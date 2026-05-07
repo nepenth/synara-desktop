@@ -55,6 +55,8 @@ surfaces without duplicating Matrix account data or room state:
   the `desktop_set_badge_count` command.
 - Backend-backed agent workflow actions emit typed `cinny://agent-action` Tauri
   events through `desktop_agent_action` rather than scraping message content.
+  The wrapper re-validates action kinds, text lengths, markdown lengths, and
+  HTTPS-only URLs before copying, opening, or emitting any action payload.
 - Auto-update entry points emit the `cinny://desktop-action` check-updates event
   so the web client can present update state inside the app.
 

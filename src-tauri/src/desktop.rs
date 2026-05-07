@@ -136,8 +136,8 @@ fn sanitize_agent_action_payload(
     }
 
     if let Some(url) = action.url.take() {
-        if !url.starts_with("https://") && !url.starts_with("http://") {
-            return Err("Agent action URL must use http or https".to_owned());
+        if !url.starts_with("https://") {
+            return Err("Agent action URL must use https".to_owned());
         }
         action.url = Some(sanitize_action_text(
             url,
@@ -487,7 +487,7 @@ mod tests {
     }
 
     #[test]
-    fn sanitize_action_payload_allows_http_urls() {
+    fn sanitize_action_payload_allows_https_urls() {
         let payload = sanitize_agent_action_payload(DesktopAgentActionPayload {
             id: "abc".to_owned(),
             title: "Action".to_owned(),
@@ -500,6 +500,20 @@ mod tests {
 
         assert_eq!(payload.id, "abc");
         assert_eq!(payload.url.as_deref(), Some("https://example.org/action"));
+    }
+
+    #[test]
+    fn sanitize_action_payload_rejects_plain_http_urls() {
+        let result = sanitize_agent_action_payload(DesktopAgentActionPayload {
+            id: "abc".to_owned(),
+            title: "Action".to_owned(),
+            kind: Some("agent".to_owned()),
+            prompt: None,
+            url: Some("http://example.org/action".to_owned()),
+            markdown: None,
+        });
+
+        assert!(result.is_err());
     }
 
     #[test]

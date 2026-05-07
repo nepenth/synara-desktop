@@ -47,3 +47,5 @@ It also exposes the badge-count and structured agent-action bridge consumed by
 the Cinny modernization web branch.
 See [Desktop modernization](docs/desktop-modernization.md) for the native
 integration contract used by the Cinny modernization branches.
+Build/test notes, runtime smoke-test evidence, and bridge security notes are
+tracked in [MODERNIZATION.md](MODERNIZATION.md).
