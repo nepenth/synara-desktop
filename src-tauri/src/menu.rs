@@ -1,7 +1,7 @@
 use tauri::menu::{MenuBuilder, SubmenuBuilder};
-use tauri::AppHandle;
+use tauri::{AppHandle, Runtime};
 
-pub fn menu() -> tauri::menu::Menu {
+pub fn menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<tauri::menu::Menu<R>> {
     let app_menu = SubmenuBuilder::new(app, "Cinny")
         .about(Some(Default::default()))
         .separator()
@@ -10,8 +10,7 @@ pub fn menu() -> tauri::menu::Menu {
         .show_all()
         .separator()
         .quit()
-        .build()
-        .unwrap();
+        .build()?;
 
     let edit_menu = SubmenuBuilder::new(app, "Edit")
         .undo()
@@ -21,18 +20,16 @@ pub fn menu() -> tauri::menu::Menu {
         .copy()
         .paste()
         .select_all()
-        .build()
-        .unwrap();
+        .build()?;
 
     let view_menu = SubmenuBuilder::new(app, "View")
         .fullscreen() // `.fullscreen()` works instead of `.enter_fullscreen()`
-        .build()
-        .unwrap();
+        .build()?;
 
     let window_menu = SubmenuBuilder::new(app, "Window")
         .minimize()
-        .build() // no `.zoom()` method directly available
-        .unwrap();
+        .close_window()
+        .build()?; // no `.zoom()` method directly available
 
     MenuBuilder::new(app)
         .item(&app_menu)
@@ -40,5 +37,4 @@ pub fn menu() -> tauri::menu::Menu {
         .item(&view_menu)
         .item(&window_menu)
         .build()
-        .unwrap()
 }

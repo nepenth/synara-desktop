@@ -37,3 +37,11 @@ To build the app locally, run:
 
 To start local dev server, run:
 * `npm run tauri dev`
+
+## Desktop polish
+
+This wrapper provides native tray/status-bar actions, close-to-tray behavior,
+global shortcuts, updater wiring, native notification permissions, and macOS
+camera/microphone permission descriptions for Matrix calls and voice workflows.
+See [Desktop modernization](docs/desktop-modernization.md) for the native
+integration contract used by the Cinny modernization branches.

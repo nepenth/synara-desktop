@@ -10,6 +10,15 @@
   ],
   "permissions": [
     "updater:default",
-    "global-shortcut:default"
+    "global-shortcut:default",
+    "notification:default",
+    "clipboard-manager:default",
+    "process:allow-exit",
+    "core:window:allow-show",
+    "core:window:allow-hide",
+    "core:window:allow-unminimize",
+    "core:window:allow-set-focus",
+    "core:app:allow-app-show",
+    "core:app:allow-app-hide"
   ]
 }
