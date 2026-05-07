@@ -20,6 +20,21 @@ struct DesktopActionPayload<'a> {
     action: &'a str,
 }
 
+#[derive(Clone, Serialize, serde::Deserialize)]
+pub struct DesktopAgentActionPayload {
+    id: String,
+    title: String,
+    kind: Option<String>,
+    prompt: Option<String>,
+    url: Option<String>,
+    markdown: Option<String>,
+}
+
+#[derive(Clone, Serialize)]
+struct DesktopAgentActionEvent {
+    action: DesktopAgentActionPayload,
+}
+
 fn main_window<R: Runtime>(app: &AppHandle<R>) -> Option<WebviewWindow<R>> {
     app.get_webview_window(MAIN_WINDOW_LABEL)
 }
@@ -73,6 +88,19 @@ pub fn emit_check_updates<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
             action: "check-updates",
         },
     )?;
+    Ok(())
+}
+
+pub fn set_badge_count<R: Runtime>(app: &AppHandle<R>, count: Option<i64>) -> tauri::Result<()> {
+    if let Some(window) = main_window(app) {
+        let normalized_count = count.filter(|value| *value > 0);
+        window.set_badge_count(normalized_count)?;
+
+        #[cfg(target_os = "macos")]
+        {
+            window.set_badge_label(normalized_count.map(|value| value.to_string()))?;
+        }
+    }
     Ok(())
 }
 
@@ -169,6 +197,21 @@ pub fn desktop_hide(app: AppHandle) -> Result<(), String> {
 #[tauri::command]
 pub fn desktop_navigate(app: AppHandle, route: String) -> Result<(), String> {
     navigate_main_window(&app, &route).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn desktop_set_badge_count(app: AppHandle, count: i64) -> Result<(), String> {
+    set_badge_count(&app, Some(count)).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn desktop_agent_action(
+    app: AppHandle,
+    action: DesktopAgentActionPayload,
+) -> Result<bool, String> {
+    app.emit("cinny://agent-action", DesktopAgentActionEvent { action })
+        .map_err(|error| error.to_string())?;
+    Ok(true)
 }
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]

@@ -50,9 +50,10 @@ agent workflows. Desktop-specific follow-up work should connect those web
 features to native surfaces:
 
 - Native notifications should deep-link into room/event anchors.
-- Tray badge/count updates should mirror active Later and notification summaries.
-- Backend-backed agent workflow actions should emit explicit Tauri events rather
-  than scraping message content.
+- Tray badge/count updates mirror active Later and notification summaries through
+  the `desktop_set_badge_count` command.
+- Backend-backed agent workflow actions emit typed `cinny://agent-action` Tauri
+  events through `desktop_agent_action` rather than scraping message content.
 - Auto-update UI should listen for the `cinny://desktop-action` check-updates
   event and present update state inside the app.
 

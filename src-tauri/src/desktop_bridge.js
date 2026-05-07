@@ -1,4 +1,6 @@
 (() => {
+  const invoke = (command, args) => window.__TAURI_INTERNALS__?.invoke?.(command, args);
+
   window.__CINNY_DESKTOP__ = Object.freeze({
     platform: "tauri",
     supportsTray: true,
@@ -9,5 +11,6 @@
       later: "/inbox/later/",
       notifications: "/inbox/notifications/",
     }),
+    invoke,
   });
 })();
