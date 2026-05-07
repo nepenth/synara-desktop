@@ -32,6 +32,7 @@ pub fn run() {
             desktop::desktop_hide,
             desktop::desktop_navigate,
             desktop::desktop_set_badge_count,
+            desktop::desktop_set_shortcuts,
             desktop::desktop_agent_action
         ])
         .on_window_event(|window, event| {
