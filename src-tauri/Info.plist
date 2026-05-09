@@ -5,6 +5,6 @@
   <key>NSCameraUsageDescription</key>
   <string>Cinny needs camera access for Matrix calls and video messages when you choose to use them.</string>
   <key>NSMicrophoneUsageDescription</key>
-  <string>Cinny needs microphone access for Matrix calls, voice messages, and audio recording when you choose to use them.</string>
+  <string>Cinny needs microphone access for Matrix calls when you choose to use them.</string>
 </dict>
 </plist>

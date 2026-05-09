@@ -42,7 +42,7 @@ To start local dev server, run:
 
 This wrapper provides native tray/status-bar actions, close-to-tray behavior,
 global shortcuts, updater wiring, native notification permissions, and macOS
-camera/microphone permission descriptions for Matrix calls and voice workflows.
+camera/microphone permission descriptions for Matrix calls.
 It also exposes the badge-count and structured agent-action bridge consumed by
 the Cinny modernization web branch.
 See [Desktop modernization](docs/desktop-modernization.md) for the native

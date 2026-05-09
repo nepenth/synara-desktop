@@ -31,7 +31,7 @@ notification-center and Later inbox deep links share one path.
 ## Media permissions
 
 The macOS bundle includes explicit camera and microphone usage descriptions for
-Matrix calls, voice messages, and audio recording. Linux media permission UX is
+Matrix calls. Linux media permission UX is
 managed by WebKit/WebRTC and the desktop environment, but the wrapper keeps the
 same web client permissions model.
 

@@ -13,7 +13,7 @@ surfaces and exposes a small typed bridge to the web app.
 - Dock/taskbar badge count updates from unread, notification, and Later
   summaries supplied by the web client.
 - Configurable global shortcuts for Show, Later, and Notifications.
-- macOS camera/microphone permission descriptions for calls and voice messages.
+- macOS camera/microphone permission descriptions for calls.
 - Structured Hermes/agent action bridge for trusted backend integrations.
 
 ## Validation
