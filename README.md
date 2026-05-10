@@ -35,6 +35,9 @@ Now, to setup development locally run the following commands:
 To build the app locally, run:
 * `npm run tauri build`
 
+On macOS, local unsigned smoke-test builds should use ad-hoc signing:
+* `APPLE_SIGNING_IDENTITY=- npm run tauri build -- --bundles app`
+
 To start local dev server, run:
 * `npm run tauri dev`
 

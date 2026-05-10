@@ -34,6 +34,16 @@ npm ci
 npm run tauri build
 ```
 
+For local macOS smoke builds without a Developer ID certificate, use an ad-hoc
+signing identity so LaunchServices receives a fully sealed bundle:
+
+```sh
+APPLE_SIGNING_IDENTITY=- npm run tauri build -- --bundles app
+```
+
+Release builds should continue to use the normal certificate/notarization
+environment. The ad-hoc identity is only for private local validation.
+
 Local `cargo check` and `cargo test` can run with the placeholder app shell, but
 runtime smoke testing should use a real web `dist/` bundle.
 
