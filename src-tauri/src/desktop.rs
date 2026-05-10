@@ -6,6 +6,8 @@ use tauri::{AppHandle, Emitter, Manager, Runtime, WebviewWindow};
 use tauri_plugin_clipboard_manager::ClipboardExt;
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutEvent, ShortcutState};
 use tauri_plugin_opener::OpenerExt;
+#[cfg(target_os = "macos")]
+use tauri_plugin_macos_fps::MacFpsExt;
 
 pub const MAIN_WINDOW_LABEL: &str = "main";
 
@@ -44,6 +46,13 @@ pub struct DesktopShortcutConfig {
 #[derive(Clone, Serialize)]
 struct DesktopAgentActionEvent {
     action: DesktopAgentActionPayload,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DesktopPerformanceCapabilities {
+    platform: &'static str,
+    high_refresh_rate: bool,
 }
 
 const DESKTOP_AGENT_ACTION_MAX_TEXT_CHARS: usize = 1024;
@@ -282,6 +291,43 @@ pub fn set_badge_count<R: Runtime>(app: &AppHandle<R>, count: Option<i64>) -> ta
     Ok(())
 }
 
+pub fn set_high_refresh_rate<R: Runtime>(
+    app: &AppHandle<R>,
+    enabled: bool,
+) -> Result<bool, String> {
+    #[cfg(target_os = "macos")]
+    {
+        let Some(window) = main_window(app) else {
+            return Ok(false);
+        };
+        if enabled {
+            window
+                .as_ref()
+                .unlock_fps()
+                .map_err(|error| error.to_string())?;
+        } else {
+            window
+                .as_ref()
+                .lock_fps()
+                .map_err(|error| error.to_string())?;
+        }
+        Ok(true)
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = (app, enabled);
+        Ok(false)
+    }
+}
+
+pub fn performance_capabilities() -> DesktopPerformanceCapabilities {
+    DesktopPerformanceCapabilities {
+        platform: std::env::consts::OS,
+        high_refresh_rate: cfg!(target_os = "macos"),
+    }
+}
+
 pub fn create_tray<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     let show = MenuItem::with_id(
         app,
@@ -425,6 +471,16 @@ pub fn desktop_set_shortcuts(
         .map_err(|error: tauri_plugin_global_shortcut::Error| error.to_string())?;
 
     Ok(true)
+}
+
+#[tauri::command]
+pub fn desktop_set_high_refresh_rate(app: AppHandle, enabled: bool) -> Result<bool, String> {
+    set_high_refresh_rate(&app, enabled)
+}
+
+#[tauri::command]
+pub fn desktop_get_performance_capabilities() -> DesktopPerformanceCapabilities {
+    performance_capabilities()
 }
 
 #[tauri::command]
@@ -587,6 +643,13 @@ mod tests {
             extract_agent_action_copy_text(&payload),
             Some("```\nBlock\n```".to_owned())
         );
+    }
+
+    #[test]
+    fn performance_capabilities_reflect_platform_support() {
+        let capabilities = performance_capabilities();
+        assert_eq!(capabilities.platform, std::env::consts::OS);
+        assert_eq!(capabilities.high_refresh_rate, cfg!(target_os = "macos"));
     }
 
     fn sanitize_action_payload_with_no_kind(

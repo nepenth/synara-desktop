@@ -33,6 +33,8 @@ pub fn run() {
             desktop::desktop_navigate,
             desktop::desktop_set_badge_count,
             desktop::desktop_set_shortcuts,
+            desktop::desktop_set_high_refresh_rate,
+            desktop::desktop_get_performance_capabilities,
             desktop::desktop_agent_action
         ])
         .on_window_event(|window, event| {
@@ -51,6 +53,11 @@ pub fn run() {
         builder = builder
             .plugin(desktop::global_shortcut_plugin())
             .plugin(tauri_plugin_updater::Builder::new().build());
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        builder = builder.plugin(tauri_plugin_macos_fps::init());
     }
 
     builder
