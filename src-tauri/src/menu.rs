@@ -1,9 +1,15 @@
-use tauri::menu::{MenuBuilder, SubmenuBuilder};
+use tauri::menu::{AboutMetadata, MenuBuilder, SubmenuBuilder};
 use tauri::{AppHandle, Runtime};
+
+use crate::build_info;
 
 pub fn menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<tauri::menu::Menu<R>> {
     let app_menu = SubmenuBuilder::new(app, "Cinny")
-        .about(Some(Default::default()))
+        .about(Some(AboutMetadata {
+            name: Some("Cinny".to_owned()),
+            version: Some(build_info::label()),
+            ..Default::default()
+        }))
         .separator()
         .hide()
         .hide_others()

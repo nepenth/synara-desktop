@@ -38,6 +38,14 @@ To build the app locally, run:
 On macOS, local unsigned smoke-test builds should use ad-hoc signing:
 * `APPLE_SIGNING_IDENTITY=- npm run tauri build -- --bundles app`
 
+Packaged builds expose their identity in the tray menu and About dialog as
+`Build <version> <branch>@<short-sha>`.
+
+To replace an existing local macOS app bundle, move the old bundle aside first.
+Copying into an existing `.app` can nest the new bundle inside the old one:
+* `mv /Applications/Cinny.app "/Applications/Cinny.app.$(date +%Y%m%d%H%M%S).previous"`
+* `cp -R src-tauri/target/release/bundle/macos/Cinny.app /Applications/Cinny.app`
+
 To start local dev server, run:
 * `npm run tauri dev`
 

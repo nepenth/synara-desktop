@@ -5,9 +5,11 @@ use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent}
 use tauri::{AppHandle, Emitter, Manager, Runtime, WebviewWindow};
 use tauri_plugin_clipboard_manager::ClipboardExt;
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutEvent, ShortcutState};
-use tauri_plugin_opener::OpenerExt;
 #[cfg(target_os = "macos")]
 use tauri_plugin_macos_fps::MacFpsExt;
+use tauri_plugin_opener::OpenerExt;
+
+use crate::build_info;
 
 pub const MAIN_WINDOW_LABEL: &str = "main";
 
@@ -15,6 +17,7 @@ const MENU_SHOW: &str = "desktop.show";
 const MENU_LATER: &str = "desktop.later";
 const MENU_NOTIFICATIONS: &str = "desktop.notifications";
 const MENU_CHECK_UPDATES: &str = "desktop.check-updates";
+const MENU_BUILD_INFO: &str = "desktop.build-info";
 const MENU_QUIT: &str = "desktop.quit";
 
 const ROUTE_HOME: &str = "/";
@@ -53,6 +56,10 @@ struct DesktopAgentActionEvent {
 pub struct DesktopPerformanceCapabilities {
     platform: &'static str,
     high_refresh_rate: bool,
+    app_version: &'static str,
+    build_revision: &'static str,
+    build_branch: &'static str,
+    build_label: String,
 }
 
 const DESKTOP_AGENT_ACTION_MAX_TEXT_CHARS: usize = 1024;
@@ -325,6 +332,10 @@ pub fn performance_capabilities() -> DesktopPerformanceCapabilities {
     DesktopPerformanceCapabilities {
         platform: std::env::consts::OS,
         high_refresh_rate: cfg!(target_os = "macos"),
+        app_version: build_info::app_version(),
+        build_revision: build_info::revision(),
+        build_branch: build_info::branch(),
+        build_label: build_info::label(),
     }
 }
 
@@ -352,6 +363,13 @@ pub fn create_tray<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
         true,
         None::<&str>,
     )?;
+    let build_item = MenuItem::with_id(
+        app,
+        MENU_BUILD_INFO,
+        build_info::menu_label(),
+        false,
+        None::<&str>,
+    )?;
     let quit = MenuItem::with_id(app, MENU_QUIT, "Quit Cinny", true, Some("CmdOrCtrl+Q"))?;
 
     let menu = Menu::with_items(
@@ -362,6 +380,7 @@ pub fn create_tray<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
             &notifications,
             &separator,
             &check_updates,
+            &build_item,
             &quit,
         ],
     )?;
@@ -396,6 +415,7 @@ pub fn handle_menu_event<R: Runtime>(app: &AppHandle<R>, event: MenuEvent) {
         MENU_LATER => navigate_main_window(app, ROUTE_LATER),
         MENU_NOTIFICATIONS => navigate_main_window(app, ROUTE_NOTIFICATIONS),
         MENU_CHECK_UPDATES => emit_check_updates(app),
+        MENU_BUILD_INFO => Ok(()),
         MENU_QUIT => {
             app.exit(0);
             Ok(())
@@ -650,6 +670,10 @@ mod tests {
         let capabilities = performance_capabilities();
         assert_eq!(capabilities.platform, std::env::consts::OS);
         assert_eq!(capabilities.high_refresh_rate, cfg!(target_os = "macos"));
+        assert_eq!(capabilities.app_version, env!("CARGO_PKG_VERSION"));
+        assert!(!capabilities.build_revision.is_empty());
+        assert!(!capabilities.build_branch.is_empty());
+        assert!(capabilities.build_label.contains(capabilities.app_version));
     }
 
     fn sanitize_action_payload_with_no_kind(

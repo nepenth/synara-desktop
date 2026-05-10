@@ -44,6 +44,19 @@ APPLE_SIGNING_IDENTITY=- npm run tauri build -- --bundles app
 Release builds should continue to use the normal certificate/notarization
 environment. The ad-hoc identity is only for private local validation.
 
+Packaged builds expose their identity in the tray menu and About dialog as
+`Build <version> <branch>@<short-sha>`. Use that value to confirm the running
+app matches the PR head you intended to test.
+
+When replacing an existing app bundle locally, move the old bundle aside before
+copying the new one; `cp -R source.app /Applications/Cinny.app` can copy the new
+bundle inside the old bundle instead of replacing it.
+
+```sh
+mv /Applications/Cinny.app "/Applications/Cinny.app.$(date +%Y%m%d%H%M%S).previous"
+cp -R src-tauri/target/release/bundle/macos/Cinny.app /Applications/Cinny.app
+```
+
 Local `cargo check` and `cargo test` can run with the placeholder app shell, but
 runtime smoke testing should use a real web `dist/` bundle.
 

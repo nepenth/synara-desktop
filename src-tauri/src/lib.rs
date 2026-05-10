@@ -3,6 +3,7 @@
     windows_subsystem = "windows"
 )]
 
+mod build_info;
 mod desktop;
 mod menu;
 
@@ -77,7 +78,7 @@ pub fn run() {
             };
 
             let app_handle = app.handle().clone();
-            WebviewWindowBuilder::new(app, "main".to_string(), window_url)
+            let window = WebviewWindowBuilder::new(app, "main".to_string(), window_url)
                 .title("Cinny")
                 .initialization_script(include_str!("desktop_bridge.js"))
                 .on_new_window(move |url, _features| {
@@ -85,6 +86,9 @@ pub fn run() {
                     NewWindowResponse::Deny
                 })
                 .build()?;
+            window.show()?;
+            window.unminimize()?;
+            window.set_focus()?;
             Ok(())
         })
         .build(context)
