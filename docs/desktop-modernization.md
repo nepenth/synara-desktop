@@ -42,17 +42,12 @@ bridge exposes capability flags and canonical desktop routes so the web client
 can adapt UI for tray, global shortcuts, updater, media permission, Later, and
 notification-center workflows without assuming every deployment is native.
 
-## macOS high-refresh mode
+## Performance diagnostics
 
-The wrapper exposes `desktop_set_high_refresh_rate(enabled)` and
-`desktop_get_performance_capabilities()` for the web client. On macOS, the
-command uses `tauri-plugin-macos-fps` to unlock the WKWebView frame-rate cap for
-ProMotion/high-refresh displays. On Linux and Windows the command returns
-`false` and does nothing.
-
-This is intentionally experimental and off by default because the plugin uses a
-private WebKit preference. The paired web client only shows the setting in the
-macOS desktop app.
+The wrapper exposes `desktop_get_performance_capabilities()` so the web client
+can report platform and build identity in diagnostics. Desktop smoothness work
+is handled through the paired web branch's bounded timeline rendering, scroll
+anchoring, and instrumentation rather than private WebKit refresh-rate toggles.
 
 ## Implemented integration points
 
@@ -100,4 +95,4 @@ Some modernization state intentionally stays in the web client:
 | Rich per-room notification settings | Landed in the paired web branch; no desktop-local duplicate state. |
 | Room favorites/folder groups | Landed as Matrix/client sidebar state in the paired web branch; no desktop-local duplicate state. |
 | Backend-backed agent workflow bridge | Landed through `desktop_agent_action` and `cinny://agent-action` events. |
-| macOS high-refresh rendering | Landed behind an experimental web setting backed by `tauri-plugin-macos-fps`; non-macOS platforms no-op. |
+| Desktop fluidity | Landed through paired web rendering and scroll-anchor improvements; no private WebKit refresh-rate override. |

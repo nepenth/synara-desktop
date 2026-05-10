@@ -5,8 +5,6 @@ use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent}
 use tauri::{AppHandle, Emitter, Manager, Runtime, WebviewWindow};
 use tauri_plugin_clipboard_manager::ClipboardExt;
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutEvent, ShortcutState};
-#[cfg(target_os = "macos")]
-use tauri_plugin_macos_fps::MacFpsExt;
 use tauri_plugin_opener::OpenerExt;
 
 use crate::build_info;
@@ -55,7 +53,6 @@ struct DesktopAgentActionEvent {
 #[serde(rename_all = "camelCase")]
 pub struct DesktopPerformanceCapabilities {
     platform: &'static str,
-    high_refresh_rate: bool,
     app_version: &'static str,
     build_revision: &'static str,
     build_branch: &'static str,
@@ -298,40 +295,9 @@ pub fn set_badge_count<R: Runtime>(app: &AppHandle<R>, count: Option<i64>) -> ta
     Ok(())
 }
 
-pub fn set_high_refresh_rate<R: Runtime>(
-    app: &AppHandle<R>,
-    enabled: bool,
-) -> Result<bool, String> {
-    #[cfg(target_os = "macos")]
-    {
-        let Some(window) = main_window(app) else {
-            return Ok(false);
-        };
-        if enabled {
-            window
-                .as_ref()
-                .unlock_fps()
-                .map_err(|error| error.to_string())?;
-        } else {
-            window
-                .as_ref()
-                .lock_fps()
-                .map_err(|error| error.to_string())?;
-        }
-        Ok(true)
-    }
-
-    #[cfg(not(target_os = "macos"))]
-    {
-        let _ = (app, enabled);
-        Ok(false)
-    }
-}
-
 pub fn performance_capabilities() -> DesktopPerformanceCapabilities {
     DesktopPerformanceCapabilities {
         platform: std::env::consts::OS,
-        high_refresh_rate: cfg!(target_os = "macos"),
         app_version: build_info::app_version(),
         build_revision: build_info::revision(),
         build_branch: build_info::branch(),
@@ -491,11 +457,6 @@ pub fn desktop_set_shortcuts(
         .map_err(|error: tauri_plugin_global_shortcut::Error| error.to_string())?;
 
     Ok(true)
-}
-
-#[tauri::command]
-pub fn desktop_set_high_refresh_rate(app: AppHandle, enabled: bool) -> Result<bool, String> {
-    set_high_refresh_rate(&app, enabled)
 }
 
 #[tauri::command]
@@ -669,7 +630,6 @@ mod tests {
     fn performance_capabilities_reflect_platform_support() {
         let capabilities = performance_capabilities();
         assert_eq!(capabilities.platform, std::env::consts::OS);
-        assert_eq!(capabilities.high_refresh_rate, cfg!(target_os = "macos"));
         assert_eq!(capabilities.app_version, env!("CARGO_PKG_VERSION"));
         assert!(!capabilities.build_revision.is_empty());
         assert!(!capabilities.build_branch.is_empty());

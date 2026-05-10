@@ -7,7 +7,6 @@
     supportsGlobalShortcuts: true,
     supportsUpdater: true,
     supportsMediaPermissions: true,
-    supportsHighRefreshRate: true,
     routes: Object.freeze({
       later: "/inbox/later/",
       notifications: "/inbox/notifications/",
