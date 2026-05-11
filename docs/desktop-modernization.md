@@ -1,18 +1,18 @@
 # Desktop modernization
 
-This desktop wrapper owns native shell behavior that the Cinny web client cannot
+This desktop wrapper owns native shell behavior that the Synara web client cannot
 provide on its own.
 
 ## Native tray
 
 The app creates a native tray/status-bar item on macOS and Linux. The tray keeps
-Cinny available after the main window is closed and exposes quick actions:
+Synara available after the main window is closed and exposes quick actions:
 
-- Show Cinny
+- Show Synara
 - Later
 - Notifications
 - Check for Updates
-- Quit Cinny
+- Quit Synara
 
 Closing the main window hides it to the tray instead of quitting. Use the tray
 Quit action or the app menu quit action to exit.
@@ -21,7 +21,7 @@ Quit action or the app menu quit action to exit.
 
 The wrapper registers these shortcuts through Tauri's global shortcut plugin:
 
-- `CmdOrCtrl+Shift+C`: show Cinny
+- `CmdOrCtrl+Shift+C`: show Synara
 - `CmdOrCtrl+Shift+L`: open Later
 - `CmdOrCtrl+Shift+N`: open Notifications
 
@@ -37,7 +37,7 @@ same web client permissions model.
 
 ## Web bridge
 
-The wrapper injects `window.__CINNY_DESKTOP__` before the Cinny app loads. The
+The wrapper injects `window.__CINNY_DESKTOP__` before the Synara app loads. The
 bridge exposes capability flags and canonical desktop routes so the web client
 can adapt UI for tray, global shortcuts, updater, media permission, Later, and
 notification-center workflows without assuming every deployment is native.

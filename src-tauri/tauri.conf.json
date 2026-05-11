@@ -22,7 +22,7 @@
     "externalBin": [],
     "copyright": "",
     "category": "SocialNetworking",
-    "shortDescription": "Yet another matrix client",
+    "shortDescription": "A modern Matrix client",
     "longDescription": "",
     "macOS": {
       "frameworks": [],
@@ -45,15 +45,15 @@
     "beforeDevCommand": "cd cinny && npm start",
     "devUrl": "http://localhost:8080"
   },
-  "productName": "Cinny",
-  "mainBinaryName": "cinny",
-  "version": "4.11.2",
-  "identifier": "in.cinny.app",
+  "productName": "Synara",
+  "mainBinaryName": "synara",
+  "version": "4.11.3-synara.1",
+  "identifier": "app.synara.desktop",
   "plugins": {
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDE2NDc3NDBGMTAzNTk1NUYKUldSZmxUVVFEM1JIRnRuMjVRTkFOQ21lUFI5KzRMU0s4OWtBS1RNRUVCNE9LcE9GcExNZ2M2NHoK",
       "endpoints": [
-        "https://github.com/cinnyapp/cinny-desktop/releases/download/tauri/release.json"
+        "https://github.com/nepenthe/cinny-desktop/releases/download/tauri/release.json"
       ]
     }
   },

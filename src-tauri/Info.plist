@@ -3,8 +3,8 @@
 <plist version="1.0">
 <dict>
   <key>NSCameraUsageDescription</key>
-  <string>Cinny needs camera access for Matrix calls and video messages when you choose to use them.</string>
+  <string>Synara needs camera access for Matrix calls and video messages when you choose to use them.</string>
   <key>NSMicrophoneUsageDescription</key>
-  <string>Cinny needs microphone access for Matrix calls when you choose to use them.</string>
+  <string>Synara needs microphone access for Matrix calls when you choose to use them.</string>
 </dict>
 </plist>

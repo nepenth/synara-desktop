@@ -1,19 +1,16 @@
-# Cinny desktop
+# Synara desktop
 
-<a href="https://github.com/cinnyapp/cinny-desktop/releases">
-  <img alt="GitHub release downloads" src="https://img.shields.io/github/downloads/cinnyapp/cinny-desktop/total?style=social"></a>
-
-Cinny is a matrix client focusing primarily on simple, elegant and secure interface. The desktop app is made with Tauri.
+Synara is a modern Matrix client focused on fast, secure conversations, desktop polish, and agent workflows. The desktop app is made with Tauri.
 
 ## Download
 
-Installers for macOS, Windows and Linux can be downloaded from [Github releases](https://github.com/cinnyapp/cinny-desktop/releases). Releases are signed with a [Ed25519](https://ed25519.cr.yp.to/) public-key.
+Installers for macOS, Windows and Linux are built from this fork. Distribution releases should be signed with an [Ed25519](https://ed25519.cr.yp.to/) public key.
 
 Operating System | Download
 ---|---
-Windows | <a href='https://github.com/cinnyapp/cinny-desktop/releases/latest/download/Cinny_desktop-x86_64.msi'>Get it on Windows</a>
-macOS | <a href='https://github.com/cinnyapp/cinny-desktop/releases/latest/download/Cinny_desktop-universal.dmg'>Get it on macOS</a>
-Linux | <a href='https://github.com/cinnyapp/cinny-desktop/releases/latest/download/Cinny_desktop-x86_64.AppImage'>Get it on Linux</a> · <a href='https://flathub.org/apps/details/in.cinny.Cinny'>Flatpak</a>
+Windows | Build from source
+macOS | Build from source
+Linux | Build from source
 
 Decoded public key:
 > RWRflTUQD3RHFtn25QNANCmePR9+4LSK89kAKTMEEB4OKpOFpLMgc64z
@@ -26,7 +23,7 @@ To verify release files, you need to download [minisign](https://jedisct1.github
 Firstly, to setup Rust, NodeJS and build tools follow [Tauri documentation](https://v2.tauri.app/start/prerequisites/).
 
 Now, to setup development locally run the following commands:
-* `git clone --recursive https://github.com/cinnyapp/cinny-desktop.git`
+* `git clone --recursive https://github.com/nepenthe/cinny-desktop.git`
 * `cd cinny-desktop/cinny`
 * `npm ci`
 * `cd ..`
@@ -43,8 +40,8 @@ Packaged builds expose their identity in the tray menu and About dialog as
 
 To replace an existing local macOS app bundle, move the old bundle aside first.
 Copying into an existing `.app` can nest the new bundle inside the old one:
-* `mv /Applications/Cinny.app "/Applications/Cinny.app.$(date +%Y%m%d%H%M%S).previous"`
-* `cp -R src-tauri/target/release/bundle/macos/Cinny.app /Applications/Cinny.app`
+* `mv /Applications/Synara.app "/Applications/Synara.app.$(date +%Y%m%d%H%M%S).previous"`
+* `cp -R src-tauri/target/release/bundle/macos/Synara.app /Applications/Synara.app`
 
 To start local dev server, run:
 * `npm run tauri dev`
@@ -55,8 +52,8 @@ This wrapper provides native tray/status-bar actions, close-to-tray behavior,
 global shortcuts, updater wiring, native notification permissions, and macOS
 camera/microphone permission descriptions for Matrix calls.
 It also exposes the badge-count and structured agent-action bridge consumed by
-the Cinny modernization web branch.
+the Synara modernization web branch.
 See [Desktop modernization](docs/desktop-modernization.md) for the native
-integration contract used by the Cinny modernization branches.
+integration contract used by the Synara modernization branches.
 Build/test notes, runtime smoke-test evidence, and bridge security notes are
 tracked in [MODERNIZATION.md](MODERNIZATION.md).

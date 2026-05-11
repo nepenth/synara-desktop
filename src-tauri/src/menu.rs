@@ -4,9 +4,9 @@ use tauri::{AppHandle, Runtime};
 use crate::build_info;
 
 pub fn menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<tauri::menu::Menu<R>> {
-    let app_menu = SubmenuBuilder::new(app, "Cinny")
+    let app_menu = SubmenuBuilder::new(app, "Synara")
         .about(Some(AboutMetadata {
-            name: Some("Cinny".to_owned()),
+            name: Some("Synara".to_owned()),
             version: Some(build_info::label()),
             ..Default::default()
         }))

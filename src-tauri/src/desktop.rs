@@ -309,7 +309,7 @@ pub fn create_tray<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     let show = MenuItem::with_id(
         app,
         MENU_SHOW,
-        "Show Cinny",
+        "Show Synara",
         true,
         Some("CmdOrCtrl+Shift+C"),
     )?;
@@ -336,7 +336,7 @@ pub fn create_tray<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
         false,
         None::<&str>,
     )?;
-    let quit = MenuItem::with_id(app, MENU_QUIT, "Quit Cinny", true, Some("CmdOrCtrl+Q"))?;
+    let quit = MenuItem::with_id(app, MENU_QUIT, "Quit Synara", true, Some("CmdOrCtrl+Q"))?;
 
     let menu = Menu::with_items(
         app,
@@ -351,8 +351,8 @@ pub fn create_tray<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
         ],
     )?;
 
-    let mut builder = TrayIconBuilder::with_id("cinny-tray")
-        .tooltip("Cinny")
+    let mut builder = TrayIconBuilder::with_id("synara-tray")
+        .tooltip("Synara")
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(handle_menu_event)

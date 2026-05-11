@@ -1,12 +1,12 @@
 # Desktop Modernization
 
-This desktop branch is the native half of the Cinny modernization stack. The
+This desktop branch is the native half of the Synara modernization stack. The
 web client owns Matrix state and feature UI; this wrapper owns native shell
 surfaces and exposes a small typed bridge to the web app.
 
 ## Native Scope
 
-- Tray/status-bar menu for Show Cinny, Later, Notifications, Check for Updates,
+- Tray/status-bar menu for Show Synara, Later, Notifications, Check for Updates,
   and Quit.
 - Close-to-tray behavior on desktop platforms.
 - Native notification permissions and click activation.
@@ -49,12 +49,12 @@ Packaged builds expose their identity in the tray menu and About dialog as
 app matches the PR head you intended to test.
 
 When replacing an existing app bundle locally, move the old bundle aside before
-copying the new one; `cp -R source.app /Applications/Cinny.app` can copy the new
+copying the new one; `cp -R source.app /Applications/Synara.app` can copy the new
 bundle inside the old bundle instead of replacing it.
 
 ```sh
-mv /Applications/Cinny.app "/Applications/Cinny.app.$(date +%Y%m%d%H%M%S).previous"
-cp -R src-tauri/target/release/bundle/macos/Cinny.app /Applications/Cinny.app
+mv /Applications/Synara.app "/Applications/Synara.app.$(date +%Y%m%d%H%M%S).previous"
+cp -R src-tauri/target/release/bundle/macos/Synara.app /Applications/Synara.app
 ```
 
 Local `cargo check` and `cargo test` can run with the placeholder app shell, but
@@ -67,7 +67,7 @@ short clips for these flows:
 
 1. Tray/status-bar menu opens Show, Later, and Notifications.
 2. Closing the main window hides it to the tray and Quit exits the app.
-3. A native notification click focuses Cinny and deep-links to a room/event or
+3. A native notification click focuses Synara and deep-links to a room/event or
    thread anchor supplied by the web client.
 4. Badge counts update when unread/Later/notification summaries change.
 5. Configurable global shortcuts route to Show, Later, and Notifications.

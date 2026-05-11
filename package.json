@@ -1,7 +1,7 @@
 {
-  "name": "cinny",
-  "version": "4.11.2",
-  "description": "Yet another matrix client",
+  "name": "synara",
+  "version": "4.11.3-synara.1",
+  "description": "A modern Matrix client",
   "main": "index.js",
   "engines": {
     "node": ">=16.0.0"
