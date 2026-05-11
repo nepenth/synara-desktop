@@ -1,7 +1,8 @@
 (() => {
-  const invoke = (command, args) => window.__TAURI_INTERNALS__?.invoke?.(command, args);
+  const invoke = (command, args) =>
+    window.__TAURI_INTERNALS__?.invoke?.(command, args);
 
-  window.__CINNY_DESKTOP__ = Object.freeze({
+  window.__SYNARA_DESKTOP__ = Object.freeze({
     platform: "tauri",
     supportsTray: true,
     supportsGlobalShortcuts: true,

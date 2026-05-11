@@ -274,7 +274,7 @@ pub fn navigate_main_window<R: Runtime>(app: &AppHandle<R>, route: &str) -> taur
 pub fn emit_check_updates<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     show_main_window(app)?;
     app.emit(
-        "cinny://desktop-action",
+        "synara://desktop-action",
         DesktopActionPayload {
             action: "check-updates",
         },
@@ -478,7 +478,7 @@ pub fn desktop_agent_action(
         return Ok(true);
     }
 
-    app.emit("cinny://agent-action", DesktopAgentActionEvent { action })
+    app.emit("synara://agent-action", DesktopAgentActionEvent { action })
         .map_err(|error| error.to_string())?;
     Ok(true)
 }

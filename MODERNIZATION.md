@@ -72,7 +72,7 @@ short clips for these flows:
 4. Badge counts update when unread/Later/notification summaries change.
 5. Configurable global shortcuts route to Show, Later, and Notifications.
 6. A Hermes/agent action is copied, opened, or emitted through the
-   `cinny://agent-action` event with sanitized payload data.
+   `synara://agent-action` event with sanitized payload data.
 
 Use test Matrix accounts for preview builds and demos. A PR preview of a Matrix
 client is untrusted client code until merged and served from a trusted release
@@ -80,14 +80,14 @@ channel.
 
 ## Bridge Security
 
-- The injected `window.__CINNY_DESKTOP__` object only advertises capabilities
+- The injected `window.__SYNARA_DESKTOP__` object only advertises capabilities
   and forwards explicit Tauri command names.
 - Agent action payloads are sanitized in Rust before any local handling:
   IDs/titles/prompts are trimmed and capped, markdown is capped, action kinds
   are allow-listed, and URLs must use HTTPS.
 - Local handling is intentionally narrow: copy actions write bounded text to the
   clipboard, open actions launch HTTPS URLs through the OS opener, and all other
-  supported actions are emitted as `cinny://agent-action` events for a backend
+  supported actions are emitted as `synara://agent-action` events for a backend
   integration to handle.
 - The wrapper does not keep a duplicate copy of Matrix room state, Later items,
   favorites, folders, notification settings, or threads.

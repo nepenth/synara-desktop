@@ -37,7 +37,7 @@ same web client permissions model.
 
 ## Web bridge
 
-The wrapper injects `window.__CINNY_DESKTOP__` before the Synara app loads. The
+The wrapper injects `window.__SYNARA_DESKTOP__` before the Synara app loads. The
 bridge exposes capability flags and canonical desktop routes so the web client
 can adapt UI for tray, global shortcuts, updater, media permission, Later, and
 notification-center workflows without assuming every deployment is native.
@@ -60,11 +60,11 @@ surfaces without duplicating Matrix account data or room state:
   client's `navigateRoom(roomId, eventId)` path.
 - Tray badge/count updates mirror active Later and notification summaries through
   the `desktop_set_badge_count` command.
-- Backend-backed agent workflow actions emit typed `cinny://agent-action` Tauri
+- Backend-backed agent workflow actions emit typed `synara://agent-action` Tauri
   events through `desktop_agent_action` rather than scraping message content.
   The wrapper re-validates action kinds, text lengths, markdown lengths, and
   HTTPS-only URLs before copying, opening, or emitting any action payload.
-- Auto-update entry points emit the `cinny://desktop-action` check-updates event
+- Auto-update entry points emit the `synara://desktop-action` check-updates event
   so the web client can present update state inside the app.
 
 ## Feature ownership
@@ -84,15 +84,15 @@ Some modernization state intentionally stays in the web client:
 
 ## Coverage checklist
 
-| Improvement | Status |
-| --- | --- |
-| Native tray/status menu | Landed in this wrapper. |
-| Media permission polish | Landed through macOS camera/microphone usage strings and WebKit/WebRTC permission alignment. |
-| Deeper threading UX | Landed in the paired web branch; this wrapper deep-links to supplied room/event/thread anchors. |
-| Full notification-center overhaul | Landed in the paired web branch; this wrapper owns native notification activation and tray/badge entry points. |
-| Native notification click deep-linking | Landed through web `navigateRoom(roomId, eventId)` clicks and wrapper focus/navigation events. |
-| Tray badge/count updates | Landed through `desktop_set_badge_count`. |
-| Rich per-room notification settings | Landed in the paired web branch; no desktop-local duplicate state. |
-| Room favorites/folder groups | Landed as Matrix/client sidebar state in the paired web branch; no desktop-local duplicate state. |
-| Backend-backed agent workflow bridge | Landed through `desktop_agent_action` and `cinny://agent-action` events. |
-| Desktop fluidity | Landed through paired web rendering and scroll-anchor improvements; no private WebKit refresh-rate override. |
+| Improvement                            | Status                                                                                                         |
+| -------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| Native tray/status menu                | Landed in this wrapper.                                                                                        |
+| Media permission polish                | Landed through macOS camera/microphone usage strings and WebKit/WebRTC permission alignment.                   |
+| Deeper threading UX                    | Landed in the paired web branch; this wrapper deep-links to supplied room/event/thread anchors.                |
+| Full notification-center overhaul      | Landed in the paired web branch; this wrapper owns native notification activation and tray/badge entry points. |
+| Native notification click deep-linking | Landed through web `navigateRoom(roomId, eventId)` clicks and wrapper focus/navigation events.                 |
+| Tray badge/count updates               | Landed through `desktop_set_badge_count`.                                                                      |
+| Rich per-room notification settings    | Landed in the paired web branch; no desktop-local duplicate state.                                             |
+| Room favorites/folder groups           | Landed as Matrix/client sidebar state in the paired web branch; no desktop-local duplicate state.              |
+| Backend-backed agent workflow bridge   | Landed through `desktop_agent_action` and `synara://agent-action` events.                                      |
+| Desktop fluidity                       | Landed through paired web rendering and scroll-anchor improvements; no private WebKit refresh-rate override.   |
