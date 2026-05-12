@@ -1,0 +1,4 @@
+[submodule "synara"]
+	path = synara
+	url = https://github.com/nepenth/synara.git
+	branch = main

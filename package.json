@@ -1,0 +1,23 @@
+{
+  "name": "synara-desktop",
+  "version": "1.0.0",
+  "description": "Synara Desktop, a high-performance Matrix client for secure conversations and agent workflows.",
+  "main": "index.js",
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  },
+  "scripts": {
+    "pretauri": "node scripts/warn-macos-app-replace.mjs",
+    "tauri": "cp config.json synara/ && tauri",
+    "release": "node scripts/release.mjs"
+  },
+  "keywords": ["matrix", "chat", "ai-agents", "agentic", "desktop", "tauri"],
+  "author": "Synara contributors",
+  "license": "AGPL-3.0-only",
+  "dependencies": {
+    "@tauri-apps/api": "2.7.0"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "2.7.1"
+  }
+}
