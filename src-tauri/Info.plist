@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>NSCameraUsageDescription</key>
+  <string>Synara needs camera access for Matrix calls and video messages when you choose to use them.</string>
+  <key>NSMicrophoneUsageDescription</key>
+  <string>Synara needs microphone access for Matrix calls when you choose to use them.</string>
+</dict>
+</plist>
