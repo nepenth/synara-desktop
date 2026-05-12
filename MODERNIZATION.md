@@ -6,8 +6,7 @@ surfaces and exposes a small typed bridge to the web app.
 
 ## Native Scope
 
-- Tray/status-bar menu for Show Synara, Later, Notifications, Check for Updates,
-  and Quit.
+- Tray/status-bar menu for Show Synara, Later, Notifications, and Quit.
 - Close-to-tray behavior on desktop platforms.
 - Native notification permissions and click activation.
 - Dock/taskbar badge count updates from unread, notification, and Later
@@ -15,6 +14,8 @@ surfaces and exposes a small typed bridge to the web app.
 - Configurable global shortcuts for Show, Later, and Notifications.
 - macOS camera/microphone permission descriptions for calls.
 - Structured Hermes/agent action bridge for trusted backend integrations.
+- Signed auto-update support is intentionally disabled in this branch until a
+  stable release metadata endpoint is configured and tested for this fork.
 
 ## Validation
 

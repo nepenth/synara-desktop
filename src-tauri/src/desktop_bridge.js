@@ -6,7 +6,7 @@
     platform: "tauri",
     supportsTray: true,
     supportsGlobalShortcuts: true,
-    supportsUpdater: true,
+    supportsUpdater: false,
     supportsMediaPermissions: true,
     routes: Object.freeze({
       later: "/inbox/later/",

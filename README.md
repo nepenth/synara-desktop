@@ -5,6 +5,9 @@ Synara is a modern Matrix client focused on fast, secure conversations, desktop 
 ## Download
 
 Installers for macOS, Windows and Linux are built from this fork. Distribution releases should be signed with an [Ed25519](https://ed25519.cr.yp.to/) public key.
+The in-app updater is currently disabled until this fork has a stable signed
+release metadata channel. Local builds do not contact Cinny or Synara release
+servers for updates.
 
 | Operating System | Download          |
 | ---------------- | ----------------- |
@@ -56,7 +59,7 @@ To start local dev server, run:
 ## Desktop polish
 
 This wrapper provides native tray/status-bar actions, close-to-tray behavior,
-global shortcuts, updater wiring, native notification permissions, and macOS
+global shortcuts, native notification permissions, and macOS
 camera/microphone permission descriptions for Matrix calls.
 It also exposes the badge-count and structured agent-action bridge consumed by
 the Synara modernization web branch.

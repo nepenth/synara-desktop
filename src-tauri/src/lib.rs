@@ -9,7 +9,7 @@ mod menu;
 
 use tauri::{
     webview::{NewWindowResponse, WebviewWindowBuilder},
-    WebviewUrl, WindowEvent,
+    LogicalSize, Size, WebviewUrl, WindowEvent,
 };
 use tauri_plugin_opener::OpenerExt;
 
@@ -21,12 +21,6 @@ pub fn run() {
         .plugin(tauri_plugin_window_state::Builder::default().build())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_notification::init())
-        .plugin(tauri_plugin_fs::init())
-        .plugin(tauri_plugin_shell::init())
-        .plugin(tauri_plugin_http::init())
-        .plugin(tauri_plugin_process::init())
-        .plugin(tauri_plugin_os::init())
-        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             desktop::desktop_show,
@@ -34,6 +28,9 @@ pub fn run() {
             desktop::desktop_navigate,
             desktop::desktop_set_badge_count,
             desktop::desktop_set_shortcuts,
+            desktop::desktop_get_notification_permission,
+            desktop::desktop_request_notification_permission,
+            desktop::desktop_notify,
             desktop::desktop_get_performance_capabilities,
             desktop::desktop_agent_action
         ])
@@ -50,9 +47,7 @@ pub fn run() {
 
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     {
-        builder = builder
-            .plugin(desktop::global_shortcut_plugin())
-            .plugin(tauri_plugin_updater::Builder::new().build());
+        builder = builder.plugin(desktop::global_shortcut_plugin());
     }
 
     builder
@@ -74,12 +69,24 @@ pub fn run() {
             let app_handle = app.handle().clone();
             let window = WebviewWindowBuilder::new(app, "main".to_string(), window_url)
                 .title("Synara")
+                .inner_size(1280.0, 900.0)
+                .min_inner_size(960.0, 720.0)
                 .initialization_script(include_str!("desktop_bridge.js"))
                 .on_new_window(move |url, _features| {
-                    let _ = app_handle.opener().open_url(url.as_str(), None::<&str>);
+                    if desktop::is_safe_external_url(url.as_str()) {
+                        let _ = app_handle.opener().open_url(url.as_str(), None::<&str>);
+                    }
                     NewWindowResponse::Deny
                 })
                 .build()?;
+
+            if let Ok(size) = window.inner_size() {
+                if size.width < 960 || size.height < 720 {
+                    window.set_size(Size::Logical(LogicalSize::new(1280.0, 900.0)))?;
+                    let _ = window.center();
+                }
+            }
+
             window.show()?;
             window.unminimize()?;
             window.set_focus()?;

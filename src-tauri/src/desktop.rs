@@ -1,11 +1,13 @@
 use serde::Serialize;
 use std::collections::HashMap;
 use tauri::menu::{Menu, MenuEvent, MenuItem, PredefinedMenuItem};
-use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+use tauri::tray::TrayIconBuilder;
 use tauri::{AppHandle, Emitter, Manager, Runtime, WebviewWindow};
 use tauri_plugin_clipboard_manager::ClipboardExt;
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutEvent, ShortcutState};
+use tauri_plugin_notification::NotificationExt;
 use tauri_plugin_opener::OpenerExt;
+use url::Url;
 
 use crate::build_info;
 
@@ -14,18 +16,12 @@ pub const MAIN_WINDOW_LABEL: &str = "main";
 const MENU_SHOW: &str = "desktop.show";
 const MENU_LATER: &str = "desktop.later";
 const MENU_NOTIFICATIONS: &str = "desktop.notifications";
-const MENU_CHECK_UPDATES: &str = "desktop.check-updates";
 const MENU_BUILD_INFO: &str = "desktop.build-info";
 const MENU_QUIT: &str = "desktop.quit";
 
 const ROUTE_HOME: &str = "/";
 const ROUTE_LATER: &str = "/inbox/later/";
 const ROUTE_NOTIFICATIONS: &str = "/inbox/notifications/";
-
-#[derive(Clone, Serialize)]
-struct DesktopActionPayload<'a> {
-    action: &'a str,
-}
 
 #[derive(Clone, Serialize, serde::Deserialize)]
 pub struct DesktopAgentActionPayload {
@@ -42,6 +38,13 @@ pub struct DesktopShortcutConfig {
     pub show: String,
     pub later: String,
     pub notifications: String,
+}
+
+#[derive(Clone, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DesktopNotificationPayload {
+    pub title: String,
+    pub body: Option<String>,
 }
 
 #[derive(Clone, Serialize)]
@@ -61,6 +64,9 @@ pub struct DesktopPerformanceCapabilities {
 
 const DESKTOP_AGENT_ACTION_MAX_TEXT_CHARS: usize = 1024;
 const DESKTOP_AGENT_ACTION_MAX_MARKDOWN_CHARS: usize = 16_384;
+const DESKTOP_NOTIFICATION_MAX_TITLE_CHARS: usize = 120;
+const DESKTOP_NOTIFICATION_MAX_BODY_CHARS: usize = 500;
+const MAX_DESKTOP_ROUTE_CHARS: usize = 2_048;
 const ALLOWED_SHORTCUT_LEN: usize = 128;
 const ALLOWED_AGENT_ACTION_KIND: &[&str] = &[
     "agent",
@@ -127,6 +133,61 @@ fn sanitize_action_text(value: String, max_chars: usize) -> String {
     truncate_text(value.trim().to_string(), max_chars)
 }
 
+fn sanitize_notification_payload(
+    notification: DesktopNotificationPayload,
+) -> Result<DesktopNotificationPayload, String> {
+    let title = sanitize_action_text(notification.title, DESKTOP_NOTIFICATION_MAX_TITLE_CHARS);
+    if title.is_empty() {
+        return Err("Notification title cannot be empty".to_owned());
+    }
+
+    let body = notification
+        .body
+        .map(|value| sanitize_action_text(value, DESKTOP_NOTIFICATION_MAX_BODY_CHARS))
+        .filter(|value| !value.is_empty());
+
+    Ok(DesktopNotificationPayload { title, body })
+}
+
+pub fn is_safe_external_url(value: &str) -> bool {
+    let Ok(url) = Url::parse(value) else {
+        return false;
+    };
+
+    match url.scheme() {
+        "https" | "http" => {
+            url.host_str().is_some() && url.username().is_empty() && url.password().is_none()
+        }
+        "mailto" | "matrix" => true,
+        _ => false,
+    }
+}
+
+fn is_safe_agent_url(value: &str) -> bool {
+    let Ok(url) = Url::parse(value) else {
+        return false;
+    };
+
+    url.scheme() == "https"
+        && url.host_str().is_some()
+        && url.username().is_empty()
+        && url.password().is_none()
+}
+
+fn sanitize_route(route: String) -> Result<String, String> {
+    let route = sanitize_action_text(route, MAX_DESKTOP_ROUTE_CHARS);
+    if route.is_empty() {
+        return Err("Route cannot be empty".to_owned());
+    }
+    if route.contains("://") {
+        return Err("Route must be an internal app route".to_owned());
+    }
+    if !route.starts_with('/') && !route.starts_with('#') {
+        return Err("Route must start with / or #".to_owned());
+    }
+    Ok(route)
+}
+
 fn sanitize_agent_action_payload(
     mut action: DesktopAgentActionPayload,
 ) -> Result<DesktopAgentActionPayload, String> {
@@ -149,7 +210,7 @@ fn sanitize_agent_action_payload(
     }
 
     if let Some(url) = action.url.take() {
-        if !url.starts_with("https://") {
+        if !is_safe_agent_url(&url) {
             return Err("Agent action URL must use https".to_owned());
         }
         action.url = Some(sanitize_action_text(
@@ -246,19 +307,6 @@ pub fn hide_main_window<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     Ok(())
 }
 
-pub fn toggle_main_window<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
-    if let Some(window) = main_window(app) {
-        if window.is_visible()? {
-            window.hide()?;
-        } else {
-            window.show()?;
-            window.unminimize()?;
-            window.set_focus()?;
-        }
-    }
-    Ok(())
-}
-
 pub fn navigate_main_window<R: Runtime>(app: &AppHandle<R>, route: &str) -> tauri::Result<()> {
     show_main_window(app)?;
 
@@ -268,17 +316,6 @@ pub fn navigate_main_window<R: Runtime>(app: &AppHandle<R>, route: &str) -> taur
         window.eval(format!("window.location.hash = {};", hash_json))?;
     }
 
-    Ok(())
-}
-
-pub fn emit_check_updates<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
-    show_main_window(app)?;
-    app.emit(
-        "synara://desktop-action",
-        DesktopActionPayload {
-            action: "check-updates",
-        },
-    )?;
     Ok(())
 }
 
@@ -322,13 +359,6 @@ pub fn create_tray<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
         Some("CmdOrCtrl+Shift+N"),
     )?;
     let separator = PredefinedMenuItem::separator(app)?;
-    let check_updates = MenuItem::with_id(
-        app,
-        MENU_CHECK_UPDATES,
-        "Check for Updates",
-        true,
-        None::<&str>,
-    )?;
     let build_item = MenuItem::with_id(
         app,
         MENU_BUILD_INFO,
@@ -345,7 +375,6 @@ pub fn create_tray<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
             &later,
             &notifications,
             &separator,
-            &check_updates,
             &build_item,
             &quit,
         ],
@@ -354,21 +383,11 @@ pub fn create_tray<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     let mut builder = TrayIconBuilder::with_id("synara-tray")
         .tooltip("Synara")
         .menu(&menu)
-        .show_menu_on_left_click(false)
-        .on_menu_event(handle_menu_event)
-        .on_tray_icon_event(|tray, event| {
-            if let TrayIconEvent::Click {
-                button: MouseButton::Left,
-                button_state: MouseButtonState::Up,
-                ..
-            } = event
-            {
-                let _ = toggle_main_window(tray.app_handle());
-            }
-        });
+        .show_menu_on_left_click(true)
+        .on_menu_event(handle_menu_event);
 
     if let Some(icon) = app.default_window_icon() {
-        builder = builder.icon(icon.clone()).icon_as_template(true);
+        builder = builder.icon(icon.clone()).icon_as_template(false);
     }
 
     builder.build(app)?;
@@ -380,7 +399,6 @@ pub fn handle_menu_event<R: Runtime>(app: &AppHandle<R>, event: MenuEvent) {
         MENU_SHOW => show_main_window(app),
         MENU_LATER => navigate_main_window(app, ROUTE_LATER),
         MENU_NOTIFICATIONS => navigate_main_window(app, ROUTE_NOTIFICATIONS),
-        MENU_CHECK_UPDATES => emit_check_updates(app),
         MENU_BUILD_INFO => Ok(()),
         MENU_QUIT => {
             app.exit(0);
@@ -406,6 +424,7 @@ pub fn desktop_hide(app: AppHandle) -> Result<(), String> {
 
 #[tauri::command]
 pub fn desktop_navigate(app: AppHandle, route: String) -> Result<(), String> {
+    let route = sanitize_route(route)?;
     navigate_main_window(&app, &route).map_err(|error| error.to_string())
 }
 
@@ -456,6 +475,36 @@ pub fn desktop_set_shortcuts(
         )
         .map_err(|error: tauri_plugin_global_shortcut::Error| error.to_string())?;
 
+    Ok(true)
+}
+
+#[tauri::command]
+pub fn desktop_get_notification_permission(app: AppHandle) -> Result<String, String> {
+    app.notification()
+        .permission_state()
+        .map(|permission| permission.to_string())
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn desktop_request_notification_permission(app: AppHandle) -> Result<String, String> {
+    app.notification()
+        .request_permission()
+        .map(|permission| permission.to_string())
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn desktop_notify(
+    app: AppHandle,
+    notification: DesktopNotificationPayload,
+) -> Result<bool, String> {
+    let notification = sanitize_notification_payload(notification)?;
+    let mut builder = app.notification().builder().title(notification.title);
+    if let Some(body) = notification.body {
+        builder = builder.body(body);
+    }
+    builder.show().map_err(|error| error.to_string())?;
     Ok(true)
 }
 
@@ -554,6 +603,20 @@ mod tests {
     }
 
     #[test]
+    fn sanitize_action_payload_rejects_credentialed_urls() {
+        let result = sanitize_agent_action_payload(DesktopAgentActionPayload {
+            id: "abc".to_owned(),
+            title: "Action".to_owned(),
+            kind: Some("agent".to_owned()),
+            prompt: None,
+            url: Some("https://user:pass@example.org/action".to_owned()),
+            markdown: None,
+        });
+
+        assert!(result.is_err());
+    }
+
+    #[test]
     fn sanitize_action_payload_rejects_disallowed_scheme() {
         let result = sanitize_agent_action_payload(DesktopAgentActionPayload {
             id: "abc".to_owned(),
@@ -634,6 +697,54 @@ mod tests {
         assert!(!capabilities.build_revision.is_empty());
         assert!(!capabilities.build_branch.is_empty());
         assert!(capabilities.build_label.contains(capabilities.app_version));
+    }
+
+    #[test]
+    fn external_url_filter_allows_http_links_and_blocks_scriptable_schemes() {
+        assert!(is_safe_external_url("https://example.org/path"));
+        assert!(is_safe_external_url("http://example.org/path"));
+        assert!(is_safe_external_url("mailto:test@example.org"));
+        assert!(!is_safe_external_url("javascript:alert(1)"));
+        assert!(!is_safe_external_url("file:///Users/example/.ssh/id_rsa"));
+        assert!(!is_safe_external_url("https://user:pass@example.org/"));
+    }
+
+    #[test]
+    fn sanitize_route_allows_only_internal_routes() {
+        assert_eq!(
+            sanitize_route("/inbox/later/".to_owned()).unwrap(),
+            "/inbox/later/"
+        );
+        assert_eq!(
+            sanitize_route("#/room/abc".to_owned()).unwrap(),
+            "#/room/abc"
+        );
+        assert!(sanitize_route("https://example.org".to_owned()).is_err());
+        assert!(sanitize_route("room/abc".to_owned()).is_err());
+    }
+
+    #[test]
+    fn sanitize_notification_payload_rejects_empty_title() {
+        let result = sanitize_notification_payload(DesktopNotificationPayload {
+            title: "  ".to_owned(),
+            body: Some("Body".to_owned()),
+        });
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn sanitize_notification_payload_truncates_body() {
+        let payload = sanitize_notification_payload(DesktopNotificationPayload {
+            title: "Reminder".to_owned(),
+            body: Some("a".repeat(DESKTOP_NOTIFICATION_MAX_BODY_CHARS + 10)),
+        })
+        .expect("notification payload should pass");
+
+        assert_eq!(
+            payload.body.unwrap().chars().count(),
+            DESKTOP_NOTIFICATION_MAX_BODY_CHARS
+        );
     }
 
     fn sanitize_action_payload_with_no_kind(

@@ -11,7 +11,6 @@ Synara available after the main window is closed and exposes quick actions:
 - Show Synara
 - Later
 - Notifications
-- Check for Updates
 - Quit Synara
 
 Closing the main window hides it to the tray instead of quitting. Use the tray
@@ -39,7 +38,7 @@ same web client permissions model.
 
 The wrapper injects `window.__SYNARA_DESKTOP__` before the Synara app loads. The
 bridge exposes capability flags and canonical desktop routes so the web client
-can adapt UI for tray, global shortcuts, updater, media permission, Later, and
+can adapt UI for tray, global shortcuts, media permission, Later, and
 notification-center workflows without assuming every deployment is native.
 
 ## Performance diagnostics
@@ -64,8 +63,9 @@ surfaces without duplicating Matrix account data or room state:
   events through `desktop_agent_action` rather than scraping message content.
   The wrapper re-validates action kinds, text lengths, markdown lengths, and
   HTTPS-only URLs before copying, opening, or emitting any action payload.
-- Auto-update entry points emit the `synara://desktop-action` check-updates event
-  so the web client can present update state inside the app.
+- Auto-update entry points are disabled in this branch. A signed release channel
+  should be configured and tested before reintroducing a user-visible update
+  menu item.
 
 ## Feature ownership
 
