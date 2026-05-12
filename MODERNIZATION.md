@@ -23,11 +23,11 @@ surfaces and exposes a small typed bridge to the web app.
 cargo test --manifest-path src-tauri/Cargo.toml
 ```
 
-Full package builds require the paired web client assets in the nested `cinny/`
+Full package builds require the paired web client assets in the nested `synara/`
 checkout:
 
 ```sh
-cd cinny
+cd synara
 npm ci
 npm run build
 cd ..

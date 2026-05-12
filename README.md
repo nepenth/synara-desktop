@@ -5,9 +5,8 @@ Synara is a modern Matrix client focused on fast, secure conversations, desktop 
 ## Download
 
 Installers for macOS, Windows and Linux are built from this fork. Distribution releases should be signed with an [Ed25519](https://ed25519.cr.yp.to/) public key.
-The in-app updater is currently disabled until this fork has a stable signed
-release metadata channel. Local builds do not contact Cinny or Synara release
-servers for updates.
+The in-app updater is currently disabled until this project has a stable signed
+release metadata channel. Local builds do not contact update servers.
 
 | Operating System | Download          |
 | ---------------- | ----------------- |
@@ -30,7 +29,7 @@ Firstly, to setup Rust, NodeJS and build tools follow [Tauri documentation](http
 Now, to setup development locally run the following commands:
 
 - `git clone --recursive https://github.com/nepenthe/synara-desktop.git`
-- `cd synara-desktop/cinny`
+- `cd synara-desktop/synara`
 - `npm ci`
 - `cd ..`
 - `npm ci`

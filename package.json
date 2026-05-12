@@ -1,18 +1,18 @@
 {
   "name": "synara",
-  "version": "4.11.3-synara.3",
+  "version": "1.0.0",
   "description": "A modern Matrix client",
   "main": "index.js",
   "engines": {
-    "node": ">=16.0.0"
+    "node": "^20.19.0 || >=22.12.0"
   },
   "scripts": {
     "pretauri": "node scripts/warn-macos-app-replace.mjs",
-    "tauri": "cp config.json cinny/ && tauri",
+    "tauri": "cp config.json synara/ && tauri",
     "release": "node scripts/release.mjs"
   },
   "keywords": [],
-  "author": "Ajay Bura",
+  "author": "Synara contributors",
   "license": "AGPL-3.0-only",
   "dependencies": {
     "@tauri-apps/api": "2.7.0"

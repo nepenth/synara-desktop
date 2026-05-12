@@ -1,3 +1,4 @@
-[submodule "cinny"]
-	path = cinny
-	url = https://github.com/cinnyapp/cinny.git
+[submodule "synara"]
+	path = synara
+	url = https://github.com/nepenth/synara.git
+	branch = main

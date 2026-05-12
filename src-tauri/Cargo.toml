@@ -2,9 +2,9 @@
 
 [package]
 name = "synara"
-version = "4.11.3-synara.3"
+version = "1.0.0"
 description = "A modern Matrix client"
-authors = ["Ajay Bura"]
+authors = ["Synara contributors"]
 license = "AGPL-3.0-only"
 repository = "https://github.com/nepenthe/synara-desktop"
 default-run = "synara"

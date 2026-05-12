@@ -3811,7 +3811,7 @@ dependencies = [
 
 [[package]]
 name = "synara"
-version = "4.11.3-synara.3"
+version = "1.0.0"
 dependencies = [
  "serde",
  "serde_json",
