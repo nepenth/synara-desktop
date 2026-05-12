@@ -1,0 +1,57 @@
+{
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "windows": {
+      "certificateThumbprint": null,
+      "digestAlgorithm": "sha256",
+      "timestampUrl": "",
+      "wix": {
+        "bannerPath": "wix/banner.bmp",
+        "dialogImagePath": "wix/dialogImage.bmp"
+      }
+    },
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "resources": [],
+    "externalBin": [],
+    "copyright": "2026 Synara contributors",
+    "category": "SocialNetworking",
+    "shortDescription": "Elegant Matrix client for AI Agents",
+    "longDescription": "Synara Desktop — High-performance Matrix client optimized for interfacing with AI Agents, featuring smooth virtualization, agent cards, and native desktop integrations.",
+    "macOS": {
+      "frameworks": [],
+      "minimumSystemVersion": "",
+      "exceptionDomain": "",
+      "signingIdentity": null,
+      "providerShortName": null,
+      "entitlements": null
+    },
+    "linux": {
+      "deb": {
+        "depends": []
+      }
+    },
+    "createUpdaterArtifacts": false
+  },
+  "build": {
+    "beforeBuildCommand": "node scripts/build-web.mjs",
+    "frontendDist": "../devAssets",
+    "beforeDevCommand": "cd synara && npm start",
+    "devUrl": "http://localhost:8080"
+  },
+  "productName": "Synara",
+  "mainBinaryName": "synara",
+  "version": "1.0.0",
+  "identifier": "app.synara.desktop",
+  "app": {
+    "security": {
+      "csp": "default-src 'self'; base-uri 'none'; object-src 'none'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: filesystem: http: https:; font-src 'self' data:; media-src 'self' data: blob: http: https:; connect-src 'self' blob: ipc: ws: wss: http: https: http://ipc.localhost; worker-src 'self' blob:; frame-src http: https:; form-action 'none'"
+    }
+  }
+}
