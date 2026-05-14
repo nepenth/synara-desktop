@@ -58,8 +58,9 @@ sudo pacman -S --needed \
   wget \
   file \
   openssl \
+  gst-plugins-good \
   appmenu-gtk-module \
-  libappindicator-gtk3 \
+  libayatana-appindicator \
   librsvg \
   xdotool
 ```
@@ -87,6 +88,23 @@ npm run tauri build -- --bundles appimage
 The Tauri `.deb` bundler supplies stock WebKitGTK, GTK, and tray runtime dependencies for Debian-family packages. Keep `bundle.linux.deb.depends` unset unless Synara gains an extra native runtime dependency.
 
 The desktop build runs `scripts/build-web.mjs`, builds the `synara/` submodule, copies `synara/dist` into `devAssets`, then packages with Tauri.
+
+### Arch-family local installs
+
+On CachyOS and other rolling Arch-family systems, `npm run tauri build -- --bundles appimage` can fail in Tauri's `linuxdeploy` step with errors like `unknown type [0x13] section .relr.dyn`. That failure is in the AppImage packaging tool's bundled `strip` binary handling newer system libraries; it does not mean the Synara binary failed to build.
+
+For local workstation testing on CachyOS, build the release binary and then produce a native pacman package:
+
+```sh
+npm run tauri build -- --bundles deb
+cd packaging/arch
+makepkg -f
+sudo pacman -U synara-desktop-bin-*.pkg.tar.zst
+```
+
+The Arch package installs a small `/usr/bin/synara` wrapper that keeps the app on native Wayland while disabling WebKitGTK's DMABUF and compositing renderer paths. Those renderer paths can crash or blank the WebKit web process on CachyOS/KDE Plasma Wayland, especially on NVIDIA systems. Keep `gst-plugins-good` installed so WebKitGTK can resolve the `autoaudiosink` GStreamer element during Matrix media setup.
+
+Use AppImage as a release artifact only after validating it on a packaging host or container whose `linuxdeploy` toolchain can strip the host libraries successfully.
 
 ## KDE Plasma Wayland Scope
 
