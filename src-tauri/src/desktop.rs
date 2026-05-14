@@ -1,5 +1,6 @@
 use serde::Serialize;
 use std::collections::HashMap;
+use tauri::image::Image;
 use tauri::menu::{Menu, MenuEvent, MenuItem, PredefinedMenuItem};
 use tauri::tray::TrayIconBuilder;
 use tauri::{AppHandle, Emitter, Manager, Runtime, WebviewWindow};
@@ -386,9 +387,8 @@ pub fn create_tray<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
         .show_menu_on_left_click(true)
         .on_menu_event(handle_menu_event);
 
-    if let Some(icon) = app.default_window_icon() {
-        builder = builder.icon(icon.clone()).icon_as_template(false);
-    }
+    let tray_icon = Image::from_bytes(include_bytes!("../icons/tray-template.png"))?;
+    builder = builder.icon(tray_icon).icon_as_template(true);
 
     builder.build(app)?;
     Ok(())
