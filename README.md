@@ -41,6 +41,8 @@ On macOS, local unsigned smoke-test builds should use ad-hoc signing:
 
 - `APPLE_SIGNING_IDENTITY=- npm run tauri build -- --bundles app`
 
+On Linux workstations, see [Linux builds](docs/linux.md) for distribution-specific system dependencies, KDE Plasma Wayland notes, and `.deb`/AppImage packaging commands.
+
 Packaged builds expose their identity in the tray menu and About dialog as `Build <version> <branch>@<short-sha>`.
 
 To replace an existing local macOS app bundle, move the old bundle aside first. Copying into an existing `.app` can nest the new bundle inside the old one:

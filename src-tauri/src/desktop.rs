@@ -387,8 +387,16 @@ pub fn create_tray<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
         .show_menu_on_left_click(true)
         .on_menu_event(handle_menu_event);
 
-    let tray_icon = Image::from_bytes(include_bytes!("../icons/tray-template.png"))?;
-    builder = builder.icon(tray_icon).icon_as_template(true);
+    #[cfg(target_os = "macos")]
+    {
+        let tray_icon = Image::from_bytes(include_bytes!("../icons/tray-template.png"))?;
+        builder = builder.icon(tray_icon).icon_as_template(true);
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    if let Some(icon) = app.default_window_icon() {
+        builder = builder.icon(icon.clone()).icon_as_template(false);
+    }
 
     builder.build(app)?;
     Ok(())

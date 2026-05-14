@@ -32,11 +32,6 @@
       "providerShortName": null,
       "entitlements": null
     },
-    "linux": {
-      "deb": {
-        "depends": []
-      }
-    },
     "createUpdaterArtifacts": false
   },
   "build": {
