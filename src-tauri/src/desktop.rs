@@ -1,6 +1,7 @@
 use serde::Serialize;
 use std::collections::HashMap;
 use std::env;
+#[cfg(target_os = "macos")]
 use tauri::image::Image;
 use tauri::menu::{Menu, MenuEvent, MenuItem, PredefinedMenuItem};
 use tauri::tray::TrayIconBuilder;
@@ -69,7 +70,7 @@ pub struct DesktopShortcutApplyResult {
     pub fallback_command: Option<String>,
 }
 
-#[derive(Clone, Serialize, PartialEq)]
+#[derive(Clone, Copy, Debug, Serialize, serde::Deserialize, PartialEq)]
 #[serde(rename_all = "kebab-case")]
 pub enum DesktopShortcutApplyState {
     Active,
@@ -325,6 +326,7 @@ fn desktop_environment_label() -> String {
     }
     env::var("XDG_CURRENT_DESKTOP")
         .map(|value| value.trim().to_owned())
+        .ok()
         .filter(|value| !value.is_empty())
         .unwrap_or_else(|| UNKNOWN_INTEGRATION_VALUE.to_owned())
 }
@@ -880,7 +882,7 @@ pub fn desktop_get_integration_status(app: AppHandle) -> DesktopIntegrationStatu
             message: "Tray is unavailable.".to_string(),
         });
 
-    let notification_permission = app
+    let notifications = app
         .notification()
         .permission_state()
         .map(|permission| permission.to_string().to_ascii_lowercase())
@@ -1054,6 +1056,9 @@ pub fn desktop_agent_action(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Mutex;
+
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
 
     #[test]
     fn validate_shortcuts_accepts_valid_input() {
@@ -1311,6 +1316,7 @@ VERSION_ID=24
 
     #[test]
     fn detect_integration_environment_falls_back_for_absent_values() {
+        let _guard = ENV_LOCK.lock().expect("env lock should not be poisoned");
         let original_desktop = std::env::var("XDG_CURRENT_DESKTOP").ok();
         let original_session_type = std::env::var("XDG_SESSION_TYPE").ok();
         let original_display = std::env::var("DISPLAY").ok();
@@ -1339,6 +1345,7 @@ VERSION_ID=24
 
     #[test]
     fn detect_cachyos_like_desktop_is_kde_wayland_when_flags_match() {
+        let _guard = ENV_LOCK.lock().expect("env lock should not be poisoned");
         let original_desktop = std::env::var("XDG_CURRENT_DESKTOP").ok();
         let original_wayland = std::env::var("WAYLAND_DISPLAY").ok();
         std::env::set_var("XDG_CURRENT_DESKTOP", "KDE");
