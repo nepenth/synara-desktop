@@ -28,6 +28,8 @@ pub fn run() {
             desktop::desktop_navigate,
             desktop::desktop_set_badge_count,
             desktop::desktop_set_shortcuts,
+            desktop::desktop_get_integration_status,
+            desktop::desktop_update_tray_state,
             desktop::desktop_get_notification_permission,
             desktop::desktop_request_notification_permission,
             desktop::desktop_notify,

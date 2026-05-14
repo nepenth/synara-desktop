@@ -1,5 +1,6 @@
 use serde::Serialize;
 use std::collections::HashMap;
+use std::env;
 use tauri::image::Image;
 use tauri::menu::{Menu, MenuEvent, MenuItem, PredefinedMenuItem};
 use tauri::tray::TrayIconBuilder;
@@ -9,6 +10,10 @@ use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutEvent, S
 use tauri_plugin_notification::NotificationExt;
 use tauri_plugin_opener::OpenerExt;
 use url::Url;
+use std::path::Path;
+use std::sync::{Mutex, OnceLock};
+
+use std::fs;
 
 use crate::build_info;
 
@@ -17,12 +22,18 @@ pub const MAIN_WINDOW_LABEL: &str = "main";
 const MENU_SHOW: &str = "desktop.show";
 const MENU_LATER: &str = "desktop.later";
 const MENU_NOTIFICATIONS: &str = "desktop.notifications";
+const MENU_UNREAD_SUMMARY: &str = "desktop.unread-summary";
+const MENU_DESKTOP_INTEGRATION: &str = "desktop.integration";
+const MENU_DND_TOGGLE: &str = "desktop.dnd";
 const MENU_BUILD_INFO: &str = "desktop.build-info";
 const MENU_QUIT: &str = "desktop.quit";
 
 const ROUTE_HOME: &str = "/";
 const ROUTE_LATER: &str = "/inbox/later/";
 const ROUTE_NOTIFICATIONS: &str = "/inbox/notifications/";
+const ROUTE_SETTINGS: &str = "/settings/";
+
+const TRAY_ICON_ID: &str = "synara-tray";
 
 #[derive(Clone, Serialize, serde::Deserialize)]
 pub struct DesktopAgentActionPayload {
@@ -46,7 +57,64 @@ pub struct DesktopShortcutConfig {
 pub struct DesktopNotificationPayload {
     pub title: String,
     pub body: Option<String>,
+    pub route: Option<String>,
 }
+
+#[derive(Clone, serde::Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DesktopShortcutApplyResult {
+    pub success: bool,
+    pub state: DesktopShortcutApplyState,
+    pub message: String,
+    pub fallback_command: Option<String>,
+}
+
+#[derive(Clone, Serialize, PartialEq)]
+#[serde(rename_all = "kebab-case")]
+pub enum DesktopShortcutApplyState {
+    Active,
+    PermissionNeeded,
+    Unsupported,
+    Failed,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DesktopIntegrationCheck {
+    pub name: String,
+    pub ready: bool,
+    pub supported: bool,
+    pub message: String,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DesktopIntegrationStatus {
+    pub platform: &'static str,
+    pub desktop_environment: String,
+    pub session_type: String,
+    pub distro_id: String,
+    pub distro_name: String,
+    pub distro_version: String,
+    pub build_identity: String,
+    pub tray: DesktopIntegrationCheck,
+    pub notifications: DesktopIntegrationCheck,
+    pub global_shortcuts: DesktopIntegrationCheck,
+    pub file_portal: DesktopIntegrationCheck,
+    pub media_portal: DesktopIntegrationCheck,
+}
+
+#[derive(Clone, Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DesktopTrayState {
+    pub unread_count: i64,
+    pub highlight_count: i64,
+    pub later_count: i64,
+    pub notification_inbox_count: i64,
+    pub do_not_disturb: bool,
+}
+
+static LAST_SHORTCUT_APPLY_STATE: OnceLock<Mutex<Option<DesktopShortcutApplyState>>> = OnceLock::new();
 
 #[derive(Clone, Serialize)]
 struct DesktopAgentActionEvent {
@@ -69,6 +137,8 @@ const DESKTOP_NOTIFICATION_MAX_TITLE_CHARS: usize = 120;
 const DESKTOP_NOTIFICATION_MAX_BODY_CHARS: usize = 500;
 const MAX_DESKTOP_ROUTE_CHARS: usize = 2_048;
 const ALLOWED_SHORTCUT_LEN: usize = 128;
+const UNKNOWN_INTEGRATION_VALUE: &str = "unknown";
+const MAX_TRAY_COUNT: i64 = 9_999;
 const ALLOWED_AGENT_ACTION_KIND: &[&str] = &[
     "agent",
     "copy",
@@ -147,7 +217,9 @@ fn sanitize_notification_payload(
         .map(|value| sanitize_action_text(value, DESKTOP_NOTIFICATION_MAX_BODY_CHARS))
         .filter(|value| !value.is_empty());
 
-    Ok(DesktopNotificationPayload { title, body })
+    let route = notification.route.and_then(|value| sanitize_route(value).ok());
+
+    Ok(DesktopNotificationPayload { title, body, route })
 }
 
 pub fn is_safe_external_url(value: &str) -> bool {
@@ -187,6 +259,291 @@ fn sanitize_route(route: String) -> Result<String, String> {
         return Err("Route must start with / or #".to_owned());
     }
     Ok(route)
+}
+
+fn clamp_count(value: i64) -> i64 {
+    match value {
+        value if value < 0 => 0,
+        value if value > MAX_TRAY_COUNT => MAX_TRAY_COUNT,
+        value => value,
+    }
+}
+
+fn last_shortcut_state() -> &'static Mutex<Option<DesktopShortcutApplyState>> {
+    LAST_SHORTCUT_APPLY_STATE.get_or_init(|| Mutex::new(None))
+}
+
+fn set_last_shortcut_apply_state(state: DesktopShortcutApplyState) {
+    if let Ok(mut guard) = last_shortcut_state().lock() {
+        *guard = Some(state);
+    }
+}
+
+fn read_last_shortcut_apply_state() -> Option<DesktopShortcutApplyState> {
+    last_shortcut_state()
+        .lock()
+        .ok()
+        .and_then(|state| state.clone())
+}
+
+fn is_kde() -> bool {
+    env::var("XDG_CURRENT_DESKTOP")
+        .map(|value| value.to_ascii_lowercase().contains("kde"))
+        .unwrap_or(false)
+}
+
+fn is_wayland() -> bool {
+    if env::var("WAYLAND_DISPLAY").is_ok() {
+        return true;
+    }
+
+    env::var("XDG_SESSION_TYPE")
+        .map(|value| value.eq_ignore_ascii_case("wayland"))
+        .unwrap_or(false)
+}
+
+fn is_kde_wayland_session() -> bool {
+    is_kde() && is_wayland()
+}
+
+fn detect_session_type() -> String {
+    if is_wayland() {
+        return "wayland".to_owned();
+    }
+    if env::var("DISPLAY").is_ok() {
+        return "x11".to_owned();
+    }
+    env::var("XDG_SESSION_TYPE").unwrap_or_else(|_| UNKNOWN_INTEGRATION_VALUE.to_owned())
+}
+
+fn desktop_environment_label() -> String {
+    if is_kde_wayland_session() {
+        return "KDE Plasma Wayland".to_owned();
+    }
+    if is_kde() {
+        return "KDE".to_owned();
+    }
+    env::var("XDG_CURRENT_DESKTOP")
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| UNKNOWN_INTEGRATION_VALUE.to_owned())
+}
+
+fn parse_os_release_field(contents: &str, key: &str) -> Option<String> {
+    let prefix = format!("{key}=");
+    for raw_line in contents.lines() {
+        let line = raw_line.trim();
+        if !line.starts_with(&prefix) {
+            continue;
+        }
+        let value = line.trim_start_matches(&prefix).trim();
+        return Some(unquote_os_release_value(value));
+    }
+    None
+}
+
+fn unquote_os_release_value(value: &str) -> String {
+    let stripped = value.trim().trim_matches('"');
+    stripped.to_owned()
+}
+
+fn detect_os_release() -> (String, String, String) {
+    let default = UNKNOWN_INTEGRATION_VALUE.to_owned();
+    let path = Path::new("/etc/os-release");
+    if !path.exists() {
+        return (default.clone(), default.clone(), default);
+    }
+
+    let Ok(contents) = fs::read_to_string(path) else {
+        return (default.clone(), default.clone(), default);
+    };
+
+    let distro_id = parse_os_release_field(&contents, "ID").unwrap_or_else(|| default.clone());
+    let distro_name = parse_os_release_field(&contents, "NAME").unwrap_or_else(|| distro_id.clone());
+    let distro_version = parse_os_release_field(&contents, "VERSION_ID").unwrap_or_else(|| default.clone());
+    (distro_id, distro_name, distro_version)
+}
+
+fn dir_has_fragment(path: &str, fragment: &str) -> bool {
+    let mut entries = match fs::read_dir(path) {
+        Ok(entries) => entries,
+        Err(_) => return false,
+    };
+
+    let fragment = fragment.to_ascii_lowercase();
+    entries.any(|entry| {
+        let Ok(entry) = entry else {
+            return false;
+        };
+        let name = entry.file_name().to_string_lossy().to_ascii_lowercase();
+        name.contains(&fragment)
+    })
+}
+
+fn has_media_portal_backend() -> bool {
+    dir_has_fragment("/usr/share/xdg-desktop-portal/portals", "screencast")
+        || dir_has_fragment("/usr/share/dbus-1/services", "screencast")
+        || dir_has_fragment("/usr/share/dbus-1/services", "camera")
+        || dir_has_fragment("/usr/share/xdg-desktop-portal/portals", "screenshot")
+}
+
+fn has_file_portal_backend() -> bool {
+    dir_has_fragment("/usr/share/xdg-desktop-portal/portals", "file")
+        || dir_has_fragment("/usr/share/dbus-1/services", "org.freedesktop.portal.files")
+        || dir_has_fragment("/usr/share/dbus-1/services", "filechooser")
+}
+
+fn shortcut_apply_state_message(state: DesktopShortcutApplyState) -> &'static str {
+    match state {
+        DesktopShortcutApplyState::Active => "Desktop shortcuts are active.",
+        DesktopShortcutApplyState::PermissionNeeded => {
+            "Shortcut registration needs permission on this desktop session."
+        }
+        DesktopShortcutApplyState::Unsupported => "Desktop shortcuts are unsupported in this environment.",
+        DesktopShortcutApplyState::Failed => "Desktop shortcut registration failed.",
+    }
+}
+
+fn desktop_shortcut_fallback_command() -> Option<String> {
+    if is_kde_wayland_session() {
+        return Some("Open System Settings > Shortcuts and create a custom shortcut for Synara.".to_string());
+    }
+    None
+}
+
+fn shortcut_result(
+    state: DesktopShortcutApplyState,
+    message: Option<String>,
+    fallback_command: Option<String>,
+) -> DesktopShortcutApplyResult {
+    let fallback_command = if matches!(state, DesktopShortcutApplyState::PermissionNeeded) {
+        Some("Open System Settings > Shortcuts and create a custom shortcut for Synara.".to_string())
+    } else {
+        fallback_command
+    };
+
+    DesktopShortcutApplyResult {
+        success: matches!(state, DesktopShortcutApplyState::Active),
+        state,
+        message: message.unwrap_or_else(|| shortcut_apply_state_message(state).to_owned()),
+        fallback_command,
+    }
+}
+
+fn shortcut_state_from_error(error: &str) -> DesktopShortcutApplyState {
+    let normalized = error.to_ascii_lowercase();
+    if normalized.contains("permission") || normalized.contains("denied") {
+        DesktopShortcutApplyState::PermissionNeeded
+    } else if normalized.contains("not supported") || normalized.contains("unsupported") {
+        DesktopShortcutApplyState::Unsupported
+    } else {
+        DesktopShortcutApplyState::Failed
+    }
+}
+
+fn tray_route_labels(state: &DesktopTrayState) -> [String; 5] {
+    let unread = clamp_count(state.unread_count);
+    let highlights = clamp_count(state.highlight_count);
+    let later = clamp_count(state.later_count);
+    let notifications = clamp_count(state.notification_inbox_count);
+    let do_not_disturb = state.do_not_disturb;
+    let summary = format!(
+        "Unread: {unread} | Highlights: {highlights} | Later: {later} | Notifications: {notifications}"
+    );
+    let later_label = format!("Later ({later})");
+    let notifications_label = format!("Notifications ({notifications})");
+    let dnd_label = if do_not_disturb {
+        "Do Not Disturb: On"
+    } else {
+        "Do Not Disturb: Off"
+    };
+    let integration_label = "Desktop Integration";
+    [
+        summary,
+        later_label,
+        notifications_label,
+        dnd_label.to_owned(),
+        integration_label.to_owned(),
+    ]
+}
+
+fn build_tray_menu<R: Runtime>(app: &AppHandle<R>, state: &DesktopTrayState) -> tauri::Result<Menu<R>> {
+    let [unread_summary, later_label, notifications_label, dnd_label, integration_label] =
+        tray_route_labels(state);
+
+    let show = MenuItem::with_id(
+        app,
+        MENU_SHOW,
+        "Show Synara",
+        true,
+        Some("CmdOrCtrl+Shift+C"),
+    )?;
+    let unread_summary = MenuItem::with_id(
+        app,
+        MENU_UNREAD_SUMMARY,
+        unread_summary.as_str(),
+        false,
+        None::<&str>,
+    )?;
+    let later = MenuItem::with_id(app, MENU_LATER, later_label.as_str(), true, Some("CmdOrCtrl+Shift+L"))?;
+    let notifications = MenuItem::with_id(
+        app,
+        MENU_NOTIFICATIONS,
+        notifications_label.as_str(),
+        true,
+        Some("CmdOrCtrl+Shift+N"),
+    )?;
+    let desktop_integration = MenuItem::with_id(
+        app,
+        MENU_DESKTOP_INTEGRATION,
+        integration_label.as_str(),
+        true,
+        None::<&str>,
+    )?;
+    let dnd = MenuItem::with_id(
+        app,
+        MENU_DND_TOGGLE,
+        dnd_label.as_str(),
+        true,
+        None::<&str>,
+    )?;
+    let separator = PredefinedMenuItem::separator(app)?;
+    let build_item = MenuItem::with_id(
+        app,
+        MENU_BUILD_INFO,
+        build_info::menu_label(),
+        false,
+        None::<&str>,
+    )?;
+    let quit = MenuItem::with_id(app, MENU_QUIT, "Quit Synara", true, Some("CmdOrCtrl+Q"))?;
+
+    #[cfg(not(target_os = "linux"))]
+    let menu = Menu::with_items(app, &[&show, &later, &notifications, &separator, &build_item, &quit])?;
+
+    #[cfg(target_os = "linux")]
+    let menu = Menu::with_items(
+        app,
+        &[
+            &show,
+            &unread_summary,
+            &later,
+            &notifications,
+            &desktop_integration,
+            &dnd,
+            &separator,
+            &build_item,
+            &quit,
+        ],
+    )?;
+
+    Ok(menu)
+}
+
+fn tray_tooltip(state: &DesktopTrayState) -> String {
+    let unread = clamp_count(state.unread_count);
+    let highlights = clamp_count(state.highlight_count);
+    let later = clamp_count(state.later_count);
+    format!("Synara — {unread} unread ({highlights} highlights), {later} later")
 }
 
 fn sanitize_agent_action_payload(
@@ -344,45 +701,17 @@ pub fn performance_capabilities() -> DesktopPerformanceCapabilities {
 }
 
 pub fn create_tray<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
-    let show = MenuItem::with_id(
-        app,
-        MENU_SHOW,
-        "Show Synara",
-        true,
-        Some("CmdOrCtrl+Shift+C"),
-    )?;
-    let later = MenuItem::with_id(app, MENU_LATER, "Later", true, Some("CmdOrCtrl+Shift+L"))?;
-    let notifications = MenuItem::with_id(
-        app,
-        MENU_NOTIFICATIONS,
-        "Notifications",
-        true,
-        Some("CmdOrCtrl+Shift+N"),
-    )?;
-    let separator = PredefinedMenuItem::separator(app)?;
-    let build_item = MenuItem::with_id(
-        app,
-        MENU_BUILD_INFO,
-        build_info::menu_label(),
-        false,
-        None::<&str>,
-    )?;
-    let quit = MenuItem::with_id(app, MENU_QUIT, "Quit Synara", true, Some("CmdOrCtrl+Q"))?;
-
-    let menu = Menu::with_items(
-        app,
-        &[
-            &show,
-            &later,
-            &notifications,
-            &separator,
-            &build_item,
-            &quit,
-        ],
-    )?;
+    let initial_state = DesktopTrayState {
+        unread_count: 0,
+        highlight_count: 0,
+        later_count: 0,
+        notification_inbox_count: 0,
+        do_not_disturb: false,
+    };
+    let menu = build_tray_menu(app, &initial_state)?;
 
     let mut builder = TrayIconBuilder::with_id("synara-tray")
-        .tooltip("Synara")
+        .tooltip(&tray_tooltip(&initial_state))
         .menu(&menu)
         .show_menu_on_left_click(true)
         .on_menu_event(handle_menu_event);
@@ -407,6 +736,9 @@ pub fn handle_menu_event<R: Runtime>(app: &AppHandle<R>, event: MenuEvent) {
         MENU_SHOW => show_main_window(app),
         MENU_LATER => navigate_main_window(app, ROUTE_LATER),
         MENU_NOTIFICATIONS => navigate_main_window(app, ROUTE_NOTIFICATIONS),
+        MENU_UNREAD_SUMMARY => navigate_main_window(app, ROUTE_HOME),
+        MENU_DESKTOP_INTEGRATION => navigate_main_window(app, ROUTE_SETTINGS),
+        MENU_DND_TOGGLE => Ok(()),
         MENU_BUILD_INFO => Ok(()),
         MENU_QUIT => {
             app.exit(0);
@@ -442,14 +774,41 @@ pub fn desktop_set_badge_count(app: AppHandle, count: i64) -> Result<(), String>
 }
 
 #[tauri::command]
-pub fn desktop_set_shortcuts(
-    app: AppHandle,
-    shortcuts: DesktopShortcutConfig,
-) -> Result<bool, String> {
-    let normalized = validate_shortcuts(&shortcuts)?;
-    let parsed_show = parse_shortcut(&normalized.show)?;
-    let parsed_later = parse_shortcut(&normalized.later)?;
-    let parsed_notifications = parse_shortcut(&normalized.notifications)?;
+pub fn desktop_set_shortcuts(app: AppHandle, shortcuts: DesktopShortcutConfig) -> DesktopShortcutApplyResult {
+    let supported = cfg!(not(any(target_os = "android", target_os = "ios")));
+    if !supported {
+        return shortcut_result(
+            DesktopShortcutApplyState::Unsupported,
+            Some("Global shortcuts are not supported on this platform.".to_string()),
+            None,
+        );
+    }
+
+    let normalized = match validate_shortcuts(&shortcuts) {
+        Ok(normalized) => normalized,
+        Err(message) => {
+            return shortcut_result(DesktopShortcutApplyState::Failed, Some(message), None);
+        }
+    };
+
+    let parsed_show = match parse_shortcut(&normalized.show) {
+        Ok(value) => value,
+        Err(message) => {
+            return shortcut_result(DesktopShortcutApplyState::Failed, Some(message), None);
+        }
+    };
+    let parsed_later = match parse_shortcut(&normalized.later) {
+        Ok(value) => value,
+        Err(message) => {
+            return shortcut_result(DesktopShortcutApplyState::Failed, Some(message), None);
+        }
+    };
+    let parsed_notifications = match parse_shortcut(&normalized.notifications) {
+        Ok(value) => value,
+        Err(message) => {
+            return shortcut_result(DesktopShortcutApplyState::Failed, Some(message), None);
+        }
+    };
 
     let mut route_by_id = HashMap::new();
     route_by_id.insert(parsed_show.id(), ROUTE_HOME);
@@ -457,33 +816,185 @@ pub fn desktop_set_shortcuts(
     route_by_id.insert(parsed_notifications.id(), ROUTE_NOTIFICATIONS);
 
     let global_shortcut = app.global_shortcut();
-    global_shortcut
-        .unregister_all()
-        .map_err(|error: tauri_plugin_global_shortcut::Error| error.to_string())?;
+    if let Err(error) = global_shortcut.unregister_all() {
+        let state = shortcut_state_from_error(&error.to_string());
+        let result = shortcut_result(
+            state,
+            Some(format!("Failed to clear previous shortcuts: {error}")),
+            desktop_shortcut_fallback_command(),
+        );
+        set_last_shortcut_apply_state(state);
+        return result;
+    };
 
-    global_shortcut
-        .on_shortcuts(
-            [
-                normalized.show.as_str(),
-                normalized.later.as_str(),
-                normalized.notifications.as_str(),
-            ],
-            move |app: &AppHandle<tauri::Wry>, shortcut: &Shortcut, event: ShortcutEvent| {
-                if event.state() != ShortcutState::Pressed {
-                    return;
+    if let Err(error) = global_shortcut.on_shortcuts(
+        [
+            normalized.show.as_str(),
+            normalized.later.as_str(),
+            normalized.notifications.as_str(),
+        ],
+        move |app: &AppHandle<tauri::Wry>, shortcut: &Shortcut, event: ShortcutEvent| {
+            if event.state() != ShortcutState::Pressed {
+                return;
+            }
+
+            let Some(route) = route_by_id.get(&shortcut.id()) else {
+                return;
+            };
+            if let Err(error) = navigate_main_window(app, route) {
+                eprintln!("failed to handle desktop shortcut: {error}");
+            }
+        },
+    ) {
+        let state = shortcut_state_from_error(&error.to_string());
+        let result = shortcut_result(
+            state,
+            Some(format!("Failed to register desktop shortcuts: {error}")),
+            desktop_shortcut_fallback_command(),
+        );
+        set_last_shortcut_apply_state(state);
+        return result;
+    }
+
+    set_last_shortcut_apply_state(DesktopShortcutApplyState::Active);
+    shortcut_result(DesktopShortcutApplyState::Active, None, None)
+}
+
+#[tauri::command]
+pub fn desktop_get_integration_status(app: AppHandle) -> DesktopIntegrationStatus {
+    let (distro_id, distro_name, distro_version) = detect_os_release();
+    let desktop_environment = desktop_environment_label();
+    let session_type = detect_session_type();
+    let tray = app
+        .tray_by_id(TRAY_ICON_ID)
+        .map(|_| DesktopIntegrationCheck {
+            name: "Tray".to_string(),
+            ready: true,
+            supported: true,
+            message: "Tray is available.".to_string(),
+        })
+        .unwrap_or_else(|| DesktopIntegrationCheck {
+            name: "Tray".to_string(),
+            ready: false,
+            supported: false,
+            message: "Tray is unavailable.".to_string(),
+        });
+
+    let notification_permission = app
+        .notification()
+        .permission_state()
+        .map(|permission| permission.to_string().to_ascii_lowercase())
+        .map(|permission| {
+            let supported = !permission.is_empty();
+            let ready = permission != "denied";
+            let message = if ready {
+                "Notification permission is active."
+            } else {
+                "Notifications are blocked by platform permission."
+            };
+            DesktopIntegrationCheck {
+                name: "Notifications".to_string(),
+                supported,
+                ready,
+                message: message.to_string(),
+            }
+        })
+        .unwrap_or_else(|_| DesktopIntegrationCheck {
+            name: "Notifications".to_string(),
+            ready: false,
+            supported: false,
+            message: "Notification state could not be read.".to_string(),
+        });
+
+    let shortcut_state = read_last_shortcut_apply_state().unwrap_or_else(|| {
+        if is_kde_wayland_session() {
+            DesktopShortcutApplyState::Failed
+        } else {
+            DesktopShortcutApplyState::Active
+        }
+    });
+    let global_shortcuts = DesktopIntegrationCheck {
+        name: "Global Shortcuts".to_string(),
+        supported: cfg!(not(any(target_os = "android", target_os = "ios"))),
+        ready: matches!(shortcut_state, DesktopShortcutApplyState::Active),
+        message: match shortcut_state {
+            DesktopShortcutApplyState::Active => "Global shortcuts are active.".to_string(),
+            DesktopShortcutApplyState::PermissionNeeded => {
+                "Global shortcuts require permission in this desktop session.".to_string()
+            }
+            DesktopShortcutApplyState::Unsupported => {
+                "Global shortcuts are unsupported in this build.".to_string()
+            }
+            DesktopShortcutApplyState::Failed => {
+                if is_kde_wayland_session() {
+                    "Global shortcuts may require permission on KDE Wayland.".to_string()
+                } else {
+                    "Global shortcuts not currently active.".to_string()
                 }
+            }
+        },
+    };
 
-                let Some(route) = route_by_id.get(&shortcut.id()) else {
-                    return;
-                };
-                if let Err(error) = navigate_main_window(app, route) {
-                    eprintln!("failed to handle desktop shortcut: {error}");
-                }
-            },
-        )
-        .map_err(|error: tauri_plugin_global_shortcut::Error| error.to_string())?;
+    let file_portal_available = has_file_portal_backend();
+    let media_portal_available = has_media_portal_backend();
+    let file_portal = DesktopIntegrationCheck {
+        name: "File Portal".to_string(),
+        supported: true,
+        ready: file_portal_available,
+        message: if file_portal_available {
+            "File portal backend detected."
+        } else {
+            "File portal backend not detected."
+        }
+        .to_string(),
+    };
+    let media_portal = DesktopIntegrationCheck {
+        name: "Media Portal".to_string(),
+        supported: true,
+        ready: media_portal_available,
+        message: if media_portal_available {
+            "Media portal backend detected."
+        } else {
+            "Media portal backend not detected."
+        }
+        .to_string(),
+    };
 
-    Ok(true)
+    DesktopIntegrationStatus {
+        platform: std::env::consts::OS,
+        desktop_environment,
+        session_type,
+        distro_id,
+        distro_name,
+        distro_version,
+        build_identity: build_info::menu_label(),
+        tray,
+        notifications,
+        global_shortcuts,
+        file_portal,
+        media_portal,
+    }
+}
+
+#[tauri::command]
+pub fn desktop_update_tray_state(
+    app: AppHandle,
+    state: DesktopTrayState,
+) -> Result<(), String> {
+    if let Some(tray) = app.tray_by_id(TRAY_ICON_ID) {
+        let state = DesktopTrayState {
+            unread_count: clamp_count(state.unread_count),
+            highlight_count: clamp_count(state.highlight_count),
+            later_count: clamp_count(state.later_count),
+            notification_inbox_count: clamp_count(state.notification_inbox_count),
+            do_not_disturb: state.do_not_disturb,
+        };
+        let menu = build_tray_menu(&app, &state).map_err(|error| error.to_string())?;
+        tray.set_menu(Some(menu)).map_err(|error| error.to_string())?;
+        tray.set_tooltip(Some(tray_tooltip(&state)))
+            .map_err(|error| error.to_string())?;
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -736,6 +1247,7 @@ mod tests {
         let result = sanitize_notification_payload(DesktopNotificationPayload {
             title: "  ".to_owned(),
             body: Some("Body".to_owned()),
+            route: None,
         });
 
         assert!(result.is_err());
@@ -746,6 +1258,7 @@ mod tests {
         let payload = sanitize_notification_payload(DesktopNotificationPayload {
             title: "Reminder".to_owned(),
             body: Some("a".repeat(DESKTOP_NOTIFICATION_MAX_BODY_CHARS + 10)),
+            route: Some("/inbox/".to_owned()),
         })
         .expect("notification payload should pass");
 
@@ -753,6 +1266,141 @@ mod tests {
             payload.body.unwrap().chars().count(),
             DESKTOP_NOTIFICATION_MAX_BODY_CHARS
         );
+    }
+
+    #[test]
+    fn sanitize_notification_payload_accepts_safe_route_and_strips_invalid_route() {
+        let payload = sanitize_notification_payload(DesktopNotificationPayload {
+            title: "Reminder".to_owned(),
+            body: Some("body".to_owned()),
+            route: Some("/inbox/notifications/".to_owned()),
+        })
+        .expect("notification payload should pass");
+        assert_eq!(
+            payload.route,
+            Some("/inbox/notifications/".to_string())
+        );
+
+        let invalid = sanitize_notification_payload(DesktopNotificationPayload {
+            title: "Reminder".to_owned(),
+            body: Some("body".to_owned()),
+            route: Some("https://evil.example.com".to_owned()),
+        })
+        .expect("notification payload should pass without route");
+        assert_eq!(invalid.route, None);
+    }
+
+    #[test]
+    fn parse_os_release_detects_cachyos_metadata() {
+        let data = r#"
+ID=cachyos
+NAME="CachyOS"
+VERSION_ID=24
+"#;
+
+        assert_eq!(parse_os_release_field(data, "ID").unwrap_or_else(|| "".to_owned()), "cachyos");
+        assert_eq!(
+            parse_os_release_field(data, "NAME").unwrap_or_else(|| "".to_owned()),
+            "CachyOS"
+        );
+        assert_eq!(
+            parse_os_release_field(data, "VERSION_ID").unwrap_or_else(|| "".to_owned()),
+            "24"
+        );
+    }
+
+    #[test]
+    fn detect_integration_environment_falls_back_for_absent_values() {
+        let original_desktop = std::env::var("XDG_CURRENT_DESKTOP").ok();
+        let original_session_type = std::env::var("XDG_SESSION_TYPE").ok();
+        let original_display = std::env::var("DISPLAY").ok();
+        let original_wayland_display = std::env::var("WAYLAND_DISPLAY").ok();
+        std::env::remove_var("XDG_CURRENT_DESKTOP");
+        std::env::remove_var("XDG_SESSION_TYPE");
+        std::env::remove_var("DISPLAY");
+        std::env::remove_var("WAYLAND_DISPLAY");
+
+        assert_eq!(desktop_environment_label(), UNKNOWN_INTEGRATION_VALUE.to_owned());
+        assert_eq!(detect_session_type(), UNKNOWN_INTEGRATION_VALUE.to_owned());
+
+        if let Some(value) = original_desktop {
+            std::env::set_var("XDG_CURRENT_DESKTOP", value);
+        }
+        if let Some(value) = original_session_type {
+            std::env::set_var("XDG_SESSION_TYPE", value);
+        }
+        if let Some(value) = original_display {
+            std::env::set_var("DISPLAY", value);
+        }
+        if let Some(value) = original_wayland_display {
+            std::env::set_var("WAYLAND_DISPLAY", value);
+        }
+    }
+
+    #[test]
+    fn detect_cachyos_like_desktop_is_kde_wayland_when_flags_match() {
+        let original_desktop = std::env::var("XDG_CURRENT_DESKTOP").ok();
+        let original_wayland = std::env::var("WAYLAND_DISPLAY").ok();
+        std::env::set_var("XDG_CURRENT_DESKTOP", "KDE");
+        std::env::set_var("WAYLAND_DISPLAY", "wayland-0");
+
+        assert!(is_kde_wayland_session());
+        assert_eq!(desktop_environment_label(), "KDE Plasma Wayland");
+        assert_eq!(detect_session_type(), "wayland");
+
+        if let Some(value) = original_desktop {
+            std::env::set_var("XDG_CURRENT_DESKTOP", value);
+        } else {
+            std::env::remove_var("XDG_CURRENT_DESKTOP");
+        }
+        if let Some(value) = original_wayland {
+            std::env::set_var("WAYLAND_DISPLAY", value);
+        } else {
+            std::env::remove_var("WAYLAND_DISPLAY");
+        }
+    }
+
+    #[test]
+    fn shortcut_state_classifier_detects_permission_errors_and_result_shapes() {
+        assert_eq!(
+            shortcut_state_from_error("failed with denied"),
+            DesktopShortcutApplyState::PermissionNeeded
+        );
+        assert_eq!(
+            shortcut_state_from_error("shortcut unsupported on this build"),
+            DesktopShortcutApplyState::Unsupported
+        );
+
+        let result = shortcut_result(
+            DesktopShortcutApplyState::PermissionNeeded,
+            None,
+            None,
+        );
+        assert!(!result.success);
+        assert_eq!(
+            result.state,
+            DesktopShortcutApplyState::PermissionNeeded
+        );
+        assert!(result.fallback_command.is_some());
+    }
+
+    #[test]
+    fn tray_state_fields_are_clamped() {
+        assert_eq!(clamp_count(-1), 0);
+        assert_eq!(clamp_count(15_000), 9_999);
+        assert_eq!(clamp_count(23), 23);
+
+        let labels = tray_route_labels(&DesktopTrayState {
+            unread_count: -5,
+            highlight_count: 12_000,
+            later_count: 3,
+            notification_inbox_count: -9,
+            do_not_disturb: true,
+        });
+        assert!(labels[0].contains("Unread: 0"));
+        assert!(labels[0].contains("Highlights: 9999"));
+        assert!(labels[0].contains("Later: 3"));
+        assert!(labels[0].contains("Notifications: 0"));
     }
 
     fn sanitize_action_payload_with_no_kind(
