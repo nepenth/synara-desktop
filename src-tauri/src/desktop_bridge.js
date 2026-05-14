@@ -6,11 +6,16 @@
     platform: "tauri",
     supportsTray: true,
     supportsGlobalShortcuts: true,
+    supportsIntegrationStatus: true,
+    supportsTrayState: true,
     supportsUpdater: false,
     supportsMediaPermissions: true,
+    desktopEnvironment: "unknown",
+    sessionType: "unknown",
     routes: Object.freeze({
       later: "/inbox/later/",
       notifications: "/inbox/notifications/",
+      settings: "/settings/",
     }),
     invoke,
   });

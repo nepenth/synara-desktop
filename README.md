@@ -54,6 +54,16 @@ To start the local dev server, run:
 
 - `npm run tauri dev`
 
+### Linux build guide
+
+For Linux workstation builds, install the required system packages and follow the steps in [`docs/linux.md`](docs/linux.md).
+
+- Debian/Ubuntu/KDE neon and Fedora package commands for build dependencies are listed there.
+- CachyOS and KDE Plasma Wayland smoke checklist is included for desktop integration verification.
+- The page also links to:
+  - [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/)
+  - [Tauri distribution formats](https://v2.tauri.app/distribute/)
+
 ## Desktop Features
 
 - Native tray/status-bar actions and close-to-tray behavior.

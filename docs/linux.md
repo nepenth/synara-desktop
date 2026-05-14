@@ -108,6 +108,37 @@ Areas that require KDE Wayland smoke testing:
 - Camera, microphone, and any future screen-share behavior through WebKitGTK, PipeWire, GStreamer, and `xdg-desktop-portal-kde`.
 - Long-room timeline responsiveness under active agent message edits.
 
+### CachyOS / KDE Plasma Wayland smoke checklist
+
+Use this checklist for one focused acceptance pass on CachyOS and other Arch-family Wayland sessions.
+
+Environment report:
+
+- Synara platform:
+  - `desktop_environment` reports `KDE` or `KDE Plasma`.
+  - `session_type` reports `Wayland`.
+  - Distribution metadata resolves to `cachyos` in the id and a matching name/version.
+- Tray diagnostics:
+  - Tray icon appears in the KDE panel.
+  - Tray menu contains `Show Synara`, unread summary, `Later`, `Notifications`, `Desktop Integration`, `Do Not Disturb`, build label, `Quit`.
+  - `unread`, `later`, `highlights`, and `notifications` menu labels update when state changes in-app.
+- Shortcut diagnostics:
+  - `Desktop Shortcuts` can be edited and saved.
+  - On failure, help text explains why and indicates KDE Wayland manual binding workaround.
+- Notifications:
+  - In-session notifications appear.
+  - Permission state in desktop integration panel reflects current denial/allowance.
+- Portals:
+  - File and media portal readiness rows are present and accurate (Ready / Not Ready / Unavailable).
+- Build/deploy check:
+  - Confirm app starts with Tauri defaults (Debian family or AppImage as configured).
+  - Validate using documented dependencies from Tauri Linux prerequisites and packaging format notes.
+
+Reference links for local environment prep:
+
+- <https://v2.tauri.app/start/prerequisites/>
+- <https://v2.tauri.app/distribute/>
+
 Recommended first validation matrix:
 
 - KDE Plasma 6 Wayland on one Debian-family workstation, such as KDE neon or Kubuntu.
