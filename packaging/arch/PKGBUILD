@@ -1,0 +1,36 @@
+# Maintainer: Synara contributors
+pkgname=synara-desktop-bin
+pkgver=1.0.1
+pkgrel=1
+pkgdesc='High-performance Matrix client optimized for AI agent workflows'
+arch=('x86_64')
+url='https://github.com/nepenth/synara-desktop'
+license=('AGPL-3.0-only')
+depends=(
+  'gtk3'
+  'webkit2gtk-4.1'
+  'gst-plugins-good'
+  'libayatana-appindicator'
+  'librsvg'
+  'openssl'
+)
+optdepends=(
+  'xdg-desktop-portal-kde: KDE Plasma Wayland file and media portal support'
+  'xdg-utils: open external links with the desktop default browser'
+)
+provides=('synara-desktop' 'synara')
+conflicts=('synara-desktop' 'synara')
+source=('synara')
+sha256sums=('SKIP')
+
+_repo_root="$(cd "${startdir}/../.." && pwd)"
+
+package() {
+  install -Dm755 "${_repo_root}/src-tauri/target/release/synara" "${pkgdir}/usr/lib/synara/synara"
+  install -Dm755 "${srcdir}/synara" "${pkgdir}/usr/bin/synara"
+  install -Dm644 "${_repo_root}/src-tauri/target/release/bundle/deb/Synara_${pkgver}_amd64/data/usr/share/applications/Synara.desktop" "${pkgdir}/usr/share/applications/Synara.desktop"
+  install -Dm644 "${_repo_root}/src-tauri/icons/32x32.png" "${pkgdir}/usr/share/icons/hicolor/32x32/apps/synara.png"
+  install -Dm644 "${_repo_root}/src-tauri/icons/128x128.png" "${pkgdir}/usr/share/icons/hicolor/128x128/apps/synara.png"
+  install -Dm644 "${_repo_root}/src-tauri/icons/128x128@2x.png" "${pkgdir}/usr/share/icons/hicolor/256x256/apps/synara.png"
+  install -Dm644 "${_repo_root}/LICENSE" "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
+}
