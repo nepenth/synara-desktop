@@ -237,6 +237,15 @@ pub fn is_safe_external_url(value: &str) -> bool {
     }
 }
 
+#[tauri::command]
+pub fn desktop_open_external_url<R: Runtime>(app: AppHandle<R>, url: String) -> bool {
+    if !is_safe_external_url(&url) {
+        return false;
+    }
+
+    app.opener().open_url(url, None::<&str>).is_ok()
+}
+
 fn is_safe_agent_url(value: &str) -> bool {
     let Ok(url) = Url::parse(value) else {
         return false;
