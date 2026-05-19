@@ -46,6 +46,8 @@ Acceptance criteria:
 
 ### Phase 3: List and block editing UX
 
+Status: Started.
+
 Requirements:
 
 - Implement predictable Enter, Shift+Enter, Backspace, Tab, and Shift+Tab behavior for lists,
@@ -56,6 +58,7 @@ Requirements:
 Acceptance criteria:
 
 - Empty list item + Enter exits the list.
+- Shift+Enter inserts a soft line break without leaving the current block.
 - Tab indents and Shift+Tab outdents list items without corrupting surrounding content.
 - Nested lists round-trip through send and edit.
 
