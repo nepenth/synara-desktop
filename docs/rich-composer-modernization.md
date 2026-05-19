@@ -133,6 +133,8 @@ Implementation notes:
 
 ### Phase 6: Golden tests
 
+Status: Golden rich-content coverage implemented.
+
 Requirements:
 
 - Add tests for Slate to Matrix content, Matrix HTML to Slate, markdown interop, and edit round-trip.
@@ -142,3 +144,10 @@ Acceptance criteria:
 - Golden cases cover lists, `ol start`, nested lists, links, spoilers, mentions, code blocks, quotes,
   headings, and markdown mode.
 - Tests fail on malformed `[object Object]` output, revealed spoiler fallbacks, or lost list starts.
+
+Implementation notes:
+
+- Rich composer golden coverage now exercises Matrix HTML output, plain-text fallback output, and
+  rich edit input parsing from a single representative Slate fixture.
+- Markdown golden coverage verifies headings, quotes, fenced code blocks, links, and multi-digit
+  ordered-list starts.
