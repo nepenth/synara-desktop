@@ -57,7 +57,7 @@ Implementation notes:
 
 ### Phase 3: List and block editing UX
 
-Status: Started.
+Status: Core list behavior implemented.
 
 Requirements:
 
@@ -72,6 +72,13 @@ Acceptance criteria:
 - Shift+Enter inserts a soft line break without leaving the current block.
 - Tab indents and Shift+Tab outdents list items without corrupting surrounding content.
 - Nested lists round-trip through send and edit.
+
+Implementation notes:
+
+- List items now support a stable nested-list Slate shape by promoting mixed inline/nested content
+  into paragraph-plus-list children.
+- Ordered and unordered nested lists serialize to Matrix HTML and readable plain-text fallbacks.
+- Tab and Shift+Tab are wired to explicit list-item indent/outdent transforms with golden coverage.
 
 ### Phase 4: Paste and edit round-trip
 
