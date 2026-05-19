@@ -104,6 +104,8 @@ Implementation notes:
 
 ### Phase 5: Composer UI and accessibility
 
+Status: Composer layout refinements started.
+
 Requirements:
 
 - Use a dedicated room composer shell instead of overloading the generic editor layout.
@@ -115,6 +117,11 @@ Acceptance criteria:
 - Keyboard-only users can reach every composer action and understand its current state.
 - Narrow windows and long drafts preserve usable text width and visible caret behavior.
 - Attachment, emoji, GIF, poll, formatting, and send actions remain reachable in all composer states.
+
+Implementation notes:
+
+- Floating room composer actions now reserve a first-line wrap shape so text does not render under
+  the action cluster.
 
 ### Phase 6: Golden tests
 
