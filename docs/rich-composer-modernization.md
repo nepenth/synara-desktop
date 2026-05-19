@@ -122,8 +122,12 @@ Implementation notes:
 
 - Floating room composer actions now reserve a first-line wrap shape so text does not render under
   the action cluster.
+- The floating room composer action cluster was tightened to reduce empty-state crowding in narrow
+  composer widths.
 - Formatting toolbar and room composer action buttons now expose explicit accessible names and
   pressed/expanded state where applicable.
+- Desktop message links now route primary clicks through the Tauri opener, matching the native
+  context-menu "open link" behavior while preserving web/browser defaults.
 
 ### Phase 6: Golden tests
 
