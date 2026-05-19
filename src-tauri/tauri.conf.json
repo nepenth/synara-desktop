@@ -42,7 +42,7 @@
   },
   "productName": "Synara",
   "mainBinaryName": "synara",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "identifier": "app.synara.desktop",
   "app": {
     "security": {
