@@ -1,6 +1,6 @@
 # Maintainer: Synara contributors
 pkgname=synara-desktop-bin
-pkgver=1.0.5
+pkgver=1.0.6
 pkgrel=1
 pkgdesc='High-performance Matrix client optimized for AI agent workflows'
 arch=('x86_64')
