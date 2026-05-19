@@ -120,6 +120,9 @@ Acceptance criteria:
 
 Implementation notes:
 
+- Room input now uses a dedicated `RoomComposer` shell that names room-specific slots for reply
+  preview, attachment action, floating composer actions, and formatting toolbar instead of wiring
+  those concerns directly through each generic editor prop.
 - Floating room composer actions now reserve a first-line wrap shape so text does not render under
   the action cluster.
 - The floating room composer action cluster was tightened to reduce empty-state crowding in narrow
