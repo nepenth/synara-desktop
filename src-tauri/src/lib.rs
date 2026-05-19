@@ -34,6 +34,7 @@ pub fn run() {
             desktop::desktop_request_notification_permission,
             desktop::desktop_notify,
             desktop::desktop_open_external_url,
+            desktop::desktop_save_file,
             desktop::desktop_get_performance_capabilities,
             desktop::desktop_agent_action
         ])

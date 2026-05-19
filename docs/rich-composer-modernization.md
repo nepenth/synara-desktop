@@ -128,6 +128,8 @@ Implementation notes:
   pressed/expanded state where applicable.
 - Desktop message links now route primary clicks through the Tauri opener, matching the native
   context-menu "open link" behavior while preserving web/browser defaults.
+- Desktop attachment downloads now bypass browser-only synthetic downloads and save downloaded
+  blobs through a native Tauri command.
 
 ### Phase 6: Golden tests
 
