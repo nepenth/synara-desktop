@@ -82,6 +82,8 @@ Implementation notes:
 
 ### Phase 4: Paste and edit round-trip
 
+Status: Rich paste handling started.
+
 Requirements:
 
 - Preserve safe links, lists, quotes, code blocks, mentions, and spoilers when editing rich messages.
@@ -93,6 +95,12 @@ Acceptance criteria:
 - Pasting from browser/Google Docs/plain text produces valid Slate content.
 - Editing a supported rich message and saving without changes does not rewrite it unnecessarily.
 - Unsupported structures remain readable and safe after edit.
+
+Implementation notes:
+
+- Room compose and message edit now share explicit rich paste handling.
+- HTML paste routes through the Matrix HTML sanitizer/parser before insertion.
+- Plain text paste falls back to paragraph-per-line Slate content.
 
 ### Phase 5: Composer UI and accessibility
 
