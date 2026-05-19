@@ -570,8 +570,7 @@ fn tray_route_labels(state: &DesktopTrayState) -> [String; 5] {
 }
 
 fn build_tray_menu<R: Runtime>(app: &AppHandle<R>, state: &DesktopTrayState) -> tauri::Result<Menu<R>> {
-    let [unread_summary, later_label, notifications_label, dnd_label, integration_label] =
-        tray_route_labels(state);
+    let route_labels = tray_route_labels(state);
 
     let show = MenuItem::with_id(
         app,
@@ -580,34 +579,19 @@ fn build_tray_menu<R: Runtime>(app: &AppHandle<R>, state: &DesktopTrayState) -> 
         true,
         Some("CmdOrCtrl+Shift+C"),
     )?;
-    let unread_summary = MenuItem::with_id(
+    let later = MenuItem::with_id(
         app,
-        MENU_UNREAD_SUMMARY,
-        unread_summary.as_str(),
-        false,
-        None::<&str>,
+        MENU_LATER,
+        route_labels[1].as_str(),
+        true,
+        Some("CmdOrCtrl+Shift+L"),
     )?;
-    let later = MenuItem::with_id(app, MENU_LATER, later_label.as_str(), true, Some("CmdOrCtrl+Shift+L"))?;
     let notifications = MenuItem::with_id(
         app,
         MENU_NOTIFICATIONS,
-        notifications_label.as_str(),
+        route_labels[2].as_str(),
         true,
         Some("CmdOrCtrl+Shift+N"),
-    )?;
-    let desktop_integration = MenuItem::with_id(
-        app,
-        MENU_DESKTOP_INTEGRATION,
-        integration_label.as_str(),
-        true,
-        None::<&str>,
-    )?;
-    let dnd = MenuItem::with_id(
-        app,
-        MENU_DND_TOGGLE,
-        dnd_label.as_str(),
-        true,
-        None::<&str>,
     )?;
     let separator = PredefinedMenuItem::separator(app)?;
     let build_item = MenuItem::with_id(
@@ -622,6 +606,30 @@ fn build_tray_menu<R: Runtime>(app: &AppHandle<R>, state: &DesktopTrayState) -> 
     #[cfg(not(target_os = "linux"))]
     let menu = Menu::with_items(app, &[&show, &later, &notifications, &separator, &build_item, &quit])?;
 
+    #[cfg(target_os = "linux")]
+    let unread_summary = MenuItem::with_id(
+        app,
+        MENU_UNREAD_SUMMARY,
+        route_labels[0].as_str(),
+        false,
+        None::<&str>,
+    )?;
+    #[cfg(target_os = "linux")]
+    let desktop_integration = MenuItem::with_id(
+        app,
+        MENU_DESKTOP_INTEGRATION,
+        route_labels[4].as_str(),
+        true,
+        None::<&str>,
+    )?;
+    #[cfg(target_os = "linux")]
+    let dnd = MenuItem::with_id(
+        app,
+        MENU_DND_TOGGLE,
+        route_labels[3].as_str(),
+        true,
+        None::<&str>,
+    )?;
     #[cfg(target_os = "linux")]
     let menu = Menu::with_items(
         app,
