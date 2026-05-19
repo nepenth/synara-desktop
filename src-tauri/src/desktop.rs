@@ -11,7 +11,7 @@ use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutEvent, S
 use tauri_plugin_notification::NotificationExt;
 use tauri_plugin_opener::OpenerExt;
 use url::Url;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 
 use std::fs;
@@ -59,6 +59,13 @@ pub struct DesktopNotificationPayload {
     pub title: String,
     pub body: Option<String>,
     pub route: Option<String>,
+}
+
+#[derive(Clone, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DesktopSaveFilePayload {
+    pub filename: String,
+    pub bytes: Vec<u8>,
 }
 
 #[derive(Clone, serde::Deserialize, Serialize)]
@@ -244,6 +251,90 @@ pub fn desktop_open_external_url<R: Runtime>(app: AppHandle<R>, url: String) -> 
     }
 
     app.opener().open_url(url, None::<&str>).is_ok()
+}
+
+fn sanitize_download_filename(filename: &str) -> String {
+    let safe_name = Path::new(filename)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("download")
+        .chars()
+        .map(|ch| {
+            if ch.is_control() || matches!(ch, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|')
+            {
+                '_'
+            } else {
+                ch
+            }
+        })
+        .collect::<String>();
+
+    let trimmed = safe_name.trim().trim_matches('.').trim();
+    if trimmed.is_empty() {
+        "download".to_owned()
+    } else {
+        trimmed.chars().take(180).collect()
+    }
+}
+
+fn downloads_dir() -> Result<PathBuf, String> {
+    #[cfg(target_os = "windows")]
+    let home = env::var_os("USERPROFILE");
+
+    #[cfg(not(target_os = "windows"))]
+    let home = env::var_os("HOME");
+
+    let Some(home_dir) = home else {
+        return Err("Unable to resolve home directory".to_owned());
+    };
+
+    Ok(PathBuf::from(home_dir).join("Downloads"))
+}
+
+fn unique_download_path(downloads: &Path, filename: &str) -> PathBuf {
+    let initial = downloads.join(filename);
+    if !initial.exists() {
+        return initial;
+    }
+
+    let path = Path::new(filename);
+    let stem = path.file_stem().and_then(|value| value.to_str()).unwrap_or("download");
+    let extension = path.extension().and_then(|value| value.to_str());
+
+    for index in 1..1000 {
+        let candidate_name = match extension {
+            Some(ext) if !ext.is_empty() => format!("{stem} ({index}).{ext}"),
+            _ => format!("{stem} ({index})"),
+        };
+        let candidate = downloads.join(candidate_name);
+        if !candidate.exists() {
+            return candidate;
+        }
+    }
+
+    downloads.join(format!("{stem} ({})", chrono_like_timestamp()))
+}
+
+fn chrono_like_timestamp() -> u128 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_millis())
+        .unwrap_or_default()
+}
+
+#[tauri::command]
+pub fn desktop_save_file(payload: DesktopSaveFilePayload) -> Result<String, String> {
+    if payload.bytes.is_empty() {
+        return Err("File is empty".to_owned());
+    }
+
+    let downloads = downloads_dir()?;
+    fs::create_dir_all(&downloads).map_err(|err| format!("Unable to create Downloads: {err}"))?;
+    let filename = sanitize_download_filename(&payload.filename);
+    let path = unique_download_path(&downloads, &filename);
+    fs::write(&path, payload.bytes).map_err(|err| format!("Unable to write file: {err}"))?;
+
+    Ok(path.to_string_lossy().into_owned())
 }
 
 fn is_safe_agent_url(value: &str) -> bool {
