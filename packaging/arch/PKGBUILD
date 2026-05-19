@@ -1,6 +1,6 @@
 # Maintainer: Synara contributors
 pkgname=synara-desktop-bin
-pkgver=1.0.4
+pkgver=1.0.5
 pkgrel=1
 pkgdesc='High-performance Matrix client optimized for AI agent workflows'
 arch=('x86_64')
@@ -26,9 +26,19 @@ sha256sums=('SKIP')
 _repo_root="$(cd "${startdir}/../.." && pwd)"
 
 package() {
+  local desktop_file
+  desktop_file="${_repo_root}/src-tauri/target/release/bundle/deb/Synara_${pkgver}_amd64/data/usr/share/applications/Synara.desktop"
+  if [[ ! -f "${desktop_file}" ]]; then
+    desktop_file="$(find "${_repo_root}/src-tauri/target/release/bundle/deb" -path '*/data/usr/share/applications/Synara.desktop' -print -quit 2>/dev/null || true)"
+  fi
+  if [[ ! -f "${desktop_file}" ]]; then
+    printf 'Synara desktop entry was not found. Run `npm run tauri build -- --bundles deb` from the repository root before `makepkg -f`.\n' >&2
+    return 1
+  fi
+
   install -Dm755 "${_repo_root}/src-tauri/target/release/synara" "${pkgdir}/usr/lib/synara/synara"
   install -Dm755 "${srcdir}/synara" "${pkgdir}/usr/bin/synara"
-  install -Dm644 "${_repo_root}/src-tauri/target/release/bundle/deb/Synara_${pkgver}_amd64/data/usr/share/applications/Synara.desktop" "${pkgdir}/usr/share/applications/Synara.desktop"
+  install -Dm644 "${desktop_file}" "${pkgdir}/usr/share/applications/Synara.desktop"
   install -Dm644 "${_repo_root}/src-tauri/icons/32x32.png" "${pkgdir}/usr/share/icons/hicolor/32x32/apps/synara.png"
   install -Dm644 "${_repo_root}/src-tauri/icons/128x128.png" "${pkgdir}/usr/share/icons/hicolor/128x128/apps/synara.png"
   install -Dm644 "${_repo_root}/src-tauri/icons/128x128@2x.png" "${pkgdir}/usr/share/icons/hicolor/256x256/apps/synara.png"
