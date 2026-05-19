@@ -31,6 +31,8 @@ Acceptance criteria:
 
 ### Phase 2: Matrix HTML policy
 
+Status: Core profile implemented.
+
 Requirements:
 
 - Define a single documented Matrix HTML profile for inbound sanitization, outbound emission, and
@@ -43,6 +45,15 @@ Acceptance criteria:
 - Sanitizer, renderer, and serializer supported tags/attributes are documented in one place.
 - Outbound formatted messages only include supported Matrix-safe tags and attributes.
 - Existing historical messages using legacy tags still render safely.
+
+Implementation notes:
+
+- The source of truth lives in `src/app/utils/matrixHtmlProfile.ts`.
+- `emittedTags` and `emittedAttributes` describe new Synara-authored Matrix HTML.
+- `allowedTags` and `inboundAttributes` are intentionally wider so historical or third-party
+  messages using legacy tags remain safe and readable.
+- Synara edit hints such as `data-md` are tolerated inbound, but stripped from outbound composer
+  HTML before sending.
 
 ### Phase 3: List and block editing UX
 
