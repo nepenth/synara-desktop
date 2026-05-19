@@ -104,7 +104,7 @@ Implementation notes:
 
 ### Phase 5: Composer UI and accessibility
 
-Status: Composer layout refinements started.
+Status: Composer layout and accessibility refinements started.
 
 Requirements:
 
@@ -122,6 +122,8 @@ Implementation notes:
 
 - Floating room composer actions now reserve a first-line wrap shape so text does not render under
   the action cluster.
+- Formatting toolbar and room composer action buttons now expose explicit accessible names and
+  pressed/expanded state where applicable.
 
 ### Phase 6: Golden tests
 
