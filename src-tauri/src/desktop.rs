@@ -1,5 +1,5 @@
 use serde::Serialize;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::env;
 #[cfg(target_os = "macos")]
 use tauri::image::Image;
@@ -35,6 +35,9 @@ const ROUTE_NOTIFICATIONS: &str = "/inbox/notifications/";
 const ROUTE_SETTINGS: &str = "/settings/";
 
 const TRAY_ICON_ID: &str = "synara-tray";
+const MAX_DROPPED_FILES: usize = 32;
+const MAX_DROPPED_FILE_BYTES: u64 = 256 * 1024 * 1024;
+const MAX_DROPPED_TOTAL_BYTES: u64 = 512 * 1024 * 1024;
 
 #[derive(Clone, Serialize, serde::Deserialize)]
 pub struct DesktopAgentActionPayload {
@@ -65,6 +68,13 @@ pub struct DesktopNotificationPayload {
 #[serde(rename_all = "camelCase")]
 pub struct DesktopSaveFilePayload {
     pub filename: String,
+    pub bytes: Vec<u8>,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DesktopDroppedFilePayload {
+    pub name: String,
     pub bytes: Vec<u8>,
 }
 
@@ -335,6 +345,78 @@ pub fn desktop_save_file(payload: DesktopSaveFilePayload) -> Result<String, Stri
     fs::write(&path, payload.bytes).map_err(|err| format!("Unable to write file: {err}"))?;
 
     Ok(path.to_string_lossy().into_owned())
+}
+
+fn dropped_file_registry() -> &'static Mutex<HashSet<PathBuf>> {
+    static DROPPED_FILE_PATHS: OnceLock<Mutex<HashSet<PathBuf>>> = OnceLock::new();
+    DROPPED_FILE_PATHS.get_or_init(|| Mutex::new(HashSet::new()))
+}
+
+pub fn remember_dropped_paths(paths: &[PathBuf]) {
+    let Ok(mut registry) = dropped_file_registry().lock() else {
+        return;
+    };
+
+    for path in paths {
+        if let Ok(canonical) = fs::canonicalize(path) {
+            registry.insert(canonical);
+        }
+    }
+}
+
+fn take_allowed_dropped_path(path: &str) -> Result<PathBuf, String> {
+    let canonical =
+        fs::canonicalize(path).map_err(|err| format!("Unable to read dropped path: {err}"))?;
+    let mut registry = dropped_file_registry()
+        .lock()
+        .map_err(|_| "Unable to access dropped file registry".to_owned())?;
+
+    if registry.remove(&canonical) {
+        Ok(canonical)
+    } else {
+        Err("Dropped file path is not available to this window".to_owned())
+    }
+}
+
+#[tauri::command]
+pub fn desktop_read_dropped_files(
+    paths: Vec<String>,
+) -> Result<Vec<DesktopDroppedFilePayload>, String> {
+    if paths.len() > MAX_DROPPED_FILES {
+        return Err(format!("Too many dropped files. Maximum is {MAX_DROPPED_FILES}."));
+    }
+
+    let mut total_bytes = 0_u64;
+    let mut files = Vec::with_capacity(paths.len());
+
+    for path in paths {
+        let canonical = take_allowed_dropped_path(&path)?;
+        let metadata = fs::metadata(&canonical)
+            .map_err(|err| format!("Unable to inspect dropped file: {err}"))?;
+        if !metadata.is_file() {
+            return Err("Only files can be dropped into the composer".to_owned());
+        }
+
+        let file_size = metadata.len();
+        if file_size > MAX_DROPPED_FILE_BYTES {
+            return Err("Dropped file is too large to attach from drag and drop".to_owned());
+        }
+        total_bytes = total_bytes.saturating_add(file_size);
+        if total_bytes > MAX_DROPPED_TOTAL_BYTES {
+            return Err("Dropped files are too large to attach together".to_owned());
+        }
+
+        let name = canonical
+            .file_name()
+            .and_then(|value| value.to_str())
+            .map(sanitize_download_filename)
+            .unwrap_or_else(|| "attachment".to_owned());
+        let bytes =
+            fs::read(&canonical).map_err(|err| format!("Unable to read dropped file: {err}"))?;
+        files.push(DesktopDroppedFilePayload { name, bytes });
+    }
+
+    Ok(files)
 }
 
 fn is_safe_agent_url(value: &str) -> bool {
