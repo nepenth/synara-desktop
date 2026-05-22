@@ -7,11 +7,41 @@ mod build_info;
 mod desktop;
 mod menu;
 
+use serde::Serialize;
+use std::path::PathBuf;
 use tauri::{
     webview::{NewWindowResponse, WebviewWindowBuilder},
-    LogicalSize, Size, WebviewUrl, WindowEvent,
+    DragDropEvent, LogicalSize, Manager, Size, WebviewUrl, WindowEvent,
 };
 use tauri_plugin_opener::OpenerExt;
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct NativeFileDropPayload {
+    phase: &'static str,
+    paths: Vec<String>,
+    x: f64,
+    y: f64,
+}
+
+fn native_drop_paths(paths: &[PathBuf]) -> Vec<String> {
+    paths
+        .iter()
+        .map(|path| path.to_string_lossy().into_owned())
+        .collect()
+}
+
+fn emit_native_file_drop(window: &tauri::Window, payload: NativeFileDropPayload) {
+    let Ok(detail) = serde_json::to_string(&payload) else {
+        return;
+    };
+    let Some(webview) = window.get_webview_window(desktop::MAIN_WINDOW_LABEL) else {
+        return;
+    };
+    let script =
+        format!("window.dispatchEvent(new CustomEvent('synara-native-file-drop', {{ detail: {detail} }}));");
+    let _ = webview.eval(&script);
+}
 
 pub fn run() {
     let port: u16 = 44548;
@@ -35,6 +65,7 @@ pub fn run() {
             desktop::desktop_notify,
             desktop::desktop_open_external_url,
             desktop::desktop_save_file,
+            desktop::desktop_read_dropped_files,
             desktop::desktop_get_performance_capabilities,
             desktop::desktop_agent_action
         ])
@@ -43,9 +74,57 @@ pub fn run() {
                 return;
             }
 
-            if let WindowEvent::CloseRequested { api, .. } = event {
-                api.prevent_close();
-                let _ = window.hide();
+            match event {
+                WindowEvent::CloseRequested { api, .. } => {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
+                WindowEvent::DragDrop(DragDropEvent::Enter { paths, position }) => {
+                    emit_native_file_drop(
+                        window,
+                        NativeFileDropPayload {
+                            phase: "enter",
+                            paths: native_drop_paths(paths),
+                            x: position.x,
+                            y: position.y,
+                        },
+                    );
+                }
+                WindowEvent::DragDrop(DragDropEvent::Over { position }) => {
+                    emit_native_file_drop(
+                        window,
+                        NativeFileDropPayload {
+                            phase: "over",
+                            paths: Vec::new(),
+                            x: position.x,
+                            y: position.y,
+                        },
+                    );
+                }
+                WindowEvent::DragDrop(DragDropEvent::Drop { paths, position }) => {
+                    desktop::remember_dropped_paths(paths);
+                    emit_native_file_drop(
+                        window,
+                        NativeFileDropPayload {
+                            phase: "drop",
+                            paths: native_drop_paths(paths),
+                            x: position.x,
+                            y: position.y,
+                        },
+                    );
+                }
+                WindowEvent::DragDrop(DragDropEvent::Leave) => {
+                    emit_native_file_drop(
+                        window,
+                        NativeFileDropPayload {
+                            phase: "leave",
+                            paths: Vec::new(),
+                            x: 0.0,
+                            y: 0.0,
+                        },
+                    );
+                }
+                _ => {}
             }
         });
 
