@@ -94,7 +94,7 @@ npm run tauri build -- --bundles appimage
 
 The Tauri `.deb` bundler supplies stock WebKitGTK, GTK, and tray runtime dependencies for Debian-family packages. Keep `bundle.linux.deb.depends` unset unless Synara gains an extra native runtime dependency.
 
-The desktop build runs `scripts/build-web.mjs`, builds the `synara/` submodule, copies `synara/dist` into `devAssets`, then packages with Tauri.
+The desktop build runs `scripts/build-runtime.mjs`, builds the `synara/` app runtime, copies `synara/dist` into `devAssets`, then packages with Tauri.
 
 ### CachyOS / Arch-family local package
 
@@ -185,7 +185,7 @@ KDE Plasma Wayland is in scope for Synara, but it needs direct validation on a L
 
 Expected to work:
 
-- Matrix login, sync, timeline rendering, account data, local notes, and web-client UI behavior.
+- Matrix login, sync, timeline rendering, account data, local notes, and app-runtime UI behavior.
 - Native Linux packaging through Tauri `.deb` and AppImage.
 - StatusNotifier/AppIndicator tray integration on KDE Plasma when the tray widget and appindicator dependencies are present.
 - Native notifications through the desktop notification stack.

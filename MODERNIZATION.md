@@ -1,8 +1,8 @@
 # Desktop Modernization
 
 This desktop branch is the native half of the Synara modernization stack. The
-web client owns Matrix state and feature UI; this wrapper owns native shell
-surfaces and exposes a small typed bridge to the web app.
+app runtime owns Matrix state and feature UI; this wrapper owns native shell
+surfaces and exposes a small typed bridge to the runtime.
 
 ## Native Scope
 
@@ -10,7 +10,7 @@ surfaces and exposes a small typed bridge to the web app.
 - Close-to-tray behavior on desktop platforms.
 - Native notification permissions and click activation.
 - Dock/taskbar badge count updates from unread, notification, and Later
-  summaries supplied by the web client.
+  summaries supplied by the app runtime.
 - Configurable global shortcuts for Show, Later, and Notifications.
 - macOS camera/microphone permission descriptions for calls.
 - Structured Hermes/agent action bridge for trusted backend integrations.
@@ -23,7 +23,7 @@ surfaces and exposes a small typed bridge to the web app.
 cargo test --manifest-path src-tauri/Cargo.toml
 ```
 
-Full package builds require the paired web client assets in the nested `synara/`
+Full package builds require the paired app-runtime assets in the nested `synara/`
 checkout:
 
 ```sh
@@ -59,7 +59,7 @@ cp -R src-tauri/target/release/bundle/macos/Synara.app /Applications/Synara.app
 ```
 
 Local `cargo check` and `cargo test` can run with the placeholder app shell, but
-runtime smoke testing should use a real web `dist/` bundle.
+runtime smoke testing should use a real app-runtime `dist/` bundle.
 
 ## Runtime Smoke Test
 
@@ -69,15 +69,14 @@ short clips for these flows:
 1. Tray/status-bar menu opens Show, Later, and Notifications.
 2. Closing the main window hides it to the tray and Quit exits the app.
 3. A native notification click focuses Synara and deep-links to a room/event or
-   thread anchor supplied by the web client.
+   thread anchor supplied by the app runtime.
 4. Badge counts update when unread/Later/notification summaries change.
 5. Configurable global shortcuts route to Show, Later, and Notifications.
 6. A Hermes/agent action is copied, opened, or emitted through the
    `synara://agent-action` event with sanitized payload data.
 
-Use test Matrix accounts for preview builds and demos. A PR preview of a Matrix
-client is untrusted client code until merged and served from a trusted release
-channel.
+Use test Matrix accounts for review builds and demos. A Matrix client build is
+untrusted client code until merged and served from a trusted release channel.
 
 ## Bridge Security
 
