@@ -16,9 +16,12 @@ management API to the frontend. Synara's immediate need is narrower: persist
 and clear the Matrix session credential through an operating-system credential
 store.
 
-The desktop shell now has the native credential adapter. Current login and
-registration still write the legacy runtime fallback storage until the migration
-and new-session write phases are built and validated.
+The desktop shell now has the native credential adapter, and the runtime uses
+native-first session persistence. Existing legacy fallback sessions migrate to
+the native store only after Matrix client initialization succeeds. Login and
+registration write native credentials first when available, with legacy
+localStorage kept only as a fallback when the native store is unavailable or a
+write fails.
 
 ## Current State
 
