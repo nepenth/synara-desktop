@@ -74,3 +74,4 @@ For Linux workstation builds, install the required system packages and follow th
 - Hardened structured agent-action bridge for the Synara app runtime.
 
 See [Desktop modernization](docs/desktop-modernization.md) for the native integration contract. Build/test notes, runtime smoke-test evidence, and bridge security notes are tracked in [MODERNIZATION.md](MODERNIZATION.md).
+The native-first architecture decision is tracked in [Native-first architecture spike](docs/native-first-architecture-spike.md).
