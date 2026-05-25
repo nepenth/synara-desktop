@@ -132,6 +132,11 @@ steps.
 
 ### Step 1: Async Session Bootstrap
 
+Status: implemented in the runtime submodule. Startup now initializes an async
+session bootstrap before mounting the router, caches the selected session for
+existing synchronous route/client consumers, and keeps legacy localStorage
+fallback behavior.
+
 Add a startup bootstrap that resolves the session before the app/router decides
 whether to show auth or the client:
 
