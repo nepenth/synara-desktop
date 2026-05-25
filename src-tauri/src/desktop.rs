@@ -1,3 +1,4 @@
+use keyring::{Entry, Error as KeyringError};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::env;
@@ -150,7 +151,7 @@ pub struct DesktopPerformanceCapabilities {
     build_label: String,
 }
 
-#[derive(Clone, Serialize, PartialEq, Eq)]
+#[derive(Clone, Copy, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct DesktopSecretStoreStatus {
     pub available: bool,
@@ -177,8 +178,25 @@ const DESKTOP_NOTIFICATION_MAX_BODY_CHARS: usize = 500;
 const DESKTOP_SESSION_MAX_BASE_URL_CHARS: usize = 2_048;
 const DESKTOP_SESSION_MAX_ID_CHARS: usize = 512;
 const DESKTOP_SESSION_MAX_TOKEN_CHARS: usize = 8_192;
+const DESKTOP_SESSION_CREDENTIAL_SERVICE: &str = "app.synara.desktop";
+const DESKTOP_SESSION_CREDENTIAL_ACCOUNT: &str = "matrix-session";
+#[allow(dead_code)]
 const DESKTOP_SECRET_STORE_BACKEND_NONE: &str = "none";
+const DESKTOP_SECRET_STORE_BACKEND_MACOS_KEYCHAIN: &str = "macos-keychain";
+#[allow(dead_code)]
+const DESKTOP_SECRET_STORE_BACKEND_LINUX_SECRET_SERVICE: &str = "linux-secret-service";
+#[allow(dead_code)]
+const DESKTOP_SECRET_STORE_BACKEND_LINUX_KEYUTILS: &str = "linux-keyutils";
+#[allow(dead_code)]
 const DESKTOP_SECRET_STORE_NOT_CONFIGURED: &str = "secure-secret-store-not-configured";
+#[allow(dead_code)]
+const DESKTOP_SECRET_STORE_UNSUPPORTED_PLATFORM: &str = "secure-secret-store-unsupported-platform";
+#[allow(dead_code)]
+const DESKTOP_SECRET_STORE_SESSION_SCOPED: &str = "linux-keyutils-session-scoped";
+#[allow(dead_code)]
+const DESKTOP_SECRET_STORE_LINUX_UNAVAILABLE: &str = "linux-secret-store-unavailable";
+const DESKTOP_SECRET_STORE_OPERATION_FAILED: &str = "desktop-secret-store-operation-failed";
+const DESKTOP_STORED_SESSION_INVALID: &str = "desktop-stored-session-invalid";
 const MAX_DESKTOP_ROUTE_CHARS: usize = 2_048;
 const ALLOWED_SHORTCUT_LEN: usize = 128;
 const UNKNOWN_INTEGRATION_VALUE: &str = "unknown";
@@ -364,6 +382,200 @@ fn sanitize_session_envelope(
         refresh_token,
         expires_in_ms: session.expires_in_ms,
     })
+}
+
+trait DesktopSessionSecretStore {
+    fn status(&self) -> DesktopSecretStoreStatus;
+    fn get_secret(&self) -> Result<Option<String>, String>;
+    fn set_secret(&self, secret: &str) -> Result<bool, String>;
+    fn remove_secret(&self) -> Result<bool, String>;
+}
+
+struct KeyringDesktopSessionSecretStore;
+
+impl KeyringDesktopSessionSecretStore {
+    fn session_entry(&self) -> Result<Entry, String> {
+        Entry::new(
+            DESKTOP_SESSION_CREDENTIAL_SERVICE,
+            DESKTOP_SESSION_CREDENTIAL_ACCOUNT,
+        )
+        .map_err(|error| map_keyring_error("create-entry", error))
+    }
+}
+
+impl DesktopSessionSecretStore for KeyringDesktopSessionSecretStore {
+    fn status(&self) -> DesktopSecretStoreStatus {
+        platform_secret_store_status()
+    }
+
+    fn get_secret(&self) -> Result<Option<String>, String> {
+        if !self.status().can_persist_session {
+            return Ok(None);
+        }
+
+        match self.session_entry()?.get_password() {
+            Ok(secret) => Ok(Some(secret)),
+            Err(KeyringError::NoEntry) => Ok(None),
+            Err(error) => Err(map_keyring_error("read-session", error)),
+        }
+    }
+
+    fn set_secret(&self, secret: &str) -> Result<bool, String> {
+        if !self.status().can_persist_session {
+            return Ok(false);
+        }
+
+        self.session_entry()?
+            .set_password(secret)
+            .map_err(|error| map_keyring_error("write-session", error))?;
+        Ok(true)
+    }
+
+    fn remove_secret(&self) -> Result<bool, String> {
+        if !self.status().can_persist_session {
+            return Ok(false);
+        }
+
+        match self.session_entry()?.delete_credential() {
+            Ok(()) => Ok(true),
+            Err(KeyringError::NoEntry) => Ok(false),
+            Err(error) => Err(map_keyring_error("remove-session", error)),
+        }
+    }
+}
+
+fn map_keyring_error(_operation: &'static str, _error: KeyringError) -> String {
+    DESKTOP_SECRET_STORE_OPERATION_FAILED.to_owned()
+}
+
+#[allow(dead_code)]
+fn unavailable_secret_store_status(reason: &'static str) -> DesktopSecretStoreStatus {
+    DesktopSecretStoreStatus {
+        available: false,
+        backend: DESKTOP_SECRET_STORE_BACKEND_NONE,
+        can_persist_session: false,
+        reason: Some(reason),
+    }
+}
+
+fn platform_secret_store_status() -> DesktopSecretStoreStatus {
+    #[cfg(target_os = "macos")]
+    {
+        DesktopSecretStoreStatus {
+            available: true,
+            backend: DESKTOP_SECRET_STORE_BACKEND_MACOS_KEYCHAIN,
+            can_persist_session: true,
+            reason: None,
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        linux_secret_store_status_from_signals(
+            has_linux_secret_service_session(),
+            has_linux_keyutils_backend(),
+        )
+    }
+
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+    {
+        unavailable_secret_store_status(DESKTOP_SECRET_STORE_UNSUPPORTED_PLATFORM)
+    }
+}
+
+#[allow(dead_code)]
+fn linux_secret_store_status_from_signals(
+    has_secret_service: bool,
+    has_keyutils: bool,
+) -> DesktopSecretStoreStatus {
+    if has_secret_service {
+        return DesktopSecretStoreStatus {
+            available: true,
+            backend: DESKTOP_SECRET_STORE_BACKEND_LINUX_SECRET_SERVICE,
+            can_persist_session: true,
+            reason: None,
+        };
+    }
+
+    if has_keyutils {
+        return DesktopSecretStoreStatus {
+            available: true,
+            backend: DESKTOP_SECRET_STORE_BACKEND_LINUX_KEYUTILS,
+            can_persist_session: false,
+            reason: Some(DESKTOP_SECRET_STORE_SESSION_SCOPED),
+        };
+    }
+
+    unavailable_secret_store_status(DESKTOP_SECRET_STORE_LINUX_UNAVAILABLE)
+}
+
+#[cfg(target_os = "linux")]
+fn has_linux_secret_service_session() -> bool {
+    let has_session_bus = env::var_os("DBUS_SESSION_BUS_ADDRESS").is_some()
+        || env::var_os("XDG_RUNTIME_DIR")
+            .map(|runtime_dir| Path::new(&runtime_dir).join("bus").exists())
+            .unwrap_or(false);
+
+    has_session_bus && has_secret_service_backend()
+}
+
+#[cfg(target_os = "linux")]
+fn has_secret_service_backend() -> bool {
+    dir_has_fragment("/usr/share/dbus-1/services", "org.freedesktop.secrets")
+        || dir_has_fragment("/usr/share/dbus-1/services", "gnome-keyring")
+        || dir_has_fragment("/usr/share/dbus-1/services", "kwallet")
+        || dir_has_fragment(
+            "/usr/local/share/dbus-1/services",
+            "org.freedesktop.secrets",
+        )
+        || dir_has_fragment("/usr/local/share/dbus-1/services", "gnome-keyring")
+        || dir_has_fragment("/usr/local/share/dbus-1/services", "kwallet")
+}
+
+#[cfg(target_os = "linux")]
+fn has_linux_keyutils_backend() -> bool {
+    Path::new("/proc/keys").exists() || Path::new("/proc/key-users").exists()
+}
+
+fn desktop_get_session_from_store(
+    store: &impl DesktopSessionSecretStore,
+) -> Result<Option<DesktopSessionEnvelope>, String> {
+    if !store.status().can_persist_session {
+        return Ok(None);
+    }
+
+    let Some(secret) = store.get_secret()? else {
+        return Ok(None);
+    };
+    let session = serde_json::from_str::<DesktopSessionEnvelope>(&secret)
+        .map_err(|_| DESKTOP_STORED_SESSION_INVALID.to_owned())?;
+    sanitize_session_envelope(session)
+        .map(Some)
+        .map_err(|_| DESKTOP_STORED_SESSION_INVALID.to_owned())
+}
+
+fn desktop_set_session_in_store(
+    store: &impl DesktopSessionSecretStore,
+    session: DesktopSessionEnvelope,
+) -> Result<bool, String> {
+    let session = sanitize_session_envelope(session)?;
+    if !store.status().can_persist_session {
+        return Ok(false);
+    }
+
+    let secret =
+        serde_json::to_string(&session).map_err(|_| DESKTOP_STORED_SESSION_INVALID.to_owned())?;
+    store.set_secret(&secret)
+}
+
+fn desktop_remove_session_from_store(
+    store: &impl DesktopSessionSecretStore,
+) -> Result<bool, String> {
+    if !store.status().can_persist_session {
+        return Ok(false);
+    }
+
+    store.remove_secret()
 }
 
 pub fn is_safe_external_url(value: &str) -> bool {
@@ -1209,28 +1421,22 @@ pub fn desktop_set_shortcuts(
 
 #[tauri::command]
 pub fn desktop_secret_store_status() -> DesktopSecretStoreStatus {
-    DesktopSecretStoreStatus {
-        available: false,
-        backend: DESKTOP_SECRET_STORE_BACKEND_NONE,
-        can_persist_session: false,
-        reason: Some(DESKTOP_SECRET_STORE_NOT_CONFIGURED),
-    }
+    KeyringDesktopSessionSecretStore.status()
 }
 
 #[tauri::command]
 pub fn desktop_get_session() -> Result<Option<DesktopSessionEnvelope>, String> {
-    Ok(None)
+    desktop_get_session_from_store(&KeyringDesktopSessionSecretStore)
 }
 
 #[tauri::command]
 pub fn desktop_set_session(session: DesktopSessionEnvelope) -> Result<bool, String> {
-    let _session = sanitize_session_envelope(session)?;
-    Ok(false)
+    desktop_set_session_in_store(&KeyringDesktopSessionSecretStore, session)
 }
 
 #[tauri::command]
 pub fn desktop_remove_session() -> Result<bool, String> {
-    Ok(false)
+    desktop_remove_session_from_store(&KeyringDesktopSessionSecretStore)
 }
 
 #[tauri::command]
@@ -1437,6 +1643,66 @@ mod tests {
             access_token: "access-token".to_owned(),
             refresh_token: None,
             expires_in_ms: Some(3_600_000),
+        }
+    }
+
+    fn available_test_secret_store_status() -> DesktopSecretStoreStatus {
+        DesktopSecretStoreStatus {
+            available: true,
+            backend: DESKTOP_SECRET_STORE_BACKEND_MACOS_KEYCHAIN,
+            can_persist_session: true,
+            reason: None,
+        }
+    }
+
+    struct TestSessionSecretStore {
+        status: DesktopSecretStoreStatus,
+        secret: Mutex<Option<String>>,
+    }
+
+    impl TestSessionSecretStore {
+        fn available() -> Self {
+            Self {
+                status: available_test_secret_store_status(),
+                secret: Mutex::new(None),
+            }
+        }
+
+        fn unavailable() -> Self {
+            Self {
+                status: unavailable_secret_store_status(DESKTOP_SECRET_STORE_NOT_CONFIGURED),
+                secret: Mutex::new(None),
+            }
+        }
+
+        fn with_secret(secret: String) -> Self {
+            Self {
+                status: available_test_secret_store_status(),
+                secret: Mutex::new(Some(secret)),
+            }
+        }
+
+        fn stored_secret(&self) -> Option<String> {
+            self.secret.lock().expect("secret lock").clone()
+        }
+    }
+
+    impl DesktopSessionSecretStore for TestSessionSecretStore {
+        fn status(&self) -> DesktopSecretStoreStatus {
+            self.status
+        }
+
+        fn get_secret(&self) -> Result<Option<String>, String> {
+            Ok(self.stored_secret())
+        }
+
+        fn set_secret(&self, secret: &str) -> Result<bool, String> {
+            *self.secret.lock().expect("secret lock") = Some(secret.to_owned());
+            Ok(true)
+        }
+
+        fn remove_secret(&self) -> Result<bool, String> {
+            Ok(self.secret.lock().expect("secret lock").take().is_some())
         }
     }
 
@@ -1676,21 +1942,140 @@ mod tests {
     }
 
     #[test]
-    fn desktop_secret_store_status_reports_unavailable_backend() {
-        let status = desktop_secret_store_status();
+    fn credential_store_names_are_stable_and_scoped() {
+        assert_eq!(DESKTOP_SESSION_CREDENTIAL_SERVICE, "app.synara.desktop");
+        assert_eq!(DESKTOP_SESSION_CREDENTIAL_ACCOUNT, "matrix-session");
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn platform_secret_store_status_reports_macos_keychain() {
+        let status = platform_secret_store_status();
+
+        assert_eq!(status.available, true);
+        assert_eq!(status.backend, DESKTOP_SECRET_STORE_BACKEND_MACOS_KEYCHAIN);
+        assert_eq!(status.can_persist_session, true);
+        assert_eq!(status.reason, None);
+    }
+
+    #[test]
+    fn linux_secret_store_status_prefers_secret_service_for_persistence() {
+        let status = linux_secret_store_status_from_signals(true, true);
+
+        assert_eq!(status.available, true);
+        assert_eq!(
+            status.backend,
+            DESKTOP_SECRET_STORE_BACKEND_LINUX_SECRET_SERVICE
+        );
+        assert_eq!(status.can_persist_session, true);
+        assert_eq!(status.reason, None);
+    }
+
+    #[test]
+    fn linux_secret_store_status_marks_keyutils_as_session_scoped() {
+        let status = linux_secret_store_status_from_signals(false, true);
+
+        assert_eq!(status.available, true);
+        assert_eq!(status.backend, DESKTOP_SECRET_STORE_BACKEND_LINUX_KEYUTILS);
+        assert_eq!(status.can_persist_session, false);
+        assert_eq!(status.reason, Some(DESKTOP_SECRET_STORE_SESSION_SCOPED));
+    }
+
+    #[test]
+    fn linux_secret_store_status_reports_unavailable_without_backends() {
+        let status = linux_secret_store_status_from_signals(false, false);
 
         assert_eq!(status.available, false);
         assert_eq!(status.backend, DESKTOP_SECRET_STORE_BACKEND_NONE);
         assert_eq!(status.can_persist_session, false);
-        assert_eq!(status.reason, Some(DESKTOP_SECRET_STORE_NOT_CONFIGURED));
+        assert_eq!(status.reason, Some(DESKTOP_SECRET_STORE_LINUX_UNAVAILABLE));
     }
 
     #[test]
-    fn desktop_set_session_validates_payload_before_reporting_unavailable() {
+    fn desktop_session_store_persists_and_reads_sanitized_session_envelopes() {
+        let store = TestSessionSecretStore::available();
+        let stored = desktop_set_session_in_store(
+            &store,
+            DesktopSessionEnvelope {
+                base_url: " https://matrix.example.org ".to_owned(),
+                user_id: " @alice:example.org ".to_owned(),
+                device_id: " DEVICEID ".to_owned(),
+                access_token: " access-token ".to_owned(),
+                refresh_token: Some(" refresh-token ".to_owned()),
+                expires_in_ms: Some(3_600_000),
+            },
+        )
+        .expect("session should store");
+
+        assert!(stored);
+        let raw = store
+            .stored_secret()
+            .expect("session secret should be stored");
+        assert!(!raw.contains("fallbackSdkStores"));
+        let stored_json: serde_json::Value =
+            serde_json::from_str(&raw).expect("stored session should be json");
+        assert_eq!(stored_json["baseUrl"], "https://matrix.example.org");
+        assert_eq!(stored_json["accessToken"], "access-token");
+
+        let session = desktop_get_session_from_store(&store)
+            .expect("session should read")
+            .expect("session should exist");
+        assert_eq!(session.base_url, "https://matrix.example.org");
+        assert_eq!(session.user_id, "@alice:example.org");
+        assert_eq!(session.device_id, "DEVICEID");
+        assert_eq!(session.access_token, "access-token");
+        assert_eq!(session.refresh_token.as_deref(), Some("refresh-token"));
+    }
+
+    #[test]
+    fn desktop_session_store_returns_none_when_no_session_exists() {
+        let store = TestSessionSecretStore::available();
+
+        assert!(desktop_get_session_from_store(&store).unwrap().is_none());
+    }
+
+    #[test]
+    fn desktop_session_store_skips_unavailable_backends() {
+        let store = TestSessionSecretStore::unavailable();
+
+        assert!(!desktop_set_session_in_store(&store, valid_session_envelope()).unwrap());
+        assert!(desktop_get_session_from_store(&store).unwrap().is_none());
+        assert!(!desktop_remove_session_from_store(&store).unwrap());
+        assert_eq!(store.stored_secret(), None);
+    }
+
+    #[test]
+    fn desktop_session_store_rejects_invalid_stored_json_without_echoing_secret() {
+        let raw_secret = "not-json-access-token";
+        let store = TestSessionSecretStore::with_secret(raw_secret.to_owned());
+
+        let error = desktop_get_session_from_store(&store)
+            .err()
+            .expect("stored session should fail");
+
+        assert_eq!(error, DESKTOP_STORED_SESSION_INVALID);
+        assert!(!error.contains(raw_secret));
+    }
+
+    #[test]
+    fn desktop_session_store_removes_existing_session() {
+        let store = TestSessionSecretStore::with_secret(
+            serde_json::to_string(&valid_session_envelope()).expect("session should encode"),
+        );
+
+        assert!(desktop_remove_session_from_store(&store).unwrap());
+        assert_eq!(store.stored_secret(), None);
+        assert!(!desktop_remove_session_from_store(&store).unwrap());
+    }
+
+    #[test]
+    fn desktop_set_session_validates_payload_before_storage() {
+        let store = TestSessionSecretStore::available();
         let mut session = valid_session_envelope();
         session.access_token = " ".to_owned();
 
-        assert!(desktop_set_session(session).is_err());
+        assert!(desktop_set_session_in_store(&store, session).is_err());
+        assert_eq!(store.stored_secret(), None);
     }
 
     #[test]

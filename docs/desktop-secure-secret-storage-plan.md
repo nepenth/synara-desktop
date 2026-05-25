@@ -16,9 +16,9 @@ management API to the frontend. Synara's immediate need is narrower: persist
 and clear the Matrix session credential through an operating-system credential
 store.
 
-This phase does not change credential persistence. Current tokens still live in
-the runtime fallback storage until the implementation phase below is built and
-validated.
+The desktop shell now has the native credential adapter. Current login and
+registration still write the legacy runtime fallback storage until the migration
+and new-session write phases are built and validated.
 
 ## Current State
 
@@ -28,8 +28,12 @@ validated.
   `synara_user_id`, and `synara_hs_base_url` into browser `localStorage`.
 - Startup reads that fallback session synchronously from `src/index.tsx`,
   `src/app/pages/Router.tsx`, and client boot paths.
-- The Tauri shell now exposes the scoped secret-store command surface, but the
-  native credential backend is intentionally not enabled yet.
+- The Tauri shell exposes the scoped secret-store command surface and a
+  keyring-backed native credential adapter.
+- macOS reports `macos-keychain` and can persist the Matrix session envelope.
+- Linux reports `linux-secret-service` when a D-Bus Secret Service session is
+  detected. `linux-keyutils` is detected as session-scoped and is not used for
+  persistent session migration by default.
 - Tauri capabilities currently expose clipboard, notifications, opener,
   window-state, and global shortcuts only.
 
@@ -50,8 +54,8 @@ Rejected as the default Matrix access-token store for now.
 Tauri's Stronghold plugin stores secrets and keys through the IOTA Stronghold
 engine and supports desktop and mobile platforms, but the official plugin
 currently requires Rust 1.77.2 or newer and must be enabled through explicit
-Tauri permissions. The repo's `src-tauri/Cargo.toml` still advertises
-`rust-version = "1.61"`, even though the local toolchain is newer.
+Tauri permissions. The repo's `src-tauri/Cargo.toml` now advertises
+`rust-version = "1.77.2"` to match the Tauri 2 floor.
 
 Stronghold may be useful later for a separate encrypted application vault, but
 it is not the simplest fit for a single OS-backed Matrix credential. It also
@@ -67,11 +71,11 @@ native credential APIs. The frontend should not get arbitrary key/value secret
 access. It should only be able to persist, read, and clear Synara's Matrix
 session envelope.
 
-The Rust `keyring` crate is a practical candidate for this adapter because it
-connects to native credential stores and exposes platform-specific backends such
-as Apple Keychain, Windows Credential Manager, and Linux Secret Service/keyutils
-stores. We should still spike macOS and the target Linux environments before
-committing to it in production.
+The Rust `keyring` 3.x crate is the adapter because it connects to native
+credential stores and exposes platform-specific backends such as Apple Keychain
+and Linux Secret Service/keyutils stores. The repo pins the 3.x API line because
+the latest 4.x crate has reorganized away from the simple `Entry` API this
+adapter needs.
 
 ## Proposed Command Surface
 
@@ -87,10 +91,10 @@ desktop_remove_session() -> Result<bool, String>
 Do not expose generic commands such as `get_secret(key)` or `set_secret(key,
 value)` to the WebView.
 
-Status: command surface implemented. The current backend returns
-`available: false`, `backend: "none"`, `canPersistSession: false`, and
-`reason: "secure-secret-store-not-configured"` until the macOS Keychain and
-Linux credential-store adapters are added.
+Status: command surface and native adapter implemented. macOS uses Keychain.
+Linux treats Secret Service as the persistent backend and reports keyutils as a
+session-scoped capability until we explicitly decide to accept non-persistent
+Linux session restore semantics.
 
 Suggested status payload:
 
