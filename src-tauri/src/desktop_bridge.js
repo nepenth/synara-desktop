@@ -10,6 +10,7 @@
     supportsTrayState: true,
     supportsUpdater: false,
     supportsMediaPermissions: true,
+    supportsSecureSecretStore: false,
     desktopEnvironment: "unknown",
     sessionType: "unknown",
     routes: Object.freeze({
