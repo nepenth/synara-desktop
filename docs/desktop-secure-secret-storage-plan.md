@@ -1,0 +1,222 @@
+# Desktop Secure Secret Storage Plan
+
+Reviewed: 2026-05-25
+
+## Decision
+
+Use a Rust-owned native credential-store adapter for desktop Matrix session
+secrets. For macOS this means Keychain. For Linux this means a Secret
+Service-backed store when available, with an explicit unsupported or migration
+fallback state when no user credential service exists.
+
+Do not make the Tauri Stronghold JavaScript plugin the default access-token
+store. Stronghold is useful for app-managed encrypted snapshots, but it pushes
+password/snapshot lifecycle concerns into the app and exposes a broader secret
+management API to the frontend. Synara's immediate need is narrower: persist
+and clear the Matrix session credential through an operating-system credential
+store.
+
+This phase does not change credential persistence. Current tokens still live in
+the runtime fallback storage until the implementation phase below is built and
+validated.
+
+## Current State
+
+- Runtime session fallback is in
+  `synara/src/app/state/sessions.ts`.
+- Login and registration write `synara_access_token`, `synara_device_id`,
+  `synara_user_id`, and `synara_hs_base_url` into browser `localStorage`.
+- Startup reads that fallback session synchronously from `src/index.tsx`,
+  `src/app/pages/Router.tsx`, and client boot paths.
+- The Tauri shell has no secret-store command or dependency today.
+- Tauri capabilities currently expose clipboard, notifications, opener,
+  window-state, and global shortcuts only.
+
+## Evaluated Options
+
+### Option A: Keep localStorage
+
+Rejected for production credential storage.
+
+This is the lowest implementation cost, but it keeps bearer access tokens in the
+WebView data store. That is not aligned with the iOS Keychain plan, nor with an
+App Store-grade credential model.
+
+### Option B: Tauri Stronghold Plugin
+
+Rejected as the default Matrix access-token store for now.
+
+Tauri's Stronghold plugin stores secrets and keys through the IOTA Stronghold
+engine and supports desktop and mobile platforms, but the official plugin
+currently requires Rust 1.77.2 or newer and must be enabled through explicit
+Tauri permissions. The repo's `src-tauri/Cargo.toml` still advertises
+`rust-version = "1.61"`, even though the local toolchain is newer.
+
+Stronghold may be useful later for a separate encrypted application vault, but
+it is not the simplest fit for a single OS-backed Matrix credential. It also
+does not remove the need to decide how the Stronghold password is generated,
+stored, rotated, and recovered.
+
+### Option C: Rust Native Credential Store
+
+Accepted.
+
+The desktop shell should expose scoped commands implemented in Rust, backed by
+native credential APIs. The frontend should not get arbitrary key/value secret
+access. It should only be able to persist, read, and clear Synara's Matrix
+session envelope.
+
+The Rust `keyring` crate is a practical candidate for this adapter because it
+connects to native credential stores and exposes platform-specific backends such
+as Apple Keychain, Windows Credential Manager, and Linux Secret Service/keyutils
+stores. We should still spike macOS and the target Linux environments before
+committing to it in production.
+
+## Proposed Command Surface
+
+Add only session-scoped commands:
+
+```text
+desktop_secret_store_status() -> DesktopSecretStoreStatus
+desktop_get_session() -> Option<DesktopSessionEnvelope>
+desktop_set_session(session: DesktopSessionEnvelope) -> Result<(), String>
+desktop_remove_session() -> Result<(), String>
+```
+
+Do not expose generic commands such as `get_secret(key)` or `set_secret(key,
+value)` to the WebView.
+
+Suggested status payload:
+
+```ts
+type DesktopSecretStoreStatus = {
+  available: boolean;
+  backend:
+    | "macos-keychain"
+    | "linux-secret-service"
+    | "linux-keyutils"
+    | "unknown";
+  canPersistSession: boolean;
+  reason?: string;
+};
+```
+
+Suggested session envelope:
+
+```ts
+type DesktopSessionEnvelope = {
+  baseUrl: string;
+  userId: string;
+  deviceId: string;
+  accessToken: string;
+  refreshToken?: string;
+  expiresInMs?: number;
+};
+```
+
+Validation rules:
+
+- Reject empty `baseUrl`, `userId`, `deviceId`, and `accessToken`.
+- Require `baseUrl` to be `https://` unless explicitly allowed for development.
+- Do not log session payloads or token-like values.
+- Store a single current-user session first; multi-account storage should be a
+  later extension.
+- Namespace the credential service/account names under the app identifier,
+  currently `app.synara.desktop`.
+
+## Runtime Migration Plan
+
+The runtime currently expects synchronous session reads. Native credential
+stores require asynchronous IPC. The migration should therefore happen in two
+steps.
+
+### Step 1: Async Session Bootstrap
+
+Add a startup bootstrap that resolves the session before the app/router decides
+whether to show auth or the client:
+
+1. Ask `platform` for secure secret-store availability.
+2. If available, read the native desktop session.
+3. If no native session exists, read the legacy localStorage fallback.
+4. Hydrate an in-memory session cache used by existing boot paths.
+5. Keep localStorage writes unchanged until the migration step is ready.
+
+Acceptance criteria:
+
+- App startup still routes logged-in and logged-out users correctly.
+- Existing localStorage users still launch.
+- Tests cover native session present, legacy session present, and no session.
+
+### Step 2: Credential Migration
+
+After bootstrap is stable:
+
+1. On first launch with a legacy localStorage token and available native store,
+   write the session envelope to the native credential store.
+2. Start Matrix client init using the migrated session.
+3. After successful client init, remove legacy token fields from localStorage.
+4. Keep non-secret local settings and drafts untouched.
+5. On logout, clear native credential store, legacy token keys, Matrix stores,
+   and service-worker in-memory token state.
+
+Acceptance criteria:
+
+- Access tokens are not left in localStorage after successful migration.
+- Failed migration does not delete the only valid session.
+- Logout clears both native and legacy session locations.
+- Downgrade behavior is documented before release.
+
+### Step 3: Write New Sessions Securely
+
+Login and registration should write the native credential store first when
+available. localStorage token writes should remain development-only fallback.
+
+Acceptance criteria:
+
+- Successful login/register stores the access token in native credentials on
+  macOS/Linux when available.
+- If native credentials are unavailable, the UI presents a clear unsupported or
+  fallback state.
+- Failed login/register does not persist partial credentials.
+
+## Testing Requirements
+
+Runtime tests:
+
+- Session bootstrap chooses native session over legacy localStorage.
+- Legacy fallback remains readable until migration.
+- Migration removes only token keys, not settings/drafts.
+- Logout clears native and legacy stores.
+
+Rust tests:
+
+- Session payload validation rejects empty or malformed fields.
+- Store key/service names are stable and scoped.
+- Commands never include token values in errors.
+- Missing credential backend returns a typed unavailable status.
+
+Manual smoke:
+
+- macOS: install, login, quit, relaunch, verify session restores from Keychain.
+- macOS: logout, relaunch, verify no session restores.
+- Linux with Secret Service: same login/relaunch/logout smoke.
+- Linux without Secret Service: verify explicit fallback/unsupported behavior.
+
+## Acceptance Criteria For This Planning Slice
+
+- Decision names a primary desktop credential strategy.
+- Stronghold and OS credential-store tradeoffs are recorded.
+- Migration steps protect existing users from losing sessions.
+- Command surface is scoped and does not expose arbitrary secret access.
+- Runtime capability contract can represent "secure store not configured yet".
+- No credential persistence behavior changes in this slice.
+
+## Sources
+
+- Tauri Stronghold plugin: https://v2.tauri.app/plugin/stronghold/
+- Tauri plugin permissions: https://v2.tauri.app/learn/security/using-plugin-permissions/
+- Rust keyring crate: https://docs.rs/keyring/latest/keyring/
+- Current shell config: `src-tauri/Cargo.toml`, `src-tauri/src/lib.rs`,
+  `src-tauri/capabilities/main.json`
+- Current runtime session store:
+  `synara/src/app/state/sessions.ts`
