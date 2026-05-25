@@ -1,6 +1,6 @@
 # Synara Desktop
 
-Synara Desktop is a Tauri-based Matrix client focused on fast, secure conversations, smooth desktop UX, and agent workflows.
+Synara Desktop is a Tauri-based native desktop Matrix client focused on fast, secure conversations, smooth desktop UX, Linux support, and agent workflows.
 
 ## Download
 
@@ -71,6 +71,6 @@ For Linux workstation builds, install the required system packages and follow th
 - Native notification permissions and notification deep links.
 - Dock/taskbar badge counts.
 - macOS camera and microphone permission descriptions for Matrix calls.
-- Hardened structured agent-action bridge for Synara web integrations.
+- Hardened structured agent-action bridge for the Synara app runtime.
 
 See [Desktop modernization](docs/desktop-modernization.md) for the native integration contract. Build/test notes, runtime smoke-test evidence, and bridge security notes are tracked in [MODERNIZATION.md](MODERNIZATION.md).
