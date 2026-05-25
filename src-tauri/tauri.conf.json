@@ -35,7 +35,7 @@
     "createUpdaterArtifacts": false
   },
   "build": {
-    "beforeBuildCommand": "node scripts/build-web.mjs",
+    "beforeBuildCommand": "node scripts/build-runtime.mjs",
     "frontendDist": "../devAssets",
     "beforeDevCommand": "cd synara && npm start",
     "devUrl": "http://localhost:8080"
