@@ -165,6 +165,11 @@ Acceptance criteria:
 
 ### Step 2: Credential Migration
 
+Status: implemented in the runtime submodule. When startup used a legacy
+fallback session, successful Matrix client initialization now writes the
+sanitized session envelope to the native store before removing only the legacy
+fallback token fields.
+
 After bootstrap is stable:
 
 1. On first launch with a legacy localStorage token and available native store,
@@ -183,6 +188,11 @@ Acceptance criteria:
 - Downgrade behavior is documented before release.
 
 ### Step 3: Write New Sessions Securely
+
+Status: implemented in the runtime submodule. Login and registration now use
+the platform session persistence helper, which writes native credentials first
+when available and only writes legacy fallback fields when the native write is
+unavailable or fails.
 
 Login and registration should write the native credential store first when
 available. localStorage token writes should remain development-only fallback.
@@ -218,14 +228,16 @@ Manual smoke:
 - Linux with Secret Service: same login/relaunch/logout smoke.
 - Linux without Secret Service: verify explicit fallback/unsupported behavior.
 
-## Acceptance Criteria For This Planning Slice
+## Acceptance Criteria Status
 
 - Decision names a primary desktop credential strategy.
 - Stronghold and OS credential-store tradeoffs are recorded.
 - Migration steps protect existing users from losing sessions.
 - Command surface is scoped and does not expose arbitrary secret access.
-- Runtime capability contract can represent "secure store not configured yet".
-- No credential persistence behavior changes in this slice.
+- Runtime capability contract can represent available, unavailable, and
+  non-persistent secret-store states.
+- Runtime credential persistence now writes native credentials first when
+  available and keeps legacy fallback only when needed.
 
 ## Sources
 
