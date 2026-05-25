@@ -105,3 +105,4 @@ untrusted client code until merged and served from a trusted release channel.
 ## Related Docs
 
 - [Desktop integration contract](docs/desktop-modernization.md)
+- [Native-first architecture spike](docs/native-first-architecture-spike.md)
