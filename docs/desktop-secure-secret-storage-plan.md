@@ -28,7 +28,8 @@ validated.
   `synara_user_id`, and `synara_hs_base_url` into browser `localStorage`.
 - Startup reads that fallback session synchronously from `src/index.tsx`,
   `src/app/pages/Router.tsx`, and client boot paths.
-- The Tauri shell has no secret-store command or dependency today.
+- The Tauri shell now exposes the scoped secret-store command surface, but the
+  native credential backend is intentionally not enabled yet.
 - Tauri capabilities currently expose clipboard, notifications, opener,
   window-state, and global shortcuts only.
 
@@ -79,12 +80,17 @@ Add only session-scoped commands:
 ```text
 desktop_secret_store_status() -> DesktopSecretStoreStatus
 desktop_get_session() -> Option<DesktopSessionEnvelope>
-desktop_set_session(session: DesktopSessionEnvelope) -> Result<(), String>
-desktop_remove_session() -> Result<(), String>
+desktop_set_session(session: DesktopSessionEnvelope) -> Result<bool, String>
+desktop_remove_session() -> Result<bool, String>
 ```
 
 Do not expose generic commands such as `get_secret(key)` or `set_secret(key,
 value)` to the WebView.
+
+Status: command surface implemented. The current backend returns
+`available: false`, `backend: "none"`, `canPersistSession: false`, and
+`reason: "secure-secret-store-not-configured"` until the macOS Keychain and
+Linux credential-store adapters are added.
 
 Suggested status payload:
 
@@ -92,6 +98,7 @@ Suggested status payload:
 type DesktopSecretStoreStatus = {
   available: boolean;
   backend:
+    | "none"
     | "macos-keychain"
     | "linux-secret-service"
     | "linux-keyutils"

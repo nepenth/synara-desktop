@@ -1,6 +1,8 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::env;
+use std::path::{Path, PathBuf};
+use std::sync::{Mutex, OnceLock};
 #[cfg(target_os = "macos")]
 use tauri::image::Image;
 use tauri::menu::{Menu, MenuEvent, MenuItem, PredefinedMenuItem};
@@ -11,8 +13,6 @@ use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutEvent, S
 use tauri_plugin_notification::NotificationExt;
 use tauri_plugin_opener::OpenerExt;
 use url::Url;
-use std::path::{Path, PathBuf};
-use std::sync::{Mutex, OnceLock};
 
 use std::fs;
 
@@ -132,7 +132,8 @@ pub struct DesktopTrayState {
     pub do_not_disturb: bool,
 }
 
-static LAST_SHORTCUT_APPLY_STATE: OnceLock<Mutex<Option<DesktopShortcutApplyState>>> = OnceLock::new();
+static LAST_SHORTCUT_APPLY_STATE: OnceLock<Mutex<Option<DesktopShortcutApplyState>>> =
+    OnceLock::new();
 
 #[derive(Clone, Serialize)]
 struct DesktopAgentActionEvent {
@@ -149,10 +150,35 @@ pub struct DesktopPerformanceCapabilities {
     build_label: String,
 }
 
+#[derive(Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct DesktopSecretStoreStatus {
+    pub available: bool,
+    pub backend: &'static str,
+    pub can_persist_session: bool,
+    pub reason: Option<&'static str>,
+}
+
+#[derive(Clone, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct DesktopSessionEnvelope {
+    base_url: String,
+    user_id: String,
+    device_id: String,
+    access_token: String,
+    refresh_token: Option<String>,
+    expires_in_ms: Option<u64>,
+}
+
 const DESKTOP_AGENT_ACTION_MAX_TEXT_CHARS: usize = 1024;
 const DESKTOP_AGENT_ACTION_MAX_MARKDOWN_CHARS: usize = 16_384;
 const DESKTOP_NOTIFICATION_MAX_TITLE_CHARS: usize = 120;
 const DESKTOP_NOTIFICATION_MAX_BODY_CHARS: usize = 500;
+const DESKTOP_SESSION_MAX_BASE_URL_CHARS: usize = 2_048;
+const DESKTOP_SESSION_MAX_ID_CHARS: usize = 512;
+const DESKTOP_SESSION_MAX_TOKEN_CHARS: usize = 8_192;
+const DESKTOP_SECRET_STORE_BACKEND_NONE: &str = "none";
+const DESKTOP_SECRET_STORE_NOT_CONFIGURED: &str = "secure-secret-store-not-configured";
 const MAX_DESKTOP_ROUTE_CHARS: usize = 2_048;
 const ALLOWED_SHORTCUT_LEN: usize = 128;
 const UNKNOWN_INTEGRATION_VALUE: &str = "unknown";
@@ -235,9 +261,109 @@ fn sanitize_notification_payload(
         .map(|value| sanitize_action_text(value, DESKTOP_NOTIFICATION_MAX_BODY_CHARS))
         .filter(|value| !value.is_empty());
 
-    let route = notification.route.and_then(|value| sanitize_route(value).ok());
+    let route = notification
+        .route
+        .and_then(|value| sanitize_route(value).ok());
 
     Ok(DesktopNotificationPayload { title, body, route })
+}
+
+fn sanitize_required_session_field(
+    value: String,
+    field_name: &'static str,
+    max_chars: usize,
+) -> Result<String, String> {
+    let sanitized = value.trim().to_owned();
+    if sanitized.is_empty() {
+        return Err(format!("Session {field_name} cannot be empty"));
+    }
+    if sanitized.chars().count() > max_chars {
+        return Err(format!("Session {field_name} is too long"));
+    }
+    Ok(sanitized)
+}
+
+fn sanitize_optional_session_field(
+    value: Option<String>,
+    field_name: &'static str,
+    max_chars: usize,
+) -> Result<Option<String>, String> {
+    let Some(value) = value else {
+        return Ok(None);
+    };
+    let sanitized = value.trim().to_owned();
+    if sanitized.is_empty() {
+        return Ok(None);
+    }
+    if sanitized.chars().count() > max_chars {
+        return Err(format!("Session {field_name} is too long"));
+    }
+    Ok(Some(sanitized))
+}
+
+fn is_loopback_session_host(host: &str) -> bool {
+    host.eq_ignore_ascii_case("localhost") || host == "127.0.0.1" || host == "::1"
+}
+
+fn is_allowed_session_base_url(value: &str) -> bool {
+    let Ok(url) = Url::parse(value) else {
+        return false;
+    };
+
+    if url.host_str().is_none() || !url.username().is_empty() || url.password().is_some() {
+        return false;
+    }
+
+    match url.scheme() {
+        "https" => true,
+        "http" => url
+            .host_str()
+            .map(is_loopback_session_host)
+            .unwrap_or(false),
+        _ => false,
+    }
+}
+
+fn sanitize_session_envelope(
+    session: DesktopSessionEnvelope,
+) -> Result<DesktopSessionEnvelope, String> {
+    let base_url = sanitize_required_session_field(
+        session.base_url,
+        "baseUrl",
+        DESKTOP_SESSION_MAX_BASE_URL_CHARS,
+    )?;
+    if !is_allowed_session_base_url(&base_url) {
+        return Err(
+            "Session baseUrl must be an HTTPS URL or a loopback development URL".to_owned(),
+        );
+    }
+
+    let user_id =
+        sanitize_required_session_field(session.user_id, "userId", DESKTOP_SESSION_MAX_ID_CHARS)?;
+    let device_id = sanitize_required_session_field(
+        session.device_id,
+        "deviceId",
+        DESKTOP_SESSION_MAX_ID_CHARS,
+    )?;
+    let access_token = sanitize_required_session_field(
+        session.access_token,
+        "accessToken",
+        DESKTOP_SESSION_MAX_TOKEN_CHARS,
+    )?;
+    let refresh_token = sanitize_optional_session_field(
+        session.refresh_token,
+        "refreshToken",
+        DESKTOP_SESSION_MAX_TOKEN_CHARS,
+    )?;
+
+    Ok(DesktopSessionEnvelope {
+        base_url,
+        user_id,
+        device_id,
+        access_token,
+        refresh_token,
+        expires_in_ms: session.expires_in_ms,
+    })
 }
 
 pub fn is_safe_external_url(value: &str) -> bool {
@@ -308,7 +434,10 @@ fn unique_download_path(downloads: &Path, filename: &str) -> PathBuf {
     }
 
     let path = Path::new(filename);
-    let stem = path.file_stem().and_then(|value| value.to_str()).unwrap_or("download");
+    let stem = path
+        .file_stem()
+        .and_then(|value| value.to_str())
+        .unwrap_or("download");
     let extension = path.extension().and_then(|value| value.to_str());
 
     for index in 1..1000 {
@@ -383,7 +512,9 @@ pub fn desktop_read_dropped_files(
     paths: Vec<String>,
 ) -> Result<Vec<DesktopDroppedFilePayload>, String> {
     if paths.len() > MAX_DROPPED_FILES {
-        return Err(format!("Too many dropped files. Maximum is {MAX_DROPPED_FILES}."));
+        return Err(format!(
+            "Too many dropped files. Maximum is {MAX_DROPPED_FILES}."
+        ));
     }
 
     let mut total_bytes = 0_u64;
@@ -543,8 +674,10 @@ fn detect_os_release() -> (String, String, String) {
     };
 
     let distro_id = parse_os_release_field(&contents, "ID").unwrap_or_else(|| default.clone());
-    let distro_name = parse_os_release_field(&contents, "NAME").unwrap_or_else(|| distro_id.clone());
-    let distro_version = parse_os_release_field(&contents, "VERSION_ID").unwrap_or_else(|| default.clone());
+    let distro_name =
+        parse_os_release_field(&contents, "NAME").unwrap_or_else(|| distro_id.clone());
+    let distro_version =
+        parse_os_release_field(&contents, "VERSION_ID").unwrap_or_else(|| default.clone());
     (distro_id, distro_name, distro_version)
 }
 
@@ -583,14 +716,18 @@ fn shortcut_apply_state_message(state: DesktopShortcutApplyState) -> &'static st
         DesktopShortcutApplyState::PermissionNeeded => {
             "Shortcut registration needs permission on this desktop session."
         }
-        DesktopShortcutApplyState::Unsupported => "Desktop shortcuts are unsupported in this environment.",
+        DesktopShortcutApplyState::Unsupported => {
+            "Desktop shortcuts are unsupported in this environment."
+        }
         DesktopShortcutApplyState::Failed => "Desktop shortcut registration failed.",
     }
 }
 
 fn desktop_shortcut_fallback_command() -> Option<String> {
     if is_kde_wayland_session() {
-        return Some("Open System Settings > Shortcuts and create a custom shortcut for Synara.".to_string());
+        return Some(
+            "Open System Settings > Shortcuts and create a custom shortcut for Synara.".to_string(),
+        );
     }
     None
 }
@@ -601,7 +738,9 @@ fn shortcut_result(
     fallback_command: Option<String>,
 ) -> DesktopShortcutApplyResult {
     let fallback_command = if matches!(state, DesktopShortcutApplyState::PermissionNeeded) {
-        Some("Open System Settings > Shortcuts and create a custom shortcut for Synara.".to_string())
+        Some(
+            "Open System Settings > Shortcuts and create a custom shortcut for Synara.".to_string(),
+        )
     } else {
         fallback_command
     };
@@ -651,7 +790,10 @@ fn tray_route_labels(state: &DesktopTrayState) -> [String; 5] {
     ]
 }
 
-fn build_tray_menu<R: Runtime>(app: &AppHandle<R>, state: &DesktopTrayState) -> tauri::Result<Menu<R>> {
+fn build_tray_menu<R: Runtime>(
+    app: &AppHandle<R>,
+    state: &DesktopTrayState,
+) -> tauri::Result<Menu<R>> {
     let route_labels = tray_route_labels(state);
 
     let show = MenuItem::with_id(
@@ -686,7 +828,17 @@ fn build_tray_menu<R: Runtime>(app: &AppHandle<R>, state: &DesktopTrayState) -> 
     let quit = MenuItem::with_id(app, MENU_QUIT, "Quit Synara", true, Some("CmdOrCtrl+Q"))?;
 
     #[cfg(not(target_os = "linux"))]
-    let menu = Menu::with_items(app, &[&show, &later, &notifications, &separator, &build_item, &quit])?;
+    let menu = Menu::with_items(
+        app,
+        &[
+            &show,
+            &later,
+            &notifications,
+            &separator,
+            &build_item,
+            &quit,
+        ],
+    )?;
 
     #[cfg(target_os = "linux")]
     let unread_summary = MenuItem::with_id(
@@ -966,7 +1118,10 @@ pub fn desktop_set_badge_count(app: AppHandle, count: i64) -> Result<(), String>
 }
 
 #[tauri::command]
-pub fn desktop_set_shortcuts(app: AppHandle, shortcuts: DesktopShortcutConfig) -> DesktopShortcutApplyResult {
+pub fn desktop_set_shortcuts(
+    app: AppHandle,
+    shortcuts: DesktopShortcutConfig,
+) -> DesktopShortcutApplyResult {
     let supported = cfg!(not(any(target_os = "android", target_os = "ios")));
     if !supported {
         return shortcut_result(
@@ -1050,6 +1205,32 @@ pub fn desktop_set_shortcuts(app: AppHandle, shortcuts: DesktopShortcutConfig) -
 
     set_last_shortcut_apply_state(DesktopShortcutApplyState::Active);
     shortcut_result(DesktopShortcutApplyState::Active, None, None)
+}
+
+#[tauri::command]
+pub fn desktop_secret_store_status() -> DesktopSecretStoreStatus {
+    DesktopSecretStoreStatus {
+        available: false,
+        backend: DESKTOP_SECRET_STORE_BACKEND_NONE,
+        can_persist_session: false,
+        reason: Some(DESKTOP_SECRET_STORE_NOT_CONFIGURED),
+    }
+}
+
+#[tauri::command]
+pub fn desktop_get_session() -> Result<Option<DesktopSessionEnvelope>, String> {
+    Ok(None)
+}
+
+#[tauri::command]
+pub fn desktop_set_session(session: DesktopSessionEnvelope) -> Result<bool, String> {
+    let _session = sanitize_session_envelope(session)?;
+    Ok(false)
+}
+
+#[tauri::command]
+pub fn desktop_remove_session() -> Result<bool, String> {
+    Ok(false)
 }
 
 #[tauri::command]
@@ -1169,10 +1350,7 @@ pub fn desktop_get_integration_status(app: AppHandle) -> DesktopIntegrationStatu
 }
 
 #[tauri::command]
-pub fn desktop_update_tray_state(
-    app: AppHandle,
-    state: DesktopTrayState,
-) -> Result<(), String> {
+pub fn desktop_update_tray_state(app: AppHandle, state: DesktopTrayState) -> Result<(), String> {
     if let Some(tray) = app.tray_by_id(TRAY_ICON_ID) {
         let state = DesktopTrayState {
             unread_count: clamp_count(state.unread_count),
@@ -1182,7 +1360,8 @@ pub fn desktop_update_tray_state(
             do_not_disturb: state.do_not_disturb,
         };
         let menu = build_tray_menu(&app, &state).map_err(|error| error.to_string())?;
-        tray.set_menu(Some(menu)).map_err(|error| error.to_string())?;
+        tray.set_menu(Some(menu))
+            .map_err(|error| error.to_string())?;
         tray.set_tooltip(Some(tray_tooltip(&state)))
             .map_err(|error| error.to_string())?;
     }
@@ -1249,6 +1428,17 @@ mod tests {
     use std::sync::Mutex;
 
     static ENV_LOCK: Mutex<()> = Mutex::new(());
+
+    fn valid_session_envelope() -> DesktopSessionEnvelope {
+        DesktopSessionEnvelope {
+            base_url: "https://matrix.example.org".to_owned(),
+            user_id: "@alice:example.org".to_owned(),
+            device_id: "DEVICEID".to_owned(),
+            access_token: "access-token".to_owned(),
+            refresh_token: None,
+            expires_in_ms: Some(3_600_000),
+        }
+    }
 
     #[test]
     fn validate_shortcuts_accepts_valid_input() {
@@ -1424,6 +1614,86 @@ mod tests {
     }
 
     #[test]
+    fn sanitize_session_envelope_accepts_https_session() {
+        let session = sanitize_session_envelope(DesktopSessionEnvelope {
+            base_url: " https://matrix.example.org ".to_owned(),
+            user_id: " @alice:example.org ".to_owned(),
+            device_id: " DEVICEID ".to_owned(),
+            access_token: " access-token ".to_owned(),
+            refresh_token: Some(" refresh-token ".to_owned()),
+            expires_in_ms: Some(3_600_000),
+        })
+        .expect("session envelope should pass");
+
+        assert_eq!(session.base_url, "https://matrix.example.org");
+        assert_eq!(session.user_id, "@alice:example.org");
+        assert_eq!(session.device_id, "DEVICEID");
+        assert_eq!(session.access_token, "access-token");
+        assert_eq!(session.refresh_token.as_deref(), Some("refresh-token"));
+        assert_eq!(session.expires_in_ms, Some(3_600_000));
+    }
+
+    #[test]
+    fn sanitize_session_envelope_allows_loopback_http_for_development() {
+        let mut session = valid_session_envelope();
+        session.base_url = "http://localhost:8008".to_owned();
+
+        let sanitized = sanitize_session_envelope(session).expect("loopback session should pass");
+
+        assert_eq!(sanitized.base_url, "http://localhost:8008");
+    }
+
+    #[test]
+    fn sanitize_session_envelope_rejects_empty_access_token() {
+        let mut session = valid_session_envelope();
+        session.access_token = "   ".to_owned();
+
+        assert!(sanitize_session_envelope(session).is_err());
+    }
+
+    #[test]
+    fn sanitize_session_envelope_rejects_plain_http_remote_base_url() {
+        let mut session = valid_session_envelope();
+        session.base_url = "http://matrix.example.org".to_owned();
+
+        let result = sanitize_session_envelope(session);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn sanitize_session_envelope_does_not_echo_token_values_in_errors() {
+        let secret_token = "super-secret-access-token";
+        let mut session = valid_session_envelope();
+        session.base_url = "http://matrix.example.org".to_owned();
+        session.access_token = secret_token.to_owned();
+
+        let error = sanitize_session_envelope(session)
+            .err()
+            .expect("session envelope should fail");
+
+        assert!(!error.contains(secret_token));
+    }
+
+    #[test]
+    fn desktop_secret_store_status_reports_unavailable_backend() {
+        let status = desktop_secret_store_status();
+
+        assert_eq!(status.available, false);
+        assert_eq!(status.backend, DESKTOP_SECRET_STORE_BACKEND_NONE);
+        assert_eq!(status.can_persist_session, false);
+        assert_eq!(status.reason, Some(DESKTOP_SECRET_STORE_NOT_CONFIGURED));
+    }
+
+    #[test]
+    fn desktop_set_session_validates_payload_before_reporting_unavailable() {
+        let mut session = valid_session_envelope();
+        session.access_token = " ".to_owned();
+
+        assert!(desktop_set_session(session).is_err());
+    }
+
+    #[test]
     fn sanitize_route_allows_only_internal_routes() {
         assert_eq!(
             sanitize_route("/inbox/later/".to_owned()).unwrap(),
@@ -1471,10 +1741,7 @@ mod tests {
             route: Some("/inbox/notifications/".to_owned()),
         })
         .expect("notification payload should pass");
-        assert_eq!(
-            payload.route,
-            Some("/inbox/notifications/".to_string())
-        );
+        assert_eq!(payload.route, Some("/inbox/notifications/".to_string()));
 
         let invalid = sanitize_notification_payload(DesktopNotificationPayload {
             title: "Reminder".to_owned(),
@@ -1493,7 +1760,10 @@ NAME="CachyOS"
 VERSION_ID=24
 "#;
 
-        assert_eq!(parse_os_release_field(data, "ID").unwrap_or_else(|| "".to_owned()), "cachyos");
+        assert_eq!(
+            parse_os_release_field(data, "ID").unwrap_or_else(|| "".to_owned()),
+            "cachyos"
+        );
         assert_eq!(
             parse_os_release_field(data, "NAME").unwrap_or_else(|| "".to_owned()),
             "CachyOS"
@@ -1516,7 +1786,10 @@ VERSION_ID=24
         std::env::remove_var("DISPLAY");
         std::env::remove_var("WAYLAND_DISPLAY");
 
-        assert_eq!(desktop_environment_label(), UNKNOWN_INTEGRATION_VALUE.to_owned());
+        assert_eq!(
+            desktop_environment_label(),
+            UNKNOWN_INTEGRATION_VALUE.to_owned()
+        );
         assert_eq!(detect_session_type(), UNKNOWN_INTEGRATION_VALUE.to_owned());
 
         if let Some(value) = original_desktop {
@@ -1568,16 +1841,9 @@ VERSION_ID=24
             DesktopShortcutApplyState::Unsupported
         );
 
-        let result = shortcut_result(
-            DesktopShortcutApplyState::PermissionNeeded,
-            None,
-            None,
-        );
+        let result = shortcut_result(DesktopShortcutApplyState::PermissionNeeded, None, None);
         assert!(!result.success);
-        assert_eq!(
-            result.state,
-            DesktopShortcutApplyState::PermissionNeeded
-        );
+        assert_eq!(result.state, DesktopShortcutApplyState::PermissionNeeded);
         assert!(result.fallback_command.is_some());
     }
 
