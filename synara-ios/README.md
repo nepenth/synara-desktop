@@ -14,6 +14,8 @@ Authoritative planning documents:
 - [Apple Developer enrollment checklist](docs/apple-developer-enrollment-checklist.md)
 - [License inventory](docs/license-inventory.md)
 - [Release checklist](docs/release-checklist.md)
+- [Tauri iOS feasibility spike](docs/tauri-ios-feasibility-spike.md)
+- [Matrix SDK feasibility spike](docs/matrix-sdk-feasibility-spike.md)
 
 Shared contracts are currently owned by:
 
