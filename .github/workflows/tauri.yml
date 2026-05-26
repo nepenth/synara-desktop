@@ -19,8 +19,8 @@ jobs:
           package-manager-cache: false
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable # They use branch based releases
-      - name: Install cinny dependencies
-        run: cd cinny && npm ci
+      - name: Install Synara runtime dependencies
+        run: cd synara && npm ci
       - name: Install tauri dependencies
         run: npm ci
       - name: Build desktop app with Tauri
@@ -30,6 +30,8 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           NODE_OPTIONS: "--max_old_space_size=4096"
+        with:
+          args: "--config '{\"bundle\":{\"createUpdaterArtifacts\":true}}'"
       - name: Get app version (windows)
         run: |
           $json = (Get-Content "src-tauri\tauri.conf.json" -Raw) | ConvertFrom-Json
@@ -39,21 +41,21 @@ jobs:
           echo "${Env:TAURI_VERSION}"
         shell: pwsh
       - name: Move msi
-        run: Move-Item "src-tauri\target\release\bundle\msi\Cinny_${{ env.TAURI_VERSION }}_x64_en-US.msi" "src-tauri\target\release\bundle\msi\Cinny_desktop-x86_64.msi"
+        run: Move-Item "src-tauri\target\release\bundle\msi\Synara_${{ env.TAURI_VERSION }}_x64_en-US.msi" "src-tauri\target\release\bundle\msi\Synara_desktop-x86_64.msi"
         shell: pwsh
       - name: Move msi.zip
-        run: Move-Item "src-tauri\target\release\bundle\msi\Cinny_${{ env.TAURI_VERSION }}_x64_en-US.msi.zip" "src-tauri\target\release\bundle\msi\Cinny_desktop-x86_64.msi.zip"
+        run: Move-Item "src-tauri\target\release\bundle\msi\Synara_${{ env.TAURI_VERSION }}_x64_en-US.msi.zip" "src-tauri\target\release\bundle\msi\Synara_desktop-x86_64.msi.zip"
         shell: pwsh
       - name: Move msi.zip.sig
-        run: Move-Item "src-tauri\target\release\bundle\msi\Cinny_${{ env.TAURI_VERSION }}_x64_en-US.msi.zip.sig" "src-tauri\target\release\bundle\msi\Cinny_desktop-x86_64.msi.zip.sig"
+        run: Move-Item "src-tauri\target\release\bundle\msi\Synara_${{ env.TAURI_VERSION }}_x64_en-US.msi.zip.sig" "src-tauri\target\release\bundle\msi\Synara_desktop-x86_64.msi.zip.sig"
         shell: pwsh
       - name: Upload tagged release
         uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0
         with:
           files: |
-            src-tauri/target/release/bundle/msi/Cinny_desktop-x86_64.msi
-            src-tauri/target/release/bundle/msi/Cinny_desktop-x86_64.msi.zip
-            src-tauri/target/release/bundle/msi/Cinny_desktop-x86_64.msi.zip.sig
+            src-tauri/target/release/bundle/msi/Synara_desktop-x86_64.msi
+            src-tauri/target/release/bundle/msi/Synara_desktop-x86_64.msi.zip
+            src-tauri/target/release/bundle/msi/Synara_desktop-x86_64.msi.zip.sig
 
   # Linux-x86_64
   linux-x86_64:
@@ -74,8 +76,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
-      - name: Install cinny dependencies
-        run: cd cinny && npm ci
+      - name: Install Synara runtime dependencies
+        run: cd synara && npm ci
       - name: Install tauri dependencies
         run: npm ci
       - name: Build desktop app with Tauri
@@ -85,25 +87,27 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           NODE_OPTIONS: "--max_old_space_size=4096"
+        with:
+          args: "--config '{\"bundle\":{\"createUpdaterArtifacts\":true}}'"
       - name: Get app version
         id: vars
         run: echo "tag=$(jq .version src-tauri/tauri.conf.json | tr -d '"')" >> $GITHUB_OUTPUT
       - name: Move deb
-        run: mv "src-tauri/target/release/bundle/deb/Cinny_${{ steps.vars.outputs.tag }}_amd64.deb" "src-tauri/target/release/bundle/deb/Cinny_desktop-x86_64.deb"
+        run: mv "src-tauri/target/release/bundle/deb/Synara_${{ steps.vars.outputs.tag }}_amd64.deb" "src-tauri/target/release/bundle/deb/Synara_desktop-x86_64.deb"
       - name: Move AppImage
-        run: mv "src-tauri/target/release/bundle/appimage/Cinny_${{ steps.vars.outputs.tag }}_amd64.AppImage" "src-tauri/target/release/bundle/appimage/Cinny_desktop-x86_64.AppImage"
+        run: mv "src-tauri/target/release/bundle/appimage/Synara_${{ steps.vars.outputs.tag }}_amd64.AppImage" "src-tauri/target/release/bundle/appimage/Synara_desktop-x86_64.AppImage"
       - name: Move AppImage.tar.gz
-        run: mv "src-tauri/target/release/bundle/appimage/Cinny_${{ steps.vars.outputs.tag }}_amd64.AppImage.tar.gz" "src-tauri/target/release/bundle/appimage/Cinny_desktop-x86_64.AppImage.tar.gz"
+        run: mv "src-tauri/target/release/bundle/appimage/Synara_${{ steps.vars.outputs.tag }}_amd64.AppImage.tar.gz" "src-tauri/target/release/bundle/appimage/Synara_desktop-x86_64.AppImage.tar.gz"
       - name: Move AppImage.tar.gz.sig
-        run: mv "src-tauri/target/release/bundle/appimage/Cinny_${{ steps.vars.outputs.tag }}_amd64.AppImage.tar.gz.sig" "src-tauri/target/release/bundle/appimage/Cinny_desktop-x86_64.AppImage.tar.gz.sig"
+        run: mv "src-tauri/target/release/bundle/appimage/Synara_${{ steps.vars.outputs.tag }}_amd64.AppImage.tar.gz.sig" "src-tauri/target/release/bundle/appimage/Synara_desktop-x86_64.AppImage.tar.gz.sig"
       - name: Upload tagged release
         uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0
         with:
           files: |
-            src-tauri/target/release/bundle/deb/Cinny_desktop-x86_64.deb
-            src-tauri/target/release/bundle/appimage/Cinny_desktop-x86_64.AppImage
-            src-tauri/target/release/bundle/appimage/Cinny_desktop-x86_64.AppImage.tar.gz
-            src-tauri/target/release/bundle/appimage/Cinny_desktop-x86_64.AppImage.tar.gz.sig
+            src-tauri/target/release/bundle/deb/Synara_desktop-x86_64.deb
+            src-tauri/target/release/bundle/appimage/Synara_desktop-x86_64.AppImage
+            src-tauri/target/release/bundle/appimage/Synara_desktop-x86_64.AppImage.tar.gz
+            src-tauri/target/release/bundle/appimage/Synara_desktop-x86_64.AppImage.tar.gz.sig
 
   # macos-universal
   macos-universal:
@@ -122,8 +126,8 @@ jobs:
         uses: dtolnay/rust-toolchain@stable # They use branch based releases
         with:
           targets: aarch64-apple-darwin,x86_64-apple-darwin
-      - name: Install cinny dependencies
-        run: cd cinny && npm ci
+      - name: Install Synara runtime dependencies
+        run: cd synara && npm ci
       - name: Install tauri dependencies
         run: npm ci
       - name: Build desktop app with Tauri
@@ -134,23 +138,23 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           NODE_OPTIONS: "--max_old_space_size=4096"
         with:
-          args: "--target universal-apple-darwin"
+          args: "--target universal-apple-darwin --config '{\"bundle\":{\"createUpdaterArtifacts\":true}}'"
       - name: Get app version
         id: vars
         run: echo "tag=$(jq .version src-tauri/tauri.conf.json | tr -d '"')" >> $GITHUB_OUTPUT
       - name: Move dmg
-        run: mv "src-tauri/target/universal-apple-darwin/release/bundle/dmg/Cinny_${{ steps.vars.outputs.tag }}_universal.dmg" "src-tauri/target/universal-apple-darwin/release/bundle/dmg/Cinny_desktop-universal.dmg"
+        run: mv "src-tauri/target/universal-apple-darwin/release/bundle/dmg/Synara_${{ steps.vars.outputs.tag }}_universal.dmg" "src-tauri/target/universal-apple-darwin/release/bundle/dmg/Synara_desktop-universal.dmg"
       - name: Move app.tar.gz
-        run: mv "src-tauri/target/universal-apple-darwin/release/bundle/macos/Cinny.app.tar.gz" "src-tauri/target/universal-apple-darwin/release/bundle/macos/Cinny_desktop-universal.app.tar.gz"
+        run: mv "src-tauri/target/universal-apple-darwin/release/bundle/macos/Synara.app.tar.gz" "src-tauri/target/universal-apple-darwin/release/bundle/macos/Synara_desktop-universal.app.tar.gz"
       - name: Move app.tar.gz.sig
-        run: mv "src-tauri/target/universal-apple-darwin/release/bundle/macos/Cinny.app.tar.gz.sig" "src-tauri/target/universal-apple-darwin/release/bundle/macos/Cinny_desktop-universal.app.tar.gz.sig"
+        run: mv "src-tauri/target/universal-apple-darwin/release/bundle/macos/Synara.app.tar.gz.sig" "src-tauri/target/universal-apple-darwin/release/bundle/macos/Synara_desktop-universal.app.tar.gz.sig"
       - name: Upload tagged release
         uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0
         with:
           files: |
-            src-tauri/target/universal-apple-darwin/release/bundle/dmg/Cinny_desktop-universal.dmg
-            src-tauri/target/universal-apple-darwin/release/bundle/macos/Cinny_desktop-universal.app.tar.gz
-            src-tauri/target/universal-apple-darwin/release/bundle/macos/Cinny_desktop-universal.app.tar.gz.sig
+            src-tauri/target/universal-apple-darwin/release/bundle/dmg/Synara_desktop-universal.dmg
+            src-tauri/target/universal-apple-darwin/release/bundle/macos/Synara_desktop-universal.app.tar.gz
+            src-tauri/target/universal-apple-darwin/release/bundle/macos/Synara_desktop-universal.app.tar.gz.sig
 
   # Upload release.json
   release-update:

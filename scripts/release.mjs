@@ -1,5 +1,5 @@
-import fetch from "node-fetch";
-import { getOctokit, context } from "@actions/github";
+const apiBaseUrl = "https://api.github.com";
+const uploadsBaseUrl = "https://uploads.github.com";
 
 async function getAssetSign(url) {
   const response = await fetch(url, {
@@ -9,7 +9,34 @@ async function getAssetSign(url) {
     },
   });
 
+  if (!response.ok) {
+    throw new Error(`Asset signature download failed: ${response.status} ${await response.text()}`);
+  }
+
   return response.text();
+}
+
+async function githubRequest(path, { method = "GET", body, raw = false, upload = false } = {}) {
+  const response = await fetch(`${upload ? uploadsBaseUrl : apiBaseUrl}${path}`, {
+    method,
+    headers: {
+      Accept: "application/vnd.github+json",
+      Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
+      "X-GitHub-Api-Version": "2022-11-28",
+      ...(body ? { "Content-Type": raw ? "application/octet-stream" : "application/json" } : {}),
+    },
+    body: body ? (raw ? body : JSON.stringify(body)) : undefined,
+  });
+
+  if (!response.ok) {
+    throw new Error(`GitHub API ${method} ${path} failed: ${response.status} ${await response.text()}`);
+  }
+
+  if (response.status === 204) {
+    return undefined;
+  }
+
+  return response.json();
 }
 
 async function createTauriRelease() {
@@ -17,19 +44,21 @@ async function createTauriRelease() {
     throw new Error("GITHUB_TOKEN is not found!");
   }
 
-  const github = getOctokit(process.env.GITHUB_TOKEN);
-  const { repos } = github.rest;
-  const repoMetaData = {
-    owner: context.repo.owner,
-    repo: context.repo.repo,
-  };
+  if (process.env.GITHUB_REPOSITORY === undefined) {
+    throw new Error("GITHUB_REPOSITORY is not found!");
+  }
 
-  const tagsResult = await repos.listTags({ ...repoMetaData, per_page: 10, page: 1 });
-  const latestTag = tagsResult.data.find((tag) => tag.name.startsWith("v"));
+  const [owner, repo] = process.env.GITHUB_REPOSITORY.split("/");
+  const repoPath = `/repos/${owner}/${repo}`;
+  const tags = await githubRequest(`${repoPath}/tags?per_page=10&page=1`);
+  const latestTag = tags.find((tag) => tag.name.startsWith("v"));
+  if (!latestTag) {
+    throw new Error("No version tag starting with v was found.");
+  }
   console.log(latestTag);
 
-  const latestRelease = await repos.getReleaseByTag({ ...repoMetaData, tag: latestTag.name });
-  const latestAssets = latestRelease.data.assets;
+  const latestRelease = await githubRequest(`${repoPath}/releases/tags/${latestTag.name}`);
+  const latestAssets = latestRelease.assets;
 
   const windowsX86_64 = {};
   const linuxX86_64 = {};
@@ -72,7 +101,7 @@ async function createTauriRelease() {
 
   const releaseData = {
     name: latestTag.name,
-    notes: `https://github.com/${repoMetaData.owner}/${repoMetaData.repo}/releases/tag/${latestTag.name}`,
+    notes: `https://github.com/${owner}/${repo}/releases/tag/${latestTag.name}`,
     pub_date: new Date().toISOString(),
     platforms: {},
   };
@@ -89,20 +118,21 @@ async function createTauriRelease() {
   if (darwinAarch64.url) releaseData.platforms["darwin-aarch64"] = darwinAarch64;
   else console.error('Failed to get release for darwinAarch64');
 
-  const releaseResult = await repos.getReleaseByTag({ ...repoMetaData, tag: 'tauri' });
-  const tauriRelease = releaseResult.data;
+  const tauriRelease = await githubRequest(`${repoPath}/releases/tags/tauri`);
 
   const prevReleaseAsset = tauriRelease.assets.find((asset) => asset.name === 'release.json');
   if (prevReleaseAsset) {
-    await repos.deleteReleaseAsset({ ...repoMetaData, asset_id: prevReleaseAsset.id });
+    await githubRequest(`${repoPath}/releases/assets/${prevReleaseAsset.id}`, {
+      method: "DELETE",
+    });
   }
 
   console.log(releaseData);
-  await repos.uploadReleaseAsset({
-    ...repoMetaData,
-    release_id: tauriRelease.id,
-    name: 'release.json',
-    data: JSON.stringify(releaseData, null, 2),
+  await githubRequest(`${repoPath}/releases/${tauriRelease.id}/assets?name=release.json`, {
+    method: "POST",
+    body: JSON.stringify(releaseData, null, 2),
+    raw: true,
+    upload: true,
   });
 }
 createTauriRelease();
