@@ -1,0 +1,38 @@
+import SwiftUI
+
+enum AppTab: String, CaseIterable, Identifiable {
+    case rooms
+    case notifications
+    case later
+    case settings
+
+    var id: String { rawValue }
+
+    @ViewBuilder
+    var content: some View {
+        switch self {
+        case .rooms:
+            PlaceholderScreen(title: "Rooms", systemImage: "bubble.left.and.bubble.right")
+        case .notifications:
+            PlaceholderScreen(title: "Notifications", systemImage: "bell")
+        case .later:
+            PlaceholderScreen(title: "Later", systemImage: "clock")
+        case .settings:
+            PlaceholderScreen(title: "Settings", systemImage: "gearshape")
+        }
+    }
+
+    @ViewBuilder
+    var label: some View {
+        switch self {
+        case .rooms:
+            Label("Rooms", systemImage: "bubble.left.and.bubble.right")
+        case .notifications:
+            Label("Notifications", systemImage: "bell")
+        case .later:
+            Label("Later", systemImage: "clock")
+        case .settings:
+            Label("Settings", systemImage: "gearshape")
+        }
+    }
+}

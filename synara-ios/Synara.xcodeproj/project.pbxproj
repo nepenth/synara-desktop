@@ -1,0 +1,537 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		1794B11F45DC4ACBA302F956 /* SynaraUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D0A5EA751CC5D570C324084 /* SynaraUITests.swift */; };
+		48CE91CF86CBAC3081878AC9 /* AppRoute.swift in Sources */ = {isa = PBXBuildFile; fileRef = 253AA6941119C1C9D4F2DE3D /* AppRoute.swift */; };
+		7BD7C2DB346D071A5121FC36 /* AppRouteTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F55BBDF32970A214C2829B1B /* AppRouteTests.swift */; };
+		8CD1DCF6DA4B22967284D0F3 /* PlaceholderScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = E23CEDAB04604A54EF7EAF9B /* PlaceholderScreen.swift */; };
+		90B73234B5A1DC142783A451 /* AppTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCD86C72DEE3F411D1FABB6B /* AppTab.swift */; };
+		9DA561CC126EB87B8410D7C7 /* RootShellView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57076E7E82206F1492033846 /* RootShellView.swift */; };
+		CC89EE97042280F04BD29498 /* SynaraApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2E4F1A7ADF247942C6D0059 /* SynaraApp.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		797D5DEA202A92706BA311E5 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = EA9352D76133C69C35180717 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 27BCF2E7659C77D3DD3882F0;
+			remoteInfo = Synara;
+		};
+		938E8733423E8E7738B8C5DA /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = EA9352D76133C69C35180717 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 27BCF2E7659C77D3DD3882F0;
+			remoteInfo = Synara;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		03ECE8FDA43404E53231A280 /* SynaraUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = SynaraUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		253AA6941119C1C9D4F2DE3D /* AppRoute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppRoute.swift; sourceTree = "<group>"; };
+		57076E7E82206F1492033846 /* RootShellView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootShellView.swift; sourceTree = "<group>"; };
+		8A5CC96CDA94EE562BDBA416 /* Synara.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Synara.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		9D0A5EA751CC5D570C324084 /* SynaraUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SynaraUITests.swift; sourceTree = "<group>"; };
+		AA155782137A4B5F84513EE1 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		B2E4F1A7ADF247942C6D0059 /* SynaraApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SynaraApp.swift; sourceTree = "<group>"; };
+		D3219D555ED36F65BF9FE332 /* SynaraTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = SynaraTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		DCD86C72DEE3F411D1FABB6B /* AppTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppTab.swift; sourceTree = "<group>"; };
+		E23CEDAB04604A54EF7EAF9B /* PlaceholderScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceholderScreen.swift; sourceTree = "<group>"; };
+		F55BBDF32970A214C2829B1B /* AppRouteTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppRouteTests.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		1E3176E5C6C0F7405EC9FDD3 = {
+			isa = PBXGroup;
+			children = (
+				CE2F9B69EA02147F6C8247BF /* Synara */,
+				EB41A3D5935B6631081FBA0D /* SynaraTests */,
+				5A6E3FAD9AFBD7357D9C974E /* SynaraUITests */,
+				539906F05A3BEACFAD1E5565 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		206AF00355E9B840C00AD4A5 /* Features */ = {
+			isa = PBXGroup;
+			children = (
+				E23CEDAB04604A54EF7EAF9B /* PlaceholderScreen.swift */,
+			);
+			path = Features;
+			sourceTree = "<group>";
+		};
+		539906F05A3BEACFAD1E5565 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				8A5CC96CDA94EE562BDBA416 /* Synara.app */,
+				D3219D555ED36F65BF9FE332 /* SynaraTests.xctest */,
+				03ECE8FDA43404E53231A280 /* SynaraUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		5A6E3FAD9AFBD7357D9C974E /* SynaraUITests */ = {
+			isa = PBXGroup;
+			children = (
+				9D0A5EA751CC5D570C324084 /* SynaraUITests.swift */,
+			);
+			path = SynaraUITests;
+			sourceTree = "<group>";
+		};
+		CE2F9B69EA02147F6C8247BF /* Synara */ = {
+			isa = PBXGroup;
+			children = (
+				F2EE5A0FC2E5D5F630BAB282 /* App */,
+				206AF00355E9B840C00AD4A5 /* Features */,
+			);
+			path = Synara;
+			sourceTree = "<group>";
+		};
+		EB41A3D5935B6631081FBA0D /* SynaraTests */ = {
+			isa = PBXGroup;
+			children = (
+				F55BBDF32970A214C2829B1B /* AppRouteTests.swift */,
+			);
+			path = SynaraTests;
+			sourceTree = "<group>";
+		};
+		F2EE5A0FC2E5D5F630BAB282 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				253AA6941119C1C9D4F2DE3D /* AppRoute.swift */,
+				DCD86C72DEE3F411D1FABB6B /* AppTab.swift */,
+				AA155782137A4B5F84513EE1 /* Info.plist */,
+				57076E7E82206F1492033846 /* RootShellView.swift */,
+				B2E4F1A7ADF247942C6D0059 /* SynaraApp.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		09AFB87B71C810FB1F2D5B1B /* SynaraUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 4232C4981BA09AB8EE5FD0D6 /* Build configuration list for PBXNativeTarget "SynaraUITests" */;
+			buildPhases = (
+				5DAA4168080C51FD23C686E2 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				BA16550DCEEEF30008C803AF /* PBXTargetDependency */,
+			);
+			name = SynaraUITests;
+			packageProductDependencies = (
+			);
+			productName = SynaraUITests;
+			productReference = 03ECE8FDA43404E53231A280 /* SynaraUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+		27BCF2E7659C77D3DD3882F0 /* Synara */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = DE554311BC15BC34BC44C0A8 /* Build configuration list for PBXNativeTarget "Synara" */;
+			buildPhases = (
+				3903FF6FE47F7C9A8662FA82 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = Synara;
+			packageProductDependencies = (
+			);
+			productName = Synara;
+			productReference = 8A5CC96CDA94EE562BDBA416 /* Synara.app */;
+			productType = "com.apple.product-type.application";
+		};
+		791D9AB64B4DDAF50B6FEC96 /* SynaraTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B2A0BFC65C4005EC33B2D837 /* Build configuration list for PBXNativeTarget "SynaraTests" */;
+			buildPhases = (
+				1ABB881AA0E4E1DDECBC02E2 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				0CF3F76228EF81391B0A93FB /* PBXTargetDependency */,
+			);
+			name = SynaraTests;
+			packageProductDependencies = (
+			);
+			productName = SynaraTests;
+			productReference = D3219D555ED36F65BF9FE332 /* SynaraTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		EA9352D76133C69C35180717 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					09AFB87B71C810FB1F2D5B1B = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Manual;
+						TestTargetID = 27BCF2E7659C77D3DD3882F0;
+					};
+					27BCF2E7659C77D3DD3882F0 = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Manual;
+					};
+					791D9AB64B4DDAF50B6FEC96 = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Manual;
+					};
+				};
+			};
+			buildConfigurationList = 9F5FFB165A56ED4A34B3D774 /* Build configuration list for PBXProject "Synara" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 1E3176E5C6C0F7405EC9FDD3;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 539906F05A3BEACFAD1E5565 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				27BCF2E7659C77D3DD3882F0 /* Synara */,
+				791D9AB64B4DDAF50B6FEC96 /* SynaraTests */,
+				09AFB87B71C810FB1F2D5B1B /* SynaraUITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		1ABB881AA0E4E1DDECBC02E2 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				7BD7C2DB346D071A5121FC36 /* AppRouteTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		3903FF6FE47F7C9A8662FA82 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				48CE91CF86CBAC3081878AC9 /* AppRoute.swift in Sources */,
+				90B73234B5A1DC142783A451 /* AppTab.swift in Sources */,
+				8CD1DCF6DA4B22967284D0F3 /* PlaceholderScreen.swift in Sources */,
+				9DA561CC126EB87B8410D7C7 /* RootShellView.swift in Sources */,
+				CC89EE97042280F04BD29498 /* SynaraApp.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		5DAA4168080C51FD23C686E2 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				1794B11F45DC4ACBA302F956 /* SynaraUITests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		0CF3F76228EF81391B0A93FB /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 27BCF2E7659C77D3DD3882F0 /* Synara */;
+			targetProxy = 797D5DEA202A92706BA311E5 /* PBXContainerItemProxy */;
+		};
+		BA16550DCEEEF30008C803AF /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 27BCF2E7659C77D3DD3882F0 /* Synara */;
+			targetProxy = 938E8733423E8E7738B8C5DA /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		033D5B261A177B40A21FB108 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				INFOPLIST_FILE = Synara/App/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = app.synara.ios;
+				PRODUCT_NAME = Synara;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		11AC2BB48C76997CD4552253 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				INFOPLIST_FILE = Synara/App/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = app.synara.ios;
+				PRODUCT_NAME = Synara;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		1F95561606858A420919AE1E /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGNING_ALLOWED = NO;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = app.synara.ios.uitests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = Synara;
+			};
+			name = Release;
+		};
+		464FCA1D294DA9ABE961D7DE /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
+				CODE_SIGN_STYLE = Manual;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1.1.0;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MARKETING_VERSION = 1.1.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		9A5C0BD805712779F119887A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGNING_ALLOWED = NO;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = app.synara.ios.tests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Synara.app/Synara";
+			};
+			name = Debug;
+		};
+		B1054016A110974004BA7A1A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
+				CODE_SIGN_STYLE = Manual;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1.1.0;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = "";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MARKETING_VERSION = 1.1.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		B9F8D4DD53F7FBBB6D255AB7 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGNING_ALLOWED = NO;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = app.synara.ios.tests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Synara.app/Synara";
+			};
+			name = Release;
+		};
+		D7AB6826A0150E4FCC90C7FC /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGNING_ALLOWED = NO;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = app.synara.ios.uitests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = Synara;
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		4232C4981BA09AB8EE5FD0D6 /* Build configuration list for PBXNativeTarget "SynaraUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D7AB6826A0150E4FCC90C7FC /* Debug */,
+				1F95561606858A420919AE1E /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		9F5FFB165A56ED4A34B3D774 /* Build configuration list for PBXProject "Synara" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				464FCA1D294DA9ABE961D7DE /* Debug */,
+				B1054016A110974004BA7A1A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		B2A0BFC65C4005EC33B2D837 /* Build configuration list for PBXNativeTarget "SynaraTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				9A5C0BD805712779F119887A /* Debug */,
+				B9F8D4DD53F7FBBB6D255AB7 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		DE554311BC15BC34BC44C0A8 /* Build configuration list for PBXNativeTarget "Synara" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				11AC2BB48C76997CD4552253 /* Debug */,
+				033D5B261A177B40A21FB108 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = EA9352D76133C69C35180717 /* Project object */;
+}
