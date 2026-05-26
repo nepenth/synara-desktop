@@ -1,0 +1,33 @@
+name: iOS Skeleton
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/ios-skeleton.yml"
+      - "synara-ios/**"
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/ios-skeleton.yml"
+      - "synara-ios/**"
+  workflow_dispatch:
+
+concurrency:
+  group: ios-skeleton-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Unsigned simulator build
+    runs-on: macos-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Build unsigned simulator app and test bundles
+        run: scripts/ci-build.sh
+        working-directory: synara-ios
