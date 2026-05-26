@@ -356,6 +356,9 @@ Acceptance criteria:
 
 Dependencies: IOS-0005, IOS-0006.
 
+Status: complete in
+[ADR 0002](../../docs/adr/0002-ios-architecture.md).
+
 Requirements:
 
 - Decide the primary implementation path.
