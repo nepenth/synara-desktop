@@ -14,6 +14,7 @@ Status: draft release gate checklist.
 - Native Matrix SDK feasibility spike completed at package/import level; real
   test-account login remains for Phase 2.
 - Architecture ADR accepted.
+- Phase 1 native iOS skeleton can start.
 
 ## Phase 1 Simulator Gates
 
