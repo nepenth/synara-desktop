@@ -32,7 +32,7 @@ Validation:
 
 ## macOS
 
-Status: locally build-validated.
+Status: locally and CI package-validated.
 
 Validated from the current `main` branch:
 
@@ -49,6 +49,9 @@ Validated from the current `main` branch:
   `codesign --verify --deep --strict --verbose=2 ...`: passing.
 - No local Synara crash reports were present in
   `~/Library/Logs/DiagnosticReports`.
+- GitHub `Desktop Package Smoke` run `26464395682`: passing on
+  `31c6ce6`, including macOS app build, signature verification, and artifact
+  upload.
 
 The local macOS build is ad-hoc signed with hardened runtime and sealed
 resources. Developer ID signing and notarization remain release-channel work
@@ -56,13 +59,15 @@ after Apple Developer credentials are available.
 
 ## Linux
 
-Status: source/package metadata validated; target workstation smoke pending.
+Status: CI package-validated; target workstation smoke pending.
 
 Validated locally from this repository:
 
 - `npm run check:versions`: passing at `1.1.0`.
 - `packaging/arch/PKGBUILD` resolves:
   `pkgname=synara-desktop-bin`, `pkgver=1.1.0`, `pkgrel=1`.
+- GitHub `Desktop Package Smoke` run `26464395682`: passing on
+  `31c6ce6`, including Linux `.deb` package build and artifact upload.
 
 Remaining validation requires the Linux target machine because WebKitGTK,
 GStreamer, Secret Service, portals, Wayland, tray, notification, and global
