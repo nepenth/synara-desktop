@@ -1,0 +1,123 @@
+{
+  "valid": {
+    "saved": {
+      "version": 1,
+      "items": {
+        "!room:example.org\n$event": {
+          "id": "!room:example.org\n$event",
+          "kind": "saved",
+          "roomId": "!room:example.org",
+          "eventId": "$event",
+          "createdAt": 1770000000000
+        }
+      }
+    },
+    "reminder": {
+      "version": 1,
+      "items": {
+        "!room:example.org\n$reminder": {
+          "id": "!room:example.org\n$reminder",
+          "kind": "reminder",
+          "roomId": "!room:example.org",
+          "eventId": "$reminder",
+          "createdAt": 1770000000000,
+          "dueTs": 1770003600000
+        }
+      }
+    },
+    "completed": {
+      "version": 1,
+      "items": {
+        "!room:example.org\n$done": {
+          "id": "!room:example.org\n$done",
+          "kind": "saved",
+          "roomId": "!room:example.org",
+          "eventId": "$done",
+          "createdAt": 1770000000000,
+          "completedAt": 1770007200000
+        }
+      }
+    }
+  },
+  "invalid": {
+    "badKind": {
+      "version": 1,
+      "items": {
+        "!room:example.org\n$event": {
+          "id": "!room:example.org\n$event",
+          "kind": "todo",
+          "roomId": "!room:example.org",
+          "eventId": "$event",
+          "createdAt": 1770000000000
+        }
+      }
+    },
+    "missingEvent": {
+      "version": 1,
+      "items": {
+        "!room:example.org\n$event": {
+          "id": "!room:example.org\n$event",
+          "kind": "saved",
+          "roomId": "!room:example.org",
+          "createdAt": 1770000000000
+        }
+      }
+    },
+    "badCreatedAt": {
+      "version": 1,
+      "items": {
+        "!room:example.org\n$event": {
+          "id": "!room:example.org\n$event",
+          "kind": "saved",
+          "roomId": "!room:example.org",
+          "eventId": "$event",
+          "createdAt": "1770000000000"
+        }
+      }
+    },
+    "legacyPlaintextFields": {
+      "version": 1,
+      "items": {
+        "legacy": {
+          "id": "legacy",
+          "kind": "saved",
+          "roomId": "!room:example.org",
+          "eventId": "$event",
+          "createdAt": 1770000000000,
+          "body": "do not keep this",
+          "sender": "@alice:example.org"
+        }
+      }
+    }
+  },
+  "normalization": {
+    "legacyPlaintextFields": {
+      "input": {
+        "version": 1,
+        "items": {
+          "legacy": {
+            "id": "legacy",
+            "kind": "saved",
+            "roomId": "!room:example.org",
+            "eventId": "$event",
+            "createdAt": 1770000000000,
+            "body": "do not keep this",
+            "sender": "@alice:example.org"
+          }
+        }
+      },
+      "normalized": {
+        "version": 1,
+        "items": {
+          "legacy": {
+            "id": "legacy",
+            "kind": "saved",
+            "roomId": "!room:example.org",
+            "eventId": "$event",
+            "createdAt": 1770000000000
+          }
+        }
+      }
+    }
+  }
+}

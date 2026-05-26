@@ -1,0 +1,162 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://synara.local/contracts/synara-room-notes-content.schema.json",
+  "$comment": "Canonical writer schema for in.synara.room_notes v1. Readers may normalize malformed or oversized items according to docs/synara-room-notes-contract.md.",
+  "title": "SynaraRoomNotesContent",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "rooms"],
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "rooms": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/SynaraRoomNotesRoom"
+      }
+    }
+  },
+  "$defs": {
+    "SynaraRoomNotesRoom": {
+      "title": "SynaraRoomNotesRoom",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["items"],
+      "properties": {
+        "items": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/SynaraRoomNoteItem"
+          }
+        }
+      }
+    },
+    "SynaraRoomNoteItem": {
+      "title": "SynaraRoomNoteItem",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SynaraTextNoteItem"
+        },
+        {
+          "$ref": "#/$defs/SynaraTodoNoteItem"
+        },
+        {
+          "$ref": "#/$defs/SynaraMessageNoteItem"
+        }
+      ]
+    },
+    "SynaraTextNoteItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "roomId", "createdAt", "updatedAt", "body"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "kind": {
+          "const": "note"
+        },
+        "roomId": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^![^\\s]+(:[^\\s]+)?$"
+        },
+        "createdAt": {
+          "type": "number"
+        },
+        "updatedAt": {
+          "type": "number"
+        },
+        "body": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000
+        }
+      }
+    },
+    "SynaraTodoNoteItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "roomId", "createdAt", "updatedAt", "body"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "kind": {
+          "const": "todo"
+        },
+        "roomId": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^![^\\s]+(:[^\\s]+)?$"
+        },
+        "createdAt": {
+          "type": "number"
+        },
+        "updatedAt": {
+          "type": "number"
+        },
+        "body": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000
+        },
+        "completedAt": {
+          "type": "number"
+        },
+        "order": {
+          "type": "number"
+        }
+      }
+    },
+    "SynaraMessageNoteItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "roomId", "createdAt", "updatedAt", "eventId"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "kind": {
+          "const": "message"
+        },
+        "roomId": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^![^\\s]+(:[^\\s]+)?$"
+        },
+        "createdAt": {
+          "type": "number"
+        },
+        "updatedAt": {
+          "type": "number"
+        },
+        "eventId": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^\\$[^\\s]+$"
+        },
+        "eventTs": {
+          "type": "number"
+        },
+        "sender": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "body": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        }
+      }
+    }
+  }
+}

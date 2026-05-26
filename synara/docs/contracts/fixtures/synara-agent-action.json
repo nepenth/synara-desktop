@@ -1,0 +1,79 @@
+{
+  "valid": {
+    "copy": {
+      "id": "export",
+      "title": "Export Thread",
+      "kind": "copy",
+      "prompt": "Copy this prompt",
+      "markdown": "# Thread"
+    },
+    "openUrl": {
+      "id": "artifact",
+      "title": "Open artifact",
+      "kind": "open_url",
+      "url": "https://artifacts.example.org/report.html"
+    },
+    "prompt": {
+      "id": "continue",
+      "title": "Continue",
+      "kind": "continue",
+      "prompt": "Continue from the latest safe checkpoint."
+    }
+  },
+  "invalid": {
+    "missingId": {
+      "title": "Missing id",
+      "prompt": "Continue"
+    },
+    "noPayload": {
+      "id": "no-payload",
+      "title": "No payload"
+    },
+    "unsupportedKind": {
+      "id": "unknown-kind",
+      "title": "Execute",
+      "kind": "shell",
+      "prompt": "rm -rf /"
+    },
+    "unsafeScheme": {
+      "id": "unsafe-url",
+      "title": "Open",
+      "url": "http://example.org/report.html"
+    },
+    "localhostUrl": {
+      "id": "localhost",
+      "title": "Open local",
+      "url": "https://localhost/private"
+    }
+  },
+  "normalization": {
+    "trimAndLowercase": {
+      "input": {
+        "id": " export ",
+        "title": " Export Thread ",
+        "kind": "COPY",
+        "prompt": " Copy this prompt ",
+        "markdown": "# Thread"
+      },
+      "normalized": {
+        "id": "export",
+        "title": "Export Thread",
+        "kind": "copy",
+        "prompt": "Copy this prompt",
+        "markdown": "# Thread"
+      }
+    },
+    "safeUrlWithoutKind": {
+      "input": {
+        "id": "artifact",
+        "title": "Open artifact",
+        "url": "https://artifacts.example.org/report.html"
+      },
+      "normalized": {
+        "id": "artifact",
+        "title": "Open artifact",
+        "url": "https://artifacts.example.org/report.html"
+      }
+    }
+  }
+}

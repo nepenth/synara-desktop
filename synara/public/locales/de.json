@@ -1,0 +1,176 @@
+{
+  "Organisms": {
+    "RoomCommon": {
+      "changed_room_name": " hat den Raum Name geändert"
+    }
+  },
+  "modernization": {
+    "settings": {
+      "gif_search": {
+        "title": "GIF Search",
+        "description": "Show GIF search in the message composer.",
+        "unavailable": "GIF search is not configured by this client."
+      },
+      "desktop_shortcuts": {
+        "title": "Desktop Shortcuts",
+        "description": "Open frequently used screens from anywhere with desktop shortcuts.",
+        "unavailable": "Desktop shortcuts are only available in the desktop app.",
+        "platform": "Desktop only",
+        "platform_disabled": "Unavailable",
+        "show_label": "Show main window shortcut",
+        "later_label": "Open Later shortcut",
+        "notifications_label": "Open Notifications shortcut",
+        "empty": "All shortcut values are required.",
+        "duplicate": "Shortcuts must be unique.",
+        "failed": "Failed to save shortcuts.",
+        "saving": "Saving…",
+        "apply": "Apply shortcuts"
+      },
+      "accent_color": {
+        "title": "Accent Color",
+        "description": "Customize primary buttons, chips, links, and focus accents.",
+        "aria_label": "Custom accent color",
+        "reset": "Reset"
+      }
+    },
+    "gif": {
+      "disabled_by_config": "GIF search is disabled by this client configuration.",
+      "search_placeholder": "Search GIFs",
+      "search_aria_label": "Search GIFs",
+      "search_button_aria_label": "Search GIFs",
+      "no_results": "No GIFs found.",
+      "select_aria_label": "Send {{title}}",
+      "picker_aria_label": "GIF Picker",
+      "onboarding": {
+        "title": "Enable GIFs?",
+        "description": "GIF search downloads your selected GIF privately, uploads it to Matrix media, then sends an mxc:// attachment.",
+        "not_now": "Not now",
+        "enable": "Enable GIFs"
+      }
+    },
+    "later": {
+      "title": "Later",
+      "kind_reminder": "Reminder",
+      "kind_saved": "Saved",
+      "done": "Done",
+      "open": "Open",
+      "snooze_20m": "Snooze 20 min",
+      "snooze_1h": "Snooze 1 hour",
+      "snooze_tomorrow": "Tomorrow",
+      "edit_due": "Edit due date",
+      "custom_due_aria_label": "Custom reminder due date",
+      "save_due": "Save due date",
+      "show_active": "Show active",
+      "show_done": "Done {{count}}",
+      "clear_completed": "Clear completed",
+      "empty": "No saved messages or reminders.",
+      "empty_done": "No completed Later items.",
+      "empty_description": "Use a message menu to save something for later or set a reminder."
+    },
+    "forward": {
+      "action": "Forward",
+      "title": "Forward Message",
+      "title_plural": "Forward {{count}} Messages",
+      "select_selection": "Select for Forwarding",
+      "remove_selection": "Remove from Forward Selection",
+      "select_selection_aria_label": "Select message for forwarding",
+      "remove_selection_aria_label": "Remove message from forward selection",
+      "selection_region_aria_label": "Forward selection",
+      "selected_count": "{{count}} selected",
+      "forward_selected": "Forward selected",
+      "clear_selection": "Clear"
+    },
+    "poll": {
+      "aria_label": "Poll",
+      "create_aria_label": "Create poll",
+      "create_title": "Create Poll",
+      "question_placeholder": "Question",
+      "question_aria_label": "Poll question",
+      "answer_placeholder": "Option {{count}}",
+      "answer_aria_label": "Poll option {{count}}",
+      "add_option": "Add option",
+      "remove_option": "Remove option",
+      "cancel": "Cancel",
+      "send": "Send poll",
+      "invalid": "Add a question and at least two answer options.",
+      "send_failed": "Could not send poll.",
+      "load_failed": "Could not load poll responses.",
+      "vote_failed": "Could not send your vote.",
+      "vote_aria_label": "Select {{option}}",
+      "unvote_aria_label": "Deselect {{option}}",
+      "selection_single": "Select one option",
+      "selection_multiple": "Select up to {{count}} options",
+      "selection_limit": "You can select up to {{count}} options.",
+      "max_aria_label": "Maximum poll selections",
+      "max_description": "Participants can choose up to {{count}} option(s).",
+      "vote_count": "{{count}} votes",
+      "command_description": "Create a poll. Example: /poll Deploy now? | Yes | No | max=2"
+    },
+    "search": {
+      "type_all": "All",
+      "type_media": "Media",
+      "type_files": "Files",
+      "type_audio": "Audio",
+      "type_links": "Links",
+      "type_polls": "Polls",
+      "filter_title": "Filter",
+      "sender_label": "Sender",
+      "sender_placeholder": "@alice:example.org, @bob:example.org",
+      "sender_aria_label": "Sender filter",
+      "from_label": "From",
+      "from_aria_label": "Search from date",
+      "to_label": "To",
+      "to_aria_label": "Search to date",
+      "apply": "Apply",
+      "clear": "Clear",
+      "apply_dates": "Apply dates",
+      "clear_dates": "Clear dates"
+    },
+    "quick_switcher": {
+      "later": "Open Later",
+      "later_description": "Saved messages and reminders",
+      "notifications": "Open Notifications",
+      "notifications_description": "Mentions and notification inbox",
+      "invites": "Open Invites",
+      "invites_description": "Room and space invites",
+      "message_search": "Message Search",
+      "message_search_description": "Search messages with room, sender, type, and date filters",
+      "create_room": "Create Room",
+      "create_room_description": "Start a new room",
+      "join_room": "Join Room",
+      "join_room_description": "Join by address",
+      "explore": "Explore Rooms",
+      "explore_description": "Discover public rooms",
+      "no_action_match": "No action matched your command."
+    },
+    "notifications": {
+      "notify": "Notify",
+      "mark_visible_read": "Mark visible read",
+      "mode_default": "Default",
+      "mode_default_description": "Use your global notification rules for this room.",
+      "mode_all": "All messages",
+      "mode_all_description": "Notify for every new message in this room.",
+      "mode_mentions": "Mentions and keywords",
+      "mode_mentions_description": "Notify for mentions, keywords, and other high-signal messages.",
+      "mode_mute": "Mute",
+      "mode_mute_description": "Suppress push and desktop notifications for this room."
+    },
+    "hermes": {
+      "copy_markdown": "Copy as Markdown",
+      "copy_json": "Copy JSON",
+      "copy_links": "Copy Links",
+      "copy_code": "Copy",
+      "open": "Open",
+      "actions_title": "Actions",
+      "artifacts_title": "Artifacts",
+      "logs_title": "Logs",
+      "code_title": "Code",
+      "diffs_title": "Diffs",
+      "confirm_action": "Open link",
+      "confirm_action_description": "Open \"{{title}}\" in an external browser?",
+      "confirm_action_cancel": "Cancel",
+      "confirm_action_open": "Open",
+      "action_failed": "Action failed"
+    }
+  }
+}

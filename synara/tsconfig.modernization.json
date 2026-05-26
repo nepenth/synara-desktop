@@ -1,0 +1,21 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true
+  },
+  "include": [
+    "src/ext.d.ts",
+    "src/app/components/hermes/HermesAgentCard.tsx",
+    "src/app/utils/__tests__/agentApprovals.test.ts",
+    "src/app/utils/__tests__/desktop.test.ts",
+    "src/app/utils/__tests__/hermes.test.ts",
+    "src/app/utils/__tests__/polls.test.ts",
+    "src/app/utils/desktop.ts",
+    "src/app/utils/agentApprovals.ts",
+    "src/app/utils/hermes.ts",
+    "src/app/utils/polls.ts",
+    "src/app/components/message/content/PollContent.tsx",
+    "src/app/utils/__tests__/timelineVirtualization.test.ts",
+    "src/app/components/editor/__tests__/richText.test.ts"
+  ]
+}
