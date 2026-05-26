@@ -21,8 +21,9 @@ Status: draft release gate checklist.
 - `Synara.xcodeproj` exists under `synara-ios/`.
 - App target, unit test target, and UI test target exist.
 - Unsigned simulator build succeeds without Apple credentials.
-- Unit tests run locally.
-- UI test launches the app shell.
+- Unit and UI test targets compile with `build-for-testing`.
+- Unit tests run locally after CoreSimulator is repaired.
+- UI test launches the app shell after CoreSimulator is repaired.
 - DerivedData, build products, and local signing artifacts are ignored.
 
 ## Security And Privacy Gates

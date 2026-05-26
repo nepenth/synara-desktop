@@ -1,0 +1,69 @@
+name: Synara
+options:
+  bundleIdPrefix: app.synara
+  deploymentTarget:
+    iOS: "16.0"
+  developmentLanguage: en
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    IPHONEOS_DEPLOYMENT_TARGET: "16.0"
+    CODE_SIGN_STYLE: Manual
+    CODE_SIGNING_ALLOWED: "NO"
+    CODE_SIGNING_REQUIRED: "NO"
+    DEVELOPMENT_TEAM: ""
+    MARKETING_VERSION: "1.1.0"
+    CURRENT_PROJECT_VERSION: "1.1.0"
+targets:
+  Synara:
+    type: application
+    platform: iOS
+    sources:
+      - path: Synara
+    info:
+      path: Synara/App/Info.plist
+      properties:
+        CFBundleDisplayName: Synara
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        UILaunchScreen: {}
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.synara.ios
+        PRODUCT_NAME: Synara
+  SynaraTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: SynaraTests
+    dependencies:
+      - target: Synara
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.synara.ios.tests
+        CODE_SIGNING_ALLOWED: "NO"
+  SynaraUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: SynaraUITests
+    dependencies:
+      - target: Synara
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.synara.ios.uitests
+        CODE_SIGNING_ALLOWED: "NO"
+schemes:
+  Synara:
+    build:
+      targets:
+        Synara: all
+    test:
+      targets:
+        - SynaraTests
+        - SynaraUITests
+      gatherCoverageData: false
+    run:
+      config: Debug
