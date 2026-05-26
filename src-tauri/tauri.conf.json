@@ -27,7 +27,7 @@
     "macOS": {
       "frameworks": [],
       "minimumSystemVersion": "",
-      "exceptionDomain": "",
+      "exceptionDomain": null,
       "signingIdentity": null,
       "providerShortName": null,
       "entitlements": null
@@ -42,7 +42,7 @@
   },
   "productName": "Synara",
   "mainBinaryName": "synara",
-  "version": "1.0.6",
+  "version": "1.1.0",
   "identifier": "app.synara.desktop",
   "app": {
     "security": {
