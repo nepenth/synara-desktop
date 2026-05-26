@@ -3,18 +3,23 @@ import SwiftUI
 struct PlaceholderScreen: View {
     let title: String
     let systemImage: String
+    @Environment(\.appEnvironment) private var environment
 
     var body: some View {
-        VStack(spacing: 16) {
-            Image(systemName: systemImage)
-                .font(.system(size: 42, weight: .semibold))
-                .foregroundStyle(.secondary)
-            Text(title)
-                .font(.title2.weight(.semibold))
+        SynaraEmptyState(
+            title: title,
+            systemImage: systemImage,
+            message: environment.matrix.syncStatusDescription
+        )
+        .navigationTitle(title)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                SynaraToolbarIconButton(systemImage: "person.crop.circle", accessibilityLabel: "Accounts") {
+                    environment.router.present(.accountSwitcher)
+                }
+            }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .navigationTitle(title)
-            .accessibilityIdentifier("\(title)Screen")
+        .accessibilityIdentifier("\(title)Screen")
     }
 }
 
@@ -47,5 +52,6 @@ struct PlaceholderScreen_Previews: PreviewProvider {
         NavigationStack {
             PlaceholderScreen(title: "Rooms", systemImage: "bubble.left.and.bubble.right")
         }
+        .environment(\.appEnvironment, AppEnvironment.mock())
     }
 }

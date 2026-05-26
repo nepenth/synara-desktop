@@ -1,27 +1,33 @@
 import SwiftUI
 
 struct RootShellView: View {
-    @State private var selectedTab: AppTab = .rooms
-    @State private var roomsPath: [AppRoute] = []
-    @State private var notificationsPath: [AppRoute] = []
-    @State private var laterPath: [AppRoute] = []
-    @State private var settingsPath: [AppRoute] = []
-    @State private var sheetDestination: SheetDestination?
+    let environment: AppEnvironment
+    @ObservedObject private var router: AppRouter
+
+    init(environment: AppEnvironment = .mock()) {
+        self.environment = environment
+        self.router = environment.router
+    }
 
     var body: some View {
-        TabView(selection: $selectedTab) {
-            tab(.rooms, path: $roomsPath)
-            tab(.notifications, path: $notificationsPath)
-            tab(.later, path: $laterPath)
-            tab(.settings, path: $settingsPath)
+        TabView(selection: $router.selectedTab) {
+            tab(.rooms)
+            tab(.notifications)
+            tab(.later)
+            tab(.settings)
         }
-        .sheet(item: $sheetDestination) { destination in
+        .environment(\.appEnvironment, environment)
+        .sheet(item: $router.sheetDestination) { destination in
             SheetPlaceholderView(destination: destination)
+        }
+        .onOpenURL { url in
+            environment.logger.info("Opening deep link \(url.absoluteString)", category: .routing)
+            _ = router.open(url: url)
         }
     }
 
-    private func tab(_ tab: AppTab, path: Binding<[AppRoute]>) -> some View {
-        NavigationStack(path: path) {
+    private func tab(_ tab: AppTab) -> some View {
+        NavigationStack(path: router.binding(for: tab)) {
             tab.content
                 .navigationDestination(for: AppRoute.self) { route in
                     RoutePlaceholderView(route: route)
@@ -34,6 +40,6 @@ struct RootShellView: View {
 
 struct RootShellView_Previews: PreviewProvider {
     static var previews: some View {
-        RootShellView()
+        RootShellView(environment: .mock())
     }
 }

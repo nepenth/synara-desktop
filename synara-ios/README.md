@@ -18,6 +18,8 @@ Authoritative planning documents:
 - [Tauri iOS feasibility spike](docs/tauri-ios-feasibility-spike.md)
 - [Matrix SDK feasibility spike](docs/matrix-sdk-feasibility-spike.md)
 - [iOS validation status](docs/ios-validation-status.md)
+- [iOS logging policy](docs/logging-policy.md)
+- [iOS CI notes](docs/ci-notes.md)
 
 Shared contracts are currently owned by:
 
@@ -43,9 +45,15 @@ List schemes:
 xcodebuild -list -project Synara.xcodeproj
 ```
 
-Simulator build and test, once local Xcode first-launch setup is complete:
+Simulator build and test-bundle compilation, once local Xcode first-launch setup
+is complete:
 
 ```sh
-xcodebuild -project Synara.xcodeproj -scheme Synara -destination 'generic/platform=iOS Simulator' -derivedDataPath /private/tmp/synara-ios-derived build
-xcodebuild -project Synara.xcodeproj -scheme Synara -destination 'generic/platform=iOS Simulator' -derivedDataPath /private/tmp/synara-ios-derived build-for-testing
+scripts/ci-build.sh
+```
+
+Run tests on a concrete installed simulator:
+
+```sh
+RUN_IOS_TESTS=1 IOS_TEST_DESTINATION='platform=iOS Simulator,name=iPhone 16' scripts/ci-build.sh
 ```

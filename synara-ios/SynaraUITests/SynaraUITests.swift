@@ -10,4 +10,14 @@ final class SynaraUITests: XCTestCase {
         XCTAssertTrue(app.tabBars.buttons["Later"].exists)
         XCTAssertTrue(app.tabBars.buttons["Settings"].exists)
     }
+
+    func testCanSwitchToSettingsTab() {
+        let app = XCUIApplication()
+        app.launch()
+
+        XCTAssertTrue(app.tabBars.buttons["Settings"].waitForExistence(timeout: 5))
+        app.tabBars.buttons["Settings"].tap()
+
+        XCTAssertTrue(app.staticTexts["Settings"].exists)
+    }
 }
