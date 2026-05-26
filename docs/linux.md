@@ -77,7 +77,7 @@ If package names drift for a newer distribution, install the equivalent WebKitGT
 ## Fresh Clone Build
 
 ```sh
-git clone --recursive https://github.com/nepenth/synara-desktop.git
+git clone https://github.com/nepenth/synara-desktop.git
 cd synara-desktop/synara
 npm ci
 cd ..
@@ -103,7 +103,7 @@ This is the recommended path for a CachyOS KDE Plasma Wayland workstation. Build
 From a fresh clone:
 
 ```sh
-git clone --recursive https://github.com/nepenth/synara-desktop.git
+git clone https://github.com/nepenth/synara-desktop.git
 cd synara-desktop
 npm ci
 cd synara
@@ -144,8 +144,7 @@ From the existing clone:
 
 ```sh
 cd synara-desktop
-git pull --recurse-submodules
-git submodule update --init --recursive
+git pull
 npm ci
 cd synara
 npm ci

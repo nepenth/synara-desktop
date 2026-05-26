@@ -1,0 +1,86 @@
+{
+  "valid": {
+    "activeLaterAndRoomUnread": {
+      "appBadgeCount": 10,
+      "inboxBadgeCount": 8,
+      "laterActiveCount": 5,
+      "inviteCount": 2,
+      "agentApprovalCount": 1,
+      "highlightCount": 2,
+      "unreadCount": 3
+    },
+    "clamping": {
+      "appBadgeCount": 5,
+      "inboxBadgeCount": 2,
+      "laterActiveCount": 2,
+      "inviteCount": 0,
+      "agentApprovalCount": 0,
+      "highlightCount": 0,
+      "unreadCount": 3
+    }
+  },
+  "invalid": {
+    "negative": {
+      "appBadgeCount": -1,
+      "inboxBadgeCount": 0,
+      "laterActiveCount": 0,
+      "inviteCount": 0,
+      "agentApprovalCount": 0,
+      "highlightCount": 0,
+      "unreadCount": 0
+    },
+    "fractional": {
+      "appBadgeCount": 1.5,
+      "inboxBadgeCount": 0,
+      "laterActiveCount": 0,
+      "inviteCount": 0,
+      "agentApprovalCount": 0,
+      "highlightCount": 0,
+      "unreadCount": 0
+    },
+    "missingCount": {
+      "appBadgeCount": 0,
+      "inboxBadgeCount": 0,
+      "laterActiveCount": 0,
+      "inviteCount": 0,
+      "agentApprovalCount": 0,
+      "highlightCount": 0
+    }
+  },
+  "runtime": {
+    "activeLaterAndRoomUnread": {
+      "input": {
+        "unreadCounts": [{ "total": 4, "highlight": 2 }, { "total": 3 }],
+        "laterActiveCount": 5,
+        "inviteCount": 2,
+        "agentApprovalCount": 1
+      },
+      "summary": {
+        "appBadgeCount": 10,
+        "inboxBadgeCount": 8,
+        "laterActiveCount": 5,
+        "inviteCount": 2,
+        "agentApprovalCount": 1,
+        "highlightCount": 2,
+        "unreadCount": 3
+      }
+    },
+    "clamping": {
+      "input": {
+        "unreadCounts": [{ "total": -1, "highlight": -2 }, { "total": 3.9 }],
+        "laterActiveCount": 2.8,
+        "inviteCount": -1,
+        "agentApprovalCount": null
+      },
+      "summary": {
+        "appBadgeCount": 5,
+        "inboxBadgeCount": 2,
+        "laterActiveCount": 2,
+        "inviteCount": 0,
+        "agentApprovalCount": 0,
+        "highlightCount": 0,
+        "unreadCount": 3
+      }
+    }
+  }
+}

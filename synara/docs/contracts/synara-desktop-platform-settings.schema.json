@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://synara.local/contracts/synara-desktop-platform-settings.schema.json",
+  "$comment": "Canonical desktop-only platform settings payload stored under local key platformSettings.",
+  "title": "SynaraDesktopPlatformSettings",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["desktopShortcutShow", "desktopShortcutLater", "desktopShortcutNotifications"],
+  "properties": {
+    "desktopShortcutShow": {
+      "type": "string",
+      "minLength": 1
+    },
+    "desktopShortcutLater": {
+      "type": "string",
+      "minLength": 1
+    },
+    "desktopShortcutNotifications": {
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}

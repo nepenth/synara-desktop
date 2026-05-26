@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://synara.local/contracts/synara-spaces-content.schema.json",
+  "$comment": "Canonical writer schema for in.synara.spaces sidebar organization. This stores space ordering and folder grouping only.",
+  "title": "SynaraSpacesContent",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "shortcut": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/MatrixRoomId"
+      },
+      "uniqueItems": true
+    },
+    "sidebar": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/SidebarItem"
+      }
+    }
+  },
+  "$defs": {
+    "MatrixRoomId": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^![^\\s]+(:[^\\s]+)?$"
+    },
+    "SidebarItem": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/MatrixRoomId"
+        },
+        {
+          "$ref": "#/$defs/SidebarFolder"
+        }
+      ]
+    },
+    "SidebarFolder": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "content"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "content": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/MatrixRoomId"
+          }
+        }
+      }
+    }
+  }
+}

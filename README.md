@@ -23,7 +23,7 @@ First, set up Rust, Node.js, and build tools by following the [Tauri prerequisit
 
 Then set up development locally:
 
-- `git clone --recursive https://github.com/nepenth/synara-desktop.git`
+- `git clone https://github.com/nepenth/synara-desktop.git`
 - `cd synara-desktop/synara`
 - `npm ci`
 - `cd ..`

@@ -1,0 +1,1125 @@
+import React, {
+  ClipboardEventHandler,
+  ChangeEventHandler,
+  KeyboardEventHandler,
+  RefObject,
+  forwardRef,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
+import { useAtom, useAtomValue } from 'jotai';
+import { isKeyHotkey } from 'is-hotkey';
+import { IContent, MsgType, RelationType, Room } from 'matrix-js-sdk';
+import { EventType } from 'matrix-js-sdk/lib/@types/event';
+import { useTranslation } from 'react-i18next';
+import { ReactEditor } from 'slate-react';
+import { Transforms, Editor } from 'slate';
+import {
+  Box,
+  Button,
+  Dialog,
+  Icon,
+  IconButton,
+  Icons,
+  Input,
+  Overlay,
+  OverlayBackdrop,
+  OverlayCenter,
+  PopOut,
+  RectCords,
+  Scroll,
+  Text,
+  config,
+  toRem,
+} from 'folds';
+
+import { useMatrixClient } from '../../hooks/useMatrixClient';
+import {
+  EditorChangeHandler,
+  Toolbar,
+  toMatrixCustomHTML,
+  toPlainText,
+  AUTOCOMPLETE_PREFIXES,
+  AutocompletePrefix,
+  AutocompleteQuery,
+  getAutocompleteQuery,
+  getPrevWorldRange,
+  resetEditor,
+  RoomMentionAutocomplete,
+  UserMentionAutocomplete,
+  EmoticonAutocomplete,
+  createEmoticonElement,
+  moveCursor,
+  resetEditorHistory,
+  customHtmlEqualsPlainText,
+  trimCustomHtml,
+  isEmptyEditor,
+  getBeginCommand,
+  trimCommand,
+  getMentions,
+  insertClipboardData,
+} from '../../components/editor';
+import { EmojiBoard, EmojiBoardTab } from '../../components/emoji-board';
+import { UseStateProvider } from '../../components/UseStateProvider';
+import {
+  TUploadContent,
+  encryptFile,
+  getImageInfo,
+  getMxIdLocalPart,
+  mxcUrlToHttp,
+} from '../../utils/matrix';
+import { useTypingStatusUpdater } from '../../hooks/useTypingStatusUpdater';
+import { useFilePicker } from '../../hooks/useFilePicker';
+import { useFileDropZone } from '../../hooks/useFileDrop';
+import {
+  TUploadItem,
+  TUploadMetadata,
+  roomIdToMsgDraftAtomFamily,
+  roomIdToReplyDraftAtomFamily,
+  roomIdToUploadItemsAtomFamily,
+  roomUploadAtomFamily,
+} from '../../state/room/roomInputDrafts';
+import { UploadCardRenderer } from '../../components/upload-card';
+import {
+  UploadBoard,
+  UploadBoardContent,
+  UploadBoardHeader,
+  UploadBoardImperativeHandlers,
+} from '../../components/upload-board';
+import {
+  Upload,
+  UploadStatus,
+  UploadSuccess,
+  createUploadFamilyObserverAtom,
+} from '../../state/upload';
+import { getDataTransferFiles, getImageUrlBlob, loadImageElement } from '../../utils/dom';
+import { safeFile } from '../../utils/mimeTypes';
+import { fulfilledPromiseSettledResult } from '../../utils/common';
+import { useSetting } from '../../state/hooks/settings';
+import { settingsAtom } from '../../state/settings';
+import {
+  getAudioMsgContent,
+  getFileMsgContent,
+  getGifMsgContent,
+  getImageMsgContent,
+  getVideoMsgContent,
+} from './msgContent';
+import { getMemberDisplayName, getMentionContent, trimReplyFromBody } from '../../utils/room';
+import { CommandAutocomplete } from './CommandAutocomplete';
+import { Command, SHRUG, TABLEFLIP, UNFLIP, useCommands } from '../../hooks/useCommands';
+import { mobileOrTablet } from '../../utils/user-agent';
+import { useElementSizeObserver } from '../../hooks/useElementSizeObserver';
+import { ReplyLayout, ThreadIndicator } from '../../components/message';
+import { roomToParentsAtom } from '../../state/room/roomToParents';
+import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
+import { useImagePackRooms } from '../../hooks/useImagePackRooms';
+import { usePowerLevelsContext } from '../../hooks/usePowerLevels';
+import colorMXID from '../../../util/colorMXID';
+import { useIsDirectRoom } from '../../hooks/useRoom';
+import { useAccessiblePowerTagColors, useGetMemberPowerTag } from '../../hooks/useMemberPowerTag';
+import { useRoomCreators } from '../../hooks/useRoomCreators';
+import { useTheme } from '../../hooks/useTheme';
+import { useRoomCreatorsTag } from '../../hooks/useRoomCreatorsTag';
+import { usePowerLevelTags } from '../../hooks/usePowerLevelTags';
+import { useComposingCheck } from '../../hooks/useComposingCheck';
+import { useClientConfig } from '../../hooks/useClientConfig';
+import { fetchGifForUpload, gifPickerEnabled, gifSearchAvailable } from '../../utils/gifProvider';
+import type { GifResult } from '../../utils/gifProvider';
+import { GifPicker } from './gif/GifPicker';
+import { clearRoomDraft, loadRoomDraft, saveRoomDraft } from '../../utils/drafts';
+import {
+  DEFAULT_POLL_SELECTIONS,
+  MAX_POLL_SELECTIONS,
+  makePollStartContent,
+  POLL_START_EVENT_TYPE,
+} from '../../utils/polls';
+import { RoomComposer } from './RoomComposer';
+
+interface RoomInputProps {
+  editor: Editor;
+  fileDropContainerRef: RefObject<HTMLElement | null>;
+  roomId: string;
+  room: Room;
+}
+export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
+  ({ editor, fileDropContainerRef, roomId, room }, ref) => {
+    const mx = useMatrixClient();
+    const clientConfig = useClientConfig();
+    const useAuthentication = useMediaAuthentication();
+    const [enterForNewline] = useSetting(settingsAtom, 'enterForNewline');
+    const [isMarkdown] = useSetting(settingsAtom, 'isMarkdown');
+    const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
+    const [legacyUsernameColor] = useSetting(settingsAtom, 'legacyUsernameColor');
+    const [gifSearchEnabled, setGifSearchEnabled] = useSetting(settingsAtom, 'gifSearchEnabled');
+    const [gifOnboardingDismissed, setGifOnboardingDismissed] = useSetting(
+      settingsAtom,
+      'gifOnboardingDismissed'
+    );
+    const { t } = useTranslation();
+    const direct = useIsDirectRoom();
+    const commands = useCommands(mx, room);
+    const emojiBtnRef = useRef<HTMLButtonElement>(null);
+    const gifBtnRef = useRef<HTMLButtonElement>(null);
+    const pollBtnRef = useRef<HTMLButtonElement>(null);
+    const roomToParents = useAtomValue(roomToParentsAtom);
+    const powerLevels = usePowerLevelsContext();
+    const creators = useRoomCreators(room);
+
+    const [msgDraft, setMsgDraft] = useAtom(roomIdToMsgDraftAtomFamily(roomId));
+    const [replyDraft, setReplyDraft] = useAtom(roomIdToReplyDraftAtomFamily(roomId));
+    const replyUserID = replyDraft?.userId;
+
+    const powerLevelTags = usePowerLevelTags(room, powerLevels);
+    const creatorsTag = useRoomCreatorsTag();
+    const getMemberPowerTag = useGetMemberPowerTag(room, creators, powerLevels);
+    const theme = useTheme();
+    const accessibleTagColors = useAccessiblePowerTagColors(
+      theme.kind,
+      creatorsTag,
+      powerLevelTags
+    );
+
+    const replyPowerTag = replyUserID ? getMemberPowerTag(replyUserID) : undefined;
+    const replyPowerColor = replyPowerTag?.color
+      ? accessibleTagColors.get(replyPowerTag.color)
+      : undefined;
+    const replyUsernameColor =
+      legacyUsernameColor || direct ? colorMXID(replyUserID ?? '') : replyPowerColor;
+
+    const [uploadBoard, setUploadBoard] = useState(true);
+    const [selectedFiles, setSelectedFiles] = useAtom(roomIdToUploadItemsAtomFamily(roomId));
+    const uploadFamilyObserverAtom = createUploadFamilyObserverAtom(
+      roomUploadAtomFamily,
+      selectedFiles.map((f) => f.file)
+    );
+    const uploadBoardHandlers = useRef<UploadBoardImperativeHandlers | undefined>(undefined);
+
+    const imagePackRooms: Room[] = useImagePackRooms(roomId, roomToParents);
+
+    const [toolbar, setToolbar] = useSetting(settingsAtom, 'editorToolbar');
+    const [autocompleteQuery, setAutocompleteQuery] =
+      useState<AutocompleteQuery<AutocompletePrefix>>();
+    const [gifPickerAnchor, setGifPickerAnchor] = useState<RectCords>();
+    const [gifSending, setGifSending] = useState(false);
+    const [gifSendError, setGifSendError] = useState<string>();
+    const [sendingMessage, setSendingMessage] = useState(false);
+    const [sendError, setSendError] = useState<string>();
+    const [pollAnchor, setPollAnchor] = useState<RectCords>();
+    const [pollQuestion, setPollQuestion] = useState('');
+    const [pollAnswers, setPollAnswers] = useState(['', '']);
+    const [pollMaxSelections, setPollMaxSelections] = useState(DEFAULT_POLL_SELECTIONS);
+    const [pollError, setPollError] = useState<string>();
+    const gifProviderAvailable = gifPickerEnabled(clientConfig.gifPicker);
+    const gifPickerAvailable = gifSearchAvailable(clientConfig.gifPicker, gifSearchEnabled);
+    const gifOnboardingVisible =
+      gifProviderAvailable && !gifSearchEnabled && !gifOnboardingDismissed;
+
+    const sendTypingStatus = useTypingStatusUpdater(mx, roomId);
+
+    const handleFiles = useCallback(
+      async (files: File[]) => {
+        setUploadBoard(true);
+        const safeFiles = files.map(safeFile);
+        const fileItems: TUploadItem[] = [];
+
+        if (room.hasEncryptionStateEvent()) {
+          const encryptFiles = fulfilledPromiseSettledResult(
+            await Promise.allSettled(safeFiles.map((f) => encryptFile(f)))
+          );
+          encryptFiles.forEach((ef) =>
+            fileItems.push({
+              ...ef,
+              metadata: {
+                markedAsSpoiler: false,
+              },
+            })
+          );
+        } else {
+          safeFiles.forEach((f) =>
+            fileItems.push({
+              file: f,
+              originalFile: f,
+              encInfo: undefined,
+              metadata: {
+                markedAsSpoiler: false,
+              },
+            })
+          );
+        }
+        setSelectedFiles({
+          type: 'PUT',
+          item: fileItems,
+        });
+      },
+      [setSelectedFiles, room]
+    );
+    const pickFile = useFilePicker(handleFiles, true);
+    const handlePaste: ClipboardEventHandler = useCallback(
+      (evt) => {
+        const files = getDataTransferFiles(evt.clipboardData);
+        if (files) {
+          evt.preventDefault();
+          handleFiles(files);
+          return;
+        }
+
+        if (insertClipboardData(editor, evt.clipboardData, isMarkdown)) {
+          evt.preventDefault();
+        }
+      },
+      [editor, handleFiles, isMarkdown]
+    );
+    const dropZoneVisible = useFileDropZone(fileDropContainerRef, handleFiles);
+    const [hideStickerBtn, setHideStickerBtn] = useState(document.body.clientWidth < 500);
+
+    const isComposing = useComposingCheck();
+
+    const getReplyRelation = useCallback(() => {
+      if (!replyDraft) return undefined;
+
+      const relation: IContent['m.relates_to'] = {
+        'm.in_reply_to': {
+          event_id: replyDraft.eventId,
+        },
+      };
+      if (replyDraft.relation?.rel_type === RelationType.Thread) {
+        relation.event_id = replyDraft.relation.event_id;
+        relation.rel_type = RelationType.Thread;
+        relation.is_falling_back = false;
+      }
+
+      return relation;
+    }, [replyDraft]);
+
+    const addReplyRelationToContent = useCallback(
+      (content: IContent): IContent => {
+        const relation = getReplyRelation();
+        if (!replyDraft || !relation) return content;
+
+        const relatedContent: IContent = {
+          ...content,
+          'm.relates_to': relation,
+        };
+
+        if (replyDraft.userId !== mx.getUserId()) {
+          relatedContent['m.mentions'] = getMentionContent([replyDraft.userId], false);
+        }
+
+        return relatedContent;
+      },
+      [mx, replyDraft, getReplyRelation]
+    );
+
+    useElementSizeObserver(
+      useCallback(() => fileDropContainerRef.current, [fileDropContainerRef]),
+      useCallback((width) => setHideStickerBtn(width < 500), [])
+    );
+
+    useEffect(() => {
+      const storedDraft = loadRoomDraft(window.localStorage, mx.getSafeUserId(), roomId);
+      const draft = msgDraft.length > 0 ? msgDraft : storedDraft;
+      if (draft && draft.length > 0) {
+        Transforms.insertFragment(editor, draft);
+      }
+    }, [mx, roomId, editor, msgDraft]);
+
+    useEffect(
+      () => () => {
+        if (!isEmptyEditor(editor)) {
+          const parsedDraft = JSON.parse(JSON.stringify(editor.children));
+          setMsgDraft(parsedDraft);
+          saveRoomDraft(window.localStorage, mx.getSafeUserId(), roomId, parsedDraft);
+        } else {
+          setMsgDraft([]);
+          clearRoomDraft(window.localStorage, mx.getSafeUserId(), roomId);
+        }
+        resetEditor(editor);
+        resetEditorHistory(editor);
+      },
+      [mx, roomId, editor, setMsgDraft]
+    );
+
+    const handleEditorChange = useCallback(
+      (value: Parameters<EditorChangeHandler>[0]) => {
+        if (isEmptyEditor(editor)) {
+          clearRoomDraft(window.localStorage, mx.getSafeUserId(), roomId);
+          return;
+        }
+        saveRoomDraft(window.localStorage, mx.getSafeUserId(), roomId, value);
+      },
+      [mx, roomId, editor]
+    );
+
+    const handleFileMetadata = useCallback(
+      (fileItem: TUploadItem, metadata: TUploadMetadata) => {
+        setSelectedFiles({
+          type: 'REPLACE',
+          item: fileItem,
+          replacement: { ...fileItem, metadata },
+        });
+      },
+      [setSelectedFiles]
+    );
+
+    const handleRemoveUpload = useCallback(
+      (upload: TUploadContent | TUploadContent[]) => {
+        const uploads = Array.isArray(upload) ? upload : [upload];
+        setSelectedFiles({
+          type: 'DELETE',
+          item: selectedFiles.filter((f) => uploads.find((u) => u === f.file)),
+        });
+        uploads.forEach((u) => roomUploadAtomFamily.remove(u));
+      },
+      [setSelectedFiles, selectedFiles]
+    );
+
+    const handleCancelUpload = (uploads: Upload[]) => {
+      uploads.forEach((upload) => {
+        if (upload.status === UploadStatus.Loading) {
+          mx.cancelUpload(upload.promise);
+        }
+      });
+      handleRemoveUpload(uploads.map((upload) => upload.file));
+    };
+
+    const handleSendUpload = async (uploads: UploadSuccess[]) => {
+      const contentsPromises = uploads.map(async (upload) => {
+        const fileItem = selectedFiles.find((f) => f.file === upload.file);
+        if (!fileItem) throw new Error('Broken upload');
+
+        if (fileItem.file.type.startsWith('image')) {
+          return getImageMsgContent(mx, fileItem, upload.mxc);
+        }
+        if (fileItem.file.type.startsWith('video')) {
+          return getVideoMsgContent(mx, fileItem, upload.mxc);
+        }
+        if (fileItem.file.type.startsWith('audio')) {
+          return getAudioMsgContent(fileItem, upload.mxc);
+        }
+        return getFileMsgContent(fileItem, upload.mxc);
+      });
+      handleCancelUpload(uploads);
+      const contents = fulfilledPromiseSettledResult(await Promise.allSettled(contentsPromises));
+      contents.forEach((content) =>
+        mx.sendMessage(roomId, addReplyRelationToContent(content) as any)
+      );
+      if (contents.length > 0) {
+        setReplyDraft(undefined);
+      }
+    };
+
+    const submit = useCallback(async () => {
+      if (sendingMessage) return;
+      uploadBoardHandlers.current?.handleSend();
+
+      const commandName = getBeginCommand(editor);
+      let plainText = toPlainText(editor.children, isMarkdown).trim();
+      let customHtml = trimCustomHtml(
+        toMatrixCustomHTML(editor.children, {
+          allowTextFormatting: true,
+          allowBlockMarkdown: isMarkdown,
+          allowInlineMarkdown: isMarkdown,
+        })
+      );
+      let msgType = MsgType.Text;
+
+      if (commandName) {
+        plainText = trimCommand(commandName, plainText);
+        customHtml = trimCommand(commandName, customHtml);
+      }
+      if (commandName === Command.Me) {
+        msgType = MsgType.Emote;
+      } else if (commandName === Command.Notice) {
+        msgType = MsgType.Notice;
+      } else if (commandName === Command.Shrug) {
+        plainText = `${SHRUG} ${plainText}`;
+        customHtml = `${SHRUG} ${customHtml}`;
+      } else if (commandName === Command.TableFlip) {
+        plainText = `${TABLEFLIP} ${plainText}`;
+        customHtml = `${TABLEFLIP} ${customHtml}`;
+      } else if (commandName === Command.UnFlip) {
+        plainText = `${UNFLIP} ${plainText}`;
+        customHtml = `${UNFLIP} ${customHtml}`;
+      } else if (commandName) {
+        const commandContent = commands[commandName as Command];
+        if (commandContent) {
+          commandContent.exe(plainText);
+        }
+        resetEditor(editor);
+        resetEditorHistory(editor);
+        sendTypingStatus(false);
+        return;
+      }
+
+      if (plainText === '') return;
+
+      const body = plainText;
+      const formattedBody = customHtml;
+      const mentionData = getMentions(mx, roomId, editor);
+
+      const content: IContent = {
+        msgtype: msgType,
+        body,
+      };
+
+      if (replyDraft && replyDraft.userId !== mx.getUserId()) {
+        mentionData.users.add(replyDraft.userId);
+      }
+
+      const mMentions = getMentionContent(Array.from(mentionData.users), mentionData.room);
+      content['m.mentions'] = mMentions;
+
+      if (replyDraft || !customHtmlEqualsPlainText(formattedBody, body)) {
+        content.format = 'org.matrix.custom.html';
+        content.formatted_body = formattedBody;
+      }
+      const relation = getReplyRelation();
+      if (relation) {
+        content['m.relates_to'] = relation;
+      }
+      try {
+        setSendingMessage(true);
+        setSendError(undefined);
+        await mx.sendMessage(roomId, content as any);
+        resetEditor(editor);
+        resetEditorHistory(editor);
+        clearRoomDraft(window.localStorage, mx.getSafeUserId(), roomId);
+        setReplyDraft(undefined);
+        sendTypingStatus(false);
+      } catch (err) {
+        const reason =
+          err instanceof Error && err.message
+            ? err.message
+            : t('composer.send_failed', 'Could not send message.');
+        setSendError(
+          t('composer.send_failed_with_reason', {
+            reason,
+            defaultValue: 'Could not send message: {{reason}}',
+          })
+        );
+      } finally {
+        setSendingMessage(false);
+      }
+    }, [
+      mx,
+      roomId,
+      editor,
+      replyDraft,
+      sendTypingStatus,
+      setReplyDraft,
+      isMarkdown,
+      commands,
+      getReplyRelation,
+      sendingMessage,
+      t,
+    ]);
+
+    const handlePollAnswerChange: ChangeEventHandler<HTMLInputElement> = (evt) => {
+      const index = Number(evt.currentTarget.getAttribute('data-answer-index'));
+      const { value } = evt.currentTarget;
+      setPollAnswers((current) =>
+        current.map((answer, answerIndex) => (answerIndex === index ? value : answer))
+      );
+    };
+
+    const handlePollMaxSelectionsChange: ChangeEventHandler<HTMLInputElement> = (evt) => {
+      const parsed = Number.parseInt(evt.currentTarget.value, 10);
+      const safeValue = Number.isFinite(parsed) ? parsed : DEFAULT_POLL_SELECTIONS;
+      const maxSelectable = Math.max(
+        1,
+        Math.min(MAX_POLL_SELECTIONS, pollAnswers.length, safeValue)
+      );
+      setPollMaxSelections(maxSelectable);
+    };
+
+    useEffect(() => {
+      setPollMaxSelections((current) =>
+        Math.max(1, Math.min(current, pollAnswers.length, MAX_POLL_SELECTIONS))
+      );
+    }, [pollAnswers]);
+
+    const handleSendPoll = async () => {
+      setPollError(undefined);
+      const content = makePollStartContent(pollQuestion, pollAnswers, pollMaxSelections);
+      if (!content) {
+        setPollError(
+          t('modernization.poll.invalid', 'Add a question and at least two answer options.')
+        );
+        return;
+      }
+      try {
+        await mx.sendEvent(roomId, POLL_START_EVENT_TYPE as any, content as any);
+        setPollQuestion('');
+        setPollAnswers(['', '']);
+        setPollMaxSelections(DEFAULT_POLL_SELECTIONS);
+        setPollAnchor(undefined);
+      } catch {
+        setPollError(t('modernization.poll.send_failed', 'Could not send poll.'));
+      }
+    };
+
+    const handleKeyDown: KeyboardEventHandler = useCallback(
+      (evt) => {
+        if (
+          (isKeyHotkey('mod+enter', evt) || (!enterForNewline && isKeyHotkey('enter', evt))) &&
+          !isComposing(evt)
+        ) {
+          evt.preventDefault();
+          submit();
+        }
+        if (isKeyHotkey('escape', evt)) {
+          evt.preventDefault();
+          if (autocompleteQuery) {
+            setAutocompleteQuery(undefined);
+            return;
+          }
+          setReplyDraft(undefined);
+        }
+      },
+      [submit, setReplyDraft, enterForNewline, autocompleteQuery, isComposing]
+    );
+
+    const handleKeyUp: KeyboardEventHandler = useCallback(
+      (evt) => {
+        if (isKeyHotkey('escape', evt)) {
+          evt.preventDefault();
+          return;
+        }
+
+        if (!hideActivity) {
+          sendTypingStatus(!isEmptyEditor(editor));
+        }
+
+        const prevWordRange = getPrevWorldRange(editor);
+        const query = prevWordRange
+          ? getAutocompleteQuery<AutocompletePrefix>(editor, prevWordRange, AUTOCOMPLETE_PREFIXES)
+          : undefined;
+        setAutocompleteQuery(query);
+      },
+      [editor, sendTypingStatus, hideActivity]
+    );
+
+    const handleCloseAutocomplete = useCallback(() => {
+      setAutocompleteQuery(undefined);
+      ReactEditor.focus(editor);
+    }, [editor]);
+
+    const handleEmoticonSelect = (key: string, shortcode: string) => {
+      editor.insertNode(createEmoticonElement(key, shortcode));
+      moveCursor(editor);
+    };
+
+    const handleStickerSelect = async (mxc: string, shortcode: string, label: string) => {
+      const stickerUrl = mxcUrlToHttp(mx, mxc, useAuthentication);
+      if (!stickerUrl) return;
+
+      const info = await getImageInfo(
+        await loadImageElement(stickerUrl),
+        await getImageUrlBlob(stickerUrl)
+      );
+
+      mx.sendEvent(
+        roomId,
+        EventType.Sticker as any,
+        addReplyRelationToContent({
+          body: label,
+          url: mxc,
+          info,
+        }) as any
+      );
+      setReplyDraft(undefined);
+    };
+
+    const handleGifSelect = async (gif: GifResult) => {
+      setGifSending(true);
+      setGifSendError(undefined);
+      try {
+        const { blob, fileName } = await fetchGifForUpload(gif);
+        const gifFile = new File([blob], fileName, { type: 'image/gif' });
+        const encrypted = room.hasEncryptionStateEvent() ? await encryptFile(gifFile) : undefined;
+        const uploadFile = encrypted?.file ?? gifFile;
+        const upload = await mx.uploadContent(uploadFile, {
+          name: fileName,
+          type: 'image/gif',
+          includeFilename: true,
+        });
+        const mxc = upload.content_uri;
+        if (!mxc) throw new Error('Failed to upload GIF.');
+        await mx.sendMessage(
+          roomId,
+          addReplyRelationToContent(
+            getGifMsgContent(gif, mxc, blob.size, fileName, encrypted?.encInfo)
+          ) as any
+        );
+        setReplyDraft(undefined);
+        setGifPickerAnchor(undefined);
+      } catch (err) {
+        setGifSendError(err instanceof Error ? err.message : 'Failed to send GIF.');
+      } finally {
+        setGifSending(false);
+      }
+    };
+
+    return (
+      <div ref={ref}>
+        {selectedFiles.length > 0 && (
+          <UploadBoard
+            header={
+              <UploadBoardHeader
+                open={uploadBoard}
+                onToggle={() => setUploadBoard(!uploadBoard)}
+                uploadFamilyObserverAtom={uploadFamilyObserverAtom}
+                onSend={handleSendUpload}
+                imperativeHandlerRef={uploadBoardHandlers}
+                onCancel={handleCancelUpload}
+              />
+            }
+          >
+            {uploadBoard && (
+              <Scroll size="300" hideTrack visibility="Hover">
+                <UploadBoardContent>
+                  {Array.from(selectedFiles)
+                    .reverse()
+                    .map((fileItem, index) => (
+                      <UploadCardRenderer
+                        // eslint-disable-next-line react/no-array-index-key
+                        key={index}
+                        isEncrypted={!!fileItem.encInfo}
+                        fileItem={fileItem}
+                        setMetadata={handleFileMetadata}
+                        onRemove={handleRemoveUpload}
+                      />
+                    ))}
+                </UploadBoardContent>
+              </Scroll>
+            )}
+          </UploadBoard>
+        )}
+        <Overlay
+          open={dropZoneVisible}
+          backdrop={<OverlayBackdrop />}
+          style={{ pointerEvents: 'none' }}
+        >
+          <OverlayCenter>
+            <Dialog variant="Primary">
+              <Box
+                direction="Column"
+                justifyContent="Center"
+                alignItems="Center"
+                gap="500"
+                style={{ padding: toRem(60) }}
+              >
+                <Icon size="600" src={Icons.File} />
+                <Text size="H4" align="Center">
+                  {`Drop Files in "${room?.name || 'Room'}"`}
+                </Text>
+                <Text align="Center">Drag and drop files here or click for selection dialog</Text>
+              </Box>
+            </Dialog>
+          </OverlayCenter>
+        </Overlay>
+        {sendError && (
+          <Box style={{ padding: `0 ${config.space.S300} ${config.space.S200}` }}>
+            <Text size="T200" priority="300">
+              {sendError}
+            </Text>
+          </Box>
+        )}
+        {autocompleteQuery?.prefix === AutocompletePrefix.RoomMention && (
+          <RoomMentionAutocomplete
+            roomId={roomId}
+            editor={editor}
+            query={autocompleteQuery}
+            requestClose={handleCloseAutocomplete}
+          />
+        )}
+        {autocompleteQuery?.prefix === AutocompletePrefix.UserMention && (
+          <UserMentionAutocomplete
+            room={room}
+            editor={editor}
+            query={autocompleteQuery}
+            requestClose={handleCloseAutocomplete}
+          />
+        )}
+        {autocompleteQuery?.prefix === AutocompletePrefix.Emoticon && (
+          <EmoticonAutocomplete
+            imagePackRooms={imagePackRooms}
+            editor={editor}
+            query={autocompleteQuery}
+            requestClose={handleCloseAutocomplete}
+          />
+        )}
+        {autocompleteQuery?.prefix === AutocompletePrefix.Command && (
+          <CommandAutocomplete
+            room={room}
+            editor={editor}
+            query={autocompleteQuery}
+            requestClose={handleCloseAutocomplete}
+          />
+        )}
+        <RoomComposer
+          editableName="RoomInput"
+          editor={editor}
+          placeholder="Send a message..."
+          onKeyDown={handleKeyDown}
+          onKeyUp={handleKeyUp}
+          onPaste={handlePaste}
+          replyPreview={
+            replyDraft && (
+              <div>
+                <Box
+                  alignItems="Center"
+                  gap="300"
+                  style={{ padding: `${config.space.S200} ${config.space.S300} 0` }}
+                >
+                  <IconButton
+                    onClick={() => setReplyDraft(undefined)}
+                    variant="SurfaceVariant"
+                    size="300"
+                    radii="300"
+                    aria-label={t('composer.reply.cancel_aria_label', 'Cancel reply')}
+                  >
+                    <Icon src={Icons.Cross} size="50" />
+                  </IconButton>
+                  <Box direction="Row" gap="200" alignItems="Center">
+                    {replyDraft.relation?.rel_type === RelationType.Thread && <ThreadIndicator />}
+                    <ReplyLayout
+                      userColor={replyUsernameColor}
+                      username={
+                        <Text size="T300" truncate>
+                          <b>
+                            {getMemberDisplayName(room, replyDraft.userId) ??
+                              getMxIdLocalPart(replyDraft.userId) ??
+                              replyDraft.userId}
+                          </b>
+                        </Text>
+                      }
+                    >
+                      <Text size="T300" truncate>
+                        {trimReplyFromBody(replyDraft.body)}
+                      </Text>
+                    </ReplyLayout>
+                  </Box>
+                </Box>
+              </div>
+            )
+          }
+          leadingAction={
+            <IconButton
+              onClick={() => pickFile('*')}
+              variant="SurfaceVariant"
+              size="300"
+              radii="300"
+              aria-label={t('composer.attach_file_aria_label', 'Attach file')}
+            >
+              <Icon src={Icons.PlusCircle} />
+            </IconButton>
+          }
+          floatingActions={
+            <>
+              <IconButton
+                variant="SurfaceVariant"
+                size="300"
+                radii="300"
+                onClick={() => setToolbar(!toolbar)}
+                aria-label={
+                  toolbar
+                    ? t('composer.formatting.hide_aria_label', 'Hide formatting toolbar')
+                    : t('composer.formatting.show_aria_label', 'Show formatting toolbar')
+                }
+                aria-pressed={toolbar}
+                aria-expanded={toolbar}
+              >
+                <Icon src={toolbar ? Icons.AlphabetUnderline : Icons.Alphabet} />
+              </IconButton>
+              <UseStateProvider initial={undefined}>
+                {(emojiBoardTab: EmojiBoardTab | undefined, setEmojiBoardTab) => (
+                  <PopOut
+                    offset={16}
+                    alignOffset={-44}
+                    position="Top"
+                    align="End"
+                    anchor={
+                      emojiBoardTab === undefined
+                        ? undefined
+                        : emojiBtnRef.current?.getBoundingClientRect() ?? undefined
+                    }
+                    content={
+                      <EmojiBoard
+                        tab={emojiBoardTab}
+                        onTabChange={setEmojiBoardTab}
+                        imagePackRooms={imagePackRooms}
+                        returnFocusOnDeactivate={false}
+                        onEmojiSelect={handleEmoticonSelect}
+                        onCustomEmojiSelect={handleEmoticonSelect}
+                        onStickerSelect={handleStickerSelect}
+                        requestClose={() => {
+                          setEmojiBoardTab((tab) => {
+                            if (tab) {
+                              if (!mobileOrTablet()) ReactEditor.focus(editor);
+                              return undefined;
+                            }
+                            return tab;
+                          });
+                        }}
+                      />
+                    }
+                  >
+                    {!hideStickerBtn && (
+                      <IconButton
+                        aria-pressed={emojiBoardTab === EmojiBoardTab.Sticker}
+                        aria-label={t('composer.sticker_picker_aria_label', 'Sticker picker')}
+                        onClick={() => setEmojiBoardTab(EmojiBoardTab.Sticker)}
+                        variant="SurfaceVariant"
+                        size="300"
+                        radii="300"
+                      >
+                        <Icon
+                          src={Icons.Sticker}
+                          filled={emojiBoardTab === EmojiBoardTab.Sticker}
+                        />
+                      </IconButton>
+                    )}
+                    <IconButton
+                      ref={emojiBtnRef}
+                      aria-pressed={
+                        hideStickerBtn ? !!emojiBoardTab : emojiBoardTab === EmojiBoardTab.Emoji
+                      }
+                      aria-label={t('composer.emoji_picker_aria_label', 'Emoji picker')}
+                      onClick={() => setEmojiBoardTab(EmojiBoardTab.Emoji)}
+                      variant="SurfaceVariant"
+                      size="300"
+                      radii="300"
+                    >
+                      <Icon
+                        src={Icons.Smile}
+                        filled={
+                          hideStickerBtn ? !!emojiBoardTab : emojiBoardTab === EmojiBoardTab.Emoji
+                        }
+                      />
+                    </IconButton>
+                  </PopOut>
+                )}
+              </UseStateProvider>
+              {(gifPickerAvailable || gifOnboardingVisible) && (
+                <PopOut
+                  offset={16}
+                  alignOffset={-44}
+                  position="Top"
+                  align="End"
+                  anchor={gifPickerAnchor}
+                  content={
+                    gifPickerAvailable ? (
+                      <GifPicker
+                        config={clientConfig.gifPicker}
+                        disabled={gifSending}
+                        error={gifSendError}
+                        onSelect={handleGifSelect}
+                      />
+                    ) : (
+                      <Box
+                        direction="Column"
+                        gap="300"
+                        style={{ padding: config.space.S400, width: toRem(280) }}
+                      >
+                        <Text size="H5">
+                          {t('modernization.gif.onboarding.title', 'Enable GIFs?')}
+                        </Text>
+                        <Text size="T300" priority="300">
+                          {t(
+                            'modernization.gif.onboarding.description',
+                            'GIF search downloads your selected GIF privately, uploads it to Matrix media, then sends an mxc:// attachment.'
+                          )}
+                        </Text>
+                        <Box justifyContent="End" gap="200">
+                          <Button
+                            size="300"
+                            variant="Secondary"
+                            fill="None"
+                            onClick={() => {
+                              setGifOnboardingDismissed(true);
+                              setGifPickerAnchor(undefined);
+                            }}
+                          >
+                            <Text size="B300">
+                              {t('modernization.gif.onboarding.not_now', 'Not now')}
+                            </Text>
+                          </Button>
+                          <Button
+                            size="300"
+                            variant="Primary"
+                            onClick={() => {
+                              setGifSearchEnabled(true);
+                              setGifOnboardingDismissed(true);
+                              setGifPickerAnchor(gifBtnRef.current?.getBoundingClientRect());
+                            }}
+                          >
+                            <Text size="B300">
+                              {t('modernization.gif.onboarding.enable', 'Enable GIFs')}
+                            </Text>
+                          </Button>
+                        </Box>
+                      </Box>
+                    )
+                  }
+                >
+                  <IconButton
+                    ref={gifBtnRef}
+                    variant="SurfaceVariant"
+                    size="300"
+                    radii="300"
+                    aria-label={t('modernization.gif.picker.aria_label', 'GIF Picker')}
+                    aria-pressed={!!gifPickerAnchor}
+                    onClick={() =>
+                      setGifPickerAnchor(
+                        gifPickerAnchor ? undefined : gifBtnRef.current?.getBoundingClientRect()
+                      )
+                    }
+                  >
+                    <Icon src={Icons.Photo} />
+                  </IconButton>
+                </PopOut>
+              )}
+              <PopOut
+                offset={16}
+                alignOffset={-44}
+                position="Top"
+                align="End"
+                anchor={pollAnchor}
+                content={
+                  <Box
+                    direction="Column"
+                    gap="300"
+                    style={{ padding: config.space.S400, width: toRem(320) }}
+                    role="group"
+                    aria-label={t('modernization.poll.create_aria_label', 'Create poll')}
+                  >
+                    <Text size="H5">{t('modernization.poll.create_title', 'Create Poll')}</Text>
+                    <Input
+                      size="300"
+                      radii="300"
+                      variant="Background"
+                      value={pollQuestion}
+                      onChange={(evt) => setPollQuestion(evt.currentTarget.value)}
+                      placeholder={t('modernization.poll.question_placeholder', 'Question')}
+                      aria-label={t('modernization.poll.question_aria_label', 'Poll question')}
+                    />
+                    <Input
+                      size="300"
+                      radii="300"
+                      variant="Background"
+                      type="number"
+                      min={DEFAULT_POLL_SELECTIONS}
+                      max={Math.min(MAX_POLL_SELECTIONS, pollAnswers.length)}
+                      value={pollMaxSelections}
+                      onChange={handlePollMaxSelectionsChange}
+                      placeholder={t('modernization.poll.max_aria_label', 'Max selections')}
+                      aria-label={t('modernization.poll.max_aria_label', 'Max selections')}
+                    />
+                    <Text size="T200" priority="300">
+                      {t('modernization.poll.max_description', {
+                        count: pollMaxSelections,
+                        defaultValue: 'Participants can choose up to {{count}} option(s).',
+                      })}
+                    </Text>
+                    {pollAnswers.map((answer, index) => (
+                      <Input
+                        // eslint-disable-next-line react/no-array-index-key
+                        key={index}
+                        size="300"
+                        radii="300"
+                        variant="Background"
+                        data-answer-index={index}
+                        value={answer}
+                        onChange={handlePollAnswerChange}
+                        placeholder={t('modernization.poll.answer_placeholder', {
+                          count: index + 1,
+                          defaultValue: 'Option {{count}}',
+                        })}
+                        aria-label={t('modernization.poll.answer_aria_label', {
+                          count: index + 1,
+                          defaultValue: 'Poll option {{count}}',
+                        })}
+                      />
+                    ))}
+                    <Box gap="200">
+                      <Button
+                        size="300"
+                        variant="Secondary"
+                        fill="None"
+                        onClick={() => setPollAnswers((current) => [...current, ''])}
+                      >
+                        <Text size="B300">{t('modernization.poll.add_option', 'Add option')}</Text>
+                      </Button>
+                      {pollAnswers.length > 2 && (
+                        <Button
+                          size="300"
+                          variant="Secondary"
+                          fill="None"
+                          onClick={() => setPollAnswers((current) => current.slice(0, -1))}
+                        >
+                          <Text size="B300">
+                            {t('modernization.poll.remove_option', 'Remove option')}
+                          </Text>
+                        </Button>
+                      )}
+                    </Box>
+                    {pollError && (
+                      <Text size="T300" priority="300">
+                        {pollError}
+                      </Text>
+                    )}
+                    <Box justifyContent="End" gap="200">
+                      <Button
+                        size="300"
+                        variant="Secondary"
+                        fill="None"
+                        onClick={() => setPollAnchor(undefined)}
+                      >
+                        <Text size="B300">{t('modernization.poll.cancel', 'Cancel')}</Text>
+                      </Button>
+                      <Button size="300" variant="Primary" onClick={handleSendPoll}>
+                        <Text size="B300">{t('modernization.poll.send', 'Send poll')}</Text>
+                      </Button>
+                    </Box>
+                  </Box>
+                }
+              >
+                <IconButton
+                  ref={pollBtnRef}
+                  variant="SurfaceVariant"
+                  size="300"
+                  radii="300"
+                  aria-label={t('modernization.poll.create_aria_label', 'Create poll')}
+                  aria-pressed={!!pollAnchor}
+                  onClick={() =>
+                    setPollAnchor(
+                      pollAnchor ? undefined : pollBtnRef.current?.getBoundingClientRect()
+                    )
+                  }
+                >
+                  <Icon src={Icons.Message} />
+                </IconButton>
+              </PopOut>
+              <IconButton
+                onClick={submit}
+                disabled={sendingMessage}
+                variant="SurfaceVariant"
+                size="300"
+                radii="300"
+                aria-label={t('composer.send_aria_label', 'Send message')}
+              >
+                <Icon src={Icons.Send} />
+              </IconButton>
+            </>
+          }
+          onChange={handleEditorChange}
+          toolbarVisible={toolbar}
+          toolbar={<Toolbar />}
+        />
+      </div>
+    );
+  }
+);

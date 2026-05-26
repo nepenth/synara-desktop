@@ -1,0 +1,64 @@
+{
+  "valid": {
+    "home": "/",
+    "homeList": "/home/",
+    "homeRoomEvent": "/home/!room%3Aexample.org/%24event/",
+    "directList": "/direct/",
+    "directRoom": "/direct/!room%3Aexample.org/",
+    "space": "/%23space%3Aexample.org/",
+    "spaceLobby": "/%23space%3Aexample.org/lobby/",
+    "spaceRoomEvent": "/%23space%3Aexample.org/!room%3Aexample.org/%24event/",
+    "inbox": "/inbox/",
+    "notifications": "/inbox/notifications/",
+    "invites": "/inbox/invites/",
+    "later": "/inbox/later/",
+    "create": "/create",
+    "explore": "/explore/",
+    "exploreServer": "/explore/matrix.org/",
+    "settings": "/settings/"
+  },
+  "invalid": {
+    "empty": "",
+    "externalUrl": "https://example.org",
+    "protocolRelative": "//example.org/path",
+    "unsupportedAuthRoute": "/login/",
+    "unsupportedInboxSection": "/inbox/unknown/",
+    "emptySegment": "/home/!room//",
+    "tooDeep": "/unknown/a/b/c/"
+  },
+  "semanticInvalid": {
+    "badPercentEncoding": "/home/%E0%A4%A/"
+  },
+  "destinations": {
+    "later": {
+      "route": "/inbox/later/",
+      "destination": {
+        "kind": "inbox",
+        "section": "later"
+      }
+    },
+    "homeRoomEvent": {
+      "route": "/home/!room%3Aexample.org/%24event/",
+      "destination": {
+        "kind": "room",
+        "roomIdOrAlias": "!room:example.org",
+        "eventId": "$event"
+      }
+    },
+    "spaceRoomEvent": {
+      "route": "/%23space%3Aexample.org/!room%3Aexample.org/%24event/",
+      "destination": {
+        "kind": "room",
+        "parentSpaceIdOrAlias": "#space:example.org",
+        "roomIdOrAlias": "!room:example.org",
+        "eventId": "$event"
+      }
+    },
+    "settings": {
+      "route": "/settings/",
+      "destination": {
+        "kind": "settings"
+      }
+    }
+  }
+}

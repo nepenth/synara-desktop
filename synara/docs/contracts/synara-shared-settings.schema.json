@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://synara.local/contracts/synara-shared-settings.schema.json",
+  "$comment": "Canonical platform-neutral settings payload stored under local key settings.",
+  "title": "SynaraSharedSettings",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "useSystemTheme",
+    "monochromeMode",
+    "isMarkdown",
+    "editorToolbar",
+    "twitterEmoji",
+    "pageZoom",
+    "hideActivity",
+    "isPeopleDrawer",
+    "memberSortFilterIndex",
+    "enterForNewline",
+    "messageLayout",
+    "messageSpacing",
+    "hideMembershipEvents",
+    "hideNickAvatarEvents",
+    "mediaAutoLoad",
+    "gifSearchEnabled",
+    "gifOnboardingDismissed",
+    "timelineVirtualizationEnabled",
+    "showHiddenEvents",
+    "legacyUsernameColor",
+    "showNotifications",
+    "isNotificationSounds",
+    "hour24Clock",
+    "dateFormatString",
+    "developerTools"
+  ],
+  "properties": {
+    "themeId": { "type": "string" },
+    "useSystemTheme": { "type": "boolean" },
+    "lightThemeId": { "type": "string" },
+    "darkThemeId": { "type": "string" },
+    "monochromeMode": { "type": "boolean" },
+    "customAccentColor": {
+      "type": "string",
+      "pattern": "^#[0-9a-fA-F]{6}$"
+    },
+    "isMarkdown": { "type": "boolean" },
+    "editorToolbar": { "type": "boolean" },
+    "twitterEmoji": { "type": "boolean" },
+    "pageZoom": {
+      "type": "number",
+      "minimum": 1
+    },
+    "hideActivity": { "type": "boolean" },
+    "isPeopleDrawer": { "type": "boolean" },
+    "memberSortFilterIndex": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "enterForNewline": { "type": "boolean" },
+    "messageLayout": {
+      "type": "integer",
+      "enum": [0, 1, 2]
+    },
+    "messageSpacing": {
+      "type": "string",
+      "enum": ["0", "100", "200", "300", "400", "500"]
+    },
+    "hideMembershipEvents": { "type": "boolean" },
+    "hideNickAvatarEvents": { "type": "boolean" },
+    "mediaAutoLoad": { "type": "boolean" },
+    "gifSearchEnabled": { "type": "boolean" },
+    "gifOnboardingDismissed": { "type": "boolean" },
+    "timelineVirtualizationEnabled": { "type": "boolean" },
+    "showHiddenEvents": { "type": "boolean" },
+    "legacyUsernameColor": { "type": "boolean" },
+    "showNotifications": { "type": "boolean" },
+    "isNotificationSounds": { "type": "boolean" },
+    "hour24Clock": { "type": "boolean" },
+    "dateFormatString": { "type": "string" },
+    "developerTools": { "type": "boolean" }
+  }
+}

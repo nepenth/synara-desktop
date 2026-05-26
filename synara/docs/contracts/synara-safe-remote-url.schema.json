@@ -1,0 +1,10 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://synara.local/contracts/synara-safe-remote-url.schema.json",
+  "$comment": "Canonical safe remote URL string. Runtime validation in src/app/utils/remoteContent.ts remains authoritative for private network edge cases.",
+  "title": "SynaraSafeRemoteUrl",
+  "type": "string",
+  "minLength": 1,
+  "maxLength": 2048,
+  "pattern": "^https://(?![^/?#]*@)(?!localhost(?:[/:?#]|$))(?![^/:?#]+\\.(?:localhost|local|localdomain|internal|lan|home\\.arpa)(?:[/:?#]|$))(?!0\\.)(?!10\\.)(?!127\\.)(?!169\\.254\\.)(?!192\\.168\\.)(?!100\\.(?:6[4-9]|[7-9]\\d|1[01]\\d|12[0-7])\\.)(?!172\\.(?:1[6-9]|2\\d|3[0-1])\\.)(?!\\[(?:::1|::|f[cd]|fe80|::ffff:)).+"
+}

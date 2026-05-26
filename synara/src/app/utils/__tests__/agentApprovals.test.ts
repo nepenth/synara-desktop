@@ -1,0 +1,119 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { detectAgentApprovalPrompt } from '../agentApprovals';
+
+const exampleApprovalBody = `⚠️ Dangerous command requires approval
+
+Code
+
+Copy
+
+set -euo pipefail
+WR=/home/nepenthe/.hermes/profiles/spectre/workspace/resources/vaultwarden.sh
+printf 'status:\\n'
+
+Reason: Security scan - [HIGH] Pipe to interpreter: $WR | python3
+
+Reply /approve to execute, /approve session to approve this pattern for the session, /approve always to approve permanently, or /deny to cancel.
+
+You can also click the reaction to approve:
+✅ = /approve
+♾️ = /approve always
+❌ = /deny`;
+
+test('detectAgentApprovalPrompt recognizes Hermes dangerous command prompts', () => {
+  const prompt = detectAgentApprovalPrompt({ body: exampleApprovalBody });
+
+  assert.equal(prompt?.title, 'Approval Required: Dangerous Command');
+  assert.match(prompt?.body ?? '', /Security scan/);
+  assert.equal(prompt?.commandPreview, 'set -euo pipefail');
+});
+
+test('detectAgentApprovalPrompt recognizes compact approval command bodies', () => {
+  const prompt = detectAgentApprovalPrompt({
+    body: `⚠️ Dangerous command requires approval
+
+Code
+
+Copy
+scp /tmp/gatekeeper-autoresearch-main.bundle asb-research@10.0.20.10:/tmp/gatekeeper-autoresearch-main.bundle
+Reason: Security scan — [MEDIUM] URL uses raw IP address: URL points to IP address 10.0.20.10 instead of a domain name
+
+Reply /approve to execute, /approve session to approve this pattern for the session, /approve always to approve permanently, or /deny to cancel.
+
+You can also click the reaction to approve:
+✅ = /approve
+♾️ = /approve always
+❌ = /deny`,
+  });
+
+  assert.match(prompt?.body ?? '', /URL uses raw IP address/);
+  assert.equal(
+    prompt?.commandPreview,
+    'scp /tmp/gatekeeper-autoresearch-main.bundle asb-research@10.0.20.10:/tmp/gatekeeper-autoresearch-main.bundle'
+  );
+});
+
+test('detectAgentApprovalPrompt recognizes markdown-bold approval headings', () => {
+  const prompt = detectAgentApprovalPrompt({
+    body: `⚠️ **Dangerous command requires approval**
+\`\`\`
+set -euo pipefail
+scp /tmp/add-spectre-prometheus.py proxmox:/tmp/add-spectre-prometheus.py
+\`\`\`
+Reason: sudo with privilege flag (stdin/askpass/shell/list)`,
+  });
+
+  assert.match(prompt?.body ?? '', /sudo with privilege flag/);
+  assert.equal(prompt?.commandPreview, 'set -euo pipefail');
+});
+
+test('detectAgentApprovalPrompt recognizes the stable approval title only', () => {
+  const prompt = detectAgentApprovalPrompt({
+    body: 'Approval Required: Dangerous Command',
+  });
+
+  assert.equal(prompt?.title, 'Approval Required: Dangerous Command');
+  assert.equal(prompt?.body, 'A Hermes Agent command is waiting for approval.');
+});
+
+test('detectAgentApprovalPrompt falls back to formatted_body title text', () => {
+  const prompt = detectAgentApprovalPrompt({
+    formatted_body:
+      '<strong>Approval Required: Dangerous Command</strong><p>Code</p><p>Copy</p><pre>npm audit</pre>',
+  });
+
+  assert.equal(prompt?.commandPreview, 'npm audit');
+});
+
+test('detectAgentApprovalPrompt supports fenced command blocks', () => {
+  const prompt = detectAgentApprovalPrompt({
+    body: `Approval Required: Dangerous Command
+
+\`\`\`bash
+npm install
+\`\`\``,
+  });
+
+  assert.equal(prompt?.commandPreview, 'npm install');
+});
+
+test('detectAgentApprovalPrompt ignores ordinary messages mentioning commands', () => {
+  assert.equal(
+    detectAgentApprovalPrompt({
+      body: 'I think we should approve this command later, but there is no approval title.',
+    }),
+    undefined
+  );
+});
+
+test('detectAgentApprovalPrompt ignores huge bodies', () => {
+  assert.equal(
+    detectAgentApprovalPrompt({
+      body: `Dangerous command requires approval ${'x'.repeat(
+        100_001
+      )} Reply /approve /approve always /deny`,
+    }),
+    undefined
+  );
+});

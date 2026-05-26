@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+    <title>Synara</title>
+    <meta name="name" content="Synara" />
+    <meta name="author" content="Synara contributors" />
+    <meta
+      name="description"
+      content="A modern Matrix client for fast, secure conversations and agent workflows."
+    />
+    <meta
+      name="keywords"
+      content="synara, matrix, matrix client, matrix.org, secure chat, agent workflows"
+    />
+
+    <meta property="og:title" content="Synara" />
+    <meta
+      property="og:description"
+      content="A modern Matrix client for fast, secure conversations and agent workflows."
+    />
+    <meta name="theme-color" content="#000000" />
+
+    <link id="favicon" rel="shortcut icon" href="./public/favicon.ico" />
+    <meta name="application-name" content="Synara" />
+  </head>
+  <body id="appBody">
+    <script>
+      window.global ||= window;
+    </script>
+    <div id="root"></div>
+    <div id="portalContainer"></div>
+    <script type="module" src="./src/index.tsx"></script>
+  </body>
+</html>

@@ -1,0 +1,452 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {
+  getDesktopIntegrationStatus,
+  getDesktopNotificationCount,
+  getDesktopPerformanceCapabilities,
+  openDesktopExternalUrl,
+  saveDesktopFile,
+  sendDesktopAgentAction,
+  setDesktopBadgeCount,
+  setDesktopShortcuts,
+  setDesktopTrayState,
+  showDesktopNotification,
+} from '../desktop';
+
+type DesktopActionCallArgs = {
+  action?: {
+    id: string;
+    title: string;
+    url?: string;
+  };
+};
+
+test('desktop badge count combines highlights and active Later items', () => {
+  assert.equal(
+    getDesktopNotificationCount(
+      [{ total: 4, highlight: 2 }, { total: 3 }, { total: 0, highlight: 0 }],
+      5
+    ),
+    10
+  );
+});
+
+test('desktop badge count clamps negative values', () => {
+  assert.equal(getDesktopNotificationCount([{ total: -1, highlight: -2 }], -5), 0);
+});
+
+test('setDesktopBadgeCount invokes the desktop bridge with a clamped count', async () => {
+  const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
+  const originalWindow = globalThis.window;
+  (globalThis as any).window = {
+    __SYNARA_DESKTOP__: {
+      platform: 'tauri',
+      invoke: async (command: string, args?: Record<string, unknown>) => {
+        calls.push({ command, args });
+        return true;
+      },
+    },
+  };
+
+  try {
+    await setDesktopBadgeCount(3.8);
+    await setDesktopBadgeCount(-2);
+  } finally {
+    (globalThis as any).window = originalWindow;
+  }
+
+  assert.deepEqual(calls, [
+    { command: 'desktop_set_badge_count', args: { count: 3 } },
+    { command: 'desktop_set_badge_count', args: { count: 0 } },
+  ]);
+});
+
+test('desktop actions use explicit IPC command names', async () => {
+  const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
+  const originalWindow = globalThis.window;
+  (globalThis as any).window = {
+    __SYNARA_DESKTOP__: {
+      platform: 'tauri',
+      invoke: async (command: string, args?: Record<string, unknown>) => {
+        calls.push({ command, args });
+        return true;
+      },
+    },
+  };
+
+  try {
+    assert.equal(
+      await sendDesktopAgentAction({
+        id: 'export',
+        title: 'Export thread',
+        kind: 'export',
+        markdown: '# Thread',
+      }),
+      true
+    );
+    assert.deepEqual(
+      await setDesktopShortcuts({
+        show: 'CmdOrCtrl+Shift+C',
+        later: 'CmdOrCtrl+Shift+L',
+        notifications: 'CmdOrCtrl+Shift+N',
+      }),
+      {
+        success: true,
+        state: 'active',
+        message: 'Desktop shortcuts are active.',
+      }
+    );
+  } finally {
+    (globalThis as any).window = originalWindow;
+  }
+
+  assert.deepEqual(
+    calls.map((call) => call.command),
+    ['desktop_agent_action', 'desktop_set_shortcuts']
+  );
+});
+
+test('desktop shortcuts normalize structured bridge results', async () => {
+  const originalWindow = globalThis.window;
+  (globalThis as any).window = {
+    __SYNARA_DESKTOP__: {
+      platform: 'tauri',
+      supportsGlobalShortcuts: true,
+      invoke: async () => ({
+        success: false,
+        state: 'permission-needed',
+        message: 'Grant shortcut permissions in system settings.',
+        fallbackCommand: 'open-settings',
+      }),
+    },
+  };
+
+  try {
+    assert.deepEqual(
+      await setDesktopShortcuts({
+        show: 'CmdOrCtrl+Shift+C',
+        later: 'CmdOrCtrl+Shift+L',
+        notifications: 'CmdOrCtrl+Shift+N',
+      }),
+      {
+        success: false,
+        state: 'permission-needed',
+        message: 'Grant shortcut permissions in system settings.',
+        fallbackCommand: 'open-settings',
+      }
+    );
+  } finally {
+    (globalThis as any).window = originalWindow;
+  }
+});
+
+test('desktop tray state is capability gated and clamps counts', async () => {
+  const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
+  const originalWindow = globalThis.window;
+
+  try {
+    (globalThis as any).window = {};
+    assert.equal(
+      await setDesktopTrayState({
+        unreadCount: 1,
+        highlightCount: 1,
+        laterCount: 1,
+        notificationInboxCount: 1,
+        doNotDisturb: false,
+      }),
+      false
+    );
+
+    (globalThis as any).window = {
+      __SYNARA_DESKTOP__: {
+        platform: 'tauri',
+        supportsTrayState: true,
+        invoke: async (command: string, args?: Record<string, unknown>) => {
+          calls.push({ command, args });
+          return null;
+        },
+      },
+    };
+
+    assert.equal(
+      await setDesktopTrayState({
+        unreadCount: 3.9,
+        highlightCount: -1,
+        laterCount: Number.NaN,
+        notificationInboxCount: 2,
+        doNotDisturb: true,
+      }),
+      true
+    );
+  } finally {
+    (globalThis as any).window = originalWindow;
+  }
+
+  assert.deepEqual(calls, [
+    {
+      command: 'desktop_update_tray_state',
+      args: {
+        state: {
+          unreadCount: 3,
+          highlightCount: 0,
+          laterCount: 0,
+          notificationInboxCount: 2,
+          doNotDisturb: true,
+        },
+      },
+    },
+  ]);
+});
+
+test('desktop integration status falls back when the bridge does not support diagnostics', async () => {
+  const originalWindow = globalThis.window;
+  (globalThis as any).window = {
+    __SYNARA_DESKTOP__: {
+      platform: 'tauri',
+      desktopEnvironment: 'gnome',
+      sessionType: 'wayland',
+      supportsIntegrationStatus: false,
+    },
+  };
+
+  try {
+    assert.deepEqual(await getDesktopIntegrationStatus(), {
+      platform: 'tauri',
+      desktopEnvironment: 'gnome',
+      sessionType: 'wayland',
+      distroId: 'unknown',
+      distroName: 'unknown',
+      distroVersion: 'unknown',
+      buildIdentity: 'unknown',
+      tray: {
+        name: 'Tray',
+        ready: false,
+        supported: false,
+        message: 'Tray support is unavailable in this client.',
+      },
+      notifications: {
+        name: 'Notifications',
+        ready: false,
+        supported: false,
+        message: 'Notification support is unavailable in this client.',
+      },
+      globalShortcuts: {
+        name: 'Global Shortcuts',
+        ready: false,
+        supported: false,
+        message: 'Global shortcut support is unavailable in this client.',
+      },
+      filePortal: {
+        name: 'File Portal',
+        ready: false,
+        supported: false,
+        message: 'File portal support is unavailable in this client.',
+      },
+      mediaPortal: {
+        name: 'Media Portal',
+        ready: false,
+        supported: false,
+        message: 'Media portal support is unavailable in this client.',
+      },
+    });
+  } finally {
+    (globalThis as any).window = originalWindow;
+  }
+});
+
+test('desktop agent actions sanitize unsafe URLs and omit invalid payloads', async () => {
+  const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
+  const originalWindow = globalThis.window;
+  (globalThis as any).window = {
+    __SYNARA_DESKTOP__: {
+      platform: 'tauri',
+      invoke: async (command: string, args?: Record<string, unknown>) => {
+        calls.push({ command, args });
+        return true;
+      },
+    },
+  };
+
+  try {
+    assert.equal(
+      await sendDesktopAgentAction({
+        id: 'unsafe-url',
+        title: 'Open private',
+        url: 'https://127.0.0.1',
+      }),
+      false
+    );
+
+    assert.equal(
+      await sendDesktopAgentAction({
+        id: 'unsupported-kind',
+        title: 'Execute',
+        kind: 'shell',
+        prompt: 'rm -rf /',
+      }),
+      false
+    );
+
+    const command = await sendDesktopAgentAction({
+      id: '',
+      title: 'Bad action',
+      url: 'https://example.org',
+    });
+    assert.equal(command, false);
+
+    assert.equal(
+      await sendDesktopAgentAction({
+        id: 'valid',
+        title: 'Open safe',
+        url: 'https://example.org',
+      }),
+      true
+    );
+  } finally {
+    (globalThis as any).window = originalWindow;
+  }
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0]?.command, 'desktop_agent_action');
+  const safeAction = calls[0]?.args as DesktopActionCallArgs | undefined;
+  assert.equal(safeAction?.action?.id, 'valid');
+  assert.equal(safeAction?.action?.title, 'Open safe');
+  assert.equal(safeAction?.action?.url, 'https://example.org');
+});
+
+test('desktop external link opener invokes the desktop bridge only on desktop', async () => {
+  const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
+  const originalWindow = globalThis.window;
+
+  try {
+    (globalThis as any).window = {};
+    assert.equal(await openDesktopExternalUrl('https://example.org'), false);
+
+    (globalThis as any).window = {
+      __SYNARA_DESKTOP__: {
+        platform: 'tauri',
+        invoke: async (command: string, args?: Record<string, unknown>) => {
+          calls.push({ command, args });
+          return true;
+        },
+      },
+    };
+
+    assert.equal(await openDesktopExternalUrl('https://example.org/path'), true);
+  } finally {
+    (globalThis as any).window = originalWindow;
+  }
+
+  assert.deepEqual(calls, [
+    {
+      command: 'desktop_open_external_url',
+      args: { url: 'https://example.org/path' },
+    },
+  ]);
+});
+
+test('desktop notifications trim text and reject external routes', async () => {
+  const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
+  const originalWindow = globalThis.window;
+  (globalThis as any).window = {
+    __SYNARA_DESKTOP__: {
+      platform: 'tauri',
+      invoke: async (command: string, args?: Record<string, unknown>) => {
+        calls.push({ command, args });
+        return true;
+      },
+    },
+  };
+
+  try {
+    assert.equal(
+      await showDesktopNotification({
+        title: '  Reminder  ',
+        body: '  Review Later item.  ',
+        route: 'https://example.org/private',
+      }),
+      true
+    );
+    assert.equal(
+      await showDesktopNotification({
+        title: 'Room',
+        route: '/room/!room:example.org',
+      }),
+      true
+    );
+  } finally {
+    (globalThis as any).window = originalWindow;
+  }
+
+  assert.deepEqual(calls, [
+    {
+      command: 'desktop_notify',
+      args: {
+        notification: {
+          title: 'Reminder',
+          body: 'Review Later item.',
+          route: undefined,
+        },
+      },
+    },
+    {
+      command: 'desktop_notify',
+      args: {
+        notification: {
+          title: 'Room',
+          body: undefined,
+          route: '/room/!room:example.org',
+        },
+      },
+    },
+  ]);
+});
+
+test('desktop file save sends bytes and filename through the desktop bridge', async () => {
+  const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
+  const originalWindow = globalThis.window;
+
+  (globalThis as any).window = {
+    __SYNARA_DESKTOP__: {
+      platform: 'tauri',
+      invoke: async (command: string, args?: Record<string, unknown>) => {
+        calls.push({ command, args });
+        return '/Users/example/Downloads/report.zip';
+      },
+    },
+  };
+
+  try {
+    assert.equal(
+      await saveDesktopFile(new Blob([new Uint8Array([80, 75])]), 'report.zip'),
+      '/Users/example/Downloads/report.zip'
+    );
+  } finally {
+    (globalThis as any).window = originalWindow;
+  }
+
+  assert.deepEqual(calls, [
+    {
+      command: 'desktop_save_file',
+      args: {
+        payload: {
+          filename: 'report.zip',
+          bytes: [80, 75],
+        },
+      },
+    },
+  ]);
+});
+
+test('desktop performance capabilities fall back on the web', async () => {
+  const originalWindow = globalThis.window;
+  (globalThis as any).window = {};
+
+  try {
+    assert.deepEqual(await getDesktopPerformanceCapabilities(), {
+      platform: 'web',
+    });
+  } finally {
+    (globalThis as any).window = originalWindow;
+  }
+});

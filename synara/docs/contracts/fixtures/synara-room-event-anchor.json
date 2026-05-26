@@ -1,0 +1,41 @@
+{
+  "valid": {
+    "room": {
+      "roomIdOrAlias": "!room:example.org"
+    },
+    "roomAlias": {
+      "roomIdOrAlias": "#synara:example.org"
+    },
+    "roomEvent": {
+      "roomIdOrAlias": "!room:example.org",
+      "eventId": "$event"
+    },
+    "threadedEvent": {
+      "roomIdOrAlias": "!room:example.org",
+      "eventId": "$reply",
+      "threadRootEventId": "$root"
+    },
+    "spaceScopedEvent": {
+      "parentSpaceIdOrAlias": "#space:example.org",
+      "roomIdOrAlias": "!room:example.org",
+      "eventId": "$event"
+    }
+  },
+  "invalid": {
+    "missingRoom": {
+      "eventId": "$event"
+    },
+    "plaintextPreview": {
+      "roomIdOrAlias": "!room:example.org",
+      "eventId": "$event",
+      "body": "do not store this"
+    },
+    "badRoomPrefix": {
+      "roomIdOrAlias": "room:example.org"
+    },
+    "badEventPrefix": {
+      "roomIdOrAlias": "!room:example.org",
+      "eventId": "event"
+    }
+  }
+}
