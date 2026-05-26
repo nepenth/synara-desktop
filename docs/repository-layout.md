@@ -15,6 +15,8 @@ This repository owns both:
 
 `synara/` is now a normal tracked directory, not a Git submodule. Fresh clones
 of `synara-desktop` do not need `--recursive` or any `git submodule` commands.
+The former standalone GitHub repository `nepenth/synara` was archived on
+2026-05-26 after `synara-desktop` package CI passed without it.
 
 Do not use a sibling checkout at:
 
@@ -41,3 +43,5 @@ Repository layout acceptance criteria:
 - `synara/` does not contain nested Git metadata.
 - `synara/` does not contain nested GitHub workflow automation.
 - No active sibling checkout exists at `/Users/nepenthe/git_repos/synara_project/synara`.
+- `nepenth/synara` is not required for fresh clones, local builds, or package
+  smoke workflows.
