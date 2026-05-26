@@ -1,11 +1,10 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const runtimePath = join(root, "synara");
-const expectedRuntimeRemote = "https://github.com/nepenth/synara.git";
 
 function git(args, options = {}) {
   return execFileSync("git", args, {
@@ -21,52 +20,35 @@ function fail(message) {
 }
 
 const gitmodulesPath = join(root, ".gitmodules");
-if (!existsSync(gitmodulesPath)) {
-  fail(".gitmodules is missing; synara must remain an explicit submodule until the repo is intentionally absorbed.");
-} else {
-  const gitmodules = readFileSync(gitmodulesPath, "utf8");
-  if (!/path\s*=\s*synara/.test(gitmodules)) {
-    fail(".gitmodules does not declare the synara submodule path.");
-  }
-  if (!gitmodules.includes(`url = ${expectedRuntimeRemote}`)) {
-    fail(`.gitmodules must point synara at ${expectedRuntimeRemote}.`);
-  }
+if (existsSync(gitmodulesPath)) {
+  fail(".gitmodules exists; synara must be tracked directly inside synara-desktop.");
 }
 
-let gitlinkCommit = "";
 try {
-  const lsTree = git(["ls-tree", "HEAD", "synara"]);
-  const match = lsTree.match(/^160000 commit ([0-9a-f]{40})\tsynara$/);
-  if (!match) {
-    fail("parent repository does not record synara as a gitlink submodule.");
-  } else {
-    gitlinkCommit = match[1];
+  const indexEntries = git(["ls-files", "--stage", "synara"]);
+  if (!indexEntries) {
+    fail("synara is not tracked by the parent repository.");
+  }
+  if (indexEntries.split("\n").some((line) => line.startsWith("160000 "))) {
+    fail("synara is still tracked as a gitlink submodule; absorb it as normal source files.");
+  }
+  if (!indexEntries.includes("\tsynara/package.json")) {
+    fail("synara/package.json is not tracked by the parent repository.");
   }
 } catch (error) {
-  fail(`unable to inspect parent synara gitlink: ${error.message}`);
+  fail(`unable to inspect tracked synara files: ${error.message}`);
 }
 
-if (!existsSync(join(runtimePath, ".git"))) {
-  fail("synara submodule is not initialized; run `git submodule update --init --recursive`.");
-} else {
-  try {
-    const runtimeHead = git(["rev-parse", "HEAD"], { cwd: runtimePath });
-    if (gitlinkCommit && runtimeHead !== gitlinkCommit) {
-      fail(`synara submodule HEAD ${runtimeHead} does not match parent pointer ${gitlinkCommit}.`);
-    }
+if (!existsSync(runtimePath)) {
+  fail("synara runtime directory is missing.");
+}
 
-    const runtimeRemote = git(["remote", "get-url", "origin"], { cwd: runtimePath });
-    if (runtimeRemote !== expectedRuntimeRemote) {
-      fail(`synara origin is ${runtimeRemote}; expected ${expectedRuntimeRemote}.`);
-    }
+if (existsSync(join(runtimePath, ".git"))) {
+  fail("synara contains nested Git metadata; remove synara/.git so it is normal tracked source.");
+}
 
-    const dirty = git(["status", "--porcelain"], { cwd: runtimePath });
-    if (dirty) {
-      fail("synara submodule has uncommitted changes; commit/push runtime work before updating the parent pointer.");
-    }
-  } catch (error) {
-    fail(`unable to validate synara submodule checkout: ${error.message}`);
-  }
+if (existsSync(join(runtimePath, ".github"))) {
+  fail("synara contains nested GitHub automation; keep CI/CD only at the synara-desktop repository root.");
 }
 
 const projectRoot = dirname(root);
@@ -79,4 +61,4 @@ if (process.exitCode) {
   process.exit(process.exitCode);
 }
 
-console.log("Repository layout is canonical: synara-desktop with initialized synara submodule.");
+console.log("Repository layout is canonical: synara runtime is tracked directly inside synara-desktop.");

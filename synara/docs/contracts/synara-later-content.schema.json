@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://synara.local/contracts/synara-later-content.schema.json",
+  "$comment": "Canonical writer schema for in.synara.later v1. Readers are allowed to normalize older or non-canonical payloads according to docs/synara-later-contract.md.",
+  "title": "SynaraLaterContent",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "items"],
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "items": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/SynaraLaterItem"
+      }
+    }
+  },
+  "$defs": {
+    "SynaraLaterItem": {
+      "title": "SynaraLaterItem",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "roomId", "eventId", "createdAt"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[^\\n]+\\n[^\\n]+$"
+        },
+        "kind": {
+          "type": "string",
+          "enum": ["saved", "reminder"]
+        },
+        "roomId": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[^\\n]+$"
+        },
+        "eventId": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[^\\n]+$"
+        },
+        "createdAt": {
+          "type": "number"
+        },
+        "dueTs": {
+          "type": "number"
+        },
+        "remindedAt": {
+          "type": "number"
+        },
+        "completedAt": {
+          "type": "number"
+        }
+      }
+    }
+  }
+}

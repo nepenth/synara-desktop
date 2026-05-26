@@ -8,35 +8,13 @@ The canonical local workspace for desktop client work is:
 /Users/example/git_repos/synara_project/synara-desktop
 ```
 
-This repository owns the macOS/Linux Tauri shell. Its app runtime is the
-`synara` submodule:
+This repository owns both:
 
-```text
-/Users/example/git_repos/synara_project/synara-desktop/synara
-```
+- the macOS/Linux Tauri shell in `src-tauri/`
+- the Synara app runtime in `synara/`
 
-Use that nested submodule for Synara runtime/client changes. The submodule
-tracks `https://github.com/nepenth/synara.git` on `main`, and the parent desktop
-repo records the exact runtime commit through the submodule pointer.
-
-This is still a real submodule relationship. Do not delete
-`https://github.com/nepenth/synara.git` while `.gitmodules` points at it. A
-fresh clone of `synara-desktop` needs that remote to populate
-`synara-desktop/synara`.
-
-The submodule shape is acceptable for now because it keeps the app runtime and
-desktop shell as independently reviewable projects while the iOS architecture
-is still being settled. If this stops helping, the next deliberate step is to
-absorb `synara/` into `synara-desktop` as a normal tracked directory and remove
-the submodule metadata in the same commit.
-
-Run this before committing repository-structure or submodule updates:
-
-```sh
-npm run check:repo-layout
-```
-
-CI runs the same check.
+`synara/` is now a normal tracked directory, not a Git submodule. Fresh clones
+of `synara-desktop` do not need `--recursive` or any `git submodule` commands.
 
 Do not use a sibling checkout at:
 
@@ -45,13 +23,21 @@ Do not use a sibling checkout at:
 ```
 
 That path is not the canonical workspace for this desktop project. If a
-standalone checkout exists for archival or comparison, sync or archive it before
-starting new work so fixes are not split across two local copies.
+standalone checkout exists for archival or comparison, archive or delete it
+before starting new work so fixes are not split across two local copies.
 
-Safe push order for desktop work:
+Run this before committing repository-structure updates:
 
-1. Push `synara-desktop/synara`.
-2. Push `synara-desktop`.
+```sh
+npm run check:repo-layout
+```
 
-This ensures the parent desktop repo never points at an unpublished submodule
-commit.
+CI runs the same check.
+
+Repository layout acceptance criteria:
+
+- `.gitmodules` does not exist.
+- `synara/` is tracked directly by the parent repository.
+- `synara/` does not contain nested Git metadata.
+- `synara/` does not contain nested GitHub workflow automation.
+- No active sibling checkout exists at `/Users/example/git_repos/synara_project/synara`.

@@ -1,0 +1,332 @@
+import React, { FormEventHandler, useMemo, useState } from 'react';
+import { Room } from 'matrix-js-sdk';
+import {
+  Box,
+  Button,
+  Checkbox,
+  Chip,
+  config,
+  Header,
+  Icon,
+  IconButton,
+  Icons,
+  Line,
+  Scroll,
+  Text,
+  TextArea,
+  color,
+  toRem,
+} from 'folds';
+import { useMatrixClient } from '../../../hooks/useMatrixClient';
+import { useAccountData } from '../../../hooks/useAccountData';
+import {
+  AccountDataEvent,
+  SynaraRoomNoteItem,
+  SynaraRoomNotesContent,
+} from '../../../../types/matrix/accountData';
+import {
+  addRoomNoteItemAccountData,
+  completeRoomTodoItemAccountData,
+  createManualRoomNoteItem,
+  deleteRoomNoteItemAccountData,
+  getRoomNoteItems,
+  moveRoomTodoItemAccountData,
+} from '../../../utils/roomNotes';
+import { useRoomNavigate } from '../../../hooks/useRoomNavigate';
+import { getMemberDisplayName } from '../../../utils/room';
+import { getMxIdLocalPart } from '../../../utils/matrix';
+
+type RoomNotesPanelProps = {
+  room: Room;
+  requestClose: () => void;
+  embedded?: boolean;
+};
+
+const formatNoteTime = (ts: number): string =>
+  new Intl.DateTimeFormat(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(new Date(ts));
+
+type RoomNoteItemProps = {
+  room: Room;
+  item: SynaraRoomNoteItem;
+  canMoveUp: boolean;
+  canMoveDown: boolean;
+};
+
+function RoomNoteItem({ room, item, canMoveUp, canMoveDown }: RoomNoteItemProps) {
+  const mx = useMatrixClient();
+  const { navigateRoom } = useRoomNavigate();
+  const senderName =
+    item.sender && (getMemberDisplayName(room, item.sender) ?? getMxIdLocalPart(item.sender));
+
+  const handleDelete = () => deleteRoomNoteItemAccountData(mx, room.roomId, item.id);
+  const handleToggleTodo = () =>
+    completeRoomTodoItemAccountData(mx, room.roomId, item.id, !item.completedAt);
+  const handleMoveUp = () => moveRoomTodoItemAccountData(mx, room.roomId, item.id, 'up');
+  const handleMoveDown = () => moveRoomTodoItemAccountData(mx, room.roomId, item.id, 'down');
+  const handleOpenMessage = () => {
+    if (item.eventId) navigateRoom(room.roomId, item.eventId);
+  };
+
+  return (
+    <Box
+      direction="Column"
+      gap="200"
+      style={{
+        padding: config.space.S300,
+        borderRadius: config.radii.R400,
+        backgroundColor: color.SurfaceVariant.Container,
+      }}
+    >
+      <Box alignItems="Center" gap="200">
+        {item.kind === 'todo' && (
+          <Checkbox
+            checked={!!item.completedAt}
+            onClick={handleToggleTodo}
+            size="300"
+            variant="Primary"
+          />
+        )}
+        <Chip
+          size="400"
+          radii="Pill"
+          variant={item.kind === 'todo' && item.completedAt ? 'Success' : 'Surface'}
+        >
+          <Text size="L400">
+            {item.kind === 'todo' ? 'ToDo' : item.kind === 'message' ? 'Message' : 'Note'}
+          </Text>
+        </Chip>
+        <Box grow="Yes" justifyContent="End">
+          <Text size="T200" priority="300">
+            {formatNoteTime(item.updatedAt)}
+          </Text>
+        </Box>
+      </Box>
+      {item.body && (
+        <Text
+          size="T300"
+          style={{
+            whiteSpace: 'pre-wrap',
+            textDecoration: item.completedAt ? 'line-through' : undefined,
+            opacity: item.completedAt ? config.opacity.P300 : undefined,
+          }}
+        >
+          {item.body}
+        </Text>
+      )}
+      {item.kind === 'message' && (
+        <Box alignItems="Center" gap="200">
+          <Text size="T200" priority="300" truncate>
+            {senderName ? `${senderName} · ` : ''}
+            {item.eventTs ? formatNoteTime(item.eventTs) : item.eventId}
+          </Text>
+        </Box>
+      )}
+      <Box gap="200" justifyContent="SpaceBetween" alignItems="Center">
+        <Box gap="100">
+          {item.kind === 'todo' && (
+            <>
+              <IconButton
+                size="300"
+                radii="300"
+                disabled={!canMoveUp}
+                onClick={handleMoveUp}
+                aria-label="Move ToDo up"
+              >
+                <Icon src={Icons.ChevronTop} size="200" />
+              </IconButton>
+              <IconButton
+                size="300"
+                radii="300"
+                disabled={!canMoveDown}
+                onClick={handleMoveDown}
+                aria-label="Move ToDo down"
+              >
+                <Icon src={Icons.ChevronBottom} size="200" />
+              </IconButton>
+            </>
+          )}
+        </Box>
+        <Box gap="200" justifyContent="End">
+          {item.eventId && (
+            <Button size="300" radii="300" onClick={handleOpenMessage}>
+              <Text size="B300">Open</Text>
+            </Button>
+          )}
+          <Button size="300" radii="300" variant="Critical" fill="None" onClick={handleDelete}>
+            <Text size="B300">Delete</Text>
+          </Button>
+        </Box>
+      </Box>
+    </Box>
+  );
+}
+
+const getTodoOrderState = (
+  item: SynaraRoomNoteItem,
+  roomItems: SynaraRoomNoteItem[]
+): { canMoveUp: boolean; canMoveDown: boolean } => {
+  if (item.kind !== 'todo') return { canMoveUp: false, canMoveDown: false };
+  const todoGroup = roomItems.filter(
+    (candidate) => candidate.kind === 'todo' && !!candidate.completedAt === !!item.completedAt
+  );
+  const index = todoGroup.findIndex((candidate) => candidate.id === item.id);
+  return {
+    canMoveUp: index > 0,
+    canMoveDown: index >= 0 && index < todoGroup.length - 1,
+  };
+};
+
+export function RoomNotesPanel({ room, requestClose, embedded }: RoomNotesPanelProps) {
+  const mx = useMatrixClient();
+  const [kind, setKind] = useState<'note' | 'todo'>('note');
+  const [body, setBody] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string>();
+  const notesEvent = useAccountData(AccountDataEvent.SynaraRoomNotes);
+  const notesContent = notesEvent?.getContent() as SynaraRoomNotesContent | undefined;
+  const roomItems = useMemo(
+    () => getRoomNoteItems(notesContent, room.roomId),
+    [notesContent, room.roomId]
+  );
+
+  const handleSubmit: FormEventHandler<HTMLFormElement> = (evt) => {
+    evt.preventDefault();
+    const item = createManualRoomNoteItem(room.roomId, kind, body);
+    if (!item || saving) return;
+    setSaving(true);
+    setError(undefined);
+    addRoomNoteItemAccountData(mx, item)
+      .then(() => setBody(''))
+      .catch(() => setError('Could not save this item.'))
+      .finally(() => setSaving(false));
+  };
+
+  return (
+    <Box
+      direction="Column"
+      style={{
+        boxSizing: 'border-box',
+        minWidth: 0,
+        overflow: 'hidden',
+        width: embedded ? '100%' : `min(${toRem(560)}, calc(100vw - ${config.space.S600}))`,
+        height: embedded ? '100%' : undefined,
+        maxHeight: embedded ? undefined : `min(${toRem(720)}, calc(100vh - ${config.space.S600}))`,
+        borderRadius: embedded ? 0 : config.radii.R500,
+        backgroundColor: color.Surface.Container,
+        boxShadow: embedded ? undefined : '0 18px 60px rgba(0, 0, 0, 0.4)',
+      }}
+    >
+      <Header size="600" style={{ padding: `0 ${config.space.S300}` }}>
+        <Box grow="Yes" direction="Column">
+          <Text size="H4">Personal Notes</Text>
+          <Text size="T200" priority="300" truncate>
+            {room.name}
+          </Text>
+        </Box>
+        <IconButton size="300" onClick={requestClose} radii="300">
+          <Icon src={Icons.Cross} />
+        </IconButton>
+      </Header>
+      <Line variant="Surface" size="300" />
+      <Box
+        as="form"
+        direction="Column"
+        gap="300"
+        onSubmit={handleSubmit}
+        style={{ minWidth: 0, padding: config.space.S300 }}
+      >
+        <Box gap="200">
+          <Chip
+            type="button"
+            radii="Pill"
+            variant={kind === 'note' ? 'Primary' : 'SurfaceVariant'}
+            onClick={() => setKind('note')}
+          >
+            <Text size="B300">Note</Text>
+          </Chip>
+          <Chip
+            type="button"
+            radii="Pill"
+            variant={kind === 'todo' ? 'Primary' : 'SurfaceVariant'}
+            onClick={() => setKind('todo')}
+          >
+            <Text size="B300">ToDo</Text>
+          </Chip>
+        </Box>
+        <TextArea
+          required
+          value={body}
+          onChange={(evt) => setBody(evt.currentTarget.value)}
+          size="500"
+          variant="SurfaceVariant"
+          radii="400"
+          placeholder={kind === 'todo' ? 'Add a ToDo item...' : 'Add a private note...'}
+          style={{
+            boxSizing: 'border-box',
+            minHeight: toRem(96),
+            resize: 'vertical',
+            width: '100%',
+          }}
+          disabled={saving}
+        />
+        <Box alignItems="Center" gap="200" style={{ minWidth: 0 }}>
+          <Box grow="Yes">
+            {error && (
+              <Text size="T200" style={{ color: color.Critical.Main }}>
+                {error}
+              </Text>
+            )}
+          </Box>
+          <Button
+            type="submit"
+            variant="Primary"
+            size="300"
+            radii="300"
+            disabled={saving || body.trim().length === 0}
+            before={<Icon size="100" src={Icons.Plus} />}
+          >
+            <Text size="B300">Add</Text>
+          </Button>
+        </Box>
+      </Box>
+      <Line variant="Surface" size="300" />
+      <Scroll style={{ flexGrow: 1, minHeight: 0 }}>
+        <Box direction="Column" gap="200" style={{ minWidth: 0, padding: config.space.S300 }}>
+          {roomItems.length > 0 ? (
+            roomItems.map((item) => {
+              const todoOrderState = getTodoOrderState(item, roomItems);
+              return (
+                <RoomNoteItem
+                  key={item.id}
+                  room={room}
+                  item={item}
+                  canMoveUp={todoOrderState.canMoveUp}
+                  canMoveDown={todoOrderState.canMoveDown}
+                />
+              );
+            })
+          ) : (
+            <Box
+              direction="Column"
+              alignItems="Center"
+              justifyContent="Center"
+              gap="200"
+              style={{ minHeight: toRem(180), padding: config.space.S300, textAlign: 'center' }}
+            >
+              <Icon size="600" src={Icons.Pencil} />
+              <Text size="H5">No personal notes yet</Text>
+              <Text size="T300" priority="300" style={{ maxWidth: toRem(280) }}>
+                Add notes, ToDo items, or pin useful messages from the message menu.
+              </Text>
+            </Box>
+          )}
+        </Box>
+      </Scroll>
+    </Box>
+  );
+}

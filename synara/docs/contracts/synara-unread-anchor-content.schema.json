@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://synara.local/contracts/synara-unread-anchor-content.schema.json",
+  "$comment": "Canonical writer schema for in.synara.unread_anchor v1. Anchors store opaque Matrix event IDs only; previews are resolved locally.",
+  "title": "SynaraUnreadAnchorContent",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "anchors"],
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "anchors": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/SynaraUnreadAnchor"
+      }
+    }
+  },
+  "$defs": {
+    "SynaraUnreadAnchor": {
+      "title": "SynaraUnreadAnchor",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["eventId", "ts"],
+      "properties": {
+        "eventId": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^\\$[^\\s]+$"
+        },
+        "ts": {
+          "type": "number"
+        }
+      }
+    }
+  }
+}

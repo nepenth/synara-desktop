@@ -1,0 +1,46 @@
+{
+  "valid": {
+    "empty": {},
+    "legacyShortcut": {
+      "shortcut": ["!space-a:example.org", "!space-b:example.org"]
+    },
+    "sidebarFolders": {
+      "sidebar": [
+        "!space-a:example.org",
+        {
+          "id": "folder:agents",
+          "name": "Agents",
+          "content": ["!agent-a:example.org", "!agent-b:example.org"]
+        }
+      ]
+    }
+  },
+  "invalid": {
+    "shortcutContainsAlias": {
+      "shortcut": ["#alias:example.org"]
+    },
+    "folderWithoutContent": {
+      "sidebar": [
+        {
+          "id": "folder:empty"
+        }
+      ]
+    },
+    "emptyFolder": {
+      "sidebar": [
+        {
+          "id": "folder:empty",
+          "content": []
+        }
+      ]
+    },
+    "duplicateFolderContent": {
+      "sidebar": [
+        {
+          "id": "folder:dup",
+          "content": ["!space-a:example.org", "!space-a:example.org"]
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,121 @@
+{
+  "valid": {
+    "summary": {
+      "title": "Build result",
+      "status": "failed",
+      "summary": "One test failed."
+    },
+    "fullCard": {
+      "title": "Agent summary",
+      "status": "ok",
+      "summary": "Plan complete.",
+      "actions": [
+        {
+          "id": "continue",
+          "title": "Continue",
+          "kind": "agent",
+          "prompt": "Continue from the latest checkpoint."
+        }
+      ],
+      "artifacts": [
+        {
+          "title": "Report",
+          "type": "html",
+          "url": "https://artifacts.example.org/report.html",
+          "summary": "Build report."
+        }
+      ],
+      "logs": [
+        {
+          "id": "logs-0",
+          "title": "Test log",
+          "code": "FAIL test"
+        }
+      ],
+      "code": [
+        {
+          "id": "code-0",
+          "title": "Snippet",
+          "language": "ts",
+          "code": "const ok = true;"
+        }
+      ]
+    }
+  },
+  "invalid": {
+    "noContent": {
+      "title": "Empty"
+    },
+    "unsafeArtifactUrl": {
+      "title": "Bad artifact",
+      "artifacts": [
+        {
+          "title": "Local report",
+          "url": "https://127.0.0.1/report.html"
+        }
+      ]
+    },
+    "actionWithoutPayload": {
+      "title": "Bad action",
+      "actions": [
+        {
+          "id": "continue",
+          "title": "Continue"
+        }
+      ]
+    },
+    "extraField": {
+      "title": "Extra",
+      "summary": "Has an extra field.",
+      "debug": true
+    }
+  },
+  "runtime": {
+    "directSynaraKey": {
+      "content": {
+        "in.synara.agent": {
+          "title": "Build result",
+          "status": "failed",
+          "summary": "One test failed.",
+          "artifacts": [
+            {
+              "title": "safe report",
+              "url": "https://artifacts.example.org/report.html"
+            },
+            {
+              "title": "unsafe report",
+              "url": "https://127.0.0.1/report.html"
+            }
+          ],
+          "logs": [
+            {
+              "title": "test log",
+              "code": "FAIL test"
+            }
+          ]
+        }
+      },
+      "parsed": {
+        "title": "Build result",
+        "status": "failed",
+        "summary": "One test failed.",
+        "actions": [],
+        "artifacts": [
+          {
+            "title": "safe report",
+            "url": "https://artifacts.example.org/report.html"
+          }
+        ],
+        "logs": [
+          {
+            "id": "logs-0",
+            "title": "test log",
+            "code": "FAIL test"
+          }
+        ],
+        "code": [],
+        "diffs": []
+      }
+    }
+  }
+}

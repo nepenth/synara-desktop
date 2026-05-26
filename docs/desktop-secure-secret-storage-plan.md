@@ -146,7 +146,7 @@ steps.
 
 ### Step 1: Async Session Bootstrap
 
-Status: implemented in the runtime submodule. Startup now initializes an async
+Status: implemented in the runtime directory. Startup now initializes an async
 session bootstrap before mounting the router, caches the selected session for
 existing synchronous route/client consumers, and keeps legacy localStorage
 fallback behavior.
@@ -168,7 +168,7 @@ Acceptance criteria:
 
 ### Step 2: Credential Migration
 
-Status: implemented in the runtime submodule. When startup used a legacy
+Status: implemented in the runtime directory. When startup used a legacy
 fallback session, successful Matrix client initialization now writes the
 sanitized session envelope to the native store before removing only the legacy
 fallback token fields.
@@ -192,7 +192,7 @@ Acceptance criteria:
 
 ### Step 3: Write New Sessions Securely
 
-Status: implemented in the runtime submodule. Login and registration now use
+Status: implemented in the runtime directory. Login and registration now use
 the platform session persistence helper, which writes native credentials first
 when available and only writes legacy fallback fields when the native write is
 unavailable or fails.

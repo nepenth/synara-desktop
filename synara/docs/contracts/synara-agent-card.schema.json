@@ -1,0 +1,160 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://synara.local/contracts/synara-agent-card.schema.json",
+  "$comment": "Canonical structured agent-card payload for supported event-content keys such as in.synara.agent, org.hermes.agent, and io.hermes.agent.",
+  "title": "SynaraAgentCardPayload",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["title"],
+  "anyOf": [
+    { "required": ["summary"] },
+    { "required": ["actions"] },
+    { "required": ["artifacts"] },
+    { "required": ["logs"] },
+    { "required": ["code"] },
+    { "required": ["diffs"] }
+  ],
+  "properties": {
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "status": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 5000
+    },
+    "actions": {
+      "type": "array",
+      "maxItems": 12,
+      "items": {
+        "$ref": "#/$defs/AgentCardAction"
+      }
+    },
+    "artifacts": {
+      "type": "array",
+      "maxItems": 20,
+      "items": {
+        "$ref": "#/$defs/AgentCardArtifact"
+      }
+    },
+    "logs": {
+      "type": "array",
+      "maxItems": 20,
+      "items": {
+        "$ref": "#/$defs/AgentCardCodeBlock"
+      }
+    },
+    "code": {
+      "type": "array",
+      "maxItems": 20,
+      "items": {
+        "$ref": "#/$defs/AgentCardCodeBlock"
+      }
+    },
+    "diffs": {
+      "type": "array",
+      "maxItems": 20,
+      "items": {
+        "$ref": "#/$defs/AgentCardCodeBlock"
+      }
+    }
+  },
+  "$defs": {
+    "AgentCardAction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title"],
+      "anyOf": [{ "required": ["url"] }, { "required": ["prompt"] }],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "kind": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "url": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2048,
+          "pattern": "^https://(?![^/?#]*@)(?!localhost(?::|/|$))(?!127\\.)(?!10\\.)(?!192\\.168\\.)(?!172\\.(1[6-9]|2[0-9]|3[0-1])\\.)(?!.*\\.local(?::|/|$))(?!.*\\.lan(?::|/|$))(?!.*\\.internal(?::|/|$)).+"
+        },
+        "prompt": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 5000
+        }
+      }
+    },
+    "AgentCardArtifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title"],
+      "properties": {
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "type": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "url": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2048,
+          "pattern": "^https://(?![^/?#]*@)(?!localhost(?::|/|$))(?!127\\.)(?!10\\.)(?!192\\.168\\.)(?!172\\.(1[6-9]|2[0-9]|3[0-1])\\.)(?!.*\\.local(?::|/|$))(?!.*\\.lan(?::|/|$))(?!.*\\.internal(?::|/|$)).+"
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 5000
+        }
+      }
+    },
+    "AgentCardCodeBlock": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "code"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "language": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "code": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 50000
+        }
+      }
+    }
+  }
+}

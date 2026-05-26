@@ -1,0 +1,16 @@
+{
+  "valid": {
+    "publicHttps": "https://cdn.example.org/image.gif",
+    "publicPath": "https://example.org/public"
+  },
+  "invalid": {
+    "http": "http://cdn.example.org/image.gif",
+    "credentialed": "https://user:pass@cdn.example.org/image.gif",
+    "localhost": "https://localhost/image.gif",
+    "loopbackIpv4": "https://127.0.0.1/image.gif",
+    "privateIpv4": "https://192.168.1.10/image.gif",
+    "carrierNatIpv4": "https://100.64.0.1/image.gif",
+    "privateIpv6": "https://[fd00::1]/image.gif",
+    "localSuffix": "https://media.internal/image.gif"
+  }
+}

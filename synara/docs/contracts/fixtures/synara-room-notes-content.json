@@ -1,0 +1,150 @@
+{
+  "valid": {
+    "note": {
+      "version": 1,
+      "rooms": {
+        "!room:example.org": {
+          "items": {
+            "note:main": {
+              "id": "note:main",
+              "kind": "note",
+              "roomId": "!room:example.org",
+              "createdAt": 1770000000000,
+              "updatedAt": 1770000300000,
+              "body": "Keep deployment notes here."
+            }
+          }
+        }
+      }
+    },
+    "todoAndMessage": {
+      "version": 1,
+      "rooms": {
+        "!room:example.org": {
+          "items": {
+            "todo:ship": {
+              "id": "todo:ship",
+              "kind": "todo",
+              "roomId": "!room:example.org",
+              "createdAt": 1770000000000,
+              "updatedAt": 1770000300000,
+              "body": "Ship the signed build.",
+              "order": 1770000300000
+            },
+            "message:$event": {
+              "id": "message:$event",
+              "kind": "message",
+              "roomId": "!room:example.org",
+              "createdAt": 1770000000000,
+              "updatedAt": 1770000300000,
+              "eventId": "$event",
+              "eventTs": 1770000200000,
+              "sender": "@alice:example.org",
+              "body": "Reference only; resolve the message locally."
+            }
+          }
+        }
+      }
+    }
+  },
+  "invalid": {
+    "missingVersion": {
+      "rooms": {}
+    },
+    "badKind": {
+      "version": 1,
+      "rooms": {
+        "!room:example.org": {
+          "items": {
+            "bad": {
+              "id": "bad",
+              "kind": "task",
+              "roomId": "!room:example.org",
+              "createdAt": 1770000000000,
+              "updatedAt": 1770000300000,
+              "body": "Invalid kind."
+            }
+          }
+        }
+      }
+    },
+    "todoWithoutBody": {
+      "version": 1,
+      "rooms": {
+        "!room:example.org": {
+          "items": {
+            "todo": {
+              "id": "todo",
+              "kind": "todo",
+              "roomId": "!room:example.org",
+              "createdAt": 1770000000000,
+              "updatedAt": 1770000300000
+            }
+          }
+        }
+      }
+    },
+    "messageWithoutEvent": {
+      "version": 1,
+      "rooms": {
+        "!room:example.org": {
+          "items": {
+            "message": {
+              "id": "message",
+              "kind": "message",
+              "roomId": "!room:example.org",
+              "createdAt": 1770000000000,
+              "updatedAt": 1770000300000
+            }
+          }
+        }
+      }
+    }
+  },
+  "normalization": {
+    "dropsMalformedItems": {
+      "input": {
+        "version": 1,
+        "rooms": {
+          "!room:example.org": {
+            "items": {
+              "valid": {
+                "id": "valid",
+                "kind": "note",
+                "roomId": "!room:example.org",
+                "createdAt": 1770000000000,
+                "updatedAt": 1770000300000,
+                "body": "Keep this."
+              },
+              "wrongRoom": {
+                "id": "wrongRoom",
+                "kind": "note",
+                "roomId": "!other:example.org",
+                "createdAt": 1770000000000,
+                "updatedAt": 1770000300000,
+                "body": "Drop this."
+              }
+            }
+          }
+        }
+      },
+      "normalized": {
+        "version": 1,
+        "rooms": {
+          "!room:example.org": {
+            "items": {
+              "valid": {
+                "id": "valid",
+                "kind": "note",
+                "roomId": "!room:example.org",
+                "createdAt": 1770000000000,
+                "updatedAt": 1770000300000,
+                "body": "Keep this."
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

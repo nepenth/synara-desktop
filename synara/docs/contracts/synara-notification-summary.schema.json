@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://synara.local/contracts/synara-notification-summary.schema.json",
+  "$comment": "Canonical output schema for shared notification summary counts.",
+  "title": "NotificationSummary",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "appBadgeCount",
+    "inboxBadgeCount",
+    "laterActiveCount",
+    "inviteCount",
+    "agentApprovalCount",
+    "highlightCount",
+    "unreadCount"
+  ],
+  "properties": {
+    "appBadgeCount": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "inboxBadgeCount": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "laterActiveCount": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "inviteCount": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "agentApprovalCount": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "highlightCount": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "unreadCount": {
+      "type": "integer",
+      "minimum": 0
+    }
+  }
+}

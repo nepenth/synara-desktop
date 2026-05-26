@@ -1,0 +1,41 @@
+{
+  "valid": {
+    "empty": {
+      "version": 1,
+      "anchors": {}
+    },
+    "roomAnchor": {
+      "version": 1,
+      "anchors": {
+        "!room:example.org": {
+          "eventId": "$event",
+          "ts": 1770000000000
+        }
+      }
+    }
+  },
+  "invalid": {
+    "missingVersion": {
+      "anchors": {}
+    },
+    "badEventId": {
+      "version": 1,
+      "anchors": {
+        "!room:example.org": {
+          "eventId": "event",
+          "ts": 1770000000000
+        }
+      }
+    },
+    "previewLeak": {
+      "version": 1,
+      "anchors": {
+        "!room:example.org": {
+          "eventId": "$event",
+          "ts": 1770000000000,
+          "body": "Do not store decrypted previews."
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://synara.local/contracts/synara-route.schema.json",
+  "$comment": "Canonical app-relative route payloads. Runtime readers also decode path segments and reject malformed percent encoding in src/app/routes/synaraRoutes.ts.",
+  "title": "SynaraRoute",
+  "type": "string",
+  "minLength": 1,
+  "maxLength": 2048,
+  "anyOf": [
+    { "const": "/" },
+    { "pattern": "^/home/$" },
+    { "pattern": "^/home/[^/?#\\\\]+(/[^/?#\\\\]+)?/$" },
+    { "pattern": "^/direct/$" },
+    { "pattern": "^/direct/[^/?#\\\\]+(/[^/?#\\\\]+)?/$" },
+    { "pattern": "^/inbox/$" },
+    { "pattern": "^/inbox/(notifications|invites|later)/$" },
+    { "pattern": "^/create/?$" },
+    { "pattern": "^/explore/$" },
+    { "pattern": "^/explore/[^/?#\\\\]+/$" },
+    { "pattern": "^/settings/$" },
+    {
+      "pattern": "^/(?!login(?:/|$))(?!register(?:/|$))(?!reset-password(?:/|$))(?!space-settings(?:/|$))(?!room-settings(?:/|$))(?!home(?:/|$))(?!direct(?:/|$))(?!inbox(?:/|$))(?!create(?:/|$))(?!explore(?:/|$))(?!settings(?:/|$))[^/?#\\\\]+/$"
+    },
+    {
+      "pattern": "^/(?!login(?:/|$))(?!register(?:/|$))(?!reset-password(?:/|$))(?!space-settings(?:/|$))(?!room-settings(?:/|$))(?!home(?:/|$))(?!direct(?:/|$))(?!inbox(?:/|$))(?!create(?:/|$))(?!explore(?:/|$))(?!settings(?:/|$))[^/?#\\\\]+/lobby/$"
+    },
+    {
+      "pattern": "^/(?!login(?:/|$))(?!register(?:/|$))(?!reset-password(?:/|$))(?!space-settings(?:/|$))(?!room-settings(?:/|$))(?!home(?:/|$))(?!direct(?:/|$))(?!inbox(?:/|$))(?!create(?:/|$))(?!explore(?:/|$))(?!settings(?:/|$))[^/?#\\\\]+/[^/?#\\\\]+(/[^/?#\\\\]+)?/$"
+    }
+  ]
+}

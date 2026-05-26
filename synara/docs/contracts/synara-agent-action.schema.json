@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://synara.local/contracts/synara-agent-action.schema.json",
+  "$comment": "Canonical writer schema for bounded agent action payloads. Runtime readers also apply URL safety checks in src/app/agents/agentActions.ts.",
+  "title": "AgentActionPayload",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "title"],
+  "anyOf": [{ "required": ["url"] }, { "required": ["prompt"] }, { "required": ["markdown"] }],
+  "properties": {
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "agent",
+        "copy",
+        "continue",
+        "export",
+        "prompt",
+        "regenerate",
+        "run",
+        "open",
+        "open_url"
+      ]
+    },
+    "prompt": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024
+    },
+    "url": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048,
+      "pattern": "^https://(?![^/?#]*@)(?!localhost(?::|/|$))(?!127\\.)(?!10\\.)(?!192\\.168\\.)(?!172\\.(1[6-9]|2[0-9]|3[0-1])\\.)(?!.*\\.local(?::|/|$))(?!.*\\.lan(?::|/|$))(?!.*\\.internal(?::|/|$)).+"
+    },
+    "markdown": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 16384
+    }
+  }
+}
