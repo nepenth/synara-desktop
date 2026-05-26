@@ -36,8 +36,8 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
-    - name: Install legacy-client dependencies
-      run: cd legacy-client && npm ci
+    - name: Install Synara runtime dependencies
+      run: cd synara && npm ci
     - name: Install tauri dependencies
       run: npm ci
     - name: Build desktop app with Tauri
@@ -53,7 +53,7 @@ jobs:
       with:
         name: release-artifacts-macos
         path: |
-          src-tauri/target/universal-apple-darwin/release/bundle/macos/LegacyClient*.app
+          src-tauri/target/universal-apple-darwin/release/bundle/macos/Synara*.app
         if-no-files-found: warn
 
     - name: Upload Linux artifacts
@@ -62,9 +62,9 @@ jobs:
       with:
         name: release-artifacts-linux
         path: |
-          src-tauri/target/release/bundle/deb/LegacyClient_*.deb
-          src-tauri/target/release/bundle/rpm/LegacyClient-*.rpm
-          src-tauri/target/release/bundle/appimage/LegacyClient_*.AppImage
+          src-tauri/target/release/bundle/deb/Synara_*.deb
+          src-tauri/target/release/bundle/rpm/Synara-*.rpm
+          src-tauri/target/release/bundle/appimage/Synara_*.AppImage
         if-no-files-found: warn
 
     - name: Upload Windows artifacts
@@ -73,6 +73,6 @@ jobs:
       with:
         name: release-artifacts-windows
         path: |
-          src-tauri/target/release/bundle/msi/LegacyClient_*_x64_*.msi
-          src-tauri/target/release/bundle/nsis/LegacyClient_*_x64-setup.exe
+          src-tauri/target/release/bundle/msi/Synara_*_x64_*.msi
+          src-tauri/target/release/bundle/nsis/Synara_*_x64-setup.exe
         if-no-files-found: warn
