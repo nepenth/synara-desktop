@@ -10,7 +10,7 @@ Status: draft release gate checklist.
 - Apple Developer enrollment checklist created.
 - License inventory created and legal blocker recorded.
 - Shared contract inventory complete.
-- Tauri iOS feasibility spike completed or explicitly skipped.
+- Tauri iOS feasibility spike completed with native SwiftUI still recommended.
 - Native Matrix SDK feasibility spike completed.
 - Architecture ADR accepted.
 

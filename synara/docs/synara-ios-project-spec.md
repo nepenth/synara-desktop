@@ -297,6 +297,13 @@ Acceptance criteria:
 
 Dependencies: IOS-0001.
 
+Status: preflight complete in
+[`synara-ios/docs/tauri-ios-feasibility-spike.md`](../../synara-ios/docs/tauri-ios-feasibility-spike.md).
+The generated Tauri iOS project initialized successfully after Apple helper
+dependencies were installed, but simulator runtime validation was blocked by
+local Xcode first-launch/simulator setup. The recommendation remains native
+SwiftUI as the shipping path.
+
 Requirements:
 
 - Fix local Tauri CLI install if needed using a normal dependency install.
