@@ -5,6 +5,7 @@
 
 mod build_info;
 mod desktop;
+#[cfg(target_os = "macos")]
 mod menu;
 
 use serde::Serialize;
@@ -140,7 +141,9 @@ pub fn run() {
 
     builder
         .setup(move |app| {
+            #[cfg(target_os = "macos")]
             app.set_menu(menu::menu(app.handle())?)?;
+
             desktop::create_tray(app.handle())?;
 
             // Dev: use devUrl from tauri.conf.json (http://localhost:8080) to support HMR
