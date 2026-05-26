@@ -39,8 +39,8 @@ fn main() {
             );
         }
     }
-    println!("cargo:rustc-env=LEGACY_CLIENT_DESKTOP_BUILD_REVISION={revision}");
-    println!("cargo:rustc-env=LEGACY_CLIENT_DESKTOP_BUILD_BRANCH={branch}");
+    println!("cargo:rustc-env=SYNARA_DESKTOP_BUILD_REVISION={revision}");
+    println!("cargo:rustc-env=SYNARA_DESKTOP_BUILD_BRANCH={branch}");
 
     tauri_build::build()
 }
