@@ -2,7 +2,7 @@
 
 Reviewed: 2026-05-24
 
-Status: draft execution spec.
+Status: Phase 0 execution in progress.
 
 Related plan: [Synara iOS App Store Plan](./synara-ios-app-store-plan.md)
 
@@ -17,7 +17,9 @@ The target is an App Store-grade native iOS app that preserves Synara behavior a
 ## Working Assumptions
 
 - The active app runtime is `synara-desktop/synara`; the standalone sibling `synara` checkout is not the target for new app work.
-- The iOS app will live as a sibling project named `synara-ios/` unless Phase 0 decides otherwise.
+- The iOS app will live in `synara-ios/` inside the canonical
+  `synara-desktop` monorepo per
+  [ADR 0001](../../docs/adr/0001-ios-repository-layout.md).
 - The iOS app will be native SwiftUI, not a shipping WebView wrapper.
 - Shared compatibility will come from documented contracts and generated schemas/types, not from attempting to reuse React UI code.
 - Matrix account data and Matrix events remain the source of truth for cross-device Synara state.
@@ -201,6 +203,8 @@ Goal: make the project startable without hidden legal, account, or architecture 
 
 Dependencies: none.
 
+Status: complete in [ADR 0001](../../docs/adr/0001-ios-repository-layout.md).
+
 Requirements:
 
 - Decide whether `synara-ios/` is a sibling folder, separate repository, or nested workspace.
@@ -222,6 +226,9 @@ Acceptance criteria:
 
 Dependencies: none.
 
+Status: complete as an owner-action checklist in
+[`synara-ios/docs/apple-developer-enrollment-checklist.md`](../../synara-ios/docs/apple-developer-enrollment-checklist.md).
+
 Requirements:
 
 - Create a checklist for LLC-based Apple Developer Program enrollment.
@@ -241,6 +248,10 @@ Acceptance criteria:
 ### IOS-0003: Licensing And App Store Distribution Review
 
 Dependencies: none.
+
+Status: draft inventory complete in
+[`synara-ios/docs/license-inventory.md`](../../synara-ios/docs/license-inventory.md);
+legal review remains a release blocker.
 
 Requirements:
 
