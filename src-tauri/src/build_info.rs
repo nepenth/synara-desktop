@@ -3,11 +3,11 @@ pub fn app_version() -> &'static str {
 }
 
 pub fn revision() -> &'static str {
-    option_env!("LEGACY_CLIENT_DESKTOP_BUILD_REVISION").unwrap_or("unknown")
+    option_env!("SYNARA_DESKTOP_BUILD_REVISION").unwrap_or("unknown")
 }
 
 pub fn branch() -> &'static str {
-    option_env!("LEGACY_CLIENT_DESKTOP_BUILD_BRANCH").unwrap_or("unknown")
+    option_env!("SYNARA_DESKTOP_BUILD_BRANCH").unwrap_or("unknown")
 }
 
 pub fn label() -> String {
