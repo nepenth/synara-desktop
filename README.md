@@ -4,22 +4,18 @@ Synara Desktop is a Tauri-based native desktop Matrix client focused on fast, se
 
 ## Download
 
-Installers for macOS, Windows and Linux are built from this project. Distribution releases should be signed with an [Ed25519](https://ed25519.cr.yp.to/) public key.
-The in-app updater is currently disabled until this project has a stable signed release metadata channel. Local builds do not contact update servers.
+Installers for macOS and Linux are built from this project. The in-app updater
+is currently disabled until this project has a stable signed release metadata
+channel. Local builds do not contact update servers.
 
 | Operating System | Download          |
 | ---------------- | ----------------- |
-| Windows          | Build from source |
 | macOS            | Build from source |
 | Linux            | Build from source |
 
-Decoded public key:
-
-> RWRflTUQD3RHFtn25QNANCmePR9+4LSK89kAKTMEEB4OKpOFpLMgc64z
-
-To verify release files, you need to download [minisign](https://jedisct1.github.io/minisign/) and decode the `*.sig` file before running:
-
-> minisign -Vm **_RELEASE_FILE.msi.zip_** -P RWRflTUQD3RHFtn25QNANCmePR9+4LSK89kAKTMEEB4OKpOFpLMgc64z -x **_SIGNATURE.msi.zip.sig_**
+Windows packaging is not part of the current supported release matrix.
+Developer ID signing, notarization, and updater metadata are release-channel
+work after the required distribution credentials are available.
 
 ## Local Development
 
@@ -39,7 +35,7 @@ To build the app locally, run:
 
 On macOS, local unsigned smoke-test builds should use ad-hoc signing:
 
-- `APPLE_SIGNING_IDENTITY=- npm run tauri build -- --bundles app`
+- `npm run tauri build -- --bundles app`
 
 On Linux workstations, see [Linux builds](docs/linux.md) for distribution-specific system dependencies, KDE Plasma Wayland notes, and `.deb`/AppImage packaging commands.
 
