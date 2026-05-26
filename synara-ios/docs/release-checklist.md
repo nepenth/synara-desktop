@@ -11,7 +11,8 @@ Status: draft release gate checklist.
 - License inventory created and legal blocker recorded.
 - Shared contract inventory complete.
 - Tauri iOS feasibility spike completed with native SwiftUI still recommended.
-- Native Matrix SDK feasibility spike completed.
+- Native Matrix SDK feasibility spike completed at package/import level; real
+  test-account login remains for Phase 2.
 - Architecture ADR accepted.
 
 ## Phase 1 Simulator Gates

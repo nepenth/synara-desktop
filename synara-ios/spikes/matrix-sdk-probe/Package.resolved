@@ -1,0 +1,15 @@
+{
+  "originHash" : "2f560426c7d51a3ff85fd9499b9b533d0c6f23beeabbcb015b13c6389c272f8e",
+  "pins" : [
+    {
+      "identity" : "matrix-rust-components-swift",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/matrix-org/matrix-rust-components-swift.git",
+      "state" : {
+        "revision" : "02133b466cddbd5c911881acbb29cf14e5563344",
+        "version" : "26.5.13"
+      }
+    }
+  ],
+  "version" : 3
+}

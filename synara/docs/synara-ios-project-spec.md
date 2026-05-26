@@ -327,6 +327,12 @@ Acceptance criteria:
 
 Dependencies: IOS-0001.
 
+Status: package/import probe complete in
+[`synara-ios/docs/matrix-sdk-feasibility-spike.md`](../../synara-ios/docs/matrix-sdk-feasibility-spike.md).
+The official Swift package resolves and imports locally. Real login was
+intentionally deferred until the native app shell has Keychain storage and
+redacted logging.
+
 Requirements:
 
 - Create a small SwiftUI proof-of-concept or package spike.
