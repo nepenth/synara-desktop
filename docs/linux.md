@@ -158,6 +158,8 @@ sudo pacman -U synara-desktop-bin-*.pkg.tar.zst
 
 `pacman -U` upgrades the installed package in place when `pkgver` or `pkgrel` changes. If you are rebuilding the same package version for local testing, `pacman -U` will still reinstall the local package.
 
+The Arch `PKGBUILD` derives `pkgver` from `src-tauri/tauri.conf.json`, so a desktop app version bump automatically changes the local pacman package version. Run `npm run check:versions` before packaging if you need to verify all desktop, runtime, Cargo, and Arch package metadata are aligned.
+
 To remove the package:
 
 ```sh
