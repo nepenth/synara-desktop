@@ -1,6 +1,13 @@
 # Maintainer: Synara contributors
 pkgname=synara-desktop-bin
-pkgver=1.0.6
+_repo_root="$(cd "${startdir}/../.." && pwd)"
+_tauri_conf="${_repo_root}/src-tauri/tauri.conf.json"
+_tauri_version="$(sed -nE 's/^[[:space:]]*"version"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/p' "${_tauri_conf}" | head -n 1)"
+if [[ -z "${_tauri_version}" ]]; then
+  printf 'Unable to read Synara version from %s\n' "${_tauri_conf}" >&2
+  return 1 2>/dev/null || exit 1
+fi
+pkgver="${_tauri_version//-/_}"
 pkgrel=1
 pkgdesc='High-performance Matrix client optimized for AI agent workflows'
 arch=('x86_64')
@@ -23,11 +30,9 @@ conflicts=('synara-desktop' 'synara')
 source=('synara')
 sha256sums=('SKIP')
 
-_repo_root="$(cd "${startdir}/../.." && pwd)"
-
 package() {
   local desktop_file
-  desktop_file="${_repo_root}/src-tauri/target/release/bundle/deb/Synara_${pkgver}_amd64/data/usr/share/applications/Synara.desktop"
+  desktop_file="${_repo_root}/src-tauri/target/release/bundle/deb/Synara_${_tauri_version}_amd64/data/usr/share/applications/Synara.desktop"
   if [[ ! -f "${desktop_file}" ]]; then
     desktop_file="$(find "${_repo_root}/src-tauri/target/release/bundle/deb" -path '*/data/usr/share/applications/Synara.desktop' -print -quit 2>/dev/null || true)"
   fi
