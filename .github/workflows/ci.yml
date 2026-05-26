@@ -46,6 +46,9 @@ jobs:
         run: npm ci
         working-directory: synara
 
+      - name: Check repository layout
+        run: npm run check:repo-layout
+
       - name: Check version metadata
         run: npm run check:versions
 
@@ -68,4 +71,3 @@ jobs:
       - name: Check runtime formatting
         run: npm run check:prettier
         working-directory: synara
-
