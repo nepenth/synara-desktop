@@ -28,7 +28,7 @@
       "frameworks": [],
       "minimumSystemVersion": "",
       "exceptionDomain": null,
-      "signingIdentity": null,
+      "signingIdentity": "-",
       "providerShortName": null,
       "entitlements": null
     },
