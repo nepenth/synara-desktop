@@ -9,6 +9,9 @@ Pre-iOS consolidation: [Native-First Consolidation Plan](./native-first-consolid
 Phase 0 repository decision:
 [ADR 0001](../../docs/adr/0001-ios-repository-layout.md)
 
+Phase 0 architecture decision:
+[ADR 0002](../../docs/adr/0002-ios-architecture.md)
+
 Release gates:
 [`synara-ios/docs/release-checklist.md`](../../synara-ios/docs/release-checklist.md)
 
