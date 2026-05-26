@@ -50,7 +50,7 @@ Completed locally:
 
 Remaining before iOS app implementation:
 
-- macOS desktop smoke validation.
-- Linux desktop smoke validation.
+- Human macOS desktop smoke validation beyond package build.
+- Human Linux desktop smoke validation beyond package build.
 - Any fixes discovered by those validations.
 - Human/legal/App Store account tasks when moving into real iOS release work.

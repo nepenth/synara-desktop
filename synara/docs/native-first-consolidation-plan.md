@@ -446,7 +446,8 @@ Acceptance criteria for starting the rewrite:
 3. Extract route, notification, and badge contracts. Completed locally.
 4. Split shared versus platform settings. Completed locally.
 5. Add session/storage abstraction. Completed locally.
-6. Validate packaged macOS and Linux desktop builds.
+6. Validate packaged macOS and Linux desktop builds. Package CI complete;
+   human smoke validation remains.
 7. Start iOS Phase 0 and Matrix SDK spike.
 8. Revisit native desktop architecture only after iOS and shared Rust-domain
    evidence exists.
