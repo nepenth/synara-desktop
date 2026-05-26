@@ -6,6 +6,12 @@ Execution spec: [Synara iOS Project Spec](./synara-ios-project-spec.md)
 
 Pre-iOS consolidation: [Native-First Consolidation Plan](./native-first-consolidation-plan.md)
 
+Phase 0 repository decision:
+[ADR 0001](../../docs/adr/0001-ios-repository-layout.md)
+
+Release gates:
+[`synara-ios/docs/release-checklist.md`](../../synara-ios/docs/release-checklist.md)
+
 ## Goal
 
 Ship an App Store-grade Synara iOS app that feels native on iPhone and iPad while preserving the cross-platform Synara product across macOS and Linux. The iOS app should extend Synara's direction as an agentic Matrix client, not merely package the existing app runtime inside a WebView.
