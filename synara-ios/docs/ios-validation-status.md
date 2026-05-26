@@ -2,7 +2,8 @@
 
 Reviewed: 2026-05-26
 
-Status: Phase 1 skeleton build-validated; simulator runtime execution pending.
+Status: Phase 1 shell, dependency, logging, design-token, and CI skeleton
+build-validated; simulator runtime execution pending.
 
 ## Project Shape
 
@@ -17,28 +18,14 @@ Status: Phase 1 skeleton build-validated; simulator runtime execution pending.
 
 ## Build Validation
 
-The app target builds for a generic iOS simulator destination when DerivedData
-is redirected outside the sandbox:
+The app target builds for a generic iOS simulator destination, and the app,
+unit test, and UI test targets compile with:
 
 ```sh
-xcodebuild -project Synara.xcodeproj \
-  -scheme Synara \
-  -destination 'generic/platform=iOS Simulator' \
-  -derivedDataPath /private/tmp/synara-ios-derived \
-  build
+scripts/ci-build.sh
 ```
 
 Result: `BUILD SUCCEEDED`.
-
-The app, unit test, and UI test targets compile with:
-
-```sh
-xcodebuild -project Synara.xcodeproj \
-  -scheme Synara \
-  -destination 'generic/platform=iOS Simulator' \
-  -derivedDataPath /private/tmp/synara-ios-derived \
-  build-for-testing
-```
 
 Result: `TEST BUILD SUCCEEDED`.
 
@@ -63,8 +50,18 @@ usable simulator runtimes and UI tests cannot execute.
   - Rooms
   - Notifications
   - Later
-  - Settings
+- Settings
 - Enum-backed routes and sheet destinations.
+- Deep-link routing for placeholder room and settings destinations.
+- App-level dependency registry installed through SwiftUI environment.
+- Mock session, Matrix, push, logging, settings, and router services for tests
+  and previews.
+- Structured logging wrapper with redaction for tokens, APNs tokens, Matrix
+  identifiers, event IDs, and URLs.
+- iOS design-token baseline with shared empty, loading, error, and toolbar
+  controls.
 - Placeholder screens with iOS 16-compatible SwiftUI.
-- Unit smoke tests for tab and sheet identifiers.
-- UI smoke test that asserts primary tabs exist once simulator execution works.
+- Unit smoke tests for routing, dependency wiring, settings storage, and
+  redaction.
+- UI smoke tests that assert primary tabs exist and Settings can be selected
+  once simulator execution works.

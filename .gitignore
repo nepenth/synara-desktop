@@ -6,3 +6,7 @@ devAssets/*
 !devAssets/index.html
 
 .DS_Store
+DerivedData/
+*.xcuserstate
+xcuserdata/
+synara-ios/.build/
