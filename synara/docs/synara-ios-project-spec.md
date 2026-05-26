@@ -383,6 +383,12 @@ Goal: create a maintainable SwiftUI app shell with routing, dependency wiring, t
 
 Dependencies: IOS-0007.
 
+Status: skeleton complete. `Synara.xcodeproj`, app target, unit test target,
+and UI test target exist under `synara-ios/`. Generic simulator build and
+`build-for-testing` pass; runtime test execution is blocked by local
+CoreSimulator mismatch documented in
+[`synara-ios/docs/ios-validation-status.md`](../../synara-ios/docs/ios-validation-status.md).
+
 Requirements:
 
 - Create the iOS app project.
