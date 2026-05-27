@@ -3,6 +3,7 @@ import SwiftUI
 
 final class AppRouter: ObservableObject {
     @Published var selectedTab: AppTab = .rooms
+    @Published var authPath: [AppRoute] = []
     @Published var roomsPath: [AppRoute] = []
     @Published var notificationsPath: [AppRoute] = []
     @Published var laterPath: [AppRoute] = []
@@ -24,6 +25,8 @@ final class AppRouter: ObservableObject {
 
     func route(to route: AppRoute) {
         switch route {
+        case .login:
+            authPath = [route]
         case .room:
             selectedTab = .rooms
             roomsPath = [route]
@@ -59,6 +62,7 @@ final class AppRouter: ObservableObject {
 
     func resetForAccountChange() {
         selectedTab = .rooms
+        authPath = []
         roomsPath = []
         notificationsPath = []
         laterPath = []

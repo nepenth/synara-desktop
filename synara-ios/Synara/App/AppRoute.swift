@@ -1,6 +1,7 @@
 import Foundation
 
 enum AppRoute: Hashable {
+    case login(homeserverURL: String)
     case room(id: String)
     case settings
 }

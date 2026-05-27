@@ -11,8 +11,11 @@
 		1A25A4B89F510B78AED4E8C6 /* AppLogging.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C94FF43A1B1DDDCF8067FB1 /* AppLogging.swift */; };
 		3CF0BDAD36854DC8962393D4 /* LogRedactorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15DF14E92067B54B5BF14404 /* LogRedactorTests.swift */; };
 		48CE91CF86CBAC3081878AC9 /* AppRoute.swift in Sources */ = {isa = PBXBuildFile; fileRef = 253AA6941119C1C9D4F2DE3D /* AppRoute.swift */; };
+		4C0DF38E441C5250941FE911 /* HomeserverDiscoveryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12329DB928DC3AB27731C926 /* HomeserverDiscoveryTests.swift */; };
+		53A86DD39FD62D232711EB70 /* HomeserverDiscovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = B41D9817A0F821E67BCD9C00 /* HomeserverDiscovery.swift */; };
 		56E15BC20C25F32A6D25BA18 /* AppEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB040EB752E246AD052AC7E7 /* AppEnvironment.swift */; };
 		7BD7C2DB346D071A5121FC36 /* AppRouteTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F55BBDF32970A214C2829B1B /* AppRouteTests.swift */; };
+		89761685411B7F9D7FCCD863 /* HomeserverSelectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C52EDC986E0B57231E77F695 /* HomeserverSelectionView.swift */; };
 		8CD1DCF6DA4B22967284D0F3 /* PlaceholderScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = E23CEDAB04604A54EF7EAF9B /* PlaceholderScreen.swift */; };
 		90B73234B5A1DC142783A451 /* AppTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCD86C72DEE3F411D1FABB6B /* AppTab.swift */; };
 		9DA561CC126EB87B8410D7C7 /* RootShellView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57076E7E82206F1492033846 /* RootShellView.swift */; };
@@ -42,6 +45,7 @@
 
 /* Begin PBXFileReference section */
 		03ECE8FDA43404E53231A280 /* SynaraUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = SynaraUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		12329DB928DC3AB27731C926 /* HomeserverDiscoveryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeserverDiscoveryTests.swift; sourceTree = "<group>"; };
 		15DF14E92067B54B5BF14404 /* LogRedactorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogRedactorTests.swift; sourceTree = "<group>"; };
 		253AA6941119C1C9D4F2DE3D /* AppRoute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppRoute.swift; sourceTree = "<group>"; };
 		3C94FF43A1B1DDDCF8067FB1 /* AppLogging.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLogging.swift; sourceTree = "<group>"; };
@@ -54,6 +58,8 @@
 		9D0A5EA751CC5D570C324084 /* SynaraUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SynaraUITests.swift; sourceTree = "<group>"; };
 		AA155782137A4B5F84513EE1 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		B2E4F1A7ADF247942C6D0059 /* SynaraApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SynaraApp.swift; sourceTree = "<group>"; };
+		B41D9817A0F821E67BCD9C00 /* HomeserverDiscovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeserverDiscovery.swift; sourceTree = "<group>"; };
+		C52EDC986E0B57231E77F695 /* HomeserverSelectionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeserverSelectionView.swift; sourceTree = "<group>"; };
 		CB040EB752E246AD052AC7E7 /* AppEnvironment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppEnvironment.swift; sourceTree = "<group>"; };
 		D3219D555ED36F65BF9FE332 /* SynaraTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = SynaraTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		DCD86C72DEE3F411D1FABB6B /* AppTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppTab.swift; sourceTree = "<group>"; };
@@ -75,6 +81,7 @@
 		206AF00355E9B840C00AD4A5 /* Features */ = {
 			isa = PBXGroup;
 			children = (
+				C52EDC986E0B57231E77F695 /* HomeserverSelectionView.swift */,
 				E23CEDAB04604A54EF7EAF9B /* PlaceholderScreen.swift */,
 			);
 			path = Features;
@@ -112,6 +119,7 @@
 				CB040EB752E246AD052AC7E7 /* AppEnvironment.swift */,
 				3C94FF43A1B1DDDCF8067FB1 /* AppLogging.swift */,
 				8A4D48D89C01C70901919CAB /* AppServices.swift */,
+				B41D9817A0F821E67BCD9C00 /* HomeserverDiscovery.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -132,6 +140,7 @@
 			children = (
 				3FF241378CB1601D3575AF03 /* AppEnvironmentTests.swift */,
 				F55BBDF32970A214C2829B1B /* AppRouteTests.swift */,
+				12329DB928DC3AB27731C926 /* HomeserverDiscoveryTests.swift */,
 				15DF14E92067B54B5BF14404 /* LogRedactorTests.swift */,
 			);
 			path = SynaraTests;
@@ -258,6 +267,7 @@
 			files = (
 				F2A315907EC47F18BB54CC1C /* AppEnvironmentTests.swift in Sources */,
 				7BD7C2DB346D071A5121FC36 /* AppRouteTests.swift in Sources */,
+				4C0DF38E441C5250941FE911 /* HomeserverDiscoveryTests.swift in Sources */,
 				3CF0BDAD36854DC8962393D4 /* LogRedactorTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -272,6 +282,8 @@
 				FFB6A97B5F18519D154EAC9C /* AppRouter.swift in Sources */,
 				D46F130EFA2B2D58B79B605D /* AppServices.swift in Sources */,
 				90B73234B5A1DC142783A451 /* AppTab.swift in Sources */,
+				53A86DD39FD62D232711EB70 /* HomeserverDiscovery.swift in Sources */,
+				89761685411B7F9D7FCCD863 /* HomeserverSelectionView.swift in Sources */,
 				8CD1DCF6DA4B22967284D0F3 /* PlaceholderScreen.swift in Sources */,
 				9DA561CC126EB87B8410D7C7 /* RootShellView.swift in Sources */,
 				CC89EE97042280F04BD29498 /* SynaraApp.swift in Sources */,
