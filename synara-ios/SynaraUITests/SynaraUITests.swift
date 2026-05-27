@@ -74,6 +74,28 @@ final class SynaraUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Hello from iOS"].waitForExistence(timeout: 5))
     }
 
+    func testLargeRoomFixtureRendersAndScrolls() {
+        let app = launchLargeRoomsApp()
+
+        let roomList = app.collectionViews["RoomList"]
+        XCTAssertTrue(roomList.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.cells.firstMatch.waitForExistence(timeout: 5))
+
+        roomList.swipeUp()
+        XCTAssertTrue(app.cells.firstMatch.exists)
+    }
+
+    func testLargeTimelineFixtureRendersAndScrolls() {
+        let app = launchLargeTimelineApp()
+
+        let timeline = app.scrollViews["TimelineList"]
+        XCTAssertTrue(timeline.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Synthetic message 0"].waitForExistence(timeout: 5))
+
+        timeline.swipeUp()
+        XCTAssertTrue(timeline.exists)
+    }
+
     func testComposerSendsMockMessage() {
         let app = launchRoomApp()
 
@@ -96,10 +118,41 @@ final class SynaraUITests: XCTestCase {
     func testLogoutReturnsToSignedOutShell() {
         let app = launchSignedInSettingsApp()
 
-        XCTAssertTrue(app.buttons["LogoutButton"].waitForExistence(timeout: 5))
-        tap(app.buttons["LogoutButton"])
+        tapSettingsElement(app.buttons["LogoutButton"], app: app, timeout: 10)
+        tap(app.buttons["ConfirmLogoutButton"].firstMatch, timeout: 5)
 
         XCTAssertTrue(app.textFields["HomeserverAddressField"].waitForExistence(timeout: 5))
+    }
+
+    func testSettingsShowsNotificationSectionsAndReleaseLinks() {
+        let app = launchSignedInSettingsApp()
+
+        XCTAssertTrue(app.buttons["NotificationPermissionButton"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["PushRegistrationButton"].exists)
+        XCTAssertTrue(revealSettingsElement(app.staticTexts["Theme"], app: app, timeout: 10))
+        XCTAssertTrue(revealSettingsElement(app.staticTexts["Session Storage"], app: app, timeout: 10))
+        XCTAssertTrue(revealSettingsElement(app.buttons["AboutSettingsLink"], app: app, timeout: 10))
+        XCTAssertTrue(revealSettingsElement(app.buttons["LicensesSettingsLink"], app: app, timeout: 10))
+        XCTAssertTrue(revealSettingsElement(app.buttons["PrivacyPolicySettingsLink"], app: app, timeout: 10))
+        XCTAssertTrue(revealSettingsElement(app.buttons["SupportSettingsLink"], app: app, timeout: 10))
+    }
+
+    func testAboutScreenShowsVersionBuildLicenseSupportAndPrivacyLinks() {
+        let app = launchSignedInSettingsApp()
+
+        tapSettingsElement(app.buttons["AboutSettingsLink"], app: app, timeout: 10)
+
+        XCTAssertTrue(app.collectionViews["AboutSettingsScreen"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Synara"].exists)
+        XCTAssertTrue(app.staticTexts["Version"].exists)
+        XCTAssertTrue(app.staticTexts["Build"].exists)
+        XCTAssertTrue(app.buttons["AboutPrivacyLink"].exists)
+        XCTAssertTrue(app.buttons["AboutSupportLink"].exists)
+
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        tapSettingsElement(app.buttons["LicensesSettingsLink"], app: app, timeout: 10)
+        XCTAssertTrue(app.collectionViews["LicensesSettingsScreen"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["AGPL-3.0-only"].exists)
     }
 
     func testAcceptInviteTransitionsRowToJoinedRoom() {
@@ -280,6 +333,25 @@ final class SynaraUITests: XCTestCase {
         return app
     }
 
+    private func launchLargeRoomsApp() -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchEnvironment["SYNARA_UI_TESTS"] = "1"
+        app.launchEnvironment["SYNARA_UI_TEST_SIGNED_IN"] = "1"
+        app.launchEnvironment["SYNARA_UI_TEST_LARGE_ROOMS"] = "1"
+        app.launch()
+        return app
+    }
+
+    private func launchLargeTimelineApp() -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchEnvironment["SYNARA_UI_TESTS"] = "1"
+        app.launchEnvironment["SYNARA_UI_TEST_ROOM_ID"] = "!large:matrix.org"
+        app.launchEnvironment["SYNARA_UI_TEST_ROOM_TITLE"] = "Large Timeline"
+        app.launchEnvironment["SYNARA_UI_TEST_LARGE_TIMELINE"] = "1"
+        app.launch()
+        return app
+    }
+
     private func launchSignedInSettingsApp() -> XCUIApplication {
         let app = XCUIApplication()
         app.launchEnvironment["SYNARA_UI_TESTS"] = "1"
@@ -380,6 +452,32 @@ final class SynaraUITests: XCTestCase {
         } else {
             element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         }
+    }
+
+    private func revealSettingsElement(_ element: XCUIElement, app: XCUIApplication, timeout: TimeInterval) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        let settingsList = app.collectionViews["SettingsScreen"].exists
+            ? app.collectionViews["SettingsScreen"]
+            : app.collectionViews.firstMatch
+
+        while Date() < deadline {
+            if element.exists && element.isHittable {
+                return true
+            }
+            if settingsList.exists {
+                settingsList.swipeUp()
+            } else {
+                app.swipeUp()
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.25))
+        }
+
+        return element.exists && element.isHittable
+    }
+
+    private func tapSettingsElement(_ element: XCUIElement, app: XCUIApplication, timeout: TimeInterval) {
+        XCTAssertTrue(revealSettingsElement(element, app: app, timeout: timeout))
+        tap(element, timeout: 1)
     }
 
     private func dismissPasswordSavePromptIfPresent(app: XCUIApplication) {

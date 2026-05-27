@@ -34,7 +34,8 @@ struct RoomListView: View {
                                 RoomListRow(room: room)
                                     .padding(.vertical, SynaraSpacing.xSmall)
                             }
-                            .accessibilityLabel("\(room.name), \(room.lastMessagePreview)")
+                            .accessibilityLabel(room.accessibilitySummary)
+                            .accessibilityHint("Opens the room timeline")
                             .accessibilityIdentifier("RoomRow-\(room.id)")
                         }
                     }
@@ -174,16 +175,31 @@ private struct InviteRoomListRow: View {
             HStack {
                 Button("Accept", action: onAccept)
                     .buttonStyle(.borderedProminent)
+                    .accessibilityHint("Joins \(room.name)")
                     .accessibilityIdentifier("AcceptInvite-\(room.id)")
 
                 Button("Decline", role: .destructive, action: onReject)
                     .buttonStyle(.bordered)
+                    .accessibilityHint("Declines the invitation to \(room.name)")
                     .accessibilityIdentifier("RejectInvite-\(room.id)")
             }
         }
         .padding(SynaraSpacing.medium)
         .background(SynaraColor.secondarySurface)
         .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+}
+
+private extension RoomSummary {
+    var accessibilitySummary: String {
+        var parts = [name, lastMessagePreview]
+        if unreadCount > 0 {
+            parts.append("\(unreadCount) unread")
+        }
+        if hasHighlight {
+            parts.append("highlighted")
+        }
+        return parts.joined(separator: ", ")
     }
 }
 

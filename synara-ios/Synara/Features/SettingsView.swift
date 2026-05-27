@@ -6,9 +6,26 @@ struct SettingsView: View {
     @State private var notificationStatus: NotificationPermissionStatus = .unavailable
     @State private var isRequestingNotifications = false
     @State private var isRegisteringPush = false
+    @State private var isLogoutConfirmationPresented = false
 
     var body: some View {
         Form {
+            Section("Account") {
+                switch environment.session.currentState {
+                case .signedIn(let session):
+                    SettingsInfoRow(title: "User", value: session.userID)
+                        .accessibilityIdentifier("SettingsAccountUser")
+                    SettingsInfoRow(title: "Device", value: session.deviceID)
+                        .accessibilityIdentifier("SettingsAccountDevice")
+                    SettingsInfoRow(title: "Homeserver", value: session.homeserverURL.host ?? session.homeserverURL.absoluteString)
+                        .accessibilityIdentifier("SettingsAccountHomeserver")
+                case .signedOut:
+                    Text("Not signed in")
+                        .foregroundStyle(SynaraColor.secondaryText)
+                        .accessibilityIdentifier("SettingsAccountSignedOut")
+                }
+            }
+
             Section("Notifications") {
                 VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
                     Text(notificationStatus.displayName)
@@ -64,9 +81,55 @@ struct SettingsView: View {
                 .font(SynaraTypography.body)
             }
 
-            Section("Account") {
+            Section("Appearance") {
+                SettingsInfoRow(title: "Theme", value: "System")
+                    .accessibilityIdentifier("AppearanceThemeRow")
+                SettingsInfoRow(title: "Text Size", value: "Uses iOS Dynamic Type")
+                    .accessibilityIdentifier("AppearanceTextSizeRow")
+            }
+
+            Section("Security") {
+                SettingsInfoRow(title: "Session Storage", value: "Keychain")
+                    .accessibilityIdentifier("SecuritySessionStorageRow")
+                SettingsInfoRow(title: "Message Security", value: "Matrix Rust SDK")
+                    .accessibilityIdentifier("SecurityMatrixSDKRow")
+                SettingsInfoRow(title: "Logout", value: "Clears local session, sync state, rooms, and push registration")
+                    .accessibilityIdentifier("SecurityLogoutWipeRow")
+            }
+
+            Section("About") {
+                NavigationLink {
+                    AboutSettingsView()
+                } label: {
+                    SettingsNavigationRow(title: "About Synara", systemImage: "info.circle")
+                }
+                .accessibilityIdentifier("AboutSettingsLink")
+
+                NavigationLink {
+                    LicensesSettingsView()
+                } label: {
+                    SettingsNavigationRow(title: "Licenses", systemImage: "doc.text")
+                }
+                .accessibilityIdentifier("LicensesSettingsLink")
+
+                NavigationLink {
+                    PrivacyPolicySettingsView()
+                } label: {
+                    SettingsNavigationRow(title: "Privacy Policy", systemImage: "hand.raised")
+                }
+                .accessibilityIdentifier("PrivacyPolicySettingsLink")
+
+                NavigationLink {
+                    SupportSettingsView()
+                } label: {
+                    SettingsNavigationRow(title: "Support", systemImage: "questionmark.circle")
+                }
+                .accessibilityIdentifier("SupportSettingsLink")
+            }
+
+            Section("Danger Zone") {
                 Button(role: .destructive) {
-                    logout()
+                    isLogoutConfirmationPresented = true
                 } label: {
                     if state.isLoading {
                         ProgressView()
@@ -76,6 +139,20 @@ struct SettingsView: View {
                 }
                 .disabled(state.isLoading)
                 .accessibilityIdentifier("LogoutButton")
+                .accessibilityHint("Requires confirmation and clears local session data from this device")
+                .confirmationDialog(
+                    "Log out of Synara?",
+                    isPresented: $isLogoutConfirmationPresented,
+                    titleVisibility: .visible
+                ) {
+                    Button("Log Out", role: .destructive) {
+                        logout()
+                    }
+                    .accessibilityIdentifier("ConfirmLogoutButton")
+                    Button("Cancel", role: .cancel) {}
+                } message: {
+                    Text("This clears local session data, sync state, cached rooms, and push registration on this device.")
+                }
             }
 
             if case .failed(let message) = state {
@@ -144,6 +221,211 @@ struct SettingsView: View {
                 }
             }
         }
+    }
+}
+
+private struct SettingsInfoRow: View {
+    let title: String
+    let value: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(SynaraColor.secondaryText)
+            Text(value)
+                .font(SynaraTypography.body)
+                .foregroundStyle(SynaraColor.primaryText)
+                .textSelection(.enabled)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(title), \(value)")
+    }
+}
+
+private struct SettingsNavigationRow: View {
+    let title: String
+    let systemImage: String
+
+    var body: some View {
+        Label(title, systemImage: systemImage)
+            .font(SynaraTypography.body)
+    }
+}
+
+private struct AboutSettingsView: View {
+    var body: some View {
+        List {
+            Section {
+                VStack(alignment: .leading, spacing: SynaraSpacing.small) {
+                    Text("Synara")
+                        .font(SynaraTypography.screenTitle)
+                    Text("Agentic native Matrix client for iOS, macOS, and Linux.")
+                        .font(SynaraTypography.supporting)
+                        .foregroundStyle(SynaraColor.secondaryText)
+                }
+                .padding(.vertical, SynaraSpacing.small)
+                .accessibilityIdentifier("AboutSummary")
+            }
+
+            Section("Build") {
+                SettingsInfoRow(title: "Version", value: AppBuildInfo.version)
+                    .accessibilityIdentifier("AboutVersionRow")
+                SettingsInfoRow(title: "Build", value: AppBuildInfo.build)
+                    .accessibilityIdentifier("AboutBuildRow")
+                SettingsInfoRow(title: "Bundle", value: AppBuildInfo.bundleIdentifier)
+                    .accessibilityIdentifier("AboutBundleRow")
+            }
+
+            Section("Links") {
+                Link(destination: SettingsLink.privacy.url) {
+                    SettingsNavigationRow(title: "Privacy Policy", systemImage: "hand.raised")
+                }
+                .accessibilityIdentifier("AboutPrivacyLink")
+
+                Link(destination: SettingsLink.support.url) {
+                    SettingsNavigationRow(title: "Support", systemImage: "questionmark.circle")
+                }
+                .accessibilityIdentifier("AboutSupportLink")
+            }
+        }
+        .navigationTitle("About")
+        .accessibilityIdentifier("AboutSettingsScreen")
+    }
+}
+
+private struct LicensesSettingsView: View {
+    var body: some View {
+        List {
+            Section("App") {
+                LicenseRow(name: "Synara", license: "AGPL-3.0-only", note: "Final App Store distribution requires legal review of repository licensing.")
+            }
+
+            Section("Dependencies") {
+                LicenseRow(name: "Matrix Rust SDK Swift", license: "Apache-2.0", note: "Pinned through Swift Package Manager.")
+                LicenseRow(name: "Apple SwiftUI and iOS SDK", license: "Apple platform SDK", note: "Provided by Xcode and iOS.")
+            }
+        }
+        .navigationTitle("Licenses")
+        .accessibilityIdentifier("LicensesSettingsScreen")
+    }
+}
+
+private struct LicenseRow: View {
+    let name: String
+    let license: String
+    let note: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
+            Text(name)
+                .font(SynaraTypography.body)
+            Text(license)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(SynaraColor.secondaryText)
+            Text(note)
+                .font(SynaraTypography.supporting)
+                .foregroundStyle(SynaraColor.secondaryText)
+        }
+        .accessibilityElement(children: .combine)
+    }
+}
+
+private struct PrivacyPolicySettingsView: View {
+    var body: some View {
+        List {
+            Section("Privacy Policy") {
+                Link(SettingsLink.privacy.displayTitle, destination: SettingsLink.privacy.url)
+                    .accessibilityIdentifier("PrivacyPolicyExternalLink")
+                Text("External TestFlight and App Store submission remain blocked until the final privacy policy is approved.")
+                    .font(SynaraTypography.supporting)
+                    .foregroundStyle(SynaraColor.secondaryText)
+            }
+
+            Section("Current Data Inventory") {
+                DataInventoryRow(title: "Account", detail: "Matrix user ID, device ID, homeserver, and access tokens are stored locally for session restore.")
+                DataInventoryRow(title: "Messages and Rooms", detail: "Room metadata, timeline content, media, and account data come from the selected Matrix homeserver.")
+                DataInventoryRow(title: "Notifications", detail: "APNs device tokens and Matrix pusher registration are used only when notifications are enabled.")
+                DataInventoryRow(title: "Diagnostics", detail: "No analytics or crash SDK is enabled. Logs are local and redacted.")
+            }
+        }
+        .navigationTitle("Privacy")
+        .accessibilityIdentifier("PrivacyPolicySettingsScreen")
+    }
+}
+
+private struct SupportSettingsView: View {
+    var body: some View {
+        List {
+            Section("Support") {
+                Link(SettingsLink.support.displayTitle, destination: SettingsLink.support.url)
+                    .accessibilityIdentifier("SupportExternalLink")
+                Text("Include app version, build number, iOS version, homeserver domain, and a short description. Do not send passwords, access tokens, recovery keys, or private room content.")
+                    .font(SynaraTypography.supporting)
+                    .foregroundStyle(SynaraColor.secondaryText)
+            }
+
+            Section("Diagnostics") {
+                SettingsInfoRow(title: "Version", value: AppBuildInfo.version)
+                SettingsInfoRow(title: "Build", value: AppBuildInfo.build)
+                SettingsInfoRow(title: "Bundle", value: AppBuildInfo.bundleIdentifier)
+            }
+        }
+        .navigationTitle("Support")
+        .accessibilityIdentifier("SupportSettingsScreen")
+    }
+}
+
+private struct DataInventoryRow: View {
+    let title: String
+    let detail: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
+            Text(title)
+                .font(SynaraTypography.body)
+            Text(detail)
+                .font(SynaraTypography.supporting)
+                .foregroundStyle(SynaraColor.secondaryText)
+        }
+        .accessibilityElement(children: .combine)
+    }
+}
+
+private enum SettingsLink {
+    case privacy
+    case support
+
+    var displayTitle: String {
+        switch self {
+        case .privacy:
+            return "https://synara.app/privacy"
+        case .support:
+            return "support@synara.app"
+        }
+    }
+
+    var url: URL {
+        switch self {
+        case .privacy:
+            return URL(string: "https://synara.app/privacy")!
+        case .support:
+            return URL(string: "mailto:support@synara.app")!
+        }
+    }
+}
+
+private enum AppBuildInfo {
+    static var version: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "Unknown"
+    }
+
+    static var build: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "Unknown"
+    }
+
+    static var bundleIdentifier: String {
+        Bundle.main.bundleIdentifier ?? "Unknown"
     }
 }
 

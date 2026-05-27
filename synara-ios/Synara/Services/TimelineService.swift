@@ -460,14 +460,31 @@ enum TimelineFixtures {
 }
 
 struct MockTimelineService: TimelineServicing {
-    var events: [RawTimelineEvent] = TimelineFixtures.commonEvents()
+    var events: [RawTimelineEvent]
+    var itemFixture: [TimelineItem]?
+
+    init(events: [RawTimelineEvent] = TimelineFixtures.commonEvents()) {
+        self.events = events
+        self.itemFixture = nil
+    }
+
+    init(items: [TimelineItem]) {
+        self.events = []
+        self.itemFixture = items
+    }
 
     func loadInitialTimeline(roomID: String) async -> [TimelineItem] {
-        events.map(TimelineMapper.map)
+        if let itemFixture {
+            return itemFixture
+        }
+        return events.map(TimelineMapper.map)
     }
 
     func loadOlderTimeline(roomID: String, before eventID: String) async -> [TimelineItem] {
-        events.filter { $0.eventID != eventID }.map(TimelineMapper.map)
+        if let itemFixture {
+            return Array(itemFixture.prefix(50))
+        }
+        return events.filter { $0.eventID != eventID }.map(TimelineMapper.map)
     }
 }
 

@@ -34,6 +34,10 @@ Status: draft release gate checklist.
 - Logout wipes Keychain entries, SDK stores, caches, drafts, and pending push
   registration state.
 - Push payloads default to generic content.
+- Privacy manifest included in the app target.
+- Privacy data inventory drafted.
+- Initial security review drafted.
+- Accessibility and performance hardening reports drafted.
 - Privacy policy URL approved before external TestFlight.
 - App Privacy labels drafted from actual data flows before App Store review.
 
