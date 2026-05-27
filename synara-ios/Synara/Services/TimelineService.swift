@@ -5,6 +5,7 @@ struct TimelineItem: Identifiable, Equatable {
         case text(String)
         case mediaPlaceholder(MediaResource)
         case redacted
+        case encryptedPlaceholder
         case unknown(type: String)
     }
 
@@ -42,7 +43,7 @@ enum TimelineMapper {
         case "m.room.message":
             kind = .text(event.body ?? "")
         case "m.room.encrypted":
-            kind = .unknown(type: event.type)
+            kind = .encryptedPlaceholder
         case "m.room.redaction":
             kind = .redacted
         case "m.room.media":
@@ -157,6 +158,7 @@ final class MatrixTimelineService: TimelineServicing {
     private let sessionStore: AppSessionStore
     private let httpClient: AuthHTTPClient
     private let jsonDecoder: JSONDecoder
+    private var paginationTokensByRoom: [String: String] = [:]
 
     init(
         sessionStore: AppSessionStore,
@@ -193,6 +195,9 @@ final class MatrixTimelineService: TimelineServicing {
             }
 
             let messages = try jsonDecoder.decode(MatrixMessagesResponse.self, from: data)
+            if let end = messages.end {
+                paginationTokensByRoom[roomID] = end
+            }
             return messages.chunk
                 .reversed()
                 .compactMap(mapEvent)
@@ -217,7 +222,7 @@ final class MatrixTimelineService: TimelineServicing {
         ]
 
         if let from {
-            queryItems.append(URLQueryItem(name: "from", value: from))
+            queryItems.append(URLQueryItem(name: "from", value: paginationTokensByRoom[roomID] ?? from))
         }
 
         var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
@@ -277,6 +282,7 @@ final class MatrixTimelineService: TimelineServicing {
 
 private struct MatrixMessagesResponse: Decodable {
     let chunk: [MatrixTimelineEvent]
+    let end: String?
 }
 
 private struct MatrixTimelineEvent: Decodable {

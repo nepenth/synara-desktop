@@ -31,6 +31,23 @@ or raw logs that contain secrets.
 12. Force quit and relaunch the app to confirm secure session restore.
 13. Log out and relaunch to confirm the account is not restored.
 
+## Gated XCTest Smoke
+
+The UI test suite includes `testLiveSmokeWhenConfigured`. It is skipped by
+default and can validate a signed simulator session against a disposable room:
+
+```sh
+SYNARA_LIVE_SMOKE=1 \
+SYNARA_LIVE_ROOM_ID='!room-id:example.org' \
+xcodebuild -project Synara.xcodeproj -scheme Synara \
+  -destination 'platform=iOS Simulator,id=<simulator-id>' \
+  -only-testing:SynaraUITests/SynaraUITests/testLiveSmokeWhenConfigured test
+```
+
+If no signed-in session exists on the simulator, also provide
+`SYNARA_LIVE_HOMESERVER`, `SYNARA_LIVE_USERNAME`, and `SYNARA_LIVE_PASSWORD` in
+the local environment. Never commit those values or paste them into docs.
+
 ## Evidence To Capture
 
 - Build mode: signed simulator, unsigned simulator, device, or archive.

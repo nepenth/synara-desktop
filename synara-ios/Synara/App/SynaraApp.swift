@@ -38,11 +38,27 @@ private extension AppEnvironment {
             )
         )
 
+        let inviteTransitionService: MockInviteTransitionService?
+        if processEnvironment["SYNARA_UI_TEST_INVITE"] == "1" {
+            inviteTransitionService = MockInviteTransitionService()
+        } else {
+            inviteTransitionService = nil
+        }
+
         if let roomID = processEnvironment["SYNARA_UI_TEST_ROOM_ID"] {
             let title = processEnvironment["SYNARA_UI_TEST_ROOM_TITLE"]
             router.route(to: .room(id: roomID, title: title))
         } else if processEnvironment["SYNARA_UI_TEST_SELECTED_TAB"] == "settings" {
             router.selectedTab = .settings
+        }
+
+        if let inviteTransitionService {
+            return .mock(
+                router: router,
+                session: session,
+                roomList: inviteTransitionService,
+                roomMembership: inviteTransitionService
+            )
         }
 
         return .mock(router: router, session: session)

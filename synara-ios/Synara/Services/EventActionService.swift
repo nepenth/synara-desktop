@@ -22,7 +22,7 @@ protocol EventActionServicing {
 struct MockEventActionService: EventActionServicing {
     func availability(for item: TimelineItem, currentUserID: String) -> EventActionAvailability {
         switch item.kind {
-        case .redacted:
+        case .redacted, .encryptedPlaceholder:
             return EventActionAvailability(canReply: false, canEdit: false, canRedact: false, canReact: false)
         default:
             return EventActionAvailability(

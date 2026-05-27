@@ -417,3 +417,57 @@ final class MockRoomListService: RoomListServicing {
         state = .empty
     }
 }
+
+final class MockInviteTransitionService: RoomListServicing, RoomMembershipServicing {
+    private var rooms: [RoomSummary]
+    private(set) var acceptedRoomIDs: [String] = []
+    private(set) var rejectedRoomIDs: [String] = []
+
+    init(rooms: [RoomSummary] = [
+        RoomSummary(
+            id: "!alerts:matrix.org",
+            name: "Alerts",
+            lastMessagePreview: "Invited to room",
+            unreadCount: 1,
+            hasHighlight: true,
+            kind: .room,
+            membership: .invited,
+            lastActivityAt: RoomListFixtures.now
+        )
+    ]) {
+        self.rooms = rooms
+    }
+
+    func loadRooms() async -> RoomListState {
+        rooms.isEmpty ? .empty : .loaded(RoomListFixtures.sorted(rooms))
+    }
+
+    func clearCache() {
+        rooms = []
+    }
+
+    func acceptInvite(roomID: String) async throws {
+        acceptedRoomIDs.append(roomID)
+        rooms = rooms.map { room in
+            guard room.id == roomID else {
+                return room
+            }
+
+            return RoomSummary(
+                id: room.id,
+                name: room.name,
+                lastMessagePreview: "Joined room",
+                unreadCount: room.unreadCount,
+                hasHighlight: room.hasHighlight,
+                kind: room.kind,
+                membership: .joined,
+                lastActivityAt: Date()
+            )
+        }
+    }
+
+    func rejectInvite(roomID: String) async throws {
+        rejectedRoomIDs.append(roomID)
+        rooms.removeAll { $0.id == roomID }
+    }
+}

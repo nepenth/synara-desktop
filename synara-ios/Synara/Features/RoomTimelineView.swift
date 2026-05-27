@@ -1,3 +1,4 @@
+import PhotosUI
 import SwiftUI
 
 struct RoomTimelineView: View {
@@ -11,6 +12,7 @@ struct RoomTimelineView: View {
     @State private var sendError: String?
     @State private var uploadState: MediaUploadState = .idle
     @State private var viewerResource: MediaResource?
+    @State private var selectedPhoto: PhotosPickerItem?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -24,7 +26,8 @@ struct RoomTimelineView: View {
                 sendError: sendError,
                 onCancelRelation: clearComposerRelation,
                 onSend: sendMessage,
-                onUpload: uploadMockMedia
+                onUpload: uploadTestMedia,
+                selectedPhoto: $selectedPhoto
             )
         }
         .navigationTitle(roomTitle ?? "Room")
@@ -37,6 +40,12 @@ struct RoomTimelineView: View {
         }
         .onChange(of: draft) { value in
             environment.drafts.setDraft(value, roomID: roomID)
+        }
+        .onChange(of: selectedPhoto) { item in
+            guard let item else {
+                return
+            }
+            uploadPickedPhoto(item)
         }
     }
 
@@ -60,6 +69,16 @@ struct RoomTimelineView: View {
                         ProgressView()
                             .frame(maxWidth: .infinity)
                     }
+
+                    Button {
+                        loadOlderTimeline(before: items.first?.eventID)
+                    } label: {
+                        Label("Load Older", systemImage: "arrow.up")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(isPaginating || items.isEmpty)
+                    .accessibilityIdentifier("LoadOlderTimelineButton")
 
                     ForEach(items) { item in
                         TimelineRow(
@@ -127,17 +146,79 @@ struct RoomTimelineView: View {
         }
     }
 
-    private func uploadMockMedia() {
+    private func uploadTestMedia() {
         uploadState = .uploading(progress: 0.5)
         Task {
             let result = await environment.mediaUploader.upload(
-                MediaUploadRequest(roomID: roomID, source: .photoLibrary, displayName: "synara-upload.jpg")
+                MediaUploadRequest(
+                    roomID: roomID,
+                    source: .photoLibrary,
+                    displayName: "synara-upload.jpg",
+                    data: Data("Synara test image".utf8),
+                    mimeType: "image/jpeg"
+                )
             )
             await MainActor.run {
                 uploadState = result
                 if case .uploaded(let item) = result {
                     append(item)
                 }
+            }
+        }
+    }
+
+    private func uploadPickedPhoto(_ item: PhotosPickerItem) {
+        uploadState = .uploading(progress: 0.25)
+        Task {
+            do {
+                guard let data = try await item.loadTransferable(type: Data.self) else {
+                    await MainActor.run {
+                        uploadState = .failed("Attachment could not be loaded. Try again.")
+                    }
+                    return
+                }
+
+                let contentType = item.supportedContentTypes.first
+                let fileExtension = contentType?.preferredFilenameExtension ?? "jpg"
+                let mimeType = contentType?.preferredMIMEType ?? "image/jpeg"
+                let result = await environment.mediaUploader.upload(
+                    MediaUploadRequest(
+                        roomID: roomID,
+                        source: .photoLibrary,
+                        displayName: "synara-photo.\(fileExtension)",
+                        data: data,
+                        mimeType: mimeType
+                    )
+                )
+                await MainActor.run {
+                    selectedPhoto = nil
+                    uploadState = result
+                    if case .uploaded(let item) = result {
+                        append(item)
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    selectedPhoto = nil
+                    uploadState = .failed("Attachment could not be loaded. Try again.")
+                }
+            }
+        }
+    }
+
+    private func loadOlderTimeline(before eventID: String?) {
+        guard let eventID,
+              case .loaded(let items, false) = state else {
+            return
+        }
+
+        state = .loaded(items, isPaginating: true)
+        Task {
+            let older = await environment.timeline.loadOlderTimeline(roomID: roomID, before: eventID)
+            await MainActor.run {
+                let existingIDs = Set(items.map(\.id))
+                let uniqueOlder = older.filter { existingIDs.contains($0.id) == false }
+                state = .loaded(uniqueOlder + items, isPaginating: false)
             }
         }
     }
@@ -275,6 +356,10 @@ private struct TimelineRow: View {
             Text("Message deleted")
                 .font(SynaraTypography.body)
                 .foregroundStyle(SynaraColor.secondaryText)
+        case .encryptedPlaceholder:
+            Label("Encrypted message unavailable", systemImage: "lock")
+                .font(SynaraTypography.body)
+                .foregroundStyle(SynaraColor.secondaryText)
         case .unknown(let type):
             Text("Unsupported event: \(type)")
                 .font(SynaraTypography.body)
@@ -290,6 +375,8 @@ private struct TimelineRow: View {
             return "\(item.senderID) sent \(resource.safeDescription)"
         case .redacted:
             return "\(item.senderID): message deleted"
+        case .encryptedPlaceholder:
+            return "\(item.senderID): encrypted message unavailable"
         case .unknown(let type):
             return "\(item.senderID): unsupported event \(type)"
         }
@@ -305,6 +392,7 @@ private struct ComposerView: View {
     let onCancelRelation: () -> Void
     let onSend: () -> Void
     let onUpload: () -> Void
+    @Binding var selectedPhoto: PhotosPickerItem?
 
     var body: some View {
         VStack(alignment: .leading, spacing: SynaraSpacing.small) {
@@ -324,15 +412,27 @@ private struct ComposerView: View {
             }
 
             HStack(alignment: .bottom, spacing: SynaraSpacing.small) {
-                Button(action: onUpload) {
-                    Image(systemName: "paperclip")
-                        .frame(width: 24, height: 24)
+                if ProcessInfo.processInfo.environment["SYNARA_UI_TESTS"] == "1" {
+                    Button(action: onUpload) {
+                        Image(systemName: "paperclip")
+                            .frame(width: 24, height: 24)
+                    }
+                    .frame(width: 44, height: 44)
+                    .buttonStyle(.plain)
+                    .contentShape(Rectangle())
+                    .accessibilityLabel("Attach")
+                    .accessibilityIdentifier("AttachmentButton")
+                } else {
+                    PhotosPicker(selection: $selectedPhoto, matching: .images) {
+                        Image(systemName: "paperclip")
+                            .frame(width: 24, height: 24)
+                    }
+                    .frame(width: 44, height: 44)
+                    .buttonStyle(.plain)
+                    .contentShape(Rectangle())
+                    .accessibilityLabel("Attach")
+                    .accessibilityIdentifier("AttachmentButton")
                 }
-                .frame(width: 44, height: 44)
-                .buttonStyle(.plain)
-                .contentShape(Rectangle())
-                .accessibilityLabel("Attach")
-                .accessibilityIdentifier("AttachmentButton")
 
                 TextField("Message", text: $text, axis: .vertical)
                     .lineLimit(1...4)
@@ -358,6 +458,11 @@ private struct ComposerView: View {
             if case .uploading(let progress) = uploadState {
                 ProgressView(value: progress)
                     .accessibilityIdentifier("MediaUploadProgress")
+            } else if case .failed(let message) = uploadState {
+                Text(message)
+                    .font(SynaraTypography.supporting)
+                    .foregroundStyle(.red)
+                    .accessibilityIdentifier("MediaUploadErrorText")
             }
         }
         .padding(SynaraSpacing.medium)

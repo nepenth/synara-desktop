@@ -8,6 +8,7 @@ final class TimelineServiceTests: XCTestCase {
                 statusCode: 200,
                 body: """
                 {
+                  "end": "next-token",
                   "chunk": [
                     {
                       "event_id": "$new",
@@ -59,6 +60,58 @@ final class TimelineServiceTests: XCTestCase {
         XCTAssertEqual(
             client.requests.first?.url?.absoluteString,
             "https://matrix.org/_matrix/client/v3/rooms/!room:matrix.org/messages?dir=b&limit=50"
+        )
+    }
+
+    func testMatrixTimelineUsesPaginationTokenForOlderMessages() async throws {
+        let client = MockTimelineHTTPClient(responses: [
+            .success(
+                statusCode: 200,
+                body: """
+                {
+                  "end": "page-token",
+                  "chunk": [
+                    {
+                      "event_id": "$new",
+                      "sender": "@alice:matrix.org",
+                      "origin_server_ts": 2000,
+                      "type": "m.room.message",
+                      "content": { "msgtype": "m.text", "body": "new" }
+                    }
+                  ]
+                }
+                """
+            ),
+            .success(
+                statusCode: 200,
+                body: """
+                {
+                  "end": "older-token",
+                  "chunk": [
+                    {
+                      "event_id": "$old",
+                      "sender": "@alice:matrix.org",
+                      "origin_server_ts": 1000,
+                      "type": "m.room.message",
+                      "content": { "msgtype": "m.text", "body": "old" }
+                    }
+                  ]
+                }
+                """
+            )
+        ])
+        let service = MatrixTimelineService(
+            sessionStore: AppSessionStore(currentState: .signedIn(try makeSession())),
+            httpClient: client
+        )
+
+        _ = await service.loadInitialTimeline(roomID: "!room:matrix.org")
+        let older = await service.loadOlderTimeline(roomID: "!room:matrix.org", before: "$new")
+
+        XCTAssertEqual(older.map(\.eventID), ["$old"])
+        XCTAssertEqual(
+            client.requests.last?.url?.absoluteString,
+            "https://matrix.org/_matrix/client/v3/rooms/!room:matrix.org/messages?dir=b&limit=50&from=page-token"
         )
     }
 
@@ -158,6 +211,21 @@ final class TimelineServiceTests: XCTestCase {
         )
 
         XCTAssertEqual(TimelineMapper.map(event).kind, .unknown(type: "synara.agent.card"))
+    }
+
+    func testEncryptedEventsRenderAsSafePlaceholders() {
+        let event = RawTimelineEvent(
+            eventID: "$encrypted:matrix.org",
+            senderID: "@alice:matrix.org",
+            timestamp: TimelineFixtures.baseDate,
+            type: "m.room.encrypted",
+            body: nil,
+            replyToEventID: nil,
+            isEdited: false,
+            mediaURL: nil
+        )
+
+        XCTAssertEqual(TimelineMapper.map(event).kind, .encryptedPlaceholder)
     }
 
     func testMediaEventsUseSafeResourceDescription() throws {
