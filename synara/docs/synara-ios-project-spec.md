@@ -627,7 +627,8 @@ Dependencies: IOS-0204.
 Status: initial live implementation complete. The live app environment loads
 room summaries from Matrix `/sync?timeout=0`, includes joined and invited rooms,
 maps room names, latest message previews, unread counts, highlight counts, and
-activity timestamps, and keeps deterministic mock fixtures for UI tests.
+activity timestamps, supports accept and decline actions for invites, and keeps
+deterministic mock fixtures for UI tests.
 
 Requirements:
 
@@ -708,6 +709,8 @@ rows for mapped text, reply, edit, redaction, unknown, media placeholder, and
 reaction states. Build-for-testing and simulator UI validation pass as
 documented in
 [`synara-ios/docs/ios-validation-status.md`](../../synara-ios/docs/ios-validation-status.md).
+The live timeline service now loads Matrix room messages and maps text, reply,
+media, redacted, encrypted, and unknown events into the native timeline model.
 
 Requirements:
 
@@ -734,7 +737,9 @@ Dependencies: IOS-0302.
 
 Status: initial native implementation complete. Composer supports multiline
 plain-text drafts, empty-message guarding, per-room draft preservation, local
-echo through the message sending service, and mock UI coverage.
+echo through the message sending service, and mock UI coverage. The live
+message sender now sends Matrix `m.room.message` text events with transaction
+IDs and reply metadata.
 
 Requirements:
 
