@@ -19,17 +19,12 @@ final class AgentActionResolverTests: XCTestCase {
     }
 
     func testUnsafeURLActionIsRejected() throws {
-        let action = try SynaraAgentCardAction(
+        XCTAssertThrowsError(try SynaraAgentCardAction(
             id: "open",
             title: "Open",
             kind: "open",
             url: "http://127.0.0.1/report"
-        )
-
-        guard case .failure(.unsafeURL) = SynaraAgentCardActionResolver.plan(for: action) else {
-            XCTFail("Expected unsafe URL failure")
-            return
-        }
+        ))
     }
 
     func testCopyPromptActionCopiesPrompt() throws {
@@ -92,7 +87,7 @@ final class AgentActionResolverTests: XCTestCase {
         }
     }
 
-    func testApprovalActionsAreBlockedPendingRoutingIntegration() throws {
+    func testApprovalActionsProduceSubmissionPlan() throws {
         let action = try SynaraAgentCardAction(
             id: "approve",
             title: "Approve",
@@ -100,12 +95,10 @@ final class AgentActionResolverTests: XCTestCase {
             prompt: "approve request"
         )
 
-        guard case .success(.blocked(let reason)) = SynaraAgentCardActionResolver.plan(for: action) else {
-            XCTFail("Expected blocked approve plan")
+        guard case .success(.submitApproval(.approve)) = SynaraAgentCardActionResolver.plan(for: action) else {
+            XCTFail("Expected approve submission plan")
             return
         }
-
-        XCTAssertTrue(reason.contains("Approval actions require"))
     }
 
     func testActionsWithoutKindDefaultToPromptCopy() throws {

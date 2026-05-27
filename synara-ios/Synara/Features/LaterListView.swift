@@ -72,7 +72,11 @@ struct LaterListView: View {
                 }
 
                 if items.isEmpty {
-                    state = error == nil ? .empty : .failed(error)
+                    if let error {
+                        state = .failed(error)
+                    } else {
+                        state = .empty
+                    }
                     return
                 }
 

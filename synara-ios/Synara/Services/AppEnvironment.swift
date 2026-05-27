@@ -18,6 +18,7 @@ struct AppEnvironment {
     let messageSender: MessageSending
     let drafts: DraftStore
     let eventActions: EventActionServicing
+    let agentApprovals: AgentApprovalServicing
     let mediaLoader: MediaLoading
     let mediaUploader: MediaUploading
 
@@ -40,8 +41,8 @@ struct AppEnvironment {
         let matrixSDKClientStore = MatrixRustSDKClientStore()
         let matrix = MatrixRustSDKMatrixClientService(clientStore: matrixSDKClientStore)
         let pusherService = MatrixPusherService(
-            logger: logger,
-            gatewayURL: pushGatewayURL()
+            gatewayURL: pushGatewayURL(),
+            logger: logger
         )
         let push = SynaraPushService(logger: logger, pusherService: pusherService)
         let roomList = MatrixRustSDKRoomListService(sessionStore: session, clientStore: matrixSDKClientStore)
@@ -69,6 +70,7 @@ struct AppEnvironment {
             messageSender: MatrixRustSDKMessageSendService(sessionStore: session, clientStore: matrixSDKClientStore),
             drafts: DraftStore(),
             eventActions: MatrixEventActionService(sessionStore: session),
+            agentApprovals: MatrixAgentApprovalService(sessionStore: session),
             mediaLoader: MatrixMediaLoader(sessionStore: session),
             mediaUploader: MatrixMediaUploadService(sessionStore: session)
         )
@@ -90,6 +92,7 @@ struct AppEnvironment {
         messageSender: MessageSending = MockMessageSendService(),
         drafts: DraftStore = DraftStore(),
         eventActions: EventActionServicing = MockEventActionService(),
+        agentApprovals: AgentApprovalServicing = MockAgentApprovalService(),
         mediaLoader: MediaLoading = MockMediaLoader(),
         mediaUploader: MediaUploading = MockMediaUploadService()
     ) -> AppEnvironment {
@@ -116,6 +119,7 @@ struct AppEnvironment {
             messageSender: messageSender,
             drafts: drafts,
             eventActions: eventActions,
+            agentApprovals: agentApprovals,
             mediaLoader: mediaLoader,
             mediaUploader: mediaUploader
         )
@@ -125,7 +129,9 @@ struct AppEnvironment {
         guard
             let value = ProcessInfo.processInfo.environment["SYNARA_PUSH_GATEWAY_URL"]?.trimmingCharacters(in: .whitespacesAndNewlines),
             value.isEmpty == false,
-            let url = URL(string: value)
+            let url = URL(string: value),
+            url.scheme?.lowercased() == "https",
+            url.host?.isEmpty == false
         else {
             return nil
         }

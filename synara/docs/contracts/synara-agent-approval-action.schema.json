@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://synara.local/contracts/synara-agent-approval-action.schema.json",
+  "title": "Synara Agent Approval Action",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "action_id", "action_title", "decision", "created_at"],
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "action_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "action_title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80
+    },
+    "decision": {
+      "enum": ["approve", "reject"]
+    },
+    "source_event_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "created_at": {
+      "type": "integer",
+      "minimum": 0
+    }
+  }
+}

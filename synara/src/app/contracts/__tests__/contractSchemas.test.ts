@@ -387,6 +387,8 @@ test('Agent action contract schema validates fixtures and runtime normalization'
     'prompt',
     'regenerate',
     'run',
+    'approve',
+    'reject',
     'open',
     'open_url',
   ]);
@@ -401,6 +403,21 @@ test('Agent action contract schema validates fixtures and runtime normalization'
       `${name} should normalize through runtime validator`
     );
   });
+});
+
+test('Agent approval action schema validates result fixtures', () => {
+  const schema = readJson<JsonSchema>('docs/contracts/synara-agent-approval-action.schema.json');
+  const fixtures = readJson<{
+    valid: Record<string, unknown>;
+    invalid: Record<string, unknown>;
+  }>('docs/contracts/fixtures/synara-agent-approval-action.json');
+
+  assert.equal(
+    schema.$id,
+    'https://synara.local/contracts/synara-agent-approval-action.schema.json'
+  );
+  assertValidFixtures(fixtures.valid, schema, 'agentApproval.valid');
+  assertInvalidFixtures(fixtures.invalid, schema, 'agentApproval.invalid');
 });
 
 test('Route contract schema validates fixtures and runtime destination parsing', () => {

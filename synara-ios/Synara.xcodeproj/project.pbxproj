@@ -28,6 +28,7 @@
 		5D6E01D7027F978C2751C1A9 /* MatrixRustSDKService.swift in Sources */ = {isa = PBXBuildFile; fileRef = CEE944AA45DCF6DA43357823 /* MatrixRustSDKService.swift */; };
 		6022C473D59F944208C3E79D /* EventActionServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8CE546B97B6AE15795C6E76 /* EventActionServiceTests.swift */; };
 		652C81E69C2C1B922B4BE789 /* RoomTimelineView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A460B0098799FF6C79F0756E /* RoomTimelineView.swift */; };
+		6CCD8DBF4D4A6682D58FD5B1 /* AgentApprovalServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45436B56CDB7CBBD40303484 /* AgentApprovalServiceTests.swift */; };
 		70328744CB4C90A1526E9E28 /* TimelineServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 633F1D9CBE601BF3E42E4B1B /* TimelineServiceTests.swift */; };
 		76AE72648BA28AFF732BB8F6 /* RoomListServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D42B2D11968F0B23193A4ED /* RoomListServiceTests.swift */; };
 		7BD7C2DB346D071A5121FC36 /* AppRouteTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F55BBDF32970A214C2829B1B /* AppRouteTests.swift */; };
@@ -89,6 +90,7 @@
 		3FF241378CB1601D3575AF03 /* AppEnvironmentTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppEnvironmentTests.swift; sourceTree = "<group>"; };
 		40037D97F31F787EA20BD7AE /* PushServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushServiceTests.swift; sourceTree = "<group>"; };
 		417DD4194803886BB803C6A6 /* RoomListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomListView.swift; sourceTree = "<group>"; };
+		45436B56CDB7CBBD40303484 /* AgentApprovalServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentApprovalServiceTests.swift; sourceTree = "<group>"; };
 		4E13415F14EC8A65D465380C /* SynaraDesign.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SynaraDesign.swift; sourceTree = "<group>"; };
 		57076E7E82206F1492033846 /* RootShellView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootShellView.swift; sourceTree = "<group>"; };
 		5DE2FB3D6ADFFA295C9B956F /* AppRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppRouter.swift; sourceTree = "<group>"; };
@@ -234,6 +236,7 @@
 			isa = PBXGroup;
 			children = (
 				9DA6E8858D607B040754AF0E /* AgentActionResolverTests.swift */,
+				45436B56CDB7CBBD40303484 /* AgentApprovalServiceTests.swift */,
 				3FF241378CB1601D3575AF03 /* AppEnvironmentTests.swift */,
 				F55BBDF32970A214C2829B1B /* AppRouteTests.swift */,
 				017B2EBED1FF4FF0EC25CB24 /* AuthServiceTests.swift */,
@@ -375,6 +378,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				969D33C61DAE6C1B12C9BCDB /* AgentActionResolverTests.swift in Sources */,
+				6CCD8DBF4D4A6682D58FD5B1 /* AgentApprovalServiceTests.swift in Sources */,
 				F2A315907EC47F18BB54CC1C /* AppEnvironmentTests.swift in Sources */,
 				7BD7C2DB346D071A5121FC36 /* AppRouteTests.swift in Sources */,
 				97901F6C1B589C2271A4975D /* AuthServiceTests.swift in Sources */,

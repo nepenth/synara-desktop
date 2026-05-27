@@ -7,6 +7,7 @@ import UIKit
 
 protocol MatrixPusherServicing {
     var isGatewayConfigured: Bool { get }
+    var configuredGatewayURL: URL? { get }
     func registerPusher(session: AuthenticatedSession, pushKey: String) async throws
     func unregisterPusher(session: AuthenticatedSession, pushKey: String) async throws
 }
@@ -23,6 +24,10 @@ final class MatrixPusherService: MatrixPusherServicing {
 
     var isGatewayConfigured: Bool {
         gatewayURL != nil
+    }
+
+    var configuredGatewayURL: URL? {
+        gatewayURL
     }
 
     init(
@@ -43,7 +48,8 @@ final class MatrixPusherService: MatrixPusherServicing {
             return
         }
 
-        guard let _ = URL(string: gatewayURL.absoluteString) else {
+        guard gatewayURL.scheme?.lowercased() == "https",
+              gatewayURL.host?.isEmpty == false else {
             logger.info("Push gateway URL is not configured; skipping pusher registration", category: .push)
             return
         }
@@ -55,6 +61,7 @@ final class MatrixPusherService: MatrixPusherServicing {
 
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
+        request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
         let payload = MatrixPusherPayload(
@@ -68,10 +75,6 @@ final class MatrixPusherService: MatrixPusherServicing {
         )
 
         request.httpBody = try JSONEncoder().encode(payload)
-        var components = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)
-        components?.queryItems = [URLQueryItem(name: "access_token", value: session.accessToken)]
-        request.url = components?.url
-
         let (_, response) = try await sessionData(for: request)
         guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
             let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
@@ -88,7 +91,8 @@ final class MatrixPusherService: MatrixPusherServicing {
             return
         }
 
-        guard let _ = URL(string: gatewayURL.absoluteString) else {
+        guard gatewayURL.scheme?.lowercased() == "https",
+              gatewayURL.host?.isEmpty == false else {
             logger.info("Push gateway URL is not configured; skipping pusher unregister", category: .push)
             return
         }
@@ -110,12 +114,9 @@ final class MatrixPusherService: MatrixPusherServicing {
 
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
+        request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONEncoder().encode(payload)
-
-        var components = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)
-        components?.queryItems = [URLQueryItem(name: "access_token", value: session.accessToken)]
-        request.url = components?.url
 
         let (_, response) = try await sessionData(for: request)
         guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
@@ -194,7 +195,7 @@ final class SynaraPushService: NSObject, PushServicing {
     private(set) var isRegistered = false
     private(set) var fullDeviceToken: String?
     private var sessionBoundPushKey: String?
-    var pushGatewayURL: String? { gatewayURL?.absoluteString }
+    var pushGatewayURL: String? { pusherService.configuredGatewayURL?.absoluteString }
     var tokenSnippet: String? {
         fullDeviceToken?.prefix(10).description
     }
@@ -255,7 +256,6 @@ final class SynaraPushService: NSObject, PushServicing {
 
         let token = tokenData.map { String(format: "%02.2hhx", $0) }.joined()
         if let existingToken = fullDeviceToken, existingToken != token {
-            isRegistered = false
             registrationStateDescription = "Token changed, re-registering"
         }
 
@@ -269,12 +269,12 @@ final class SynaraPushService: NSObject, PushServicing {
     }
 
     func clearRegistrationState() {
+        let session = currentSession
+        let pushKey = sessionBoundPushKey ?? fullDeviceToken
         Task {
-            if let currentSession {
+            if let session, let pushKey {
                 do {
-                    if let sessionBoundPushKey {
-                        try await pusherService.unregisterPusher(session: currentSession, pushKey: sessionBoundPushKey)
-                    }
+                    try await pusherService.unregisterPusher(session: session, pushKey: pushKey)
                 } catch {
                     logger.error("Push unregister failed", category: .push)
                 }
@@ -309,7 +309,7 @@ final class SynaraPushService: NSObject, PushServicing {
     }
 
     func parseBadgeCount(from notificationPayload: [AnyHashable: Any]) -> Int? {
-        let flattened = flattenPayload(notificationPayload)
+        let flattened = NotificationPushRouteParser.flattenPayload(notificationPayload)
         let candidates: [Any?] = [
             notificationPayload["badge"],
             notificationPayload["badge_count"],
@@ -353,12 +353,13 @@ final class SynaraPushService: NSObject, PushServicing {
         guard let badge = parseBadgeCount(from: notificationPayload) else {
             return
         }
+        let logger = logger
 
         Task {
             await MainActor.run {
                 UNUserNotificationCenter.current().setBadgeCount(badge) { error in
                     if let error {
-                        self.logger.error("Push badge update failed: \(error.localizedDescription)", category: .push)
+                        logger.error("Push badge update failed: \(error.localizedDescription)", category: .push)
                     }
                 }
             }
@@ -396,8 +397,8 @@ final class SynaraPushService: NSObject, PushServicing {
 
         do {
             try await pusherService.registerPusher(session: session, pushKey: token)
-            isRegistered = true
             sessionBoundPushKey = token
+            isRegistered = true
             registrationStateDescription = "Pusher registration complete"
         } catch {
             logger.error("Push registration failed: \(error)", category: .push)
@@ -460,7 +461,7 @@ enum NotificationPushRouteParser {
         return nil
     }
 
-    private static func flattenPayload(_ payload: [AnyHashable: Any]) -> [String: Any] {
+    static func flattenPayload(_ payload: [AnyHashable: Any]) -> [String: Any] {
         var result: [String: Any] = [:]
 
         for (key, value) in payload {

@@ -8,6 +8,8 @@ export const AGENT_ACTION_KINDS = [
   'prompt',
   'regenerate',
   'run',
+  'approve',
+  'reject',
   'open',
   'open_url',
 ] as const;

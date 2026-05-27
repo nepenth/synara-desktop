@@ -1482,21 +1482,24 @@ Acceptance criteria:
 
 Dependencies: IOS-0505, IOS-0303.
 
-Status: blocked pending approval command contract and server-side action persistence design.
+Status: initial implementation complete for iOS Matrix event persistence. The app
+now maps approve/reject actions to authenticated `m.room.message` sends carrying
+`in.synara.agent.action`; live agent-room smoke remains pending.
 
 Requirements:
-Note: approval persistence path is intentionally blocked for security reasons until a
-server-side contract for approval command routing is finalized.
+Note: approval persistence is intentionally limited to a controlled Matrix event
+contract. The app records the explicit user decision; it does not execute local
+commands or infer behavior from arbitrary agent payloads.
 
 - Implement approve, reject, copy markdown, copy JSON, copy prompt, and open safe link where supported by contract.
 - Persist resulting action state through Matrix events or account data, not local-only iOS state.
 
 Next implementation slices:
 
-- Define `in.synara.agent.action` contract for approve/reject and persistence target.
-- Wire Matrix send path for approve/reject actions to a controlled, authenticated endpoint.
-- Return explicit retryable errors for unsupported action outcomes.
-- Add unit tests for approval action execution, including blocked/error states.
+- Define `in.synara.agent.action` contract for approve/reject and persistence target. Complete.
+- Wire Matrix send path for approve/reject actions to a controlled, authenticated endpoint. Complete.
+- Return explicit retryable errors for unsupported action outcomes. Complete.
+- Add unit tests for approval action execution, including blocked/error states. Complete.
 - Add live smoke validation in a dedicated approval test room.
 
 Deliverables:
