@@ -2,33 +2,35 @@
 
 Reviewed: 2026-05-27
 
-Status: Phase 3 REST boundary validated, and Matrix Rust SDK live E2EE probe
-validated against a disposable encrypted room. Production E2EE is not complete
-in the current REST-backed iOS MVP and must be delivered by moving app-facing
-Matrix services onto the Matrix Rust SDK crypto path before TestFlight or App
-Store release.
+Status: Matrix Rust SDK live E2EE probe validated against a disposable
+encrypted room, and the iOS app target now builds with SDK-backed auth, session
+restore, room list, timeline, and send service adapters. Production E2EE is
+still not release-complete until app-level live encrypted-room validation,
+recovery, verification, key backup, and encrypted media are completed.
 
 ## Current Behavior
 
-- `m.room.encrypted` events are detected by the timeline mapper.
-- Encrypted events render as a safe unavailable-message placeholder.
+- App login/session restore, room list, timeline pagination, and message send
+  are wired through the Matrix Rust SDK service boundary.
+- `m.room.encrypted` and UTD states are still mapped defensively.
+- Encrypted events render as a safe unavailable-message placeholder when the SDK
+  cannot decrypt or the app does not yet support that event surface.
 - Reply, edit, redact, and reaction actions are disabled for encrypted
   placeholders so the app does not pretend to act on undecrypted content.
 - Unit tests cover encrypted placeholder mapping and action availability.
 
 ## Not Yet Supported
 
-- Megolm decryption.
-- Encrypted message sending.
 - Key backup restore.
 - Device verification and cross-signing.
 - Recovery from undecryptable history.
 - Encrypted media decryption.
+- Gated app-level live simulator E2EE smoke is not yet passing because room-list
+  selection/routing does not reach the timeline reliably under UI automation.
 
-These unsupported items describe the shipping app surface. The SDK probe below
-proves the pinned Matrix Rust SDK Swift package can perform the underlying
-login, room encryption inspection, encrypted timeline, and encrypted send work
-outside the app service layer.
+These unsupported items describe the remaining release blockers. The SDK probe
+below proves the pinned Matrix Rust SDK Swift package can perform the underlying
+login, room encryption inspection, encrypted timeline, and encrypted send work.
 
 ## Matrix Rust SDK Live Probe
 
@@ -66,18 +68,22 @@ handle encrypted private rooms that do not publish room aliases.
 
 ## Required Production Work
 
-1. Add Matrix Rust SDK Swift package integration to the app target.
+1. Matrix Rust SDK Swift package integration to the app target. Done.
 2. Introduce app-owned `SynaraMatrix` protocols for auth, session restore, room
    list, timeline, media, and crypto status.
-3. Move login/session restore from REST services to SDK-backed services.
+3. Move login/session restore from REST services to SDK-backed services. Done
+   for auth/session metadata.
 4. Store SDK session and crypto state in SDK-approved storage plus Keychain for
-   app-owned session metadata.
+   app-owned session metadata. Done for login/session; logout now clears SDK
+   persisted stores.
 5. Initialize SDK crypto before sync and before encrypted room timelines load.
+   Done in the SDK client store.
 6. Replace encrypted placeholders with decrypted SDK timeline content when
    available, while preserving safe placeholders for UTD states.
-7. Send encrypted text messages through SDK timeline APIs.
+7. Send encrypted text messages through SDK timeline APIs. Implemented in the
+   SDK-backed message sender; app-level live validation is still pending.
 8. Validate encrypted room sync and send through a gated simulator smoke using a
-   disposable encrypted test room.
+   disposable encrypted test room. Blocked on the UI routing issue above.
 9. Add recovery, verification, and key-backup UX or explicitly block release
    until a conservative minimum is implemented.
 10. Add encrypted media decryption/download before claiming media parity in
@@ -86,8 +92,7 @@ handle encrypted private rooms that do not publish room aliases.
 
 ## Acceptance Gate
 
-Phase 3 is complete for unencrypted live messaging, safe encrypted-event
-fallback, and SDK-level E2EE feasibility. Phase 4 can proceed for local
-development, but external TestFlight and App Store release remain blocked until
-the app itself can send, receive, decrypt, and recover encrypted room content
-according to the production E2EE requirements above.
+Phase 3 plus the SDK-backed app integration build gate are complete enough to
+continue Phase 4 local work. External TestFlight and App Store release remain
+blocked until the app-level encrypted-room live smoke passes and recovery,
+verification, key backup, and encrypted media requirements are closed.

@@ -4,6 +4,7 @@ struct RootShellView: View {
     let environment: AppEnvironment
     @ObservedObject private var router: AppRouter
     @ObservedObject private var session: AppSessionStore
+    @State private var startedMatrixSessionID: String?
 
     init(environment: AppEnvironment = .mock()) {
         self.environment = environment
@@ -28,8 +29,8 @@ struct RootShellView: View {
         switch session.currentState {
         case .signedOut:
             signedOutShell
-        case .signedIn:
-            signedInShell
+        case .signedIn(let authenticatedSession):
+            signedInShell(session: authenticatedSession)
         }
     }
 
@@ -42,12 +43,21 @@ struct RootShellView: View {
         }
     }
 
-    private var signedInShell: some View {
+    private func signedInShell(session authenticatedSession: AuthenticatedSession) -> some View {
         TabView(selection: $router.selectedTab) {
             tab(.rooms)
             tab(.notifications)
             tab(.later)
             tab(.settings)
+        }
+        .task(id: authenticatedSession.userID + authenticatedSession.deviceID) {
+            let sessionID = authenticatedSession.userID + authenticatedSession.deviceID
+            guard startedMatrixSessionID != sessionID else {
+                return
+            }
+            startedMatrixSessionID = sessionID
+            await environment.matrix.start(session: authenticatedSession)
+            environment.push.configure(with: authenticatedSession)
         }
     }
 

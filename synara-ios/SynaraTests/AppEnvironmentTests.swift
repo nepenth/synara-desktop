@@ -50,4 +50,26 @@ final class AppEnvironmentTests: XCTestCase {
         XCTAssertEqual(NotificationPermissionStatus.map(.provisional), .provisional)
         XCTAssertEqual(NotificationPermissionStatus.map(.ephemeral), .ephemeral)
     }
+
+    func testLiveEnvironmentReadsPushGatewayFromEnvironment() {
+        let variable = "SYNARA_PUSH_GATEWAY_URL"
+        setenv(variable, "https://push.example.internal", 1)
+
+        let environment = AppEnvironment.live()
+
+        unsetenv(variable)
+
+        XCTAssertEqual((environment.push as? SynaraPushService)?.pushGatewayURL, "https://push.example.internal")
+    }
+
+    func testLiveEnvironmentIgnoresInvalidPushGatewayEnvironmentValue() {
+        let variable = "SYNARA_PUSH_GATEWAY_URL"
+        setenv(variable, "not a url", 1)
+
+        let environment = AppEnvironment.live()
+
+        unsetenv(variable)
+
+        XCTAssertNil((environment.push as? SynaraPushService)?.pushGatewayURL)
+    }
 }

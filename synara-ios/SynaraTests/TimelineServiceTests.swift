@@ -176,6 +176,91 @@ final class TimelineServiceTests: XCTestCase {
         XCTAssertEqual(items[1].kind, .unknown(type: "synara.agent.card"))
     }
 
+    func testMatrixTimelineParsesAgentCardPayloadFromConfiguredContentKeys() async throws {
+        let client = MockTimelineHTTPClient(responses: [
+            .success(
+                statusCode: 200,
+                body: """
+                {
+                  "chunk": [
+                    {
+                      "event_id": "$agent-card",
+                      "sender": "@agent:matrix.org",
+                      "origin_server_ts": 1600001000,
+                      "type": "m.room.message",
+                      "content": {
+                        "body": "Build result",
+                        "org.hermes.agent": {
+                          "title": "Build result",
+                          "status": "passed",
+                          "summary": "Everything is good.",
+                          "actions": [
+                            {
+                              "id": "continue",
+                              "title": "Continue",
+                              "prompt": "Continue from last step."
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                }
+                """
+            )
+        ])
+        let service = MatrixTimelineService(
+            sessionStore: AppSessionStore(currentState: .signedIn(try makeSession())),
+            httpClient: client
+        )
+
+        let items = await service.loadInitialTimeline(roomID: "!room:matrix.org")
+
+        XCTAssertEqual(items.count, 1)
+        let item = try XCTUnwrap(items.first)
+        guard case .agentCard(let card) = item.kind else {
+            XCTFail("Expected parsed agent card kind")
+            return
+        }
+        XCTAssertEqual(card.title, "Build result")
+        XCTAssertEqual(card.summary, "Everything is good.")
+        XCTAssertEqual(card.status, "passed")
+        XCTAssertEqual(card.actions.count, 1)
+        XCTAssertEqual(card.actions.first?.id, "continue")
+    }
+
+    func testMapperMapsAgentCardKind() {
+        let card = try! SynaraAgentCard(
+            title: "Agent summary",
+            status: "ok",
+            summary: "Plan complete.",
+            actions: [
+                try! SynaraAgentCardAction(
+                    id: "continue",
+                    title: "Continue",
+                    prompt: "continue"
+                )
+            ]
+        )
+        let event = RawTimelineEvent(
+            eventID: "$agent:matrix.org",
+            senderID: "@agent:matrix.org",
+            timestamp: TimelineFixtures.baseDate,
+            type: "org.hermes.agent",
+            body: nil,
+            replyToEventID: nil,
+            isEdited: false,
+            mediaURL: nil,
+            agentCard: card
+        )
+
+        if case .agentCard(let mapped) = TimelineMapper.map(event) {
+            XCTAssertEqual(mapped, card)
+        } else {
+            XCTFail("Expected agent card mapped kind")
+        }
+    }
+
     func testMapperKeepsStableIdentityAndMetadata() {
         let event = RawTimelineEvent(
             eventID: "$event:matrix.org",
