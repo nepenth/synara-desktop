@@ -46,8 +46,12 @@ struct RoomTimelineView: View {
                 selectedPhoto: $selectedPhoto
             )
         }
+        .background(isAgentRoom ? SynaraColor.agentReviewBackground : SynaraColor.surface)
         .navigationTitle(roomTitle ?? "Room")
         .navigationBarBackButtonHidden(true)
+        .toolbar(.hidden, for: .navigationBar)
+        .toolbar(.hidden, for: .tabBar)
+        .preferredColorScheme(isAgentRoom ? .dark : nil)
         .sheet(item: $viewerResource) { resource in
             MediaViewer(resource: resource)
         }
@@ -129,6 +133,7 @@ struct RoomTimelineView: View {
                     }
                     .padding(SynaraSpacing.large)
                 }
+                .background(isAgentRoom ? SynaraColor.agentReviewBackground : SynaraColor.surface)
                 .accessibilityIdentifier("TimelineList")
                 .onAppear {
                     lastRenderedTimelineCount = items.count
@@ -205,6 +210,10 @@ struct RoomTimelineView: View {
             return "Matrix room"
         }
         return "\(participantCount) participants"
+    }
+
+    private var isAgentRoom: Bool {
+        (roomTitle ?? "").localizedCaseInsensitiveContains("agent")
     }
 
     private func isGroupedWithPrevious(index: Int, items: [TimelineItem]) -> Bool {

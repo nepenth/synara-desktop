@@ -80,7 +80,7 @@ final class SynaraUITests: XCTestCase {
     func testRoomRouteShowsTimeline() {
         let app = launchRoomApp()
 
-        XCTAssertTrue(app.navigationBars["Project"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Project"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.scrollViews["TimelineList"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["LoadOlderTimelineButton"].exists)
         XCTAssertTrue(app.staticTexts["Hello from iOS"].waitForExistence(timeout: 5))
@@ -205,7 +205,7 @@ final class SynaraUITests: XCTestCase {
         XCTAssertTrue(row.waitForExistence(timeout: 5))
         tap(row)
 
-        XCTAssertTrue(app.navigationBars["!project:matrix.org"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["!project:matrix.org"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.scrollViews["TimelineList"].waitForExistence(timeout: 5))
     }
 
