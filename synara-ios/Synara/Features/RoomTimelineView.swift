@@ -27,7 +27,6 @@ struct RoomTimelineView: View {
             )
         }
         .navigationTitle("Room")
-        .accessibilityIdentifier("RoomTimelineScreen-\(roomID)")
         .sheet(item: $viewerResource) { resource in
             MediaViewer(resource: resource)
         }
@@ -331,13 +330,14 @@ private struct ComposerView: View {
                 .accessibilityLabel("Attach")
                 .accessibilityIdentifier("AttachmentButton")
 
-                TextEditor(text: $text)
-                    .frame(minHeight: 44, maxHeight: 96)
+                TextField("Message", text: $text, axis: .vertical)
+                    .lineLimit(1...4)
+                    .padding(SynaraSpacing.small)
                     .overlay(
                         RoundedRectangle(cornerRadius: 8)
                             .stroke(SynaraColor.secondaryText.opacity(0.25))
                     )
-                    .accessibilityIdentifier("ComposerTextEditor")
+                    .accessibilityIdentifier("ComposerTextField")
 
                 Button(action: onSend) {
                     Image(systemName: "paperplane.fill")

@@ -4,7 +4,8 @@ Reviewed: 2026-05-27
 
 Status: Phase 1 shell/foundation, Phase 2 auth/session/sync/room-list/logout,
 Phase 3 timeline UI, composer, event actions, media viewer, and media upload
-MVP work are build-validated; simulator runtime execution pending.
+MVP work are build-validated and simulator runtime validated with deterministic
+mock services.
 
 ## Project Shape
 
@@ -30,17 +31,30 @@ Result: `BUILD SUCCEEDED`.
 
 Result: `TEST BUILD SUCCEEDED`.
 
-## Local Environment Blocker
+## Local Simulator Validation
 
-Running tests or launching the simulator is currently blocked by a local Xcode
-and CoreSimulator mismatch:
+Local simulator execution is unblocked as of 2026-05-27. Validation ran on an
+iPhone 17 Pro simulator using iOS 26.5.
 
-```text
-CoreSimulator is out of date. Current version (1051.50.0) is older than build version (1051.54.0).
+```sh
+xcodebuild -project Synara.xcodeproj -scheme Synara -configuration Debug \
+  -destination 'platform=iOS Simulator,id=<simulator-id>' \
+  -derivedDataPath /private/tmp/synara-ios-mcp-derived \
+  -only-testing:SynaraTests test
+
+xcodebuild -project Synara.xcodeproj -scheme Synara -configuration Debug \
+  -destination 'platform=iOS Simulator,id=<simulator-id>' \
+  -derivedDataPath /private/tmp/synara-ios-mcp-derived \
+  -only-testing:SynaraUITests test
 ```
 
-Until that local Xcode/simulator state is repaired, `xcrun simctl` cannot list
-usable simulator runtimes and UI tests cannot execute.
+Results:
+
+- `SynaraTests`: 49 tests, 0 failures.
+- `SynaraUITests`: 9 tests, 0 failures.
+
+UI tests launch the app with `SYNARA_UI_TESTS=1`, which forces deterministic
+mock services instead of live Keychain, auth, and Matrix dependencies.
 
 ## Current App Surface
 
@@ -64,8 +78,7 @@ usable simulator runtimes and UI tests cannot execute.
 - Placeholder screens with iOS 16-compatible SwiftUI.
 - Unit smoke tests for routing, dependency wiring, settings storage, and
   redaction.
-- UI smoke tests that assert primary tabs exist and Settings can be selected
-  once simulator execution works.
+- UI smoke tests assert primary tabs exist and Settings can be selected.
 
 ## Current Auth Surface
 
@@ -78,7 +91,7 @@ usable simulator runtimes and UI tests cannot execute.
 - Unit tests cover URL normalization, invalid input, mock discovery requests,
   and login routing.
 - UI tests cover signed-out homeserver selection, invalid input, and successful
-  navigation to the login placeholder once simulator execution works.
+  navigation to the login form.
 - Login screen accepts username and password input.
 - Auth service contract supports password-login requests behind placeholder and
   mock implementations.
@@ -87,8 +100,7 @@ usable simulator runtimes and UI tests cannot execute.
 - Failed login shows non-sensitive errors and does not persist credentials.
 - Unit tests cover auth request validation, mock auth fixtures, and session
   state transitions.
-- UI tests cover missing-credential errors and successful mock login once
-  simulator execution works.
+- UI tests cover missing-credential errors and successful mock login.
 - Secure session storage supports save, load, delete, corrupt-entry handling,
   and legacy envelope migration through the app session store contract.
 - Login saves sessions through secure storage before transitioning to the
@@ -117,4 +129,4 @@ usable simulator runtimes and UI tests cannot execute.
   event action behavior, and media URL/path safety.
 - UI tests cover opening a room from the room list, sending a mock message,
   adding a mock media attachment, and logout return to the homeserver selection
-  shell once simulator execution works.
+  shell.
