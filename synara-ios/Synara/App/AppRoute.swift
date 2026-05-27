@@ -15,8 +15,32 @@ enum AppDeepLink: Equatable {
     case later
 
     init?(url: URL) {
+        let scheme = url.scheme?.lowercased()
         let host = url.host?.lowercased()
         let pathComponents = url.pathComponents.filter { $0 != "/" }
+
+        if scheme == "https" {
+            guard host == "synara.app",
+                  pathComponents.first?.lowercased() == "r",
+                  pathComponents.count > 1 else {
+                return nil
+            }
+
+            let encodedPath = pathComponents.dropFirst().joined(separator: "/")
+            let decodedPath = encodedPath.removingPercentEncoding ?? encodedPath
+            let normalizedPath = decodedPath.hasPrefix("/") ? decodedPath : "/\(decodedPath)"
+            guard let routeURL = URL(string: "synara://host\(normalizedPath)"),
+                  let parsed = AppDeepLink(url: routeURL) else {
+                return nil
+            }
+
+            self = parsed
+            return
+        }
+
+        guard scheme == "synara" else {
+            return nil
+        }
 
         if host == "settings" || pathComponents.first?.lowercased() == "settings" {
             self = .settings

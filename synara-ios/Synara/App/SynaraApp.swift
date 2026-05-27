@@ -174,9 +174,18 @@ private extension AppEnvironment {
             router.selectedTab = .later
         }
 
-        let timeline = processEnvironment["SYNARA_UI_TEST_AGENT_CARD"] == "1"
-            ? MockTimelineService(events: uiTestAgentCardEvents())
-            : MockTimelineService()
+        let timeline: TimelineServicing
+        if processEnvironment["SYNARA_UI_TEST_AGENT_CARD"] == "1" {
+            timeline = MockTimelineService(events: uiTestAgentCardEvents())
+        } else if processEnvironment["SYNARA_UI_TEST_LARGE_TIMELINE"] == "1" {
+            timeline = MockTimelineService(items: TimelineFixtures.largeTimeline())
+        } else {
+            timeline = MockTimelineService()
+        }
+
+        let roomList = processEnvironment["SYNARA_UI_TEST_LARGE_ROOMS"] == "1"
+            ? MockRoomListService(state: .loaded(RoomListFixtures.large()))
+            : MockRoomListService()
         let later = processEnvironment["SYNARA_UI_TEST_LATER_ITEMS"] == "1"
             ? MockLaterService(items: uiTestLaterItems())
             : MockLaterService()
@@ -200,6 +209,7 @@ private extension AppEnvironment {
         return .mock(
             router: router,
             session: session,
+            roomList: roomList,
             timeline: timeline,
             later: later,
             agentApprovals: agentApprovals

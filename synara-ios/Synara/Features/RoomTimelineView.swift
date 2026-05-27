@@ -453,6 +453,7 @@ private struct TimelineRow: View {
         }
         .accessibilityElement(children: accessibilityChildBehavior)
         .accessibilityLabel(accessibilitySummary)
+        .accessibilityHint(accessibilityHint)
         .accessibilityIdentifier("TimelineItem-\(item.eventID)")
     }
 
@@ -515,6 +516,15 @@ private struct TimelineRow: View {
 
         return .combine
     }
+
+    private var accessibilityHint: String {
+        switch item.kind {
+        case .agentCard:
+            return "Review available agent actions"
+        default:
+            return "Long press for message actions"
+        }
+    }
 }
 
 private struct AgentCardTimelineRow: View {
@@ -554,7 +564,8 @@ private struct AgentCardTimelineRow: View {
                     }
                     .disabled(SynaraAgentCardActionResolver.shouldRender(action) == false)
                     .buttonStyle(.bordered)
-                    .controlSize(.small)
+                    .controlSize(.regular)
+                    .accessibilityHint("Performs \(action.title)")
                     .accessibilityIdentifier("AgentCardAction-\(action.id)")
                 }
             }
@@ -620,6 +631,8 @@ private struct ComposerView: View {
                         RoundedRectangle(cornerRadius: 8)
                             .stroke(SynaraColor.secondaryText.opacity(0.25))
                     )
+                    .accessibilityLabel("Message")
+                    .accessibilityHint("Enter a message for this room")
                     .accessibilityIdentifier("ComposerTextField")
 
                 Button(action: onSend) {
@@ -631,6 +644,7 @@ private struct ComposerView: View {
                 .contentShape(Rectangle())
                 .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 .accessibilityLabel("Send")
+                .accessibilityHint("Sends the current message")
                 .accessibilityIdentifier("ComposerSendButton")
             }
 
@@ -660,6 +674,7 @@ private struct ComposerRelationBanner: View {
                 .lineLimit(1)
             Spacer()
             Button("Cancel", action: onCancel)
+                .accessibilityLabel("Cancel \(title.lowercased())")
         }
     }
 }
