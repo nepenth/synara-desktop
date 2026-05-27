@@ -25,6 +25,11 @@ struct AppEnvironment {
             secureStore: KeychainSecureSessionStore(),
             restorePersistedSession: true
         )
+        if let restoreFailure = session.restoreFailureLogDescription {
+            logger.error("Session restore failed: \(restoreFailure)", category: .auth)
+        } else if case .signedIn = session.currentState {
+            logger.info("Session restore succeeded", category: .auth)
+        }
         let matrix = PlaceholderMatrixClientService()
         let push = PlaceholderPushService()
         let roomList = MatrixRoomListService(sessionStore: session)
@@ -50,8 +55,8 @@ struct AppEnvironment {
             messageSender: MatrixMessageSendService(sessionStore: session),
             drafts: DraftStore(),
             eventActions: MatrixEventActionService(sessionStore: session),
-            mediaLoader: MockMediaLoader(),
-            mediaUploader: MockMediaUploadService()
+            mediaLoader: MatrixMediaLoader(sessionStore: session),
+            mediaUploader: MatrixMediaUploadService(sessionStore: session)
         )
     }
 

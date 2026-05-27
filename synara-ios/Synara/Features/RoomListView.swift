@@ -160,7 +160,6 @@ private struct InviteRoomListRow: View {
         .padding(SynaraSpacing.medium)
         .background(SynaraColor.secondarySurface)
         .clipShape(RoundedRectangle(cornerRadius: 8))
-        .accessibilityIdentifier("InviteRoomRow-\(room.id)")
     }
 }
 
