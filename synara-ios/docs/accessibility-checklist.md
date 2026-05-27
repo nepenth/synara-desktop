@@ -20,6 +20,8 @@ Status: initial Phase 6 audit complete for the native MVP surface.
 - Composer controls have explicit labels and hints for attach, message entry, and send.
 - Agent action buttons use regular control sizing and explicit hints.
 - Invite and logout destructive paths include explicit hints and confirmation coverage.
+- Phase 6.5 keeps icon controls at 44 points, adds visible search and product
+  headers, and preserves deterministic UI coverage after the visual redesign.
 
 ## Manual Review Notes
 

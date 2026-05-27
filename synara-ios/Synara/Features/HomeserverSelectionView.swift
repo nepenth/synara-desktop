@@ -8,6 +8,15 @@ struct HomeserverSelectionView: View {
     var body: some View {
         Form {
             Section {
+                SynaraProductHeader(
+                    title: "Synara",
+                    subtitle: "Native Matrix rooms, agent approvals, and private workflows across your devices."
+                )
+                .accessibilityIdentifier("HomeserverProductHeader")
+            }
+            .listRowBackground(Color.clear)
+
+            Section {
                 TextField("matrix.org", text: $address)
                     .keyboardType(.URL)
                     .textInputAutocapitalization(.never)

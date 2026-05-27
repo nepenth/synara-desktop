@@ -65,6 +65,18 @@ final class SynaraUITests: XCTestCase {
         XCTAssertTrue(app.buttons["RoomRow-!alice:matrix.org"].exists)
     }
 
+    func testRoomSearchFiltersByName() {
+        let app = launchFilteredRoomsApp(query: "Alice")
+
+        XCTAssertTrue(app.collectionViews["RoomList"].waitForExistence(timeout: 5))
+        let searchField = app.textFields["RoomSearchField"]
+        XCTAssertTrue(searchField.waitForExistence(timeout: 5))
+        XCTAssertEqual(searchField.value as? String, "Alice")
+
+        XCTAssertTrue(app.buttons["RoomRow-!alice:matrix.org"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["RoomRow-!project:matrix.org"].exists)
+    }
+
     func testRoomRouteShowsTimeline() {
         let app = launchRoomApp()
 
@@ -342,6 +354,15 @@ final class SynaraUITests: XCTestCase {
         return app
     }
 
+    private func launchFilteredRoomsApp(query: String) -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchEnvironment["SYNARA_UI_TESTS"] = "1"
+        app.launchEnvironment["SYNARA_UI_TEST_SIGNED_IN"] = "1"
+        app.launchEnvironment["SYNARA_UI_TEST_ROOM_SEARCH"] = query
+        app.launch()
+        return app
+    }
+
     private func launchLargeTimelineApp() -> XCUIApplication {
         let app = XCUIApplication()
         app.launchEnvironment["SYNARA_UI_TESTS"] = "1"
@@ -405,7 +426,8 @@ final class SynaraUITests: XCTestCase {
         app.textFields["LoginUsernameField"].typeText("alice")
         app.secureTextFields["LoginPasswordField"].tap()
         app.secureTextFields["LoginPasswordField"].typeText("password")
-        app.buttons["LoginSubmitButton"].tap()
+        app.swipeUp()
+        tap(app.buttons["LoginSubmitButton"])
     }
 
     private func loginLive(app: XCUIApplication, homeserver: String, username: String, password: String) {
@@ -420,7 +442,8 @@ final class SynaraUITests: XCTestCase {
         app.textFields["LoginUsernameField"].typeText(username)
         app.secureTextFields["LoginPasswordField"].tap()
         app.secureTextFields["LoginPasswordField"].typeText(password)
-        app.buttons["LoginSubmitButton"].tap()
+        app.swipeUp()
+        tap(app.buttons["LoginSubmitButton"])
     }
 
     private func waitForLogin(app: XCUIApplication) {
