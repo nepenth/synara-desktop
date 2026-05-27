@@ -399,7 +399,7 @@ enum TimelineFixtures {
                 senderID: "@alice:matrix.org",
                 timestamp: baseDate,
                 type: "m.room.message",
-                body: "Hello from iOS",
+                body: "Here's the latest spec for the new permissions model. Hello from iOS",
                 replyToEventID: nil,
                 isEdited: false,
                 mediaURL: nil
@@ -409,7 +409,7 @@ enum TimelineFixtures {
                 senderID: "@bob:matrix.org",
                 timestamp: baseDate.addingTimeInterval(30),
                 type: "m.room.message",
-                body: "Reply body",
+                body: "Thanks. A couple of questions inline.",
                 replyToEventID: "$text:\(roomID)",
                 isEdited: true,
                 mediaURL: nil
@@ -419,17 +419,17 @@ enum TimelineFixtures {
                 senderID: "@alice:matrix.org",
                 timestamp: baseDate.addingTimeInterval(45),
                 type: "m.room.media",
-                body: "photo.jpg",
+                body: "permissions-v2.pdf",
                 replyToEventID: nil,
                 isEdited: false,
                 mediaURL: URL(string: "mxc://matrix.org/media-id")
             ),
             RawTimelineEvent(
-                eventID: "$unknown:\(roomID)",
-                senderID: "@agent:matrix.org",
+                eventID: "$security:\(roomID)",
+                senderID: "@ravi:matrix.org",
                 timestamp: baseDate.addingTimeInterval(60),
-                type: "synara.agent.card",
-                body: nil,
+                type: "m.room.message",
+                body: "From a security perspective this looks good.",
                 replyToEventID: nil,
                 isEdited: false,
                 mediaURL: nil
