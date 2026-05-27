@@ -28,6 +28,15 @@ struct RoutePlaceholderView: View {
 
     var body: some View {
         switch route {
+        case .login(let homeserverURL):
+            PlaceholderScreen(title: "Login", systemImage: "person.badge.key")
+                .accessibilityIdentifier("LoginScreen")
+                .overlay(alignment: .bottom) {
+                    Text(homeserverURL)
+                        .font(SynaraTypography.supporting)
+                        .foregroundStyle(SynaraColor.secondaryText)
+                        .padding(SynaraSpacing.large)
+                }
         case .room(let id):
             PlaceholderScreen(title: "Room \(id)", systemImage: "number")
         case .settings:
