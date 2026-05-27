@@ -152,3 +152,180 @@ struct MockTimelineService: TimelineServicing {
         events.filter { $0.eventID != eventID }.map(TimelineMapper.map)
     }
 }
+
+final class MatrixTimelineService: TimelineServicing {
+    private let sessionStore: AppSessionStore
+    private let httpClient: AuthHTTPClient
+    private let jsonDecoder: JSONDecoder
+
+    init(
+        sessionStore: AppSessionStore,
+        httpClient: AuthHTTPClient = URLSession.shared,
+        jsonDecoder: JSONDecoder = JSONDecoder()
+    ) {
+        self.sessionStore = sessionStore
+        self.httpClient = httpClient
+        self.jsonDecoder = jsonDecoder
+    }
+
+    func loadInitialTimeline(roomID: String) async -> [TimelineItem] {
+        await loadTimeline(roomID: roomID, from: nil)
+    }
+
+    func loadOlderTimeline(roomID: String, before eventID: String) async -> [TimelineItem] {
+        await loadTimeline(roomID: roomID, from: eventID)
+    }
+
+    private func loadTimeline(roomID: String, from: String?) async -> [TimelineItem] {
+        guard case .signedIn(let session) = sessionStore.currentState else {
+            return []
+        }
+
+        do {
+            var request = URLRequest(url: messagesURL(homeserverURL: session.homeserverURL, roomID: roomID, from: from))
+            request.httpMethod = "GET"
+            request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
+
+            let (data, response) = try await httpClient.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse,
+                  httpResponse.statusCode == 200 else {
+                return []
+            }
+
+            let messages = try jsonDecoder.decode(MatrixMessagesResponse.self, from: data)
+            return messages.chunk
+                .reversed()
+                .compactMap(mapEvent)
+                .map(TimelineMapper.map)
+        } catch {
+            return []
+        }
+    }
+
+    private func messagesURL(homeserverURL: URL, roomID: String, from: String?) -> URL {
+        var url = homeserverURL
+        url.appendPathComponent("_matrix")
+        url.appendPathComponent("client")
+        url.appendPathComponent("v3")
+        url.appendPathComponent("rooms")
+        url.appendPathComponent(roomID)
+        url.appendPathComponent("messages")
+
+        var queryItems = [
+            URLQueryItem(name: "dir", value: "b"),
+            URLQueryItem(name: "limit", value: "50")
+        ]
+
+        if let from {
+            queryItems.append(URLQueryItem(name: "from", value: from))
+        }
+
+        var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        components?.queryItems = queryItems
+        return components?.url ?? url
+    }
+
+    private func mapEvent(_ event: MatrixTimelineEvent) -> RawTimelineEvent? {
+        guard let eventID = event.eventID,
+              let sender = event.sender else {
+            return nil
+        }
+
+        let content = event.content ?? MatrixTimelineEventContent()
+        let eventType: String
+        let body: String?
+        let mediaURL: URL?
+
+        if event.type == "m.room.message" {
+            if let msgtype = content.msgtype,
+               ["m.image", "m.file", "m.audio", "m.video"].contains(msgtype) {
+                eventType = "m.room.media"
+                body = content.body
+                mediaURL = content.url.flatMap(URL.init(string:))
+            } else {
+                eventType = event.type
+                body = content.body
+                mediaURL = nil
+            }
+        } else {
+            eventType = event.type
+            body = content.body
+            mediaURL = content.url.flatMap(URL.init(string:))
+        }
+
+        return RawTimelineEvent(
+            eventID: eventID,
+            senderID: sender,
+            timestamp: Date(timeIntervalSince1970: TimeInterval(event.originServerTimestamp ?? 0) / 1_000),
+            type: eventType,
+            body: body,
+            replyToEventID: content.relatesTo?.inReplyTo?.eventID,
+            isEdited: content.relatesTo?.relType == "m.replace",
+            mediaURL: mediaURL
+        )
+    }
+}
+
+private struct MatrixMessagesResponse: Decodable {
+    let chunk: [MatrixTimelineEvent]
+}
+
+private struct MatrixTimelineEvent: Decodable {
+    let eventID: String?
+    let sender: String?
+    let originServerTimestamp: Int?
+    let type: String
+    let content: MatrixTimelineEventContent?
+
+    enum CodingKeys: String, CodingKey {
+        case eventID = "event_id"
+        case sender
+        case originServerTimestamp = "origin_server_ts"
+        case type
+        case content
+    }
+}
+
+private struct MatrixTimelineEventContent: Decodable {
+    let body: String?
+    let msgtype: String?
+    let url: String?
+    let relatesTo: MatrixRelatesTo?
+
+    init(
+        body: String? = nil,
+        msgtype: String? = nil,
+        url: String? = nil,
+        relatesTo: MatrixRelatesTo? = nil
+    ) {
+        self.body = body
+        self.msgtype = msgtype
+        self.url = url
+        self.relatesTo = relatesTo
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case body
+        case msgtype
+        case url
+        case relatesTo = "m.relates_to"
+    }
+}
+
+private struct MatrixRelatesTo: Decodable {
+    let relType: String?
+    let inReplyTo: MatrixInReplyTo?
+
+    enum CodingKeys: String, CodingKey {
+        case relType = "rel_type"
+        case inReplyTo = "m.in_reply_to"
+    }
+}
+
+private struct MatrixInReplyTo: Decodable {
+    let eventID: String?
+
+    enum CodingKeys: String, CodingKey {
+        case eventID = "event_id"
+    }
+}

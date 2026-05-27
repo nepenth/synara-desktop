@@ -6,12 +6,18 @@ struct RoomSummary: Identifiable, Equatable {
         case directMessage
     }
 
+    enum Membership: Equatable {
+        case joined
+        case invited
+    }
+
     let id: String
     let name: String
     let lastMessagePreview: String
     let unreadCount: Int
     let hasHighlight: Bool
     let kind: RoomKind
+    let membership: Membership
     let lastActivityAt: Date
 }
 
@@ -26,6 +32,25 @@ enum RoomListState: Equatable {
 protocol RoomListServicing: AnyObject {
     func loadRooms() async -> RoomListState
     func clearCache()
+}
+
+enum RoomMembershipError: LocalizedError, Equatable {
+    case signedOut
+    case failed
+
+    var errorDescription: String? {
+        switch self {
+        case .signedOut:
+            return "Sign in before changing room membership."
+        case .failed:
+            return "Could not update the room invite. Try again."
+        }
+    }
+}
+
+protocol RoomMembershipServicing: AnyObject {
+    func acceptInvite(roomID: String) async throws
+    func rejectInvite(roomID: String) async throws
 }
 
 enum RoomListFixtures {
@@ -44,6 +69,7 @@ enum RoomListFixtures {
                 unreadCount: 3,
                 hasHighlight: true,
                 kind: .room,
+                membership: .joined,
                 lastActivityAt: now.addingTimeInterval(60)
             ),
             RoomSummary(
@@ -53,6 +79,7 @@ enum RoomListFixtures {
                 unreadCount: 0,
                 hasHighlight: false,
                 kind: .directMessage,
+                membership: .joined,
                 lastActivityAt: now
             )
         ]
@@ -71,6 +98,7 @@ enum RoomListFixtures {
                 unreadCount: index % 7,
                 hasHighlight: index % 23 == 0,
                 kind: kind,
+                membership: .joined,
                 lastActivityAt: now.addingTimeInterval(TimeInterval(-index))
             )
             rooms.append(room)
@@ -180,6 +208,7 @@ final class MatrixRoomListService: RoomListServicing {
                 unreadCount: joinedRoom.unreadNotifications?.notificationCount ?? 0,
                 hasHighlight: (joinedRoom.unreadNotifications?.highlightCount ?? 0) > 0,
                 kind: .room,
+                membership: .joined,
                 lastActivityAt: lastActivityAt
             )
         } ?? []
@@ -193,6 +222,7 @@ final class MatrixRoomListService: RoomListServicing {
                 unreadCount: 1,
                 hasHighlight: true,
                 kind: .room,
+                membership: .invited,
                 lastActivityAt: latestActivityDate(from: inviteEvents)
             )
         } ?? []
@@ -293,6 +323,75 @@ private struct MatrixUnreadNotifications: Decodable {
     enum CodingKeys: String, CodingKey {
         case notificationCount = "notification_count"
         case highlightCount = "highlight_count"
+    }
+}
+
+final class MatrixRoomMembershipService: RoomMembershipServicing {
+    private let sessionStore: AppSessionStore
+    private let httpClient: AuthHTTPClient
+
+    init(
+        sessionStore: AppSessionStore,
+        httpClient: AuthHTTPClient = URLSession.shared
+    ) {
+        self.sessionStore = sessionStore
+        self.httpClient = httpClient
+    }
+
+    func acceptInvite(roomID: String) async throws {
+        try await membershipRequest(roomID: roomID, action: "join")
+    }
+
+    func rejectInvite(roomID: String) async throws {
+        try await membershipRequest(roomID: roomID, action: "leave")
+    }
+
+    private func membershipRequest(roomID: String, action: String) async throws {
+        guard case .signedIn(let session) = sessionStore.currentState else {
+            throw RoomMembershipError.signedOut
+        }
+
+        var request = URLRequest(url: membershipURL(homeserverURL: session.homeserverURL, roomID: roomID, action: action))
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = Data("{}".utf8)
+
+        do {
+            let (_, response) = try await httpClient.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse,
+                  (200...299).contains(httpResponse.statusCode) else {
+                throw RoomMembershipError.failed
+            }
+        } catch let error as RoomMembershipError {
+            throw error
+        } catch {
+            throw RoomMembershipError.failed
+        }
+    }
+
+    private func membershipURL(homeserverURL: URL, roomID: String, action: String) -> URL {
+        var url = homeserverURL
+        url.appendPathComponent("_matrix")
+        url.appendPathComponent("client")
+        url.appendPathComponent("v3")
+        url.appendPathComponent("rooms")
+        url.appendPathComponent(roomID)
+        url.appendPathComponent(action)
+        return url
+    }
+}
+
+final class MockRoomMembershipService: RoomMembershipServicing {
+    private(set) var acceptedRoomIDs: [String] = []
+    private(set) var rejectedRoomIDs: [String] = []
+
+    func acceptInvite(roomID: String) async throws {
+        acceptedRoomIDs.append(roomID)
+    }
+
+    func rejectInvite(roomID: String) async throws {
+        rejectedRoomIDs.append(roomID)
     }
 }
 
