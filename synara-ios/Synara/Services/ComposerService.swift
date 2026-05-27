@@ -1,0 +1,63 @@
+import Foundation
+
+struct MessageSendRequest: Equatable {
+    let roomID: String
+    let body: String
+    let replyToEventID: String?
+    let editEventID: String?
+}
+
+enum MessageSendError: LocalizedError, Equatable {
+    case emptyMessage
+    case failed
+
+    var errorDescription: String? {
+        switch self {
+        case .emptyMessage:
+            return "Enter a message before sending."
+        case .failed:
+            return "Message could not be sent. Try again."
+        }
+    }
+}
+
+protocol MessageSending {
+    func send(_ request: MessageSendRequest) async throws -> TimelineItem
+}
+
+final class DraftStore {
+    private var drafts: [String: String] = [:]
+
+    func draft(roomID: String) -> String {
+        drafts[roomID] ?? ""
+    }
+
+    func setDraft(_ draft: String, roomID: String) {
+        drafts[roomID] = draft
+    }
+
+    func clearDraft(roomID: String) {
+        drafts.removeValue(forKey: roomID)
+    }
+}
+
+struct MockMessageSendService: MessageSending {
+    func send(_ request: MessageSendRequest) async throws -> TimelineItem {
+        let body = request.body.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard body.isEmpty == false else {
+            throw MessageSendError.emptyMessage
+        }
+
+        let eventID = "$local-\(UUID().uuidString)"
+        return TimelineItem(
+            id: eventID,
+            eventID: eventID,
+            senderID: "@local:matrix.org",
+            timestamp: Date(),
+            kind: .text(body),
+            replyToEventID: request.replyToEventID,
+            isEdited: request.editEventID != nil,
+            reactions: [:]
+        )
+    }
+}

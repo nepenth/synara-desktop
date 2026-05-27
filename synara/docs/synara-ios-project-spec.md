@@ -691,6 +691,12 @@ Acceptance criteria:
 
 Dependencies: IOS-0301, IOS-0105.
 
+Status: initial native implementation complete. The room timeline renders lazy
+rows for mapped text, reply, edit, redaction, unknown, media placeholder, and
+reaction states. Build-for-testing passes; simulator runtime validation remains
+blocked by the local CoreSimulator mismatch documented in
+[`synara-ios/docs/ios-validation-status.md`](../../synara-ios/docs/ios-validation-status.md).
+
 Requirements:
 
 - Render timeline groups, sender labels, timestamps, text, replies, edits, reactions, and redactions.
@@ -713,6 +719,10 @@ Acceptance criteria:
 ### IOS-0303: Composer MVP
 
 Dependencies: IOS-0302.
+
+Status: initial native implementation complete. Composer supports multiline
+plain-text drafts, empty-message guarding, per-room draft preservation, local
+echo through the message sending service, and mock UI coverage.
 
 Requirements:
 
@@ -737,6 +747,10 @@ Acceptance criteria:
 
 Dependencies: IOS-0303.
 
+Status: initial native implementation complete. Event action availability and
+mock action application are wired through context menus and covered by unit
+tests.
+
 Requirements:
 
 - Add event actions for reply, edit, redact, and reaction.
@@ -759,6 +773,10 @@ Acceptance criteria:
 ### IOS-0305: Media Download And Viewer
 
 Dependencies: IOS-0302.
+
+Status: initial native implementation complete. Authenticated media resources,
+safe display descriptions, media placeholders, viewer presentation, and media
+URL safety tests are in place.
 
 Requirements:
 
@@ -783,6 +801,10 @@ Acceptance criteria:
 ### IOS-0306: Media Upload
 
 Dependencies: IOS-0303, IOS-0305.
+
+Status: initial native implementation complete. Mock attachment upload presents
+upload progress, appends a media local echo, and sanitizes local file/path input
+before display.
 
 Requirements:
 
