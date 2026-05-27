@@ -1,18 +1,31 @@
-import PhotosUI
 import SwiftUI
+import PhotosUI
+#if canImport(UIKit)
+import UIKit
+#endif
 
 struct RoomTimelineView: View {
     let roomID: String
     let roomTitle: String?
+    let focusedEventID: String?
     @Environment(\.appEnvironment) private var environment
     @State private var state: TimelineViewState = .idle
     @State private var draft: String = ""
     @State private var replyTarget: TimelineItem?
     @State private var editTarget: TimelineItem?
     @State private var sendError: String?
+    @State private var hasAnchoredEvent = false
     @State private var uploadState: MediaUploadState = .idle
     @State private var viewerResource: MediaResource?
     @State private var selectedPhoto: PhotosPickerItem?
+    @State private var agentActionMessage: String?
+    @Environment(\.openURL) private var openURL
+
+    init(roomID: String, roomTitle: String?, focusedEventID: String? = nil) {
+        self.roomID = roomID
+        self.roomTitle = roomTitle
+        self.focusedEventID = focusedEventID
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -34,7 +47,18 @@ struct RoomTimelineView: View {
         .sheet(item: $viewerResource) { resource in
             MediaViewer(resource: resource)
         }
+        .alert("Agent Action", isPresented: Binding(
+            get: { agentActionMessage != nil },
+            set: { if !$0 { agentActionMessage = nil } }
+        )) {
+            Button("OK") {
+                agentActionMessage = nil
+            }
+        } message: {
+            Text(agentActionMessage ?? "")
+        }
         .task(id: roomID) {
+            hasAnchoredEvent = false
             draft = environment.drafts.draft(roomID: roomID)
             await loadTimeline()
         }
@@ -63,39 +87,74 @@ struct RoomTimelineView: View {
                 }
             }
         case .loaded(let items, let isPaginating):
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: SynaraSpacing.medium) {
-                    if isPaginating {
-                        ProgressView()
-                            .frame(maxWidth: .infinity)
-                    }
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: SynaraSpacing.medium) {
+                        if isPaginating {
+                            ProgressView()
+                                .frame(maxWidth: .infinity)
+                        }
 
-                    Button {
-                        loadOlderTimeline(before: items.first?.eventID)
-                    } label: {
-                        Label("Load Older", systemImage: "arrow.up")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.bordered)
-                    .disabled(isPaginating || items.isEmpty)
-                    .accessibilityIdentifier("LoadOlderTimelineButton")
+                        Button {
+                            loadOlderTimeline(before: items.first?.eventID)
+                        } label: {
+                            Label("Load Older", systemImage: "arrow.up")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.bordered)
+                        .disabled(isPaginating || items.isEmpty)
+                        .accessibilityIdentifier("LoadOlderTimelineButton")
 
-                    ForEach(items) { item in
-                        TimelineRow(
-                            item: item,
-                            currentUserID: currentUserID,
-                            availability: environment.eventActions.availability(for: item, currentUserID: currentUserID),
-                            onReply: { replyTarget = item },
-                            onEdit: { beginEdit(item) },
-                            onRedact: { applyAction(.redact, to: item) },
-                            onReact: { applyAction(.react("👍"), to: item) },
-                            onOpenMedia: { resource in viewerResource = resource }
-                        )
+                        ForEach(items) { item in
+                            TimelineRow(
+                                item: item,
+                                currentUserID: currentUserID,
+                                availability: environment.eventActions.availability(for: item, currentUserID: currentUserID),
+                                onReply: { replyTarget = item },
+                                onEdit: { beginEdit(item) },
+                                onRedact: { applyAction(.redact, to: item) },
+                                onReact: { applyAction(.react("👍"), to: item) },
+                                onOpenMedia: { resource in viewerResource = resource },
+                                onAgentAction: executeAgentAction
+                            )
+                            .id(item.eventID)
+                        }
                     }
+                    .padding(SynaraSpacing.large)
                 }
-                .padding(SynaraSpacing.large)
+                .accessibilityIdentifier("TimelineList")
+                .onAppear {
+                    scrollToAnchoredEvent(items: items, proxy: proxy)
+                }
+                .onChange(of: state) { currentState in
+                    guard case .loaded(let updatedItems, _) = currentState else {
+                        return
+                    }
+                    scrollToAnchoredEvent(items: updatedItems, proxy: proxy)
+                }
             }
-            .accessibilityIdentifier("TimelineList")
+        }
+    }
+
+    private func scrollToAnchoredEvent(items: [TimelineItem], proxy: ScrollViewProxy) {
+        guard hasAnchoredEvent == false,
+              let focusedEventID else {
+            return
+        }
+
+        guard let target = items.first(where: { item in
+            item.eventID == focusedEventID || item.id == focusedEventID
+        }) else {
+            return
+        }
+
+        hasAnchoredEvent = true
+        Task {
+            await MainActor.run {
+                withAnimation {
+                    proxy.scrollTo(target.id, anchor: .center)
+                }
+            }
         }
     }
 
@@ -260,9 +319,36 @@ struct RoomTimelineView: View {
         }
         state = .loaded(items.map { $0.id == item.id ? item : $0 }, isPaginating: isPaginating)
     }
+
+    private func executeAgentAction(_ action: SynaraAgentCardAction) {
+        switch SynaraAgentCardActionResolver.plan(for: action) {
+        case .success(let plan):
+            switch plan {
+            case .openURL(let url):
+                openURL(url)
+            case .copyText(let text):
+                #if canImport(UIKit)
+                UIPasteboard.general.string = text
+                #endif
+            case .blocked(let reason):
+                agentActionMessage = reason
+            }
+        case .failure(let error):
+            switch error {
+            case .unsupportedKind(let unsupported):
+                agentActionMessage = "Unsupported action: \(unsupported)"
+            case .missingPayload:
+                agentActionMessage = "Action payload is missing"
+            case .unsafeURL:
+                agentActionMessage = "Action link is not allowed"
+            case .encodingFailure:
+                agentActionMessage = "Could not copy action payload"
+            }
+        }
+    }
 }
 
-private enum TimelineViewState {
+private enum TimelineViewState: Equatable {
     case idle
     case loading
     case empty
@@ -279,6 +365,7 @@ private struct TimelineRow: View {
     let onRedact: () -> Void
     let onReact: () -> Void
     let onOpenMedia: (MediaResource) -> Void
+    let onAgentAction: (SynaraAgentCardAction) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: SynaraSpacing.small) {
@@ -364,6 +451,8 @@ private struct TimelineRow: View {
             Text("Unsupported event: \(type)")
                 .font(SynaraTypography.body)
                 .foregroundStyle(SynaraColor.secondaryText)
+        case .agentCard(let card):
+            AgentCardTimelineRow(card: card, onAction: onAgentAction)
         }
     }
 
@@ -379,6 +468,53 @@ private struct TimelineRow: View {
             return "\(item.senderID): encrypted message unavailable"
         case .unknown(let type):
             return "\(item.senderID): unsupported event \(type)"
+        case .agentCard(let card):
+            return "\(item.senderID): agent card: \(card.title)"
+        }
+    }
+}
+
+private struct AgentCardTimelineRow: View {
+    let card: SynaraAgentCard
+    let onAction: (SynaraAgentCardAction) -> Void
+
+    var body: some View {
+        let visibleActions = card.actions.filter { SynaraAgentCardActionResolver.shouldRender($0) }
+
+        VStack(alignment: .leading, spacing: SynaraSpacing.small) {
+            HStack(alignment: .top) {
+                Text(card.title)
+                    .font(SynaraTypography.body)
+                    .bold()
+                    .accessibilityIdentifier("AgentCardTitle")
+                if let status = card.status {
+                    Spacer()
+                    Text(status)
+                        .font(SynaraTypography.supporting)
+                        .foregroundStyle(SynaraColor.secondaryText)
+                }
+            }
+
+            if let summary = card.summary {
+                Text(summary)
+                    .font(SynaraTypography.supporting)
+                    .foregroundStyle(SynaraColor.primaryText)
+            }
+
+            if visibleActions.isEmpty == false {
+                Text("Actions")
+                    .font(.caption)
+                    .foregroundStyle(SynaraColor.secondaryText)
+                ForEach(visibleActions, id: \.id) { action in
+                    Button(action.title) {
+                        onAction(action)
+                    }
+                    .disabled(SynaraAgentCardActionResolver.shouldRender(action) == false)
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .accessibilityIdentifier("AgentCardAction-\(action.id)")
+                }
+            }
         }
     }
 }

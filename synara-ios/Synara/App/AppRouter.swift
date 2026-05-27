@@ -33,7 +33,17 @@ final class AppRouter: ObservableObject {
         case .settings:
             selectedTab = .settings
             settingsPath = [route]
+        case .notifications:
+            selectedTab = .notifications
+            notificationsPath = [route]
+        case .later:
+            selectedTab = .later
+            laterPath = [route]
         }
+    }
+
+    func routeToNotificationFallback() {
+        selectedTab = .notifications
     }
 
     @discardableResult
@@ -43,10 +53,18 @@ final class AppRouter: ObservableObject {
         }
 
         switch deepLink {
-        case .room(let id):
-            route(to: .room(id: id, title: nil))
+        case .room(let id, let eventID):
+            if let eventID {
+                route(to: .room(id: id, eventID: eventID, title: nil))
+            } else {
+                route(to: .room(id: id, title: nil))
+            }
         case .settings:
             route(to: .settings)
+        case .notifications:
+            route(to: .notifications)
+        case .later:
+            route(to: .later)
         }
 
         return true

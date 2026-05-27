@@ -6,6 +6,7 @@ struct TimelineItem: Identifiable, Equatable {
         case mediaPlaceholder(MediaResource)
         case redacted
         case encryptedPlaceholder
+        case agentCard(SynaraAgentCard)
         case unknown(type: String)
     }
 
@@ -17,6 +18,253 @@ struct TimelineItem: Identifiable, Equatable {
     let replyToEventID: String?
     let isEdited: Bool
     let reactions: [String: Int]
+    let isEncrypted: Bool
+
+    init(
+        id: String,
+        eventID: String,
+        senderID: String,
+        timestamp: Date,
+        kind: Kind,
+        replyToEventID: String?,
+        isEdited: Bool,
+        reactions: [String: Int],
+        isEncrypted: Bool = false
+    ) {
+        self.id = id
+        self.eventID = eventID
+        self.senderID = senderID
+        self.timestamp = timestamp
+        self.kind = kind
+        self.replyToEventID = replyToEventID
+        self.isEdited = isEdited
+        self.reactions = reactions
+        self.isEncrypted = isEncrypted
+    }
+}
+
+protocol LaterServicing {
+    func loadItems() async -> Result<([SynaraLaterListItem], LaterInboxError), Never>
+}
+
+enum LaterInboxError: Error, LocalizedError, Equatable {
+    case noSession
+    case malformedPayload
+    case networkFailure
+
+    var errorDescription: String? {
+        switch self {
+        case .noSession:
+            return "Sign in to load your Later items."
+        case .malformedPayload:
+            return "Later account data was not readable."
+        case .networkFailure:
+            return "Could not load Later account data."
+        }
+    }
+}
+
+struct SynaraLaterListItem: Identifiable, Equatable {
+    let id: String
+    let roomID: String
+    let eventID: String
+    let kind: SynaraLaterItem.Kind
+    let dueTs: Int?
+    let completedAt: Int?
+    let createdAt: Int
+    let isCompleted: Bool
+
+    var label: String {
+        switch kind {
+        case .saved:
+            return "Saved"
+        case .reminder:
+            return "Reminder"
+        }
+    }
+
+    var detail: String {
+        if let completedAt {
+            return "Completed"
+        }
+
+        if let dueTs {
+            if dueTs < Int(Date().timeIntervalSince1970 * 1000) {
+                return "Due"
+            }
+
+            return "Due soon"
+        }
+
+        return "No due date"
+    }
+}
+
+final class MatrixAccountDataLaterService: LaterServicing {
+    private let sessionStore: AppSessionStore
+    private let httpClient: AuthHTTPClient
+    private let jsonDecoder: JSONDecoder
+    private let now: () -> Int
+
+    init(
+        sessionStore: AppSessionStore,
+        httpClient: AuthHTTPClient = URLSession.shared,
+        jsonDecoder: JSONDecoder = JSONDecoder(),
+        now: @escaping () -> Int = { Int(Date().timeIntervalSince1970 * 1000) }
+    ) {
+        self.sessionStore = sessionStore
+        self.httpClient = httpClient
+        self.jsonDecoder = jsonDecoder
+        self.now = now
+    }
+
+    func loadItems() async -> Result<([SynaraLaterListItem], LaterInboxError), Never> {
+        guard case .signedIn(let session) = sessionStore.currentState else {
+            return .success(([], .noSession))
+        }
+
+        do {
+            let request = try accountDataRequest(for: session)
+            let (data, response) = try await httpClient.data(for: request)
+
+            guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
+                return .success(([], .networkFailure))
+            }
+
+            guard let content = extractAccountDataContent(from: data),
+                  let items = decode(content: content).successValue() else {
+                return .success(([], .malformedPayload))
+            }
+
+            return .success((SynaraLaterListItem.sorted(items: items, now: now()), nil))
+        } catch {
+            return .success(([], .networkFailure))
+        }
+    }
+
+    private func accountDataRequest(for session: AuthenticatedSession) throws -> URLRequest {
+        var request = URLRequest(url: accountDataURL(for: session))
+        request.httpMethod = "GET"
+        request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
+        return request
+    }
+
+    private func accountDataURL(for session: AuthenticatedSession) -> URL {
+        var url = session.homeserverURL
+        url.appendPathComponent("_matrix")
+        url.appendPathComponent("client")
+        url.appendPathComponent("v3")
+        url.appendPathComponent("user")
+        url.appendPathComponent(session.userID.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? session.userID)
+        url.appendPathComponent("account_data")
+        url.appendPathComponent("in.synara.later")
+        return url
+    }
+
+    private func extractAccountDataContent(from data: Data) -> [String: Any]? {
+        let object: Any
+
+        do {
+            object = try JSONSerialization.jsonObject(with: data)
+        } catch {
+            return nil
+        }
+
+        guard let top = object as? [String: Any] else {
+            return nil
+        }
+
+        if let content = top["content"] as? [String: Any] {
+            return content
+        }
+
+        if top["items"] != nil || top["version"] != nil {
+            return top
+        }
+
+        return nil
+    }
+
+    private func decode(content: [String: Any]) -> Result<SynaraLaterContent, LaterInboxError> {
+        do {
+            let data = try JSONSerialization.data(withJSONObject: content)
+            let decoded = try jsonDecoder.decode(SynaraLaterContent.self, from: data)
+            return .success(decoded)
+        } catch {
+            return .failure(.malformedPayload)
+        }
+    }
+}
+
+extension Result where Success == SynaraLaterContent, Failure == LaterInboxError {
+    func successValue() -> SynaraLaterContent? {
+        return try? self.get()
+    }
+}
+
+extension SynaraLaterListItem {
+    static func sorted(items: SynaraLaterContent, now: Int) -> [SynaraLaterListItem] {
+        return items.items.values
+            .map {
+                SynaraLaterListItem(
+                    id: $0.id,
+                    roomID: $0.roomId,
+                    eventID: $0.eventId,
+                    kind: $0.kind,
+                    dueTs: $0.dueTs,
+                    completedAt: $0.completedAt,
+                    createdAt: $0.createdAt,
+                    isCompleted: $0.completedAt != nil
+                )
+            }
+            .sorted { left, right in
+                if left.completedAt != nil && right.completedAt == nil {
+                    return false
+                }
+
+                if left.completedAt == nil && right.completedAt != nil {
+                    return true
+                }
+
+                let leftDue = left.dueTs ?? Int.max
+                let rightDue = right.dueTs ?? Int.max
+                let leftDueSoon = leftDue <= now
+                let rightDueSoon = rightDue <= now
+
+                if leftDueSoon != rightDueSoon {
+                    return leftDueSoon
+                }
+
+                if leftDue != rightDue {
+                    return leftDue < rightDue
+                }
+
+                return left.createdAt > right.createdAt
+            }
+    }
+
+    static let empty = SynaraLaterListItem(
+        id: "",
+        roomID: "",
+        eventID: "",
+        kind: .saved,
+        dueTs: nil,
+        completedAt: nil,
+        createdAt: 0,
+        isCompleted: false
+    )
+}
+
+struct MockLaterService: LaterServicing {
+    private let items: [SynaraLaterListItem]
+
+    init(items: [SynaraLaterListItem] = []) {
+        self.items = items
+    }
+
+    func loadItems() async -> Result<([SynaraLaterListItem], LaterInboxError), Never> {
+        .success((items, nil))
+    }
 }
 
 struct RawTimelineEvent: Equatable {
@@ -28,6 +276,29 @@ struct RawTimelineEvent: Equatable {
     let replyToEventID: String?
     let isEdited: Bool
     let mediaURL: URL?
+    let agentCard: SynaraAgentCard?
+
+    init(
+        eventID: String,
+        senderID: String,
+        timestamp: Date,
+        type: String,
+        body: String?,
+        replyToEventID: String?,
+        isEdited: Bool,
+        mediaURL: URL?,
+        agentCard: SynaraAgentCard? = nil
+    ) {
+        self.eventID = eventID
+        self.senderID = senderID
+        self.timestamp = timestamp
+        self.type = type
+        self.body = body
+        self.replyToEventID = replyToEventID
+        self.isEdited = isEdited
+        self.mediaURL = mediaURL
+        self.agentCard = agentCard
+    }
 }
 
 protocol TimelineServicing {
@@ -39,7 +310,10 @@ enum TimelineMapper {
     static func map(_ event: RawTimelineEvent) -> TimelineItem {
         let kind: TimelineItem.Kind
 
-        switch event.type {
+        if let agentCard = event.agentCard {
+            kind = .agentCard(agentCard)
+        } else {
+            switch event.type {
         case "m.room.message":
             kind = .text(event.body ?? "")
         case "m.room.encrypted":
@@ -57,6 +331,7 @@ enum TimelineMapper {
             )
         default:
             kind = .unknown(type: event.type)
+        }
         }
 
         return TimelineItem(
@@ -241,6 +516,7 @@ final class MatrixTimelineService: TimelineServicing {
         let eventType: String
         let body: String?
         let mediaURL: URL?
+        let agentCard = parseAgentCard(from: content)
 
         if event.type == "m.room.message" {
             if let msgtype = content.msgtype,
@@ -257,6 +533,9 @@ final class MatrixTimelineService: TimelineServicing {
             eventType = event.type
             body = content.body
             mediaURL = content.url.flatMap(URL.init(string:))
+            if eventType.hasPrefix("m.room.") && body?.isEmpty == false {
+                // Keep existing behavior for plain message-like room events.
+            }
         }
 
         return RawTimelineEvent(
@@ -267,7 +546,8 @@ final class MatrixTimelineService: TimelineServicing {
             body: body,
             replyToEventID: content.relatesTo?.inReplyTo?.eventID,
             isEdited: content.relatesTo?.relType == "m.replace",
-            mediaURL: mediaURL
+            mediaURL: mediaURL,
+            agentCard: agentCard
         )
     }
 
@@ -276,7 +556,51 @@ final class MatrixTimelineService: TimelineServicing {
             return true
         }
 
+        if ["org.hermes.agent", "io.hermes.agent", "in.synara.agent", "m.custom.agent"].contains(eventType) {
+            return true
+        }
+
         return eventType.hasPrefix("synara.")
+    }
+
+    private func parseAgentCard(from content: MatrixTimelineEventContent) -> SynaraAgentCard? {
+        let keys = ["org.hermes.agent", "io.hermes.agent", "in.synara.agent", "m.custom.agent"]
+
+        if let directPayload = keys.compactMap({ key in
+            extractAgentCard(from: content.raw[key])
+        }).first {
+            return directPayload
+        }
+
+        guard let body = content.body,
+              body.count <= 200_000,
+              let bodyData = body.data(using: .utf8),
+              let parsedBody = try? JSONSerialization.jsonObject(with: bodyData) as? [String: Any] else {
+            return nil
+        }
+
+        if let directPayload = keys.compactMap({ key in
+            extractAgentCard(from: parsedBody[key])
+        }).first {
+            return directPayload
+        }
+
+        guard let hermes = parsedBody["hermes"] as? Bool, hermes else {
+            return nil
+        }
+
+        return extractAgentCard(from: parsedBody["payload"]) ?? extractAgentCard(from: parsedBody["agent"])
+    }
+
+    private func extractAgentCard(from rawValue: Any?) -> SynaraAgentCard? {
+        guard let raw = rawValue as? [String: Any] else {
+            return nil
+        }
+        do {
+            return try JSONDecoder().decode(SynaraAgentCard.self, from: JSONSerialization.data(withJSONObject: raw))
+        } catch {
+            return nil
+        }
     }
 }
 
@@ -306,24 +630,38 @@ private struct MatrixTimelineEventContent: Decodable {
     let msgtype: String?
     let url: String?
     let relatesTo: MatrixRelatesTo?
+    let raw: [String: Any]
 
     init(
         body: String? = nil,
         msgtype: String? = nil,
         url: String? = nil,
-        relatesTo: MatrixRelatesTo? = nil
+        relatesTo: MatrixRelatesTo? = nil,
+        raw: [String: Any] = [:]
     ) {
         self.body = body
         self.msgtype = msgtype
         self.url = url
         self.relatesTo = relatesTo
+        self.raw = raw
     }
 
-    enum CodingKeys: String, CodingKey {
-        case body
-        case msgtype
-        case url
-        case relatesTo = "m.relates_to"
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let raw = try container.decode([String: JSONAny].self)
+        self.raw = raw.toAnyDictionary()
+        self.body = raw["body"]?.string
+        self.msgtype = raw["msgtype"]?.string
+        self.url = raw["url"]?.string
+
+        if let relatesToObject = raw["m.relates_to"]?.dictionary {
+            self.relatesTo = MatrixRelatesTo(
+                relType: relatesToObject["rel_type"]?.string,
+                inReplyTo: relatesToObject["m.in_reply_to"]?.dictionary.flatMap(MatrixInReplyTo.init)
+            )
+        } else {
+            self.relatesTo = nil
+        }
     }
 }
 
@@ -342,5 +680,102 @@ private struct MatrixInReplyTo: Decodable {
 
     enum CodingKeys: String, CodingKey {
         case eventID = "event_id"
+    }
+
+    init(eventID: String?) {
+        self.eventID = eventID
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.eventID = try container.decodeIfPresent(String.self, forKey: .eventID)
+    }
+}
+
+private enum JSONAny: Decodable {
+    case dictionary([String: JSONAny])
+    case array([JSONAny])
+    case string(String)
+    case number(Double)
+    case bool(Bool)
+    case null
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+
+        if container.decodeNil() {
+            self = .null
+            return
+        }
+        if let boolValue = try? container.decode(Bool.self) {
+            self = .bool(boolValue)
+            return
+        }
+        if let stringValue = try? container.decode(String.self) {
+            self = .string(stringValue)
+            return
+        }
+        if let intValue = try? container.decode(Int.self) {
+            self = .number(Double(intValue))
+            return
+        }
+        if let doubleValue = try? container.decode(Double.self) {
+            self = .number(doubleValue)
+            return
+        }
+        if let arrayValue = try? container.decode([JSONAny].self) {
+            self = .array(arrayValue)
+            return
+        }
+        if let dictionaryValue = try? container.decode([String: JSONAny].self) {
+            self = .dictionary(dictionaryValue)
+            return
+        }
+
+        throw DecodingError.dataCorruptedError(in: container, debugDescription: "Unsupported JSON value")
+    }
+
+    var string: String? {
+        if case .string(let value) = self { return value }
+        return nil
+    }
+
+    var bool: Bool? {
+        if case .bool(let value) = self { return value }
+        return nil
+    }
+
+    var dictionary: [String: JSONAny]? {
+        if case .dictionary(let value) = self { return value }
+        return nil
+    }
+
+    var toAny: Any {
+        switch self {
+        case .string(let value):
+            return value
+        case .number(let value):
+            return value
+        case .bool(let value):
+            return value
+        case .null:
+            return NSNull()
+        case .array(let array):
+            return array.map(\.toAny)
+        case .dictionary(let dictionary):
+            return dictionary.toAnyDictionary()
+        }
+    }
+
+    var toAnyDictionary: [String: Any] {
+        return toAny as? [String: Any] ?? [:]
+    }
+}
+
+private extension Dictionary where Key == String, Value == JSONAny {
+    func toAnyDictionary() -> [String: Any] {
+        return reduce(into: [:]) { object, pair in
+            object[pair.key] = pair.value.toAny
+        }
     }
 }
