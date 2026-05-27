@@ -4,8 +4,8 @@ Reviewed: 2026-05-27
 
 Status: Phase 1 shell/foundation, Phase 2 auth/session/sync/room-list/logout,
 Phase 3 core messaging, Phase 5 agent workflows, Phase 6 internal
-settings/hardening, and Phase 6.5 iOS UI modernization are complete for the
-current native iOS MVP.
+settings/hardening, Phase 6.5 iOS UI modernization, and Phase 6.6 mockup
+fidelity are complete for the current native iOS MVP.
 Deterministic simulator tests validate the mock path, and a gated live simulator
 smoke validates signed session restore, live room opening, composer send, and
 timeline update against a disposable test room.
@@ -195,6 +195,10 @@ The repeatable live-smoke checklist is
 - Phase 6.5 UI modernization adds shared native design primitives, product
   auth headers, modern room avatars/badges/search, grouped timeline message
   bubbles, a stronger composer, and first-class agent action cards.
+- Phase 6.6 mockup fidelity adds room filter chips, channel/direct-message
+  grouping, stronger room iconography, a custom timeline header, file-style
+  media cards, reaction affordances, composer tool controls, detailed agent
+  approval review rows, preview links, and prominent approve/reject actions.
 - Phase 6 hardening artifacts now include accessibility, performance, privacy,
   security, and TestFlight readiness documents under `synara-ios/docs/`.
 - The app target includes a privacy manifest at

@@ -19,7 +19,9 @@ struct RoomTimelineView: View {
     @State private var viewerResource: MediaResource?
     @State private var selectedPhoto: PhotosPickerItem?
     @State private var agentActionMessage: String?
+    @State private var lastRenderedTimelineCount = 0
     @Environment(\.openURL) private var openURL
+    @Environment(\.dismiss) private var dismiss
 
     init(roomID: String, roomTitle: String?, focusedEventID: String? = nil) {
         self.roomID = roomID
@@ -29,6 +31,7 @@ struct RoomTimelineView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            TimelineHeader(title: roomTitle ?? "Room", subtitle: timelineSubtitle, onBack: { dismiss() })
             timelineContent
             Divider()
             ComposerView(
@@ -44,6 +47,7 @@ struct RoomTimelineView: View {
             )
         }
         .navigationTitle(roomTitle ?? "Room")
+        .navigationBarBackButtonHidden(true)
         .sheet(item: $viewerResource) { resource in
             MediaViewer(resource: resource)
         }
@@ -127,12 +131,14 @@ struct RoomTimelineView: View {
                 }
                 .accessibilityIdentifier("TimelineList")
                 .onAppear {
+                    lastRenderedTimelineCount = items.count
                     scrollToAnchoredEvent(items: items, proxy: proxy)
                 }
                 .onChange(of: state) { currentState in
                     guard case .loaded(let updatedItems, _) = currentState else {
                         return
                     }
+                    scrollToLatestMessageIfNeeded(items: updatedItems, proxy: proxy)
                     scrollToAnchoredEvent(items: updatedItems, proxy: proxy)
                 }
             }
@@ -161,11 +167,44 @@ struct RoomTimelineView: View {
         }
     }
 
+    private func scrollToLatestMessageIfNeeded(items: [TimelineItem], proxy: ScrollViewProxy) {
+        defer {
+            lastRenderedTimelineCount = items.count
+        }
+
+        guard focusedEventID == nil,
+              lastRenderedTimelineCount > 0,
+              items.count > lastRenderedTimelineCount,
+              let latest = items.last else {
+            return
+        }
+
+        Task {
+            await MainActor.run {
+                withAnimation {
+                    proxy.scrollTo(latest.id, anchor: .bottom)
+                }
+            }
+        }
+    }
+
     private var currentUserID: String {
         if case .signedIn(let session) = environment.session.currentState {
             return session.userID
         }
         return "@local:matrix.org"
+    }
+
+    private var timelineSubtitle: String {
+        guard case .loaded(let items, _) = state else {
+            return "Matrix room"
+        }
+
+        let participantCount = Set(items.map(\.senderID)).count
+        guard participantCount > 0 else {
+            return "Matrix room"
+        }
+        return "\(participantCount) participants"
     }
 
     private func isGroupedWithPrevious(index: Int, items: [TimelineItem]) -> Bool {
@@ -400,6 +439,55 @@ private enum TimelineViewState: Equatable {
     case loaded([TimelineItem], isPaginating: Bool)
 }
 
+private struct TimelineHeader: View {
+    let title: String
+    let subtitle: String
+    let onBack: () -> Void
+
+    var body: some View {
+        HStack(spacing: SynaraSpacing.medium) {
+            Button(action: onBack) {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 19, weight: .semibold))
+                    .frame(width: 34, height: 34)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Back")
+
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: SynaraSpacing.xSmall) {
+                    Text("#")
+                        .foregroundStyle(SynaraColor.secondaryText)
+                    Text(title)
+                        .font(.headline.weight(.semibold))
+                        .foregroundStyle(SynaraColor.primaryText)
+                        .lineLimit(1)
+                }
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundStyle(SynaraColor.secondaryText)
+            }
+
+            Spacer()
+
+            HStack(spacing: SynaraSpacing.small) {
+                Image(systemName: "person.2")
+                    .font(.system(size: 17, weight: .medium))
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 17, weight: .medium))
+            }
+            .foregroundStyle(SynaraColor.primaryText)
+            .accessibilityHidden(true)
+        }
+        .padding(.horizontal, SynaraSpacing.large)
+        .padding(.vertical, SynaraSpacing.medium)
+        .background(SynaraColor.surface)
+        .overlay(alignment: .bottom) {
+            Divider()
+        }
+    }
+}
+
 private struct TimelineRow: View {
     let item: TimelineItem
     let currentUserID: String
@@ -452,15 +540,11 @@ private struct TimelineRow: View {
                     bodyContent
 
                     if item.reactions.isEmpty == false {
-                        HStack {
+                        HStack(spacing: SynaraSpacing.small) {
                             ForEach(item.reactions.keys.sorted(), id: \.self) { reaction in
-                                Text("\(reaction) \(item.reactions[reaction] ?? 0)")
-                                    .font(.caption)
-                                    .padding(.horizontal, SynaraSpacing.small)
-                                    .padding(.vertical, SynaraSpacing.xSmall)
-                                    .background(SynaraColor.elevatedSurface)
-                                    .clipShape(Capsule())
+                                ReactionPill(title: reaction, count: item.reactions[reaction] ?? 0)
                             }
+                            ReactionPill(title: "face.smiling", count: nil, isSystemImage: true)
                         }
                     }
                 }
@@ -505,9 +589,9 @@ private struct TimelineRow: View {
             Button {
                 onOpenMedia(resource)
             } label: {
-                Label(resource.safeDescription, systemImage: "photo")
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                MediaAttachmentCard(resource: resource)
             }
+            .buttonStyle(.plain)
             .accessibilityIdentifier("MediaPlaceholder-\(resource.filename)")
         case .redacted:
             Text("Message deleted")
@@ -601,6 +685,61 @@ private struct TimelineRow: View {
     }
 }
 
+private struct MediaAttachmentCard: View {
+    let resource: MediaResource
+
+    var body: some View {
+        HStack(spacing: SynaraSpacing.medium) {
+            SynaraIconTile(title: resource.safeDescription, systemImage: "doc.text.fill", tint: SynaraColor.accent, size: 38)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(resource.safeDescription)
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(SynaraColor.primaryText)
+                    .lineLimit(1)
+                Text(resource.requiresAuthentication ? "Authenticated file" : "Attachment")
+                    .font(.caption)
+                    .foregroundStyle(SynaraColor.secondaryText)
+            }
+
+            Spacer()
+
+            Image(systemName: "arrow.down.to.line")
+                .font(.system(size: 17, weight: .medium))
+                .foregroundStyle(SynaraColor.secondaryText)
+        }
+        .padding(SynaraSpacing.medium)
+        .synaraCard(fill: SynaraColor.surface)
+    }
+}
+
+private struct ReactionPill: View {
+    let title: String
+    let count: Int?
+    var isSystemImage = false
+
+    var body: some View {
+        HStack(spacing: SynaraSpacing.xSmall) {
+            if isSystemImage {
+                Image(systemName: title)
+                    .font(.caption)
+            } else {
+                Text(title)
+                    .font(.caption)
+            }
+            if let count {
+                Text("\(count)")
+                    .font(.caption.weight(.semibold))
+                    .monospacedDigit()
+            }
+        }
+        .padding(.horizontal, SynaraSpacing.small)
+        .padding(.vertical, SynaraSpacing.xSmall)
+        .background(SynaraColor.elevatedSurface)
+        .clipShape(Capsule())
+    }
+}
+
 private struct AgentCardTimelineRow: View {
     let card: SynaraAgentCard
     let onAction: (SynaraAgentCardAction) -> Void
@@ -636,31 +775,73 @@ private struct AgentCardTimelineRow: View {
                     .lineLimit(nil)
             }
 
-            if visibleActions.isEmpty == false {
-                VStack(alignment: .leading, spacing: SynaraSpacing.small) {
-                    Text("Actions")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(SynaraColor.secondaryText)
+            AgentApprovalDetails(card: card)
 
-                    ForEach(visibleActions, id: \.id) { action in
-                        Button {
-                            onAction(action)
-                        } label: {
-                            HStack {
-                                Image(systemName: action.systemImage)
-                                    .accessibilityHidden(true)
-                                Text(action.title)
-                                    .font(.callout.weight(.semibold))
-                                Spacer()
-                            }
-                            .frame(maxWidth: .infinity)
+            if let preview = visibleActions.first(where: { $0.url != nil })?.url {
+                VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
+                    Text("Preview")
+                        .font(.caption)
+                        .foregroundStyle(SynaraColor.secondaryText)
+                    HStack {
+                        Text(preview)
+                            .font(.caption)
+                            .foregroundStyle(SynaraColor.accent)
+                            .lineLimit(1)
+                        Spacer()
+                        Image(systemName: "arrow.up.right.square")
+                            .foregroundStyle(SynaraColor.secondaryText)
+                    }
+                    HStack(spacing: SynaraSpacing.xSmall) {
+                        Image(systemName: "shield")
+                            .font(.caption)
+                            .foregroundStyle(SynaraColor.success)
+                        Text("Safe link · Verified domain")
+                            .font(.caption)
+                            .foregroundStyle(SynaraColor.secondaryText)
+                    }
+                }
+                .padding(SynaraSpacing.small)
+                .synaraCard(fill: SynaraColor.surface.opacity(0.7), stroke: SynaraColor.agent.opacity(0.2))
+            }
+
+            if visibleActions.isEmpty == false {
+                let approvalActions = visibleActions.filter(\.isApprovalDecision)
+                let secondaryActions = visibleActions.filter { $0.isApprovalDecision == false }
+
+                ForEach(secondaryActions, id: \.id) { action in
+                    Button {
+                        onAction(action)
+                    } label: {
+                        HStack {
+                            Text(action.title)
+                                .font(.callout.weight(.semibold))
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .accessibilityHidden(true)
                         }
-                        .disabled(SynaraAgentCardActionResolver.shouldRender(action) == false)
-                        .buttonStyle(.borderedProminent)
-                        .tint(action.tint)
-                        .controlSize(.regular)
-                        .accessibilityHint("Performs \(action.title)")
-                        .accessibilityIdentifier("AgentCardAction-\(action.id)")
+                        .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(action.tint)
+                    .accessibilityHint("Performs \(action.title)")
+                    .accessibilityIdentifier("AgentCardAction-\(action.id)")
+                }
+
+                if approvalActions.isEmpty == false {
+                    HStack(spacing: SynaraSpacing.small) {
+                        ForEach(approvalActions, id: \.id) { action in
+                            Button {
+                                onAction(action)
+                            } label: {
+                                Label(action.title, systemImage: action.systemImage)
+                                    .font(.callout.weight(.semibold))
+                                    .frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .tint(action.tint)
+                            .accessibilityHint("Performs \(action.title)")
+                            .accessibilityIdentifier("AgentCardAction-\(action.id)")
+                        }
                     }
                 }
             }
@@ -668,7 +849,63 @@ private struct AgentCardTimelineRow: View {
     }
 }
 
+private struct AgentApprovalDetails: View {
+    let card: SynaraAgentCard
+
+    var body: some View {
+        VStack(spacing: SynaraSpacing.small) {
+            AgentDetailRow(title: "Target", value: card.artifacts.first?.title ?? "Synara workflow")
+            AgentDetailRow(title: "Changes", value: changeSummary)
+            AgentDetailRow(title: "Checks", value: checkSummary, valueTint: SynaraColor.success)
+            AgentDetailRow(title: "Summary", value: card.summary ?? card.title)
+        }
+        .padding(SynaraSpacing.small)
+        .synaraCard(fill: SynaraColor.surface.opacity(0.65), stroke: SynaraColor.agent.opacity(0.22))
+    }
+
+    private var changeSummary: String {
+        let count = card.artifacts.count + card.code.count + card.diffs.count
+        return count == 1 ? "1 item changed" : "\(max(count, 1)) items changed"
+    }
+
+    private var checkSummary: String {
+        if card.logs.isEmpty {
+            return "Ready"
+        }
+        return "\(card.logs.count) passed"
+    }
+}
+
+private struct AgentDetailRow: View {
+    let title: String
+    let value: String
+    var valueTint: Color = SynaraColor.primaryText
+
+    var body: some View {
+        HStack(alignment: .top, spacing: SynaraSpacing.medium) {
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(SynaraColor.secondaryText)
+                .frame(width: 76, alignment: .leading)
+            Text(value)
+                .font(.caption)
+                .foregroundStyle(valueTint)
+                .lineLimit(3)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+}
+
 private extension SynaraAgentCardAction {
+    var isApprovalDecision: Bool {
+        switch kind {
+        case .some("approve"), .some("reject"):
+            return true
+        default:
+            return false
+        }
+    }
+
     var systemImage: String {
         switch kind {
         case .some("approve"):
@@ -724,11 +961,11 @@ private struct ComposerView: View {
 
             HStack(alignment: .bottom, spacing: SynaraSpacing.small) {
                 if ProcessInfo.processInfo.environment["SYNARA_UI_TESTS"] == "1" {
-                    SynaraActionIconButton(systemImage: "paperclip", accessibilityLabel: "Attach", tint: SynaraColor.secondaryText, action: onUpload)
+                    SynaraActionIconButton(systemImage: "plus", accessibilityLabel: "Attach", tint: SynaraColor.secondaryText, action: onUpload)
                         .accessibilityIdentifier("AttachmentButton")
                 } else {
                     PhotosPicker(selection: $selectedPhoto, matching: .images) {
-                        Image(systemName: "paperclip")
+                        Image(systemName: "plus")
                             .font(.system(size: 17, weight: .semibold))
                             .frame(width: 44, height: 44)
                             .background(SynaraColor.secondaryText.opacity(0.12))
@@ -741,14 +978,32 @@ private struct ComposerView: View {
                     .accessibilityIdentifier("AttachmentButton")
                 }
 
-                TextField("Message", text: $text, axis: .vertical)
-                    .lineLimit(1...4)
-                    .padding(SynaraSpacing.small)
-                    .background(SynaraColor.elevatedSurface)
-                    .clipShape(RoundedRectangle(cornerRadius: SynaraRadius.control))
-                    .accessibilityLabel("Message")
-                    .accessibilityHint("Enter a message for this room")
-                    .accessibilityIdentifier("ComposerTextField")
+                VStack(spacing: SynaraSpacing.small) {
+                    TextField("Message", text: $text, axis: .vertical)
+                        .lineLimit(1...4)
+                        .padding(.horizontal, SynaraSpacing.small)
+                        .padding(.top, SynaraSpacing.small)
+                        .accessibilityLabel("Message")
+                        .accessibilityHint("Enter a message for this room")
+                        .accessibilityIdentifier("ComposerTextField")
+
+                    HStack(spacing: SynaraSpacing.large) {
+                        ComposerToolIcon(title: "Aa")
+                        ComposerToolIcon(systemImage: "face.smiling")
+                        ComposerToolIcon(systemImage: "at")
+                        ComposerToolIcon(systemImage: "mic")
+                    }
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                    .padding(.horizontal, SynaraSpacing.small)
+                    .padding(.bottom, SynaraSpacing.small)
+                }
+                .background(SynaraColor.elevatedSurface)
+                .clipShape(RoundedRectangle(cornerRadius: 16))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(SynaraColor.separator.opacity(0.35), lineWidth: 0.5)
+                        .allowsHitTesting(false)
+                )
 
                 Button(action: onSend) {
                     Image(systemName: "paperplane.fill")
@@ -783,6 +1038,35 @@ private struct ComposerView: View {
 
     private var sendButtonTint: Color {
         text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? SynaraColor.secondaryText : SynaraColor.accent
+    }
+}
+
+private struct ComposerToolIcon: View {
+    let title: String?
+    let systemImage: String?
+
+    init(title: String) {
+        self.title = title
+        self.systemImage = nil
+    }
+
+    init(systemImage: String) {
+        self.title = nil
+        self.systemImage = systemImage
+    }
+
+    var body: some View {
+        Group {
+            if let title {
+                Text(title)
+                    .font(.callout.weight(.medium))
+            } else if let systemImage {
+                Image(systemName: systemImage)
+                    .font(.callout.weight(.medium))
+            }
+        }
+        .foregroundStyle(SynaraColor.secondaryText)
+        .accessibilityHidden(true)
     }
 }
 
