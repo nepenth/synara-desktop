@@ -624,6 +624,11 @@ Acceptance criteria:
 
 Dependencies: IOS-0204.
 
+Status: initial live implementation complete. The live app environment loads
+room summaries from Matrix `/sync?timeout=0`, includes joined and invited rooms,
+maps room names, latest message previews, unread counts, highlight counts, and
+activity timestamps, and keeps deterministic mock fixtures for UI tests.
+
 Requirements:
 
 - Render joined rooms and DMs.

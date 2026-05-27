@@ -26,7 +26,7 @@ struct AppEnvironment {
         )
         let matrix = PlaceholderMatrixClientService()
         let push = PlaceholderPushService()
-        let roomList = PlaceholderRoomListService()
+        let roomList = MatrixRoomListService(sessionStore: session)
         return AppEnvironment(
             session: session,
             matrix: matrix,

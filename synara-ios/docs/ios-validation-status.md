@@ -112,8 +112,12 @@ mock services instead of live Keychain, auth, and Matrix dependencies.
   signed-in shell.
 - Matrix lifecycle service exposes stopped, starting, syncing, and failed sync
   states, with explicit start, stop, and local-reset hooks.
+- Live room list loading uses `/_matrix/client/v3/sync?timeout=0` with the
+  secure session access token and maps joined and invited rooms into stable
+  room summaries.
 - Room list service renders loading, empty, failed, and loaded states with
-  stable room IDs, unread counts, highlight state, and 1,000-room fixtures.
+  stable room IDs, unread counts, highlight state, invite previews, and
+  1,000-room fixtures.
 - Settings exposes logout through a local wipe service that stops sync, clears
   cached rooms, clears push registration state, deletes the secure session, and
   returns to the signed-out shell.
