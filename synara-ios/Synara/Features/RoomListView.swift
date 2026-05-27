@@ -85,6 +85,9 @@ struct RoomListView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(SynaraColor.secondarySurface)
                     .accessibilityIdentifier("RoomMembershipErrorText")
+            } else {
+                Color.clear
+                    .frame(height: 68)
             }
         }
         .navigationTitle("Rooms")
@@ -214,6 +217,7 @@ struct RoomListView: View {
             .accessibilityHint("Opens the room timeline")
             .accessibilityIdentifier("RoomRow-\(room.id)")
             .listRowSeparator(.hidden)
+            .listRowInsets(EdgeInsets(top: 3, leading: SynaraSpacing.large, bottom: 3, trailing: SynaraSpacing.large))
             .listRowBackground(SynaraColor.surface)
         }
     }
@@ -275,6 +279,7 @@ private struct RoomFilterStrip: View {
                     }
                 }
             }
+            .padding(.trailing, SynaraSpacing.large)
         }
         .accessibilityIdentifier("RoomFilterStrip")
     }
@@ -334,7 +339,7 @@ private struct RoomListRow: View {
 
     var body: some View {
         HStack(spacing: SynaraSpacing.medium) {
-            SynaraIconTile(title: room.name, systemImage: room.roomIconName, tint: room.roomTint)
+            SynaraIconTile(title: room.name, systemImage: room.roomIconName, tint: room.roomTint, size: 40)
 
             VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
                 HStack(alignment: .firstTextBaseline, spacing: SynaraSpacing.small) {
@@ -365,12 +370,12 @@ private struct RoomListRow: View {
                 Text(room.lastMessagePreview)
                     .font(SynaraTypography.supporting)
                     .foregroundStyle(SynaraColor.secondaryText)
-                    .lineLimit(2)
+                    .lineLimit(1)
             }
 
             SynaraUnreadBadge(count: room.unreadCount, highlighted: room.hasHighlight)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
     }
 }
 
