@@ -2,16 +2,14 @@ import XCTest
 
 final class SynaraUITests: XCTestCase {
     func testShellShowsHomeserverSelectionWhenSignedOut() {
-        let app = XCUIApplication()
-        app.launch()
+        let app = launchApp()
 
         XCTAssertTrue(app.textFields["HomeserverAddressField"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["HomeserverContinueButton"].exists)
     }
 
     func testInvalidHomeserverShowsErrorBeforeNavigation() {
-        let app = XCUIApplication()
-        app.launch()
+        let app = launchApp()
 
         let addressField = app.textFields["HomeserverAddressField"]
         XCTAssertTrue(addressField.waitForExistence(timeout: 5))
@@ -23,8 +21,7 @@ final class SynaraUITests: XCTestCase {
     }
 
     func testValidHomeserverNavigatesToLoginPlaceholder() {
-        let app = XCUIApplication()
-        app.launch()
+        let app = launchApp()
 
         let addressField = app.textFields["HomeserverAddressField"]
         XCTAssertTrue(addressField.waitForExistence(timeout: 5))
@@ -32,12 +29,11 @@ final class SynaraUITests: XCTestCase {
         addressField.typeText("matrix.org")
         app.buttons["HomeserverContinueButton"].tap()
 
-        XCTAssertTrue(app.otherElements["LoginScreen"].waitForExistence(timeout: 5))
+        waitForLogin(app: app)
     }
 
     func testLoginValidationShowsNonSensitiveError() {
-        let app = XCUIApplication()
-        app.launch()
+        let app = launchApp()
 
         let addressField = app.textFields["HomeserverAddressField"]
         XCTAssertTrue(addressField.waitForExistence(timeout: 5))
@@ -45,15 +41,14 @@ final class SynaraUITests: XCTestCase {
         addressField.typeText("matrix.org")
         app.buttons["HomeserverContinueButton"].tap()
 
-        XCTAssertTrue(app.otherElements["LoginScreen"].waitForExistence(timeout: 5))
+        waitForLogin(app: app)
         app.buttons["LoginSubmitButton"].tap()
 
         XCTAssertTrue(app.staticTexts["LoginErrorText"].waitForExistence(timeout: 5))
     }
 
     func testSuccessfulMockLoginShowsSignedInShell() {
-        let app = XCUIApplication()
-        app.launch()
+        let app = launchApp()
 
         login(app: app)
 
@@ -61,37 +56,34 @@ final class SynaraUITests: XCTestCase {
     }
 
     func testRoomListOpensTimeline() {
-        let app = XCUIApplication()
-        app.launch()
+        let app = launchApp()
 
         login(app: app)
 
         XCTAssertTrue(app.buttons["RoomRow-!project:matrix.org"].waitForExistence(timeout: 5))
         app.buttons["RoomRow-!project:matrix.org"].tap()
 
-        XCTAssertTrue(app.otherElements["RoomTimelineScreen-!project:matrix.org"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.otherElements["TimelineItem-$text:!project:matrix.org"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.scrollViews["TimelineList"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Hello from iOS"].waitForExistence(timeout: 5))
     }
 
     func testComposerSendsMockMessage() {
-        let app = XCUIApplication()
-        app.launch()
+        let app = launchApp()
 
         login(app: app)
 
         XCTAssertTrue(app.buttons["RoomRow-!project:matrix.org"].waitForExistence(timeout: 5))
         app.buttons["RoomRow-!project:matrix.org"].tap()
-        XCTAssertTrue(app.textViews["ComposerTextEditor"].waitForExistence(timeout: 5))
-        app.textViews["ComposerTextEditor"].tap()
-        app.textViews["ComposerTextEditor"].typeText("hello from ui")
+        XCTAssertTrue(app.textFields["ComposerTextField"].waitForExistence(timeout: 5))
+        app.textFields["ComposerTextField"].tap()
+        app.textFields["ComposerTextField"].typeText("hello from ui")
         app.buttons["ComposerSendButton"].tap()
 
         XCTAssertTrue(app.staticTexts["hello from ui"].waitForExistence(timeout: 5))
     }
 
     func testMediaUploadAddsAttachmentPlaceholder() {
-        let app = XCUIApplication()
-        app.launch()
+        let app = launchApp()
 
         login(app: app)
 
@@ -104,8 +96,7 @@ final class SynaraUITests: XCTestCase {
     }
 
     func testLogoutReturnsToSignedOutShell() {
-        let app = XCUIApplication()
-        app.launch()
+        let app = launchApp()
 
         login(app: app)
 
@@ -117,6 +108,13 @@ final class SynaraUITests: XCTestCase {
         XCTAssertTrue(app.textFields["HomeserverAddressField"].waitForExistence(timeout: 5))
     }
 
+    private func launchApp() -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchEnvironment["SYNARA_UI_TESTS"] = "1"
+        app.launch()
+        return app
+    }
+
     private func login(app: XCUIApplication) {
         let addressField = app.textFields["HomeserverAddressField"]
         XCTAssertTrue(addressField.waitForExistence(timeout: 5))
@@ -124,11 +122,17 @@ final class SynaraUITests: XCTestCase {
         addressField.typeText("matrix.org")
         app.buttons["HomeserverContinueButton"].tap()
 
-        XCTAssertTrue(app.otherElements["LoginScreen"].waitForExistence(timeout: 5))
+        waitForLogin(app: app)
         app.textFields["LoginUsernameField"].tap()
         app.textFields["LoginUsernameField"].typeText("alice")
         app.secureTextFields["LoginPasswordField"].tap()
         app.secureTextFields["LoginPasswordField"].typeText("password")
         app.buttons["LoginSubmitButton"].tap()
+    }
+
+    private func waitForLogin(app: XCUIApplication) {
+        XCTAssertTrue(app.textFields["LoginUsernameField"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.secureTextFields["LoginPasswordField"].exists)
+        XCTAssertTrue(app.buttons["LoginSubmitButton"].exists)
     }
 }

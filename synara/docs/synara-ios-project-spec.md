@@ -384,9 +384,9 @@ Goal: create a maintainable SwiftUI app shell with routing, dependency wiring, t
 Dependencies: IOS-0007.
 
 Status: skeleton complete. `Synara.xcodeproj`, app target, unit test target,
-and UI test target exist under `synara-ios/`. Generic simulator build and
-`build-for-testing` pass; runtime test execution is blocked by local
-CoreSimulator mismatch documented in
+and UI test target exist under `synara-ios/`. Generic simulator build,
+`build-for-testing`, simulator unit tests, and simulator UI tests pass; current
+validation is documented in
 [`synara-ios/docs/ios-validation-status.md`](../../synara-ios/docs/ios-validation-status.md).
 
 Requirements:
@@ -693,8 +693,8 @@ Dependencies: IOS-0301, IOS-0105.
 
 Status: initial native implementation complete. The room timeline renders lazy
 rows for mapped text, reply, edit, redaction, unknown, media placeholder, and
-reaction states. Build-for-testing passes; simulator runtime validation remains
-blocked by the local CoreSimulator mismatch documented in
+reaction states. Build-for-testing and simulator UI validation pass as
+documented in
 [`synara-ios/docs/ios-validation-status.md`](../../synara-ios/docs/ios-validation-status.md).
 
 Requirements:
