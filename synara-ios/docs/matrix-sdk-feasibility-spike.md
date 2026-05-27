@@ -2,7 +2,7 @@
 
 Reviewed: 2026-05-26
 
-Status: package probe complete; real login not attempted.
+Status: package probe complete; live E2EE probe complete.
 
 Related task: IOS-0006 in
 [Synara iOS Project Spec](../../synara/docs/synara-ios-project-spec.md).
@@ -13,11 +13,13 @@ Proceed with the native SwiftUI plus Matrix Rust SDK plan.
 
 The official Swift package resolved, downloaded its prebuilt binary artifact,
 compiled the Swift wrapper sources, linked a local probe executable, and the
-probe ran successfully. This is enough to start a native iOS skeleton and a
-more serious Matrix service wrapper.
+probe ran successfully. A gated live probe also validated password login,
+SDK crypto initialization, encrypted room detection, encrypted timeline
+pagination, and encrypted message send against a disposable test room.
 
-Do not attempt real login/session work until the iOS app shell has a Keychain
-session abstraction, redacted logging, and test-account-only configuration.
+Do not move production app traffic to the SDK until the app has a narrow
+`SynaraMatrix` wrapper, Keychain-backed app session metadata, redacted logging,
+and gated test-account-only live validation.
 
 ## Sources Checked
 
@@ -43,8 +45,10 @@ at release `26.05.13`.
 synara-ios/spikes/matrix-sdk-probe
 ```
 
-The probe imports `MatrixRustSDK` without creating a client, storing
-credentials, or contacting a homeserver.
+The default probe imports `MatrixRustSDK` without creating a client, storing
+credentials, or contacting a homeserver. The gated `live-e2ee` mode uses
+environment-provided disposable credentials and does not print passwords,
+access tokens, or refresh tokens.
 
 ## Commands Run
 
@@ -74,6 +78,18 @@ Run:
 .build/arm64-apple-macosx/debug/MatrixSDKProbe
 ```
 
+Live E2EE run:
+
+```sh
+SYNARA_MATRIX_PROBE=live-e2ee \
+SYNARA_E2EE_HOMESERVER=<test homeserver> \
+SYNARA_E2EE_USERNAME=<test username> \
+SYNARA_E2EE_PASSWORD=<test password> \
+SYNARA_E2EE_ROOM=<encrypted room id, alias, or display name> \
+SYNARA_E2EE_SEND=1 \
+.build/arm64-apple-macosx/debug/MatrixSDKProbe
+```
+
 ## Results
 
 - SwiftPM resolved `matrix-rust-components-swift` at normalized version
@@ -98,6 +114,14 @@ https://github.com/matrix-org/matrix-rust-components-swift/releases/download/26.
 ```text
 MatrixRustSDK import succeeded.
 ```
+- Live E2EE validation succeeded with:
+  - SDK password login.
+  - SDK E2EE initialization.
+  - Encrypted joined-room discovery.
+  - Room encryption state `encrypted`.
+  - Timeline pagination.
+  - Encrypted send acceptance.
+  - Zero unable-to-decrypt callbacks in the observed timeline window.
 
 ## Build Caveat
 
@@ -121,15 +145,15 @@ future macOS reuse, but the iOS app target is the main concern for this spike.
 This spike verified package resolution and module import only. The following
 coverage still needs a real test homeserver spike:
 
-| Area            | Status                                             | Next proof                                                                        |
-| --------------- | -------------------------------------------------- | --------------------------------------------------------------------------------- |
-| Login           | Available through SDK surface, not exercised       | Test-account password login in native app shell or a dedicated integration probe. |
-| Session restore | Not exercised                                      | Keychain-backed session store plus SDK restore test.                              |
-| Room list       | Not exercised                                      | Mock first, then test homeserver room-list sync.                                  |
-| Timeline        | Not exercised                                      | Wrapper around SDK timeline APIs with fixture-backed mapping tests.               |
-| E2EE            | SDK includes crypto wrapper sources; not exercised | Test encrypted room sync with non-production account.                             |
-| Media           | Not exercised                                      | Upload/download wrapper with authenticated media policy.                          |
-| Pusher APIs     | Not exercised                                      | APNs token mock plus Matrix pusher registration against staging homeserver.       |
+| Area            | Status                                                        | Next proof                                                                        |
+| --------------- | ------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| Login           | Exercised in live probe with disposable password credentials. | Move login behind app-owned SDK wrapper and Keychain session metadata.            |
+| Session restore | Not exercised.                                                | Keychain-backed session store plus SDK restore test.                              |
+| Room list       | Exercised enough to discover joined encrypted rooms.          | SDK-backed app room-list service and simulator smoke.                             |
+| Timeline        | Exercised for encrypted pagination and listener updates.      | App timeline mapper around SDK timeline APIs with fixture-backed mapping tests.   |
+| E2EE            | Exercised for initialization, encrypted room state, and send. | App service integration, recovery, verification, key backup, and encrypted media. |
+| Media           | Not exercised.                                                | Upload/download wrapper with authenticated and encrypted media policy.            |
+| Pusher APIs     | Not exercised.                                                | APNs token mock plus Matrix pusher registration against staging homeserver.       |
 
 ## Minimum Platform Implications
 
@@ -145,14 +169,18 @@ coverage still needs a real test homeserver spike:
   the primary path and Tauri iOS as non-shipping for now.
 - Create the real `Synara.xcodeproj` under `synara-ios/`.
 - Add a `SynaraMatrix` module that wraps SDK APIs behind app-owned protocols.
-- Add redacted logging before any real auth calls.
-- Add Keychain storage before any persisted session work.
-- Use only test accounts and test rooms for the first login and room-list spike.
+- Move auth/session restore/room list/timeline send from REST-backed services to
+  SDK-backed services.
+- Preserve safe placeholders for UTD or unsupported encrypted states.
+- Add recovery, verification, key backup, and encrypted media before external
+  TestFlight/App Store release.
 
 ## Acceptance Result
 
 - Swift package integration: passed.
 - Local module import: passed.
-- Real login: intentionally not attempted.
-- Recommendation: proceed to IOS-0007 architecture ADR, then Phase 1 native iOS
-  skeleton.
+- Live SDK login: passed with disposable credentials supplied through
+  environment variables.
+- Live SDK E2EE room validation: passed.
+- Recommendation: integrate Matrix Rust SDK behind app-owned protocols before
+  claiming production encrypted-room support.

@@ -80,8 +80,11 @@ Findings are tracked in ordered implementation items in
   snapshot can still return an empty app tree. The canonical automation path is
   XCTest accessibility, which is passing.
 - Current REST messaging safely renders encrypted events as unavailable
-  placeholders. Production E2EE remains a Matrix Rust SDK crypto integration
-  gate before TestFlight/App Store release.
+  placeholders. A Matrix Rust SDK live probe validates encrypted-room login,
+  crypto initialization, encrypted timeline pagination, encrypted send
+  acceptance, and zero UTD callbacks in the observed window. Production E2EE
+  remains blocked until the app services move onto the SDK crypto path before
+  external TestFlight/App Store release.
 
 The repeatable live-smoke checklist is
 [`synara-ios/docs/live-simulator-smoke.md`](live-simulator-smoke.md).
