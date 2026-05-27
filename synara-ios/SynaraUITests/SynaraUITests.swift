@@ -60,7 +60,7 @@ final class SynaraUITests: XCTestCase {
         XCTAssertTrue(app.tabBars.buttons["Rooms"].waitForExistence(timeout: 5))
     }
 
-    func testRoomListOpensRoomPlaceholder() {
+    func testRoomListOpensTimeline() {
         let app = XCUIApplication()
         app.launch()
 
@@ -69,7 +69,38 @@ final class SynaraUITests: XCTestCase {
         XCTAssertTrue(app.buttons["RoomRow-!project:matrix.org"].waitForExistence(timeout: 5))
         app.buttons["RoomRow-!project:matrix.org"].tap()
 
-        XCTAssertTrue(app.otherElements["Room !project:matrix.orgScreen"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.otherElements["RoomTimelineScreen-!project:matrix.org"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.otherElements["TimelineItem-$text:!project:matrix.org"].waitForExistence(timeout: 5))
+    }
+
+    func testComposerSendsMockMessage() {
+        let app = XCUIApplication()
+        app.launch()
+
+        login(app: app)
+
+        XCTAssertTrue(app.buttons["RoomRow-!project:matrix.org"].waitForExistence(timeout: 5))
+        app.buttons["RoomRow-!project:matrix.org"].tap()
+        XCTAssertTrue(app.textViews["ComposerTextEditor"].waitForExistence(timeout: 5))
+        app.textViews["ComposerTextEditor"].tap()
+        app.textViews["ComposerTextEditor"].typeText("hello from ui")
+        app.buttons["ComposerSendButton"].tap()
+
+        XCTAssertTrue(app.staticTexts["hello from ui"].waitForExistence(timeout: 5))
+    }
+
+    func testMediaUploadAddsAttachmentPlaceholder() {
+        let app = XCUIApplication()
+        app.launch()
+
+        login(app: app)
+
+        XCTAssertTrue(app.buttons["RoomRow-!project:matrix.org"].waitForExistence(timeout: 5))
+        app.buttons["RoomRow-!project:matrix.org"].tap()
+        XCTAssertTrue(app.buttons["AttachmentButton"].waitForExistence(timeout: 5))
+        app.buttons["AttachmentButton"].tap()
+
+        XCTAssertTrue(app.buttons["MediaPlaceholder-synara-upload.jpg"].waitForExistence(timeout: 5))
     }
 
     func testLogoutReturnsToSignedOutShell() {

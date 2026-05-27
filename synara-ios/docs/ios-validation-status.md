@@ -1,10 +1,10 @@
 # iOS Validation Status
 
-Reviewed: 2026-05-26
+Reviewed: 2026-05-27
 
-Status: Phase 1 shell/foundation, Phase 2 auth/session/sync/room-list/logout
-work, and Phase 3 timeline service scaffolding are build-validated; simulator
-runtime execution pending.
+Status: Phase 1 shell/foundation, Phase 2 auth/session/sync/room-list/logout,
+Phase 3 timeline UI, composer, event actions, media viewer, and media upload
+MVP work are build-validated; simulator runtime execution pending.
 
 ## Project Shape
 
@@ -103,7 +103,18 @@ usable simulator runtimes and UI tests cannot execute.
 - Timeline service scaffolding normalizes raw events into stable timeline item
   models for text, media placeholders, redactions, unknown events, replies, and
   edits.
+- Room timeline screen renders lazy rows with sender labels, reply/edit states,
+  redactions, unknown event placeholders, media placeholders, and reaction
+  summaries.
+- Composer MVP supports multiline text input, empty-message guarding, local
+  echo, send failure messaging, and per-room draft preservation.
+- Event action service and context menu support reply, edit, redact, and react
+  availability against the mock service layer.
+- Media service supports authenticated media resources, safe media descriptions,
+  viewer presentation, upload progress state, and sanitized upload display names.
 - Unit tests cover secure session storage, Matrix lifecycle, room sorting and
-  unread mapping, local wipe behavior, and timeline mapping.
-- UI tests cover opening a room from the room list and logout return to the
-  homeserver selection shell once simulator execution works.
+  unread mapping, local wipe behavior, timeline mapping, composer/draft behavior,
+  event action behavior, and media URL/path safety.
+- UI tests cover opening a room from the room list, sending a mock message,
+  adding a mock media attachment, and logout return to the homeserver selection
+  shell once simulator execution works.
