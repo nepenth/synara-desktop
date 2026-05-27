@@ -10,6 +10,7 @@ struct AppEnvironment {
     let homeserverDiscovery: HomeserverDiscovering
     let auth: AuthServicing
     let roomList: RoomListServicing
+    let roomMembership: RoomMembershipServicing
     let wipe: LocalWiping
     let timeline: TimelineServicing
     let messageSender: MessageSending
@@ -27,6 +28,7 @@ struct AppEnvironment {
         let matrix = PlaceholderMatrixClientService()
         let push = PlaceholderPushService()
         let roomList = MatrixRoomListService(sessionStore: session)
+        let roomMembership = MatrixRoomMembershipService(sessionStore: session)
         return AppEnvironment(
             session: session,
             matrix: matrix,
@@ -37,14 +39,15 @@ struct AppEnvironment {
             homeserverDiscovery: PlaceholderHomeserverDiscoveryService(),
             auth: MatrixPasswordAuthService(),
             roomList: roomList,
+            roomMembership: roomMembership,
             wipe: AppLocalWipeService(
                 session: session,
                 matrix: matrix,
                 roomList: roomList,
                 push: push
             ),
-            timeline: MockTimelineService(),
-            messageSender: MockMessageSendService(),
+            timeline: MatrixTimelineService(sessionStore: session),
+            messageSender: MatrixMessageSendService(sessionStore: session),
             drafts: DraftStore(),
             eventActions: MockEventActionService(),
             mediaLoader: MockMediaLoader(),
@@ -60,6 +63,7 @@ struct AppEnvironment {
         matrix: MatrixClientServicing = MockMatrixClientService(),
         push: PushServicing = MockPushService(),
         roomList: RoomListServicing = MockRoomListService(),
+        roomMembership: RoomMembershipServicing = MockRoomMembershipService(),
         wipe: LocalWiping? = nil,
         timeline: TimelineServicing = MockTimelineService(),
         messageSender: MessageSending = MockMessageSendService(),
@@ -78,6 +82,7 @@ struct AppEnvironment {
             homeserverDiscovery: homeserverDiscovery,
             auth: auth,
             roomList: roomList,
+            roomMembership: roomMembership,
             wipe: wipe ?? AppLocalWipeService(
                 session: session,
                 matrix: matrix,

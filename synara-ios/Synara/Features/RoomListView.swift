@@ -3,6 +3,7 @@ import SwiftUI
 struct RoomListView: View {
     @Environment(\.appEnvironment) private var environment
     @State private var state: RoomListState = .idle
+    @State private var membershipError: String?
 
     var body: some View {
         Group {
@@ -21,14 +22,33 @@ struct RoomListView: View {
                 }
             case .loaded(let rooms):
                 List(rooms) { room in
-                    Button {
-                        environment.router.route(to: .room(id: room.id))
-                    } label: {
-                        RoomListRow(room: room)
+                    if room.membership == .invited {
+                        InviteRoomListRow(
+                            room: room,
+                            onAccept: { updateInvite(roomID: room.id, accept: true) },
+                            onReject: { updateInvite(roomID: room.id, accept: false) }
+                        )
+                    } else {
+                        Button {
+                            environment.router.route(to: .room(id: room.id))
+                        } label: {
+                            RoomListRow(room: room)
+                        }
+                        .accessibilityIdentifier("RoomRow-\(room.id)")
                     }
-                    .accessibilityIdentifier("RoomRow-\(room.id)")
                 }
                 .accessibilityIdentifier("RoomList")
+            }
+        }
+        .safeAreaInset(edge: .bottom) {
+            if let membershipError {
+                Text(membershipError)
+                    .font(SynaraTypography.supporting)
+                    .foregroundStyle(.red)
+                    .padding(SynaraSpacing.medium)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(SynaraColor.secondarySurface)
+                    .accessibilityIdentifier("RoomMembershipErrorText")
             }
         }
         .navigationTitle("Rooms")
@@ -43,6 +63,27 @@ struct RoomListView: View {
             let loadedState = await environment.roomList.loadRooms()
             await MainActor.run {
                 state = loadedState
+            }
+        }
+    }
+
+    private func updateInvite(roomID: String, accept: Bool) {
+        membershipError = nil
+
+        Task {
+            do {
+                if accept {
+                    try await environment.roomMembership.acceptInvite(roomID: roomID)
+                } else {
+                    try await environment.roomMembership.rejectInvite(roomID: roomID)
+                }
+                await MainActor.run {
+                    loadRooms()
+                }
+            } catch {
+                await MainActor.run {
+                    membershipError = RoomMembershipError.failed.localizedDescription
+                }
             }
         }
     }
@@ -83,6 +124,29 @@ private struct RoomListRow: View {
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(room.name), \(room.lastMessagePreview)")
+    }
+}
+
+private struct InviteRoomListRow: View {
+    let room: RoomSummary
+    let onAccept: () -> Void
+    let onReject: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: SynaraSpacing.small) {
+            RoomListRow(room: room)
+
+            HStack {
+                Button("Accept", action: onAccept)
+                    .buttonStyle(.borderedProminent)
+                    .accessibilityIdentifier("AcceptInvite-\(room.id)")
+
+                Button("Decline", role: .destructive, action: onReject)
+                    .buttonStyle(.bordered)
+                    .accessibilityIdentifier("RejectInvite-\(room.id)")
+            }
+        }
+        .accessibilityIdentifier("InviteRoomRow-\(room.id)")
     }
 }
 

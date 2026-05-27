@@ -88,9 +88,11 @@ final class RoomListServiceTests: XCTestCase {
         XCTAssertEqual(rooms.map(\.id), ["!invited:matrix.org", "!joined:matrix.org"])
         XCTAssertEqual(rooms[0].name, "Invited Room")
         XCTAssertEqual(rooms[0].lastMessagePreview, "Invited to room")
+        XCTAssertEqual(rooms[0].membership, .invited)
         XCTAssertTrue(rooms[0].hasHighlight)
         XCTAssertEqual(rooms[1].name, "Joined Room")
         XCTAssertEqual(rooms[1].lastMessagePreview, "Hello there")
+        XCTAssertEqual(rooms[1].membership, .joined)
         XCTAssertEqual(rooms[1].unreadCount, 2)
         XCTAssertEqual(client.requests.first?.httpMethod, "GET")
         XCTAssertEqual(
@@ -118,6 +120,61 @@ final class RoomListServiceTests: XCTestCase {
         let state = await service.loadRooms()
 
         XCTAssertEqual(state, .failed("Could not load rooms. Try again."))
+    }
+
+    func testMatrixMembershipAcceptsInvite() async throws {
+        let session = try makeSession()
+        let client = MockRoomListHTTPClient(responses: [
+            .success(statusCode: 200, body: #"{"room_id":"!room:matrix.org"}"#)
+        ])
+        let service = MatrixRoomMembershipService(
+            sessionStore: AppSessionStore(currentState: .signedIn(session)),
+            httpClient: client
+        )
+
+        try await service.acceptInvite(roomID: "!room:matrix.org")
+
+        XCTAssertEqual(client.requests.first?.httpMethod, "POST")
+        XCTAssertEqual(
+            client.requests.first?.url?.absoluteString,
+            "https://matrix.org/_matrix/client/v3/rooms/!room:matrix.org/join"
+        )
+        XCTAssertEqual(client.requests.first?.value(forHTTPHeaderField: "Authorization"), "Bearer token")
+        XCTAssertEqual(client.requests.first?.httpBody, Data("{}".utf8))
+    }
+
+    func testMatrixMembershipRejectsInvite() async throws {
+        let session = try makeSession()
+        let client = MockRoomListHTTPClient(responses: [
+            .success(statusCode: 200, body: #"{}"#)
+        ])
+        let service = MatrixRoomMembershipService(
+            sessionStore: AppSessionStore(currentState: .signedIn(session)),
+            httpClient: client
+        )
+
+        try await service.rejectInvite(roomID: "!room:matrix.org")
+
+        XCTAssertEqual(
+            client.requests.first?.url?.absoluteString,
+            "https://matrix.org/_matrix/client/v3/rooms/!room:matrix.org/leave"
+        )
+    }
+
+    func testMatrixMembershipFailsWhenSignedOut() async throws {
+        let client = MockRoomListHTTPClient()
+        let service = MatrixRoomMembershipService(
+            sessionStore: AppSessionStore(),
+            httpClient: client
+        )
+
+        do {
+            try await service.acceptInvite(roomID: "!room:matrix.org")
+            XCTFail("Expected signed-out error")
+        } catch let error as RoomMembershipError {
+            XCTAssertEqual(error, .signedOut)
+            XCTAssertTrue(client.requests.isEmpty)
+        }
     }
 
     func testRoomsSortByHighlightUnreadThenActivity() {
@@ -153,6 +210,15 @@ final class RoomListServiceTests: XCTestCase {
 
         XCTAssertEqual(state, .empty)
         XCTAssertEqual(service.clearCallCount, 1)
+    }
+
+    private func makeSession() throws -> AuthenticatedSession {
+        AuthenticatedSession(
+            userID: "@alice:matrix.org",
+            deviceID: "DEVICE",
+            homeserverURL: try XCTUnwrap(URL(string: "https://matrix.org")),
+            accessToken: "token"
+        )
     }
 }
 

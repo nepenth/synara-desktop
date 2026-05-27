@@ -118,6 +118,13 @@ mock services instead of live Keychain, auth, and Matrix dependencies.
 - Room list service renders loading, empty, failed, and loaded states with
   stable room IDs, unread counts, highlight state, invite previews, and
   1,000-room fixtures.
+- Invited rooms expose native accept and decline actions backed by Matrix
+  room membership endpoints.
+- Live timeline loading uses Matrix room messages for joined rooms and maps
+  text, reply, media, redacted, encrypted, and unknown events into the native
+  timeline model.
+- Live message sending uses Matrix `m.room.message` send with transaction IDs
+  and supports reply metadata for text messages.
 - Settings exposes logout through a local wipe service that stops sync, clears
   cached rooms, clears push registration state, deletes the secure session, and
   returns to the signed-out shell.
