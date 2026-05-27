@@ -1491,6 +1491,14 @@ server-side contract for approval command routing is finalized.
 - Implement approve, reject, copy markdown, copy JSON, copy prompt, and open safe link where supported by contract.
 - Persist resulting action state through Matrix events or account data, not local-only iOS state.
 
+Next implementation slices:
+
+- Define `in.synara.agent.action` contract for approve/reject and persistence target.
+- Wire Matrix send path for approve/reject actions to a controlled, authenticated endpoint.
+- Return explicit retryable errors for unsupported action outcomes.
+- Add unit tests for approval action execution, including blocked/error states.
+- Add live smoke validation in a dedicated approval test room.
+
 Deliverables:
 
 - Agent action UI.
