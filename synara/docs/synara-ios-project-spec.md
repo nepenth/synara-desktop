@@ -1816,6 +1816,46 @@ Acceptance criteria:
 - Full deterministic UI suite passes or completes successfully in underlying
   Xcode logs if the MCP response window times out.
 
+## Phase 6.6: Mockup Fidelity And Desktop Parity UI Pass
+
+Goal: close the visible distance between the native iOS app and the approved
+high-fidelity iPhone mockups while preserving the desktop-derived Synara
+workflow surface.
+
+Status: complete for the current native iOS MVP. The implementation closes the
+largest visible fidelity gaps in the room list, room timeline/composer, and
+agent approval card while preserving the existing desktop-derived app
+functions.
+
+Requirements:
+
+- Treat the approved three-screen mockup as the visual target for the room
+  list, timeline/composer, and agent approval room.
+- Preserve existing app functionality: Rooms, Notifications, Later, Settings,
+  Matrix auth/session restore, secure storage, message actions, media,
+  encrypted placeholders, and Synara agent approvals.
+- Add room filter chips for All, Unread, Mentions, and Favorites without
+  changing room-list service contracts.
+- Render room/channel rows with stronger iconography, unread badges, mention
+  affordances, activity timestamps, and Direct Messages grouping.
+- Render timeline headers, media/file cards, reaction chips, reply affordances,
+  and composer controls closer to the mockup.
+- Render agent approval cards as detailed approval surfaces with status,
+  changed-item/check summaries, preview links, and prominent approve/reject
+  controls.
+
+Acceptance criteria:
+
+- The iOS room list visually exposes search, filters, room rows, DMs, unread
+  state, and mention state in the same hierarchy as the mockup.
+- The iOS timeline visually exposes room title, participant context, message
+  grouping, attachment cards, reactions, reply/edit composer state, and send
+  controls without regressing existing message actions.
+- The iOS agent card surface visually supports production-style approval review
+  and keeps all existing safe action routing.
+- Existing deterministic unit/UI tests continue to pass or are updated only for
+  intentional accessibility/visual-surface changes.
+
 ## Phase 7: App Store Submission
 
 Goal: submit a legally cleared, privacy-reviewed, production-signed app.

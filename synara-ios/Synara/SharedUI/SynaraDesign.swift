@@ -22,6 +22,10 @@ enum SynaraColor {
     static let warning = Color(.systemOrange)
     static let critical = Color(.systemRed)
     static let separator = Color(.separator)
+    static let secure = Color(.systemOrange)
+    static let design = Color(.systemPurple)
+    static let ops = Color(.systemTeal)
+    static let mutedControl = Color(.systemGray5)
 }
 
 enum SynaraRadius {
@@ -130,6 +134,32 @@ struct SynaraUnreadBadge: View {
     }
 }
 
+struct SynaraFilterChip: View {
+    let title: String
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.caption.weight(.medium))
+                .lineLimit(1)
+                .padding(.horizontal, SynaraSpacing.medium)
+                .frame(height: 32)
+                .background(isSelected ? SynaraColor.accent : SynaraColor.secondarySurface)
+                .foregroundStyle(isSelected ? Color.white : SynaraColor.secondaryText)
+                .clipShape(Capsule())
+                .overlay(
+                    Capsule()
+                        .stroke(isSelected ? Color.clear : SynaraColor.separator.opacity(0.55), lineWidth: 0.5)
+                        .allowsHitTesting(false)
+                )
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+}
+
 struct SynaraActionIconButton: View {
     let systemImage: String
     let accessibilityLabel: String
@@ -160,6 +190,25 @@ struct SynaraActionIconButton: View {
         .buttonStyle(.plain)
         .contentShape(Rectangle())
         .accessibilityLabel(Text(accessibilityLabel))
+    }
+}
+
+struct SynaraIconTile: View {
+    let title: String
+    let systemImage: String
+    let tint: Color
+    var size: CGFloat = 46
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: SynaraRadius.card)
+                .fill(tint)
+            Image(systemName: systemImage)
+                .font(.system(size: size * 0.44, weight: .semibold))
+                .foregroundStyle(.white)
+        }
+        .frame(width: size, height: size)
+        .accessibilityHidden(true)
     }
 }
 
