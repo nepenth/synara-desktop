@@ -13,6 +13,7 @@ enum LoginError: LocalizedError, Equatable {
     case networkFailure
     case cancelled
     case unsupported
+    case sessionPersistenceFailed
 
     var errorDescription: String? {
         switch self {
@@ -28,6 +29,8 @@ enum LoginError: LocalizedError, Equatable {
             return "Login was cancelled."
         case .unsupported:
             return "Password login is not supported for this homeserver yet."
+        case .sessionPersistenceFailed:
+            return "Could not save the session securely."
         }
     }
 }
@@ -51,7 +54,8 @@ struct PlaceholderAuthService: AuthServicing {
         return AuthenticatedSession(
             userID: username.hasPrefix("@") ? username : "@\(username):\(request.homeserverURL.host ?? "localhost")",
             deviceID: "SYNARA-IOS-MOCK",
-            homeserverURL: request.homeserverURL
+            homeserverURL: request.homeserverURL,
+            accessToken: "mock-access-token"
         )
     }
 }

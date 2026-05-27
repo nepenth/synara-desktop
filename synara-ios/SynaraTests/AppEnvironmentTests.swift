@@ -7,7 +7,7 @@ final class AppEnvironmentTests: XCTestCase {
         let environment = AppEnvironment.mock(router: router)
 
         XCTAssertTrue(environment.session.currentState == .signedOut)
-        XCTAssertEqual(environment.matrix.syncStatusDescription, "Mock sync idle")
+        XCTAssertEqual(environment.matrix.syncStatusDescription, "Not connected")
         XCTAssertFalse(environment.push.isRegistrationAvailable)
         XCTAssertTrue(environment.router === router)
         XCTAssertTrue(environment.auth is MockAuthService)

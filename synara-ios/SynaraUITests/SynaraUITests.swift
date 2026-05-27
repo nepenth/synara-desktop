@@ -55,6 +55,38 @@ final class SynaraUITests: XCTestCase {
         let app = XCUIApplication()
         app.launch()
 
+        login(app: app)
+
+        XCTAssertTrue(app.tabBars.buttons["Rooms"].waitForExistence(timeout: 5))
+    }
+
+    func testRoomListOpensRoomPlaceholder() {
+        let app = XCUIApplication()
+        app.launch()
+
+        login(app: app)
+
+        XCTAssertTrue(app.buttons["RoomRow-!project:matrix.org"].waitForExistence(timeout: 5))
+        app.buttons["RoomRow-!project:matrix.org"].tap()
+
+        XCTAssertTrue(app.otherElements["Room !project:matrix.orgScreen"].waitForExistence(timeout: 5))
+    }
+
+    func testLogoutReturnsToSignedOutShell() {
+        let app = XCUIApplication()
+        app.launch()
+
+        login(app: app)
+
+        XCTAssertTrue(app.tabBars.buttons["Settings"].waitForExistence(timeout: 5))
+        app.tabBars.buttons["Settings"].tap()
+        XCTAssertTrue(app.buttons["LogoutButton"].waitForExistence(timeout: 5))
+        app.buttons["LogoutButton"].tap()
+
+        XCTAssertTrue(app.textFields["HomeserverAddressField"].waitForExistence(timeout: 5))
+    }
+
+    private func login(app: XCUIApplication) {
         let addressField = app.textFields["HomeserverAddressField"]
         XCTAssertTrue(addressField.waitForExistence(timeout: 5))
         addressField.tap()
@@ -67,7 +99,5 @@ final class SynaraUITests: XCTestCase {
         app.secureTextFields["LoginPasswordField"].tap()
         app.secureTextFields["LoginPasswordField"].typeText("password")
         app.buttons["LoginSubmitButton"].tap()
-
-        XCTAssertTrue(app.tabBars.buttons["Rooms"].waitForExistence(timeout: 5))
     }
 }

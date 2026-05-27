@@ -12,13 +12,13 @@ enum AppTab: String, CaseIterable, Identifiable {
     var content: some View {
         switch self {
         case .rooms:
-            PlaceholderScreen(title: "Rooms", systemImage: "bubble.left.and.bubble.right")
+            RoomListView()
         case .notifications:
             PlaceholderScreen(title: "Notifications", systemImage: "bell")
         case .later:
             PlaceholderScreen(title: "Later", systemImage: "clock")
         case .settings:
-            PlaceholderScreen(title: "Settings", systemImage: "gearshape")
+            SettingsView()
         }
     }
 
