@@ -26,6 +26,8 @@ enum SynaraColor {
     static let design = Color(.systemPurple)
     static let ops = Color(.systemTeal)
     static let mutedControl = Color(.systemGray5)
+    static let agentReviewBackground = Color(red: 0.06, green: 0.10, blue: 0.13)
+    static let agentReviewSurface = Color(red: 0.10, green: 0.16, blue: 0.20)
 }
 
 enum SynaraRadius {
