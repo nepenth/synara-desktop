@@ -55,7 +55,8 @@ final class AuthServiceTests: XCTestCase {
         let fixture = AuthenticatedSession(
             userID: "@tester:example.org",
             deviceID: "DEVICE",
-            homeserverURL: homeserverURL
+            homeserverURL: homeserverURL,
+            accessToken: "token"
         )
         let service = MockAuthService(result: .success(fixture))
         let request = LoginRequest(
@@ -75,16 +76,17 @@ final class AuthServiceTests: XCTestCase {
         let session = AuthenticatedSession(
             userID: "@alice:matrix.org",
             deviceID: "DEVICE",
-            homeserverURL: homeserverURL
+            homeserverURL: homeserverURL,
+            accessToken: "token"
         )
         let store = AppSessionStore()
 
         XCTAssertEqual(store.currentState, .signedOut)
 
-        store.completeLogin(session)
+        try store.completeLogin(session)
         XCTAssertEqual(store.currentState, .signedIn(session))
 
-        store.signOut()
+        try store.signOut()
         XCTAssertEqual(store.currentState, .signedOut)
     }
 }

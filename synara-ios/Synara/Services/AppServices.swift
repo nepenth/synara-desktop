@@ -6,18 +6,45 @@ enum SessionState: Equatable {
     case signedIn(AuthenticatedSession)
 }
 
-struct AuthenticatedSession: Equatable {
+struct AuthenticatedSession: Codable, Equatable {
     let userID: String
     let deviceID: String
     let homeserverURL: URL
+    let accessToken: String
 }
 
-protocol MatrixClientServicing {
+enum MatrixSyncStatus: Equatable {
+    case stopped
+    case starting
+    case syncing
+    case failed(String)
+
+    var description: String {
+        switch self {
+        case .stopped:
+            return "Not connected"
+        case .starting:
+            return "Starting sync"
+        case .syncing:
+            return "Syncing"
+        case .failed(let message):
+            return message
+        }
+    }
+}
+
+protocol MatrixClientServicing: AnyObject {
     var syncStatusDescription: String { get }
+    var syncStatus: MatrixSyncStatus { get }
+
+    func start(session: AuthenticatedSession) async
+    func stop() async
+    func resetLocalState()
 }
 
 protocol PushServicing {
     var isRegistrationAvailable: Bool { get }
+    func clearRegistrationState()
 }
 
 protocol SettingsStoring {
@@ -27,26 +54,65 @@ protocol SettingsStoring {
 
 final class AppSessionStore: ObservableObject {
     @Published private(set) var currentState: SessionState
+    let secureStore: SecureSessionStoring
 
-    init(currentState: SessionState = .signedOut) {
-        self.currentState = currentState
+    init(
+        currentState: SessionState = .signedOut,
+        secureStore: SecureSessionStoring = InMemorySecureSessionStore(),
+        restorePersistedSession: Bool = false
+    ) {
+        self.secureStore = secureStore
+
+        if restorePersistedSession, let restored = try? secureStore.load() {
+            self.currentState = .signedIn(restored)
+        } else {
+            self.currentState = currentState
+        }
     }
 
-    func completeLogin(_ session: AuthenticatedSession) {
+    func restore() throws {
+        if let restored = try secureStore.load() {
+            currentState = .signedIn(restored)
+        } else {
+            currentState = .signedOut
+        }
+    }
+
+    func completeLogin(_ session: AuthenticatedSession) throws {
+        try secureStore.save(session)
         currentState = .signedIn(session)
     }
 
-    func signOut() {
+    func signOut() throws {
+        try secureStore.delete()
         currentState = .signedOut
     }
 }
 
 final class PlaceholderMatrixClientService: MatrixClientServicing {
-    let syncStatusDescription = "Not connected"
+    private(set) var syncStatus: MatrixSyncStatus = .stopped
+
+    var syncStatusDescription: String {
+        syncStatus.description
+    }
+
+    func start(session: AuthenticatedSession) async {
+        syncStatus = .syncing
+    }
+
+    func stop() async {
+        syncStatus = .stopped
+    }
+
+    func resetLocalState() {
+        syncStatus = .stopped
+    }
 }
 
 final class PlaceholderPushService: PushServicing {
     let isRegistrationAvailable = false
+
+    func clearRegistrationState() {}
 }
 
 final class InMemorySettingsStore: SettingsStoring {
@@ -62,17 +128,44 @@ final class InMemorySettingsStore: SettingsStoring {
 }
 
 final class MockMatrixClientService: MatrixClientServicing {
-    let syncStatusDescription: String
+    private(set) var syncStatus: MatrixSyncStatus
+    private(set) var startedSessions: [AuthenticatedSession] = []
+    private(set) var stopCallCount = 0
+    private(set) var resetCallCount = 0
 
-    init(syncStatusDescription: String = "Mock sync idle") {
-        self.syncStatusDescription = syncStatusDescription
+    var syncStatusDescription: String {
+        syncStatus.description
+    }
+
+    init(syncStatus: MatrixSyncStatus = .stopped) {
+        self.syncStatus = syncStatus
+    }
+
+    func start(session: AuthenticatedSession) async {
+        startedSessions.append(session)
+        syncStatus = .syncing
+    }
+
+    func stop() async {
+        stopCallCount += 1
+        syncStatus = .stopped
+    }
+
+    func resetLocalState() {
+        resetCallCount += 1
+        syncStatus = .stopped
     }
 }
 
 final class MockPushService: PushServicing {
     let isRegistrationAvailable: Bool
+    private(set) var clearCallCount = 0
 
     init(isRegistrationAvailable: Bool = false) {
         self.isRegistrationAvailable = isRegistrationAvailable
+    }
+
+    func clearRegistrationState() {
+        clearCallCount += 1
     }
 }
