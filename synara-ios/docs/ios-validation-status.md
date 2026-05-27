@@ -93,13 +93,18 @@ mock services instead of live Keychain, auth, and Matrix dependencies.
 - UI tests cover signed-out homeserver selection, invalid input, and successful
   navigation to the login form.
 - Login screen accepts username and password input.
-- Auth service contract supports password-login requests behind placeholder and
-  mock implementations.
+- Live auth uses the Matrix Client-Server `m.login.password` flow: it checks
+  `/_matrix/client/v3/login` for password support, submits the password login
+  request, and maps successful responses into secure app sessions.
+- Mock auth remains forced for UI tests through `SYNARA_UI_TESTS=1`.
 - Successful mock login updates the observable session store and transitions to
   the signed-in tab shell.
 - Failed login shows non-sensitive errors and does not persist credentials.
-- Unit tests cover auth request validation, mock auth fixtures, and session
+- Unit tests cover auth request validation, Matrix login request construction,
+  unsupported login flows, invalid credentials, mock auth fixtures, and session
   state transitions.
+- A live homeserver flow check can be run manually, but no live test
+  homeserver, username, or password is stored in the repository.
 - UI tests cover missing-credential errors and successful mock login.
 - Secure session storage supports save, load, delete, corrupt-entry handling,
   and legacy envelope migration through the app session store contract.

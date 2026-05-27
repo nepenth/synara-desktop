@@ -547,6 +547,13 @@ Acceptance criteria:
 
 Dependencies: IOS-0201, IOS-0006.
 
+Status: initial native implementation complete. The live app environment uses a
+Matrix Client-Server password auth adapter that validates username/password
+input, verifies `m.login.password` support through `/_matrix/client/v3/login`,
+submits password login, maps invalid credentials and unsupported flows to
+non-sensitive app errors, and returns secure app sessions for persistence.
+UI tests still force mock auth with `SYNARA_UI_TESTS=1`.
+
 Requirements:
 
 - Implement password login if supported by the SDK path.

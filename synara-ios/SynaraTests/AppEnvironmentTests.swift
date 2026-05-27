@@ -13,6 +13,12 @@ final class AppEnvironmentTests: XCTestCase {
         XCTAssertTrue(environment.auth is MockAuthService)
     }
 
+    func testLiveEnvironmentUsesMatrixPasswordAuth() {
+        let environment = AppEnvironment.live()
+
+        XCTAssertTrue(environment.auth is MatrixPasswordAuthService)
+    }
+
     func testSettingsStorePersistsBooleansInMemory() {
         let settings = InMemorySettingsStore()
 

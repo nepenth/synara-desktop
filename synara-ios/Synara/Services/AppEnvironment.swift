@@ -35,7 +35,7 @@ struct AppEnvironment {
             settings: InMemorySettingsStore(),
             router: AppRouter(),
             homeserverDiscovery: PlaceholderHomeserverDiscoveryService(),
-            auth: PlaceholderAuthService(),
+            auth: MatrixPasswordAuthService(),
             roomList: roomList,
             wipe: AppLocalWipeService(
                 session: session,
