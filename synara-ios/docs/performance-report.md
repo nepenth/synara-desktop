@@ -11,11 +11,13 @@ Status: initial Phase 6 fixture pass complete. Instruments traces remain a relea
 - UI test launch flags:
   - `SYNARA_UI_TEST_LARGE_ROOMS=1`
   - `SYNARA_UI_TEST_LARGE_TIMELINE=1`
+  - `SYNARA_UI_TEST_ROOM_SEARCH=<query>`
 
 ## Current Results
 
 - Deterministic UI tests verify that the 1,000-room list renders and remains scrollable.
 - Deterministic UI tests verify that the 10,000-event timeline renders and remains scrollable.
+- Deterministic UI tests verify that room filtering preserves stable room rows.
 - Timeline rows use `LazyVStack`; room rows use native `List`.
 - Media upload and timeline pagination remain bounded by explicit user actions.
 
