@@ -7,6 +7,7 @@ struct AppEnvironment {
     let logger: LoggingServicing
     let settings: SettingsStoring
     let router: AppRouter
+    let homeserverDiscovery: HomeserverDiscovering
 
     static func live() -> AppEnvironment {
         let logger = AppLogger()
@@ -16,18 +17,24 @@ struct AppEnvironment {
             push: PlaceholderPushService(),
             logger: logger,
             settings: InMemorySettingsStore(),
-            router: AppRouter()
+            router: AppRouter(),
+            homeserverDiscovery: PlaceholderHomeserverDiscoveryService()
         )
     }
 
-    static func mock(router: AppRouter = AppRouter()) -> AppEnvironment {
+    static func mock(
+        router: AppRouter = AppRouter(),
+        session: SessionServicing = MockSessionService(),
+        homeserverDiscovery: HomeserverDiscovering = MockHomeserverDiscoveryService()
+    ) -> AppEnvironment {
         AppEnvironment(
-            session: MockSessionService(),
+            session: session,
             matrix: MockMatrixClientService(),
             push: MockPushService(),
             logger: MockLoggingService(),
             settings: InMemorySettingsStore(),
-            router: router
+            router: router,
+            homeserverDiscovery: homeserverDiscovery
         )
     }
 }

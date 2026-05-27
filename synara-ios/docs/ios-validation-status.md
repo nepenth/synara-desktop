@@ -2,7 +2,7 @@
 
 Reviewed: 2026-05-26
 
-Status: Phase 1 shell, dependency, logging, design-token, and CI skeleton
+Status: Phase 1 shell/foundation and Phase 2 homeserver selection are
 build-validated; simulator runtime execution pending.
 
 ## Project Shape
@@ -65,3 +65,16 @@ usable simulator runtimes and UI tests cannot execute.
   redaction.
 - UI smoke tests that assert primary tabs exist and Settings can be selected
   once simulator execution works.
+
+## Current Auth Surface
+
+- Signed-out users land in a native homeserver selection flow.
+- Homeserver addresses are normalized before discovery.
+- Insecure `http://` homeserver input is rejected before discovery.
+- Suggested homeservers are provided through the discovery service contract.
+- Successful discovery routes to a login placeholder with the normalized
+  homeserver base URL.
+- Unit tests cover URL normalization, invalid input, mock discovery requests,
+  and login routing.
+- UI tests cover signed-out homeserver selection, invalid input, and successful
+  navigation to the login placeholder once simulator execution works.
