@@ -2,8 +2,8 @@
 
 Reviewed: 2026-05-26
 
-Status: Phase 1 shell/foundation and Phase 2 homeserver selection are
-build-validated; simulator runtime execution pending.
+Status: Phase 1 shell/foundation, Phase 2 homeserver selection, and Phase 2
+login flow are build-validated; simulator runtime execution pending.
 
 ## Project Shape
 
@@ -78,3 +78,13 @@ usable simulator runtimes and UI tests cannot execute.
   and login routing.
 - UI tests cover signed-out homeserver selection, invalid input, and successful
   navigation to the login placeholder once simulator execution works.
+- Login screen accepts username and password input.
+- Auth service contract supports password-login requests behind placeholder and
+  mock implementations.
+- Successful mock login updates the observable session store and transitions to
+  the signed-in tab shell.
+- Failed login shows non-sensitive errors and does not persist credentials.
+- Unit tests cover auth request validation, mock auth fixtures, and session
+  state transitions.
+- UI tests cover missing-credential errors and successful mock login once
+  simulator execution works.

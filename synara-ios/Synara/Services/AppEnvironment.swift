@@ -1,31 +1,34 @@
 import SwiftUI
 
 struct AppEnvironment {
-    let session: SessionServicing
+    let session: AppSessionStore
     let matrix: MatrixClientServicing
     let push: PushServicing
     let logger: LoggingServicing
     let settings: SettingsStoring
     let router: AppRouter
     let homeserverDiscovery: HomeserverDiscovering
+    let auth: AuthServicing
 
     static func live() -> AppEnvironment {
         let logger = AppLogger()
         return AppEnvironment(
-            session: PlaceholderSessionService(),
+            session: AppSessionStore(),
             matrix: PlaceholderMatrixClientService(),
             push: PlaceholderPushService(),
             logger: logger,
             settings: InMemorySettingsStore(),
             router: AppRouter(),
-            homeserverDiscovery: PlaceholderHomeserverDiscoveryService()
+            homeserverDiscovery: PlaceholderHomeserverDiscoveryService(),
+            auth: PlaceholderAuthService()
         )
     }
 
     static func mock(
         router: AppRouter = AppRouter(),
-        session: SessionServicing = MockSessionService(),
-        homeserverDiscovery: HomeserverDiscovering = MockHomeserverDiscoveryService()
+        session: AppSessionStore = AppSessionStore(),
+        homeserverDiscovery: HomeserverDiscovering = MockHomeserverDiscoveryService(),
+        auth: AuthServicing = MockAuthService()
     ) -> AppEnvironment {
         AppEnvironment(
             session: session,
@@ -34,7 +37,8 @@ struct AppEnvironment {
             logger: MockLoggingService(),
             settings: InMemorySettingsStore(),
             router: router,
-            homeserverDiscovery: homeserverDiscovery
+            homeserverDiscovery: homeserverDiscovery,
+            auth: auth
         )
     }
 }

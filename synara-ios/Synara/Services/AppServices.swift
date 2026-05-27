@@ -1,12 +1,15 @@
+import Combine
 import Foundation
 
 enum SessionState: Equatable {
     case signedOut
-    case signedIn(userID: String)
+    case signedIn(AuthenticatedSession)
 }
 
-protocol SessionServicing {
-    var currentState: SessionState { get }
+struct AuthenticatedSession: Equatable {
+    let userID: String
+    let deviceID: String
+    let homeserverURL: URL
 }
 
 protocol MatrixClientServicing {
@@ -22,8 +25,20 @@ protocol SettingsStoring {
     func set(_ value: Bool, for key: String)
 }
 
-final class PlaceholderSessionService: SessionServicing {
-    let currentState: SessionState = .signedOut
+final class AppSessionStore: ObservableObject {
+    @Published private(set) var currentState: SessionState
+
+    init(currentState: SessionState = .signedOut) {
+        self.currentState = currentState
+    }
+
+    func completeLogin(_ session: AuthenticatedSession) {
+        currentState = .signedIn(session)
+    }
+
+    func signOut() {
+        currentState = .signedOut
+    }
 }
 
 final class PlaceholderMatrixClientService: MatrixClientServicing {
@@ -43,14 +58,6 @@ final class InMemorySettingsStore: SettingsStoring {
 
     func set(_ value: Bool, for key: String) {
         values[key] = value
-    }
-}
-
-final class MockSessionService: SessionServicing {
-    let currentState: SessionState
-
-    init(currentState: SessionState = .signedOut) {
-        self.currentState = currentState
     }
 }
 
