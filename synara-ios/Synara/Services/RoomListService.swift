@@ -63,14 +63,54 @@ enum RoomListFixtures {
     static func small() -> [RoomSummary] {
         [
             RoomSummary(
+                id: "!general:matrix.org",
+                name: "General",
+                lastMessagePreview: "Kai: Project update looks good",
+                unreadCount: 7,
+                hasHighlight: false,
+                kind: .room,
+                membership: .joined,
+                lastActivityAt: now.addingTimeInterval(120)
+            ),
+            RoomSummary(
                 id: "!project:matrix.org",
-                name: "Project",
-                lastMessagePreview: "Build validated",
+                name: "Product",
+                lastMessagePreview: "Mina: Here's the latest spec",
                 unreadCount: 3,
                 hasHighlight: true,
                 kind: .room,
                 membership: .joined,
                 lastActivityAt: now.addingTimeInterval(60)
+            ),
+            RoomSummary(
+                id: "!design:matrix.org",
+                name: "Design",
+                lastMessagePreview: "You: Figma file updated",
+                unreadCount: 0,
+                hasHighlight: false,
+                kind: .room,
+                membership: .joined,
+                lastActivityAt: now.addingTimeInterval(-180)
+            ),
+            RoomSummary(
+                id: "!security:matrix.org",
+                name: "Security",
+                lastMessagePreview: "Ravi: Please review the audit",
+                unreadCount: 2,
+                hasHighlight: false,
+                kind: .room,
+                membership: .joined,
+                lastActivityAt: now.addingTimeInterval(-780)
+            ),
+            RoomSummary(
+                id: "!agent-workflows:matrix.org",
+                name: "Agent Workflows",
+                lastMessagePreview: "Workflow run completed",
+                unreadCount: 1,
+                hasHighlight: false,
+                kind: .room,
+                membership: .joined,
+                lastActivityAt: now.addingTimeInterval(-1_200)
             ),
             RoomSummary(
                 id: "!alice:matrix.org",
@@ -81,6 +121,16 @@ enum RoomListFixtures {
                 kind: .directMessage,
                 membership: .joined,
                 lastActivityAt: now
+            ),
+            RoomSummary(
+                id: "!mina:matrix.org",
+                name: "Mina",
+                lastMessagePreview: "You: Sounds good!",
+                unreadCount: 1,
+                hasHighlight: false,
+                kind: .directMessage,
+                membership: .joined,
+                lastActivityAt: now.addingTimeInterval(-300)
             )
         ]
     }

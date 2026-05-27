@@ -304,20 +304,27 @@ private struct RoomSearchField: View {
 
     var body: some View {
         HStack(spacing: SynaraSpacing.small) {
-            Image(systemName: "magnifyingglass")
-                .foregroundStyle(SynaraColor.secondaryText)
-                .accessibilityHidden(true)
-            TextField("Search rooms", text: $text)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .focused($isFocused)
-                .accessibilityIdentifier("RoomSearchField")
-        }
-        .padding(SynaraSpacing.medium)
-        .synaraCard(fill: SynaraColor.secondarySurface)
-        .contentShape(Rectangle())
-        .onTapGesture {
-            isFocused = true
+            HStack(spacing: SynaraSpacing.small) {
+                Image(systemName: "magnifyingglass")
+                    .foregroundStyle(SynaraColor.secondaryText)
+                    .accessibilityHidden(true)
+                TextField("Search rooms", text: $text)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .focused($isFocused)
+                    .accessibilityIdentifier("RoomSearchField")
+            }
+            .padding(SynaraSpacing.medium)
+            .frame(height: 44)
+            .synaraCard(fill: SynaraColor.secondarySurface)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                isFocused = true
+            }
+
+            SynaraActionIconButton(systemImage: "line.3.horizontal.decrease", accessibilityLabel: "Room filters", tint: SynaraColor.secondaryText) {
+                isFocused = true
+            }
         }
     }
 }

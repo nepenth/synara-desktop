@@ -103,15 +103,17 @@ struct RoomTimelineView: View {
                                 .frame(maxWidth: .infinity)
                         }
 
-                        Button {
-                            loadOlderTimeline(before: items.first?.eventID)
-                        } label: {
-                            Label("Load Older", systemImage: "arrow.up")
-                                .frame(maxWidth: .infinity)
+                        if isAgentRoom == false {
+                            Button {
+                                loadOlderTimeline(before: items.first?.eventID)
+                            } label: {
+                                Label("Load Older", systemImage: "arrow.up")
+                                    .frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(.bordered)
+                            .disabled(isPaginating || items.isEmpty)
+                            .accessibilityIdentifier("LoadOlderTimelineButton")
                         }
-                        .buttonStyle(.bordered)
-                        .disabled(isPaginating || items.isEmpty)
-                        .accessibilityIdentifier("LoadOlderTimelineButton")
 
                         ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
                             TimelineRow(
@@ -781,7 +783,7 @@ private struct AgentCardTimelineRow: View {
                 Text(summary)
                     .font(SynaraTypography.supporting)
                     .foregroundStyle(SynaraColor.primaryText)
-                    .lineLimit(nil)
+                    .lineLimit(2)
             }
 
             AgentApprovalDetails(card: card)
@@ -815,7 +817,9 @@ private struct AgentCardTimelineRow: View {
 
             if visibleActions.isEmpty == false {
                 let approvalActions = visibleActions.filter(\.isApprovalDecision)
-                let secondaryActions = visibleActions.filter { $0.isApprovalDecision == false }
+                let secondaryActions = visibleActions.filter { action in
+                    action.isApprovalDecision == false && action.url != nil
+                }
 
                 ForEach(secondaryActions, id: \.id) { action in
                     Button {

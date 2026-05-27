@@ -286,14 +286,28 @@ private extension AppEnvironment {
                 title: "Copy Prompt",
                 kind: "copy_prompt",
                 prompt: "deploy only service api"
+            ),
+            try? SynaraAgentCardAction(
+                id: "view-changes",
+                title: "View changes",
+                kind: "open_url",
+                url: "https://staging.synara.app/review/a1b2c3d"
             )
         ].compactMap { $0 }
 
         return try SynaraAgentCard(
-            title: "Deployment Approval",
-            status: "pending",
-            summary: "Review deployment request.",
-            actions: actions
+            title: "Deploy to Production",
+            status: "Pending approval",
+            summary: "Includes user permissions update and audit log improvements.",
+            actions: actions,
+            artifacts: [
+                try SynaraAgentCardArtifact(title: "api.synara.app", type: "deployment", summary: "Production target")
+            ],
+            logs: [
+                try SynaraAgentCardCodeBlock(id: "build", title: "Build", language: "text", code: "Passed"),
+                try SynaraAgentCardCodeBlock(id: "tests", title: "Tests", language: "text", code: "Passed"),
+                try SynaraAgentCardCodeBlock(id: "security", title: "Security scan", language: "text", code: "Passed")
+            ]
         )
     }
 }
