@@ -307,10 +307,16 @@ final class MatrixRustSDKRoomMembershipService: RoomMembershipServicing {
 final class MatrixRustSDKTimelineService: TimelineServicing {
     private let sessionStore: AppSessionStore
     private let clientStore: MatrixRustSDKClientStore
+    private let rawTimelineFallback: TimelineServicing?
 
-    init(sessionStore: AppSessionStore, clientStore: MatrixRustSDKClientStore) {
+    init(
+        sessionStore: AppSessionStore,
+        clientStore: MatrixRustSDKClientStore,
+        rawTimelineFallback: TimelineServicing? = nil
+    ) {
         self.sessionStore = sessionStore
         self.clientStore = clientStore
+        self.rawTimelineFallback = rawTimelineFallback ?? MatrixTimelineService(sessionStore: sessionStore)
     }
 
     func loadInitialTimeline(roomID: String) async -> [TimelineItem] {
@@ -339,11 +345,35 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
 
             _ = try await timeline.paginateBackwards(numEvents: pageSize)
             let items = await collector.waitForItems(timeoutNanoseconds: 1_500_000_000)
-            return items.compactMap(Self.mapTimelineItem)
+            let sdkItems = items.compactMap(Self.mapTimelineItem)
                 .sorted { $0.timestamp < $1.timestamp }
+            let rawAgentItems = await rawAgentFallbackItems(roomID: roomID)
+            return Self.mergedTimelineItems(sdkItems: sdkItems, rawAgentItems: rawAgentItems)
         } catch {
+            return await rawAgentFallbackItems(roomID: roomID)
+        }
+    }
+
+    private func rawAgentFallbackItems(roomID: String) async -> [TimelineItem] {
+        guard let rawTimelineFallback else {
             return []
         }
+
+        return await rawTimelineFallback.loadInitialTimeline(roomID: roomID)
+            .filter { item in
+                if case .agentCard = item.kind {
+                    return true
+                }
+                return false
+            }
+    }
+
+    static func mergedTimelineItems(sdkItems: [TimelineItem], rawAgentItems: [TimelineItem]) -> [TimelineItem] {
+        var itemsByID = Dictionary(uniqueKeysWithValues: sdkItems.map { ($0.id, $0) })
+        for item in rawAgentItems {
+            itemsByID[item.id] = item
+        }
+        return itemsByID.values.sorted { $0.timestamp < $1.timestamp }
     }
 
     private static func mapTimelineItem(_ item: EventTimelineItem) -> TimelineItem? {
@@ -379,6 +409,9 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
     private static func mapMessageLike(_ content: MsgLikeContent, eventTypeRaw: String?) -> TimelineItem.Kind {
         switch content.kind {
         case .message(let message):
+            if let agentCard = SynaraAgentCardPayloadParser.parse(body: message.body) {
+                return .agentCard(agentCard)
+            }
             return .text(message.body)
         case .unableToDecrypt:
             return .encryptedPlaceholder

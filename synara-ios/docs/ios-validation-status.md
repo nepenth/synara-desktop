@@ -101,7 +101,11 @@ The repeatable live-smoke checklist is
   affordances, malformed payload rejection, and unknown-kind handling.
 - Agent approve/reject actions now submit authenticated Matrix events carrying
   `in.synara.agent.action` payloads; unit tests validate request shape and
-  signed-out errors. Live agent-room approval smoke remains pending.
+  signed-out errors.
+- The gated `testLiveAgentApprovalSmokeWhenConfigured` simulator test seeds a
+  real Matrix agent card, approves it through the app UI, and verifies the
+  resulting `in.synara.agent.action` event in the room. This passed locally
+  against the disposable `test-e2e-room` on `matrix.whyland.com`.
 
 ## Current App Surface
 

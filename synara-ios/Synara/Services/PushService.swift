@@ -260,7 +260,9 @@ final class SynaraPushService: NSObject, PushServicing {
         }
 
         fullDeviceToken = token
-        registrationStateDescription = "Token captured for APNs"
+        registrationStateDescription = pusherService.isGatewayConfigured
+            ? "Token captured for APNs"
+            : "Push gateway not configured"
         logger.info("APNs token captured", category: .push)
 
         Task {

@@ -451,7 +451,7 @@ private struct TimelineRow: View {
                 Button("Redact", role: .destructive, action: onRedact)
             }
         }
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: accessibilityChildBehavior)
         .accessibilityLabel(accessibilitySummary)
         .accessibilityIdentifier("TimelineItem-\(item.eventID)")
     }
@@ -501,8 +501,19 @@ private struct TimelineRow: View {
         case .unknown(let type):
             return "\(item.senderID): unsupported event \(type)"
         case .agentCard(let card):
-            return "\(item.senderID): agent card: \(card.title)"
+            let status = card.status.map { ", status \($0)" } ?? ""
+            let primaryAction = card.actions.first(where: SynaraAgentCardActionResolver.shouldRender)
+                .map { ", primary action \($0.title)" } ?? ""
+            return "\(item.senderID): agent card: \(card.title)\(status)\(primaryAction)"
         }
+    }
+
+    private var accessibilityChildBehavior: AccessibilityChildBehavior {
+        if case .agentCard = item.kind {
+            return .contain
+        }
+
+        return .combine
     }
 }
 

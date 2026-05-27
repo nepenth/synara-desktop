@@ -48,6 +48,22 @@ If no signed-in session exists on the simulator, also provide
 `SYNARA_LIVE_HOMESERVER`, `SYNARA_LIVE_USERNAME`, and `SYNARA_LIVE_PASSWORD` in
 the local environment. Never commit those values or paste them into docs.
 
+The suite also includes `testLiveAgentApprovalSmokeWhenConfigured` for Phase 5
+agent workflows. It logs in through a disposable account, seeds a bounded agent
+card into the target room, approves it through the app UI, and verifies the
+resulting `in.synara.agent.action` Matrix event:
+
+```sh
+SYNARA_LIVE_AGENT_SMOKE=1 \
+SYNARA_LIVE_AGENT_ROOM_ID='!room-id:example.org' \
+SYNARA_LIVE_HOMESERVER='https://matrix.example.org' \
+SYNARA_LIVE_USERNAME='<test-user>' \
+SYNARA_LIVE_PASSWORD='<test-password>' \
+xcodebuild -project Synara.xcodeproj -scheme Synara \
+  -destination 'platform=iOS Simulator,id=<simulator-id>' \
+  -only-testing:SynaraUITests/SynaraUITests/testLiveAgentApprovalSmokeWhenConfigured test
+```
+
 ## Evidence To Capture
 
 - Build mode: signed simulator, unsigned simulator, device, or archive.

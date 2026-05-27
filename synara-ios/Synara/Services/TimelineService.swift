@@ -267,6 +267,48 @@ struct MockLaterService: LaterServicing {
     }
 }
 
+enum SynaraAgentCardPayloadParser {
+    private static let contentKeys = ["org.hermes.agent", "io.hermes.agent", "in.synara.agent", "m.custom.agent"]
+
+    static func parse(raw: [String: Any] = [:], body: String? = nil) -> SynaraAgentCard? {
+        if let directPayload = contentKeys.compactMap({ key in
+            extractAgentCard(from: raw[key])
+        }).first {
+            return directPayload
+        }
+
+        guard let body,
+              body.count <= 200_000,
+              let bodyData = body.data(using: .utf8),
+              let parsedBody = try? JSONSerialization.jsonObject(with: bodyData) as? [String: Any] else {
+            return nil
+        }
+
+        if let directPayload = contentKeys.compactMap({ key in
+            extractAgentCard(from: parsedBody[key])
+        }).first {
+            return directPayload
+        }
+
+        guard let hermes = parsedBody["hermes"] as? Bool, hermes else {
+            return nil
+        }
+
+        return extractAgentCard(from: parsedBody["payload"]) ?? extractAgentCard(from: parsedBody["agent"])
+    }
+
+    private static func extractAgentCard(from rawValue: Any?) -> SynaraAgentCard? {
+        guard let raw = rawValue as? [String: Any] else {
+            return nil
+        }
+        do {
+            return try JSONDecoder().decode(SynaraAgentCard.self, from: JSONSerialization.data(withJSONObject: raw))
+        } catch {
+            return nil
+        }
+    }
+}
+
 struct RawTimelineEvent: Equatable {
     let eventID: String
     let senderID: String
@@ -564,43 +606,7 @@ final class MatrixTimelineService: TimelineServicing {
     }
 
     private func parseAgentCard(from content: MatrixTimelineEventContent) -> SynaraAgentCard? {
-        let keys = ["org.hermes.agent", "io.hermes.agent", "in.synara.agent", "m.custom.agent"]
-
-        if let directPayload = keys.compactMap({ key in
-            extractAgentCard(from: content.raw[key])
-        }).first {
-            return directPayload
-        }
-
-        guard let body = content.body,
-              body.count <= 200_000,
-              let bodyData = body.data(using: .utf8),
-              let parsedBody = try? JSONSerialization.jsonObject(with: bodyData) as? [String: Any] else {
-            return nil
-        }
-
-        if let directPayload = keys.compactMap({ key in
-            extractAgentCard(from: parsedBody[key])
-        }).first {
-            return directPayload
-        }
-
-        guard let hermes = parsedBody["hermes"] as? Bool, hermes else {
-            return nil
-        }
-
-        return extractAgentCard(from: parsedBody["payload"]) ?? extractAgentCard(from: parsedBody["agent"])
-    }
-
-    private func extractAgentCard(from rawValue: Any?) -> SynaraAgentCard? {
-        guard let raw = rawValue as? [String: Any] else {
-            return nil
-        }
-        do {
-            return try JSONDecoder().decode(SynaraAgentCard.self, from: JSONSerialization.data(withJSONObject: raw))
-        } catch {
-            return nil
-        }
+        SynaraAgentCardPayloadParser.parse(raw: content.raw, body: content.body)
     }
 }
 
