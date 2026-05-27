@@ -1,5 +1,6 @@
 import Combine
 import Foundation
+import UserNotifications
 
 enum SessionState: Equatable {
     case signedOut
@@ -11,6 +12,27 @@ struct AuthenticatedSession: Codable, Equatable {
     let deviceID: String
     let homeserverURL: URL
     let accessToken: String
+    let refreshToken: String?
+    let slidingSyncVersion: String
+    let sdkStoreID: String?
+
+    init(
+        userID: String,
+        deviceID: String,
+        homeserverURL: URL,
+        accessToken: String,
+        refreshToken: String? = nil,
+        slidingSyncVersion: String = "native",
+        sdkStoreID: String? = nil
+    ) {
+        self.userID = userID
+        self.deviceID = deviceID
+        self.homeserverURL = homeserverURL
+        self.accessToken = accessToken
+        self.refreshToken = refreshToken
+        self.slidingSyncVersion = slidingSyncVersion
+        self.sdkStoreID = sdkStoreID
+    }
 }
 
 enum MatrixSyncStatus: Equatable {
@@ -44,7 +66,83 @@ protocol MatrixClientServicing: AnyObject {
 
 protocol PushServicing {
     var isRegistrationAvailable: Bool { get }
+    var isRegistered: Bool { get }
+    var tokenSnippet: String? { get }
+    var registrationStateDescription: String { get }
+    var pushGatewayURL: String? { get }
+
+    func beginRegistration()
+    func handleDeviceToken(_ tokenData: Data)
     func clearRegistrationState()
+    func configure(with session: AuthenticatedSession)
+    func route(from notificationPayload: [AnyHashable: Any]) -> AppRoute?
+    func parseBadgeCount(from notificationPayload: [AnyHashable: Any]) -> Int?
+    func applyIncomingBadge(from notificationPayload: [AnyHashable: Any])
+}
+
+enum NotificationPermissionStatus: Equatable {
+    case notDetermined
+    case denied
+    case authorized
+    case provisional
+    case ephemeral
+    case unavailable
+
+    var displayName: String {
+        switch self {
+        case .notDetermined:
+            return "Not Requested"
+        case .denied:
+            return "Denied"
+        case .authorized:
+            return "Authorized"
+        case .provisional:
+            return "Provisional"
+        case .ephemeral:
+            return "Ephemeral"
+        case .unavailable:
+            return "Unavailable"
+        }
+    }
+
+    var detail: String {
+        switch self {
+        case .notDetermined:
+            return "Notifications can be enabled for room and agent alerts."
+        case .denied:
+            return "Enable notifications in iOS Settings to receive alerts."
+        case .authorized:
+            return "Notifications are enabled."
+        case .provisional:
+            return "Notifications can be delivered quietly."
+        case .ephemeral:
+            return "Notifications are temporarily available for this session."
+        case .unavailable:
+            return "Notifications are unavailable on this device."
+        }
+    }
+
+    static func map(_ authorizationStatus: UNAuthorizationStatus) -> NotificationPermissionStatus {
+        switch authorizationStatus {
+        case .notDetermined:
+            return .notDetermined
+        case .denied:
+            return .denied
+        case .authorized:
+            return .authorized
+        case .provisional:
+            return .provisional
+        case .ephemeral:
+            return .ephemeral
+        @unknown default:
+            return .unavailable
+        }
+    }
+}
+
+protocol NotificationPermissionServicing {
+    func currentStatus() async -> NotificationPermissionStatus
+    func requestAuthorization() async -> NotificationPermissionStatus
 }
 
 protocol SettingsStoring {
@@ -134,8 +232,44 @@ final class PlaceholderMatrixClientService: MatrixClientServicing {
 
 final class PlaceholderPushService: PushServicing {
     let isRegistrationAvailable = false
+    let isRegistered = false
+    let tokenSnippet: String? = nil
+    let registrationStateDescription = "Push unavailable"
+    let pushGatewayURL: String? = nil
+
+    func beginRegistration() {}
+
+    func handleDeviceToken(_ tokenData: Data) {}
 
     func clearRegistrationState() {}
+
+    func configure(with session: AuthenticatedSession) {}
+
+    func route(from notificationPayload: [AnyHashable: Any]) -> AppRoute? {
+        nil
+    }
+
+    func parseBadgeCount(from notificationPayload: [AnyHashable: Any]) -> Int? {
+        nil
+    }
+
+    func applyIncomingBadge(from notificationPayload: [AnyHashable: Any]) {}
+}
+
+struct UserNotificationPermissionService: NotificationPermissionServicing {
+    func currentStatus() async -> NotificationPermissionStatus {
+        let settings = await UNUserNotificationCenter.current().notificationSettings()
+        return NotificationPermissionStatus.map(settings.authorizationStatus)
+    }
+
+    func requestAuthorization() async -> NotificationPermissionStatus {
+        do {
+            _ = try await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound])
+            return await currentStatus()
+        } catch {
+            return .unavailable
+        }
+    }
 }
 
 final class InMemorySettingsStore: SettingsStoring {
@@ -182,13 +316,94 @@ final class MockMatrixClientService: MatrixClientServicing {
 
 final class MockPushService: PushServicing {
     let isRegistrationAvailable: Bool
+    let pushGatewayURL: String?
     private(set) var clearCallCount = 0
+    private(set) var beginRegistrationCallCount = 0
+    private(set) var configureCallCount = 0
+    private(set) var routeCallCount = 0
+    private(set) var badgeParseCallCount = 0
+    private(set) var badgeApplyCallCount = 0
+    private(set) var tokenCallCount = 0
+    var isRegistered = false
+    var tokenSnippet: String?
+    var registrationStateDescription: String {
+        isRegistered ? "Mock registered" : "Mock unregistered"
+    }
 
-    init(isRegistrationAvailable: Bool = false) {
+    private let routeOverride: AppRoute?
+
+    init(
+        isRegistrationAvailable: Bool = false,
+        pushGatewayURL: String? = nil,
+        routeOverride: AppRoute? = nil
+    ) {
         self.isRegistrationAvailable = isRegistrationAvailable
+        self.pushGatewayURL = pushGatewayURL
+        self.routeOverride = routeOverride
+    }
+
+    func beginRegistration() {
+        beginRegistrationCallCount += 1
+    }
+
+    func handleDeviceToken(_ tokenData: Data) {
+        tokenCallCount += 1
+        tokenSnippet = tokenData.map { String(format: "%02x", $0) }.joined()
+        isRegistered = true
     }
 
     func clearRegistrationState() {
         clearCallCount += 1
+        isRegistered = false
+        tokenSnippet = nil
+    }
+
+    func configure(with session: AuthenticatedSession) {
+        configureCallCount += 1
+    }
+
+    func route(from notificationPayload: [AnyHashable: Any]) -> AppRoute? {
+        routeCallCount += 1
+        return routeOverride
+    }
+
+    func parseBadgeCount(from notificationPayload: [AnyHashable: Any]) -> Int? {
+        badgeParseCallCount += 1
+
+        if let value = notificationPayload["badge"] as? Int {
+            return value
+        }
+
+        if let value = notificationPayload["badge_count"] as? Int {
+            return value
+        }
+
+        if let value = notificationPayload["synara.badge"] as? Int {
+            return value
+        }
+
+        return nil
+    }
+
+    func applyIncomingBadge(from notificationPayload: [AnyHashable: Any]) {
+        badgeApplyCallCount += 1
+    }
+}
+
+final class MockNotificationPermissionService: NotificationPermissionServicing {
+    var status: NotificationPermissionStatus
+    private(set) var requestCallCount = 0
+
+    init(status: NotificationPermissionStatus = .notDetermined) {
+        self.status = status
+    }
+
+    func currentStatus() async -> NotificationPermissionStatus {
+        status
+    }
+
+    func requestAuthorization() async -> NotificationPermissionStatus {
+        requestCallCount += 1
+        return status
     }
 }

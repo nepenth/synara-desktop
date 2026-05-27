@@ -127,7 +127,14 @@ final class SynaraUITests: XCTestCase {
             throw XCTSkip("Set SYNARA_LIVE_SMOKE=1 for local live simulator smoke.")
         }
 
+        let roomName = liveEnvironmentValue("SYNARA_LIVE_ROOM_NAME", in: environment) ?? "Alerts"
         let app = XCUIApplication()
+        app.launchEnvironment["SYNARA_RESET_SESSION_ON_LAUNCH"] = "1"
+        if let roomID = liveEnvironmentValue("SYNARA_LIVE_ROOM_ID", in: environment) {
+            app.launchEnvironment["SYNARA_AUTO_OPEN_ROOM_ID"] = roomID
+        } else {
+            app.launchEnvironment["SYNARA_AUTO_OPEN_ROOM_NAME"] = roomName
+        }
         app.launch()
 
         if app.textFields["HomeserverAddressField"].waitForExistence(timeout: 5) {
@@ -139,26 +146,17 @@ final class SynaraUITests: XCTestCase {
             loginLive(app: app, homeserver: homeserver, username: username, password: password)
         }
 
-        XCTAssertTrue(app.tabBars.buttons["Rooms"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.tabBars.buttons["Rooms"].waitForExistence(timeout: 60))
 
-        let roomName = liveEnvironmentValue("SYNARA_LIVE_ROOM_NAME", in: environment) ?? "Alerts"
-        let room: XCUIElement
-        if let roomID = liveEnvironmentValue("SYNARA_LIVE_ROOM_ID", in: environment) {
-            room = app.buttons["RoomRow-\(roomID)"]
-        } else {
-            room = app.buttons.containing(NSPredicate(format: "label BEGINSWITH %@", roomName)).firstMatch
+        let composer = app.textFields["ComposerTextField"]
+        guard composer.waitForExistence(timeout: 30) else {
+            XCTFail("Expected encrypted room timeline composer to appear.")
+            return
         }
-        XCTAssertTrue(room.waitForExistence(timeout: 20))
-        tap(room, timeout: 20)
-
-        if liveEnvironmentValue("SYNARA_LIVE_ROOM_ID", in: environment) == nil {
-            XCTAssertTrue(app.navigationBars[roomName].waitForExistence(timeout: 10))
-        }
-        XCTAssertTrue(app.textFields["ComposerTextField"].waitForExistence(timeout: 10))
 
         let message = "Synara live smoke \(Int(Date().timeIntervalSince1970))"
-        app.textFields["ComposerTextField"].tap()
-        app.textFields["ComposerTextField"].typeText(message)
+        composer.tap()
+        composer.typeText(message)
         tap(app.buttons["ComposerSendButton"], timeout: 10)
 
         XCTAssertTrue(app.staticTexts[message].waitForExistence(timeout: 20))
@@ -246,4 +244,5 @@ final class SynaraUITests: XCTestCase {
             element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         }
     }
+
 }

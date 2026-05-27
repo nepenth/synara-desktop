@@ -21,6 +21,7 @@ Authoritative planning documents:
 - [iOS logging policy](docs/logging-policy.md)
 - [iOS CI notes](docs/ci-notes.md)
 - [Live simulator smoke](docs/live-simulator-smoke.md)
+- [Push gateway staging](docs/push-gateway-staging.md)
 
 Shared contracts are currently owned by:
 

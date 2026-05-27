@@ -30,6 +30,36 @@ final class AppRouteTests: XCTestCase {
         XCTAssertEqual(router.roomsPath, [.room(id: "!roomid:example.org", title: nil)])
     }
 
+    func testDeepLinkRoutesRoomWithEventAnchor() throws {
+        let router = AppRouter()
+        let url = try XCTUnwrap(URL(string: "synara://route/%2Froom%2F!roomid%3Aexample.org%2F%24evt123"))
+        let opened = router.open(url: url)
+
+        XCTAssertTrue(opened)
+        XCTAssertEqual(router.selectedTab, .rooms)
+        XCTAssertEqual(router.roomsPath, [.room(id: "!roomid:example.org", eventID: "$evt123", title: nil)])
+    }
+
+    func testDeepLinkRoutesNotificationsFallbackSurface() throws {
+        let router = AppRouter()
+        let url = try XCTUnwrap(URL(string: "synara://inbox/later"))
+        let opened = router.open(url: url)
+
+        XCTAssertTrue(opened)
+        XCTAssertEqual(router.selectedTab, .later)
+        XCTAssertEqual(router.laterPath, [.later])
+    }
+
+    func testDeepLinkRoutesNotificationsSurface() throws {
+        let router = AppRouter()
+        let url = try XCTUnwrap(URL(string: "synara://notifications"))
+        let opened = router.open(url: url)
+
+        XCTAssertTrue(opened)
+        XCTAssertEqual(router.selectedTab, .notifications)
+        XCTAssertEqual(router.notificationsPath, [.notifications])
+    }
+
     func testRouterCanCarryRoomTitleFromRoomList() {
         let router = AppRouter()
 

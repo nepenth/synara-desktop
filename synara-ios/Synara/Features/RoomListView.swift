@@ -21,34 +21,25 @@ struct RoomListView: View {
                     loadRooms()
                 }
             case .loaded(let rooms):
-                ScrollView {
-                    LazyVStack(spacing: SynaraSpacing.small) {
-                        ForEach(rooms) { room in
-                            if room.membership == .invited {
-                                InviteRoomListRow(
-                                    room: room,
-                                    onAccept: { updateInvite(roomID: room.id, accept: true) },
-                                    onReject: { updateInvite(roomID: room.id, accept: false) }
-                                )
-                            } else {
-                                Button {
-                                    environment.router.route(to: .room(id: room.id, title: room.name))
-                                } label: {
-                                    RoomListRow(room: room)
-                                        .padding(SynaraSpacing.medium)
-                                        .background(SynaraColor.secondarySurface)
-                                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                                }
-                                .buttonStyle(.plain)
-                                .contentShape(Rectangle())
-                                .accessibilityLabel("\(room.name), \(room.lastMessagePreview)")
-                                .accessibilityIdentifier("RoomRow-\(room.id)")
+                List {
+                    ForEach(rooms) { room in
+                        if room.membership == .invited {
+                            InviteRoomListRow(
+                                room: room,
+                                onAccept: { updateInvite(roomID: room.id, accept: true) },
+                                onReject: { updateInvite(roomID: room.id, accept: false) }
+                            )
+                        } else {
+                            NavigationLink(value: AppRoute.room(id: room.id, title: room.name)) {
+                                RoomListRow(room: room)
+                                    .padding(.vertical, SynaraSpacing.xSmall)
                             }
+                            .accessibilityLabel("\(room.name), \(room.lastMessagePreview)")
+                            .accessibilityIdentifier("RoomRow-\(room.id)")
                         }
                     }
-                    .padding(.horizontal, SynaraSpacing.medium)
-                    .padding(.vertical, SynaraSpacing.small)
                 }
+                .listStyle(.plain)
                 .accessibilityIdentifier("RoomList")
             }
         }
@@ -75,7 +66,40 @@ struct RoomListView: View {
             let loadedState = await environment.roomList.loadRooms()
             await MainActor.run {
                 state = loadedState
+                autoOpenRoomIfRequested(from: loadedState)
             }
+        }
+    }
+
+    private func autoOpenRoomIfRequested(from state: RoomListState) {
+        guard environment.router.roomsPath.isEmpty,
+              case .loaded(let rooms) = state else {
+            return
+        }
+
+        let processEnvironment = ProcessInfo.processInfo.environment
+        let requestedRoomID = processEnvironment["SYNARA_AUTO_OPEN_ROOM_ID"]
+        let requestedRoomName = processEnvironment["SYNARA_AUTO_OPEN_ROOM_NAME"]
+        guard requestedRoomID != nil || requestedRoomName != nil else {
+            return
+        }
+
+        let room = rooms.first { room in
+            if let requestedRoomID, room.id == requestedRoomID {
+                return true
+            }
+            if let requestedRoomName {
+                let normalizedRoomName = room.name.trimmingCharacters(in: CharacterSet(charactersIn: "#"))
+                if normalizedRoomName.localizedCaseInsensitiveContains(requestedRoomName)
+                    || requestedRoomName.localizedCaseInsensitiveContains(normalizedRoomName) {
+                    return true
+                }
+            }
+            return false
+        }
+
+        if let room {
+            environment.router.route(to: .room(id: room.id, title: room.name))
         }
     }
 

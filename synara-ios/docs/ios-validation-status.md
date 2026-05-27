@@ -11,8 +11,9 @@ timeline update against a disposable test room.
 Phase 4 push completion is partly complete: notification permission, APNs token
 capture, pusher registration flow, deep-link routing, and badge parsing are
 implemented in app code and tests. Push gateway staging (`IOS-0404`) is still
-blocked pending staging gateway infrastructure; configuration and validation
-smoke guidance are documented in
+blocked pending staging gateway infrastructure; app-side payload and endpoint
+validation are covered by `PushServiceTests`, and configuration and smoke guidance
+are documented in
 [`push-gateway-staging.md`](push-gateway-staging.md).
 
 ## Project Shape
@@ -95,6 +96,9 @@ Findings are tracked in ordered implementation items in
 
 The repeatable live-smoke checklist is
 [`synara-ios/docs/live-simulator-smoke.md`](live-simulator-smoke.md).
+
+- Agent card action handling is now covered in unit tests for safe URL, copy
+  affordances, malformed payload rejection, and unknown-kind handling.
 
 ## Current App Surface
 

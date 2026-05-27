@@ -1266,7 +1266,9 @@ Acceptance criteria:
 
 Dependencies: IOS-0403.
 
-Status: local staging scaffolding is in place; production/staging gateway endpoint is still pending.
+Status: local staging scaffolding is in place (including payload shape assertions in tests);
+production/staging gateway endpoint is still pending. iOS app code still requires
+external gateway validation before this item is complete.
 
 Requirements:
 
@@ -1428,6 +1430,11 @@ Acceptance criteria:
 
 Dependencies: IOS-0301, IOS-0502.
 
+Status: implemented in native timeline parser and row renderer. `TimelineService` now
+parses structured Hermes payloads from configured keys and explicit body markers,
+maps them into `.agentCard`, and `RoomTimelineView` renders title/status/summary
+with bounded action affordances.
+
 Requirements:
 
 - Parse `in.synara.agent` and configured compatible agent keys.
@@ -1451,6 +1458,8 @@ Acceptance criteria:
 
 Dependencies: IOS-0504.
 
+Status: implemented in native runtime and unit tests.
+
 Requirements:
 
 - Validate action ID, title, kind, URL, prompt, and markdown before acting.
@@ -1473,7 +1482,11 @@ Acceptance criteria:
 
 Dependencies: IOS-0505, IOS-0303.
 
+Status: blocked pending approval command contract and server-side action persistence design.
+
 Requirements:
+Note: approval persistence path is intentionally blocked for security reasons until a
+server-side contract for approval command routing is finalized.
 
 - Implement approve, reject, copy markdown, copy JSON, copy prompt, and open safe link where supported by contract.
 - Persist resulting action state through Matrix events or account data, not local-only iOS state.
