@@ -16,7 +16,7 @@ enum AppTab: String, CaseIterable, Identifiable {
         case .notifications:
             PlaceholderScreen(title: "Notifications", systemImage: "bell")
         case .later:
-            PlaceholderScreen(title: "Later", systemImage: "clock")
+            LaterListView()
         case .settings:
             SettingsView()
         }

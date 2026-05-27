@@ -8,6 +8,13 @@ Deterministic simulator tests validate the mock path, and a gated live simulator
 smoke validates signed session restore, live room opening, composer send, and
 timeline update against a disposable test room.
 
+Phase 4 push completion is partly complete: notification permission, APNs token
+capture, pusher registration flow, deep-link routing, and badge parsing are
+implemented in app code and tests. Push gateway staging (`IOS-0404`) is still
+blocked pending staging gateway infrastructure; configuration and validation
+smoke guidance are documented in
+[`push-gateway-staging.md`](push-gateway-staging.md).
+
 ## Project Shape
 
 - `Synara.xcodeproj` exists under `synara-ios/`.
@@ -100,7 +107,7 @@ The repeatable live-smoke checklist is
   - Later
 - Settings
 - Enum-backed routes and sheet destinations.
-- Deep-link routing for placeholder room and settings destinations.
+- Deep-link routing for room, settings, notifications tab, and later tab destinations.
 - App-level dependency registry installed through SwiftUI environment.
 - Mock session, Matrix, push, logging, settings, and router services for tests
   and previews.
@@ -109,6 +116,8 @@ The repeatable live-smoke checklist is
 - iOS design-token baseline with shared empty, loading, error, and toolbar
   controls.
 - Placeholder screens with iOS 16-compatible SwiftUI.
+- Later tab now renders `LaterListView` wired to `in.synara.later` account-data
+  loading and room/event navigation where anchors exist.
 - Unit smoke tests for routing, dependency wiring, settings storage, and
   redaction.
 - UI smoke tests assert primary tabs exist and Settings can be selected.

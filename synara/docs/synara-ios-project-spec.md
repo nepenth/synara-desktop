@@ -1135,9 +1135,12 @@ Acceptance criteria:
 
 Dependencies: IOS-0203, IOS-0204, IOS-0301, IOS-0303, IOS-0307.
 
-Status: planned before external TestFlight/App Store release. This can proceed
-after Phase 4 local push work if needed, but release cannot claim encrypted-room
-support until this item is complete.
+Status: in progress. The app target now includes the Matrix Rust SDK Swift
+package and SDK-backed auth, session restore, room list, timeline, and send
+service adapters. Build validation passes, but the gated app-level live
+encrypted-room smoke is not complete because UI automation is not yet reaching
+the room timeline from the live room list. Release cannot claim encrypted-room
+support until this item is fully validated.
 
 Requirements:
 
@@ -1173,6 +1176,13 @@ Acceptance criteria:
 - No credentials, access tokens, refresh tokens, recovery keys, or room keys are
   printed or committed.
 
+Open implementation item:
+
+- Fix live room-list-to-timeline routing under UI automation and manual review.
+  The app can launch directly into a routed room, but live room-list selection
+  did not land on the timeline during the IOS-0308 simulator smoke. Treat this
+  as the next IOS-0308 blocker before claiming app-level encrypted-room support.
+
 ## Phase 4: Push, Badge, And Deep Links
 
 Goal: deliver production-shaped iOS notifications with safe privacy defaults.
@@ -1180,6 +1190,10 @@ Goal: deliver production-shaped iOS notifications with safe privacy defaults.
 ### IOS-0401: Notification Permission UI
 
 Dependencies: IOS-0204.
+
+Status: initial implementation complete for the local app shell. Settings now
+shows notification authorization state through a native permission service and
+can request authorization. Physical-device/APNs work remains in IOS-0402.
 
 Requirements:
 
@@ -1201,6 +1215,8 @@ Acceptance criteria:
 ### IOS-0402: APNs Device Registration
 
 Dependencies: IOS-0401, Apple account setup.
+
+Status: implementation in the iOS app is complete pending physical-device validation.
 
 Requirements:
 
@@ -1225,6 +1241,9 @@ Acceptance criteria:
 
 Dependencies: IOS-0402, IOS-0204.
 
+Status: implementation in local/local-session path is complete with session/token
+refresh behavior; live-device registration remains pending.
+
 Requirements:
 
 - Register a Matrix pusher after APNs token acquisition.
@@ -1246,6 +1265,8 @@ Acceptance criteria:
 ### IOS-0404: Push Gateway Staging
 
 Dependencies: IOS-0403.
+
+Status: local staging scaffolding is in place; production/staging gateway endpoint is still pending.
 
 Requirements:
 
@@ -1269,6 +1290,10 @@ Acceptance criteria:
 
 Dependencies: IOS-0404, IOS-0102.
 
+Status: implemented for room/event/localized route payloads with safe fallback to
+notifications tab for malformed payloads and added route coverage for `/inbox`
+and `notifications`.
+
 Requirements:
 
 - Route notification taps to a safe destination.
@@ -1290,6 +1315,9 @@ Acceptance criteria:
 ### IOS-0406: Badge Count
 
 Dependencies: IOS-0403, IOS-0205.
+
+Status: implemented in-app with push payload parsing and auto-clear on foreground
+or tap-open navigation.
 
 Requirements:
 
@@ -1316,6 +1344,8 @@ Goal: make iOS participate in Synara-specific workflows without desktop-only ass
 
 Dependencies: IOS-0004.
 
+Status: completed locally with Swift-facing mirror work in `synara-ios/Synara/Contracts/SynaraContracts.swift`.
+
 Requirements:
 
 - Add JSON Schemas or equivalent machine-readable definitions for shared contracts.
@@ -1338,6 +1368,8 @@ Acceptance criteria:
 
 Dependencies: IOS-0501.
 
+Status: implemented for notification summary, later content, agent action, and route models with decoding tests in `synara-ios/SynaraTests/SynaraContractsTests.swift`.
+
 Requirements:
 
 - Generate Swift types from schemas or create manually mirrored types with conformance tests.
@@ -1358,11 +1390,27 @@ Acceptance criteria:
 
 Dependencies: IOS-0502, IOS-0204.
 
+Status: in implementation.
+
 Requirements:
 
 - Read `in.synara.later` account data.
 - Render Later items without decrypted message bodies stored in account data.
 - Navigate to room/event anchor when possible.
+
+Implementation notes:
+
+- `synara-ios/Synara/Services/AppEnvironment.swift` wires `MatrixAccountDataLaterService`
+  in live mode and `MockLaterService` in mock mode.
+- `synara-ios/Synara/App/AppTab.swift` now points the Later tab at `LaterListView`.
+- `synara-ios/Synara/Features/LaterListView.swift` renders active/completed items,
+  highlights reminder states, and opens room/event anchors where available.
+- `synara-ios/Synara/Features/PlaceholderScreen.swift` maps the `.later` route to
+  `LaterListView` for deep-link fallback.
+- `synara-ios/SynaraTests/TimelineServiceTests.swift` adds sorting and decode tests
+  for account-data Later loading.
+- `synara-ios/SynaraTests/AppEnvironmentTests.swift` validates service wiring for
+  both live and mock environments.
 
 Deliverables:
 
