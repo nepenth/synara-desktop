@@ -30,8 +30,8 @@ struct RoutePlaceholderView: View {
         switch route {
         case .login(let homeserverURL):
             LoginView(homeserverURLString: homeserverURL)
-        case .room(let id):
-            RoomTimelineView(roomID: id)
+        case .room(let id, let title):
+            RoomTimelineView(roomID: id, roomTitle: title)
         case .settings:
             PlaceholderScreen(title: "Settings", systemImage: "gearshape")
         }

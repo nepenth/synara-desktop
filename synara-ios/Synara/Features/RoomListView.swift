@@ -21,21 +21,33 @@ struct RoomListView: View {
                     loadRooms()
                 }
             case .loaded(let rooms):
-                List(rooms) { room in
-                    if room.membership == .invited {
-                        InviteRoomListRow(
-                            room: room,
-                            onAccept: { updateInvite(roomID: room.id, accept: true) },
-                            onReject: { updateInvite(roomID: room.id, accept: false) }
-                        )
-                    } else {
-                        Button {
-                            environment.router.route(to: .room(id: room.id))
-                        } label: {
-                            RoomListRow(room: room)
+                ScrollView {
+                    LazyVStack(spacing: SynaraSpacing.small) {
+                        ForEach(rooms) { room in
+                            if room.membership == .invited {
+                                InviteRoomListRow(
+                                    room: room,
+                                    onAccept: { updateInvite(roomID: room.id, accept: true) },
+                                    onReject: { updateInvite(roomID: room.id, accept: false) }
+                                )
+                            } else {
+                                Button {
+                                    environment.router.route(to: .room(id: room.id, title: room.name))
+                                } label: {
+                                    RoomListRow(room: room)
+                                        .padding(SynaraSpacing.medium)
+                                        .background(SynaraColor.secondarySurface)
+                                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                                }
+                                .buttonStyle(.plain)
+                                .contentShape(Rectangle())
+                                .accessibilityLabel("\(room.name), \(room.lastMessagePreview)")
+                                .accessibilityIdentifier("RoomRow-\(room.id)")
+                            }
                         }
-                        .accessibilityIdentifier("RoomRow-\(room.id)")
                     }
+                    .padding(.horizontal, SynaraSpacing.medium)
+                    .padding(.vertical, SynaraSpacing.small)
                 }
                 .accessibilityIdentifier("RoomList")
             }
@@ -122,8 +134,7 @@ private struct RoomListRow: View {
                     .accessibilityLabel("\(room.unreadCount) unread")
             }
         }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(room.name), \(room.lastMessagePreview)")
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -146,6 +157,9 @@ private struct InviteRoomListRow: View {
                     .accessibilityIdentifier("RejectInvite-\(room.id)")
             }
         }
+        .padding(SynaraSpacing.medium)
+        .background(SynaraColor.secondarySurface)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
         .accessibilityIdentifier("InviteRoomRow-\(room.id)")
     }
 }

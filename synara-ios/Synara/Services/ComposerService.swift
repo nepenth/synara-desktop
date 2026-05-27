@@ -101,7 +101,11 @@ final class MatrixMessageSendService: MessageSending {
         urlRequest.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
         urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
         urlRequest.httpBody = try jsonEncoder.encode(
-            MatrixSendMessageRequest(body: body, replyToEventID: request.replyToEventID)
+            MatrixSendMessageRequest(
+                body: body,
+                replyToEventID: request.replyToEventID,
+                editEventID: request.editEventID
+            )
         )
 
         do {
@@ -146,13 +150,21 @@ final class MatrixMessageSendService: MessageSending {
 private struct MatrixSendMessageRequest: Encodable {
     let msgtype = "m.text"
     let body: String
+    let newContent: MatrixSendNewContent?
     let relatesTo: MatrixSendRelatesTo?
 
-    init(body: String, replyToEventID: String?) {
-        self.body = body
-        if let replyToEventID {
-            relatesTo = MatrixSendRelatesTo(inReplyTo: MatrixSendInReplyTo(eventID: replyToEventID))
+    init(body: String, replyToEventID: String?, editEventID: String?) {
+        if let editEventID {
+            self.body = "* \(body)"
+            newContent = MatrixSendNewContent(body: body)
+            relatesTo = MatrixSendRelatesTo(relType: "m.replace", eventID: editEventID, inReplyTo: nil)
+        } else if let replyToEventID {
+            self.body = body
+            newContent = nil
+            relatesTo = MatrixSendRelatesTo(relType: nil, eventID: nil, inReplyTo: MatrixSendInReplyTo(eventID: replyToEventID))
         } else {
+            self.body = body
+            newContent = nil
             relatesTo = nil
         }
     }
@@ -160,14 +172,24 @@ private struct MatrixSendMessageRequest: Encodable {
     enum CodingKeys: String, CodingKey {
         case msgtype
         case body
+        case newContent = "m.new_content"
         case relatesTo = "m.relates_to"
     }
 }
 
+private struct MatrixSendNewContent: Encodable {
+    let msgtype = "m.text"
+    let body: String
+}
+
 private struct MatrixSendRelatesTo: Encodable {
-    let inReplyTo: MatrixSendInReplyTo
+    let relType: String?
+    let eventID: String?
+    let inReplyTo: MatrixSendInReplyTo?
 
     enum CodingKeys: String, CodingKey {
+        case relType = "rel_type"
+        case eventID = "event_id"
         case inReplyTo = "m.in_reply_to"
     }
 }

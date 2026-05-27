@@ -227,7 +227,8 @@ final class MatrixTimelineService: TimelineServicing {
 
     private func mapEvent(_ event: MatrixTimelineEvent) -> RawTimelineEvent? {
         guard let eventID = event.eventID,
-              let sender = event.sender else {
+              let sender = event.sender,
+              shouldShow(eventType: event.type) else {
             return nil
         }
 
@@ -263,6 +264,14 @@ final class MatrixTimelineService: TimelineServicing {
             isEdited: content.relatesTo?.relType == "m.replace",
             mediaURL: mediaURL
         )
+    }
+
+    private func shouldShow(eventType: String) -> Bool {
+        if ["m.room.message", "m.room.encrypted", "m.room.redaction"].contains(eventType) {
+            return true
+        }
+
+        return eventType.hasPrefix("synara.")
     }
 }
 
