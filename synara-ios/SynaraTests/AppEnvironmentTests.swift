@@ -10,6 +10,7 @@ final class AppEnvironmentTests: XCTestCase {
         XCTAssertEqual(environment.matrix.syncStatusDescription, "Mock sync idle")
         XCTAssertFalse(environment.push.isRegistrationAvailable)
         XCTAssertTrue(environment.router === router)
+        XCTAssertTrue(environment.auth is MockAuthService)
     }
 
     func testSettingsStorePersistsBooleansInMemory() {
