@@ -11,8 +11,10 @@ struct AppEnvironment {
     let auth: AuthServicing
     let roomList: RoomListServicing
     let roomMembership: RoomMembershipServicing
+    let notificationPermission: NotificationPermissionServicing
     let wipe: LocalWiping
     let timeline: TimelineServicing
+    let later: LaterServicing
     let messageSender: MessageSending
     let drafts: DraftStore
     let eventActions: EventActionServicing
@@ -21,8 +23,13 @@ struct AppEnvironment {
 
     static func live() -> AppEnvironment {
         let logger = AppLogger()
+        let secureStore = KeychainSecureSessionStore()
+        if ProcessInfo.processInfo.environment["SYNARA_RESET_SESSION_ON_LAUNCH"] == "1" {
+            try? secureStore.delete()
+            try? MatrixRustSDKClientStore.deletePersistedStores()
+        }
         let session = AppSessionStore(
-            secureStore: KeychainSecureSessionStore(),
+            secureStore: secureStore,
             restorePersistedSession: true
         )
         if let restoreFailure = session.restoreFailureLogDescription {
@@ -30,10 +37,15 @@ struct AppEnvironment {
         } else if case .signedIn = session.currentState {
             logger.info("Session restore succeeded", category: .auth)
         }
-        let matrix = PlaceholderMatrixClientService()
-        let push = PlaceholderPushService()
-        let roomList = MatrixRoomListService(sessionStore: session)
-        let roomMembership = MatrixRoomMembershipService(sessionStore: session)
+        let matrixSDKClientStore = MatrixRustSDKClientStore()
+        let matrix = MatrixRustSDKMatrixClientService(clientStore: matrixSDKClientStore)
+        let pusherService = MatrixPusherService(
+            logger: logger,
+            gatewayURL: pushGatewayURL()
+        )
+        let push = SynaraPushService(logger: logger, pusherService: pusherService)
+        let roomList = MatrixRustSDKRoomListService(sessionStore: session, clientStore: matrixSDKClientStore)
+        let roomMembership = MatrixRustSDKRoomMembershipService(sessionStore: session, clientStore: matrixSDKClientStore)
         return AppEnvironment(
             session: session,
             matrix: matrix,
@@ -42,17 +54,19 @@ struct AppEnvironment {
             settings: InMemorySettingsStore(),
             router: AppRouter(),
             homeserverDiscovery: PlaceholderHomeserverDiscoveryService(),
-            auth: MatrixPasswordAuthService(),
+            auth: MatrixRustSDKAuthService(clientStore: matrixSDKClientStore),
             roomList: roomList,
             roomMembership: roomMembership,
+            notificationPermission: UserNotificationPermissionService(),
             wipe: AppLocalWipeService(
                 session: session,
                 matrix: matrix,
                 roomList: roomList,
                 push: push
             ),
-            timeline: MatrixTimelineService(sessionStore: session),
-            messageSender: MatrixMessageSendService(sessionStore: session),
+            timeline: MatrixRustSDKTimelineService(sessionStore: session, clientStore: matrixSDKClientStore),
+            later: MatrixAccountDataLaterService(sessionStore: session),
+            messageSender: MatrixRustSDKMessageSendService(sessionStore: session, clientStore: matrixSDKClientStore),
             drafts: DraftStore(),
             eventActions: MatrixEventActionService(sessionStore: session),
             mediaLoader: MatrixMediaLoader(sessionStore: session),
@@ -69,8 +83,10 @@ struct AppEnvironment {
         push: PushServicing = MockPushService(),
         roomList: RoomListServicing = MockRoomListService(),
         roomMembership: RoomMembershipServicing = MockRoomMembershipService(),
+        notificationPermission: NotificationPermissionServicing = MockNotificationPermissionService(),
         wipe: LocalWiping? = nil,
         timeline: TimelineServicing = MockTimelineService(),
+        later: LaterServicing = MockLaterService(),
         messageSender: MessageSending = MockMessageSendService(),
         drafts: DraftStore = DraftStore(),
         eventActions: EventActionServicing = MockEventActionService(),
@@ -88,6 +104,7 @@ struct AppEnvironment {
             auth: auth,
             roomList: roomList,
             roomMembership: roomMembership,
+            notificationPermission: notificationPermission,
             wipe: wipe ?? AppLocalWipeService(
                 session: session,
                 matrix: matrix,
@@ -95,12 +112,25 @@ struct AppEnvironment {
                 push: push
             ),
             timeline: timeline,
+            later: later,
             messageSender: messageSender,
             drafts: drafts,
             eventActions: eventActions,
             mediaLoader: mediaLoader,
             mediaUploader: mediaUploader
         )
+    }
+
+    private static func pushGatewayURL() -> URL? {
+        guard
+            let value = ProcessInfo.processInfo.environment["SYNARA_PUSH_GATEWAY_URL"]?.trimmingCharacters(in: .whitespacesAndNewlines),
+            value.isEmpty == false,
+            let url = URL(string: value)
+        else {
+            return nil
+        }
+
+        return url
     }
 }
 

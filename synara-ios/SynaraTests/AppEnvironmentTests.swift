@@ -1,4 +1,5 @@
 import XCTest
+import UserNotifications
 @testable import Synara
 
 final class AppEnvironmentTests: XCTestCase {
@@ -11,16 +12,24 @@ final class AppEnvironmentTests: XCTestCase {
         XCTAssertFalse(environment.push.isRegistrationAvailable)
         XCTAssertTrue(environment.router === router)
         XCTAssertTrue(environment.auth is MockAuthService)
+        XCTAssertTrue(environment.notificationPermission is MockNotificationPermissionService)
     }
 
-    func testLiveEnvironmentUsesMatrixPasswordAuth() {
+    func testMockEnvironmentInstallsLaterService() {
+        let environment = AppEnvironment.mock()
+
+        XCTAssertTrue(environment.later is MockLaterService)
+    }
+
+    func testLiveEnvironmentUsesMatrixRustSDKServices() {
         let environment = AppEnvironment.live()
 
-        XCTAssertTrue(environment.auth is MatrixPasswordAuthService)
-        XCTAssertTrue(environment.roomList is MatrixRoomListService)
-        XCTAssertTrue(environment.roomMembership is MatrixRoomMembershipService)
-        XCTAssertTrue(environment.timeline is MatrixTimelineService)
-        XCTAssertTrue(environment.messageSender is MatrixMessageSendService)
+        XCTAssertTrue(environment.auth is MatrixRustSDKAuthService)
+        XCTAssertTrue(environment.roomList is MatrixRustSDKRoomListService)
+        XCTAssertTrue(environment.roomMembership is MatrixRustSDKRoomMembershipService)
+        XCTAssertTrue(environment.timeline is MatrixRustSDKTimelineService)
+        XCTAssertTrue(environment.later is MatrixAccountDataLaterService)
+        XCTAssertTrue(environment.messageSender is MatrixRustSDKMessageSendService)
         XCTAssertTrue(environment.eventActions is MatrixEventActionService)
     }
 
@@ -32,5 +41,13 @@ final class AppEnvironmentTests: XCTestCase {
         settings.set(true, for: "largeText")
 
         XCTAssertTrue(settings.bool(for: "largeText"))
+    }
+
+    func testNotificationPermissionStatusMapsAuthorizationStates() {
+        XCTAssertEqual(NotificationPermissionStatus.map(.notDetermined), .notDetermined)
+        XCTAssertEqual(NotificationPermissionStatus.map(.denied), .denied)
+        XCTAssertEqual(NotificationPermissionStatus.map(.authorized), .authorized)
+        XCTAssertEqual(NotificationPermissionStatus.map(.provisional), .provisional)
+        XCTAssertEqual(NotificationPermissionStatus.map(.ephemeral), .ephemeral)
     }
 }

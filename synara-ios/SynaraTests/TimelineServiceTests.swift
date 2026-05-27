@@ -269,6 +269,146 @@ final class TimelineServiceTests: XCTestCase {
         XCTAssertEqual(Set(items.map(\.id)).count, 10_000)
     }
 
+    func testMatrixAccountDataLaterServiceLoadsSortedActiveAndCompletedItems() async throws {
+        let expectedNow = 1_800_000_000_000
+        let client = MockTimelineHTTPClient(responses: [
+            .success(
+                statusCode: 200,
+                body: #"
+                {
+                  "content": {
+                    "version": 1,
+                    "items": {
+                      "!room:example.org\n$event-active-late": {
+                        "id": "!room:example.org\\n$event-active-late",
+                        "kind": "saved",
+                        "roomId": "!room:example.org",
+                        "eventId": "$event-active-late",
+                        "createdAt": 1770000000000,
+                        "dueTs": 1800001000000
+                      },
+                      "!room:example.org\n$event-active-soon": {
+                        "id": "!room:example.org\\n$event-active-soon",
+                        "kind": "reminder",
+                        "roomId": "!room:example.org",
+                        "eventId": "$event-active-soon",
+                        "createdAt": 1790000000000,
+                        "dueTs": 1795000000000
+                      },
+                      "!room:example.org\n$event-completed": {
+                        "id": "!room:example.org\\n$event-completed",
+                        "kind": "reminder",
+                        "roomId": "!room:example.org",
+                        "eventId": "$event-completed",
+                        "createdAt": 1780000000000,
+                        "dueTs": 1810000000000,
+                        "completedAt": 1798000000000
+                      }
+                    }
+                  }
+                }
+                "#
+            )
+        ])
+
+        let service = MatrixAccountDataLaterService(
+            sessionStore: AppSessionStore(currentState: .signedIn(try makeSession())),
+            httpClient: client,
+            now: { expectedNow }
+        )
+
+        guard case let .success((items, error)) = await service.loadItems() else {
+            XCTFail("Expected success payload")
+            return
+        }
+
+        XCTAssertNil(error)
+        XCTAssertEqual(items.map(\.id), [
+            "!room:example.org\n$event-active-soon",
+            "!room:example.org\n$event-active-late",
+            "!room:example.org\n$event-completed"
+        ])
+    }
+
+    func testMatrixAccountDataLaterServiceReturnsMalformedPayloadError() async throws {
+        let client = MockTimelineHTTPClient(responses: [
+            .success(
+                statusCode: 200,
+                body: #"{\"items\":{}}"
+            )
+        ])
+        let service = MatrixAccountDataLaterService(
+            sessionStore: AppSessionStore(currentState: .signedIn(try makeSession())),
+            httpClient: client
+        )
+
+        guard case let .success((items, error)) = await service.loadItems() else {
+            XCTFail("Expected success payload")
+            return
+        }
+
+        XCTAssertEqual(items, [])
+        XCTAssertEqual(error, .malformedPayload)
+    }
+
+    func testMatrixAccountDataLaterServiceReturnsNoSessionError() async {
+        let service = MatrixAccountDataLaterService(sessionStore: AppSessionStore())
+
+        guard case let .success((items, error)) = await service.loadItems() else {
+            XCTFail("Expected success payload")
+            return
+        }
+
+        XCTAssertTrue(items.isEmpty)
+        XCTAssertEqual(error, .noSession)
+    }
+
+    func testSynaraLaterListSortingPrioritizesActiveItems() {
+        let now = 1_760_000_000_000
+        let items: SynaraLaterContent
+        do {
+            items = try SynaraLaterContent(
+                version: 1,
+                items: [
+                    "a": .init(
+                        id: "a",
+                        kind: .saved,
+                        roomId: "!room:example.org",
+                        eventId: "$one",
+                        createdAt: 5,
+                        dueTs: now + 3600_000,
+                        completedAt: 9_000
+                    ),
+                    "b": .init(
+                        id: "b",
+                        kind: .reminder,
+                        roomId: "!room:example.org",
+                        eventId: "$two",
+                        createdAt: 6,
+                        dueTs: now - 10_000,
+                        completedAt: nil
+                    ),
+                    "c": .init(
+                        id: "c",
+                        kind: .saved,
+                        roomId: "!room:example.org",
+                        eventId: "$three",
+                        createdAt: 7,
+                        dueTs: now + 1000,
+                        completedAt: nil
+                    )
+                ]
+            )
+        } catch {
+            XCTFail("Failed fixture: \(error)")
+            return
+        }
+
+        let sorted = SynaraLaterListItem.sorted(items: items, now: now)
+
+        XCTAssertEqual(sorted.map(\.id), ["c", "b", "a"])
+    }
+
     private func makeSession() throws -> AuthenticatedSession {
         AuthenticatedSession(
             userID: "@alice:matrix.org",
