@@ -81,6 +81,9 @@ struct LoginView: View {
                         Task {
                             await environment.matrix.start(session: session)
                         }
+                    } catch let error as SecureSessionStoreError {
+                        state = .failed(LoginError.sessionPersistenceFailed.localizedDescription)
+                        environment.logger.error("Password login failed: \(error.logDescription)", category: .auth)
                     } catch {
                         state = .failed(LoginError.sessionPersistenceFailed.localizedDescription)
                         environment.logger.error("Password login failed: session persistence failed", category: .auth)

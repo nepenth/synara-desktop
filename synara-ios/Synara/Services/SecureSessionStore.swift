@@ -13,6 +13,15 @@ enum SecureSessionStoreError: LocalizedError, Equatable {
             return "Could not access secure session storage."
         }
     }
+
+    var logDescription: String {
+        switch self {
+        case .corruptEntry:
+            return "secure session entry is corrupt"
+        case .keychainFailure(let status):
+            return "secure session keychain failure status \(status)"
+        }
+    }
 }
 
 enum SessionMigrationResult: Equatable {

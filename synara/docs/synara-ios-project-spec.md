@@ -379,6 +379,41 @@ Acceptance criteria:
 
 Goal: create a maintainable SwiftUI app shell with routing, dependency wiring, tests, and CI-ready build commands.
 
+### Ordered Live-Simulator Hardening Queue
+
+This queue was created from the May 27, 2026 live iOS simulator smoke against a
+dedicated private test homeserver account. These items must remain ordered
+because each item increases the trustworthiness of the next validation layer.
+
+1. Local signed simulator runtime: live auth cannot be considered validated
+   until the app is launched in a signed simulator build. The unsigned CI build
+   path successfully compiles the app, but it cannot validate Keychain-backed
+   session persistence.
+2. Keychain persistence diagnostics and restore validation: login must surface
+   non-sensitive user errors and log non-sensitive Keychain status details so
+   signing, entitlement, and simulator problems can be diagnosed without
+   exposing tokens.
+3. Live simulator automation and accessibility reliability: text fields,
+   buttons, tabs, alerts, and timeline controls must be discoverable and
+   operable through accessibility-driven automation, not only visual coordinate
+   taps.
+4. Live invite and room-list transition validation: accepting or rejecting an
+   invite must refresh the room list, remove invite controls, preserve unread
+   state, and allow the joined room to open without relaunching.
+5. Room navigation context: opening a room from the list must carry the room
+   display name into the timeline title, while deep links without cached room
+   metadata may fall back to a neutral title until hydrated.
+6. Timeline event visibility: room state events such as create, member,
+   power-level, history-visibility, guest-access, and join-rules events must not
+   pollute the chat timeline. They should either be hidden, grouped into a
+   room-activity/system surface, or mapped to intentional system rows.
+7. Composer live-send usability: the send control must have a reliable
+   44-point hit target, work through simulator automation, clear the draft only
+   after successful send, and show a non-sensitive failure state otherwise.
+8. Live validation runbook: each live smoke should capture build mode, simulator
+   OS, app version, homeserver, redacted logs, screenshots, mutations performed
+   against the test room, and any known state changes such as invite acceptance.
+
 ### IOS-0101: Create Xcode Project And Targets
 
 Dependencies: IOS-0007.
@@ -515,6 +550,36 @@ Acceptance criteria:
 - Simulator build and unit tests can run without Apple credentials.
 - The CI note distinguishes unsigned simulator tests from signed device/archive builds.
 - Build artifacts and DerivedData are ignored.
+
+### IOS-0107: Signed Local Simulator Runtime
+
+Dependencies: IOS-0106.
+
+Status: identified during live simulator validation. A locally signed simulator
+build is required for Keychain-backed session validation; the unsigned CI build
+path remains useful for credential-free compilation and deterministic tests.
+
+Requirements:
+
+- Keep CI simulator compilation free of Apple credentials and signing secrets.
+- Ensure local simulator runs use normal simulator code signing unless the
+  developer explicitly opts into an unsigned compile-only path.
+- Document that unsigned builds are not valid for live Keychain/session smoke.
+- Preserve App Store signing as a future distribution track, separate from the
+  local signed simulator track.
+
+Deliverables:
+
+- Project signing defaults suitable for local simulator execution.
+- CI script overrides that keep GitHub Actions unsigned.
+- README and CI notes explaining signed local runtime versus unsigned CI.
+
+Acceptance criteria:
+
+- Local signed simulator launch can complete login and save a Keychain session.
+- CI still builds and compiles test bundles without Apple Developer credentials.
+- A failed unsigned live login is diagnosed as a build-mode/signing problem, not
+  a Matrix authentication failure.
 
 ## Phase 2: Auth, Session, And Matrix Sync
 
@@ -673,6 +738,98 @@ Acceptance criteria:
 - Unit test verifies wipe calls all registered stores.
 - No leftover local room list is shown after logout.
 
+### IOS-0207: Live Auth Persistence Diagnostics
+
+Dependencies: IOS-0107, IOS-0202, IOS-0203.
+
+Status: identified during live simulator validation. The app initially logged a
+generic session persistence failure after successful Matrix auth; we need
+diagnostics precise enough to separate Keychain, signing, and entitlement
+problems while still redacting secrets.
+
+Requirements:
+
+- Log non-sensitive secure-storage status details for failed session save/load.
+- Keep user-facing errors short and non-sensitive.
+- Never log access tokens, passwords, homeserver credentials, or raw session
+  payloads.
+- Restore an existing signed-in session after app relaunch.
+
+Deliverables:
+
+- Secure-session log descriptions.
+- Unit tests for diagnostic descriptions and redaction behavior.
+- Live validation notes covering login, relaunch, restore, logout, and failed
+  persistence cases.
+
+Acceptance criteria:
+
+- Successful live login transitions to the signed-in shell and survives relaunch.
+- Failed Keychain persistence logs a non-sensitive status code or category.
+- Credential and token scans remain clean after live smoke.
+
+### IOS-0208: Live Simulator Accessibility And Automation Reliability
+
+Dependencies: IOS-0105, IOS-0201, IOS-0202.
+
+Status: identified during live simulator validation. Visual coordinate taps
+worked for broad navigation, but accessibility hierarchy capture was incomplete
+and text-field focus required keyboard traversal. This weakens repeatable live
+smoke testing and VoiceOver confidence.
+
+Requirements:
+
+- Ensure primary screens expose stable accessibility identifiers and labels.
+- Ensure homeserver, username, password, composer, invite, tab, and alert
+  controls can be focused and activated reliably in simulator automation.
+- Avoid relying on pixel coordinates for the canonical smoke path.
+- Keep UI tests deterministic through mocks while allowing a separate live
+  smoke script/runbook for test homeservers.
+
+Deliverables:
+
+- Accessibility audit fixes for auth, room list, timeline, and composer screens.
+- A live simulator smoke checklist or script that uses accessibility targets
+  where available.
+- UI tests that guard important identifiers and focus order.
+
+Acceptance criteria:
+
+- Automation can enter homeserver, username, and password without coordinate
+  fallback.
+- Automation can dismiss the iOS password-save prompt when it appears.
+- Automation can accept or decline an invite, open a room, and send a message
+  using stable controls.
+
+### IOS-0209: Live Invite Transition Validation
+
+Dependencies: IOS-0205, IOS-0208.
+
+Status: identified during live simulator validation. The live room list displayed
+the `Alerts` invite and invite acceptance transitioned the room to a joined
+state; this needs repeatable coverage and clearer post-action guarantees.
+
+Requirements:
+
+- Accept and reject invites through Matrix membership endpoints.
+- Refresh the room list after membership changes.
+- Remove invite controls after a successful membership change.
+- Preserve unread/highlight semantics when the joined room appears.
+- Show a non-sensitive retryable failure when membership changes fail.
+
+Deliverables:
+
+- Invite transition tests and live validation notes.
+- Room-list state refresh behavior after membership updates.
+- Error copy for failed accept/reject.
+
+Acceptance criteria:
+
+- Accepting a test invite changes the row from invited to joined without app
+  relaunch.
+- Rejecting a test invite removes the invite from the visible room list.
+- Failed accept/reject does not leave stale loading controls behind.
+
 ## Phase 3: Core Messaging
 
 Goal: make the app usable for daily chat in test encrypted and unencrypted rooms.
@@ -760,13 +917,103 @@ Acceptance criteria:
 - Draft survives room navigation within the app session.
 - UI test sends a message using mock service.
 
+### IOS-0303A: Room Title Hydration
+
+Dependencies: IOS-0205, IOS-0302.
+
+Status: implemented. Opening a room from the list now carries the known display
+name into the timeline title, and deep-link/fallback routes can still open
+without cached title metadata.
+
+Requirements:
+
+- Carry known room display names from the room list route into the timeline.
+- Fall back gracefully when a room opens from a deep link without cached
+  metadata.
+- Leave room ID out of the primary title unless no display name is known and a
+  debug-oriented fallback is explicitly chosen.
+
+Deliverables:
+
+- Route payload support for optional room title.
+- Timeline title rendering from route context.
+- Tests for room-list route title and deep-link fallback.
+
+Acceptance criteria:
+
+- Tapping `Alerts` opens a timeline titled `Alerts`.
+- Deep-linked rooms without cached metadata still open.
+- The route remains hashable and stable for NavigationStack paths.
+
+### IOS-0303B: Timeline Event Visibility And System Events
+
+Dependencies: IOS-0301, IOS-0302.
+
+Status: implemented for the primary chat timeline. Routine Matrix room state
+events are filtered from visible chat rows, while custom Synara/agent unknown
+events remain safe placeholders.
+
+Requirements:
+
+- Hide routine Matrix state events from the primary chat timeline unless mapped
+  to an intentional system row.
+- Keep unknown custom Synara/agent events visible as safe placeholders.
+- Preserve redaction, encrypted, media, reply, edit, and plain-text handling.
+- Avoid dropping actual `m.room.message` events with unsupported `msgtype`;
+  these should render as safe text or media placeholders where possible.
+
+Deliverables:
+
+- Matrix event visibility filter.
+- Unit tests proving state events are hidden and custom unknown events remain
+  safe.
+- Follow-up design note for a future room-activity/system-event surface.
+
+Acceptance criteria:
+
+- Opening a live test room shows recent chat-relevant events first, not a wall
+  of room creation/member/power-level events.
+- Unit tests cover hidden state events, visible text/media events, encrypted
+  events, redactions, and custom unknown events.
+- No visible timeline row exposes raw event IDs except where the UI explicitly
+  represents reply/debug context.
+
+### IOS-0303C: Composer Live Send Hardening
+
+Dependencies: IOS-0303, IOS-0208.
+
+Status: initial hardening implemented. Composer icon controls have larger hit
+targets, deterministic UI tests cover mock sending, and the live-smoke runbook
+tracks remaining live send validation.
+
+Requirements:
+
+- Give send and attachment controls at least 44x44 point hit targets.
+- Ensure disabled/enabled send state tracks trimmed draft content.
+- Support keyboard and accessibility activation of Send.
+- Clear drafts only after Matrix send succeeds.
+- Preserve failure copy and retry opportunity when send fails.
+
+Deliverables:
+
+- Composer control hit-target updates.
+- UI tests for enabled send state and activation.
+- Live smoke validation that sends a harmless test message in the test room.
+
+Acceptance criteria:
+
+- Live simulator can send a text message to the test room through the UI.
+- Empty or whitespace-only drafts cannot be sent.
+- Failed sends leave the draft available for retry.
+
 ### IOS-0304: Reply, Edit, Redact, React
 
 Dependencies: IOS-0303.
 
 Status: initial native implementation complete. Event action availability and
 mock action application are wired through context menus and covered by unit
-tests.
+tests. Live Matrix adapters now send edit replacement content, redactions, and
+reaction annotations, with local UI updates only after successful responses.
 
 Requirements:
 

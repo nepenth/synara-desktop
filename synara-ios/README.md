@@ -20,6 +20,7 @@ Authoritative planning documents:
 - [iOS validation status](docs/ios-validation-status.md)
 - [iOS logging policy](docs/logging-policy.md)
 - [iOS CI notes](docs/ci-notes.md)
+- [Live simulator smoke](docs/live-simulator-smoke.md)
 
 Shared contracts are currently owned by:
 
@@ -45,8 +46,8 @@ List schemes:
 xcodebuild -list -project Synara.xcodeproj
 ```
 
-Simulator build and test-bundle compilation, once local Xcode first-launch setup
-is complete:
+Unsigned simulator build and test-bundle compilation, once local Xcode
+first-launch setup is complete:
 
 ```sh
 scripts/ci-build.sh
@@ -57,3 +58,7 @@ Run tests on a concrete installed simulator:
 ```sh
 RUN_IOS_TESTS=1 IOS_TEST_DESTINATION='platform=iOS Simulator,name=iPhone 16' scripts/ci-build.sh
 ```
+
+For live simulator smoke testing against a Matrix homeserver, use a signed
+local simulator run from Xcode or XcodeBuildMCP. The unsigned CI build path is
+compile-oriented and is not valid for Keychain-backed session validation.
