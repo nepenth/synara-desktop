@@ -89,6 +89,7 @@ struct RoomListView: View {
         }
         .navigationTitle("Rooms")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.hidden, for: .navigationBar)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 SynaraToolbarIconButton(systemImage: "person.crop.circle", accessibilityLabel: "Accounts") {
@@ -461,9 +462,6 @@ private extension RoomSummary {
     }
 
     var roomTint: Color {
-        if hasHighlight {
-            return SynaraColor.accent
-        }
         if kind == .directMessage {
             return SynaraColor.secondaryText
         }
@@ -479,7 +477,7 @@ private extension RoomSummary {
         if name.localizedCaseInsensitiveContains("ops") {
             return SynaraColor.ops
         }
-        return Color(.systemGray)
+        return SynaraColor.primaryText
     }
 }
 
