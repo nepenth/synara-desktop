@@ -106,17 +106,22 @@ final class PushServiceTests: XCTestCase {
         service.configure(with: makeSession())
         service.handleDeviceToken(Data([0x7A, 0xB1, 0x3C]))
 
-        await waitForExpectations(timeout: 1)
+        await fulfillment(of: [expectation], timeout: 1)
+        await waitUntil { service.registrationStateDescription == "Pusher registration complete" }
         XCTAssertTrue(service.isRegistered)
         XCTAssertEqual(pusher.registerCount, 1)
         XCTAssertEqual(pusher.lastPushKey, "7ab13c")
     }
 
     func testPushServiceClearsRegistrationAndUnregistersOnLogout() async {
-        let expectation = expectation(description: "unregister pusher")
+        let registerExpectation = expectation(description: "register pusher")
+        let unregisterExpectation = expectation(description: "unregister pusher")
         let pusher = StubPusherService()
+        pusher.onRegister = {
+            registerExpectation.fulfill()
+        }
         pusher.onUnregister = {
-            expectation.fulfill()
+            unregisterExpectation.fulfill()
         }
 
         let service = SynaraPushService(
@@ -126,9 +131,11 @@ final class PushServiceTests: XCTestCase {
         )
         service.configure(with: makeSession())
         service.handleDeviceToken(Data([0x7A, 0xB1, 0x3C]))
-        await waitForExpectations(timeout: 1)
+        await fulfillment(of: [registerExpectation], timeout: 1)
+        await waitUntil { service.registrationStateDescription == "Pusher registration complete" }
 
         service.clearRegistrationState()
+        await fulfillment(of: [unregisterExpectation], timeout: 1)
 
         XCTAssertEqual(service.tokenSnippet, nil)
         XCTAssertFalse(service.isRegistered)
@@ -137,10 +144,14 @@ final class PushServiceTests: XCTestCase {
 
     func testPushServiceReplacesRegistrationOnTokenRotation() async {
         let pusher = StubPusherService()
-        let registerExpectation = expectation(description: "register pusher twice")
-        registerExpectation.expectedFulfillmentCount = 2
+        let firstRegisterExpectation = expectation(description: "register initial pusher")
+        let secondRegisterExpectation = expectation(description: "register rotated pusher")
         pusher.onRegister = {
-            registerExpectation.fulfill()
+            if pusher.registerCount == 1 {
+                firstRegisterExpectation.fulfill()
+            } else if pusher.registerCount == 2 {
+                secondRegisterExpectation.fulfill()
+            }
         }
 
         let service = SynaraPushService(
@@ -150,9 +161,10 @@ final class PushServiceTests: XCTestCase {
         )
         service.configure(with: makeSession())
         service.handleDeviceToken(Data([0x7A, 0xB1, 0x3C]))
-        await waitForExpectations(timeout: 1)
+        await fulfillment(of: [firstRegisterExpectation], timeout: 1)
+        await waitUntil { service.registrationStateDescription == "Pusher registration complete" }
         service.handleDeviceToken(Data([0xAA, 0x55, 0x00]))
-        await waitForExpectations(timeout: 1)
+        await fulfillment(of: [secondRegisterExpectation], timeout: 1)
 
         XCTAssertEqual(pusher.registerCount, 2)
         XCTAssertEqual(pusher.unregisterCount, 1)
@@ -181,6 +193,7 @@ final class PushServiceTests: XCTestCase {
 
     func testPusherServiceSendsExpectedPushGatewayPayload() async throws {
         RecordingURLProtocol.capturedRequest = nil
+        RecordingURLProtocol.capturedBody = nil
         let session = URLSession(configuration: recordingSessionConfiguration())
         let gateway = URL(string: "https://push.example.internal")!
         let service = MatrixPusherService(gatewayURL: gateway, session: session)
@@ -191,9 +204,10 @@ final class PushServiceTests: XCTestCase {
         let captured = try XCTUnwrap(RecordingURLProtocol.capturedRequest)
         XCTAssertEqual(captured.httpMethod, "POST")
         XCTAssertTrue(captured.url?.path.contains("/pushers/set") == true)
-        XCTAssertEqual(captured.url?.query?.contains("access_token=token"), true)
+        XCTAssertNil(captured.url?.query)
+        XCTAssertEqual(captured.value(forHTTPHeaderField: "Authorization"), "Bearer token")
 
-        let body = try XCTUnwrap(captured.httpBody)
+        let body = try XCTUnwrap(RecordingURLProtocol.capturedBody)
         let payload = try JSONSerialization.jsonObject(with: body) as? [String: Any]
         XCTAssertEqual(payload?["app_id"] as? String, "app.synara.ios")
         XCTAssertEqual(payload?["pushkey"] as? String, "7ab13c")
@@ -205,6 +219,7 @@ final class PushServiceTests: XCTestCase {
 
     func testPusherServiceUnregisterUsesDeleteEndpoint() async throws {
         RecordingURLProtocol.capturedRequest = nil
+        RecordingURLProtocol.capturedBody = nil
         let session = URLSession(configuration: recordingSessionConfiguration())
         let gateway = URL(string: "https://push.example.internal")!
         let service = MatrixPusherService(gatewayURL: gateway, session: session)
@@ -215,6 +230,8 @@ final class PushServiceTests: XCTestCase {
         let captured = try XCTUnwrap(RecordingURLProtocol.capturedRequest)
         XCTAssertEqual(captured.httpMethod, "POST")
         XCTAssertTrue(captured.url?.path.contains("/pushers/delete") == true)
+        XCTAssertNil(captured.url?.query)
+        XCTAssertEqual(captured.value(forHTTPHeaderField: "Authorization"), "Bearer token")
     }
 
     private func makeSession() -> AuthenticatedSession {
@@ -239,10 +256,26 @@ final class PushServiceTests: XCTestCase {
         XCTAssertEqual(id, roomID)
         XCTAssertEqual(parsedEventID, eventID)
     }
+
+    private func waitUntil(
+        timeoutNanoseconds: UInt64 = 1_000_000_000,
+        condition: @escaping () -> Bool
+    ) async {
+        let deadline = DispatchTime.now().uptimeNanoseconds + timeoutNanoseconds
+        while DispatchTime.now().uptimeNanoseconds < deadline {
+            if condition() {
+                return
+            }
+            try? await Task.sleep(nanoseconds: 10_000_000)
+        }
+    }
 }
 
 private final class StubPusherService: MatrixPusherServicing {
         var isGatewayConfigured: Bool
+        var configuredGatewayURL: URL? {
+            isGatewayConfigured ? URL(string: "https://push.example.internal") : nil
+        }
         private(set) var registerCount = 0
         private(set) var unregisterCount = 0
         private(set) var lastPushKey: String?
@@ -275,6 +308,7 @@ private func recordingSessionConfiguration() -> URLSessionConfiguration {
 
 private final class RecordingURLProtocol: URLProtocol {
     static var capturedRequest: URLRequest?
+    static var capturedBody: Data?
 
     override class func canInit(with request: URLRequest) -> Bool {
         true
@@ -286,6 +320,7 @@ private final class RecordingURLProtocol: URLProtocol {
 
     override func startLoading() {
         Self.capturedRequest = request
+        Self.capturedBody = request.httpBody ?? Self.readBodyStream(request.httpBodyStream)
         guard let url = request.url else {
             client?.urlProtocol(self, didFailWithError: URLError(.badURL))
             return
@@ -307,4 +342,25 @@ private final class RecordingURLProtocol: URLProtocol {
     }
 
     override func stopLoading() {}
+
+    private static func readBodyStream(_ stream: InputStream?) -> Data? {
+        guard let stream else {
+            return nil
+        }
+
+        stream.open()
+        defer { stream.close() }
+
+        var data = Data()
+        var buffer = [UInt8](repeating: 0, count: 1024)
+        while stream.hasBytesAvailable {
+            let count = stream.read(&buffer, maxLength: buffer.count)
+            if count > 0 {
+                data.append(buffer, count: count)
+            } else {
+                break
+            }
+        }
+        return data.isEmpty ? nil : data
+    }
 }

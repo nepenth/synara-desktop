@@ -44,7 +44,7 @@ struct TimelineItem: Identifiable, Equatable {
 }
 
 protocol LaterServicing {
-    func loadItems() async -> Result<([SynaraLaterListItem], LaterInboxError), Never>
+    func loadItems() async -> Result<([SynaraLaterListItem], LaterInboxError?), Never>
 }
 
 enum LaterInboxError: Error, LocalizedError, Equatable {
@@ -84,7 +84,7 @@ struct SynaraLaterListItem: Identifiable, Equatable {
     }
 
     var detail: String {
-        if let completedAt {
+        if completedAt != nil {
             return "Completed"
         }
 
@@ -118,7 +118,7 @@ final class MatrixAccountDataLaterService: LaterServicing {
         self.now = now
     }
 
-    func loadItems() async -> Result<([SynaraLaterListItem], LaterInboxError), Never> {
+    func loadItems() async -> Result<([SynaraLaterListItem], LaterInboxError?), Never> {
         guard case .signedIn(let session) = sessionStore.currentState else {
             return .success(([], .noSession))
         }
@@ -262,7 +262,7 @@ struct MockLaterService: LaterServicing {
         self.items = items
     }
 
-    func loadItems() async -> Result<([SynaraLaterListItem], LaterInboxError), Never> {
+    func loadItems() async -> Result<([SynaraLaterListItem], LaterInboxError?), Never> {
         .success((items, nil))
     }
 }
@@ -655,9 +655,10 @@ private struct MatrixTimelineEventContent: Decodable {
         self.url = raw["url"]?.string
 
         if let relatesToObject = raw["m.relates_to"]?.dictionary {
+            let replyEventID = relatesToObject["m.in_reply_to"]?.dictionary?["event_id"]?.string
             self.relatesTo = MatrixRelatesTo(
                 relType: relatesToObject["rel_type"]?.string,
-                inReplyTo: relatesToObject["m.in_reply_to"]?.dictionary.flatMap(MatrixInReplyTo.init)
+                inReplyTo: MatrixInReplyTo(eventID: replyEventID)
             )
         } else {
             self.relatesTo = nil

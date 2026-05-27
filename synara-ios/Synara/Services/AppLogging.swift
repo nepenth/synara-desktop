@@ -11,7 +11,7 @@ enum LogCategory: String, CaseIterable {
     case sync
 }
 
-protocol LoggingServicing {
+protocol LoggingServicing: Sendable {
     func debug(_ message: String, category: LogCategory)
     func info(_ message: String, category: LogCategory)
     func error(_ message: String, category: LogCategory)
@@ -43,7 +43,7 @@ struct AppLogger: LoggingServicing {
     }
 }
 
-final class MockLoggingService: LoggingServicing {
+final class MockLoggingService: LoggingServicing, @unchecked Sendable {
     private(set) var entries: [String] = []
 
     func debug(_ message: String, category: LogCategory) {

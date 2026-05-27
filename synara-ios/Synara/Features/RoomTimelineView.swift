@@ -115,7 +115,9 @@ struct RoomTimelineView: View {
                                 onRedact: { applyAction(.redact, to: item) },
                                 onReact: { applyAction(.react("👍"), to: item) },
                                 onOpenMedia: { resource in viewerResource = resource },
-                                onAgentAction: executeAgentAction
+                                onAgentAction: { action in
+                                    executeAgentAction(action, sourceEventID: item.eventID)
+                                }
                             )
                             .id(item.eventID)
                         }
@@ -320,7 +322,7 @@ struct RoomTimelineView: View {
         state = .loaded(items.map { $0.id == item.id ? item : $0 }, isPaginating: isPaginating)
     }
 
-    private func executeAgentAction(_ action: SynaraAgentCardAction) {
+    private func executeAgentAction(_ action: SynaraAgentCardAction, sourceEventID: String?) {
         switch SynaraAgentCardActionResolver.plan(for: action) {
         case .success(let plan):
             switch plan {
@@ -330,8 +332,8 @@ struct RoomTimelineView: View {
                 #if canImport(UIKit)
                 UIPasteboard.general.string = text
                 #endif
-            case .blocked(let reason):
-                agentActionMessage = reason
+            case .submitApproval(let decision):
+                submitAgentApproval(action, decision: decision, sourceEventID: sourceEventID)
             }
         case .failure(let error):
             switch error {
@@ -343,6 +345,36 @@ struct RoomTimelineView: View {
                 agentActionMessage = "Action link is not allowed"
             case .encodingFailure:
                 agentActionMessage = "Could not copy action payload"
+            }
+        }
+    }
+
+    private func submitAgentApproval(
+        _ action: SynaraAgentCardAction,
+        decision: SynaraAgentApprovalDecision,
+        sourceEventID: String?
+    ) {
+        Task {
+            do {
+                try await environment.agentApprovals.submit(
+                    SynaraAgentApprovalRequest(
+                        roomID: roomID,
+                        sourceEventID: sourceEventID,
+                        action: action,
+                        decision: decision
+                    )
+                )
+                await MainActor.run {
+                    agentActionMessage = decision == .approve ? "Agent action approved" : "Agent action rejected"
+                }
+            } catch let error as SynaraAgentApprovalError {
+                await MainActor.run {
+                    agentActionMessage = error.errorDescription ?? "Agent action could not be submitted"
+                }
+            } catch {
+                await MainActor.run {
+                    agentActionMessage = "Agent action could not be submitted"
+                }
             }
         }
     }

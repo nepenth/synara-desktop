@@ -14,6 +14,9 @@ Synara uses namespaced `in.synara.*` account data and event-content fields for c
 - `in.synara.forwarded`: attribution metadata added to forwarded messages. The visible message body also includes attribution so other clients are not required to understand this key.
 - `in.synara.gif.*`: GIF metadata for provider/source attribution. GIF media itself is uploaded to the Matrix media repository and sent as `mxc://`.
 - `in.synara.agent`: explicit structured agent-card payload key supported by the Hermes/agent card renderer. See [Synara Agent Card Contract](./synara-agent-card-contract.md).
+- `in.synara.agent.action`: explicit approve/reject result payload embedded in
+  an authenticated Matrix room event after user activation. See
+  [Synara Agent Action Contract](./synara-agent-action-contract.md).
 
 ## Local-Only Storage
 

@@ -1,0 +1,42 @@
+{
+  "valid": {
+    "approve": {
+      "version": 1,
+      "action_id": "deploy",
+      "action_title": "Deploy",
+      "decision": "approve",
+      "source_event_id": "$source:example.org",
+      "created_at": 1770000000000
+    },
+    "reject": {
+      "version": 1,
+      "action_id": "deploy",
+      "action_title": "Deploy",
+      "decision": "reject",
+      "created_at": 1770000000000
+    }
+  },
+  "invalid": {
+    "unsupportedVersion": {
+      "version": 2,
+      "action_id": "deploy",
+      "action_title": "Deploy",
+      "decision": "approve",
+      "created_at": 1770000000000
+    },
+    "emptyActionID": {
+      "version": 1,
+      "action_id": "",
+      "action_title": "Deploy",
+      "decision": "approve",
+      "created_at": 1770000000000
+    },
+    "unsupportedDecision": {
+      "version": 1,
+      "action_id": "deploy",
+      "action_title": "Deploy",
+      "decision": "execute",
+      "created_at": 1770000000000
+    }
+  }
+}

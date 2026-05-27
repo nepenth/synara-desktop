@@ -99,6 +99,9 @@ The repeatable live-smoke checklist is
 
 - Agent card action handling is now covered in unit tests for safe URL, copy
   affordances, malformed payload rejection, and unknown-kind handling.
+- Agent approve/reject actions now submit authenticated Matrix events carrying
+  `in.synara.agent.action` payloads; unit tests validate request shape and
+  signed-out errors. Live agent-room approval smoke remains pending.
 
 ## Current App Surface
 
