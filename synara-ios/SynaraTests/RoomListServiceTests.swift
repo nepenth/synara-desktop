@@ -2,6 +2,124 @@ import XCTest
 @testable import Synara
 
 final class RoomListServiceTests: XCTestCase {
+    func testMatrixRoomListReturnsEmptyWhenSignedOut() async {
+        let client = MockRoomListHTTPClient()
+        let service = MatrixRoomListService(
+            sessionStore: AppSessionStore(),
+            httpClient: client
+        )
+
+        let state = await service.loadRooms()
+
+        XCTAssertEqual(state, .empty)
+        XCTAssertTrue(client.requests.isEmpty)
+    }
+
+    func testMatrixRoomListMapsJoinedAndInvitedRooms() async throws {
+        let homeserverURL = try XCTUnwrap(URL(string: "https://matrix.org"))
+        let session = AuthenticatedSession(
+            userID: "@alice:matrix.org",
+            deviceID: "DEVICE",
+            homeserverURL: homeserverURL,
+            accessToken: "token"
+        )
+        let client = MockRoomListHTTPClient(responses: [
+            .success(
+                statusCode: 200,
+                body: """
+                {
+                  "rooms": {
+                    "join": {
+                      "!joined:matrix.org": {
+                        "state": {
+                          "events": [
+                            {
+                              "type": "m.room.name",
+                              "origin_server_ts": 1000,
+                              "content": { "name": "Joined Room" }
+                            }
+                          ]
+                        },
+                        "timeline": {
+                          "events": [
+                            {
+                              "type": "m.room.message",
+                              "origin_server_ts": 2000,
+                              "content": { "body": "Hello there" }
+                            }
+                          ]
+                        },
+                        "unread_notifications": {
+                          "notification_count": 2,
+                          "highlight_count": 0
+                        }
+                      }
+                    },
+                    "invite": {
+                      "!invited:matrix.org": {
+                        "invite_state": {
+                          "events": [
+                            {
+                              "type": "m.room.name",
+                              "origin_server_ts": 3000,
+                              "content": { "name": "Invited Room" }
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+                """
+            )
+        ])
+        let service = MatrixRoomListService(
+            sessionStore: AppSessionStore(currentState: .signedIn(session)),
+            httpClient: client
+        )
+
+        let state = await service.loadRooms()
+
+        guard case .loaded(let rooms) = state else {
+            XCTFail("Expected loaded rooms")
+            return
+        }
+
+        XCTAssertEqual(rooms.map(\.id), ["!invited:matrix.org", "!joined:matrix.org"])
+        XCTAssertEqual(rooms[0].name, "Invited Room")
+        XCTAssertEqual(rooms[0].lastMessagePreview, "Invited to room")
+        XCTAssertTrue(rooms[0].hasHighlight)
+        XCTAssertEqual(rooms[1].name, "Joined Room")
+        XCTAssertEqual(rooms[1].lastMessagePreview, "Hello there")
+        XCTAssertEqual(rooms[1].unreadCount, 2)
+        XCTAssertEqual(client.requests.first?.httpMethod, "GET")
+        XCTAssertEqual(
+            client.requests.first?.url?.absoluteString,
+            "https://matrix.org/_matrix/client/v3/sync?timeout=0"
+        )
+        XCTAssertEqual(client.requests.first?.value(forHTTPHeaderField: "Authorization"), "Bearer token")
+    }
+
+    func testMatrixRoomListMapsHTTPFailureToFailedState() async throws {
+        let session = AuthenticatedSession(
+            userID: "@alice:matrix.org",
+            deviceID: "DEVICE",
+            homeserverURL: try XCTUnwrap(URL(string: "https://matrix.org")),
+            accessToken: "token"
+        )
+        let client = MockRoomListHTTPClient(responses: [
+            .success(statusCode: 401, body: #"{"errcode":"M_UNKNOWN_TOKEN"}"#)
+        ])
+        let service = MatrixRoomListService(
+            sessionStore: AppSessionStore(currentState: .signedIn(session)),
+            httpClient: client
+        )
+
+        let state = await service.loadRooms()
+
+        XCTAssertEqual(state, .failed("Could not load rooms. Try again."))
+    }
+
     func testRoomsSortByHighlightUnreadThenActivity() {
         let rooms = RoomListFixtures.small().reversed()
 
@@ -35,5 +153,44 @@ final class RoomListServiceTests: XCTestCase {
 
         XCTAssertEqual(state, .empty)
         XCTAssertEqual(service.clearCallCount, 1)
+    }
+}
+
+private final class MockRoomListHTTPClient: AuthHTTPClient {
+    enum Response {
+        case success(statusCode: Int, body: String)
+        case failure(Error)
+    }
+
+    private var responses: [Response]
+    private(set) var requests: [URLRequest] = []
+
+    init(responses: [Response] = []) {
+        self.responses = responses
+    }
+
+    func data(for request: URLRequest) async throws -> (Data, URLResponse) {
+        requests.append(request)
+
+        guard responses.isEmpty == false else {
+            throw LoginError.networkFailure
+        }
+
+        let response = responses.removeFirst()
+        switch response {
+        case .success(let statusCode, let body):
+            let url = try XCTUnwrap(request.url)
+            let httpResponse = try XCTUnwrap(
+                HTTPURLResponse(
+                    url: url,
+                    statusCode: statusCode,
+                    httpVersion: nil,
+                    headerFields: nil
+                )
+            )
+            return (Data(body.utf8), httpResponse)
+        case .failure(let error):
+            throw error
+        }
     }
 }
