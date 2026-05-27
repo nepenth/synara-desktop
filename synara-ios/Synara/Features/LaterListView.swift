@@ -124,9 +124,9 @@ private struct LaterListRow: View {
 
                         Spacer()
 
-                if item.isDueSoon {
-                    Text(item.dueLabel)
-                        .font(.caption)
+                        if item.isDueSoon {
+                            Text(item.dueLabel)
+                                .font(.caption)
                                 .padding(.horizontal, SynaraSpacing.xSmall)
                                 .padding(.vertical, 2)
                                 .background(SynaraColor.secondarySurface)
@@ -233,7 +233,8 @@ private extension SynaraLaterListItem {
     }
 
     var accessibilityRowIdentifier: String {
-        let safeEventID = eventID.replacingOccurrences(of: "/", with: "_")
+        let stableID = eventID.isEmpty ? id : eventID
+        let safeEventID = stableID.replacingOccurrences(of: "/", with: "_")
             .replacingOccurrences(of: ":", with: "_")
         return "LaterRow-\(safeEventID)"
     }
