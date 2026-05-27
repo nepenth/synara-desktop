@@ -383,12 +383,12 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
         switch item.content {
         case .msgLike(let content):
             kind = mapMessageLike(content, eventTypeRaw: item.eventTypeRaw)
-        case .state(_, let content):
-            kind = .unknown(type: "\(content)")
+        case .state:
+            return nil
         case .failedToParseMessageLike(let eventType, _):
             kind = eventType == "m.room.encrypted" ? .encryptedPlaceholder : .unknown(type: eventType)
-        case .failedToParseState(let eventType, _, _):
-            kind = .unknown(type: eventType)
+        case .failedToParseState:
+            return nil
         case .callInvite, .rtcNotification, .roomMembership, .profileChange:
             return nil
         }
