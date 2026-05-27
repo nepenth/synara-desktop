@@ -2,7 +2,7 @@ import Foundation
 
 enum AppRoute: Hashable {
     case login(homeserverURL: String)
-    case room(id: String)
+    case room(id: String, title: String? = nil)
     case settings
 }
 

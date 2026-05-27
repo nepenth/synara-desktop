@@ -27,7 +27,16 @@ final class AppRouteTests: XCTestCase {
 
         XCTAssertTrue(opened)
         XCTAssertEqual(router.selectedTab, .rooms)
-        XCTAssertEqual(router.roomsPath, [.room(id: "!roomid:example.org")])
+        XCTAssertEqual(router.roomsPath, [.room(id: "!roomid:example.org", title: nil)])
+    }
+
+    func testRouterCanCarryRoomTitleFromRoomList() {
+        let router = AppRouter()
+
+        router.route(to: .room(id: "!roomid:example.org", title: "Alerts"))
+
+        XCTAssertEqual(router.selectedTab, .rooms)
+        XCTAssertEqual(router.roomsPath, [.room(id: "!roomid:example.org", title: "Alerts")])
     }
 
     func testRouterResetClearsNavigationAndSheets() {

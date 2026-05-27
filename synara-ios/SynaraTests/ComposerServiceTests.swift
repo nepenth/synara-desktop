@@ -64,6 +64,42 @@ final class ComposerServiceTests: XCTestCase {
         }
     }
 
+    func testMatrixSendCreatesEditRelation() async throws {
+        let client = MockComposerHTTPClient(responses: [
+            .success(statusCode: 200, body: #"{"event_id":"$edit"}"#)
+        ])
+        let service = MatrixMessageSendService(
+            sessionStore: AppSessionStore(currentState: .signedIn(try makeSession())),
+            httpClient: client
+        )
+        let request = MessageSendRequest(
+            roomID: "!room:matrix.org",
+            body: " updated ",
+            replyToEventID: "$ignored-parent",
+            editEventID: "$original"
+        )
+
+        let item = try await service.send(request)
+
+        XCTAssertEqual(item.eventID, "$edit")
+        XCTAssertEqual(item.kind, .text("updated"))
+        XCTAssertTrue(item.isEdited)
+
+        let body = try XCTUnwrap(client.requests.first?.httpBody)
+        let payload = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
+        XCTAssertEqual(payload["msgtype"] as? String, "m.text")
+        XCTAssertEqual(payload["body"] as? String, "* updated")
+
+        let newContent = try XCTUnwrap(payload["m.new_content"] as? [String: Any])
+        XCTAssertEqual(newContent["msgtype"] as? String, "m.text")
+        XCTAssertEqual(newContent["body"] as? String, "updated")
+
+        let relatesTo = try XCTUnwrap(payload["m.relates_to"] as? [String: Any])
+        XCTAssertEqual(relatesTo["rel_type"] as? String, "m.replace")
+        XCTAssertEqual(relatesTo["event_id"] as? String, "$original")
+        XCTAssertNil(relatesTo["m.in_reply_to"])
+    }
+
     func testDraftStorePreservesDraftByRoom() {
         let store = DraftStore()
 

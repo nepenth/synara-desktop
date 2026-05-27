@@ -44,7 +44,7 @@ final class AppRouter: ObservableObject {
 
         switch deepLink {
         case .room(let id):
-            route(to: .room(id: id))
+            route(to: .room(id: id, title: nil))
         case .settings:
             route(to: .settings)
         }

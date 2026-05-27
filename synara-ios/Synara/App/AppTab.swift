@@ -27,12 +27,16 @@ enum AppTab: String, CaseIterable, Identifiable {
         switch self {
         case .rooms:
             Label("Rooms", systemImage: "bubble.left.and.bubble.right")
+                .accessibilityIdentifier("RoomsTab")
         case .notifications:
             Label("Notifications", systemImage: "bell")
+                .accessibilityIdentifier("NotificationsTab")
         case .later:
             Label("Later", systemImage: "clock")
+                .accessibilityIdentifier("LaterTab")
         case .settings:
             Label("Settings", systemImage: "gearshape")
+                .accessibilityIdentifier("SettingsTab")
         }
     }
 }

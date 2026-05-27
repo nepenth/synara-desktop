@@ -31,6 +31,17 @@ final class SecureSessionStoreTests: XCTestCase {
         }
     }
 
+    func testSecureStoreErrorsHaveNonSensitiveLogDescriptions() {
+        XCTAssertEqual(
+            SecureSessionStoreError.keychainFailure(status: -34018).logDescription,
+            "secure session keychain failure status -34018"
+        )
+        XCTAssertEqual(
+            SecureSessionStoreError.corruptEntry.logDescription,
+            "secure session entry is corrupt"
+        )
+    }
+
     func testLegacySessionMigratesToEnvelope() throws {
         let store = InMemorySecureSessionStore()
         let session = try makeSession()

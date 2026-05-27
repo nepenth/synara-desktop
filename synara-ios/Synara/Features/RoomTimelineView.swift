@@ -2,6 +2,7 @@ import SwiftUI
 
 struct RoomTimelineView: View {
     let roomID: String
+    let roomTitle: String?
     @Environment(\.appEnvironment) private var environment
     @State private var state: TimelineViewState = .idle
     @State private var draft: String = ""
@@ -26,7 +27,7 @@ struct RoomTimelineView: View {
                 onUpload: uploadMockMedia
             )
         }
-        .navigationTitle("Room")
+        .navigationTitle(roomTitle ?? "Room")
         .sheet(item: $viewerResource) { resource in
             MediaViewer(resource: resource)
         }
@@ -151,7 +152,7 @@ struct RoomTimelineView: View {
 
     private func applyAction(_ action: EventActionType, to item: TimelineItem) {
         Task {
-            let updated = await environment.eventActions.apply(action, to: item, currentUserID: currentUserID)
+            let updated = await environment.eventActions.apply(action, to: item, currentUserID: currentUserID, roomID: roomID)
             await MainActor.run {
                 replace(updated)
             }
@@ -325,8 +326,11 @@ private struct ComposerView: View {
             HStack(alignment: .bottom, spacing: SynaraSpacing.small) {
                 Button(action: onUpload) {
                     Image(systemName: "paperclip")
-                        .frame(width: 32, height: 32)
+                        .frame(width: 24, height: 24)
                 }
+                .frame(width: 44, height: 44)
+                .buttonStyle(.plain)
+                .contentShape(Rectangle())
                 .accessibilityLabel("Attach")
                 .accessibilityIdentifier("AttachmentButton")
 
@@ -341,8 +345,11 @@ private struct ComposerView: View {
 
                 Button(action: onSend) {
                     Image(systemName: "paperplane.fill")
-                        .frame(width: 32, height: 32)
+                        .frame(width: 24, height: 24)
                 }
+                .frame(width: 44, height: 44)
+                .buttonStyle(.plain)
+                .contentShape(Rectangle())
                 .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 .accessibilityLabel("Send")
                 .accessibilityIdentifier("ComposerSendButton")
@@ -409,7 +416,7 @@ private struct MediaViewer: View {
 struct RoomTimelineView_Previews: PreviewProvider {
     static var previews: some View {
         NavigationStack {
-            RoomTimelineView(roomID: "!project:matrix.org")
+            RoomTimelineView(roomID: "!project:matrix.org", roomTitle: "Project")
         }
         .environment(\.appEnvironment, AppEnvironment.mock())
     }

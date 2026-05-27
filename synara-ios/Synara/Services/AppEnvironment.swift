@@ -49,7 +49,7 @@ struct AppEnvironment {
             timeline: MatrixTimelineService(sessionStore: session),
             messageSender: MatrixMessageSendService(sessionStore: session),
             drafts: DraftStore(),
-            eventActions: MockEventActionService(),
+            eventActions: MatrixEventActionService(sessionStore: session),
             mediaLoader: MockMediaLoader(),
             mediaUploader: MockMediaUploadService()
         )

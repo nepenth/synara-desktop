@@ -56,6 +56,31 @@ Results:
 UI tests launch the app with `SYNARA_UI_TESTS=1`, which forces deterministic
 mock services instead of live Keychain, auth, and Matrix dependencies.
 
+## Live Matrix Simulator Findings
+
+Live validation on May 27, 2026 used a dedicated test account on a private test
+homeserver. Credentials, homeserver details, and tokens were not written to
+source files, tests, or git.
+
+Findings are tracked in ordered implementation items in
+[`synara/docs/synara-ios-project-spec.md`](../../synara/docs/synara-ios-project-spec.md):
+
+- Unsigned simulator builds can compile the app but cannot validate
+  Keychain-backed login persistence.
+- Signed simulator login succeeded and transitioned into the Rooms shell.
+- The test account had an `Alerts` invite; accepting it refreshed the room list
+  into a joined-room row.
+- The room timeline opened, but the title fell back to `Room` instead of
+  preserving the `Alerts` display name.
+- The initial live timeline showed Matrix state events as unsupported chat rows.
+- The composer accepted text, but the send icon needed stronger hit-target and
+  automation validation.
+- Simulator accessibility hierarchy capture was incomplete during manual smoke,
+  so the canonical live-smoke path still needs accessibility hardening.
+
+The repeatable live-smoke checklist is
+[`synara-ios/docs/live-simulator-smoke.md`](live-simulator-smoke.md).
+
 ## Current App Surface
 
 - Native SwiftUI app entry point.
@@ -125,6 +150,9 @@ mock services instead of live Keychain, auth, and Matrix dependencies.
   timeline model.
 - Live message sending uses Matrix `m.room.message` send with transaction IDs
   and supports reply metadata for text messages.
+- Live edit sending uses Matrix `m.replace` replacement content.
+- Live redaction and reaction actions use Matrix event endpoints and update the
+  local timeline only after successful responses.
 - Settings exposes logout through a local wipe service that stops sync, clears
   cached rooms, clears push registration state, deletes the secure session, and
   returns to the signed-out shell.

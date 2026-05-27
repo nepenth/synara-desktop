@@ -75,6 +75,54 @@ final class TimelineServiceTests: XCTestCase {
         XCTAssertTrue(client.requests.isEmpty)
     }
 
+    func testMatrixTimelineHidesRoomStateEventsButKeepsCustomUnknowns() async throws {
+        let client = MockTimelineHTTPClient(responses: [
+            .success(
+                statusCode: 200,
+                body: """
+                {
+                  "chunk": [
+                    {
+                      "event_id": "$create",
+                      "sender": "@alice:matrix.org",
+                      "origin_server_ts": 1000,
+                      "type": "m.room.create",
+                      "content": {}
+                    },
+                    {
+                      "event_id": "$agent",
+                      "sender": "@agent:matrix.org",
+                      "origin_server_ts": 2000,
+                      "type": "synara.agent.card",
+                      "content": {}
+                    },
+                    {
+                      "event_id": "$text",
+                      "sender": "@alice:matrix.org",
+                      "origin_server_ts": 3000,
+                      "type": "m.room.message",
+                      "content": {
+                        "msgtype": "m.text",
+                        "body": "visible"
+                      }
+                    }
+                  ]
+                }
+                """
+            )
+        ])
+        let service = MatrixTimelineService(
+            sessionStore: AppSessionStore(currentState: .signedIn(try makeSession())),
+            httpClient: client
+        )
+
+        let items = await service.loadInitialTimeline(roomID: "!room:matrix.org")
+
+        XCTAssertEqual(items.map(\.eventID), ["$text", "$agent"])
+        XCTAssertEqual(items[0].kind, .text("visible"))
+        XCTAssertEqual(items[1].kind, .unknown(type: "synara.agent.card"))
+    }
+
     func testMapperKeepsStableIdentityAndMetadata() {
         let event = RawTimelineEvent(
             eventID: "$event:matrix.org",

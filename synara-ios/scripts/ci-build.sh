@@ -4,6 +4,12 @@ set -euo pipefail
 DERIVED_DATA_PATH="${DERIVED_DATA_PATH:-/private/tmp/synara-ios-derived}"
 BUILD_DESTINATION="${IOS_BUILD_DESTINATION:-generic/platform=iOS Simulator}"
 TEST_DESTINATION="${IOS_TEST_DESTINATION:-platform=iOS Simulator,name=iPhone 16}"
+UNSIGNED_BUILD_ARGS=(
+  CODE_SIGNING_ALLOWED=NO
+  CODE_SIGNING_REQUIRED=NO
+  CODE_SIGN_STYLE=Manual
+  DEVELOPMENT_TEAM=
+)
 
 cd "$(dirname "$0")/.."
 
@@ -19,14 +25,16 @@ xcodebuild \
   -scheme Synara \
   -destination "$BUILD_DESTINATION" \
   -derivedDataPath "$DERIVED_DATA_PATH" \
-  build
+  build \
+  "${UNSIGNED_BUILD_ARGS[@]}"
 
 xcodebuild \
   -project Synara.xcodeproj \
   -scheme Synara \
   -destination "$BUILD_DESTINATION" \
   -derivedDataPath "$DERIVED_DATA_PATH" \
-  build-for-testing
+  build-for-testing \
+  "${UNSIGNED_BUILD_ARGS[@]}"
 
 if [[ "${RUN_IOS_TESTS:-0}" == "1" ]]; then
   xcodebuild \
@@ -34,5 +42,6 @@ if [[ "${RUN_IOS_TESTS:-0}" == "1" ]]; then
     -scheme Synara \
     -destination "$TEST_DESTINATION" \
     -derivedDataPath "$DERIVED_DATA_PATH" \
-    test
+    test \
+    "${UNSIGNED_BUILD_ARGS[@]}"
 fi
