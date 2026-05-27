@@ -64,6 +64,18 @@ final class SecureSessionStoreTests: XCTestCase {
         XCTAssertEqual(sessionStore.currentState, .signedIn(session))
     }
 
+    func testAppSessionStoreCapturesRestoreFailureDiagnostics() {
+        let secureStore = InMemorySecureSessionStore()
+        secureStore.writeRawDataForTesting(Data("not-json".utf8))
+        let sessionStore = AppSessionStore(
+            secureStore: secureStore,
+            restorePersistedSession: true
+        )
+
+        XCTAssertEqual(sessionStore.currentState, .signedOut)
+        XCTAssertEqual(sessionStore.restoreFailureLogDescription, "secure session entry is corrupt")
+    }
+
     private func makeSession() throws -> AuthenticatedSession {
         AuthenticatedSession(
             userID: "@alice:matrix.org",

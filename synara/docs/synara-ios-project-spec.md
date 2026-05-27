@@ -555,9 +555,9 @@ Acceptance criteria:
 
 Dependencies: IOS-0106.
 
-Status: identified during live simulator validation. A locally signed simulator
-build is required for Keychain-backed session validation; the unsigned CI build
-path remains useful for credential-free compilation and deterministic tests.
+Status: complete. Local signed simulator runtime validates Keychain-backed
+session restore, while the unsigned CI build path remains credential-free for
+compilation and deterministic tests.
 
 Requirements:
 
@@ -612,7 +612,7 @@ Acceptance criteria:
 
 Dependencies: IOS-0201, IOS-0006.
 
-Status: initial native implementation complete. The live app environment uses a
+Status: complete for Phase 2. The live app environment uses a
 Matrix Client-Server password auth adapter that validates username/password
 input, verifies `m.login.password` support through `/_matrix/client/v3/login`,
 submits password login, maps invalid credentials and unsupported flows to
@@ -689,7 +689,7 @@ Acceptance criteria:
 
 Dependencies: IOS-0204.
 
-Status: initial live implementation complete. The live app environment loads
+Status: complete for Phase 2. The live app environment loads
 room summaries from Matrix `/sync?timeout=0`, includes joined and invited rooms,
 maps room names, latest message previews, unread counts, highlight counts, and
 activity timestamps, supports accept and decline actions for invites, and keeps
@@ -742,10 +742,9 @@ Acceptance criteria:
 
 Dependencies: IOS-0107, IOS-0202, IOS-0203.
 
-Status: identified during live simulator validation. The app initially logged a
-generic session persistence failure after successful Matrix auth; we need
-diagnostics precise enough to separate Keychain, signing, and entitlement
-problems while still redacting secrets.
+Status: complete. The app records non-sensitive secure-session restore and
+persistence diagnostics, and signed simulator restore is live-validated without
+logging credentials or tokens.
 
 Requirements:
 
@@ -772,10 +771,11 @@ Acceptance criteria:
 
 Dependencies: IOS-0105, IOS-0201, IOS-0202.
 
-Status: identified during live simulator validation. Visual coordinate taps
-worked for broad navigation, but accessibility hierarchy capture was incomplete
-and text-field focus required keyboard traversal. This weakens repeatable live
-smoke testing and VoiceOver confidence.
+Status: complete for app-level automation. Deterministic XCTest coverage uses
+stable accessibility identifiers for auth, room list, timeline, composer,
+invites, settings, and logout. A gated live-smoke XCTest validates the signed
+runtime path. XcodeBuildMCP's live `snapshot_ui` can still return an empty app
+tree, which is tracked as a tooling limitation rather than an app blocker.
 
 Requirements:
 
@@ -805,9 +805,8 @@ Acceptance criteria:
 
 Dependencies: IOS-0205, IOS-0208.
 
-Status: identified during live simulator validation. The live room list displayed
-the `Alerts` invite and invite acceptance transitioned the room to a joined
-state; this needs repeatable coverage and clearer post-action guarantees.
+Status: complete. Invite accept/reject endpoints, room-list refresh behavior,
+and deterministic UI transitions are implemented and covered.
 
 Requirements:
 
@@ -838,6 +837,10 @@ Goal: make the app usable for daily chat in test encrypted and unencrypted rooms
 
 Dependencies: IOS-0205.
 
+Status: complete for Phase 3. Timeline mapping covers text, media, replies,
+edits, reactions, redactions, encrypted placeholders, custom unknown events, and
+Matrix pagination tokens.
+
 Requirements:
 
 - Provide app-facing timeline items from the Matrix SDK.
@@ -861,9 +864,10 @@ Acceptance criteria:
 
 Dependencies: IOS-0301, IOS-0105.
 
-Status: initial native implementation complete. The room timeline renders lazy
+Status: complete for Phase 3. The room timeline renders lazy
 rows for mapped text, reply, edit, redaction, unknown, media placeholder, and
-reaction states. Build-for-testing and simulator UI validation pass as
+reaction states, exposes a native load-older control, and keeps encrypted events
+as safe placeholders. Build-for-testing and simulator UI validation pass as
 documented in
 [`synara-ios/docs/ios-validation-status.md`](../../synara-ios/docs/ios-validation-status.md).
 The live timeline service now loads Matrix room messages and maps text, reply,
@@ -892,11 +896,12 @@ Acceptance criteria:
 
 Dependencies: IOS-0302.
 
-Status: initial native implementation complete. Composer supports multiline
+Status: complete for Phase 3. Composer supports multiline
 plain-text drafts, empty-message guarding, per-room draft preservation, local
 echo through the message sending service, and mock UI coverage. The live
 message sender now sends Matrix `m.room.message` text events with transaction
-IDs and reply metadata.
+IDs and reply metadata, and a gated live-smoke UI test validates a disposable
+room send.
 
 Requirements:
 
@@ -982,9 +987,9 @@ Acceptance criteria:
 
 Dependencies: IOS-0303, IOS-0208.
 
-Status: initial hardening implemented. Composer icon controls have larger hit
-targets, deterministic UI tests cover mock sending, and the live-smoke runbook
-tracks remaining live send validation.
+Status: complete. Composer icon controls have larger hit targets, deterministic
+UI tests cover mock sending, and the gated live-smoke UI test validates live
+send through the UI in a disposable room.
 
 Requirements:
 
@@ -1010,7 +1015,7 @@ Acceptance criteria:
 
 Dependencies: IOS-0303.
 
-Status: initial native implementation complete. Event action availability and
+Status: complete for Phase 3. Event action availability and
 mock action application are wired through context menus and covered by unit
 tests. Live Matrix adapters now send edit replacement content, redactions, and
 reaction annotations, with local UI updates only after successful responses.
@@ -1038,9 +1043,9 @@ Acceptance criteria:
 
 Dependencies: IOS-0302.
 
-Status: initial native implementation complete. Authenticated media resources,
-safe display descriptions, media placeholders, viewer presentation, and media
-URL safety tests are in place.
+Status: complete for Phase 3. Authenticated media resources, safe display
+descriptions, media placeholders, viewer presentation, authenticated thumbnail
+requests, and media URL safety tests are in place.
 
 Requirements:
 
@@ -1066,9 +1071,10 @@ Acceptance criteria:
 
 Dependencies: IOS-0303, IOS-0305.
 
-Status: initial native implementation complete. Mock attachment upload presents
-upload progress, appends a media local echo, and sanitizes local file/path input
-before display.
+Status: complete for Phase 3. Attachment upload presents upload progress,
+sanitizes local file/path input before display, supports the native photo
+library path for live builds, and live media upload sends Matrix media events
+after upload.
 
 Requirements:
 
@@ -1092,6 +1098,13 @@ Acceptance criteria:
 ### IOS-0307: Encrypted Room Validation
 
 Dependencies: IOS-0302, IOS-0303, IOS-0305.
+
+Status: Phase 3 boundary complete in
+[`synara-ios/docs/e2ee-validation.md`](../../synara-ios/docs/e2ee-validation.md).
+The current REST-backed MVP detects encrypted events and renders safe
+unavailable placeholders. Production encrypted send/receive/decrypt/recovery is
+not complete and is explicitly blocked on Matrix Rust SDK crypto integration
+before TestFlight or App Store release.
 
 Requirements:
 

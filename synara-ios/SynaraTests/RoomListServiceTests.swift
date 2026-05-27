@@ -212,6 +212,31 @@ final class RoomListServiceTests: XCTestCase {
         XCTAssertEqual(service.clearCallCount, 1)
     }
 
+    func testMockInviteTransitionAcceptsInviteIntoJoinedRoom() async throws {
+        let service = MockInviteTransitionService()
+
+        try await service.acceptInvite(roomID: "!alerts:matrix.org")
+        let state = await service.loadRooms()
+
+        guard case .loaded(let rooms) = state else {
+            XCTFail("Expected loaded rooms")
+            return
+        }
+
+        XCTAssertEqual(rooms.first?.id, "!alerts:matrix.org")
+        XCTAssertEqual(rooms.first?.membership, .joined)
+        XCTAssertEqual(rooms.first?.lastMessagePreview, "Joined room")
+    }
+
+    func testMockInviteTransitionRejectsInviteIntoEmptyState() async throws {
+        let service = MockInviteTransitionService()
+
+        try await service.rejectInvite(roomID: "!alerts:matrix.org")
+        let state = await service.loadRooms()
+
+        XCTAssertEqual(state, .empty)
+    }
+
     private func makeSession() throws -> AuthenticatedSession {
         AuthenticatedSession(
             userID: "@alice:matrix.org",

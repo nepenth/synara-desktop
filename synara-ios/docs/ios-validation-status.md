@@ -3,9 +3,10 @@
 Reviewed: 2026-05-27
 
 Status: Phase 1 shell/foundation, Phase 2 auth/session/sync/room-list/logout,
-Phase 3 timeline UI, composer, event actions, media viewer, and media upload
-MVP work are build-validated and simulator runtime validated with deterministic
-mock services.
+and Phase 3 core messaging are complete for the current native iOS MVP.
+Deterministic simulator tests validate the mock path, and a gated live simulator
+smoke validates signed session restore, live room opening, composer send, and
+timeline update against a disposable test room.
 
 ## Project Shape
 
@@ -50,11 +51,13 @@ xcodebuild -project Synara.xcodeproj -scheme Synara -configuration Debug \
 
 Results:
 
-- `SynaraTests`: 49 tests, 0 failures.
-- `SynaraUITests`: 9 tests, 0 failures.
+- `SynaraTests`: 80 tests, 0 failures.
+- `SynaraUITests`: 12 tests, 0 failures, 1 skipped gated live-smoke test.
 
-UI tests launch the app with `SYNARA_UI_TESTS=1`, which forces deterministic
-mock services instead of live Keychain, auth, and Matrix dependencies.
+Deterministic UI tests launch the app with `SYNARA_UI_TESTS=1`, which forces
+mock services instead of live Keychain, auth, and Matrix dependencies. The
+gated live-smoke UI test runs only when `SYNARA_LIVE_SMOKE=1` is supplied and
+does not store homeserver credentials in the repository.
 
 ## Live Matrix Simulator Findings
 
@@ -65,18 +68,20 @@ source files, tests, or git.
 Findings are tracked in ordered implementation items in
 [`synara/docs/synara-ios-project-spec.md`](../../synara/docs/synara-ios-project-spec.md):
 
-- Unsigned simulator builds can compile the app but cannot validate
-  Keychain-backed login persistence.
-- Signed simulator login succeeded and transitioned into the Rooms shell.
-- The test account had an `Alerts` invite; accepting it refreshed the room list
-  into a joined-room row.
-- The room timeline opened, but the title fell back to `Room` instead of
-  preserving the `Alerts` display name.
-- The initial live timeline showed Matrix state events as unsupported chat rows.
-- The composer accepted text, but the send icon needed stronger hit-target and
-  automation validation.
-- Simulator accessibility hierarchy capture was incomplete during manual smoke,
-  so the canonical live-smoke path still needs accessibility hardening.
+- Unsigned simulator builds can compile the app but are not used as proof of
+  Keychain-backed session behavior.
+- Signed simulator login and restore are validated; the app logs only
+  non-sensitive session restore status.
+- Live room list loading, room title routing, timeline opening, routine state
+  event filtering, and disposable-room message send are validated.
+- Invite accept/reject transition behavior is covered by deterministic UI tests
+  and live membership endpoints are covered by unit tests.
+- XcodeBuildMCP screenshot capture works, but its live accessibility hierarchy
+  snapshot can still return an empty app tree. The canonical automation path is
+  XCTest accessibility, which is passing.
+- Current REST messaging safely renders encrypted events as unavailable
+  placeholders. Production E2EE remains a Matrix Rust SDK crypto integration
+  gate before TestFlight/App Store release.
 
 The repeatable live-smoke checklist is
 [`synara-ios/docs/live-simulator-smoke.md`](live-simulator-smoke.md).
@@ -104,6 +109,8 @@ The repeatable live-smoke checklist is
 - Unit smoke tests for routing, dependency wiring, settings storage, and
   redaction.
 - UI smoke tests assert primary tabs exist and Settings can be selected.
+- Gated live UI smoke can be run locally with environment variables and is
+  skipped in normal CI/local deterministic runs.
 
 ## Current Auth Surface
 
@@ -150,6 +157,8 @@ The repeatable live-smoke checklist is
   timeline model.
 - Live message sending uses Matrix `m.room.message` send with transaction IDs
   and supports reply metadata for text messages.
+- Timeline pagination uses Matrix pagination tokens and exposes a native
+  `Load Older` control.
 - Live edit sending uses Matrix `m.replace` replacement content.
 - Live redaction and reaction actions use Matrix event endpoints and update the
   local timeline only after successful responses.
@@ -167,10 +176,12 @@ The repeatable live-smoke checklist is
 - Event action service and context menu support reply, edit, redact, and react
   availability against the mock service layer.
 - Media service supports authenticated media resources, safe media descriptions,
-  viewer presentation, upload progress state, and sanitized upload display names.
+  viewer presentation, upload progress state, sanitized upload display names,
+  authenticated thumbnail requests, Matrix media uploads, and media-message
+  sends after upload.
 - Unit tests cover secure session storage, Matrix lifecycle, room sorting and
   unread mapping, local wipe behavior, timeline mapping, composer/draft behavior,
   event action behavior, and media URL/path safety.
 - UI tests cover opening a room from the room list, sending a mock message,
-  adding a mock media attachment, and logout return to the homeserver selection
-  shell.
+  loading older messages, accepting/rejecting invites, adding a mock media
+  attachment, and logout return to the homeserver selection shell.

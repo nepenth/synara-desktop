@@ -55,6 +55,7 @@ protocol SettingsStoring {
 final class AppSessionStore: ObservableObject {
     @Published private(set) var currentState: SessionState
     let secureStore: SecureSessionStoring
+    private(set) var restoreFailureLogDescription: String?
 
     init(
         currentState: SessionState = .signedOut,
@@ -63,18 +64,40 @@ final class AppSessionStore: ObservableObject {
     ) {
         self.secureStore = secureStore
 
-        if restorePersistedSession, let restored = try? secureStore.load() {
-            self.currentState = .signedIn(restored)
+        if restorePersistedSession {
+            do {
+                if let restored = try secureStore.load() {
+                    self.currentState = .signedIn(restored)
+                } else {
+                    self.currentState = currentState
+                }
+            } catch let error as SecureSessionStoreError {
+                restoreFailureLogDescription = error.logDescription
+                self.currentState = .signedOut
+            } catch {
+                restoreFailureLogDescription = "secure session restore failed"
+                self.currentState = .signedOut
+            }
         } else {
             self.currentState = currentState
         }
     }
 
     func restore() throws {
-        if let restored = try secureStore.load() {
-            currentState = .signedIn(restored)
-        } else {
-            currentState = .signedOut
+        do {
+            if let restored = try secureStore.load() {
+                restoreFailureLogDescription = nil
+                currentState = .signedIn(restored)
+            } else {
+                restoreFailureLogDescription = nil
+                currentState = .signedOut
+            }
+        } catch let error as SecureSessionStoreError {
+            restoreFailureLogDescription = error.logDescription
+            throw error
+        } catch {
+            restoreFailureLogDescription = "secure session restore failed"
+            throw error
         }
     }
 
