@@ -33,8 +33,19 @@ enum AppDeepLink: Equatable {
             return
         }
 
-        if host == "inbox" {
-            let normalized = pathComponents.map(\.lowercased)
+        if host == "route" {
+            let encodedPath = String(url.path.dropFirst())
+            let decodedPath = encodedPath.removingPercentEncoding ?? encodedPath
+            let normalizedPath = decodedPath.hasPrefix("/") ? decodedPath : "/\(decodedPath)"
+            if let routeURL = URL(string: "synara://host\(normalizedPath)"),
+               let parsed = AppDeepLink(url: routeURL) {
+                self = parsed
+                return
+            }
+        }
+
+        if host == "inbox" || pathComponents.first?.lowercased() == "inbox" {
+            let normalized = pathComponents.map { $0.lowercased() }
             if normalized.contains("later") {
                 self = .later
             } else if normalized.contains("notifications") || normalized.contains("invites") {

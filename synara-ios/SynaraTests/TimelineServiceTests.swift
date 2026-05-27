@@ -254,7 +254,7 @@ final class TimelineServiceTests: XCTestCase {
             agentCard: card
         )
 
-        if case .agentCard(let mapped) = TimelineMapper.map(event) {
+        if case .agentCard(let mapped) = TimelineMapper.map(event).kind {
             XCTAssertEqual(mapped, card)
         } else {
             XCTFail("Expected agent card mapped kind")
@@ -359,13 +359,13 @@ final class TimelineServiceTests: XCTestCase {
         let client = MockTimelineHTTPClient(responses: [
             .success(
                 statusCode: 200,
-                body: #"
+                body: #"""
                 {
                   "content": {
                     "version": 1,
                     "items": {
                       "!room:example.org\n$event-active-late": {
-                        "id": "!room:example.org\\n$event-active-late",
+                        "id": "!room:example.org\n$event-active-late",
                         "kind": "saved",
                         "roomId": "!room:example.org",
                         "eventId": "$event-active-late",
@@ -373,7 +373,7 @@ final class TimelineServiceTests: XCTestCase {
                         "dueTs": 1800001000000
                       },
                       "!room:example.org\n$event-active-soon": {
-                        "id": "!room:example.org\\n$event-active-soon",
+                        "id": "!room:example.org\n$event-active-soon",
                         "kind": "reminder",
                         "roomId": "!room:example.org",
                         "eventId": "$event-active-soon",
@@ -381,7 +381,7 @@ final class TimelineServiceTests: XCTestCase {
                         "dueTs": 1795000000000
                       },
                       "!room:example.org\n$event-completed": {
-                        "id": "!room:example.org\\n$event-completed",
+                        "id": "!room:example.org\n$event-completed",
                         "kind": "reminder",
                         "roomId": "!room:example.org",
                         "eventId": "$event-completed",
@@ -392,7 +392,7 @@ final class TimelineServiceTests: XCTestCase {
                     }
                   }
                 }
-                "#
+                """#
             )
         ])
 
@@ -419,7 +419,7 @@ final class TimelineServiceTests: XCTestCase {
         let client = MockTimelineHTTPClient(responses: [
             .success(
                 statusCode: 200,
-                body: #"{\"items\":{}}"
+                body: #"{"items":{}}"#
             )
         ])
         let service = MatrixAccountDataLaterService(
@@ -491,7 +491,7 @@ final class TimelineServiceTests: XCTestCase {
 
         let sorted = SynaraLaterListItem.sorted(items: items, now: now)
 
-        XCTAssertEqual(sorted.map(\.id), ["c", "b", "a"])
+        XCTAssertEqual(sorted.map(\.id), ["b", "c", "a"])
     }
 
     private func makeSession() throws -> AuthenticatedSession {

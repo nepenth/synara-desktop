@@ -13,9 +13,8 @@ final class SynaraContractsTests: XCTestCase {
     }
 
     func testRejectsNegativeNotificationCounts() {
-        let data = try? invalidNotificationSummaryJSON.data(using: .utf8)
-        XCTAssertNotNil(data)
-        XCTAssertThrowsError(try JSONDecoder().decode(SynaraNotificationSummary.self, from: data!))
+        let data = invalidNotificationSummaryJSON.data(using: .utf8)!
+        XCTAssertThrowsError(try JSONDecoder().decode(SynaraNotificationSummary.self, from: data))
     }
 
     func testDecodesLaterContentAndKinds() throws {
@@ -29,15 +28,13 @@ final class SynaraContractsTests: XCTestCase {
     }
 
     func testRejectsInvalidLaterKind() {
-        let data = try? invalidLaterKindJSON.data(using: .utf8)
-        XCTAssertNotNil(data)
-        XCTAssertThrowsError(try JSONDecoder().decode(SynaraLaterContent.self, from: data!))
+        let data = invalidLaterKindJSON.data(using: .utf8)!
+        XCTAssertThrowsError(try JSONDecoder().decode(SynaraLaterContent.self, from: data))
     }
 
     func testRejectsMissingLaterVersion() {
-        let data = try? missingLaterVersionJSON.data(using: .utf8)
-        XCTAssertNotNil(data)
-        XCTAssertThrowsError(try JSONDecoder().decode(SynaraLaterContent.self, from: data!))
+        let data = missingLaterVersionJSON.data(using: .utf8)!
+        XCTAssertThrowsError(try JSONDecoder().decode(SynaraLaterContent.self, from: data))
     }
 
     func testDecodesAgentActionOpenURL() throws {
@@ -135,7 +132,7 @@ final class SynaraContractsTests: XCTestCase {
       "highlightCount": 2,
       "unreadCount": 3
     }
-    """
+    """#
 
     private let invalidNotificationSummaryJSON = #"""
     {
@@ -147,7 +144,7 @@ final class SynaraContractsTests: XCTestCase {
       "highlightCount": 0,
       "unreadCount": 0
     }
-    """
+    """#
 
     private let validLaterContentJSON = #"""
     {
@@ -170,7 +167,7 @@ final class SynaraContractsTests: XCTestCase {
         }
       }
     }
-    """
+    """#
 
     private let invalidLaterKindJSON = #"""
     {
@@ -185,7 +182,7 @@ final class SynaraContractsTests: XCTestCase {
         }
       }
     }
-    """
+    """#
 
     private let missingLaterVersionJSON = #"""
     {
@@ -199,7 +196,7 @@ final class SynaraContractsTests: XCTestCase {
         }
       }
     }
-    """
+    """#
 
     private let validAgentActionOpenURLJSON = #"""
     {
@@ -209,7 +206,7 @@ final class SynaraContractsTests: XCTestCase {
       "url": "https://artifacts.example.org/report.html",
       "markdown": "# Thread"
     }
-    """
+    """#
 
     private let invalidAgentActionURLJSON = #"""
     {
@@ -218,14 +215,14 @@ final class SynaraContractsTests: XCTestCase {
       "kind": "open_url",
       "url": "http://127.0.0.1/report.html"
     }
-    """
+    """#
 
     private let invalidAgentActionPayloadJSON = #"""
     {
       "id": "missing",
       "title": "No payload"
     }
-    """
+    """#
 
     private let validAgentCardJSON = #"""
     {
@@ -249,13 +246,13 @@ final class SynaraContractsTests: XCTestCase {
         }
       ]
     }
-    """
+    """#
 
     private let invalidAgentCardMissingContentJSON = #"""
     {
       "title": "Empty"
     }
-    """
+    """#
 
     private let validAgentCardActionMarkdownJSON = #"""
     {
@@ -264,5 +261,5 @@ final class SynaraContractsTests: XCTestCase {
       "kind": "copy_markdown",
       "markdown": "# heading"
     }
-    """
+    """#
 }

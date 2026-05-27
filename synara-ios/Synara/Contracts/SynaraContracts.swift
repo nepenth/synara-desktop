@@ -299,8 +299,8 @@ struct SynaraAgentCardAction: Codable, Equatable {
         }
 
         if let url {
-            if let normalized = url.trimmingCharacters(in: .whitespacesAndNewlines),
-               normalized.utf8.count <= 2048,
+            let normalized = url.trimmingCharacters(in: .whitespacesAndNewlines)
+            if normalized.utf8.count <= 2048,
                normalized.isEmpty == false,
                SynaraContractURLPolicy.isSafeHTTPS(normalized) {
                 self.url = normalized

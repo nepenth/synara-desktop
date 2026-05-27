@@ -10,7 +10,40 @@ enum SynaraAgentCardActionError: Error, Equatable {
 enum SynaraAgentCardActionExecution: Equatable {
     case openURL(URL)
     case copyText(String)
-    case blocked(String)
+    case submitApproval(SynaraAgentApprovalDecision)
+}
+
+enum SynaraAgentApprovalDecision: String, Codable, Equatable {
+    case approve
+    case reject
+}
+
+enum SynaraAgentApprovalError: LocalizedError, Equatable {
+    case signedOut
+    case unsupportedAction
+    case failed
+
+    var errorDescription: String? {
+        switch self {
+        case .signedOut:
+            return "Sign in to submit this agent action."
+        case .unsupportedAction:
+            return "This agent action cannot be submitted."
+        case .failed:
+            return "Agent action could not be submitted. Try again."
+        }
+    }
+}
+
+struct SynaraAgentApprovalRequest: Equatable {
+    let roomID: String
+    let sourceEventID: String?
+    let action: SynaraAgentCardAction
+    let decision: SynaraAgentApprovalDecision
+}
+
+protocol AgentApprovalServicing {
+    func submit(_ request: SynaraAgentApprovalRequest) async throws
 }
 
 struct SynaraAgentCardActionResolver {
@@ -18,7 +51,7 @@ struct SynaraAgentCardActionResolver {
 
     static func shouldRender(_ action: SynaraAgentCardAction) -> Bool {
         guard let normalizedKind = SynaraAgentCardActionKind.resolved(from: action.kind) else {
-            return true
+            return action.kind == nil
         }
 
         return renderableKinds.contains(normalizedKind)
@@ -65,7 +98,10 @@ struct SynaraAgentCardActionResolver {
             actionPayload = .success(.copyText(json))
         case SynaraAgentCardActionKind.approve.rawValue,
              SynaraAgentCardActionKind.reject.rawValue:
-            actionPayload = .success(.blocked("Approval actions require Matrix command routing and are not yet connected."))
+            let decision: SynaraAgentApprovalDecision = kind == SynaraAgentCardActionKind.approve.rawValue ? .approve : .reject
+            actionPayload = .success(.submitApproval(decision))
+        case nil where action.kind != nil:
+            actionPayload = .failure(.unsupportedKind(action.kind ?? "unknown"))
         case nil:
             if let prompt = action.prompt {
                 actionPayload = .success(.copyText(prompt))
@@ -93,5 +129,137 @@ struct SynaraAgentCardActionResolver {
         }
 
         return String(data: data, encoding: .utf8)
+    }
+}
+
+final class MatrixAgentApprovalService: AgentApprovalServicing {
+    private let sessionStore: AppSessionStore
+    private let httpClient: AuthHTTPClient
+    private let jsonEncoder: JSONEncoder
+
+    init(
+        sessionStore: AppSessionStore,
+        httpClient: AuthHTTPClient = URLSession.shared,
+        jsonEncoder: JSONEncoder = JSONEncoder()
+    ) {
+        self.sessionStore = sessionStore
+        self.httpClient = httpClient
+        self.jsonEncoder = jsonEncoder
+    }
+
+    func submit(_ request: SynaraAgentApprovalRequest) async throws {
+        guard case .signedIn(let session) = sessionStore.currentState else {
+            throw SynaraAgentApprovalError.signedOut
+        }
+
+        guard request.action.id.isEmpty == false else {
+            throw SynaraAgentApprovalError.unsupportedAction
+        }
+
+        var urlRequest = URLRequest(
+            url: sendURL(
+                homeserverURL: session.homeserverURL,
+                roomID: request.roomID,
+                transactionID: UUID().uuidString
+            )
+        )
+        urlRequest.httpMethod = "PUT"
+        urlRequest.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
+        urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        urlRequest.httpBody = try jsonEncoder.encode(
+            SynaraAgentApprovalMatrixEvent(
+                body: "\(request.decision.displayName) agent action: \(request.action.title)",
+                action: SynaraAgentApprovalContent(
+                    version: 1,
+                    actionID: request.action.id,
+                    actionTitle: request.action.title,
+                    decision: request.decision,
+                    sourceEventID: request.sourceEventID,
+                    createdAt: Int(Date().timeIntervalSince1970 * 1000)
+                )
+            )
+        )
+
+        do {
+            let (_, response) = try await httpClient.data(for: urlRequest)
+            guard let http = response as? HTTPURLResponse,
+                  (200...299).contains(http.statusCode) else {
+                throw SynaraAgentApprovalError.failed
+            }
+        } catch let error as SynaraAgentApprovalError {
+            throw error
+        } catch {
+            throw SynaraAgentApprovalError.failed
+        }
+    }
+
+    private func sendURL(homeserverURL: URL, roomID: String, transactionID: String) -> URL {
+        var url = homeserverURL
+        url.appendPathComponent("_matrix")
+        url.appendPathComponent("client")
+        url.appendPathComponent("v3")
+        url.appendPathComponent("rooms")
+        url.appendPathComponent(roomID)
+        url.appendPathComponent("send")
+        url.appendPathComponent("m.room.message")
+        url.appendPathComponent(transactionID)
+        return url
+    }
+}
+
+final class MockAgentApprovalService: AgentApprovalServicing {
+    private(set) var submitted: [SynaraAgentApprovalRequest] = []
+    var error: SynaraAgentApprovalError?
+
+    init(error: SynaraAgentApprovalError? = nil) {
+        self.error = error
+    }
+
+    func submit(_ request: SynaraAgentApprovalRequest) async throws {
+        if let error {
+            throw error
+        }
+        submitted.append(request)
+    }
+}
+
+private struct SynaraAgentApprovalMatrixEvent: Encodable {
+    let msgtype = "m.notice"
+    let body: String
+    let action: SynaraAgentApprovalContent
+
+    enum CodingKeys: String, CodingKey {
+        case msgtype
+        case body
+        case action = "in.synara.agent.action"
+    }
+}
+
+private struct SynaraAgentApprovalContent: Encodable {
+    let version: Int
+    let actionID: String
+    let actionTitle: String
+    let decision: SynaraAgentApprovalDecision
+    let sourceEventID: String?
+    let createdAt: Int
+
+    enum CodingKeys: String, CodingKey {
+        case version
+        case actionID = "action_id"
+        case actionTitle = "action_title"
+        case decision
+        case sourceEventID = "source_event_id"
+        case createdAt = "created_at"
+    }
+}
+
+private extension SynaraAgentApprovalDecision {
+    var displayName: String {
+        switch self {
+        case .approve:
+            return "Approved"
+        case .reject:
+            return "Rejected"
+        }
     }
 }

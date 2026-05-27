@@ -42,6 +42,8 @@ type AgentActionKind =
   | 'prompt'
   | 'regenerate'
   | 'run'
+  | 'approve'
+  | 'reject'
   | 'open'
   | 'open_url';
 ```
@@ -79,10 +81,38 @@ Unsafe URLs reject the whole action.
 - `agent`, `continue`, `export`, `prompt`, `regenerate`, and `run`: allowed
   typed actions for higher-level agent workflows. They are forwarded or handled
   only by code that explicitly supports the kind.
+- `approve` and `reject`: platform may submit a controlled
+  `in.synara.agent.action` Matrix event in the same room after explicit user
+  activation. Platforms must not execute the underlying requested work locally.
 - Missing `kind` with a safe `url` is treated as an open-url action for current
   desktop compatibility.
 - Unknown `kind` values are rejected. Platforms must not infer behavior from
   unknown strings.
+
+## Approval Result Event
+
+Approve/reject actions persist as room events, not local-only client state. The
+iOS MVP sends an authenticated `m.room.message` event with `msgtype: m.notice`
+and a bounded `in.synara.agent.action` object:
+
+```json
+{
+  "msgtype": "m.notice",
+  "body": "Approved agent action: Deploy",
+  "in.synara.agent.action": {
+    "version": 1,
+    "action_id": "deploy",
+    "action_title": "Deploy",
+    "decision": "approve",
+    "source_event_id": "$source:example.org",
+    "created_at": 1770000000000
+  }
+}
+```
+
+`decision` is either `approve` or `reject`. Readers must ignore unsupported
+versions and must not treat the event as authorization to run arbitrary local
+commands.
 
 ## Security Rules
 

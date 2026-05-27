@@ -23,6 +23,10 @@ Human-readable inventory: [Synara Shared Contract Inventory](../synara-contracts
 - `synara-agent-action.schema.json`: canonical bounded agent action payload.
 - `fixtures/synara-agent-action.json`: valid, invalid, and normalization
   fixtures for agent actions.
+- `synara-agent-approval-action.schema.json`: canonical v1 approve/reject
+  result payload for `in.synara.agent.action`.
+- `fixtures/synara-agent-approval-action.json`: valid and invalid approval
+  result fixtures.
 - `synara-agent-card.schema.json`: canonical structured agent-card payload.
 - `fixtures/synara-agent-card.json`: valid, invalid, and runtime parsing
   fixtures for agent cards.
@@ -66,6 +70,7 @@ Human-readable inventory: [Synara Shared Contract Inventory](../synara-contracts
 | Contract                 | Desktop-runtime owner                    | iOS owner                       | Compatibility rule                                                               |
 | ------------------------ | ---------------------------------------- | ------------------------------- | -------------------------------------------------------------------------------- |
 | Agent action payloads    | `src/app/agents/agentActions.ts`         | Future native agent-card service | Writers emit bounded canonical payloads; readers validate and fail closed.       |
+| Agent approval results   | Future agent action bridge               | Native agent approval service     | Writers emit canonical v1 Matrix room events; readers ignore unsupported versions. |
 | Agent cards              | `src/app/utils/hermes.ts`                | Future native agent-card service | Explicit structured keys only; safe URLs and bounded sections.                   |
 | `in.synara.later`        | `src/app/utils/later.ts`                 | Future native Later service      | Writers emit canonical v1; readers normalize legacy v1.                          |
 | `in.synara.room_notes`   | `src/app/utils/roomNotes.ts`             | Future native room notes service | Writers emit canonical v1; readers normalize malformed or oversized items.       |

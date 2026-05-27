@@ -28,6 +28,8 @@
         "prompt",
         "regenerate",
         "run",
+        "approve",
+        "reject",
         "open",
         "open_url"
       ]

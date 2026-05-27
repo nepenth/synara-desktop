@@ -31,6 +31,7 @@ final class AppEnvironmentTests: XCTestCase {
         XCTAssertTrue(environment.later is MatrixAccountDataLaterService)
         XCTAssertTrue(environment.messageSender is MatrixRustSDKMessageSendService)
         XCTAssertTrue(environment.eventActions is MatrixEventActionService)
+        XCTAssertTrue(environment.agentApprovals is MatrixAgentApprovalService)
     }
 
     func testSettingsStorePersistsBooleansInMemory() {

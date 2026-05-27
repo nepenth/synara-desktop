@@ -18,6 +18,18 @@
       "title": "Continue",
       "kind": "continue",
       "prompt": "Continue from the latest safe checkpoint."
+    },
+    "approve": {
+      "id": "deploy",
+      "title": "Approve Deploy",
+      "kind": "approve",
+      "prompt": "Approve the requested deployment."
+    },
+    "reject": {
+      "id": "deploy",
+      "title": "Reject Deploy",
+      "kind": "reject",
+      "prompt": "Reject the requested deployment."
     }
   },
   "invalid": {
