@@ -62,7 +62,8 @@ final class SynaraUITests: XCTestCase {
         login(app: app)
 
         XCTAssertTrue(app.buttons["RoomRow-!project:matrix.org"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.buttons["RoomRow-!alice:matrix.org"].exists)
+        XCTAssertTrue(app.buttons["RoomRow-!general:matrix.org"].exists)
+        XCTAssertTrue(app.buttons["RoomRow-!agent-workflows:matrix.org"].exists)
     }
 
     func testRoomSearchFiltersByName() {
@@ -83,7 +84,7 @@ final class SynaraUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Project"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.scrollViews["TimelineList"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["LoadOlderTimelineButton"].exists)
-        XCTAssertTrue(app.staticTexts["Hello from iOS"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Here's the latest spec for the new permissions model. Hello from iOS"].waitForExistence(timeout: 5))
     }
 
     func testLargeRoomFixtureRendersAndScrolls() {
@@ -212,7 +213,7 @@ final class SynaraUITests: XCTestCase {
     func testAgentCardApproveActionShowsSubmittedState() {
         let app = launchAgentCardRoomApp()
 
-        XCTAssertTrue(app.staticTexts["Deployment Approval"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Deploy to Production"].waitForExistence(timeout: 5))
         tap(app.buttons["AgentCardAction-approve-deploy"])
 
         let alert = app.alerts["Agent Action"]
@@ -223,7 +224,7 @@ final class SynaraUITests: XCTestCase {
     func testAgentCardApprovalFailureIsVisibleAndRetryable() {
         let app = launchAgentCardRoomApp(approvalError: "failed")
 
-        XCTAssertTrue(app.staticTexts["Deployment Approval"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Deploy to Production"].waitForExistence(timeout: 5))
         tap(app.buttons["AgentCardAction-reject-deploy"])
 
         let alert = app.alerts["Agent Action"]
