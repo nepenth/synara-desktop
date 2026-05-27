@@ -10,6 +10,16 @@ struct LoginView: View {
     var body: some View {
         Form {
             Section {
+                SynaraProductHeader(
+                    title: "Welcome Back",
+                    subtitle: "Sign in to your Matrix homeserver to restore rooms, secure sessions, and agent workflows.",
+                    systemImage: "lock.shield"
+                )
+                .accessibilityIdentifier("LoginProductHeader")
+            }
+            .listRowBackground(Color.clear)
+
+            Section {
                 Text(homeserverURLString)
                     .font(SynaraTypography.supporting)
                     .foregroundStyle(SynaraColor.secondaryText)

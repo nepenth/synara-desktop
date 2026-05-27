@@ -3,8 +3,9 @@
 Reviewed: 2026-05-27
 
 Status: Phase 1 shell/foundation, Phase 2 auth/session/sync/room-list/logout,
-Phase 3 core messaging, Phase 5 agent workflows, and the Phase 6 internal
-settings/hardening pass are complete for the current native iOS MVP.
+Phase 3 core messaging, Phase 5 agent workflows, Phase 6 internal
+settings/hardening, and Phase 6.5 iOS UI modernization are complete for the
+current native iOS MVP.
 Deterministic simulator tests validate the mock path, and a gated live simulator
 smoke validates signed session restore, live room opening, composer send, and
 timeline update against a disposable test room.
@@ -61,7 +62,7 @@ xcodebuild -project Synara.xcodeproj -scheme Synara -configuration Debug \
 Results:
 
 - `SynaraTests`: 135 tests, 0 failures.
-- `SynaraUITests`: 22 tests, 0 failures, 2 skipped gated live-smoke tests.
+- `SynaraUITests`: 23 tests, 0 failures, 2 skipped gated live-smoke tests.
 
 Deterministic UI tests launch the app with `SYNARA_UI_TESTS=1`, which forces
 mock services instead of live Keychain, auth, and Matrix dependencies. The
@@ -191,6 +192,9 @@ The repeatable live-smoke checklist is
   returns to the signed-out shell.
 - Settings exposes account, notifications, appearance, security, About,
   Licenses, Privacy Policy, Support, and confirmed destructive logout flows.
+- Phase 6.5 UI modernization adds shared native design primitives, product
+  auth headers, modern room avatars/badges/search, grouped timeline message
+  bubbles, a stronger composer, and first-class agent action cards.
 - Phase 6 hardening artifacts now include accessibility, performance, privacy,
   security, and TestFlight readiness documents under `synara-ios/docs/`.
 - The app target includes a privacy manifest at

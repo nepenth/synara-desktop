@@ -1685,6 +1685,137 @@ Acceptance criteria:
 - Known issues list is explicit.
 - Legal and privacy gates are checked before external testers.
 
+## Phase 6.5: iOS Product Design And UI Modernization
+
+Goal: make the native iOS app feel like a polished, modern Matrix client with
+clear continuity to the desktop Synara runtime and interaction quality in the
+same class as contemporary iOS team-chat clients.
+
+Status: complete for the current native MVP. A generated visual reference
+mockup was used only for direction; no generated bitmap asset is shipped in the
+app.
+
+### IOS-0651: Design Direction And Native Component System
+
+Dependencies: IOS-0601, IOS-0602.
+
+Requirements:
+
+- Align visual language with desktop Synara: sober surfaces, compact hierarchy,
+  primary accent, clear warning/success/critical states, and practical density.
+- Keep iOS native structure: `TabView`, per-tab `NavigationStack`, native
+  search, native Forms/Lists where appropriate, and 44-point controls.
+- Introduce reusable primitives for avatars, badges, status chips, cards, and
+  icon controls.
+- Avoid marketing-style decoration, gradient-orb backgrounds, and non-native
+  controls.
+
+Deliverables:
+
+- Shared SwiftUI design primitives.
+- Design-system preview coverage.
+
+Acceptance criteria:
+
+- Room, timeline, composer, agent card, auth, and settings surfaces use shared
+  primitives rather than one-off styling.
+- Light/dark mode remains system-driven.
+- Dynamic Type and VoiceOver labels remain intact after modernization.
+
+### IOS-0652: Room List Modernization
+
+Dependencies: IOS-0651.
+
+Requirements:
+
+- Add native room search.
+- Render avatars, unread badges, mention/highlight state, last activity, and
+  invite treatment.
+- Preserve stable identifiers and 1,000-room fixture behavior.
+
+Deliverables:
+
+- Modern room list row and invite card.
+- UI tests for search and large-room scroll behavior.
+
+Acceptance criteria:
+
+- User can search by room name or preview.
+- Highlighted rooms are visually distinguishable without relying only on color.
+- 1,000-room fixture renders and scrolls.
+
+### IOS-0653: Timeline, Composer, And Agent Card Modernization
+
+Dependencies: IOS-0651.
+
+Requirements:
+
+- Render grouped timeline messages with sender-aware alignment, avatars,
+  timestamps, reactions, reply previews, and safe encrypted/unknown states.
+- Modernize composer with 44-point attachment/send controls, rounded input,
+  reply/edit banners, and disabled send state.
+- Make agent cards first-class: workflow header, status chip, clear approve,
+  reject, open, and copy affordances.
+
+Deliverables:
+
+- Modern timeline rows and composer.
+- Modern agent approval card layout.
+- UI tests for timeline/composer/agent action smoke and 10,000-event fixture.
+
+Acceptance criteria:
+
+- Existing timeline, send, media, and agent approval UI tests pass.
+- 10,000-event fixture renders and scrolls.
+- Agent actions remain allow-listed and safely routed.
+
+### IOS-0654: Auth, Settings, And Release Surface Polish
+
+Dependencies: IOS-0651, IOS-0601.
+
+Requirements:
+
+- Make login/homeserver screens feel product-grade without introducing a
+  marketing landing page.
+- Keep settings native and inspectable while aligning it to shared visual
+  primitives.
+- Preserve About, Licenses, Privacy, Support, and confirmed logout acceptance.
+
+Deliverables:
+
+- Product headers for auth.
+- Settings polish where it improves scanability without hiding release gates.
+
+Acceptance criteria:
+
+- Existing auth and settings UI tests pass.
+- Destructive logout remains confirmed.
+- Privacy/support/legal gates remain visible and explicit.
+
+### IOS-0655: Visual QA And Screenshot Readiness
+
+Dependencies: IOS-0652, IOS-0653, IOS-0654.
+
+Requirements:
+
+- Validate simulator build, deterministic unit tests, focused UI tests, and full
+  deterministic UI suite.
+- Capture or document visual reference states for room list, timeline, agent
+  card, settings, and auth.
+- Update validation docs with Phase 6.5 status.
+
+Deliverables:
+
+- Updated validation status.
+- Passing test evidence.
+
+Acceptance criteria:
+
+- Simulator build is clean.
+- Full unit test target passes.
+- Full deterministic UI suite passes or completes successfully in underlying
+  Xcode logs if the MCP response window times out.
+
 ## Phase 7: App Store Submission
 
 Goal: submit a legally cleared, privacy-reviewed, production-signed app.
