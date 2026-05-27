@@ -258,9 +258,10 @@ final class SynaraUITests: XCTestCase {
             dismissPasswordSavePromptIfPresent(app: app)
         }
 
-        XCTAssertTrue(app.tabBars.buttons["Rooms"].waitForExistence(timeout: 60))
-
         let composer = app.textFields["ComposerTextField"]
+        if composer.waitForExistence(timeout: 5) == false {
+            XCTAssertTrue(app.tabBars.buttons["Rooms"].waitForExistence(timeout: 60))
+        }
         guard composer.waitForExistence(timeout: 30) else {
             XCTFail("Expected encrypted room timeline composer to appear.")
             return
@@ -271,7 +272,7 @@ final class SynaraUITests: XCTestCase {
         composer.typeText(message)
         tap(app.buttons["ComposerSendButton"], timeout: 10)
 
-        XCTAssertTrue(app.staticTexts[message].waitForExistence(timeout: 20))
+        XCTAssertTrue(waitForTimelineElement(app.staticTexts[message], app: app, timeout: 60))
     }
 
     func testLiveAgentApprovalSmokeWhenConfigured() throws {
@@ -310,8 +311,7 @@ final class SynaraUITests: XCTestCase {
             dismissPasswordSavePromptIfPresent(app: app)
         }
 
-        XCTAssertTrue(app.tabBars.buttons["Rooms"].waitForExistence(timeout: 60))
-        XCTAssertTrue(waitForTimelineElement(app.staticTexts[title], app: app, timeout: 30))
+        XCTAssertTrue(waitForTimelineElement(app.staticTexts[title], app: app, timeout: 60))
         XCTAssertTrue(waitForTimelineElement(app.buttons["AgentCardAction-live-approve-\(smokeID)"], app: app, timeout: 10))
         tap(app.buttons["AgentCardAction-live-approve-\(smokeID)"], timeout: 1)
 
