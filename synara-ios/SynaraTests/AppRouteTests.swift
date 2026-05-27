@@ -40,6 +40,27 @@ final class AppRouteTests: XCTestCase {
         XCTAssertEqual(router.roomsPath, [.room(id: "!roomid:example.org", eventID: "$evt123", title: nil)])
     }
 
+    func testUniversalLinkRoutesRoomWithEventAnchor() throws {
+        let router = AppRouter()
+        let url = try XCTUnwrap(URL(string: "https://synara.app/r/%2Froom%2F!roomid%3Aexample.org%2F%24evt123"))
+        let opened = router.open(url: url)
+
+        XCTAssertTrue(opened)
+        XCTAssertEqual(router.selectedTab, .rooms)
+        XCTAssertEqual(router.roomsPath, [.room(id: "!roomid:example.org", eventID: "$evt123", title: nil)])
+    }
+
+    func testDeepLinkRejectsUnsafeSchemesAndHosts() throws {
+        let router = AppRouter()
+        let originalTab = router.selectedTab
+
+        XCTAssertFalse(router.open(url: try XCTUnwrap(URL(string: "https://settings"))))
+        XCTAssertFalse(router.open(url: try XCTUnwrap(URL(string: "https://evil.example/r/%2Fsettings"))))
+        XCTAssertFalse(router.open(url: try XCTUnwrap(URL(string: "http://synara.app/r/%2Fsettings"))))
+        XCTAssertEqual(router.selectedTab, originalTab)
+        XCTAssertTrue(router.settingsPath.isEmpty)
+    }
+
     func testDeepLinkRoutesNotificationsFallbackSurface() throws {
         let router = AppRouter()
         let url = try XCTUnwrap(URL(string: "synara://inbox/later"))

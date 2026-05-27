@@ -1528,6 +1528,12 @@ Goal: make the app reviewable, testable, and usable under real iOS conditions.
 
 Dependencies: IOS-0206, IOS-0401.
 
+Status: complete for the native MVP. Settings now expose account,
+notifications, appearance, security, About, Licenses, Privacy Policy, Support,
+and confirmed logout/wipe flows. UI coverage validates notification settings,
+release links, About metadata, license visibility, and destructive logout
+confirmation.
+
 Requirements:
 
 - Include account, notifications, appearance, security, about, licenses, privacy policy, support, and logout.
@@ -1547,6 +1553,11 @@ Acceptance criteria:
 ### IOS-0602: Accessibility Audit Pass
 
 Dependencies: IOS-0302, IOS-0303, IOS-0601.
+
+Status: initial MVP pass complete. Checklist:
+[`accessibility-checklist.md`](../../synara-ios/docs/accessibility-checklist.md).
+Physical-device VoiceOver and screenshot capture remain release-candidate
+gates before external TestFlight.
 
 Requirements:
 
@@ -1568,6 +1579,12 @@ Acceptance criteria:
 ### IOS-0603: Performance Profiling Pass
 
 Dependencies: IOS-0302, IOS-0303, IOS-0205.
+
+Status: initial fixture pass complete. Report:
+[`performance-report.md`](../../synara-ios/docs/performance-report.md).
+The app has deterministic 1,000-room and 10,000-event UI fixtures; Instruments
+traces remain a release-candidate gate once signing and device testing are
+available.
 
 Requirements:
 
@@ -1591,6 +1608,11 @@ Acceptance criteria:
 
 Dependencies: IOS-0404, IOS-0601.
 
+Status: draft complete for internal readiness. Inventory:
+[`privacy-data-inventory.md`](../../synara-ios/docs/privacy-data-inventory.md).
+The app target includes `PrivacyInfo.xcprivacy`; final privacy policy and App
+Privacy labels remain human/legal gates before external TestFlight.
+
 Requirements:
 
 - Identify data collected, data linked to user, tracking status, and third-party SDK data use.
@@ -1611,6 +1633,12 @@ Acceptance criteria:
 ### IOS-0605: Security Review
 
 Dependencies: IOS-0206, IOS-0405, IOS-0506.
+
+Status: initial MVP review complete. Report:
+[`security-review.md`](../../synara-ios/docs/security-review.md). App routing
+now rejects unsafe deep-link schemes/hosts, logs remain redacted by tests, and
+logout wipe/agent-action security paths are covered. Production E2EE remains a
+release-blocking SDK crypto integration gate.
 
 Requirements:
 
@@ -1633,6 +1661,11 @@ Acceptance criteria:
 ### IOS-0606: TestFlight Readiness
 
 Dependencies: IOS-0601, IOS-0602, IOS-0603, IOS-0604, IOS-0605.
+
+Status: internal-readiness draft complete. Checklist:
+[`testflight-readiness.md`](../../synara-ios/docs/testflight-readiness.md).
+Archive/upload cannot be completed autonomously until Apple Developer
+enrollment, signing, App Store Connect, privacy, and legal gates are closed.
 
 Requirements:
 

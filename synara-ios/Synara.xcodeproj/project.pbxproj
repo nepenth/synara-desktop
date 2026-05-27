@@ -40,6 +40,7 @@
 		969D33C61DAE6C1B12C9BCDB /* AgentActionResolverTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9DA6E8858D607B040754AF0E /* AgentActionResolverTests.swift */; };
 		97901F6C1B589C2271A4975D /* AuthServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 017B2EBED1FF4FF0EC25CB24 /* AuthServiceTests.swift */; };
 		9B792F2B4073B7792ED943D8 /* MediaService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3ECC92EE34CCE4DB57A5D3E /* MediaService.swift */; };
+		9D70F473C1C1E8971224F0B0 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 184EF5364268AFF19F35E66B /* PrivacyInfo.xcprivacy */; };
 		9DA561CC126EB87B8410D7C7 /* RootShellView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57076E7E82206F1492033846 /* RootShellView.swift */; };
 		9F74223A8F55C5CF1DBAE27B /* SynaraContracts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14082967A84F18C386D01EFB /* SynaraContracts.swift */; };
 		A4B52FFB382C8BD8FFFDF5F9 /* SecureSessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDD7517A55AC0E513E708AA0 /* SecureSessionStore.swift */; };
@@ -81,6 +82,7 @@
 		12329DB928DC3AB27731C926 /* HomeserverDiscoveryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeserverDiscoveryTests.swift; sourceTree = "<group>"; };
 		14082967A84F18C386D01EFB /* SynaraContracts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SynaraContracts.swift; sourceTree = "<group>"; };
 		15DF14E92067B54B5BF14404 /* LogRedactorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogRedactorTests.swift; sourceTree = "<group>"; };
+		184EF5364268AFF19F35E66B /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		1C0070A890F80B56DD756D02 /* SecureSessionStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecureSessionStoreTests.swift; sourceTree = "<group>"; };
 		2515972271FDB4E4717F0CEE /* LoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginView.swift; sourceTree = "<group>"; };
 		253AA6941119C1C9D4F2DE3D /* AppRoute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppRoute.swift; sourceTree = "<group>"; };
@@ -212,12 +214,21 @@
 			path = Services;
 			sourceTree = "<group>";
 		};
+		CBF0FE9D91C40CC8D2490302 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				184EF5364268AFF19F35E66B /* PrivacyInfo.xcprivacy */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
 		CE2F9B69EA02147F6C8247BF /* Synara */ = {
 			isa = PBXGroup;
 			children = (
 				F2EE5A0FC2E5D5F630BAB282 /* App */,
 				DE9CED84C138D15ADE1C5DB5 /* Contracts */,
 				206AF00355E9B840C00AD4A5 /* Features */,
+				CBF0FE9D91C40CC8D2490302 /* Resources */,
 				9BB7CAC1FBBBDFC5A77724A7 /* Services */,
 				3A4DA8BEFE5F5AF292A8D467 /* SharedUI */,
 			);
@@ -295,6 +306,7 @@
 			buildConfigurationList = DE554311BC15BC34BC44C0A8 /* Build configuration list for PBXNativeTarget "Synara" */;
 			buildPhases = (
 				3903FF6FE47F7C9A8662FA82 /* Sources */,
+				925A71237A3FBF2B91AD497D /* Resources */,
 				1A008702E0E402A2835D52D3 /* Frameworks */,
 			);
 			buildRules = (
@@ -371,6 +383,17 @@
 			);
 		};
 /* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		925A71237A3FBF2B91AD497D /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				9D70F473C1C1E8971224F0B0 /* PrivacyInfo.xcprivacy in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		1ABB881AA0E4E1DDECBC02E2 /* Sources */ = {
