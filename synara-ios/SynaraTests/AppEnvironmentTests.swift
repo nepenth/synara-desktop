@@ -17,6 +17,7 @@ final class AppEnvironmentTests: XCTestCase {
         let environment = AppEnvironment.live()
 
         XCTAssertTrue(environment.auth is MatrixPasswordAuthService)
+        XCTAssertTrue(environment.roomList is MatrixRoomListService)
     }
 
     func testSettingsStorePersistsBooleansInMemory() {
