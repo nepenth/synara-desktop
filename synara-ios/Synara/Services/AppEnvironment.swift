@@ -12,6 +12,11 @@ struct AppEnvironment {
     let roomList: RoomListServicing
     let wipe: LocalWiping
     let timeline: TimelineServicing
+    let messageSender: MessageSending
+    let drafts: DraftStore
+    let eventActions: EventActionServicing
+    let mediaLoader: MediaLoading
+    let mediaUploader: MediaUploading
 
     static func live() -> AppEnvironment {
         let logger = AppLogger()
@@ -38,7 +43,12 @@ struct AppEnvironment {
                 roomList: roomList,
                 push: push
             ),
-            timeline: MockTimelineService()
+            timeline: MockTimelineService(),
+            messageSender: MockMessageSendService(),
+            drafts: DraftStore(),
+            eventActions: MockEventActionService(),
+            mediaLoader: MockMediaLoader(),
+            mediaUploader: MockMediaUploadService()
         )
     }
 
@@ -51,7 +61,12 @@ struct AppEnvironment {
         push: PushServicing = MockPushService(),
         roomList: RoomListServicing = MockRoomListService(),
         wipe: LocalWiping? = nil,
-        timeline: TimelineServicing = MockTimelineService()
+        timeline: TimelineServicing = MockTimelineService(),
+        messageSender: MessageSending = MockMessageSendService(),
+        drafts: DraftStore = DraftStore(),
+        eventActions: EventActionServicing = MockEventActionService(),
+        mediaLoader: MediaLoading = MockMediaLoader(),
+        mediaUploader: MediaUploading = MockMediaUploadService()
     ) -> AppEnvironment {
         AppEnvironment(
             session: session,
@@ -69,7 +84,12 @@ struct AppEnvironment {
                 roomList: roomList,
                 push: push
             ),
-            timeline: timeline
+            timeline: timeline,
+            messageSender: messageSender,
+            drafts: drafts,
+            eventActions: eventActions,
+            mediaLoader: mediaLoader,
+            mediaUploader: mediaUploader
         )
     }
 }

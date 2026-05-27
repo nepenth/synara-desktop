@@ -3,7 +3,7 @@ import Foundation
 struct TimelineItem: Identifiable, Equatable {
     enum Kind: Equatable {
         case text(String)
-        case mediaPlaceholder(filename: String?)
+        case mediaPlaceholder(MediaResource)
         case redacted
         case unknown(type: String)
     }
@@ -15,6 +15,7 @@ struct TimelineItem: Identifiable, Equatable {
     let kind: Kind
     let replyToEventID: String?
     let isEdited: Bool
+    let reactions: [String: Int]
 }
 
 struct RawTimelineEvent: Equatable {
@@ -25,6 +26,7 @@ struct RawTimelineEvent: Equatable {
     let body: String?
     let replyToEventID: String?
     let isEdited: Bool
+    let mediaURL: URL?
 }
 
 protocol TimelineServicing {
@@ -44,7 +46,14 @@ enum TimelineMapper {
         case "m.room.redaction":
             kind = .redacted
         case "m.room.media":
-            kind = .mediaPlaceholder(filename: event.body)
+            kind = .mediaPlaceholder(
+                MediaResource(
+                    id: event.eventID,
+                    filename: event.body ?? "Attachment",
+                    authenticatedURL: event.mediaURL,
+                    requiresAuthentication: true
+                )
+            )
         default:
             kind = .unknown(type: event.type)
         }
@@ -56,7 +65,8 @@ enum TimelineMapper {
             timestamp: event.timestamp,
             kind: kind,
             replyToEventID: event.replyToEventID,
-            isEdited: event.isEdited
+            isEdited: event.isEdited,
+            reactions: [:]
         )
     }
 }
@@ -73,7 +83,8 @@ enum TimelineFixtures {
                 type: "m.room.message",
                 body: "Hello from iOS",
                 replyToEventID: nil,
-                isEdited: false
+                isEdited: false,
+                mediaURL: nil
             ),
             RawTimelineEvent(
                 eventID: "$reply:\(roomID)",
@@ -82,7 +93,18 @@ enum TimelineFixtures {
                 type: "m.room.message",
                 body: "Reply body",
                 replyToEventID: "$text:\(roomID)",
-                isEdited: true
+                isEdited: true,
+                mediaURL: nil
+            ),
+            RawTimelineEvent(
+                eventID: "$media:\(roomID)",
+                senderID: "@alice:matrix.org",
+                timestamp: baseDate.addingTimeInterval(45),
+                type: "m.room.media",
+                body: "photo.jpg",
+                replyToEventID: nil,
+                isEdited: false,
+                mediaURL: URL(string: "mxc://matrix.org/media-id")
             ),
             RawTimelineEvent(
                 eventID: "$unknown:\(roomID)",
@@ -91,9 +113,31 @@ enum TimelineFixtures {
                 type: "synara.agent.card",
                 body: nil,
                 replyToEventID: nil,
-                isEdited: false
+                isEdited: false,
+                mediaURL: nil
             )
         ]
+    }
+
+    static func largeTimeline(count: Int = 10_000) -> [TimelineItem] {
+        var items: [TimelineItem] = []
+        items.reserveCapacity(count)
+
+        for index in 0..<count {
+            let item = TimelineItem(
+                id: "$synthetic-\(index):matrix.org",
+                eventID: "$synthetic-\(index):matrix.org",
+                senderID: index % 2 == 0 ? "@alice:matrix.org" : "@bob:matrix.org",
+                timestamp: baseDate.addingTimeInterval(TimeInterval(index)),
+                kind: .text("Synthetic message \(index)"),
+                replyToEventID: nil,
+                isEdited: false,
+                reactions: [:]
+            )
+            items.append(item)
+        }
+
+        return items
     }
 }
 
