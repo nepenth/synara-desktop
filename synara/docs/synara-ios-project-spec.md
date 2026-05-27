@@ -1392,7 +1392,8 @@ Acceptance criteria:
 
 Dependencies: IOS-0502, IOS-0204.
 
-Status: in implementation.
+Status: implemented in native service, Later tab UI, navigation handling, and UI
+acceptance tests.
 
 Requirements:
 
@@ -1413,6 +1414,8 @@ Implementation notes:
   for account-data Later loading.
 - `synara-ios/SynaraTests/AppEnvironmentTests.swift` validates service wiring for
   both live and mock environments.
+- `synara-ios/SynaraUITests/SynaraUITests.swift` validates active/completed
+  rendering, unavailable destinations, and room/event navigation from Later rows.
 
 Deliverables:
 
@@ -1433,7 +1436,9 @@ Dependencies: IOS-0301, IOS-0502.
 Status: implemented in native timeline parser and row renderer. `TimelineService` now
 parses structured Hermes payloads from configured keys and explicit body markers,
 maps them into `.agentCard`, and `RoomTimelineView` renders title/status/summary
-with bounded action affordances.
+with bounded action affordances. The SDK-backed live timeline path merges raw
+Synara agent-card events from the Client-Server API when the Matrix Rust SDK does
+not expose custom content in timeline items.
 
 Requirements:
 
@@ -1482,9 +1487,10 @@ Acceptance criteria:
 
 Dependencies: IOS-0505, IOS-0303.
 
-Status: initial implementation complete for iOS Matrix event persistence. The app
-now maps approve/reject actions to authenticated `m.room.message` sends carrying
-`in.synara.agent.action`; live agent-room smoke remains pending.
+Status: complete for Phase 5. The app maps approve/reject actions to
+authenticated `m.room.message` sends carrying `in.synara.agent.action`, and the
+gated live simulator smoke has validated approve persistence in the dedicated
+Matrix test room.
 
 Requirements:
 Note: approval persistence is intentionally limited to a controlled Matrix event
@@ -1500,7 +1506,7 @@ Next implementation slices:
 - Wire Matrix send path for approve/reject actions to a controlled, authenticated endpoint. Complete.
 - Return explicit retryable errors for unsupported action outcomes. Complete.
 - Add unit tests for approval action execution, including blocked/error states. Complete.
-- Add live smoke validation in a dedicated approval test room.
+- Add live smoke validation in a dedicated approval test room. Complete.
 
 Deliverables:
 

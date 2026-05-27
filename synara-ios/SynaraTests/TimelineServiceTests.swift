@@ -229,6 +229,78 @@ final class TimelineServiceTests: XCTestCase {
         XCTAssertEqual(card.actions.first?.id, "continue")
     }
 
+    func testAgentCardPayloadParserReadsHermesJSONMessageBody() throws {
+        let body = #"""
+        {
+          "hermes": true,
+          "payload": {
+            "title": "Approval required",
+            "status": "pending",
+            "summary": "Review the proposed action.",
+            "actions": [
+              {
+                "id": "approve",
+                "title": "Approve",
+                "kind": "approve",
+                "prompt": "approve request"
+              }
+            ]
+          }
+        }
+        """#
+
+        let card = try XCTUnwrap(SynaraAgentCardPayloadParser.parse(body: body))
+
+        XCTAssertEqual(card.title, "Approval required")
+        XCTAssertEqual(card.status, "pending")
+        XCTAssertEqual(card.actions.first?.id, "approve")
+        XCTAssertEqual(card.actions.first?.kind, "approve")
+    }
+
+    func testSDKTimelineMergePrefersRawAgentCardFallbackForSameEvent() throws {
+        let card = try SynaraAgentCard(
+            title: "Approval required",
+            status: "pending",
+            summary: "Review this action.",
+            actions: [
+                try SynaraAgentCardAction(
+                    id: "approve",
+                    title: "Approve",
+                    kind: "approve",
+                    prompt: "approve request"
+                )
+            ]
+        )
+        let sdkItem = TimelineItem(
+            id: "$agent",
+            eventID: "$agent",
+            senderID: "@agent:matrix.org",
+            timestamp: TimelineFixtures.baseDate,
+            kind: .text("{\"hermes\":true}"),
+            replyToEventID: nil,
+            isEdited: false,
+            reactions: [:]
+        )
+        let rawAgentItem = TimelineItem(
+            id: "$agent",
+            eventID: "$agent",
+            senderID: "@agent:matrix.org",
+            timestamp: TimelineFixtures.baseDate,
+            kind: .agentCard(card),
+            replyToEventID: nil,
+            isEdited: false,
+            reactions: [:]
+        )
+
+        let merged = MatrixRustSDKTimelineService.mergedTimelineItems(
+            sdkItems: [sdkItem],
+            rawAgentItems: [rawAgentItem]
+        )
+
+        XCTAssertEqual(merged.count, 1)
+        XCTAssertEqual(merged.first?.kind, .agentCard(card))
+    }
+
     func testMapperMapsAgentCardKind() {
         let card = try! SynaraAgentCard(
             title: "Agent summary",
