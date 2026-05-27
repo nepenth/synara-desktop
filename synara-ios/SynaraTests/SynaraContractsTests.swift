@@ -89,6 +89,16 @@ final class SynaraContractsTests: XCTestCase {
         ))
     }
 
+    func testRejectsOversizedAgentCardActionPrompt() {
+        let hugePrompt = String(repeating: "p", count: 5_001)
+        XCTAssertThrowsError(try SynaraAgentCardAction(
+            id: "oversize",
+            title: "Oversize",
+            kind: "copy_prompt",
+            prompt: hugePrompt
+        ))
+    }
+
     func testRejectsInvalidAgentCardWithoutContent() {
         XCTAssertThrowsError(try JSONDecoder().decode(SynaraAgentCard.self, from: invalidAgentCardMissingContentJSON.data(using: .utf8)!))
     }
