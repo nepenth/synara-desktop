@@ -1099,29 +1099,79 @@ Acceptance criteria:
 
 Dependencies: IOS-0302, IOS-0303, IOS-0305.
 
-Status: Phase 3 boundary complete in
+Status: Phase 3 REST boundary and SDK live E2EE probe complete in
 [`synara-ios/docs/e2ee-validation.md`](../../synara-ios/docs/e2ee-validation.md).
 The current REST-backed MVP detects encrypted events and renders safe
-unavailable placeholders. Production encrypted send/receive/decrypt/recovery is
-not complete and is explicitly blocked on Matrix Rust SDK crypto integration
-before TestFlight or App Store release.
+unavailable placeholders. The Matrix Rust SDK probe validates disposable
+encrypted-room login, crypto initialization, encrypted room state, encrypted
+timeline pagination, encrypted send acceptance, and zero UTD callbacks in the
+observed timeline window. Production encrypted send/receive/decrypt/recovery is
+not complete in the app itself and is explicitly blocked on Matrix Rust SDK app
+service integration before TestFlight or App Store release.
 
 Requirements:
 
 - Validate reading and sending in encrypted rooms.
 - Identify key backup, verification, or cross-signing limitations.
 - Document unsupported E2EE states.
+- Define the SDK-backed app service integration work needed before external
+  release.
 
 Deliverables:
 
 - E2EE validation report.
 - Bug backlog for missing SDK flows.
+- SDK live probe under `synara-ios/spikes/matrix-sdk-probe`.
 
 Acceptance criteria:
 
-- Test encrypted room can receive and send messages.
-- Decryption failure renders a safe, understandable placeholder.
+- SDK live probe can authenticate, identify an encrypted room, observe timeline
+  events, and send an encrypted message with disposable credentials.
+- Current REST app decryption failure renders a safe, understandable
+  placeholder.
 - The report identifies what is required for production-grade recovery and verification.
+
+### IOS-0308: Matrix Rust SDK App E2EE Integration
+
+Dependencies: IOS-0203, IOS-0204, IOS-0301, IOS-0303, IOS-0307.
+
+Status: planned before external TestFlight/App Store release. This can proceed
+after Phase 4 local push work if needed, but release cannot claim encrypted-room
+support until this item is complete.
+
+Requirements:
+
+- Add the Matrix Rust SDK Swift package to the app target.
+- Introduce a `SynaraMatrix` app-owned wrapper around SDK auth, session restore,
+  room list, room timeline, send, media, and crypto-state APIs.
+- Move password login/session restore from the REST-backed implementation to
+  SDK-backed services without logging credentials or tokens.
+- Store app-owned session metadata in Keychain and SDK state in SDK-approved
+  persistent storage.
+- Initialize SDK crypto before room sync and timeline rendering.
+- Map decrypted SDK timeline events into existing `TimelineService` models.
+- Preserve safe placeholders and disabled event actions for UTD or unsupported
+  encrypted states.
+- Send encrypted text messages through SDK timeline APIs.
+- Add gated live simulator validation for encrypted and unencrypted rooms.
+
+Deliverables:
+
+- SDK-backed Matrix service implementation.
+- Unit tests for mapping decrypted, UTD, and unsupported encrypted timeline
+  states.
+- Gated live simulator smoke for encrypted room open and encrypted message send.
+- Updated E2EE validation report with recovery, verification, key backup, and
+  encrypted media status.
+
+Acceptance criteria:
+
+- Existing unencrypted live-smoke flows still pass.
+- Encrypted-room timeline renders decrypted text events from the SDK path.
+- Encrypted-room composer sends a text message that appears in the room.
+- UTD events never render as plaintext and never enable reply/edit/redact/react.
+- No credentials, access tokens, refresh tokens, recovery keys, or room keys are
+  printed or committed.
 
 ## Phase 4: Push, Badge, And Deep Links
 
