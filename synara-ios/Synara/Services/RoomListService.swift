@@ -29,7 +29,11 @@ protocol RoomListServicing: AnyObject {
 }
 
 enum RoomListFixtures {
-    static let now = Date(timeIntervalSince1970: 1_700_000_000)
+    private static let baseTimestamp: TimeInterval = 1_700_000_000
+
+    static var now: Date {
+        Date(timeIntervalSince1970: baseTimestamp)
+    }
 
     static func small() -> [RoomSummary] {
         [
@@ -55,28 +59,35 @@ enum RoomListFixtures {
     }
 
     static func large(count: Int = 1_000) -> [RoomSummary] {
-        (0..<count).map { index in
-            RoomSummary(
+        var rooms: [RoomSummary] = []
+        rooms.reserveCapacity(count)
+
+        for index in 0..<count {
+            let kind: RoomSummary.RoomKind = index % 5 == 0 ? .directMessage : .room
+            let room = RoomSummary(
                 id: "!room-\(index):matrix.org",
                 name: "Room \(index)",
                 lastMessagePreview: "Message \(index)",
                 unreadCount: index % 7,
                 hasHighlight: index % 23 == 0,
-                kind: index % 5 == 0 ? .directMessage : .room,
+                kind: kind,
                 lastActivityAt: now.addingTimeInterval(TimeInterval(-index))
             )
+            rooms.append(room)
         }
+
+        return rooms
     }
 
     static func sorted(_ rooms: [RoomSummary]) -> [RoomSummary] {
-        rooms.sorted {
-            if $0.hasHighlight != $1.hasHighlight {
-                return $0.hasHighlight
+        rooms.sorted { lhs, rhs in
+            if lhs.hasHighlight != rhs.hasHighlight {
+                return lhs.hasHighlight
             }
-            if $0.unreadCount != $1.unreadCount {
-                return $0.unreadCount > $1.unreadCount
+            if lhs.unreadCount != rhs.unreadCount {
+                return lhs.unreadCount > rhs.unreadCount
             }
-            return $0.lastActivityAt > $1.lastActivityAt
+            return lhs.lastActivityAt > rhs.lastActivityAt
         }
     }
 }
