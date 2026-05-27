@@ -3,10 +3,12 @@ import SwiftUI
 struct RootShellView: View {
     let environment: AppEnvironment
     @ObservedObject private var router: AppRouter
+    @ObservedObject private var session: AppSessionStore
 
     init(environment: AppEnvironment = .mock()) {
         self.environment = environment
         self.router = environment.router
+        self.session = environment.session
     }
 
     var body: some View {
@@ -23,7 +25,7 @@ struct RootShellView: View {
 
     @ViewBuilder
     private var content: some View {
-        switch environment.session.currentState {
+        switch session.currentState {
         case .signedOut:
             signedOutShell
         case .signedIn:
