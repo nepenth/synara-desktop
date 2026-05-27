@@ -73,10 +73,18 @@ struct LoginView: View {
             do {
                 let session = try await environment.auth.login(request)
                 await MainActor.run {
-                    state = .authenticated
-                    environment.session.completeLogin(session)
-                    environment.router.resetForAccountChange()
-                    environment.logger.info("Password login succeeded", category: .auth)
+                    do {
+                        try environment.session.completeLogin(session)
+                        state = .authenticated
+                        environment.router.resetForAccountChange()
+                        environment.logger.info("Password login succeeded", category: .auth)
+                        Task {
+                            await environment.matrix.start(session: session)
+                        }
+                    } catch {
+                        state = .failed(LoginError.sessionPersistenceFailed.localizedDescription)
+                        environment.logger.error("Password login failed: session persistence failed", category: .auth)
+                    }
                 }
             } catch let error as LoginError {
                 await MainActor.run {

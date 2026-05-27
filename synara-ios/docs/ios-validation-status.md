@@ -2,8 +2,9 @@
 
 Reviewed: 2026-05-26
 
-Status: Phase 1 shell/foundation, Phase 2 homeserver selection, and Phase 2
-login flow are build-validated; simulator runtime execution pending.
+Status: Phase 1 shell/foundation, Phase 2 auth/session/sync/room-list/logout
+work, and Phase 3 timeline service scaffolding are build-validated; simulator
+runtime execution pending.
 
 ## Project Shape
 
@@ -88,3 +89,21 @@ usable simulator runtimes and UI tests cannot execute.
   state transitions.
 - UI tests cover missing-credential errors and successful mock login once
   simulator execution works.
+- Secure session storage supports save, load, delete, corrupt-entry handling,
+  and legacy envelope migration through the app session store contract.
+- Login saves sessions through secure storage before transitioning to the
+  signed-in shell.
+- Matrix lifecycle service exposes stopped, starting, syncing, and failed sync
+  states, with explicit start, stop, and local-reset hooks.
+- Room list service renders loading, empty, failed, and loaded states with
+  stable room IDs, unread counts, highlight state, and 1,000-room fixtures.
+- Settings exposes logout through a local wipe service that stops sync, clears
+  cached rooms, clears push registration state, deletes the secure session, and
+  returns to the signed-out shell.
+- Timeline service scaffolding normalizes raw events into stable timeline item
+  models for text, media placeholders, redactions, unknown events, replies, and
+  edits.
+- Unit tests cover secure session storage, Matrix lifecycle, room sorting and
+  unread mapping, local wipe behavior, and timeline mapping.
+- UI tests cover opening a room from the room list and logout return to the
+  homeserver selection shell once simulator execution works.
