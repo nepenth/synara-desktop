@@ -608,6 +608,19 @@ private struct RoomDetailsView: View {
                     }
                 }
 
+                if let powerLevels = details?.powerLevels {
+                    Section("Permissions") {
+                        SettingsInfo(title: "Your level", value: "\(powerLevels.ownUserLevel)")
+                        PermissionInfo(title: "Send messages", threshold: powerLevels.eventsDefault, allowed: true)
+                        PermissionInfo(title: "Invite users", threshold: powerLevels.invite, allowed: powerLevels.canInvite)
+                        PermissionInfo(title: "Change name", threshold: powerLevels.roomName, allowed: powerLevels.canEditName)
+                        PermissionInfo(title: "Change topic", threshold: powerLevels.roomTopic, allowed: powerLevels.canEditTopic)
+                        PermissionInfo(title: "Change avatar", threshold: powerLevels.roomAvatar, allowed: powerLevels.canEditAvatar)
+                        PermissionInfo(title: "Moderate", threshold: powerLevels.kick, allowed: powerLevels.canKick || powerLevels.canBan || powerLevels.canRedactOther)
+                    }
+                    .accessibilityIdentifier("RoomPermissionsSection")
+                }
+
                 Section("Notifications") {
                     Picker("Mode", selection: $notificationMode) {
                         ForEach(SynaraRoomNotificationMode.allCases) { mode in
@@ -794,6 +807,34 @@ private struct RoomDetailsView: View {
                 }
             }
         }
+    }
+}
+
+private struct PermissionInfo: View {
+    let title: String
+    let threshold: Int64
+    let allowed: Bool
+
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
+                Text(title)
+                    .font(SynaraTypography.body)
+                    .foregroundStyle(SynaraColor.primaryText)
+                Text("Requires \(threshold)")
+                    .font(.caption)
+                    .foregroundStyle(SynaraColor.secondaryText)
+            }
+
+            Spacer()
+
+            SynaraStatusChip(
+                title: allowed ? "Allowed" : "Restricted",
+                tint: allowed ? SynaraColor.success : SynaraColor.warning,
+                systemImage: allowed ? "checkmark.circle" : "lock"
+            )
+        }
+        .accessibilityElement(children: .combine)
     }
 }
 

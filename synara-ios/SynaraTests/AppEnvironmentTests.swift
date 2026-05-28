@@ -73,6 +73,8 @@ final class AppEnvironmentTests: XCTestCase {
         XCTAssertEqual(details?.topic, "Operational response")
         XCTAssertEqual(details?.isEncrypted, true)
         XCTAssertEqual(details?.isPublic, false)
+        XCTAssertEqual(details?.powerLevels?.ownUserLevel, 100)
+        XCTAssertEqual(details?.powerLevels?.canEditTopic, true)
     }
 
     func testMockRoomManagementValidatesMatrixIDs() async throws {

@@ -1882,9 +1882,12 @@ Implemented in this slice:
 - Permission-aware room name/topic editing backed by Matrix Rust SDK
   `Room.setName` and `Room.setTopic` where room power levels allow those state
   events.
+- Read-only permissions summary showing current user level, Matrix threshold
+  levels, and allowed/restricted state for message, invite, room profile, and
+  moderation actions.
 - Deterministic unit/UI tests for mock create-room validation, Matrix ID
-  validation, room-management sheet, room profile editing, room details, and
-  leave navigation.
+  validation, room-management sheet, room profile editing, room permissions,
+  room details, and leave navigation.
 - Gated live room-management smoke for private encrypted room creation, room
   details read, optional invite, leave, and room-list recovery.
 
@@ -1895,7 +1898,8 @@ Remaining Phase 8 work:
 - Public-room discovery UI beyond direct join by alias/ID.
 - Spaces navigation and room-list filtering by space.
 - Room profile editing for avatar/aliases where permissions allow.
-- Power-level editing only after safe write semantics are specified.
+- Power-level editing only after safe write semantics are specified; read-only
+  power-level visibility is implemented.
 
 ## Final Release Phase: App Store Submission
 

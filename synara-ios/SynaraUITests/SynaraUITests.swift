@@ -110,6 +110,8 @@ final class SynaraUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Room ID"].exists)
         XCTAssertTrue(app.staticTexts["Encryption"].exists)
         XCTAssertTrue(app.staticTexts["Members"].exists)
+        XCTAssertTrue(revealRoomDetailsElement(app.staticTexts["Your level"], app: app, timeout: 5))
+        XCTAssertTrue(revealRoomDetailsElement(app.staticTexts["Change topic"], app: app, timeout: 5))
 
         app.textFields["RoomInviteUserField"].tap()
         app.textFields["RoomInviteUserField"].typeText("@newuser:matrix.org")
