@@ -5,10 +5,12 @@ Reviewed: 2026-05-27
 Status: Phase 1 shell/foundation, Phase 2 auth/session/sync/room-list/logout,
 Phase 3 core messaging, Phase 5 agent workflows, Phase 6 internal
 settings/hardening, Phase 6.5 iOS UI modernization, and Phase 6.6 mockup
-fidelity are complete for the current native iOS MVP.
+fidelity are complete for the current native iOS MVP. Phase 7 production E2EE
+first slice is complete for app-level encrypted room open/send/relaunch restore,
+crypto status UI, and conservative recovery controls.
 Deterministic simulator tests validate the mock path, and a gated live simulator
 smoke validates signed session restore, live room opening, composer send, and
-timeline update against a disposable test room.
+timeline update against disposable encrypted and unencrypted test rooms.
 
 Phase 4 push completion is partly complete: notification permission, APNs token
 capture, pusher registration flow, deep-link routing, and badge parsing are
@@ -61,8 +63,8 @@ xcodebuild -project Synara.xcodeproj -scheme Synara -configuration Debug \
 
 Results:
 
-- `SynaraTests`: 135 tests, 0 failures.
-- `SynaraUITests`: 23 tests, 0 failures, 2 skipped gated live-smoke tests.
+- `SynaraTests`: 72 tests, 0 failures.
+- `SynaraUITests`: 26 tests, 0 failures, 3 skipped gated live-smoke tests.
 
 Deterministic UI tests launch the app with `SYNARA_UI_TESTS=1`, which forces
 mock services instead of live Keychain, auth, and Matrix dependencies. The
@@ -89,12 +91,21 @@ Findings are tracked in ordered implementation items in
 - XcodeBuildMCP screenshot capture works, but its live accessibility hierarchy
   snapshot can still return an empty app tree. The canonical automation path is
   XCTest accessibility, which is passing.
-- Current REST messaging safely renders encrypted events as unavailable
-  placeholders. A Matrix Rust SDK live probe validates encrypted-room login,
-  crypto initialization, encrypted timeline pagination, encrypted send
-  acceptance, and zero UTD callbacks in the observed window. Production E2EE
-  remains blocked until the app services move onto the SDK crypto path before
-  external TestFlight/App Store release.
+- Matrix Rust SDK app services now render decrypted encrypted-room messages when
+  keys are available and preserve safe unavailable placeholders for UTD states.
+  The app surfaces encrypted-room/session crypto status in room headers and
+  Settings, including unverified device, key backup, recovery, and decryption
+  issue states.
+- A Matrix Rust SDK live probe validates encrypted-room login, crypto
+  initialization, encrypted timeline pagination, encrypted send acceptance, and
+  zero UTD callbacks in the observed window.
+- The gated `testLiveEncryptedRoomSmokeWhenConfigured` simulator test validates
+  app-level encrypted room open, composer send, relaunch restore, and no visible
+  undecrypted placeholder on the smoke path against the disposable encrypted
+  test room.
+- Production E2EE remains blocked until full recovery, verification/cross-
+  signing, key backup restore, encrypted media, and broader encrypted-room
+  regression coverage are complete before external TestFlight/App Store release.
 
 The repeatable live-smoke checklist is
 [`synara-ios/docs/live-simulator-smoke.md`](live-simulator-smoke.md).
@@ -192,6 +203,9 @@ The repeatable live-smoke checklist is
   returns to the signed-out shell.
 - Settings exposes account, notifications, appearance, security, About,
   Licenses, Privacy Policy, Support, and confirmed destructive logout flows.
+- Settings exposes crypto verification, recovery, key backup, decryption issue
+  status, SDK-backed device verification request, and recovery-key submission
+  controls.
 - Phase 6.5 UI modernization adds shared native design primitives, product
   auth headers, modern room avatars/badges/search, grouped timeline message
   bubbles, a stronger composer, and first-class agent action cards.
@@ -212,6 +226,9 @@ The repeatable live-smoke checklist is
 - Room timeline screen renders lazy rows with sender labels, reply/edit states,
   redactions, unknown event placeholders, media placeholders, and reaction
   summaries.
+- Room timeline headers render encrypted-room crypto status, and encrypted
+  timelines show conservative recovery UI with retry and Settings navigation
+  when keys or recovery need attention.
 - Composer MVP supports multiline text input, empty-message guarding, local
   echo, send failure messaging, and per-room draft preservation.
 - Event action service and context menu support reply, edit, redact, and react

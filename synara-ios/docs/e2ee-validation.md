@@ -2,31 +2,41 @@
 
 Reviewed: 2026-05-27
 
-Status: Matrix Rust SDK live E2EE probe validated against a disposable
-encrypted room, and the iOS app target now builds with SDK-backed auth, session
-restore, room list, timeline, and send service adapters. Production E2EE is
-still not release-complete until app-level live encrypted-room validation,
-recovery, verification, key backup, and encrypted media are completed.
+Status: Matrix Rust SDK live E2EE probe and app-level live encrypted-room UI
+smoke validated against a disposable encrypted room. The iOS app target now
+builds with SDK-backed auth, session restore, room list, timeline, send, crypto
+status, recovery, and verification-request service adapters. Production E2EE is
+still not release-complete until full recovery/verification flows, key backup
+restore UX, encrypted media, and broader encrypted-room regression coverage are
+completed.
 
 ## Current Behavior
 
 - App login/session restore, room list, timeline pagination, and message send
   are wired through the Matrix Rust SDK service boundary.
-- `m.room.encrypted` and UTD states are still mapped defensively.
+- Decrypted SDK timeline content renders normally when keys are available.
+- `m.room.encrypted` and UTD states are still mapped defensively when keys are
+  unavailable.
 - Encrypted events render as a safe unavailable-message placeholder when the SDK
   cannot decrypt or the app does not yet support that event surface.
 - Reply, edit, redact, and reaction actions are disabled for encrypted
   placeholders so the app does not pretend to act on undecrypted content.
-- Unit tests cover encrypted placeholder mapping and action availability.
+- Timeline headers and Settings now surface room/session crypto state:
+  encrypted, unverified, key backup unavailable, recovery needed, and
+  unable-to-decrypt counts.
+- Settings exposes SDK-backed device verification request and recovery-key
+  submission actions. Recovery keys are used only for the request and are not
+  stored by Synara.
+- Unit/UI tests cover encrypted placeholder mapping, crypto-status
+  presentation, recovery-state decisions, recovery controls, and action
+  availability.
 
 ## Not Yet Supported
 
-- Key backup restore.
-- Device verification and cross-signing.
-- Recovery from undecryptable history.
+- Complete key backup restore UX.
+- Complete device verification and cross-signing UX.
+- Complete recovery from undecryptable history.
 - Encrypted media decryption.
-- Gated app-level live simulator E2EE smoke is not yet passing because room-list
-  selection/routing does not reach the timeline reliably under UI automation.
 
 These unsupported items describe the remaining release blockers. The SDK probe
 below proves the pinned Matrix Rust SDK Swift package can perform the underlying
@@ -66,6 +76,36 @@ also matches joined or invited rooms by room id, canonical alias, alternative
 alias, and display name/local alias. This reflects the likely production need to
 handle encrypted private rooms that do not publish room aliases.
 
+## App-Level Live E2EE Smoke
+
+Date: 2026-05-27.
+
+Gated XCTest:
+`SynaraUITests/SynaraUITests/testLiveEncryptedRoomSmokeWhenConfigured`.
+
+Environment contract:
+
+```sh
+SYNARA_LIVE_E2EE_SMOKE=1
+SYNARA_LIVE_HOMESERVER=<test homeserver>
+SYNARA_LIVE_USERNAME=<test username>
+SYNARA_LIVE_PASSWORD=<test password>
+SYNARA_LIVE_E2EE_ROOM_ID=<encrypted room id>
+```
+
+Validation result:
+
+- App launched with a clean local session and SDK store.
+- Password login succeeded through the app UI.
+- The encrypted room opened directly through the live route hook.
+- Composer became available in the encrypted room.
+- Room header surfaced an app-visible crypto status.
+- Sending from the composer created a visible encrypted-room message.
+- Relaunch without resetting local state restored session/crypto state and
+  re-opened the room without re-login.
+- The sent message rendered after relaunch.
+- No visible undecrypted placeholder appeared on the smoke path.
+
 ## Required Production Work
 
 1. Matrix Rust SDK Swift package integration to the app target. Done.
@@ -81,18 +121,22 @@ handle encrypted private rooms that do not publish room aliases.
 6. Replace encrypted placeholders with decrypted SDK timeline content when
    available, while preserving safe placeholders for UTD states.
 7. Send encrypted text messages through SDK timeline APIs. Implemented in the
-   SDK-backed message sender; app-level live validation is still pending.
+   SDK-backed message sender; app-level live validation now passes.
 8. Validate encrypted room sync and send through a gated simulator smoke using a
-   disposable encrypted test room. Blocked on the UI routing issue above.
+   disposable encrypted test room. Done for open, send, relaunch restore, and
+   visible no-UTD smoke path.
 9. Add recovery, verification, and key-backup UX or explicitly block release
-   until a conservative minimum is implemented.
+   until a conservative minimum is implemented. First conservative UI is in
+   place; full verification/recovery flows remain release blockers.
 10. Add encrypted media decryption/download before claiming media parity in
     encrypted rooms.
 11. Re-run live-smoke flows in encrypted and unencrypted rooms.
 
 ## Acceptance Gate
 
-Phase 3 plus the SDK-backed app integration build gate are complete enough to
-continue Phase 4 local work. External TestFlight and App Store release remain
-blocked until the app-level encrypted-room live smoke passes and recovery,
-verification, key backup, and encrypted media requirements are closed.
+The first Phase 7 production E2EE slice is validated: app-level encrypted room
+open, send, relaunch restore, crypto status UI, conservative recovery UI, and
+safe UTD handling are implemented and tested. External TestFlight and App Store
+release remain blocked until complete recovery, verification/cross-signing, key
+backup restore, encrypted media, and broader encrypted-room regression
+requirements are closed.

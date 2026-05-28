@@ -382,7 +382,10 @@ final class TimelineServiceTests: XCTestCase {
             mediaURL: nil
         )
 
-        XCTAssertEqual(TimelineMapper.map(event).kind, .encryptedPlaceholder)
+        let item = TimelineMapper.map(event)
+
+        XCTAssertEqual(item.kind, .encryptedPlaceholder)
+        XCTAssertTrue(item.isEncrypted)
     }
 
     func testMediaEventsUseSafeResourceDescription() throws {

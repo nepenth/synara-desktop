@@ -19,6 +19,8 @@ struct RoomTimelineView: View {
     @State private var viewerResource: MediaResource?
     @State private var selectedPhoto: PhotosPickerItem?
     @State private var agentActionMessage: String?
+    @State private var cryptoStatus: RoomCryptoStatus = .unknown
+    @State private var cryptoActionMessage: String?
     @State private var lastRenderedTimelineCount = 0
     @Environment(\.openURL) private var openURL
     @Environment(\.dismiss) private var dismiss
@@ -31,7 +33,12 @@ struct RoomTimelineView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            TimelineHeader(title: roomTitle ?? "Room", subtitle: timelineSubtitle, onBack: { dismiss() })
+            TimelineHeader(
+                title: roomTitle ?? "Room",
+                subtitle: timelineSubtitle,
+                cryptoStatus: cryptoStatus,
+                onBack: { dismiss() }
+            )
             timelineContent
             Divider()
             ComposerView(
@@ -65,9 +72,20 @@ struct RoomTimelineView: View {
         } message: {
             Text(agentActionMessage ?? "")
         }
+        .alert("Encryption", isPresented: Binding(
+            get: { cryptoActionMessage != nil },
+            set: { if !$0 { cryptoActionMessage = nil } }
+        )) {
+            Button("OK") {
+                cryptoActionMessage = nil
+            }
+        } message: {
+            Text(cryptoActionMessage ?? "")
+        }
         .task(id: roomID) {
             hasAnchoredEvent = false
             draft = environment.drafts.draft(roomID: roomID)
+            await loadCryptoStatus()
             await loadTimeline()
         }
         .onChange(of: draft) { value in
@@ -101,6 +119,14 @@ struct RoomTimelineView: View {
                         if isPaginating {
                             ProgressView()
                                 .frame(maxWidth: .infinity)
+                        }
+
+                        if shouldShowRecoveryBanner(items: items) {
+                            CryptoRecoveryBanner(
+                                status: cryptoStatus,
+                                onRetry: retryDecryption,
+                                onReviewSecurity: { environment.router.route(to: .settings) }
+                            )
                         }
 
                         if isAgentRoom == false {
@@ -236,6 +262,33 @@ struct RoomTimelineView: View {
         let items = await environment.timeline.loadInitialTimeline(roomID: roomID)
         await MainActor.run {
             state = items.isEmpty ? .empty : .loaded(items, isPaginating: false)
+        }
+    }
+
+    private func loadCryptoStatus() async {
+        let status = await environment.crypto.roomStatus(roomID: roomID)
+        await MainActor.run {
+            cryptoStatus = status
+        }
+    }
+
+    private func retryDecryption() {
+        Task {
+            let result = await environment.crypto.retryDecryption(roomID: roomID)
+            await loadCryptoStatus()
+            await loadTimeline()
+            await MainActor.run {
+                cryptoActionMessage = result.message
+            }
+        }
+    }
+
+    private func shouldShowRecoveryBanner(items: [TimelineItem]) -> Bool {
+        cryptoStatus.needsRecoveryAttention || items.contains { item in
+            if case .encryptedPlaceholder = item.kind {
+                return true
+            }
+            return false
         }
     }
 
@@ -455,6 +508,7 @@ private enum TimelineViewState: Equatable {
 private struct TimelineHeader: View {
     let title: String
     let subtitle: String
+    let cryptoStatus: RoomCryptoStatus
     let onBack: () -> Void
 
     var body: some View {
@@ -484,6 +538,10 @@ private struct TimelineHeader: View {
             Spacer()
 
             HStack(spacing: SynaraSpacing.small) {
+                if cryptoStatus.encryption != .unknown && cryptoStatus.encryption != .notEncrypted {
+                    CryptoStatusPill(status: cryptoStatus)
+                }
+
                 Image(systemName: "person.2")
                     .font(.system(size: 17, weight: .medium))
                 Image(systemName: "ellipsis")
@@ -498,6 +556,88 @@ private struct TimelineHeader: View {
         .overlay(alignment: .bottom) {
             Divider()
         }
+    }
+}
+
+private struct CryptoStatusPill: View {
+    let status: RoomCryptoStatus
+
+    var body: some View {
+        Label(title, systemImage: systemImage)
+            .font(.caption.weight(.semibold))
+            .lineLimit(1)
+            .padding(.horizontal, SynaraSpacing.small)
+            .padding(.vertical, SynaraSpacing.xSmall)
+            .background(tint.opacity(0.14))
+            .foregroundStyle(tint)
+            .clipShape(Capsule())
+            .accessibilityIdentifier("RoomCryptoStatusPill")
+            .accessibilityLabel(title)
+    }
+
+    private var title: String {
+        if status.encryption == .unavailable {
+            return "Encryption Unknown"
+        }
+        if status.unableToDecryptCount > 0 || status.recovery == .disabled || status.recovery == .incomplete {
+            return "Recovery Needed"
+        }
+        if status.backup == .unavailable {
+            return "No Key Backup"
+        }
+        if status.verification == .unverified {
+            return "Unverified"
+        }
+        return "Encrypted"
+    }
+
+    private var systemImage: String {
+        title == "Encrypted" ? "lock.fill" : "exclamationmark.lock.fill"
+    }
+
+    private var tint: Color {
+        title == "Encrypted" ? SynaraColor.success : SynaraColor.warning
+    }
+}
+
+private struct CryptoRecoveryBanner: View {
+    let status: RoomCryptoStatus
+    let onRetry: () -> Void
+    let onReviewSecurity: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: SynaraSpacing.small) {
+            Label("Encrypted history needs attention", systemImage: "lock.trianglebadge.exclamationmark")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(SynaraColor.primaryText)
+
+            Text(detail)
+                .font(SynaraTypography.supporting)
+                .foregroundStyle(SynaraColor.secondaryText)
+                .fixedSize(horizontal: false, vertical: true)
+
+            HStack(spacing: SynaraSpacing.small) {
+                Button("Retry Decryption", action: onRetry)
+                    .buttonStyle(.borderedProminent)
+                    .accessibilityIdentifier("EncryptedRecoveryRetryButton")
+                Button("Review Security", action: onReviewSecurity)
+                    .buttonStyle(.bordered)
+                    .accessibilityIdentifier("EncryptedRecoverySettingsButton")
+            }
+        }
+        .padding(SynaraSpacing.medium)
+        .synaraCard(fill: SynaraColor.warning.opacity(0.10), stroke: SynaraColor.warning.opacity(0.30))
+        .accessibilityIdentifier("EncryptedRecoveryBanner")
+    }
+
+    private var detail: String {
+        if status.recovery == .disabled || status.backup == .unavailable {
+            return "This room is encrypted, but key backup or recovery is not available on this device. Retry sync, or verify/recover this device from Settings."
+        }
+        if status.recovery == .incomplete {
+            return "This room is encrypted, but recovery is incomplete. Verify another session or recover keys before acting on undecrypted messages."
+        }
+        return "Some encrypted events are missing keys. Retry decryption after sync, or review device verification and recovery in Settings."
     }
 }
 
@@ -621,7 +761,7 @@ private struct TimelineRow: View {
                 .font(SynaraTypography.body)
                 .foregroundStyle(SynaraColor.secondaryText)
         case .encryptedPlaceholder:
-            Label("Encrypted message unavailable", systemImage: "lock")
+            Label("Encrypted content unavailable. Actions and media downloads are blocked until keys are available.", systemImage: "lock")
                 .font(SynaraTypography.body)
                 .foregroundStyle(SynaraColor.secondaryText)
         case .unknown(let type):

@@ -1,10 +1,34 @@
 import Foundation
 @preconcurrency import MatrixRustSDK
 
+private final class SynaraUnableToDecryptRecorder: UnableToDecryptDelegate, @unchecked Sendable {
+    private let lock = NSLock()
+    private var count = 0
+
+    var unableToDecryptCount: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return count
+    }
+
+    func onUtd(info: UnableToDecryptInfo) {
+        lock.lock()
+        defer { lock.unlock() }
+        count += 1
+    }
+
+    func reset() {
+        lock.lock()
+        defer { lock.unlock() }
+        count = 0
+    }
+}
+
 actor MatrixRustSDKClientStore {
     private var client: Client?
     private var activeSession: AuthenticatedSession?
     private var syncStatus: MatrixSyncStatus = .stopped
+    private let unableToDecryptRecorder = SynaraUnableToDecryptRecorder()
 
     var syncStatusDescription: String {
         syncStatus.description
@@ -28,6 +52,8 @@ actor MatrixRustSDKClientStore {
         let client = try await buildClient(homeserverURL: request.homeserverURL, storeID: storeID)
 
         do {
+            unableToDecryptRecorder.reset()
+            try await installUnableToDecryptDelegate(on: client)
             try await client.login(
                 username: username,
                 password: request.password,
@@ -76,6 +102,7 @@ actor MatrixRustSDKClientStore {
         client = nil
         activeSession = nil
         syncStatus = .stopped
+        unableToDecryptRecorder.reset()
         try? Self.deletePersistedStores()
     }
 
@@ -98,6 +125,66 @@ actor MatrixRustSDKClientStore {
         return client.rooms().first { $0.id() == roomID }
     }
 
+    func roomCryptoStatus(roomID: String, session: AuthenticatedSession) async throws -> RoomCryptoStatus {
+        let client = try await ensureClient(for: session)
+        _ = try await client.syncOnceV2(settings: SyncSettingsV2(timeoutMs: 5_000, fullState: false))
+        let sessionStatus = try await cryptoSessionStatus(client: client)
+
+        guard let room = try client.getRoom(roomId: roomID) ?? client.rooms().first(where: { $0.id() == roomID }) else {
+            return RoomCryptoStatus(
+                encryption: .unavailable,
+                verification: sessionStatus.verification,
+                recovery: sessionStatus.recovery,
+                backup: sessionStatus.backup,
+                unableToDecryptCount: sessionStatus.unableToDecryptCount
+            )
+        }
+
+        let latestEncryptionState = try? await room.latestEncryptionState()
+        let currentEncryptionState = room.encryptionState()
+        let isEncrypted = await room.isEncrypted()
+        let encryption: SynaraRoomEncryptionStatus
+        if latestEncryptionState == .encrypted || currentEncryptionState == .encrypted || isEncrypted {
+            encryption = .encrypted
+        } else {
+            encryption = .notEncrypted
+        }
+
+        return RoomCryptoStatus(
+            encryption: encryption,
+            verification: sessionStatus.verification,
+            recovery: sessionStatus.recovery,
+            backup: sessionStatus.backup,
+            unableToDecryptCount: sessionStatus.unableToDecryptCount
+        )
+    }
+
+    func sessionCryptoStatus(session: AuthenticatedSession) async throws -> SessionCryptoStatus {
+        let client = try await ensureClient(for: session)
+        return try await cryptoSessionStatus(client: client)
+    }
+
+    func retryDecryption(roomID: String, session: AuthenticatedSession) async throws {
+        let client = try await ensureClient(for: session)
+        await client.encryption().waitForE2eeInitializationTasks()
+        _ = try await client.syncOnceV2(settings: SyncSettingsV2(timeoutMs: 5_000, fullState: false))
+        if let room = try client.getRoom(roomId: roomID) ?? client.rooms().first(where: { $0.id() == roomID }) {
+            let timeline = try await room.timeline()
+            _ = try? await timeline.paginateBackwards(numEvents: 20)
+        }
+    }
+
+    func requestDeviceVerification(session: AuthenticatedSession) async throws {
+        let client = try await ensureClient(for: session)
+        let controller = try await client.getSessionVerificationController()
+        try await controller.requestDeviceVerification()
+    }
+
+    func recover(recoveryKey: String, session: AuthenticatedSession) async throws {
+        let client = try await ensureClient(for: session)
+        try await client.encryption().recoverAndFixBackup(recoveryKey: recoveryKey)
+    }
+
     private func ensureClient(for session: AuthenticatedSession) async throws -> Client {
         if let client, activeSession == session {
             return client
@@ -107,12 +194,74 @@ actor MatrixRustSDKClientStore {
             homeserverURL: session.homeserverURL,
             storeID: session.sdkStoreID ?? Self.storeID(for: session.userID, homeserverURL: session.homeserverURL)
         )
+        try await installUnableToDecryptDelegate(on: client)
         try await client.restoreSession(session: session.sdkSession)
         await client.encryption().waitForE2eeInitializationTasks()
 
         self.client = client
         self.activeSession = session
         return client
+    }
+
+    private func installUnableToDecryptDelegate(on client: Client) async throws {
+        try await client.setUtdDelegate(utdDelegate: unableToDecryptRecorder)
+    }
+
+    private func cryptoSessionStatus(client: Client) async throws -> SessionCryptoStatus {
+        let encryption = client.encryption()
+        await encryption.waitForE2eeInitializationTasks()
+
+        let backupExists = try? await encryption.backupExistsOnServer()
+        let hasDevicesToVerifyAgainst = try? await encryption.hasDevicesToVerifyAgainst()
+        let isLastDevice = try? await encryption.isLastDevice()
+
+        return SessionCryptoStatus(
+            verification: Self.mapVerificationState(encryption.verificationState()),
+            recovery: Self.mapRecoveryState(encryption.recoveryState()),
+            backup: Self.mapBackupState(encryption.backupState(), backupExists: backupExists),
+            hasDevicesToVerifyAgainst: hasDevicesToVerifyAgainst,
+            isLastDevice: isLastDevice,
+            unableToDecryptCount: unableToDecryptRecorder.unableToDecryptCount
+        )
+    }
+
+    private static func mapVerificationState(_ state: VerificationState) -> SynaraCryptoVerificationStatus {
+        switch state {
+        case .verified:
+            return .verified
+        case .unverified:
+            return .unverified
+        case .unknown:
+            return .unknown
+        }
+    }
+
+    private static func mapRecoveryState(_ state: RecoveryState) -> SynaraCryptoRecoveryStatus {
+        switch state {
+        case .enabled:
+            return .enabled
+        case .disabled:
+            return .disabled
+        case .incomplete:
+            return .incomplete
+        case .unknown:
+            return .unknown
+        }
+    }
+
+    private static func mapBackupState(_ state: BackupState, backupExists: Bool?) -> SynaraCryptoBackupStatus {
+        if backupExists == false {
+            return .unavailable
+        }
+
+        switch state {
+        case .enabled:
+            return .enabled
+        case .creating, .enabling, .resuming, .downloading, .disabling:
+            return .syncing
+        case .unknown:
+            return .unknown
+        }
     }
 
     private func buildClient(homeserverURL: URL, storeID: String) async throws -> Client {
@@ -478,6 +627,83 @@ final class MatrixRustSDKMessageSendService: MessageSending {
             throw error
         } catch {
             throw MessageSendError.failed
+        }
+    }
+}
+
+final class MatrixRustSDKCryptoStatusService: CryptoStatusServicing {
+    private let sessionStore: AppSessionStore
+    private let clientStore: MatrixRustSDKClientStore
+
+    init(sessionStore: AppSessionStore, clientStore: MatrixRustSDKClientStore) {
+        self.sessionStore = sessionStore
+        self.clientStore = clientStore
+    }
+
+    func roomStatus(roomID: String) async -> RoomCryptoStatus {
+        guard case .signedIn(let session) = sessionStore.currentState else {
+            return .unknown
+        }
+
+        do {
+            return try await clientStore.roomCryptoStatus(roomID: roomID, session: session)
+        } catch {
+            return .unknown
+        }
+    }
+
+    func sessionStatus() async -> SessionCryptoStatus {
+        guard case .signedIn(let session) = sessionStore.currentState else {
+            return .unknown
+        }
+
+        do {
+            return try await clientStore.sessionCryptoStatus(session: session)
+        } catch {
+            return .unknown
+        }
+    }
+
+    func retryDecryption(roomID: String) async -> CryptoActionResult {
+        guard case .signedIn(let session) = sessionStore.currentState else {
+            return .unavailable("Sign in before retrying encrypted message decryption.")
+        }
+
+        do {
+            try await clientStore.retryDecryption(roomID: roomID, session: session)
+            return .completed("Decryption retry started.")
+        } catch {
+            return .failed("Could not retry decryption. Try again after sync completes.")
+        }
+    }
+
+    func requestDeviceVerification() async -> CryptoActionResult {
+        guard case .signedIn(let session) = sessionStore.currentState else {
+            return .unavailable("Sign in before requesting device verification.")
+        }
+
+        do {
+            try await clientStore.requestDeviceVerification(session: session)
+            return .completed("Device verification request sent to your other sessions.")
+        } catch {
+            return .failed("Could not start device verification from this device.")
+        }
+    }
+
+    func recover(recoveryKey: String) async -> CryptoActionResult {
+        let trimmed = recoveryKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.isEmpty == false else {
+            return .failed("Enter a recovery key before recovering keys.")
+        }
+        guard case .signedIn(let session) = sessionStore.currentState else {
+            return .unavailable("Sign in before recovering keys.")
+        }
+
+        do {
+            try await clientStore.recover(recoveryKey: trimmed, session: session)
+            return .completed("Recovery completed. Encrypted history will decrypt as keys arrive.")
+        } catch {
+            return .failed("Could not recover keys with that recovery key.")
         }
     }
 }
