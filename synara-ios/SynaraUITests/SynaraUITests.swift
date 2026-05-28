@@ -449,6 +449,64 @@ final class SynaraUITests: XCTestCase {
         )
     }
 
+    func testLiveRoomManagementSmokeWhenConfigured() throws {
+        let environment = ProcessInfo.processInfo.environment
+        guard liveEnvironmentValue("SYNARA_LIVE_ROOM_MANAGEMENT_SMOKE", in: environment) == "1" else {
+            throw XCTSkip("Set SYNARA_LIVE_ROOM_MANAGEMENT_SMOKE=1 for local room-management simulator smoke.")
+        }
+
+        guard let homeserver = liveEnvironmentValue("SYNARA_LIVE_HOMESERVER", in: environment),
+              let username = liveEnvironmentValue("SYNARA_LIVE_USERNAME", in: environment),
+              let password = liveEnvironmentValue("SYNARA_LIVE_PASSWORD", in: environment) else {
+            throw XCTSkip("Live room-management smoke needs homeserver, username, and password environment variables.")
+        }
+
+        let inviteUserID = liveEnvironmentValue("SYNARA_LIVE_INVITE_USER_ID", in: environment)
+        let roomName = "Synara UI Room \(Int(Date().timeIntervalSince1970))"
+
+        let app = XCUIApplication()
+        app.launchEnvironment["SYNARA_RESET_SESSION_ON_LAUNCH"] = "1"
+        app.launch()
+
+        if app.textFields["HomeserverAddressField"].waitForExistence(timeout: 5) {
+            loginLive(app: app, homeserver: homeserver, username: username, password: password)
+            dismissPasswordSavePromptIfPresent(app: app)
+        }
+
+        XCTAssertTrue(app.collectionViews["RoomList"].waitForExistence(timeout: 60))
+        tap(app.buttons["NewRoomButton"], timeout: 10)
+
+        XCTAssertTrue(app.staticTexts["Create Room"].waitForExistence(timeout: 10))
+        app.textFields["CreateRoomNameField"].tap()
+        app.textFields["CreateRoomNameField"].typeText(roomName)
+        app.textFields["CreateRoomTopicField"].tap()
+        app.textFields["CreateRoomTopicField"].typeText("Disposable live room-management smoke")
+        tap(app.buttons["RoomManagementSubmitButton"], timeout: 10)
+
+        XCTAssertTrue(app.textFields["ComposerTextField"].waitForExistence(timeout: 90))
+        XCTAssertTrue(app.buttons["RoomDetailsButton"].waitForExistence(timeout: 10))
+        tap(app.buttons["RoomDetailsButton"], timeout: 10)
+
+        XCTAssertTrue(app.collectionViews["RoomDetailsScreen"].waitForExistence(timeout: 30))
+        XCTAssertTrue(app.staticTexts["Room ID"].exists)
+        XCTAssertTrue(app.staticTexts["Encryption"].exists)
+        XCTAssertTrue(app.staticTexts["Members"].exists)
+
+        if let inviteUserID, inviteUserID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
+            app.textFields["RoomInviteUserField"].tap()
+            app.textFields["RoomInviteUserField"].typeText(inviteUserID)
+            XCTAssertTrue(revealRoomDetailsElement(app.buttons["RoomInviteUserButton"], app: app, timeout: 10))
+            tap(app.buttons["RoomInviteUserButton"], timeout: 1)
+            XCTAssertTrue(app.staticTexts["Invitation sent."].waitForExistence(timeout: 30))
+        }
+
+        XCTAssertTrue(revealRoomDetailsElement(app.buttons["LeaveRoomButton"], app: app, timeout: 10))
+        tap(app.buttons["LeaveRoomButton"], timeout: 1)
+        tap(app.buttons["Leave Room"].firstMatch, timeout: 10)
+        XCTAssertTrue(app.collectionViews["RoomList"].waitForExistence(timeout: 60))
+        XCTAssertFalse(app.staticTexts[roomName].exists)
+    }
+
     private func launchApp() -> XCUIApplication {
         let app = XCUIApplication()
         app.launchEnvironment["SYNARA_UI_TESTS"] = "1"
@@ -666,6 +724,27 @@ final class SynaraUITests: XCTestCase {
     private func tapSettingsElement(_ element: XCUIElement, app: XCUIApplication, timeout: TimeInterval) {
         XCTAssertTrue(revealSettingsElement(element, app: app, timeout: timeout))
         tap(element, timeout: 1)
+    }
+
+    private func revealRoomDetailsElement(_ element: XCUIElement, app: XCUIApplication, timeout: TimeInterval) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        let detailsList = app.collectionViews["RoomDetailsScreen"].exists
+            ? app.collectionViews["RoomDetailsScreen"]
+            : app.collectionViews.firstMatch
+
+        while Date() < deadline {
+            if element.exists && element.isHittable {
+                return true
+            }
+            if detailsList.exists {
+                detailsList.swipeUp()
+            } else {
+                app.swipeUp()
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.25))
+        }
+
+        return element.exists && element.isHittable
     }
 
     private func dismissPasswordSavePromptIfPresent(app: XCUIApplication) {
