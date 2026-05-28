@@ -91,6 +91,29 @@ struct SynaraAvatar: View {
     }
 }
 
+struct SynaraBrandMark: View {
+    var assetName = "SynaraLogo"
+    var size: CGFloat = 48
+    var hasBackground = true
+
+    var body: some View {
+        Image(assetName)
+            .resizable()
+            .interpolation(.high)
+            .scaledToFit()
+            .padding(size * 0.12)
+            .frame(width: size, height: size)
+            .background {
+                if hasBackground {
+                    RoundedRectangle(cornerRadius: SynaraRadius.card)
+                        .fill(SynaraColor.secondarySurface)
+                }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: SynaraRadius.card))
+            .accessibilityHidden(true)
+    }
+}
+
 struct SynaraStatusChip: View {
     let title: String
     let tint: Color
@@ -218,10 +241,11 @@ struct SynaraProductHeader: View {
     let title: String
     let subtitle: String
     var systemImage: String = "sparkles"
+    var assetName: String = "SynaraLogo"
 
     var body: some View {
         VStack(alignment: .leading, spacing: SynaraSpacing.medium) {
-            SynaraAvatar(title: title, systemImage: systemImage, tint: SynaraColor.accent, size: 48)
+            SynaraBrandMark(assetName: assetName, size: 56)
             VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
                 Text(title)
                     .font(.title2.weight(.semibold))

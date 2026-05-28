@@ -264,7 +264,7 @@ private struct RoomListHeader: View {
         HStack(spacing: SynaraSpacing.medium) {
             Button(action: onAccount) {
                 ZStack(alignment: .bottomTrailing) {
-                    SynaraAvatar(title: "Synara", tint: SynaraColor.secondaryText, size: 38)
+                    SynaraBrandMark(size: 38)
                     Circle()
                         .fill(SynaraColor.success)
                         .frame(width: 10, height: 10)
