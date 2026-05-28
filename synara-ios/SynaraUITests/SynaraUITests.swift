@@ -211,8 +211,27 @@ final class SynaraUITests: XCTestCase {
         let app = launchRoomApp()
 
         tap(app.buttons["AttachmentButton"])
+        XCTAssertTrue(app.otherElements["AttachmentOptionsSheet"].waitForExistence(timeout: 5))
+        tap(app.buttons["AttachmentOption-Photo or Video"])
 
         XCTAssertTrue(app.buttons["MediaPlaceholder-synara-upload.jpg"].waitForExistence(timeout: 5))
+    }
+
+    func testThreadViewOpensAndRepliesFromTimeline() {
+        let app = launchRoomApp()
+
+        XCTAssertTrue(app.buttons["1 reply"].waitForExistence(timeout: 5))
+        tap(app.buttons["1 reply"])
+        XCTAssertTrue(app.staticTexts["ThreadTimelineTitle"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.scrollViews["ThreadTimelineList"].exists)
+
+        let composer = app.textFields["ComposerTextField"]
+        XCTAssertTrue(composer.waitForExistence(timeout: 5))
+        composer.tap()
+        composer.typeText("replying in thread")
+        tap(app.buttons["ComposerSendButton"])
+
+        XCTAssertTrue(app.staticTexts["replying in thread"].waitForExistence(timeout: 5))
     }
 
     func testEncryptedTimelineShowsCryptoStatusRecoveryBannerAndSafePlaceholder() {
@@ -562,6 +581,104 @@ final class SynaraUITests: XCTestCase {
         XCTAssertFalse(app.staticTexts[roomName].exists)
     }
 
+    func testLiveVisualMockupScreenshotsWhenConfigured() throws {
+        let environment = ProcessInfo.processInfo.environment
+        guard liveEnvironmentValue("SYNARA_LIVE_VISUAL_SMOKE", in: environment) == "1" else {
+            throw XCTSkip("Set SYNARA_LIVE_VISUAL_SMOKE=1 for local visual smoke screenshots.")
+        }
+
+        guard let homeserver = liveEnvironmentValue("SYNARA_LIVE_HOMESERVER", in: environment),
+              let username = liveEnvironmentValue("SYNARA_LIVE_USERNAME", in: environment),
+              let password = liveEnvironmentValue("SYNARA_LIVE_PASSWORD", in: environment),
+              let screenshotDirectory = liveEnvironmentValue("SYNARA_SCREENSHOT_DIR", in: environment) else {
+            throw XCTSkip("Live visual smoke needs homeserver, username, password, and screenshot directory.")
+        }
+
+        let roomID = liveEnvironmentValue("SYNARA_LIVE_ROOM_ID", in: environment)
+        let roomName = liveEnvironmentValue("SYNARA_LIVE_ROOM_NAME", in: environment) ?? "Alerts"
+        let app = XCUIApplication()
+        app.launchEnvironment["SYNARA_RESET_SESSION_ON_LAUNCH"] = "1"
+        app.launch()
+
+        if app.textFields["HomeserverAddressField"].waitForExistence(timeout: 5) {
+            loginLive(app: app, homeserver: homeserver, username: username, password: password)
+            dismissPasswordSavePromptIfPresent(app: app)
+        }
+
+        XCTAssertTrue(app.collectionViews["RoomList"].waitForExistence(timeout: 60))
+        try saveScreenshot(app: app, directory: screenshotDirectory, name: "01-live-room-list")
+
+        if let roomID {
+            tap(app.buttons["RoomRow-\(roomID)"], timeout: 15)
+        } else {
+            tap(app.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", roomName)).firstMatch, timeout: 15)
+        }
+
+        XCTAssertTrue(app.textFields["ComposerTextField"].waitForExistence(timeout: 60))
+        XCTAssertTrue(app.scrollViews["TimelineList"].waitForExistence(timeout: 60))
+        try saveScreenshot(app: app, directory: screenshotDirectory, name: "02-live-room-timeline")
+
+        let composer = app.textFields["ComposerTextField"]
+        composer.tap()
+        composer.typeText("Visual validation draft")
+        try saveScreenshot(app: app, directory: screenshotDirectory, name: "03-live-composer-typing")
+
+        tap(app.buttons["AttachmentButton"], timeout: 10)
+        XCTAssertTrue(app.otherElements["AttachmentOptionsSheet"].waitForExistence(timeout: 5))
+        try saveScreenshot(app: app, directory: screenshotDirectory, name: "04-live-attachment-sheet")
+    }
+
+    func testMockThreadVisualScreenshotWhenConfigured() throws {
+        let environment = ProcessInfo.processInfo.environment
+        guard liveEnvironmentValue("SYNARA_MOCK_THREAD_VISUAL_SMOKE", in: environment) == "1" else {
+            throw XCTSkip("Set SYNARA_MOCK_THREAD_VISUAL_SMOKE=1 for thread visual smoke screenshots.")
+        }
+        guard let screenshotDirectory = liveEnvironmentValue("SYNARA_SCREENSHOT_DIR", in: environment) else {
+            throw XCTSkip("Thread visual smoke needs screenshot directory.")
+        }
+
+        let app = launchRoomApp()
+        XCTAssertTrue(app.buttons["1 reply"].waitForExistence(timeout: 5))
+        tap(app.buttons["1 reply"])
+        XCTAssertTrue(app.staticTexts["ThreadTimelineTitle"].waitForExistence(timeout: 5))
+        try saveScreenshot(app: app, directory: screenshotDirectory, name: "05-mock-thread")
+
+        let composer = app.textFields["ComposerTextField"]
+        XCTAssertTrue(composer.waitForExistence(timeout: 5))
+        composer.tap()
+        composer.typeText("Thread validation draft")
+        try saveScreenshot(app: app, directory: screenshotDirectory, name: "06-mock-thread-typing")
+    }
+
+    func testMockRoomsVisualScreenshotsWhenConfigured() throws {
+        let environment = ProcessInfo.processInfo.environment
+        guard liveEnvironmentValue("SYNARA_MOCK_ROOMS_VISUAL_SMOKE", in: environment) == "1" else {
+            throw XCTSkip("Set SYNARA_MOCK_ROOMS_VISUAL_SMOKE=1 for room visual smoke screenshots.")
+        }
+        guard let screenshotDirectory = liveEnvironmentValue("SYNARA_SCREENSHOT_DIR", in: environment) else {
+            throw XCTSkip("Room visual smoke needs screenshot directory.")
+        }
+
+        let app = launchSignedInRoomsApp()
+        XCTAssertTrue(app.collectionViews["RoomList"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["RoomRow-!project:matrix.org"].waitForExistence(timeout: 5))
+        try saveScreenshot(app: app, directory: screenshotDirectory, name: "01-mock-room-list")
+
+        tap(app.buttons["RoomRow-!project:matrix.org"], timeout: 5)
+        XCTAssertTrue(app.scrollViews["TimelineList"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.textFields["ComposerTextField"].waitForExistence(timeout: 5))
+        try saveScreenshot(app: app, directory: screenshotDirectory, name: "02-mock-room-timeline")
+
+        let composer = app.textFields["ComposerTextField"]
+        composer.tap()
+        composer.typeText("Sounds good. I'll prep some notes before our sync.")
+        try saveScreenshot(app: app, directory: screenshotDirectory, name: "03-mock-composer-typing")
+
+        tap(app.buttons["AttachmentButton"], timeout: 5)
+        XCTAssertTrue(app.otherElements["AttachmentOptionsSheet"].waitForExistence(timeout: 5))
+        try saveScreenshot(app: app, directory: screenshotDirectory, name: "04-mock-attachment-sheet")
+    }
+
     private func launchApp() -> XCUIApplication {
         let app = XCUIApplication()
         app.launchEnvironment["SYNARA_UI_TESTS"] = "1"
@@ -574,6 +691,14 @@ final class SynaraUITests: XCTestCase {
         app.launchEnvironment["SYNARA_UI_TESTS"] = "1"
         app.launchEnvironment["SYNARA_UI_TEST_ROOM_ID"] = "!project:matrix.org"
         app.launchEnvironment["SYNARA_UI_TEST_ROOM_TITLE"] = "Project"
+        app.launch()
+        return app
+    }
+
+    private func launchSignedInRoomsApp() -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchEnvironment["SYNARA_UI_TESTS"] = "1"
+        app.launchEnvironment["SYNARA_UI_TEST_SIGNED_IN"] = "1"
         app.launch()
         return app
     }
@@ -910,6 +1035,12 @@ final class SynaraUITests: XCTestCase {
             RunLoop.current.run(until: Date().addingTimeInterval(0.25))
         }
         return (element.value as? String)?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+    }
+
+    private func saveScreenshot(app: XCUIApplication, directory: String, name: String) throws {
+        let directoryURL = URL(fileURLWithPath: directory, isDirectory: true)
+        try FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
+        try app.screenshot().pngRepresentation.write(to: directoryURL.appendingPathComponent("\(name).png"))
     }
 
 }

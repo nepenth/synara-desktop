@@ -3,7 +3,7 @@ import XCTest
 
 final class AppRouteTests: XCTestCase {
     func testTabsExposeExpectedDestinations() {
-        XCTAssertEqual(AppTab.allCases.map(\.rawValue), ["rooms", "notifications", "later", "settings"])
+        XCTAssertEqual(AppTab.allCases.map(\.rawValue), ["rooms", "later", "notifications", "settings"])
     }
 
     func testSheetDestinationHasStableIdentifier() {
@@ -88,6 +88,32 @@ final class AppRouteTests: XCTestCase {
 
         XCTAssertEqual(router.selectedTab, .rooms)
         XCTAssertEqual(router.roomsPath, [.room(id: "!roomid:example.org", title: "Alerts")])
+    }
+
+    func testRouterCanRouteToThreadSurface() {
+        let router = AppRouter()
+
+        router.route(
+            to: .thread(
+                roomID: "!roomid:example.org",
+                rootEventID: "$event:example.org",
+                roomTitle: "Alerts",
+                rootTitle: "Root message"
+            )
+        )
+
+        XCTAssertEqual(router.selectedTab, .rooms)
+        XCTAssertEqual(
+            router.roomsPath,
+            [
+                .thread(
+                    roomID: "!roomid:example.org",
+                    rootEventID: "$event:example.org",
+                    roomTitle: "Alerts",
+                    rootTitle: "Root message"
+                )
+            ]
+        )
     }
 
     func testRouterResetClearsNavigationAndSheets() {

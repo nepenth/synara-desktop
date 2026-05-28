@@ -1,6 +1,7 @@
 # Synara iOS
 
-Status: Phase 1 native skeleton started.
+Status: Native MVP with active Phase 6.7 fidelity validation and Phase 6.9
+performance hardening.
 
 This directory is reserved for the native SwiftUI iOS app. The current accepted
 layout keeps iOS in the canonical `synara-desktop` monorepo beside the desktop
@@ -18,6 +19,10 @@ Authoritative planning documents:
 - [Tauri iOS feasibility spike](docs/tauri-ios-feasibility-spike.md)
 - [Matrix SDK feasibility spike](docs/matrix-sdk-feasibility-spike.md)
 - [iOS validation status](docs/ios-validation-status.md)
+- [Phase 6.7 functionality and visual fidelity plan](docs/phase-6-7-plan.md)
+- [iOS functionality matrix](docs/ios-functionality-matrix.md)
+- [iOS visual fidelity matrix](docs/ios-visual-fidelity-matrix.md)
+- [Phase 6.9 performance plan](docs/phase-6-9-performance-plan.md)
 - [iOS logging policy](docs/logging-policy.md)
 - [iOS CI notes](docs/ci-notes.md)
 - [Live simulator smoke](docs/live-simulator-smoke.md)
