@@ -177,6 +177,8 @@ private extension AppEnvironment {
         let timeline: TimelineServicing
         if processEnvironment["SYNARA_UI_TEST_AGENT_CARD"] == "1" {
             timeline = MockTimelineService(events: uiTestAgentCardEvents())
+        } else if processEnvironment["SYNARA_UI_TEST_ENCRYPTED_TIMELINE"] == "1" {
+            timeline = MockTimelineService(items: uiTestEncryptedTimelineItems())
         } else if processEnvironment["SYNARA_UI_TEST_LARGE_TIMELINE"] == "1" {
             timeline = MockTimelineService(items: TimelineFixtures.largeTimeline())
         } else {
@@ -193,6 +195,25 @@ private extension AppEnvironment {
             ? .failed
             : nil
         let agentApprovals = MockAgentApprovalService(error: approvalError)
+        let crypto = processEnvironment["SYNARA_UI_TEST_ENCRYPTED_TIMELINE"] == "1"
+            ? MockCryptoStatusService(
+                roomCryptoStatus: RoomCryptoStatus(
+                    encryption: .encrypted,
+                    verification: .unverified,
+                    recovery: .incomplete,
+                    backup: .unavailable,
+                    unableToDecryptCount: 1
+                ),
+                sessionCryptoStatus: SessionCryptoStatus(
+                    verification: .unverified,
+                    recovery: .incomplete,
+                    backup: .unavailable,
+                    hasDevicesToVerifyAgainst: true,
+                    isLastDevice: false,
+                    unableToDecryptCount: 1
+                )
+            )
+            : MockCryptoStatusService()
 
         if let inviteTransitionService {
             return .mock(
@@ -202,7 +223,8 @@ private extension AppEnvironment {
                 roomMembership: inviteTransitionService,
                 timeline: timeline,
                 later: later,
-                agentApprovals: agentApprovals
+                agentApprovals: agentApprovals,
+                crypto: crypto
             )
         }
 
@@ -212,7 +234,8 @@ private extension AppEnvironment {
             roomList: roomList,
             timeline: timeline,
             later: later,
-            agentApprovals: agentApprovals
+            agentApprovals: agentApprovals,
+            crypto: crypto
         )
     }
 
@@ -247,6 +270,33 @@ private extension AppEnvironment {
                 completedAt: 1_770_000_100_000,
                 createdAt: 1_769_998_000_000,
                 isCompleted: true
+            )
+        ]
+    }
+
+    static func uiTestEncryptedTimelineItems() -> [TimelineItem] {
+        [
+            TimelineItem(
+                id: "$decrypted:matrix.org",
+                eventID: "$decrypted:matrix.org",
+                senderID: "@alice:matrix.org",
+                timestamp: TimelineFixtures.baseDate,
+                kind: .text("Decrypted encrypted-room message"),
+                replyToEventID: nil,
+                isEdited: false,
+                reactions: [:],
+                isEncrypted: true
+            ),
+            TimelineItem(
+                id: "$utd:matrix.org",
+                eventID: "$utd:matrix.org",
+                senderID: "@bob:matrix.org",
+                timestamp: TimelineFixtures.baseDate.addingTimeInterval(30),
+                kind: .encryptedPlaceholder,
+                replyToEventID: nil,
+                isEdited: false,
+                reactions: [:],
+                isEncrypted: true
             )
         ]
     }

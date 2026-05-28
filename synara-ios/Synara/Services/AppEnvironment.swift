@@ -21,6 +21,7 @@ struct AppEnvironment {
     let agentApprovals: AgentApprovalServicing
     let mediaLoader: MediaLoading
     let mediaUploader: MediaUploading
+    let crypto: CryptoStatusServicing
 
     static func live() -> AppEnvironment {
         let logger = AppLogger()
@@ -47,6 +48,7 @@ struct AppEnvironment {
         let push = SynaraPushService(logger: logger, pusherService: pusherService)
         let roomList = MatrixRustSDKRoomListService(sessionStore: session, clientStore: matrixSDKClientStore)
         let roomMembership = MatrixRustSDKRoomMembershipService(sessionStore: session, clientStore: matrixSDKClientStore)
+        let crypto = MatrixRustSDKCryptoStatusService(sessionStore: session, clientStore: matrixSDKClientStore)
         return AppEnvironment(
             session: session,
             matrix: matrix,
@@ -72,7 +74,8 @@ struct AppEnvironment {
             eventActions: MatrixEventActionService(sessionStore: session),
             agentApprovals: MatrixAgentApprovalService(sessionStore: session),
             mediaLoader: MatrixMediaLoader(sessionStore: session),
-            mediaUploader: MatrixMediaUploadService(sessionStore: session)
+            mediaUploader: MatrixMediaUploadService(sessionStore: session),
+            crypto: crypto
         )
     }
 
@@ -94,7 +97,8 @@ struct AppEnvironment {
         eventActions: EventActionServicing = MockEventActionService(),
         agentApprovals: AgentApprovalServicing = MockAgentApprovalService(),
         mediaLoader: MediaLoading = MockMediaLoader(),
-        mediaUploader: MediaUploading = MockMediaUploadService()
+        mediaUploader: MediaUploading = MockMediaUploadService(),
+        crypto: CryptoStatusServicing = MockCryptoStatusService()
     ) -> AppEnvironment {
         AppEnvironment(
             session: session,
@@ -121,7 +125,8 @@ struct AppEnvironment {
             eventActions: eventActions,
             agentApprovals: agentApprovals,
             mediaLoader: mediaLoader,
-            mediaUploader: mediaUploader
+            mediaUploader: mediaUploader,
+            crypto: crypto
         )
     }
 

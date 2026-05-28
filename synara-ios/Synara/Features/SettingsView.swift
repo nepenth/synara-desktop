@@ -7,6 +7,10 @@ struct SettingsView: View {
     @State private var isRequestingNotifications = false
     @State private var isRegisteringPush = false
     @State private var isLogoutConfirmationPresented = false
+    @State private var sessionCryptoStatus: SessionCryptoStatus = .unknown
+    @State private var recoveryKey = ""
+    @State private var cryptoActionMessage: String?
+    @State private var isRunningCryptoAction = false
 
     var body: some View {
         Form {
@@ -93,6 +97,48 @@ struct SettingsView: View {
                     .accessibilityIdentifier("SecuritySessionStorageRow")
                 SettingsInfoRow(title: "Message Security", value: "Matrix Rust SDK")
                     .accessibilityIdentifier("SecurityMatrixSDKRow")
+                SettingsInfoRow(title: "Device Verification", value: sessionCryptoStatus.verification.settingsDisplayName)
+                    .accessibilityIdentifier("SecurityDeviceVerificationRow")
+                SettingsInfoRow(title: "Key Recovery", value: sessionCryptoStatus.recovery.settingsDisplayName)
+                    .accessibilityIdentifier("SecurityKeyRecoveryRow")
+                SettingsInfoRow(title: "Key Backup", value: sessionCryptoStatus.backup.settingsDisplayName)
+                    .accessibilityIdentifier("SecurityKeyBackupRow")
+                SettingsInfoRow(title: "Decryption Issues", value: sessionCryptoStatus.unableToDecryptCount == 0 ? "None" : "\(sessionCryptoStatus.unableToDecryptCount)")
+                    .accessibilityIdentifier("SecurityDecryptionIssuesRow")
+
+                if sessionCryptoStatus.hasDevicesToVerifyAgainst == true {
+                    Button {
+                        requestDeviceVerification()
+                    } label: {
+                        cryptoActionLabel("Verify This Device")
+                    }
+                    .disabled(isRunningCryptoAction)
+                    .accessibilityIdentifier("RequestDeviceVerificationButton")
+                }
+
+                VStack(alignment: .leading, spacing: SynaraSpacing.small) {
+                    SecureField("Recovery key", text: $recoveryKey)
+                        .textContentType(.oneTimeCode)
+                        .accessibilityIdentifier("RecoveryKeyField")
+                    Button {
+                        recoverKeys()
+                    } label: {
+                        cryptoActionLabel("Recover Keys")
+                    }
+                    .disabled(isRunningCryptoAction || recoveryKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .accessibilityIdentifier("RecoverKeysButton")
+                    Text("Recovery keys are used only for this request and are not stored by Synara.")
+                        .font(SynaraTypography.supporting)
+                        .foregroundStyle(SynaraColor.secondaryText)
+                }
+
+                if let cryptoActionMessage {
+                    Text(cryptoActionMessage)
+                        .font(SynaraTypography.supporting)
+                        .foregroundStyle(SynaraColor.secondaryText)
+                        .accessibilityIdentifier("CryptoActionMessage")
+                }
+
                 SettingsInfoRow(title: "Logout", value: "Clears local session, sync state, rooms, and push registration")
                     .accessibilityIdentifier("SecurityLogoutWipeRow")
             }
@@ -167,6 +213,7 @@ struct SettingsView: View {
         .accessibilityIdentifier("SettingsScreen")
         .task {
             await refreshNotificationStatus()
+            await refreshCryptoStatus()
         }
     }
 
@@ -199,6 +246,56 @@ struct SettingsView: View {
             await MainActor.run {
                 environment.push.beginRegistration()
                 isRegisteringPush = false
+            }
+        }
+    }
+
+    private func refreshCryptoStatus() async {
+        let status = await environment.crypto.sessionStatus()
+        await MainActor.run {
+            sessionCryptoStatus = status
+        }
+    }
+
+    @ViewBuilder
+    private func cryptoActionLabel(_ title: String) -> some View {
+        if isRunningCryptoAction {
+            ProgressView()
+        } else {
+            Text(title)
+        }
+    }
+
+    private func requestDeviceVerification() {
+        runCryptoAction {
+            await environment.crypto.requestDeviceVerification()
+        }
+    }
+
+    private func recoverKeys() {
+        let key = recoveryKey
+        runCryptoAction {
+            await environment.crypto.recover(recoveryKey: key)
+        } onComplete: {
+            recoveryKey = ""
+        }
+    }
+
+    private func runCryptoAction(
+        _ action: @escaping () async -> CryptoActionResult,
+        onComplete: @escaping @MainActor () -> Void = {}
+    ) {
+        isRunningCryptoAction = true
+        cryptoActionMessage = nil
+
+        Task {
+            let result = await action()
+            let status = await environment.crypto.sessionStatus()
+            await MainActor.run {
+                sessionCryptoStatus = status
+                cryptoActionMessage = result.message
+                isRunningCryptoAction = false
+                onComplete()
             }
         }
     }
@@ -250,6 +347,49 @@ private struct SettingsNavigationRow: View {
     var body: some View {
         Label(title, systemImage: systemImage)
             .font(SynaraTypography.body)
+    }
+}
+
+private extension SynaraCryptoVerificationStatus {
+    var settingsDisplayName: String {
+        switch self {
+        case .verified:
+            return "Verified"
+        case .unverified:
+            return "Unverified"
+        case .unknown:
+            return "Unknown"
+        }
+    }
+}
+
+private extension SynaraCryptoRecoveryStatus {
+    var settingsDisplayName: String {
+        switch self {
+        case .enabled:
+            return "Enabled"
+        case .disabled:
+            return "Disabled"
+        case .incomplete:
+            return "Needs Recovery"
+        case .unknown:
+            return "Unknown"
+        }
+    }
+}
+
+private extension SynaraCryptoBackupStatus {
+    var settingsDisplayName: String {
+        switch self {
+        case .enabled:
+            return "Enabled"
+        case .unavailable:
+            return "Unavailable"
+        case .syncing:
+            return "Syncing"
+        case .unknown:
+            return "Unknown"
+        }
     }
 }
 
