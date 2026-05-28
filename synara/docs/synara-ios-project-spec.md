@@ -1881,11 +1881,13 @@ Implemented in this slice:
   invite permission, notification mode, invite, and leave confirmation.
 - Deterministic unit/UI tests for mock create-room validation, Matrix ID
   validation, room-management sheet, room details, and leave navigation.
+- Gated live room-management smoke for private encrypted room creation, room
+  details read, optional invite, leave, and room-list recovery.
 
 Remaining Phase 8 work:
 
-- Live smoke for create room, invite, leave, and details read against the test
-  homeserver.
+- Execute the live room-management smoke with a second disposable Matrix user so
+  the invite leg is validated end to end against the test homeserver.
 - Public-room discovery UI beyond direct join by alias/ID.
 - Spaces navigation and room-list filtering by space.
 - Room profile editing for name/topic/avatar/aliases where permissions allow.

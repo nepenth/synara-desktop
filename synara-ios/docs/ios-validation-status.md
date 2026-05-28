@@ -9,7 +9,8 @@ fidelity are complete for the current native iOS MVP. Phase 7 production E2EE
 first slice is complete for app-level encrypted room open/send/relaunch restore,
 crypto status UI, and conservative recovery controls. Phase 8 room-management
 first slice is complete for service contracts and native create/join/DM,
-room-details, invite, leave, and notification-mode UI surfaces.
+room-details, invite, leave, notification-mode UI surfaces, and gated live
+room-management smoke coverage.
 Deterministic simulator tests validate the mock path, and a gated live simulator
 smoke validates signed session restore, live room opening, composer send, and
 timeline update against disposable encrypted and unencrypted test rooms.
@@ -66,7 +67,7 @@ xcodebuild -project Synara.xcodeproj -scheme Synara -configuration Debug \
 Results:
 
 - `SynaraTests`: 75 tests, 0 failures.
-- `SynaraUITests`: 28 tests, 0 failures, 3 skipped gated live-smoke tests.
+- `SynaraUITests`: 29 tests, 0 failures, 4 skipped gated live-smoke tests.
 
 Deterministic UI tests launch the app with `SYNARA_UI_TESTS=1`, which forces
 mock services instead of live Keychain, auth, and Matrix dependencies. The
@@ -121,6 +122,12 @@ The repeatable live-smoke checklist is
   real Matrix agent card, approves it through the app UI, and verifies the
   resulting `in.synara.agent.action` event in the room. This passed locally
   against the disposable `test-e2e-room` on `matrix.example.com`.
+- The gated `testLiveRoomManagementSmokeWhenConfigured` simulator test covers
+  live private encrypted room creation, room-details read, optional invite, and
+  leave-room recovery. The invite leg requires `SYNARA_LIVE_INVITE_USER_ID` for
+  a second disposable Matrix account. The create/details/leave leg passed
+  locally against the disposable test account on May 27, 2026; the invite leg
+  remains pending a second disposable user.
 
 ## Current App Surface
 

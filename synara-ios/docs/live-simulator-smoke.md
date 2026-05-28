@@ -64,6 +64,25 @@ xcodebuild -project Synara.xcodeproj -scheme Synara \
   -only-testing:SynaraUITests/SynaraUITests/testLiveAgentApprovalSmokeWhenConfigured test
 ```
 
+The suite also includes `testLiveRoomManagementSmokeWhenConfigured` for Phase 8
+room management. It logs in through a disposable account, creates a private
+encrypted room, opens room details, optionally invites a second disposable user,
+leaves the room, and verifies the room list recovers:
+
+```sh
+SYNARA_LIVE_ROOM_MANAGEMENT_SMOKE=1 \
+SYNARA_LIVE_HOMESERVER='https://matrix.example.org' \
+SYNARA_LIVE_USERNAME='<test-user>' \
+SYNARA_LIVE_PASSWORD='<test-password>' \
+SYNARA_LIVE_INVITE_USER_ID='@second-test-user:example.org' \
+xcodebuild -project Synara.xcodeproj -scheme Synara \
+  -destination 'platform=iOS Simulator,id=<simulator-id>' \
+  -only-testing:SynaraUITests/SynaraUITests/testLiveRoomManagementSmokeWhenConfigured test
+```
+
+`SYNARA_LIVE_INVITE_USER_ID` is optional for create/details/leave validation,
+but it is required for the invite leg of the Phase 8 acceptance smoke.
+
 ## Evidence To Capture
 
 - Build mode: signed simulator, unsigned simulator, device, or archive.
