@@ -277,6 +277,48 @@ struct RoomOperationResult: Equatable {
     let name: String?
 }
 
+struct RoomPowerLevelSummary: Equatable {
+    let ownUserLevel: Int64
+    let usersDefault: Int64
+    let eventsDefault: Int64
+    let stateDefault: Int64
+    let invite: Int64
+    let kick: Int64
+    let ban: Int64
+    let redact: Int64
+    let roomName: Int64
+    let roomTopic: Int64
+    let roomAvatar: Int64
+    let canInvite: Bool
+    let canKick: Bool
+    let canBan: Bool
+    let canRedactOther: Bool
+    let canEditName: Bool
+    let canEditTopic: Bool
+    let canEditAvatar: Bool
+
+    static let fullPower = RoomPowerLevelSummary(
+        ownUserLevel: 100,
+        usersDefault: 0,
+        eventsDefault: 0,
+        stateDefault: 50,
+        invite: 50,
+        kick: 50,
+        ban: 50,
+        redact: 50,
+        roomName: 50,
+        roomTopic: 50,
+        roomAvatar: 50,
+        canInvite: true,
+        canKick: true,
+        canBan: true,
+        canRedactOther: true,
+        canEditName: true,
+        canEditTopic: true,
+        canEditAvatar: true
+    )
+}
+
 struct RoomDetails: Equatable {
     let roomID: String
     let name: String
@@ -288,6 +330,7 @@ struct RoomDetails: Equatable {
     let canInvite: Bool
     let canEditName: Bool
     let canEditTopic: Bool
+    let powerLevels: RoomPowerLevelSummary?
     let notificationMode: SynaraRoomNotificationMode
 }
 
@@ -511,6 +554,7 @@ final class MockRoomManagementService: RoomManagementServicing {
             canInvite: true,
             canEditName: true,
             canEditTopic: true,
+            powerLevels: .fullPower,
             notificationMode: .allMessages
         )
         return RoomOperationResult(roomID: roomID, name: trimmedName)
@@ -559,6 +603,7 @@ final class MockRoomManagementService: RoomManagementServicing {
             canInvite: true,
             canEditName: true,
             canEditTopic: true,
+            powerLevels: .fullPower,
             notificationMode: .allMessages
         )
     }
@@ -592,6 +637,7 @@ final class MockRoomManagementService: RoomManagementServicing {
             canInvite: details.canInvite,
             canEditName: details.canEditName,
             canEditTopic: details.canEditTopic,
+            powerLevels: details.powerLevels,
             notificationMode: details.notificationMode
         )
         detailsByRoomID[request.roomID] = details
@@ -612,6 +658,7 @@ final class MockRoomManagementService: RoomManagementServicing {
             canInvite: details.canInvite,
             canEditName: details.canEditName,
             canEditTopic: details.canEditTopic,
+            powerLevels: details.powerLevels,
             notificationMode: mode
         )
         detailsByRoomID[roomID] = details

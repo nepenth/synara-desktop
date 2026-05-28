@@ -271,6 +271,9 @@ actor MatrixRustSDKClientStore {
         let notificationSettings = try? await client.getNotificationSettings()
             .getRoomNotificationSettings(roomId: roomID, isEncrypted: isEncrypted, isOneToOne: isDirect)
         let powerLevels = try? await room.getPowerLevels()
+        let powerLevelValues = powerLevels?.values()
+        let ownUserID = room.ownUserId()
+        let ownUserLevel = powerLevels?.userPowerLevels()[ownUserID] ?? powerLevelValues?.usersDefault ?? 0
 
         return RoomDetails(
             roomID: room.id(),
@@ -283,6 +286,11 @@ actor MatrixRustSDKClientStore {
             canInvite: powerLevels?.canOwnUserInvite() ?? false,
             canEditName: powerLevels?.canOwnUserSendState(stateEvent: .roomName) ?? false,
             canEditTopic: powerLevels?.canOwnUserSendState(stateEvent: .roomTopic) ?? false,
+            powerLevels: powerLevelSummary(
+                values: powerLevelValues,
+                ownUserLevel: ownUserLevel,
+                powerLevels: powerLevels
+            ),
             notificationMode: Self.mapNotificationMode(notificationSettings?.mode)
         )
     }
@@ -424,6 +432,37 @@ actor MatrixRustSDKClientStore {
         case .mute:
             return .mute
         }
+    }
+
+    private func powerLevelSummary(
+        values: RoomPowerLevelsValues?,
+        ownUserLevel: Int64,
+        powerLevels: RoomPowerLevels?
+    ) -> RoomPowerLevelSummary? {
+        guard let values, let powerLevels else {
+            return nil
+        }
+
+        return RoomPowerLevelSummary(
+            ownUserLevel: ownUserLevel,
+            usersDefault: values.usersDefault,
+            eventsDefault: values.eventsDefault,
+            stateDefault: values.stateDefault,
+            invite: values.invite,
+            kick: values.kick,
+            ban: values.ban,
+            redact: values.redact,
+            roomName: values.roomName,
+            roomTopic: values.roomTopic,
+            roomAvatar: values.roomAvatar,
+            canInvite: powerLevels.canOwnUserInvite(),
+            canKick: powerLevels.canOwnUserKick(),
+            canBan: powerLevels.canOwnUserBan(),
+            canRedactOther: powerLevels.canOwnUserRedactOther(),
+            canEditName: powerLevels.canOwnUserSendState(stateEvent: .roomName),
+            canEditTopic: powerLevels.canOwnUserSendState(stateEvent: .roomTopic),
+            canEditAvatar: powerLevels.canOwnUserSendState(stateEvent: .roomAvatar)
+        )
     }
 
     private static func isValidMatrixID(_ value: String) -> Bool {

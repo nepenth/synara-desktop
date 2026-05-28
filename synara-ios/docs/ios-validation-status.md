@@ -11,7 +11,8 @@ crypto status UI, and conservative recovery controls. Phase 8 room-management
 first slice is complete for service contracts and native create/join/DM,
 room-details, invite, leave, notification-mode UI surfaces, and gated live
 room-management smoke coverage. Room profile editing now supports
-permission-aware name/topic updates through mock and SDK-backed services.
+permission-aware name/topic updates through mock and SDK-backed services, and
+room details expose read-only power-level/permission context.
 Deterministic simulator tests validate the mock path, and a gated live simulator
 smoke validates signed session restore, live room opening, composer send, and
 timeline update against disposable encrypted and unencrypted test rooms.
@@ -223,6 +224,8 @@ The repeatable live-smoke checklist is
   entry, leave confirmation, and per-room notification mode controls.
 - Room details exposes permission-aware room name/topic editing and saves
   changes through Matrix Rust SDK room state APIs where allowed.
+- Room details exposes read-only power-level thresholds and allowed/restricted
+  status for message, invite, name/topic/avatar, and moderation permissions.
 - Phase 6.5 UI modernization adds shared native design primitives, product
   auth headers, modern room avatars/badges/search, grouped timeline message
   bubbles, a stronger composer, and first-class agent action cards.
