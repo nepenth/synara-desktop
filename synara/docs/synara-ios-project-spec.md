@@ -1879,8 +1879,12 @@ Implemented in this slice:
 - Join room flow by room ID or alias.
 - Room details sheet with name, topic, aliases, encryption, member count,
   invite permission, notification mode, invite, and leave confirmation.
+- Permission-aware room name/topic editing backed by Matrix Rust SDK
+  `Room.setName` and `Room.setTopic` where room power levels allow those state
+  events.
 - Deterministic unit/UI tests for mock create-room validation, Matrix ID
-  validation, room-management sheet, room details, and leave navigation.
+  validation, room-management sheet, room profile editing, room details, and
+  leave navigation.
 - Gated live room-management smoke for private encrypted room creation, room
   details read, optional invite, leave, and room-list recovery.
 
@@ -1890,7 +1894,7 @@ Remaining Phase 8 work:
   the invite leg is validated end to end against the test homeserver.
 - Public-room discovery UI beyond direct join by alias/ID.
 - Spaces navigation and room-list filtering by space.
-- Room profile editing for name/topic/avatar/aliases where permissions allow.
+- Room profile editing for avatar/aliases where permissions allow.
 - Power-level editing only after safe write semantics are specified.
 
 ## Final Release Phase: App Store Submission

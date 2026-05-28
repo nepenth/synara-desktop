@@ -86,6 +86,41 @@ final class AppEnvironmentTests: XCTestCase {
         }
     }
 
+    func testMockRoomManagementUpdatesRoomProfile() async throws {
+        let service = MockRoomManagementService()
+        let result = try await service.createRoom(
+            RoomCreateRequest(
+                name: "Incident Room",
+                topic: "Operational response",
+                visibility: .private,
+                isEncrypted: true
+            )
+        )
+
+        try await service.updateRoomProfile(
+            RoomProfileUpdateRequest(
+                roomID: result.roomID,
+                name: "Incident Review",
+                topic: "Post-incident follow-up"
+            )
+        )
+        let details = await service.roomDetails(roomID: result.roomID)
+
+        XCTAssertEqual(details?.name, "Incident Review")
+        XCTAssertEqual(details?.topic, "Post-incident follow-up")
+    }
+
+    func testMockRoomManagementRejectsEmptyProfileUpdate() async throws {
+        let service = MockRoomManagementService()
+
+        do {
+            try await service.updateRoomProfile(RoomProfileUpdateRequest(roomID: "!room:matrix.org", name: nil, topic: nil))
+            XCTFail("Expected empty profile update to fail.")
+        } catch let error as RoomManagementError {
+            XCTAssertEqual(error, .noProfileChanges)
+        }
+    }
+
     func testSettingsStorePersistsBooleansInMemory() {
         let settings = InMemorySettingsStore()
 
