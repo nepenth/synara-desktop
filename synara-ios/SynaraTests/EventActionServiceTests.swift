@@ -35,6 +35,36 @@ final class EventActionServiceTests: XCTestCase {
         XCTAssertFalse(availability.canReact)
     }
 
+    func testEncryptedMediaHasNoActions() throws {
+        let service = MockEventActionService()
+        let item = TimelineItem(
+            id: "$encrypted-media:matrix.org",
+            eventID: "$encrypted-media:matrix.org",
+            senderID: "@alice:matrix.org",
+            timestamp: TimelineFixtures.baseDate,
+            kind: .mediaPlaceholder(
+                MediaResource(
+                    id: "$encrypted-media:matrix.org",
+                    filename: "secret.png",
+                    authenticatedURL: try XCTUnwrap(URL(string: "mxc://matrix.org/secret")),
+                    requiresAuthentication: true,
+                    isEncrypted: true
+                )
+            ),
+            replyToEventID: nil,
+            isEdited: false,
+            reactions: [:],
+            isEncrypted: true
+        )
+
+        let availability = service.availability(for: item, currentUserID: "@alice:matrix.org")
+
+        XCTAssertFalse(availability.canReply)
+        XCTAssertFalse(availability.canEdit)
+        XCTAssertFalse(availability.canRedact)
+        XCTAssertFalse(availability.canReact)
+    }
+
     func testReactAggregatesWithoutDuplicateLocalEcho() async {
         let service = MockEventActionService()
         let item = makeItem(senderID: "@alice:matrix.org")
