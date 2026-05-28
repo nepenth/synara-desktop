@@ -102,6 +102,56 @@ final class RoomListServiceTests: XCTestCase {
         XCTAssertEqual(client.requests.first?.value(forHTTPHeaderField: "Authorization"), "Bearer token")
     }
 
+    func testMatrixRoomListMapsParentSpaces() async throws {
+        let client = MockRoomListHTTPClient(responses: [
+            .success(
+                statusCode: 200,
+                body: """
+                {
+                  "rooms": {
+                    "join": {
+                      "!room:matrix.org": {
+                        "state": {
+                          "events": [
+                            {
+                              "type": "m.room.name",
+                              "state_key": "",
+                              "origin_server_ts": 1000,
+                              "content": { "name": "Alerts" }
+                            },
+                            {
+                              "type": "m.space.parent",
+                              "state_key": "!ops:matrix.org",
+                              "origin_server_ts": 1001,
+                              "content": {
+                                "via": ["matrix.org"],
+                                "canonical_alias": "#ops:matrix.org"
+                              }
+                            }
+                          ]
+                        },
+                        "timeline": { "events": [] }
+                      }
+                    }
+                  }
+                }
+                """
+            )
+        ])
+        let service = MatrixRoomListService(
+            sessionStore: AppSessionStore(currentState: .signedIn(try makeSession())),
+            httpClient: client
+        )
+
+        let state = await service.loadRooms()
+
+        guard case .loaded(let rooms) = state else {
+            XCTFail("Expected loaded rooms")
+            return
+        }
+        XCTAssertEqual(rooms.first?.parentSpaces, [SpaceSummary(id: "!ops:matrix.org", name: "#ops:matrix.org")])
+    }
+
     func testMatrixRoomListMapsHTTPFailureToFailedState() async throws {
         let session = AuthenticatedSession(
             userID: "@alice:matrix.org",

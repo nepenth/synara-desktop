@@ -580,6 +580,9 @@ private struct RoomDetailsView: View {
     @State private var details: RoomDetails?
     @State private var profileName = ""
     @State private var profileTopic = ""
+    @State private var canonicalAlias = ""
+    @State private var alternativeAliases = ""
+    @State private var selectedAvatarPhoto: PhotosPickerItem?
     @State private var inviteUserID = ""
     @State private var notificationMode: SynaraRoomNotificationMode = .allMessages
     @State private var message: String?
@@ -606,9 +609,7 @@ private struct RoomDetailsView: View {
                     SettingsInfo(title: "Room ID", value: roomID)
                     SettingsInfo(title: "Encryption", value: details?.isEncrypted == true ? "Encrypted" : "Not encrypted")
                     SettingsInfo(title: "Members", value: "\(details?.memberCount ?? 0)")
-                    if let aliases = details?.aliases, aliases.isEmpty == false {
-                        SettingsInfo(title: "Aliases", value: aliases.joined(separator: ", "))
-                    }
+                    SettingsInfo(title: "Avatar", value: details?.avatarURL ?? "None")
                 }
 
                 if let powerLevels = details?.powerLevels {
@@ -646,6 +647,28 @@ private struct RoomDetailsView: View {
                         .accessibilityIdentifier("RoomInviteUserButton")
                 }
 
+                Section("Aliases And Avatar") {
+                    TextField("#room:server", text: $canonicalAlias)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .disabled(details?.canEditAliases != true || isLoading)
+                        .accessibilityIdentifier("RoomCanonicalAliasField")
+                    TextField("#alias:server, #other:server", text: $alternativeAliases, axis: .vertical)
+                        .lineLimit(1...3)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .disabled(details?.canEditAliases != true || isLoading)
+                        .accessibilityIdentifier("RoomAlternativeAliasesField")
+                    PhotosPicker(selection: $selectedAvatarPhoto, matching: .images) {
+                        Label("Upload Avatar", systemImage: "photo")
+                    }
+                    .disabled(details?.canEditAvatar != true || isLoading)
+                    .accessibilityIdentifier("RoomAvatarUploadButton")
+                    Button("Remove Avatar", role: .destructive, action: removeAvatar)
+                        .disabled(details?.canEditAvatar != true || isLoading || details?.avatarURL == nil)
+                        .accessibilityIdentifier("RoomAvatarRemoveButton")
+                }
+
                 Section("Danger Zone") {
                     Button("Leave Room", role: .destructive) {
                         isLeaveConfirmationPresented = true
@@ -679,6 +702,11 @@ private struct RoomDetailsView: View {
             .task {
                 await loadDetails()
             }
+            .onChange(of: selectedAvatarPhoto) { item in
+                if let item {
+                    uploadAvatar(item)
+                }
+            }
         }
     }
 
@@ -689,6 +717,9 @@ private struct RoomDetailsView: View {
             notificationMode = loadedDetails?.notificationMode ?? .allMessages
             profileName = loadedDetails?.name ?? fallbackTitle
             profileTopic = loadedDetails?.topic ?? ""
+            let aliases = loadedDetails?.aliases ?? []
+            canonicalAlias = aliases.first ?? ""
+            alternativeAliases = aliases.dropFirst().joined(separator: ", ")
         }
     }
 
@@ -721,7 +752,25 @@ private struct RoomDetailsView: View {
         if let profileNameChange, profileNameChange.isEmpty {
             return false
         }
-        return profileNameChange != nil || profileTopicChange != nil
+        return profileNameChange != nil || profileTopicChange != nil || aliasChange != nil
+    }
+
+    private var aliasChange: (canonical: String?, alternatives: [String])? {
+        guard details?.canEditAliases == true else {
+            return nil
+        }
+
+        let canonical = canonicalAlias.trimmingCharacters(in: .whitespacesAndNewlines)
+        let alternatives = alternativeAliases
+            .split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { $0.isEmpty == false }
+        let current = details?.aliases ?? []
+        let updated = (canonical.isEmpty ? [] : [canonical]) + alternatives
+        guard updated != current else {
+            return nil
+        }
+        return (canonical.isEmpty ? nil : canonical, alternatives)
     }
 
     private func saveProfile() {
@@ -732,7 +781,9 @@ private struct RoomDetailsView: View {
                     RoomProfileUpdateRequest(
                         roomID: roomID,
                         name: profileNameChange,
-                        topic: profileTopicChange
+                        topic: profileTopicChange,
+                        canonicalAlias: aliasChange?.canonical,
+                        alternativeAliases: aliasChange?.alternatives
                     )
                 )
                 await loadDetails()
@@ -783,6 +834,69 @@ private struct RoomDetailsView: View {
             } catch let error as RoomManagementError {
                 await MainActor.run {
                     message = error.localizedDescription
+                    isLoading = false
+                }
+            } catch {
+                await MainActor.run {
+                    message = RoomManagementError.failed.localizedDescription
+                    isLoading = false
+                }
+            }
+        }
+    }
+
+    private func uploadAvatar(_ item: PhotosPickerItem) {
+        isLoading = true
+        Task {
+            do {
+                guard let data = try await item.loadTransferable(type: Data.self), data.isEmpty == false else {
+                    throw RoomManagementError.failed
+                }
+                try await environment.roomManagement.updateRoomProfile(
+                    RoomProfileUpdateRequest(
+                        roomID: roomID,
+                        name: nil,
+                        topic: nil,
+                        avatar: .upload(data: data, mimeType: "image/jpeg")
+                    )
+                )
+                await loadDetails()
+                await MainActor.run {
+                    selectedAvatarPhoto = nil
+                    message = "Avatar updated."
+                    isLoading = false
+                }
+            } catch let error as RoomManagementError {
+                await MainActor.run {
+                    selectedAvatarPhoto = nil
+                    message = error.localizedDescription
+                    isLoading = false
+                }
+            } catch {
+                await MainActor.run {
+                    selectedAvatarPhoto = nil
+                    message = RoomManagementError.failed.localizedDescription
+                    isLoading = false
+                }
+            }
+        }
+    }
+
+    private func removeAvatar() {
+        isLoading = true
+        Task {
+            do {
+                try await environment.roomManagement.updateRoomProfile(
+                    RoomProfileUpdateRequest(
+                        roomID: roomID,
+                        name: nil,
+                        topic: nil,
+                        avatar: .remove
+                    )
+                )
+                await loadDetails()
+                await MainActor.run {
+                    message = "Avatar removed."
                     isLoading = false
                 }
             } catch {

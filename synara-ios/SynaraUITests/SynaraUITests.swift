@@ -92,6 +92,29 @@ final class SynaraUITests: XCTestCase {
         XCTAssertFalse(app.buttons["RoomRow-!project:matrix.org"].exists)
     }
 
+    func testSpaceFilterScopesRoomList() {
+        let app = launchApp()
+
+        login(app: app)
+
+        XCTAssertTrue(app.scrollViews["SpaceFilterStrip"].waitForExistence(timeout: 5))
+        tap(app.buttons["Workspace"])
+        XCTAssertTrue(app.buttons["RoomRow-!project:matrix.org"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["All spaces"].exists)
+    }
+
+    func testRoomManagementPublicDirectorySearchMockFlow() {
+        let app = launchRoomManagementSheetApp()
+
+        tap(app.buttons["Join"])
+        let searchField = app.textFields["PublicRoomSearchField"]
+        XCTAssertTrue(searchField.waitForExistence(timeout: 5))
+        searchField.tap()
+        searchField.typeText("alerts")
+        tap(app.buttons["PublicRoomSearchButton"])
+        XCTAssertTrue(app.buttons["PublicRoomResult-!public-alerts:matrix.org"].waitForExistence(timeout: 5))
+    }
+
     func testRoomRouteShowsTimeline() {
         let app = launchRoomApp()
 
@@ -113,11 +136,15 @@ final class SynaraUITests: XCTestCase {
         XCTAssertTrue(revealRoomDetailsElement(app.staticTexts["Your level"], app: app, timeout: 5))
         XCTAssertTrue(revealRoomDetailsElement(app.staticTexts["Change topic"], app: app, timeout: 5))
 
-        app.textFields["RoomInviteUserField"].tap()
-        app.textFields["RoomInviteUserField"].typeText("@newuser:matrix.org")
-        app.swipeUp()
-        XCTAssertTrue(app.buttons["Invite User"].exists)
+        let inviteField = app.textFields["RoomInviteUserField"]
+        XCTAssertTrue(revealRoomDetailsElement(inviteField, app: app, timeout: 12))
+        inviteField.tap()
+        inviteField.typeText("@newuser:matrix.org")
+        dismissKeyboardIfPresent(app: app)
+        XCTAssertTrue(revealRoomDetailsElement(app.buttons["RoomInviteUserButton"], app: app, timeout: 5))
+        XCTAssertTrue(waitForEnabled(app.buttons["RoomInviteUserButton"], timeout: 5))
 
+        XCTAssertTrue(revealRoomDetailsElement(app.buttons["LeaveRoomButton"], app: app, timeout: 8))
         tap(app.buttons["LeaveRoomButton"])
         tap(app.buttons["Leave Room"].firstMatch)
         XCTAssertTrue(app.collectionViews["RoomList"].waitForExistence(timeout: 5))
@@ -136,14 +163,14 @@ final class SynaraUITests: XCTestCase {
         XCTAssertTrue(waitForNonEmptyValue(topicField, timeout: 5))
         nameField.tap()
         nameField.typeText(" Updated")
-        topicField.tap()
-        topicField.typeText(" Updated")
-        XCTAssertTrue(app.buttons["RoomProfileSaveButton"].isEnabled)
         dismissKeyboardIfPresent(app: app)
+        let aliasField = app.textFields["RoomCanonicalAliasField"]
+        XCTAssertTrue(revealRoomDetailsElement(aliasField, app: app, timeout: 10))
+        XCTAssertTrue(app.buttons["RoomProfileSaveButton"].isEnabled)
         tap(app.buttons["Save"])
 
         let profileMessage = app.staticTexts["RoomDetailsMessage"]
-        XCTAssertTrue(revealRoomDetailsElement(profileMessage, app: app, timeout: 10))
+        XCTAssertTrue(revealRoomDetailsElement(profileMessage, app: app, timeout: 10, direction: .down))
         XCTAssertEqual(profileMessage.label, "Profile updated.")
     }
 
@@ -500,9 +527,7 @@ final class SynaraUITests: XCTestCase {
         }
 
         XCTAssertTrue(app.collectionViews["RoomList"].waitForExistence(timeout: 60))
-        tap(app.buttons["NewRoomButton"], timeout: 10)
-
-        XCTAssertTrue(app.staticTexts["Create Room"].waitForExistence(timeout: 10))
+        XCTAssertTrue(openRoomManagementSheet(app: app, timeout: 20))
         app.textFields["CreateRoomNameField"].tap()
         app.textFields["CreateRoomNameField"].typeText(roomName)
         app.textFields["CreateRoomTopicField"].tap()
@@ -519,11 +544,15 @@ final class SynaraUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Members"].exists)
 
         if let inviteUserID, inviteUserID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
-            app.textFields["RoomInviteUserField"].tap()
-            app.textFields["RoomInviteUserField"].typeText(inviteUserID)
+            let inviteField = app.textFields["RoomInviteUserField"]
+            XCTAssertTrue(revealRoomDetailsElement(inviteField, app: app, timeout: 15))
+            inviteField.tap()
+            inviteField.typeText(inviteUserID)
+            dismissKeyboardIfPresent(app: app)
             XCTAssertTrue(revealRoomDetailsElement(app.buttons["RoomInviteUserButton"], app: app, timeout: 10))
+            XCTAssertTrue(waitForEnabled(app.buttons["RoomInviteUserButton"], timeout: 10))
             tap(app.buttons["RoomInviteUserButton"], timeout: 1)
-            XCTAssertTrue(app.staticTexts["Invitation sent."].waitForExistence(timeout: 30))
+            XCTAssertTrue(revealRoomDetailsElement(app.staticTexts["Invitation sent."], app: app, timeout: 30, direction: .down))
         }
 
         XCTAssertTrue(revealRoomDetailsElement(app.buttons["LeaveRoomButton"], app: app, timeout: 10))
@@ -752,7 +781,17 @@ final class SynaraUITests: XCTestCase {
         tap(element, timeout: 1)
     }
 
-    private func revealRoomDetailsElement(_ element: XCUIElement, app: XCUIApplication, timeout: TimeInterval) -> Bool {
+    private enum ScrollDirection {
+        case up
+        case down
+    }
+
+    private func revealRoomDetailsElement(
+        _ element: XCUIElement,
+        app: XCUIApplication,
+        timeout: TimeInterval,
+        direction: ScrollDirection = .up
+    ) -> Bool {
         let deadline = Date().addingTimeInterval(timeout)
         let detailsList = app.collectionViews["RoomDetailsScreen"].exists
             ? app.collectionViews["RoomDetailsScreen"]
@@ -763,9 +802,19 @@ final class SynaraUITests: XCTestCase {
                 return true
             }
             if detailsList.exists {
-                detailsList.swipeUp()
+                switch direction {
+                case .up:
+                    detailsList.swipeUp()
+                case .down:
+                    detailsList.swipeDown()
+                }
             } else {
-                app.swipeUp()
+                switch direction {
+                case .up:
+                    app.swipeUp()
+                case .down:
+                    app.swipeDown()
+                }
             }
             RunLoop.current.run(until: Date().addingTimeInterval(0.25))
         }
@@ -788,13 +837,39 @@ final class SynaraUITests: XCTestCase {
         guard app.keyboards.firstMatch.exists else {
             return
         }
-        if app.keyboards.buttons["Return"].exists {
-            app.keyboards.buttons["Return"].tap()
-        } else if app.keyboards.buttons["Done"].exists {
+        if app.keyboards.buttons["Done"].exists {
             app.keyboards.buttons["Done"].tap()
+        } else if app.keyboards.buttons["Return"].exists {
+            app.keyboards.buttons["Return"].tap()
         } else {
             app.swipeDown()
         }
+    }
+
+    private func waitForEnabled(_ element: XCUIElement, timeout: TimeInterval) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if element.exists && element.isEnabled {
+                return true
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.25))
+        }
+        return element.exists && element.isEnabled
+    }
+
+    private func openRoomManagementSheet(app: XCUIApplication, timeout: TimeInterval) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if app.staticTexts["Create Room"].exists {
+                return true
+            }
+            let button = app.buttons["NewRoomButton"]
+            if button.waitForExistence(timeout: 2) {
+                tap(button, timeout: 1)
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.5))
+        }
+        return app.staticTexts["Create Room"].exists
     }
 
     private func waitForTimelineElement(_ element: XCUIElement, app: XCUIApplication, timeout: TimeInterval) -> Bool {

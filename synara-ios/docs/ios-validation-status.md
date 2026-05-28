@@ -131,10 +131,15 @@ The repeatable live-smoke checklist is
   against the disposable `test-e2e-room` on `matrix.whyland.com`.
 - The gated `testLiveRoomManagementSmokeWhenConfigured` simulator test covers
   live private encrypted room creation, room-details read, optional invite, and
-  leave-room recovery. The invite leg requires `SYNARA_LIVE_INVITE_USER_ID` for
-  a second disposable Matrix account. The create/details/leave leg passed
-  locally against the disposable test account on May 27, 2026; the invite leg
-  remains pending a second disposable user.
+  leave-room recovery. The create/details/invite/leave leg passed locally
+  against disposable test accounts on May 28, 2026.
+- Phase 8 public-room discovery is implemented in the join sheet through the
+  Matrix Rust SDK room-directory search API, with deterministic mock UI coverage.
+- Room-list space filtering is implemented with parent-space metadata from sync
+  and SDK `SpaceService.joinedParentsOfChild`, with deterministic mock UI and
+  unit coverage.
+- Room details now supports permission-aware canonical/alternative alias edits
+  and avatar upload/remove through Matrix Rust SDK room state APIs.
 
 ## Current App Surface
 
