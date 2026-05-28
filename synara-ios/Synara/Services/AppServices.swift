@@ -266,6 +266,12 @@ struct RoomJoinRequest: Equatable {
     let reference: String
 }
 
+struct RoomProfileUpdateRequest: Equatable {
+    let roomID: String
+    let name: String?
+    let topic: String?
+}
+
 struct RoomOperationResult: Equatable {
     let roomID: String
     let name: String?
@@ -280,6 +286,8 @@ struct RoomDetails: Equatable {
     let isPublic: Bool?
     let memberCount: Int
     let canInvite: Bool
+    let canEditName: Bool
+    let canEditTopic: Bool
     let notificationMode: SynaraRoomNotificationMode
 }
 
@@ -289,6 +297,7 @@ enum RoomManagementError: LocalizedError, Equatable {
     case missingUserID
     case missingRoomReference
     case invalidMatrixID
+    case noProfileChanges
     case failed
 
     var errorDescription: String? {
@@ -303,6 +312,8 @@ enum RoomManagementError: LocalizedError, Equatable {
             return "Enter a room ID or alias."
         case .invalidMatrixID:
             return "Matrix IDs must look like @name:server."
+        case .noProfileChanges:
+            return "Change the room name or topic before saving."
         case .failed:
             return "Room action failed. Try again."
         }
@@ -316,6 +327,7 @@ protocol RoomManagementServicing {
     func leaveRoom(roomID: String) async throws
     func inviteUser(roomID: String, userID: String) async throws
     func roomDetails(roomID: String) async -> RoomDetails?
+    func updateRoomProfile(_ request: RoomProfileUpdateRequest) async throws
     func setNotificationMode(_ mode: SynaraRoomNotificationMode, roomID: String) async throws
 }
 
@@ -497,6 +509,8 @@ final class MockRoomManagementService: RoomManagementServicing {
             isPublic: request.visibility == .public,
             memberCount: 1,
             canInvite: true,
+            canEditName: true,
+            canEditTopic: true,
             notificationMode: .allMessages
         )
         return RoomOperationResult(roomID: roomID, name: trimmedName)
@@ -543,8 +557,44 @@ final class MockRoomManagementService: RoomManagementServicing {
             isPublic: nil,
             memberCount: 3,
             canInvite: true,
+            canEditName: true,
+            canEditTopic: true,
             notificationMode: .allMessages
         )
+    }
+
+    func updateRoomProfile(_ request: RoomProfileUpdateRequest) async throws {
+        var existingDetails = detailsByRoomID[request.roomID]
+        if existingDetails == nil {
+            existingDetails = await roomDetails(roomID: request.roomID)
+        }
+        guard var details = existingDetails else {
+            throw RoomManagementError.failed
+        }
+
+        let trimmedName = request.name?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedTopic = request.topic?.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmedName != nil || trimmedTopic != nil else {
+            throw RoomManagementError.noProfileChanges
+        }
+        if let trimmedName, trimmedName.isEmpty {
+            throw RoomManagementError.missingRoomName
+        }
+
+        details = RoomDetails(
+            roomID: details.roomID,
+            name: trimmedName ?? details.name,
+            topic: trimmedTopic ?? details.topic,
+            aliases: details.aliases,
+            isEncrypted: details.isEncrypted,
+            isPublic: details.isPublic,
+            memberCount: details.memberCount,
+            canInvite: details.canInvite,
+            canEditName: details.canEditName,
+            canEditTopic: details.canEditTopic,
+            notificationMode: details.notificationMode
+        )
+        detailsByRoomID[request.roomID] = details
     }
 
     func setNotificationMode(_ mode: SynaraRoomNotificationMode, roomID: String) async throws {
@@ -560,6 +610,8 @@ final class MockRoomManagementService: RoomManagementServicing {
             isPublic: details.isPublic,
             memberCount: details.memberCount,
             canInvite: details.canInvite,
+            canEditName: details.canEditName,
+            canEditTopic: details.canEditTopic,
             notificationMode: mode
         )
         detailsByRoomID[roomID] = details

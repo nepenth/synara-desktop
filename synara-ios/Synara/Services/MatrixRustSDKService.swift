@@ -281,8 +281,40 @@ actor MatrixRustSDKClientStore {
             isPublic: room.isPublic(),
             memberCount: Int(room.joinedMembersCount() + room.invitedMembersCount()),
             canInvite: powerLevels?.canOwnUserInvite() ?? false,
+            canEditName: powerLevels?.canOwnUserSendState(stateEvent: .roomName) ?? false,
+            canEditTopic: powerLevels?.canOwnUserSendState(stateEvent: .roomTopic) ?? false,
             notificationMode: Self.mapNotificationMode(notificationSettings?.mode)
         )
+    }
+
+    func updateRoomProfile(_ request: RoomProfileUpdateRequest, session: AuthenticatedSession) async throws {
+        guard let room = try await room(roomID: request.roomID, session: session) else {
+            throw RoomManagementError.failed
+        }
+
+        let name = request.name?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let topic = request.topic?.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard name != nil || topic != nil else {
+            throw RoomManagementError.noProfileChanges
+        }
+        if let name, name.isEmpty {
+            throw RoomManagementError.missingRoomName
+        }
+
+        let powerLevels = try? await room.getPowerLevels()
+        if let name {
+            guard powerLevels?.canOwnUserSendState(stateEvent: .roomName) ?? false else {
+                throw RoomManagementError.failed
+            }
+            try await room.setName(name: name)
+        }
+        if let topic {
+            guard powerLevels?.canOwnUserSendState(stateEvent: .roomTopic) ?? false else {
+                throw RoomManagementError.failed
+            }
+            try await room.setTopic(topic: topic)
+        }
+        try await syncOnce(session: session, fullState: true)
     }
 
     func setNotificationMode(_ mode: SynaraRoomNotificationMode, roomID: String, session: AuthenticatedSession) async throws {
@@ -891,6 +923,13 @@ final class MatrixRustSDKRoomManagementService: RoomManagementServicing {
             return nil
         }
         return try? await clientStore.roomDetails(roomID: roomID, session: session)
+    }
+
+    func updateRoomProfile(_ request: RoomProfileUpdateRequest) async throws {
+        guard case .signedIn(let session) = sessionStore.currentState else {
+            throw RoomManagementError.signedOut
+        }
+        try await clientStore.updateRoomProfile(request, session: session)
     }
 
     func setNotificationMode(_ mode: SynaraRoomNotificationMode, roomID: String) async throws {

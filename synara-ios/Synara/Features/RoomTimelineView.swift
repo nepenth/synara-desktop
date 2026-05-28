@@ -575,6 +575,8 @@ private struct RoomDetailsView: View {
     @Environment(\.appEnvironment) private var environment
     @Environment(\.dismiss) private var dismiss
     @State private var details: RoomDetails?
+    @State private var profileName = ""
+    @State private var profileTopic = ""
     @State private var inviteUserID = ""
     @State private var notificationMode: SynaraRoomNotificationMode = .allMessages
     @State private var message: String?
@@ -585,9 +587,20 @@ private struct RoomDetailsView: View {
         NavigationStack {
             Form {
                 Section("Room") {
-                    SettingsInfo(title: "Name", value: details?.name ?? fallbackTitle)
+                    TextField("Name", text: $profileName)
+                        .disabled(details?.canEditName != true || isLoading)
+                        .accessibilityIdentifier("RoomProfileNameField")
+                    TextField("Topic", text: $profileTopic, axis: .vertical)
+                        .lineLimit(1...3)
+                        .disabled(details?.canEditTopic != true || isLoading)
+                        .accessibilityIdentifier("RoomProfileTopicField")
+                    if let message {
+                        Text(message)
+                            .font(SynaraTypography.supporting)
+                            .foregroundStyle(SynaraColor.secondaryText)
+                            .accessibilityIdentifier("RoomDetailsMessage")
+                    }
                     SettingsInfo(title: "Room ID", value: roomID)
-                    SettingsInfo(title: "Topic", value: details?.topic ?? "No topic")
                     SettingsInfo(title: "Encryption", value: details?.isEncrypted == true ? "Encrypted" : "Not encrypted")
                     SettingsInfo(title: "Members", value: "\(details?.memberCount ?? 0)")
                     if let aliases = details?.aliases, aliases.isEmpty == false {
@@ -624,14 +637,6 @@ private struct RoomDetailsView: View {
                     .accessibilityIdentifier("LeaveRoomButton")
                 }
 
-                if let message {
-                    Section {
-                        Text(message)
-                            .font(SynaraTypography.supporting)
-                            .foregroundStyle(SynaraColor.secondaryText)
-                            .accessibilityIdentifier("RoomDetailsMessage")
-                    }
-                }
             }
             .navigationTitle("Room Details")
             .accessibilityIdentifier("RoomDetailsScreen")
@@ -640,6 +645,11 @@ private struct RoomDetailsView: View {
                     Button("Done") {
                         dismiss()
                     }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save", action: saveProfile)
+                        .disabled(canSaveProfile == false)
+                        .accessibilityIdentifier("RoomProfileSaveButton")
                 }
             }
             .confirmationDialog("Leave this room?", isPresented: $isLeaveConfirmationPresented) {
@@ -661,6 +671,70 @@ private struct RoomDetailsView: View {
         await MainActor.run {
             details = loadedDetails
             notificationMode = loadedDetails?.notificationMode ?? .allMessages
+            profileName = loadedDetails?.name ?? fallbackTitle
+            profileTopic = loadedDetails?.topic ?? ""
+        }
+    }
+
+    private var profileNameChange: String? {
+        guard details?.canEditName == true else {
+            return nil
+        }
+        let trimmedName = profileName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmedName != details?.name else {
+            return nil
+        }
+        return trimmedName
+    }
+
+    private var profileTopicChange: String? {
+        guard details?.canEditTopic == true else {
+            return nil
+        }
+        let trimmedTopic = profileTopic.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmedTopic != (details?.topic ?? "") else {
+            return nil
+        }
+        return trimmedTopic
+    }
+
+    private var canSaveProfile: Bool {
+        guard isLoading == false else {
+            return false
+        }
+        if let profileNameChange, profileNameChange.isEmpty {
+            return false
+        }
+        return profileNameChange != nil || profileTopicChange != nil
+    }
+
+    private func saveProfile() {
+        isLoading = true
+        Task {
+            do {
+                try await environment.roomManagement.updateRoomProfile(
+                    RoomProfileUpdateRequest(
+                        roomID: roomID,
+                        name: profileNameChange,
+                        topic: profileTopicChange
+                    )
+                )
+                await loadDetails()
+                await MainActor.run {
+                    message = "Profile updated."
+                    isLoading = false
+                }
+            } catch let error as RoomManagementError {
+                await MainActor.run {
+                    message = error.localizedDescription
+                    isLoading = false
+                }
+            } catch {
+                await MainActor.run {
+                    message = RoomManagementError.failed.localizedDescription
+                    isLoading = false
+                }
+            }
         }
     }
 
