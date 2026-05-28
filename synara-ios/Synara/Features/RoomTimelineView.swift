@@ -411,6 +411,9 @@ struct RoomTimelineView: View {
         if case .text(let body) = item.kind {
             draft = body
             environment.drafts.setDraft(body, roomID: roomID)
+        } else if case .formattedText(let body, _) = item.kind {
+            draft = body
+            environment.drafts.setDraft(body, roomID: roomID)
         }
     }
 
@@ -1046,14 +1049,23 @@ private struct TimelineRow: View {
             Text(body)
                 .font(.subheadline)
                 .lineLimit(nil)
+        case .formattedText(let body, let html):
+            Text(MatrixHTMLRenderer.attributedString(body: body, html: html))
+                .font(.subheadline)
+                .lineLimit(nil)
         case .mediaPlaceholder(let resource):
-            Button {
-                onOpenMedia(resource)
-            } label: {
+            if resource.isEncrypted {
                 MediaAttachmentCard(resource: resource)
+                    .accessibilityIdentifier("EncryptedMediaPlaceholder-\(resource.filename)")
+            } else {
+                Button {
+                    onOpenMedia(resource)
+                } label: {
+                    MediaAttachmentCard(resource: resource)
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("MediaPlaceholder-\(resource.filename)")
             }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("MediaPlaceholder-\(resource.filename)")
         case .redacted:
             Text("Message deleted")
                 .font(SynaraTypography.body)
@@ -1075,7 +1087,12 @@ private struct TimelineRow: View {
         switch item.kind {
         case .text(let body):
             return "\(item.senderID): \(body)"
+        case .formattedText(let body, _):
+            return "\(item.senderID): \(body)"
         case .mediaPlaceholder(let resource):
+            if resource.isEncrypted {
+                return "\(item.senderID) sent encrypted media that cannot be opened until keys are available"
+            }
             return "\(item.senderID) sent \(resource.safeDescription)"
         case .redacted:
             return "\(item.senderID): message deleted"
@@ -1147,7 +1164,7 @@ private struct TimelineRow: View {
 
     private var usesBubble: Bool {
         switch item.kind {
-        case .text, .mediaPlaceholder:
+        case .text, .formattedText, .mediaPlaceholder:
             return false
         default:
             return true
@@ -1170,11 +1187,17 @@ private struct MediaAttachmentCard: View {
                 Text(resource.requiresAuthentication ? "Authenticated file" : "Attachment")
                     .font(.caption2)
                     .foregroundStyle(SynaraColor.secondaryText)
+                if resource.isEncrypted {
+                    Text("Encrypted media requires recovered keys")
+                        .font(.caption2)
+                        .foregroundStyle(SynaraColor.warning)
+                        .lineLimit(2)
+                }
             }
 
             Spacer()
 
-            Image(systemName: "arrow.down.to.line")
+            Image(systemName: resource.isEncrypted ? "lock.fill" : "arrow.down.to.line")
                 .font(.system(size: 15, weight: .medium))
                 .foregroundStyle(SynaraColor.secondaryText)
         }

@@ -5,10 +5,11 @@ Reviewed: 2026-05-27
 Status: Matrix Rust SDK live E2EE probe and app-level live encrypted-room UI
 smoke validated against a disposable encrypted room. The iOS app target now
 builds with SDK-backed auth, session restore, room list, timeline, send, crypto
-status, recovery, and verification-request service adapters. Production E2EE is
-still not release-complete until full recovery/verification flows, key backup
-restore UX, encrypted media, and broader encrypted-room regression coverage are
-completed.
+status, recovery, and verification-request service adapters. Encrypted media is
+explicitly detected and safely blocked until decrypted media bytes are
+available. Production E2EE is still not release-complete until full
+recovery/verification flows, key backup restore UX, encrypted media decryption,
+and broader encrypted-room regression coverage are completed.
 
 ## Current Behavior
 
@@ -30,13 +31,17 @@ completed.
 - Unit/UI tests cover encrypted placeholder mapping, crypto-status
   presentation, recovery-state decisions, recovery controls, and action
   availability.
+- Encrypted Matrix media events that expose `content.file.url` are mapped to
+  encrypted media placeholders. Thumbnail/download loading and timeline actions
+  are blocked with a recovery-oriented safe message until media decryption is
+  implemented.
 
 ## Not Yet Supported
 
 - Complete key backup restore UX.
 - Complete device verification and cross-signing UX.
 - Complete recovery from undecryptable history.
-- Encrypted media decryption.
+- Encrypted media decryption and viewer/download support.
 
 These unsupported items describe the remaining release blockers. The SDK probe
 below proves the pinned Matrix Rust SDK Swift package can perform the underlying
@@ -129,7 +134,8 @@ Validation result:
    until a conservative minimum is implemented. First conservative UI is in
    place; full verification/recovery flows remain release blockers.
 10. Add encrypted media decryption/download before claiming media parity in
-    encrypted rooms.
+    encrypted rooms. Encrypted media is now detected and safely blocked; actual
+    decryption remains the release blocker.
 11. Re-run live-smoke flows in encrypted and unencrypted rooms.
 
 ## Acceptance Gate

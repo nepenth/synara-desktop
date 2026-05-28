@@ -3,6 +3,7 @@ import Foundation
 struct TimelineItem: Identifiable, Equatable {
     enum Kind: Equatable {
         case text(String)
+        case formattedText(body: String, html: String)
         case mediaPlaceholder(MediaResource)
         case redacted
         case encryptedPlaceholder
@@ -315,9 +316,11 @@ struct RawTimelineEvent: Equatable {
     let timestamp: Date
     let type: String
     let body: String?
+    let formattedBody: String?
     let replyToEventID: String?
     let isEdited: Bool
     let mediaURL: URL?
+    let isEncrypted: Bool
     let agentCard: SynaraAgentCard?
 
     init(
@@ -326,9 +329,11 @@ struct RawTimelineEvent: Equatable {
         timestamp: Date,
         type: String,
         body: String?,
+        formattedBody: String? = nil,
         replyToEventID: String?,
         isEdited: Bool,
         mediaURL: URL?,
+        isEncrypted: Bool = false,
         agentCard: SynaraAgentCard? = nil
     ) {
         self.eventID = eventID
@@ -336,9 +341,11 @@ struct RawTimelineEvent: Equatable {
         self.timestamp = timestamp
         self.type = type
         self.body = body
+        self.formattedBody = formattedBody
         self.replyToEventID = replyToEventID
         self.isEdited = isEdited
         self.mediaURL = mediaURL
+        self.isEncrypted = isEncrypted
         self.agentCard = agentCard
     }
 }
@@ -357,7 +364,11 @@ enum TimelineMapper {
         } else {
             switch event.type {
         case "m.room.message":
-            kind = .text(event.body ?? "")
+            if let formattedBody = event.formattedBody, formattedBody.isEmpty == false {
+                kind = .formattedText(body: event.body ?? "", html: formattedBody)
+            } else {
+                kind = .text(event.body ?? "")
+            }
         case "m.room.encrypted":
             kind = .encryptedPlaceholder
         case "m.room.redaction":
@@ -368,7 +379,8 @@ enum TimelineMapper {
                     id: event.eventID,
                     filename: event.body ?? "Attachment",
                     authenticatedURL: event.mediaURL,
-                    requiresAuthentication: true
+                    requiresAuthentication: true,
+                    isEncrypted: event.isEncrypted
                 )
             )
         default:
@@ -385,7 +397,7 @@ enum TimelineMapper {
             replyToEventID: event.replyToEventID,
             isEdited: event.isEdited,
             reactions: [:],
-            isEncrypted: event.type == "m.room.encrypted"
+            isEncrypted: event.type == "m.room.encrypted" || event.isEncrypted
         )
     }
 }
@@ -489,6 +501,50 @@ struct MockTimelineService: TimelineServicing {
     }
 }
 
+enum MatrixHTMLRenderer {
+    static func attributedString(body: String, html: String) -> AttributedString {
+        let markdown = sanitizedMarkdown(body: body, html: html)
+        if let attributed = try? AttributedString(
+            markdown: markdown,
+            options: AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace)
+        ) {
+            return attributed
+        }
+
+        return AttributedString(body)
+    }
+
+    static func sanitizedMarkdown(body: String, html: String) -> String {
+        var output = html
+            .removingHTMLBlocks(named: "script")
+            .removingHTMLBlocks(named: "style")
+
+        output = output.replacingAnchorTags()
+        output = output.replacingTag("strong", with: "**")
+        output = output.replacingTag("b", with: "**")
+        output = output.replacingTag("em", with: "*")
+        output = output.replacingTag("i", with: "*")
+        output = output.replacingTag("code", with: "`")
+        output = output.replacingTag("del", with: "~~")
+        output = output.replacingHTMLPattern(#"<br\s*/?>"#, with: "\n")
+        output = output.replacingHTMLPattern(#"</p\s*>"#, with: "\n\n")
+        output = output.replacingHTMLPattern(#"<p(?:\s+[^>]*)?>"#, with: "")
+        output = output.replacingHTMLPattern(#"<li(?:\s+[^>]*)?>"#, with: "\n- ")
+        output = output.replacingHTMLPattern(#"</li\s*>"#, with: "")
+        output = output.replacingHTMLPattern(#"</?(ul|ol)(?:\s+[^>]*)?>"#, with: "\n")
+        output = output.replacingHTMLPattern(#"<blockquote(?:\s+[^>]*)?>"#, with: "\n> ")
+        output = output.replacingHTMLPattern(#"</blockquote\s*>"#, with: "\n")
+        output = output.replacingHTMLPattern(#"<span[^>]*data-mx-spoiler[^>]*>"#, with: "")
+        output = output.replacingHTMLPattern(#"</?span(?:\s+[^>]*)?>"#, with: "")
+        output = output.replacingHTMLPattern(#"</?[^>]+>"#, with: "")
+        output = output.decodingBasicHTMLEntities()
+        output = output.replacingOccurrences(of: "\n\n\n", with: "\n\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        return output.isEmpty ? body : output
+    }
+}
+
 final class MatrixTimelineService: TimelineServicing {
     private let sessionStore: AppSessionStore
     private let httpClient: AuthHTTPClient
@@ -575,7 +631,9 @@ final class MatrixTimelineService: TimelineServicing {
         let content = event.content ?? MatrixTimelineEventContent()
         let eventType: String
         let body: String?
+        let formattedBody: String?
         let mediaURL: URL?
+        let isEncrypted: Bool
         let agentCard = parseAgentCard(from: content)
 
         if event.type == "m.room.message" {
@@ -583,16 +641,22 @@ final class MatrixTimelineService: TimelineServicing {
                ["m.image", "m.file", "m.audio", "m.video"].contains(msgtype) {
                 eventType = "m.room.media"
                 body = content.body
-                mediaURL = content.url.flatMap(URL.init(string:))
+                formattedBody = nil
+                mediaURL = (content.url ?? content.encryptedFileURL).flatMap(URL.init(string:))
+                isEncrypted = content.encryptedFileURL != nil
             } else {
                 eventType = event.type
                 body = content.body
+                formattedBody = content.formattedBody
                 mediaURL = nil
+                isEncrypted = false
             }
         } else {
             eventType = event.type
             body = content.body
+            formattedBody = content.formattedBody
             mediaURL = content.url.flatMap(URL.init(string:))
+            isEncrypted = event.type == "m.room.encrypted"
             if eventType.hasPrefix("m.room.") && body?.isEmpty == false {
                 // Keep existing behavior for plain message-like room events.
             }
@@ -604,9 +668,11 @@ final class MatrixTimelineService: TimelineServicing {
             timestamp: Date(timeIntervalSince1970: TimeInterval(event.originServerTimestamp ?? 0) / 1_000),
             type: eventType,
             body: body,
+            formattedBody: formattedBody,
             replyToEventID: content.relatesTo?.inReplyTo?.eventID,
             isEdited: content.relatesTo?.relType == "m.replace",
             mediaURL: mediaURL,
+            isEncrypted: isEncrypted,
             agentCard: agentCard
         )
     }
@@ -651,21 +717,30 @@ private struct MatrixTimelineEvent: Decodable {
 
 private struct MatrixTimelineEventContent: Decodable {
     let body: String?
+    let format: String?
+    let formattedBody: String?
     let msgtype: String?
     let url: String?
+    let encryptedFileURL: String?
     let relatesTo: MatrixRelatesTo?
     let raw: [String: Any]
 
     init(
         body: String? = nil,
+        format: String? = nil,
+        formattedBody: String? = nil,
         msgtype: String? = nil,
         url: String? = nil,
+        encryptedFileURL: String? = nil,
         relatesTo: MatrixRelatesTo? = nil,
         raw: [String: Any] = [:]
     ) {
         self.body = body
+        self.format = format
+        self.formattedBody = formattedBody
         self.msgtype = msgtype
         self.url = url
+        self.encryptedFileURL = encryptedFileURL
         self.relatesTo = relatesTo
         self.raw = raw
     }
@@ -675,8 +750,12 @@ private struct MatrixTimelineEventContent: Decodable {
         let raw = try container.decode([String: JSONAny].self)
         self.raw = raw.toAnyDictionary()
         self.body = raw["body"]?.string
+        self.format = raw["format"]?.string
+        let formattedBody = raw["formatted_body"]?.string
+        self.formattedBody = raw["format"]?.string == "org.matrix.custom.html" ? formattedBody : nil
         self.msgtype = raw["msgtype"]?.string
         self.url = raw["url"]?.string
+        self.encryptedFileURL = raw["file"]?.dictionary?["url"]?.string
 
         if let relatesToObject = raw["m.relates_to"]?.dictionary {
             let replyEventID = relatesToObject["m.in_reply_to"]?.dictionary?["event_id"]?.string
@@ -802,5 +881,103 @@ private extension Dictionary where Key == String, Value == JSONAny {
         return reduce(into: [:]) { object, pair in
             object[pair.key] = pair.value.toAny
         }
+    }
+}
+
+private extension String {
+    func removingHTMLBlocks(named tagName: String) -> String {
+        replacingHTMLPattern(#"<\#(tagName)(?:\s+[^>]*)?>[\s\S]*?</\#(tagName)\s*>"#, with: "")
+    }
+
+    func replacingTag(_ tagName: String, with marker: String) -> String {
+        replacingHTMLPattern(#"<\#(tagName)(?:\s+[^>]*)?>"#, with: marker)
+            .replacingHTMLPattern(#"</\#(tagName)\s*>"#, with: marker)
+    }
+
+    func replacingAnchorTags() -> String {
+        let pattern = #"<a\s+[^>]*href\s*=\s*['"]([^'"]+)['"][^>]*>([\s\S]*?)</a\s*>"#
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
+            return self
+        }
+
+        let nsRange = NSRange(startIndex..<endIndex, in: self)
+        let matches = regex.matches(in: self, range: nsRange).reversed()
+        let source = self as NSString
+        let output = NSMutableString(string: self)
+
+        for match in matches {
+            guard match.numberOfRanges == 3 else {
+                continue
+            }
+
+            let href = source.substring(with: match.range(at: 1)).decodingBasicHTMLEntities()
+            let label = source.substring(with: match.range(at: 2))
+                .replacingHTMLPattern(#"</?[^>]+>"#, with: "")
+                .decodingBasicHTMLEntities()
+            if href.isSafeMatrixHTMLLink {
+                output.replaceCharacters(in: match.range(at: 0), with: "[\(label)](\(href))")
+            } else {
+                output.replaceCharacters(in: match.range(at: 0), with: label)
+            }
+        }
+
+        return output as String
+    }
+
+    func replacingHTMLPattern(_ pattern: String, with replacement: String) -> String {
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
+            return self
+        }
+        let nsRange = NSRange(startIndex..<endIndex, in: self)
+        return regex.stringByReplacingMatches(in: self, range: nsRange, withTemplate: replacement)
+    }
+
+    func decodingBasicHTMLEntities() -> String {
+        replacingOccurrences(of: "&amp;", with: "&")
+            .replacingOccurrences(of: "&lt;", with: "<")
+            .replacingOccurrences(of: "&gt;", with: ">")
+            .replacingOccurrences(of: "&quot;", with: "\"")
+            .replacingOccurrences(of: "&#39;", with: "'")
+            .replacingOccurrences(of: "&apos;", with: "'")
+            .decodingNumericHTMLEntities()
+    }
+
+    func decodingNumericHTMLEntities() -> String {
+        let pattern = #"&#(x?[0-9A-Fa-f]+);"#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else {
+            return self
+        }
+
+        let nsRange = NSRange(startIndex..<endIndex, in: self)
+        let matches = regex.matches(in: self, range: nsRange).reversed()
+        let source = self as NSString
+        let output = NSMutableString(string: self)
+
+        for match in matches {
+            guard match.numberOfRanges == 2 else {
+                continue
+            }
+
+            let rawValue = source.substring(with: match.range(at: 1))
+            let radix = rawValue.hasPrefix("x") || rawValue.hasPrefix("X") ? 16 : 10
+            let digits = radix == 16 ? String(rawValue.dropFirst()) : rawValue
+            guard let scalarValue = UInt32(digits, radix: radix),
+                  let scalar = UnicodeScalar(scalarValue) else {
+                continue
+            }
+
+            output.replaceCharacters(in: match.range(at: 0), with: String(Character(scalar)))
+        }
+
+        return output as String
+    }
+
+    var isSafeMatrixHTMLLink: Bool {
+        guard let components = URLComponents(string: self),
+              let scheme = components.scheme?.lowercased() else {
+            return false
+        }
+
+        return ["https", "http", "matrix"].contains(scheme)
     }
 }

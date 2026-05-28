@@ -63,6 +63,57 @@ final class TimelineServiceTests: XCTestCase {
         )
     }
 
+    func testMatrixTimelineMapsFormattedHTMLMessages() async throws {
+        let client = MockTimelineHTTPClient(responses: [
+            .success(
+                statusCode: 200,
+                body: """
+                {
+                  "chunk": [
+                    {
+                      "event_id": "$formatted",
+                      "sender": "@alice:matrix.org",
+                      "origin_server_ts": 1000,
+                      "type": "m.room.message",
+                      "content": {
+                        "msgtype": "m.text",
+                        "body": "Bold link alert",
+                        "format": "org.matrix.custom.html",
+                        "formatted_body": "<strong>Bold</strong> <a href=\\"https://matrix.to/#/@alice:matrix.org\\">link</a> <script>alert(1)</script>alert"
+                      }
+                    }
+                  ]
+                }
+                """
+            )
+        ])
+        let service = MatrixTimelineService(
+            sessionStore: AppSessionStore(currentState: .signedIn(try makeSession())),
+            httpClient: client
+        )
+
+        let items = await service.loadInitialTimeline(roomID: "!room:matrix.org")
+
+        guard case .formattedText(let body, let html) = items.first?.kind else {
+            XCTFail("Expected formatted text")
+            return
+        }
+        XCTAssertEqual(body, "Bold link alert")
+        XCTAssertTrue(html.contains("<strong>Bold</strong>"))
+        let markdown = MatrixHTMLRenderer.sanitizedMarkdown(body: body, html: html)
+        XCTAssertEqual(markdown, "**Bold** [link](https://matrix.to/#/@alice:matrix.org) alert")
+        XCTAssertFalse(markdown.contains("script"))
+    }
+
+    func testMatrixHTMLSanitizerDropsUnsafeLinksAndKeepsFallback() {
+        let markdown = MatrixHTMLRenderer.sanitizedMarkdown(
+            body: "fallback",
+            html: #"<em>Hi</em> <a href="javascript:alert(1)">tap</a> <code>&lt;safe&gt;</code>"#
+        )
+
+        XCTAssertEqual(markdown, "*Hi* tap `<safe>`")
+    }
+
     func testMatrixTimelineUsesPaginationTokenForOlderMessages() async throws {
         let client = MockTimelineHTTPClient(responses: [
             .success(
@@ -410,6 +461,53 @@ final class TimelineServiceTests: XCTestCase {
         XCTAssertEqual(resource.safeDescription, "photo.jpg")
         XCTAssertFalse(resource.safeDescription.contains("matrix.org"))
         XCTAssertTrue(resource.requiresAuthentication)
+    }
+
+    func testEncryptedMediaEventsAreBlockedPlaceholders() async throws {
+        let client = MockTimelineHTTPClient(responses: [
+            .success(
+                statusCode: 200,
+                body: """
+                {
+                  "chunk": [
+                    {
+                      "event_id": "$encrypted-media",
+                      "sender": "@alice:matrix.org",
+                      "origin_server_ts": 1000,
+                      "type": "m.room.message",
+                      "content": {
+                        "msgtype": "m.image",
+                        "body": "secret.png",
+                        "file": {
+                          "url": "mxc://matrix.org/encrypted-media",
+                          "key": { "alg": "A256CTR", "k": "redacted", "key_ops": ["encrypt","decrypt"], "kty": "oct" },
+                          "iv": "redacted",
+                          "hashes": { "sha256": "redacted" },
+                          "v": "v2"
+                        }
+                      }
+                    }
+                  ]
+                }
+                """
+            )
+        ])
+        let service = MatrixTimelineService(
+            sessionStore: AppSessionStore(currentState: .signedIn(try makeSession())),
+            httpClient: client
+        )
+
+        let items = await service.loadInitialTimeline(roomID: "!room:matrix.org")
+        let item = try XCTUnwrap(items.first)
+
+        guard case .mediaPlaceholder(let resource) = item.kind else {
+            XCTFail("Expected media placeholder")
+            return
+        }
+        XCTAssertTrue(item.isEncrypted)
+        XCTAssertTrue(resource.isEncrypted)
+        XCTAssertEqual(resource.safeDescription, "secret.png")
+        XCTAssertEqual(resource.authenticatedURL?.absoluteString, "mxc://matrix.org/encrypted-media")
     }
 
     func testMockTimelineCanLoadInitialAndOlderEvents() async {

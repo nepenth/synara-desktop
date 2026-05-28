@@ -5,6 +5,21 @@ struct MediaResource: Identifiable, Equatable {
     let filename: String
     let authenticatedURL: URL?
     let requiresAuthentication: Bool
+    let isEncrypted: Bool
+
+    init(
+        id: String,
+        filename: String,
+        authenticatedURL: URL?,
+        requiresAuthentication: Bool,
+        isEncrypted: Bool = false
+    ) {
+        self.id = id
+        self.filename = filename
+        self.authenticatedURL = authenticatedURL
+        self.requiresAuthentication = requiresAuthentication
+        self.isEncrypted = isEncrypted
+    }
 
     var safeDescription: String {
         let safeName = URL(fileURLWithPath: filename).lastPathComponent
@@ -64,7 +79,15 @@ protocol MediaUploading {
 
 struct MockMediaLoader: MediaLoading {
     func loadThumbnail(for resource: MediaResource) async -> MediaLoadState {
-        resource.authenticatedURL == nil ? .failed("Media is unavailable.") : .thumbnail(resource)
+        guard resource.isEncrypted == false else {
+            return .failed("Encrypted media requires recovered keys before it can be opened.")
+        }
+
+        if resource.authenticatedURL == nil {
+            return .failed("Media is unavailable.")
+        }
+
+        return .thumbnail(resource)
     }
 }
 
@@ -104,6 +127,10 @@ final class MatrixMediaLoader: MediaLoading {
     }
 
     func loadThumbnail(for resource: MediaResource) async -> MediaLoadState {
+        guard resource.isEncrypted == false else {
+            return .failed("Encrypted media requires recovered keys before it can be opened.")
+        }
+
         guard case .signedIn(let session) = sessionStore.currentState,
               let url = resource.authenticatedURL,
               let downloadURL = mediaURL(homeserverURL: session.homeserverURL, mxcURL: url, kind: .thumbnail) else {
