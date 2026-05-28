@@ -22,6 +22,8 @@ protocol EventActionServicing {
 struct MockEventActionService: EventActionServicing {
     func availability(for item: TimelineItem, currentUserID: String) -> EventActionAvailability {
         switch item.kind {
+        case .mediaPlaceholder(let resource) where resource.isEncrypted:
+            return EventActionAvailability(canReply: false, canEdit: false, canRedact: false, canReact: false)
         case .redacted, .encryptedPlaceholder:
             return EventActionAvailability(canReply: false, canEdit: false, canRedact: false, canReact: false)
         default:
@@ -47,7 +49,8 @@ struct MockEventActionService: EventActionServicing {
                 kind: item.kind,
                 replyToEventID: item.replyToEventID,
                 isEdited: true,
-                reactions: item.reactions
+                reactions: item.reactions,
+                isEncrypted: item.isEncrypted
             )
         case .redact:
             return TimelineItem(
@@ -58,7 +61,8 @@ struct MockEventActionService: EventActionServicing {
                 kind: .redacted,
                 replyToEventID: item.replyToEventID,
                 isEdited: item.isEdited,
-                reactions: [:]
+                reactions: [:],
+                isEncrypted: item.isEncrypted
             )
         case .react(let reaction):
             var reactions = item.reactions
@@ -71,7 +75,8 @@ struct MockEventActionService: EventActionServicing {
                 kind: item.kind,
                 replyToEventID: item.replyToEventID,
                 isEdited: item.isEdited,
-                reactions: reactions
+                reactions: reactions,
+                isEncrypted: item.isEncrypted
             )
         }
     }

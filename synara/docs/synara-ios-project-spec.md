@@ -1106,9 +1106,11 @@ The Matrix Rust SDK probe validates disposable encrypted-room login, crypto
 initialization, encrypted room state, encrypted timeline pagination, encrypted
 send acceptance, and zero UTD callbacks in the observed timeline window. The
 app-level smoke validates encrypted room open, send, relaunch restore, crypto
-status UI, and no visible undecrypted placeholder on the smoke path. Production
-E2EE remains blocked on complete recovery, verification/cross-signing, key
-backup restore, encrypted media, and broader encrypted-room regression coverage
+status UI, and no visible undecrypted placeholder on the smoke path. Encrypted
+media is now explicitly detected and safely blocked in timeline/media/action
+surfaces until decrypted media bytes are available. Production E2EE remains
+blocked on complete recovery, verification/cross-signing, key backup restore,
+encrypted media decryption, and broader encrypted-room regression coverage
 before TestFlight or App Store release.
 
 Requirements:
@@ -1142,10 +1144,11 @@ Status: first production E2EE slice complete. The app target includes the Matrix
 Rust SDK Swift package and SDK-backed auth, session restore, room list,
 timeline, send, crypto status, recovery, and verification-request service
 adapters. Build validation, deterministic unit/UI tests, full UI suite, and the
-gated app-level live encrypted-room smoke pass. Release cannot claim complete
-encrypted-room support until full recovery, verification/cross-signing, key
-backup restore, encrypted media, and broader encrypted regression coverage are
-complete.
+gated app-level live encrypted-room smoke pass. Encrypted media is a
+safe-blocked state until decryption support is added. Release cannot claim
+complete encrypted-room support until full recovery, verification/cross-signing,
+key backup restore, encrypted media decryption, and broader encrypted
+regression coverage are complete.
 
 Requirements:
 
@@ -1160,6 +1163,8 @@ Requirements:
 - Map decrypted SDK timeline events into existing `TimelineService` models.
 - Preserve safe placeholders and disabled event actions for UTD or unsupported
   encrypted states.
+- Detect encrypted media placeholders and block thumbnail/download/actions until
+  encrypted media decryption is implemented.
 - Send encrypted text messages through SDK timeline APIs.
 - Add gated live simulator validation for encrypted and unencrypted rooms.
 - Surface room/session crypto status in room headers and Settings.
@@ -1184,13 +1189,16 @@ Acceptance criteria:
   re-login.
 - Room header and Settings expose crypto status and recovery state.
 - UTD events never render as plaintext and never enable reply/edit/redact/react.
+- Encrypted media does not expose authenticated media downloads or enable event
+  actions before media decryption support exists.
 - No credentials, access tokens, refresh tokens, recovery keys, or room keys are
   printed or committed.
 
 Open implementation item:
 
 - Complete production-grade recovery, verification/cross-signing, key backup
-  restore, encrypted media, and expanded encrypted-room regression coverage.
+  restore, encrypted media decryption, and expanded encrypted-room regression
+  coverage.
 
 ## Phase 4: Push, Badge, And Deep Links
 
@@ -1900,6 +1908,66 @@ Remaining Phase 8 work:
 - Room profile editing for avatar/aliases where permissions allow.
 - Power-level editing only after safe write semantics are specified; read-only
   power-level visibility is implemented.
+
+## Phase 9: Daily Messaging Parity
+
+Status: first implementation slice complete. The REST timeline mapper now
+preserves Matrix `org.matrix.custom.html` formatted bodies separately from the
+plain fallback body, renders a safe formatted `AttributedString` in the native
+timeline, strips script/style/unsupported tags, allows only `http`, `https`,
+and `matrix` links, and keeps the fallback body for editing/accessibility.
+Encrypted media handling from Phase 7 also closes a daily-use safety gap by
+making encrypted media visibly blocked instead of presenting it as a normal file
+download.
+
+Goal: make the iOS timeline and composer feel like a full Matrix client.
+
+Requirements:
+
+- Render safe Matrix HTML for bold, italic, links, inline code, quotes, lists,
+  spoilers as safe text, and plain-text fallback.
+- Add rich composer controls with valid outbound Matrix HTML and plain-text
+  fallback.
+- Add mentions autocomplete for room members and the current user display name.
+- Add thread affordances, thread timeline navigation, and root-event context.
+- Add read receipts and typing indicators from live Matrix data.
+- Expand reply/edit UI with full preview, edit banner, cancel affordance, and
+  permission-aware controls.
+- Add reaction picker, add/remove own reaction, and reaction details.
+- Add message actions for copy text, copy permalink/deep link, and iOS share.
+- Render polls read-only before voting support is enabled.
+
+Deliverables:
+
+- Matrix HTML rendering and sanitizer tests.
+- Composer rich-text send/edit tests.
+- Mention insertion tests.
+- Thread navigation tests.
+- Reaction and message-action tests.
+- Desktop contract tests for shared Matrix HTML/event semantics.
+
+Acceptance criteria:
+
+- Formatted messages render safely and never execute unsafe links or HTML.
+- Sending rich text produces valid Matrix HTML plus a readable fallback body.
+- Mention autocomplete inserts Matrix-valid mentions and degrades safely when
+  member data is unavailable.
+- Threads are navigable from timeline and deep links.
+- Typing and read receipts render without timeline layout jumps.
+- Reaction add/remove works live and updates the local timeline only after
+  server success.
+- UI tests cover rich send/edit, mention insertion, thread navigation,
+  reactions, copy/share, and poll rendering.
+
+Remaining Phase 9 work:
+
+- Extend formatted-body support through the Matrix Rust SDK timeline path once
+  the Swift SDK exposes formatted content metadata in the event timeline item.
+- Implement rich outbound composer formatting instead of sending only the
+  current markdown/plain-text content.
+- Implement mentions autocomplete, threads, read receipts, typing indicators,
+  richer reaction controls, message share/copy/permalink actions, and poll
+  rendering.
 
 ## Final Release Phase: App Store Submission
 

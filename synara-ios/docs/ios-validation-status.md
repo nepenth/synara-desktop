@@ -109,9 +109,13 @@ Findings are tracked in ordered implementation items in
   app-level encrypted room open, composer send, relaunch restore, and no visible
   undecrypted placeholder on the smoke path against the disposable encrypted
   test room.
+- Encrypted media is now a first-class safe-blocked state: Matrix `content.file`
+  media events map to encrypted media placeholders, media loading refuses to
+  fetch them until decryption support exists, and event actions are disabled.
 - Production E2EE remains blocked until full recovery, verification/cross-
-  signing, key backup restore, encrypted media, and broader encrypted-room
-  regression coverage are complete before external TestFlight/App Store release.
+  signing, key backup restore, encrypted media decryption, and broader
+  encrypted-room regression coverage are complete before external TestFlight/App
+  Store release.
 
 The repeatable live-smoke checklist is
 [`synara-ios/docs/live-simulator-smoke.md`](live-simulator-smoke.md).
@@ -226,6 +230,10 @@ The repeatable live-smoke checklist is
   changes through Matrix Rust SDK room state APIs where allowed.
 - Room details exposes read-only power-level thresholds and allowed/restricted
   status for message, invite, name/topic/avatar, and moderation permissions.
+- Daily messaging parity has started with safe Matrix HTML rendering for the
+  REST timeline mapper. Supported formatting includes emphasis, strong text,
+  inline code, safe links, quotes, lists, spoilers as safe text, and stripped
+  script/style content with body fallback.
 - Phase 6.5 UI modernization adds shared native design primitives, product
   auth headers, modern room avatars/badges/search, grouped timeline message
   bubbles, a stronger composer, and first-class agent action cards.

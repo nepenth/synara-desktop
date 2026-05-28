@@ -2,6 +2,20 @@ import XCTest
 @testable import Synara
 
 final class MediaServiceTests: XCTestCase {
+    func testMediaLoaderBlocksEncryptedMedia() async throws {
+        let resource = MediaResource(
+            id: "$encrypted-media",
+            filename: "secret.png",
+            authenticatedURL: try XCTUnwrap(URL(string: "mxc://matrix.org/secret")),
+            requiresAuthentication: true,
+            isEncrypted: true
+        )
+
+        let state = await MockMediaLoader().loadThumbnail(for: resource)
+
+        XCTAssertEqual(state, .failed("Encrypted media requires recovered keys before it can be opened."))
+    }
+
     func testMediaLoaderDoesNotExposeAuthenticatedURLInDescription() async throws {
         let resource = MediaResource(
             id: "$media:matrix.org",
