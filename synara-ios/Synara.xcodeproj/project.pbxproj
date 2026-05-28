@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0729CE3EC35C32CEC12026B1 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = C3035383FA98B774B4F47C39 /* Assets.xcassets */; };
 		0E68BDED62692800912DE41C /* LocalWipeService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5077C08931AFE23ABB6EBFB /* LocalWipeService.swift */; };
 		1794B11F45DC4ACBA302F956 /* SynaraUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D0A5EA751CC5D570C324084 /* SynaraUITests.swift */; };
 		1A25A4B89F510B78AED4E8C6 /* AppLogging.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C94FF43A1B1DDDCF8067FB1 /* AppLogging.swift */; };
@@ -115,6 +116,7 @@
 		B6E7399D69CF6418A4206407 /* RoomListService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomListService.swift; sourceTree = "<group>"; };
 		C0FBB16EA6FF93511B2EE8F0 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		C261C2AFA98091E546B19E90 /* LocalWipeServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalWipeServiceTests.swift; sourceTree = "<group>"; };
+		C3035383FA98B774B4F47C39 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		C52EDC986E0B57231E77F695 /* HomeserverSelectionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeserverSelectionView.swift; sourceTree = "<group>"; };
 		C830BF9B8F7ED001CA8AC317 /* AuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthService.swift; sourceTree = "<group>"; };
 		CAB0B1FDD47555E50BE466B2 /* MediaServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaServiceTests.swift; sourceTree = "<group>"; };
@@ -217,6 +219,7 @@
 		CBF0FE9D91C40CC8D2490302 /* Resources */ = {
 			isa = PBXGroup;
 			children = (
+				C3035383FA98B774B4F47C39 /* Assets.xcassets */,
 				184EF5364268AFF19F35E66B /* PrivacyInfo.xcprivacy */,
 			);
 			path = Resources;
@@ -389,6 +392,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				0729CE3EC35C32CEC12026B1 /* Assets.xcassets in Resources */,
 				9D70F473C1C1E8971224F0B0 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
