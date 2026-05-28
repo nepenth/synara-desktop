@@ -122,11 +122,13 @@ struct RoomListView: View {
     private func loadRooms() {
         state = .loading
         Task {
+            let signpostID = PerformanceTrace.begin("RoomListLoad")
             let loadedState = await environment.roomList.loadRooms()
             await MainActor.run {
                 state = loadedState
                 autoOpenRoomIfRequested(from: loadedState)
             }
+            PerformanceTrace.end("RoomListLoad", id: signpostID)
         }
     }
 

@@ -3,6 +3,7 @@ import Foundation
 enum AppRoute: Hashable {
     case login(homeserverURL: String)
     case room(id: String, eventID: String? = nil, title: String? = nil)
+    case thread(roomID: String, rootEventID: String, roomTitle: String? = nil, rootTitle: String? = nil)
     case settings
     case notifications
     case later

@@ -10,6 +10,7 @@
 		0729CE3EC35C32CEC12026B1 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = C3035383FA98B774B4F47C39 /* Assets.xcassets */; };
 		0E68BDED62692800912DE41C /* LocalWipeService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5077C08931AFE23ABB6EBFB /* LocalWipeService.swift */; };
 		1794B11F45DC4ACBA302F956 /* SynaraUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D0A5EA751CC5D570C324084 /* SynaraUITests.swift */; };
+		195E1F1A887EF41A86A02A3A /* PerformanceFixtureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4697063405B601DC0FE6F086 /* PerformanceFixtureTests.swift */; };
 		1A25A4B89F510B78AED4E8C6 /* AppLogging.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C94FF43A1B1DDDCF8067FB1 /* AppLogging.swift */; };
 		1DB7278B67BE35BB7DC62210 /* AgentActionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80584058D243DE7197CF3096 /* AgentActionService.swift */; };
 		2AEC9CA069983AED2A534D47 /* AuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C830BF9B8F7ED001CA8AC317 /* AuthService.swift */; };
@@ -35,6 +36,7 @@
 		7BD7C2DB346D071A5121FC36 /* AppRouteTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F55BBDF32970A214C2829B1B /* AppRouteTests.swift */; };
 		88AAAD208C97C1A9EFF8AFE5 /* PushServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40037D97F31F787EA20BD7AE /* PushServiceTests.swift */; };
 		89761685411B7F9D7FCCD863 /* HomeserverSelectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C52EDC986E0B57231E77F695 /* HomeserverSelectionView.swift */; };
+		8B42041876057A9091D2F463 /* PerformanceInstrumentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00D51C4E0E89D32C8D99CC22 /* PerformanceInstrumentation.swift */; };
 		8C497BFC6D2B9A3048BB2852 /* LoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2515972271FDB4E4717F0CEE /* LoginView.swift */; };
 		8CD1DCF6DA4B22967284D0F3 /* PlaceholderScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = E23CEDAB04604A54EF7EAF9B /* PlaceholderScreen.swift */; };
 		90B73234B5A1DC142783A451 /* AppTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCD86C72DEE3F411D1FABB6B /* AppTab.swift */; };
@@ -77,6 +79,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		00D51C4E0E89D32C8D99CC22 /* PerformanceInstrumentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PerformanceInstrumentation.swift; sourceTree = "<group>"; };
 		017B2EBED1FF4FF0EC25CB24 /* AuthServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthServiceTests.swift; sourceTree = "<group>"; };
 		03ECE8FDA43404E53231A280 /* SynaraUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = SynaraUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		0D42B2D11968F0B23193A4ED /* RoomListServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomListServiceTests.swift; sourceTree = "<group>"; };
@@ -94,6 +97,7 @@
 		40037D97F31F787EA20BD7AE /* PushServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushServiceTests.swift; sourceTree = "<group>"; };
 		417DD4194803886BB803C6A6 /* RoomListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomListView.swift; sourceTree = "<group>"; };
 		45436B56CDB7CBBD40303484 /* AgentApprovalServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentApprovalServiceTests.swift; sourceTree = "<group>"; };
+		4697063405B601DC0FE6F086 /* PerformanceFixtureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PerformanceFixtureTests.swift; sourceTree = "<group>"; };
 		4E13415F14EC8A65D465380C /* SynaraDesign.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SynaraDesign.swift; sourceTree = "<group>"; };
 		57076E7E82206F1492033846 /* RootShellView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootShellView.swift; sourceTree = "<group>"; };
 		5DE2FB3D6ADFFA295C9B956F /* AppRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppRouter.swift; sourceTree = "<group>"; };
@@ -208,6 +212,7 @@
 				A5077C08931AFE23ABB6EBFB /* LocalWipeService.swift */,
 				CEE944AA45DCF6DA43357823 /* MatrixRustSDKService.swift */,
 				B3ECC92EE34CCE4DB57A5D3E /* MediaService.swift */,
+				00D51C4E0E89D32C8D99CC22 /* PerformanceInstrumentation.swift */,
 				A602AD446A2DD4C7C3A476ED /* PushService.swift */,
 				B6E7399D69CF6418A4206407 /* RoomListService.swift */,
 				CDD7517A55AC0E513E708AA0 /* SecureSessionStore.swift */,
@@ -261,6 +266,7 @@
 				15DF14E92067B54B5BF14404 /* LogRedactorTests.swift */,
 				2CBE437294BD93B48D7CDF75 /* MatrixLifecycleTests.swift */,
 				CAB0B1FDD47555E50BE466B2 /* MediaServiceTests.swift */,
+				4697063405B601DC0FE6F086 /* PerformanceFixtureTests.swift */,
 				40037D97F31F787EA20BD7AE /* PushServiceTests.swift */,
 				0D42B2D11968F0B23193A4ED /* RoomListServiceTests.swift */,
 				1C0070A890F80B56DD756D02 /* SecureSessionStoreTests.swift */,
@@ -416,6 +422,7 @@
 				3CF0BDAD36854DC8962393D4 /* LogRedactorTests.swift in Sources */,
 				BFD957777F3C28C1ED7C69AD /* MatrixLifecycleTests.swift in Sources */,
 				DD21E3D8ABB385F61B3E008F /* MediaServiceTests.swift in Sources */,
+				195E1F1A887EF41A86A02A3A /* PerformanceFixtureTests.swift in Sources */,
 				88AAAD208C97C1A9EFF8AFE5 /* PushServiceTests.swift in Sources */,
 				76AE72648BA28AFF732BB8F6 /* RoomListServiceTests.swift in Sources */,
 				45DB0A08CF868FFA984A3B0D /* SecureSessionStoreTests.swift in Sources */,
@@ -445,6 +452,7 @@
 				8C497BFC6D2B9A3048BB2852 /* LoginView.swift in Sources */,
 				5D6E01D7027F978C2751C1A9 /* MatrixRustSDKService.swift in Sources */,
 				9B792F2B4073B7792ED943D8 /* MediaService.swift in Sources */,
+				8B42041876057A9091D2F463 /* PerformanceInstrumentation.swift in Sources */,
 				8CD1DCF6DA4B22967284D0F3 /* PlaceholderScreen.swift in Sources */,
 				53A96EF2B937BE57AE02A15C /* PushService.swift in Sources */,
 				A72441DA6F04ED38E6AFA5FD /* RoomListService.swift in Sources */,

@@ -46,8 +46,8 @@ struct RootShellView: View {
     private func signedInShell(session authenticatedSession: AuthenticatedSession) -> some View {
         TabView(selection: $router.selectedTab) {
             tab(.rooms)
-            tab(.notifications)
             tab(.later)
+            tab(.notifications)
             tab(.settings)
         }
         .task(id: authenticatedSession.userID + authenticatedSession.deviceID) {
@@ -56,8 +56,10 @@ struct RootShellView: View {
                 return
             }
             startedMatrixSessionID = sessionID
+            let signpostID = PerformanceTrace.begin("SignedInSessionStart")
             await environment.matrix.start(session: authenticatedSession)
             environment.push.configure(with: authenticatedSession)
+            PerformanceTrace.end("SignedInSessionStart", id: signpostID)
         }
     }
 

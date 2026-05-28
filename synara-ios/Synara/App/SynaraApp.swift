@@ -5,19 +5,38 @@ import UserNotifications
 @main
 struct SynaraApp: App {
     @UIApplicationDelegateAdaptor(SynaraAppDelegate.self) private var appDelegate
+    @Environment(\.scenePhase) private var scenePhase
 
     private let environment: AppEnvironment = {
+        PerformanceTrace.event("AppEnvironmentCreate")
         if ProcessInfo.processInfo.environment["SYNARA_UI_TESTS"] == "1" {
             return .uiTest()
         }
         return .live()
     }()
 
+    init() {
+        PerformanceTrace.event("AppInit")
+    }
+
     var body: some Scene {
         WindowGroup {
             RootShellView(environment: environment)
                 .onAppear {
+                    PerformanceTrace.event("RootShellAppear")
                     appDelegate.bind(to: environment)
+                }
+                .onChange(of: scenePhase) { phase in
+                    switch phase {
+                    case .active:
+                        PerformanceTrace.event("SceneActive")
+                    case .background:
+                        PerformanceTrace.event("SceneBackground")
+                    case .inactive:
+                        PerformanceTrace.event("SceneInactive")
+                    @unknown default:
+                        PerformanceTrace.event("SceneUnknown")
+                    }
                 }
         }
     }

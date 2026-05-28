@@ -45,6 +45,7 @@ struct RoomTimelineView: View {
             Divider()
             ComposerView(
                 text: $draft,
+                placeholder: "Send a message...",
                 replyTarget: replyTarget,
                 editTarget: editTarget,
                 uploadState: uploadState,
@@ -146,13 +147,17 @@ struct RoomTimelineView: View {
                             .accessibilityIdentifier("LoadOlderTimelineButton")
                         }
 
+                        let threadReplyCounts = replyCounts(for: items)
+
                         ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
                             TimelineRow(
                                 item: item,
                                 currentUserID: currentUserID,
                                 isGroupedWithPrevious: isGroupedWithPrevious(index: index, items: items),
+                                replyCount: threadReplyCounts[item.eventID] ?? 0,
                                 availability: environment.eventActions.availability(for: item, currentUserID: currentUserID),
                                 onReply: { replyTarget = item },
+                                onOpenThread: { openThread(root: item) },
                                 onEdit: { beginEdit(item) },
                                 onRedact: { applyAction(.redact, to: item) },
                                 onReact: { applyAction(.react("👍"), to: item) },
@@ -262,12 +267,30 @@ struct RoomTimelineView: View {
             && current.timestamp.timeIntervalSince(previous.timestamp) < 5 * 60
     }
 
+    private func replyCounts(for items: [TimelineItem]) -> [String: Int] {
+        Dictionary(grouping: items.compactMap(\.replyToEventID), by: { $0 })
+            .mapValues(\.count)
+    }
+
+    private func openThread(root item: TimelineItem) {
+        environment.router.route(
+            to: .thread(
+                roomID: roomID,
+                rootEventID: item.eventID,
+                roomTitle: roomTitle,
+                rootTitle: item.threadTitle
+            )
+        )
+    }
+
     private func loadTimeline() async {
         state = .loading
+        let signpostID = PerformanceTrace.begin("TimelineInitialLoad")
         let items = await environment.timeline.loadInitialTimeline(roomID: roomID)
         await MainActor.run {
             state = items.isEmpty ? .empty : .loaded(items, isPaginating: false)
         }
+        PerformanceTrace.end("TimelineInitialLoad", id: signpostID)
     }
 
     private func loadCryptoStatus() async {
@@ -313,6 +336,10 @@ struct RoomTimelineView: View {
 
         Task {
             do {
+                let signpostID = PerformanceTrace.begin("MessageSend")
+                defer {
+                    PerformanceTrace.end("MessageSend", id: signpostID)
+                }
                 let item = try await environment.messageSender.send(request)
                 await MainActor.run {
                     append(item)
@@ -332,6 +359,10 @@ struct RoomTimelineView: View {
     private func uploadTestMedia() {
         uploadState = .uploading(progress: 0.5)
         Task {
+            let signpostID = PerformanceTrace.begin("MediaUpload")
+            defer {
+                PerformanceTrace.end("MediaUpload", id: signpostID)
+            }
             let result = await environment.mediaUploader.upload(
                 MediaUploadRequest(
                     roomID: roomID,
@@ -353,6 +384,10 @@ struct RoomTimelineView: View {
     private func uploadPickedPhoto(_ item: PhotosPickerItem) {
         uploadState = .uploading(progress: 0.25)
         Task {
+            let signpostID = PerformanceTrace.begin("PhotoPickerUpload")
+            defer {
+                PerformanceTrace.end("PhotoPickerUpload", id: signpostID)
+            }
             do {
                 guard let data = try await item.loadTransferable(type: Data.self) else {
                     await MainActor.run {
@@ -397,12 +432,14 @@ struct RoomTimelineView: View {
 
         state = .loaded(items, isPaginating: true)
         Task {
+            let signpostID = PerformanceTrace.begin("TimelineLoadOlder")
             let older = await environment.timeline.loadOlderTimeline(roomID: roomID, before: eventID)
             await MainActor.run {
                 let existingIDs = Set(items.map(\.id))
                 let uniqueOlder = older.filter { existingIDs.contains($0.id) == false }
                 state = .loaded(uniqueOlder + items, isPaginating: false)
             }
+            PerformanceTrace.end("TimelineLoadOlder", id: signpostID)
         }
     }
 
@@ -551,8 +588,12 @@ private struct TimelineHeader: View {
                     CryptoStatusPill(status: cryptoStatus)
                 }
 
-                Image(systemName: "person.2")
+                Image(systemName: "magnifyingglass")
                     .font(.system(size: 17, weight: .medium))
+                    .accessibilityHidden(true)
+                Image(systemName: "phone")
+                    .font(.system(size: 17, weight: .medium))
+                    .accessibilityHidden(true)
                 Button(action: onDetails) {
                     Image(systemName: "ellipsis")
                         .font(.system(size: 17, weight: .medium))
@@ -568,6 +609,300 @@ private struct TimelineHeader: View {
         .background(SynaraColor.surface)
         .overlay(alignment: .bottom) {
             Divider()
+        }
+    }
+}
+
+struct ThreadTimelineView: View {
+    let roomID: String
+    let rootEventID: String
+    let roomTitle: String?
+    let rootTitle: String?
+    @Environment(\.appEnvironment) private var environment
+    @Environment(\.dismiss) private var dismiss
+    @State private var state: TimelineViewState = .idle
+    @State private var draft = ""
+    @State private var sendError: String?
+    @State private var uploadState: MediaUploadState = .idle
+    @State private var selectedPhoto: PhotosPickerItem?
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ThreadHeader(
+                subtitle: rootTitle ?? roomTitle ?? "Room message",
+                onBack: { dismiss() }
+            )
+
+            threadContent
+
+            Divider()
+
+            ComposerView(
+                text: $draft,
+                placeholder: "Reply in thread...",
+                replyTarget: nil,
+                editTarget: nil,
+                uploadState: uploadState,
+                sendError: sendError,
+                onCancelRelation: {},
+                onSend: sendThreadReply,
+                onUpload: uploadThreadAttachment,
+                selectedPhoto: $selectedPhoto
+            )
+        }
+        .background(SynaraColor.surface)
+        .navigationBarBackButtonHidden(true)
+        .toolbar(.hidden, for: .navigationBar)
+        .toolbar(.hidden, for: .tabBar)
+        .task(id: roomID + rootEventID) {
+            await loadThread()
+        }
+        .onChange(of: selectedPhoto) { item in
+            guard item != nil else {
+                return
+            }
+            uploadThreadAttachment()
+            selectedPhoto = nil
+        }
+    }
+
+    @ViewBuilder
+    private var threadContent: some View {
+        switch state {
+        case .idle, .loading:
+            SynaraLoadingState(title: "Loading thread")
+        case .empty:
+            SynaraEmptyState(title: "No Thread Replies", systemImage: "bubble.left.and.bubble.right", message: "Replies will appear here.")
+        case .failed(let message):
+            SynaraErrorState(title: "Could Not Load Thread", message: message) {
+                Task {
+                    await loadThread()
+                }
+            }
+        case .loaded(let items, _):
+            let visibleItems = threadItems(from: items)
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: SynaraSpacing.medium) {
+                    ForEach(visibleItems) { item in
+                        ThreadMessageRow(item: item)
+                    }
+                }
+                .padding(.horizontal, SynaraSpacing.xLarge)
+                .padding(.top, SynaraSpacing.large)
+                .padding(.bottom, SynaraSpacing.large)
+            }
+            .accessibilityIdentifier("ThreadTimelineList")
+        }
+    }
+
+    private func loadThread() async {
+        state = .loading
+        let signpostID = PerformanceTrace.begin("ThreadTimelineLoad")
+        let items = await environment.timeline.loadInitialTimeline(roomID: roomID)
+        await MainActor.run {
+            state = threadItems(from: items).isEmpty ? .empty : .loaded(items, isPaginating: false)
+        }
+        PerformanceTrace.end("ThreadTimelineLoad", id: signpostID)
+    }
+
+    private func threadItems(from items: [TimelineItem]) -> [TimelineItem] {
+        let root = items.first { $0.eventID == rootEventID }
+        let replies = items
+            .filter { $0.replyToEventID == rootEventID }
+            .sorted { $0.timestamp < $1.timestamp }
+
+        if let root {
+            return [root] + replies
+        }
+
+        return replies
+    }
+
+    private func sendThreadReply() {
+        let body = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard body.isEmpty == false else {
+            sendError = MessageSendError.emptyMessage.localizedDescription
+            return
+        }
+
+        sendError = nil
+        Task {
+            do {
+                let signpostID = PerformanceTrace.begin("ThreadMessageSend")
+                defer {
+                    PerformanceTrace.end("ThreadMessageSend", id: signpostID)
+                }
+                let item = try await environment.messageSender.send(
+                    MessageSendRequest(
+                        roomID: roomID,
+                        body: body,
+                        replyToEventID: rootEventID,
+                        editEventID: nil
+                    )
+                )
+                await MainActor.run {
+                    draft = ""
+                    append(item)
+                }
+            } catch let error as MessageSendError {
+                await MainActor.run {
+                    sendError = error.localizedDescription
+                }
+            } catch {
+                await MainActor.run {
+                    sendError = MessageSendError.failed.localizedDescription
+                }
+            }
+        }
+    }
+
+    private func uploadThreadAttachment() {
+        uploadState = .uploading(progress: 0.5)
+        Task {
+            let signpostID = PerformanceTrace.begin("ThreadMediaUpload")
+            defer {
+                PerformanceTrace.end("ThreadMediaUpload", id: signpostID)
+            }
+            let result = await environment.mediaUploader.upload(
+                MediaUploadRequest(
+                    roomID: roomID,
+                    source: .photoLibrary,
+                    displayName: "thread-attachment.jpg",
+                    data: Data("Synara thread attachment".utf8),
+                    mimeType: "image/jpeg"
+                )
+            )
+            await MainActor.run {
+                uploadState = result
+                if case .uploaded(let item) = result {
+                    append(item)
+                }
+            }
+        }
+    }
+
+    private func append(_ item: TimelineItem) {
+        switch state {
+        case .loaded(let items, let isPaginating):
+            state = .loaded(items + [item], isPaginating: isPaginating)
+        default:
+            state = .loaded([item], isPaginating: false)
+        }
+    }
+}
+
+private struct ThreadHeader: View {
+    let subtitle: String
+    let onBack: () -> Void
+
+    var body: some View {
+        ZStack {
+            HStack {
+                Button(action: onBack) {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 19, weight: .semibold))
+                        .frame(width: 38, height: 38)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Back")
+
+                Spacer()
+
+                HStack(spacing: SynaraSpacing.medium) {
+                    Image(systemName: "bell")
+                    Image(systemName: "ellipsis")
+                }
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(SynaraColor.primaryText)
+            }
+
+            VStack(spacing: 2) {
+                Text("Thread")
+                    .font(.headline.weight(.semibold))
+                    .foregroundStyle(SynaraColor.primaryText)
+                    .accessibilityIdentifier("ThreadTimelineTitle")
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundStyle(SynaraColor.secondaryText)
+                    .lineLimit(1)
+            }
+            .padding(.horizontal, 80)
+        }
+        .padding(.horizontal, SynaraSpacing.large)
+        .padding(.vertical, SynaraSpacing.medium)
+        .background(SynaraColor.surface)
+    }
+}
+
+private struct ThreadMessageRow: View {
+    let item: TimelineItem
+
+    var body: some View {
+        VStack(spacing: SynaraSpacing.medium) {
+            HStack(alignment: .top, spacing: SynaraSpacing.medium) {
+                SynaraAvatar(title: item.senderID, tint: SynaraColor.secondaryText, size: 34)
+
+                VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
+                    HStack(alignment: .firstTextBaseline, spacing: SynaraSpacing.small) {
+                        Text(item.senderDisplayName)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(SynaraColor.primaryText)
+                        Text(item.timestamp.timelineTime)
+                            .font(.caption)
+                            .foregroundStyle(SynaraColor.secondaryText)
+                    }
+
+                    threadBody
+
+                    if item.reactions.isEmpty == false {
+                        HStack(spacing: SynaraSpacing.xSmall) {
+                            ForEach(item.reactions.keys.sorted(), id: \.self) { reaction in
+                                ReactionPill(title: reaction, count: item.reactions[reaction] ?? 0)
+                            }
+                            ReactionPill(title: "face.smiling", count: nil, isSystemImage: true)
+                        }
+                    }
+                }
+
+                Spacer(minLength: 0)
+            }
+
+            Divider()
+                .padding(.leading, 46)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("ThreadItem-\(item.eventID)")
+    }
+
+    @ViewBuilder
+    private var threadBody: some View {
+        switch item.kind {
+        case .text(let body):
+            Text(body)
+                .font(.body)
+                .foregroundStyle(SynaraColor.primaryText)
+                .fixedSize(horizontal: false, vertical: true)
+        case .formattedText(let body, let html):
+            Text(MatrixHTMLRenderer.attributedString(body: body, html: html))
+                .font(.body)
+                .foregroundStyle(SynaraColor.primaryText)
+                .fixedSize(horizontal: false, vertical: true)
+        case .mediaPlaceholder(let resource):
+            MediaAttachmentCard(resource: resource)
+        case .redacted:
+            Text("Message deleted")
+                .font(.body)
+                .foregroundStyle(SynaraColor.secondaryText)
+        case .encryptedPlaceholder:
+            Label("Encrypted content unavailable.", systemImage: "lock")
+                .font(.body)
+                .foregroundStyle(SynaraColor.secondaryText)
+        case .agentCard(let card):
+            AgentCardTimelineRow(card: card, onAction: { _ in })
+        case .unknown(let type):
+            Text("Unsupported event: \(type)")
+                .font(.body)
+                .foregroundStyle(SynaraColor.secondaryText)
         }
     }
 }
@@ -1060,8 +1395,10 @@ private struct TimelineRow: View {
     let item: TimelineItem
     let currentUserID: String
     let isGroupedWithPrevious: Bool
+    let replyCount: Int
     let availability: EventActionAvailability
     let onReply: () -> Void
+    let onOpenThread: () -> Void
     let onEdit: () -> Void
     let onRedact: () -> Void
     let onReact: () -> Void
@@ -1107,6 +1444,9 @@ private struct TimelineRow: View {
             if availability.canReply {
                 Button("Reply", action: onReply)
             }
+            if replyCount > 0 {
+                Button("Open Thread", action: onOpenThread)
+            }
             if availability.canEdit {
                 Button("Edit", action: onEdit)
             }
@@ -1142,6 +1482,19 @@ private struct TimelineRow: View {
                     }
                     ReactionPill(title: "face.smiling", count: nil, isSystemImage: true)
                 }
+            }
+
+            if replyCount > 0 {
+                Button(action: onOpenThread) {
+                    HStack(spacing: SynaraSpacing.xSmall) {
+                        Image(systemName: "bubble.left.and.bubble.right")
+                        Text(replyCount == 1 ? "1 reply" : "\(replyCount) replies")
+                    }
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(SynaraColor.accent)
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("ThreadButton-\(item.eventID)")
             }
         }
 
@@ -1224,6 +1577,10 @@ private struct TimelineRow: View {
 
     private var accessibilityChildBehavior: AccessibilityChildBehavior {
         if case .agentCard = item.kind {
+            return .contain
+        }
+
+        if replyCount > 0 {
             return .contain
         }
 
@@ -1545,6 +1902,7 @@ private extension SynaraAgentCardAction {
 
 private struct ComposerView: View {
     @Binding var text: String
+    let placeholder: String
     let replyTarget: TimelineItem?
     let editTarget: TimelineItem?
     let uploadState: MediaUploadState
@@ -1553,6 +1911,7 @@ private struct ComposerView: View {
     let onSend: () -> Void
     let onUpload: () -> Void
     @Binding var selectedPhoto: PhotosPickerItem?
+    @State private var isAttachmentSheetPresented = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: SynaraSpacing.small) {
@@ -1572,58 +1931,48 @@ private struct ComposerView: View {
             }
 
             HStack(alignment: .bottom, spacing: SynaraSpacing.small) {
-                if ProcessInfo.processInfo.environment["SYNARA_UI_TESTS"] == "1" {
-                    SynaraActionIconButton(systemImage: "plus", accessibilityLabel: "Attach", tint: SynaraColor.secondaryText, action: onUpload)
-                        .accessibilityIdentifier("AttachmentButton")
-                } else {
-                    PhotosPicker(selection: $selectedPhoto, matching: .images) {
-                        Image(systemName: "plus")
-                            .font(.system(size: 17, weight: .semibold))
-                            .frame(width: 44, height: 44)
-                            .background(SynaraColor.secondaryText.opacity(0.12))
-                            .foregroundStyle(SynaraColor.secondaryText)
-                            .clipShape(RoundedRectangle(cornerRadius: SynaraRadius.control))
-                    }
-                    .buttonStyle(.plain)
-                    .contentShape(Rectangle())
-                    .accessibilityLabel("Attach")
-                    .accessibilityIdentifier("AttachmentButton")
+                Button {
+                    isAttachmentSheetPresented = true
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.system(size: 17, weight: .semibold))
+                        .frame(width: 40, height: 40)
+                        .background(SynaraColor.secondarySurface)
+                        .foregroundStyle(SynaraColor.secondaryText)
+                        .clipShape(Circle())
+                        .overlay(
+                            Circle()
+                                .stroke(SynaraColor.separator.opacity(0.45), lineWidth: 0.5)
+                                .allowsHitTesting(false)
+                        )
                 }
+                .buttonStyle(.plain)
+                .contentShape(Rectangle())
+                .accessibilityLabel("Attach")
+                .accessibilityIdentifier("AttachmentButton")
 
-                VStack(spacing: SynaraSpacing.xSmall) {
-                    TextField("Message", text: $text, axis: .vertical)
-                        .lineLimit(1...4)
-                        .padding(.horizontal, SynaraSpacing.medium)
-                        .padding(.top, SynaraSpacing.medium)
-                        .accessibilityLabel("Message")
-                        .accessibilityHint("Enter a message for this room")
-                        .accessibilityIdentifier("ComposerTextField")
-
-                    HStack(spacing: SynaraSpacing.large) {
-                        ComposerToolIcon(title: "Aa")
-                        ComposerToolIcon(systemImage: "face.smiling")
-                        ComposerToolIcon(systemImage: "at")
-                        ComposerToolIcon(systemImage: "mic")
-                    }
-                    .frame(maxWidth: .infinity, alignment: .trailing)
+                TextField(placeholder, text: $text, axis: .vertical)
+                    .lineLimit(1...4)
                     .padding(.horizontal, SynaraSpacing.medium)
-                    .padding(.bottom, SynaraSpacing.small)
-                }
-                .background(SynaraColor.surface)
-                .clipShape(RoundedRectangle(cornerRadius: 16))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16)
-                        .stroke(SynaraColor.separator.opacity(0.35), lineWidth: 0.5)
-                        .allowsHitTesting(false)
-                )
+                    .padding(.vertical, SynaraSpacing.medium)
+                    .background(SynaraColor.surface)
+                    .clipShape(Capsule())
+                    .overlay(
+                        Capsule()
+                            .stroke(SynaraColor.separator.opacity(0.35), lineWidth: 0.5)
+                            .allowsHitTesting(false)
+                    )
+                    .accessibilityLabel("Message")
+                    .accessibilityHint("Enter a message for this room")
+                    .accessibilityIdentifier("ComposerTextField")
 
                 Button(action: onSend) {
-                    Image(systemName: "paperplane.fill")
+                    Image(systemName: text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "mic" : "paperplane.fill")
                         .font(.system(size: 17, weight: .semibold))
-                        .frame(width: 44, height: 44)
+                        .frame(width: 40, height: 40)
                         .background(sendButtonTint)
-                        .foregroundStyle(Color.white)
-                        .clipShape(RoundedRectangle(cornerRadius: SynaraRadius.control))
+                        .foregroundStyle(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? SynaraColor.secondaryText : Color.white)
+                        .clipShape(Circle())
                 }
                 .buttonStyle(.plain)
                 .contentShape(Rectangle())
@@ -1648,10 +1997,120 @@ private struct ComposerView: View {
         .padding(.top, SynaraSpacing.small)
         .padding(.bottom, SynaraSpacing.medium)
         .background(.regularMaterial)
+        .sheet(isPresented: $isAttachmentSheetPresented) {
+            AttachmentOptionsSheet(
+                onFallbackUpload: {
+                    isAttachmentSheetPresented = false
+                    onUpload()
+                },
+                selectedPhoto: $selectedPhoto
+            )
+            .presentationDetents([.height(360)])
+            .presentationDragIndicator(.visible)
+        }
     }
 
     private var sendButtonTint: Color {
-        text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? SynaraColor.secondaryText : SynaraColor.accent
+        text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? SynaraColor.secondarySurface : SynaraColor.accent
+    }
+}
+
+private struct AttachmentOptionsSheet: View {
+    let onFallbackUpload: () -> Void
+    @Binding var selectedPhoto: PhotosPickerItem?
+
+    private let options: [AttachmentOption] = [
+        AttachmentOption(title: "Photo or Video", systemImage: "photo", tint: .green, kind: .photo),
+        AttachmentOption(title: "File", systemImage: "doc", tint: .indigo, kind: .fallbackUpload),
+        AttachmentOption(title: "Location", systemImage: "mappin.circle", tint: .red, kind: .fallbackUpload),
+        AttachmentOption(title: "Poll", systemImage: "chart.bar.doc.horizontal", tint: .blue, kind: .fallbackUpload),
+        AttachmentOption(title: "Code Snippet", systemImage: "chevron.left.forwardslash.chevron.right", tint: .purple, kind: .fallbackUpload),
+        AttachmentOption(title: "Camera", systemImage: "camera", tint: .orange, kind: .fallbackUpload),
+        AttachmentOption(title: "Voice Message", systemImage: "mic", tint: .mint, kind: .fallbackUpload),
+        AttachmentOption(title: "Contact", systemImage: "person.crop.circle", tint: .mint, kind: .fallbackUpload)
+    ]
+
+    var body: some View {
+        VStack(spacing: SynaraSpacing.large) {
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: SynaraSpacing.medium), GridItem(.flexible(), spacing: SynaraSpacing.medium)], spacing: SynaraSpacing.medium) {
+                ForEach(options) { option in
+                    switch option.kind {
+                    case .photo:
+                        if ProcessInfo.processInfo.environment["SYNARA_UI_TESTS"] == "1" {
+                            Button(action: onFallbackUpload) {
+                                AttachmentOptionLabel(option: option)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("AttachmentOption-\(option.title)")
+                        } else {
+                            PhotosPicker(selection: $selectedPhoto, matching: .any(of: [.images, .videos])) {
+                                AttachmentOptionLabel(option: option)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("AttachmentOption-\(option.title)")
+                        }
+                    case .fallbackUpload:
+                        Button(action: onFallbackUpload) {
+                            AttachmentOptionLabel(option: option)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("AttachmentOption-\(option.title)")
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, SynaraSpacing.medium)
+        .padding(.top, SynaraSpacing.xLarge)
+        .padding(.bottom, SynaraSpacing.large)
+        .background(SynaraColor.surface)
+        .accessibilityIdentifier("AttachmentOptionsSheet")
+    }
+}
+
+private struct AttachmentOption: Identifiable {
+    enum Kind {
+        case photo
+        case fallbackUpload
+    }
+
+    let title: String
+    let systemImage: String
+    let tint: Color
+    let kind: Kind
+
+    var id: String { title }
+}
+
+private struct AttachmentOptionLabel: View {
+    let option: AttachmentOption
+
+    var body: some View {
+        HStack(spacing: SynaraSpacing.medium) {
+            Image(systemName: option.systemImage)
+                .font(.system(size: 18, weight: .semibold))
+                .frame(width: 30, height: 30)
+                .background(option.tint.opacity(0.14))
+                .foregroundStyle(option.tint)
+                .clipShape(Circle())
+
+            Text(option.title)
+                .font(.callout.weight(.semibold))
+                .foregroundStyle(SynaraColor.primaryText)
+                .lineLimit(1)
+                .minimumScaleFactor(0.68)
+                .allowsTightening(true)
+
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, minHeight: 64, alignment: .leading)
+        .padding(.horizontal, SynaraSpacing.medium)
+        .background(SynaraColor.surface)
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(SynaraColor.separator.opacity(0.45), lineWidth: 0.5)
+                .allowsHitTesting(false)
+        )
     }
 }
 
@@ -1743,6 +2202,39 @@ private extension Date {
         formatter.timeStyle = .short
         formatter.dateStyle = .none
         return formatter.string(from: self)
+    }
+}
+
+private extension TimelineItem {
+    var senderDisplayName: String {
+        guard senderID.hasPrefix("@") else {
+            return senderID
+        }
+
+        return senderID
+            .dropFirst()
+            .split(separator: ":")
+            .first
+            .map(String.init) ?? senderID
+    }
+
+    var threadTitle: String {
+        switch kind {
+        case .text(let body):
+            return body
+        case .formattedText(let body, _):
+            return body
+        case .mediaPlaceholder(let resource):
+            return resource.safeDescription
+        case .agentCard(let card):
+            return card.title
+        case .redacted:
+            return "Deleted message"
+        case .encryptedPlaceholder:
+            return "Encrypted message"
+        case .unknown(let type):
+            return type
+        }
     }
 }
 

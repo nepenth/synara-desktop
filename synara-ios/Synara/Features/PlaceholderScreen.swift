@@ -36,6 +36,13 @@ struct RoutePlaceholderView: View {
                 roomTitle: title,
                 focusedEventID: eventID
             )
+        case .thread(let roomID, let rootEventID, let roomTitle, let rootTitle):
+            ThreadTimelineView(
+                roomID: roomID,
+                rootEventID: rootEventID,
+                roomTitle: roomTitle,
+                rootTitle: rootTitle
+            )
         case .settings:
             PlaceholderScreen(title: "Settings", systemImage: "gearshape")
         case .notifications:
