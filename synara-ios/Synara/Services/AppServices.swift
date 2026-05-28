@@ -235,6 +235,90 @@ protocol CryptoStatusServicing {
     func recover(recoveryKey: String) async -> CryptoActionResult
 }
 
+enum SynaraRoomVisibility: String, CaseIterable, Identifiable, Equatable {
+    case `private` = "Private"
+    case `public` = "Public"
+
+    var id: String { rawValue }
+}
+
+enum SynaraRoomNotificationMode: String, CaseIterable, Identifiable, Equatable {
+    case allMessages = "All"
+    case mentionsOnly = "Mentions"
+    case mute = "Mute"
+
+    var id: String { rawValue }
+}
+
+struct RoomCreateRequest: Equatable {
+    let name: String
+    let topic: String
+    let visibility: SynaraRoomVisibility
+    let isEncrypted: Bool
+}
+
+struct DirectMessageCreateRequest: Equatable {
+    let userID: String
+    let isEncrypted: Bool
+}
+
+struct RoomJoinRequest: Equatable {
+    let reference: String
+}
+
+struct RoomOperationResult: Equatable {
+    let roomID: String
+    let name: String?
+}
+
+struct RoomDetails: Equatable {
+    let roomID: String
+    let name: String
+    let topic: String?
+    let aliases: [String]
+    let isEncrypted: Bool
+    let isPublic: Bool?
+    let memberCount: Int
+    let canInvite: Bool
+    let notificationMode: SynaraRoomNotificationMode
+}
+
+enum RoomManagementError: LocalizedError, Equatable {
+    case signedOut
+    case missingRoomName
+    case missingUserID
+    case missingRoomReference
+    case invalidMatrixID
+    case failed
+
+    var errorDescription: String? {
+        switch self {
+        case .signedOut:
+            return "Sign in before managing rooms."
+        case .missingRoomName:
+            return "Enter a room name."
+        case .missingUserID:
+            return "Enter a valid Matrix ID."
+        case .missingRoomReference:
+            return "Enter a room ID or alias."
+        case .invalidMatrixID:
+            return "Matrix IDs must look like @name:server."
+        case .failed:
+            return "Room action failed. Try again."
+        }
+    }
+}
+
+protocol RoomManagementServicing {
+    func createRoom(_ request: RoomCreateRequest) async throws -> RoomOperationResult
+    func createDirectMessage(_ request: DirectMessageCreateRequest) async throws -> RoomOperationResult
+    func joinRoom(_ request: RoomJoinRequest) async throws -> RoomOperationResult
+    func leaveRoom(roomID: String) async throws
+    func inviteUser(roomID: String, userID: String) async throws
+    func roomDetails(roomID: String) async -> RoomDetails?
+    func setNotificationMode(_ mode: SynaraRoomNotificationMode, roomID: String) async throws
+}
+
 protocol SettingsStoring {
     func bool(for key: String) -> Bool
     func set(_ value: Bool, for key: String)
@@ -380,6 +464,109 @@ struct MockCryptoStatusService: CryptoStatusServicing {
             return .failed("Enter a recovery key before recovering keys.")
         }
         return .completed("Recovery key accepted.")
+    }
+}
+
+final class MockRoomManagementService: RoomManagementServicing {
+    private var detailsByRoomID: [String: RoomDetails]
+    private var nextRoomIndex = 0
+    private(set) var createdRooms: [RoomCreateRequest] = []
+    private(set) var createdDMs: [DirectMessageCreateRequest] = []
+    private(set) var joinedRooms: [RoomJoinRequest] = []
+    private(set) var leftRoomIDs: [String] = []
+    private(set) var invitedUsers: [(roomID: String, userID: String)] = []
+
+    init(detailsByRoomID: [String: RoomDetails] = [:]) {
+        self.detailsByRoomID = detailsByRoomID
+    }
+
+    func createRoom(_ request: RoomCreateRequest) async throws -> RoomOperationResult {
+        let trimmedName = request.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmedName.isEmpty == false else {
+            throw RoomManagementError.missingRoomName
+        }
+        createdRooms.append(request)
+        nextRoomIndex += 1
+        let roomID = "!created-\(nextRoomIndex):matrix.org"
+        detailsByRoomID[roomID] = RoomDetails(
+            roomID: roomID,
+            name: trimmedName,
+            topic: request.topic.isEmpty ? nil : request.topic,
+            aliases: [],
+            isEncrypted: request.isEncrypted,
+            isPublic: request.visibility == .public,
+            memberCount: 1,
+            canInvite: true,
+            notificationMode: .allMessages
+        )
+        return RoomOperationResult(roomID: roomID, name: trimmedName)
+    }
+
+    func createDirectMessage(_ request: DirectMessageCreateRequest) async throws -> RoomOperationResult {
+        let trimmedUserID = request.userID.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard Self.isValidMatrixID(trimmedUserID) else {
+            throw RoomManagementError.invalidMatrixID
+        }
+        createdDMs.append(request)
+        nextRoomIndex += 1
+        return RoomOperationResult(roomID: "!dm-\(nextRoomIndex):matrix.org", name: trimmedUserID)
+    }
+
+    func joinRoom(_ request: RoomJoinRequest) async throws -> RoomOperationResult {
+        let trimmedReference = request.reference.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmedReference.isEmpty == false else {
+            throw RoomManagementError.missingRoomReference
+        }
+        joinedRooms.append(request)
+        return RoomOperationResult(roomID: trimmedReference.hasPrefix("!") ? trimmedReference : "!joined:matrix.org", name: trimmedReference)
+    }
+
+    func leaveRoom(roomID: String) async throws {
+        leftRoomIDs.append(roomID)
+    }
+
+    func inviteUser(roomID: String, userID: String) async throws {
+        let trimmedUserID = userID.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard Self.isValidMatrixID(trimmedUserID) else {
+            throw RoomManagementError.invalidMatrixID
+        }
+        invitedUsers.append((roomID: roomID, userID: trimmedUserID))
+    }
+
+    func roomDetails(roomID: String) async -> RoomDetails? {
+        detailsByRoomID[roomID] ?? RoomDetails(
+            roomID: roomID,
+            name: roomID,
+            topic: "Room details from the current Matrix session.",
+            aliases: [],
+            isEncrypted: roomID.localizedCaseInsensitiveContains("encrypted"),
+            isPublic: nil,
+            memberCount: 3,
+            canInvite: true,
+            notificationMode: .allMessages
+        )
+    }
+
+    func setNotificationMode(_ mode: SynaraRoomNotificationMode, roomID: String) async throws {
+        guard var details = detailsByRoomID[roomID] else {
+            return
+        }
+        details = RoomDetails(
+            roomID: details.roomID,
+            name: details.name,
+            topic: details.topic,
+            aliases: details.aliases,
+            isEncrypted: details.isEncrypted,
+            isPublic: details.isPublic,
+            memberCount: details.memberCount,
+            canInvite: details.canInvite,
+            notificationMode: mode
+        )
+        detailsByRoomID[roomID] = details
+    }
+
+    private static func isValidMatrixID(_ value: String) -> Bool {
+        value.hasPrefix("@") && value.contains(":") && value.count > 3
     }
 }
 

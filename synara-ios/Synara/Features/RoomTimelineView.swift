@@ -21,6 +21,7 @@ struct RoomTimelineView: View {
     @State private var agentActionMessage: String?
     @State private var cryptoStatus: RoomCryptoStatus = .unknown
     @State private var cryptoActionMessage: String?
+    @State private var isRoomDetailsPresented = false
     @State private var lastRenderedTimelineCount = 0
     @Environment(\.openURL) private var openURL
     @Environment(\.dismiss) private var dismiss
@@ -37,6 +38,7 @@ struct RoomTimelineView: View {
                 title: roomTitle ?? "Room",
                 subtitle: timelineSubtitle,
                 cryptoStatus: cryptoStatus,
+                onDetails: { isRoomDetailsPresented = true },
                 onBack: { dismiss() }
             )
             timelineContent
@@ -61,6 +63,9 @@ struct RoomTimelineView: View {
         .preferredColorScheme(isAgentRoom ? .dark : nil)
         .sheet(item: $viewerResource) { resource in
             MediaViewer(resource: resource)
+        }
+        .sheet(isPresented: $isRoomDetailsPresented) {
+            RoomDetailsView(roomID: roomID, fallbackTitle: roomTitle ?? "Room")
         }
         .alert("Agent Action", isPresented: Binding(
             get: { agentActionMessage != nil },
@@ -509,6 +514,7 @@ private struct TimelineHeader: View {
     let title: String
     let subtitle: String
     let cryptoStatus: RoomCryptoStatus
+    let onDetails: () -> Void
     let onBack: () -> Void
 
     var body: some View {
@@ -544,11 +550,15 @@ private struct TimelineHeader: View {
 
                 Image(systemName: "person.2")
                     .font(.system(size: 17, weight: .medium))
-                Image(systemName: "ellipsis")
-                    .font(.system(size: 17, weight: .medium))
+                Button(action: onDetails) {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 17, weight: .medium))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Room details")
+                .accessibilityIdentifier("RoomDetailsButton")
             }
             .foregroundStyle(SynaraColor.primaryText)
-            .accessibilityHidden(true)
         }
         .padding(.horizontal, SynaraSpacing.large)
         .padding(.vertical, SynaraSpacing.medium)
@@ -556,6 +566,179 @@ private struct TimelineHeader: View {
         .overlay(alignment: .bottom) {
             Divider()
         }
+    }
+}
+
+private struct RoomDetailsView: View {
+    let roomID: String
+    let fallbackTitle: String
+    @Environment(\.appEnvironment) private var environment
+    @Environment(\.dismiss) private var dismiss
+    @State private var details: RoomDetails?
+    @State private var inviteUserID = ""
+    @State private var notificationMode: SynaraRoomNotificationMode = .allMessages
+    @State private var message: String?
+    @State private var isLoading = false
+    @State private var isLeaveConfirmationPresented = false
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Room") {
+                    SettingsInfo(title: "Name", value: details?.name ?? fallbackTitle)
+                    SettingsInfo(title: "Room ID", value: roomID)
+                    SettingsInfo(title: "Topic", value: details?.topic ?? "No topic")
+                    SettingsInfo(title: "Encryption", value: details?.isEncrypted == true ? "Encrypted" : "Not encrypted")
+                    SettingsInfo(title: "Members", value: "\(details?.memberCount ?? 0)")
+                    if let aliases = details?.aliases, aliases.isEmpty == false {
+                        SettingsInfo(title: "Aliases", value: aliases.joined(separator: ", "))
+                    }
+                }
+
+                Section("Notifications") {
+                    Picker("Mode", selection: $notificationMode) {
+                        ForEach(SynaraRoomNotificationMode.allCases) { mode in
+                            Text(mode.rawValue).tag(mode)
+                        }
+                    }
+                    .accessibilityIdentifier("RoomNotificationModePicker")
+                    .onChange(of: notificationMode) { mode in
+                        updateNotificationMode(mode)
+                    }
+                }
+
+                Section("Members") {
+                    TextField("@user:server", text: $inviteUserID)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .accessibilityIdentifier("RoomInviteUserField")
+                    Button("Invite User", action: inviteUser)
+                        .disabled(isLoading || inviteUserID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || details?.canInvite == false)
+                        .accessibilityIdentifier("RoomInviteUserButton")
+                }
+
+                Section("Danger Zone") {
+                    Button("Leave Room", role: .destructive) {
+                        isLeaveConfirmationPresented = true
+                    }
+                    .accessibilityIdentifier("LeaveRoomButton")
+                }
+
+                if let message {
+                    Section {
+                        Text(message)
+                            .font(SynaraTypography.supporting)
+                            .foregroundStyle(SynaraColor.secondaryText)
+                            .accessibilityIdentifier("RoomDetailsMessage")
+                    }
+                }
+            }
+            .navigationTitle("Room Details")
+            .accessibilityIdentifier("RoomDetailsScreen")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                }
+            }
+            .confirmationDialog("Leave this room?", isPresented: $isLeaveConfirmationPresented) {
+                Button("Leave Room", role: .destructive) {
+                    leaveRoom()
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("The room will be removed from your joined room list.")
+            }
+            .task {
+                await loadDetails()
+            }
+        }
+    }
+
+    private func loadDetails() async {
+        let loadedDetails = await environment.roomManagement.roomDetails(roomID: roomID)
+        await MainActor.run {
+            details = loadedDetails
+            notificationMode = loadedDetails?.notificationMode ?? .allMessages
+        }
+    }
+
+    private func updateNotificationMode(_ mode: SynaraRoomNotificationMode) {
+        Task {
+            do {
+                try await environment.roomManagement.setNotificationMode(mode, roomID: roomID)
+                await MainActor.run {
+                    message = "Notification mode updated."
+                }
+            } catch {
+                await MainActor.run {
+                    message = RoomManagementError.failed.localizedDescription
+                }
+            }
+        }
+    }
+
+    private func inviteUser() {
+        let userID = inviteUserID
+        isLoading = true
+        Task {
+            do {
+                try await environment.roomManagement.inviteUser(roomID: roomID, userID: userID)
+                await MainActor.run {
+                    inviteUserID = ""
+                    message = "Invitation sent."
+                    isLoading = false
+                }
+            } catch let error as RoomManagementError {
+                await MainActor.run {
+                    message = error.localizedDescription
+                    isLoading = false
+                }
+            } catch {
+                await MainActor.run {
+                    message = RoomManagementError.failed.localizedDescription
+                    isLoading = false
+                }
+            }
+        }
+    }
+
+    private func leaveRoom() {
+        isLoading = true
+        Task {
+            do {
+                try await environment.roomManagement.leaveRoom(roomID: roomID)
+                await MainActor.run {
+                    environment.router.roomsPath = []
+                    dismiss()
+                }
+            } catch {
+                await MainActor.run {
+                    message = RoomManagementError.failed.localizedDescription
+                    isLoading = false
+                }
+            }
+        }
+    }
+}
+
+private struct SettingsInfo: View {
+    let title: String
+    let value: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(SynaraColor.secondaryText)
+            Text(value)
+                .font(SynaraTypography.body)
+                .foregroundStyle(SynaraColor.primaryText)
+                .textSelection(.enabled)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(title), \(value)")
     }
 }
 

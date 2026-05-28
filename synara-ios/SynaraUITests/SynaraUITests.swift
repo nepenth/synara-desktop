@@ -66,6 +66,20 @@ final class SynaraUITests: XCTestCase {
         XCTAssertTrue(app.buttons["RoomRow-!agent-workflows:matrix.org"].exists)
     }
 
+    func testRoomManagementCreatesPrivateEncryptedRoom() {
+        let app = launchRoomManagementSheetApp()
+
+        XCTAssertTrue(app.staticTexts["Create Room"].waitForExistence(timeout: 5))
+        app.textFields["Name"].tap()
+        app.textFields["Name"].typeText("Incident Room")
+        app.textFields["Topic"].tap()
+        app.textFields["Topic"].typeText("Operational response")
+        tap(app.buttons["RoomManagementSubmitButton"])
+
+        XCTAssertTrue(app.staticTexts["Incident Room"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.scrollViews["TimelineList"].waitForExistence(timeout: 5))
+    }
+
     func testRoomSearchFiltersByName() {
         let app = launchFilteredRoomsApp(query: "Alice")
 
@@ -85,6 +99,26 @@ final class SynaraUITests: XCTestCase {
         XCTAssertTrue(app.scrollViews["TimelineList"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["LoadOlderTimelineButton"].exists)
         XCTAssertTrue(app.staticTexts["Here's the latest spec for the new permissions model. Hello from iOS"].waitForExistence(timeout: 5))
+    }
+
+    func testRoomDetailsInviteAndLeaveMockFlow() {
+        let app = launchRoomApp()
+
+        XCTAssertTrue(app.buttons["RoomDetailsButton"].waitForExistence(timeout: 5))
+        tap(app.buttons["RoomDetailsButton"])
+        XCTAssertTrue(app.collectionViews["RoomDetailsScreen"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Room ID"].exists)
+        XCTAssertTrue(app.staticTexts["Encryption"].exists)
+        XCTAssertTrue(app.staticTexts["Members"].exists)
+
+        app.textFields["RoomInviteUserField"].tap()
+        app.textFields["RoomInviteUserField"].typeText("@newuser:matrix.org")
+        app.swipeUp()
+        XCTAssertTrue(app.buttons["Invite User"].exists)
+
+        tap(app.buttons["LeaveRoomButton"])
+        tap(app.buttons["Leave Room"].firstMatch)
+        XCTAssertTrue(app.collectionViews["RoomList"].waitForExistence(timeout: 5))
     }
 
     func testLargeRoomFixtureRendersAndScrolls() {
@@ -493,6 +527,15 @@ final class SynaraUITests: XCTestCase {
         app.launchEnvironment["SYNARA_UI_TESTS"] = "1"
         app.launchEnvironment["SYNARA_UI_TEST_SIGNED_IN"] = "1"
         app.launchEnvironment["SYNARA_UI_TEST_INVITE"] = "1"
+        app.launch()
+        return app
+    }
+
+    private func launchRoomManagementSheetApp() -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchEnvironment["SYNARA_UI_TESTS"] = "1"
+        app.launchEnvironment["SYNARA_UI_TEST_SIGNED_IN"] = "1"
+        app.launchEnvironment["SYNARA_UI_TEST_ROOM_MANAGEMENT_SHEET"] = "1"
         app.launch()
         return app
     }
