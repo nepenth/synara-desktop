@@ -185,6 +185,112 @@ actor MatrixRustSDKClientStore {
         try await client.encryption().recoverAndFixBackup(recoveryKey: recoveryKey)
     }
 
+    func createRoom(_ request: RoomCreateRequest, session: AuthenticatedSession) async throws -> RoomOperationResult {
+        let client = try await ensureClient(for: session)
+        let name = request.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard name.isEmpty == false else {
+            throw RoomManagementError.missingRoomName
+        }
+
+        let roomID = try await client.createRoom(
+            request: CreateRoomParameters(
+                name: name,
+                topic: request.topic.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty,
+                isEncrypted: request.isEncrypted,
+                visibility: request.visibility == .public ? .public : .private,
+                preset: request.visibility == .public ? .publicChat : .privateChat
+            )
+        )
+        _ = try await client.syncOnceV2(settings: SyncSettingsV2(timeoutMs: 5_000, fullState: true))
+        return RoomOperationResult(roomID: roomID, name: name)
+    }
+
+    func createDirectMessage(_ request: DirectMessageCreateRequest, session: AuthenticatedSession) async throws -> RoomOperationResult {
+        let client = try await ensureClient(for: session)
+        let userID = request.userID.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard Self.isValidMatrixID(userID) else {
+            throw RoomManagementError.invalidMatrixID
+        }
+
+        let roomID = try await client.createRoom(
+            request: CreateRoomParameters(
+                name: nil,
+                topic: nil,
+                isEncrypted: request.isEncrypted,
+                isDirect: true,
+                visibility: .private,
+                preset: .trustedPrivateChat,
+                invite: [userID]
+            )
+        )
+        _ = try await client.syncOnceV2(settings: SyncSettingsV2(timeoutMs: 5_000, fullState: true))
+        return RoomOperationResult(roomID: roomID, name: userID)
+    }
+
+    func joinRoom(_ request: RoomJoinRequest, session: AuthenticatedSession) async throws -> RoomOperationResult {
+        let client = try await ensureClient(for: session)
+        let reference = request.reference.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard reference.isEmpty == false else {
+            throw RoomManagementError.missingRoomReference
+        }
+
+        let room = reference.hasPrefix("!")
+            ? try await client.joinRoomById(roomId: reference)
+            : try await client.joinRoomByIdOrAlias(roomIdOrAlias: reference, serverNames: [])
+        _ = try await client.syncOnceV2(settings: SyncSettingsV2(timeoutMs: 5_000, fullState: true))
+        return RoomOperationResult(roomID: room.id(), name: room.displayName() ?? room.canonicalAlias())
+    }
+
+    func leaveRoom(roomID: String, session: AuthenticatedSession) async throws {
+        guard let room = try await room(roomID: roomID, session: session) else {
+            throw RoomManagementError.failed
+        }
+        try await room.leave()
+        try await syncOnce(session: session, fullState: true)
+    }
+
+    func inviteUser(roomID: String, userID: String, session: AuthenticatedSession) async throws {
+        let trimmedUserID = userID.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard Self.isValidMatrixID(trimmedUserID) else {
+            throw RoomManagementError.invalidMatrixID
+        }
+        guard let room = try await room(roomID: roomID, session: session) else {
+            throw RoomManagementError.failed
+        }
+        try await room.inviteUserById(userId: trimmedUserID)
+    }
+
+    func roomDetails(roomID: String, session: AuthenticatedSession) async throws -> RoomDetails? {
+        let client = try await ensureClient(for: session)
+        guard let room = try client.getRoom(roomId: roomID) ?? client.rooms().first(where: { $0.id() == roomID }) else {
+            return nil
+        }
+
+        let isEncrypted = await room.isEncrypted()
+        let isDirect = await room.isDirect()
+        let notificationSettings = try? await client.getNotificationSettings()
+            .getRoomNotificationSettings(roomId: roomID, isEncrypted: isEncrypted, isOneToOne: isDirect)
+        let powerLevels = try? await room.getPowerLevels()
+
+        return RoomDetails(
+            roomID: room.id(),
+            name: room.displayName() ?? room.canonicalAlias() ?? room.id(),
+            topic: room.topic(),
+            aliases: [room.canonicalAlias()].compactMap(\.self) + room.alternativeAliases(),
+            isEncrypted: isEncrypted,
+            isPublic: room.isPublic(),
+            memberCount: Int(room.joinedMembersCount() + room.invitedMembersCount()),
+            canInvite: powerLevels?.canOwnUserInvite() ?? false,
+            notificationMode: Self.mapNotificationMode(notificationSettings?.mode)
+        )
+    }
+
+    func setNotificationMode(_ mode: SynaraRoomNotificationMode, roomID: String, session: AuthenticatedSession) async throws {
+        let client = try await ensureClient(for: session)
+        let notificationSettings = await client.getNotificationSettings()
+        try await notificationSettings.setRoomNotificationMode(roomId: roomID, mode: Self.mapNotificationMode(mode))
+    }
+
     private func ensureClient(for session: AuthenticatedSession) async throws -> Client {
         if let client, activeSession == session {
             return client
@@ -262,6 +368,34 @@ actor MatrixRustSDKClientStore {
         case .unknown:
             return .unknown
         }
+    }
+
+    private static func mapNotificationMode(_ mode: MatrixRustSDK.RoomNotificationMode?) -> SynaraRoomNotificationMode {
+        switch mode {
+        case .allMessages:
+            return .allMessages
+        case .mentionsAndKeywordsOnly:
+            return .mentionsOnly
+        case .mute:
+            return .mute
+        case nil:
+            return .allMessages
+        }
+    }
+
+    private static func mapNotificationMode(_ mode: SynaraRoomNotificationMode) -> MatrixRustSDK.RoomNotificationMode {
+        switch mode {
+        case .allMessages:
+            return .allMessages
+        case .mentionsOnly:
+            return .mentionsAndKeywordsOnly
+        case .mute:
+            return .mute
+        }
+    }
+
+    private static func isValidMatrixID(_ value: String) -> Bool {
+        value.hasPrefix("@") && value.contains(":") && value.count > 3
     }
 
     private func buildClient(homeserverURL: URL, storeID: String) async throws -> Client {
@@ -708,6 +842,65 @@ final class MatrixRustSDKCryptoStatusService: CryptoStatusServicing {
     }
 }
 
+final class MatrixRustSDKRoomManagementService: RoomManagementServicing {
+    private let sessionStore: AppSessionStore
+    private let clientStore: MatrixRustSDKClientStore
+
+    init(sessionStore: AppSessionStore, clientStore: MatrixRustSDKClientStore) {
+        self.sessionStore = sessionStore
+        self.clientStore = clientStore
+    }
+
+    func createRoom(_ request: RoomCreateRequest) async throws -> RoomOperationResult {
+        guard case .signedIn(let session) = sessionStore.currentState else {
+            throw RoomManagementError.signedOut
+        }
+        return try await clientStore.createRoom(request, session: session)
+    }
+
+    func createDirectMessage(_ request: DirectMessageCreateRequest) async throws -> RoomOperationResult {
+        guard case .signedIn(let session) = sessionStore.currentState else {
+            throw RoomManagementError.signedOut
+        }
+        return try await clientStore.createDirectMessage(request, session: session)
+    }
+
+    func joinRoom(_ request: RoomJoinRequest) async throws -> RoomOperationResult {
+        guard case .signedIn(let session) = sessionStore.currentState else {
+            throw RoomManagementError.signedOut
+        }
+        return try await clientStore.joinRoom(request, session: session)
+    }
+
+    func leaveRoom(roomID: String) async throws {
+        guard case .signedIn(let session) = sessionStore.currentState else {
+            throw RoomManagementError.signedOut
+        }
+        try await clientStore.leaveRoom(roomID: roomID, session: session)
+    }
+
+    func inviteUser(roomID: String, userID: String) async throws {
+        guard case .signedIn(let session) = sessionStore.currentState else {
+            throw RoomManagementError.signedOut
+        }
+        try await clientStore.inviteUser(roomID: roomID, userID: userID, session: session)
+    }
+
+    func roomDetails(roomID: String) async -> RoomDetails? {
+        guard case .signedIn(let session) = sessionStore.currentState else {
+            return nil
+        }
+        return try? await clientStore.roomDetails(roomID: roomID, session: session)
+    }
+
+    func setNotificationMode(_ mode: SynaraRoomNotificationMode, roomID: String) async throws {
+        guard case .signedIn(let session) = sessionStore.currentState else {
+            throw RoomManagementError.signedOut
+        }
+        try await clientStore.setNotificationMode(mode, roomID: roomID, session: session)
+    }
+}
+
 private final class MatrixRustSDKTimelineCollector: TimelineListener, @unchecked Sendable {
     private let lock = NSLock()
     private var collected: [EventTimelineItem] = []
@@ -806,5 +999,11 @@ private extension TimelineItemContent {
             return []
         }
         return content.reactions
+    }
+}
+
+private extension String {
+    var nilIfEmpty: String? {
+        isEmpty ? nil : self
     }
 }

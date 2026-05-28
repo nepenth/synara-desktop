@@ -7,7 +7,9 @@ Phase 3 core messaging, Phase 5 agent workflows, Phase 6 internal
 settings/hardening, Phase 6.5 iOS UI modernization, and Phase 6.6 mockup
 fidelity are complete for the current native iOS MVP. Phase 7 production E2EE
 first slice is complete for app-level encrypted room open/send/relaunch restore,
-crypto status UI, and conservative recovery controls.
+crypto status UI, and conservative recovery controls. Phase 8 room-management
+first slice is complete for service contracts and native create/join/DM,
+room-details, invite, leave, and notification-mode UI surfaces.
 Deterministic simulator tests validate the mock path, and a gated live simulator
 smoke validates signed session restore, live room opening, composer send, and
 timeline update against disposable encrypted and unencrypted test rooms.
@@ -63,8 +65,8 @@ xcodebuild -project Synara.xcodeproj -scheme Synara -configuration Debug \
 
 Results:
 
-- `SynaraTests`: 72 tests, 0 failures.
-- `SynaraUITests`: 26 tests, 0 failures, 3 skipped gated live-smoke tests.
+- `SynaraTests`: 75 tests, 0 failures.
+- `SynaraUITests`: 28 tests, 0 failures, 3 skipped gated live-smoke tests.
 
 Deterministic UI tests launch the app with `SYNARA_UI_TESTS=1`, which forces
 mock services instead of live Keychain, auth, and Matrix dependencies. The
@@ -206,6 +208,10 @@ The repeatable live-smoke checklist is
 - Settings exposes crypto verification, recovery, key backup, decryption issue
   status, SDK-backed device verification request, and recovery-key submission
   controls.
+- Room management exposes native create-room, create-DM, and join-room sheet
+  flows. Private rooms and DMs default to encryption.
+- Room details exposes live room metadata, encryption/member context, invite
+  entry, leave confirmation, and per-room notification mode controls.
 - Phase 6.5 UI modernization adds shared native design primitives, product
   auth headers, modern room avatars/badges/search, grouped timeline message
   bubbles, a stronger composer, and first-class agent action cards.
