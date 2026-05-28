@@ -22,6 +22,7 @@ struct AppEnvironment {
     let mediaLoader: MediaLoading
     let mediaUploader: MediaUploading
     let crypto: CryptoStatusServicing
+    let roomManagement: RoomManagementServicing
 
     static func live() -> AppEnvironment {
         let logger = AppLogger()
@@ -49,6 +50,7 @@ struct AppEnvironment {
         let roomList = MatrixRustSDKRoomListService(sessionStore: session, clientStore: matrixSDKClientStore)
         let roomMembership = MatrixRustSDKRoomMembershipService(sessionStore: session, clientStore: matrixSDKClientStore)
         let crypto = MatrixRustSDKCryptoStatusService(sessionStore: session, clientStore: matrixSDKClientStore)
+        let roomManagement = MatrixRustSDKRoomManagementService(sessionStore: session, clientStore: matrixSDKClientStore)
         return AppEnvironment(
             session: session,
             matrix: matrix,
@@ -75,7 +77,8 @@ struct AppEnvironment {
             agentApprovals: MatrixAgentApprovalService(sessionStore: session),
             mediaLoader: MatrixMediaLoader(sessionStore: session),
             mediaUploader: MatrixMediaUploadService(sessionStore: session),
-            crypto: crypto
+            crypto: crypto,
+            roomManagement: roomManagement
         )
     }
 
@@ -98,7 +101,8 @@ struct AppEnvironment {
         agentApprovals: AgentApprovalServicing = MockAgentApprovalService(),
         mediaLoader: MediaLoading = MockMediaLoader(),
         mediaUploader: MediaUploading = MockMediaUploadService(),
-        crypto: CryptoStatusServicing = MockCryptoStatusService()
+        crypto: CryptoStatusServicing = MockCryptoStatusService(),
+        roomManagement: RoomManagementServicing = MockRoomManagementService()
     ) -> AppEnvironment {
         AppEnvironment(
             session: session,
@@ -126,7 +130,8 @@ struct AppEnvironment {
             agentApprovals: agentApprovals,
             mediaLoader: mediaLoader,
             mediaUploader: mediaUploader,
-            crypto: crypto
+            crypto: crypto,
+            roomManagement: roomManagement
         )
     }
 

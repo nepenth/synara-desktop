@@ -1865,6 +1865,32 @@ Acceptance criteria:
 - Existing deterministic unit/UI tests continue to pass or are updated only for
   intentional accessibility/visual-surface changes.
 
+## Phase 8: Room, DM, Space, And Settings Parity
+
+Status: first room-management slice complete. The iOS app now has app-owned
+room-management service contracts, mock services, SDK-backed adapters for
+create room, create DM, join by room ID/alias, leave, invite, room details, and
+room notification modes, plus native UI surfaces for the same.
+
+Implemented in this slice:
+
+- Create room sheet with private/public visibility and encryption toggle.
+- Create DM flow by Matrix ID, defaulting to encrypted.
+- Join room flow by room ID or alias.
+- Room details sheet with name, topic, aliases, encryption, member count,
+  invite permission, notification mode, invite, and leave confirmation.
+- Deterministic unit/UI tests for mock create-room validation, Matrix ID
+  validation, room-management sheet, room details, and leave navigation.
+
+Remaining Phase 8 work:
+
+- Live smoke for create room, invite, leave, and details read against the test
+  homeserver.
+- Public-room discovery UI beyond direct join by alias/ID.
+- Spaces navigation and room-list filtering by space.
+- Room profile editing for name/topic/avatar/aliases where permissions allow.
+- Power-level editing only after safe write semantics are specified.
+
 ## Final Release Phase: App Store Submission
 
 Status: deferred until the desktop-parity release-gate track is complete:

@@ -33,6 +33,7 @@ final class AppEnvironmentTests: XCTestCase {
         XCTAssertTrue(environment.eventActions is MatrixEventActionService)
         XCTAssertTrue(environment.agentApprovals is MatrixAgentApprovalService)
         XCTAssertTrue(environment.crypto is MatrixRustSDKCryptoStatusService)
+        XCTAssertTrue(environment.roomManagement is MatrixRustSDKRoomManagementService)
     }
 
     func testRoomCryptoStatusFlagsRecoveryAttentionForEncryptedProblems() {
@@ -52,6 +53,37 @@ final class AppEnvironmentTests: XCTestCase {
         let result = await MockCryptoStatusService().recover(recoveryKey: "   ")
 
         XCTAssertEqual(result, .failed("Enter a recovery key before recovering keys."))
+    }
+
+    func testMockRoomManagementCreatesEncryptedPrivateRoom() async throws {
+        let service = MockRoomManagementService()
+
+        let result = try await service.createRoom(
+            RoomCreateRequest(
+                name: "Incident Room",
+                topic: "Operational response",
+                visibility: .private,
+                isEncrypted: true
+            )
+        )
+        let details = await service.roomDetails(roomID: result.roomID)
+
+        XCTAssertEqual(result.name, "Incident Room")
+        XCTAssertEqual(details?.name, "Incident Room")
+        XCTAssertEqual(details?.topic, "Operational response")
+        XCTAssertEqual(details?.isEncrypted, true)
+        XCTAssertEqual(details?.isPublic, false)
+    }
+
+    func testMockRoomManagementValidatesMatrixIDs() async throws {
+        let service = MockRoomManagementService()
+
+        do {
+            _ = try await service.createDirectMessage(DirectMessageCreateRequest(userID: "alice", isEncrypted: true))
+            XCTFail("Expected invalid Matrix ID to fail.")
+        } catch let error as RoomManagementError {
+            XCTAssertEqual(error, .invalidMatrixID)
+        }
     }
 
     func testSettingsStorePersistsBooleansInMemory() {

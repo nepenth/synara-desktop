@@ -6,6 +6,7 @@ struct RoomListView: View {
     @State private var membershipError: String?
     @State private var searchQuery: String = ProcessInfo.processInfo.environment["SYNARA_UI_TEST_ROOM_SEARCH"] ?? ""
     @State private var selectedFilter: RoomListFilter = .all
+    @State private var isRoomManagementSheetPresented = ProcessInfo.processInfo.environment["SYNARA_UI_TEST_ROOM_MANAGEMENT_SHEET"] == "1"
 
     var body: some View {
         Group {
@@ -28,9 +29,10 @@ struct RoomListView: View {
                 let directRooms = filteredRooms.filter { $0.kind == .directMessage }
                 VStack(spacing: 0) {
                     VStack(spacing: SynaraSpacing.medium) {
-                        RoomListHeader {
-                            environment.router.present(.accountSwitcher)
-                        }
+                        RoomListHeader(
+                            onAccount: { environment.router.present(.accountSwitcher) },
+                            onNewRoom: { isRoomManagementSheetPresented = true }
+                        )
                         RoomSearchField(text: $searchQuery)
                         RoomFilterStrip(selectedFilter: $selectedFilter)
                     }
@@ -98,6 +100,13 @@ struct RoomListView: View {
                 SynaraToolbarIconButton(systemImage: "person.crop.circle", accessibilityLabel: "Accounts") {
                     environment.router.present(.accountSwitcher)
                 }
+            }
+        }
+        .sheet(isPresented: $isRoomManagementSheetPresented) {
+            RoomManagementSheet { result in
+                isRoomManagementSheetPresented = false
+                loadRooms()
+                environment.router.route(to: .room(id: result.roomID, title: result.name))
             }
         }
         .task {
@@ -234,6 +243,7 @@ private enum RoomListFilter: String, CaseIterable, Identifiable {
 
 private struct RoomListHeader: View {
     let onAccount: () -> Void
+    let onNewRoom: () -> Void
 
     var body: some View {
         HStack(spacing: SynaraSpacing.medium) {
@@ -260,9 +270,186 @@ private struct RoomListHeader: View {
 
             Spacer()
 
-            SynaraActionIconButton(systemImage: "square.and.pencil", accessibilityLabel: "New room", tint: SynaraColor.secondaryText) {
-                onAccount()
+            Button(action: onNewRoom) {
+                Image(systemName: "square.and.pencil")
+                    .font(.system(size: 17, weight: .semibold))
+                    .frame(width: 44, height: 44)
+                    .background(SynaraColor.secondaryText.opacity(0.12))
+                    .foregroundStyle(SynaraColor.secondaryText)
+                    .clipShape(RoundedRectangle(cornerRadius: SynaraRadius.control))
             }
+            .buttonStyle(.plain)
+            .contentShape(Rectangle())
+            .accessibilityLabel("New room")
+            .accessibilityIdentifier("NewRoomButton")
+        }
+    }
+}
+
+private struct RoomManagementSheet: View {
+    enum Mode: String, CaseIterable, Identifiable {
+        case room = "Room"
+        case dm = "DM"
+        case join = "Join"
+
+        var id: String { rawValue }
+    }
+
+    @Environment(\.appEnvironment) private var environment
+    @Environment(\.dismiss) private var dismiss
+    @State private var mode: Mode = .room
+    @State private var roomName = ""
+    @State private var roomTopic = ""
+    @State private var roomVisibility: SynaraRoomVisibility = .private
+    @State private var encryptRoom = true
+    @State private var userID = ""
+    @State private var joinReference = ""
+    @State private var state: SheetState = .idle
+    let onComplete: (RoomOperationResult) -> Void
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    Picker("Action", selection: $mode) {
+                        ForEach(Mode.allCases) { mode in
+                            Text(mode.rawValue).tag(mode)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .accessibilityIdentifier("RoomManagementModePicker")
+                }
+
+                switch mode {
+                case .room:
+                    createRoomSection
+                case .dm:
+                    directMessageSection
+                case .join:
+                    joinRoomSection
+                }
+
+                if case .failed(let message) = state {
+                    Section {
+                        Text(message)
+                            .foregroundStyle(.red)
+                            .accessibilityIdentifier("RoomManagementErrorText")
+                    }
+                }
+            }
+            .navigationTitle("New")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(actionTitle, action: submit)
+                        .disabled(state.isLoading)
+                        .accessibilityIdentifier("RoomManagementSubmitButton")
+                }
+            }
+            .accessibilityIdentifier("RoomManagementSheet")
+        }
+    }
+
+    private var createRoomSection: some View {
+        Section("Create Room") {
+            TextField("Name", text: $roomName)
+                .accessibilityIdentifier("CreateRoomNameField")
+            TextField("Topic", text: $roomTopic)
+                .accessibilityIdentifier("CreateRoomTopicField")
+            Picker("Visibility", selection: $roomVisibility) {
+                ForEach(SynaraRoomVisibility.allCases) { visibility in
+                    Text(visibility.rawValue).tag(visibility)
+                }
+            }
+            Toggle("Encrypt room", isOn: $encryptRoom)
+                .accessibilityIdentifier("CreateRoomEncryptionToggle")
+        }
+    }
+
+    private var directMessageSection: some View {
+        Section("Start Direct Message") {
+            TextField("@user:server", text: $userID)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .accessibilityIdentifier("CreateDMUserField")
+            Toggle("Encrypt DM", isOn: $encryptRoom)
+                .accessibilityIdentifier("CreateDMEncryptionToggle")
+        }
+    }
+
+    private var joinRoomSection: some View {
+        Section("Join Room") {
+            TextField("#room:server or !room:server", text: $joinReference)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .accessibilityIdentifier("JoinRoomReferenceField")
+        }
+    }
+
+    private var actionTitle: String {
+        switch mode {
+        case .room:
+            return "Create"
+        case .dm:
+            return "Start"
+        case .join:
+            return "Join"
+        }
+    }
+
+    private func submit() {
+        state = .loading
+        Task {
+            do {
+                let result: RoomOperationResult
+                switch mode {
+                case .room:
+                    result = try await environment.roomManagement.createRoom(
+                        RoomCreateRequest(
+                            name: roomName,
+                            topic: roomTopic,
+                            visibility: roomVisibility,
+                            isEncrypted: encryptRoom
+                        )
+                    )
+                case .dm:
+                    result = try await environment.roomManagement.createDirectMessage(
+                        DirectMessageCreateRequest(userID: userID, isEncrypted: encryptRoom)
+                    )
+                case .join:
+                    result = try await environment.roomManagement.joinRoom(RoomJoinRequest(reference: joinReference))
+                }
+
+                await MainActor.run {
+                    state = .idle
+                    onComplete(result)
+                }
+            } catch let error as RoomManagementError {
+                await MainActor.run {
+                    state = .failed(error.localizedDescription)
+                }
+            } catch {
+                await MainActor.run {
+                    state = .failed(RoomManagementError.failed.localizedDescription)
+                }
+            }
+        }
+    }
+
+    private enum SheetState: Equatable {
+        case idle
+        case loading
+        case failed(String)
+
+        var isLoading: Bool {
+            if case .loading = self {
+                return true
+            }
+            return false
         }
     }
 }
