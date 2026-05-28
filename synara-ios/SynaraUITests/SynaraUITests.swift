@@ -128,6 +128,18 @@ final class SynaraUITests: XCTestCase {
         XCTAssertTrue(app.buttons["MediaPlaceholder-synara-upload.jpg"].waitForExistence(timeout: 5))
     }
 
+    func testEncryptedTimelineShowsCryptoStatusRecoveryBannerAndSafePlaceholder() {
+        let app = launchEncryptedRoomApp()
+
+        XCTAssertTrue(app.scrollViews["TimelineList"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Recovery Needed"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Encrypted history needs attention"].waitForExistence(timeout: 5))
+        XCTAssertTrue(waitForTimelineElement(app.buttons["Retry Decryption"], app: app, timeout: 5))
+        XCTAssertTrue(waitForTimelineElement(app.buttons["Review Security"], app: app, timeout: 5))
+        XCTAssertTrue(app.staticTexts["Decrypted encrypted-room message"].exists)
+        XCTAssertTrue(app.staticTexts["Encrypted content unavailable. Actions and media downloads are blocked until keys are available."].exists)
+    }
+
     func testLogoutReturnsToSignedOutShell() {
         let app = launchSignedInSettingsApp()
 
@@ -144,10 +156,26 @@ final class SynaraUITests: XCTestCase {
         XCTAssertTrue(app.buttons["PushRegistrationButton"].exists)
         XCTAssertTrue(revealSettingsElement(app.staticTexts["Theme"], app: app, timeout: 10))
         XCTAssertTrue(revealSettingsElement(app.staticTexts["Session Storage"], app: app, timeout: 10))
+        XCTAssertTrue(revealSettingsElement(app.staticTexts["Device Verification"], app: app, timeout: 10))
+        XCTAssertTrue(revealSettingsElement(app.staticTexts["Key Recovery"], app: app, timeout: 10))
+        XCTAssertTrue(revealSettingsElement(app.staticTexts["Key Backup"], app: app, timeout: 10))
         XCTAssertTrue(revealSettingsElement(app.buttons["AboutSettingsLink"], app: app, timeout: 10))
         XCTAssertTrue(revealSettingsElement(app.buttons["LicensesSettingsLink"], app: app, timeout: 10))
         XCTAssertTrue(revealSettingsElement(app.buttons["PrivacyPolicySettingsLink"], app: app, timeout: 10))
         XCTAssertTrue(revealSettingsElement(app.buttons["SupportSettingsLink"], app: app, timeout: 10))
+    }
+
+    func testSettingsShowsEncryptedRecoveryControlsWhenNeeded() {
+        let app = launchEncryptedSettingsApp()
+
+        XCTAssertTrue(revealSettingsElement(app.staticTexts["Unverified"], app: app, timeout: 10))
+        XCTAssertTrue(revealSettingsElement(app.staticTexts["Needs Recovery"], app: app, timeout: 10))
+        XCTAssertTrue(revealSettingsElement(app.staticTexts["Unavailable"], app: app, timeout: 10))
+        XCTAssertTrue(revealSettingsElement(app.buttons["RequestDeviceVerificationButton"], app: app, timeout: 10))
+        XCTAssertTrue(revealSettingsElement(app.secureTextFields["RecoveryKeyField"], app: app, timeout: 10))
+        app.secureTextFields["RecoveryKeyField"].tap()
+        app.secureTextFields["RecoveryKeyField"].typeText("mock-recovery-key")
+        XCTAssertTrue(revealSettingsElement(app.buttons["RecoverKeysButton"], app: app, timeout: 10))
     }
 
     func testAboutScreenShowsVersionBuildLicenseSupportAndPrivacyLinks() {
@@ -330,6 +358,63 @@ final class SynaraUITests: XCTestCase {
         )
     }
 
+    func testLiveEncryptedRoomSmokeWhenConfigured() throws {
+        let environment = ProcessInfo.processInfo.environment
+        guard liveEnvironmentValue("SYNARA_LIVE_E2EE_SMOKE", in: environment) == "1" else {
+            throw XCTSkip("Set SYNARA_LIVE_E2EE_SMOKE=1 for local encrypted-room simulator smoke.")
+        }
+
+        guard let homeserver = liveEnvironmentValue("SYNARA_LIVE_HOMESERVER", in: environment),
+              let username = liveEnvironmentValue("SYNARA_LIVE_USERNAME", in: environment),
+              let password = liveEnvironmentValue("SYNARA_LIVE_PASSWORD", in: environment) else {
+            throw XCTSkip("Live encrypted smoke needs homeserver, username, and password environment variables.")
+        }
+
+        let roomID = try liveEncryptedRoomID(environment: environment, homeserver: homeserver, username: username, password: password)
+        let app = XCUIApplication()
+        app.launchEnvironment["SYNARA_RESET_SESSION_ON_LAUNCH"] = "1"
+        app.launchEnvironment["SYNARA_AUTO_OPEN_ROOM_ID"] = roomID
+        app.launch()
+
+        if app.textFields["HomeserverAddressField"].waitForExistence(timeout: 5) {
+            loginLive(app: app, homeserver: homeserver, username: username, password: password)
+            dismissPasswordSavePromptIfPresent(app: app)
+        }
+
+        let composer = app.textFields["ComposerTextField"]
+        XCTAssertTrue(composer.waitForExistence(timeout: 60))
+        XCTAssertTrue(
+            waitForAnyStaticText(
+                ["Encrypted", "Recovery Needed", "No Key Backup", "Unverified", "Encryption Unknown"],
+                app: app,
+                timeout: 30
+            )
+        )
+
+        let message = "Synara encrypted smoke \(Int(Date().timeIntervalSince1970))"
+        composer.tap()
+        composer.typeText(message)
+        tap(app.buttons["ComposerSendButton"], timeout: 10)
+
+        XCTAssertTrue(waitForTimelineElement(app.staticTexts[message], app: app, timeout: 90))
+        XCTAssertFalse(app.staticTexts["Encrypted content unavailable. Actions and media downloads are blocked until keys are available."].exists)
+
+        app.terminate()
+        app.launchEnvironment.removeValue(forKey: "SYNARA_RESET_SESSION_ON_LAUNCH")
+        app.launchEnvironment["SYNARA_AUTO_OPEN_ROOM_ID"] = roomID
+        app.launch()
+
+        XCTAssertTrue(app.textFields["ComposerTextField"].waitForExistence(timeout: 60))
+        XCTAssertTrue(waitForTimelineElement(app.staticTexts[message], app: app, timeout: 90))
+        XCTAssertTrue(
+            waitForAnyStaticText(
+                ["Encrypted", "Recovery Needed", "No Key Backup", "Unverified", "Encryption Unknown"],
+                app: app,
+                timeout: 30
+            )
+        )
+    }
+
     private func launchApp() -> XCUIApplication {
         let app = XCUIApplication()
         app.launchEnvironment["SYNARA_UI_TESTS"] = "1"
@@ -379,6 +464,26 @@ final class SynaraUITests: XCTestCase {
         app.launchEnvironment["SYNARA_UI_TESTS"] = "1"
         app.launchEnvironment["SYNARA_UI_TEST_SIGNED_IN"] = "1"
         app.launchEnvironment["SYNARA_UI_TEST_SELECTED_TAB"] = "settings"
+        app.launch()
+        return app
+    }
+
+    private func launchEncryptedSettingsApp() -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchEnvironment["SYNARA_UI_TESTS"] = "1"
+        app.launchEnvironment["SYNARA_UI_TEST_SIGNED_IN"] = "1"
+        app.launchEnvironment["SYNARA_UI_TEST_SELECTED_TAB"] = "settings"
+        app.launchEnvironment["SYNARA_UI_TEST_ENCRYPTED_TIMELINE"] = "1"
+        app.launch()
+        return app
+    }
+
+    private func launchEncryptedRoomApp() -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchEnvironment["SYNARA_UI_TESTS"] = "1"
+        app.launchEnvironment["SYNARA_UI_TEST_ROOM_ID"] = "!encrypted:matrix.org"
+        app.launchEnvironment["SYNARA_UI_TEST_ROOM_TITLE"] = "Secret"
+        app.launchEnvironment["SYNARA_UI_TEST_ENCRYPTED_TIMELINE"] = "1"
         app.launch()
         return app
     }
@@ -469,6 +574,22 @@ final class SynaraUITests: XCTestCase {
         return try client.resolveRoomAlias(alias)
     }
 
+    private func liveEncryptedRoomID(environment: [String: String], homeserver: String, username: String, password: String) throws -> String {
+        if let roomID = liveEnvironmentValue("SYNARA_LIVE_E2EE_ROOM_ID", in: environment)
+            ?? liveEnvironmentValue("SYNARA_LIVE_ROOM_ID", in: environment) {
+            return roomID
+        }
+
+        let liveClient = try MatrixLiveTestClient.login(
+            homeserver: homeserver,
+            username: username,
+            password: password
+        )
+        let alias = liveEnvironmentValue("SYNARA_LIVE_E2EE_ROOM_ALIAS", in: environment)
+            ?? "#test-e2e-room:matrix.example.com"
+        return try liveClient.resolveRoomAlias(alias)
+    }
+
     private func tap(_ element: XCUIElement, timeout: TimeInterval = 5) {
         XCTAssertTrue(element.waitForExistence(timeout: timeout))
         if element.isHittable {
@@ -530,6 +651,17 @@ final class SynaraUITests: XCTestCase {
         }
 
         return element.exists
+    }
+
+    private func waitForAnyStaticText(_ values: [String], app: XCUIApplication, timeout: TimeInterval) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if values.contains(where: { app.staticTexts[$0].exists }) {
+                return true
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.5))
+        }
+        return values.contains(where: { app.staticTexts[$0].exists })
     }
 
 }

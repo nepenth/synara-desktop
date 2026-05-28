@@ -145,6 +145,96 @@ protocol NotificationPermissionServicing {
     func requestAuthorization() async -> NotificationPermissionStatus
 }
 
+enum SynaraRoomEncryptionStatus: Equatable {
+    case unknown
+    case notEncrypted
+    case encrypted
+    case unavailable
+}
+
+enum SynaraCryptoVerificationStatus: Equatable {
+    case unknown
+    case verified
+    case unverified
+}
+
+enum SynaraCryptoRecoveryStatus: Equatable {
+    case unknown
+    case enabled
+    case disabled
+    case incomplete
+}
+
+enum SynaraCryptoBackupStatus: Equatable {
+    case unknown
+    case enabled
+    case unavailable
+    case syncing
+}
+
+struct RoomCryptoStatus: Equatable {
+    let encryption: SynaraRoomEncryptionStatus
+    let verification: SynaraCryptoVerificationStatus
+    let recovery: SynaraCryptoRecoveryStatus
+    let backup: SynaraCryptoBackupStatus
+    let unableToDecryptCount: Int
+
+    static let unknown = RoomCryptoStatus(
+        encryption: .unknown,
+        verification: .unknown,
+        recovery: .unknown,
+        backup: .unknown,
+        unableToDecryptCount: 0
+    )
+
+    var isEncrypted: Bool {
+        encryption == .encrypted
+    }
+
+    var needsRecoveryAttention: Bool {
+        isEncrypted && (recovery == .disabled || recovery == .incomplete || unableToDecryptCount > 0)
+    }
+}
+
+struct SessionCryptoStatus: Equatable {
+    let verification: SynaraCryptoVerificationStatus
+    let recovery: SynaraCryptoRecoveryStatus
+    let backup: SynaraCryptoBackupStatus
+    let hasDevicesToVerifyAgainst: Bool?
+    let isLastDevice: Bool?
+    let unableToDecryptCount: Int
+
+    static let unknown = SessionCryptoStatus(
+        verification: .unknown,
+        recovery: .unknown,
+        backup: .unknown,
+        hasDevicesToVerifyAgainst: nil,
+        isLastDevice: nil,
+        unableToDecryptCount: 0
+    )
+}
+
+enum CryptoActionResult: Equatable {
+    case completed(String)
+    case unavailable(String)
+    case failed(String)
+
+    var message: String {
+        switch self {
+        case .completed(let message), .unavailable(let message), .failed(let message):
+            return message
+        }
+    }
+}
+
+protocol CryptoStatusServicing {
+    func roomStatus(roomID: String) async -> RoomCryptoStatus
+    func sessionStatus() async -> SessionCryptoStatus
+    func retryDecryption(roomID: String) async -> CryptoActionResult
+    func requestDeviceVerification() async -> CryptoActionResult
+    func recover(recoveryKey: String) async -> CryptoActionResult
+}
+
 protocol SettingsStoring {
     func bool(for key: String) -> Bool
     func set(_ value: Bool, for key: String)
@@ -254,6 +344,43 @@ final class PlaceholderPushService: PushServicing {
     }
 
     func applyIncomingBadge(from notificationPayload: [AnyHashable: Any]) {}
+}
+
+struct MockCryptoStatusService: CryptoStatusServicing {
+    var roomCryptoStatus: RoomCryptoStatus
+    var sessionCryptoStatus: SessionCryptoStatus
+
+    init(
+        roomCryptoStatus: RoomCryptoStatus = .unknown,
+        sessionCryptoStatus: SessionCryptoStatus = .unknown
+    ) {
+        self.roomCryptoStatus = roomCryptoStatus
+        self.sessionCryptoStatus = sessionCryptoStatus
+    }
+
+    func roomStatus(roomID: String) async -> RoomCryptoStatus {
+        roomCryptoStatus
+    }
+
+    func sessionStatus() async -> SessionCryptoStatus {
+        sessionCryptoStatus
+    }
+
+    func retryDecryption(roomID: String) async -> CryptoActionResult {
+        .completed("Decryption retry started.")
+    }
+
+    func requestDeviceVerification() async -> CryptoActionResult {
+        .completed("Device verification request sent.")
+    }
+
+    func recover(recoveryKey: String) async -> CryptoActionResult {
+        let trimmed = recoveryKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.isEmpty == false else {
+            return .failed("Enter a recovery key before recovering keys.")
+        }
+        return .completed("Recovery key accepted.")
+    }
 }
 
 struct UserNotificationPermissionService: NotificationPermissionServicing {

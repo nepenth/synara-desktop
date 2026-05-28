@@ -384,7 +384,8 @@ enum TimelineMapper {
             kind: kind,
             replyToEventID: event.replyToEventID,
             isEdited: event.isEdited,
-            reactions: [:]
+            reactions: [:],
+            isEncrypted: event.type == "m.room.encrypted"
         )
     }
 }

@@ -32,6 +32,26 @@ final class AppEnvironmentTests: XCTestCase {
         XCTAssertTrue(environment.messageSender is MatrixRustSDKMessageSendService)
         XCTAssertTrue(environment.eventActions is MatrixEventActionService)
         XCTAssertTrue(environment.agentApprovals is MatrixAgentApprovalService)
+        XCTAssertTrue(environment.crypto is MatrixRustSDKCryptoStatusService)
+    }
+
+    func testRoomCryptoStatusFlagsRecoveryAttentionForEncryptedProblems() {
+        let status = RoomCryptoStatus(
+            encryption: .encrypted,
+            verification: .unverified,
+            recovery: .incomplete,
+            backup: .unavailable,
+            unableToDecryptCount: 1
+        )
+
+        XCTAssertTrue(status.isEncrypted)
+        XCTAssertTrue(status.needsRecoveryAttention)
+    }
+
+    func testMockCryptoRecoverRejectsEmptyRecoveryKey() async {
+        let result = await MockCryptoStatusService().recover(recoveryKey: "   ")
+
+        XCTAssertEqual(result, .failed("Enter a recovery key before recovering keys."))
     }
 
     func testSettingsStorePersistsBooleansInMemory() {
