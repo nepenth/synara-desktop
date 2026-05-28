@@ -1875,37 +1875,42 @@ Acceptance criteria:
 
 ## Phase 8: Room, DM, Space, And Settings Parity
 
-Status: first room-management slice complete. The iOS app now has app-owned
-room-management service contracts, mock services, SDK-backed adapters for
-create room, create DM, join by room ID/alias, leave, invite, room details, and
-room notification modes, plus native UI surfaces for the same.
+Status: implementation complete. The iOS app now has app-owned room-management
+service contracts, mock services, SDK-backed adapters for create room, create
+DM, join by room ID/alias, public-room discovery, leave, invite, room details,
+avatar/alias profile edits, parent-space metadata, and room notification modes,
+plus native UI surfaces for the same.
 
 Implemented in this slice:
 
 - Create room sheet with private/public visibility and encryption toggle.
 - Create DM flow by Matrix ID, defaulting to encrypted.
 - Join room flow by room ID or alias.
+- Public room directory search in the join flow, with result cards that join by
+  alias when available and room ID otherwise.
+- Space filter chips in the room list, backed by Matrix parent-space metadata
+  from sync and Matrix Rust SDK `SpaceService.joinedParentsOfChild`.
 - Room details sheet with name, topic, aliases, encryption, member count,
   invite permission, notification mode, invite, and leave confirmation.
 - Permission-aware room name/topic editing backed by Matrix Rust SDK
   `Room.setName` and `Room.setTopic` where room power levels allow those state
   events.
+- Permission-aware canonical/alternative alias editing backed by Matrix Rust SDK
+  `Room.updateCanonicalAlias`.
+- Permission-aware room avatar upload/remove backed by Matrix Rust SDK
+  `Room.uploadAvatar` and `Room.removeAvatar`.
 - Read-only permissions summary showing current user level, Matrix threshold
   levels, and allowed/restricted state for message, invite, room profile, and
   moderation actions.
 - Deterministic unit/UI tests for mock create-room validation, Matrix ID
-  validation, room-management sheet, room profile editing, room permissions,
-  room details, and leave navigation.
+  validation, room-management sheet, public directory search, space filters,
+  room profile editing, alias/avatar edits, room permissions, room details, and
+  leave navigation.
 - Gated live room-management smoke for private encrypted room creation, room
   details read, optional invite, leave, and room-list recovery.
 
 Remaining Phase 8 work:
 
-- Execute the live room-management smoke with a second disposable Matrix user so
-  the invite leg is validated end to end against the test homeserver.
-- Public-room discovery UI beyond direct join by alias/ID.
-- Spaces navigation and room-list filtering by space.
-- Room profile editing for avatar/aliases where permissions allow.
 - Power-level editing only after safe write semantics are specified; read-only
   power-level visibility is implemented.
 

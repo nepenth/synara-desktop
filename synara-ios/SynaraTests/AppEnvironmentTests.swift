@@ -112,6 +112,42 @@ final class AppEnvironmentTests: XCTestCase {
         XCTAssertEqual(details?.topic, "Post-incident follow-up")
     }
 
+    func testMockRoomManagementUpdatesAliasesAndAvatar() async throws {
+        let service = MockRoomManagementService()
+        let result = try await service.createRoom(
+            RoomCreateRequest(
+                name: "Incident Room",
+                topic: "Operational response",
+                visibility: .private,
+                isEncrypted: true
+            )
+        )
+
+        try await service.updateRoomProfile(
+            RoomProfileUpdateRequest(
+                roomID: result.roomID,
+                name: nil,
+                topic: nil,
+                canonicalAlias: "#incident:matrix.org",
+                alternativeAliases: ["#incident-review:matrix.org"],
+                avatar: .upload(data: Data("avatar".utf8), mimeType: "image/jpeg")
+            )
+        )
+        let details = await service.roomDetails(roomID: result.roomID)
+
+        XCTAssertEqual(details?.aliases, ["#incident:matrix.org", "#incident-review:matrix.org"])
+        XCTAssertEqual(details?.avatarURL, "mxc://mock/room-avatar")
+    }
+
+    func testMockRoomManagementSearchesPublicRooms() async throws {
+        let service = MockRoomManagementService()
+
+        let results = try await service.searchPublicRooms(query: "alerts")
+
+        XCTAssertEqual(results.first?.name, "alerts Public")
+        XCTAssertEqual(results.first?.joinReference, "#alerts:matrix.org")
+    }
+
     func testMockRoomManagementRejectsEmptyProfileUpdate() async throws {
         let service = MockRoomManagementService()
 

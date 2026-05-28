@@ -286,12 +286,15 @@ actor MatrixRustSDKClientStore {
             canInvite: powerLevels?.canOwnUserInvite() ?? false,
             canEditName: powerLevels?.canOwnUserSendState(stateEvent: .roomName) ?? false,
             canEditTopic: powerLevels?.canOwnUserSendState(stateEvent: .roomTopic) ?? false,
+            canEditAvatar: powerLevels?.canOwnUserSendState(stateEvent: .roomAvatar) ?? false,
+            canEditAliases: powerLevels?.canOwnUserSendState(stateEvent: .roomCanonicalAlias) ?? false,
             powerLevels: powerLevelSummary(
                 values: powerLevelValues,
                 ownUserLevel: ownUserLevel,
                 powerLevels: powerLevels
             ),
-            notificationMode: Self.mapNotificationMode(notificationSettings?.mode)
+            notificationMode: Self.mapNotificationMode(notificationSettings?.mode),
+            avatarURL: room.avatarUrl()
         )
     }
 
@@ -302,11 +305,21 @@ actor MatrixRustSDKClientStore {
 
         let name = request.name?.trimmingCharacters(in: .whitespacesAndNewlines)
         let topic = request.topic?.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard name != nil || topic != nil else {
+        let canonicalAlias = request.canonicalAlias?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let alternativeAliases = request.alternativeAliases?
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { $0.isEmpty == false }
+        guard name != nil || topic != nil || canonicalAlias != nil || alternativeAliases != nil || request.avatar != nil else {
             throw RoomManagementError.noProfileChanges
         }
         if let name, name.isEmpty {
             throw RoomManagementError.missingRoomName
+        }
+        if let canonicalAlias, canonicalAlias.isEmpty == false, Self.isValidRoomAlias(canonicalAlias) == false {
+            throw RoomManagementError.invalidRoomAlias
+        }
+        if let alternativeAliases, alternativeAliases.contains(where: { Self.isValidRoomAlias($0) == false }) {
+            throw RoomManagementError.invalidRoomAlias
         }
 
         let powerLevels = try? await room.getPowerLevels()
@@ -322,7 +335,40 @@ actor MatrixRustSDKClientStore {
             }
             try await room.setTopic(topic: topic)
         }
+        if canonicalAlias != nil || alternativeAliases != nil {
+            guard powerLevels?.canOwnUserSendState(stateEvent: .roomCanonicalAlias) ?? false else {
+                throw RoomManagementError.failed
+            }
+            try await room.updateCanonicalAlias(alias: canonicalAlias?.nilIfEmpty, altAliases: alternativeAliases ?? room.alternativeAliases())
+        }
+        if let avatar = request.avatar {
+            guard powerLevels?.canOwnUserSendState(stateEvent: .roomAvatar) ?? false else {
+                throw RoomManagementError.failed
+            }
+            switch avatar {
+            case .upload(let data, let mimeType):
+                try await room.uploadAvatar(mimeType: mimeType, data: data, mediaInfo: nil)
+            case .remove:
+                try await room.removeAvatar()
+            }
+        }
         try await syncOnce(session: session, fullState: true)
+    }
+
+    func searchPublicRooms(query: String, session: AuthenticatedSession) async throws -> [PublicRoomSummary] {
+        let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmedQuery.isEmpty == false else {
+            return []
+        }
+
+        let client = try await ensureClient(for: session)
+        let search = client.roomDirectorySearch()
+        let collector = MatrixRustSDKRoomDirectoryCollector()
+        let handle = await search.results(listener: collector)
+        defer { handle.cancel() }
+        try await search.search(filter: trimmedQuery, batchSize: 20, viaServerName: nil)
+        let rooms = await collector.waitForRooms(timeoutNanoseconds: 1_500_000_000)
+        return rooms.map(Self.mapPublicRoom)
     }
 
     func setNotificationMode(_ mode: SynaraRoomNotificationMode, roomID: String, session: AuthenticatedSession) async throws {
@@ -331,7 +377,7 @@ actor MatrixRustSDKClientStore {
         try await notificationSettings.setRoomNotificationMode(roomId: roomID, mode: Self.mapNotificationMode(mode))
     }
 
-    private func ensureClient(for session: AuthenticatedSession) async throws -> Client {
+    fileprivate func ensureClient(for session: AuthenticatedSession) async throws -> Client {
         if let client, activeSession == session {
             return client
         }
@@ -434,6 +480,17 @@ actor MatrixRustSDKClientStore {
         }
     }
 
+    private static func mapPublicRoom(_ room: RoomDescription) -> PublicRoomSummary {
+        PublicRoomSummary(
+            id: room.roomId,
+            name: room.name ?? room.alias ?? room.roomId,
+            topic: room.topic,
+            alias: room.alias,
+            memberCount: Int(room.joinedMembers),
+            isWorldReadable: room.isWorldReadable
+        )
+    }
+
     private func powerLevelSummary(
         values: RoomPowerLevelsValues?,
         ownUserLevel: Int64,
@@ -467,6 +524,10 @@ actor MatrixRustSDKClientStore {
 
     private static func isValidMatrixID(_ value: String) -> Bool {
         value.hasPrefix("@") && value.contains(":") && value.count > 3
+    }
+
+    private static func isValidRoomAlias(_ value: String) -> Bool {
+        value.hasPrefix("#") && value.contains(":") && value.count > 3
     }
 
     private func buildClient(homeserverURL: URL, storeID: String) async throws -> Client {
@@ -589,8 +650,14 @@ final class MatrixRustSDKRoomListService: RoomListServicing {
 
         do {
             try await clientStore.syncOnce(session: session, fullState: true)
-            let rooms = try await clientStore.rooms(session: session)
-                .compactMap(Self.mapRoom)
+            let client = try await clientStore.ensureClient(for: session)
+            let spaceService = await client.spaceService()
+            var rooms: [RoomSummary] = []
+            for room in client.rooms() {
+                if let summary = await Self.mapRoom(room, spaceService: spaceService) {
+                    rooms.append(summary)
+                }
+            }
             let sorted = RoomListFixtures.sorted(rooms)
             return sorted.isEmpty ? .empty : .loaded(sorted)
         } catch {
@@ -600,7 +667,7 @@ final class MatrixRustSDKRoomListService: RoomListServicing {
 
     func clearCache() {}
 
-    private static func mapRoom(_ room: Room) -> RoomSummary? {
+    private static func mapRoom(_ room: Room, spaceService: SpaceService?) async -> RoomSummary? {
         let membership: RoomSummary.Membership
         switch room.membership() {
         case .joined:
@@ -613,15 +680,19 @@ final class MatrixRustSDKRoomListService: RoomListServicing {
 
         let name = room.displayName() ?? room.canonicalAlias() ?? room.id()
         let encryptedPreview = room.encryptionState() == .encrypted ? "Encrypted room" : "No recent messages"
+        let parentSpaces = (try? await spaceService?.joinedParentsOfChild(childId: room.id()).map {
+            SpaceSummary(id: $0.roomId, name: $0.displayName)
+        }) ?? []
         return RoomSummary(
             id: room.id(),
             name: name,
             lastMessagePreview: membership == .invited ? "Invited to room" : encryptedPreview,
             unreadCount: membership == .invited ? 1 : 0,
             hasHighlight: membership == .invited,
-            kind: .room,
+            kind: (await room.isDirect()) ? .directMessage : .room,
             membership: membership,
-            lastActivityAt: Date()
+            lastActivityAt: Date(),
+            parentSpaces: parentSpaces
         )
     }
 }
@@ -957,6 +1028,13 @@ final class MatrixRustSDKRoomManagementService: RoomManagementServicing {
         try await clientStore.inviteUser(roomID: roomID, userID: userID, session: session)
     }
 
+    func searchPublicRooms(query: String) async throws -> [PublicRoomSummary] {
+        guard case .signedIn(let session) = sessionStore.currentState else {
+            throw RoomManagementError.signedOut
+        }
+        return try await clientStore.searchPublicRooms(query: query, session: session)
+    }
+
     func roomDetails(roomID: String) async -> RoomDetails? {
         guard case .signedIn(let session) = sessionStore.currentState else {
             return nil
@@ -976,6 +1054,70 @@ final class MatrixRustSDKRoomManagementService: RoomManagementServicing {
             throw RoomManagementError.signedOut
         }
         try await clientStore.setNotificationMode(mode, roomID: roomID, session: session)
+    }
+}
+
+private final class MatrixRustSDKRoomDirectoryCollector: RoomDirectorySearchEntriesListener, @unchecked Sendable {
+    private let lock = NSLock()
+    private var rooms: [RoomDescription] = []
+
+    func onUpdate(roomEntriesUpdate: [RoomDirectorySearchEntryUpdate]) {
+        lock.lock()
+        defer { lock.unlock() }
+
+        for update in roomEntriesUpdate {
+            switch update {
+            case .append(let values), .reset(let values):
+                rooms = values
+            case .clear:
+                rooms = []
+            case .pushFront(let value):
+                rooms.insert(value, at: 0)
+            case .pushBack(let value):
+                rooms.append(value)
+            case .popFront:
+                if rooms.isEmpty == false {
+                    rooms.removeFirst()
+                }
+            case .popBack:
+                _ = rooms.popLast()
+            case .insert(let index, let value):
+                let boundedIndex = min(Int(index), rooms.count)
+                rooms.insert(value, at: boundedIndex)
+            case .set(let index, let value):
+                let intIndex = Int(index)
+                if rooms.indices.contains(intIndex) {
+                    rooms[intIndex] = value
+                }
+            case .remove(let index):
+                let intIndex = Int(index)
+                if rooms.indices.contains(intIndex) {
+                    rooms.remove(at: intIndex)
+                }
+            case .truncate(let length):
+                rooms = Array(rooms.prefix(Int(length)))
+            }
+        }
+    }
+
+    func waitForRooms(timeoutNanoseconds: UInt64) async -> [RoomDescription] {
+        let deadline = DispatchTime.now().uptimeNanoseconds + timeoutNanoseconds
+
+        while DispatchTime.now().uptimeNanoseconds < deadline {
+            let currentRooms = snapshot()
+            if currentRooms.isEmpty == false {
+                return currentRooms
+            }
+            try? await Task.sleep(nanoseconds: 100_000_000)
+        }
+
+        return snapshot()
+    }
+
+    private func snapshot() -> [RoomDescription] {
+        lock.lock()
+        defer { lock.unlock() }
+        return rooms
     }
 }
 
