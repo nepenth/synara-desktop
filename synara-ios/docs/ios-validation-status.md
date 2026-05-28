@@ -1,18 +1,27 @@
 # iOS Validation Status
 
-Reviewed: 2026-05-27
+Reviewed: 2026-05-28
 
 Status: Phase 1 shell/foundation, Phase 2 auth/session/sync/room-list/logout,
 Phase 3 core messaging, Phase 5 agent workflows, Phase 6 internal
 settings/hardening, Phase 6.5 iOS UI modernization, and Phase 6.6 mockup
-fidelity are complete for the current native iOS MVP. Phase 7 production E2EE
-first slice is complete for app-level encrypted room open/send/relaunch restore,
-crypto status UI, and conservative recovery controls. Phase 8 room-management
-first slice is complete for service contracts and native create/join/DM,
-room-details, invite, leave, notification-mode UI surfaces, and gated live
-room-management smoke coverage. Room profile editing now supports
-permission-aware name/topic updates through mock and SDK-backed services, and
-room details expose read-only power-level/permission context.
+fidelity are complete for the current native iOS MVP. Phase 6.7 is now the
+active validation pass that separates actual functionality, live/manual
+evidence, and visual-fidelity gaps; its matrices are
+[`ios-functionality-matrix.md`](ios-functionality-matrix.md) and
+[`ios-visual-fidelity-matrix.md`](ios-visual-fidelity-matrix.md). Phase 6.9
+performance review has started with signpost instrumentation and fixture
+performance tests; its plan is
+[`phase-6-9-performance-plan.md`](phase-6-9-performance-plan.md).
+
+Phase 7 production E2EE first slice is complete for app-level encrypted room
+open/send/relaunch restore, crypto status UI, and conservative recovery
+controls. Phase 8 room-management first slice is complete for service
+contracts and native create/join/DM, room-details, invite, leave,
+notification-mode UI surfaces, and gated live room-management smoke coverage.
+Room profile editing now supports permission-aware name/topic updates through
+mock and SDK-backed services, and room details expose read-only
+power-level/permission context.
 Deterministic simulator tests validate the mock path, and a gated live simulator
 smoke validates signed session restore, live room opening, composer send, and
 timeline update against disposable encrypted and unencrypted test rooms.
@@ -246,6 +255,14 @@ The repeatable live-smoke checklist is
   grouping, stronger room iconography, a custom timeline header, file-style
   media cards, reaction affordances, composer tool controls, detailed agent
   approval review rows, preview links, and prominent approve/reject actions.
+- Phase 6.7 adds functionality and visual-fidelity matrices plus deterministic
+  and live screenshot capture paths for rooms, timeline, composer, attachment
+  sheet, and thread screens. These screens remain `Partial` for near
+  pixel-perfect acceptance until their visible deltas are tuned and reviewed.
+- Phase 6.9 adds stable performance signposts for app/session lifecycle,
+  room-list loading, timeline loading/pagination, thread loading, message send,
+  and media upload; Simulator/device trace baselines are still required before
+  external TestFlight.
 - Phase 6 hardening artifacts now include accessibility, performance, privacy,
   security, and TestFlight readiness documents under `synara-ios/docs/`.
 - The app target includes a privacy manifest at

@@ -27,7 +27,7 @@ final class AppRouter: ObservableObject {
         switch route {
         case .login:
             authPath = [route]
-        case .room:
+        case .room, .thread:
             selectedTab = .rooms
             roomsPath = [route]
         case .settings:

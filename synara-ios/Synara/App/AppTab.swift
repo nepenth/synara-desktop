@@ -2,8 +2,8 @@ import SwiftUI
 
 enum AppTab: String, CaseIterable, Identifiable {
     case rooms
-    case notifications
     case later
+    case notifications
     case settings
 
     var id: String { rawValue }
