@@ -19,6 +19,34 @@ struct RoomSummary: Identifiable, Equatable {
     let kind: RoomKind
     let membership: Membership
     let lastActivityAt: Date
+    let parentSpaces: [SpaceSummary]
+
+    init(
+        id: String,
+        name: String,
+        lastMessagePreview: String,
+        unreadCount: Int,
+        hasHighlight: Bool,
+        kind: RoomKind,
+        membership: Membership,
+        lastActivityAt: Date,
+        parentSpaces: [SpaceSummary] = []
+    ) {
+        self.id = id
+        self.name = name
+        self.lastMessagePreview = lastMessagePreview
+        self.unreadCount = unreadCount
+        self.hasHighlight = hasHighlight
+        self.kind = kind
+        self.membership = membership
+        self.lastActivityAt = lastActivityAt
+        self.parentSpaces = parentSpaces
+    }
+}
+
+struct SpaceSummary: Identifiable, Equatable, Hashable {
+    let id: String
+    let name: String
 }
 
 enum RoomListState: Equatable {
@@ -70,7 +98,8 @@ enum RoomListFixtures {
                 hasHighlight: false,
                 kind: .room,
                 membership: .joined,
-                lastActivityAt: now.addingTimeInterval(120)
+                lastActivityAt: now.addingTimeInterval(120),
+                parentSpaces: [SpaceSummary(id: "!workspace:matrix.org", name: "Workspace")]
             ),
             RoomSummary(
                 id: "!project:matrix.org",
@@ -80,7 +109,8 @@ enum RoomListFixtures {
                 hasHighlight: true,
                 kind: .room,
                 membership: .joined,
-                lastActivityAt: now.addingTimeInterval(60)
+                lastActivityAt: now.addingTimeInterval(60),
+                parentSpaces: [SpaceSummary(id: "!workspace:matrix.org", name: "Workspace")]
             ),
             RoomSummary(
                 id: "!design:matrix.org",
@@ -90,7 +120,8 @@ enum RoomListFixtures {
                 hasHighlight: false,
                 kind: .room,
                 membership: .joined,
-                lastActivityAt: now.addingTimeInterval(-180)
+                lastActivityAt: now.addingTimeInterval(-180),
+                parentSpaces: [SpaceSummary(id: "!workspace:matrix.org", name: "Workspace")]
             ),
             RoomSummary(
                 id: "!security:matrix.org",
@@ -100,7 +131,8 @@ enum RoomListFixtures {
                 hasHighlight: false,
                 kind: .room,
                 membership: .joined,
-                lastActivityAt: now.addingTimeInterval(-780)
+                lastActivityAt: now.addingTimeInterval(-780),
+                parentSpaces: [SpaceSummary(id: "!ops:matrix.org", name: "Ops")]
             ),
             RoomSummary(
                 id: "!agent-workflows:matrix.org",
@@ -110,7 +142,8 @@ enum RoomListFixtures {
                 hasHighlight: false,
                 kind: .room,
                 membership: .joined,
-                lastActivityAt: now.addingTimeInterval(-1_200)
+                lastActivityAt: now.addingTimeInterval(-1_200),
+                parentSpaces: [SpaceSummary(id: "!ops:matrix.org", name: "Ops")]
             ),
             RoomSummary(
                 id: "!alice:matrix.org",
@@ -149,7 +182,8 @@ enum RoomListFixtures {
                 hasHighlight: index % 23 == 0,
                 kind: kind,
                 membership: .joined,
-                lastActivityAt: now.addingTimeInterval(TimeInterval(-index))
+                lastActivityAt: now.addingTimeInterval(TimeInterval(-index)),
+                parentSpaces: kind == .room && index % 4 == 0 ? [SpaceSummary(id: "!space-\(index % 3):matrix.org", name: "Space \(index % 3)")] : []
             )
             rooms.append(room)
         }
@@ -259,7 +293,8 @@ final class MatrixRoomListService: RoomListServicing {
                 hasHighlight: (joinedRoom.unreadNotifications?.highlightCount ?? 0) > 0,
                 kind: .room,
                 membership: .joined,
-                lastActivityAt: lastActivityAt
+                lastActivityAt: lastActivityAt,
+                parentSpaces: parentSpaces(from: stateEvents)
             )
         } ?? []
 
@@ -273,7 +308,8 @@ final class MatrixRoomListService: RoomListServicing {
                 hasHighlight: true,
                 kind: .room,
                 membership: .invited,
-                lastActivityAt: latestActivityDate(from: inviteEvents)
+                lastActivityAt: latestActivityDate(from: inviteEvents),
+                parentSpaces: parentSpaces(from: inviteEvents)
             )
         } ?? []
 
@@ -301,6 +337,17 @@ final class MatrixRoomListService: RoomListServicing {
         }
 
         return Date(timeIntervalSince1970: TimeInterval(timestamp) / 1_000)
+    }
+
+    private func parentSpaces(from events: [MatrixSyncEvent]) -> [SpaceSummary] {
+        events.compactMap { event in
+            guard event.type == "m.space.parent",
+                  let spaceID = event.stateKey,
+                  event.content.via?.isEmpty == false else {
+                return nil
+            }
+            return SpaceSummary(id: spaceID, name: event.content.name ?? event.content.canonicalAlias ?? spaceID)
+        }
     }
 }
 
@@ -350,11 +397,13 @@ private struct MatrixEventBatch: Decodable {
 
 private struct MatrixSyncEvent: Decodable {
     let type: String
+    let stateKey: String?
     let originServerTimestamp: Int?
     let content: MatrixEventContent
 
     enum CodingKeys: String, CodingKey {
         case type
+        case stateKey = "state_key"
         case originServerTimestamp = "origin_server_ts"
         case content
     }
@@ -363,7 +412,17 @@ private struct MatrixSyncEvent: Decodable {
 private struct MatrixEventContent: Decodable {
     let name: String?
     let alias: String?
+    let canonicalAlias: String?
     let body: String?
+    let via: [String]?
+
+    enum CodingKeys: String, CodingKey {
+        case name
+        case alias
+        case canonicalAlias = "canonical_alias"
+        case body
+        case via
+    }
 }
 
 private struct MatrixUnreadNotifications: Decodable {
@@ -511,7 +570,8 @@ final class MockInviteTransitionService: RoomListServicing, RoomMembershipServic
                 hasHighlight: room.hasHighlight,
                 kind: room.kind,
                 membership: .joined,
-                lastActivityAt: Date()
+                lastActivityAt: Date(),
+                parentSpaces: room.parentSpaces
             )
         }
     }

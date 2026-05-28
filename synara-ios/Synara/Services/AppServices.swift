@@ -270,11 +270,48 @@ struct RoomProfileUpdateRequest: Equatable {
     let roomID: String
     let name: String?
     let topic: String?
+    let canonicalAlias: String?
+    let alternativeAliases: [String]?
+    let avatar: RoomAvatarUpdate?
+
+    init(
+        roomID: String,
+        name: String?,
+        topic: String?,
+        canonicalAlias: String? = nil,
+        alternativeAliases: [String]? = nil,
+        avatar: RoomAvatarUpdate? = nil
+    ) {
+        self.roomID = roomID
+        self.name = name
+        self.topic = topic
+        self.canonicalAlias = canonicalAlias
+        self.alternativeAliases = alternativeAliases
+        self.avatar = avatar
+    }
+}
+
+enum RoomAvatarUpdate: Equatable {
+    case upload(data: Data, mimeType: String)
+    case remove
 }
 
 struct RoomOperationResult: Equatable {
     let roomID: String
     let name: String?
+}
+
+struct PublicRoomSummary: Identifiable, Equatable {
+    let id: String
+    let name: String
+    let topic: String?
+    let alias: String?
+    let memberCount: Int
+    let isWorldReadable: Bool
+
+    var joinReference: String {
+        alias ?? id
+    }
 }
 
 struct RoomPowerLevelSummary: Equatable {
@@ -330,8 +367,11 @@ struct RoomDetails: Equatable {
     let canInvite: Bool
     let canEditName: Bool
     let canEditTopic: Bool
+    let canEditAvatar: Bool
+    let canEditAliases: Bool
     let powerLevels: RoomPowerLevelSummary?
     let notificationMode: SynaraRoomNotificationMode
+    let avatarURL: String?
 }
 
 enum RoomManagementError: LocalizedError, Equatable {
@@ -340,6 +380,7 @@ enum RoomManagementError: LocalizedError, Equatable {
     case missingUserID
     case missingRoomReference
     case invalidMatrixID
+    case invalidRoomAlias
     case noProfileChanges
     case failed
 
@@ -355,6 +396,8 @@ enum RoomManagementError: LocalizedError, Equatable {
             return "Enter a room ID or alias."
         case .invalidMatrixID:
             return "Matrix IDs must look like @name:server."
+        case .invalidRoomAlias:
+            return "Room aliases must look like #room:server."
         case .noProfileChanges:
             return "Change the room name or topic before saving."
         case .failed:
@@ -369,6 +412,7 @@ protocol RoomManagementServicing {
     func joinRoom(_ request: RoomJoinRequest) async throws -> RoomOperationResult
     func leaveRoom(roomID: String) async throws
     func inviteUser(roomID: String, userID: String) async throws
+    func searchPublicRooms(query: String) async throws -> [PublicRoomSummary]
     func roomDetails(roomID: String) async -> RoomDetails?
     func updateRoomProfile(_ request: RoomProfileUpdateRequest) async throws
     func setNotificationMode(_ mode: SynaraRoomNotificationMode, roomID: String) async throws
@@ -554,8 +598,11 @@ final class MockRoomManagementService: RoomManagementServicing {
             canInvite: true,
             canEditName: true,
             canEditTopic: true,
+            canEditAvatar: true,
+            canEditAliases: true,
             powerLevels: .fullPower,
-            notificationMode: .allMessages
+            notificationMode: .allMessages,
+            avatarURL: nil
         )
         return RoomOperationResult(roomID: roomID, name: trimmedName)
     }
@@ -591,6 +638,24 @@ final class MockRoomManagementService: RoomManagementServicing {
         invitedUsers.append((roomID: roomID, userID: trimmedUserID))
     }
 
+    func searchPublicRooms(query: String) async throws -> [PublicRoomSummary] {
+        let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmedQuery.isEmpty == false else {
+            return []
+        }
+
+        return [
+            PublicRoomSummary(
+                id: "!public-\(trimmedQuery.lowercased()):matrix.org",
+                name: "\(trimmedQuery) Public",
+                topic: "Public room matching \(trimmedQuery).",
+                alias: "#\(trimmedQuery.lowercased()):matrix.org",
+                memberCount: 42,
+                isWorldReadable: true
+            )
+        ]
+    }
+
     func roomDetails(roomID: String) async -> RoomDetails? {
         detailsByRoomID[roomID] ?? RoomDetails(
             roomID: roomID,
@@ -603,8 +668,11 @@ final class MockRoomManagementService: RoomManagementServicing {
             canInvite: true,
             canEditName: true,
             canEditTopic: true,
+            canEditAvatar: true,
+            canEditAliases: true,
             powerLevels: .fullPower,
-            notificationMode: .allMessages
+            notificationMode: .allMessages,
+            avatarURL: nil
         )
     }
 
@@ -619,28 +687,56 @@ final class MockRoomManagementService: RoomManagementServicing {
 
         let trimmedName = request.name?.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedTopic = request.topic?.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmedName != nil || trimmedTopic != nil else {
+        let trimmedAlias = request.canonicalAlias?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let alternativeAliases = request.alternativeAliases?
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { $0.isEmpty == false }
+        guard trimmedName != nil || trimmedTopic != nil || trimmedAlias != nil || alternativeAliases != nil || request.avatar != nil else {
             throw RoomManagementError.noProfileChanges
         }
         if let trimmedName, trimmedName.isEmpty {
             throw RoomManagementError.missingRoomName
+        }
+        if let trimmedAlias, trimmedAlias.isEmpty == false, Self.isValidRoomAlias(trimmedAlias) == false {
+            throw RoomManagementError.invalidRoomAlias
+        }
+
+        var aliases = details.aliases
+        if let trimmedAlias {
+            aliases = trimmedAlias.isEmpty ? (alternativeAliases ?? []) : [trimmedAlias] + (alternativeAliases ?? [])
+        } else if let alternativeAliases {
+            aliases = alternativeAliases
         }
 
         details = RoomDetails(
             roomID: details.roomID,
             name: trimmedName ?? details.name,
             topic: trimmedTopic ?? details.topic,
-            aliases: details.aliases,
+            aliases: aliases,
             isEncrypted: details.isEncrypted,
             isPublic: details.isPublic,
             memberCount: details.memberCount,
             canInvite: details.canInvite,
             canEditName: details.canEditName,
             canEditTopic: details.canEditTopic,
+            canEditAvatar: details.canEditAvatar,
+            canEditAliases: details.canEditAliases,
             powerLevels: details.powerLevels,
-            notificationMode: details.notificationMode
+            notificationMode: details.notificationMode,
+            avatarURL: avatarURL(after: request.avatar, current: details.avatarURL)
         )
         detailsByRoomID[request.roomID] = details
+    }
+
+    private func avatarURL(after update: RoomAvatarUpdate?, current: String?) -> String? {
+        switch update {
+        case .upload:
+            return "mxc://mock/room-avatar"
+        case .remove:
+            return nil
+        case nil:
+            return current
+        }
     }
 
     func setNotificationMode(_ mode: SynaraRoomNotificationMode, roomID: String) async throws {
@@ -658,14 +754,21 @@ final class MockRoomManagementService: RoomManagementServicing {
             canInvite: details.canInvite,
             canEditName: details.canEditName,
             canEditTopic: details.canEditTopic,
+            canEditAvatar: details.canEditAvatar,
+            canEditAliases: details.canEditAliases,
             powerLevels: details.powerLevels,
-            notificationMode: mode
+            notificationMode: mode,
+            avatarURL: details.avatarURL
         )
         detailsByRoomID[roomID] = details
     }
 
     private static func isValidMatrixID(_ value: String) -> Bool {
         value.hasPrefix("@") && value.contains(":") && value.count > 3
+    }
+
+    private static func isValidRoomAlias(_ value: String) -> Bool {
+        value.hasPrefix("#") && value.contains(":") && value.count > 3
     }
 }
 

@@ -6,6 +6,7 @@ struct RoomListView: View {
     @State private var membershipError: String?
     @State private var searchQuery: String = ProcessInfo.processInfo.environment["SYNARA_UI_TEST_ROOM_SEARCH"] ?? ""
     @State private var selectedFilter: RoomListFilter = .all
+    @State private var selectedSpaceID: String?
     @State private var isRoomManagementSheetPresented = ProcessInfo.processInfo.environment["SYNARA_UI_TEST_ROOM_MANAGEMENT_SHEET"] == "1"
 
     var body: some View {
@@ -27,6 +28,7 @@ struct RoomListView: View {
                 let filteredRooms = filteredRooms(from: rooms)
                 let channelRooms = filteredRooms.filter { $0.kind == .room }
                 let directRooms = filteredRooms.filter { $0.kind == .directMessage }
+                let spaces = spaces(from: rooms)
                 VStack(spacing: 0) {
                     VStack(spacing: SynaraSpacing.medium) {
                         RoomListHeader(
@@ -35,6 +37,9 @@ struct RoomListView: View {
                         )
                         RoomSearchField(text: $searchQuery)
                         RoomFilterStrip(selectedFilter: $selectedFilter)
+                        if spaces.isEmpty == false {
+                            SpaceFilterStrip(spaces: spaces, selectedSpaceID: $selectedSpaceID)
+                        }
                     }
                     .padding(.horizontal, SynaraSpacing.large)
                     .padding(.top, SynaraSpacing.medium)
@@ -182,6 +187,12 @@ struct RoomListView: View {
         let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         var scopedRooms = rooms
 
+        if let selectedSpaceID {
+            scopedRooms = scopedRooms.filter { room in
+                room.parentSpaces.contains(where: { $0.id == selectedSpaceID })
+            }
+        }
+
         switch selectedFilter {
         case .all:
             break
@@ -204,6 +215,10 @@ struct RoomListView: View {
             room.name.localizedCaseInsensitiveContains(query)
                 || room.lastMessagePreview.localizedCaseInsensitiveContains(query)
         }
+    }
+
+    private func spaces(from rooms: [RoomSummary]) -> [SpaceSummary] {
+        Array(Set(rooms.flatMap(\.parentSpaces))).sorted { $0.name < $1.name }
     }
 
     @ViewBuilder
@@ -304,6 +319,8 @@ private struct RoomManagementSheet: View {
     @State private var encryptRoom = true
     @State private var userID = ""
     @State private var joinReference = ""
+    @State private var directoryQuery = ""
+    @State private var directoryResults: [PublicRoomSummary] = []
     @State private var state: SheetState = .idle
     let onComplete: (RoomOperationResult) -> Void
 
@@ -382,11 +399,45 @@ private struct RoomManagementSheet: View {
     }
 
     private var joinRoomSection: some View {
-        Section("Join Room") {
-            TextField("#room:server or !room:server", text: $joinReference)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .accessibilityIdentifier("JoinRoomReferenceField")
+        Group {
+            Section("Join Room") {
+                TextField("#room:server or !room:server", text: $joinReference)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .accessibilityIdentifier("JoinRoomReferenceField")
+            }
+
+            Section("Public Directory") {
+                TextField("Search public rooms", text: $directoryQuery)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .accessibilityIdentifier("PublicRoomSearchField")
+                Button("Search Directory", action: searchDirectory)
+                    .disabled(state.isLoading || directoryQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .accessibilityIdentifier("PublicRoomSearchButton")
+
+                ForEach(directoryResults) { result in
+                    Button {
+                        joinReference = result.joinReference
+                        submit()
+                    } label: {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(result.name)
+                                .font(.body.weight(.semibold))
+                            if let topic = result.topic, topic.isEmpty == false {
+                                Text(topic)
+                                    .font(.caption)
+                                    .foregroundStyle(SynaraColor.secondaryText)
+                                    .lineLimit(2)
+                            }
+                            Text("\(result.memberCount) members")
+                                .font(.caption2)
+                                .foregroundStyle(SynaraColor.secondaryText)
+                        }
+                    }
+                    .accessibilityIdentifier("PublicRoomResult-\(result.id)")
+                }
+            }
         }
     }
 
@@ -440,6 +491,27 @@ private struct RoomManagementSheet: View {
         }
     }
 
+    private func searchDirectory() {
+        state = .loading
+        Task {
+            do {
+                let results = try await environment.roomManagement.searchPublicRooms(query: directoryQuery)
+                await MainActor.run {
+                    directoryResults = results
+                    state = .idle
+                }
+            } catch let error as RoomManagementError {
+                await MainActor.run {
+                    state = .failed(error.localizedDescription)
+                }
+            } catch {
+                await MainActor.run {
+                    state = .failed(RoomManagementError.failed.localizedDescription)
+                }
+            }
+        }
+    }
+
     private enum SheetState: Equatable {
         case idle
         case loading
@@ -469,6 +541,30 @@ private struct RoomFilterStrip: View {
             .padding(.trailing, SynaraSpacing.large)
         }
         .accessibilityIdentifier("RoomFilterStrip")
+    }
+}
+
+private struct SpaceFilterStrip: View {
+    let spaces: [SpaceSummary]
+    @Binding var selectedSpaceID: String?
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: SynaraSpacing.small) {
+                SynaraFilterChip(title: "All spaces", isSelected: selectedSpaceID == nil) {
+                    selectedSpaceID = nil
+                }
+
+                ForEach(spaces) { space in
+                    SynaraFilterChip(title: space.name, isSelected: selectedSpaceID == space.id) {
+                        selectedSpaceID = space.id
+                    }
+                    .accessibilityIdentifier("SpaceFilter-\(space.id)")
+                }
+            }
+            .padding(.trailing, SynaraSpacing.large)
+        }
+        .accessibilityIdentifier("SpaceFilterStrip")
     }
 }
 
