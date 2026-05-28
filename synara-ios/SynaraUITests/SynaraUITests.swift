@@ -121,6 +121,30 @@ final class SynaraUITests: XCTestCase {
         XCTAssertTrue(app.collectionViews["RoomList"].waitForExistence(timeout: 5))
     }
 
+    func testRoomDetailsProfileEditMockFlow() {
+        let app = launchRoomApp()
+
+        XCTAssertTrue(app.buttons["RoomDetailsButton"].waitForExistence(timeout: 5))
+        tap(app.buttons["RoomDetailsButton"])
+        XCTAssertTrue(app.collectionViews["RoomDetailsScreen"].waitForExistence(timeout: 5))
+
+        let nameField = app.textFields["RoomProfileNameField"]
+        let topicField = app.textFields["RoomProfileTopicField"]
+        XCTAssertTrue(waitForNonEmptyValue(nameField, timeout: 5))
+        XCTAssertTrue(waitForNonEmptyValue(topicField, timeout: 5))
+        nameField.tap()
+        nameField.typeText(" Updated")
+        topicField.tap()
+        topicField.typeText(" Updated")
+        XCTAssertTrue(app.buttons["RoomProfileSaveButton"].isEnabled)
+        dismissKeyboardIfPresent(app: app)
+        tap(app.buttons["Save"])
+
+        let profileMessage = app.staticTexts["RoomDetailsMessage"]
+        XCTAssertTrue(revealRoomDetailsElement(profileMessage, app: app, timeout: 10))
+        XCTAssertEqual(profileMessage.label, "Profile updated.")
+    }
+
     func testLargeRoomFixtureRendersAndScrolls() {
         let app = launchLargeRoomsApp()
 
@@ -758,6 +782,19 @@ final class SynaraUITests: XCTestCase {
         }
     }
 
+    private func dismissKeyboardIfPresent(app: XCUIApplication) {
+        guard app.keyboards.firstMatch.exists else {
+            return
+        }
+        if app.keyboards.buttons["Return"].exists {
+            app.keyboards.buttons["Return"].tap()
+        } else if app.keyboards.buttons["Done"].exists {
+            app.keyboards.buttons["Done"].tap()
+        } else {
+            app.swipeDown()
+        }
+    }
+
     private func waitForTimelineElement(_ element: XCUIElement, app: XCUIApplication, timeout: TimeInterval) -> Bool {
         let deadline = Date().addingTimeInterval(timeout)
         let timeline = app.scrollViews["TimelineList"]
@@ -784,6 +821,18 @@ final class SynaraUITests: XCTestCase {
             RunLoop.current.run(until: Date().addingTimeInterval(0.5))
         }
         return values.contains(where: { app.staticTexts[$0].exists })
+    }
+
+    private func waitForNonEmptyValue(_ element: XCUIElement, timeout: TimeInterval) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if let value = element.value as? String,
+               value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
+                return true
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.25))
+        }
+        return (element.value as? String)?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
     }
 
 }

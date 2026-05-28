@@ -10,7 +10,8 @@ first slice is complete for app-level encrypted room open/send/relaunch restore,
 crypto status UI, and conservative recovery controls. Phase 8 room-management
 first slice is complete for service contracts and native create/join/DM,
 room-details, invite, leave, notification-mode UI surfaces, and gated live
-room-management smoke coverage.
+room-management smoke coverage. Room profile editing now supports
+permission-aware name/topic updates through mock and SDK-backed services.
 Deterministic simulator tests validate the mock path, and a gated live simulator
 smoke validates signed session restore, live room opening, composer send, and
 timeline update against disposable encrypted and unencrypted test rooms.
@@ -66,8 +67,9 @@ xcodebuild -project Synara.xcodeproj -scheme Synara -configuration Debug \
 
 Results:
 
-- `SynaraTests`: 75 tests, 0 failures.
-- `SynaraUITests`: 29 tests, 0 failures, 4 skipped gated live-smoke tests.
+- `SynaraTests`: 141 tests, 0 failures.
+- `SynaraUITests`: 30 tests, 0 failures; 26 passed, 4 skipped gated live-smoke
+  tests.
 
 Deterministic UI tests launch the app with `SYNARA_UI_TESTS=1`, which forces
 mock services instead of live Keychain, auth, and Matrix dependencies. The
@@ -219,6 +221,8 @@ The repeatable live-smoke checklist is
   flows. Private rooms and DMs default to encryption.
 - Room details exposes live room metadata, encryption/member context, invite
   entry, leave confirmation, and per-room notification mode controls.
+- Room details exposes permission-aware room name/topic editing and saves
+  changes through Matrix Rust SDK room state APIs where allowed.
 - Phase 6.5 UI modernization adds shared native design primitives, product
   auth headers, modern room avatars/badges/search, grouped timeline message
   bubbles, a stronger composer, and first-class agent action cards.
