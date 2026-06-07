@@ -24,6 +24,7 @@ import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 import { useOpenUserRoomProfile } from '../../state/hooks/userRoomProfile';
 import { useSpaceOptionally } from '../../hooks/useSpace';
 import { getMouseEventCords } from '../../utils/dom';
+import { resolveMatrixThumbnailUrl } from '../../matrix/media';
 
 export type EventReadersProps = {
   room: Room;
@@ -63,15 +64,7 @@ export const EventReaders = as<'div', EventReadersProps>(
                 const name = getName(readerId);
                 const avatarMxcUrl = room.getMember(readerId)?.getMxcAvatarUrl();
                 const avatarUrl = avatarMxcUrl
-                  ? mx.mxcUrlToHttp(
-                      avatarMxcUrl,
-                      100,
-                      100,
-                      'crop',
-                      undefined,
-                      false,
-                      useAuthentication
-                    )
+                  ? resolveMatrixThumbnailUrl(mx, avatarMxcUrl, 100, { useAuthentication })
                   : undefined;
 
                 return (

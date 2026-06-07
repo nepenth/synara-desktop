@@ -29,7 +29,6 @@ import { mDirectAtom } from '../../../state/mDirectList';
 import { BreakWord, LineClamp3 } from '../../../styles/Text.css';
 import { LINKIFY_OPTS } from '../../../plugins/react-custom-html-parser';
 import { RoomAvatar, RoomIcon } from '../../../components/room-avatar';
-import { mxcUrlToHttp } from '../../../utils/matrix';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { useMediaAuthentication } from '../../../hooks/useMediaAuthentication';
 import { StateEvent } from '../../../../types/matrix/room';
@@ -40,6 +39,7 @@ import { useFilePicker } from '../../../hooks/useFilePicker';
 import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
 import { useAlive } from '../../../hooks/useAlive';
 import { RoomPermissionsAPI } from '../../../hooks/useRoomPermissions';
+import { resolveMatrixThumbnailUrl, resolveOptionalMatrixMediaUrl } from '../../../matrix/media';
 
 type RoomProfileEditProps = {
   canEditAvatar: boolean;
@@ -66,9 +66,7 @@ export function RoomProfileEdit({
   const joinRule = useRoomJoinRule(room);
   const [roomAvatar, setRoomAvatar] = useState(avatar);
 
-  const avatarUrl = roomAvatar
-    ? mxcUrlToHttp(mx, roomAvatar, useAuthentication) ?? undefined
-    : undefined;
+  const avatarUrl = resolveOptionalMatrixMediaUrl(mx, roomAvatar, { useAuthentication });
 
   const [imageFile, setImageFile] = useState<File>();
   const avatarFileUrl = useObjectURL(imageFile);
@@ -280,7 +278,7 @@ export function RoomProfile({ permissions }: RoomProfileProps) {
   const canEdit = canEditAvatar || canEditName || canEditTopic;
 
   const avatarUrl = avatar
-    ? mxcUrlToHttp(mx, avatar, useAuthentication, 96, 96, 'crop') ?? undefined
+    ? resolveMatrixThumbnailUrl(mx, avatar, 96, { useAuthentication })
     : undefined;
 
   const [edit, setEdit] = useState(false);

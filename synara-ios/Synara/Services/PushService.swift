@@ -17,10 +17,10 @@ struct MatrixPusherRegistrationFailure: Error {
 }
 
 final class MatrixPusherService: MatrixPusherServicing {
+    private let clientStore: MatrixRustSDKClientStore
     private let gatewayURL: URL?
     private let appID: String
     private let logger: LoggingServicing
-    private let session: URLSession
 
     var isGatewayConfigured: Bool {
         gatewayURL != nil
@@ -31,15 +31,15 @@ final class MatrixPusherService: MatrixPusherServicing {
     }
 
     init(
+        clientStore: MatrixRustSDKClientStore,
         appID: String = "com.whylandcreative.synara",
         gatewayURL: URL? = nil,
-        logger: LoggingServicing = AppLogger(),
-        session: URLSession = .shared
+        logger: LoggingServicing = AppLogger()
     ) {
+        self.clientStore = clientStore
         self.appID = appID
         self.gatewayURL = gatewayURL
         self.logger = logger
-        self.session = session
     }
 
     func registerPusher(session: AuthenticatedSession, pushKey: String) async throws {
@@ -54,34 +54,15 @@ final class MatrixPusherService: MatrixPusherServicing {
             return
         }
 
-        let endpoint = matrixEndpoint(
-            baseURL: session.homeserverURL,
-            path: "/_matrix/client/v3/pushers/set"
-        )
-
-        var request = URLRequest(url: endpoint)
-        request.httpMethod = "POST"
-        request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-
-        let payload = MatrixPusherPayload(
+        try await clientStore.setPusher(
+            pushKey: pushKey,
             appID: appID,
-            pushkey: pushKey,
-            kind: "http",
+            gatewayURL: gatewayURL,
             appDisplayName: "Synara",
             deviceDisplayName: session.deviceID,
             lang: "en-US",
-            data: MatrixPusherData(url: gatewayURL.absoluteString, format: "event_id_only")
+            session: session
         )
-
-        request.httpBody = try JSONEncoder().encode(payload)
-        let (_, response) = try await sessionData(for: request)
-        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
-            let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
-            logger.error("Push registration failed with status \(statusCode)", category: .push)
-            throw MatrixPusherRegistrationFailure(statusCode: statusCode)
-        }
-
         logger.info("Push pusher registered", category: .push)
     }
 
@@ -97,97 +78,12 @@ final class MatrixPusherService: MatrixPusherServicing {
             return
         }
 
-        let payload = MatrixPusherRemovalPayload(
+        try await clientStore.deletePusher(
+            pushKey: pushKey,
             appID: appID,
-            pushkey: pushKey,
-            kind: "http",
-            appDisplayName: "Synara",
-            deviceDisplayName: session.deviceID,
-            lang: "en-US",
-            data: MatrixPusherData(url: gatewayURL.absoluteString, format: "event_id_only")
+            session: session
         )
-
-        let endpoint = matrixEndpoint(
-            baseURL: session.homeserverURL,
-            path: "/_matrix/client/v3/pushers/delete"
-        )
-
-        var request = URLRequest(url: endpoint)
-        request.httpMethod = "POST"
-        request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try JSONEncoder().encode(payload)
-
-        let (_, response) = try await sessionData(for: request)
-        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
-            let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
-            logger.error("Push unregister failed with status \(statusCode)", category: .push)
-            throw MatrixPusherRegistrationFailure(statusCode: statusCode)
-        }
-
         logger.info("Push pusher unregistered", category: .push)
-    }
-
-    private func sessionData(for request: URLRequest) async throws -> (Data, URLResponse) {
-        return try await session.data(for: request)
-    }
-
-    private func matrixEndpoint(baseURL: URL, path: String) -> URL {
-        var normalized = baseURL.absoluteString
-        if normalized.hasSuffix("/") {
-            normalized.removeLast()
-        }
-        return URL(string: normalized + path) ?? baseURL
-    }
-}
-
-private struct MatrixPusherPayload: Encodable {
-    let appID: String
-    let pushkey: String
-    let kind: String
-    let appDisplayName: String
-    let deviceDisplayName: String
-    let lang: String
-    let data: MatrixPusherData
-
-    enum CodingKeys: String, CodingKey {
-        case appID = "app_id"
-        case pushkey
-        case kind
-        case appDisplayName = "app_display_name"
-        case deviceDisplayName = "device_display_name"
-        case lang
-        case data
-    }
-}
-
-private struct MatrixPusherRemovalPayload: Encodable {
-    let appID: String
-    let pushkey: String
-    let kind: String
-    let appDisplayName: String
-    let deviceDisplayName: String
-    let lang: String
-    let data: MatrixPusherData
-
-    enum CodingKeys: String, CodingKey {
-        case appID = "app_id"
-        case pushkey
-        case kind
-        case appDisplayName = "app_display_name"
-        case deviceDisplayName = "device_display_name"
-        case lang
-        case data
-    }
-}
-
-private struct MatrixPusherData: Encodable {
-    let url: String
-    let format: String
-
-    enum CodingKeys: String, CodingKey {
-        case url
-        case format
     }
 }
 
@@ -219,7 +115,7 @@ final class SynaraPushService: NSObject, PushServicing {
         isRegistrationAvailable: Bool? = nil
     ) {
         self.logger = logger
-        self.pusherService = pusherService ?? MatrixPusherService(logger: logger)
+        self.pusherService = pusherService ?? DisabledMatrixPusherService()
 
         let defaultAvailability = {
             #if targetEnvironment(simulator)
@@ -430,6 +326,14 @@ enum IntValueParser {
             return nil
         }
     }
+}
+
+private struct DisabledMatrixPusherService: MatrixPusherServicing {
+    var isGatewayConfigured: Bool { false }
+    var configuredGatewayURL: URL? { nil }
+
+    func registerPusher(session: AuthenticatedSession, pushKey: String) async throws {}
+    func unregisterPusher(session: AuthenticatedSession, pushKey: String) async throws {}
 }
 
 enum NotificationPushRouteParser {

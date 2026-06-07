@@ -31,7 +31,6 @@ import { LineClamp2 } from '../../../styles/Text.css';
 import { SettingTile } from '../../../components/setting-tile';
 import { SequenceCardStyle } from '../styles.css';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
-import { mxcUrlToHttp } from '../../../utils/matrix';
 import { useMediaAuthentication } from '../../../hooks/useMediaAuthentication';
 import { usePowerLevels } from '../../../hooks/usePowerLevels';
 import { StateEvent } from '../../../../types/matrix/room';
@@ -40,6 +39,7 @@ import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
 import { useAlive } from '../../../hooks/useAlive';
 import { useRoomCreators } from '../../../hooks/useRoomCreators';
 import { useRoomPermissions } from '../../../hooks/useRoomPermissions';
+import { resolveOptionalMatrixMediaUrl } from '../../../matrix/media';
 
 type CreatePackTileProps = {
   packs: ImagePack[];
@@ -190,7 +190,7 @@ export function RoomPacks({ onViewPack }: RoomPacksProps) {
 
   const renderPack = (pack: ImagePack) => {
     const avatarMxc = pack.getAvatarUrl(ImageUsage.Emoticon);
-    const avatarUrl = avatarMxc ? mxcUrlToHttp(mx, avatarMxc, useAuthentication) : undefined;
+    const avatarUrl = resolveOptionalMatrixMediaUrl(mx, avatarMxc, { useAuthentication });
     const { address } = pack;
     if (!address) return null;
     const removed = !!removedPacks.find((addr) => packAddressEqual(addr, address));

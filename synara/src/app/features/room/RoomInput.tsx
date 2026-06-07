@@ -68,7 +68,6 @@ import {
   encryptFile,
   getImageInfo,
   getMxIdLocalPart,
-  mxcUrlToHttp,
 } from '../../utils/matrix';
 import { useTypingStatusUpdater } from '../../hooks/useTypingStatusUpdater';
 import { useFilePicker } from '../../hooks/useFilePicker';
@@ -123,6 +122,7 @@ import { useRoomCreators } from '../../hooks/useRoomCreators';
 import { useTheme } from '../../hooks/useTheme';
 import { useRoomCreatorsTag } from '../../hooks/useRoomCreatorsTag';
 import { usePowerLevelTags } from '../../hooks/usePowerLevelTags';
+import { resolveOptionalMatrixMediaUrl } from '../../matrix/media';
 import { useComposingCheck } from '../../hooks/useComposingCheck';
 import { useClientConfig } from '../../hooks/useClientConfig';
 import { fetchGifForUpload, gifPickerEnabled, gifSearchAvailable } from '../../utils/gifProvider';
@@ -612,7 +612,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
     };
 
     const handleStickerSelect = async (mxc: string, shortcode: string, label: string) => {
-      const stickerUrl = mxcUrlToHttp(mx, mxc, useAuthentication);
+      const stickerUrl = resolveOptionalMatrixMediaUrl(mx, mxc, { useAuthentication });
       if (!stickerUrl) return;
 
       const info = await getImageInfo(

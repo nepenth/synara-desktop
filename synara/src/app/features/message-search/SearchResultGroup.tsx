@@ -13,7 +13,7 @@ import {
   makeMentionCustomProps,
   renderMatrixMention,
 } from '../../plugins/react-custom-html-parser';
-import { getMxIdLocalPart, mxcUrlToHttp } from '../../utils/matrix';
+import { getMxIdLocalPart } from '../../utils/matrix';
 import { useMatrixEventRenderer } from '../../hooks/useMatrixEventRenderer';
 import { GetContentCallback, MessageEvent, StateEvent } from '../../../types/matrix/room';
 import {
@@ -39,6 +39,7 @@ import { UserAvatar } from '../../components/user-avatar';
 import { useMentionClickHandler } from '../../hooks/useMentionClickHandler';
 import { useSpoilerClickHandler } from '../../hooks/useSpoilerClickHandler';
 import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
+import { resolveMatrixThumbnailUrl } from '../../matrix/media';
 import { usePowerLevels } from '../../hooks/usePowerLevels';
 import { usePowerLevelTags } from '../../hooks/usePowerLevelTags';
 import { useTheme } from '../../hooks/useTheme';
@@ -260,14 +261,9 @@ export function SearchResultGroup({
                         userId={event.sender}
                         src={
                           senderAvatarMxc
-                            ? mxcUrlToHttp(
-                                mx,
-                                senderAvatarMxc,
+                            ? resolveMatrixThumbnailUrl(mx, senderAvatarMxc, 48, {
                                 useAuthentication,
-                                48,
-                                48,
-                                'crop'
-                              ) ?? undefined
+                              })
                             : undefined
                         }
                         alt={displayName}

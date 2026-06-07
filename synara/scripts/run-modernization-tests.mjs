@@ -27,6 +27,7 @@ const tests = [
   'src/app/utils/__tests__/timelineVirtualization.test.ts',
   'src/app/utils/__tests__/desktop.test.ts',
   'src/app/platform/__tests__/platform.test.ts',
+  'src/app/matrix/__tests__/media.test.ts',
   'src/app/state/__tests__/sessionBootstrap.test.ts',
   'src/app/state/__tests__/sessionPersistence.test.ts',
   'src/app/state/__tests__/sessions.test.ts',

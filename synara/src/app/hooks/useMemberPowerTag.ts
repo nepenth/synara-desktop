@@ -6,6 +6,7 @@ import { MemberPowerTag, MemberPowerTagIcon } from '../../types/matrix/room';
 import { useRoomCreatorsTag } from './useRoomCreatorsTag';
 import { ThemeKind } from './useTheme';
 import { accessibleColor } from '../plugins/color';
+import { resolveMatrixMediaUrl } from '../matrix/media';
 
 export type GetMemberPowerTag = (userId: string) => MemberPowerTag;
 
@@ -36,10 +37,20 @@ export const getPowerTagIconSrc = (
   mx: MatrixClient,
   useAuthentication: boolean,
   icon: MemberPowerTagIcon
-): string | undefined =>
-  icon?.key?.startsWith('mxc://')
-    ? mx.mxcUrlToHttp(icon.key, 96, 96, 'scale', undefined, undefined, useAuthentication) ?? '🌻'
-    : icon?.key;
+): string | undefined => {
+  if (!icon?.key?.startsWith('mxc://')) return icon?.key;
+
+  try {
+    return resolveMatrixMediaUrl(mx, icon.key, {
+      useAuthentication,
+      width: 96,
+      height: 96,
+      resizeMethod: 'scale',
+    });
+  } catch {
+    return '🌻';
+  }
+};
 
 export const useAccessiblePowerTagColors = (
   themeKind: ThemeKind,

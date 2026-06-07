@@ -58,7 +58,7 @@ import {
   getMemberDisplayName,
   trimReplyFromBody,
 } from '../../../utils/room';
-import { getMxIdLocalPart, mxcUrlToHttp } from '../../../utils/matrix';
+import { getMxIdLocalPart } from '../../../utils/matrix';
 import { MessageLayout, MessageSpacing } from '../../../state/settings';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { useRecentEmoji } from '../../../hooks/useRecentEmoji';
@@ -73,6 +73,7 @@ import { UserAvatar } from '../../../components/user-avatar';
 import { copyToClipboard } from '../../../utils/dom';
 import { stopPropagation } from '../../../utils/keyboard';
 import { getMatrixToRoomEvent } from '../../../plugins/matrix-to';
+import { resolveMatrixThumbnailUrl } from '../../../matrix/media';
 import { getViaServers } from '../../../plugins/via-servers';
 import { useMediaAuthentication } from '../../../hooks/useMediaAuthentication';
 import { useRoomPinnedEvents } from '../../../hooks/useRoomPinnedEvents';
@@ -1244,7 +1245,7 @@ export const Message = as<'div', MessageProps>(
             userId={senderId}
             src={
               senderAvatarMxc
-                ? mxcUrlToHttp(mx, senderAvatarMxc, useAuthentication, 48, 48, 'crop') ?? undefined
+                ? resolveMatrixThumbnailUrl(mx, senderAvatarMxc, 48, { useAuthentication })
                 : undefined
             }
             alt={senderDisplayName}

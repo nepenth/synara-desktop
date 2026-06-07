@@ -2,9 +2,9 @@ import { ReactNode, useCallback, useEffect } from 'react';
 import { IThumbnailContent } from '../../../../types/matrix/common';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
-import { decryptFile, downloadEncryptedMedia, mxcUrlToHttp } from '../../../utils/matrix';
 import { useMediaAuthentication } from '../../../hooks/useMediaAuthentication';
 import { FALLBACK_MIMETYPE } from '../../../utils/mimeTypes';
+import { createMatrixMediaObjectUrl, resolveMatrixMediaUrl } from '../../../matrix/media';
 
 export type ThumbnailContentProps = {
   info: IThumbnailContent;
@@ -23,16 +23,15 @@ export function ThumbnailContent({ info, renderImage }: ThumbnailContentProps) {
         throw new Error('Failed to load thumbnail');
       }
 
-      const mediaUrl = mxcUrlToHttp(mx, thumbMxcUrl, useAuthentication);
-      if (!mediaUrl) throw new Error('Invalid media URL');
       if (encInfo) {
-        const fileContent = await downloadEncryptedMedia(mediaUrl, (encBuf) =>
-          decryptFile(encBuf, thumbInfo.mimetype ?? FALLBACK_MIMETYPE, encInfo)
-        );
-        return URL.createObjectURL(fileContent);
+        return createMatrixMediaObjectUrl(mx, thumbMxcUrl, {
+          useAuthentication,
+          mimeType: thumbInfo.mimetype ?? FALLBACK_MIMETYPE,
+          encryptedInfo: encInfo,
+        });
       }
 
-      return mediaUrl;
+      return resolveMatrixMediaUrl(mx, thumbMxcUrl, { useAuthentication });
     }, [mx, info, useAuthentication])
   );
 

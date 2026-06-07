@@ -19,6 +19,7 @@ struct AppEnvironment {
     let drafts: DraftStore
     let eventActions: EventActionServicing
     let agentApprovals: AgentApprovalServicing
+    let readMarkers: RoomReadMarkerServicing
     let mediaLoader: MediaLoading
     let mediaUploader: MediaUploading
     let crypto: CryptoStatusServicing
@@ -43,6 +44,7 @@ struct AppEnvironment {
         let matrixSDKClientStore = MatrixRustSDKClientStore()
         let matrix = MatrixRustSDKMatrixClientService(clientStore: matrixSDKClientStore)
         let pusherService = MatrixPusherService(
+            clientStore: matrixSDKClientStore,
             gatewayURL: pushGatewayURL(),
             logger: logger
         )
@@ -70,13 +72,14 @@ struct AppEnvironment {
                 push: push
             ),
             timeline: MatrixRustSDKTimelineService(sessionStore: session, clientStore: matrixSDKClientStore),
-            later: MatrixAccountDataLaterService(sessionStore: session),
+            later: MatrixRustSDKLaterService(sessionStore: session, clientStore: matrixSDKClientStore),
             messageSender: MatrixRustSDKMessageSendService(sessionStore: session, clientStore: matrixSDKClientStore),
             drafts: DraftStore(),
-            eventActions: MatrixEventActionService(sessionStore: session),
-            agentApprovals: MatrixAgentApprovalService(sessionStore: session),
-            mediaLoader: MatrixMediaLoader(sessionStore: session),
-            mediaUploader: MatrixMediaUploadService(sessionStore: session),
+            eventActions: MatrixRustSDKEventActionService(sessionStore: session, clientStore: matrixSDKClientStore),
+            agentApprovals: MatrixRustSDKAgentApprovalService(sessionStore: session, clientStore: matrixSDKClientStore),
+            readMarkers: MatrixRoomReadMarkerService(sessionStore: session),
+            mediaLoader: MatrixMediaLoader(sessionStore: session, clientStore: matrixSDKClientStore),
+            mediaUploader: MatrixMediaUploadService(sessionStore: session, clientStore: matrixSDKClientStore),
             crypto: crypto,
             roomManagement: roomManagement
         )
@@ -99,6 +102,7 @@ struct AppEnvironment {
         drafts: DraftStore = DraftStore(),
         eventActions: EventActionServicing = MockEventActionService(),
         agentApprovals: AgentApprovalServicing = MockAgentApprovalService(),
+        readMarkers: RoomReadMarkerServicing = MockRoomReadMarkerService(),
         mediaLoader: MediaLoading = MockMediaLoader(),
         mediaUploader: MediaUploading = MockMediaUploadService(),
         crypto: CryptoStatusServicing = MockCryptoStatusService(),
@@ -128,6 +132,7 @@ struct AppEnvironment {
             drafts: drafts,
             eventActions: eventActions,
             agentApprovals: agentApprovals,
+            readMarkers: readMarkers,
             mediaLoader: mediaLoader,
             mediaUploader: mediaUploader,
             crypto: crypto,

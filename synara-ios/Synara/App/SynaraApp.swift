@@ -17,6 +17,10 @@ struct SynaraApp: App {
 
     init() {
         PerformanceTrace.event("AppInit")
+        let environment = ProcessInfo.processInfo.environment
+        if environment["SYNARA_UI_TESTS"] == "1" || environment["SYNARA_DISABLE_ANIMATIONS"] == "1" {
+            UIView.setAnimationsEnabled(false)
+        }
     }
 
     var body: some Scene {

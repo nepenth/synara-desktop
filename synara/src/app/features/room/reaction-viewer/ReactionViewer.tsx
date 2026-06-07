@@ -30,6 +30,7 @@ import { useMediaAuthentication } from '../../../hooks/useMediaAuthentication';
 import { useOpenUserRoomProfile } from '../../../state/hooks/userRoomProfile';
 import { useSpaceOptionally } from '../../../hooks/useSpace';
 import { getMouseEventCords } from '../../../utils/dom';
+import { resolveMatrixThumbnailUrl } from '../../../matrix/media';
 
 export type ReactionViewerProps = {
   room: Room;
@@ -143,15 +144,7 @@ export const ReactionViewer = as<'div', ReactionViewerProps>(
 
                   const avatarMxcUrl = member?.getMxcAvatarUrl();
                   const avatarUrl = avatarMxcUrl
-                    ? mx.mxcUrlToHttp(
-                        avatarMxcUrl,
-                        100,
-                        100,
-                        'crop',
-                        undefined,
-                        false,
-                        useAuthentication
-                      )
+                    ? resolveMatrixThumbnailUrl(mx, avatarMxcUrl, 100, { useAuthentication })
                     : undefined;
                   const eventId = mEvent.getId();
 

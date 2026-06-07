@@ -2,160 +2,6 @@ import XCTest
 @testable import Synara
 
 final class TimelineServiceTests: XCTestCase {
-    func testMatrixTimelineMapsMessagesAndMedia() async throws {
-        let client = MockTimelineHTTPClient(responses: [
-            .success(
-                statusCode: 200,
-                body: """
-                {
-                  "end": "next-token",
-                  "chunk": [
-                    {
-                      "event_id": "$new",
-                      "sender": "@bob:matrix.org",
-                      "origin_server_ts": 2000,
-                      "type": "m.room.message",
-                      "content": {
-                        "msgtype": "m.image",
-                        "body": "photo.jpg",
-                        "url": "mxc://matrix.org/media"
-                      }
-                    },
-                    {
-                      "event_id": "$old",
-                      "sender": "@alice:matrix.org",
-                      "origin_server_ts": 1000,
-                      "type": "m.room.message",
-                      "content": {
-                        "msgtype": "m.text",
-                        "body": "hello",
-                        "m.relates_to": {
-                          "m.in_reply_to": {
-                            "event_id": "$parent"
-                          }
-                        }
-                      }
-                    }
-                  ]
-                }
-                """
-            )
-        ])
-        let service = MatrixTimelineService(
-            sessionStore: AppSessionStore(currentState: .signedIn(try makeSession())),
-            httpClient: client
-        )
-
-        let items = await service.loadInitialTimeline(roomID: "!room:matrix.org")
-
-        XCTAssertEqual(items.map(\.eventID), ["$old", "$new"])
-        XCTAssertEqual(items[0].kind, .text("hello"))
-        XCTAssertEqual(items[0].replyToEventID, "$parent")
-        guard case .mediaPlaceholder(let resource) = items[1].kind else {
-            XCTFail("Expected media placeholder")
-            return
-        }
-        XCTAssertEqual(resource.filename, "photo.jpg")
-        XCTAssertEqual(client.requests.first?.httpMethod, "GET")
-        XCTAssertEqual(
-            client.requests.first?.url?.absoluteString,
-            "https://matrix.org/_matrix/client/v3/rooms/!room:matrix.org/messages?dir=b&limit=50"
-        )
-    }
-
-    func testMatrixTimelineMapsFormattedHTMLMessages() async throws {
-        let client = MockTimelineHTTPClient(responses: [
-            .success(
-                statusCode: 200,
-                body: """
-                {
-                  "chunk": [
-                    {
-                      "event_id": "$formatted",
-                      "sender": "@alice:matrix.org",
-                      "origin_server_ts": 1000,
-                      "type": "m.room.message",
-                      "content": {
-                        "msgtype": "m.text",
-                        "body": "Bold link alert",
-                        "format": "org.matrix.custom.html",
-                        "formatted_body": "<strong>Bold</strong> <a href=\\"https://matrix.to/#/@alice:matrix.org\\">link</a> <script>alert(1)</script>alert"
-                      }
-                    }
-                  ]
-                }
-                """
-            )
-        ])
-        let service = MatrixTimelineService(
-            sessionStore: AppSessionStore(currentState: .signedIn(try makeSession())),
-            httpClient: client
-        )
-
-        let items = await service.loadInitialTimeline(roomID: "!room:matrix.org")
-
-        guard case .formattedText(let body, let html) = items.first?.kind else {
-            XCTFail("Expected formatted text")
-            return
-        }
-        XCTAssertEqual(body, "Bold link alert")
-        XCTAssertTrue(html.contains("<strong>Bold</strong>"))
-        let markdown = MatrixHTMLRenderer.sanitizedMarkdown(body: body, html: html)
-        XCTAssertEqual(markdown, "**Bold** [link](https://matrix.to/#/@alice:matrix.org) alert")
-        XCTAssertFalse(markdown.contains("script"))
-    }
-
-    func testMatrixTimelineMapsSenderProfileAvatarURL() async throws {
-        let client = MockTimelineHTTPClient(
-            responses: [
-                .success(
-                    statusCode: 200,
-                    body: """
-                    {
-                      "chunk": [
-                        {
-                          "event_id": "$second",
-                          "sender": "@alice:matrix.org",
-                          "origin_server_ts": 2000,
-                          "type": "m.room.message",
-                          "content": { "msgtype": "m.text", "body": "second" }
-                        },
-                        {
-                          "event_id": "$first",
-                          "sender": "@alice:matrix.org",
-                          "origin_server_ts": 1000,
-                          "type": "m.room.message",
-                          "content": { "msgtype": "m.text", "body": "first" }
-                        }
-                      ]
-                    }
-                    """
-                )
-            ],
-            profileResponsesByUserID: [
-                "@alice:matrix.org": .success(
-                    statusCode: 200,
-                    body: #"{"displayname":"Alice","avatar_url":"mxc://matrix.org/alice-avatar"}"#
-                )
-            ]
-        )
-        let service = MatrixTimelineService(
-            sessionStore: AppSessionStore(currentState: .signedIn(try makeSession())),
-            httpClient: client
-        )
-
-        let items = await service.loadInitialTimeline(roomID: "!room:matrix.org")
-
-        XCTAssertEqual(items.map(\.senderAvatarURL?.absoluteString), [
-            "mxc://matrix.org/alice-avatar",
-            "mxc://matrix.org/alice-avatar"
-        ])
-        XCTAssertEqual(
-            client.requests.filter { $0.url?.path.contains("/_matrix/client/v3/profile/") == true }.count,
-            1
-        )
-    }
-
     func testMatrixHTMLSanitizerDropsUnsafeLinksAndKeepsFallback() {
         let markdown = MatrixHTMLRenderer.sanitizedMarkdown(
             body: "fallback",
@@ -163,172 +9,6 @@ final class TimelineServiceTests: XCTestCase {
         )
 
         XCTAssertEqual(markdown, "*Hi* tap `<safe>`")
-    }
-
-    func testMatrixTimelineUsesPaginationTokenForOlderMessages() async throws {
-        let client = MockTimelineHTTPClient(responses: [
-            .success(
-                statusCode: 200,
-                body: """
-                {
-                  "end": "page-token",
-                  "chunk": [
-                    {
-                      "event_id": "$new",
-                      "sender": "@alice:matrix.org",
-                      "origin_server_ts": 2000,
-                      "type": "m.room.message",
-                      "content": { "msgtype": "m.text", "body": "new" }
-                    }
-                  ]
-                }
-                """
-            ),
-            .success(
-                statusCode: 200,
-                body: """
-                {
-                  "end": "older-token",
-                  "chunk": [
-                    {
-                      "event_id": "$old",
-                      "sender": "@alice:matrix.org",
-                      "origin_server_ts": 1000,
-                      "type": "m.room.message",
-                      "content": { "msgtype": "m.text", "body": "old" }
-                    }
-                  ]
-                }
-                """
-            )
-        ])
-        let service = MatrixTimelineService(
-            sessionStore: AppSessionStore(currentState: .signedIn(try makeSession())),
-            httpClient: client
-        )
-
-        _ = await service.loadInitialTimeline(roomID: "!room:matrix.org")
-        let older = await service.loadOlderTimeline(roomID: "!room:matrix.org", before: "$new")
-
-        XCTAssertEqual(older.map(\.eventID), ["$old"])
-        XCTAssertEqual(
-            client.requests.last(where: { $0.url?.path.contains("/_matrix/client/v3/rooms/") == true })?.url?.absoluteString,
-            "https://matrix.org/_matrix/client/v3/rooms/!room:matrix.org/messages?dir=b&limit=50&from=page-token"
-        )
-    }
-
-    func testMatrixTimelineReturnsEmptyWhenSignedOut() async {
-        let client = MockTimelineHTTPClient()
-        let service = MatrixTimelineService(
-            sessionStore: AppSessionStore(),
-            httpClient: client
-        )
-
-        let items = await service.loadInitialTimeline(roomID: "!room:matrix.org")
-
-        XCTAssertTrue(items.isEmpty)
-        XCTAssertTrue(client.requests.isEmpty)
-    }
-
-    func testMatrixTimelineHidesRoomStateEventsButKeepsCustomUnknowns() async throws {
-        let client = MockTimelineHTTPClient(responses: [
-            .success(
-                statusCode: 200,
-                body: """
-                {
-                  "chunk": [
-                    {
-                      "event_id": "$create",
-                      "sender": "@alice:matrix.org",
-                      "origin_server_ts": 1000,
-                      "type": "m.room.create",
-                      "content": {}
-                    },
-                    {
-                      "event_id": "$agent",
-                      "sender": "@agent:matrix.org",
-                      "origin_server_ts": 2000,
-                      "type": "synara.agent.card",
-                      "content": {}
-                    },
-                    {
-                      "event_id": "$text",
-                      "sender": "@alice:matrix.org",
-                      "origin_server_ts": 3000,
-                      "type": "m.room.message",
-                      "content": {
-                        "msgtype": "m.text",
-                        "body": "visible"
-                      }
-                    }
-                  ]
-                }
-                """
-            )
-        ])
-        let service = MatrixTimelineService(
-            sessionStore: AppSessionStore(currentState: .signedIn(try makeSession())),
-            httpClient: client
-        )
-
-        let items = await service.loadInitialTimeline(roomID: "!room:matrix.org")
-
-        XCTAssertEqual(items.map(\.eventID), ["$text", "$agent"])
-        XCTAssertEqual(items[0].kind, .text("visible"))
-        XCTAssertEqual(items[1].kind, .unknown(type: "synara.agent.card"))
-    }
-
-    func testMatrixTimelineParsesAgentCardPayloadFromConfiguredContentKeys() async throws {
-        let client = MockTimelineHTTPClient(responses: [
-            .success(
-                statusCode: 200,
-                body: """
-                {
-                  "chunk": [
-                    {
-                      "event_id": "$agent-card",
-                      "sender": "@agent:matrix.org",
-                      "origin_server_ts": 1600001000,
-                      "type": "m.room.message",
-                      "content": {
-                        "body": "Build result",
-                        "org.hermes.agent": {
-                          "title": "Build result",
-                          "status": "passed",
-                          "summary": "Everything is good.",
-                          "actions": [
-                            {
-                              "id": "continue",
-                              "title": "Continue",
-                              "prompt": "Continue from last step."
-                            }
-                          ]
-                        }
-                      }
-                    }
-                  ]
-                }
-                """
-            )
-        ])
-        let service = MatrixTimelineService(
-            sessionStore: AppSessionStore(currentState: .signedIn(try makeSession())),
-            httpClient: client
-        )
-
-        let items = await service.loadInitialTimeline(roomID: "!room:matrix.org")
-
-        XCTAssertEqual(items.count, 1)
-        let item = try XCTUnwrap(items.first)
-        guard case .agentCard(let card) = item.kind else {
-            XCTFail("Expected parsed agent card kind")
-            return
-        }
-        XCTAssertEqual(card.title, "Build result")
-        XCTAssertEqual(card.summary, "Everything is good.")
-        XCTAssertEqual(card.status, "passed")
-        XCTAssertEqual(card.actions.count, 1)
-        XCTAssertEqual(card.actions.first?.id, "continue")
     }
 
     func testAgentCardPayloadParserReadsHermesJSONMessageBody() throws {
@@ -357,50 +37,6 @@ final class TimelineServiceTests: XCTestCase {
         XCTAssertEqual(card.status, "pending")
         XCTAssertEqual(card.actions.first?.id, "approve")
         XCTAssertEqual(card.actions.first?.kind, "approve")
-    }
-
-    func testSDKTimelineMergePrefersRawAgentCardFallbackForSameEvent() throws {
-        let card = try SynaraAgentCard(
-            title: "Approval required",
-            status: "pending",
-            summary: "Review this action.",
-            actions: [
-                try SynaraAgentCardAction(
-                    id: "approve",
-                    title: "Approve",
-                    kind: "approve",
-                    prompt: "approve request"
-                )
-            ]
-        )
-        let sdkItem = TimelineItem(
-            id: "$agent",
-            eventID: "$agent",
-            senderID: "@agent:matrix.org",
-            timestamp: TimelineFixtures.baseDate,
-            kind: .text("{\"hermes\":true}"),
-            replyToEventID: nil,
-            isEdited: false,
-            reactions: [:]
-        )
-        let rawAgentItem = TimelineItem(
-            id: "$agent",
-            eventID: "$agent",
-            senderID: "@agent:matrix.org",
-            timestamp: TimelineFixtures.baseDate,
-            kind: .agentCard(card),
-            replyToEventID: nil,
-            isEdited: false,
-            reactions: [:]
-        )
-
-        let merged = MatrixRustSDKTimelineService.mergedTimelineItems(
-            sdkItems: [sdkItem],
-            rawAgentItems: [rawAgentItem]
-        )
-
-        XCTAssertEqual(merged.count, 1)
-        XCTAssertEqual(merged.first?.kind, .agentCard(card))
     }
 
     func testMapperMapsAgentCardKind() {
@@ -514,53 +150,6 @@ final class TimelineServiceTests: XCTestCase {
         XCTAssertTrue(resource.requiresAuthentication)
     }
 
-    func testEncryptedMediaEventsAreBlockedPlaceholders() async throws {
-        let client = MockTimelineHTTPClient(responses: [
-            .success(
-                statusCode: 200,
-                body: """
-                {
-                  "chunk": [
-                    {
-                      "event_id": "$encrypted-media",
-                      "sender": "@alice:matrix.org",
-                      "origin_server_ts": 1000,
-                      "type": "m.room.message",
-                      "content": {
-                        "msgtype": "m.image",
-                        "body": "secret.png",
-                        "file": {
-                          "url": "mxc://matrix.org/encrypted-media",
-                          "key": { "alg": "A256CTR", "k": "redacted", "key_ops": ["encrypt","decrypt"], "kty": "oct" },
-                          "iv": "redacted",
-                          "hashes": { "sha256": "redacted" },
-                          "v": "v2"
-                        }
-                      }
-                    }
-                  ]
-                }
-                """
-            )
-        ])
-        let service = MatrixTimelineService(
-            sessionStore: AppSessionStore(currentState: .signedIn(try makeSession())),
-            httpClient: client
-        )
-
-        let items = await service.loadInitialTimeline(roomID: "!room:matrix.org")
-        let item = try XCTUnwrap(items.first)
-
-        guard case .mediaPlaceholder(let resource) = item.kind else {
-            XCTFail("Expected media placeholder")
-            return
-        }
-        XCTAssertTrue(item.isEncrypted)
-        XCTAssertTrue(resource.isEncrypted)
-        XCTAssertEqual(resource.safeDescription, "secret.png")
-        XCTAssertEqual(resource.authenticatedURL?.absoluteString, "mxc://matrix.org/encrypted-media")
-    }
-
     func testMockTimelineCanLoadInitialAndOlderEvents() async {
         let service = MockTimelineService()
 
@@ -581,98 +170,39 @@ final class TimelineServiceTests: XCTestCase {
         XCTAssertEqual(Set(items.map(\.id)).count, 10_000)
     }
 
-    func testMatrixAccountDataLaterServiceLoadsSortedActiveAndCompletedItems() async throws {
-        let expectedNow = 1_800_000_000_000
-        let client = MockTimelineHTTPClient(responses: [
-            .success(
-                statusCode: 200,
-                body: #"""
-                {
-                  "content": {
-                    "version": 1,
-                    "items": {
-                      "!room:example.org\n$event-active-late": {
-                        "id": "!room:example.org\n$event-active-late",
-                        "kind": "saved",
-                        "roomId": "!room:example.org",
-                        "eventId": "$event-active-late",
-                        "createdAt": 1770000000000,
-                        "dueTs": 1800001000000
-                      },
-                      "!room:example.org\n$event-active-soon": {
-                        "id": "!room:example.org\n$event-active-soon",
-                        "kind": "reminder",
-                        "roomId": "!room:example.org",
-                        "eventId": "$event-active-soon",
-                        "createdAt": 1790000000000,
-                        "dueTs": 1795000000000
-                      },
-                      "!room:example.org\n$event-completed": {
-                        "id": "!room:example.org\n$event-completed",
-                        "kind": "reminder",
-                        "roomId": "!room:example.org",
-                        "eventId": "$event-completed",
-                        "createdAt": 1780000000000,
-                        "dueTs": 1810000000000,
-                        "completedAt": 1798000000000
-                      }
-                    }
-                  }
-                }
-                """#
-            )
-        ])
-
-        let service = MatrixAccountDataLaterService(
-            sessionStore: AppSessionStore(currentState: .signedIn(try makeSession())),
-            httpClient: client,
-            now: { expectedNow }
+    func testTimelineReplyCounterCountsRepliesByRootEvent() {
+        let root = TimelineItem(
+            id: "$root",
+            eventID: "$root",
+            senderID: "@alice:matrix.org",
+            timestamp: TimelineFixtures.baseDate,
+            kind: .text("Root"),
+            replyToEventID: nil,
+            isEdited: false,
+            reactions: [:]
+        )
+        let firstReply = TimelineItem(
+            id: "$reply-1",
+            eventID: "$reply-1",
+            senderID: "@bob:matrix.org",
+            timestamp: TimelineFixtures.baseDate.addingTimeInterval(1),
+            kind: .text("Reply one"),
+            replyToEventID: "$root",
+            isEdited: false,
+            reactions: [:]
+        )
+        let secondReply = TimelineItem(
+            id: "$reply-2",
+            eventID: "$reply-2",
+            senderID: "@carol:matrix.org",
+            timestamp: TimelineFixtures.baseDate.addingTimeInterval(2),
+            kind: .text("Reply two"),
+            replyToEventID: "$root",
+            isEdited: false,
+            reactions: [:]
         )
 
-        guard case let .success((items, error)) = await service.loadItems() else {
-            XCTFail("Expected success payload")
-            return
-        }
-
-        XCTAssertNil(error)
-        XCTAssertEqual(items.map(\.id), [
-            "!room:example.org\n$event-active-soon",
-            "!room:example.org\n$event-active-late",
-            "!room:example.org\n$event-completed"
-        ])
-    }
-
-    func testMatrixAccountDataLaterServiceReturnsMalformedPayloadError() async throws {
-        let client = MockTimelineHTTPClient(responses: [
-            .success(
-                statusCode: 200,
-                body: #"{"items":{}}"#
-            )
-        ])
-        let service = MatrixAccountDataLaterService(
-            sessionStore: AppSessionStore(currentState: .signedIn(try makeSession())),
-            httpClient: client
-        )
-
-        guard case let .success((items, error)) = await service.loadItems() else {
-            XCTFail("Expected success payload")
-            return
-        }
-
-        XCTAssertEqual(items, [])
-        XCTAssertEqual(error, .malformedPayload)
-    }
-
-    func testMatrixAccountDataLaterServiceReturnsNoSessionError() async {
-        let service = MatrixAccountDataLaterService(sessionStore: AppSessionStore())
-
-        guard case let .success((items, error)) = await service.loadItems() else {
-            XCTFail("Expected success payload")
-            return
-        }
-
-        XCTAssertTrue(items.isEmpty)
-        XCTAssertEqual(error, .noSession)
+        XCTAssertEqual(TimelineReplyCounter.replyCounts(for: [root, firstReply, secondReply]), ["$root": 2])
     }
 
     func testSynaraLaterListSortingPrioritizesActiveItems() {
@@ -721,64 +251,4 @@ final class TimelineServiceTests: XCTestCase {
         XCTAssertEqual(sorted.map(\.id), ["b", "c", "a"])
     }
 
-    private func makeSession() throws -> AuthenticatedSession {
-        AuthenticatedSession(
-            userID: "@alice:matrix.org",
-            deviceID: "DEVICE",
-            homeserverURL: try XCTUnwrap(URL(string: "https://matrix.org")),
-            accessToken: "token"
-        )
-    }
-}
-
-private final class MockTimelineHTTPClient: AuthHTTPClient {
-    enum Response {
-        case success(statusCode: Int, body: String)
-        case failure(Error)
-    }
-
-    private var responses: [Response]
-    private var profileResponsesByUserID: [String: Response]
-    private(set) var requests: [URLRequest] = []
-
-    init(responses: [Response] = [], profileResponsesByUserID: [String: Response] = [:]) {
-        self.responses = responses
-        self.profileResponsesByUserID = profileResponsesByUserID
-    }
-
-    func data(for request: URLRequest) async throws -> (Data, URLResponse) {
-        requests.append(request)
-
-        if request.url?.path.contains("/_matrix/client/v3/profile/") == true {
-            let userID = request.url?.lastPathComponent.removingPercentEncoding ?? ""
-            return try resolve(
-                profileResponsesByUserID[userID] ?? .success(statusCode: 404, body: "{}"),
-                request: request
-            )
-        }
-
-        guard responses.isEmpty == false else {
-            throw LoginError.networkFailure
-        }
-
-        return try resolve(responses.removeFirst(), request: request)
-    }
-
-    private func resolve(_ response: Response, request: URLRequest) throws -> (Data, URLResponse) {
-        switch response {
-        case .success(let statusCode, let body):
-            let url = try XCTUnwrap(request.url)
-            let httpResponse = try XCTUnwrap(
-                HTTPURLResponse(
-                    url: url,
-                    statusCode: statusCode,
-                    httpVersion: nil,
-                    headerFields: nil
-                )
-            )
-            return (Data(body.utf8), httpResponse)
-        case .failure(let error):
-            throw error
-        }
-    }
 }

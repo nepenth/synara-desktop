@@ -2,7 +2,7 @@ import { Box, Button, config, Icon, Icons, Text } from 'folds';
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { UserHero, UserHeroName } from './UserHero';
-import { getMxIdServer, mxcUrlToHttp } from '../../utils/matrix';
+import { getMxIdServer } from '../../utils/matrix';
 import { getMemberAvatarMxc, getMemberDisplayName } from '../../utils/room';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
@@ -22,6 +22,7 @@ import { useMemberPowerCompare } from '../../hooks/useMemberPowerCompare';
 import { CreatorChip } from './CreatorChip';
 import { getDirectCreatePath, withSearchParam } from '../../pages/pathUtils';
 import { DirectCreateSearchParams } from '../../pages/paths';
+import { resolveMatrixThumbnailUrl } from '../../matrix/media';
 
 type UserRoomProfileProps = {
   userId: string;
@@ -55,7 +56,9 @@ export function UserRoomProfile({ userId }: UserRoomProfileProps) {
   const server = getMxIdServer(userId);
   const displayName = getMemberDisplayName(room, userId);
   const avatarMxc = getMemberAvatarMxc(room, userId);
-  const avatarUrl = (avatarMxc && mxcUrlToHttp(mx, avatarMxc, useAuthentication)) ?? undefined;
+  const avatarUrl = avatarMxc
+    ? resolveMatrixThumbnailUrl(mx, avatarMxc, 96, { useAuthentication })
+    : undefined;
 
   const presence = useUserPresence(userId);
 

@@ -192,16 +192,15 @@ The repeatable live-smoke checklist is
 - UI tests cover signed-out homeserver selection, invalid input, and successful
   navigation to the login form.
 - Login screen accepts username and password input.
-- Live auth uses the Matrix Client-Server `m.login.password` flow: it checks
-  `/_matrix/client/v3/login` for password support, submits the password login
-  request, and maps successful responses into secure app sessions.
+- Live auth uses `MatrixRustSDKAuthService`, which performs password login
+  through the Matrix Rust SDK and maps successful SDK sessions into secure app
+  sessions.
 - Mock auth remains forced for UI tests through `SYNARA_UI_TESTS=1`.
 - Successful mock login updates the observable session store and transitions to
   the signed-in tab shell.
 - Failed login shows non-sensitive errors and does not persist credentials.
-- Unit tests cover auth request validation, Matrix login request construction,
-  unsupported login flows, invalid credentials, mock auth fixtures, and session
-  state transitions.
+- Unit tests cover auth request validation, invalid credentials, mock auth
+  fixtures, and session state transitions.
 - A live homeserver flow check can be run manually, but no live test
   homeserver, username, or password is stored in the repository.
 - UI tests cover missing-credential errors and successful mock login.
@@ -211,24 +210,23 @@ The repeatable live-smoke checklist is
   signed-in shell.
 - Matrix lifecycle service exposes stopped, starting, syncing, and failed sync
   states, with explicit start, stop, and local-reset hooks.
-- Live room list loading uses `/_matrix/client/v3/sync?timeout=0` with the
-  secure session access token and maps joined and invited rooms into stable
-  room summaries.
+- Live room list loading uses `MatrixRustSDKRoomListService` and Matrix Rust SDK
+  room-list streaming with secure session restore.
 - Room list service renders loading, empty, failed, and loaded states with
   stable room IDs, unread counts, highlight state, invite previews, and
   1,000-room fixtures.
-- Invited rooms expose native accept and decline actions backed by Matrix
-  room membership endpoints.
-- Live timeline loading uses Matrix room messages for joined rooms and maps
-  text, reply, media, redacted, encrypted, and unknown events into the native
+- Invited rooms expose native accept and decline actions backed by Matrix Rust
+  SDK room membership operations.
+- Live timeline loading uses Matrix Rust SDK timelines and maps text, reply,
+  media, redacted, encrypted, agent-card, and unknown events into the native
   timeline model.
-- Live message sending uses Matrix `m.room.message` send with transaction IDs
+- Live message sending uses Matrix Rust SDK timeline sends
   and supports reply metadata for text messages.
 - Timeline pagination uses Matrix pagination tokens and exposes a native
   `Load Older` control.
-- Live edit sending uses Matrix `m.replace` replacement content.
-- Live redaction and reaction actions use Matrix event endpoints and update the
-  local timeline only after successful responses.
+- Live edit sending uses Matrix Rust SDK `Timeline.edit`.
+- Live redaction and reaction actions use Matrix Rust SDK timeline APIs and
+  update through SDK timeline state.
 - Settings exposes logout through a local wipe service that stops sync, clears
   cached rooms, clears push registration state, deletes the secure session, and
   returns to the signed-out shell.

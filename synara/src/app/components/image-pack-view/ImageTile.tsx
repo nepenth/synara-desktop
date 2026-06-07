@@ -1,7 +1,6 @@
 import React, { FormEventHandler, ReactNode, useMemo, useState } from 'react';
 import { Badge, Box, Button, Chip, Icon, Icons, Input, Text } from 'folds';
 import { UsageSwitcher, useUsageStr } from './UsageSwitcher';
-import { mxcUrlToHttp } from '../../utils/matrix';
 import * as css from './style.css';
 import { ImageUsage, imageUsageEqual, PackImageReader } from '../../plugins/custom-emoji';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
@@ -9,6 +8,7 @@ import { SettingTile } from '../setting-tile';
 import { useObjectURL } from '../../hooks/useObjectURL';
 import { createUploadAtom, TUploadAtom } from '../../state/upload';
 import { replaceSpaceWithDash } from '../../utils/common';
+import { resolveOptionalMatrixMediaUrl } from '../../matrix/media';
 
 type ImageTileProps = {
   defaultShortcode: string;
@@ -38,7 +38,7 @@ export function ImageTile({
       before={
         <img
           className={css.ImagePackImage}
-          src={mxcUrlToHttp(mx, image.url, useAuthentication) ?? ''}
+          src={resolveOptionalMatrixMediaUrl(mx, image.url, { useAuthentication }) ?? ''}
           alt={image.shortcode}
           loading="lazy"
         />
@@ -162,7 +162,7 @@ export function ImageTileEdit({
       before={
         <img
           className={css.ImagePackImage}
-          src={mxcUrlToHttp(mx, image.url, useAuthentication) ?? ''}
+          src={resolveOptionalMatrixMediaUrl(mx, image.url, { useAuthentication }) ?? ''}
           alt={image.shortcode}
           loading="lazy"
         />

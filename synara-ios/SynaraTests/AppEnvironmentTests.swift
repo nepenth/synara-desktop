@@ -28,10 +28,10 @@ final class AppEnvironmentTests: XCTestCase {
         XCTAssertTrue(environment.roomList is MatrixRustSDKRoomListService)
         XCTAssertTrue(environment.roomMembership is MatrixRustSDKRoomMembershipService)
         XCTAssertTrue(environment.timeline is MatrixRustSDKTimelineService)
-        XCTAssertTrue(environment.later is MatrixAccountDataLaterService)
+        XCTAssertTrue(environment.later is MatrixRustSDKLaterService)
         XCTAssertTrue(environment.messageSender is MatrixRustSDKMessageSendService)
-        XCTAssertTrue(environment.eventActions is MatrixEventActionService)
-        XCTAssertTrue(environment.agentApprovals is MatrixAgentApprovalService)
+        XCTAssertTrue(environment.eventActions is MatrixRustSDKEventActionService)
+        XCTAssertTrue(environment.agentApprovals is MatrixRustSDKAgentApprovalService)
         XCTAssertTrue(environment.crypto is MatrixRustSDKCryptoStatusService)
         XCTAssertTrue(environment.roomManagement is MatrixRustSDKRoomManagementService)
     }

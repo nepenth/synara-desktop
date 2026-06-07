@@ -2,6 +2,16 @@ import XCTest
 import Foundation
 
 final class SynaraUITests: XCTestCase {
+    override func setUpWithError() throws {
+        try super.setUpWithError()
+        continueAfterFailure = false
+    }
+
+    override func tearDownWithError() throws {
+        XCUIApplication().terminate()
+        try super.tearDownWithError()
+    }
+
     func testShellShowsHomeserverSelectionWhenSignedOut() {
         let app = launchApp()
 
@@ -242,9 +252,10 @@ final class SynaraUITests: XCTestCase {
 
     func testThreadViewOpensAndRepliesFromTimeline() {
         let app = launchRoomApp()
+        let threadButton = app.buttons["ThreadButton-$security:!project:matrix.org"]
 
-        XCTAssertTrue(app.buttons["1 reply"].waitForExistence(timeout: 5))
-        tap(app.buttons["1 reply"])
+        XCTAssertTrue(threadButton.waitForExistence(timeout: 5))
+        tap(threadButton)
         XCTAssertTrue(app.staticTexts["ThreadTimelineTitle"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.scrollViews["ThreadTimelineList"].exists)
 
@@ -403,7 +414,7 @@ final class SynaraUITests: XCTestCase {
         } else {
             app.launchEnvironment["SYNARA_AUTO_OPEN_ROOM_NAME"] = roomName
         }
-        app.launch()
+        launch(app)
 
         if app.textFields["HomeserverAddressField"].waitForExistence(timeout: 5) {
             guard let homeserver = liveEnvironmentValue("SYNARA_LIVE_HOMESERVER", in: environment),
@@ -461,7 +472,7 @@ final class SynaraUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchEnvironment["SYNARA_RESET_SESSION_ON_LAUNCH"] = "1"
         app.launchEnvironment["SYNARA_AUTO_OPEN_ROOM_ID"] = roomID
-        app.launch()
+        launch(app)
 
         if app.textFields["HomeserverAddressField"].waitForExistence(timeout: 5) {
             loginLive(app: app, homeserver: homeserver, username: username, password: password)
@@ -503,7 +514,7 @@ final class SynaraUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchEnvironment["SYNARA_RESET_SESSION_ON_LAUNCH"] = "1"
         app.launchEnvironment["SYNARA_AUTO_OPEN_ROOM_ID"] = roomID
-        app.launch()
+        launch(app)
 
         if app.textFields["HomeserverAddressField"].waitForExistence(timeout: 5) {
             loginLive(app: app, homeserver: homeserver, username: username, password: password)
@@ -531,7 +542,7 @@ final class SynaraUITests: XCTestCase {
         app.terminate()
         app.launchEnvironment.removeValue(forKey: "SYNARA_RESET_SESSION_ON_LAUNCH")
         app.launchEnvironment["SYNARA_AUTO_OPEN_ROOM_ID"] = roomID
-        app.launch()
+        launch(app)
 
         XCTAssertTrue(app.textFields["ComposerTextField"].waitForExistence(timeout: 60))
         XCTAssertTrue(waitForTimelineElement(app.staticTexts[message], app: app, timeout: 90))
@@ -561,7 +572,7 @@ final class SynaraUITests: XCTestCase {
 
         let app = XCUIApplication()
         app.launchEnvironment["SYNARA_RESET_SESSION_ON_LAUNCH"] = "1"
-        app.launch()
+        launch(app)
 
         if app.textFields["HomeserverAddressField"].waitForExistence(timeout: 5) {
             loginLive(app: app, homeserver: homeserver, username: username, password: password)
@@ -621,7 +632,7 @@ final class SynaraUITests: XCTestCase {
         let roomName = liveEnvironmentValue("SYNARA_LIVE_ROOM_NAME", in: environment) ?? "Alerts"
         let app = XCUIApplication()
         app.launchEnvironment["SYNARA_RESET_SESSION_ON_LAUNCH"] = "1"
-        app.launch()
+        launch(app)
 
         if app.textFields["HomeserverAddressField"].waitForExistence(timeout: 5) {
             loginLive(app: app, homeserver: homeserver, username: username, password: password)
@@ -722,7 +733,7 @@ final class SynaraUITests: XCTestCase {
     private func launchApp() -> XCUIApplication {
         let app = XCUIApplication()
         app.launchEnvironment["SYNARA_UI_TESTS"] = "1"
-        app.launch()
+        launch(app)
         return app
     }
 
@@ -731,7 +742,7 @@ final class SynaraUITests: XCTestCase {
         app.launchEnvironment["SYNARA_UI_TESTS"] = "1"
         app.launchEnvironment["SYNARA_UI_TEST_ROOM_ID"] = "!project:matrix.org"
         app.launchEnvironment["SYNARA_UI_TEST_ROOM_TITLE"] = "Project"
-        app.launch()
+        launch(app)
         return app
     }
 
@@ -739,7 +750,7 @@ final class SynaraUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchEnvironment["SYNARA_UI_TESTS"] = "1"
         app.launchEnvironment["SYNARA_UI_TEST_SIGNED_IN"] = "1"
-        app.launch()
+        launch(app)
         return app
     }
 
@@ -748,7 +759,7 @@ final class SynaraUITests: XCTestCase {
         app.launchEnvironment["SYNARA_UI_TESTS"] = "1"
         app.launchEnvironment["SYNARA_UI_TEST_SIGNED_IN"] = "1"
         app.launchEnvironment["SYNARA_UI_TEST_LARGE_ROOMS"] = "1"
-        app.launch()
+        launch(app)
         return app
     }
 
@@ -757,7 +768,7 @@ final class SynaraUITests: XCTestCase {
         app.launchEnvironment["SYNARA_UI_TESTS"] = "1"
         app.launchEnvironment["SYNARA_UI_TEST_SIGNED_IN"] = "1"
         app.launchEnvironment["SYNARA_UI_TEST_ROOM_SEARCH"] = query
-        app.launch()
+        launch(app)
         return app
     }
 
@@ -767,7 +778,7 @@ final class SynaraUITests: XCTestCase {
         app.launchEnvironment["SYNARA_UI_TEST_ROOM_ID"] = "!large:matrix.org"
         app.launchEnvironment["SYNARA_UI_TEST_ROOM_TITLE"] = "Large Timeline"
         app.launchEnvironment["SYNARA_UI_TEST_LARGE_TIMELINE"] = "1"
-        app.launch()
+        launch(app)
         return app
     }
 
@@ -776,7 +787,7 @@ final class SynaraUITests: XCTestCase {
         app.launchEnvironment["SYNARA_UI_TESTS"] = "1"
         app.launchEnvironment["SYNARA_UI_TEST_SIGNED_IN"] = "1"
         app.launchEnvironment["SYNARA_UI_TEST_SELECTED_TAB"] = "settings"
-        app.launch()
+        launch(app)
         return app
     }
 
@@ -786,7 +797,7 @@ final class SynaraUITests: XCTestCase {
         app.launchEnvironment["SYNARA_UI_TEST_SIGNED_IN"] = "1"
         app.launchEnvironment["SYNARA_UI_TEST_SELECTED_TAB"] = "settings"
         app.launchEnvironment["SYNARA_UI_TEST_ENCRYPTED_TIMELINE"] = "1"
-        app.launch()
+        launch(app)
         return app
     }
 
@@ -796,7 +807,7 @@ final class SynaraUITests: XCTestCase {
         app.launchEnvironment["SYNARA_UI_TEST_ROOM_ID"] = "!encrypted:matrix.org"
         app.launchEnvironment["SYNARA_UI_TEST_ROOM_TITLE"] = "Secret"
         app.launchEnvironment["SYNARA_UI_TEST_ENCRYPTED_TIMELINE"] = "1"
-        app.launch()
+        launch(app)
         return app
     }
 
@@ -805,7 +816,7 @@ final class SynaraUITests: XCTestCase {
         app.launchEnvironment["SYNARA_UI_TESTS"] = "1"
         app.launchEnvironment["SYNARA_UI_TEST_SIGNED_IN"] = "1"
         app.launchEnvironment["SYNARA_UI_TEST_INVITE"] = "1"
-        app.launch()
+        launch(app)
         return app
     }
 
@@ -814,7 +825,7 @@ final class SynaraUITests: XCTestCase {
         app.launchEnvironment["SYNARA_UI_TESTS"] = "1"
         app.launchEnvironment["SYNARA_UI_TEST_SIGNED_IN"] = "1"
         app.launchEnvironment["SYNARA_UI_TEST_ROOM_MANAGEMENT_SHEET"] = "1"
-        app.launch()
+        launch(app)
         return app
     }
 
@@ -824,7 +835,7 @@ final class SynaraUITests: XCTestCase {
         app.launchEnvironment["SYNARA_UI_TEST_SIGNED_IN"] = "1"
         app.launchEnvironment["SYNARA_UI_TEST_SELECTED_TAB"] = "later"
         app.launchEnvironment["SYNARA_UI_TEST_LATER_ITEMS"] = "1"
-        app.launch()
+        launch(app)
         return app
     }
 
@@ -837,8 +848,24 @@ final class SynaraUITests: XCTestCase {
         if let approvalError {
             app.launchEnvironment["SYNARA_UI_TEST_AGENT_APPROVAL_ERROR"] = approvalError
         }
-        app.launch()
+        launch(app)
         return app
+    }
+
+    private func launch(_ app: XCUIApplication) {
+        app.launchEnvironment["SYNARA_DISABLE_ANIMATIONS"] = "1"
+        let stableArguments = [
+            "-ApplePersistenceIgnoreState",
+            "YES",
+            "-UIPreferredContentSizeCategoryName",
+            "UICTContentSizeCategoryM"
+        ]
+        stableArguments.forEach { argument in
+            if app.launchArguments.contains(argument) == false {
+                app.launchArguments.append(argument)
+            }
+        }
+        app.launch()
     }
 
     private func login(app: XCUIApplication) {
