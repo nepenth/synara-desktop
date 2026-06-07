@@ -25,6 +25,7 @@ struct RoomTimelineView: View {
     @State private var lastRenderedTimelineCount = 0
     @State private var showJumpToLatest = false
     @State private var hasPositionedInitialTimeline = false
+    @State private var initialReadMarkerEventID: String?
     @Environment(\.openURL) private var openURL
     @Environment(\.dismiss) private var dismiss
 
@@ -97,16 +98,10 @@ struct RoomTimelineView: View {
             defer {
                 PerformanceTrace.end("RoomOpen", id: roomOpenSignpostID)
             }
-            let status = await loadCryptoStatus()
-            if status.encryption == .encrypted {
-                let encryptedOpenSignpostID = PerformanceTrace.begin("EncryptedRoomOpen")
-                defer {
-                    PerformanceTrace.end("EncryptedRoomOpen", id: encryptedOpenSignpostID)
-                }
-                await loadTimeline()
-            } else {
-                await loadTimeline()
+            Task {
+                _ = await loadCryptoStatus()
             }
+            await loadTimeline()
         }
         .onChange(of: draft) { value in
             environment.drafts.setDraft(value, roomID: roomID)
@@ -242,11 +237,18 @@ struct RoomTimelineView: View {
             return
         }
 
+        let target = initialReadMarkerEventID.flatMap { eventID in
+            items.first { item in
+                item.eventID == eventID || item.id == eventID
+            }
+        } ?? latest
+        let isLatestTarget = target.eventID == latest.eventID || target.id == latest.id
+
         hasPositionedInitialTimeline = true
         Task {
             await MainActor.run {
-                proxy.scrollTo(latest.eventID, anchor: .bottom)
-                showJumpToLatest = false
+                proxy.scrollTo(target.eventID, anchor: isLatestTarget ? .bottom : .center)
+                showJumpToLatest = isLatestTarget == false
             }
         }
     }
@@ -268,6 +270,9 @@ struct RoomTimelineView: View {
             await MainActor.run {
                 withAnimation {
                     proxy.scrollTo(target.id, anchor: .center)
+                }
+                if let latest = items.last {
+                    showJumpToLatest = target.eventID != latest.eventID && target.id != latest.id
                 }
             }
         }
@@ -360,13 +365,57 @@ struct RoomTimelineView: View {
         state = .loading
         showJumpToLatest = false
         hasPositionedInitialTimeline = false
+        initialReadMarkerEventID = nil
         let signpostID = PerformanceTrace.begin("TimelineInitialLoad")
         defer {
             PerformanceTrace.end("TimelineInitialLoad", id: signpostID)
         }
-        let items = await environment.timeline.loadInitialTimeline(roomID: roomID)
+        let readMarkerEventID: String?
+        if let focusedEventID {
+            readMarkerEventID = focusedEventID
+        } else {
+            readMarkerEventID = await loadReadMarkerEventID()
+        }
+        await MainActor.run {
+            initialReadMarkerEventID = focusedEventID == nil ? readMarkerEventID : nil
+        }
+        let items = await environment.timeline.loadInitialTimeline(roomID: roomID, focusedEventID: readMarkerEventID)
         await MainActor.run {
             state = items.isEmpty ? .empty : .loaded(items, isPaginating: false)
+        }
+    }
+
+    private func loadReadMarkerEventID() async -> String? {
+        guard case .signedIn(let session) = environment.session.currentState else {
+            return nil
+        }
+
+        var url = session.homeserverURL
+        url.appendPathComponent("_matrix")
+        url.appendPathComponent("client")
+        url.appendPathComponent("v3")
+        url.appendPathComponent("user")
+        url.appendPathComponent(session.userID)
+        url.appendPathComponent("rooms")
+        url.appendPathComponent(roomID)
+        url.appendPathComponent("account_data")
+        url.appendPathComponent("m.fully_read")
+
+        do {
+            var request = URLRequest(url: url)
+            request.httpMethod = "GET"
+            request.timeoutInterval = 0.75
+            request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
+
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let http = response as? HTTPURLResponse,
+                  http.statusCode == 200 else {
+                return nil
+            }
+
+            return try JSONDecoder().decode(RoomReadMarkerResponse.self, from: data).eventID
+        } catch {
+            return nil
         }
     }
 
@@ -1014,6 +1063,71 @@ private struct ThreadMessageRow: View {
     }
 }
 
+private struct RoomReadMarkerResponse: Decodable {
+    let eventID: String
+
+    enum CodingKeys: String, CodingKey {
+        case eventID = "event_id"
+    }
+}
+
+private struct TimelineAvatarProfileResponse: Decodable {
+    let avatarURL: String?
+
+    enum CodingKeys: String, CodingKey {
+        case avatarURL = "avatar_url"
+    }
+}
+
+private let timelineAvatarURLCache = TimelineAvatarURLCache()
+
+private actor TimelineAvatarURLCache {
+    private var urlsByCacheKey: [String: URL] = [:]
+    private var missingCacheKeys: Set<String> = []
+
+    func avatarURL(for senderID: String, session: AuthenticatedSession) async -> URL? {
+        let cacheKey = "\(session.homeserverURL.absoluteString)|\(senderID)"
+        if let url = urlsByCacheKey[cacheKey] {
+            return url
+        }
+        if missingCacheKeys.contains(cacheKey) {
+            return nil
+        }
+
+        var url = session.homeserverURL
+        url.appendPathComponent("_matrix")
+        url.appendPathComponent("client")
+        url.appendPathComponent("v3")
+        url.appendPathComponent("profile")
+        url.appendPathComponent(senderID)
+
+        do {
+            var request = URLRequest(url: url)
+            request.httpMethod = "GET"
+            request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
+
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let http = response as? HTTPURLResponse,
+                  http.statusCode == 200 else {
+                missingCacheKeys.insert(cacheKey)
+                return nil
+            }
+
+            let profile = try JSONDecoder().decode(TimelineAvatarProfileResponse.self, from: data)
+            guard let avatarURL = profile.avatarURL.flatMap(URL.init(string:)) else {
+                missingCacheKeys.insert(cacheKey)
+                return nil
+            }
+
+            urlsByCacheKey[cacheKey] = avatarURL
+            return avatarURL
+        } catch {
+            missingCacheKeys.insert(cacheKey)
+            return nil
+        }
+    }
+}
+
 private struct TimelineAvatar: View {
     let senderID: String
     let avatarURL: URL?
@@ -1032,7 +1146,7 @@ private struct TimelineAvatar: View {
                 .offset(x: size * 0.03, y: size * 0.03)
         }
         .frame(width: size, height: size)
-        .task(id: avatarURL) {
+        .task(id: avatarTaskID) {
             await loadAvatar()
         }
         .accessibilityHidden(true)
@@ -1061,9 +1175,19 @@ private struct TimelineAvatar: View {
     private func loadAvatar() async {
         avatarImage = nil
 
-        guard let avatarURL,
-              case .signedIn(let session) = environment.session.currentState,
-              let requestURL = mediaThumbnailURL(for: avatarURL, session: session) else {
+        guard case .signedIn(let session) = environment.session.currentState else {
+            return
+        }
+
+        let resolvedAvatarURL: URL?
+        if let avatarURL {
+            resolvedAvatarURL = avatarURL
+        } else {
+            resolvedAvatarURL = await timelineAvatarURLCache.avatarURL(for: senderID, session: session)
+        }
+
+        guard let resolvedAvatarURL,
+              let requestURL = mediaThumbnailURL(for: resolvedAvatarURL, session: session) else {
             return
         }
 
@@ -1083,6 +1207,10 @@ private struct TimelineAvatar: View {
         } catch {
             avatarImage = nil
         }
+    }
+
+    private var avatarTaskID: String {
+        "\(senderID)|\(avatarURL?.absoluteString ?? "profile")"
     }
 
     private func mediaThumbnailURL(for sourceURL: URL, session: AuthenticatedSession) -> URL? {
@@ -2285,7 +2413,7 @@ private struct ComposerView: View {
                 },
                 selectedPhoto: $selectedPhoto
             )
-            .presentationDetents([.height(336)])
+            .presentationDetents([.height(304)])
             .presentationDragIndicator(.visible)
         }
         .alert("Attachment Unavailable", isPresented: Binding(
@@ -2354,8 +2482,8 @@ private struct AttachmentOptionsSheet: View {
             }
         }
         .padding(.horizontal, SynaraSpacing.medium)
-        .padding(.top, SynaraSpacing.large)
-        .padding(.bottom, SynaraSpacing.large)
+        .padding(.top, SynaraSpacing.medium)
+        .padding(.bottom, SynaraSpacing.xSmall)
         .background(SynaraColor.surface)
         .accessibilityIdentifier("AttachmentOptionsSheet")
     }
@@ -2396,7 +2524,7 @@ private struct AttachmentOptionLabel: View {
 
             Spacer(minLength: 0)
         }
-        .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
+        .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
         .padding(.horizontal, SynaraSpacing.medium)
         .background(SynaraColor.surface)
         .clipShape(RoundedRectangle(cornerRadius: 14))

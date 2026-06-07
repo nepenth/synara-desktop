@@ -132,7 +132,7 @@ final class SynaraUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Project"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.scrollViews["TimelineList"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["LoadOlderTimelineButton"].exists)
-        XCTAssertTrue(app.staticTexts["Here's the latest spec for the new permissions model. Hello from iOS"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Here's the latest spec for the new permissions model."].waitForExistence(timeout: 5))
     }
 
     func testRoomDetailsInviteAndLeaveMockFlow() {
