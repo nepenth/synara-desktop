@@ -28,15 +28,10 @@ import {
   mimeTypeToExt,
 } from '../../../utils/mimeTypes';
 import { stopPropagation } from '../../../utils/keyboard';
-import {
-  decryptFile,
-  downloadEncryptedMedia,
-  downloadMedia,
-  mxcUrlToHttp,
-} from '../../../utils/matrix';
 import { useMediaAuthentication } from '../../../hooks/useMediaAuthentication';
 import { ModalWide } from '../../../styles/Modal.css';
 import { savePlatformFile, supportsPlatformNativeFileSave } from '../../../platform';
+import { createMatrixMediaObjectUrl, downloadMatrixMedia } from '../../../matrix/media';
 
 const renderErrorButton = (retry: () => void, text: string) => (
   <TooltipProvider
@@ -87,11 +82,11 @@ export function ReadTextFile({ body, mimeType, url, encInfo, renderViewer }: Rea
 
   const [textState, loadText] = useAsyncCallback(
     useCallback(async () => {
-      const mediaUrl = mxcUrlToHttp(mx, url, useAuthentication);
-      if (!mediaUrl) throw new Error('Invalid media URL');
-      const fileContent = encInfo
-        ? await downloadEncryptedMedia(mediaUrl, (encBuf) => decryptFile(encBuf, mimeType, encInfo))
-        : await downloadMedia(mediaUrl);
+      const fileContent = await downloadMatrixMedia(mx, url, {
+        useAuthentication,
+        mimeType,
+        encryptedInfo: encInfo,
+      });
 
       const text = fileContent.text();
       setTextViewer(true);
@@ -178,13 +173,12 @@ export function ReadPdfFile({ body, mimeType, url, encInfo, renderViewer }: Read
 
   const [pdfState, loadPdf] = useAsyncCallback(
     useCallback(async () => {
-      const mediaUrl = mxcUrlToHttp(mx, url, useAuthentication);
-      if (!mediaUrl) throw new Error('Invalid media URL');
-      const fileContent = encInfo
-        ? await downloadEncryptedMedia(mediaUrl, (encBuf) => decryptFile(encBuf, mimeType, encInfo))
-        : await downloadMedia(mediaUrl);
       setPdfViewer(true);
-      return URL.createObjectURL(fileContent);
+      return createMatrixMediaObjectUrl(mx, url, {
+        useAuthentication,
+        mimeType,
+        encryptedInfo: encInfo,
+      });
     }, [mx, url, useAuthentication, mimeType, encInfo])
   );
 
@@ -256,11 +250,11 @@ export function DownloadFile({ body, mimeType, url, info, encInfo }: DownloadFil
 
   const [downloadState, download] = useAsyncCallback(
     useCallback(async () => {
-      const mediaUrl = mxcUrlToHttp(mx, url, useAuthentication);
-      if (!mediaUrl) throw new Error('Invalid media URL');
-      const fileContent = encInfo
-        ? await downloadEncryptedMedia(mediaUrl, (encBuf) => decryptFile(encBuf, mimeType, encInfo))
-        : await downloadMedia(mediaUrl);
+      const fileContent = await downloadMatrixMedia(mx, url, {
+        useAuthentication,
+        mimeType,
+        encryptedInfo: encInfo,
+      });
 
       if (supportsPlatformNativeFileSave()) {
         await savePlatformFile(fileContent, body);

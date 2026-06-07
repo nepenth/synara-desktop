@@ -36,8 +36,8 @@ import * as styleCss from './style.css';
 import { AsyncStatus, useAsyncCallback } from '../../hooks/useAsyncCallback';
 import { getDirectRoomAvatarUrl, getRoomAvatarUrl } from '../../utils/room';
 import { ItemDraggableTarget, useDraggableItem } from './DnD';
-import { mxcUrlToHttp } from '../../utils/matrix';
 import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
+import { resolveMatrixThumbnailUrl } from '../../matrix/media';
 
 type RoomJoinButtonProps = {
   roomId: string;
@@ -402,8 +402,7 @@ export const RoomItemCard = as<'div', RoomItemCardProps>(
                   topic={summary.topic}
                   avatarUrl={
                     summary?.avatar_url
-                      ? mxcUrlToHttp(mx, summary.avatar_url, useAuthentication, 96, 96, 'crop') ??
-                        undefined
+                      ? resolveMatrixThumbnailUrl(mx, summary.avatar_url, 96, { useAuthentication })
                       : undefined
                   }
                   memberCount={summary.num_joined_members}

@@ -28,7 +28,6 @@ import { useGlobalImagePacks, useRoomsImagePacks } from '../../../hooks/useImage
 import { SequenceCardStyle } from '../styles.css';
 import { SequenceCard } from '../../../components/sequence-card';
 import { SettingTile } from '../../../components/setting-tile';
-import { mxcUrlToHttp } from '../../../utils/matrix';
 import { useMediaAuthentication } from '../../../hooks/useMediaAuthentication';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import {
@@ -43,6 +42,7 @@ import { allRoomsAtom } from '../../../state/room-list/roomList';
 import { AccountDataEvent } from '../../../../types/matrix/accountData';
 import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
 import { stopPropagation } from '../../../utils/keyboard';
+import { resolveOptionalMatrixMediaUrl } from '../../../matrix/media';
 
 function GlobalPackSelector({
   packs,
@@ -168,9 +168,9 @@ function GlobalPackSelector({
                   </Box>
                   {roomPacks.map((pack) => {
                     const avatarMxc = pack.getAvatarUrl(ImageUsage.Emoticon);
-                    const avatarUrl = avatarMxc
-                      ? mxcUrlToHttp(mx, avatarMxc, useAuthentication)
-                      : undefined;
+                    const avatarUrl = resolveOptionalMatrixMediaUrl(mx, avatarMxc, {
+                      useAuthentication,
+                    });
                     const { address } = pack;
                     if (!address) return null;
 
@@ -346,7 +346,7 @@ export function GlobalPacks({ onViewPack }: GlobalPacksProps) {
 
   const renderPack = (pack: ImagePack) => {
     const avatarMxc = pack.getAvatarUrl(ImageUsage.Emoticon);
-    const avatarUrl = avatarMxc ? mxcUrlToHttp(mx, avatarMxc, useAuthentication) : undefined;
+    const avatarUrl = resolveOptionalMatrixMediaUrl(mx, avatarMxc, { useAuthentication });
     const { address } = pack;
     if (!address) return null;
     const removed = !!removedPacks.find((addr) => packAddressEqual(addr, address));

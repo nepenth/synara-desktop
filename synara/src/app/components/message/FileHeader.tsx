@@ -6,13 +6,8 @@ import { mimeTypeToExt } from '../../utils/mimeTypes';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 import { AsyncStatus, useAsyncCallback } from '../../hooks/useAsyncCallback';
-import {
-  decryptFile,
-  downloadEncryptedMedia,
-  downloadMedia,
-  mxcUrlToHttp,
-} from '../../utils/matrix';
 import { savePlatformFile, supportsPlatformNativeFileSave } from '../../platform';
+import { downloadMatrixMedia } from '../../matrix/media';
 
 const badgeStyles = { maxWidth: toRem(100) };
 
@@ -28,11 +23,11 @@ export function FileDownloadButton({ filename, url, mimeType, encInfo }: FileDow
 
   const [downloadState, download] = useAsyncCallback(
     useCallback(async () => {
-      const mediaUrl = mxcUrlToHttp(mx, url, useAuthentication);
-      if (!mediaUrl) throw new Error('Invalid media URL');
-      const fileContent = encInfo
-        ? await downloadEncryptedMedia(mediaUrl, (encBuf) => decryptFile(encBuf, mimeType, encInfo))
-        : await downloadMedia(mediaUrl);
+      const fileContent = await downloadMatrixMedia(mx, url, {
+        useAuthentication,
+        mimeType,
+        encryptedInfo: encInfo,
+      });
 
       if (supportsPlatformNativeFileSave()) {
         await savePlatformFile(fileContent, filename);

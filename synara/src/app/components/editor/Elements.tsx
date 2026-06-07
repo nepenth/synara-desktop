@@ -13,8 +13,8 @@ import { CommandElement, EmoticonElement, LinkElement, MentionElement } from './
 import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { getBeginCommand } from './utils';
 import { BlockType } from './types';
-import { mxcUrlToHttp } from '../../utils/matrix';
 import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
+import { resolveOptionalMatrixMediaUrl } from '../../matrix/media';
 
 // Put this at the start and end of an inline component to work around this Chromium bug:
 // https://bugs.chromium.org/p/chromium/issues/detail?id=1249405
@@ -93,7 +93,7 @@ function RenderEmoticonElement({
         {element.key.startsWith('mxc://') ? (
           <img
             className={css.EmoticonImg}
-            src={mxcUrlToHttp(mx, element.key, useAuthentication) ?? element.key}
+            src={resolveOptionalMatrixMediaUrl(mx, element.key, { useAuthentication }) ?? element.key}
             alt={element.shortcode}
           />
         ) : (

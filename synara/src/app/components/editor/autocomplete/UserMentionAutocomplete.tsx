@@ -20,6 +20,7 @@ import { getMemberDisplayName, getMemberSearchStr } from '../../../utils/room';
 import { UserAvatar } from '../../user-avatar';
 import { useMediaAuthentication } from '../../../hooks/useMediaAuthentication';
 import { Membership } from '../../../../types/matrix/room';
+import { resolveMatrixThumbnailUrl } from '../../../matrix/media';
 
 type MentionAutoCompleteHandler = (userId: string, name: string) => void;
 
@@ -155,7 +156,7 @@ export function UserMentionAutocomplete({
         autoCompleteMembers.map((roomMember) => {
           const avatarMxcUrl = roomMember.getMxcAvatarUrl();
           const avatarUrl = avatarMxcUrl
-            ? mx.mxcUrlToHttp(avatarMxcUrl, 32, 32, 'crop', undefined, false, useAuthentication)
+            ? resolveMatrixThumbnailUrl(mx, avatarMxcUrl, 32, { useAuthentication })
             : undefined;
           return (
             <MenuItem

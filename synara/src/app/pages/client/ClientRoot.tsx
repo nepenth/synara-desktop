@@ -36,13 +36,12 @@ import { SyncStatus } from './SyncStatus';
 import { AuthMetadataProvider } from '../../hooks/useAuthMetadata';
 import { getActiveSession } from '../../state/sessionBootstrap';
 import { AutoDiscovery } from './AutoDiscovery';
-import { platformSessionStore } from '../../platform';
+import { platformSessionStore, repairPlatformDeviceDisplayName } from '../../platform';
 import {
   clearPersistedSessions,
   migrateLegacySessionToNativeAfterClientInit,
 } from '../../state/sessionPersistence';
 import { shouldRetrySyncOnResume } from '../../utils/syncLifecycle';
-import { synaraDeviceDisplayName } from '../../utils/user-agent';
 
 function ClientRootLoading() {
   return (
@@ -191,12 +190,9 @@ const usePlatformDeviceDisplayNameRepair = (mx?: MatrixClient) => {
     if (!mx || !deviceId) return undefined;
 
     let cancelled = false;
-    const displayName = synaraDeviceDisplayName();
-
     void (async () => {
-      const currentDevice = await mx.getDevice(deviceId).catch(() => undefined);
-      if (cancelled || currentDevice?.display_name === displayName) return;
-      await mx.setDeviceDetails(deviceId, { display_name: displayName });
+      if (cancelled) return;
+      await repairPlatformDeviceDisplayName(mx);
     })().catch(() => undefined);
 
     return () => {

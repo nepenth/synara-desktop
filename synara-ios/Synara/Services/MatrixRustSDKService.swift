@@ -180,6 +180,11 @@ actor MatrixRustSDKClientStore {
         return client.rooms().first { $0.id() == roomID }
     }
 
+    func userProfile(userID: String, session: AuthenticatedSession) async throws -> UserProfile {
+        let client = try await ensureClient(for: session)
+        return try await client.getProfile(userId: userID)
+    }
+
     func roomCryptoStatus(roomID: String, session: AuthenticatedSession) async throws -> RoomCryptoStatus {
         let client = try await ensureClient(for: session)
         _ = try await client.syncOnceV2(settings: SyncSettingsV2(timeoutMs: 5_000, fullState: false))
@@ -430,6 +435,120 @@ actor MatrixRustSDKClientStore {
         let client = try await ensureClient(for: session)
         let notificationSettings = await client.getNotificationSettings()
         try await notificationSettings.setRoomNotificationMode(roomId: roomID, mode: Self.mapNotificationMode(mode))
+    }
+
+    func accountData(eventType: String, session: AuthenticatedSession) async throws -> String? {
+        let client = try await ensureClient(for: session)
+        return try await client.accountData(eventType: eventType)
+    }
+
+    func setAccountData(eventType: String, content: String, session: AuthenticatedSession) async throws {
+        let client = try await ensureClient(for: session)
+        try await client.setAccountData(eventType: eventType, content: content)
+    }
+
+    func mediaThumbnailData(mxcURL: URL, width: UInt64 = 640, height: UInt64 = 480, session: AuthenticatedSession) async throws -> Data {
+        let client = try await ensureClient(for: session)
+        let source = try MediaSource.fromUrl(url: mxcURL.absoluteString)
+        return try await client.getMediaThumbnail(mediaSource: source, width: width, height: height)
+    }
+
+    func uploadMedia(data: Data, mimeType: String, session: AuthenticatedSession) async throws -> String {
+        let client = try await ensureClient(for: session)
+        return try await client.uploadMedia(mimeType: mimeType, data: data, progressWatcher: nil)
+    }
+
+    func sendMediaMessage(
+        roomID: String,
+        filename: String,
+        contentURI: String,
+        mimeType: String,
+        size: UInt64?,
+        session: AuthenticatedSession
+    ) async throws {
+        guard let room = try await room(roomID: roomID, session: session) else {
+            throw MessageSendError.failed
+        }
+        let source = try MediaSource.fromUrl(url: contentURI)
+        let msgtype: MessageType
+        if mimeType.hasPrefix("image/") {
+            msgtype = .image(
+                content: ImageMessageContent(
+                    filename: filename,
+                    caption: nil,
+                    formattedCaption: nil,
+                    source: source,
+                    info: ImageInfo(
+                        height: nil,
+                        width: nil,
+                        mimetype: mimeType,
+                        size: size,
+                        thumbnailInfo: nil,
+                        thumbnailSource: nil,
+                        blurhash: nil,
+                        isAnimated: nil
+                    )
+                )
+            )
+        } else {
+            msgtype = .file(
+                content: FileMessageContent(
+                    filename: filename,
+                    caption: nil,
+                    formattedCaption: nil,
+                    source: source,
+                    info: FileInfo(
+                        mimetype: mimeType,
+                        size: size,
+                        thumbnailInfo: nil,
+                        thumbnailSource: nil
+                    )
+                )
+            )
+        }
+        let content = try messageEventContentNew(msgtype: msgtype)
+        let timeline = try await room.timeline()
+        _ = try await timeline.send(msg: content)
+    }
+
+    func setPusher(
+        pushKey: String,
+        appID: String,
+        gatewayURL: URL,
+        appDisplayName: String,
+        deviceDisplayName: String,
+        lang: String,
+        session: AuthenticatedSession
+    ) async throws {
+        let client = try await ensureClient(for: session)
+        try await client.setPusher(
+            identifiers: PusherIdentifiers(pushkey: pushKey, appId: appID),
+            kind: .http(
+                data: HttpPusherData(
+                    url: gatewayURL.absoluteString,
+                    format: .eventIdOnly,
+                    defaultPayload: nil
+                )
+            ),
+            appDisplayName: appDisplayName,
+            deviceDisplayName: deviceDisplayName,
+            profileTag: nil,
+            lang: lang
+        )
+    }
+
+    func deletePusher(pushKey: String, appID: String, session: AuthenticatedSession) async throws {
+        let client = try await ensureClient(for: session)
+        try await client.deletePusher(
+            identifiers: PusherIdentifiers(pushkey: pushKey, appId: appID)
+        )
+    }
+
+    func sendRawRoomEvent(roomID: String, eventType: String, content: String, session: AuthenticatedSession) async throws {
+        guard let room = try await room(roomID: roomID, session: session) else {
+            throw MessageSendError.failed
+        }
+        try await room.sendRaw(eventType: eventType, content: content)
     }
 
     fileprivate func ensureClient(for session: AuthenticatedSession) async throws -> Client {
@@ -1053,23 +1172,14 @@ final class MatrixRustSDKRoomMembershipService: RoomMembershipServicing {
 final class MatrixRustSDKTimelineService: TimelineServicing {
     private let sessionStore: AppSessionStore
     private let clientStore: MatrixRustSDKClientStore
-    private let rawTimelineFallback: TimelineServicing?
-    private let httpClient: AuthHTTPClient
-    private let jsonDecoder: JSONDecoder
-    private var profileCacheByUserID: [String: MatrixRustSDKProfileResponse?] = [:]
+    private var profileAvatarCacheByUserID: [String: URL?] = [:]
 
     init(
         sessionStore: AppSessionStore,
-        clientStore: MatrixRustSDKClientStore,
-        rawTimelineFallback: TimelineServicing? = nil,
-        httpClient: AuthHTTPClient = URLSession.shared,
-        jsonDecoder: JSONDecoder = JSONDecoder()
+        clientStore: MatrixRustSDKClientStore
     ) {
         self.sessionStore = sessionStore
         self.clientStore = clientStore
-        self.rawTimelineFallback = rawTimelineFallback ?? MatrixTimelineService(sessionStore: sessionStore)
-        self.httpClient = httpClient
-        self.jsonDecoder = jsonDecoder
     }
 
     func loadInitialTimeline(roomID: String) async -> [TimelineItem] {
@@ -1102,7 +1212,7 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
                     } else {
                         try? await clientStore.syncOnceForInteractiveOpen(session: session)
                         guard let syncedRoom = try await clientStore.room(roomID: roomID, session: session) else {
-                            continuation.yield(await rawAgentFallbackItems(roomID: roomID))
+                            continuation.yield([])
                             continuation.finish()
                             return
                         }
@@ -1152,7 +1262,7 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
 
                     await subscription.waitUntilCancelled()
                 } catch {
-                    continuation.yield(await rawAgentFallbackItems(roomID: roomID))
+                    continuation.yield([])
                     continuation.finish()
                 }
             }
@@ -1221,26 +1331,24 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
                 .sorted { $0.timestamp < $1.timestamp }
             guard sdkItems.isEmpty == false else {
                 try? await clientStore.syncOnce(session: session, fullState: false)
-                return await rawAgentFallbackItems(roomID: roomID)
+                return []
             }
             let enrichedSDKItems = enrichProfiles ? await enrichWithProfiles(sdkItems, session: session) : sdkItems
-            let rawAgentItems = enrichProfiles ? await rawAgentFallbackItems(roomID: roomID) : []
-            return Self.mergedTimelineItems(sdkItems: enrichedSDKItems, rawAgentItems: rawAgentItems)
+            return enrichedSDKItems
         } catch {
-            return await rawAgentFallbackItems(roomID: roomID)
+            return []
         }
     }
 
     private func enrichWithProfiles(_ items: [TimelineItem], session: AuthenticatedSession) async -> [TimelineItem] {
-        var profilesByUserID: [String: MatrixRustSDKProfileResponse?] = [:]
+        var avatarURLsByUserID: [String: URL?] = [:]
 
         for senderID in Set(items.map(\.senderID)) {
-            profilesByUserID[senderID] = await profile(for: senderID, session: session)
+            avatarURLsByUserID[senderID] = await profileAvatarURL(for: senderID, session: session)
         }
 
         return items.map { item in
-            guard let profile = profilesByUserID[item.senderID] ?? nil,
-                  let avatarURL = profile.avatarURL.flatMap(URL.init(string:)) else {
+            guard let avatarURL = avatarURLsByUserID[item.senderID] ?? nil else {
                 return item
             }
 
@@ -1259,59 +1367,20 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
         }
     }
 
-    private func profile(for userID: String, session: AuthenticatedSession) async -> MatrixRustSDKProfileResponse? {
-        if let cached = profileCacheByUserID[userID] {
+    private func profileAvatarURL(for userID: String, session: AuthenticatedSession) async -> URL? {
+        if let cached = profileAvatarCacheByUserID[userID] {
             return cached
         }
 
-        var url = session.homeserverURL
-        url.appendPathComponent("_matrix")
-        url.appendPathComponent("client")
-        url.appendPathComponent("v3")
-        url.appendPathComponent("profile")
-        url.appendPathComponent(userID)
-
         do {
-            var request = URLRequest(url: url)
-            request.httpMethod = "GET"
-            request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
-
-            let (data, response) = try await httpClient.data(for: request)
-            guard let http = response as? HTTPURLResponse,
-                  http.statusCode == 200 else {
-                profileCacheByUserID[userID] = nil
-                return nil
-            }
-
-            let profile = try jsonDecoder.decode(MatrixRustSDKProfileResponse.self, from: data)
-            profileCacheByUserID[userID] = profile
-            return profile
+            let profile = try await clientStore.userProfile(userID: userID, session: session)
+            let avatarURL = profile.avatarUrl.flatMap(URL.init(string:))
+            profileAvatarCacheByUserID[userID] = avatarURL
+            return avatarURL
         } catch {
-            profileCacheByUserID[userID] = nil
+            profileAvatarCacheByUserID[userID] = nil
             return nil
         }
-    }
-
-    private func rawAgentFallbackItems(roomID: String) async -> [TimelineItem] {
-        guard let rawTimelineFallback else {
-            return []
-        }
-
-        return await rawTimelineFallback.loadInitialTimeline(roomID: roomID)
-            .filter { item in
-                if case .agentCard = item.kind {
-                    return true
-                }
-                return false
-            }
-    }
-
-    static func mergedTimelineItems(sdkItems: [TimelineItem], rawAgentItems: [TimelineItem]) -> [TimelineItem] {
-        var itemsByID = Dictionary(uniqueKeysWithValues: sdkItems.map { ($0.id, $0) })
-        for item in rawAgentItems {
-            itemsByID[item.id] = item
-        }
-        return itemsByID.values.sorted { $0.timestamp < $1.timestamp }
     }
 
     private static func mapTimelineItem(_ item: EventTimelineItem) -> TimelineItem? {
@@ -1335,6 +1404,7 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
             id: eventID,
             eventID: eventID,
             senderID: item.sender,
+            senderAvatarURL: avatarURL(from: item.senderProfile),
             timestamp: Date(timeIntervalSince1970: TimeInterval(item.timestamp) / 1_000),
             kind: kind,
             replyToEventID: nil,
@@ -1342,6 +1412,15 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
             reactions: Dictionary(uniqueKeysWithValues: item.content.synaraReactions.map { ($0.key, $0.senders.count) }),
             isEncrypted: item.eventTypeRaw == "m.room.encrypted" || kind == .encryptedPlaceholder
         )
+    }
+
+    private static func avatarURL(from profile: ProfileDetails) -> URL? {
+        switch profile {
+        case .ready(_, _, let avatarUrl):
+            return avatarUrl.flatMap(URL.init(string:))
+        case .unavailable, .pending, .error:
+            return nil
+        }
     }
 
     private static func mapMessageLike(_ content: MsgLikeContent, eventTypeRaw: String?) -> TimelineItem.Kind {
@@ -1365,39 +1444,22 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
     }
 }
 
-private struct MatrixRustSDKProfileResponse: Decodable {
-    let avatarURL: String?
-
-    enum CodingKeys: String, CodingKey {
-        case avatarURL = "avatar_url"
-    }
-}
-
 final class MatrixRustSDKMessageSendService: MessageSending {
     private let sessionStore: AppSessionStore
     private let clientStore: MatrixRustSDKClientStore
-    private let httpClient: AuthHTTPClient
-    private let jsonDecoder: JSONDecoder
 
     init(
         sessionStore: AppSessionStore,
-        clientStore: MatrixRustSDKClientStore,
-        httpClient: AuthHTTPClient = URLSession.shared,
-        jsonDecoder: JSONDecoder = JSONDecoder()
+        clientStore: MatrixRustSDKClientStore
     ) {
         self.sessionStore = sessionStore
         self.clientStore = clientStore
-        self.httpClient = httpClient
-        self.jsonDecoder = jsonDecoder
     }
 
     func send(_ request: MessageSendRequest) async throws -> TimelineItem {
         let body = request.body.trimmingCharacters(in: .whitespacesAndNewlines)
         guard body.isEmpty == false else {
             throw MessageSendError.emptyMessage
-        }
-        guard request.editEventID == nil else {
-            throw MessageSendError.failed
         }
         guard case .signedIn(let session) = sessionStore.currentState else {
             throw MessageSendError.failed
@@ -1410,14 +1472,19 @@ final class MatrixRustSDKMessageSendService: MessageSending {
             let timeline = try await room.timeline()
             let content = messageEventContentFromMarkdown(md: body)
 
-            if let replyToEventID = request.replyToEventID {
+            if let editEventID = request.editEventID {
+                try await timeline.edit(
+                    eventOrTransactionId: .eventId(eventId: editEventID),
+                    newContent: .roomMessage(content: content)
+                )
+            } else if let replyToEventID = request.replyToEventID {
                 try await timeline.sendReply(msg: content, eventId: replyToEventID)
             } else {
                 _ = try await timeline.send(msg: content)
             }
 
             try await clientStore.syncOnce(session: session, fullState: false)
-            let eventID = "$local-\(UUID().uuidString)"
+            let eventID = request.editEventID ?? "$local-\(UUID().uuidString)"
             let senderAvatarURL = await profileAvatarURL(for: session.userID, session: session)
             return TimelineItem(
                 id: eventID,
@@ -1426,8 +1493,8 @@ final class MatrixRustSDKMessageSendService: MessageSending {
                 senderAvatarURL: senderAvatarURL,
                 timestamp: Date(),
                 kind: .text(body),
-                replyToEventID: request.replyToEventID,
-                isEdited: false,
+                replyToEventID: request.editEventID == nil ? request.replyToEventID : nil,
+                isEdited: request.editEventID != nil,
                 reactions: [:],
                 isEncrypted: await room.isEncrypted()
             )
@@ -1439,29 +1506,8 @@ final class MatrixRustSDKMessageSendService: MessageSending {
     }
 
     private func profileAvatarURL(for userID: String, session: AuthenticatedSession) async -> URL? {
-        var url = session.homeserverURL
-        url.appendPathComponent("_matrix")
-        url.appendPathComponent("client")
-        url.appendPathComponent("v3")
-        url.appendPathComponent("profile")
-        url.appendPathComponent(userID)
-
-        do {
-            var request = URLRequest(url: url)
-            request.httpMethod = "GET"
-            request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
-
-            let (data, response) = try await httpClient.data(for: request)
-            guard let http = response as? HTTPURLResponse,
-                  http.statusCode == 200 else {
-                return nil
-            }
-
-            let profile = try jsonDecoder.decode(MatrixRustSDKProfileResponse.self, from: data)
-            return profile.avatarURL.flatMap(URL.init(string:))
-        } catch {
-            return nil
-        }
+        let profile = try? await clientStore.userProfile(userID: userID, session: session)
+        return profile?.avatarUrl.flatMap(URL.init(string:))
     }
 }
 

@@ -41,7 +41,7 @@ import {
   UsernameBold,
 } from '../../../components/message';
 import { UserAvatar } from '../../../components/user-avatar';
-import { getMxIdLocalPart, mxcUrlToHttp } from '../../../utils/matrix';
+import { getMxIdLocalPart } from '../../../utils/matrix';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import {
   getEditedEvent,
@@ -86,6 +86,7 @@ import {
   useGetMemberPowerTag,
 } from '../../../hooks/useMemberPowerTag';
 import { useRoomCreatorsTag } from '../../../hooks/useRoomCreatorsTag';
+import { resolveMatrixThumbnailUrl } from '../../../matrix/media';
 
 type PinnedMessageProps = {
   room: Room;
@@ -198,8 +199,7 @@ function PinnedMessage({
               userId={sender}
               src={
                 senderAvatarMxc
-                  ? mxcUrlToHttp(mx, senderAvatarMxc, useAuthentication, 48, 48, 'crop') ??
-                    undefined
+                  ? resolveMatrixThumbnailUrl(mx, senderAvatarMxc, 48, { useAuthentication })
                   : undefined
               }
               alt={displayName}

@@ -11,6 +11,7 @@ import {
   getPlatformSecretStoreStatus,
   isDesktopPlatform,
   platformSessionStore,
+  repairPlatformDeviceDisplayName,
   setPlatformBadgeCount,
   showPlatformNotification,
   setPlatformTrayState,
@@ -46,6 +47,45 @@ test('platform capabilities describe local development runtime by default', () =
   } finally {
     (globalThis as any).window = originalWindow;
   }
+});
+
+test('platform device display-name repair uses Matrix SDK device details', async () => {
+  const updates: Array<{ deviceId: string; displayName: string }> = [];
+  const client = {
+    getDeviceId: () => 'DEVICE',
+    getDevice: async () => ({ display_name: 'Legacy Device' }),
+    setDeviceDetails: async (deviceId: string, details: { display_name: string }) => {
+      updates.push({ deviceId, displayName: details.display_name });
+      return {};
+    },
+  };
+
+  assert.equal(await repairPlatformDeviceDisplayName(client, 'Synara macOS'), true);
+  assert.deepEqual(updates, [{ deviceId: 'DEVICE', displayName: 'Synara macOS' }]);
+});
+
+test('platform device display-name repair skips already-correct or missing devices', async () => {
+  const updates: Array<string> = [];
+  const matchingClient = {
+    getDeviceId: () => 'DEVICE',
+    getDevice: async () => ({ display_name: 'Synara Linux' }),
+    setDeviceDetails: async (deviceId: string) => {
+      updates.push(deviceId);
+      return {};
+    },
+  };
+  const missingClient = {
+    getDeviceId: () => undefined,
+    getDevice: async () => undefined,
+    setDeviceDetails: async (deviceId: string) => {
+      updates.push(deviceId);
+      return {};
+    },
+  };
+
+  assert.equal(await repairPlatformDeviceDisplayName(matchingClient, 'Synara Linux'), false);
+  assert.equal(await repairPlatformDeviceDisplayName(missingClient, 'Synara Linux'), false);
+  assert.deepEqual(updates, []);
 });
 
 test('platform capabilities describe Tauri desktop runtime when bridge is present', async () => {

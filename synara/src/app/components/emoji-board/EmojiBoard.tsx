@@ -22,7 +22,7 @@ import { preventScrollWithArrowKey, stopPropagation } from '../../utils/keyboard
 import { useRelevantImagePacks } from '../../hooks/useImagePacks';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { useRecentEmoji } from '../../hooks/useRecentEmoji';
-import { isUserId, mxcUrlToHttp } from '../../utils/matrix';
+import { isUserId } from '../../utils/matrix';
 import { editableActiveElement, targetFromEvent } from '../../utils/dom';
 import { useAsyncSearch, UseAsyncSearchOptions } from '../../hooks/useAsyncSearch';
 import { useDebounce } from '../../hooks/useDebounce';
@@ -50,6 +50,7 @@ import {
   EmojiGroup,
   EmojiBoardLayout,
 } from './components';
+import { resolveOptionalMatrixMediaUrl } from '../../matrix/media';
 import { EmojiBoardTab, EmojiType } from './types';
 import { VirtualTile } from '../virtualizer';
 
@@ -201,8 +202,9 @@ function EmojiSidebar({ activeGroupAtom, packs, onScrollToGroup }: EmojiSidebarP
             let label = pack.meta.name;
             if (!label) label = isUserId(pack.id) ? 'Personal Pack' : mx.getRoom(pack.id)?.name;
 
-            const url =
-              mxcUrlToHttp(mx, pack.getAvatarUrl(usage) ?? '', useAuthentication) ?? undefined;
+            const url = resolveOptionalMatrixMediaUrl(mx, pack.getAvatarUrl(usage), {
+              useAuthentication,
+            });
 
             return (
               <ImageGroupIcon
@@ -264,8 +266,9 @@ function StickerSidebar({ activeGroupAtom, packs, onScrollToGroup }: StickerSide
           let label = pack.meta.name;
           if (!label) label = isUserId(pack.id) ? 'Personal Pack' : mx.getRoom(pack.id)?.name;
 
-          const url =
-            mxcUrlToHttp(mx, pack.getAvatarUrl(usage) ?? '', useAuthentication) ?? undefined;
+          const url = resolveOptionalMatrixMediaUrl(mx, pack.getAvatarUrl(usage), {
+            useAuthentication,
+          });
 
           return (
             <ImageGroupIcon

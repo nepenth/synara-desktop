@@ -5,7 +5,7 @@ import { EmojiItemInfo, EmojiType } from '../types';
 import * as css from './styles.css';
 import { PackImageReader } from '../../../plugins/custom-emoji';
 import { IEmoji } from '../../../plugins/emoji';
-import { mxcUrlToHttp } from '../../../utils/matrix';
+import { resolveOptionalMatrixMediaUrl } from '../../../matrix/media';
 
 export const getEmojiItemInfo = (element: Element): EmojiItemInfo | undefined => {
   const label = element.getAttribute('title');
@@ -68,7 +68,7 @@ export function CustomEmojiItem({ mx, useAuthentication, image }: CustomEmojiIte
         loading="lazy"
         className={css.CustomEmojiImg}
         alt={image.body || image.shortcode}
-        src={mxcUrlToHttp(mx, image.url, useAuthentication) ?? ''}
+        src={resolveOptionalMatrixMediaUrl(mx, image.url, { useAuthentication }) ?? ''}
       />
     </Box>
   );
@@ -98,7 +98,7 @@ export function StickerItem({ mx, useAuthentication, image }: StickerItemProps) 
         loading="lazy"
         className={css.StickerImg}
         alt={image.body || image.shortcode}
-        src={mxcUrlToHttp(mx, image.url, useAuthentication) ?? ''}
+        src={resolveOptionalMatrixMediaUrl(mx, image.url, { useAuthentication }) ?? ''}
       />
     </Box>
   );

@@ -85,68 +85,6 @@ final class EventActionServiceTests: XCTestCase {
         XCTAssertEqual(updated.kind, .redacted)
     }
 
-    func testMatrixRedactCreatesRequestAndLocalUpdate() async throws {
-        let client = MockEventActionHTTPClient(responses: [.success(statusCode: 200, body: #"{}"#)])
-        let service = MatrixEventActionService(
-            sessionStore: AppSessionStore(currentState: .signedIn(try makeSession())),
-            httpClient: client
-        )
-        let item = makeItem(senderID: "@alice:matrix.org")
-
-        let updated = await service.apply(.redact, to: item, currentUserID: "@alice:matrix.org", roomID: "!room:matrix.org")
-
-        XCTAssertEqual(updated.kind, .redacted)
-        XCTAssertEqual(client.requests.first?.httpMethod, "PUT")
-        XCTAssertEqual(
-            client.requests.first?.url?.absoluteString.hasPrefix(
-                "https://matrix.org/_matrix/client/v3/rooms/!room:matrix.org/redact/$event:matrix.org/"
-            ),
-            true
-        )
-        XCTAssertEqual(client.requests.first?.value(forHTTPHeaderField: "Authorization"), "Bearer token")
-        XCTAssertEqual(client.requests.first?.httpBody, Data("{}".utf8))
-    }
-
-    func testMatrixReactionCreatesAnnotationRequestAndLocalUpdate() async throws {
-        let client = MockEventActionHTTPClient(responses: [.success(statusCode: 200, body: #"{"event_id":"$reaction"}"#)])
-        let service = MatrixEventActionService(
-            sessionStore: AppSessionStore(currentState: .signedIn(try makeSession())),
-            httpClient: client
-        )
-        let item = makeItem(senderID: "@alice:matrix.org")
-
-        let updated = await service.apply(.react("👍"), to: item, currentUserID: "@bob:matrix.org", roomID: "!room:matrix.org")
-
-        XCTAssertEqual(updated.reactions["👍"], 1)
-        XCTAssertEqual(client.requests.first?.httpMethod, "PUT")
-        XCTAssertEqual(
-            client.requests.first?.url?.absoluteString.hasPrefix(
-                "https://matrix.org/_matrix/client/v3/rooms/!room:matrix.org/send/m.reaction/"
-            ),
-            true
-        )
-
-        let body = try XCTUnwrap(client.requests.first?.httpBody)
-        let payload = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
-        let relatesTo = try XCTUnwrap(payload["m.relates_to"] as? [String: Any])
-        XCTAssertEqual(relatesTo["rel_type"] as? String, "m.annotation")
-        XCTAssertEqual(relatesTo["event_id"] as? String, "$event:matrix.org")
-        XCTAssertEqual(relatesTo["key"] as? String, "👍")
-    }
-
-    func testMatrixActionFailureKeepsOriginalItem() async throws {
-        let client = MockEventActionHTTPClient(responses: [.success(statusCode: 500, body: #"{}"#)])
-        let service = MatrixEventActionService(
-            sessionStore: AppSessionStore(currentState: .signedIn(try makeSession())),
-            httpClient: client
-        )
-        let item = makeItem(senderID: "@alice:matrix.org")
-
-        let updated = await service.apply(.redact, to: item, currentUserID: "@alice:matrix.org", roomID: "!room:matrix.org")
-
-        XCTAssertEqual(updated, item)
-    }
-
     private func makeItem(senderID: String) -> TimelineItem {
         TimelineItem(
             id: "$event:matrix.org",
@@ -160,47 +98,4 @@ final class EventActionServiceTests: XCTestCase {
         )
     }
 
-    private func makeSession() throws -> AuthenticatedSession {
-        AuthenticatedSession(
-            userID: "@alice:matrix.org",
-            deviceID: "DEVICE",
-            homeserverURL: try XCTUnwrap(URL(string: "https://matrix.org")),
-            accessToken: "token"
-        )
-    }
-}
-
-private final class MockEventActionHTTPClient: AuthHTTPClient {
-    enum Response {
-        case success(statusCode: Int, body: String)
-        case failure(Error)
-    }
-
-    private var responses: [Response]
-    private(set) var requests: [URLRequest] = []
-
-    init(responses: [Response]) {
-        self.responses = responses
-    }
-
-    func data(for request: URLRequest) async throws -> (Data, URLResponse) {
-        requests.append(request)
-
-        let response = responses.removeFirst()
-        switch response {
-        case .success(let statusCode, let body):
-            let url = try XCTUnwrap(request.url)
-            let httpResponse = try XCTUnwrap(
-                HTTPURLResponse(
-                    url: url,
-                    statusCode: statusCode,
-                    httpVersion: nil,
-                    headerFields: nil
-                )
-            )
-            return (Data(body.utf8), httpResponse)
-        case .failure(let error):
-            throw error
-        }
-    }
 }

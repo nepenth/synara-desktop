@@ -4,7 +4,7 @@ import { Atom, atom, useAtomValue } from 'jotai';
 import * as css from './styles.css';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { useMediaAuthentication } from '../../../hooks/useMediaAuthentication';
-import { mxcUrlToHttp } from '../../../utils/matrix';
+import { resolveOptionalMatrixMediaUrl } from '../../../matrix/media';
 
 export type PreviewData = {
   key: string;
@@ -37,7 +37,7 @@ export function Preview({ previewAtom }: PreviewProps) {
           {key.startsWith('mxc://') ? (
             <img
               className={css.PreviewImg}
-              src={mxcUrlToHttp(mx, key, useAuthentication) ?? key}
+              src={resolveOptionalMatrixMediaUrl(mx, key, { useAuthentication }) ?? key}
               alt={shortcode}
             />
           ) : (
