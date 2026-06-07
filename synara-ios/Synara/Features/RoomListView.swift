@@ -278,14 +278,16 @@ struct RoomListView: View {
             .listRowSeparator(.hidden)
             .listRowBackground(SynaraColor.surface)
         } else {
-            NavigationLink(value: AppRoute.room(id: room.id, title: room.name)) {
+            Button {
+                dismissSearch(clearQuery: false)
+                environment.router.route(to: .room(id: room.id, title: room.name))
+            } label: {
                 RoomListRow(room: room)
                     .accessibilityIdentifier("RoomRow-\(room.id)")
                     .padding(.vertical, SynaraSpacing.xSmall)
             }
-            .simultaneousGesture(TapGesture().onEnded {
-                dismissSearch(clearQuery: false)
-            })
+            .buttonStyle(.plain)
+            .contentShape(Rectangle())
             .accessibilityLabel(room.accessibilitySummary)
             .accessibilityHint("Opens the room timeline")
             .accessibilityIdentifier("RoomRow-\(room.id)")
