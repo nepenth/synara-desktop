@@ -44,7 +44,7 @@ Status: draft release gate checklist.
 ## App Store Account Gates
 
 - LLC Apple Developer Program enrollment complete.
-- `app.synara.ios` App ID created.
+- `com.whylandcreative.synara` App ID created.
 - Required capabilities enabled and documented.
 - App Store Connect app record created.
 - CI signing secret storage approved.

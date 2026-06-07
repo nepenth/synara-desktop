@@ -43,8 +43,8 @@ Validated from the current `main` branch:
 - Bundle version:
   `CFBundleShortVersionString = 1.1.0`,
   `CFBundleVersion = 1.1.0`.
-- Bundle identifier:
-  `app.synara.desktop`.
+- Configured bundle identifier:
+  `com.whylandcreative.synara.desktop`.
 - Strict code-signing verification:
   `codesign --verify --deep --strict --verbose=2 ...`: passing.
 - No local Synara crash reports were present in

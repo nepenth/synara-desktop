@@ -125,10 +125,10 @@ Needed:
 
 Initial bundle IDs:
 
-- iOS: `app.synara.ios` or `app.synara.mobile`.
-- iOS notification service extension: `app.synara.ios.NotificationService`, if added.
-- iOS share extension: `app.synara.ios.ShareExtension`, if added.
-- Existing desktop identifier: `app.synara.desktop`.
+- iOS: `com.whylandcreative.synara`.
+- iOS notification service extension: `com.whylandcreative.synara.NotificationService`, if added.
+- iOS share extension: `com.whylandcreative.synara.ShareExtension`, if added.
+- Existing desktop identifier: `com.whylandcreative.synara.desktop`.
 
 Initial iOS capabilities:
 

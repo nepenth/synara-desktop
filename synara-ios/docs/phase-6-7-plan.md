@@ -2,6 +2,35 @@
 
 Reviewed: 2026-05-28
 
+## Execution Status
+
+Status: simulator-completable Phase 6.7 work is complete for local
+device-readiness. Remaining items are product-review or future feature work:
+true Matrix threads, production media/search depth, and final visual tuning on a
+physical iPhone.
+
+Completed:
+
+- Functionality matrix covers current iOS surfaces and desktop-parity gaps.
+- Visual fidelity matrix covers rooms, timeline, composer, attachment sheet,
+  thread, and agent approval screenshots.
+- Deterministic screenshot tests cover rooms/timeline/composer/attachment,
+  thread, and agent approval.
+- Live visual smoke remains available for real Matrix data.
+- Room list now uses Favorites/Other grouping for mockup parity.
+- Timeline pagination is visually subdued.
+- Non-photo attachment actions now show an honest unavailable state instead of
+  fake upload behavior.
+
+Release-prep accepted:
+
+- Generated mockup chrome is not treated as a source-of-truth for exact system
+  status bar, hardware frame, or keyboard rendering.
+- Thread UI is reply-backed until true Matrix `m.thread` implementation is
+  scoped.
+- Settings/login/later/notifications retain their current modernized Synara UI
+  until product review asks for dedicated mockup tuning.
+
 ## Goal
 
 Make iOS validation honest and repeatable. Phase 6.7 must prove two things for

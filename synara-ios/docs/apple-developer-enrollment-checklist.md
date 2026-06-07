@@ -9,10 +9,10 @@ this repository.
 
 | Purpose                        | Bundle ID                            | Phase                      | Notes                                                          |
 | ------------------------------ | ------------------------------------ | -------------------------- | -------------------------------------------------------------- |
-| iOS app                        | `app.synara.ios`                     | Phase 1                    | Primary native app target.                                     |
-| Notification service extension | `app.synara.ios.NotificationService` | Post-MVP or push hardening | Add only if rich or mutable notification handling is required. |
-| Share extension                | `app.synara.ios.ShareExtension`      | Deferred                   | Add after core messaging and push are stable.                  |
-| Existing desktop app           | `app.synara.desktop`                 | Existing                   | Already used by the macOS/Linux Tauri app.                     |
+| iOS app                        | `com.whylandcreative.synara`                     | Phase 1                    | Primary native app target.                                     |
+| Notification service extension | `com.whylandcreative.synara.NotificationService` | Post-MVP or push hardening | Add only if rich or mutable notification handling is required. |
+| Share extension                | `com.whylandcreative.synara.ShareExtension`      | Deferred                   | Add after core messaging and push are stable.                  |
+| Existing desktop app           | `com.whylandcreative.synara.desktop`             | Existing                   | Already used by the macOS/Linux Tauri app.                     |
 
 ## Owner-Only Tasks
 
@@ -32,7 +32,7 @@ this repository.
 
 ## Engineering Tasks After Enrollment
 
-- Create explicit App ID for `app.synara.ios`.
+- Create explicit App ID for `com.whylandcreative.synara`.
 - Enable only required capabilities:
   - Push Notifications.
   - Associated Domains.

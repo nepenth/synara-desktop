@@ -136,7 +136,7 @@ Validation rules:
 - Store a single current-user session first; multi-account storage should be a
   later extension.
 - Namespace the credential service/account names under the app identifier,
-  currently `app.synara.desktop`.
+  currently `com.whylandcreative.synara.desktop`.
 
 ## Runtime Migration Plan
 
