@@ -91,6 +91,30 @@ def post(path, body)
   request(:post, path, body: body)
 end
 
+def add_build_to_group(build_id, group_id)
+  relationship = {
+    data: [
+      {
+        type: "builds",
+        id: build_id
+      }
+    ]
+  }
+  post("/v1/betaGroups/#{group_id}/relationships/builds", relationship)
+end
+
+def add_group_to_build(build_id, group_id)
+  relationship = {
+    data: [
+      {
+        type: "betaGroups",
+        id: group_id
+      }
+    ]
+  }
+  post("/v1/builds/#{build_id}/relationships/betaGroups", relationship)
+end
+
 def relationship_link(data, name)
   data.fetch("relationships").fetch(name).fetch("links").fetch("related")
 end
@@ -132,25 +156,28 @@ group_name = group.fetch("attributes")["name"]
 puts "Using internal beta group #{group_name} group_id=#{group.fetch("id")}"
 
 begin
-  post(
-    "/v1/betaGroups/#{group.fetch("id")}/relationships/builds",
-    {
-      data: [
-        {
-          type: "builds",
-          id: build.fetch("id")
-        }
-      ]
-    }
-  )
+  add_build_to_group(build.fetch("id"), group.fetch("id"))
   puts "Build assigned to internal TestFlight group."
 rescue AppStoreConnectError => e
   detail = asc_error_detail(e)
   if e.status == 409
     puts "Build is already assigned to the internal TestFlight group."
   elsif e.status == 422 && detail.include?("Cannot add internal group to a build")
-    puts "App Store Connect does not allow explicit build assignment to internal groups."
-    puts "The build is VALID and should be available to internal testers after Apple's TestFlight propagation/compliance checks."
+    begin
+      add_group_to_build(build.fetch("id"), group.fetch("id"))
+      puts "Build assigned to internal TestFlight group."
+    rescue AppStoreConnectError => fallback_error
+      fallback_detail = asc_error_detail(fallback_error)
+      if fallback_error.status == 409
+        puts "Build is already assigned to the internal TestFlight group."
+      elsif fallback_error.status == 422 && fallback_detail.include?("Cannot add internal group to a build")
+        puts "App Store Connect does not allow explicit build assignment to this internal group."
+        puts "The build is VALID and should be available to internal testers after Apple's TestFlight propagation/compliance checks, or through a named internal group with automatic distribution enabled."
+      else
+        warn JSON.pretty_generate(fallback_error.payload)
+        raise
+      end
+    end
   else
     warn JSON.pretty_generate(e.payload)
     raise

@@ -55,6 +55,11 @@ synara-ios/scripts/upload-testflight-internal.sh
 synara-ios/scripts/promote-testflight-internal.rb
 ```
 
+Use an App Store Connect API key with at least App Manager access for upload and
+TestFlight build management. Admin access is acceptable for this local key if you
+want the automation to cover future metadata and tester-management work, but the
+private key must remain outside the repository.
+
 Do not commit `.p8` files. The repo ignores `AuthKey_*.p8` and `*.p8` as a
 defense-in-depth measure.
 
