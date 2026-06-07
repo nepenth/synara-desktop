@@ -108,6 +108,16 @@ actor MatrixRustSDKClientStore {
         try? Self.deletePersistedStores()
     }
 
+    func resetPersistedStore(for session: AuthenticatedSession) async {
+        if activeSession == session {
+            client = nil
+            activeSession = nil
+        }
+        syncStatus = .stopped
+        unableToDecryptRecorder.reset()
+        try? Self.deletePersistedStore(for: session)
+    }
+
     func syncOnce(session: AuthenticatedSession, fullState: Bool = false) async throws {
         let client = try await ensureClient(for: session)
         _ = try await client.syncOnceV2(settings: SyncSettingsV2(timeoutMs: 5_000, fullState: fullState))
@@ -587,6 +597,15 @@ actor MatrixRustSDKClientStore {
         try FileManager.default.removeItem(at: root)
     }
 
+    static func deletePersistedStore(for session: AuthenticatedSession) throws {
+        let storeID = session.sdkStoreID ?? storeID(for: session.userID, homeserverURL: session.homeserverURL)
+        let root = try storeRootURL(create: false).appendingPathComponent(storeID, isDirectory: true)
+        guard FileManager.default.fileExists(atPath: root.path) else {
+            return
+        }
+        try FileManager.default.removeItem(at: root)
+    }
+
     private static func storeRootURL(create: Bool = true) throws -> URL {
         let base = try FileManager.default.url(
             for: .applicationSupportDirectory,
@@ -679,6 +698,10 @@ final class MatrixRustSDKRoomListService: RoomListServicing {
             return .empty
         }
 
+        return await loadRooms(session: session, allowsStoreRepair: true)
+    }
+
+    private func loadRooms(session: AuthenticatedSession, allowsStoreRepair: Bool) async -> RoomListState {
         do {
             let client = try await clientStore.ensureClient(for: session)
             var didSyncFail = false
@@ -708,6 +731,9 @@ final class MatrixRustSDKRoomListService: RoomListServicing {
                 if cachedRooms.isEmpty == false {
                     return .loaded(cachedRooms)
                 }
+                if didSyncFail, allowsStoreRepair {
+                    return await repairStoreAndReloadRooms(session: session)
+                }
                 return didSyncFail ? .failed("Could not load rooms. Try again.") : .empty
             }
             return .loaded(sorted)
@@ -715,8 +741,16 @@ final class MatrixRustSDKRoomListService: RoomListServicing {
             if cachedRooms.isEmpty == false {
                 return .loaded(cachedRooms)
             }
+            if allowsStoreRepair {
+                return await repairStoreAndReloadRooms(session: session)
+            }
             return .failed("Could not load rooms. Try again.")
         }
+    }
+
+    private func repairStoreAndReloadRooms(session: AuthenticatedSession) async -> RoomListState {
+        await clientStore.resetPersistedStore(for: session)
+        return await loadRooms(session: session, allowsStoreRepair: false)
     }
 
     func clearCache() {
