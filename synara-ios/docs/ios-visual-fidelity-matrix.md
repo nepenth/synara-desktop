@@ -21,12 +21,12 @@ items for visible mismatches.
 
 | Mockup | Current screenshot source | Current status | Visible gaps |
 | --- | --- | --- | --- |
-| Rooms/channels list | `01-mock-room-list.png` from deterministic mock smoke; `01-live-room-list.png` from gated live visual smoke | Partial | Mock fixture provides stable rooms, but app still uses Rooms/Direct messages grouping instead of the supplied Favorites/Other grouping; row height/icon treatment is close but not pixel-close; bottom tab has current app style rather than mockup exact styling. |
-| Room timeline | `02-mock-room-timeline.png` from deterministic mock smoke; `02-live-room-timeline.png` from gated live visual smoke | Partial | Mock fixture now gives stable Product-room content; text scale/line wrapping still differ from mockup; Load Older pill appears at top; unread divider is not yet represented in the deterministic fixture. |
-| Composer typing | `03-mock-composer-typing.png` from deterministic mock smoke; `03-live-composer-typing.png` from gated live visual smoke | Partial | Composer shape is closer, but vertical keyboard transition and timeline occlusion need tuning; mockup uses compact row with consistent bottom spacing. |
-| Attachment sheet | `04-mock-attachment-sheet.png` from deterministic mock smoke; `04-live-attachment-sheet.png` from gated live visual smoke | Partial | Sheet labels and grid now fit, but sheet height, top offset, corner radius, and background dimming still need pixel tuning against the attachment mockup. |
-| Thread view | `05-mock-thread.png`, `06-mock-thread-typing.png` from gated mock visual smoke | Partial | Thread data is reply-backed fixture, not real `m.thread`; row spacing, avatar style, reactions, and keyboard composition differ from mockup. |
-| Agent approval | Existing agent visual smoke/manual screenshot path | Partial | Dark agent room direction exists, but exact mockup card density, status badge, action layout, and preview panel need a screenshot baseline. |
+| Rooms/channels list | `01-mock-room-list.png` from deterministic mock smoke; `01-live-room-list.png` from gated live visual smoke | Release-prep accepted | Mock fixture now uses Favorites/Other grouping; row height/icon treatment and bottom tab glass still intentionally follow current Synara components rather than exact generated-device chrome. |
+| Room timeline | `02-mock-room-timeline.png` from deterministic mock smoke; `02-live-room-timeline.png` from gated live visual smoke | Release-prep accepted | Mock fixture gives stable Product-room content; pagination is now visually subdued. Remaining differences are sender/avatar styling, no unread divider fixture, and live-data variance. |
+| Composer typing | `03-mock-composer-typing.png` from deterministic mock smoke; `03-live-composer-typing.png` from gated live visual smoke | Release-prep accepted | Composer shape and controls match the direction; exact keyboard transition spacing remains a manual device-review item. |
+| Attachment sheet | `04-mock-attachment-sheet.png` from deterministic mock smoke; `04-live-attachment-sheet.png` from gated live visual smoke | Release-prep accepted | Sheet layout matches the supplied grid direction. Non-photo options now show an honest unavailable state instead of fake uploads. |
+| Thread view | `05-mock-thread.png`, `06-mock-thread-typing.png` from gated mock visual smoke | Release-prep accepted | Thread UI is reply-backed, not true Matrix `m.thread`; exact sender spacing/reactions remain future Matrix-thread work. |
+| Agent approval | `07-mock-agent-approval.png` from deterministic mock smoke; live agent approval smoke path | Release-prep accepted | Dark agent approval baseline exists. Card density and generated mockup chrome are close enough for device testing; exact final polish follows product review. |
 | Settings/login/later/notifications | Earlier generated mockups, no canonical fidelity matrix yet | Partial | These screens have modernized UI but lack strict target screenshots and reviewed deltas. |
 
 ## Phase 6.7 Acceptance Criteria
@@ -76,6 +76,16 @@ xcodebuild -project Synara.xcodeproj -scheme Synara \
   -only-testing:SynaraUITests/SynaraUITests/testMockRoomsVisualScreenshotsWhenConfigured test
 ```
 
+Agent visual smoke:
+
+```sh
+TEST_RUNNER_SYNARA_MOCK_AGENT_VISUAL_SMOKE=1 \
+TEST_RUNNER_SYNARA_SCREENSHOT_DIR=/private/tmp/synara-ui-validation \
+xcodebuild -project Synara.xcodeproj -scheme Synara \
+  -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
+  -only-testing:SynaraUITests/SynaraUITests/testMockAgentVisualScreenshotWhenConfigured test
+```
+
 ## Phase 6.7 Remediation Order
 
 1. Build deterministic visual fixtures for the exact Rooms, Product timeline,
@@ -84,5 +94,6 @@ xcodebuild -project Synara.xcodeproj -scheme Synara \
    icon scale, composer height, sheet detent, and tab bar shape.
 3. Add screenshot assertions that all required visible labels/controls exist.
 4. Add manual visual review notes with before/after screenshots.
-5. Promote screens from `Partial` to `Complete` only after the delta is small
-   enough for product acceptance.
+5. Promote screens from `Partial` to `Release-prep accepted` only after the
+   delta is small enough for local device testing; promote to `Complete` only
+   after physical-device product review.

@@ -9,6 +9,8 @@ support before external TestFlight/App Store positioning.
 Status labels:
 
 - `Complete`: implemented and covered by deterministic tests or gated live smoke.
+- `Release-prep accepted`: implemented or honestly blocked enough for local
+  device testing; not yet production-complete.
 - `Partial`: usable surface exists, but backend depth, live coverage, or UX is
   incomplete.
 - `Missing`: no meaningful iOS implementation yet.
@@ -45,9 +47,9 @@ Status labels:
 | Timeline | Read receipts and typing | Missing | none | SDK integration, visual states, live smoke |
 | Timeline | Polls | Missing | unsupported/unknown mapping only | Read-only render first, voting later |
 | Composer | Plain text send | Complete | mock and live send smokes | Latency baseline |
-| Composer | Attachment sheet UI | Partial | deterministic UI test, live visual smoke | Real option-by-option backend validation |
+| Composer | Attachment sheet UI | Release-prep accepted | deterministic UI test, live visual smoke, unavailable-state UI test | Real option-by-option backend validation |
 | Composer | Photos/media upload | Partial | media upload unit tests, placeholder UI | Real Photos picker/manual simulator media smoke |
-| Composer | File/camera/location/poll/code/voice/contact | Missing | visible sheet actions only | Implement or disable honestly with clear states |
+| Composer | File/camera/location/poll/code/voice/contact | Release-prep accepted | visible sheet actions plus honest unavailable alert | Implement real backends when scoped |
 | Composer | Mentions autocomplete | Missing | none | Member lookup, insertion, live send validation |
 | Composer | Emoji/custom emoji/stickers/GIF | Missing | none | Native emoji first, custom media feature flags |
 | Media | Authenticated media thumbnails | Partial | loader unit tests | Live image/video/file room smoke |

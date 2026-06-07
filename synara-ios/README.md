@@ -23,6 +23,7 @@ Authoritative planning documents:
 - [iOS functionality matrix](docs/ios-functionality-matrix.md)
 - [iOS visual fidelity matrix](docs/ios-visual-fidelity-matrix.md)
 - [Phase 6.9 performance plan](docs/phase-6-9-performance-plan.md)
+- [iOS device readiness](docs/device-readiness.md)
 - [iOS logging policy](docs/logging-policy.md)
 - [iOS CI notes](docs/ci-notes.md)
 - [Live simulator smoke](docs/live-simulator-smoke.md)

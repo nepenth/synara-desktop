@@ -5,13 +5,14 @@ Reviewed: 2026-05-28
 Status: Phase 1 shell/foundation, Phase 2 auth/session/sync/room-list/logout,
 Phase 3 core messaging, Phase 5 agent workflows, Phase 6 internal
 settings/hardening, Phase 6.5 iOS UI modernization, and Phase 6.6 mockup
-fidelity are complete for the current native iOS MVP. Phase 6.7 is now the
-active validation pass that separates actual functionality, live/manual
-evidence, and visual-fidelity gaps; its matrices are
+fidelity are complete for the current native iOS MVP. Phase 6.7 is now
+simulator-complete for local device-readiness: it separates actual
+functionality, live/manual evidence, and visual-fidelity gaps; its matrices are
 [`ios-functionality-matrix.md`](ios-functionality-matrix.md) and
 [`ios-visual-fidelity-matrix.md`](ios-visual-fidelity-matrix.md). Phase 6.9
-performance review has started with signpost instrumentation and fixture
-performance tests; its plan is
+performance review is locally remediated and simulator-verified with signpost
+instrumentation and fixture performance tests; physical-device traces and memory
+graphs remain external release gates. Its plan is
 [`phase-6-9-performance-plan.md`](phase-6-9-performance-plan.md).
 
 Phase 7 production E2EE first slice is complete for app-level encrypted room
@@ -257,11 +258,14 @@ The repeatable live-smoke checklist is
   approval review rows, preview links, and prominent approve/reject actions.
 - Phase 6.7 adds functionality and visual-fidelity matrices plus deterministic
   and live screenshot capture paths for rooms, timeline, composer, attachment
-  sheet, and thread screens. These screens remain `Partial` for near
-  pixel-perfect acceptance until their visible deltas are tuned and reviewed.
+  sheet, thread, and agent approval screens. Core mockup screens are
+  release-prep accepted for local device testing; exact final polish waits for
+  physical-device product review.
 - Phase 6.9 adds stable performance signposts for app/session lifecycle,
   room-list loading, timeline loading/pagination, thread loading, message send,
-  and media upload; Simulator/device trace baselines are still required before
+  media upload, room open, and encrypted room open. Simulator fixture tests and
+  signpost log validation are passing; exportable Time Profiler summaries,
+  memory graphs, and physical-device profiling are still required before
   external TestFlight.
 - Phase 6 hardening artifacts now include accessibility, performance, privacy,
   security, and TestFlight readiness documents under `synara-ios/docs/`.
