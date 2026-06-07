@@ -89,14 +89,16 @@ actor MatrixRustSDKClientStore {
     }
 
     func start(session: AuthenticatedSession) async {
-        syncStatus = .syncing
+        do {
+            _ = try await startSyncService(session: session)
+        } catch {
+            syncStatus = .failed("Could not start sync.")
+        }
     }
 
-    func stop() {
+    func stop() async {
         if let syncService {
-            Task {
-                await syncService.stop()
-            }
+            await syncService.stop()
         }
         syncService = nil
         roomListService = nil
@@ -150,9 +152,7 @@ actor MatrixRustSDKClientStore {
         syncService = service
         roomListService = service.roomListService()
         syncStatus = .syncing
-        Task {
-            await service.start()
-        }
+        await service.start()
         return service
     }
 
@@ -1255,9 +1255,7 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
 
                     _ = try? await timeline.paginateBackwards(numEvents: 20)
                     if focusedEventID != nil {
-                        for _ in 0..<3 {
-                            _ = try? await timeline.paginateForwards(numEvents: 20)
-                        }
+                        await Self.paginateFocusedTimelineForwardToLiveEnd(timeline)
                     }
 
                     await subscription.waitUntilCancelled()
@@ -1322,9 +1320,7 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
 
             _ = try await timeline.paginateBackwards(numEvents: pageSize)
             if focusedEventID != nil {
-                for _ in 0..<3 {
-                    _ = try? await timeline.paginateForwards(numEvents: pageSize)
-                }
+                await Self.paginateFocusedTimelineForwardToLiveEnd(timeline)
             }
             let items = await collector.waitForItems(timeoutNanoseconds: 1_000_000_000)
             let sdkItems = items.compactMap(Self.mapTimelineItem)
@@ -1337,6 +1333,19 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
             return enrichedSDKItems
         } catch {
             return []
+        }
+    }
+
+    private static func paginateFocusedTimelineForwardToLiveEnd(_ timeline: Timeline) async {
+        for _ in 0..<24 {
+            do {
+                let hitEnd = try await timeline.paginateForwards(numEvents: 50)
+                if hitEnd {
+                    return
+                }
+            } catch {
+                return
+            }
         }
     }
 

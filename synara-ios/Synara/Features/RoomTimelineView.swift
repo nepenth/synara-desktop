@@ -102,7 +102,7 @@ struct RoomTimelineView: View {
             Task {
                 _ = await loadCryptoStatus()
             }
-            await loadTimeline()
+            await prepareTimelineUpdates()
             startTimelineUpdates()
         }
         .onDisappear {
@@ -129,7 +129,8 @@ struct RoomTimelineView: View {
         case .failed(let message):
             SynaraErrorState(title: "Could Not Load Timeline", message: message) {
                 Task {
-                    await loadTimeline()
+                    await prepareTimelineUpdates()
+                    startTimelineUpdates()
                 }
             }
         case .loaded(let items, let isPaginating):
@@ -358,7 +359,7 @@ struct RoomTimelineView: View {
         )
     }
 
-    private func loadTimeline() async {
+    private func prepareTimelineUpdates() async {
         state = .loading
         showJumpToLatest = false
         hasPositionedInitialTimeline = false
@@ -376,6 +377,11 @@ struct RoomTimelineView: View {
         await MainActor.run {
             initialReadMarkerEventID = focusedEventID == nil ? readMarkerEventID : nil
         }
+    }
+
+    private func loadTimeline() async {
+        await prepareTimelineUpdates()
+        let readMarkerEventID = focusedEventID ?? initialReadMarkerEventID
         let items = await environment.timeline.loadInitialTimeline(roomID: roomID, focusedEventID: readMarkerEventID)
         await MainActor.run {
             state = items.isEmpty ? .empty : .loaded(items, isPaginating: false)
@@ -392,6 +398,9 @@ struct RoomTimelineView: View {
                 }
                 await MainActor.run {
                     guard updatedItems.isEmpty == false else {
+                        if case .loading = state {
+                            state = .empty
+                        }
                         return
                     }
                     state = .loaded(updatedItems, isPaginating: false)
