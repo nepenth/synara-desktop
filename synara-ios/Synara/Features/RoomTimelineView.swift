@@ -192,7 +192,7 @@ struct RoomTimelineView: View {
                             .id(item.eventID)
                         }
                     }
-                    .padding(.horizontal, isAgentRoom ? SynaraSpacing.large : SynaraSpacing.xLarge)
+                    .padding(.horizontal, SynaraSpacing.large)
                     .padding(.top, isAgentRoom ? SynaraSpacing.medium : SynaraSpacing.small)
                     .padding(.bottom, SynaraSpacing.small)
                 }
@@ -1686,11 +1686,9 @@ private struct TimelineRow: View {
 
                 messageContent
             }
-
-            if isOutgoing == false {
-                Spacer(minLength: 40)
-            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.top, isGroupedWithPrevious ? 0 : 7)
         .contextMenu {
             if availability.canReply {
@@ -1753,11 +1751,11 @@ private struct TimelineRow: View {
         if usesBubble {
             content
                 .padding(SynaraSpacing.small)
-                .frame(maxWidth: 520, alignment: .leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .synaraCard(fill: bubbleFill, stroke: bubbleStroke)
         } else {
             content
-                .frame(maxWidth: 520, alignment: .leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
@@ -1769,11 +1767,15 @@ private struct TimelineRow: View {
                 .font(.callout)
                 .foregroundStyle(SynaraColor.primaryText)
                 .lineLimit(nil)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
         case .formattedText(let body, let html):
             Text(MatrixHTMLRenderer.attributedString(body: body, html: html))
                 .font(.callout)
                 .foregroundStyle(SynaraColor.primaryText)
                 .lineLimit(nil)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
         case .mediaPlaceholder(let resource):
             if resource.isEncrypted {
                 MediaAttachmentCard(resource: resource)
