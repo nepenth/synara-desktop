@@ -59,7 +59,16 @@ enum RoomListState: Equatable {
 
 protocol RoomListServicing: AnyObject {
     func loadRooms() async -> RoomListState
+    func roomUpdates() -> AsyncStream<RoomListState>
     func clearCache()
+}
+
+extension RoomListServicing {
+    func roomUpdates() -> AsyncStream<RoomListState> {
+        AsyncStream { continuation in
+            continuation.finish()
+        }
+    }
 }
 
 enum RoomMembershipError: LocalizedError, Equatable {
