@@ -4,7 +4,8 @@ import React from 'react';
 import { Room } from 'matrix-js-sdk';
 import { UserAvatar } from '../../components/user-avatar';
 import { getMemberAvatarMxc, getMemberDisplayName } from '../../utils/room';
-import { getMxIdLocalPart, mxcUrlToHttp } from '../../utils/matrix';
+import { resolveMatrixThumbnailUrl } from '../../matrix/media';
+import { getMxIdLocalPart } from '../../utils/matrix';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 import { StackedAvatar } from '../../components/stacked-avatar';
@@ -34,7 +35,7 @@ export function MemberGlance({ room, members, speakers, max = 6 }: MemberGlanceP
         const name = getMemberDisplayName(room, userId) ?? getMxIdLocalPart(userId) ?? userId;
         const avatarMxc = getMemberAvatarMxc(room, userId);
         const avatarUrl = avatarMxc
-          ? mxcUrlToHttp(mx, avatarMxc, useAuthentication, 96, 96) ?? undefined
+          ? resolveMatrixThumbnailUrl(mx, avatarMxc, 96, { useAuthentication })
           : undefined;
 
         return (

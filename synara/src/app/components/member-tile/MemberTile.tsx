@@ -5,6 +5,7 @@ import { getMemberDisplayName } from '../../utils/room';
 import { getMxIdLocalPart } from '../../utils/matrix';
 import { UserAvatar } from '../user-avatar';
 import * as css from './style.css';
+import { resolveMatrixThumbnailUrl } from '../../matrix/media';
 
 const getName = (room: Room, member: RoomMember) =>
   getMemberDisplayName(room, member.userId) ?? getMxIdLocalPart(member.userId) ?? member.userId;
@@ -23,7 +24,11 @@ export const MemberTile = as<'button', MemberTileProps>(
 
     const avatarMxcUrl = member.getMxcAvatarUrl();
     const avatarUrl = avatarMxcUrl
-      ? mx.mxcUrlToHttp(avatarMxcUrl, 100, 100, 'crop', undefined, false, useAuthentication)
+      ? resolveMatrixThumbnailUrl(mx, avatarMxcUrl, 100, {
+          useAuthentication,
+          allowDirectLinks: undefined,
+          allowRedirects: false,
+        })
       : undefined;
 
     return (

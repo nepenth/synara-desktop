@@ -13,10 +13,10 @@ import { useRecentEmoji } from '../../../hooks/useRecentEmoji';
 import { useRelevantImagePacks } from '../../../hooks/useImagePacks';
 import { IEmoji, emojis } from '../../../plugins/emoji';
 import { useKeyDown } from '../../../hooks/useKeyDown';
-import { mxcUrlToHttp } from '../../../utils/matrix';
 import { useMediaAuthentication } from '../../../hooks/useMediaAuthentication';
 import { ImageUsage, PackImageReader } from '../../../plugins/custom-emoji';
 import { getEmoticonSearchStr } from '../../../plugins/utils';
+import { resolveOptionalMatrixMediaUrl } from '../../../matrix/media';
 
 type EmoticonCompleteHandler = (key: string, shortcode: string) => void;
 
@@ -88,7 +88,7 @@ export function EmoticonAutocomplete({
       {autoCompleteEmoticon.map((emoticon) => {
         const isCustomEmoji = 'url' in emoticon;
         const key = isCustomEmoji ? emoticon.url : emoticon.unicode;
-        const customEmojiUrl = mxcUrlToHttp(mx, key, useAuthentication);
+        const customEmojiUrl = resolveOptionalMatrixMediaUrl(mx, key, { useAuthentication });
 
         return (
           <MenuItem

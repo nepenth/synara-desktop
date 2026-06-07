@@ -31,13 +31,13 @@ import * as css from './SpaceItem.css';
 import * as styleCss from './style.css';
 import { useDraggableItem } from './DnD';
 import { stopPropagation } from '../../utils/keyboard';
-import { mxcUrlToHttp } from '../../utils/matrix';
 import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 import { useOpenCreateRoomModal } from '../../state/hooks/createRoomModal';
 import { useOpenCreateSpaceModal } from '../../state/hooks/createSpaceModal';
 import { AddExistingModal } from '../add-existing';
 import { CreateRoomType } from '../../components/create-room/types';
 import { BetaNoticeBadge } from '../../components/BetaNoticeBadge';
+import { resolveMatrixThumbnailUrl } from '../../matrix/media';
 
 function SpaceProfileLoading() {
   return (
@@ -484,8 +484,7 @@ export const SpaceItemCard = as<'div', SpaceItemCardProps>(
                     name={summary.name || summary.canonical_alias || roomId}
                     avatarUrl={
                       summary?.avatar_url
-                        ? mxcUrlToHttp(mx, summary.avatar_url, useAuthentication, 96, 96, 'crop') ??
-                          undefined
+                        ? resolveMatrixThumbnailUrl(mx, summary.avatar_url, 96, { useAuthentication })
                         : undefined
                     }
                     suggested={content.suggested}

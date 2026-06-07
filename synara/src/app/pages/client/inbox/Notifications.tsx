@@ -30,7 +30,7 @@ import { useAtomValue } from 'jotai';
 import { useTranslation } from 'react-i18next';
 import { Page, PageContent, PageContentCenter, PageHeader } from '../../../components/page';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
-import { getMxIdLocalPart, mxcUrlToHttp } from '../../../utils/matrix';
+import { getMxIdLocalPart } from '../../../utils/matrix';
 import { InboxNotificationsPathSearchParams } from '../../paths';
 import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
 import { SequenceCard } from '../../../components/sequence-card';
@@ -85,6 +85,7 @@ import { useSpoilerClickHandler } from '../../../hooks/useSpoilerClickHandler';
 import { ScreenSize, useScreenSizeContext } from '../../../hooks/useScreenSize';
 import { BackRouteHandler } from '../../../components/BackRouteHandler';
 import { useMediaAuthentication } from '../../../hooks/useMediaAuthentication';
+import { resolveMatrixThumbnailUrl } from '../../../matrix/media';
 import { allRoomsAtom } from '../../../state/room-list/roomList';
 import { usePowerLevels } from '../../../hooks/usePowerLevels';
 import { usePowerLevelTags } from '../../../hooks/usePowerLevelTags';
@@ -504,14 +505,9 @@ function RoomNotificationsGroupComp({
                         userId={event.sender}
                         src={
                           senderAvatarMxc
-                            ? mxcUrlToHttp(
-                                mx,
-                                senderAvatarMxc,
+                            ? resolveMatrixThumbnailUrl(mx, senderAvatarMxc, 48, {
                                 useAuthentication,
-                                48,
-                                48,
-                                'crop'
-                              ) ?? undefined
+                              })
                             : undefined
                         }
                         alt={displayName}

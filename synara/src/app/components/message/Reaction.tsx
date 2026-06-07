@@ -5,7 +5,8 @@ import { MatrixClient, MatrixEvent, Room } from 'matrix-js-sdk';
 import * as css from './Reaction.css';
 import { getHexcodeForEmoji, getShortcodeFor } from '../../plugins/emoji';
 import { getMemberDisplayName } from '../../utils/room';
-import { eventWithShortcode, getMxIdLocalPart, mxcUrlToHttp } from '../../utils/matrix';
+import { eventWithShortcode, getMxIdLocalPart } from '../../utils/matrix';
+import { resolveOptionalMatrixMediaUrl } from '../../matrix/media';
 
 export const Reaction = as<
   'button',
@@ -29,7 +30,7 @@ export const Reaction = as<
       {reaction.startsWith('mxc://') ? (
         <img
           className={css.ReactionImg}
-          src={mxcUrlToHttp(mx, reaction, useAuthentication) ?? reaction}
+          src={resolveOptionalMatrixMediaUrl(mx, reaction, { useAuthentication }) ?? reaction}
           alt={reaction}
         />
       ) : (

@@ -23,7 +23,7 @@ import {
   isNotificationEvent,
 } from '../../utils/room';
 import { NotificationType, UnreadInfo } from '../../../types/matrix/room';
-import { getMxIdLocalPart, mxcUrlToHttp } from '../../utils/matrix';
+import { getMxIdLocalPart } from '../../utils/matrix';
 import { useSelectedRoom } from '../../hooks/router/useSelectedRoom';
 import { useInboxNotificationsSelected } from '../../hooks/router/useInbox';
 import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
@@ -43,6 +43,7 @@ import {
   supportsPlatformTrayState,
 } from '../../platform';
 import { detectAgentApprovalPrompt } from '../../utils/agentApprovals';
+import { resolveMatrixThumbnailUrl } from '../../matrix/media';
 
 const RECENT_AGENT_APPROVAL_MS = 10 * 60 * 1000;
 
@@ -295,7 +296,7 @@ function MessageNotifications() {
         notify({
           roomName: room.name ?? 'Unknown',
           roomAvatar: avatarMxc
-            ? mxcUrlToHttp(mx, avatarMxc, useAuthentication, 96, 96, 'crop') ?? undefined
+            ? resolveMatrixThumbnailUrl(mx, avatarMxc, 96, { useAuthentication })
             : undefined,
           username: getMemberDisplayName(room, sender) ?? getMxIdLocalPart(sender) ?? sender,
           roomId: room.roomId,

@@ -13,7 +13,6 @@ import {
   Chip,
 } from 'folds';
 import Linkify from 'linkify-react';
-import { mxcUrlToHttp } from '../../utils/matrix';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { nameInitials } from '../../utils/common';
 import { BreakWord } from '../../styles/Text.css';
@@ -25,6 +24,7 @@ import { createUploadAtom, UploadSuccess } from '../../state/upload';
 import { CompactUploadCardRenderer } from '../upload-card';
 import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 import { PackMetaReader } from '../../plugins/custom-emoji';
+import { resolveOptionalMatrixMediaUrl } from '../../matrix/media';
 
 type ImagePackAvatarProps = {
   url?: string;
@@ -52,9 +52,7 @@ type ImagePackProfileProps = {
 export function ImagePackProfile({ meta, canEdit, onEdit }: ImagePackProfileProps) {
   const mx = useMatrixClient();
   const useAuthentication = useMediaAuthentication();
-  const avatarUrl = meta.avatar
-    ? mxcUrlToHttp(mx, meta.avatar, useAuthentication) ?? undefined
-    : undefined;
+  const avatarUrl = resolveOptionalMatrixMediaUrl(mx, meta.avatar, { useAuthentication });
 
   return (
     <Box gap="400">
@@ -101,7 +99,7 @@ export function ImagePackProfileEdit({ meta, onCancel, onSave }: ImagePackProfil
   const useAuthentication = useMediaAuthentication();
   const [avatar, setAvatar] = useState(meta.avatar);
 
-  const avatarUrl = avatar ? mxcUrlToHttp(mx, avatar, useAuthentication) ?? undefined : undefined;
+  const avatarUrl = resolveOptionalMatrixMediaUrl(mx, avatar, { useAuthentication });
 
   const [imageFile, setImageFile] = useState<File>();
   const avatarFileUrl = useObjectURL(imageFile);

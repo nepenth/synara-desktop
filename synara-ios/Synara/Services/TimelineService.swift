@@ -104,68 +104,28 @@ struct SynaraLaterListItem: Identifiable, Equatable {
     }
 }
 
-final class MatrixAccountDataLaterService: LaterServicing {
-    private let sessionStore: AppSessionStore
-    private let httpClient: AuthHTTPClient
-    private let jsonDecoder: JSONDecoder
-    private let now: () -> Int
-
-    init(
-        sessionStore: AppSessionStore,
-        httpClient: AuthHTTPClient = URLSession.shared,
-        jsonDecoder: JSONDecoder = JSONDecoder(),
-        now: @escaping () -> Int = { Int(Date().timeIntervalSince1970 * 1000) }
-    ) {
-        self.sessionStore = sessionStore
-        self.httpClient = httpClient
-        self.jsonDecoder = jsonDecoder
-        self.now = now
-    }
-
-    func loadItems() async -> Result<([SynaraLaterListItem], LaterInboxError?), Never> {
-        guard case .signedIn(let session) = sessionStore.currentState else {
-            return .success(([], .noSession))
+enum SynaraLaterAccountDataCodec {
+    static func decodeEnvelopeData(_ data: Data, jsonDecoder: JSONDecoder) -> SynaraLaterContent? {
+        guard let content = extractAccountDataContent(from: data) else {
+            return nil
         }
 
-        do {
-            let request = try accountDataRequest(for: session)
-            let (data, response) = try await httpClient.data(for: request)
+        return decode(content: content, jsonDecoder: jsonDecoder)
+    }
 
-            guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-                return .success(([], .networkFailure))
-            }
-
-            guard let content = extractAccountDataContent(from: data),
-                  let items = decode(content: content).successValue() else {
-                return .success(([], .malformedPayload))
-            }
-
-            return .success((SynaraLaterListItem.sorted(items: items, now: now()), nil))
-        } catch {
-            return .success(([], .networkFailure))
+    static func decodeContentString(_ content: String, jsonDecoder: JSONDecoder) -> SynaraLaterContent? {
+        guard let data = content.data(using: .utf8) else {
+            return nil
         }
+
+        if let decoded = try? jsonDecoder.decode(SynaraLaterContent.self, from: data) {
+            return decoded
+        }
+
+        return decodeEnvelopeData(data, jsonDecoder: jsonDecoder)
     }
 
-    private func accountDataRequest(for session: AuthenticatedSession) throws -> URLRequest {
-        var request = URLRequest(url: accountDataURL(for: session))
-        request.httpMethod = "GET"
-        request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
-        return request
-    }
-
-    private func accountDataURL(for session: AuthenticatedSession) -> URL {
-        var url = session.homeserverURL
-        url.appendPathComponent("_matrix")
-        url.appendPathComponent("client")
-        url.appendPathComponent("v3")
-        url.appendPathComponent("user")
-        url.appendPathComponent(session.userID.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? session.userID)
-        url.appendPathComponent("account_data")
-        url.appendPathComponent("in.synara.later")
-        return url
-    }
-
-    private func extractAccountDataContent(from data: Data) -> [String: Any]? {
+    private static func extractAccountDataContent(from data: Data) -> [String: Any]? {
         let object: Any
 
         do {
@@ -189,20 +149,52 @@ final class MatrixAccountDataLaterService: LaterServicing {
         return nil
     }
 
-    private func decode(content: [String: Any]) -> Result<SynaraLaterContent, LaterInboxError> {
+    private static func decode(content: [String: Any], jsonDecoder: JSONDecoder) -> SynaraLaterContent? {
         do {
             let data = try JSONSerialization.data(withJSONObject: content)
-            let decoded = try jsonDecoder.decode(SynaraLaterContent.self, from: data)
-            return .success(decoded)
+            return try jsonDecoder.decode(SynaraLaterContent.self, from: data)
         } catch {
-            return .failure(.malformedPayload)
+            return nil
         }
     }
 }
 
-extension Result where Success == SynaraLaterContent, Failure == LaterInboxError {
-    func successValue() -> SynaraLaterContent? {
-        return try? self.get()
+final class MatrixRustSDKLaterService: LaterServicing {
+    private let sessionStore: AppSessionStore
+    private let clientStore: MatrixRustSDKClientStore
+    private let jsonDecoder: JSONDecoder
+    private let now: () -> Int
+
+    init(
+        sessionStore: AppSessionStore,
+        clientStore: MatrixRustSDKClientStore,
+        jsonDecoder: JSONDecoder = JSONDecoder(),
+        now: @escaping () -> Int = { Int(Date().timeIntervalSince1970 * 1000) }
+    ) {
+        self.sessionStore = sessionStore
+        self.clientStore = clientStore
+        self.jsonDecoder = jsonDecoder
+        self.now = now
+    }
+
+    func loadItems() async -> Result<([SynaraLaterListItem], LaterInboxError?), Never> {
+        guard case .signedIn(let session) = sessionStore.currentState else {
+            return .success(([], .noSession))
+        }
+
+        do {
+            guard let rawContent = try await clientStore.accountData(eventType: "in.synara.later", session: session) else {
+                return .success(([], nil))
+            }
+
+            guard let items = SynaraLaterAccountDataCodec.decodeContentString(rawContent, jsonDecoder: jsonDecoder) else {
+                return .success(([], .malformedPayload))
+            }
+
+            return .success((SynaraLaterListItem.sorted(items: items, now: now()), nil))
+        } catch {
+            return .success(([], .networkFailure))
+        }
     }
 }
 
@@ -527,6 +519,20 @@ enum TimelineFixtures {
     }
 }
 
+enum TimelineReplyCounter {
+    static func replyCounts(for items: [TimelineItem]) -> [String: Int] {
+        var counts: [String: Int] = [:]
+        counts.reserveCapacity(min(items.count, 512))
+
+        for item in items {
+            guard let replyToEventID = item.replyToEventID else { continue }
+            counts[replyToEventID, default: 0] += 1
+        }
+
+        return counts
+    }
+}
+
 struct MockTimelineService: TimelineServicing {
     var events: [RawTimelineEvent]
     var itemFixture: [TimelineItem]?
@@ -597,434 +603,6 @@ enum MatrixHTMLRenderer {
             .trimmingCharacters(in: .whitespacesAndNewlines)
 
         return output.isEmpty ? body : output
-    }
-}
-
-final class MatrixTimelineService: TimelineServicing {
-    private let sessionStore: AppSessionStore
-    private let httpClient: AuthHTTPClient
-    private let jsonDecoder: JSONDecoder
-    private var paginationTokensByRoom: [String: String] = [:]
-    private var profileCacheByUserID: [String: MatrixProfileResponse?] = [:]
-
-    init(
-        sessionStore: AppSessionStore,
-        httpClient: AuthHTTPClient = URLSession.shared,
-        jsonDecoder: JSONDecoder = JSONDecoder()
-    ) {
-        self.sessionStore = sessionStore
-        self.httpClient = httpClient
-        self.jsonDecoder = jsonDecoder
-    }
-
-    func loadInitialTimeline(roomID: String) async -> [TimelineItem] {
-        await loadTimeline(roomID: roomID, from: nil)
-    }
-
-    func loadOlderTimeline(roomID: String, before eventID: String) async -> [TimelineItem] {
-        await loadTimeline(roomID: roomID, from: eventID)
-    }
-
-    private func loadTimeline(roomID: String, from: String?) async -> [TimelineItem] {
-        guard case .signedIn(let session) = sessionStore.currentState else {
-            return []
-        }
-
-        do {
-            var request = URLRequest(url: messagesURL(homeserverURL: session.homeserverURL, roomID: roomID, from: from))
-            request.httpMethod = "GET"
-            request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
-
-            let (data, response) = try await httpClient.data(for: request)
-            guard let httpResponse = response as? HTTPURLResponse,
-                  httpResponse.statusCode == 200 else {
-                return []
-            }
-
-            let messages = try jsonDecoder.decode(MatrixMessagesResponse.self, from: data)
-            if let end = messages.end {
-                paginationTokensByRoom[roomID] = end
-            }
-            let rawEvents = messages.chunk
-                .reversed()
-                .compactMap(mapEvent)
-
-            let enrichedEvents = await enrichWithProfiles(rawEvents, session: session)
-            return enrichedEvents
-                .map(TimelineMapper.map)
-        } catch {
-            return []
-        }
-    }
-
-    private func enrichWithProfiles(
-        _ events: [RawTimelineEvent],
-        session: AuthenticatedSession
-    ) async -> [RawTimelineEvent] {
-        var profilesByUserID: [String: MatrixProfileResponse?] = [:]
-
-        for senderID in Set(events.map(\.senderID)) {
-            profilesByUserID[senderID] = await profile(for: senderID, session: session)
-        }
-
-        return events.map { event in
-            guard let profile = profilesByUserID[event.senderID] ?? nil,
-                  let avatarURL = profile.avatarURL.flatMap(URL.init(string:)) else {
-                return event
-            }
-
-            return RawTimelineEvent(
-                eventID: event.eventID,
-                senderID: event.senderID,
-                senderAvatarURL: avatarURL,
-                timestamp: event.timestamp,
-                type: event.type,
-                body: event.body,
-                formattedBody: event.formattedBody,
-                replyToEventID: event.replyToEventID,
-                isEdited: event.isEdited,
-                mediaURL: event.mediaURL,
-                isEncrypted: event.isEncrypted,
-                agentCard: event.agentCard,
-                reactions: event.reactions
-            )
-        }
-    }
-
-    private func profile(for userID: String, session: AuthenticatedSession) async -> MatrixProfileResponse? {
-        if let cached = profileCacheByUserID[userID] {
-            return cached
-        }
-
-        guard let url = profileURL(homeserverURL: session.homeserverURL, userID: userID) else {
-            profileCacheByUserID[userID] = nil
-            return nil
-        }
-
-        do {
-            var request = URLRequest(url: url)
-            request.httpMethod = "GET"
-            request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
-
-            let (data, response) = try await httpClient.data(for: request)
-            guard let httpResponse = response as? HTTPURLResponse,
-                  httpResponse.statusCode == 200 else {
-                profileCacheByUserID[userID] = nil
-                return nil
-            }
-
-            let profile = try jsonDecoder.decode(MatrixProfileResponse.self, from: data)
-            profileCacheByUserID[userID] = profile
-            return profile
-        } catch {
-            profileCacheByUserID[userID] = nil
-            return nil
-        }
-    }
-
-    private func profileURL(homeserverURL: URL, userID: String) -> URL? {
-        var url = homeserverURL
-        url.appendPathComponent("_matrix")
-        url.appendPathComponent("client")
-        url.appendPathComponent("v3")
-        url.appendPathComponent("profile")
-        url.appendPathComponent(userID)
-        return url
-    }
-
-    private func messagesURL(homeserverURL: URL, roomID: String, from: String?) -> URL {
-        var url = homeserverURL
-        url.appendPathComponent("_matrix")
-        url.appendPathComponent("client")
-        url.appendPathComponent("v3")
-        url.appendPathComponent("rooms")
-        url.appendPathComponent(roomID)
-        url.appendPathComponent("messages")
-
-        var queryItems = [
-            URLQueryItem(name: "dir", value: "b"),
-            URLQueryItem(name: "limit", value: "50")
-        ]
-
-        if let from {
-            queryItems.append(URLQueryItem(name: "from", value: paginationTokensByRoom[roomID] ?? from))
-        }
-
-        var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
-        components?.queryItems = queryItems
-        return components?.url ?? url
-    }
-
-    private func mapEvent(_ event: MatrixTimelineEvent) -> RawTimelineEvent? {
-        guard let eventID = event.eventID,
-              let sender = event.sender,
-              shouldShow(eventType: event.type) else {
-            return nil
-        }
-
-        let content = event.content ?? MatrixTimelineEventContent()
-        let eventType: String
-        let body: String?
-        let formattedBody: String?
-        let mediaURL: URL?
-        let isEncrypted: Bool
-        let agentCard = parseAgentCard(from: content)
-
-        if event.type == "m.room.message" {
-            if let msgtype = content.msgtype,
-               ["m.image", "m.file", "m.audio", "m.video"].contains(msgtype) {
-                eventType = "m.room.media"
-                body = content.body
-                formattedBody = nil
-                mediaURL = (content.url ?? content.encryptedFileURL).flatMap(URL.init(string:))
-                isEncrypted = content.encryptedFileURL != nil
-            } else {
-                eventType = event.type
-                body = content.body
-                formattedBody = content.formattedBody
-                mediaURL = nil
-                isEncrypted = false
-            }
-        } else {
-            eventType = event.type
-            body = content.body
-            formattedBody = content.formattedBody
-            mediaURL = content.url.flatMap(URL.init(string:))
-            isEncrypted = event.type == "m.room.encrypted"
-            if eventType.hasPrefix("m.room.") && body?.isEmpty == false {
-                // Keep existing behavior for plain message-like room events.
-            }
-        }
-
-        return RawTimelineEvent(
-            eventID: eventID,
-            senderID: sender,
-            timestamp: Date(timeIntervalSince1970: TimeInterval(event.originServerTimestamp ?? 0) / 1_000),
-            type: eventType,
-            body: body,
-            formattedBody: formattedBody,
-            replyToEventID: content.relatesTo?.inReplyTo?.eventID,
-            isEdited: content.relatesTo?.relType == "m.replace",
-            mediaURL: mediaURL,
-            isEncrypted: isEncrypted,
-            agentCard: agentCard
-        )
-    }
-
-    private func shouldShow(eventType: String) -> Bool {
-        if ["m.room.message", "m.room.encrypted", "m.room.redaction"].contains(eventType) {
-            return true
-        }
-
-        if ["org.hermes.agent", "io.hermes.agent", "in.synara.agent", "m.custom.agent"].contains(eventType) {
-            return true
-        }
-
-        return eventType.hasPrefix("synara.")
-    }
-
-    private func parseAgentCard(from content: MatrixTimelineEventContent) -> SynaraAgentCard? {
-        SynaraAgentCardPayloadParser.parse(raw: content.raw, body: content.body)
-    }
-}
-
-private struct MatrixMessagesResponse: Decodable {
-    let chunk: [MatrixTimelineEvent]
-    let end: String?
-}
-
-private struct MatrixProfileResponse: Decodable {
-    let displayName: String?
-    let avatarURL: String?
-
-    enum CodingKeys: String, CodingKey {
-        case displayName = "displayname"
-        case avatarURL = "avatar_url"
-    }
-}
-
-private struct MatrixTimelineEvent: Decodable {
-    let eventID: String?
-    let sender: String?
-    let originServerTimestamp: Int?
-    let type: String
-    let content: MatrixTimelineEventContent?
-
-    enum CodingKeys: String, CodingKey {
-        case eventID = "event_id"
-        case sender
-        case originServerTimestamp = "origin_server_ts"
-        case type
-        case content
-    }
-}
-
-private struct MatrixTimelineEventContent: Decodable {
-    let body: String?
-    let format: String?
-    let formattedBody: String?
-    let msgtype: String?
-    let url: String?
-    let encryptedFileURL: String?
-    let relatesTo: MatrixRelatesTo?
-    let raw: [String: Any]
-
-    init(
-        body: String? = nil,
-        format: String? = nil,
-        formattedBody: String? = nil,
-        msgtype: String? = nil,
-        url: String? = nil,
-        encryptedFileURL: String? = nil,
-        relatesTo: MatrixRelatesTo? = nil,
-        raw: [String: Any] = [:]
-    ) {
-        self.body = body
-        self.format = format
-        self.formattedBody = formattedBody
-        self.msgtype = msgtype
-        self.url = url
-        self.encryptedFileURL = encryptedFileURL
-        self.relatesTo = relatesTo
-        self.raw = raw
-    }
-
-    init(from decoder: Decoder) throws {
-        let container = try decoder.singleValueContainer()
-        let raw = try container.decode([String: JSONAny].self)
-        self.raw = raw.toAnyDictionary()
-        self.body = raw["body"]?.string
-        self.format = raw["format"]?.string
-        let formattedBody = raw["formatted_body"]?.string
-        self.formattedBody = raw["format"]?.string == "org.matrix.custom.html" ? formattedBody : nil
-        self.msgtype = raw["msgtype"]?.string
-        self.url = raw["url"]?.string
-        self.encryptedFileURL = raw["file"]?.dictionary?["url"]?.string
-
-        if let relatesToObject = raw["m.relates_to"]?.dictionary {
-            let replyEventID = relatesToObject["m.in_reply_to"]?.dictionary?["event_id"]?.string
-            self.relatesTo = MatrixRelatesTo(
-                relType: relatesToObject["rel_type"]?.string,
-                inReplyTo: MatrixInReplyTo(eventID: replyEventID)
-            )
-        } else {
-            self.relatesTo = nil
-        }
-    }
-}
-
-private struct MatrixRelatesTo: Decodable {
-    let relType: String?
-    let inReplyTo: MatrixInReplyTo?
-
-    enum CodingKeys: String, CodingKey {
-        case relType = "rel_type"
-        case inReplyTo = "m.in_reply_to"
-    }
-}
-
-private struct MatrixInReplyTo: Decodable {
-    let eventID: String?
-
-    enum CodingKeys: String, CodingKey {
-        case eventID = "event_id"
-    }
-
-    init(eventID: String?) {
-        self.eventID = eventID
-    }
-
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        self.eventID = try container.decodeIfPresent(String.self, forKey: .eventID)
-    }
-}
-
-private enum JSONAny: Decodable {
-    case dictionary([String: JSONAny])
-    case array([JSONAny])
-    case string(String)
-    case number(Double)
-    case bool(Bool)
-    case null
-
-    init(from decoder: Decoder) throws {
-        let container = try decoder.singleValueContainer()
-
-        if container.decodeNil() {
-            self = .null
-            return
-        }
-        if let boolValue = try? container.decode(Bool.self) {
-            self = .bool(boolValue)
-            return
-        }
-        if let stringValue = try? container.decode(String.self) {
-            self = .string(stringValue)
-            return
-        }
-        if let intValue = try? container.decode(Int.self) {
-            self = .number(Double(intValue))
-            return
-        }
-        if let doubleValue = try? container.decode(Double.self) {
-            self = .number(doubleValue)
-            return
-        }
-        if let arrayValue = try? container.decode([JSONAny].self) {
-            self = .array(arrayValue)
-            return
-        }
-        if let dictionaryValue = try? container.decode([String: JSONAny].self) {
-            self = .dictionary(dictionaryValue)
-            return
-        }
-
-        throw DecodingError.dataCorruptedError(in: container, debugDescription: "Unsupported JSON value")
-    }
-
-    var string: String? {
-        if case .string(let value) = self { return value }
-        return nil
-    }
-
-    var bool: Bool? {
-        if case .bool(let value) = self { return value }
-        return nil
-    }
-
-    var dictionary: [String: JSONAny]? {
-        if case .dictionary(let value) = self { return value }
-        return nil
-    }
-
-    var toAny: Any {
-        switch self {
-        case .string(let value):
-            return value
-        case .number(let value):
-            return value
-        case .bool(let value):
-            return value
-        case .null:
-            return NSNull()
-        case .array(let array):
-            return array.map(\.toAny)
-        case .dictionary(let dictionary):
-            return dictionary.toAnyDictionary()
-        }
-    }
-
-    var toAnyDictionary: [String: Any] {
-        return toAny as? [String: Any] ?? [:]
-    }
-}
-
-private extension Dictionary where Key == String, Value == JSONAny {
-    func toAnyDictionary() -> [String: Any] {
-        return reduce(into: [:]) { object, pair in
-            object[pair.key] = pair.value.toAny
-        }
     }
 }
 

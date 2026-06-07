@@ -21,7 +21,8 @@ import { Room } from 'matrix-js-sdk';
 import * as css from './styles.css';
 import { stopPropagation } from '../../utils/keyboard';
 import { getMemberAvatarMxc, getMemberDisplayName } from '../../utils/room';
-import { getMxIdLocalPart, mxcUrlToHttp } from '../../utils/matrix';
+import { resolveMatrixThumbnailUrl } from '../../matrix/media';
+import { getMxIdLocalPart } from '../../utils/matrix';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 import { UserAvatar } from '../../components/user-avatar';
@@ -77,7 +78,7 @@ export function LiveChip({ count, room, members }: LiveChipProps) {
                       getMemberDisplayName(room, userId) ?? getMxIdLocalPart(userId) ?? userId;
                     const avatarMxc = getMemberAvatarMxc(room, userId);
                     const avatarUrl = avatarMxc
-                      ? mxcUrlToHttp(mx, avatarMxc, useAuthentication, 96, 96) ?? undefined
+                      ? resolveMatrixThumbnailUrl(mx, avatarMxc, 96, { useAuthentication })
                       : undefined;
 
                     return (

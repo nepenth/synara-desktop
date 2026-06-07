@@ -166,7 +166,7 @@ struct RoomTimelineView: View {
                             .accessibilityIdentifier("LoadOlderTimelineButton")
                         }
 
-                        let threadReplyCounts = replyCounts(for: items)
+                        let threadReplyCounts = TimelineReplyCounter.replyCounts(for: items)
 
                         ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
                             if shouldShowMockupUnreadDivider(before: item, index: index) {
@@ -340,11 +340,6 @@ struct RoomTimelineView: View {
             && current.timestamp.timeIntervalSince(previous.timestamp) < 5 * 60
     }
 
-    private func replyCounts(for items: [TimelineItem]) -> [String: Int] {
-        Dictionary(grouping: items.compactMap(\.replyToEventID), by: { $0 })
-            .mapValues(\.count)
-    }
-
     private func shouldShowMockupUnreadDivider(before item: TimelineItem, index: Int) -> Bool {
         ProcessInfo.processInfo.environment["SYNARA_UI_TESTS"] == "1"
             && roomID == "!project:matrix.org"
@@ -406,37 +401,7 @@ struct RoomTimelineView: View {
     }
 
     private func loadReadMarkerEventID() async -> String? {
-        guard case .signedIn(let session) = environment.session.currentState else {
-            return nil
-        }
-
-        var url = session.homeserverURL
-        url.appendPathComponent("_matrix")
-        url.appendPathComponent("client")
-        url.appendPathComponent("v3")
-        url.appendPathComponent("user")
-        url.appendPathComponent(session.userID)
-        url.appendPathComponent("rooms")
-        url.appendPathComponent(roomID)
-        url.appendPathComponent("account_data")
-        url.appendPathComponent("m.fully_read")
-
-        do {
-            var request = URLRequest(url: url)
-            request.httpMethod = "GET"
-            request.timeoutInterval = 0.75
-            request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
-
-            let (data, response) = try await URLSession.shared.data(for: request)
-            guard let http = response as? HTTPURLResponse,
-                  http.statusCode == 200 else {
-                return nil
-            }
-
-            return try JSONDecoder().decode(RoomReadMarkerResponse.self, from: data).eventID
-        } catch {
-            return nil
-        }
+        await environment.readMarkers.fullyReadEventID(roomID: roomID)
     }
 
     private func loadCryptoStatus() async -> RoomCryptoStatus {
@@ -480,6 +445,7 @@ struct RoomTimelineView: View {
             replyToEventID: replyTarget?.eventID,
             editEventID: editTarget?.eventID
         )
+        let isEditing = request.editEventID != nil
 
         Task {
             do {
@@ -489,7 +455,11 @@ struct RoomTimelineView: View {
                 }
                 let item = try await environment.messageSender.send(request)
                 await MainActor.run {
-                    append(item)
+                    if isEditing {
+                        replace(item)
+                    } else {
+                        append(item)
+                    }
                     draft = ""
                     environment.drafts.clearDraft(roomID: roomID)
                     clearComposerRelation()
@@ -1114,71 +1084,6 @@ private struct ThreadMessageRow: View {
     }
 }
 
-private struct RoomReadMarkerResponse: Decodable {
-    let eventID: String
-
-    enum CodingKeys: String, CodingKey {
-        case eventID = "event_id"
-    }
-}
-
-private struct TimelineAvatarProfileResponse: Decodable {
-    let avatarURL: String?
-
-    enum CodingKeys: String, CodingKey {
-        case avatarURL = "avatar_url"
-    }
-}
-
-private let timelineAvatarURLCache = TimelineAvatarURLCache()
-
-private actor TimelineAvatarURLCache {
-    private var urlsByCacheKey: [String: URL] = [:]
-    private var missingCacheKeys: Set<String> = []
-
-    func avatarURL(for senderID: String, session: AuthenticatedSession) async -> URL? {
-        let cacheKey = "\(session.homeserverURL.absoluteString)|\(senderID)"
-        if let url = urlsByCacheKey[cacheKey] {
-            return url
-        }
-        if missingCacheKeys.contains(cacheKey) {
-            return nil
-        }
-
-        var url = session.homeserverURL
-        url.appendPathComponent("_matrix")
-        url.appendPathComponent("client")
-        url.appendPathComponent("v3")
-        url.appendPathComponent("profile")
-        url.appendPathComponent(senderID)
-
-        do {
-            var request = URLRequest(url: url)
-            request.httpMethod = "GET"
-            request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
-
-            let (data, response) = try await URLSession.shared.data(for: request)
-            guard let http = response as? HTTPURLResponse,
-                  http.statusCode == 200 else {
-                missingCacheKeys.insert(cacheKey)
-                return nil
-            }
-
-            let profile = try JSONDecoder().decode(TimelineAvatarProfileResponse.self, from: data)
-            guard let avatarURL = profile.avatarURL.flatMap(URL.init(string:)) else {
-                missingCacheKeys.insert(cacheKey)
-                return nil
-            }
-
-            urlsByCacheKey[cacheKey] = avatarURL
-            return avatarURL
-        } catch {
-            missingCacheKeys.insert(cacheKey)
-            return nil
-        }
-    }
-}
-
 private struct TimelineAvatar: View {
     let senderID: String
     let avatarURL: URL?
@@ -1226,74 +1131,29 @@ private struct TimelineAvatar: View {
     private func loadAvatar() async {
         avatarImage = nil
 
-        guard case .signedIn(let session) = environment.session.currentState else {
+        guard let avatarURL,
+              avatarURL.scheme == "mxc" else {
             return
         }
 
-        let resolvedAvatarURL: URL?
-        if let avatarURL {
-            resolvedAvatarURL = avatarURL
-        } else {
-            resolvedAvatarURL = await timelineAvatarURLCache.avatarURL(for: senderID, session: session)
-        }
-
-        guard let resolvedAvatarURL,
-              let requestURL = mediaThumbnailURL(for: resolvedAvatarURL, session: session) else {
-            return
-        }
-
-        var request = URLRequest(url: requestURL)
-        request.httpMethod = "GET"
-        request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
-        request.setValue("image/*", forHTTPHeaderField: "Accept")
-
-        do {
-            let (data, response) = try await URLSession.shared.data(for: request)
-            guard let http = response as? HTTPURLResponse,
-                  (200...299).contains(http.statusCode),
-                  let image = UIImage(data: data) else {
-                return
-            }
+        let resource = MediaResource(
+            id: avatarURL.absoluteString,
+            filename: "\(senderID)-avatar",
+            authenticatedURL: avatarURL,
+            requiresAuthentication: true
+        )
+        if let data = await environment.mediaLoader.loadThumbnailData(
+            for: resource,
+            width: UInt64(max(1, Int(size * 3))),
+            height: UInt64(max(1, Int(size * 3)))
+        ),
+           let image = UIImage(data: data) {
             avatarImage = image
-        } catch {
-            avatarImage = nil
         }
     }
 
     private var avatarTaskID: String {
         "\(senderID)|\(avatarURL?.absoluteString ?? "profile")"
-    }
-
-    private func mediaThumbnailURL(for sourceURL: URL, session: AuthenticatedSession) -> URL? {
-        guard sourceURL.scheme == "mxc" else {
-            return sourceURL
-        }
-
-        guard let serverName = sourceURL.host else {
-            return nil
-        }
-
-        let mediaID = sourceURL.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        guard mediaID.isEmpty == false else {
-            return nil
-        }
-
-        var url = session.homeserverURL
-        url.appendPathComponent("_matrix")
-        url.appendPathComponent("client")
-        url.appendPathComponent("v1")
-        url.appendPathComponent("media")
-        url.appendPathComponent("thumbnail")
-        url.appendPathComponent(serverName)
-        url.appendPathComponent(mediaID)
-
-        var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
-        components?.queryItems = [
-            URLQueryItem(name: "width", value: "\(Int(size * 3))"),
-            URLQueryItem(name: "height", value: "\(Int(size * 3))"),
-            URLQueryItem(name: "method", value: "crop")
-        ]
-        return components?.url
     }
 
     private var initials: String {

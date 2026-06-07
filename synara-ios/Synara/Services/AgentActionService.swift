@@ -46,6 +46,31 @@ protocol AgentApprovalServicing {
     func submit(_ request: SynaraAgentApprovalRequest) async throws
 }
 
+func encodeAgentApprovalMatrixEvent(
+    _ request: SynaraAgentApprovalRequest,
+    createdAt: Int = Int(Date().timeIntervalSince1970 * 1000),
+    jsonEncoder: JSONEncoder = JSONEncoder()
+) throws -> Data {
+    try jsonEncoder.encode(makeAgentApprovalMatrixEvent(request, createdAt: createdAt))
+}
+
+private func makeAgentApprovalMatrixEvent(
+    _ request: SynaraAgentApprovalRequest,
+    createdAt: Int
+) -> SynaraAgentApprovalMatrixEvent {
+    SynaraAgentApprovalMatrixEvent(
+        body: "\(request.decision.displayName) agent action: \(request.action.title)",
+        action: SynaraAgentApprovalContent(
+            version: 1,
+            actionID: request.action.id,
+            actionTitle: request.action.title,
+            decision: request.decision,
+            sourceEventID: request.sourceEventID,
+            createdAt: createdAt
+        )
+    )
+}
+
 struct SynaraAgentCardActionResolver {
     static let renderableKinds: Set<String> = SynaraAgentCardActionKind.renderableKinds
 
@@ -132,18 +157,18 @@ struct SynaraAgentCardActionResolver {
     }
 }
 
-final class MatrixAgentApprovalService: AgentApprovalServicing {
+final class MatrixRustSDKAgentApprovalService: AgentApprovalServicing {
     private let sessionStore: AppSessionStore
-    private let httpClient: AuthHTTPClient
+    private let clientStore: MatrixRustSDKClientStore
     private let jsonEncoder: JSONEncoder
 
     init(
         sessionStore: AppSessionStore,
-        httpClient: AuthHTTPClient = URLSession.shared,
+        clientStore: MatrixRustSDKClientStore,
         jsonEncoder: JSONEncoder = JSONEncoder()
     ) {
         self.sessionStore = sessionStore
-        self.httpClient = httpClient
+        self.clientStore = clientStore
         self.jsonEncoder = jsonEncoder
     }
 
@@ -156,54 +181,22 @@ final class MatrixAgentApprovalService: AgentApprovalServicing {
             throw SynaraAgentApprovalError.unsupportedAction
         }
 
-        var urlRequest = URLRequest(
-            url: sendURL(
-                homeserverURL: session.homeserverURL,
-                roomID: request.roomID,
-                transactionID: UUID().uuidString
-            )
-        )
-        urlRequest.httpMethod = "PUT"
-        urlRequest.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
-        urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        urlRequest.httpBody = try jsonEncoder.encode(
-            SynaraAgentApprovalMatrixEvent(
-                body: "\(request.decision.displayName) agent action: \(request.action.title)",
-                action: SynaraAgentApprovalContent(
-                    version: 1,
-                    actionID: request.action.id,
-                    actionTitle: request.action.title,
-                    decision: request.decision,
-                    sourceEventID: request.sourceEventID,
-                    createdAt: Int(Date().timeIntervalSince1970 * 1000)
-                )
-            )
-        )
-
         do {
-            let (_, response) = try await httpClient.data(for: urlRequest)
-            guard let http = response as? HTTPURLResponse,
-                  (200...299).contains(http.statusCode) else {
+            let data = try encodeAgentApprovalMatrixEvent(request, jsonEncoder: jsonEncoder)
+            guard let content = String(data: data, encoding: .utf8) else {
                 throw SynaraAgentApprovalError.failed
             }
+            try await clientStore.sendRawRoomEvent(
+                roomID: request.roomID,
+                eventType: "m.room.message",
+                content: content,
+                session: session
+            )
         } catch let error as SynaraAgentApprovalError {
             throw error
         } catch {
             throw SynaraAgentApprovalError.failed
         }
-    }
-
-    private func sendURL(homeserverURL: URL, roomID: String, transactionID: String) -> URL {
-        var url = homeserverURL
-        url.appendPathComponent("_matrix")
-        url.appendPathComponent("client")
-        url.appendPathComponent("v3")
-        url.appendPathComponent("rooms")
-        url.appendPathComponent(roomID)
-        url.appendPathComponent("send")
-        url.appendPathComponent("m.room.message")
-        url.appendPathComponent(transactionID)
-        return url
     }
 }
 

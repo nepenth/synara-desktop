@@ -50,6 +50,9 @@ jobs:
       - name: Check version metadata
         run: npm run check:versions
 
+      - name: Check Matrix integration boundaries
+        run: npm run check:matrix-boundaries
+
       - name: Check Rust desktop shell
         run: cargo check --locked
         working-directory: src-tauri

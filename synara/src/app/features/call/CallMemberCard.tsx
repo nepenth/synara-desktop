@@ -7,7 +7,8 @@ import { useOpenUserRoomProfile } from '../../state/hooks/userRoomProfile';
 import { SequenceCard } from '../../components/sequence-card';
 import { getMemberAvatarMxc, getMemberDisplayName } from '../../utils/room';
 import { useRoom } from '../../hooks/useRoom';
-import { getMxIdLocalPart, mxcUrlToHttp } from '../../utils/matrix';
+import { resolveMatrixThumbnailUrl } from '../../matrix/media';
+import { getMxIdLocalPart } from '../../utils/matrix';
 import { UserAvatar } from '../../components/user-avatar';
 import { getMouseEventCords } from '../../utils/dom';
 import * as css from './styles.css';
@@ -34,7 +35,7 @@ export function CallMemberCard({ member }: CallMemberCardProps) {
   const name = getMemberDisplayName(room, userId) ?? getMxIdLocalPart(userId) ?? userId;
   const avatarMxc = getMemberAvatarMxc(room, userId);
   const avatarUrl = avatarMxc
-    ? mxcUrlToHttp(mx, avatarMxc, useAuthentication, 96, 96) ?? undefined
+    ? resolveMatrixThumbnailUrl(mx, avatarMxc, 96, { useAuthentication })
     : undefined;
 
   const audioOnly =

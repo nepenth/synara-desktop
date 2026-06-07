@@ -59,6 +59,7 @@ import { useSpaceOptionally } from '../../hooks/useSpace';
 import { ContainerColor } from '../../styles/ContainerColor.css';
 import { useFlattenPowerTagMembers, useGetMemberPowerTag } from '../../hooks/useMemberPowerTag';
 import { useRoomCreators } from '../../hooks/useRoomCreators';
+import { resolveMatrixThumbnailUrl } from '../../matrix/media';
 
 type MemberDrawerHeaderProps = {
   room: Room;
@@ -123,7 +124,7 @@ function MemberItem({
     getMemberDisplayName(room, member.userId) ?? getMxIdLocalPart(member.userId) ?? member.userId;
   const avatarMxcUrl = member.getMxcAvatarUrl();
   const avatarUrl = avatarMxcUrl
-    ? mx.mxcUrlToHttp(avatarMxcUrl, 100, 100, 'crop', undefined, false, useAuthentication)
+    ? resolveMatrixThumbnailUrl(mx, avatarMxcUrl, 100, { useAuthentication })
     : undefined;
 
   return (

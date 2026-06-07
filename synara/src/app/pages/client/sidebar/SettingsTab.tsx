@@ -3,7 +3,8 @@ import { Text } from 'folds';
 import { SidebarItem, SidebarItemTooltip, SidebarAvatar } from '../../../components/sidebar';
 import { UserAvatar } from '../../../components/user-avatar';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
-import { getMxIdLocalPart, mxcUrlToHttp } from '../../../utils/matrix';
+import { resolveMatrixThumbnailUrl } from '../../../matrix/media';
+import { getMxIdLocalPart } from '../../../utils/matrix';
 import { nameInitials } from '../../../utils/common';
 import { useMediaAuthentication } from '../../../hooks/useMediaAuthentication';
 import { Settings } from '../../../features/settings';
@@ -20,7 +21,7 @@ export function SettingsTab() {
 
   const displayName = profile.displayName ?? getMxIdLocalPart(userId) ?? userId;
   const avatarUrl = profile.avatarUrl
-    ? mxcUrlToHttp(mx, profile.avatarUrl, useAuthentication, 96, 96, 'crop') ?? undefined
+    ? resolveMatrixThumbnailUrl(mx, profile.avatarUrl, 96, { useAuthentication })
     : undefined;
 
   const openSettings = () => setSettings(true);
