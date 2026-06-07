@@ -41,6 +41,8 @@ import {
   clearPersistedSessions,
   migrateLegacySessionToNativeAfterClientInit,
 } from '../../state/sessionPersistence';
+import { shouldRetrySyncOnResume } from '../../utils/syncLifecycle';
+import { synaraDeviceDisplayName } from '../../utils/user-agent';
 
 function ClientRootLoading() {
   return (
@@ -145,6 +147,64 @@ const useLogoutListener = (mx?: MatrixClient) => {
   }, [mx]);
 };
 
+const useSyncResumeRetry = (mx?: MatrixClient) => {
+  useEffect(() => {
+    if (!mx) return undefined;
+
+    let retryTimer: number | undefined;
+
+    const retrySyncIfNeeded = () => {
+      retryTimer = undefined;
+      if (document.visibilityState === 'hidden' || !mx.clientRunning) return;
+      if (shouldRetrySyncOnResume(mx.getSyncState())) {
+        mx.retryImmediately();
+      }
+    };
+
+    const scheduleRetry = () => {
+      if (retryTimer !== undefined) {
+        window.clearTimeout(retryTimer);
+      }
+      retryTimer = window.setTimeout(retrySyncIfNeeded, 0);
+    };
+
+    document.addEventListener('visibilitychange', scheduleRetry);
+    window.addEventListener('focus', scheduleRetry);
+    window.addEventListener('online', scheduleRetry);
+    window.addEventListener('pageshow', scheduleRetry);
+
+    return () => {
+      if (retryTimer !== undefined) {
+        window.clearTimeout(retryTimer);
+      }
+      document.removeEventListener('visibilitychange', scheduleRetry);
+      window.removeEventListener('focus', scheduleRetry);
+      window.removeEventListener('online', scheduleRetry);
+      window.removeEventListener('pageshow', scheduleRetry);
+    };
+  }, [mx]);
+};
+
+const usePlatformDeviceDisplayNameRepair = (mx?: MatrixClient) => {
+  useEffect(() => {
+    const deviceId = mx?.getDeviceId();
+    if (!mx || !deviceId) return undefined;
+
+    let cancelled = false;
+    const displayName = synaraDeviceDisplayName();
+
+    void (async () => {
+      const currentDevice = await mx.getDevice(deviceId).catch(() => undefined);
+      if (cancelled || currentDevice?.display_name === displayName) return;
+      await mx.setDeviceDetails(deviceId, { display_name: displayName });
+    })().catch(() => undefined);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [mx]);
+};
+
 type ClientRootProps = {
   children: ReactNode;
 };
@@ -172,6 +232,8 @@ export function ClientRoot({ children }: ClientRootProps) {
   );
 
   useLogoutListener(mx);
+  useSyncResumeRetry(mx);
+  usePlatformDeviceDisplayNameRepair(mx);
 
   useEffect(() => {
     if (loadState.status === AsyncStatus.Idle) {
