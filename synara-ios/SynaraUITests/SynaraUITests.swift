@@ -201,9 +201,9 @@ final class SynaraUITests: XCTestCase {
 
         let timeline = app.scrollViews["TimelineList"]
         XCTAssertTrue(timeline.waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["Synthetic message 0"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Synthetic message 9999"].waitForExistence(timeout: 5))
 
-        timeline.swipeUp()
+        timeline.swipeDown()
         XCTAssertTrue(timeline.exists)
     }
 
