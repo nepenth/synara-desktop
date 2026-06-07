@@ -203,10 +203,7 @@ struct RoomTimelineView: View {
                 .overlay(alignment: .bottomTrailing) {
                     if showJumpToLatest, let latest = items.last {
                         JumpToLatestButton {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                proxy.scrollTo(latest.eventID, anchor: .bottom)
-                            }
-                            showJumpToLatest = false
+                            jumpToLatest(proxy: proxy, currentItems: items, fallbackEventID: latest.eventID)
                         }
                         .padding(.trailing, SynaraSpacing.large)
                         .padding(.bottom, SynaraSpacing.medium)
@@ -248,7 +245,7 @@ struct RoomTimelineView: View {
         Task {
             await MainActor.run {
                 proxy.scrollTo(target.eventID, anchor: isLatestTarget ? .bottom : .center)
-                showJumpToLatest = isLatestTarget == false
+                showJumpToLatest = initialReadMarkerEventID != nil || isLatestTarget == false
             }
         }
     }
@@ -571,6 +568,37 @@ struct RoomTimelineView: View {
                 if uniqueOlder.isEmpty == false {
                     showJumpToLatest = true
                 }
+            }
+        }
+    }
+
+    private func jumpToLatest(proxy: ScrollViewProxy, currentItems: [TimelineItem], fallbackEventID: String) {
+        guard case .loaded(_, false) = state else {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                proxy.scrollTo(fallbackEventID, anchor: .bottom)
+            }
+            showJumpToLatest = false
+            return
+        }
+
+        state = .loaded(currentItems, isPaginating: true)
+        Task {
+            let signpostID = PerformanceTrace.begin("TimelineJumpToLatest")
+            defer {
+                PerformanceTrace.end("TimelineJumpToLatest", id: signpostID)
+            }
+            let latestItems = await environment.timeline.loadInitialTimeline(roomID: roomID, focusedEventID: nil)
+            await MainActor.run {
+                let nextItems = latestItems.isEmpty ? currentItems : latestItems
+                initialReadMarkerEventID = nil
+                hasPositionedInitialTimeline = true
+                state = .loaded(nextItems, isPaginating: false)
+                if let latest = nextItems.last {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        proxy.scrollTo(latest.eventID, anchor: .bottom)
+                    }
+                }
+                showJumpToLatest = false
             }
         }
     }

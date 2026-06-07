@@ -9,6 +9,8 @@ struct RoomListView: View {
     @State private var selectedSpaceID: String?
     @State private var isRoomManagementSheetPresented = ProcessInfo.processInfo.environment["SYNARA_UI_TEST_ROOM_MANAGEMENT_SHEET"] == "1"
     @State private var hasStartedInitialLoad = false
+    @State private var hasScheduledPostCacheRefresh = false
+    @State private var postCacheRefreshTask: Task<Void, Never>?
     @State private var isSearchPresented = ProcessInfo.processInfo.environment["SYNARA_UI_TEST_ROOM_SEARCH"] != nil
     @FocusState private var isSearchFocused: Bool
 
@@ -144,10 +146,17 @@ struct RoomListView: View {
             hasStartedInitialLoad = true
             loadRooms()
         }
+        .onDisappear {
+            postCacheRefreshTask?.cancel()
+        }
     }
 
-    private func loadRooms() {
-        state = .loading
+    private func loadRooms(showLoading: Bool = true, schedulePostCacheRefresh: Bool = true) {
+        if showLoading {
+            state = .loading
+        } else if case .idle = state {
+            state = .loading
+        }
         Task {
             let signpostID = PerformanceTrace.begin("RoomListLoad")
             defer {
@@ -157,6 +166,28 @@ struct RoomListView: View {
             await MainActor.run {
                 state = loadedState
                 autoOpenRoomIfRequested(from: loadedState)
+                if schedulePostCacheRefresh {
+                    scheduleRoomListRefreshAfterCachedLoad()
+                }
+            }
+        }
+    }
+
+    private func scheduleRoomListRefreshAfterCachedLoad() {
+        guard hasScheduledPostCacheRefresh == false,
+              case .loaded = state else {
+            return
+        }
+
+        hasScheduledPostCacheRefresh = true
+        postCacheRefreshTask?.cancel()
+        postCacheRefreshTask = Task {
+            try? await Task.sleep(nanoseconds: 1_800_000_000)
+            guard Task.isCancelled == false else {
+                return
+            }
+            await MainActor.run {
+                loadRooms(showLoading: false, schedulePostCacheRefresh: false)
             }
         }
     }
