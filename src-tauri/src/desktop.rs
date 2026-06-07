@@ -178,7 +178,8 @@ const DESKTOP_NOTIFICATION_MAX_BODY_CHARS: usize = 500;
 const DESKTOP_SESSION_MAX_BASE_URL_CHARS: usize = 2_048;
 const DESKTOP_SESSION_MAX_ID_CHARS: usize = 512;
 const DESKTOP_SESSION_MAX_TOKEN_CHARS: usize = 8_192;
-const DESKTOP_SESSION_CREDENTIAL_SERVICE: &str = "app.synara.desktop";
+const DESKTOP_SESSION_CREDENTIAL_SERVICE: &str = "com.whylandcreative.synara.desktop";
+const DESKTOP_SESSION_LEGACY_CREDENTIAL_SERVICE: &str = "app.synara.desktop";
 const DESKTOP_SESSION_CREDENTIAL_ACCOUNT: &str = "matrix-session";
 #[allow(dead_code)]
 const DESKTOP_SECRET_STORE_BACKEND_NONE: &str = "none";
@@ -395,11 +396,16 @@ struct KeyringDesktopSessionSecretStore;
 
 impl KeyringDesktopSessionSecretStore {
     fn session_entry(&self) -> Result<Entry, String> {
-        Entry::new(
-            DESKTOP_SESSION_CREDENTIAL_SERVICE,
-            DESKTOP_SESSION_CREDENTIAL_ACCOUNT,
-        )
-        .map_err(|error| map_keyring_error("create-entry", error))
+        self.session_entry_for_service(DESKTOP_SESSION_CREDENTIAL_SERVICE)
+    }
+
+    fn legacy_session_entry(&self) -> Result<Entry, String> {
+        self.session_entry_for_service(DESKTOP_SESSION_LEGACY_CREDENTIAL_SERVICE)
+    }
+
+    fn session_entry_for_service(&self, service: &str) -> Result<Entry, String> {
+        Entry::new(service, DESKTOP_SESSION_CREDENTIAL_ACCOUNT)
+            .map_err(|error| map_keyring_error("create-entry", error))
     }
 }
 
@@ -415,7 +421,17 @@ impl DesktopSessionSecretStore for KeyringDesktopSessionSecretStore {
 
         match self.session_entry()?.get_password() {
             Ok(secret) => Ok(Some(secret)),
-            Err(KeyringError::NoEntry) => Ok(None),
+            Err(KeyringError::NoEntry) => match self.legacy_session_entry()?.get_password() {
+                Ok(secret) => {
+                    self.session_entry()?
+                        .set_password(&secret)
+                        .map_err(|error| map_keyring_error("migrate-session", error))?;
+                    let _ = self.legacy_session_entry()?.delete_credential();
+                    Ok(Some(secret))
+                }
+                Err(KeyringError::NoEntry) => Ok(None),
+                Err(error) => Err(map_keyring_error("read-legacy-session", error)),
+            },
             Err(error) => Err(map_keyring_error("read-session", error)),
         }
     }
@@ -436,9 +452,15 @@ impl DesktopSessionSecretStore for KeyringDesktopSessionSecretStore {
             return Ok(false);
         }
 
+        let legacy_removed = match self.legacy_session_entry()?.delete_credential() {
+            Ok(()) => true,
+            Err(KeyringError::NoEntry) => false,
+            Err(error) => return Err(map_keyring_error("remove-legacy-session", error)),
+        };
+
         match self.session_entry()?.delete_credential() {
             Ok(()) => Ok(true),
-            Err(KeyringError::NoEntry) => Ok(false),
+            Err(KeyringError::NoEntry) => Ok(legacy_removed),
             Err(error) => Err(map_keyring_error("remove-session", error)),
         }
     }
@@ -1943,7 +1965,14 @@ mod tests {
 
     #[test]
     fn credential_store_names_are_stable_and_scoped() {
-        assert_eq!(DESKTOP_SESSION_CREDENTIAL_SERVICE, "app.synara.desktop");
+        assert_eq!(
+            DESKTOP_SESSION_CREDENTIAL_SERVICE,
+            "com.whylandcreative.synara.desktop"
+        );
+        assert_eq!(
+            DESKTOP_SESSION_LEGACY_CREDENTIAL_SERVICE,
+            "app.synara.desktop"
+        );
         assert_eq!(DESKTOP_SESSION_CREDENTIAL_ACCOUNT, "matrix-session");
     }
 

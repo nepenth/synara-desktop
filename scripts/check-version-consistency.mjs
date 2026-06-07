@@ -27,8 +27,15 @@ const cargoToml = readText("src-tauri/Cargo.toml");
 const cargoLock = readText("src-tauri/Cargo.lock");
 const runtimePackage = readJson("synara/package.json");
 const runtimePackageLock = readJson("synara/package-lock.json");
+const iosProject = readText("synara-ios/Synara.xcodeproj/project.pbxproj");
+const iosXcodeGenProject = readText("synara-ios/project.yml");
 
 const expectedVersion = tauriConfig.version;
+const iosBuildVersion = matchRequired(
+  "synara-ios/project.yml CURRENT_PROJECT_VERSION",
+  iosXcodeGenProject,
+  /CURRENT_PROJECT_VERSION:\s*"([^"]+)"/
+);
 const cargoVersion = matchRequired(
   "src-tauri/Cargo.toml package version",
   cargoToml,
@@ -72,5 +79,16 @@ assertEqual(
   expectedVersion
 );
 assertEqual("packaging/arch/PKGBUILD pkgver", archPkgver, expectedVersion.replaceAll("-", "_"));
+assertEqual(
+  "synara-ios/project.yml MARKETING_VERSION",
+  matchRequired("synara-ios/project.yml MARKETING_VERSION", iosXcodeGenProject, /MARKETING_VERSION:\s*"([^"]+)"/),
+  expectedVersion
+);
+for (const marketingVersion of iosProject.matchAll(/MARKETING_VERSION = ([^;]+);/g)) {
+  assertEqual("synara-ios/Synara.xcodeproj MARKETING_VERSION", marketingVersion[1], expectedVersion);
+}
+for (const buildVersion of iosProject.matchAll(/CURRENT_PROJECT_VERSION = ([^;]+);/g)) {
+  assertEqual("synara-ios/Synara.xcodeproj CURRENT_PROJECT_VERSION", buildVersion[1], iosBuildVersion);
+}
 
 console.log(`Version metadata is consistent at ${expectedVersion}.`);
