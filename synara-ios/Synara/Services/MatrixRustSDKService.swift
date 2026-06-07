@@ -696,39 +696,28 @@ final class MatrixRustSDKRoomListService: RoomListServicing {
     private func loadRooms(session: AuthenticatedSession, allowsStoreRepair: Bool) async -> RoomListState {
         do {
             let client = try await clientStore.ensureClient(for: session)
-            var didSyncFail = false
+            let cachedState = await roomListState(from: client)
+            if case .loaded(let rooms) = cachedState, rooms.isEmpty == false {
+                cachedRooms = rooms
+                Task {
+                    try? await self.clientStore.syncOnce(session: session, fullState: false)
+                }
+                return cachedState
+            }
+
             do {
                 try await clientStore.syncOnce(session: session, fullState: false)
             } catch {
-                didSyncFail = true
-            }
-            let spaceService = await client.spaceService()
-            let sdkRooms = client.rooms()
-            let shouldMapSpaces = sdkRooms.count <= 80
-            var rooms: [RoomSummary] = []
-            rooms.reserveCapacity(sdkRooms.count)
-            for room in sdkRooms {
-                if let summary = await Self.mapRoom(
-                    room,
-                    spaceService: shouldMapSpaces ? spaceService : nil
-                ) {
-                    rooms.append(summary)
-                }
-            }
-            let sorted = RoomListFixtures.sorted(rooms)
-            if sorted.isEmpty == false {
-                cachedRooms = sorted
-            }
-            if sorted.isEmpty {
                 if cachedRooms.isEmpty == false {
                     return .loaded(cachedRooms)
                 }
-                if didSyncFail, allowsStoreRepair {
+                if allowsStoreRepair {
                     return await repairStoreAndReloadRooms(session: session)
                 }
-                return didSyncFail ? .failed("Could not load rooms. Try again.") : .empty
+                return .failed("Could not load rooms. Try again.")
             }
-            return .loaded(sorted)
+
+            return await roomListState(from: client)
         } catch {
             if cachedRooms.isEmpty == false {
                 return .loaded(cachedRooms)
@@ -738,6 +727,33 @@ final class MatrixRustSDKRoomListService: RoomListServicing {
             }
             return .failed("Could not load rooms. Try again.")
         }
+    }
+
+    private func roomListState(from client: Client) async -> RoomListState {
+        let spaceService = await client.spaceService()
+        let sdkRooms = client.rooms()
+        let shouldMapSpaces = sdkRooms.count <= 80
+        var rooms: [RoomSummary] = []
+        rooms.reserveCapacity(sdkRooms.count)
+        for room in sdkRooms {
+            if let summary = await Self.mapRoom(
+                room,
+                spaceService: shouldMapSpaces ? spaceService : nil
+            ) {
+                rooms.append(summary)
+            }
+        }
+        let sorted = RoomListFixtures.sorted(rooms)
+        if sorted.isEmpty == false {
+            cachedRooms = sorted
+        }
+        if sorted.isEmpty {
+            if cachedRooms.isEmpty == false {
+                return .loaded(cachedRooms)
+            }
+            return .empty
+        }
+        return .loaded(sorted)
     }
 
     private func repairStoreAndReloadRooms(session: AuthenticatedSession) async -> RoomListState {
@@ -760,23 +776,132 @@ final class MatrixRustSDKRoomListService: RoomListServicing {
             return nil
         }
 
+        let roomInfo = try? await room.roomInfo()
+        let latestPreview = await latestPreview(for: room)
         let name = room.displayName() ?? room.canonicalAlias() ?? room.id()
-        let encryptedPreview = room.encryptionState() == .encrypted ? "Encrypted room" : "No recent messages"
+        let preview = latestPreview.text ?? defaultPreview(for: room, membership: membership)
         let parentSpaces = (try? await spaceService?.joinedParentsOfChild(childId: room.id()).map {
             SpaceSummary(id: $0.roomId, name: $0.displayName)
         }) ?? []
         return RoomSummary(
             id: room.id(),
             name: name,
-            lastMessagePreview: membership == .invited ? "Invited to room" : encryptedPreview,
-            unreadCount: membership == .invited ? 1 : 0,
-            hasHighlight: membership == .invited,
+            lastMessagePreview: preview,
+            unreadCount: membership == .invited ? 1 : Int(roomInfo?.numUnreadNotifications ?? 0),
+            hasHighlight: membership == .invited || (roomInfo?.numUnreadMentions ?? 0) > 0 || (roomInfo?.highlightCount ?? 0) > 0,
             kind: (await room.isDirect()) ? .directMessage : .room,
             membership: membership,
-            lastActivityAt: .distantPast,
+            lastActivityAt: latestPreview.timestamp ?? .distantPast,
             parentSpaces: parentSpaces
         )
     }
+
+    private static func defaultPreview(for room: Room, membership: RoomSummary.Membership) -> String {
+        if membership == .invited {
+            return "Invited to room"
+        }
+        if room.encryptionState() == .encrypted {
+            return "Encrypted room"
+        }
+        return "Tap to open room"
+    }
+
+    private static func latestPreview(for room: Room) async -> LatestRoomEventPreview {
+        switch await room.latestEvent() {
+        case .none:
+            return LatestRoomEventPreview(text: nil, timestamp: nil)
+        case .remote(let timestamp, let sender, let isOwn, _, let content):
+            return LatestRoomEventPreview(
+                text: previewText(content: content, sender: sender, isOwn: isOwn),
+                timestamp: Date(timeIntervalSince1970: TimeInterval(timestamp) / 1_000)
+            )
+        case .local(let timestamp, let sender, _, let content, _):
+            return LatestRoomEventPreview(
+                text: previewText(content: content, sender: sender, isOwn: true),
+                timestamp: Date(timeIntervalSince1970: TimeInterval(timestamp) / 1_000)
+            )
+        case .remoteInvite(let timestamp, let inviter, _):
+            let inviterName = inviter.map { senderDisplayName($0, isOwn: false) } ?? "Someone"
+            return LatestRoomEventPreview(
+                text: "\(inviterName) invited you",
+                timestamp: Date(timeIntervalSince1970: TimeInterval(timestamp) / 1_000)
+            )
+        }
+    }
+
+    private static func previewText(content: TimelineItemContent, sender: String, isOwn: Bool) -> String? {
+        let prefix = senderDisplayName(sender, isOwn: isOwn)
+        switch content {
+        case .msgLike(let content):
+            switch content.kind {
+            case .message(let message):
+                return "\(prefix): \(message.body)"
+            case .sticker(let body, _, _):
+                return "\(prefix): Sticker: \(body)"
+            case .poll(let question, _, _, _, _, _, _):
+                return "\(prefix): Poll: \(question)"
+            case .redacted:
+                return "\(prefix): Message deleted"
+            case .unableToDecrypt:
+                return "\(prefix): Encrypted message"
+            case .other:
+                return "\(prefix): Message"
+            case .liveLocation:
+                return "\(prefix): Live location"
+            }
+        case .roomMembership(let userID, let displayName, let change, _):
+            return membershipPreview(userID: userID, displayName: displayName, change: change)
+        case .profileChange:
+            return nil
+        case .state:
+            return nil
+        case .callInvite:
+            return "\(prefix): Call started"
+        case .rtcNotification:
+            return nil
+        case .failedToParseMessageLike(let eventType, _):
+            return eventType == "m.room.encrypted" ? "\(prefix): Encrypted message" : nil
+        case .failedToParseState:
+            return nil
+        }
+    }
+
+    private static func senderDisplayName(_ sender: String, isOwn: Bool) -> String {
+        if isOwn {
+            return "You"
+        }
+
+        let trimmed = sender.trimmingCharacters(in: CharacterSet(charactersIn: "@"))
+        guard let localpart = trimmed.split(separator: ":").first, localpart.isEmpty == false else {
+            return sender
+        }
+        return String(localpart.prefix(1)).uppercased() + localpart.dropFirst()
+    }
+
+    private static func membershipPreview(
+        userID: String,
+        displayName: String?,
+        change: MembershipChange?
+    ) -> String? {
+        let name = displayName ?? senderDisplayName(userID, isOwn: false)
+        switch change {
+        case .joined:
+            return "\(name) joined"
+        case .left, .kicked, .banned:
+            return "\(name) left"
+        case .invited:
+            return "\(name) was invited"
+        case nil:
+            return nil
+        default:
+            return nil
+        }
+    }
+}
+
+private struct LatestRoomEventPreview {
+    let text: String?
+    let timestamp: Date?
 }
 
 final class MatrixRustSDKRoomMembershipService: RoomMembershipServicing {
