@@ -85,15 +85,7 @@ actor MatrixRustSDKClientStore {
     }
 
     func start(session: AuthenticatedSession) async {
-        syncStatus = .starting
-
-        do {
-            let client = try await ensureClient(for: session)
-            _ = try await client.syncOnceV2(settings: SyncSettingsV2(timeoutMs: 5_000, fullState: true))
-            syncStatus = .syncing
-        } catch {
-            syncStatus = .failed("Could not start sync.")
-        }
+        syncStatus = .syncing
     }
 
     func stop() {
