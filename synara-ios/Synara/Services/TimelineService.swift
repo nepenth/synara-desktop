@@ -361,7 +361,14 @@ struct RawTimelineEvent: Equatable {
 
 protocol TimelineServicing {
     func loadInitialTimeline(roomID: String) async -> [TimelineItem]
+    func loadInitialTimeline(roomID: String, focusedEventID: String?) async -> [TimelineItem]
     func loadOlderTimeline(roomID: String, before eventID: String) async -> [TimelineItem]
+}
+
+extension TimelineServicing {
+    func loadInitialTimeline(roomID: String, focusedEventID: String?) async -> [TimelineItem] {
+        await loadInitialTimeline(roomID: roomID)
+    }
 }
 
 enum TimelineMapper {

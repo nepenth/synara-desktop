@@ -834,14 +834,23 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
     }
 
     func loadInitialTimeline(roomID: String) async -> [TimelineItem] {
-        await loadTimeline(roomID: roomID, pageSize: 20, enrichProfiles: false)
+        await loadInitialTimeline(roomID: roomID, focusedEventID: nil)
+    }
+
+    func loadInitialTimeline(roomID: String, focusedEventID: String?) async -> [TimelineItem] {
+        await loadTimeline(roomID: roomID, focusedEventID: focusedEventID, pageSize: 20, enrichProfiles: false)
     }
 
     func loadOlderTimeline(roomID: String, before eventID: String) async -> [TimelineItem] {
-        await loadTimeline(roomID: roomID, pageSize: 50, enrichProfiles: true)
+        await loadTimeline(roomID: roomID, focusedEventID: nil, pageSize: 50, enrichProfiles: true)
     }
 
-    private func loadTimeline(roomID: String, pageSize: UInt16, enrichProfiles: Bool) async -> [TimelineItem] {
+    private func loadTimeline(
+        roomID: String,
+        focusedEventID: String?,
+        pageSize: UInt16,
+        enrichProfiles: Bool
+    ) async -> [TimelineItem] {
         guard case .signedIn(let session) = sessionStore.currentState else {
             return []
         }
@@ -858,13 +867,34 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
                 room = syncedRoom
             }
 
-            let timeline = try await room.timeline()
+            let timeline: Timeline
+            if let focusedEventID, focusedEventID.isEmpty == false {
+                timeline = try await room.timelineWithConfiguration(
+                    configuration: TimelineConfiguration(
+                        focus: .event(
+                            eventId: focusedEventID,
+                            numContextEvents: pageSize,
+                            threadMode: .automatic(hideThreadedEvents: true)
+                        ),
+                        filter: .all,
+                        internalIdPrefix: nil,
+                        dateDividerMode: .daily,
+                        trackReadReceipts: .disabled,
+                        reportUtds: true
+                    )
+                )
+            } else {
+                timeline = try await room.timeline()
+            }
             let collector = MatrixRustSDKTimelineCollector()
             let handle = await timeline.addListener(listener: collector)
             defer { handle.cancel() }
 
             _ = try await timeline.paginateBackwards(numEvents: pageSize)
-            let items = await collector.waitForItems(timeoutNanoseconds: 1_500_000_000)
+            if focusedEventID != nil {
+                _ = try? await timeline.paginateForwards(numEvents: pageSize)
+            }
+            let items = await collector.waitForItems(timeoutNanoseconds: 750_000_000)
             let sdkItems = items.compactMap(Self.mapTimelineItem)
                 .sorted { $0.timestamp < $1.timestamp }
             guard sdkItems.isEmpty == false else {
