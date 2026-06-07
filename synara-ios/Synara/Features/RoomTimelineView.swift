@@ -24,6 +24,7 @@ struct RoomTimelineView: View {
     @State private var isRoomDetailsPresented = false
     @State private var lastRenderedTimelineCount = 0
     @State private var showJumpToLatest = false
+    @State private var hasPositionedInitialTimeline = false
     @Environment(\.openURL) private var openURL
     @Environment(\.dismiss) private var dismiss
 
@@ -219,15 +220,33 @@ struct RoomTimelineView: View {
                 }
                 .onAppear {
                     lastRenderedTimelineCount = items.count
+                    scrollToInitialPosition(items: items, proxy: proxy)
                     scrollToAnchoredEvent(items: items, proxy: proxy)
                 }
                 .onChange(of: state) { currentState in
                     guard case .loaded(let updatedItems, _) = currentState else {
                         return
                     }
+                    scrollToInitialPosition(items: updatedItems, proxy: proxy)
                     scrollToLatestMessageIfNeeded(items: updatedItems, proxy: proxy)
                     scrollToAnchoredEvent(items: updatedItems, proxy: proxy)
                 }
+            }
+        }
+    }
+
+    private func scrollToInitialPosition(items: [TimelineItem], proxy: ScrollViewProxy) {
+        guard hasPositionedInitialTimeline == false,
+              focusedEventID == nil,
+              let latest = items.last else {
+            return
+        }
+
+        hasPositionedInitialTimeline = true
+        Task {
+            await MainActor.run {
+                proxy.scrollTo(latest.eventID, anchor: .bottom)
+                showJumpToLatest = false
             }
         }
     }
@@ -270,7 +289,7 @@ struct RoomTimelineView: View {
         Task {
             await MainActor.run {
                 withAnimation {
-                    proxy.scrollTo(latest.id, anchor: .bottom)
+                    proxy.scrollTo(latest.eventID, anchor: .bottom)
                 }
             }
         }
@@ -340,6 +359,7 @@ struct RoomTimelineView: View {
     private func loadTimeline() async {
         state = .loading
         showJumpToLatest = false
+        hasPositionedInitialTimeline = false
         let signpostID = PerformanceTrace.begin("TimelineInitialLoad")
         defer {
             PerformanceTrace.end("TimelineInitialLoad", id: signpostID)
@@ -499,6 +519,9 @@ struct RoomTimelineView: View {
                 let existingIDs = Set(items.map(\.id))
                 let uniqueOlder = older.filter { existingIDs.contains($0.id) == false }
                 state = .loaded(uniqueOlder + items, isPaginating: false)
+                if uniqueOlder.isEmpty == false {
+                    showJumpToLatest = true
+                }
             }
         }
     }

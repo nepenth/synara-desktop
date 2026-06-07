@@ -842,22 +842,28 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
     }
 
     func loadInitialTimeline(roomID: String) async -> [TimelineItem] {
-        await loadTimeline(roomID: roomID, pageSize: 30)
+        await loadTimeline(roomID: roomID, pageSize: 20, enrichProfiles: false)
     }
 
     func loadOlderTimeline(roomID: String, before eventID: String) async -> [TimelineItem] {
-        await loadTimeline(roomID: roomID, pageSize: 50)
+        await loadTimeline(roomID: roomID, pageSize: 50, enrichProfiles: true)
     }
 
-    private func loadTimeline(roomID: String, pageSize: UInt16) async -> [TimelineItem] {
+    private func loadTimeline(roomID: String, pageSize: UInt16, enrichProfiles: Bool) async -> [TimelineItem] {
         guard case .signedIn(let session) = sessionStore.currentState else {
             return []
         }
 
         do {
-            try await clientStore.syncOnce(session: session, fullState: false)
-            guard let room = try await clientStore.room(roomID: roomID, session: session) else {
-                return []
+            let room: Room
+            if let restoredRoom = try await clientStore.room(roomID: roomID, session: session) {
+                room = restoredRoom
+            } else {
+                try await clientStore.syncOnce(session: session, fullState: false)
+                guard let syncedRoom = try await clientStore.room(roomID: roomID, session: session) else {
+                    return []
+                }
+                room = syncedRoom
             }
 
             let timeline = try await room.timeline()
@@ -869,8 +875,12 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
             let items = await collector.waitForItems(timeoutNanoseconds: 1_500_000_000)
             let sdkItems = items.compactMap(Self.mapTimelineItem)
                 .sorted { $0.timestamp < $1.timestamp }
-            let enrichedSDKItems = await enrichWithProfiles(sdkItems, session: session)
-            let rawAgentItems = await rawAgentFallbackItems(roomID: roomID)
+            guard sdkItems.isEmpty == false else {
+                try? await clientStore.syncOnce(session: session, fullState: false)
+                return await rawAgentFallbackItems(roomID: roomID)
+            }
+            let enrichedSDKItems = enrichProfiles ? await enrichWithProfiles(sdkItems, session: session) : sdkItems
+            let rawAgentItems = enrichProfiles ? await rawAgentFallbackItems(roomID: roomID) : []
             return Self.mergedTimelineItems(sdkItems: enrichedSDKItems, rawAgentItems: rawAgentItems)
         } catch {
             return await rawAgentFallbackItems(roomID: roomID)
