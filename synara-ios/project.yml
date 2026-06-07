@@ -1,6 +1,6 @@
 name: Synara
 options:
-  bundleIdPrefix: app.synara
+  bundleIdPrefix: com.whylandcreative.synara
   deploymentTarget:
     iOS: "16.0"
   developmentLanguage: en
@@ -9,8 +9,8 @@ settings:
     SWIFT_VERSION: "5.0"
     IPHONEOS_DEPLOYMENT_TARGET: "16.0"
     CODE_SIGN_STYLE: Automatic
-    MARKETING_VERSION: "1.1.0"
-    CURRENT_PROJECT_VERSION: "1.1.0"
+    MARKETING_VERSION: "1.1.1"
+    CURRENT_PROJECT_VERSION: "1.1.2"
 packages:
   MatrixRustComponentsSwift:
     url: https://github.com/matrix-org/matrix-rust-components-swift.git
@@ -31,16 +31,35 @@ targets:
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         CFBundleURLTypes:
-          - CFBundleURLName: app.synara.ios
+          - CFBundleURLName: com.whylandcreative.synara
             CFBundleURLSchemes:
               - synara
         UILaunchScreen: {}
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: true
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: app.synara.ios
+        CODE_SIGN_ENTITLEMENTS: Synara/Resources/Synara.entitlements
+        DEVELOPMENT_TEAM: ABC123DEFG
+        PRODUCT_BUNDLE_IDENTIFIER: com.whylandcreative.synara
         PRODUCT_NAME: Synara
+      configs:
+        Debug:
+          APS_ENVIRONMENT: development
+        Release:
+          APS_ENVIRONMENT: production
+          CODE_SIGN_IDENTITY: Apple Distribution
+          CODE_SIGN_STYLE: Manual
+          PROVISIONING_PROFILE_SPECIFIER: Synara Matrix App Store
   SynaraTests:
     type: bundle.unit-test
     platform: iOS
@@ -50,7 +69,7 @@ targets:
       - target: Synara
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: app.synara.ios.tests
+        PRODUCT_BUNDLE_IDENTIFIER: com.whylandcreative.synara.tests
         CODE_SIGNING_ALLOWED: "NO"
   SynaraUITests:
     type: bundle.ui-testing
@@ -61,7 +80,7 @@ targets:
       - target: Synara
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: app.synara.ios.uitests
+        PRODUCT_BUNDLE_IDENTIFIER: com.whylandcreative.synara.uitests
         CODE_SIGNING_ALLOWED: "NO"
 schemes:
   Synara:

@@ -113,6 +113,7 @@
 		A7A9908B77A7CB8F4A4CC55A /* ComposerService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerService.swift; sourceTree = "<group>"; };
 		A856EC4E030E1E38C04CBE4B /* EventActionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventActionService.swift; sourceTree = "<group>"; };
 		AA155782137A4B5F84513EE1 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		B10EE99838CAB266CBA8416E /* Synara.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Synara.entitlements; sourceTree = "<group>"; };
 		B2E4F1A7ADF247942C6D0059 /* SynaraApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SynaraApp.swift; sourceTree = "<group>"; };
 		B3ECC92EE34CCE4DB57A5D3E /* MediaService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaService.swift; sourceTree = "<group>"; };
 		B41D9817A0F821E67BCD9C00 /* HomeserverDiscovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeserverDiscovery.swift; sourceTree = "<group>"; };
@@ -226,6 +227,7 @@
 			children = (
 				C3035383FA98B774B4F47C39 /* Assets.xcassets */,
 				184EF5364268AFF19F35E66B /* PrivacyInfo.xcprivacy */,
+				B10EE99838CAB266CBA8416E /* Synara.entitlements */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
@@ -362,7 +364,7 @@
 						TestTargetID = 27BCF2E7659C77D3DD3882F0;
 					};
 					27BCF2E7659C77D3DD3882F0 = {
-						ProvisioningStyle = Automatic;
+						DevelopmentTeam = ABC123DEFG;
 					};
 					791D9AB64B4DDAF50B6FEC96 = {
 						ProvisioningStyle = Automatic;
@@ -495,15 +497,20 @@
 		033D5B261A177B40A21FB108 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				APS_ENVIRONMENT = production;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_ENTITLEMENTS = Synara/Resources/Synara.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Distribution";
+				CODE_SIGN_STYLE = Manual;
+				DEVELOPMENT_TEAM = ABC123DEFG;
 				INFOPLIST_FILE = Synara/App/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = app.synara.ios;
+				PRODUCT_BUNDLE_IDENTIFIER = com.whylandcreative.synara;
 				PRODUCT_NAME = Synara;
+				PROVISIONING_PROFILE_SPECIFIER = "Synara Matrix App Store";
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -512,14 +519,17 @@
 		11AC2BB48C76997CD4552253 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				APS_ENVIRONMENT = development;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Synara/Resources/Synara.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				DEVELOPMENT_TEAM = ABC123DEFG;
 				INFOPLIST_FILE = Synara/App/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = app.synara.ios;
+				PRODUCT_BUNDLE_IDENTIFIER = com.whylandcreative.synara;
 				PRODUCT_NAME = Synara;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -536,7 +546,7 @@
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = app.synara.ios.uitests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.whylandcreative.synara.uitests;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_TARGET_NAME = Synara;
@@ -578,7 +588,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 1.1.0;
+				CURRENT_PROJECT_VERSION = 1.1.2;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
@@ -597,7 +607,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
-				MARKETING_VERSION = 1.1.0;
+				MARKETING_VERSION = 1.1.1;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -619,7 +629,7 @@
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = app.synara.ios.tests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.whylandcreative.synara.tests;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Synara.app/Synara";
@@ -661,7 +671,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 1.1.0;
+				CURRENT_PROJECT_VERSION = 1.1.2;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -674,7 +684,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
-				MARKETING_VERSION = 1.1.0;
+				MARKETING_VERSION = 1.1.1;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -695,7 +705,7 @@
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = app.synara.ios.tests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.whylandcreative.synara.tests;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Synara.app/Synara";
@@ -712,7 +722,7 @@
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = app.synara.ios.uitests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.whylandcreative.synara.uitests;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_TARGET_NAME = Synara;

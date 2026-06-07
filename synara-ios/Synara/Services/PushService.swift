@@ -31,7 +31,7 @@ final class MatrixPusherService: MatrixPusherServicing {
     }
 
     init(
-        appID: String = "app.synara.ios",
+        appID: String = "com.whylandcreative.synara",
         gatewayURL: URL? = nil,
         logger: LoggingServicing = AppLogger(),
         session: URLSession = .shared

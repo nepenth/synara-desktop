@@ -105,6 +105,57 @@ final class TimelineServiceTests: XCTestCase {
         XCTAssertFalse(markdown.contains("script"))
     }
 
+    func testMatrixTimelineMapsSenderProfileAvatarURL() async throws {
+        let client = MockTimelineHTTPClient(
+            responses: [
+                .success(
+                    statusCode: 200,
+                    body: """
+                    {
+                      "chunk": [
+                        {
+                          "event_id": "$second",
+                          "sender": "@alice:matrix.org",
+                          "origin_server_ts": 2000,
+                          "type": "m.room.message",
+                          "content": { "msgtype": "m.text", "body": "second" }
+                        },
+                        {
+                          "event_id": "$first",
+                          "sender": "@alice:matrix.org",
+                          "origin_server_ts": 1000,
+                          "type": "m.room.message",
+                          "content": { "msgtype": "m.text", "body": "first" }
+                        }
+                      ]
+                    }
+                    """
+                )
+            ],
+            profileResponsesByUserID: [
+                "@alice:matrix.org": .success(
+                    statusCode: 200,
+                    body: #"{"displayname":"Alice","avatar_url":"mxc://matrix.org/alice-avatar"}"#
+                )
+            ]
+        )
+        let service = MatrixTimelineService(
+            sessionStore: AppSessionStore(currentState: .signedIn(try makeSession())),
+            httpClient: client
+        )
+
+        let items = await service.loadInitialTimeline(roomID: "!room:matrix.org")
+
+        XCTAssertEqual(items.map(\.senderAvatarURL?.absoluteString), [
+            "mxc://matrix.org/alice-avatar",
+            "mxc://matrix.org/alice-avatar"
+        ])
+        XCTAssertEqual(
+            client.requests.filter { $0.url?.path.contains("/_matrix/client/v3/profile/") == true }.count,
+            1
+        )
+    }
+
     func testMatrixHTMLSanitizerDropsUnsafeLinksAndKeepsFallback() {
         let markdown = MatrixHTMLRenderer.sanitizedMarkdown(
             body: "fallback",
@@ -161,7 +212,7 @@ final class TimelineServiceTests: XCTestCase {
 
         XCTAssertEqual(older.map(\.eventID), ["$old"])
         XCTAssertEqual(
-            client.requests.last?.url?.absoluteString,
+            client.requests.last(where: { $0.url?.path.contains("/_matrix/client/v3/rooms/") == true })?.url?.absoluteString,
             "https://matrix.org/_matrix/client/v3/rooms/!room:matrix.org/messages?dir=b&limit=50&from=page-token"
         )
     }
@@ -516,8 +567,11 @@ final class TimelineServiceTests: XCTestCase {
         let initial = await service.loadInitialTimeline(roomID: "!room:matrix.org")
         let older = await service.loadOlderTimeline(roomID: "!room:matrix.org", before: initial[0].eventID)
 
-        XCTAssertEqual(initial.count, 4)
-        XCTAssertEqual(older.count, 3)
+        XCTAssertEqual(initial.count, 6)
+        XCTAssertEqual(older.count, 5)
+        XCTAssertEqual(initial[0].senderID, "@mina:matrix.org")
+        XCTAssertEqual(initial[0].reactions["👍"], 3)
+        XCTAssertEqual(initial[4].replyToEventID, "$security:!project:matrix.org")
     }
 
     func testLargeTimelineFixtureHasStableIdentity() {
@@ -684,20 +738,33 @@ private final class MockTimelineHTTPClient: AuthHTTPClient {
     }
 
     private var responses: [Response]
+    private var profileResponsesByUserID: [String: Response]
     private(set) var requests: [URLRequest] = []
 
-    init(responses: [Response] = []) {
+    init(responses: [Response] = [], profileResponsesByUserID: [String: Response] = [:]) {
         self.responses = responses
+        self.profileResponsesByUserID = profileResponsesByUserID
     }
 
     func data(for request: URLRequest) async throws -> (Data, URLResponse) {
         requests.append(request)
 
+        if request.url?.path.contains("/_matrix/client/v3/profile/") == true {
+            let userID = request.url?.lastPathComponent.removingPercentEncoding ?? ""
+            return try resolve(
+                profileResponsesByUserID[userID] ?? .success(statusCode: 404, body: "{}"),
+                request: request
+            )
+        }
+
         guard responses.isEmpty == false else {
             throw LoginError.networkFailure
         }
 
-        let response = responses.removeFirst()
+        return try resolve(responses.removeFirst(), request: request)
+    }
+
+    private func resolve(_ response: Response, request: URLRequest) throws -> (Data, URLResponse) {
         switch response {
         case .success(let statusCode, let body):
             let url = try XCTUnwrap(request.url)

@@ -209,7 +209,7 @@ final class PushServiceTests: XCTestCase {
 
         let body = try XCTUnwrap(RecordingURLProtocol.capturedBody)
         let payload = try JSONSerialization.jsonObject(with: body) as? [String: Any]
-        XCTAssertEqual(payload?["app_id"] as? String, "app.synara.ios")
+        XCTAssertEqual(payload?["app_id"] as? String, "com.whylandcreative.synara")
         XCTAssertEqual(payload?["pushkey"] as? String, "7ab13c")
 
         let data = try XCTUnwrap(payload?["data"] as? [String: Any])
