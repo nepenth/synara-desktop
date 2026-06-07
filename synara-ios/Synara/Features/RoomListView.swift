@@ -143,12 +143,11 @@ struct RoomListView: View {
                 return
             }
             hasStartedInitialLoad = true
-            loadRooms()
-            startRoomUpdates()
+            loadRooms(startUpdatesAfterLoad: true)
         }
         .onAppear {
             if hasStartedInitialLoad {
-                startRoomUpdates()
+                startRoomUpdatesIfReady(for: state)
             }
         }
         .onDisappear {
@@ -156,7 +155,7 @@ struct RoomListView: View {
         }
     }
 
-    private func loadRooms(showLoading: Bool = true) {
+    private func loadRooms(showLoading: Bool = true, startUpdatesAfterLoad: Bool = false) {
         if showLoading {
             state = .loading
         } else if case .idle = state {
@@ -171,7 +170,19 @@ struct RoomListView: View {
             await MainActor.run {
                 state = loadedState
                 autoOpenRoomIfRequested(from: loadedState)
+                if startUpdatesAfterLoad {
+                    startRoomUpdatesIfReady(for: loadedState)
+                }
             }
+        }
+    }
+
+    private func startRoomUpdatesIfReady(for state: RoomListState) {
+        switch state {
+        case .loaded, .empty:
+            startRoomUpdates()
+        case .idle, .loading, .failed:
+            break
         }
     }
 

@@ -90,7 +90,8 @@ actor MatrixRustSDKClientStore {
 
     func start(session: AuthenticatedSession) async {
         do {
-            _ = try await startSyncService(session: session)
+            _ = try await ensureClient(for: session)
+            syncStatus = .syncing
         } catch {
             syncStatus = .failed("Could not start sync.")
         }
@@ -924,10 +925,15 @@ final class MatrixRustSDKRoomListService: RoomListServicing {
             let cachedState = await roomListState(from: client)
             if case .loaded(let rooms) = cachedState, rooms.isEmpty == false {
                 cachedRooms = rooms
-                Task {
-                    try? await self.clientStore.syncOnce(session: session, fullState: false)
+                do {
+                    try await clientStore.syncOnceForInteractiveOpen(session: session)
+                } catch {
+                    if allowsStoreRepair {
+                        return await repairStoreAndReloadRooms(session: session)
+                    }
+                    return cachedState
                 }
-                return cachedState
+                return await roomListState(from: client)
             }
 
             do {
