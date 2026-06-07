@@ -20,7 +20,7 @@ protocol LoggingServicing: Sendable {
 struct AppLogger: LoggingServicing {
     private let subsystem: String
 
-    init(subsystem: String = "app.synara.ios") {
+    init(subsystem: String = "com.whylandcreative.synara") {
         self.subsystem = subsystem
     }
 
