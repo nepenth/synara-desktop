@@ -27,6 +27,28 @@ SYNARA_IOS_ARCHIVE_ROOT=/tmp \
 synara-ios/scripts/upload-testflight-internal.sh
 ```
 
+For unattended App Store Connect authentication, create an API key in App Store
+Connect and store the `.p8` outside this repository, for example:
+
+```sh
+mkdir -p ~/.private_keys/appstoreconnect
+chmod 700 ~/.private_keys ~/.private_keys/appstoreconnect
+mv ~/Downloads/AuthKey_ABC123DEFG.p8 ~/.private_keys/appstoreconnect/
+chmod 600 ~/.private_keys/appstoreconnect/AuthKey_ABC123DEFG.p8
+```
+
+Then run:
+
+```sh
+SYNARA_ASC_KEY_PATH="$HOME/.private_keys/appstoreconnect/AuthKey_ABC123DEFG.p8" \
+SYNARA_ASC_KEY_ID="ABC123DEFG" \
+SYNARA_ASC_ISSUER_ID="00000000-0000-0000-0000-000000000000" \
+synara-ios/scripts/upload-testflight-internal.sh
+```
+
+Do not commit `.p8` files. The repo ignores `AuthKey_*.p8` and `*.p8` as a
+defense-in-depth measure.
+
 The script disables Xcode-managed build-number mutation so App Store Connect uses
 the build number committed in `Synara.xcodeproj` and `project.yml`.
 
