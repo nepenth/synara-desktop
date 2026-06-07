@@ -65,6 +65,7 @@ type CustomEditorProps = {
   before?: ReactNode;
   after?: ReactNode;
   maxHeight?: string;
+  spellCheck?: boolean;
   editor: Editor;
   placeholder?: string;
   onKeyDown?: KeyboardEventHandler;
@@ -81,6 +82,7 @@ export const CustomEditor = forwardRef<HTMLDivElement, CustomEditorProps>(
       before,
       after,
       maxHeight = '50vh',
+      spellCheck = true,
       editor,
       placeholder,
       onKeyDown,
@@ -146,6 +148,7 @@ export const CustomEditor = forwardRef<HTMLDivElement, CustomEditorProps>(
                   renderPlaceholder={renderPlaceholder}
                   renderElement={renderElement}
                   renderLeaf={renderLeaf}
+                  spellCheck={spellCheck}
                   onKeyDown={handleKeydown}
                   onKeyUp={onKeyUp}
                   onPaste={onPaste}

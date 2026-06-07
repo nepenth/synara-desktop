@@ -37,6 +37,7 @@ import { PasswordInput } from '../../../components/password-input';
 import { FieldError } from '../FiledError';
 import { getResetPasswordPath } from '../../pathUtils';
 import { stopPropagation } from '../../../utils/keyboard';
+import { synaraDeviceDisplayName } from '../../../utils/user-agent';
 
 function UsernameHint({ server }: { server: string }) {
   const [anchor, setAnchor] = useState<RectCords>();
@@ -133,7 +134,7 @@ export function PasswordLoginForm({ defaultUsername, defaultEmail }: PasswordLog
         user: username,
       },
       password,
-      initial_device_display_name: 'Synara Web',
+      initial_device_display_name: synaraDeviceDisplayName(),
     });
   };
 
@@ -151,7 +152,7 @@ export function PasswordLoginForm({ defaultUsername, defaultEmail }: PasswordLog
         user: mxIdUsername,
       },
       password,
-      initial_device_display_name: 'Synara Web',
+      initial_device_display_name: synaraDeviceDisplayName(),
     });
   };
   const handleEmailLogin = (email: string, password: string) => {
@@ -163,7 +164,7 @@ export function PasswordLoginForm({ defaultUsername, defaultEmail }: PasswordLog
         address: email,
       },
       password,
-      initial_device_display_name: 'Synara Web',
+      initial_device_display_name: synaraDeviceDisplayName(),
     });
   };
 
