@@ -66,6 +66,17 @@ final class SynaraUITests: XCTestCase {
         XCTAssertTrue(app.buttons["RoomRow-!agent-workflows:matrix.org"].exists)
     }
 
+    func testRoomHeaderAccountMenuShowsSettingsAndLogout() {
+        let app = launchSignedInRoomsApp()
+
+        XCTAssertTrue(app.collectionViews["RoomList"].waitForExistence(timeout: 5))
+        tap(app.buttons["RoomHeaderAccountMenuButton"])
+
+        XCTAssertTrue(app.collectionViews["AccountMenuSheet"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["AccountMenuSettingsButton"].exists)
+        XCTAssertTrue(app.buttons["AccountMenuLogoutButton"].exists)
+    }
+
     func testRoomManagementCreatesPrivateEncryptedRoom() {
         let app = launchRoomManagementSheetApp()
 
@@ -215,6 +226,18 @@ final class SynaraUITests: XCTestCase {
         tap(app.buttons["AttachmentOption-Photo or Video"])
 
         XCTAssertTrue(app.buttons["MediaPlaceholder-synara-upload.jpg"].waitForExistence(timeout: 5))
+    }
+
+    func testUnavailableAttachmentOptionShowsHonestState() {
+        let app = launchRoomApp()
+
+        tap(app.buttons["AttachmentButton"])
+        XCTAssertTrue(app.otherElements["AttachmentOptionsSheet"].waitForExistence(timeout: 5))
+        tap(app.buttons["AttachmentOption-File"])
+
+        let alert = app.alerts["Attachment Unavailable"]
+        XCTAssertTrue(alert.waitForExistence(timeout: 5))
+        XCTAssertTrue(alert.staticTexts["File attachments are not available in this build yet."].exists)
     }
 
     func testThreadViewOpensAndRepliesFromTimeline() {
@@ -638,8 +661,9 @@ final class SynaraUITests: XCTestCase {
         }
 
         let app = launchRoomApp()
-        XCTAssertTrue(app.buttons["1 reply"].waitForExistence(timeout: 5))
-        tap(app.buttons["1 reply"])
+        let threadButton = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", "repl")).firstMatch
+        XCTAssertTrue(threadButton.waitForExistence(timeout: 5))
+        tap(threadButton)
         XCTAssertTrue(app.staticTexts["ThreadTimelineTitle"].waitForExistence(timeout: 5))
         try saveScreenshot(app: app, directory: screenshotDirectory, name: "05-mock-thread")
 
@@ -648,6 +672,22 @@ final class SynaraUITests: XCTestCase {
         composer.tap()
         composer.typeText("Thread validation draft")
         try saveScreenshot(app: app, directory: screenshotDirectory, name: "06-mock-thread-typing")
+    }
+
+    func testMockAgentVisualScreenshotWhenConfigured() throws {
+        let environment = ProcessInfo.processInfo.environment
+        guard liveEnvironmentValue("SYNARA_MOCK_AGENT_VISUAL_SMOKE", in: environment) == "1" else {
+            throw XCTSkip("Set SYNARA_MOCK_AGENT_VISUAL_SMOKE=1 for agent visual smoke screenshots.")
+        }
+        guard let screenshotDirectory = liveEnvironmentValue("SYNARA_SCREENSHOT_DIR", in: environment) else {
+            throw XCTSkip("Agent visual smoke needs screenshot directory.")
+        }
+
+        let app = launchAgentCardRoomApp()
+        XCTAssertTrue(app.staticTexts["Deploy to Production"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["AgentCardAction-approve-deploy"].exists)
+        XCTAssertTrue(app.buttons["AgentCardAction-reject-deploy"].exists)
+        try saveScreenshot(app: app, directory: screenshotDirectory, name: "07-mock-agent-approval")
     }
 
     func testMockRoomsVisualScreenshotsWhenConfigured() throws {

@@ -2,7 +2,7 @@ import Foundation
 import OSLog
 
 enum PerformanceTrace {
-    private static let log = OSLog(subsystem: "app.synara.ios", category: "performance")
+    private static let log = OSLog(subsystem: "com.whylandcreative.synara", category: "performance")
 
     @discardableResult
     static func begin(_ name: StaticString) -> OSSignpostID {

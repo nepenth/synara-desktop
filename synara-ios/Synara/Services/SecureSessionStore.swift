@@ -42,7 +42,7 @@ private struct SecureSessionEnvelope: Codable {
 }
 
 final class KeychainSecureSessionStore: SecureSessionStoring {
-    private let service = "app.synara.ios.session"
+    private let service = "com.whylandcreative.synara.session"
     private let account = "current"
 
     func save(_ session: AuthenticatedSession) throws {

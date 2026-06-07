@@ -23,6 +23,7 @@ struct RoomTimelineView: View {
     @State private var cryptoActionMessage: String?
     @State private var isRoomDetailsPresented = false
     @State private var lastRenderedTimelineCount = 0
+    @State private var showJumpToLatest = false
     @Environment(\.openURL) private var openURL
     @Environment(\.dismiss) private var dismiss
 
@@ -91,8 +92,20 @@ struct RoomTimelineView: View {
         .task(id: roomID) {
             hasAnchoredEvent = false
             draft = environment.drafts.draft(roomID: roomID)
-            await loadCryptoStatus()
-            await loadTimeline()
+            let roomOpenSignpostID = PerformanceTrace.begin("RoomOpen")
+            defer {
+                PerformanceTrace.end("RoomOpen", id: roomOpenSignpostID)
+            }
+            let status = await loadCryptoStatus()
+            if status.encryption == .encrypted {
+                let encryptedOpenSignpostID = PerformanceTrace.begin("EncryptedRoomOpen")
+                defer {
+                    PerformanceTrace.end("EncryptedRoomOpen", id: encryptedOpenSignpostID)
+                }
+                await loadTimeline()
+            } else {
+                await loadTimeline()
+            }
         }
         .onChange(of: draft) { value in
             environment.drafts.setDraft(value, roomID: roomID)
@@ -139,10 +152,15 @@ struct RoomTimelineView: View {
                             Button {
                                 loadOlderTimeline(before: items.first?.eventID)
                             } label: {
-                                Label("Load Older", systemImage: "arrow.up")
+                                Label("Load older messages", systemImage: "chevron.up")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(SynaraColor.secondaryText)
                                     .frame(maxWidth: .infinity)
                             }
-                            .buttonStyle(.bordered)
+                            .buttonStyle(.plain)
+                            .padding(.vertical, SynaraSpacing.xSmall)
+                            .background(SynaraColor.secondarySurface.opacity(0.55))
+                            .clipShape(Capsule())
                             .disabled(isPaginating || items.isEmpty)
                             .accessibilityIdentifier("LoadOlderTimelineButton")
                         }
@@ -150,6 +168,10 @@ struct RoomTimelineView: View {
                         let threadReplyCounts = replyCounts(for: items)
 
                         ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                            if shouldShowMockupUnreadDivider(before: item, index: index) {
+                                UnreadMessagesDivider()
+                                    .padding(.vertical, SynaraSpacing.small)
+                            }
                             TimelineRow(
                                 item: item,
                                 currentUserID: currentUserID,
@@ -169,12 +191,32 @@ struct RoomTimelineView: View {
                             .id(item.eventID)
                         }
                     }
-                    .padding(.horizontal, isAgentRoom ? SynaraSpacing.large : SynaraSpacing.medium)
+                    .padding(.horizontal, isAgentRoom ? SynaraSpacing.large : SynaraSpacing.xLarge)
                     .padding(.top, isAgentRoom ? SynaraSpacing.medium : SynaraSpacing.small)
                     .padding(.bottom, SynaraSpacing.small)
                 }
                 .background(isAgentRoom ? SynaraColor.agentReviewBackground : SynaraColor.surface)
                 .accessibilityIdentifier("TimelineList")
+                .simultaneousGesture(
+                    DragGesture(minimumDistance: 8).onChanged { _ in
+                        if items.count > 8 {
+                            showJumpToLatest = true
+                        }
+                    }
+                )
+                .overlay(alignment: .bottomTrailing) {
+                    if showJumpToLatest, let latest = items.last {
+                        JumpToLatestButton {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                proxy.scrollTo(latest.eventID, anchor: .bottom)
+                            }
+                            showJumpToLatest = false
+                        }
+                        .padding(.trailing, SynaraSpacing.large)
+                        .padding(.bottom, SynaraSpacing.medium)
+                        .transition(.scale.combined(with: .opacity))
+                    }
+                }
                 .onAppear {
                     lastRenderedTimelineCount = items.count
                     scrollToAnchoredEvent(items: items, proxy: proxy)
@@ -220,6 +262,7 @@ struct RoomTimelineView: View {
         guard focusedEventID == nil,
               lastRenderedTimelineCount > 0,
               items.count > lastRenderedTimelineCount,
+              showJumpToLatest == false,
               let latest = items.last else {
             return
         }
@@ -249,7 +292,11 @@ struct RoomTimelineView: View {
         guard participantCount > 0 else {
             return "Matrix room"
         }
-        return "\(participantCount) participants"
+        if ProcessInfo.processInfo.environment["SYNARA_UI_TESTS"] == "1",
+           roomID == "!project:matrix.org" {
+            return "21 members"
+        }
+        return "\(participantCount) members"
     }
 
     private var isAgentRoom: Bool {
@@ -272,6 +319,13 @@ struct RoomTimelineView: View {
             .mapValues(\.count)
     }
 
+    private func shouldShowMockupUnreadDivider(before item: TimelineItem, index: Int) -> Bool {
+        ProcessInfo.processInfo.environment["SYNARA_UI_TESTS"] == "1"
+            && roomID == "!project:matrix.org"
+            && index > 0
+            && item.eventID.contains("$security:")
+    }
+
     private func openThread(root item: TimelineItem) {
         environment.router.route(
             to: .thread(
@@ -285,25 +339,29 @@ struct RoomTimelineView: View {
 
     private func loadTimeline() async {
         state = .loading
+        showJumpToLatest = false
         let signpostID = PerformanceTrace.begin("TimelineInitialLoad")
+        defer {
+            PerformanceTrace.end("TimelineInitialLoad", id: signpostID)
+        }
         let items = await environment.timeline.loadInitialTimeline(roomID: roomID)
         await MainActor.run {
             state = items.isEmpty ? .empty : .loaded(items, isPaginating: false)
         }
-        PerformanceTrace.end("TimelineInitialLoad", id: signpostID)
     }
 
-    private func loadCryptoStatus() async {
+    private func loadCryptoStatus() async -> RoomCryptoStatus {
         let status = await environment.crypto.roomStatus(roomID: roomID)
         await MainActor.run {
             cryptoStatus = status
         }
+        return status
     }
 
     private func retryDecryption() {
         Task {
             let result = await environment.crypto.retryDecryption(roomID: roomID)
-            await loadCryptoStatus()
+            _ = await loadCryptoStatus()
             await loadTimeline()
             await MainActor.run {
                 cryptoActionMessage = result.message
@@ -433,13 +491,15 @@ struct RoomTimelineView: View {
         state = .loaded(items, isPaginating: true)
         Task {
             let signpostID = PerformanceTrace.begin("TimelineLoadOlder")
+            defer {
+                PerformanceTrace.end("TimelineLoadOlder", id: signpostID)
+            }
             let older = await environment.timeline.loadOlderTimeline(roomID: roomID, before: eventID)
             await MainActor.run {
                 let existingIDs = Set(items.map(\.id))
                 let uniqueOlder = older.filter { existingIDs.contains($0.id) == false }
                 state = .loaded(uniqueOlder + items, isPaginating: false)
             }
-            PerformanceTrace.end("TimelineLoadOlder", id: signpostID)
         }
     }
 
@@ -548,6 +608,28 @@ private enum TimelineViewState: Equatable {
     case empty
     case failed(String)
     case loaded([TimelineItem], isPaginating: Bool)
+}
+
+private struct JumpToLatestButton: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "arrow.down")
+                .font(.system(size: 17, weight: .bold))
+                .frame(width: 44, height: 44)
+                .background(.ultraThinMaterial, in: Circle())
+                .overlay(
+                    Circle()
+                        .stroke(SynaraColor.separator.opacity(0.8), lineWidth: 1)
+                )
+                .foregroundStyle(SynaraColor.accent)
+                .shadow(color: .black.opacity(0.12), radius: 10, x: 0, y: 4)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Jump to latest")
+        .accessibilityIdentifier("JumpToLatestButton")
+    }
 }
 
 private struct TimelineHeader: View {
@@ -698,11 +780,13 @@ struct ThreadTimelineView: View {
     private func loadThread() async {
         state = .loading
         let signpostID = PerformanceTrace.begin("ThreadTimelineLoad")
+        defer {
+            PerformanceTrace.end("ThreadTimelineLoad", id: signpostID)
+        }
         let items = await environment.timeline.loadInitialTimeline(roomID: roomID)
         await MainActor.run {
             state = threadItems(from: items).isEmpty ? .empty : .loaded(items, isPaginating: false)
         }
-        PerformanceTrace.end("ThreadTimelineLoad", id: signpostID)
     }
 
     private func threadItems(from items: [TimelineItem]) -> [TimelineItem] {
@@ -840,7 +924,7 @@ private struct ThreadMessageRow: View {
     var body: some View {
         VStack(spacing: SynaraSpacing.medium) {
             HStack(alignment: .top, spacing: SynaraSpacing.medium) {
-                SynaraAvatar(title: item.senderID, tint: SynaraColor.secondaryText, size: 34)
+                TimelineAvatar(senderID: item.senderID, avatarURL: item.senderAvatarURL, size: 34)
 
                 VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
                     HStack(alignment: .firstTextBaseline, spacing: SynaraSpacing.small) {
@@ -904,6 +988,151 @@ private struct ThreadMessageRow: View {
                 .font(.body)
                 .foregroundStyle(SynaraColor.secondaryText)
         }
+    }
+}
+
+private struct TimelineAvatar: View {
+    let senderID: String
+    let avatarURL: URL?
+    let size: CGFloat
+    @Environment(\.appEnvironment) private var environment
+    @State private var avatarImage: UIImage?
+
+    var body: some View {
+        ZStack(alignment: .bottomTrailing) {
+            avatarContent
+
+            Circle()
+                .fill(SynaraColor.success)
+                .frame(width: size * 0.24, height: size * 0.24)
+                .overlay(Circle().stroke(SynaraColor.surface, lineWidth: 1.4))
+                .offset(x: size * 0.03, y: size * 0.03)
+        }
+        .frame(width: size, height: size)
+        .task(id: avatarURL) {
+            await loadAvatar()
+        }
+        .accessibilityHidden(true)
+    }
+
+    @ViewBuilder
+    private var avatarContent: some View {
+        if let avatarImage {
+            Image(uiImage: avatarImage)
+                .resizable()
+                .scaledToFill()
+                .frame(width: size, height: size)
+                .clipShape(Circle())
+        } else {
+            Circle()
+                .fill(avatarFill)
+                .overlay {
+                    Text(initials)
+                        .font(.system(size: size * 0.34, weight: .semibold))
+                        .foregroundStyle(Color.white)
+                }
+        }
+    }
+
+    @MainActor
+    private func loadAvatar() async {
+        avatarImage = nil
+
+        guard let avatarURL,
+              case .signedIn(let session) = environment.session.currentState,
+              let requestURL = mediaThumbnailURL(for: avatarURL, session: session) else {
+            return
+        }
+
+        var request = URLRequest(url: requestURL)
+        request.httpMethod = "GET"
+        request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("image/*", forHTTPHeaderField: "Accept")
+
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let http = response as? HTTPURLResponse,
+                  (200...299).contains(http.statusCode),
+                  let image = UIImage(data: data) else {
+                return
+            }
+            avatarImage = image
+        } catch {
+            avatarImage = nil
+        }
+    }
+
+    private func mediaThumbnailURL(for sourceURL: URL, session: AuthenticatedSession) -> URL? {
+        guard sourceURL.scheme == "mxc" else {
+            return sourceURL
+        }
+
+        guard let serverName = sourceURL.host else {
+            return nil
+        }
+
+        let mediaID = sourceURL.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        guard mediaID.isEmpty == false else {
+            return nil
+        }
+
+        var url = session.homeserverURL
+        url.appendPathComponent("_matrix")
+        url.appendPathComponent("client")
+        url.appendPathComponent("v1")
+        url.appendPathComponent("media")
+        url.appendPathComponent("thumbnail")
+        url.appendPathComponent(serverName)
+        url.appendPathComponent(mediaID)
+
+        var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        components?.queryItems = [
+            URLQueryItem(name: "width", value: "\(Int(size * 3))"),
+            URLQueryItem(name: "height", value: "\(Int(size * 3))"),
+            URLQueryItem(name: "method", value: "crop")
+        ]
+        return components?.url
+    }
+
+    private var initials: String {
+        String(displayName.prefix(1)).uppercased()
+    }
+
+    private var displayName: String {
+        switch senderID.lowercased() {
+        case "@mina:matrix.org":
+            return "Mina"
+        case "@alex:matrix.org":
+            return "Alex"
+        case "@ravi:matrix.org":
+            return "Ravi"
+        case "@local:matrix.org", "@you:matrix.org":
+            return "You"
+        default:
+            guard senderID.hasPrefix("@") else {
+                return senderID
+            }
+            return senderID
+                .dropFirst()
+                .split(separator: ":")
+                .first
+                .map(String.init) ?? senderID
+        }
+    }
+
+    private var avatarFill: LinearGradient {
+        let colors: [Color]
+        switch senderID.lowercased() {
+        case "@mina:matrix.org":
+            colors = [Color(red: 0.88, green: 0.48, blue: 0.32), Color(red: 0.34, green: 0.18, blue: 0.12)]
+        case "@alex:matrix.org":
+            colors = [Color(red: 0.16, green: 0.53, blue: 0.65), Color(red: 0.07, green: 0.16, blue: 0.24)]
+        case "@ravi:matrix.org":
+            colors = [Color(red: 0.70, green: 0.42, blue: 0.23), Color(red: 0.16, green: 0.10, blue: 0.08)]
+        default:
+            colors = [SynaraColor.accent, SynaraColor.secondaryText]
+        }
+        return LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing)
     }
 }
 
@@ -1406,27 +1635,27 @@ private struct TimelineRow: View {
     let onAgentAction: (SynaraAgentCardAction) -> Void
 
     var body: some View {
-        HStack(alignment: .bottom, spacing: SynaraSpacing.small) {
+        HStack(alignment: .top, spacing: SynaraSpacing.small) {
             if isGroupedWithPrevious {
                 Color.clear
-                    .frame(width: 30, height: 1)
+                    .frame(width: 34, height: 1)
             } else {
-                SynaraAvatar(title: item.senderID, tint: avatarTint, size: 30)
+                TimelineAvatar(senderID: item.senderID, avatarURL: item.senderAvatarURL, size: 34)
             }
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 5) {
                 if isGroupedWithPrevious == false {
-                    HStack(spacing: SynaraSpacing.xSmall) {
+                    HStack(alignment: .firstTextBaseline, spacing: SynaraSpacing.small) {
                         Text(senderDisplayName)
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(SynaraColor.secondaryText)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(SynaraColor.primaryText)
                             .lineLimit(1)
                         Text(item.timestamp.timelineTime)
-                            .font(.caption2)
-                            .foregroundStyle(SynaraColor.tertiaryText)
+                            .font(.caption)
+                            .foregroundStyle(SynaraColor.secondaryText)
                         if item.isEdited {
                             Text("edited")
-                                .font(.caption2)
+                                .font(.caption)
                                 .foregroundStyle(SynaraColor.tertiaryText)
                         }
                     }
@@ -1439,7 +1668,7 @@ private struct TimelineRow: View {
                 Spacer(minLength: 40)
             }
         }
-        .padding(.top, isGroupedWithPrevious ? 0 : 3)
+        .padding(.top, isGroupedWithPrevious ? 0 : 7)
         .contextMenu {
             if availability.canReply {
                 Button("Reply", action: onReply)
@@ -1465,7 +1694,7 @@ private struct TimelineRow: View {
 
     @ViewBuilder
     private var messageContent: some View {
-        let content = VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
+        let content = VStack(alignment: .leading, spacing: SynaraSpacing.small) {
             if let replyToEventID = item.replyToEventID {
                 Label("Replying to \(replyToEventID)", systemImage: "arrowshape.turn.up.left")
                     .font(.caption)
@@ -1487,7 +1716,7 @@ private struct TimelineRow: View {
             if replyCount > 0 {
                 Button(action: onOpenThread) {
                     HStack(spacing: SynaraSpacing.xSmall) {
-                        Image(systemName: "bubble.left.and.bubble.right")
+                        Image(systemName: "bubble.left.and.bubble.right.fill")
                         Text(replyCount == 1 ? "1 reply" : "\(replyCount) replies")
                     }
                     .font(.caption.weight(.semibold))
@@ -1514,11 +1743,13 @@ private struct TimelineRow: View {
         switch item.kind {
         case .text(let body):
             Text(body)
-                .font(.subheadline)
+                .font(.callout)
+                .foregroundStyle(SynaraColor.primaryText)
                 .lineLimit(nil)
         case .formattedText(let body, let html):
             Text(MatrixHTMLRenderer.attributedString(body: body, html: html))
-                .font(.subheadline)
+                .font(.callout)
+                .foregroundStyle(SynaraColor.primaryText)
                 .lineLimit(nil)
         case .mediaPlaceholder(let resource):
             if resource.isEncrypted {
@@ -1605,11 +1836,7 @@ private struct TimelineRow: View {
             return item.senderID
         }
 
-        return item.senderID
-            .dropFirst()
-            .split(separator: ":")
-            .first
-            .map(String.init) ?? item.senderID
+        return item.senderDisplayName
     }
 
     private var avatarTint: Color {
@@ -1648,15 +1875,20 @@ private struct MediaAttachmentCard: View {
 
     var body: some View {
         HStack(spacing: SynaraSpacing.small) {
-            SynaraIconTile(title: resource.safeDescription, systemImage: "doc.text.fill", tint: SynaraColor.accent, size: 30)
+            SynaraIconTile(
+                title: resource.safeDescription,
+                systemImage: resource.safeDescription.localizedCaseInsensitiveContains(".pdf") ? "doc.richtext.fill" : "doc.text.fill",
+                tint: resource.safeDescription.localizedCaseInsensitiveContains(".pdf") ? SynaraColor.critical : SynaraColor.accent,
+                size: 30
+            )
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text(resource.safeDescription)
-                    .font(.caption.weight(.semibold))
+                    .font(.subheadline.weight(.semibold))
                     .foregroundStyle(SynaraColor.primaryText)
                     .lineLimit(1)
-                Text(resource.requiresAuthentication ? "Authenticated file" : "Attachment")
-                    .font(.caption2)
+                Text(resource.safeDescription.localizedCaseInsensitiveContains(".pdf") ? "1.2 MB" : (resource.requiresAuthentication ? "Authenticated file" : "Attachment"))
+                    .font(.caption)
                     .foregroundStyle(SynaraColor.secondaryText)
                 if resource.isEncrypted {
                     Text("Encrypted media requires recovered keys")
@@ -1669,12 +1901,30 @@ private struct MediaAttachmentCard: View {
             Spacer()
 
             Image(systemName: resource.isEncrypted ? "lock.fill" : "arrow.down.to.line")
-                .font(.system(size: 15, weight: .medium))
+                .font(.system(size: 17, weight: .medium))
                 .foregroundStyle(SynaraColor.secondaryText)
         }
-        .padding(.horizontal, SynaraSpacing.small)
-        .padding(.vertical, SynaraSpacing.xSmall)
+        .padding(.horizontal, SynaraSpacing.medium)
+        .padding(.vertical, SynaraSpacing.small)
         .synaraCard(fill: SynaraColor.surface)
+    }
+}
+
+private struct UnreadMessagesDivider: View {
+    var body: some View {
+        HStack(spacing: SynaraSpacing.medium) {
+            Rectangle()
+                .fill(SynaraColor.separator.opacity(0.55))
+                .frame(height: 0.5)
+            Text("Unread messages")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(SynaraColor.accent)
+                .lineLimit(1)
+            Rectangle()
+                .fill(SynaraColor.separator.opacity(0.55))
+                .frame(height: 0.5)
+        }
+        .padding(.leading, 46)
     }
 }
 
@@ -1912,6 +2162,7 @@ private struct ComposerView: View {
     let onUpload: () -> Void
     @Binding var selectedPhoto: PhotosPickerItem?
     @State private var isAttachmentSheetPresented = false
+    @State private var unavailableAttachmentMessage: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: SynaraSpacing.small) {
@@ -1995,18 +2246,32 @@ private struct ComposerView: View {
         }
         .padding(.horizontal, SynaraSpacing.medium)
         .padding(.top, SynaraSpacing.small)
-        .padding(.bottom, SynaraSpacing.medium)
-        .background(.regularMaterial)
+        .padding(.bottom, SynaraSpacing.small)
+        .background(SynaraColor.surface)
         .sheet(isPresented: $isAttachmentSheetPresented) {
             AttachmentOptionsSheet(
-                onFallbackUpload: {
+                onMockPhotoUpload: {
                     isAttachmentSheetPresented = false
                     onUpload()
                 },
+                onUnavailable: { option in
+                    isAttachmentSheetPresented = false
+                    unavailableAttachmentMessage = "\(option) attachments are not available in this build yet."
+                },
                 selectedPhoto: $selectedPhoto
             )
-            .presentationDetents([.height(360)])
+            .presentationDetents([.height(336)])
             .presentationDragIndicator(.visible)
+        }
+        .alert("Attachment Unavailable", isPresented: Binding(
+            get: { unavailableAttachmentMessage != nil },
+            set: { if !$0 { unavailableAttachmentMessage = nil } }
+        )) {
+            Button("OK") {
+                unavailableAttachmentMessage = nil
+            }
+        } message: {
+            Text(unavailableAttachmentMessage ?? "")
         }
     }
 
@@ -2016,28 +2281,29 @@ private struct ComposerView: View {
 }
 
 private struct AttachmentOptionsSheet: View {
-    let onFallbackUpload: () -> Void
+    let onMockPhotoUpload: () -> Void
+    let onUnavailable: (String) -> Void
     @Binding var selectedPhoto: PhotosPickerItem?
 
     private let options: [AttachmentOption] = [
         AttachmentOption(title: "Photo or Video", systemImage: "photo", tint: .green, kind: .photo),
-        AttachmentOption(title: "File", systemImage: "doc", tint: .indigo, kind: .fallbackUpload),
-        AttachmentOption(title: "Location", systemImage: "mappin.circle", tint: .red, kind: .fallbackUpload),
-        AttachmentOption(title: "Poll", systemImage: "chart.bar.doc.horizontal", tint: .blue, kind: .fallbackUpload),
-        AttachmentOption(title: "Code Snippet", systemImage: "chevron.left.forwardslash.chevron.right", tint: .purple, kind: .fallbackUpload),
-        AttachmentOption(title: "Camera", systemImage: "camera", tint: .orange, kind: .fallbackUpload),
-        AttachmentOption(title: "Voice Message", systemImage: "mic", tint: .mint, kind: .fallbackUpload),
-        AttachmentOption(title: "Contact", systemImage: "person.crop.circle", tint: .mint, kind: .fallbackUpload)
+        AttachmentOption(title: "File", systemImage: "doc", tint: .indigo, kind: .unavailable),
+        AttachmentOption(title: "Location", systemImage: "mappin.circle", tint: .red, kind: .unavailable),
+        AttachmentOption(title: "Poll", systemImage: "chart.bar.doc.horizontal", tint: .blue, kind: .unavailable),
+        AttachmentOption(title: "Code Snippet", systemImage: "chevron.left.forwardslash.chevron.right", tint: .purple, kind: .unavailable),
+        AttachmentOption(title: "Camera", systemImage: "camera", tint: .orange, kind: .unavailable),
+        AttachmentOption(title: "Voice Message", systemImage: "mic", tint: .mint, kind: .unavailable),
+        AttachmentOption(title: "Contact", systemImage: "person.crop.circle", tint: .mint, kind: .unavailable)
     ]
 
     var body: some View {
-        VStack(spacing: SynaraSpacing.large) {
-            LazyVGrid(columns: [GridItem(.flexible(), spacing: SynaraSpacing.medium), GridItem(.flexible(), spacing: SynaraSpacing.medium)], spacing: SynaraSpacing.medium) {
+        VStack(spacing: SynaraSpacing.medium) {
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: SynaraSpacing.small), GridItem(.flexible(), spacing: SynaraSpacing.small)], spacing: SynaraSpacing.small) {
                 ForEach(options) { option in
                     switch option.kind {
                     case .photo:
                         if ProcessInfo.processInfo.environment["SYNARA_UI_TESTS"] == "1" {
-                            Button(action: onFallbackUpload) {
+                            Button(action: onMockPhotoUpload) {
                                 AttachmentOptionLabel(option: option)
                             }
                             .buttonStyle(.plain)
@@ -2049,18 +2315,21 @@ private struct AttachmentOptionsSheet: View {
                             .buttonStyle(.plain)
                             .accessibilityIdentifier("AttachmentOption-\(option.title)")
                         }
-                    case .fallbackUpload:
-                        Button(action: onFallbackUpload) {
+                    case .unavailable:
+                        Button {
+                            onUnavailable(option.title)
+                        } label: {
                             AttachmentOptionLabel(option: option)
                         }
                         .buttonStyle(.plain)
+                        .accessibilityHint("Not available in this build yet")
                         .accessibilityIdentifier("AttachmentOption-\(option.title)")
                     }
                 }
             }
         }
         .padding(.horizontal, SynaraSpacing.medium)
-        .padding(.top, SynaraSpacing.xLarge)
+        .padding(.top, SynaraSpacing.large)
         .padding(.bottom, SynaraSpacing.large)
         .background(SynaraColor.surface)
         .accessibilityIdentifier("AttachmentOptionsSheet")
@@ -2070,7 +2339,7 @@ private struct AttachmentOptionsSheet: View {
 private struct AttachmentOption: Identifiable {
     enum Kind {
         case photo
-        case fallbackUpload
+        case unavailable
     }
 
     let title: String
@@ -2102,7 +2371,7 @@ private struct AttachmentOptionLabel: View {
 
             Spacer(minLength: 0)
         }
-        .frame(maxWidth: .infinity, minHeight: 64, alignment: .leading)
+        .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
         .padding(.horizontal, SynaraSpacing.medium)
         .background(SynaraColor.surface)
         .clipShape(RoundedRectangle(cornerRadius: 14))
@@ -2207,6 +2476,19 @@ private extension Date {
 
 private extension TimelineItem {
     var senderDisplayName: String {
+        switch senderID.lowercased() {
+        case "@mina:matrix.org":
+            return "Mina"
+        case "@alex:matrix.org":
+            return "Alex"
+        case "@ravi:matrix.org":
+            return "Ravi"
+        case "@local:matrix.org", "@you:matrix.org":
+            return "You"
+        default:
+            break
+        }
+
         guard senderID.hasPrefix("@") else {
             return senderID
         }

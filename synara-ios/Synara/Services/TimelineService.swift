@@ -14,6 +14,7 @@ struct TimelineItem: Identifiable, Equatable {
     let id: String
     let eventID: String
     let senderID: String
+    let senderAvatarURL: URL?
     let timestamp: Date
     let kind: Kind
     let replyToEventID: String?
@@ -25,6 +26,7 @@ struct TimelineItem: Identifiable, Equatable {
         id: String,
         eventID: String,
         senderID: String,
+        senderAvatarURL: URL? = nil,
         timestamp: Date,
         kind: Kind,
         replyToEventID: String?,
@@ -35,6 +37,7 @@ struct TimelineItem: Identifiable, Equatable {
         self.id = id
         self.eventID = eventID
         self.senderID = senderID
+        self.senderAvatarURL = senderAvatarURL
         self.timestamp = timestamp
         self.kind = kind
         self.replyToEventID = replyToEventID
@@ -313,6 +316,7 @@ enum SynaraAgentCardPayloadParser {
 struct RawTimelineEvent: Equatable {
     let eventID: String
     let senderID: String
+    let senderAvatarURL: URL?
     let timestamp: Date
     let type: String
     let body: String?
@@ -322,10 +326,12 @@ struct RawTimelineEvent: Equatable {
     let mediaURL: URL?
     let isEncrypted: Bool
     let agentCard: SynaraAgentCard?
+    let reactions: [String: Int]
 
     init(
         eventID: String,
         senderID: String,
+        senderAvatarURL: URL? = nil,
         timestamp: Date,
         type: String,
         body: String?,
@@ -334,10 +340,12 @@ struct RawTimelineEvent: Equatable {
         isEdited: Bool,
         mediaURL: URL?,
         isEncrypted: Bool = false,
-        agentCard: SynaraAgentCard? = nil
+        agentCard: SynaraAgentCard? = nil,
+        reactions: [String: Int] = [:]
     ) {
         self.eventID = eventID
         self.senderID = senderID
+        self.senderAvatarURL = senderAvatarURL
         self.timestamp = timestamp
         self.type = type
         self.body = body
@@ -347,6 +355,7 @@ struct RawTimelineEvent: Equatable {
         self.mediaURL = mediaURL
         self.isEncrypted = isEncrypted
         self.agentCard = agentCard
+        self.reactions = reactions
     }
 }
 
@@ -392,11 +401,12 @@ enum TimelineMapper {
             id: event.eventID,
             eventID: event.eventID,
             senderID: event.senderID,
+            senderAvatarURL: event.senderAvatarURL,
             timestamp: event.timestamp,
             kind: kind,
             replyToEventID: event.replyToEventID,
             isEdited: event.isEdited,
-            reactions: [:],
+            reactions: event.reactions,
             isEncrypted: event.type == "m.room.encrypted" || event.isEncrypted
         )
     }
@@ -409,41 +419,64 @@ enum TimelineFixtures {
         [
             RawTimelineEvent(
                 eventID: "$text:\(roomID)",
-                senderID: "@alice:matrix.org",
+                senderID: "@mina:matrix.org",
                 timestamp: baseDate,
                 type: "m.room.message",
-                body: "Here's the latest spec for the new permissions model. Hello from iOS",
+                body: "Here's the latest spec for the new permissions model.",
                 replyToEventID: nil,
                 isEdited: false,
-                mediaURL: nil
-            ),
-            RawTimelineEvent(
-                eventID: "$reply:\(roomID)",
-                senderID: "@bob:matrix.org",
-                timestamp: baseDate.addingTimeInterval(30),
-                type: "m.room.message",
-                body: "Thanks. A couple of questions inline.",
-                replyToEventID: "$text:\(roomID)",
-                isEdited: true,
-                mediaURL: nil
+                mediaURL: nil,
+                reactions: ["👍": 3, "👏": 2]
             ),
             RawTimelineEvent(
                 eventID: "$media:\(roomID)",
-                senderID: "@alice:matrix.org",
-                timestamp: baseDate.addingTimeInterval(45),
+                senderID: "@mina:matrix.org",
+                timestamp: baseDate.addingTimeInterval(8),
                 type: "m.room.media",
-                body: "permissions-v2.pdf",
+                body: "permissions-spec.pdf",
                 replyToEventID: nil,
                 isEdited: false,
                 mediaURL: URL(string: "mxc://matrix.org/media-id")
             ),
             RawTimelineEvent(
-                eventID: "$security:\(roomID)",
-                senderID: "@ravi:matrix.org",
+                eventID: "$alex:\(roomID)",
+                senderID: "@alex:matrix.org",
                 timestamp: baseDate.addingTimeInterval(60),
                 type: "m.room.message",
-                body: "From a security perspective this looks good.",
+                body: "Thanks! I'll take a look and drop feedback.",
                 replyToEventID: nil,
+                isEdited: false,
+                mediaURL: nil
+            ),
+            RawTimelineEvent(
+                eventID: "$security:\(roomID)",
+                senderID: "@ravi:matrix.org",
+                timestamp: baseDate.addingTimeInterval(300),
+                type: "m.room.message",
+                body: "We should also update the role matrix while we're at it.",
+                replyToEventID: nil,
+                isEdited: false,
+                mediaURL: nil,
+                reactions: ["👍": 2]
+            ),
+            RawTimelineEvent(
+                eventID: "$thread-reply:\(roomID)",
+                senderID: "@mina:matrix.org",
+                timestamp: baseDate.addingTimeInterval(360),
+                type: "m.room.message",
+                body: "+1 — I'll update the doc and share a draft.",
+                replyToEventID: "$security:\(roomID)",
+                isEdited: false,
+                mediaURL: nil,
+                reactions: ["👍": 1]
+            ),
+            RawTimelineEvent(
+                eventID: "$alex-thread:\(roomID)",
+                senderID: "@alex:matrix.org",
+                timestamp: baseDate.addingTimeInterval(365),
+                type: "m.room.message",
+                body: "Can I take a pass on the reviewer roles?",
+                replyToEventID: "$security:\(roomID)",
                 isEdited: false,
                 mediaURL: nil
             )
@@ -550,6 +583,7 @@ final class MatrixTimelineService: TimelineServicing {
     private let httpClient: AuthHTTPClient
     private let jsonDecoder: JSONDecoder
     private var paginationTokensByRoom: [String: String] = [:]
+    private var profileCacheByUserID: [String: MatrixProfileResponse?] = [:]
 
     init(
         sessionStore: AppSessionStore,
@@ -589,13 +623,91 @@ final class MatrixTimelineService: TimelineServicing {
             if let end = messages.end {
                 paginationTokensByRoom[roomID] = end
             }
-            return messages.chunk
+            let rawEvents = messages.chunk
                 .reversed()
                 .compactMap(mapEvent)
+
+            let enrichedEvents = await enrichWithProfiles(rawEvents, session: session)
+            return enrichedEvents
                 .map(TimelineMapper.map)
         } catch {
             return []
         }
+    }
+
+    private func enrichWithProfiles(
+        _ events: [RawTimelineEvent],
+        session: AuthenticatedSession
+    ) async -> [RawTimelineEvent] {
+        var profilesByUserID: [String: MatrixProfileResponse?] = [:]
+
+        for senderID in Set(events.map(\.senderID)) {
+            profilesByUserID[senderID] = await profile(for: senderID, session: session)
+        }
+
+        return events.map { event in
+            guard let profile = profilesByUserID[event.senderID] ?? nil,
+                  let avatarURL = profile.avatarURL.flatMap(URL.init(string:)) else {
+                return event
+            }
+
+            return RawTimelineEvent(
+                eventID: event.eventID,
+                senderID: event.senderID,
+                senderAvatarURL: avatarURL,
+                timestamp: event.timestamp,
+                type: event.type,
+                body: event.body,
+                formattedBody: event.formattedBody,
+                replyToEventID: event.replyToEventID,
+                isEdited: event.isEdited,
+                mediaURL: event.mediaURL,
+                isEncrypted: event.isEncrypted,
+                agentCard: event.agentCard,
+                reactions: event.reactions
+            )
+        }
+    }
+
+    private func profile(for userID: String, session: AuthenticatedSession) async -> MatrixProfileResponse? {
+        if let cached = profileCacheByUserID[userID] {
+            return cached
+        }
+
+        guard let url = profileURL(homeserverURL: session.homeserverURL, userID: userID) else {
+            profileCacheByUserID[userID] = nil
+            return nil
+        }
+
+        do {
+            var request = URLRequest(url: url)
+            request.httpMethod = "GET"
+            request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
+
+            let (data, response) = try await httpClient.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse,
+                  httpResponse.statusCode == 200 else {
+                profileCacheByUserID[userID] = nil
+                return nil
+            }
+
+            let profile = try jsonDecoder.decode(MatrixProfileResponse.self, from: data)
+            profileCacheByUserID[userID] = profile
+            return profile
+        } catch {
+            profileCacheByUserID[userID] = nil
+            return nil
+        }
+    }
+
+    private func profileURL(homeserverURL: URL, userID: String) -> URL? {
+        var url = homeserverURL
+        url.appendPathComponent("_matrix")
+        url.appendPathComponent("client")
+        url.appendPathComponent("v3")
+        url.appendPathComponent("profile")
+        url.appendPathComponent(userID)
+        return url
     }
 
     private func messagesURL(homeserverURL: URL, roomID: String, from: String?) -> URL {
@@ -697,6 +809,16 @@ final class MatrixTimelineService: TimelineServicing {
 private struct MatrixMessagesResponse: Decodable {
     let chunk: [MatrixTimelineEvent]
     let end: String?
+}
+
+private struct MatrixProfileResponse: Decodable {
+    let displayName: String?
+    let avatarURL: String?
+
+    enum CodingKeys: String, CodingKey {
+        case displayName = "displayname"
+        case avatarURL = "avatar_url"
+    }
 }
 
 private struct MatrixTimelineEvent: Decodable {

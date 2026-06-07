@@ -25,6 +25,7 @@ private final class SynaraUnableToDecryptRecorder: UnableToDecryptDelegate, @unc
 }
 
 actor MatrixRustSDKClientStore {
+    private static let platformDeviceDisplayName = "Synara iOS"
     private var client: Client?
     private var activeSession: AuthenticatedSession?
     private var syncStatus: MatrixSyncStatus = .stopped
@@ -74,6 +75,7 @@ actor MatrixRustSDKClientStore {
             )
             self.client = client
             self.activeSession = session
+            await ensurePlatformDeviceDisplayName(session: session)
             self.syncStatus = .syncing
             return session
         } catch {
@@ -389,10 +391,38 @@ actor MatrixRustSDKClientStore {
         try await installUnableToDecryptDelegate(on: client)
         try await client.restoreSession(session: session.sdkSession)
         await client.encryption().waitForE2eeInitializationTasks()
+        await ensurePlatformDeviceDisplayName(session: session)
 
         self.client = client
         self.activeSession = session
         return client
+    }
+
+    private func ensurePlatformDeviceDisplayName(session: AuthenticatedSession) async {
+        guard session.accessToken.isEmpty == false,
+              session.deviceID.isEmpty == false else {
+            return
+        }
+
+        var url = session.homeserverURL
+        url.appendPathComponent("_matrix")
+        url.appendPathComponent("client")
+        url.appendPathComponent("v3")
+        url.appendPathComponent("devices")
+        url.appendPathComponent(session.deviceID)
+
+        do {
+            var request = URLRequest(url: url)
+            request.httpMethod = "PUT"
+            request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.httpBody = try JSONSerialization.data(withJSONObject: [
+                "display_name": Self.platformDeviceDisplayName
+            ])
+            _ = try await URLSession.shared.data(for: request)
+        } catch {
+            // Device naming should not block login, restore, or room loading.
+        }
     }
 
     private func installUnableToDecryptDelegate(on client: Client) async throws {
@@ -637,6 +667,7 @@ struct MatrixRustSDKAuthService: AuthServicing {
 final class MatrixRustSDKRoomListService: RoomListServicing {
     private let sessionStore: AppSessionStore
     private let clientStore: MatrixRustSDKClientStore
+    private var cachedRooms: [RoomSummary] = []
 
     init(sessionStore: AppSessionStore, clientStore: MatrixRustSDKClientStore) {
         self.sessionStore = sessionStore
@@ -649,23 +680,48 @@ final class MatrixRustSDKRoomListService: RoomListServicing {
         }
 
         do {
-            try await clientStore.syncOnce(session: session, fullState: true)
             let client = try await clientStore.ensureClient(for: session)
+            var didSyncFail = false
+            do {
+                try await clientStore.syncOnce(session: session, fullState: false)
+            } catch {
+                didSyncFail = true
+            }
             let spaceService = await client.spaceService()
+            let sdkRooms = client.rooms()
+            let shouldMapSpaces = sdkRooms.count <= 80
             var rooms: [RoomSummary] = []
-            for room in client.rooms() {
-                if let summary = await Self.mapRoom(room, spaceService: spaceService) {
+            rooms.reserveCapacity(sdkRooms.count)
+            for room in sdkRooms {
+                if let summary = await Self.mapRoom(
+                    room,
+                    spaceService: shouldMapSpaces ? spaceService : nil
+                ) {
                     rooms.append(summary)
                 }
             }
             let sorted = RoomListFixtures.sorted(rooms)
-            return sorted.isEmpty ? .empty : .loaded(sorted)
+            if sorted.isEmpty == false {
+                cachedRooms = sorted
+            }
+            if sorted.isEmpty {
+                if cachedRooms.isEmpty == false {
+                    return .loaded(cachedRooms)
+                }
+                return didSyncFail ? .failed("Could not load rooms. Try again.") : .empty
+            }
+            return .loaded(sorted)
         } catch {
+            if cachedRooms.isEmpty == false {
+                return .loaded(cachedRooms)
+            }
             return .failed("Could not load rooms. Try again.")
         }
     }
 
-    func clearCache() {}
+    func clearCache() {
+        cachedRooms = []
+    }
 
     private static func mapRoom(_ room: Room, spaceService: SpaceService?) async -> RoomSummary? {
         let membership: RoomSummary.Membership
@@ -691,7 +747,7 @@ final class MatrixRustSDKRoomListService: RoomListServicing {
             hasHighlight: membership == .invited,
             kind: (await room.isDirect()) ? .directMessage : .room,
             membership: membership,
-            lastActivityAt: Date(),
+            lastActivityAt: .distantPast,
             parentSpaces: parentSpaces
         )
     }
@@ -733,19 +789,26 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
     private let sessionStore: AppSessionStore
     private let clientStore: MatrixRustSDKClientStore
     private let rawTimelineFallback: TimelineServicing?
+    private let httpClient: AuthHTTPClient
+    private let jsonDecoder: JSONDecoder
+    private var profileCacheByUserID: [String: MatrixRustSDKProfileResponse?] = [:]
 
     init(
         sessionStore: AppSessionStore,
         clientStore: MatrixRustSDKClientStore,
-        rawTimelineFallback: TimelineServicing? = nil
+        rawTimelineFallback: TimelineServicing? = nil,
+        httpClient: AuthHTTPClient = URLSession.shared,
+        jsonDecoder: JSONDecoder = JSONDecoder()
     ) {
         self.sessionStore = sessionStore
         self.clientStore = clientStore
         self.rawTimelineFallback = rawTimelineFallback ?? MatrixTimelineService(sessionStore: sessionStore)
+        self.httpClient = httpClient
+        self.jsonDecoder = jsonDecoder
     }
 
     func loadInitialTimeline(roomID: String) async -> [TimelineItem] {
-        await loadTimeline(roomID: roomID, pageSize: 50)
+        await loadTimeline(roomID: roomID, pageSize: 30)
     }
 
     func loadOlderTimeline(roomID: String, before eventID: String) async -> [TimelineItem] {
@@ -772,10 +835,72 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
             let items = await collector.waitForItems(timeoutNanoseconds: 1_500_000_000)
             let sdkItems = items.compactMap(Self.mapTimelineItem)
                 .sorted { $0.timestamp < $1.timestamp }
+            let enrichedSDKItems = await enrichWithProfiles(sdkItems, session: session)
             let rawAgentItems = await rawAgentFallbackItems(roomID: roomID)
-            return Self.mergedTimelineItems(sdkItems: sdkItems, rawAgentItems: rawAgentItems)
+            return Self.mergedTimelineItems(sdkItems: enrichedSDKItems, rawAgentItems: rawAgentItems)
         } catch {
             return await rawAgentFallbackItems(roomID: roomID)
+        }
+    }
+
+    private func enrichWithProfiles(_ items: [TimelineItem], session: AuthenticatedSession) async -> [TimelineItem] {
+        var profilesByUserID: [String: MatrixRustSDKProfileResponse?] = [:]
+
+        for senderID in Set(items.map(\.senderID)) {
+            profilesByUserID[senderID] = await profile(for: senderID, session: session)
+        }
+
+        return items.map { item in
+            guard let profile = profilesByUserID[item.senderID] ?? nil,
+                  let avatarURL = profile.avatarURL.flatMap(URL.init(string:)) else {
+                return item
+            }
+
+            return TimelineItem(
+                id: item.id,
+                eventID: item.eventID,
+                senderID: item.senderID,
+                senderAvatarURL: avatarURL,
+                timestamp: item.timestamp,
+                kind: item.kind,
+                replyToEventID: item.replyToEventID,
+                isEdited: item.isEdited,
+                reactions: item.reactions,
+                isEncrypted: item.isEncrypted
+            )
+        }
+    }
+
+    private func profile(for userID: String, session: AuthenticatedSession) async -> MatrixRustSDKProfileResponse? {
+        if let cached = profileCacheByUserID[userID] {
+            return cached
+        }
+
+        var url = session.homeserverURL
+        url.appendPathComponent("_matrix")
+        url.appendPathComponent("client")
+        url.appendPathComponent("v3")
+        url.appendPathComponent("profile")
+        url.appendPathComponent(userID)
+
+        do {
+            var request = URLRequest(url: url)
+            request.httpMethod = "GET"
+            request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
+
+            let (data, response) = try await httpClient.data(for: request)
+            guard let http = response as? HTTPURLResponse,
+                  http.statusCode == 200 else {
+                profileCacheByUserID[userID] = nil
+                return nil
+            }
+
+            let profile = try jsonDecoder.decode(MatrixRustSDKProfileResponse.self, from: data)
+            profileCacheByUserID[userID] = profile
+            return profile
+        } catch {
+            profileCacheByUserID[userID] = nil
+            return nil
         }
     }
 
@@ -852,13 +977,30 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
     }
 }
 
+private struct MatrixRustSDKProfileResponse: Decodable {
+    let avatarURL: String?
+
+    enum CodingKeys: String, CodingKey {
+        case avatarURL = "avatar_url"
+    }
+}
+
 final class MatrixRustSDKMessageSendService: MessageSending {
     private let sessionStore: AppSessionStore
     private let clientStore: MatrixRustSDKClientStore
+    private let httpClient: AuthHTTPClient
+    private let jsonDecoder: JSONDecoder
 
-    init(sessionStore: AppSessionStore, clientStore: MatrixRustSDKClientStore) {
+    init(
+        sessionStore: AppSessionStore,
+        clientStore: MatrixRustSDKClientStore,
+        httpClient: AuthHTTPClient = URLSession.shared,
+        jsonDecoder: JSONDecoder = JSONDecoder()
+    ) {
         self.sessionStore = sessionStore
         self.clientStore = clientStore
+        self.httpClient = httpClient
+        self.jsonDecoder = jsonDecoder
     }
 
     func send(_ request: MessageSendRequest) async throws -> TimelineItem {
@@ -888,10 +1030,12 @@ final class MatrixRustSDKMessageSendService: MessageSending {
 
             try await clientStore.syncOnce(session: session, fullState: false)
             let eventID = "$local-\(UUID().uuidString)"
+            let senderAvatarURL = await profileAvatarURL(for: session.userID, session: session)
             return TimelineItem(
                 id: eventID,
                 eventID: eventID,
                 senderID: session.userID,
+                senderAvatarURL: senderAvatarURL,
                 timestamp: Date(),
                 kind: .text(body),
                 replyToEventID: request.replyToEventID,
@@ -903,6 +1047,32 @@ final class MatrixRustSDKMessageSendService: MessageSending {
             throw error
         } catch {
             throw MessageSendError.failed
+        }
+    }
+
+    private func profileAvatarURL(for userID: String, session: AuthenticatedSession) async -> URL? {
+        var url = session.homeserverURL
+        url.appendPathComponent("_matrix")
+        url.appendPathComponent("client")
+        url.appendPathComponent("v3")
+        url.appendPathComponent("profile")
+        url.appendPathComponent(userID)
+
+        do {
+            var request = URLRequest(url: url)
+            request.httpMethod = "GET"
+            request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
+
+            let (data, response) = try await httpClient.data(for: request)
+            guard let http = response as? HTTPURLResponse,
+                  http.statusCode == 200 else {
+                return nil
+            }
+
+            let profile = try jsonDecoder.decode(MatrixRustSDKProfileResponse.self, from: data)
+            return profile.avatarURL.flatMap(URL.init(string:))
+        } catch {
+            return nil
         }
     }
 }
