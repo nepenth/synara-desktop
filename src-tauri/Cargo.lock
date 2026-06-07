@@ -4113,7 +4113,7 @@ dependencies = [
 
 [[package]]
 name = "synara"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "keyring",
  "serde",
@@ -4127,6 +4127,7 @@ dependencies = [
  "tauri-plugin-opener",
  "tauri-plugin-window-state",
  "url",
+ "webkit2gtk",
 ]
 
 [[package]]

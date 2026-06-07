@@ -45,6 +45,69 @@ fn emit_native_file_drop(window: &tauri::Window, payload: NativeFileDropPayload)
     let _ = webview.eval(&script);
 }
 
+#[cfg(target_os = "linux")]
+fn normalized_spellcheck_language(value: &str) -> Option<String> {
+    let language = value
+        .trim()
+        .split('.')
+        .next()
+        .unwrap_or_default()
+        .split('@')
+        .next()
+        .unwrap_or_default()
+        .replace('-', "_");
+
+    if language.is_empty()
+        || language.eq_ignore_ascii_case("C")
+        || language.eq_ignore_ascii_case("POSIX")
+    {
+        return None;
+    }
+
+    Some(language)
+}
+
+#[cfg(target_os = "linux")]
+fn linux_spellcheck_languages() -> Vec<String> {
+    let mut languages = Vec::new();
+    for key in ["LC_ALL", "LC_MESSAGES", "LANG", "LANGUAGE"] {
+        let Some(value) = std::env::var_os(key).and_then(|value| value.into_string().ok()) else {
+            continue;
+        };
+
+        for candidate in value.split(':').filter_map(normalized_spellcheck_language) {
+            if !languages.contains(&candidate) {
+                languages.push(candidate);
+            }
+        }
+    }
+
+    if languages.is_empty() {
+        languages.push("en_US".to_owned());
+    }
+
+    languages
+}
+
+#[cfg(target_os = "linux")]
+fn configure_webview_spellcheck<R: tauri::Runtime>(window: &tauri::WebviewWindow<R>) {
+    let languages = linux_spellcheck_languages();
+    let _ = window.with_webview(move |webview| {
+        use webkit2gtk::prelude::{WebContextExt, WebViewExt};
+
+        let Some(context) = webview.inner().context() else {
+            return;
+        };
+
+        let language_refs = languages.iter().map(String::as_str).collect::<Vec<_>>();
+        context.set_spell_checking_languages(&language_refs);
+        context.set_spell_checking_enabled(true);
+    });
+}
+
+#[cfg(not(target_os = "linux"))]
+fn configure_webview_spellcheck<R: tauri::Runtime>(_window: &tauri::WebviewWindow<R>) {}
+
 pub fn run() {
     let port: u16 = 44548;
     let context = tauri::generate_context!();
@@ -170,6 +233,8 @@ pub fn run() {
                     NewWindowResponse::Deny
                 })
                 .build()?;
+
+            configure_webview_spellcheck(&window);
 
             if let Ok(size) = window.inner_size() {
                 if size.width < 960 || size.height < 720 {
