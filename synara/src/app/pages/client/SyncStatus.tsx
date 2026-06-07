@@ -30,12 +30,7 @@ export function SyncStatus({ mx }: SyncStatusProps) {
     }, [])
   );
 
-  if (
-    (stateData.current === SyncState.Prepared ||
-      stateData.current === SyncState.Syncing ||
-      stateData.current === SyncState.Catchup) &&
-    stateData.previous !== SyncState.Syncing
-  ) {
+  if (stateData.current === SyncState.Prepared || stateData.current === SyncState.Catchup) {
     return (
       <Box direction="Column" shrink="No">
         <Box

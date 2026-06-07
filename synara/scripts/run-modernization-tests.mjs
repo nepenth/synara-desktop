@@ -23,6 +23,7 @@ const tests = [
   'src/app/utils/__tests__/polls.test.ts',
   'src/app/utils/__tests__/messageSearchFilters.test.ts',
   'src/app/utils/__tests__/themeAccent.test.ts',
+  'src/app/utils/__tests__/syncLifecycle.test.ts',
   'src/app/utils/__tests__/timelineVirtualization.test.ts',
   'src/app/utils/__tests__/desktop.test.ts',
   'src/app/platform/__tests__/platform.test.ts',
