@@ -6,6 +6,8 @@ devAssets/*
 !devAssets/index.html
 
 .DS_Store
+AuthKey_*.p8
+*.p8
 DerivedData/
 *.xcuserstate
 xcuserdata/
