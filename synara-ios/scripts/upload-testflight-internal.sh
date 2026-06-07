@@ -12,6 +12,7 @@ PROVISIONING_PROFILE="${SYNARA_IOS_PROVISIONING_PROFILE:-Synara Matrix App Store
 ARCHIVE_ROOT="${SYNARA_IOS_ARCHIVE_ROOT:-/tmp}"
 
 xcode_auth_args=()
+has_xcode_auth_args=0
 if [[ -n "${SYNARA_ASC_KEY_PATH:-}" || -n "${SYNARA_ASC_KEY_ID:-}" || -n "${SYNARA_ASC_ISSUER_ID:-}" ]]; then
   if [[ -z "${SYNARA_ASC_KEY_PATH:-}" || -z "${SYNARA_ASC_KEY_ID:-}" || -z "${SYNARA_ASC_ISSUER_ID:-}" ]]; then
     echo "Set SYNARA_ASC_KEY_PATH, SYNARA_ASC_KEY_ID, and SYNARA_ASC_ISSUER_ID together." >&2
@@ -22,7 +23,16 @@ if [[ -n "${SYNARA_ASC_KEY_PATH:-}" || -n "${SYNARA_ASC_KEY_ID:-}" || -n "${SYNA
     -authenticationKeyID "$SYNARA_ASC_KEY_ID"
     -authenticationKeyIssuerID "$SYNARA_ASC_ISSUER_ID"
   )
+  has_xcode_auth_args=1
 fi
+
+run_xcodebuild() {
+  if [[ "$has_xcode_auth_args" == "1" ]]; then
+    xcodebuild "$@" "${xcode_auth_args[@]}"
+    return
+  fi
+  xcodebuild "$@"
+}
 
 read_build_setting() {
   local key="$1"
@@ -84,23 +94,21 @@ cat > "$export_options" <<PLIST
 PLIST
 
 echo "Archiving Synara ${marketing_version} (${build_number}) to ${archive_path}"
-xcodebuild \
+run_xcodebuild \
   -project "$PROJECT_DIR/Synara.xcodeproj" \
   -scheme "$SCHEME" \
   -configuration "$CONFIGURATION" \
   -destination "generic/platform=iOS" \
   -archivePath "$archive_path" \
   archive \
-  -allowProvisioningUpdates \
-  "${xcode_auth_args[@]}"
+  -allowProvisioningUpdates
 
 echo "Uploading Synara ${marketing_version} (${build_number}) to App Store Connect"
-xcodebuild \
+run_xcodebuild \
   -exportArchive \
   -archivePath "$archive_path" \
   -exportOptionsPlist "$export_options" \
   -exportPath "$export_path" \
-  -allowProvisioningUpdates \
-  "${xcode_auth_args[@]}"
+  -allowProvisioningUpdates
 
 echo "Upload complete. Wait for App Store Connect processing, then install from TestFlight."
