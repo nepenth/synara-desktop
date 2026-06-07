@@ -116,6 +116,12 @@ actor MatrixRustSDKClientStore {
         syncStatus = .syncing
     }
 
+    func syncOnceForInteractiveOpen(session: AuthenticatedSession) async throws {
+        let client = try await ensureClient(for: session)
+        _ = try await client.syncOnceV2(settings: SyncSettingsV2(timeoutMs: 1_500, fullState: false))
+        syncStatus = .syncing
+    }
+
     func rooms(session: AuthenticatedSession) async throws -> [Room] {
         let client = try await ensureClient(for: session)
         return client.rooms()
@@ -992,6 +998,8 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
                 room = syncedRoom
             }
 
+            try? await clientStore.syncOnceForInteractiveOpen(session: session)
+
             let timeline: Timeline
             if let focusedEventID, focusedEventID.isEmpty == false {
                 timeline = try await room.timelineWithConfiguration(
@@ -1017,9 +1025,11 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
 
             _ = try await timeline.paginateBackwards(numEvents: pageSize)
             if focusedEventID != nil {
-                _ = try? await timeline.paginateForwards(numEvents: pageSize)
+                for _ in 0..<3 {
+                    _ = try? await timeline.paginateForwards(numEvents: pageSize)
+                }
             }
-            let items = await collector.waitForItems(timeoutNanoseconds: 750_000_000)
+            let items = await collector.waitForItems(timeoutNanoseconds: 1_000_000_000)
             let sdkItems = items.compactMap(Self.mapTimelineItem)
                 .sorted { $0.timestamp < $1.timestamp }
             guard sdkItems.isEmpty == false else {
