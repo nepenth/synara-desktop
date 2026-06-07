@@ -28,6 +28,8 @@ actor MatrixRustSDKClientStore {
     private static let platformDeviceDisplayName = "Synara iOS"
     private var client: Client?
     private var activeSession: AuthenticatedSession?
+    private var syncService: SyncService?
+    private var roomListService: RoomListService?
     private var syncStatus: MatrixSyncStatus = .stopped
     private let unableToDecryptRecorder = SynaraUnableToDecryptRecorder()
 
@@ -75,6 +77,8 @@ actor MatrixRustSDKClientStore {
             )
             self.client = client
             self.activeSession = session
+            self.syncService = nil
+            self.roomListService = nil
             await ensurePlatformDeviceDisplayName(session: session)
             self.syncStatus = .syncing
             return session
@@ -89,12 +93,21 @@ actor MatrixRustSDKClientStore {
     }
 
     func stop() {
+        if let syncService {
+            Task {
+                await syncService.stop()
+            }
+        }
+        syncService = nil
+        roomListService = nil
         syncStatus = .stopped
     }
 
     func resetLocalState() {
         client = nil
         activeSession = nil
+        syncService = nil
+        roomListService = nil
         syncStatus = .stopped
         unableToDecryptRecorder.reset()
         try? Self.deletePersistedStores()
@@ -104,6 +117,8 @@ actor MatrixRustSDKClientStore {
         if activeSession == session {
             client = nil
             activeSession = nil
+            syncService = nil
+            roomListService = nil
         }
         syncStatus = .stopped
         unableToDecryptRecorder.reset()
@@ -120,6 +135,36 @@ actor MatrixRustSDKClientStore {
         let client = try await ensureClient(for: session)
         _ = try await client.syncOnceV2(settings: SyncSettingsV2(timeoutMs: 1_500, fullState: false))
         syncStatus = .syncing
+    }
+
+    @discardableResult
+    func startSyncService(session: AuthenticatedSession) async throws -> SyncService {
+        _ = try await ensureClient(for: session)
+        if let syncService {
+            syncStatus = .syncing
+            return syncService
+        }
+
+        let client = try await ensureClient(for: session)
+        let service = try await client.syncService().finish()
+        syncService = service
+        roomListService = service.roomListService()
+        syncStatus = .syncing
+        Task {
+            await service.start()
+        }
+        return service
+    }
+
+    func streamingRoomListService(session: AuthenticatedSession) async throws -> RoomListService {
+        let service = try await startSyncService(session: session)
+        if let roomListService {
+            return roomListService
+        }
+
+        let listService = service.roomListService()
+        roomListService = listService
+        return listService
     }
 
     func rooms(session: AuthenticatedSession) async throws -> [Room] {
@@ -699,6 +744,61 @@ final class MatrixRustSDKRoomListService: RoomListServicing {
         return await loadRooms(session: session, allowsStoreRepair: true)
     }
 
+    func roomUpdates() -> AsyncStream<RoomListState> {
+        guard case .signedIn(let session) = sessionStore.currentState else {
+            return AsyncStream { continuation in
+                continuation.yield(.empty)
+                continuation.finish()
+            }
+        }
+
+        return AsyncStream(bufferingPolicy: .bufferingNewest(1)) { continuation in
+            let task = Task {
+                do {
+                    let client = try await clientStore.ensureClient(for: session)
+                    let roomListService = try await clientStore.streamingRoomListService(session: session)
+                    let allRooms = try await roomListService.allRooms()
+                    let spaceService = await client.spaceService()
+                    let listener = MatrixRustSDKRoomListEntriesCollector { [weak self] rooms in
+                        guard let self else {
+                            return
+                        }
+                        Task {
+                            let summaries = await self.roomSummaries(from: rooms, spaceService: spaceService)
+                            let state: RoomListState = summaries.isEmpty ? .empty : .loaded(summaries)
+                            continuation.yield(state)
+                        }
+                    }
+                    let result = allRooms.entriesWithDynamicAdapters(pageSize: 100, listener: listener)
+                    _ = result.controller().setFilter(kind: .all(filters: []))
+                    let handle = result.entriesStream()
+                    let subscription = MatrixRustSDKRoomListSubscription(
+                        listener: listener,
+                        result: result,
+                        streamHandle: handle
+                    )
+
+                    if cachedRooms.isEmpty == false {
+                        continuation.yield(.loaded(cachedRooms))
+                    }
+
+                    await subscription.waitUntilCancelled()
+                } catch {
+                    if cachedRooms.isEmpty == false {
+                        continuation.yield(.loaded(cachedRooms))
+                    } else {
+                        continuation.yield(.failed("Could not load rooms. Try again."))
+                    }
+                    continuation.finish()
+                }
+            }
+
+            continuation.onTermination = { _ in
+                task.cancel()
+            }
+        }
+    }
+
     private func loadRooms(session: AuthenticatedSession, allowsStoreRepair: Bool) async -> RoomListState {
         do {
             let client = try await clientStore.ensureClient(for: session)
@@ -735,21 +835,29 @@ final class MatrixRustSDKRoomListService: RoomListServicing {
         }
     }
 
-    private func roomListState(from client: Client) async -> RoomListState {
-        let spaceService = await client.spaceService()
-        let sdkRooms = client.rooms()
-        let shouldMapSpaces = sdkRooms.count <= 80
-        var rooms: [RoomSummary] = []
-        rooms.reserveCapacity(sdkRooms.count)
-        for room in sdkRooms {
+    private func roomSummaries(from rooms: [Room], spaceService: SpaceService?) async -> [RoomSummary] {
+        let shouldMapSpaces = rooms.count <= 80
+        var summaries: [RoomSummary] = []
+        summaries.reserveCapacity(rooms.count)
+        for room in rooms {
             if let summary = await Self.mapRoom(
                 room,
                 spaceService: shouldMapSpaces ? spaceService : nil
             ) {
-                rooms.append(summary)
+                summaries.append(summary)
             }
         }
-        let sorted = RoomListFixtures.sorted(rooms)
+        let sorted = RoomListFixtures.sorted(summaries)
+        if sorted.isEmpty == false {
+            cachedRooms = sorted
+        }
+        return sorted
+    }
+
+    private func roomListState(from client: Client) async -> RoomListState {
+        let spaceService = await client.spaceService()
+        let sdkRooms = client.rooms()
+        let sorted = await roomSummaries(from: sdkRooms, spaceService: spaceService)
         if sorted.isEmpty == false {
             cachedRooms = sorted
         }
@@ -974,6 +1082,85 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
 
     func loadOlderTimeline(roomID: String, before eventID: String) async -> [TimelineItem] {
         await loadTimeline(roomID: roomID, focusedEventID: nil, pageSize: 50, enrichProfiles: true)
+    }
+
+    func timelineUpdates(roomID: String, focusedEventID: String?) -> AsyncStream<[TimelineItem]> {
+        guard case .signedIn(let session) = sessionStore.currentState else {
+            return AsyncStream { continuation in
+                continuation.yield([])
+                continuation.finish()
+            }
+        }
+
+        return AsyncStream(bufferingPolicy: .bufferingNewest(1)) { continuation in
+            let task = Task {
+                do {
+                    _ = try await clientStore.startSyncService(session: session)
+                    let room: Room
+                    if let restoredRoom = try await clientStore.room(roomID: roomID, session: session) {
+                        room = restoredRoom
+                    } else {
+                        try? await clientStore.syncOnceForInteractiveOpen(session: session)
+                        guard let syncedRoom = try await clientStore.room(roomID: roomID, session: session) else {
+                            continuation.yield(await rawAgentFallbackItems(roomID: roomID))
+                            continuation.finish()
+                            return
+                        }
+                        room = syncedRoom
+                    }
+
+                    let timeline: Timeline
+                    if let focusedEventID, focusedEventID.isEmpty == false {
+                        timeline = try await room.timelineWithConfiguration(
+                            configuration: TimelineConfiguration(
+                                focus: .event(
+                                    eventId: focusedEventID,
+                                    numContextEvents: 20,
+                                    threadMode: .automatic(hideThreadedEvents: true)
+                                ),
+                                filter: .all,
+                                internalIdPrefix: nil,
+                                dateDividerMode: .daily,
+                                trackReadReceipts: .disabled,
+                                reportUtds: true
+                            )
+                        )
+                    } else {
+                        timeline = try await room.timeline()
+                    }
+
+                    let listener = MatrixRustSDKStreamingTimelineCollector { events in
+                        Task {
+                            let sdkItems = events.compactMap(Self.mapTimelineItem)
+                                .sorted { $0.timestamp < $1.timestamp }
+                            continuation.yield(sdkItems)
+                        }
+                    }
+                    let handle = await timeline.addListener(listener: listener)
+                    let subscription = MatrixRustSDKTimelineSubscription(
+                        timeline: timeline,
+                        listener: listener,
+                        handle: handle
+                    )
+
+                    _ = try? await timeline.paginateBackwards(numEvents: 20)
+                    if focusedEventID != nil {
+                        for _ in 0..<3 {
+                            _ = try? await timeline.paginateForwards(numEvents: 20)
+                        }
+                    }
+
+                    await subscription.waitUntilCancelled()
+                } catch {
+                    continuation.yield(await rawAgentFallbackItems(roomID: roomID))
+                    continuation.finish()
+                }
+            }
+
+            continuation.onTermination = { _ in
+                task.cancel()
+            }
+        }
     }
 
     private func loadTimeline(
@@ -1492,6 +1679,91 @@ private final class MatrixRustSDKRoomDirectoryCollector: RoomDirectorySearchEntr
     }
 }
 
+private final class MatrixRustSDKRoomListSubscription: @unchecked Sendable {
+    private let listener: MatrixRustSDKRoomListEntriesCollector
+    private let result: RoomListEntriesWithDynamicAdaptersResult
+    private let streamHandle: TaskHandle
+
+    init(
+        listener: MatrixRustSDKRoomListEntriesCollector,
+        result: RoomListEntriesWithDynamicAdaptersResult,
+        streamHandle: TaskHandle
+    ) {
+        self.listener = listener
+        self.result = result
+        self.streamHandle = streamHandle
+    }
+
+    func waitUntilCancelled() async {
+        while Task.isCancelled == false {
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+        }
+        streamHandle.cancel()
+        _ = listener
+        _ = result
+    }
+
+    deinit {
+        streamHandle.cancel()
+    }
+}
+
+private final class MatrixRustSDKRoomListEntriesCollector: RoomListEntriesListener, @unchecked Sendable {
+    private let lock = NSLock()
+    private var rooms: [Room] = []
+    private let onRooms: @Sendable ([Room]) -> Void
+
+    init(onRooms: @escaping @Sendable ([Room]) -> Void) {
+        self.onRooms = onRooms
+    }
+
+    func onUpdate(roomEntriesUpdate: [RoomListEntriesUpdate]) {
+        lock.lock()
+        for update in roomEntriesUpdate {
+            apply(update)
+        }
+        let snapshot = rooms
+        lock.unlock()
+        onRooms(snapshot)
+    }
+
+    private func apply(_ update: RoomListEntriesUpdate) {
+        switch update {
+        case .append(let values):
+            rooms.append(contentsOf: values)
+        case .clear:
+            rooms.removeAll()
+        case .pushFront(let room):
+            rooms.insert(room, at: 0)
+        case .pushBack(let room):
+            rooms.append(room)
+        case .popFront:
+            if rooms.isEmpty == false {
+                rooms.removeFirst()
+            }
+        case .popBack:
+            _ = rooms.popLast()
+        case .insert(let index, let room):
+            let boundedIndex = min(Int(index), rooms.count)
+            rooms.insert(room, at: boundedIndex)
+        case .set(let index, let room):
+            let intIndex = Int(index)
+            if rooms.indices.contains(intIndex) {
+                rooms[intIndex] = room
+            }
+        case .remove(let index):
+            let intIndex = Int(index)
+            if rooms.indices.contains(intIndex) {
+                rooms.remove(at: intIndex)
+            }
+        case .truncate(let length):
+            rooms = Array(rooms.prefix(Int(length)))
+        case .reset(let values):
+            rooms = values
+        }
+    }
+}
+
 private final class MatrixRustSDKTimelineCollector: TimelineListener, @unchecked Sendable {
     private let lock = NSLock()
     private var collected: [EventTimelineItem] = []
@@ -1544,6 +1816,87 @@ private final class MatrixRustSDKTimelineCollector: TimelineListener, @unchecked
             return [value]
         case .clear, .popFront, .popBack, .remove, .truncate:
             return []
+        }
+    }
+}
+
+private final class MatrixRustSDKTimelineSubscription: @unchecked Sendable {
+    private let timeline: Timeline
+    private let listener: MatrixRustSDKStreamingTimelineCollector
+    private let handle: TaskHandle
+
+    init(timeline: Timeline, listener: MatrixRustSDKStreamingTimelineCollector, handle: TaskHandle) {
+        self.timeline = timeline
+        self.listener = listener
+        self.handle = handle
+    }
+
+    func waitUntilCancelled() async {
+        while Task.isCancelled == false {
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+        }
+        handle.cancel()
+        _ = timeline
+        _ = listener
+    }
+
+    deinit {
+        handle.cancel()
+    }
+}
+
+private final class MatrixRustSDKStreamingTimelineCollector: TimelineListener, @unchecked Sendable {
+    private let lock = NSLock()
+    private var timelineItems: [MatrixRustSDK.TimelineItem] = []
+    private let onItems: @Sendable ([EventTimelineItem]) -> Void
+
+    init(onItems: @escaping @Sendable ([EventTimelineItem]) -> Void) {
+        self.onItems = onItems
+    }
+
+    func onUpdate(diff: [TimelineDiff]) {
+        lock.lock()
+        for update in diff {
+            apply(update)
+        }
+        let events = timelineItems.compactMap { $0.asEvent() }
+        lock.unlock()
+        onItems(events)
+    }
+
+    private func apply(_ update: TimelineDiff) {
+        switch update {
+        case .append(let values):
+            timelineItems.append(contentsOf: values)
+        case .clear:
+            timelineItems.removeAll()
+        case .pushFront(let item):
+            timelineItems.insert(item, at: 0)
+        case .pushBack(let item):
+            timelineItems.append(item)
+        case .popFront:
+            if timelineItems.isEmpty == false {
+                timelineItems.removeFirst()
+            }
+        case .popBack:
+            _ = timelineItems.popLast()
+        case .insert(let index, let item):
+            let boundedIndex = min(Int(index), timelineItems.count)
+            timelineItems.insert(item, at: boundedIndex)
+        case .set(let index, let item):
+            let intIndex = Int(index)
+            if timelineItems.indices.contains(intIndex) {
+                timelineItems[intIndex] = item
+            }
+        case .remove(let index):
+            let intIndex = Int(index)
+            if timelineItems.indices.contains(intIndex) {
+                timelineItems.remove(at: intIndex)
+            }
+        case .truncate(let length):
+            timelineItems = Array(timelineItems.prefix(Int(length)))
+        case .reset(let values):
+            timelineItems = values
         }
     }
 }

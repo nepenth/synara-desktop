@@ -363,11 +363,26 @@ protocol TimelineServicing {
     func loadInitialTimeline(roomID: String) async -> [TimelineItem]
     func loadInitialTimeline(roomID: String, focusedEventID: String?) async -> [TimelineItem]
     func loadOlderTimeline(roomID: String, before eventID: String) async -> [TimelineItem]
+    func timelineUpdates(roomID: String, focusedEventID: String?) -> AsyncStream<[TimelineItem]>
 }
 
 extension TimelineServicing {
     func loadInitialTimeline(roomID: String, focusedEventID: String?) async -> [TimelineItem] {
         await loadInitialTimeline(roomID: roomID)
+    }
+
+    func timelineUpdates(roomID: String, focusedEventID: String?) -> AsyncStream<[TimelineItem]> {
+        AsyncStream { continuation in
+            let task = Task {
+                let items = await loadInitialTimeline(roomID: roomID, focusedEventID: focusedEventID)
+                continuation.yield(items)
+                continuation.finish()
+            }
+
+            continuation.onTermination = { _ in
+                task.cancel()
+            }
+        }
     }
 }
 

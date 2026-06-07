@@ -26,6 +26,7 @@ struct RoomTimelineView: View {
     @State private var showJumpToLatest = false
     @State private var hasPositionedInitialTimeline = false
     @State private var initialReadMarkerEventID: String?
+    @State private var timelineUpdatesTask: Task<Void, Never>?
     @Environment(\.openURL) private var openURL
     @Environment(\.dismiss) private var dismiss
 
@@ -102,6 +103,10 @@ struct RoomTimelineView: View {
                 _ = await loadCryptoStatus()
             }
             await loadTimeline()
+            startTimelineUpdates()
+        }
+        .onDisappear {
+            timelineUpdatesTask?.cancel()
         }
         .onChange(of: draft) { value in
             environment.drafts.setDraft(value, roomID: roomID)
@@ -379,6 +384,24 @@ struct RoomTimelineView: View {
         let items = await environment.timeline.loadInitialTimeline(roomID: roomID, focusedEventID: readMarkerEventID)
         await MainActor.run {
             state = items.isEmpty ? .empty : .loaded(items, isPaginating: false)
+        }
+    }
+
+    private func startTimelineUpdates() {
+        timelineUpdatesTask?.cancel()
+        let streamFocusEventID = focusedEventID ?? initialReadMarkerEventID
+        timelineUpdatesTask = Task {
+            for await updatedItems in environment.timeline.timelineUpdates(roomID: roomID, focusedEventID: streamFocusEventID) {
+                guard Task.isCancelled == false else {
+                    return
+                }
+                await MainActor.run {
+                    guard updatedItems.isEmpty == false else {
+                        return
+                    }
+                    state = .loaded(updatedItems, isPaginating: false)
+                }
+            }
         }
     }
 
