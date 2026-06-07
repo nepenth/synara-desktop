@@ -46,6 +46,15 @@ SYNARA_ASC_ISSUER_ID="00000000-0000-0000-0000-000000000000" \
 synara-ios/scripts/upload-testflight-internal.sh
 ```
 
+For local use, these values can also live in an untracked env file outside the
+repo:
+
+```sh
+source "$HOME/.private_keys/appstoreconnect/synara.env"
+synara-ios/scripts/upload-testflight-internal.sh
+synara-ios/scripts/promote-testflight-internal.rb
+```
+
 Do not commit `.p8` files. The repo ignores `AuthKey_*.p8` and `*.p8` as a
 defense-in-depth measure.
 
@@ -55,3 +64,9 @@ the build number committed in `Synara.xcodeproj` and `project.yml`.
 After upload, Apple still performs server-side processing. If App Store Connect
 shows "Missing Compliance", answer the export-compliance prompt before the build
 can be installed through TestFlight.
+
+`promote-testflight-internal.rb` checks the uploaded build status and attempts to
+associate it with the configured internal TestFlight group. App Store Connect may
+reject explicit assignment to built-in internal groups; in that case the script
+reports the build as valid and leaves final propagation/compliance handling to
+App Store Connect.
