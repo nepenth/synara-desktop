@@ -27,6 +27,30 @@ final class TimelineServiceTests: XCTestCase {
         XCTAssertEqual(String(attributed.characters), "- Ship it\n- Review fallback")
     }
 
+    func testMatrixHTMLRendererExtractsDetailsCodeBlocks() throws {
+        let html = #"""
+        <details open>
+          <summary>🛠️ Tool activity (4 updates)</summary>
+          <pre><code>🧠 memory: "~memory: &quot;Worker multi-model &quot;"&#10;✅ memory completed (0.0s)</code></pre>
+        </details>
+        <p><strong>Practical decision:</strong></p>
+        <ul><li>Do not use it for active/default bounty pipelines.</li></ul>
+        """#
+
+        let block = try XCTUnwrap(MatrixHTMLRenderer.detailsBlocks(html: html).first)
+
+        XCTAssertEqual(block.summary, "🛠️ Tool activity (4 updates)")
+        XCTAssertEqual(
+            block.code,
+            "🧠 memory: \"~memory: \"Worker multi-model \"\"\n✅ memory completed (0.0s)"
+        )
+        XCTAssertTrue(block.body.isEmpty)
+        XCTAssertEqual(
+            MatrixHTMLRenderer.markdownExcludingDetails(body: "", html: html),
+            "**Practical decision:**\n\n- Do not use it for active/default bounty pipelines."
+        )
+    }
+
     func testMatrixRustSDKMapperPreservesFormattedTextMessages() {
         let content = MsgLikeContent(
             kind: .message(
