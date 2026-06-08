@@ -60,8 +60,9 @@ protocol MatrixClientServicing: AnyObject {
     var syncStatus: MatrixSyncStatus { get }
 
     func start(session: AuthenticatedSession) async
+    func warmSync(session: AuthenticatedSession) async
     func stop() async
-    func resetLocalState()
+    func resetLocalState(for session: AuthenticatedSession?) async
 }
 
 protocol PushServicing {
@@ -73,9 +74,10 @@ protocol PushServicing {
 
     func beginRegistration()
     func handleDeviceToken(_ tokenData: Data)
-    func clearRegistrationState()
+    func clearRegistrationState() async
     func configure(with session: AuthenticatedSession)
     func route(from notificationPayload: [AnyHashable: Any]) -> AppRoute?
+    func resolveRoute(from notificationPayload: [AnyHashable: Any]) async -> AppRoute?
     func parseBadgeCount(from notificationPayload: [AnyHashable: Any]) -> Int?
     func applyIncomingBadge(from notificationPayload: [AnyHashable: Any])
 }
@@ -425,6 +427,7 @@ protocol SettingsStoring {
 
 final class AppSessionStore: ObservableObject {
     @Published private(set) var currentState: SessionState
+    @Published private(set) var sessionEpoch: Int = 0
     let secureStore: SecureSessionStoring
     private(set) var restoreFailureLogDescription: String?
 
@@ -475,11 +478,13 @@ final class AppSessionStore: ObservableObject {
 
     func completeLogin(_ session: AuthenticatedSession) throws {
         try secureStore.save(session)
+        sessionEpoch += 1
         currentState = .signedIn(session)
     }
 
     func signOut() throws {
         try secureStore.delete()
+        sessionEpoch += 1
         currentState = .signedOut
     }
 }
@@ -495,11 +500,16 @@ final class PlaceholderMatrixClientService: MatrixClientServicing {
         syncStatus = .syncing
     }
 
+    func warmSync(session: AuthenticatedSession) async {
+        syncStatus = .syncing
+    }
+
     func stop() async {
         syncStatus = .stopped
     }
 
-    func resetLocalState() {
+    func resetLocalState(for session: AuthenticatedSession?) async {
+        _ = session
         syncStatus = .stopped
     }
 }
@@ -515,11 +525,15 @@ final class PlaceholderPushService: PushServicing {
 
     func handleDeviceToken(_ tokenData: Data) {}
 
-    func clearRegistrationState() {}
+    func clearRegistrationState() async {}
 
     func configure(with session: AuthenticatedSession) {}
 
     func route(from notificationPayload: [AnyHashable: Any]) -> AppRoute? {
+        nil
+    }
+
+    func resolveRoute(from notificationPayload: [AnyHashable: Any]) async -> AppRoute? {
         nil
     }
 
@@ -820,13 +834,21 @@ final class MockMatrixClientService: MatrixClientServicing {
         syncStatus = .syncing
     }
 
+    func warmSync(session: AuthenticatedSession) async {
+        startedSessions.append(session)
+        syncStatus = .syncing
+    }
+
     func stop() async {
         stopCallCount += 1
         syncStatus = .stopped
     }
 
-    func resetLocalState() {
+    private(set) var resetSessions: [AuthenticatedSession?] = []
+
+    func resetLocalState(for session: AuthenticatedSession?) async {
         resetCallCount += 1
+        resetSessions.append(session)
         syncStatus = .stopped
     }
 }
@@ -869,7 +891,7 @@ final class MockPushService: PushServicing {
         isRegistered = true
     }
 
-    func clearRegistrationState() {
+    func clearRegistrationState() async {
         clearCallCount += 1
         isRegistered = false
         tokenSnippet = nil
@@ -880,6 +902,11 @@ final class MockPushService: PushServicing {
     }
 
     func route(from notificationPayload: [AnyHashable: Any]) -> AppRoute? {
+        routeCallCount += 1
+        return routeOverride
+    }
+
+    func resolveRoute(from notificationPayload: [AnyHashable: Any]) async -> AppRoute? {
         routeCallCount += 1
         return routeOverride
     }

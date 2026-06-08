@@ -92,9 +92,8 @@ struct RoomTimelineView: View {
         } message: {
             Text(cryptoActionMessage ?? "")
         }
-        .task(id: roomID) {
-            hasAnchoredEvent = false
-            draft = environment.drafts.draft(roomID: roomID)
+        .task(id: timelineTaskID) {
+            resetTimelineState()
             let roomOpenSignpostID = PerformanceTrace.begin("RoomOpen")
             defer {
                 PerformanceTrace.end("RoomOpen", id: roomOpenSignpostID)
@@ -129,7 +128,7 @@ struct RoomTimelineView: View {
         case .failed(let message):
             SynaraErrorState(title: "Could Not Load Timeline", message: message) {
                 Task {
-                    await prepareTimelineUpdates()
+                    await loadTimeline()
                     startTimelineUpdates()
                 }
             }
@@ -170,7 +169,7 @@ struct RoomTimelineView: View {
                         let threadReplyCounts = TimelineReplyCounter.replyCounts(for: items)
 
                         ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
-                            if shouldShowMockupUnreadDivider(before: item, index: index) {
+                            if shouldShowUnreadDivider(before: item, at: index, in: items) {
                                 UnreadMessagesDivider()
                                     .padding(.vertical, SynaraSpacing.small)
                             }
@@ -341,11 +340,64 @@ struct RoomTimelineView: View {
             && current.timestamp.timeIntervalSince(previous.timestamp) < 5 * 60
     }
 
-    private func shouldShowMockupUnreadDivider(before item: TimelineItem, index: Int) -> Bool {
-        ProcessInfo.processInfo.environment["SYNARA_UI_TESTS"] == "1"
-            && roomID == "!project:matrix.org"
-            && index > 0
-            && item.eventID.contains("$security:")
+    private var timelineTaskID: String {
+        roomID + (focusedEventID ?? "")
+    }
+
+    private func resetTimelineState() {
+        timelineUpdatesTask?.cancel()
+        timelineUpdatesTask = nil
+        state = .idle
+        draft = environment.drafts.draft(roomID: roomID)
+        replyTarget = nil
+        editTarget = nil
+        sendError = nil
+        hasAnchoredEvent = false
+        uploadState = .idle
+        viewerResource = nil
+        selectedPhoto = nil
+        agentActionMessage = nil
+        cryptoStatus = .unknown
+        cryptoActionMessage = nil
+        isRoomDetailsPresented = false
+        lastRenderedTimelineCount = 0
+        showJumpToLatest = false
+        hasPositionedInitialTimeline = false
+        initialReadMarkerEventID = nil
+    }
+
+    private func shouldShowUnreadDivider(before item: TimelineItem, at index: Int, in items: [TimelineItem]) -> Bool {
+        if ProcessInfo.processInfo.environment["SYNARA_UI_TESTS"] == "1",
+           roomID == "!project:matrix.org",
+           index > 0,
+           item.eventID.contains("$security:") {
+            return true
+        }
+
+        guard let markerID = initialReadMarkerEventID,
+              markerID.isEmpty == false,
+              item.eventID != markerID,
+              item.id != markerID else {
+            return false
+        }
+
+        guard index > 0 else {
+            return false
+        }
+
+        let previous = items[index - 1]
+        return previous.eventID == markerID || previous.id == markerID
+    }
+
+    private func applyTimelineOutcome(_ outcome: TimelineLoadOutcome, isPaginating: Bool = false) {
+        switch outcome {
+        case .loaded(let items):
+            state = .loaded(items, isPaginating: isPaginating)
+        case .empty:
+            state = .empty
+        case .failed(let message):
+            state = .failed(message)
+        }
     }
 
     private func openThread(root item: TimelineItem) {
@@ -382,9 +434,9 @@ struct RoomTimelineView: View {
     private func loadTimeline() async {
         await prepareTimelineUpdates()
         let readMarkerEventID = focusedEventID ?? initialReadMarkerEventID
-        let items = await environment.timeline.loadInitialTimeline(roomID: roomID, focusedEventID: readMarkerEventID)
+        let outcome = await environment.timeline.loadInitialTimeline(roomID: roomID, focusedEventID: readMarkerEventID)
         await MainActor.run {
-            state = items.isEmpty ? .empty : .loaded(items, isPaginating: false)
+            applyTimelineOutcome(outcome)
         }
     }
 
@@ -392,18 +444,24 @@ struct RoomTimelineView: View {
         timelineUpdatesTask?.cancel()
         let streamFocusEventID = overrideFocus ?? focusedEventID ?? initialReadMarkerEventID
         timelineUpdatesTask = Task {
-            for await updatedItems in environment.timeline.timelineUpdates(roomID: roomID, focusedEventID: streamFocusEventID) {
+            for await outcome in environment.timeline.timelineUpdates(roomID: roomID, focusedEventID: streamFocusEventID) {
                 guard Task.isCancelled == false else {
                     return
                 }
                 await MainActor.run {
-                    guard updatedItems.isEmpty == false else {
+                    switch outcome {
+                    case .loaded(let items):
+                        applyTimelineOutcome(.loaded(items))
+                    case .empty:
                         if case .loading = state {
                             state = .empty
                         }
-                        return
+                    case .failed(let message):
+                        if case .loaded = state {
+                            return
+                        }
+                        state = .failed(message)
                     }
-                    state = .loaded(updatedItems, isPaginating: false)
                 }
             }
         }
@@ -465,10 +523,10 @@ struct RoomTimelineView: View {
                 let item = try await environment.messageSender.send(request)
                 await MainActor.run {
                     if isEditing {
+                        // Edits may not stream back immediately; keep a local replace.
                         replace(item)
-                    } else {
-                        append(item)
                     }
+                    // New sends rely on timeline streaming instead of optimistic append.
                     draft = ""
                     environment.drafts.clearDraft(roomID: roomID)
                     clearComposerRelation()
@@ -562,13 +620,20 @@ struct RoomTimelineView: View {
             defer {
                 PerformanceTrace.end("TimelineLoadOlder", id: signpostID)
             }
-            let older = await environment.timeline.loadOlderTimeline(roomID: roomID, before: eventID)
+            let outcome = await environment.timeline.loadOlderTimeline(roomID: roomID, before: eventID)
             await MainActor.run {
-                let existingIDs = Set(items.map(\.id))
-                let uniqueOlder = older.filter { existingIDs.contains($0.id) == false }
-                state = .loaded(uniqueOlder + items, isPaginating: false)
-                if uniqueOlder.isEmpty == false {
-                    showJumpToLatest = true
+                switch outcome {
+                case .loaded(let older):
+                    let existingIDs = Set(items.map(\.id))
+                    let uniqueOlder = older.filter { existingIDs.contains($0.id) == false }
+                    state = .loaded(uniqueOlder + items, isPaginating: false)
+                    if uniqueOlder.isEmpty == false {
+                        showJumpToLatest = true
+                    }
+                case .empty:
+                    state = .loaded(items, isPaginating: false)
+                case .failed(let message):
+                    state = .failed(message)
                 }
             }
         }
@@ -589,13 +654,24 @@ struct RoomTimelineView: View {
             defer {
                 PerformanceTrace.end("TimelineJumpToLatest", id: signpostID)
             }
-            let latestItems = await environment.timeline.loadInitialTimeline(roomID: roomID, focusedEventID: nil)
+            let outcome = await environment.timeline.loadInitialTimeline(roomID: roomID, focusedEventID: nil)
             await MainActor.run {
-                let nextItems = latestItems.isEmpty ? currentItems : latestItems
+                let nextItems: [TimelineItem]
+                switch outcome {
+                case .loaded(let items):
+                    nextItems = items.isEmpty ? currentItems : items
+                case .empty:
+                    nextItems = currentItems
+                case .failed:
+                    nextItems = currentItems
+                }
                 initialReadMarkerEventID = nil
                 hasPositionedInitialTimeline = true
                 state = .loaded(nextItems, isPaginating: false)
                 if let latest = nextItems.last {
+                    Task {
+                        _ = await environment.readMarkers.markFullyRead(roomID: roomID, eventID: latest.eventID)
+                    }
                     withAnimation(.easeInOut(duration: 0.2)) {
                         proxy.scrollTo(latest.eventID, anchor: .bottom)
                     }
@@ -619,9 +695,15 @@ struct RoomTimelineView: View {
 
     private func applyAction(_ action: EventActionType, to item: TimelineItem) {
         Task {
-            let updated = await environment.eventActions.apply(action, to: item, currentUserID: currentUserID, roomID: roomID)
-            await MainActor.run {
-                replace(updated)
+            do {
+                let updated = try await environment.eventActions.apply(action, to: item, currentUserID: currentUserID, roomID: roomID)
+                await MainActor.run {
+                    replace(updated)
+                }
+            } catch {
+                await MainActor.run {
+                    sendError = "Action could not be completed. Try again."
+                }
             }
         }
     }
@@ -810,6 +892,7 @@ struct ThreadTimelineView: View {
     @State private var sendError: String?
     @State private var uploadState: MediaUploadState = .idle
     @State private var selectedPhoto: PhotosPickerItem?
+    @State private var threadUpdatesTask: Task<Void, Never>?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -841,6 +924,11 @@ struct ThreadTimelineView: View {
         .toolbar(.hidden, for: .tabBar)
         .task(id: roomID + rootEventID) {
             await loadThread()
+            startThreadUpdates()
+        }
+        .onDisappear {
+            threadUpdatesTask?.cancel()
+            threadUpdatesTask = nil
         }
         .onChange(of: selectedPhoto) { item in
             guard item != nil else {
@@ -886,23 +974,54 @@ struct ThreadTimelineView: View {
         defer {
             PerformanceTrace.end("ThreadTimelineLoad", id: signpostID)
         }
-        let items = await environment.timeline.loadInitialTimeline(roomID: roomID)
+        let outcome = await environment.timeline.loadThreadTimeline(roomID: roomID, rootEventID: rootEventID)
         await MainActor.run {
-            state = threadItems(from: items).isEmpty ? .empty : .loaded(items, isPaginating: false)
+            applyThreadOutcome(outcome)
+        }
+    }
+
+    private func startThreadUpdates() {
+        threadUpdatesTask?.cancel()
+        threadUpdatesTask = Task {
+            for await outcome in environment.timeline.threadTimelineUpdates(
+                roomID: roomID,
+                rootEventID: rootEventID
+            ) {
+                guard Task.isCancelled == false else {
+                    return
+                }
+                await MainActor.run {
+                    switch outcome {
+                    case .loaded(let items):
+                        applyThreadOutcome(.loaded(items))
+                    case .empty:
+                        if case .loading = state {
+                            state = .empty
+                        }
+                    case .failed(let message):
+                        if case .loaded = state {
+                            return
+                        }
+                        state = .failed(message)
+                    }
+                }
+            }
+        }
+    }
+
+    private func applyThreadOutcome(_ outcome: TimelineLoadOutcome) {
+        switch outcome {
+        case .loaded(let items):
+            state = items.isEmpty ? .empty : .loaded(items, isPaginating: false)
+        case .empty:
+            state = .empty
+        case .failed(let message):
+            state = .failed(message)
         }
     }
 
     private func threadItems(from items: [TimelineItem]) -> [TimelineItem] {
-        let root = items.first { $0.eventID == rootEventID }
-        let replies = items
-            .filter { $0.replyToEventID == rootEventID }
-            .sorted { $0.timestamp < $1.timestamp }
-
-        if let root {
-            return [root] + replies
-        }
-
-        return replies
+        items
     }
 
     private func sendThreadReply() {
@@ -1342,6 +1461,7 @@ private struct RoomDetailsView: View {
     @State private var selectedAvatarPhoto: PhotosPickerItem?
     @State private var inviteUserID = ""
     @State private var notificationMode: SynaraRoomNotificationMode = .allMessages
+    @State private var isApplyingLoadedNotificationMode = false
     @State private var message: String?
     @State private var isLoading = false
     @State private var isLeaveConfirmationPresented = false
@@ -1390,6 +1510,9 @@ private struct RoomDetailsView: View {
                     }
                     .accessibilityIdentifier("RoomNotificationModePicker")
                     .onChange(of: notificationMode) { mode in
+                        guard isApplyingLoadedNotificationMode == false else {
+                            return
+                        }
                         updateNotificationMode(mode)
                     }
                 }
@@ -1471,7 +1594,9 @@ private struct RoomDetailsView: View {
         let loadedDetails = await environment.roomManagement.roomDetails(roomID: roomID)
         await MainActor.run {
             details = loadedDetails
+            isApplyingLoadedNotificationMode = true
             notificationMode = loadedDetails?.notificationMode ?? .allMessages
+            isApplyingLoadedNotificationMode = false
             profileName = loadedDetails?.name ?? fallbackTitle
             profileTopic = loadedDetails?.topic ?? ""
             let aliases = loadedDetails?.aliases ?? []
@@ -2407,21 +2532,25 @@ private struct ComposerView: View {
                     .accessibilityHint("Enter a message for this room")
                     .accessibilityIdentifier("ComposerTextField")
 
-                Button(action: onSend) {
-                    Image(systemName: text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "mic" : "paperplane.fill")
-                        .font(.system(size: 17, weight: .semibold))
+                if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    Color.clear
                         .frame(width: 40, height: 40)
-                        .background(sendButtonTint)
-                        .foregroundStyle(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? SynaraColor.secondaryText : Color.white)
-                        .clipShape(Circle())
+                        .accessibilityHidden(true)
+                } else {
+                    Button(action: onSend) {
+                        Image(systemName: "paperplane.fill")
+                            .font(.system(size: 17, weight: .semibold))
+                            .frame(width: 40, height: 40)
+                            .background(sendButtonTint)
+                            .foregroundStyle(Color.white)
+                            .clipShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .contentShape(Rectangle())
+                    .accessibilityLabel("Send")
+                    .accessibilityHint("Sends the current message")
+                    .accessibilityIdentifier("ComposerSendButton")
                 }
-                .buttonStyle(.plain)
-                .contentShape(Rectangle())
-                .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                .opacity(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.45 : 1)
-                .accessibilityLabel("Send")
-                .accessibilityHint("Sends the current message")
-                .accessibilityIdentifier("ComposerSendButton")
             }
 
             if case .uploading(let progress) = uploadState {

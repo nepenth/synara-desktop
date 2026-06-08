@@ -18,10 +18,30 @@ final class MatrixStoreLifecycleTests: XCTestCase {
         try FileManager.default.createDirectory(at: legacyStore.appendingPathComponent("data", isDirectory: true), withIntermediateDirectories: true)
         try FileManager.default.createDirectory(at: versionedStore.appendingPathComponent("data", isDirectory: true), withIntermediateDirectories: true)
 
-        try pruneLegacyStores(in: root)
+        try MatrixRustSDKClientStore.pruneLegacyPersistedStores(in: root)
 
         XCTAssertFalse(FileManager.default.fileExists(atPath: legacyStore.path))
         XCTAssertTrue(FileManager.default.fileExists(atPath: versionedStore.path))
+    }
+
+    func testDeletePersistedStoreRemovesOnlyTargetSession() throws {
+        let alice = try makeSession(userID: "@alice:matrix.org")
+        let bob = try makeSession(userID: "@bob:matrix.org")
+        defer {
+            try? MatrixRustSDKClientStore.deletePersistedStore(for: alice)
+            try? MatrixRustSDKClientStore.deletePersistedStore(for: bob)
+        }
+
+        try MatrixRustSDKClientStore.materializePersistedStore(for: alice)
+        try MatrixRustSDKClientStore.materializePersistedStore(for: bob)
+
+        XCTAssertTrue(MatrixRustSDKClientStore.persistedStoreExists(for: alice))
+        XCTAssertTrue(MatrixRustSDKClientStore.persistedStoreExists(for: bob))
+
+        try MatrixRustSDKClientStore.deletePersistedStore(for: alice)
+
+        XCTAssertFalse(MatrixRustSDKClientStore.persistedStoreExists(for: alice))
+        XCTAssertTrue(MatrixRustSDKClientStore.persistedStoreExists(for: bob))
     }
 
     func testKeychainSecureStoreMigratesLegacyEnvelope() throws {
@@ -51,25 +71,9 @@ final class MatrixStoreLifecycleTests: XCTestCase {
         return base
     }
 
-    private func pruneLegacyStores(in root: URL) throws {
-        let versionDirectoryPrefix = "v"
-        for child in try FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: [.isDirectoryKey]) {
-            let isDirectory = (try? child.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true
-            guard isDirectory else {
-                continue
-            }
-
-            if child.lastPathComponent.hasPrefix(versionDirectoryPrefix) {
-                continue
-            }
-
-            try FileManager.default.removeItem(at: child)
-        }
-    }
-
-    private func makeSession() throws -> AuthenticatedSession {
+    private func makeSession(userID: String = "@alice:matrix.org") throws -> AuthenticatedSession {
         AuthenticatedSession(
-            userID: "@alice:matrix.org",
+            userID: userID,
             deviceID: "DEVICE",
             homeserverURL: try XCTUnwrap(URL(string: "https://matrix.org")),
             accessToken: "secret-token"

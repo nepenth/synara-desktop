@@ -308,7 +308,6 @@ struct SettingsView: View {
                 try await environment.wipe.logoutAndWipe()
                 await MainActor.run {
                     state = .idle
-                    environment.router.resetForAccountChange()
                     environment.logger.info("Local logout completed", category: .auth)
                 }
             } catch {

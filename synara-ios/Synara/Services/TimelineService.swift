@@ -351,23 +351,44 @@ struct RawTimelineEvent: Equatable {
     }
 }
 
-protocol TimelineServicing {
-    func loadInitialTimeline(roomID: String) async -> [TimelineItem]
-    func loadInitialTimeline(roomID: String, focusedEventID: String?) async -> [TimelineItem]
-    func loadOlderTimeline(roomID: String, before eventID: String) async -> [TimelineItem]
-    func timelineUpdates(roomID: String, focusedEventID: String?) -> AsyncStream<[TimelineItem]>
+enum TimelineLoadOutcome: Equatable {
+    case loaded([TimelineItem])
+    case empty
+    case failed(String)
+}
+
+protocol TimelineServicing: AnyObject {
+    func loadInitialTimeline(roomID: String) async -> TimelineLoadOutcome
+    func loadInitialTimeline(roomID: String, focusedEventID: String?) async -> TimelineLoadOutcome
+    func loadThreadTimeline(roomID: String, rootEventID: String) async -> TimelineLoadOutcome
+    func loadOlderTimeline(roomID: String, before eventID: String) async -> TimelineLoadOutcome
+    func timelineUpdates(roomID: String, focusedEventID: String?) -> AsyncStream<TimelineLoadOutcome>
+    func threadTimelineUpdates(roomID: String, rootEventID: String) -> AsyncStream<TimelineLoadOutcome>
+    func clearSessionCaches()
 }
 
 extension TimelineServicing {
-    func loadInitialTimeline(roomID: String, focusedEventID: String?) async -> [TimelineItem] {
-        await loadInitialTimeline(roomID: roomID)
+    func clearSessionCaches() {}
+
+    func loadInitialTimeline(roomID: String) async -> TimelineLoadOutcome {
+        await loadInitialTimeline(roomID: roomID, focusedEventID: nil)
     }
 
-    func timelineUpdates(roomID: String, focusedEventID: String?) -> AsyncStream<[TimelineItem]> {
+    func loadThreadTimeline(roomID: String, rootEventID: String) async -> TimelineLoadOutcome {
+        await loadInitialTimeline(roomID: roomID, focusedEventID: rootEventID)
+    }
+
+    func threadTimelineUpdates(roomID: String, rootEventID: String) -> AsyncStream<TimelineLoadOutcome> {
+        timelineUpdates(roomID: roomID, focusedEventID: rootEventID)
+    }
+}
+
+extension TimelineServicing {
+    func timelineUpdates(roomID: String, focusedEventID: String?) -> AsyncStream<TimelineLoadOutcome> {
         AsyncStream { continuation in
             let task = Task {
-                let items = await loadInitialTimeline(roomID: roomID, focusedEventID: focusedEventID)
-                continuation.yield(items)
+                let outcome = await loadInitialTimeline(roomID: roomID, focusedEventID: focusedEventID)
+                continuation.yield(outcome)
                 continuation.finish()
             }
 
@@ -533,9 +554,11 @@ enum TimelineReplyCounter {
     }
 }
 
-struct MockTimelineService: TimelineServicing {
+final class MockTimelineService: TimelineServicing {
     var events: [RawTimelineEvent]
     var itemFixture: [TimelineItem]?
+    var updateOutcomes: [TimelineLoadOutcome] = []
+    private(set) var clearSessionCachesCallCount = 0
 
     init(events: [RawTimelineEvent] = TimelineFixtures.commonEvents()) {
         self.events = events
@@ -547,18 +570,78 @@ struct MockTimelineService: TimelineServicing {
         self.itemFixture = items
     }
 
-    func loadInitialTimeline(roomID: String) async -> [TimelineItem] {
-        if let itemFixture {
-            return itemFixture
-        }
-        return events.map(TimelineMapper.map)
+    func clearSessionCaches() {
+        clearSessionCachesCallCount += 1
     }
 
-    func loadOlderTimeline(roomID: String, before eventID: String) async -> [TimelineItem] {
-        if let itemFixture {
-            return Array(itemFixture.prefix(50))
+    func loadInitialTimeline(roomID: String) async -> TimelineLoadOutcome {
+        await loadInitialTimeline(roomID: roomID, focusedEventID: nil)
+    }
+
+    func loadInitialTimeline(roomID: String, focusedEventID: String?) async -> TimelineLoadOutcome {
+        if let focusedEventID,
+           let item = (itemFixture ?? events.map(TimelineMapper.map)).first(where: { $0.eventID == focusedEventID || $0.id == focusedEventID }) {
+            return .loaded([item])
         }
-        return events.filter { $0.eventID != eventID }.map(TimelineMapper.map)
+        if let itemFixture {
+            return itemFixture.isEmpty ? .empty : .loaded(itemFixture)
+        }
+        let items = events.map(TimelineMapper.map)
+        return items.isEmpty ? .empty : .loaded(items)
+    }
+
+    func loadOlderTimeline(roomID: String, before eventID: String) async -> TimelineLoadOutcome {
+        if let itemFixture {
+            let older = Array(itemFixture.prefix(50))
+            return older.isEmpty ? .empty : .loaded(older)
+        }
+        let older = events.filter { $0.eventID != eventID }.map(TimelineMapper.map)
+        return older.isEmpty ? .empty : .loaded(older)
+    }
+
+    func loadThreadTimeline(roomID: String, rootEventID: String) async -> TimelineLoadOutcome {
+        let items = (itemFixture ?? events.map(TimelineMapper.map))
+        let threadItems = threadTimelineItems(from: items, rootEventID: rootEventID)
+        return threadItems.isEmpty ? .empty : .loaded(threadItems)
+    }
+
+    func threadTimelineUpdates(roomID: String, rootEventID: String) -> AsyncStream<TimelineLoadOutcome> {
+        timelineUpdates(roomID: roomID, focusedEventID: rootEventID)
+    }
+
+    private func threadTimelineItems(from items: [TimelineItem], rootEventID: String) -> [TimelineItem] {
+        let root = items.first { $0.eventID == rootEventID }
+        let replies = items
+            .filter { $0.replyToEventID == rootEventID }
+            .sorted { $0.timestamp < $1.timestamp }
+
+        if let root {
+            return [root] + replies
+        }
+
+        return replies
+    }
+
+    func timelineUpdates(roomID: String, focusedEventID: String?) -> AsyncStream<TimelineLoadOutcome> {
+        AsyncStream { continuation in
+            let task = Task {
+                let outcomes: [TimelineLoadOutcome]
+                if updateOutcomes.isEmpty {
+                    outcomes = [await loadInitialTimeline(roomID: roomID, focusedEventID: focusedEventID)]
+                } else {
+                    outcomes = updateOutcomes
+                }
+
+                for outcome in outcomes {
+                    continuation.yield(outcome)
+                }
+                continuation.finish()
+            }
+
+            continuation.onTermination = { _ in
+                task.cancel()
+            }
+        }
     }
 }
 

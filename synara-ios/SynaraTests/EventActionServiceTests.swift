@@ -65,21 +65,21 @@ final class EventActionServiceTests: XCTestCase {
         XCTAssertFalse(availability.canReact)
     }
 
-    func testReactAggregatesWithoutDuplicateLocalEcho() async {
+    func testReactAggregatesWithoutDuplicateLocalEcho() async throws {
         let service = MockEventActionService()
         let item = makeItem(senderID: "@alice:matrix.org")
 
-        let updated = await service.apply(.react("👍"), to: item, currentUserID: "@bob:matrix.org", roomID: "!room:matrix.org")
+        let updated = try await service.apply(.react("👍"), to: item, currentUserID: "@bob:matrix.org", roomID: "!room:matrix.org")
 
         XCTAssertEqual(updated.id, item.id)
         XCTAssertEqual(updated.reactions["👍"], 1)
     }
 
-    func testRedactKeepsStableIdentity() async {
+    func testRedactKeepsStableIdentity() async throws {
         let service = MockEventActionService()
         let item = makeItem(senderID: "@alice:matrix.org")
 
-        let updated = await service.apply(.redact, to: item, currentUserID: "@alice:matrix.org", roomID: "!room:matrix.org")
+        let updated = try await service.apply(.redact, to: item, currentUserID: "@alice:matrix.org", roomID: "!room:matrix.org")
 
         XCTAssertEqual(updated.id, item.id)
         XCTAssertEqual(updated.kind, .redacted)

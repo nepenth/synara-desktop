@@ -62,4 +62,95 @@ final class RoomListServiceTests: XCTestCase {
         XCTAssertEqual(state, .empty)
     }
 
+    func testSearchFilterExcludesNonMatchingInvites() {
+        let invite = RoomSummary(
+            id: "!alerts:matrix.org",
+            name: "Alerts",
+            lastMessagePreview: "You are invited",
+            unreadCount: 1,
+            hasHighlight: false,
+            kind: .room,
+            membership: .invited,
+            lastActivityAt: RoomListFixtures.now
+        )
+        let joined = RoomSummary(
+            id: "!alice:matrix.org",
+            name: "Alice",
+            lastMessagePreview: "Hello from Alice",
+            unreadCount: 0,
+            hasHighlight: false,
+            kind: .directMessage,
+            membership: .joined,
+            lastActivityAt: RoomListFixtures.now
+        )
+        let rooms = [invite, joined]
+
+        let filtered = RoomListSearchFilter.applySearchQuery("Alice", to: rooms, invitedRooms: [invite])
+
+        XCTAssertEqual(filtered.map(\.id), ["!alice:matrix.org"])
+    }
+
+    func testSearchFilterIncludesMatchingInvites() {
+        let invite = RoomSummary(
+            id: "!alerts:matrix.org",
+            name: "Alerts",
+            lastMessagePreview: "You are invited",
+            unreadCount: 1,
+            hasHighlight: false,
+            kind: .room,
+            membership: .invited,
+            lastActivityAt: RoomListFixtures.now
+        )
+        let joined = RoomSummary(
+            id: "!project:matrix.org",
+            name: "Project",
+            lastMessagePreview: "Latest update",
+            unreadCount: 2,
+            hasHighlight: false,
+            kind: .room,
+            membership: .joined,
+            lastActivityAt: RoomListFixtures.now
+        )
+        let rooms = [invite, joined]
+
+        let filtered = RoomListSearchFilter.applySearchQuery("Alerts", to: rooms, invitedRooms: [invite])
+
+        XCTAssertEqual(filtered.map(\.id), ["!alerts:matrix.org"])
+    }
+
+    func testMockRoomListStreamYieldsMultipleStates() async {
+        let initialRooms = RoomListFixtures.small()
+        let updatedRooms = [
+            RoomSummary(
+                id: "!new:matrix.org",
+                name: "New room",
+                lastMessagePreview: "Fresh activity",
+                unreadCount: 2,
+                hasHighlight: true,
+                kind: .room,
+                membership: .joined,
+                lastActivityAt: RoomListFixtures.now
+            )
+        ] + initialRooms
+        let service = MockRoomListService(state: .loaded(initialRooms))
+        service.updateStates = [
+            .loaded(initialRooms),
+            .loaded(updatedRooms)
+        ]
+
+        var states: [RoomListState] = []
+        for await state in service.roomUpdates() {
+            states.append(state)
+        }
+
+        XCTAssertEqual(states.count, 2)
+        guard case .loaded(let firstBatch) = states[0],
+              case .loaded(let secondBatch) = states[1] else {
+            XCTFail("Expected loaded room list states")
+            return
+        }
+        XCTAssertEqual(firstBatch.count, initialRooms.count)
+        XCTAssertEqual(secondBatch.first?.id, "!new:matrix.org")
+    }
+
 }

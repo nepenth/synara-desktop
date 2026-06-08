@@ -25,6 +25,7 @@ struct AppEnvironment {
     let crypto: CryptoStatusServicing
     let roomManagement: RoomManagementServicing
 
+    @MainActor
     static func live() -> AppEnvironment {
         let logger = AppLogger()
         let secureStore = KeychainSecureSessionStore()
@@ -54,7 +55,18 @@ struct AppEnvironment {
             gatewayURL: pushGatewayURL(),
             logger: logger
         )
-        let push = SynaraPushService(logger: logger, pusherService: pusherService)
+        let sparsePushRouteResolver = MatrixSparsePushRouteResolver(
+            sessionStore: session,
+            clientStore: matrixSDKClientStore
+        )
+        let push = SynaraPushService(
+            logger: logger,
+            pusherService: pusherService,
+            sparseRouteResolver: sparsePushRouteResolver
+        )
+        let router = AppRouter()
+        let drafts = DraftStore()
+        let timeline = MatrixRustSDKTimelineService(sessionStore: session, clientStore: matrixSDKClientStore)
         let roomList = MatrixRustSDKRoomListService(sessionStore: session, clientStore: matrixSDKClientStore)
         let roomMembership = MatrixRustSDKRoomMembershipService(sessionStore: session, clientStore: matrixSDKClientStore)
         let crypto = MatrixRustSDKCryptoStatusService(sessionStore: session, clientStore: matrixSDKClientStore)
@@ -65,7 +77,7 @@ struct AppEnvironment {
             push: push,
             logger: logger,
             settings: InMemorySettingsStore(),
-            router: AppRouter(),
+            router: router,
             homeserverDiscovery: PlaceholderHomeserverDiscoveryService(),
             auth: MatrixRustSDKAuthService(clientStore: matrixSDKClientStore),
             roomList: roomList,
@@ -75,15 +87,18 @@ struct AppEnvironment {
                 session: session,
                 matrix: matrix,
                 roomList: roomList,
-                push: push
+                timeline: timeline,
+                drafts: drafts,
+                push: push,
+                router: router
             ),
-            timeline: MatrixRustSDKTimelineService(sessionStore: session, clientStore: matrixSDKClientStore),
+            timeline: timeline,
             later: MatrixRustSDKLaterService(sessionStore: session, clientStore: matrixSDKClientStore),
             messageSender: MatrixRustSDKMessageSendService(sessionStore: session, clientStore: matrixSDKClientStore),
-            drafts: DraftStore(),
+            drafts: drafts,
             eventActions: MatrixRustSDKEventActionService(sessionStore: session, clientStore: matrixSDKClientStore),
             agentApprovals: MatrixRustSDKAgentApprovalService(sessionStore: session, clientStore: matrixSDKClientStore),
-            readMarkers: MatrixRoomReadMarkerService(sessionStore: session),
+            readMarkers: MatrixRoomReadMarkerService(sessionStore: session, clientStore: matrixSDKClientStore),
             mediaLoader: MatrixMediaLoader(sessionStore: session, clientStore: matrixSDKClientStore),
             mediaUploader: MatrixMediaUploadService(sessionStore: session, clientStore: matrixSDKClientStore),
             crypto: crypto,
@@ -130,7 +145,10 @@ struct AppEnvironment {
                 session: session,
                 matrix: matrix,
                 roomList: roomList,
-                push: push
+                timeline: timeline,
+                drafts: drafts,
+                push: push,
+                router: router
             ),
             timeline: timeline,
             later: later,

@@ -17,7 +17,7 @@ final class MatrixLifecycleTests: XCTestCase {
         let matrix = MockMatrixClientService(syncStatus: .syncing)
 
         await matrix.stop()
-        matrix.resetLocalState()
+        await matrix.resetLocalState(for: nil)
 
         XCTAssertEqual(matrix.syncStatus, .stopped)
         XCTAssertEqual(matrix.stopCallCount, 1)
