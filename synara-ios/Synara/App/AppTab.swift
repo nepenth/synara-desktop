@@ -1,5 +1,17 @@
 import SwiftUI
 
+private struct NotificationsTabView: View {
+    var body: some View {
+        SynaraEmptyState(
+            title: "Notifications Open Rooms",
+            systemImage: "bell",
+            message: "Synara does not keep a separate notification inbox. Push alerts open the relevant room directly. Check Settings to manage notification permissions and push registration."
+        )
+        .navigationTitle("Notifications")
+        .accessibilityIdentifier("NotificationsScreen")
+    }
+}
+
 enum AppTab: String, CaseIterable, Identifiable {
     case rooms
     case later
@@ -14,7 +26,7 @@ enum AppTab: String, CaseIterable, Identifiable {
         case .rooms:
             RoomListView()
         case .notifications:
-            PlaceholderScreen(title: "Notifications", systemImage: "bell")
+            NotificationsTabView()
         case .later:
             LaterListView()
         case .settings:

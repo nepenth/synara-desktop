@@ -13,17 +13,17 @@ final class AppRouteTests: XCTestCase {
     func testDeepLinkRoutesSettings() throws {
         let router = AppRouter()
         let url = try XCTUnwrap(URL(string: "synara://settings"))
-        let opened = router.open(url: url)
+        let opened = router.open(url: url, sessionIsSignedIn: true)
 
         XCTAssertTrue(opened)
         XCTAssertEqual(router.selectedTab, .settings)
-        XCTAssertEqual(router.settingsPath, [.settings])
+        XCTAssertTrue(router.settingsPath.isEmpty)
     }
 
     func testDeepLinkRoutesRoom() throws {
         let router = AppRouter()
         let url = try XCTUnwrap(URL(string: "synara://room/!roomid:example.org"))
-        let opened = router.open(url: url)
+        let opened = router.open(url: url, sessionIsSignedIn: true)
 
         XCTAssertTrue(opened)
         XCTAssertEqual(router.selectedTab, .rooms)
@@ -33,7 +33,7 @@ final class AppRouteTests: XCTestCase {
     func testDeepLinkRoutesRoomWithEventAnchor() throws {
         let router = AppRouter()
         let url = try XCTUnwrap(URL(string: "synara://route/%2Froom%2F!roomid%3Aexample.org%2F%24evt123"))
-        let opened = router.open(url: url)
+        let opened = router.open(url: url, sessionIsSignedIn: true)
 
         XCTAssertTrue(opened)
         XCTAssertEqual(router.selectedTab, .rooms)
@@ -43,7 +43,7 @@ final class AppRouteTests: XCTestCase {
     func testUniversalLinkRoutesRoomWithEventAnchor() throws {
         let router = AppRouter()
         let url = try XCTUnwrap(URL(string: "https://synara.app/r/%2Froom%2F!roomid%3Aexample.org%2F%24evt123"))
-        let opened = router.open(url: url)
+        let opened = router.open(url: url, sessionIsSignedIn: true)
 
         XCTAssertTrue(opened)
         XCTAssertEqual(router.selectedTab, .rooms)
@@ -54,9 +54,9 @@ final class AppRouteTests: XCTestCase {
         let router = AppRouter()
         let originalTab = router.selectedTab
 
-        XCTAssertFalse(router.open(url: try XCTUnwrap(URL(string: "https://settings"))))
-        XCTAssertFalse(router.open(url: try XCTUnwrap(URL(string: "https://evil.example/r/%2Fsettings"))))
-        XCTAssertFalse(router.open(url: try XCTUnwrap(URL(string: "http://synara.app/r/%2Fsettings"))))
+        XCTAssertFalse(router.open(url: try XCTUnwrap(URL(string: "https://settings")), sessionIsSignedIn: true))
+        XCTAssertFalse(router.open(url: try XCTUnwrap(URL(string: "https://evil.example/r/%2Fsettings")), sessionIsSignedIn: true))
+        XCTAssertFalse(router.open(url: try XCTUnwrap(URL(string: "http://synara.app/r/%2Fsettings")), sessionIsSignedIn: true))
         XCTAssertEqual(router.selectedTab, originalTab)
         XCTAssertTrue(router.settingsPath.isEmpty)
     }
@@ -64,7 +64,7 @@ final class AppRouteTests: XCTestCase {
     func testDeepLinkRoutesNotificationsFallbackSurface() throws {
         let router = AppRouter()
         let url = try XCTUnwrap(URL(string: "synara://inbox/later"))
-        let opened = router.open(url: url)
+        let opened = router.open(url: url, sessionIsSignedIn: true)
 
         XCTAssertTrue(opened)
         XCTAssertEqual(router.selectedTab, .later)
@@ -74,11 +74,11 @@ final class AppRouteTests: XCTestCase {
     func testDeepLinkRoutesNotificationsSurface() throws {
         let router = AppRouter()
         let url = try XCTUnwrap(URL(string: "synara://notifications"))
-        let opened = router.open(url: url)
+        let opened = router.open(url: url, sessionIsSignedIn: true)
 
         XCTAssertTrue(opened)
         XCTAssertEqual(router.selectedTab, .notifications)
-        XCTAssertEqual(router.notificationsPath, [.notifications])
+        XCTAssertTrue(router.notificationsPath.isEmpty)
     }
 
     func testRouterCanCarryRoomTitleFromRoomList() {
@@ -116,12 +116,60 @@ final class AppRouteTests: XCTestCase {
         )
     }
 
+    func testRouterAppendsThreadWhenRoomAlreadyInPath() {
+        let router = AppRouter()
+        router.route(to: .room(id: "!roomid:example.org", title: "Alerts"))
+        router.route(
+            to: .thread(
+                roomID: "!roomid:example.org",
+                rootEventID: "$event:example.org",
+                roomTitle: "Alerts",
+                rootTitle: "Root message"
+            )
+        )
+
+        XCTAssertEqual(
+            router.roomsPath,
+            [
+                .room(id: "!roomid:example.org", title: "Alerts"),
+                .thread(
+                    roomID: "!roomid:example.org",
+                    rootEventID: "$event:example.org",
+                    roomTitle: "Alerts",
+                    rootTitle: "Root message"
+                )
+            ]
+        )
+    }
+
+    func testDeepLinkDefersRouteWhileSignedOut() throws {
+        let router = AppRouter()
+        let url = try XCTUnwrap(URL(string: "synara://room/!roomid:example.org"))
+
+        XCTAssertTrue(router.open(url: url, sessionIsSignedIn: false))
+        XCTAssertEqual(router.pendingDeepLink, .room(id: "!roomid:example.org", title: nil))
+        XCTAssertTrue(router.roomsPath.isEmpty)
+        XCTAssertEqual(router.selectedTab, .rooms)
+    }
+
+    func testReplayPendingDeepLinkRoutesAfterSignIn() throws {
+        let router = AppRouter()
+        let url = try XCTUnwrap(URL(string: "synara://room/!roomid:example.org"))
+
+        XCTAssertTrue(router.open(url: url, sessionIsSignedIn: false))
+        router.replayPendingDeepLinkIfNeeded(sessionIsSignedIn: true)
+
+        XCTAssertNil(router.pendingDeepLink)
+        XCTAssertEqual(router.selectedTab, .rooms)
+        XCTAssertEqual(router.roomsPath, [.room(id: "!roomid:example.org", title: nil)])
+    }
+
     func testRouterResetClearsNavigationAndSheets() {
         let router = AppRouter()
         router.route(to: .settings)
         router.present(.accountSwitcher)
 
-        router.resetForAccountChange()
+        router.resetNavigationPathsForAccountChange()
 
         XCTAssertEqual(router.selectedTab, .rooms)
         XCTAssertTrue(router.roomsPath.isEmpty)

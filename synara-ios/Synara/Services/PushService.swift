@@ -87,6 +87,7 @@ final class MatrixPusherService: MatrixPusherServicing {
     }
 }
 
+@MainActor
 final class SynaraPushService: NSObject, PushServicing {
     private(set) var isRegistered = false
     private(set) var fullDeviceToken: String?
@@ -109,7 +110,7 @@ final class SynaraPushService: NSObject, PushServicing {
     private let isSimulator = false
     #endif
 
-    init(
+    nonisolated init(
         logger: LoggingServicing = AppLogger(),
         pusherService: MatrixPusherServicing? = nil,
         isRegistrationAvailable: Bool? = nil
@@ -166,16 +167,14 @@ final class SynaraPushService: NSObject, PushServicing {
         }
     }
 
-    func clearRegistrationState() {
+    func clearRegistrationState() async {
         let session = currentSession
         let pushKey = sessionBoundPushKey ?? fullDeviceToken
-        Task {
-            if let session, let pushKey {
-                do {
-                    try await pusherService.unregisterPusher(session: session, pushKey: pushKey)
-                } catch {
-                    logger.error("Push unregister failed", category: .push)
-                }
+        if let session, let pushKey {
+            do {
+                try await pusherService.unregisterPusher(session: session, pushKey: pushKey)
+            } catch {
+                logger.error("Push unregister failed", category: .push)
             }
         }
 

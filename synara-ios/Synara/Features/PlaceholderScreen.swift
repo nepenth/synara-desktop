@@ -36,6 +36,7 @@ struct RoutePlaceholderView: View {
                 roomTitle: title,
                 focusedEventID: eventID
             )
+            .id("\(id)-\(eventID ?? "")")
         case .thread(let roomID, let rootEventID, let roomTitle, let rootTitle):
             ThreadTimelineView(
                 roomID: roomID,
@@ -44,7 +45,7 @@ struct RoutePlaceholderView: View {
                 rootTitle: rootTitle
             )
         case .settings:
-            PlaceholderScreen(title: "Settings", systemImage: "gearshape")
+            EmptyView()
         case .notifications:
             PlaceholderScreen(title: "Notifications", systemImage: "bell")
         case .later:
@@ -150,7 +151,6 @@ private struct AccountMenuSheet: View {
                 try await environment.wipe.logoutAndWipe()
                 await MainActor.run {
                     isLoggingOut = false
-                    environment.router.resetForAccountChange()
                     environment.logger.info("Local logout completed from account menu", category: .auth)
                     dismiss()
                 }

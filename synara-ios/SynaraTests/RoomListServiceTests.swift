@@ -62,4 +62,39 @@ final class RoomListServiceTests: XCTestCase {
         XCTAssertEqual(state, .empty)
     }
 
+    func testMockRoomListStreamYieldsMultipleStates() async {
+        let initialRooms = RoomListFixtures.small()
+        let updatedRooms = [
+            RoomSummary(
+                id: "!new:matrix.org",
+                name: "New room",
+                lastMessagePreview: "Fresh activity",
+                unreadCount: 2,
+                hasHighlight: true,
+                kind: .room,
+                membership: .joined,
+                lastActivityAt: RoomListFixtures.now
+            )
+        ] + initialRooms
+        let service = MockRoomListService(state: .loaded(initialRooms))
+        service.updateStates = [
+            .loaded(initialRooms),
+            .loaded(updatedRooms)
+        ]
+
+        var states: [RoomListState] = []
+        for await state in service.roomUpdates() {
+            states.append(state)
+        }
+
+        XCTAssertEqual(states.count, 2)
+        guard case .loaded(let firstBatch) = states[0],
+              case .loaded(let secondBatch) = states[1] else {
+            XCTFail("Expected loaded room list states")
+            return
+        }
+        XCTAssertEqual(firstBatch.count, initialRooms.count)
+        XCTAssertEqual(secondBatch.first?.id, "!new:matrix.org")
+    }
+
 }

@@ -21,6 +21,7 @@ final class AppEnvironmentTests: XCTestCase {
         XCTAssertTrue(environment.later is MockLaterService)
     }
 
+    @MainActor
     func testLiveEnvironmentUsesMatrixRustSDKServices() {
         let environment = AppEnvironment.live()
 
@@ -177,6 +178,7 @@ final class AppEnvironmentTests: XCTestCase {
         XCTAssertEqual(NotificationPermissionStatus.map(.ephemeral), .ephemeral)
     }
 
+    @MainActor
     func testLiveEnvironmentReadsPushGatewayFromEnvironment() {
         let variable = "SYNARA_PUSH_GATEWAY_URL"
         setenv(variable, "https://push.example.internal", 1)
@@ -188,6 +190,7 @@ final class AppEnvironmentTests: XCTestCase {
         XCTAssertEqual((environment.push as? SynaraPushService)?.pushGatewayURL, "https://push.example.internal")
     }
 
+    @MainActor
     func testLiveEnvironmentIgnoresInvalidPushGatewayEnvironmentValue() {
         let variable = "SYNARA_PUSH_GATEWAY_URL"
         setenv(variable, "not a url", 1)

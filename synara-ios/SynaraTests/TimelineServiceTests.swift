@@ -227,14 +227,65 @@ final class TimelineServiceTests: XCTestCase {
     func testMockTimelineCanLoadInitialAndOlderEvents() async {
         let service = MockTimelineService()
 
-        let initial = await service.loadInitialTimeline(roomID: "!room:matrix.org")
-        let older = await service.loadOlderTimeline(roomID: "!room:matrix.org", before: initial[0].eventID)
+        let initialOutcome = await service.loadInitialTimeline(roomID: "!room:matrix.org")
+        guard case .loaded(let initial) = initialOutcome else {
+            XCTFail("Expected loaded initial timeline")
+            return
+        }
+
+        let olderOutcome = await service.loadOlderTimeline(roomID: "!room:matrix.org", before: initial[0].eventID)
+        guard case .loaded(let older) = olderOutcome else {
+            XCTFail("Expected loaded older timeline")
+            return
+        }
 
         XCTAssertEqual(initial.count, 6)
         XCTAssertEqual(older.count, 5)
         XCTAssertEqual(initial[0].senderID, "@mina:matrix.org")
         XCTAssertEqual(initial[0].reactions["👍"], 3)
         XCTAssertEqual(initial[4].replyToEventID, "$security:!project:matrix.org")
+    }
+
+    func testMockTimelineStreamYieldsMultipleOutcomes() async {
+        let firstItem = TimelineItem(
+            id: "$first",
+            eventID: "$first",
+            senderID: "@alice:matrix.org",
+            timestamp: TimelineFixtures.baseDate,
+            kind: .text("First"),
+            replyToEventID: nil,
+            isEdited: false,
+            reactions: [:]
+        )
+        let secondItem = TimelineItem(
+            id: "$second",
+            eventID: "$second",
+            senderID: "@bob:matrix.org",
+            timestamp: TimelineFixtures.baseDate.addingTimeInterval(1),
+            kind: .text("Second"),
+            replyToEventID: nil,
+            isEdited: false,
+            reactions: [:]
+        )
+        let service = MockTimelineService()
+        service.updateOutcomes = [
+            .loaded([firstItem]),
+            .loaded([firstItem, secondItem])
+        ]
+
+        var outcomes: [TimelineLoadOutcome] = []
+        for await outcome in service.timelineUpdates(roomID: "!room:matrix.org", focusedEventID: nil) {
+            outcomes.append(outcome)
+        }
+
+        XCTAssertEqual(outcomes.count, 2)
+        guard case .loaded(let firstBatch) = outcomes[0],
+              case .loaded(let secondBatch) = outcomes[1] else {
+            XCTFail("Expected loaded timeline outcomes")
+            return
+        }
+        XCTAssertEqual(firstBatch.count, 1)
+        XCTAssertEqual(secondBatch.count, 2)
     }
 
     func testLargeTimelineFixtureHasStableIdentity() {
