@@ -360,8 +360,10 @@ enum TimelineLoadOutcome: Equatable {
 protocol TimelineServicing: AnyObject {
     func loadInitialTimeline(roomID: String) async -> TimelineLoadOutcome
     func loadInitialTimeline(roomID: String, focusedEventID: String?) async -> TimelineLoadOutcome
+    func loadThreadTimeline(roomID: String, rootEventID: String) async -> TimelineLoadOutcome
     func loadOlderTimeline(roomID: String, before eventID: String) async -> TimelineLoadOutcome
     func timelineUpdates(roomID: String, focusedEventID: String?) -> AsyncStream<TimelineLoadOutcome>
+    func threadTimelineUpdates(roomID: String, rootEventID: String) -> AsyncStream<TimelineLoadOutcome>
     func clearSessionCaches()
 }
 
@@ -370,6 +372,14 @@ extension TimelineServicing {
 
     func loadInitialTimeline(roomID: String) async -> TimelineLoadOutcome {
         await loadInitialTimeline(roomID: roomID, focusedEventID: nil)
+    }
+
+    func loadThreadTimeline(roomID: String, rootEventID: String) async -> TimelineLoadOutcome {
+        await loadInitialTimeline(roomID: roomID, focusedEventID: rootEventID)
+    }
+
+    func threadTimelineUpdates(roomID: String, rootEventID: String) -> AsyncStream<TimelineLoadOutcome> {
+        timelineUpdates(roomID: roomID, focusedEventID: rootEventID)
     }
 }
 
@@ -587,6 +597,29 @@ final class MockTimelineService: TimelineServicing {
         }
         let older = events.filter { $0.eventID != eventID }.map(TimelineMapper.map)
         return older.isEmpty ? .empty : .loaded(older)
+    }
+
+    func loadThreadTimeline(roomID: String, rootEventID: String) async -> TimelineLoadOutcome {
+        let items = (itemFixture ?? events.map(TimelineMapper.map))
+        let threadItems = threadTimelineItems(from: items, rootEventID: rootEventID)
+        return threadItems.isEmpty ? .empty : .loaded(threadItems)
+    }
+
+    func threadTimelineUpdates(roomID: String, rootEventID: String) -> AsyncStream<TimelineLoadOutcome> {
+        timelineUpdates(roomID: roomID, focusedEventID: rootEventID)
+    }
+
+    private func threadTimelineItems(from items: [TimelineItem], rootEventID: String) -> [TimelineItem] {
+        let root = items.first { $0.eventID == rootEventID }
+        let replies = items
+            .filter { $0.replyToEventID == rootEventID }
+            .sorted { $0.timestamp < $1.timestamp }
+
+        if let root {
+            return [root] + replies
+        }
+
+        return replies
     }
 
     func timelineUpdates(roomID: String, focusedEventID: String?) -> AsyncStream<TimelineLoadOutcome> {

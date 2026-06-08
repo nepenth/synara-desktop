@@ -24,6 +24,26 @@ final class MatrixStoreLifecycleTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: versionedStore.path))
     }
 
+    func testDeletePersistedStoreRemovesOnlyTargetSession() throws {
+        let alice = try makeSession(userID: "@alice:matrix.org")
+        let bob = try makeSession(userID: "@bob:matrix.org")
+        defer {
+            try? MatrixRustSDKClientStore.deletePersistedStore(for: alice)
+            try? MatrixRustSDKClientStore.deletePersistedStore(for: bob)
+        }
+
+        try MatrixRustSDKClientStore.materializePersistedStore(for: alice)
+        try MatrixRustSDKClientStore.materializePersistedStore(for: bob)
+
+        XCTAssertTrue(MatrixRustSDKClientStore.persistedStoreExists(for: alice))
+        XCTAssertTrue(MatrixRustSDKClientStore.persistedStoreExists(for: bob))
+
+        try MatrixRustSDKClientStore.deletePersistedStore(for: alice)
+
+        XCTAssertFalse(MatrixRustSDKClientStore.persistedStoreExists(for: alice))
+        XCTAssertTrue(MatrixRustSDKClientStore.persistedStoreExists(for: bob))
+    }
+
     func testKeychainSecureStoreMigratesLegacyEnvelope() throws {
         let store = KeychainSecureSessionStore()
         defer { try? store.delete() }
@@ -51,9 +71,9 @@ final class MatrixStoreLifecycleTests: XCTestCase {
         return base
     }
 
-    private func makeSession() throws -> AuthenticatedSession {
+    private func makeSession(userID: String = "@alice:matrix.org") throws -> AuthenticatedSession {
         AuthenticatedSession(
-            userID: "@alice:matrix.org",
+            userID: userID,
             deviceID: "DEVICE",
             homeserverURL: try XCTUnwrap(URL(string: "https://matrix.org")),
             accessToken: "secret-token"

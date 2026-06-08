@@ -31,7 +31,7 @@ struct AppLocalWipeService: LocalWiping {
 
         await matrix.stop()
         await push.clearRegistrationState()
-        await matrix.resetLocalState()
+        await matrix.resetLocalState(for: activeSession)
         roomList.clearCache()
         timeline.clearSessionCaches()
         drafts.clearAll()
@@ -43,7 +43,6 @@ struct AppLocalWipeService: LocalWiping {
             throw LocalWipeError.sessionDeleteFailed
         }
 
-        _ = activeSession
     }
 }
 

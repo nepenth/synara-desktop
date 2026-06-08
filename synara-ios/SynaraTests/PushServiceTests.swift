@@ -3,6 +3,19 @@ import XCTest
 
 @MainActor
 final class PushServiceTests: XCTestCase {
+    func testSparseEventIDParserReturnsEventWhenRoomMissing() {
+        XCTAssertEqual(
+            NotificationPushRouteParser.sparseEventID(from: ["event_id": "$sparse:matrix.org"]),
+            "$sparse:matrix.org"
+        )
+        XCTAssertNil(
+            NotificationPushRouteParser.sparseEventID(from: [
+                "room_id": "!room:matrix.org",
+                "event_id": "$sparse:matrix.org"
+            ])
+        )
+    }
+
     func testRouteFromPayloadUsesRoomIdAndEventId() {
         let service = SynaraPushService(
             logger: MockLoggingService(),
@@ -159,6 +172,22 @@ final class PushServiceTests: XCTestCase {
         XCTAssertEqual(service.tokenSnippet, "aa5500")
     }
 
+    func testResolveRouteFallsBackToSparseResolver() async {
+        let resolver = StubSparsePushRouteResolver(
+            route: .room(id: "!resolved:matrix.org", eventID: "$sparse:matrix.org")
+        )
+        let service = SynaraPushService(
+            logger: MockLoggingService(),
+            pusherService: StubPusherService(),
+            sparseRouteResolver: resolver
+        )
+
+        let route = await service.resolveRoute(from: ["event_id": "$sparse:matrix.org"])
+
+        assertRoute(route, matchesRoom: "!resolved:matrix.org", eventID: "$sparse:matrix.org")
+        XCTAssertEqual(resolver.resolveCallCount, 1)
+    }
+
     func testPushServiceDoesNotRegisterWithoutGateway() async {
         let pusher = StubPusherService(isGatewayConfigured: false)
 
@@ -212,6 +241,20 @@ final class PushServiceTests: XCTestCase {
             }
             try? await Task.sleep(nanoseconds: 10_000_000)
         }
+    }
+}
+
+private final class StubSparsePushRouteResolver: SparsePushRouteResolving {
+    let route: AppRoute?
+    private(set) var resolveCallCount = 0
+
+    init(route: AppRoute?) {
+        self.route = route
+    }
+
+    func resolveRoute(eventID: String) async -> AppRoute? {
+        resolveCallCount += 1
+        return route
     }
 }
 

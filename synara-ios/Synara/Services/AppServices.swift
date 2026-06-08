@@ -62,7 +62,7 @@ protocol MatrixClientServicing: AnyObject {
     func start(session: AuthenticatedSession) async
     func warmSync(session: AuthenticatedSession) async
     func stop() async
-    func resetLocalState() async
+    func resetLocalState(for session: AuthenticatedSession?) async
 }
 
 protocol PushServicing {
@@ -77,6 +77,7 @@ protocol PushServicing {
     func clearRegistrationState() async
     func configure(with session: AuthenticatedSession)
     func route(from notificationPayload: [AnyHashable: Any]) -> AppRoute?
+    func resolveRoute(from notificationPayload: [AnyHashable: Any]) async -> AppRoute?
     func parseBadgeCount(from notificationPayload: [AnyHashable: Any]) -> Int?
     func applyIncomingBadge(from notificationPayload: [AnyHashable: Any])
 }
@@ -507,7 +508,8 @@ final class PlaceholderMatrixClientService: MatrixClientServicing {
         syncStatus = .stopped
     }
 
-    func resetLocalState() async {
+    func resetLocalState(for session: AuthenticatedSession?) async {
+        _ = session
         syncStatus = .stopped
     }
 }
@@ -528,6 +530,10 @@ final class PlaceholderPushService: PushServicing {
     func configure(with session: AuthenticatedSession) {}
 
     func route(from notificationPayload: [AnyHashable: Any]) -> AppRoute? {
+        nil
+    }
+
+    func resolveRoute(from notificationPayload: [AnyHashable: Any]) async -> AppRoute? {
         nil
     }
 
@@ -838,8 +844,11 @@ final class MockMatrixClientService: MatrixClientServicing {
         syncStatus = .stopped
     }
 
-    func resetLocalState() async {
+    private(set) var resetSessions: [AuthenticatedSession?] = []
+
+    func resetLocalState(for session: AuthenticatedSession?) async {
         resetCallCount += 1
+        resetSessions.append(session)
         syncStatus = .stopped
     }
 }
@@ -893,6 +902,11 @@ final class MockPushService: PushServicing {
     }
 
     func route(from notificationPayload: [AnyHashable: Any]) -> AppRoute? {
+        routeCallCount += 1
+        return routeOverride
+    }
+
+    func resolveRoute(from notificationPayload: [AnyHashable: Any]) async -> AppRoute? {
         routeCallCount += 1
         return routeOverride
     }
