@@ -734,6 +734,7 @@ actor MatrixRustSDKClientStore {
     }
 
     private func buildClient(homeserverURL: URL, storeID: String) async throws -> Client {
+        try Self.ensurePlatformInitialized()
         let paths = try Self.sessionPaths(storeID: storeID)
         return try await ClientBuilder()
             .homeserverUrl(url: homeserverURL.absoluteString)
@@ -769,6 +770,14 @@ actor MatrixRustSDKClientStore {
         try FileManager.default.removeItem(at: root)
     }
 
+    static func persistedStoreExists(for session: AuthenticatedSession) -> Bool {
+        let storeID = session.sdkStoreID ?? storeID(for: session.userID, homeserverURL: session.homeserverURL)
+        guard let root = try? storeRootURL(create: false).appendingPathComponent(storeID, isDirectory: true) else {
+            return false
+        }
+        return FileManager.default.fileExists(atPath: root.path)
+    }
+
     private static func storeRootURL(create: Bool = true) throws -> URL {
         let base = try FileManager.default.url(
             for: .applicationSupportDirectory,
@@ -791,6 +800,31 @@ actor MatrixRustSDKClientStore {
             allowed.contains(scalar) ? Character(scalar) : "-"
         }
         return String(sanitized).lowercased()
+    }
+
+    private static let platformBootstrapLock = NSLock()
+    private static var isPlatformInitialized = false
+
+    private static func ensurePlatformInitialized() throws {
+        platformBootstrapLock.lock()
+        defer { platformBootstrapLock.unlock() }
+
+        guard isPlatformInitialized == false else {
+            return
+        }
+
+        try MatrixRustSDK.initPlatform(
+            config: TracingConfiguration(
+                logLevel: .warn,
+                traceLogPacks: [],
+                extraTargets: [],
+                writeToStdoutOrSystem: false,
+                writeToFiles: nil,
+                sentryConfig: nil
+            ),
+            useLightweightTokioRuntime: false
+        )
+        isPlatformInitialized = true
     }
 }
 
