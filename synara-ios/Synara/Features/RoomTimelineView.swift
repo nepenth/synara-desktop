@@ -388,9 +388,9 @@ struct RoomTimelineView: View {
         }
     }
 
-    private func startTimelineUpdates() {
+    private func startTimelineUpdates(streamFocusEventID overrideFocus: String?? = nil) {
         timelineUpdatesTask?.cancel()
-        let streamFocusEventID = focusedEventID ?? initialReadMarkerEventID
+        let streamFocusEventID = overrideFocus ?? focusedEventID ?? initialReadMarkerEventID
         timelineUpdatesTask = Task {
             for await updatedItems in environment.timeline.timelineUpdates(roomID: roomID, focusedEventID: streamFocusEventID) {
                 guard Task.isCancelled == false else {
@@ -601,6 +601,7 @@ struct RoomTimelineView: View {
                     }
                 }
                 showJumpToLatest = false
+                startTimelineUpdates(streamFocusEventID: .some(nil))
             }
         }
     }

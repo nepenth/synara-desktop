@@ -104,7 +104,34 @@ final class KeychainSecureSessionStore: SecureSessionStoring {
     }
 
     func migrateIfNeeded() throws -> SessionMigrationResult {
-        _ = try load()
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+
+        var item: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &item)
+
+        if status == errSecItemNotFound {
+            return .notNeeded
+        }
+
+        guard status == errSecSuccess, let data = item as? Data else {
+            if status == errSecSuccess {
+                throw SecureSessionStoreError.corruptEntry
+            }
+            throw SecureSessionStoreError.keychainFailure(status: status)
+        }
+
+        if let session = try? JSONDecoder().decode(AuthenticatedSession.self, from: data) {
+            try save(session)
+            return .migrated
+        }
+
+        _ = try decode(data)
         return .notNeeded
     }
 
