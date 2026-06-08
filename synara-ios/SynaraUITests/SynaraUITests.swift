@@ -280,6 +280,17 @@ final class SynaraUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Encrypted content unavailable. Actions and media downloads are blocked until keys are available."].exists)
     }
 
+    func testNotificationsInboxShowsUnreadRooms() {
+        let app = launchSignedInNotificationsApp()
+
+        XCTAssertTrue(app.staticTexts["Notifications"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["NotificationsRow-!project:matrix.org"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["NotificationsRow-!general:matrix.org"].exists)
+
+        tap(app.buttons["NotificationsRow-!project:matrix.org"])
+        XCTAssertTrue(app.scrollViews["TimelineList"].waitForExistence(timeout: 5))
+    }
+
     func testLogoutReturnsToSignedOutShell() {
         let app = launchSignedInSettingsApp()
 
@@ -398,6 +409,55 @@ final class SynaraUITests: XCTestCase {
         let alert = app.alerts["Agent Action"]
         XCTAssertTrue(alert.waitForExistence(timeout: 5))
         XCTAssertTrue(alert.staticTexts["Agent action could not be submitted. Try again."].exists)
+    }
+
+    func testLiveStaleCacheSmokeWhenConfigured() throws {
+        let environment = ProcessInfo.processInfo.environment
+        guard liveEnvironmentValue("SYNARA_LIVE_STALE_CACHE_SMOKE", in: environment) == "1" else {
+            throw XCTSkip("Set SYNARA_LIVE_STALE_CACHE_SMOKE=1 for stale-cache live simulator smoke.")
+        }
+
+        guard let homeserver = liveEnvironmentValue("SYNARA_LIVE_HOMESERVER", in: environment),
+              let username = liveEnvironmentValue("SYNARA_LIVE_USERNAME", in: environment),
+              let password = liveEnvironmentValue("SYNARA_LIVE_PASSWORD", in: environment) else {
+            throw XCTSkip("Stale-cache live smoke needs homeserver, username, and password environment variables.")
+        }
+
+        let roomID: String
+        if let configuredRoomID = liveEnvironmentValue("SYNARA_LIVE_ROOM_ID", in: environment) {
+            roomID = configuredRoomID
+        } else {
+            let liveClient = try MatrixLiveTestClient.login(
+                homeserver: homeserver,
+                username: username,
+                password: password
+            )
+            let alias = liveEnvironmentValue("SYNARA_LIVE_ROOM_ALIAS", in: environment) ?? "#test-e2e-room:matrix.example.com"
+            roomID = try liveClient.resolveRoomAlias(alias)
+        }
+
+        let app = XCUIApplication()
+        app.launchEnvironment["SYNARA_RESET_SESSION_ON_LAUNCH"] = "1"
+        app.launchEnvironment["SYNARA_AUTO_OPEN_ROOM_ID"] = roomID
+        launch(app)
+
+        if app.textFields["HomeserverAddressField"].waitForExistence(timeout: 5) {
+            loginLive(app: app, homeserver: homeserver, username: username, password: password)
+            dismissPasswordSavePromptIfPresent(app: app)
+        }
+
+        let composer = app.textFields["ComposerTextField"]
+        XCTAssertTrue(composer.waitForExistence(timeout: 60))
+
+        let liveClient = try MatrixLiveTestClient.login(
+            homeserver: homeserver,
+            username: username,
+            password: password
+        )
+        let message = "Synara stale-cache smoke \(Int(Date().timeIntervalSince1970))"
+        _ = try liveClient.sendRoomMessage(roomID: roomID, body: message)
+
+        XCTAssertTrue(waitForTimelineElement(app.staticTexts[message], app: app, timeout: 90))
     }
 
     func testLiveSmokeWhenConfigured() throws {
@@ -782,6 +842,15 @@ final class SynaraUITests: XCTestCase {
         return app
     }
 
+    private func launchSignedInNotificationsApp() -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchEnvironment["SYNARA_UI_TESTS"] = "1"
+        app.launchEnvironment["SYNARA_UI_TEST_SIGNED_IN"] = "1"
+        app.launchEnvironment["SYNARA_UI_TEST_SELECTED_TAB"] = "notifications"
+        launch(app)
+        return app
+    }
+
     private func launchSignedInSettingsApp() -> XCUIApplication {
         let app = XCUIApplication()
         app.launchEnvironment["SYNARA_UI_TESTS"] = "1"
@@ -1161,6 +1230,24 @@ private final class MatrixLiveTestClient {
             throw LiveMatrixError.invalidResponse
         }
         return roomID
+    }
+
+    func sendRoomMessage(roomID: String, body: String) throws -> String {
+        let content: [String: Any] = [
+            "msgtype": "m.text",
+            "body": body
+        ]
+
+        let response = try authenticatedRequest(
+            method: "PUT",
+            path: ["client", "v3", "rooms", roomID, "send", "m.room.message", UUID().uuidString],
+            body: content
+        )
+        guard let object = try JSONSerialization.jsonObject(with: response.data) as? [String: Any],
+              let eventID = object["event_id"] as? String else {
+            throw LiveMatrixError.invalidResponse
+        }
+        return eventID
     }
 
     func seedAgentApprovalCard(roomID: String, title: String, actionID: String) throws -> String {

@@ -5,6 +5,22 @@ import UserNotifications
 import UIKit
 #endif
 
+protocol SparsePushRouteResolving: Sendable {
+    func resolveRoute(eventID: String) async -> AppRoute?
+}
+
+struct MatrixSparsePushRouteResolver: SparsePushRouteResolving {
+    let sessionStore: AppSessionStore
+    let clientStore: MatrixRustSDKClientStore
+
+    func resolveRoute(eventID: String) async -> AppRoute? {
+        guard case .signedIn(let session) = sessionStore.currentState else {
+            return nil
+        }
+        return await clientStore.resolvePushRoute(eventID: eventID, session: session)
+    }
+}
+
 protocol MatrixPusherServicing {
     var isGatewayConfigured: Bool { get }
     var configuredGatewayURL: URL? { get }
@@ -87,6 +103,7 @@ final class MatrixPusherService: MatrixPusherServicing {
     }
 }
 
+@MainActor
 final class SynaraPushService: NSObject, PushServicing {
     private(set) var isRegistered = false
     private(set) var fullDeviceToken: String?
@@ -99,6 +116,7 @@ final class SynaraPushService: NSObject, PushServicing {
     private(set) var currentSession: AuthenticatedSession?
 
     private let pusherService: MatrixPusherServicing
+    private let sparseRouteResolver: SparsePushRouteResolving?
     private let logger: LoggingServicing
     private(set) var isRegistrationAvailable: Bool = true
     private var currentSessionSignature: String?
@@ -109,13 +127,15 @@ final class SynaraPushService: NSObject, PushServicing {
     private let isSimulator = false
     #endif
 
-    init(
+    nonisolated init(
         logger: LoggingServicing = AppLogger(),
         pusherService: MatrixPusherServicing? = nil,
+        sparseRouteResolver: SparsePushRouteResolving? = nil,
         isRegistrationAvailable: Bool? = nil
     ) {
         self.logger = logger
         self.pusherService = pusherService ?? DisabledMatrixPusherService()
+        self.sparseRouteResolver = sparseRouteResolver
 
         let defaultAvailability = {
             #if targetEnvironment(simulator)
@@ -166,16 +186,14 @@ final class SynaraPushService: NSObject, PushServicing {
         }
     }
 
-    func clearRegistrationState() {
+    func clearRegistrationState() async {
         let session = currentSession
         let pushKey = sessionBoundPushKey ?? fullDeviceToken
-        Task {
-            if let session, let pushKey {
-                do {
-                    try await pusherService.unregisterPusher(session: session, pushKey: pushKey)
-                } catch {
-                    logger.error("Push unregister failed", category: .push)
-                }
+        if let session, let pushKey {
+            do {
+                try await pusherService.unregisterPusher(session: session, pushKey: pushKey)
+            } catch {
+                logger.error("Push unregister failed", category: .push)
             }
         }
 
@@ -206,6 +224,19 @@ final class SynaraPushService: NSObject, PushServicing {
         NotificationPushRouteParser.route(from: notificationPayload)
     }
 
+    func resolveRoute(from notificationPayload: [AnyHashable: Any]) async -> AppRoute? {
+        if let route = route(from: notificationPayload) {
+            return route
+        }
+
+        guard let eventID = NotificationPushRouteParser.sparseEventID(from: notificationPayload),
+              let sparseRouteResolver else {
+            return nil
+        }
+
+        return await sparseRouteResolver.resolveRoute(eventID: eventID)
+    }
+
     func parseBadgeCount(from notificationPayload: [AnyHashable: Any]) -> Int? {
         let flattened = NotificationPushRouteParser.flattenPayload(notificationPayload)
         let candidates: [Any?] = [
@@ -225,16 +256,19 @@ final class SynaraPushService: NSObject, PushServicing {
         ]
 
         for value in candidates {
-            if let parsed = IntValueParser.parse(value) {
-                return parsed
-            }
-
-            if let parsed = extractSummaryBadgeCount(from: value) {
-                return parsed
+            if let badge = badgeCount(from: value) {
+                return badge
             }
         }
 
         return nil
+    }
+
+    private func badgeCount(from value: Any?) -> Int? {
+        if let parsed = IntValueParser.parse(value) {
+            return parsed
+        }
+        return extractSummaryBadgeCount(from: value)
     }
 
     private func extractSummaryBadgeCount(from value: Any?) -> Int? {
@@ -362,6 +396,31 @@ enum NotificationPushRouteParser {
 
         if let route = candidates["roomId"] as? String {
             return AppRoute.room(id: route)
+        }
+
+        return nil
+    }
+
+    static func sparseEventID(from payload: [AnyHashable: Any]) -> String? {
+        let candidates = flattenPayload(payload)
+        if let roomID = candidates["room_id"] as? String, roomID.isEmpty == false {
+            return nil
+        }
+        if let roomID = candidates["roomId"] as? String, roomID.isEmpty == false {
+            return nil
+        }
+
+        let eventCandidates: [Any?] = [
+            payload["event_id"],
+            payload["eventId"],
+            candidates["event_id"],
+            candidates["eventId"]
+        ]
+
+        for value in eventCandidates {
+            if let eventID = value as? String, eventID.isEmpty == false {
+                return eventID
+            }
         }
 
         return nil

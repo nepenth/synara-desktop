@@ -32,6 +32,7 @@
 		652C81E69C2C1B922B4BE789 /* RoomTimelineView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A460B0098799FF6C79F0756E /* RoomTimelineView.swift */; };
 		6CCD8DBF4D4A6682D58FD5B1 /* AgentApprovalServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45436B56CDB7CBBD40303484 /* AgentApprovalServiceTests.swift */; };
 		70328744CB4C90A1526E9E28 /* TimelineServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 633F1D9CBE601BF3E42E4B1B /* TimelineServiceTests.swift */; };
+		7247DDD14FE03A17AEC96541 /* SessionCoordinatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26D5EAB60408E1F01AB36535 /* SessionCoordinatorTests.swift */; };
 		76AE72648BA28AFF732BB8F6 /* RoomListServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D42B2D11968F0B23193A4ED /* RoomListServiceTests.swift */; };
 		7BD7C2DB346D071A5121FC36 /* AppRouteTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F55BBDF32970A214C2829B1B /* AppRouteTests.swift */; };
 		88AAAD208C97C1A9EFF8AFE5 /* PushServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40037D97F31F787EA20BD7AE /* PushServiceTests.swift */; };
@@ -39,6 +40,7 @@
 		8B42041876057A9091D2F463 /* PerformanceInstrumentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00D51C4E0E89D32C8D99CC22 /* PerformanceInstrumentation.swift */; };
 		8C497BFC6D2B9A3048BB2852 /* LoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2515972271FDB4E4717F0CEE /* LoginView.swift */; };
 		8CD1DCF6DA4B22967284D0F3 /* PlaceholderScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = E23CEDAB04604A54EF7EAF9B /* PlaceholderScreen.swift */; };
+		901EB2CE7F90AED37B5827E0 /* SessionCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75DD7BEECD59D41C5461C892 /* SessionCoordinator.swift */; };
 		90B73234B5A1DC142783A451 /* AppTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCD86C72DEE3F411D1FABB6B /* AppTab.swift */; };
 		9105AE3CB60343D07B999895 /* RoomReadMarkerServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA398093E16277847EDB79DB /* RoomReadMarkerServiceTests.swift */; };
 		969D33C61DAE6C1B12C9BCDB /* AgentActionResolverTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9DA6E8858D607B040754AF0E /* AgentActionResolverTests.swift */; };
@@ -94,6 +96,7 @@
 		1C0070A890F80B56DD756D02 /* SecureSessionStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecureSessionStoreTests.swift; sourceTree = "<group>"; };
 		2515972271FDB4E4717F0CEE /* LoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginView.swift; sourceTree = "<group>"; };
 		253AA6941119C1C9D4F2DE3D /* AppRoute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppRoute.swift; sourceTree = "<group>"; };
+		26D5EAB60408E1F01AB36535 /* SessionCoordinatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionCoordinatorTests.swift; sourceTree = "<group>"; };
 		28004193A008B4EDFF0E6E18 /* ComposerServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerServiceTests.swift; sourceTree = "<group>"; };
 		2CBE437294BD93B48D7CDF75 /* MatrixLifecycleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MatrixLifecycleTests.swift; sourceTree = "<group>"; };
 		3C94FF43A1B1DDDCF8067FB1 /* AppLogging.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLogging.swift; sourceTree = "<group>"; };
@@ -106,6 +109,7 @@
 		57076E7E82206F1492033846 /* RootShellView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootShellView.swift; sourceTree = "<group>"; };
 		5DE2FB3D6ADFFA295C9B956F /* AppRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppRouter.swift; sourceTree = "<group>"; };
 		633F1D9CBE601BF3E42E4B1B /* TimelineServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineServiceTests.swift; sourceTree = "<group>"; };
+		75DD7BEECD59D41C5461C892 /* SessionCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionCoordinator.swift; sourceTree = "<group>"; };
 		80584058D243DE7197CF3096 /* AgentActionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentActionService.swift; sourceTree = "<group>"; };
 		8A4D48D89C01C70901919CAB /* AppServices.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppServices.swift; sourceTree = "<group>"; };
 		8A5CC96CDA94EE562BDBA416 /* Synara.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Synara.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -224,6 +228,7 @@
 				B6E7399D69CF6418A4206407 /* RoomListService.swift */,
 				A4B44B25CB0277A9BAD73943 /* RoomReadMarkerService.swift */,
 				CDD7517A55AC0E513E708AA0 /* SecureSessionStore.swift */,
+				75DD7BEECD59D41C5461C892 /* SessionCoordinator.swift */,
 				EDFDD334C6EF890B453477E1 /* TimelineService.swift */,
 			);
 			path = Services;
@@ -281,6 +286,7 @@
 				0D42B2D11968F0B23193A4ED /* RoomListServiceTests.swift */,
 				AA398093E16277847EDB79DB /* RoomReadMarkerServiceTests.swift */,
 				1C0070A890F80B56DD756D02 /* SecureSessionStoreTests.swift */,
+				26D5EAB60408E1F01AB36535 /* SessionCoordinatorTests.swift */,
 				EE92B48EA7FF49B2D9FED1FE /* SynaraContractsTests.swift */,
 				633F1D9CBE601BF3E42E4B1B /* TimelineServiceTests.swift */,
 			);
@@ -439,6 +445,7 @@
 				76AE72648BA28AFF732BB8F6 /* RoomListServiceTests.swift in Sources */,
 				9105AE3CB60343D07B999895 /* RoomReadMarkerServiceTests.swift in Sources */,
 				45DB0A08CF868FFA984A3B0D /* SecureSessionStoreTests.swift in Sources */,
+				7247DDD14FE03A17AEC96541 /* SessionCoordinatorTests.swift in Sources */,
 				504E908432E2659D05DE87F8 /* SynaraContractsTests.swift in Sources */,
 				70328744CB4C90A1526E9E28 /* TimelineServiceTests.swift in Sources */,
 			);
@@ -474,6 +481,7 @@
 				652C81E69C2C1B922B4BE789 /* RoomTimelineView.swift in Sources */,
 				9DA561CC126EB87B8410D7C7 /* RootShellView.swift in Sources */,
 				A4B52FFB382C8BD8FFFDF5F9 /* SecureSessionStore.swift in Sources */,
+				901EB2CE7F90AED37B5827E0 /* SessionCoordinator.swift in Sources */,
 				EE7410A9C8E4EB56072632D8 /* SettingsView.swift in Sources */,
 				CC89EE97042280F04BD29498 /* SynaraApp.swift in Sources */,
 				9F74223A8F55C5CF1DBAE27B /* SynaraContracts.swift in Sources */,

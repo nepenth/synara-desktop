@@ -48,6 +48,42 @@ final class RoomReadMarkerServiceTests: XCTestCase {
         XCTAssertNil(eventID)
     }
 
+    func testMarkFullyReadReturnsFalseWhenSignedOut() async {
+        let http = RecordingReadMarkerHTTPClient(statusCode: 200, body: #"{"event_id":"$event"}"#)
+        let service = MatrixRoomReadMarkerService(sessionStore: AppSessionStore(), httpClient: http)
+
+        let didMark = await service.markFullyRead(roomID: "!room:matrix.example", eventID: "$event:matrix.example")
+
+        XCTAssertFalse(didMark)
+        XCTAssertNil(http.lastRequest)
+    }
+
+    func testMarkFullyReadWritesAccountData() async throws {
+        let http = RecordingReadMarkerHTTPClient(statusCode: 200, body: #"{"event_id":"$event:matrix.example"}"#)
+        let sessionStore = AppSessionStore(currentState: .signedIn(makeSession()))
+        let service = MatrixRoomReadMarkerService(sessionStore: sessionStore, httpClient: http)
+
+        let didMark = await service.markFullyRead(roomID: "!room:matrix.example", eventID: "$event:matrix.example")
+
+        XCTAssertTrue(didMark)
+        let request = try XCTUnwrap(http.lastRequest)
+        XCTAssertEqual(request.httpMethod, "PUT")
+        XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer token")
+        XCTAssertEqual(request.value(forHTTPHeaderField: "Content-Type"), "application/json")
+        let body = try XCTUnwrap(request.httpBody)
+        XCTAssertEqual(String(data: body, encoding: .utf8), #"{"event_id":"$event:matrix.example"}"#)
+    }
+
+    func testMarkFullyReadReturnsFalseForNonSuccessStatus() async {
+        let http = RecordingReadMarkerHTTPClient(statusCode: 500, body: #"{"errcode":"M_UNKNOWN"}"#)
+        let sessionStore = AppSessionStore(currentState: .signedIn(makeSession()))
+        let service = MatrixRoomReadMarkerService(sessionStore: sessionStore, httpClient: http)
+
+        let didMark = await service.markFullyRead(roomID: "!room:matrix.example", eventID: "$event:matrix.example")
+
+        XCTAssertFalse(didMark)
+    }
+
     private func makeSession() -> AuthenticatedSession {
         AuthenticatedSession(
             userID: "@test:matrix.example",
