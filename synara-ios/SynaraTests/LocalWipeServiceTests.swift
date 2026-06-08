@@ -29,6 +29,8 @@ final class LocalWipeServiceTests: XCTestCase {
         XCTAssertEqual(session.currentState, .signedOut)
         XCTAssertEqual(matrix.stopCallCount, 1)
         XCTAssertEqual(matrix.resetCallCount, 1)
+        XCTAssertEqual(matrix.resetSessions.count, 1)
+        XCTAssertEqual(matrix.resetSessions.first??.userID, "@alice:matrix.org")
         XCTAssertEqual(roomList.clearCallCount, 1)
         XCTAssertEqual(timeline.clearSessionCachesCallCount, 1)
         XCTAssertEqual(push.clearCallCount, 1)

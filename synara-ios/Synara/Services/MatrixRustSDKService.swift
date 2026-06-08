@@ -604,6 +604,67 @@ actor MatrixRustSDKClientStore {
         )
     }
 
+    func markRoomReadUpTo(roomID: String, eventID: String, session: AuthenticatedSession) async throws {
+        guard let room = try await room(roomID: roomID, session: session) else {
+            throw MessageSendError.failed
+        }
+
+        try await room.markAsFullyReadUnchecked(eventId: eventID)
+        let timeline = try await room.timeline()
+        try await timeline.sendReadReceipt(receiptType: .read, eventId: eventID)
+        try await timeline.markAsRead(receiptType: .read)
+    }
+
+    func resolvePushRoute(eventID: String, session: AuthenticatedSession) async -> AppRoute? {
+        do {
+            let client = try await ensureClient(for: session)
+            let syncService = try await startSyncService(session: session)
+            let notificationClient = try await client.notificationClient(
+                processSetup: .singleProcess(syncService: syncService)
+            )
+
+            let rooms = try await rooms(session: session)
+            var unreadCountsByRoomID: [String: UInt64] = [:]
+            unreadCountsByRoomID.reserveCapacity(rooms.count)
+            for room in rooms {
+                let roomInfo = try? await room.roomInfo()
+                unreadCountsByRoomID[room.id()] = roomInfo?.numUnreadNotifications ?? 0
+            }
+
+            let prioritizedRooms = rooms.sorted { lhs, rhs in
+                let lhsUnread = unreadCountsByRoomID[lhs.id()] ?? 0
+                let rhsUnread = unreadCountsByRoomID[rhs.id()] ?? 0
+                if lhsUnread != rhsUnread {
+                    return lhsUnread > rhsUnread
+                }
+                return lhs.id() < rhs.id()
+            }
+
+            var batch: [NotificationItemsRequest] = []
+            batch.reserveCapacity(min(prioritizedRooms.count, 32))
+
+            for room in prioritizedRooms.prefix(32) {
+                batch.append(NotificationItemsRequest(roomId: room.id(), eventIds: [eventID]))
+            }
+
+            guard batch.isEmpty == false else {
+                return nil
+            }
+
+            let results = try await notificationClient.getNotifications(requests: batch)
+            for request in batch {
+                guard case .ok = results[request.roomId] else {
+                    continue
+                }
+                return .room(id: request.roomId, eventID: eventID)
+            }
+        } catch {
+            return nil
+        }
+
+        return nil
+    }
+
     func sendRawRoomEvent(roomID: String, eventType: String, content: String, session: AuthenticatedSession) async throws {
         guard let room = try await room(roomID: roomID, session: session) else {
             throw MessageSendError.failed
@@ -860,6 +921,11 @@ actor MatrixRustSDKClientStore {
         return FileManager.default.fileExists(atPath: root.path)
     }
 
+    static func materializePersistedStore(for session: AuthenticatedSession) throws {
+        let storeID = session.sdkStoreID ?? storeID(for: session.userID, homeserverURL: session.homeserverURL)
+        _ = try sessionPaths(storeID: storeID)
+    }
+
     static func pruneLegacyPersistedStores() throws {
         try pruneLegacyPersistedStores(in: storeRootURL(create: false))
     }
@@ -996,9 +1062,9 @@ final class MatrixRustSDKMatrixClientService: MatrixClientServicing {
         setSyncStatus(await clientStore.currentSyncStatus())
     }
 
-    func resetLocalState() async {
+    func resetLocalState(for session: AuthenticatedSession? = nil) async {
         setSyncStatus(.stopped)
-        await clientStore.resetLocalState()
+        await clientStore.resetLocalState(for: session)
     }
 
     private func setSyncStatus(_ status: MatrixSyncStatus) {
@@ -1401,9 +1467,17 @@ final class MatrixRustSDKRoomMembershipService: RoomMembershipServicing {
 }
 
 final class MatrixRustSDKTimelineService: TimelineServicing {
+    private enum TimelineCacheFocus: Hashable {
+        case live
+        case event(String)
+        case thread(String)
+    }
+
     private let sessionStore: AppSessionStore
     private let clientStore: MatrixRustSDKClientStore
     private var profileAvatarCacheByUserID: [String: URL?] = [:]
+    private let timelineCacheLock = NSLock()
+    private var cachedTimelines: [String: Timeline] = [:]
 
     init(
         sessionStore: AppSessionStore,
@@ -1421,15 +1495,40 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
         await loadTimeline(roomID: roomID, focusedEventID: focusedEventID, pageSize: 20, enrichProfiles: false)
     }
 
+    func loadThreadTimeline(roomID: String, rootEventID: String) async -> TimelineLoadOutcome {
+        await loadThreadTimeline(roomID: roomID, rootEventID: rootEventID, pageSize: 20)
+    }
+
     func loadOlderTimeline(roomID: String, before eventID: String) async -> TimelineLoadOutcome {
         await loadOlderTimeline(roomID: roomID, beforeEventID: eventID, pageSize: 50)
     }
 
     func clearSessionCaches() {
         profileAvatarCacheByUserID.removeAll()
+        timelineCacheLock.lock()
+        cachedTimelines.removeAll()
+        timelineCacheLock.unlock()
+    }
+
+    func threadTimelineUpdates(roomID: String, rootEventID: String) -> AsyncStream<TimelineLoadOutcome> {
+        timelineUpdates(roomID: roomID, focusedEventID: rootEventID, focus: .thread(rootEventID))
     }
 
     func timelineUpdates(roomID: String, focusedEventID: String?) -> AsyncStream<TimelineLoadOutcome> {
+        let focus: TimelineCacheFocus
+        if let focusedEventID, focusedEventID.isEmpty == false {
+            focus = .event(focusedEventID)
+        } else {
+            focus = .live
+        }
+        return timelineUpdates(roomID: roomID, focusedEventID: focusedEventID, focus: focus)
+    }
+
+    private func timelineUpdates(
+        roomID: String,
+        focusedEventID: String?,
+        focus: TimelineCacheFocus
+    ) -> AsyncStream<TimelineLoadOutcome> {
         guard case .signedIn(let session) = sessionStore.currentState else {
             return AsyncStream { continuation in
                 continuation.yield(.empty)
@@ -1454,40 +1553,20 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
 
                 do {
                     _ = try await clientStore.startSyncService(session: session)
-                    let room: Room
-                    if let restoredRoom = try await clientStore.room(roomID: roomID, session: session) {
-                        room = restoredRoom
-                    } else {
-                        try? await clientStore.syncOnceForInteractiveOpen(session: session)
-                        guard let syncedRoom = try await clientStore.room(roomID: roomID, session: session) else {
-                            if self.isCurrentSignedInUser(session) {
-                                continuation.yield(.empty)
-                            }
-                            continuation.finish()
-                            return
+                    let room = try await self.resolveRoom(roomID: roomID, session: session)
+                    guard let room else {
+                        if self.isCurrentSignedInUser(session) {
+                            continuation.yield(.empty)
                         }
-                        room = syncedRoom
+                        continuation.finish()
+                        return
                     }
 
-                    let timeline: Timeline
-                    if let focusedEventID, focusedEventID.isEmpty == false {
-                        timeline = try await room.timelineWithConfiguration(
-                            configuration: TimelineConfiguration(
-                                focus: .event(
-                                    eventId: focusedEventID,
-                                    numContextEvents: 20,
-                                    threadMode: .automatic(hideThreadedEvents: true)
-                                ),
-                                filter: .all,
-                                internalIdPrefix: nil,
-                                dateDividerMode: .daily,
-                                trackReadReceipts: .disabled,
-                                reportUtds: true
-                            )
-                        )
-                    } else {
-                        timeline = try await room.timeline()
-                    }
+                    let timeline = try await self.resolveCachedTimeline(
+                        room: room,
+                        focus: focus,
+                        pageSize: 20
+                    )
 
                     let eventUpdates = AsyncStream<[EventTimelineItem]>.makeStream(bufferingPolicy: .bufferingNewest(1))
                     eventUpdatesContinuation = eventUpdates.continuation
@@ -1525,7 +1604,7 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
                     }
 
                     _ = try? await timeline.paginateBackwards(numEvents: 20)
-                    if focusedEventID != nil {
+                    if focusedEventID != nil || focus != .live {
                         await Self.paginateFocusedTimelineForwardToLiveEnd(timeline)
                     }
 
@@ -1551,55 +1630,70 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
         return currentSession.userID == session.userID
     }
 
+    private func loadThreadTimeline(
+        roomID: String,
+        rootEventID: String,
+        pageSize: UInt16
+    ) async -> TimelineLoadOutcome {
+        await loadTimelinePage(
+            roomID: roomID,
+            focus: .thread(rootEventID),
+            pageSize: pageSize,
+            enrichProfiles: false,
+            paginateForwardWhenFocused: true
+        )
+    }
+
     private func loadTimeline(
         roomID: String,
         focusedEventID: String?,
         pageSize: UInt16,
         enrichProfiles: Bool
     ) async -> TimelineLoadOutcome {
+        let focus: TimelineCacheFocus
+        if let focusedEventID, focusedEventID.isEmpty == false {
+            focus = .event(focusedEventID)
+        } else {
+            focus = .live
+        }
+
+        return await loadTimelinePage(
+            roomID: roomID,
+            focus: focus,
+            pageSize: pageSize,
+            enrichProfiles: enrichProfiles,
+            paginateForwardWhenFocused: focusedEventID != nil
+        )
+    }
+
+    private func loadTimelinePage(
+        roomID: String,
+        focus: TimelineCacheFocus,
+        pageSize: UInt16,
+        enrichProfiles: Bool,
+        paginateForwardWhenFocused: Bool
+    ) async -> TimelineLoadOutcome {
         guard case .signedIn(let session) = sessionStore.currentState else {
             return .empty
         }
 
         do {
-            let room: Room
-            if let restoredRoom = try await clientStore.room(roomID: roomID, session: session) {
-                room = restoredRoom
-            } else {
-                try await clientStore.syncOnce(session: session, fullState: false)
-                guard let syncedRoom = try await clientStore.room(roomID: roomID, session: session) else {
-                    return .empty
-                }
-                room = syncedRoom
-            }
-
             try? await clientStore.syncOnceForInteractiveOpen(session: session)
-
-            let timeline: Timeline
-            if let focusedEventID, focusedEventID.isEmpty == false {
-                timeline = try await room.timelineWithConfiguration(
-                    configuration: TimelineConfiguration(
-                        focus: .event(
-                            eventId: focusedEventID,
-                            numContextEvents: pageSize,
-                            threadMode: .automatic(hideThreadedEvents: true)
-                        ),
-                        filter: .all,
-                        internalIdPrefix: nil,
-                        dateDividerMode: .daily,
-                        trackReadReceipts: .disabled,
-                        reportUtds: true
-                    )
-                )
-            } else {
-                timeline = try await room.timeline()
+            guard let room = try await resolveRoom(roomID: roomID, session: session) else {
+                return .empty
             }
+
+            let timeline = try await resolveCachedTimeline(
+                room: room,
+                focus: focus,
+                pageSize: pageSize
+            )
             let collector = MatrixRustSDKTimelineCollector()
             let handle = await timeline.addListener(listener: collector)
             defer { handle.cancel() }
 
             var reachedTimelineStart = try await timeline.paginateBackwards(numEvents: pageSize)
-            if focusedEventID != nil {
+            if paginateForwardWhenFocused {
                 await Self.paginateFocusedTimelineForwardToLiveEnd(timeline)
             }
             var sdkItems = await Self.waitForMappedTimelineItems(
@@ -1633,6 +1727,77 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
         } catch {
             return .failed("Could not load messages. Try again.")
         }
+    }
+
+    private func resolveRoom(roomID: String, session: AuthenticatedSession) async throws -> Room? {
+        if let restoredRoom = try await clientStore.room(roomID: roomID, session: session) {
+            return restoredRoom
+        }
+
+        try await clientStore.syncOnce(session: session, fullState: false)
+        return try await clientStore.room(roomID: roomID, session: session)
+    }
+
+    private func timelineCacheKey(roomID: String, focus: TimelineCacheFocus) -> String {
+        switch focus {
+        case .live:
+            return "\(roomID)|live"
+        case .event(let eventID):
+            return "\(roomID)|event|\(eventID)"
+        case .thread(let rootEventID):
+            return "\(roomID)|thread|\(rootEventID)"
+        }
+    }
+
+    private func resolveCachedTimeline(
+        room: Room,
+        focus: TimelineCacheFocus,
+        pageSize: UInt16
+    ) async throws -> Timeline {
+        let cacheKey = timelineCacheKey(roomID: room.id(), focus: focus)
+
+        timelineCacheLock.lock()
+        if let cachedTimeline = cachedTimelines[cacheKey] {
+            timelineCacheLock.unlock()
+            return cachedTimeline
+        }
+        timelineCacheLock.unlock()
+
+        let timeline: Timeline
+        switch focus {
+        case .live:
+            timeline = try await room.timeline()
+        case .event(let eventID):
+            timeline = try await room.timelineWithConfiguration(
+                configuration: Self.timelineConfiguration(
+                    focus: .event(
+                        eventId: eventID,
+                        numContextEvents: pageSize,
+                        threadMode: .automatic(hideThreadedEvents: true)
+                    )
+                )
+            )
+        case .thread(let rootEventID):
+            timeline = try await room.timelineWithConfiguration(
+                configuration: Self.timelineConfiguration(focus: .thread(rootEventId: rootEventID))
+            )
+        }
+
+        timelineCacheLock.lock()
+        cachedTimelines[cacheKey] = timeline
+        timelineCacheLock.unlock()
+        return timeline
+    }
+
+    private static func timelineConfiguration(focus: TimelineFocus) -> TimelineConfiguration {
+        TimelineConfiguration(
+            focus: focus,
+            filter: .all,
+            internalIdPrefix: nil,
+            dateDividerMode: .daily,
+            trackReadReceipts: .messageLikeEvents,
+            reportUtds: true
+        )
     }
 
     private static func waitForMappedTimelineItems(

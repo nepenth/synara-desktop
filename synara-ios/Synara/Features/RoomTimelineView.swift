@@ -892,6 +892,7 @@ struct ThreadTimelineView: View {
     @State private var sendError: String?
     @State private var uploadState: MediaUploadState = .idle
     @State private var selectedPhoto: PhotosPickerItem?
+    @State private var threadUpdatesTask: Task<Void, Never>?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -923,6 +924,11 @@ struct ThreadTimelineView: View {
         .toolbar(.hidden, for: .tabBar)
         .task(id: roomID + rootEventID) {
             await loadThread()
+            startThreadUpdates()
+        }
+        .onDisappear {
+            threadUpdatesTask?.cancel()
+            threadUpdatesTask = nil
         }
         .onChange(of: selectedPhoto) { item in
             guard item != nil else {
@@ -968,31 +974,54 @@ struct ThreadTimelineView: View {
         defer {
             PerformanceTrace.end("ThreadTimelineLoad", id: signpostID)
         }
-        let outcome = await environment.timeline.loadInitialTimeline(roomID: roomID)
+        let outcome = await environment.timeline.loadThreadTimeline(roomID: roomID, rootEventID: rootEventID)
         await MainActor.run {
-            switch outcome {
-            case .loaded(let items):
-                let threadOnly = threadItems(from: items)
-                state = threadOnly.isEmpty ? .empty : .loaded(threadOnly, isPaginating: false)
-            case .empty:
-                state = .empty
-            case .failed(let message):
-                state = .failed(message)
+            applyThreadOutcome(outcome)
+        }
+    }
+
+    private func startThreadUpdates() {
+        threadUpdatesTask?.cancel()
+        threadUpdatesTask = Task {
+            for await outcome in environment.timeline.threadTimelineUpdates(
+                roomID: roomID,
+                rootEventID: rootEventID
+            ) {
+                guard Task.isCancelled == false else {
+                    return
+                }
+                await MainActor.run {
+                    switch outcome {
+                    case .loaded(let items):
+                        applyThreadOutcome(.loaded(items))
+                    case .empty:
+                        if case .loading = state {
+                            state = .empty
+                        }
+                    case .failed(let message):
+                        if case .loaded = state {
+                            return
+                        }
+                        state = .failed(message)
+                    }
+                }
             }
         }
     }
 
-    private func threadItems(from items: [TimelineItem]) -> [TimelineItem] {
-        let root = items.first { $0.eventID == rootEventID }
-        let replies = items
-            .filter { $0.replyToEventID == rootEventID }
-            .sorted { $0.timestamp < $1.timestamp }
-
-        if let root {
-            return [root] + replies
+    private func applyThreadOutcome(_ outcome: TimelineLoadOutcome) {
+        switch outcome {
+        case .loaded(let items):
+            state = items.isEmpty ? .empty : .loaded(items, isPaginating: false)
+        case .empty:
+            state = .empty
+        case .failed(let message):
+            state = .failed(message)
         }
+    }
 
-        return replies
+    private func threadItems(from items: [TimelineItem]) -> [TimelineItem] {
+        items
     }
 
     private func sendThreadReply() {

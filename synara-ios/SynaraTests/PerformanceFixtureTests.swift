@@ -2,32 +2,48 @@ import XCTest
 @testable import Synara
 
 final class PerformanceFixtureTests: XCTestCase {
+    private let roomSortThresholdSeconds = 0.05
+    private let timelineFixtureThresholdSeconds = 0.10
+    private let replyCountThresholdSeconds = 0.05
+
     func testLargeRoomFixtureSortPerformance() {
         let rooms = RoomListFixtures.large(count: 1_000)
 
-        assertCompletes {
+        measure {
             XCTAssertEqual(RoomListFixtures.sorted(rooms).count, 1_000)
+        }
+
+        assertCompletesWithin(roomSortThresholdSeconds) {
+            _ = RoomListFixtures.sorted(rooms)
         }
     }
 
     func testLargeTimelineFixtureCreationPerformance() {
-        assertCompletes {
+        measure {
             XCTAssertEqual(TimelineFixtures.largeTimeline(count: 10_000).count, 10_000)
+        }
+
+        assertCompletesWithin(timelineFixtureThresholdSeconds) {
+            _ = TimelineFixtures.largeTimeline(count: 10_000)
         }
     }
 
     func testTimelineReplyCountPerformance() {
         let items = TimelineFixtures.largeTimeline(count: 10_000)
 
-        assertCompletes {
+        measure {
             let counts = TimelineReplyCounter.replyCounts(for: items)
             XCTAssertTrue(counts.isEmpty)
         }
+
+        assertCompletesWithin(replyCountThresholdSeconds) {
+            _ = TimelineReplyCounter.replyCounts(for: items)
+        }
     }
 
-    private func assertCompletes(_ block: () -> Void) {
+    private func assertCompletesWithin(_ threshold: TimeInterval, _ block: () -> Void) {
         let start = Date()
         block()
-        XCTAssertGreaterThanOrEqual(Date().timeIntervalSince(start), 0)
+        XCTAssertLessThan(Date().timeIntervalSince(start), threshold)
     }
 }
