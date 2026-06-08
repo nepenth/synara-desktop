@@ -1069,10 +1069,7 @@ private struct ThreadMessageRow: View {
                 .foregroundStyle(SynaraColor.primaryText)
                 .fixedSize(horizontal: false, vertical: true)
         case .formattedText(let body, let html):
-            Text(MatrixHTMLRenderer.attributedString(body: body, html: html))
-                .font(.body)
-                .foregroundStyle(SynaraColor.primaryText)
-                .fixedSize(horizontal: false, vertical: true)
+            MatrixFormattedMessageView(fallbackBody: body, html: html, font: .body)
         case .mediaPlaceholder(let resource):
             MediaAttachmentCard(resource: resource)
         case .redacted:
@@ -1090,6 +1087,130 @@ private struct ThreadMessageRow: View {
                 .font(.body)
                 .foregroundStyle(SynaraColor.secondaryText)
         }
+    }
+}
+
+private struct MatrixFormattedMessageView: View {
+    let fallbackBody: String
+    let html: String
+    let font: Font
+
+    private var detailsBlocks: [MatrixHTMLRenderer.DetailsBlock] {
+        MatrixHTMLRenderer.detailsBlocks(html: html)
+    }
+
+    private var remainingMarkdown: String {
+        MatrixHTMLRenderer.markdownExcludingDetails(body: "", html: html)
+    }
+
+    var body: some View {
+        if detailsBlocks.isEmpty {
+            Text(MatrixHTMLRenderer.attributedString(body: fallbackBody, html: html))
+                .font(font)
+                .foregroundStyle(SynaraColor.primaryText)
+                .lineLimit(nil)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
+        } else {
+            VStack(alignment: .leading, spacing: SynaraSpacing.small) {
+                ForEach(detailsBlocks.indices, id: \.self) { index in
+                    MatrixDetailsBlockView(block: detailsBlocks[index])
+                }
+
+                if remainingMarkdown.isEmpty == false {
+                    Text(attributedMarkdown(remainingMarkdown))
+                        .font(font)
+                        .foregroundStyle(SynaraColor.primaryText)
+                        .lineLimit(nil)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private func attributedMarkdown(_ markdown: String) -> AttributedString {
+        (try? AttributedString(
+            markdown: markdown,
+            options: AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace)
+        )) ?? AttributedString(markdown)
+    }
+}
+
+private struct MatrixDetailsBlockView: View {
+    let block: MatrixHTMLRenderer.DetailsBlock
+    @State private var isExpanded = true
+
+    var body: some View {
+        DisclosureGroup(isExpanded: $isExpanded) {
+            VStack(alignment: .leading, spacing: SynaraSpacing.small) {
+                if let code = block.code {
+                    MatrixCodeBlockView(code: code)
+                }
+
+                if block.body.isEmpty == false {
+                    Text(block.body)
+                        .font(.callout)
+                        .foregroundStyle(SynaraColor.primaryText)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .padding(.top, SynaraSpacing.xSmall)
+        } label: {
+            Text(block.summary)
+                .font(.callout.weight(.semibold))
+                .foregroundStyle(SynaraColor.primaryText)
+                .lineLimit(nil)
+        }
+        .tint(SynaraColor.secondaryText)
+    }
+}
+
+private struct MatrixCodeBlockView: View {
+    let code: String
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Text("Code")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(SynaraColor.primaryText)
+
+                Spacer()
+
+                Button("Copy") {
+                    #if canImport(UIKit)
+                    UIPasteboard.general.string = code
+                    #endif
+                }
+                .font(.caption.weight(.semibold))
+                .buttonStyle(.plain)
+                .foregroundStyle(SynaraColor.primaryText)
+            }
+            .padding(.horizontal, SynaraSpacing.medium)
+            .padding(.vertical, SynaraSpacing.small)
+            .background(SynaraColor.elevatedSurface)
+
+            Divider()
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                Text(code)
+                    .font(.system(.callout, design: .monospaced))
+                    .foregroundStyle(SynaraColor.primaryText)
+                    .textSelection(.enabled)
+                    .padding(SynaraSpacing.medium)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .background(SynaraColor.secondarySurface)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: SynaraRadius.card, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: SynaraRadius.card, style: .continuous)
+                .stroke(SynaraColor.separator.opacity(0.8), lineWidth: 1)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -1818,12 +1939,7 @@ private struct TimelineRow: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .fixedSize(horizontal: false, vertical: true)
         case .formattedText(let body, let html):
-            Text(MatrixHTMLRenderer.attributedString(body: body, html: html))
-                .font(.callout)
-                .foregroundStyle(SynaraColor.primaryText)
-                .lineLimit(nil)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .fixedSize(horizontal: false, vertical: true)
+            MatrixFormattedMessageView(fallbackBody: body, html: html, font: .callout)
         case .mediaPlaceholder(let resource):
             if resource.isEncrypted {
                 MediaAttachmentCard(resource: resource)
