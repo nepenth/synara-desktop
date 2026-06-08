@@ -1,14 +1,125 @@
 import SwiftUI
 
 private struct NotificationsTabView: View {
+    @Environment(\.appEnvironment) private var environment
+    @State private var state: RoomListState = .idle
+    @State private var roomUpdatesTask: Task<Void, Never>?
+
     var body: some View {
-        SynaraEmptyState(
-            title: "Notifications Open Rooms",
-            systemImage: "bell",
-            message: "Synara does not keep a separate notification inbox. Push alerts open the relevant room directly. Check Settings to manage notification permissions and push registration."
-        )
+        Group {
+            switch state {
+            case .idle, .loading:
+                SynaraLoadingState(title: "Loading unread rooms")
+            case .empty:
+                SynaraEmptyState(
+                    title: "You're Caught Up",
+                    systemImage: "bell.slash",
+                    message: "Unread rooms and mentions will appear here. Push alerts still open the relevant room directly."
+                )
+            case .failed(let message):
+                SynaraErrorState(title: "Could Not Load Notifications", message: message) {
+                    loadInbox()
+                }
+            case .loaded(let rooms):
+                let unreadRooms = rooms.filter { $0.unreadCount > 0 || $0.hasHighlight || $0.membership == .invited }
+                if unreadRooms.isEmpty {
+                    SynaraEmptyState(
+                        title: "You're Caught Up",
+                        systemImage: "bell.slash",
+                        message: "Unread rooms and mentions will appear here. Push alerts still open the relevant room directly."
+                    )
+                } else {
+                    List {
+                        Section {
+                            ForEach(unreadRooms) { room in
+                                Button {
+                                    environment.router.route(to: .room(id: room.id, title: room.name))
+                                } label: {
+                                    NotificationsInboxRow(room: room)
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityIdentifier("NotificationsRow-\(room.id)")
+                            }
+                        } header: {
+                            Text("\(unreadRooms.count) unread")
+                                .font(SynaraTypography.supporting)
+                                .foregroundStyle(SynaraColor.secondaryText)
+                        }
+                    }
+                    .listStyle(.plain)
+                    .accessibilityIdentifier("NotificationsInboxList")
+                }
+            }
+        }
         .navigationTitle("Notifications")
         .accessibilityIdentifier("NotificationsScreen")
+        .task {
+            loadInbox()
+            startRoomUpdates()
+        }
+        .onDisappear {
+            roomUpdatesTask?.cancel()
+            roomUpdatesTask = nil
+        }
+    }
+
+    private func loadInbox() {
+        state = .loading
+        Task {
+            let nextState = await environment.roomList.loadRooms()
+            await MainActor.run {
+                state = nextState
+            }
+        }
+    }
+
+    private func startRoomUpdates() {
+        roomUpdatesTask?.cancel()
+        roomUpdatesTask = Task {
+            for await update in environment.roomList.roomUpdates() {
+                guard Task.isCancelled == false else {
+                    return
+                }
+                await MainActor.run {
+                    state = update
+                }
+            }
+        }
+    }
+}
+
+private struct NotificationsInboxRow: View {
+    let room: RoomSummary
+
+    var body: some View {
+        HStack(spacing: SynaraSpacing.medium) {
+            VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
+                HStack(spacing: SynaraSpacing.small) {
+                    Text(room.name)
+                        .font(SynaraTypography.body.weight(room.hasHighlight ? .semibold : .regular))
+                        .foregroundStyle(SynaraColor.primaryText)
+                        .lineLimit(1)
+
+                    if room.hasHighlight {
+                        SynaraStatusChip(title: "Mention", tint: SynaraColor.accent, systemImage: "at")
+                    }
+
+                    if room.membership == .invited {
+                        SynaraStatusChip(title: "Invite", tint: SynaraColor.accent, systemImage: "envelope")
+                    }
+                }
+
+                Text(room.lastMessagePreview)
+                    .font(SynaraTypography.supporting)
+                    .foregroundStyle(SynaraColor.secondaryText)
+                    .lineLimit(2)
+            }
+
+            Spacer(minLength: SynaraSpacing.small)
+
+            SynaraUnreadBadge(count: room.unreadCount, highlighted: room.hasHighlight)
+        }
+        .padding(.vertical, SynaraSpacing.xSmall)
     }
 }
 

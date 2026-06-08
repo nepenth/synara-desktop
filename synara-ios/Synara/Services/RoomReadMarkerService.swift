@@ -13,15 +13,18 @@ extension URLSession: RoomReadMarkerHTTPClient {}
 
 final class MatrixRoomReadMarkerService: RoomReadMarkerServicing {
     private let sessionStore: AppSessionStore
+    private let clientStore: MatrixRustSDKClientStore?
     private let httpClient: RoomReadMarkerHTTPClient
     private let jsonDecoder: JSONDecoder
 
     init(
         sessionStore: AppSessionStore,
+        clientStore: MatrixRustSDKClientStore? = nil,
         httpClient: RoomReadMarkerHTTPClient = URLSession.shared,
         jsonDecoder: JSONDecoder = JSONDecoder()
     ) {
         self.sessionStore = sessionStore
+        self.clientStore = clientStore
         self.httpClient = httpClient
         self.jsonDecoder = jsonDecoder
     }
@@ -52,6 +55,15 @@ final class MatrixRoomReadMarkerService: RoomReadMarkerServicing {
     func markFullyRead(roomID: String, eventID: String) async -> Bool {
         guard case .signedIn(let session) = sessionStore.currentState else {
             return false
+        }
+
+        if let clientStore {
+            do {
+                try await clientStore.markRoomReadUpTo(roomID: roomID, eventID: eventID, session: session)
+                return true
+            } catch {
+                // Fall back to the direct account-data write when SDK read APIs fail.
+            }
         }
 
         do {

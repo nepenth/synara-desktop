@@ -55,7 +55,15 @@ struct AppEnvironment {
             gatewayURL: pushGatewayURL(),
             logger: logger
         )
-        let push = SynaraPushService(logger: logger, pusherService: pusherService)
+        let sparsePushRouteResolver = MatrixSparsePushRouteResolver(
+            sessionStore: session,
+            clientStore: matrixSDKClientStore
+        )
+        let push = SynaraPushService(
+            logger: logger,
+            pusherService: pusherService,
+            sparseRouteResolver: sparsePushRouteResolver
+        )
         let router = AppRouter()
         let drafts = DraftStore()
         let timeline = MatrixRustSDKTimelineService(sessionStore: session, clientStore: matrixSDKClientStore)
@@ -90,7 +98,7 @@ struct AppEnvironment {
             drafts: drafts,
             eventActions: MatrixRustSDKEventActionService(sessionStore: session, clientStore: matrixSDKClientStore),
             agentApprovals: MatrixRustSDKAgentApprovalService(sessionStore: session, clientStore: matrixSDKClientStore),
-            readMarkers: MatrixRoomReadMarkerService(sessionStore: session),
+            readMarkers: MatrixRoomReadMarkerService(sessionStore: session, clientStore: matrixSDKClientStore),
             mediaLoader: MatrixMediaLoader(sessionStore: session, clientStore: matrixSDKClientStore),
             mediaUploader: MatrixMediaUploadService(sessionStore: session, clientStore: matrixSDKClientStore),
             crypto: crypto,

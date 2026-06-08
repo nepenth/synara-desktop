@@ -51,6 +51,7 @@ final class SynaraAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificati
     private var router: AppRouter?
     private var logger: LoggingServicing?
     private var pendingRoute: AppRoute?
+    private var pendingNotificationPayload: [AnyHashable: Any]?
 
     func bind(to environment: AppEnvironment) {
         push = environment.push
@@ -62,6 +63,14 @@ final class SynaraAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificati
             routeToDestination(pendingRoute)
             self.pendingRoute = nil
         }
+
+        if let pendingNotificationPayload {
+            let payload = pendingNotificationPayload
+            self.pendingNotificationPayload = nil
+            Task { @MainActor in
+                await self.resolveNotificationRoute(from: payload)
+            }
+        }
     }
 
     func application(
@@ -69,8 +78,10 @@ final class SynaraAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificati
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
         if let remotePayload = launchOptions?[.remoteNotification] as? [AnyHashable: Any] {
-            if let route = push?.route(from: remotePayload) ?? NotificationPushRouteParser.route(from: remotePayload) {
+            if let route = NotificationPushRouteParser.route(from: remotePayload) {
                 routeToDestination(route)
+            } else if NotificationPushRouteParser.sparseEventID(from: remotePayload) != nil {
+                pendingNotificationPayload = remotePayload
             } else {
                 routeToFallback()
             }
@@ -101,7 +112,7 @@ final class SynaraAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificati
             return
         }
 
-        if let route = push.route(from: response.notification.request.content.userInfo) {
+        if let route = await push.resolveRoute(from: response.notification.request.content.userInfo) {
             routeToDestination(route)
             push.applyIncomingBadge(from: response.notification.request.content.userInfo)
         } else {
@@ -124,6 +135,15 @@ final class SynaraAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificati
         }
 
         return [.banner, .sound, .badge, .list]
+    }
+
+    private func resolveNotificationRoute(from payload: [AnyHashable: Any]) async {
+        if let route = await push?.resolveRoute(from: payload)
+            ?? NotificationPushRouteParser.route(from: payload) {
+            routeToDestination(route)
+        } else {
+            routeToFallback()
+        }
     }
 
     private func routeToDestination(_ route: AppRoute) {
@@ -195,6 +215,8 @@ private extension AppEnvironment {
             router.selectedTab = .settings
         } else if processEnvironment["SYNARA_UI_TEST_SELECTED_TAB"] == "later" {
             router.selectedTab = .later
+        } else if processEnvironment["SYNARA_UI_TEST_SELECTED_TAB"] == "notifications" {
+            router.selectedTab = .notifications
         }
 
         let timeline: TimelineServicing
