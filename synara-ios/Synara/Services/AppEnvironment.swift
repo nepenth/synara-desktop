@@ -40,11 +40,12 @@ struct AppEnvironment {
             logger.error("Session restore failed: \(restoreFailure)", category: .auth)
         } else if case .signedIn = session.currentState {
             logger.info("Session restore succeeded", category: .auth)
-        }
-        if case .signedIn(let restoredSession) = session.currentState,
-           MatrixRustSDKClientStore.persistedStoreExists(for: restoredSession) == false {
-            logger.error("Clearing restored session because the Matrix SDK store is missing", category: .auth)
-            try? session.signOut()
+            do {
+                try MatrixRustSDKClientStore.pruneLegacyPersistedStores()
+                logger.info("Pruned legacy Matrix SDK stores after session restore", category: .auth)
+            } catch {
+                logger.error("Could not prune legacy Matrix SDK stores", category: .auth)
+            }
         }
         let matrixSDKClientStore = MatrixRustSDKClientStore()
         let matrix = MatrixRustSDKMatrixClientService(clientStore: matrixSDKClientStore)
