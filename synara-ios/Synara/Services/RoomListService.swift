@@ -213,6 +213,43 @@ enum RoomListFixtures {
     }
 }
 
+enum RoomListSearchFilter {
+    static func roomMatchesQuery(_ room: RoomSummary, query: String) -> Bool {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.isEmpty == false else {
+            return true
+        }
+
+        return room.name.localizedCaseInsensitiveContains(trimmed)
+            || room.lastMessagePreview.localizedCaseInsensitiveContains(trimmed)
+    }
+
+    static func mergeInvitedRooms(_ invitedRooms: [RoomSummary], into rooms: [RoomSummary]) -> [RoomSummary] {
+        guard invitedRooms.isEmpty == false else {
+            return rooms
+        }
+
+        let existingIDs = Set(rooms.map(\.id))
+        let missingInvites = invitedRooms.filter { existingIDs.contains($0.id) == false }
+        return missingInvites + rooms
+    }
+
+    static func applySearchQuery(
+        _ query: String,
+        to rooms: [RoomSummary],
+        invitedRooms: [RoomSummary]
+    ) -> [RoomSummary] {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.isEmpty == false else {
+            return rooms
+        }
+
+        let filtered = rooms.filter { roomMatchesQuery($0, query: trimmed) }
+        let matchingInvites = invitedRooms.filter { roomMatchesQuery($0, query: trimmed) }
+        return mergeInvitedRooms(matchingInvites, into: filtered.filter { $0.membership != .invited })
+    }
+}
+
 final class PlaceholderRoomListService: RoomListServicing {
     private var cachedRooms: [RoomSummary] = RoomListFixtures.small()
 

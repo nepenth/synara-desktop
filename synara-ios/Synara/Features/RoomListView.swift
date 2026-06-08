@@ -282,27 +282,13 @@ struct RoomListView: View {
             scopedRooms = scopedRooms.filter(\.isFavoriteLike)
         }
 
-        var filtered = mergeInvitedRooms(invitedRooms, into: scopedRooms)
+        var filtered = RoomListSearchFilter.mergeInvitedRooms(invitedRooms, into: scopedRooms)
 
         guard query.isEmpty == false else {
             return filtered
         }
 
-        filtered = filtered.filter { room in
-            room.name.localizedCaseInsensitiveContains(query)
-                || room.lastMessagePreview.localizedCaseInsensitiveContains(query)
-        }
-        return mergeInvitedRooms(invitedRooms, into: filtered.filter { $0.membership != .invited })
-    }
-
-    private func mergeInvitedRooms(_ invitedRooms: [RoomSummary], into rooms: [RoomSummary]) -> [RoomSummary] {
-        guard invitedRooms.isEmpty == false else {
-            return rooms
-        }
-
-        let existingIDs = Set(rooms.map(\.id))
-        let missingInvites = invitedRooms.filter { existingIDs.contains($0.id) == false }
-        return missingInvites + rooms
+        return RoomListSearchFilter.applySearchQuery(query, to: filtered, invitedRooms: invitedRooms)
     }
 
     private func spaces(from rooms: [RoomSummary]) -> [SpaceSummary] {
