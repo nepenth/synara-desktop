@@ -256,16 +256,19 @@ final class SynaraPushService: NSObject, PushServicing {
         ]
 
         for value in candidates {
-            if let parsed = IntValueParser.parse(value) {
-                return parsed
-            }
-
-            if let parsed = extractSummaryBadgeCount(from: value) {
-                return parsed
+            if let badge = badgeCount(from: value) {
+                return badge
             }
         }
 
         return nil
+    }
+
+    private func badgeCount(from value: Any?) -> Int? {
+        if let parsed = IntValueParser.parse(value) {
+            return parsed
+        }
+        return extractSummaryBadgeCount(from: value)
     }
 
     private func extractSummaryBadgeCount(from value: Any?) -> Int? {
