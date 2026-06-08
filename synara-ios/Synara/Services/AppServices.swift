@@ -437,6 +437,7 @@ final class AppSessionStore: ObservableObject {
 
         if restorePersistedSession {
             do {
+                _ = try secureStore.migrateIfNeeded()
                 if let restored = try secureStore.load() {
                     self.currentState = .signedIn(restored)
                 } else {

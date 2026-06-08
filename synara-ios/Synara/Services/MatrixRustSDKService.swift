@@ -68,6 +68,8 @@ enum MatrixRustSDKTimelineMessageMapper {
 }
 
 actor MatrixRustSDKClientStore {
+    /// Bump when the on-disk Matrix SDK store layout or compatibility requirements change.
+    static let persistedStoreSchemaVersion = 2
     private static let platformDeviceDisplayName = "Synara iOS"
     private var client: Client?
     private var activeSession: AuthenticatedSession?
@@ -595,23 +597,36 @@ actor MatrixRustSDKClientStore {
         try await room.sendRaw(eventType: eventType, content: content)
     }
 
-    fileprivate func ensureClient(for session: AuthenticatedSession) async throws -> Client {
+    fileprivate func ensureClient(for session: AuthenticatedSession, allowsStoreRepair: Bool = true) async throws -> Client {
         if let client, activeSession == session {
             return client
         }
 
-        let client = try await buildClient(
-            homeserverURL: session.homeserverURL,
-            storeID: session.sdkStoreID ?? Self.storeID(for: session.userID, homeserverURL: session.homeserverURL)
-        )
-        try await installUnableToDecryptDelegate(on: client)
-        try await client.restoreSession(session: session.sdkSession)
-        await client.encryption().waitForE2eeInitializationTasks()
-        await ensurePlatformDeviceDisplayName(session: session)
+        let storeID = session.sdkStoreID ?? Self.storeID(for: session.userID, homeserverURL: session.homeserverURL)
 
-        self.client = client
-        self.activeSession = session
-        return client
+        do {
+            let client = try await buildClient(homeserverURL: session.homeserverURL, storeID: storeID)
+            try await installUnableToDecryptDelegate(on: client)
+            try await client.restoreSession(session: session.sdkSession)
+            await client.encryption().waitForE2eeInitializationTasks()
+            await ensurePlatformDeviceDisplayName(session: session)
+
+            self.client = client
+            self.activeSession = session
+            return client
+        } catch {
+            if allowsStoreRepair {
+                if activeSession == session {
+                    client = nil
+                    activeSession = nil
+                    syncService = nil
+                    roomListService = nil
+                }
+                try? Self.deletePersistedStore(for: session)
+                return try await ensureClient(for: session, allowsStoreRepair: false)
+            }
+            throw error
+        }
     }
 
     private func ensurePlatformDeviceDisplayName(session: AuthenticatedSession) async {
@@ -786,8 +801,7 @@ actor MatrixRustSDKClientStore {
     }
 
     private static func sessionPaths(storeID: String) throws -> (data: URL, cache: URL) {
-        let base = try storeRootURL()
-            .appendingPathComponent(storeID, isDirectory: true)
+        let base = try versionedStoreRoot(storeID: storeID, create: true)
 
         let data = base.appendingPathComponent("data", isDirectory: true)
         let cache = base.appendingPathComponent("cache", isDirectory: true)
@@ -806,19 +820,64 @@ actor MatrixRustSDKClientStore {
 
     static func deletePersistedStore(for session: AuthenticatedSession) throws {
         let storeID = session.sdkStoreID ?? storeID(for: session.userID, homeserverURL: session.homeserverURL)
-        let root = try storeRootURL(create: false).appendingPathComponent(storeID, isDirectory: true)
-        guard FileManager.default.fileExists(atPath: root.path) else {
-            return
-        }
-        try FileManager.default.removeItem(at: root)
+        try deleteStoreDirectoryIfPresent(at: try versionedStoreRoot(storeID: storeID, create: false))
+        try deleteStoreDirectoryIfPresent(at: try legacyStoreRoot(storeID: storeID, create: false))
     }
 
     static func persistedStoreExists(for session: AuthenticatedSession) -> Bool {
         let storeID = session.sdkStoreID ?? storeID(for: session.userID, homeserverURL: session.homeserverURL)
-        guard let root = try? storeRootURL(create: false).appendingPathComponent(storeID, isDirectory: true) else {
+        guard let root = try? versionedStoreRoot(storeID: storeID, create: false) else {
             return false
         }
         return FileManager.default.fileExists(atPath: root.path)
+    }
+
+    static func pruneLegacyPersistedStores() throws {
+        let root = try storeRootURL(create: false)
+        guard FileManager.default.fileExists(atPath: root.path) else {
+            return
+        }
+
+        let versionDirectoryPrefix = "v"
+        for child in try FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: [.isDirectoryKey]) {
+            let isDirectory = (try? child.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true
+            guard isDirectory else {
+                continue
+            }
+
+            let name = child.lastPathComponent
+            if name.hasPrefix(versionDirectoryPrefix) {
+                continue
+            }
+
+            try? FileManager.default.removeItem(at: child)
+        }
+    }
+
+    private static func versionedStoreRoot(storeID: String, create: Bool) throws -> URL {
+        let root = try storeRootURL(create: create)
+            .appendingPathComponent("v\(persistedStoreSchemaVersion)", isDirectory: true)
+            .appendingPathComponent(storeID, isDirectory: true)
+        if create {
+            try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        }
+        return root
+    }
+
+    private static func legacyStoreRoot(storeID: String, create: Bool) throws -> URL {
+        let root = try storeRootURL(create: create)
+            .appendingPathComponent(storeID, isDirectory: true)
+        if create {
+            try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        }
+        return root
+    }
+
+    private static func deleteStoreDirectoryIfPresent(at url: URL) throws {
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            return
+        }
+        try FileManager.default.removeItem(at: url)
     }
 
     private static func storeRootURL(create: Bool = true) throws -> URL {
@@ -1274,7 +1333,7 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
     }
 
     func loadOlderTimeline(roomID: String, before eventID: String) async -> [TimelineItem] {
-        await loadTimeline(roomID: roomID, focusedEventID: nil, pageSize: 50, enrichProfiles: true)
+        await loadOlderTimeline(roomID: roomID, beforeEventID: eventID, pageSize: 50)
     }
 
     func timelineUpdates(roomID: String, focusedEventID: String?) -> AsyncStream<[TimelineItem]> {
@@ -1463,7 +1522,11 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
     }
 
     private static func paginateFocusedTimelineForwardToLiveEnd(_ timeline: Timeline) async {
-        for _ in 0..<24 {
+        var iterations = 0
+        let maxIterations = 200
+
+        while iterations < maxIterations {
+            iterations += 1
             do {
                 let hitEnd = try await timeline.paginateForwards(numEvents: 50)
                 if hitEnd {
@@ -1472,6 +1535,62 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
             } catch {
                 return
             }
+        }
+    }
+
+    private func loadOlderTimeline(roomID: String, beforeEventID: String, pageSize: UInt16) async -> [TimelineItem] {
+        guard case .signedIn(let session) = sessionStore.currentState else {
+            return []
+        }
+
+        do {
+            let room: Room
+            if let restoredRoom = try await clientStore.room(roomID: roomID, session: session) {
+                room = restoredRoom
+            } else {
+                try await clientStore.syncOnce(session: session, fullState: false)
+                guard let syncedRoom = try await clientStore.room(roomID: roomID, session: session) else {
+                    return []
+                }
+                room = syncedRoom
+            }
+
+            try? await clientStore.syncOnceForInteractiveOpen(session: session)
+
+            let timeline = try await room.timelineWithConfiguration(
+                configuration: TimelineConfiguration(
+                    focus: .event(
+                        eventId: beforeEventID,
+                        numContextEvents: 0,
+                        threadMode: .automatic(hideThreadedEvents: true)
+                    ),
+                    filter: .all,
+                    internalIdPrefix: nil,
+                    dateDividerMode: .daily,
+                    trackReadReceipts: .disabled,
+                    reportUtds: true
+                )
+            )
+            let collector = MatrixRustSDKTimelineCollector()
+            let handle = await timeline.addListener(listener: collector)
+            defer { handle.cancel() }
+
+            _ = try? await timeline.paginateBackwards(numEvents: pageSize)
+            let sdkItems = await Self.waitForMappedTimelineItems(
+                collector: collector,
+                timeoutNanoseconds: 1_500_000_000
+            )
+            let olderItems = sdkItems.filter { item in
+                item.eventID != beforeEventID && item.id != beforeEventID
+            }
+
+            guard olderItems.isEmpty == false else {
+                return []
+            }
+
+            return await enrichWithProfiles(olderItems, session: session)
+        } catch {
+            return []
         }
     }
 
@@ -1928,17 +2047,14 @@ private final class MatrixRustSDKRoomListEntriesCollector: RoomListEntriesListen
 
 private final class MatrixRustSDKTimelineCollector: TimelineListener, @unchecked Sendable {
     private let lock = NSLock()
-    private var collected: [EventTimelineItem] = []
+    private var timelineItems: [MatrixRustSDK.TimelineItem] = []
 
     func onUpdate(diff: [TimelineDiff]) {
         lock.lock()
-        defer { lock.unlock() }
-
-        for timelineItem in diff.flatMap(Self.items(from:)) {
-            if let event = timelineItem.asEvent() {
-                collected.append(event)
-            }
+        for update in diff {
+            apply(update)
         }
+        lock.unlock()
     }
 
     func items() -> [EventTimelineItem] {
@@ -1946,24 +2062,52 @@ private final class MatrixRustSDKTimelineCollector: TimelineListener, @unchecked
         defer { lock.unlock() }
 
         var seen = Set<String>()
-        return collected.filter { item in
-            let id = item.eventOrTransactionId.synaraID
+        return timelineItems.compactMap { item in
+            guard let event = item.asEvent() else {
+                return nil
+            }
+            let id = event.eventOrTransactionId.synaraID
             guard seen.contains(id) == false else {
-                return false
+                return nil
             }
             seen.insert(id)
-            return true
+            return event
         }
     }
 
-    private static func items(from diff: TimelineDiff) -> [MatrixRustSDK.TimelineItem] {
-        switch diff {
-        case let .append(values), let .reset(values):
-            return values
-        case let .pushFront(value), let .pushBack(value), let .insert(_, value), let .set(_, value):
-            return [value]
-        case .clear, .popFront, .popBack, .remove, .truncate:
-            return []
+    private func apply(_ update: TimelineDiff) {
+        switch update {
+        case .append(let values):
+            timelineItems.append(contentsOf: values)
+        case .clear:
+            timelineItems.removeAll()
+        case .pushFront(let item):
+            timelineItems.insert(item, at: 0)
+        case .pushBack(let item):
+            timelineItems.append(item)
+        case .popFront:
+            if timelineItems.isEmpty == false {
+                timelineItems.removeFirst()
+            }
+        case .popBack:
+            _ = timelineItems.popLast()
+        case .insert(let index, let item):
+            let boundedIndex = min(Int(index), timelineItems.count)
+            timelineItems.insert(item, at: boundedIndex)
+        case .set(let index, let item):
+            let intIndex = Int(index)
+            if timelineItems.indices.contains(intIndex) {
+                timelineItems[intIndex] = item
+            }
+        case .remove(let index):
+            let intIndex = Int(index)
+            if timelineItems.indices.contains(intIndex) {
+                timelineItems.remove(at: intIndex)
+            }
+        case .truncate(let length):
+            timelineItems = Array(timelineItems.prefix(Int(length)))
+        case .reset(let values):
+            timelineItems = values
         }
     }
 }
