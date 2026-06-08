@@ -10,7 +10,7 @@ settings:
     IPHONEOS_DEPLOYMENT_TARGET: "16.0"
     CODE_SIGN_STYLE: Automatic
     MARKETING_VERSION: "1.1.1"
-    CURRENT_PROJECT_VERSION: "1.1.13"
+    CURRENT_PROJECT_VERSION: "1.1.14"
 packages:
   MatrixRustComponentsSwift:
     url: https://github.com/matrix-org/matrix-rust-components-swift.git
@@ -30,6 +30,7 @@ targets:
         CFBundleDisplayName: Synara
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        ITSAppUsesNonExemptEncryption: false
         CFBundleURLTypes:
           - CFBundleURLName: com.whylandcreative.synara
             CFBundleURLSchemes:

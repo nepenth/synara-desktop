@@ -1283,6 +1283,9 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
                         Task {
                             let sdkItems = events.compactMap(Self.mapTimelineItem)
                                 .sorted { $0.timestamp < $1.timestamp }
+                            guard sdkItems.isEmpty == false else {
+                                return
+                            }
                             continuation.yield(sdkItems)
                         }
                     }
@@ -1358,22 +1361,62 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
             let handle = await timeline.addListener(listener: collector)
             defer { handle.cancel() }
 
-            _ = try await timeline.paginateBackwards(numEvents: pageSize)
+            var reachedTimelineStart = try await timeline.paginateBackwards(numEvents: pageSize)
             if focusedEventID != nil {
                 await Self.paginateFocusedTimelineForwardToLiveEnd(timeline)
             }
-            let items = await collector.waitForItems(timeoutNanoseconds: 1_000_000_000)
-            let sdkItems = items.compactMap(Self.mapTimelineItem)
-                .sorted { $0.timestamp < $1.timestamp }
-            guard sdkItems.isEmpty == false else {
+            var sdkItems = await Self.waitForMappedTimelineItems(
+                collector: collector,
+                timeoutNanoseconds: 1_500_000_000
+            )
+
+            while sdkItems.isEmpty && reachedTimelineStart == false {
+                reachedTimelineStart = (try? await timeline.paginateBackwards(numEvents: pageSize)) ?? true
+                sdkItems = await Self.waitForMappedTimelineItems(
+                    collector: collector,
+                    timeoutNanoseconds: 750_000_000
+                )
+            }
+
+            if sdkItems.isEmpty {
                 try? await clientStore.syncOnce(session: session, fullState: false)
+                _ = try? await timeline.paginateBackwards(numEvents: pageSize)
+                sdkItems = await Self.waitForMappedTimelineItems(
+                    collector: collector,
+                    timeoutNanoseconds: 1_500_000_000
+                )
+            }
+
+            guard sdkItems.isEmpty == false else {
                 return []
             }
+
             let enrichedSDKItems = enrichProfiles ? await enrichWithProfiles(sdkItems, session: session) : sdkItems
             return enrichedSDKItems
         } catch {
             return []
         }
+    }
+
+    private static func waitForMappedTimelineItems(
+        collector: MatrixRustSDKTimelineCollector,
+        timeoutNanoseconds: UInt64
+    ) async -> [TimelineItem] {
+        let deadline = DispatchTime.now().uptimeNanoseconds + timeoutNanoseconds
+
+        while DispatchTime.now().uptimeNanoseconds < deadline {
+            let mappedItems = collector.items()
+                .compactMap(Self.mapTimelineItem)
+                .sorted { $0.timestamp < $1.timestamp }
+            if mappedItems.isEmpty == false {
+                return mappedItems
+            }
+            try? await Task.sleep(nanoseconds: 100_000_000)
+        }
+
+        return collector.items()
+            .compactMap(Self.mapTimelineItem)
+            .sorted { $0.timestamp < $1.timestamp }
     }
 
     private static func paginateFocusedTimelineForwardToLiveEnd(_ timeline: Timeline) async {
@@ -1887,20 +1930,6 @@ private final class MatrixRustSDKTimelineCollector: TimelineListener, @unchecked
             seen.insert(id)
             return true
         }
-    }
-
-    func waitForItems(timeoutNanoseconds: UInt64) async -> [EventTimelineItem] {
-        let deadline = DispatchTime.now().uptimeNanoseconds + timeoutNanoseconds
-
-        while DispatchTime.now().uptimeNanoseconds < deadline {
-            let currentItems = items()
-            if currentItems.isEmpty == false {
-                return currentItems
-            }
-            try? await Task.sleep(nanoseconds: 100_000_000)
-        }
-
-        return items()
     }
 
     private static func items(from diff: TimelineDiff) -> [MatrixRustSDK.TimelineItem] {
