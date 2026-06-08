@@ -102,7 +102,7 @@ struct RoomTimelineView: View {
             Task {
                 _ = await loadCryptoStatus()
             }
-            await prepareTimelineUpdates()
+            await loadTimeline()
             startTimelineUpdates()
         }
         .onDisappear {
