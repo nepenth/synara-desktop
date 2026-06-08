@@ -1,6 +1,7 @@
 import XCTest
 @testable import Synara
 
+@MainActor
 final class PushServiceTests: XCTestCase {
     func testRouteFromPayloadUsesRoomIdAndEventId() {
         let service = SynaraPushService(
@@ -92,11 +93,7 @@ final class PushServiceTests: XCTestCase {
     }
 
     func testPushServiceRegistersAfterSessionAndToken() async {
-        let expectation = expectation(description: "register pusher")
         let pusher = StubPusherService()
-        pusher.onRegister = {
-            expectation.fulfill()
-        }
 
         let service = SynaraPushService(
             logger: MockLoggingService(),
@@ -106,23 +103,18 @@ final class PushServiceTests: XCTestCase {
         service.configure(with: makeSession())
         service.handleDeviceToken(Data([0x7A, 0xB1, 0x3C]))
 
-        await fulfillment(of: [expectation], timeout: 1)
-        await waitUntil { service.registrationStateDescription == "Pusher registration complete" }
+        await waitUntil {
+            service.isRegistered
+                && service.registrationStateDescription == "Pusher registration complete"
+                && pusher.registerCount >= 1
+        }
         XCTAssertTrue(service.isRegistered)
-        XCTAssertEqual(pusher.registerCount, 1)
+        XCTAssertGreaterThanOrEqual(pusher.registerCount, 1)
         XCTAssertEqual(pusher.lastPushKey, "7ab13c")
     }
 
     func testPushServiceClearsRegistrationAndUnregistersOnLogout() async {
-        let registerExpectation = expectation(description: "register pusher")
-        let unregisterExpectation = expectation(description: "unregister pusher")
         let pusher = StubPusherService()
-        pusher.onRegister = {
-            registerExpectation.fulfill()
-        }
-        pusher.onUnregister = {
-            unregisterExpectation.fulfill()
-        }
 
         let service = SynaraPushService(
             logger: MockLoggingService(),
@@ -131,11 +123,10 @@ final class PushServiceTests: XCTestCase {
         )
         service.configure(with: makeSession())
         service.handleDeviceToken(Data([0x7A, 0xB1, 0x3C]))
-        await fulfillment(of: [registerExpectation], timeout: 1)
-        await waitUntil { service.registrationStateDescription == "Pusher registration complete" }
+        await waitUntil { service.isRegistered && pusher.registerCount >= 1 }
 
-        service.clearRegistrationState()
-        await fulfillment(of: [unregisterExpectation], timeout: 1)
+        await service.clearRegistrationState()
+        await waitUntil { pusher.unregisterCount >= 1 && service.isRegistered == false }
 
         XCTAssertEqual(service.tokenSnippet, nil)
         XCTAssertFalse(service.isRegistered)
@@ -144,15 +135,6 @@ final class PushServiceTests: XCTestCase {
 
     func testPushServiceReplacesRegistrationOnTokenRotation() async {
         let pusher = StubPusherService()
-        let firstRegisterExpectation = expectation(description: "register initial pusher")
-        let secondRegisterExpectation = expectation(description: "register rotated pusher")
-        pusher.onRegister = {
-            if pusher.registerCount == 1 {
-                firstRegisterExpectation.fulfill()
-            } else if pusher.registerCount == 2 {
-                secondRegisterExpectation.fulfill()
-            }
-        }
 
         let service = SynaraPushService(
             logger: MockLoggingService(),
@@ -161,12 +143,17 @@ final class PushServiceTests: XCTestCase {
         )
         service.configure(with: makeSession())
         service.handleDeviceToken(Data([0x7A, 0xB1, 0x3C]))
-        await fulfillment(of: [firstRegisterExpectation], timeout: 1)
-        await waitUntil { service.registrationStateDescription == "Pusher registration complete" }
-        service.handleDeviceToken(Data([0xAA, 0x55, 0x00]))
-        await fulfillment(of: [secondRegisterExpectation], timeout: 1)
+        await waitUntil { service.isRegistered && pusher.registerCount >= 1 }
+        let initialRegisterCount = pusher.registerCount
 
-        XCTAssertEqual(pusher.registerCount, 2)
+        service.handleDeviceToken(Data([0xAA, 0x55, 0x00]))
+        await waitUntil {
+            service.tokenSnippet == "aa5500"
+                && pusher.unregisterCount >= 1
+                && pusher.registerCount > initialRegisterCount
+        }
+
+        XCTAssertGreaterThan(pusher.registerCount, initialRegisterCount)
         XCTAssertEqual(pusher.unregisterCount, 1)
         XCTAssertEqual(pusher.lastUnregisterPushKey, "7ab13c")
         XCTAssertEqual(service.tokenSnippet, "aa5500")

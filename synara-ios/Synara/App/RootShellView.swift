@@ -4,7 +4,6 @@ struct RootShellView: View {
     let environment: AppEnvironment
     @ObservedObject private var router: AppRouter
     @ObservedObject private var session: AppSessionStore
-    @State private var startedMatrixSessionID: String?
 
     init(environment: AppEnvironment = .mock()) {
         self.environment = environment
@@ -20,7 +19,13 @@ struct RootShellView: View {
             }
             .onOpenURL { url in
                 environment.logger.info("Opening deep link \(url.absoluteString)", category: .routing)
-                _ = router.open(url: url)
+                let sessionIsSignedIn: Bool
+                if case .signedIn = session.currentState {
+                    sessionIsSignedIn = true
+                } else {
+                    sessionIsSignedIn = false
+                }
+                _ = router.open(url: url, sessionIsSignedIn: sessionIsSignedIn)
             }
     }
 
@@ -50,16 +55,11 @@ struct RootShellView: View {
             tab(.notifications)
             tab(.settings)
         }
-        .task(id: authenticatedSession.userID + authenticatedSession.deviceID) {
-            let sessionID = authenticatedSession.userID + authenticatedSession.deviceID
-            guard startedMatrixSessionID != sessionID else {
-                return
-            }
-            startedMatrixSessionID = sessionID
+        .task(id: "\(authenticatedSession.userID)-\(authenticatedSession.deviceID)-\(session.sessionEpoch)") {
             let signpostID = PerformanceTrace.begin("SignedInSessionStart")
-            await environment.matrix.start(session: authenticatedSession)
-            environment.push.configure(with: authenticatedSession)
+            await SessionCoordinator.startSignedInSession(environment: environment, session: authenticatedSession)
             PerformanceTrace.end("SignedInSessionStart", id: signpostID)
+            environment.router.replayPendingDeepLinkIfNeeded(sessionIsSignedIn: true)
         }
     }
 

@@ -2,6 +2,7 @@ import Foundation
 
 protocol RoomReadMarkerServicing {
     func fullyReadEventID(roomID: String) async -> String?
+    func markFullyRead(roomID: String, eventID: String) async -> Bool
 }
 
 protocol RoomReadMarkerHTTPClient {
@@ -48,6 +49,30 @@ final class MatrixRoomReadMarkerService: RoomReadMarkerServicing {
         }
     }
 
+    func markFullyRead(roomID: String, eventID: String) async -> Bool {
+        guard case .signedIn(let session) = sessionStore.currentState else {
+            return false
+        }
+
+        do {
+            var request = URLRequest(url: fullyReadURL(session: session, roomID: roomID))
+            request.httpMethod = "PUT"
+            request.timeoutInterval = 2
+            request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.httpBody = try JSONSerialization.data(withJSONObject: ["event_id": eventID])
+
+            let (_, response) = try await httpClient.data(for: request)
+            guard let http = response as? HTTPURLResponse,
+                  (200...299).contains(http.statusCode) else {
+                return false
+            }
+            return true
+        } catch {
+            return false
+        }
+    }
+
     private func fullyReadURL(session: AuthenticatedSession, roomID: String) -> URL {
         var url = session.homeserverURL
         url.appendPathComponent("_matrix")
@@ -72,6 +97,11 @@ final class MockRoomReadMarkerService: RoomReadMarkerServicing {
 
     func fullyReadEventID(roomID: String) async -> String? {
         eventID
+    }
+
+    func markFullyRead(roomID: String, eventID: String) async -> Bool {
+        self.eventID = eventID
+        return true
     }
 }
 

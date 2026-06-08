@@ -86,11 +86,9 @@ struct LoginView: View {
                     do {
                         try environment.session.completeLogin(session)
                         state = .authenticated
-                        environment.router.resetForAccountChange()
+                        environment.router.resetNavigationPathsForAccountChange()
+                        environment.router.replayPendingDeepLinkIfNeeded(sessionIsSignedIn: true)
                         environment.logger.info("Password login succeeded", category: .auth)
-                        Task {
-                            await environment.matrix.start(session: session)
-                        }
                     } catch let error as SecureSessionStoreError {
                         state = .failed(LoginError.sessionPersistenceFailed.localizedDescription)
                         environment.logger.error("Password login failed: \(error.logDescription)", category: .auth)
