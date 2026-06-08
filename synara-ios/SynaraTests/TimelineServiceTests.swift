@@ -1,4 +1,5 @@
 import XCTest
+@preconcurrency import MatrixRustSDK
 @testable import Synara
 
 final class TimelineServiceTests: XCTestCase {
@@ -9,6 +10,55 @@ final class TimelineServiceTests: XCTestCase {
         )
 
         XCTAssertEqual(markdown, "*Hi* tap `<safe>`")
+    }
+
+    func testMatrixHTMLRendererConvertsListsAndStrongText() {
+        let markdown = MatrixHTMLRenderer.sanitizedMarkdown(
+            body: "- **Ship it**\n- Review fallback",
+            html: #"<ul><li><strong>Ship it</strong></li><li>Review fallback</li></ul>"#
+        )
+
+        XCTAssertEqual(markdown, "- **Ship it**\n- Review fallback")
+
+        let attributed = MatrixHTMLRenderer.attributedString(
+            body: "- **Ship it**\n- Review fallback",
+            html: #"<ul><li><strong>Ship it</strong></li><li>Review fallback</li></ul>"#
+        )
+        XCTAssertEqual(String(attributed.characters), "- Ship it\n- Review fallback")
+    }
+
+    func testMatrixRustSDKMapperPreservesFormattedTextMessages() {
+        let content = MsgLikeContent(
+            kind: .message(
+                content: MessageContent(
+                    msgType: .text(
+                        content: TextMessageContent(
+                            body: "- **Ship it**\n- Review fallback",
+                            formatted: FormattedBody(
+                                format: .html,
+                                body: #"<ul><li><strong>Ship it</strong></li><li>Review fallback</li></ul>"#
+                            )
+                        )
+                    ),
+                    body: "- **Ship it**\n- Review fallback",
+                    isEdited: false,
+                    mentions: nil
+                )
+            ),
+            reactions: [],
+            inReplyTo: nil,
+            threadRoot: nil,
+            threadSummary: nil
+        )
+
+        let kind = MatrixRustSDKTimelineMessageMapper.mapMessageLike(content, eventTypeRaw: "m.room.message")
+
+        if case .formattedText(let body, let html) = kind {
+            XCTAssertEqual(body, "- **Ship it**\n- Review fallback")
+            XCTAssertEqual(html, #"<ul><li><strong>Ship it</strong></li><li>Review fallback</li></ul>"#)
+        } else {
+            XCTFail("Expected formatted text, got \(kind)")
+        }
     }
 
     func testAgentCardPayloadParserReadsHermesJSONMessageBody() throws {

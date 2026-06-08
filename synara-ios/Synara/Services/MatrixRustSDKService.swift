@@ -24,6 +24,49 @@ private final class SynaraUnableToDecryptRecorder: UnableToDecryptDelegate, @unc
     }
 }
 
+enum MatrixRustSDKTimelineMessageMapper {
+    static func mapMessageLike(_ content: MsgLikeContent, eventTypeRaw: String?) -> TimelineItem.Kind {
+        switch content.kind {
+        case .message(let message):
+            if let agentCard = SynaraAgentCardPayloadParser.parse(body: message.body) {
+                return .agentCard(agentCard)
+            }
+            switch message.msgType {
+            case .text(let content):
+                return mapTextMessage(body: content.body, formatted: content.formatted)
+            case .notice(let content):
+                return mapTextMessage(body: content.body, formatted: content.formatted)
+            case .emote(let content):
+                return mapTextMessage(body: content.body, formatted: content.formatted)
+            case .other(_, let body):
+                return .text(body)
+            case .image, .audio, .video, .file, .gallery, .location:
+                return .text(message.body)
+            }
+        case .unableToDecrypt:
+            return .encryptedPlaceholder
+        case .redacted:
+            return .redacted
+        case .sticker(let body, _, _):
+            return .text(body)
+        case .other(let eventType):
+            return eventTypeRaw == "m.room.encrypted" ? .encryptedPlaceholder : .unknown(type: "\(eventType)")
+        case .poll, .liveLocation:
+            return .unknown(type: eventTypeRaw ?? "m.room.message")
+        }
+    }
+
+    private static func mapTextMessage(body: String, formatted: FormattedBody?) -> TimelineItem.Kind {
+        guard let formatted,
+              case .html = formatted.format,
+              formatted.body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else {
+            return .text(body)
+        }
+
+        return .formattedText(body: body, html: formatted.body)
+    }
+}
+
 actor MatrixRustSDKClientStore {
     private static let platformDeviceDisplayName = "Synara iOS"
     private var client: Client?
@@ -1481,7 +1524,7 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
 
         switch item.content {
         case .msgLike(let content):
-            kind = mapMessageLike(content, eventTypeRaw: item.eventTypeRaw)
+            kind = MatrixRustSDKTimelineMessageMapper.mapMessageLike(content, eventTypeRaw: item.eventTypeRaw)
         case .state:
             return nil
         case .failedToParseMessageLike(let eventType, _):
@@ -1515,25 +1558,6 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
         }
     }
 
-    private static func mapMessageLike(_ content: MsgLikeContent, eventTypeRaw: String?) -> TimelineItem.Kind {
-        switch content.kind {
-        case .message(let message):
-            if let agentCard = SynaraAgentCardPayloadParser.parse(body: message.body) {
-                return .agentCard(agentCard)
-            }
-            return .text(message.body)
-        case .unableToDecrypt:
-            return .encryptedPlaceholder
-        case .redacted:
-            return .redacted
-        case .sticker(let body, _, _):
-            return .text(body)
-        case .other(let eventType):
-            return eventTypeRaw == "m.room.encrypted" ? .encryptedPlaceholder : .unknown(type: "\(eventType)")
-        case .poll, .liveLocation:
-            return .unknown(type: eventTypeRaw ?? "m.room.message")
-        }
-    }
 }
 
 final class MatrixRustSDKMessageSendService: MessageSending {
