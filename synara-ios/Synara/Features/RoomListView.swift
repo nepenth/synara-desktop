@@ -9,6 +9,7 @@ struct RoomListView: View {
     @State private var selectedSpaceID: String?
     @State private var isRoomManagementSheetPresented = ProcessInfo.processInfo.environment["SYNARA_UI_TEST_ROOM_MANAGEMENT_SHEET"] == "1"
     @State private var hasStartedInitialLoad = false
+    @State private var loadRoomsTask: Task<Void, Never>?
     @State private var roomUpdatesTask: Task<Void, Never>?
     @State private var isSearchPresented = ProcessInfo.processInfo.environment["SYNARA_UI_TEST_ROOM_SEARCH"] != nil
     @FocusState private var isSearchFocused: Bool
@@ -151,6 +152,7 @@ struct RoomListView: View {
             }
         }
         .onDisappear {
+            loadRoomsTask?.cancel()
             roomUpdatesTask?.cancel()
         }
     }
@@ -161,12 +163,16 @@ struct RoomListView: View {
         } else if case .idle = state {
             state = .loading
         }
-        Task {
+        loadRoomsTask?.cancel()
+        loadRoomsTask = Task {
             let signpostID = PerformanceTrace.begin("RoomListLoad")
             defer {
                 PerformanceTrace.end("RoomListLoad", id: signpostID)
             }
             let loadedState = await environment.roomList.loadRooms()
+            guard Task.isCancelled == false else {
+                return
+            }
             await MainActor.run {
                 state = loadedState
                 autoOpenRoomIfRequested(from: loadedState)
@@ -256,7 +262,8 @@ struct RoomListView: View {
 
     private func filteredRooms(from rooms: [RoomSummary]) -> [RoomSummary] {
         let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
-        var scopedRooms = rooms
+        let invitedRooms = rooms.filter { $0.membership == .invited }
+        var scopedRooms = rooms.filter { $0.membership != .invited }
 
         if let selectedSpaceID {
             scopedRooms = scopedRooms.filter { room in
@@ -275,14 +282,13 @@ struct RoomListView: View {
             scopedRooms = scopedRooms.filter(\.isFavoriteLike)
         }
 
+        var filtered = RoomListSearchFilter.mergeInvitedRooms(invitedRooms, into: scopedRooms)
+
         guard query.isEmpty == false else {
-            return scopedRooms
+            return filtered
         }
 
-        return scopedRooms.filter { room in
-            room.name.localizedCaseInsensitiveContains(query)
-                || room.lastMessagePreview.localizedCaseInsensitiveContains(query)
-        }
+        return RoomListSearchFilter.applySearchQuery(query, to: filtered, invitedRooms: invitedRooms)
     }
 
     private func spaces(from rooms: [RoomSummary]) -> [SpaceSummary] {
@@ -290,11 +296,7 @@ struct RoomListView: View {
     }
 
     private func favoriteRooms(from rooms: [RoomSummary]) -> [RoomSummary] {
-        let explicitFavorites = rooms.filter(\.isFavoriteLike)
-        if explicitFavorites.isEmpty == false {
-            return explicitFavorites
-        }
-        return Array(rooms.prefix(4))
+        rooms.filter(\.isFavoriteLike)
     }
 
     private var accountMenuTitle: String {
@@ -666,6 +668,7 @@ private struct RoomFilterStrip: View {
                     SynaraFilterChip(title: filter.rawValue, isSelected: filter == selectedFilter) {
                         selectedFilter = filter
                     }
+                    .accessibilityIdentifier("RoomFilter-\(filter.rawValue)")
                 }
             }
             .padding(.trailing, SynaraSpacing.large)

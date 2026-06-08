@@ -5,13 +5,13 @@ final class PerformanceFixtureTests: XCTestCase {
     func testLargeRoomFixtureSortPerformance() {
         let rooms = RoomListFixtures.large(count: 1_000)
 
-        assertCompletes {
+        measure {
             XCTAssertEqual(RoomListFixtures.sorted(rooms).count, 1_000)
         }
     }
 
     func testLargeTimelineFixtureCreationPerformance() {
-        assertCompletes {
+        measure {
             XCTAssertEqual(TimelineFixtures.largeTimeline(count: 10_000).count, 10_000)
         }
     }
@@ -19,15 +19,9 @@ final class PerformanceFixtureTests: XCTestCase {
     func testTimelineReplyCountPerformance() {
         let items = TimelineFixtures.largeTimeline(count: 10_000)
 
-        assertCompletes {
+        measure {
             let counts = TimelineReplyCounter.replyCounts(for: items)
             XCTAssertTrue(counts.isEmpty)
         }
-    }
-
-    private func assertCompletes(_ block: () -> Void) {
-        let start = Date()
-        block()
-        XCTAssertGreaterThanOrEqual(Date().timeIntervalSince(start), 0)
     }
 }

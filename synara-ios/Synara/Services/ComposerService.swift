@@ -39,6 +39,10 @@ final class DraftStore {
     func clearDraft(roomID: String) {
         drafts.removeValue(forKey: roomID)
     }
+
+    func clearAll() {
+        drafts.removeAll()
+    }
 }
 
 struct MockMessageSendService: MessageSending {

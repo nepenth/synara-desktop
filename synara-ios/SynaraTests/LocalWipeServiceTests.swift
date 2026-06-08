@@ -7,12 +7,21 @@ final class LocalWipeServiceTests: XCTestCase {
         let session = AppSessionStore(secureStore: secureStore, restorePersistedSession: true)
         let matrix = MockMatrixClientService(syncStatus: .syncing)
         let roomList = MockRoomListService()
+        let timeline = MockTimelineService()
+        let drafts = DraftStore()
+        drafts.setDraft("draft text", roomID: "!room:matrix.org")
         let push = MockPushService()
+        let router = AppRouter()
+        router.route(to: .settings)
+        router.present(.accountSwitcher)
         let wipe = AppLocalWipeService(
             session: session,
             matrix: matrix,
             roomList: roomList,
-            push: push
+            timeline: timeline,
+            drafts: drafts,
+            push: push,
+            router: router
         )
 
         try await wipe.logoutAndWipe()
@@ -20,9 +29,16 @@ final class LocalWipeServiceTests: XCTestCase {
         XCTAssertEqual(session.currentState, .signedOut)
         XCTAssertEqual(matrix.stopCallCount, 1)
         XCTAssertEqual(matrix.resetCallCount, 1)
+        XCTAssertEqual(matrix.resetSessions.count, 1)
+        XCTAssertEqual(matrix.resetSessions.first??.userID, "@alice:matrix.org")
         XCTAssertEqual(roomList.clearCallCount, 1)
+        XCTAssertEqual(timeline.clearSessionCachesCallCount, 1)
         XCTAssertEqual(push.clearCallCount, 1)
         XCTAssertEqual(secureStore.deleteCallCount, 1)
+        XCTAssertEqual(drafts.draft(roomID: "!room:matrix.org"), "")
+        XCTAssertEqual(router.selectedTab, .rooms)
+        XCTAssertTrue(router.settingsPath.isEmpty)
+        XCTAssertNil(router.sheetDestination)
     }
 
     private func makeSession() throws -> AuthenticatedSession {
