@@ -563,6 +563,12 @@ struct MockTimelineService: TimelineServicing {
 }
 
 enum MatrixHTMLRenderer {
+    struct DetailsBlock: Equatable {
+        let summary: String
+        let code: String?
+        let body: String
+    }
+
     static func attributedString(body: String, html: String) -> AttributedString {
         let markdown = sanitizedMarkdown(body: body, html: html)
         if let attributed = try? AttributedString(
@@ -573,6 +579,53 @@ enum MatrixHTMLRenderer {
         }
 
         return AttributedString(body)
+    }
+
+    static func detailsBlocks(html: String) -> [DetailsBlock] {
+        let sanitized = html
+            .removingHTMLBlocks(named: "script")
+            .removingHTMLBlocks(named: "style")
+        let pattern = #"<details(?:\s+[^>]*)?>([\s\S]*?)</details\s*>"#
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
+            return []
+        }
+
+        let source = sanitized as NSString
+        let nsRange = NSRange(sanitized.startIndex..<sanitized.endIndex, in: sanitized)
+        return regex.matches(in: sanitized, range: nsRange).compactMap { match in
+            guard match.numberOfRanges == 2 else {
+                return nil
+            }
+
+            let content = source.substring(with: match.range(at: 1))
+            guard let summary = firstHTMLCapture(
+                in: content,
+                pattern: #"<summary(?:\s+[^>]*)?>([\s\S]*?)</summary\s*>"#
+            )?.strippingHTMLTagsAndDecoding(),
+                summary.isEmpty == false else {
+                return nil
+            }
+
+            let code = firstHTMLCapture(
+                in: content,
+                pattern: #"<pre(?:\s+[^>]*)?>\s*<code(?:\s+[^>]*)?>([\s\S]*?)</code\s*>\s*</pre\s*>"#
+            )?.decodingBasicHTMLEntities()
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+
+            let body = content
+                .replacingHTMLPattern(#"<summary(?:\s+[^>]*)?>[\s\S]*?</summary\s*>"#, with: "")
+                .replacingHTMLPattern(#"<pre(?:\s+[^>]*)?>[\s\S]*?</pre\s*>"#, with: "")
+                .strippingHTMLTagsAndDecoding()
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+
+            return DetailsBlock(summary: summary, code: code?.isEmpty == false ? code : nil, body: body)
+        }
+    }
+
+    static func markdownExcludingDetails(body: String, html: String) -> String {
+        let htmlWithoutDetails = html.replacingHTMLPattern(#"<details(?:\s+[^>]*)?>[\s\S]*?</details\s*>"#, with: "")
+        let markdown = sanitizedMarkdown(body: "", html: htmlWithoutDetails)
+        return markdown.isEmpty ? body : markdown
     }
 
     static func sanitizedMarkdown(body: String, html: String) -> String {
@@ -599,10 +652,25 @@ enum MatrixHTMLRenderer {
         output = output.replacingHTMLPattern(#"</?span(?:\s+[^>]*)?>"#, with: "")
         output = output.replacingHTMLPattern(#"</?[^>]+>"#, with: "")
         output = output.decodingBasicHTMLEntities()
-        output = output.replacingOccurrences(of: "\n\n\n", with: "\n\n")
+        output = output.replacingHTMLPattern(#"\n{3,}"#, with: "\n\n")
             .trimmingCharacters(in: .whitespacesAndNewlines)
 
         return output.isEmpty ? body : output
+    }
+
+    private static func firstHTMLCapture(in html: String, pattern: String) -> String? {
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
+            return nil
+        }
+
+        let nsRange = NSRange(html.startIndex..<html.endIndex, in: html)
+        guard let match = regex.firstMatch(in: html, range: nsRange),
+              match.numberOfRanges == 2,
+              let range = Range(match.range(at: 1), in: html) else {
+            return nil
+        }
+
+        return String(html[range])
     }
 }
 
@@ -652,6 +720,12 @@ private extension String {
         }
         let nsRange = NSRange(startIndex..<endIndex, in: self)
         return regex.stringByReplacingMatches(in: self, range: nsRange, withTemplate: replacement)
+    }
+
+    func strippingHTMLTagsAndDecoding() -> String {
+        replacingHTMLPattern(#"</?[^>]+>"#, with: "")
+            .decodingBasicHTMLEntities()
+            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     func decodingBasicHTMLEntities() -> String {

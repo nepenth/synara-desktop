@@ -36,7 +36,6 @@ struct AppEnvironment {
             secureStore: secureStore,
             restorePersistedSession: true
         )
-        clearLegacyRestoredSessionIfNeeded(session: session, logger: logger)
         if let restoreFailure = session.restoreFailureLogDescription {
             logger.error("Session restore failed: \(restoreFailure)", category: .auth)
         } else if case .signedIn = session.currentState {
@@ -160,25 +159,6 @@ struct AppEnvironment {
         return url
     }
 
-    private static func clearLegacyRestoredSessionIfNeeded(session: AppSessionStore, logger: LoggingServicing) {
-        let defaults = UserDefaults.standard
-        let migrationKey = "SynaraClearedLegacyMatrixStartupStores_20260607"
-        guard defaults.bool(forKey: migrationKey) == false else {
-            return
-        }
-
-        defer {
-            defaults.set(true, forKey: migrationKey)
-        }
-
-        guard case .signedIn = session.currentState else {
-            return
-        }
-
-        logger.error("Clearing legacy restored Matrix session during startup migration", category: .auth)
-        try? MatrixRustSDKClientStore.deletePersistedStores()
-        try? session.signOut()
-    }
 }
 
 private struct AppEnvironmentKey: EnvironmentKey {
