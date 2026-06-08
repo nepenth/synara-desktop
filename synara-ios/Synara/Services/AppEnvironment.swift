@@ -1,5 +1,4 @@
 import SwiftUI
-@preconcurrency import MatrixRustSDK
 
 struct AppEnvironment {
     let session: AppSessionStore
@@ -28,7 +27,6 @@ struct AppEnvironment {
 
     static func live() -> AppEnvironment {
         let logger = AppLogger()
-        MatrixRustSDKPlatformBootstrap.ensureInitialized(logger: logger)
         let secureStore = KeychainSecureSessionStore()
         if ProcessInfo.processInfo.environment["SYNARA_RESET_SESSION_ON_LAUNCH"] == "1" {
             try? secureStore.delete()
@@ -42,6 +40,11 @@ struct AppEnvironment {
             logger.error("Session restore failed: \(restoreFailure)", category: .auth)
         } else if case .signedIn = session.currentState {
             logger.info("Session restore succeeded", category: .auth)
+        }
+        if case .signedIn(let restoredSession) = session.currentState,
+           MatrixRustSDKClientStore.persistedStoreExists(for: restoredSession) == false {
+            logger.error("Clearing restored session because the Matrix SDK store is missing", category: .auth)
+            try? session.signOut()
         }
         let matrixSDKClientStore = MatrixRustSDKClientStore()
         let matrix = MatrixRustSDKMatrixClientService(clientStore: matrixSDKClientStore)
@@ -154,37 +157,6 @@ struct AppEnvironment {
         }
 
         return url
-    }
-}
-
-private enum MatrixRustSDKPlatformBootstrap {
-    private static let lock = NSLock()
-    private static var isInitialized = false
-
-    static func ensureInitialized(logger: LoggingServicing) {
-        lock.lock()
-        defer { lock.unlock() }
-
-        guard isInitialized == false else {
-            return
-        }
-
-        do {
-            try MatrixRustSDK.initPlatform(
-                config: TracingConfiguration(
-                    logLevel: .warn,
-                    traceLogPacks: [],
-                    extraTargets: [],
-                    writeToStdoutOrSystem: false,
-                    writeToFiles: nil,
-                    sentryConfig: nil
-                ),
-                useLightweightTokioRuntime: false
-            )
-            isInitialized = true
-        } catch {
-            logger.error("Matrix SDK platform initialization failed: \(error.localizedDescription)", category: .matrix)
-        }
     }
 }
 
