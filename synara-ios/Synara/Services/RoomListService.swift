@@ -240,6 +240,7 @@ final class MockRoomMembershipService: RoomMembershipServicing {
 
 final class MockRoomListService: RoomListServicing {
     var state: RoomListState
+    var updateStates: [RoomListState] = []
     private(set) var loadCallCount = 0
     private(set) var clearCallCount = 0
 
@@ -253,6 +254,28 @@ final class MockRoomListService: RoomListServicing {
             return .loaded(RoomListFixtures.sorted(rooms))
         }
         return state
+    }
+
+    func roomUpdates() -> AsyncStream<RoomListState> {
+        AsyncStream { continuation in
+            let task = Task {
+                let states: [RoomListState]
+                if updateStates.isEmpty {
+                    states = [await loadRooms()]
+                } else {
+                    states = updateStates
+                }
+
+                for state in states {
+                    continuation.yield(state)
+                }
+                continuation.finish()
+            }
+
+            continuation.onTermination = { _ in
+                task.cancel()
+            }
+        }
     }
 
     func clearCache() {

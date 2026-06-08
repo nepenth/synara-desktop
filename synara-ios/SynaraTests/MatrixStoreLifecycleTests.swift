@@ -18,7 +18,7 @@ final class MatrixStoreLifecycleTests: XCTestCase {
         try FileManager.default.createDirectory(at: legacyStore.appendingPathComponent("data", isDirectory: true), withIntermediateDirectories: true)
         try FileManager.default.createDirectory(at: versionedStore.appendingPathComponent("data", isDirectory: true), withIntermediateDirectories: true)
 
-        try pruneLegacyStores(in: root)
+        try MatrixRustSDKClientStore.pruneLegacyPersistedStores(in: root)
 
         XCTAssertFalse(FileManager.default.fileExists(atPath: legacyStore.path))
         XCTAssertTrue(FileManager.default.fileExists(atPath: versionedStore.path))
@@ -49,22 +49,6 @@ final class MatrixStoreLifecycleTests: XCTestCase {
             .appendingPathComponent("synara-store-test-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
         return base
-    }
-
-    private func pruneLegacyStores(in root: URL) throws {
-        let versionDirectoryPrefix = "v"
-        for child in try FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: [.isDirectoryKey]) {
-            let isDirectory = (try? child.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true
-            guard isDirectory else {
-                continue
-            }
-
-            if child.lastPathComponent.hasPrefix(versionDirectoryPrefix) {
-                continue
-            }
-
-            try FileManager.default.removeItem(at: child)
-        }
     }
 
     private func makeSession() throws -> AuthenticatedSession {

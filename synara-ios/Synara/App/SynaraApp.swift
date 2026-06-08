@@ -68,9 +68,8 @@ final class SynaraAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificati
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
-        if let remotePayload = launchOptions?[.remoteNotification] as? [AnyHashable: Any],
-           let push {
-            if let route = push.route(from: remotePayload) {
+        if let remotePayload = launchOptions?[.remoteNotification] as? [AnyHashable: Any] {
+            if let route = push?.route(from: remotePayload) ?? NotificationPushRouteParser.route(from: remotePayload) {
                 routeToDestination(route)
             } else {
                 routeToFallback()
@@ -141,6 +140,7 @@ final class SynaraAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificati
 
     private func routeToFallback() {
         guard let router else {
+            pendingRoute = .notifications
             return
         }
 

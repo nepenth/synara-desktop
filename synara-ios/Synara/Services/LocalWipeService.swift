@@ -16,19 +16,34 @@ struct AppLocalWipeService: LocalWiping {
     let session: AppSessionStore
     let matrix: MatrixClientServicing
     let roomList: RoomListServicing
+    let timeline: TimelineServicing
+    let drafts: DraftStore
     let push: PushServicing
+    let router: AppRouter
 
     func logoutAndWipe() async throws {
+        let activeSession: AuthenticatedSession?
+        if case .signedIn(let signedInSession) = session.currentState {
+            activeSession = signedInSession
+        } else {
+            activeSession = nil
+        }
+
         await matrix.stop()
-        matrix.resetLocalState()
+        await push.clearRegistrationState()
+        await matrix.resetLocalState()
         roomList.clearCache()
-        push.clearRegistrationState()
+        timeline.clearSessionCaches()
+        drafts.clearAll()
+        router.resetNavigationPathsForAccountChange()
 
         do {
             try session.signOut()
         } catch {
             throw LocalWipeError.sessionDeleteFailed
         }
+
+        _ = activeSession
     }
 }
 

@@ -15,9 +15,23 @@ struct EventActionAvailability: Equatable {
     let canReact: Bool
 }
 
+enum EventActionError: LocalizedError, Equatable {
+    case signedOut
+    case failed
+
+    var errorDescription: String? {
+        switch self {
+        case .signedOut:
+            return "Sign in before changing messages."
+        case .failed:
+            return "That action could not be completed. Try again."
+        }
+    }
+}
+
 protocol EventActionServicing {
     func availability(for item: TimelineItem, currentUserID: String) -> EventActionAvailability
-    func apply(_ action: EventActionType, to item: TimelineItem, currentUserID: String, roomID: String) async -> TimelineItem
+    func apply(_ action: EventActionType, to item: TimelineItem, currentUserID: String, roomID: String) async throws -> TimelineItem
 }
 
 struct MockEventActionService: EventActionServicing {
@@ -37,7 +51,7 @@ struct MockEventActionService: EventActionServicing {
         }
     }
 
-    func apply(_ action: EventActionType, to item: TimelineItem, currentUserID: String, roomID: String) async -> TimelineItem {
+    func apply(_ action: EventActionType, to item: TimelineItem, currentUserID: String, roomID: String) async throws -> TimelineItem {
         switch action {
         case .reply:
             return item
@@ -96,28 +110,24 @@ final class MatrixRustSDKEventActionService: EventActionServicing {
         MockEventActionService().availability(for: item, currentUserID: currentUserID)
     }
 
-    func apply(_ action: EventActionType, to item: TimelineItem, currentUserID: String, roomID: String) async -> TimelineItem {
+    func apply(_ action: EventActionType, to item: TimelineItem, currentUserID: String, roomID: String) async throws -> TimelineItem {
         guard case .signedIn(let session) = sessionStore.currentState else {
-            return item
+            throw EventActionError.signedOut
         }
 
-        do {
-            guard let room = try await clientStore.room(roomID: roomID, session: session) else {
-                return item
-            }
-            let timeline = try await room.timeline()
-            let eventID = EventOrTransactionId.eventId(eventId: item.eventID)
+        guard let room = try await clientStore.room(roomID: roomID, session: session) else {
+            throw EventActionError.failed
+        }
+        let timeline = try await room.timeline()
+        let eventID = EventOrTransactionId.eventId(eventId: item.eventID)
 
-            switch action {
-            case .reply, .edit:
-                return item
-            case .redact:
-                try await timeline.redactEvent(eventOrTransactionId: eventID, reason: nil)
-            case .react(let reaction):
-                _ = try await timeline.toggleReaction(itemId: eventID, key: reaction)
-            }
-        } catch {
+        switch action {
+        case .reply, .edit:
             return item
+        case .redact:
+            try await timeline.redactEvent(eventOrTransactionId: eventID, reason: nil)
+        case .react(let reaction):
+            _ = try await timeline.toggleReaction(itemId: eventID, key: reaction)
         }
 
         // The SDK timeline listener owns local echo and remote echo updates.

@@ -47,19 +47,32 @@ final class KeychainSecureSessionStore: SecureSessionStoring {
 
     func save(_ session: AuthenticatedSession) throws {
         let data = try JSONEncoder().encode(SecureSessionEnvelope(version: 1, session: session))
-        try delete()
-
-        let query: [String: Any] = [
+        let matchQuery: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
-            kSecAttrAccount as String: account,
-            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
-            kSecValueData as String: data
+            kSecAttrAccount as String: account
+        ]
+        let updateAttributes: [String: Any] = [
+            kSecValueData as String: data,
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
         ]
 
-        let status = SecItemAdd(query as CFDictionary, nil)
-        guard status == errSecSuccess else {
-            throw SecureSessionStoreError.keychainFailure(status: status)
+        let updateStatus = SecItemUpdate(matchQuery as CFDictionary, updateAttributes as CFDictionary)
+        if updateStatus == errSecSuccess {
+            return
+        }
+
+        if updateStatus != errSecItemNotFound {
+            throw SecureSessionStoreError.keychainFailure(status: updateStatus)
+        }
+
+        var addQuery = matchQuery
+        addQuery[kSecValueData as String] = data
+        addQuery[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+
+        let addStatus = SecItemAdd(addQuery as CFDictionary, nil)
+        guard addStatus == errSecSuccess else {
+            throw SecureSessionStoreError.keychainFailure(status: addStatus)
         }
     }
 
