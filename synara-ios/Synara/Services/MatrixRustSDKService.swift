@@ -203,10 +203,12 @@ actor MatrixRustSDKClientStore {
     @discardableResult
     func startSyncService(session: AuthenticatedSession) async throws -> SyncService {
         _ = try await ensureClient(for: session)
-        if let syncService {
+        if let syncService, activeSession == session {
             syncStatus = .syncing
             return syncService
         }
+
+        await detachSyncServices()
 
         let client = try await ensureClient(for: session)
         let service = try await client.syncService().finish()
@@ -624,45 +626,71 @@ actor MatrixRustSDKClientStore {
             )
 
             let rooms = try await rooms(session: session)
-            var unreadCountsByRoomID: [String: UInt64] = [:]
-            unreadCountsByRoomID.reserveCapacity(rooms.count)
-            for room in rooms {
-                let roomInfo = try? await room.roomInfo()
-                unreadCountsByRoomID[room.id()] = roomInfo?.numUnreadNotifications ?? 0
-            }
-
-            let prioritizedRooms = rooms.sorted { lhs, rhs in
-                let lhsUnread = unreadCountsByRoomID[lhs.id()] ?? 0
-                let rhsUnread = unreadCountsByRoomID[rhs.id()] ?? 0
-                if lhsUnread != rhsUnread {
-                    return lhsUnread > rhsUnread
-                }
-                return lhs.id() < rhs.id()
-            }
-
-            var batch: [NotificationItemsRequest] = []
-            batch.reserveCapacity(min(prioritizedRooms.count, 32))
-
-            for room in prioritizedRooms.prefix(32) {
-                batch.append(NotificationItemsRequest(roomId: room.id(), eventIds: [eventID]))
-            }
-
-            guard batch.isEmpty == false else {
+            guard rooms.isEmpty == false else {
                 return nil
             }
 
-            let results = try await notificationClient.getNotifications(requests: batch)
-            for request in batch {
+            return try await resolvePushRoute(
+                eventID: eventID,
+                rooms: prioritizedRoomsForNotificationLookup(rooms),
+                notificationClient: notificationClient
+            )
+        } catch {
+            return nil
+        }
+    }
+
+    private func prioritizedRoomsForNotificationLookup(_ rooms: [Room]) async -> [Room] {
+        var unreadCountsByRoomID: [String: UInt64] = [:]
+        unreadCountsByRoomID.reserveCapacity(rooms.count)
+        for room in rooms {
+            let roomInfo = try? await room.roomInfo()
+            unreadCountsByRoomID[room.id()] = roomInfo?.numUnreadNotifications ?? 0
+        }
+
+        return rooms.sorted { lhs, rhs in
+            let lhsUnread = unreadCountsByRoomID[lhs.id()] ?? 0
+            let rhsUnread = unreadCountsByRoomID[rhs.id()] ?? 0
+            if lhsUnread != rhsUnread {
+                return lhsUnread > rhsUnread
+            }
+            return lhs.id() < rhs.id()
+        }
+    }
+
+    private func resolvePushRoute(
+        eventID: String,
+        rooms: [Room],
+        notificationClient: NotificationClient
+    ) async throws -> AppRoute? {
+        let batchSize = 32
+        var offset = 0
+
+        while offset < rooms.count {
+            let end = min(offset + batchSize, rooms.count)
+            let slice = rooms[offset..<end]
+            let requests = slice.map { NotificationItemsRequest(roomId: $0.id(), eventIds: [eventID]) }
+            let results = try await notificationClient.getNotifications(requests: requests)
+
+            for request in requests {
                 guard case .ok = results[request.roomId] else {
                     continue
                 }
                 return .room(id: request.roomId, eventID: eventID)
             }
-        } catch {
-            return nil
+
+            offset = end
         }
 
         return nil
+    }
+
+    private func detachSyncServices() async {
+        if let syncService {
+            await syncService.stop()
+        }
+        syncService = nil
+        roomListService = nil
     }
 
     func sendRawRoomEvent(roomID: String, eventType: String, content: String, session: AuthenticatedSession) async throws {
@@ -675,6 +703,13 @@ actor MatrixRustSDKClientStore {
     fileprivate func ensureClient(for session: AuthenticatedSession, allowsStoreRepair: Bool = true) async throws -> Client {
         if let client, activeSession == session {
             return client
+        }
+
+        if let activeSession, activeSession != session {
+            await detachSyncServices()
+            client = nil
+            self.activeSession = nil
+            unableToDecryptRecorder.reset()
         }
 
         let storeID = session.sdkStoreID ?? Self.storeID(for: session.userID, homeserverURL: session.homeserverURL)
