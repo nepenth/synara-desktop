@@ -526,6 +526,8 @@ struct RoomTimelineView: View {
                     if isEditing {
                         // Edits may not stream back immediately; keep a local replace.
                         replace(item)
+                    } else if ProcessInfo.processInfo.environment["SYNARA_UI_TESTS"] == "1" {
+                        append(item)
                     }
                     // New sends rely on timeline streaming instead of optimistic append.
                     draft = ""
@@ -2480,6 +2482,9 @@ private struct ComposerView: View {
     @Binding var selectedPhoto: PhotosPickerItem?
     @State private var isAttachmentSheetPresented = false
     @State private var unavailableAttachmentMessage: String?
+    @State private var isFormattingBarVisible = false
+    @State private var composerSelection = ComposerTextSelection.empty
+    @FocusState private var isComposerFocused: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: SynaraSpacing.small) {
@@ -2496,6 +2501,13 @@ private struct ComposerView: View {
                     .font(SynaraTypography.supporting)
                     .foregroundStyle(.red)
                     .accessibilityIdentifier("ComposerErrorText")
+            }
+
+            if isFormattingBarVisible {
+                ComposerFormattingBar { format in
+                    applyFormatting(format)
+                }
+                .transition(.move(edge: .bottom).combined(with: .opacity))
             }
 
             HStack(alignment: .bottom, spacing: SynaraSpacing.small) {
@@ -2519,27 +2531,43 @@ private struct ComposerView: View {
                 .accessibilityLabel("Attach")
                 .accessibilityIdentifier("AttachmentButton")
 
-                TextField(placeholder, text: $text, axis: .vertical)
-                    .lineLimit(1...4)
-                    .padding(.horizontal, SynaraSpacing.medium)
-                    .padding(.vertical, SynaraSpacing.medium)
-                    .background(SynaraColor.surface)
-                    .clipShape(Capsule())
-                    .overlay(
-                        Capsule()
-                            .stroke(SynaraColor.separator.opacity(0.35), lineWidth: 0.5)
-                            .allowsHitTesting(false)
-                    )
-                    .accessibilityLabel("Message")
-                    .accessibilityHint("Enter a message for this room")
-                    .accessibilityIdentifier("ComposerTextField")
+                HStack(alignment: .bottom, spacing: SynaraSpacing.xSmall) {
+                    composerField
+
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.18)) {
+                            isFormattingBarVisible.toggle()
+                        }
+                        isComposerFocused = true
+                    } label: {
+                        Image(systemName: isFormattingBarVisible ? "textformat.alt" : "textformat")
+                            .font(.system(size: 16, weight: .semibold))
+                            .frame(width: 32, height: 32)
+                            .foregroundStyle(isFormattingBarVisible ? SynaraColor.accent : SynaraColor.secondaryText)
+                    }
+                    .buttonStyle(.plain)
+                    .contentShape(Rectangle())
+                    .accessibilityLabel(isFormattingBarVisible ? "Hide formatting toolbar" : "Show formatting toolbar")
+                    .accessibilityAddTraits(isFormattingBarVisible ? .isSelected : [])
+                    .accessibilityIdentifier("ComposerFormattingToggle")
+                }
+                .padding(.leading, SynaraSpacing.medium)
+                .padding(.trailing, SynaraSpacing.small)
+                .padding(.vertical, SynaraSpacing.xSmall)
+                .background(SynaraColor.surface)
+                .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        .stroke(SynaraColor.separator.opacity(0.35), lineWidth: 0.5)
+                        .allowsHitTesting(false)
+                )
 
                 if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     Color.clear
                         .frame(width: 40, height: 40)
                         .accessibilityHidden(true)
                 } else {
-                    Button(action: onSend) {
+                    Button(action: submitMessage) {
                         Image(systemName: "paperplane.fill")
                             .font(.system(size: 17, weight: .semibold))
                             .frame(width: 40, height: 40)
@@ -2598,6 +2626,71 @@ private struct ComposerView: View {
 
     private var sendButtonTint: Color {
         text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? SynaraColor.secondarySurface : SynaraColor.accent
+    }
+
+    @ViewBuilder
+    private var composerField: some View {
+        ZStack(alignment: .topLeading) {
+            if text.isEmpty {
+                Text(placeholder)
+                    .font(SynaraTypography.body)
+                    .foregroundStyle(SynaraColor.tertiaryText)
+                    .padding(.top, 8)
+                    .padding(.leading, 4)
+                    .allowsHitTesting(false)
+            }
+
+            TextEditor(text: $text)
+                .font(SynaraTypography.body)
+                .focused($isComposerFocused)
+                .frame(minHeight: 36, maxHeight: 112)
+                .scrollContentBackground(.hidden)
+                .accessibilityIdentifier("ComposerTextField")
+                .accessibilityLabel("Message")
+                .accessibilityHint("Enter a message for this room")
+        }
+    }
+
+    private func applyFormatting(_ format: ComposerMarkdownFormat) {
+        let end = (text as NSString).length
+        let selection = composerSelection.length > 0 ? composerSelection : ComposerTextSelection(location: end, length: 0)
+        let result = ComposerMarkdown.apply(format, to: text, selection: selection)
+        text = result.text
+        composerSelection = result.selection
+        isComposerFocused = true
+    }
+
+    private func submitMessage() {
+        onSend()
+    }
+}
+
+private struct ComposerFormattingBar: View {
+    let onFormat: (ComposerMarkdownFormat) -> Void
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: SynaraSpacing.xSmall) {
+                ForEach(ComposerMarkdownFormat.allCases) { format in
+                    Button {
+                        onFormat(format)
+                    } label: {
+                        Image(systemName: format.systemImage)
+                            .font(.system(size: 15, weight: .semibold))
+                            .frame(width: 36, height: 36)
+                            .background(SynaraColor.secondarySurface)
+                            .foregroundStyle(SynaraColor.primaryText)
+                            .clipShape(RoundedRectangle(cornerRadius: SynaraRadius.control))
+                    }
+                    .buttonStyle(.plain)
+                    .contentShape(Rectangle())
+                    .accessibilityLabel(format.accessibilityLabel)
+                    .accessibilityIdentifier("ComposerFormat-\(format.rawValue)")
+                }
+            }
+            .padding(.horizontal, SynaraSpacing.medium)
+        }
+        .accessibilityIdentifier("ComposerFormattingBar")
     }
 }
 
