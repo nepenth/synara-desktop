@@ -178,14 +178,87 @@ actor MatrixRustSDKClientStore {
 
     func resetPersistedStore(for session: AuthenticatedSession) async {
         if activeSession == session {
+            await detachSyncServices()
             client = nil
             activeSession = nil
-            syncService = nil
-            roomListService = nil
         }
         syncStatus = .stopped
         unableToDecryptRecorder.reset()
         try? Self.deletePersistedStore(for: session)
+    }
+
+    func loadInteractiveRoomListState(
+        session: AuthenticatedSession,
+        fallbackCache: [RoomSummary],
+        allowsStoreRepair: Bool
+    ) async -> RoomListState {
+        do {
+            _ = try await ensureClient(for: session, allowsStoreRepair: allowsStoreRepair)
+            let cachedState = await MatrixRoomListStateBuilder.build(
+                from: client,
+                fallbackCache: fallbackCache
+            )
+            if case .loaded(let rooms) = cachedState, rooms.isEmpty == false {
+                do {
+                    try await syncOnceForInteractiveOpen(session: session)
+                } catch {
+                    if allowsStoreRepair {
+                        return await repairInteractiveRoomListState(
+                            session: session,
+                            fallbackCache: fallbackCache
+                        )
+                    }
+                    return cachedState
+                }
+                return await MatrixRoomListStateBuilder.build(
+                    from: client,
+                    fallbackCache: fallbackCache
+                )
+            }
+
+            do {
+                try await syncOnce(session: session, fullState: false)
+            } catch {
+                if fallbackCache.isEmpty == false {
+                    return .loaded(fallbackCache)
+                }
+                if allowsStoreRepair {
+                    return await repairInteractiveRoomListState(
+                        session: session,
+                        fallbackCache: fallbackCache
+                    )
+                }
+                return .failed("Could not load rooms. Try again.")
+            }
+
+            return await MatrixRoomListStateBuilder.build(
+                from: client,
+                fallbackCache: fallbackCache
+            )
+        } catch {
+            if fallbackCache.isEmpty == false {
+                return .loaded(fallbackCache)
+            }
+            if allowsStoreRepair {
+                return await repairInteractiveRoomListState(
+                    session: session,
+                    fallbackCache: fallbackCache
+                )
+            }
+            return .failed("Could not load rooms. Try again.")
+        }
+    }
+
+    private func repairInteractiveRoomListState(
+        session: AuthenticatedSession,
+        fallbackCache: [RoomSummary]
+    ) async -> RoomListState {
+        await resetPersistedStore(for: session)
+        return await loadInteractiveRoomListState(
+            session: session,
+            fallbackCache: fallbackCache,
+            allowsStoreRepair: false
+        )
     }
 
     func syncOnce(session: AuthenticatedSession, fullState: Bool = false) async throws {
@@ -1117,6 +1190,43 @@ struct MatrixRustSDKAuthService: AuthServicing {
     }
 }
 
+private enum MatrixRoomListStateBuilder {
+    static func build(from client: Client?, fallbackCache: [RoomSummary]) async -> RoomListState {
+        guard let client else {
+            if fallbackCache.isEmpty == false {
+                return .loaded(fallbackCache)
+            }
+            return .failed("Could not load rooms. Try again.")
+        }
+
+        let spaceService = await client.spaceService()
+        let sdkRooms = client.rooms()
+        let sorted = await roomSummaries(from: sdkRooms, spaceService: spaceService)
+        if sorted.isEmpty == false {
+            return .loaded(sorted)
+        }
+        if fallbackCache.isEmpty == false {
+            return .loaded(fallbackCache)
+        }
+        return .empty
+    }
+
+    static func roomSummaries(from rooms: [Room], spaceService: SpaceService?) async -> [RoomSummary] {
+        let shouldMapSpaces = rooms.count <= 80
+        var summaries: [RoomSummary] = []
+        summaries.reserveCapacity(rooms.count)
+        for room in rooms {
+            if let summary = await MatrixRustSDKRoomListService.mapRoom(
+                room,
+                spaceService: shouldMapSpaces ? spaceService : nil
+            ) {
+                summaries.append(summary)
+            }
+        }
+        return RoomListFixtures.sorted(summaries)
+    }
+}
+
 final class MatrixRustSDKRoomListService: RoomListServicing {
     private let sessionStore: AppSessionStore
     private let clientStore: MatrixRustSDKClientStore
@@ -1192,7 +1302,13 @@ final class MatrixRustSDKRoomListService: RoomListServicing {
                                 return
                             }
 
-                            let summaries = await self.roomSummaries(from: rooms, spaceService: spaceService)
+                            let summaries = await MatrixRoomListStateBuilder.roomSummaries(
+                                from: rooms,
+                                spaceService: spaceService
+                            )
+                            if summaries.isEmpty == false {
+                                self.setCachedRooms(summaries)
+                            }
                             let state: RoomListState = summaries.isEmpty ? .empty : .loaded(summaries)
                             continuation.yield(state)
                         }
@@ -1241,87 +1357,15 @@ final class MatrixRustSDKRoomListService: RoomListServicing {
     }
 
     private func loadRooms(session: AuthenticatedSession, allowsStoreRepair: Bool) async -> RoomListState {
-        do {
-            let client = try await clientStore.ensureClient(for: session)
-            let cachedState = await roomListState(from: client)
-            if case .loaded(let rooms) = cachedState, rooms.isEmpty == false {
-                setCachedRooms(rooms)
-                do {
-                    try await clientStore.syncOnceForInteractiveOpen(session: session)
-                } catch {
-                    if allowsStoreRepair {
-                        return await repairStoreAndReloadRooms(session: session)
-                    }
-                    return cachedState
-                }
-                return await roomListState(from: client)
-            }
-
-            do {
-                try await clientStore.syncOnce(session: session, fullState: false)
-            } catch {
-                let cachedSnapshot = cachedRoomsSnapshot()
-                if cachedSnapshot.isEmpty == false {
-                    return .loaded(cachedSnapshot)
-                }
-                if allowsStoreRepair {
-                    return await repairStoreAndReloadRooms(session: session)
-                }
-                return .failed("Could not load rooms. Try again.")
-            }
-
-            return await roomListState(from: client)
-        } catch {
-            let cachedSnapshot = cachedRoomsSnapshot()
-            if cachedSnapshot.isEmpty == false {
-                return .loaded(cachedSnapshot)
-            }
-            if allowsStoreRepair {
-                return await repairStoreAndReloadRooms(session: session)
-            }
-            return .failed("Could not load rooms. Try again.")
+        let state = await clientStore.loadInteractiveRoomListState(
+            session: session,
+            fallbackCache: cachedRoomsSnapshot(),
+            allowsStoreRepair: allowsStoreRepair
+        )
+        if case .loaded(let rooms) = state, rooms.isEmpty == false {
+            setCachedRooms(rooms)
         }
-    }
-
-    private func roomSummaries(from rooms: [Room], spaceService: SpaceService?) async -> [RoomSummary] {
-        let shouldMapSpaces = rooms.count <= 80
-        var summaries: [RoomSummary] = []
-        summaries.reserveCapacity(rooms.count)
-        for room in rooms {
-            if let summary = await Self.mapRoom(
-                room,
-                spaceService: shouldMapSpaces ? spaceService : nil
-            ) {
-                summaries.append(summary)
-            }
-        }
-        let sorted = RoomListFixtures.sorted(summaries)
-        if sorted.isEmpty == false {
-            setCachedRooms(sorted)
-        }
-        return sorted
-    }
-
-    private func roomListState(from client: Client) async -> RoomListState {
-        let spaceService = await client.spaceService()
-        let sdkRooms = client.rooms()
-        let sorted = await roomSummaries(from: sdkRooms, spaceService: spaceService)
-        if sorted.isEmpty == false {
-            setCachedRooms(sorted)
-        }
-        if sorted.isEmpty {
-            let cachedSnapshot = cachedRoomsSnapshot()
-            if cachedSnapshot.isEmpty == false {
-                return .loaded(cachedSnapshot)
-            }
-            return .empty
-        }
-        return .loaded(sorted)
-    }
-
-    private func repairStoreAndReloadRooms(session: AuthenticatedSession) async -> RoomListState {
-        await clientStore.resetPersistedStore(for: session)
-        return await loadRooms(session: session, allowsStoreRepair: false)
+        return state
     }
 
     func clearCache() {
@@ -1330,7 +1374,7 @@ final class MatrixRustSDKRoomListService: RoomListServicing {
         cachedRooms = []
     }
 
-    private static func mapRoom(_ room: Room, spaceService: SpaceService?) async -> RoomSummary? {
+    fileprivate static func mapRoom(_ room: Room, spaceService: SpaceService?) async -> RoomSummary? {
         let membership: RoomSummary.Membership
         switch room.membership() {
         case .joined:
