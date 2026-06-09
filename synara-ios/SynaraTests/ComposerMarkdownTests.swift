@@ -67,4 +67,26 @@ final class ComposerMarkdownTests: XCTestCase {
         XCTAssertEqual(result.text, "> quoted")
         XCTAssertEqual(result.selection, ComposerTextSelection(location: 2, length: 6))
     }
+
+    func testInlineCodeWrapsPartialSelection() {
+        let result = ComposerMarkdown.apply(
+            .inlineCode,
+            to: "use npm install here",
+            selection: ComposerTextSelection(location: 4, length: 11)
+        )
+
+        XCTAssertEqual(result.text, "use `npm install` here")
+        XCTAssertEqual(result.selection, ComposerTextSelection(location: 5, length: 11))
+    }
+
+    func testNumberedListPrefixesOnlySelectedLines() {
+        let result = ComposerMarkdown.apply(
+            .numberedList,
+            to: "alpha\nbeta\ngamma",
+            selection: ComposerTextSelection(location: 6, length: 4)
+        )
+
+        XCTAssertEqual(result.text, "alpha\n1. beta\ngamma")
+        XCTAssertEqual(result.selection, ComposerTextSelection(location: 9, length: 4))
+    }
 }

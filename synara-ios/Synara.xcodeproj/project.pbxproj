@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		0729CE3EC35C32CEC12026B1 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = C3035383FA98B774B4F47C39 /* Assets.xcassets */; };
+		0B6FED64AA988069902712C4 /* ComposerTextView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69B679E7F5741D45B587B578 /* ComposerTextView.swift */; };
 		0E68BDED62692800912DE41C /* LocalWipeService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5077C08931AFE23ABB6EBFB /* LocalWipeService.swift */; };
 		1794B11F45DC4ACBA302F956 /* SynaraUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D0A5EA751CC5D570C324084 /* SynaraUITests.swift */; };
 		195E1F1A887EF41A86A02A3A /* PerformanceFixtureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4697063405B601DC0FE6F086 /* PerformanceFixtureTests.swift */; };
@@ -113,6 +114,7 @@
 		57076E7E82206F1492033846 /* RootShellView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootShellView.swift; sourceTree = "<group>"; };
 		5DE2FB3D6ADFFA295C9B956F /* AppRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppRouter.swift; sourceTree = "<group>"; };
 		633F1D9CBE601BF3E42E4B1B /* TimelineServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineServiceTests.swift; sourceTree = "<group>"; };
+		69B679E7F5741D45B587B578 /* ComposerTextView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerTextView.swift; sourceTree = "<group>"; };
 		72E9B9C1E874AD8B6B90D9C3 /* ComposerMarkdownTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerMarkdownTests.swift; sourceTree = "<group>"; };
 		75DD7BEECD59D41C5461C892 /* SessionCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionCoordinator.swift; sourceTree = "<group>"; };
 		80584058D243DE7197CF3096 /* AgentActionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentActionService.swift; sourceTree = "<group>"; };
@@ -221,6 +223,7 @@
 			isa = PBXGroup;
 			children = (
 				275642FB89913A7B3E8AD14A /* ComposerMarkdown.swift */,
+				69B679E7F5741D45B587B578 /* ComposerTextView.swift */,
 			);
 			path = Composer;
 			sourceTree = "<group>";
@@ -483,6 +486,7 @@
 				2AEC9CA069983AED2A534D47 /* AuthService.swift in Sources */,
 				49A35E5B574613614328D6E4 /* ComposerMarkdown.swift in Sources */,
 				3AB84959BA0C8A2EB98CF309 /* ComposerService.swift in Sources */,
+				0B6FED64AA988069902712C4 /* ComposerTextView.swift in Sources */,
 				E9028170C931CDFE77B89713 /* EventActionService.swift in Sources */,
 				53A86DD39FD62D232711EB70 /* HomeserverDiscovery.swift in Sources */,
 				89761685411B7F9D7FCCD863 /* HomeserverSelectionView.swift in Sources */,
@@ -628,7 +632,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 1.1.17;
+				CURRENT_PROJECT_VERSION = 1.1.18;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
@@ -711,7 +715,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 1.1.17;
+				CURRENT_PROJECT_VERSION = 1.1.18;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
