@@ -24,6 +24,31 @@ final class MatrixLifecycleTests: XCTestCase {
         XCTAssertEqual(matrix.resetCallCount, 1)
     }
 
+    func testPauseAndResumeBackgroundLifecycle() async throws {
+        let matrix = MockMatrixClientService(syncStatus: .syncing)
+        let session = try makeSession()
+
+        await matrix.pauseForBackground()
+        XCTAssertEqual(matrix.pauseCallCount, 1)
+        XCTAssertEqual(matrix.syncStatus, .stopped)
+
+        await matrix.resumeFromForeground(session: session)
+        XCTAssertEqual(matrix.resumeCallCount, 1)
+        XCTAssertEqual(matrix.resumedSessions, [session])
+        XCTAssertEqual(matrix.syncStatus, .syncing)
+    }
+
+    func testBackgroundNotificationSyncReportsResult() async throws {
+        let matrix = MockMatrixClientService()
+        matrix.backgroundSyncResult = true
+        let session = try makeSession()
+
+        let synced = await matrix.syncForBackgroundNotification(session: session)
+
+        XCTAssertTrue(synced)
+        XCTAssertEqual(matrix.backgroundSyncCallCount, 1)
+    }
+
     private func makeSession() throws -> AuthenticatedSession {
         AuthenticatedSession(
             userID: "@alice:matrix.org",

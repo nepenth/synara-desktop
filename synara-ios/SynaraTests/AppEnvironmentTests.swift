@@ -160,6 +160,20 @@ final class AppEnvironmentTests: XCTestCase {
         }
     }
 
+    func testUserDefaultsSettingsStorePersistsAcrossInstances() {
+        let suiteName = "synara.settings.test.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer {
+            defaults.removePersistentDomain(forName: suiteName)
+        }
+
+        let first = UserDefaultsSettingsStore(defaults: defaults)
+        first.set(true, for: "largeText")
+
+        let second = UserDefaultsSettingsStore(defaults: defaults)
+        XCTAssertTrue(second.bool(for: "largeText"))
+    }
+
     func testSettingsStorePersistsBooleansInMemory() {
         let settings = InMemorySettingsStore()
 

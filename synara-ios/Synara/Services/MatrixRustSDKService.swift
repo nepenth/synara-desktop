@@ -82,6 +82,7 @@ actor MatrixRustSDKClientStore {
     /// client while another task still reads rooms from it.
     private var isMutatingClient = false
     private var clientMutationWaiters: [CheckedContinuation<Void, Never>] = []
+    private var isClientPaused = false
 
     var syncStatusDescription: String {
         syncStatus.description
@@ -176,6 +177,108 @@ actor MatrixRustSDKClientStore {
         syncStatus = .stopped
     }
 
+    func pauseForBackground() async {
+        await acquireClientMutationLock()
+        defer { releaseClientMutationLock() }
+
+        guard isClientPaused == false else {
+            return
+        }
+
+        await detachSyncServices()
+
+        if let client {
+            do {
+                try await client.pause()
+            } catch {
+                // Pausing is best-effort before suspension; sync is already stopped.
+            }
+        }
+
+        isClientPaused = true
+        syncStatus = .stopped
+    }
+
+    func resumeFromForeground(session: AuthenticatedSession) async {
+        await acquireClientMutationLock()
+
+        if isClientPaused, let client {
+            do {
+                try await client.resume()
+            } catch {
+                releaseClientMutationLock()
+                syncStatus = .failed("Could not resume sync.")
+                return
+            }
+            isClientPaused = false
+        }
+
+        let shouldStartSync = activeSession == session && client != nil
+        releaseClientMutationLock()
+
+        guard shouldStartSync else {
+            return
+        }
+
+        do {
+            _ = try await startSyncService(session: session)
+        } catch {
+            syncStatus = .failed("Could not resume sync.")
+        }
+    }
+
+    func syncForBackgroundNotification(session: AuthenticatedSession) async -> Bool {
+        await acquireClientMutationLock()
+
+        guard activeSession == session, let client else {
+            releaseClientMutationLock()
+            return false
+        }
+
+        let wasPaused = isClientPaused
+        if wasPaused {
+            do {
+                try await client.resume()
+                isClientPaused = false
+            } catch {
+                releaseClientMutationLock()
+                return false
+            }
+        }
+
+        releaseClientMutationLock()
+
+        do {
+            _ = try await client.syncOnceV2(settings: SyncSettingsV2(timeoutMs: 5_000, fullState: false))
+            syncStatus = .syncing
+        } catch {
+            if wasPaused {
+                await acquireClientMutationLock()
+                try? await client.pause()
+                isClientPaused = true
+                syncStatus = .stopped
+                releaseClientMutationLock()
+            }
+            return false
+        }
+
+        if wasPaused {
+            await acquireClientMutationLock()
+            await detachSyncServices()
+            do {
+                try await client.pause()
+            } catch {
+                releaseClientMutationLock()
+                return true
+            }
+            isClientPaused = true
+            syncStatus = .stopped
+            releaseClientMutationLock()
+        }
+
+        return true
+    }
+
     func resetLocalState(for session: AuthenticatedSession? = nil) async {
         await acquireClientMutationLock()
         defer { releaseClientMutationLock() }
@@ -187,6 +290,7 @@ actor MatrixRustSDKClientStore {
         activeSession = nil
         syncService = nil
         roomListService = nil
+        isClientPaused = false
         syncStatus = .stopped
         unableToDecryptRecorder.reset()
         if let session {
@@ -1253,6 +1357,22 @@ final class MatrixRustSDKMatrixClientService: MatrixClientServicing {
     func resetLocalState(for session: AuthenticatedSession? = nil) async {
         setSyncStatus(.stopped)
         await clientStore.resetLocalState(for: session)
+    }
+
+    func pauseForBackground() async {
+        await clientStore.pauseForBackground()
+        setSyncStatus(await clientStore.currentSyncStatus())
+    }
+
+    func resumeFromForeground(session: AuthenticatedSession) async {
+        await clientStore.resumeFromForeground(session: session)
+        setSyncStatus(await clientStore.currentSyncStatus())
+    }
+
+    func syncForBackgroundNotification(session: AuthenticatedSession) async -> Bool {
+        let synced = await clientStore.syncForBackgroundNotification(session: session)
+        setSyncStatus(await clientStore.currentSyncStatus())
+        return synced
     }
 
     private func setSyncStatus(_ status: MatrixSyncStatus) {
