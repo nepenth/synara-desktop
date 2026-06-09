@@ -381,7 +381,7 @@ struct RoomTimelineView: View {
     }
 
     private var isAgentRoom: Bool {
-        RoomSummary.isAgentRoomName(roomTitle ?? "")
+        environment.roomList.isAgentRoom(roomID: roomID)
     }
 
     private func isGroupedWithPrevious(index: Int, items: [TimelineItem]) -> Bool {
@@ -1109,6 +1109,11 @@ struct RoomTimelineView: View {
                     )
                 )
                 await MainActor.run {
+                    if decision == .approve {
+                        SynaraHaptics.trigger(.success)
+                    } else {
+                        SynaraHaptics.trigger(.lightImpact)
+                    }
                     agentActionMessage = decision == .approve ? "Agent action approved" : "Agent action rejected"
                 }
             } catch let error as SynaraAgentApprovalError {
@@ -1382,7 +1387,12 @@ struct ThreadTimelineView: View {
     private var threadContent: some View {
         switch state {
         case .idle, .loading:
-            SynaraLoadingState(title: "Loading thread")
+            ScrollView {
+                SynaraTimelineSkeletonList(rowCount: 4)
+                    .padding(.horizontal, SynaraSpacing.xLarge)
+                    .padding(.vertical, SynaraSpacing.large)
+            }
+            .accessibilityIdentifier("ThreadLoading")
         case .empty:
             SynaraEmptyState(title: "No Thread Replies", systemImage: "bubble.left.and.bubble.right", message: "Replies will appear here.")
         case .failed(let message):
