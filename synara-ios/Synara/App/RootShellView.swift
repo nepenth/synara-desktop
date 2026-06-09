@@ -4,6 +4,8 @@ struct RootShellView: View {
     let environment: AppEnvironment
     @ObservedObject private var router: AppRouter
     @ObservedObject private var session: AppSessionStore
+    @State private var tabBadgeCounts = TabBadgeCounts()
+    @State private var tabBadgeUpdatesTask: Task<Void, Never>?
 
     init(environment: AppEnvironment = .mock()) {
         self.environment = environment
@@ -60,6 +62,12 @@ struct RootShellView: View {
             await SessionCoordinator.startSignedInSession(environment: environment, session: authenticatedSession)
             PerformanceTrace.end("SignedInSessionStart", id: signpostID)
             environment.router.replayPendingDeepLinkIfNeeded(sessionIsSignedIn: true)
+            await refreshTabBadges()
+            startTabBadgeUpdates()
+        }
+        .onDisappear {
+            tabBadgeUpdatesTask?.cancel()
+            tabBadgeUpdatesTask = nil
         }
     }
 
@@ -70,8 +78,45 @@ struct RootShellView: View {
                     RoutePlaceholderView(route: route)
                 }
         }
-        .tabItem { tab.label }
+        .tabItem {
+            tab.label(badgeCounts: tabBadgeCounts)
+        }
         .tag(tab)
+    }
+
+    private func refreshTabBadges() async {
+        let roomState = await environment.roomList.loadRooms()
+        let agentPendingCount = await environment.agentApprovals.pendingApprovalCount()
+        let rooms = rooms(from: roomState)
+
+        await MainActor.run {
+            tabBadgeCounts = TabBadgeCounts.make(from: rooms, agentApprovalCount: agentPendingCount)
+        }
+    }
+
+    private func startTabBadgeUpdates() {
+        tabBadgeUpdatesTask?.cancel()
+        tabBadgeUpdatesTask = Task {
+            for await update in environment.roomList.roomUpdates() {
+                guard Task.isCancelled == false else {
+                    return
+                }
+
+                let agentPendingCount = await environment.agentApprovals.pendingApprovalCount()
+                let rooms = rooms(from: update)
+
+                await MainActor.run {
+                    tabBadgeCounts = TabBadgeCounts.make(from: rooms, agentApprovalCount: agentPendingCount)
+                }
+            }
+        }
+    }
+
+    private func rooms(from state: RoomListState) -> [RoomSummary] {
+        guard case .loaded(let rooms) = state else {
+            return []
+        }
+        return rooms
     }
 }
 

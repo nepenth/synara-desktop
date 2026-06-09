@@ -12,6 +12,7 @@ struct RoomListView: View {
     @State private var loadRoomsTask: Task<Void, Never>?
     @State private var roomUpdatesTask: Task<Void, Never>?
     @State private var isSearchPresented = ProcessInfo.processInfo.environment["SYNARA_UI_TEST_ROOM_SEARCH"] != nil
+    @State private var roomPendingLeave: RoomSummary?
     @FocusState private var isSearchFocused: Bool
 
     var body: some View {
@@ -154,6 +155,32 @@ struct RoomListView: View {
                 isRoomManagementSheetPresented = false
                 loadRooms()
                 environment.router.route(to: .room(id: result.roomID, title: result.name))
+            }
+        }
+        .confirmationDialog(
+            "Leave this room?",
+            isPresented: Binding(
+                get: { roomPendingLeave != nil },
+                set: { isPresented in
+                    if isPresented == false {
+                        roomPendingLeave = nil
+                    }
+                }
+            ),
+            titleVisibility: .visible
+        ) {
+            if let roomPendingLeave {
+                Button("Leave Room", role: .destructive) {
+                    leaveRoom(roomPendingLeave)
+                }
+                .accessibilityIdentifier("LeaveRoomConfirm-\(roomPendingLeave.id)")
+            }
+            Button("Cancel", role: .cancel) {
+                roomPendingLeave = nil
+            }
+        } message: {
+            if let roomPendingLeave {
+                Text("\(roomPendingLeave.name) will be removed from your joined room list.")
             }
         }
         .task {
@@ -351,6 +378,72 @@ struct RoomListView: View {
             .listRowSeparator(.hidden)
             .listRowInsets(EdgeInsets(top: 3, leading: SynaraSpacing.large, bottom: 3, trailing: SynaraSpacing.large))
             .listRowBackground(SynaraColor.surface)
+            .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                if room.unreadCount > 0 {
+                    Button {
+                        markRoomAsRead(room)
+                    } label: {
+                        Label("Read", systemImage: "envelope.open")
+                    }
+                    .tint(SynaraColor.accent)
+                    .accessibilityIdentifier("MarkRead-\(room.id)")
+                }
+            }
+            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                Button {
+                    muteRoom(room)
+                } label: {
+                    Label("Mute", systemImage: "bell.slash")
+                }
+                .tint(SynaraColor.secondaryText)
+                .accessibilityIdentifier("MuteRoom-\(room.id)")
+
+                Button(role: .destructive) {
+                    roomPendingLeave = room
+                } label: {
+                    Label("Leave", systemImage: "rectangle.portrait.and.arrow.right")
+                }
+                .accessibilityIdentifier("LeaveRoom-\(room.id)")
+            }
+        }
+    }
+
+    private func markRoomAsRead(_ room: RoomSummary) {
+        Task {
+            _ = await environment.readMarkers.markRoomAsRead(roomID: room.id)
+            await MainActor.run {
+                loadRooms(showLoading: false)
+            }
+        }
+    }
+
+    private func muteRoom(_ room: RoomSummary) {
+        Task {
+            do {
+                try await environment.roomManagement.setNotificationMode(.mute, roomID: room.id)
+            } catch {
+                await MainActor.run {
+                    membershipError = RoomManagementError.failed.localizedDescription
+                }
+            }
+        }
+    }
+
+    private func leaveRoom(_ room: RoomSummary) {
+        membershipError = nil
+        roomPendingLeave = nil
+
+        Task {
+            do {
+                try await environment.roomManagement.leaveRoom(roomID: room.id)
+                await MainActor.run {
+                    loadRooms()
+                }
+            } catch {
+                await MainActor.run {
+                    membershipError = RoomManagementError.failed.localizedDescription
+                }
+            }
         }
     }
 

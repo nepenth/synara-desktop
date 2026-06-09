@@ -27,6 +27,24 @@ final class RoomListServiceTests: XCTestCase {
         XCTAssertEqual(service.loadCallCount, 1)
     }
 
+    func testRoomDisplayNameLookupResolvesCachedNames() async {
+        let service = MockRoomListService(state: .loaded(RoomListFixtures.small()))
+        let state = await service.loadRooms()
+
+        XCTAssertEqual(service.roomDisplayName(roomID: "!project:matrix.org"), "Product")
+        XCTAssertEqual(
+            RoomDisplayNameLookup.resolve(
+                roomID: "!project:matrix.org",
+                names: RoomDisplayNameLookup.names(from: state)
+            ),
+            "Product"
+        )
+        XCTAssertEqual(
+            RoomDisplayNameLookup.resolve(roomID: "!missing:matrix.org", names: [:]),
+            "!missing:matrix.org"
+        )
+    }
+
     func testClearCacheReturnsEmptyState() async {
         let service = MockRoomListService()
 
@@ -188,6 +206,106 @@ final class RoomListServiceTests: XCTestCase {
             filtered.map(\.id),
             ["!general:matrix.org", "!project:matrix.org", "!design:matrix.org"]
         )
+    }
+
+    func testNotificationBadgeSummaryMatchesSharedContractFixture() {
+        let summary = NotificationBadgeSummary.summarizeNotifications(
+            NotificationSummaryInput(
+                unreadCounts: [
+                    BadgeUnreadSource(total: 4, highlight: 2),
+                    BadgeUnreadSource(total: 3)
+                ],
+                laterActiveCount: 5,
+                inviteCount: 2,
+                agentApprovalCount: 1
+            )
+        )
+
+        XCTAssertEqual(summary?.appBadgeCount, 10)
+        XCTAssertEqual(summary?.inboxBadgeCount, 8)
+        XCTAssertEqual(summary?.laterActiveCount, 5)
+        XCTAssertEqual(summary?.inviteCount, 2)
+        XCTAssertEqual(summary?.agentApprovalCount, 1)
+        XCTAssertEqual(summary?.highlightCount, 2)
+        XCTAssertEqual(summary?.unreadCount, 3)
+    }
+
+    func testNotificationBadgeSummaryClampsInvalidCounts() {
+        let summary = NotificationBadgeSummary.summarizeNotifications(
+            NotificationSummaryInput(
+                unreadCounts: [
+                    BadgeUnreadSource(total: -1, highlight: -2),
+                    BadgeUnreadSource(total: 3)
+                ],
+                laterActiveCount: 2,
+                inviteCount: -1,
+                agentApprovalCount: -4
+            )
+        )
+
+        XCTAssertEqual(summary?.appBadgeCount, 5)
+        XCTAssertEqual(summary?.inboxBadgeCount, 2)
+        XCTAssertEqual(summary?.highlightCount, 0)
+        XCTAssertEqual(summary?.unreadCount, 3)
+    }
+
+    func testNotificationsInboxSectionsPartitionRooms() {
+        let rooms = [
+            RoomSummary(
+                id: "!project:matrix.org",
+                name: "Product",
+                lastMessagePreview: "Mention",
+                unreadCount: 3,
+                hasHighlight: true,
+                kind: .room,
+                membership: .joined,
+                lastActivityAt: RoomListFixtures.now
+            ),
+            RoomSummary(
+                id: "!alerts:matrix.org",
+                name: "Alerts",
+                lastMessagePreview: "Invite",
+                unreadCount: 1,
+                hasHighlight: true,
+                kind: .room,
+                membership: .invited,
+                lastActivityAt: RoomListFixtures.now
+            ),
+            RoomSummary(
+                id: "!general:matrix.org",
+                name: "General",
+                lastMessagePreview: "Unread only",
+                unreadCount: 2,
+                hasHighlight: false,
+                kind: .room,
+                membership: .joined,
+                lastActivityAt: RoomListFixtures.now
+            ),
+            RoomSummary(
+                id: "!design:matrix.org",
+                name: "Design",
+                lastMessagePreview: "Read",
+                unreadCount: 0,
+                hasHighlight: false,
+                kind: .room,
+                membership: .joined,
+                lastActivityAt: RoomListFixtures.now
+            )
+        ]
+
+        let sections = NotificationsInboxSections.make(from: rooms)
+
+        XCTAssertEqual(sections.mentions.map(\.id), ["!project:matrix.org"])
+        XCTAssertEqual(sections.invites.map(\.id), ["!alerts:matrix.org"])
+        XCTAssertEqual(sections.unreadRooms.map(\.id), ["!general:matrix.org"])
+        XCTAssertEqual(NotificationsInboxSections.notificationRooms(from: rooms).count, 3)
+    }
+
+    func testTabBadgeCountsUseRoomListState() {
+        let badges = TabBadgeCounts.make(from: RoomListFixtures.small(), agentApprovalCount: 2)
+
+        XCTAssertEqual(badges.notifications, 7)
+        XCTAssertEqual(badges.rooms, 12)
     }
 
     func testMockRoomListStreamYieldsMultipleStates() async {

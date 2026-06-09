@@ -3,6 +3,8 @@ import SwiftUI
 private struct NotificationsTabView: View {
     @Environment(\.appEnvironment) private var environment
     @State private var state: RoomListState = .idle
+    @State private var agentPendingCount = 0
+    @State private var isUnreadRoomsExpanded = false
     @State private var roomUpdatesTask: Task<Void, Never>?
 
     var body: some View {
@@ -19,48 +21,13 @@ private struct NotificationsTabView: View {
                 .listStyle(.plain)
                 .accessibilityIdentifier("NotificationsLoading")
             case .empty:
-                SynaraEmptyState(
-                    title: "You're Caught Up",
-                    systemImage: "bell.slash",
-                    message: "Unread rooms and mentions will appear here. Push alerts still open the relevant room directly."
-                )
+                caughtUpEmptyState
             case .failed(let message):
                 SynaraErrorState(title: "Could Not Load Notifications", message: message) {
                     loadInbox()
                 }
             case .loaded(let rooms):
-                let unreadRooms = rooms.filter { $0.unreadCount > 0 || $0.hasHighlight || $0.membership == .invited }
-                if unreadRooms.isEmpty {
-                    SynaraEmptyState(
-                        title: "You're Caught Up",
-                        systemImage: "bell.slash",
-                        message: "Unread rooms and mentions will appear here. Push alerts still open the relevant room directly."
-                    )
-                } else {
-                    List {
-                        Section {
-                            ForEach(unreadRooms) { room in
-                                Button {
-                                    environment.router.route(to: .room(id: room.id, title: room.name))
-                                } label: {
-                                    NotificationsInboxRow(room: room)
-                                        .frame(maxWidth: .infinity, alignment: .leading)
-                                        .contentShape(Rectangle())
-                                }
-                                .buttonStyle(SynaraListRowButtonStyle())
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .contentShape(Rectangle())
-                                .accessibilityIdentifier("NotificationsRow-\(room.id)")
-                            }
-                        } header: {
-                            Text("\(unreadRooms.count) unread")
-                                .font(SynaraTypography.supporting)
-                                .foregroundStyle(SynaraColor.secondaryText)
-                        }
-                    }
-                    .listStyle(.plain)
-                    .accessibilityIdentifier("NotificationsInboxList")
-                }
+                notificationsContent(for: rooms)
             }
         }
         .refreshable {
@@ -78,6 +45,112 @@ private struct NotificationsTabView: View {
         }
     }
 
+    @ViewBuilder
+    private func notificationsContent(for rooms: [RoomSummary]) -> some View {
+        let sections = NotificationsInboxSections.make(from: rooms)
+        let showsAgentEmptyState = environment.agentApprovals.supportsPendingApprovalInbox == false
+        let hasVisibleContent = sections.hasRoomSections || agentPendingCount > 0 || showsAgentEmptyState
+
+        if hasVisibleContent == false {
+            caughtUpEmptyState
+        } else {
+            List {
+                if sections.mentions.isEmpty == false {
+                    Section {
+                        ForEach(sections.mentions) { room in
+                            notificationsRow(room)
+                        }
+                    } header: {
+                        notificationsSectionHeader("Mentions", count: sections.mentions.count)
+                    }
+                }
+
+                if sections.invites.isEmpty == false {
+                    Section {
+                        ForEach(sections.invites) { room in
+                            notificationsRow(room)
+                        }
+                    } header: {
+                        notificationsSectionHeader("Invites", count: sections.invites.count)
+                    }
+                }
+
+                if agentPendingCount > 0 {
+                    Section {
+                        Label {
+                            Text(agentPendingCount == 1 ? "1 pending agent action" : "\(agentPendingCount) pending agent actions")
+                                .font(SynaraTypography.body)
+                                .foregroundStyle(SynaraColor.primaryText)
+                        } icon: {
+                            Image(systemName: "cpu")
+                                .foregroundStyle(SynaraColor.agent)
+                        }
+                        .accessibilityIdentifier("NotificationsAgentPendingSummary")
+                    } header: {
+                        notificationsSectionHeader("Agent actions", count: agentPendingCount)
+                    }
+                } else if showsAgentEmptyState {
+                    Section {
+                        Text("No pending agent actions")
+                            .font(SynaraTypography.supporting)
+                            .foregroundStyle(SynaraColor.secondaryText)
+                            .accessibilityIdentifier("NotificationsAgentEmptyState")
+                    } header: {
+                        Text("Agent actions")
+                            .font(SynaraTypography.supporting)
+                            .foregroundStyle(SynaraColor.secondaryText)
+                    }
+                }
+
+                if sections.unreadRooms.isEmpty == false {
+                    Section {
+                        DisclosureGroup(isExpanded: $isUnreadRoomsExpanded) {
+                            ForEach(sections.unreadRooms) { room in
+                                notificationsRow(room)
+                            }
+                        } label: {
+                            Text("Unread rooms")
+                                .font(SynaraTypography.body.weight(.medium))
+                                .foregroundStyle(SynaraColor.primaryText)
+                        }
+                    } header: {
+                        notificationsSectionHeader("Unread rooms", count: sections.unreadRooms.count)
+                    }
+                }
+            }
+            .listStyle(.plain)
+            .accessibilityIdentifier("NotificationsInboxList")
+        }
+    }
+
+    private var caughtUpEmptyState: some View {
+        SynaraEmptyState(
+            title: "You're Caught Up",
+            systemImage: "bell.slash",
+            message: "Unread rooms and mentions will appear here. Push alerts still open the relevant room directly."
+        )
+    }
+
+    private func notificationsSectionHeader(_ title: String, count: Int) -> some View {
+        Text("\(title) · \(count)")
+            .font(SynaraTypography.supporting)
+            .foregroundStyle(SynaraColor.secondaryText)
+    }
+
+    private func notificationsRow(_ room: RoomSummary) -> some View {
+        Button {
+            environment.router.route(to: .room(id: room.id, title: room.name))
+        } label: {
+            NotificationsInboxRow(room: room)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(SynaraListRowButtonStyle())
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+        .accessibilityIdentifier("NotificationsRow-\(room.id)")
+    }
+
     private func loadInbox() {
         state = .loading
         Task {
@@ -86,9 +159,14 @@ private struct NotificationsTabView: View {
     }
 
     private func reloadInbox() async {
-        let nextState = await environment.roomList.loadRooms()
+        async let nextState = environment.roomList.loadRooms()
+        async let pendingApprovals = environment.agentApprovals.pendingApprovalCount()
+        let resolvedState = await nextState
+        let resolvedPendingApprovals = await pendingApprovals
+
         await MainActor.run {
-            state = nextState
+            state = resolvedState
+            agentPendingCount = resolvedPendingApprovals
         }
     }
 
@@ -99,8 +177,10 @@ private struct NotificationsTabView: View {
                 guard Task.isCancelled == false else {
                     return
                 }
+                let pendingApprovals = await environment.agentApprovals.pendingApprovalCount()
                 await MainActor.run {
                     state = update
+                    agentPendingCount = pendingApprovals
                 }
             }
         }
@@ -166,14 +246,16 @@ enum AppTab: String, CaseIterable, Identifiable {
     }
 
     @ViewBuilder
-    var label: some View {
+    func label(badgeCounts: TabBadgeCounts) -> some View {
         switch self {
         case .rooms:
             Label("Rooms", systemImage: "bubble.left.and.bubble.right")
                 .accessibilityIdentifier("RoomsTab")
+                .badge(badgeCounts.rooms > 0 ? badgeCounts.rooms : 0)
         case .notifications:
             Label("Notifications", systemImage: "bell")
                 .accessibilityIdentifier("NotificationsTab")
+                .badge(badgeCounts.notifications > 0 ? badgeCounts.notifications : 0)
         case .later:
             Label("Later", systemImage: "clock")
                 .accessibilityIdentifier("LaterTab")

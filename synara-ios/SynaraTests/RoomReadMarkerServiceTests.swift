@@ -84,6 +84,15 @@ final class RoomReadMarkerServiceTests: XCTestCase {
         XCTAssertFalse(didMark)
     }
 
+    func testMockMarkRoomAsReadUsesLatestEventMarker() async {
+        let service = MockRoomReadMarkerService()
+
+        let didMark = await service.markRoomAsRead(roomID: "!room:matrix.example")
+
+        XCTAssertTrue(didMark)
+        XCTAssertEqual(service.eventID, "$latest:!room:matrix.example")
+    }
+
     private func makeSession() -> AuthenticatedSession {
         AuthenticatedSession(
             userID: "@test:matrix.example",
