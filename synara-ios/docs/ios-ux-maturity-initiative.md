@@ -41,6 +41,18 @@ Branch: `feature/ios-ux-maturity`
 - [x] Dismissible crypto banner (only when action needed)
 - [x] Spaces: unread per space, collapse headers, selected-space header
 
+## Validation (2026-06-09)
+
+- **202 unit tests passing** on iPhone 17 / iOS 26.5 simulator after review fixes.
+- Post-review fixes: notifications caught-up logic, removed misleading global agent pending chips, agent rooms detected from latest agent event (not room name), Later/thread skeleton loading, tab badges only when count > 0, removed duplicate `loadRooms` for tab badges.
+
+## Known follow-ups
+
+- Per-room agent pending approval chips (needs inbox API).
+- Favorite swipe / starred rooms (needs Matrix account data).
+- Push gateway deployment (paused).
+- Notifications inbox rows still omit room avatars (parity with room list).
+
 ## Orchestration
 
 Main agent assigns work → sub-agent implements → main agent reviews → fix loop until phase complete → commit → next phase.
