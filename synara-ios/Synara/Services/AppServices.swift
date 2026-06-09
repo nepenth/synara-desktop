@@ -208,6 +208,12 @@ struct RoomCryptoStatus: Equatable {
     var needsRecoveryAttention: Bool {
         isEncrypted && (recovery == .disabled || recovery == .incomplete || unableToDecryptCount > 0)
     }
+
+    var needsCryptoActionBanner: Bool {
+        verification == .unverified
+            || unableToDecryptCount > 0
+            || recovery == .incomplete
+    }
 }
 
 struct SessionCryptoStatus: Equatable {

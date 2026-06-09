@@ -1703,7 +1703,8 @@ final class MatrixRustSDKRoomListService: RoomListServicing {
             kind: (await room.isDirect()) ? .directMessage : .room,
             membership: membership,
             lastActivityAt: latestPreview.timestamp ?? .distantPast,
-            parentSpaces: parentSpaces
+            parentSpaces: parentSpaces,
+            avatarURL: room.avatarUrl().flatMap(URL.init(string:))
         )
     }
 
