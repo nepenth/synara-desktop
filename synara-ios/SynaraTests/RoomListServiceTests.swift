@@ -118,6 +118,78 @@ final class RoomListServiceTests: XCTestCase {
         XCTAssertEqual(filtered.map(\.id), ["!alerts:matrix.org"])
     }
 
+    func testScopeFilterUnreadKeepsInvitesAndUnreadRooms() {
+        let invite = RoomSummary(
+            id: "!alerts:matrix.org",
+            name: "Alerts",
+            lastMessagePreview: "You are invited",
+            unreadCount: 1,
+            hasHighlight: false,
+            kind: .room,
+            membership: .invited,
+            lastActivityAt: RoomListFixtures.now
+        )
+        let unread = RoomSummary(
+            id: "!project:matrix.org",
+            name: "Product",
+            lastMessagePreview: "Mina: Here's the latest spec",
+            unreadCount: 3,
+            hasHighlight: true,
+            kind: .room,
+            membership: .joined,
+            lastActivityAt: RoomListFixtures.now
+        )
+        let read = RoomSummary(
+            id: "!general:matrix.org",
+            name: "General",
+            lastMessagePreview: "Kai: Project update looks good",
+            unreadCount: 0,
+            hasHighlight: false,
+            kind: .room,
+            membership: .joined,
+            lastActivityAt: RoomListFixtures.now
+        )
+
+        let filtered = RoomListScopeFilter.filteredRooms(
+            from: [invite, unread, read],
+            filter: .unread,
+            selectedSpaceID: nil,
+            searchQuery: ""
+        )
+
+        XCTAssertEqual(Set(filtered.map(\.id)), Set(["!alerts:matrix.org", "!project:matrix.org"]))
+    }
+
+    func testScopeFilterMentionsExcludesNonHighlightedRooms() {
+        let rooms = RoomListFixtures.small()
+
+        let filtered = RoomListScopeFilter.filteredRooms(
+            from: rooms,
+            filter: .mentions,
+            selectedSpaceID: nil,
+            searchQuery: ""
+        )
+
+        XCTAssertTrue(filtered.allSatisfy(\.hasHighlight))
+        XCTAssertEqual(filtered.map(\.id), ["!project:matrix.org"])
+    }
+
+    func testScopeFilterRespectsSelectedSpace() {
+        let rooms = RoomListFixtures.small()
+
+        let filtered = RoomListScopeFilter.filteredRooms(
+            from: rooms,
+            filter: .all,
+            selectedSpaceID: "!workspace:matrix.org",
+            searchQuery: ""
+        )
+
+        XCTAssertEqual(
+            filtered.map(\.id),
+            ["!general:matrix.org", "!project:matrix.org", "!design:matrix.org"]
+        )
+    }
+
     func testMockRoomListStreamYieldsMultipleStates() async {
         let initialRooms = RoomListFixtures.small()
         let updatedRooms = [

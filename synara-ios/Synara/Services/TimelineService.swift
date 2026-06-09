@@ -1,5 +1,45 @@
 import Foundation
 
+enum TimelineSearchFilter {
+    static func searchableText(for item: TimelineItem) -> String {
+        switch item.kind {
+        case .text(let body):
+            return body
+        case .formattedText(let body, _):
+            return body
+        case .mediaPlaceholder(let resource):
+            return resource.safeDescription
+        case .agentCard(let card):
+            return card.title
+        case .redacted:
+            return "Deleted message"
+        case .encryptedPlaceholder:
+            return "Encrypted message"
+        case .unknown(let type):
+            return type
+        }
+    }
+
+    static func itemMatchesQuery(_ item: TimelineItem, query: String) -> Bool {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.isEmpty == false else {
+            return true
+        }
+
+        return searchableText(for: item).localizedCaseInsensitiveContains(trimmed)
+            || item.senderID.localizedCaseInsensitiveContains(trimmed)
+    }
+
+    static func applySearchQuery(_ query: String, to items: [TimelineItem]) -> [TimelineItem] {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.isEmpty == false else {
+            return items
+        }
+
+        return items.filter { itemMatchesQuery($0, query: trimmed) }
+    }
+}
+
 struct TimelineItem: Identifiable, Equatable {
     enum Kind: Equatable {
         case text(String)

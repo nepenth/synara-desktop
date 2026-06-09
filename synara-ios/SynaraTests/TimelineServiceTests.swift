@@ -376,4 +376,60 @@ final class TimelineServiceTests: XCTestCase {
         XCTAssertEqual(sorted.map(\.id), ["b", "c", "a"])
     }
 
+    func testTimelineSearchFilterMatchesMessageBody() {
+        let items = [
+            TimelineItem(
+                id: "$one",
+                eventID: "$one",
+                senderID: "@mina:matrix.org",
+                timestamp: TimelineFixtures.baseDate,
+                kind: .text("Ship the release notes"),
+                replyToEventID: nil,
+                isEdited: false,
+                reactions: [:]
+            ),
+            TimelineItem(
+                id: "$two",
+                eventID: "$two",
+                senderID: "@alex:matrix.org",
+                timestamp: TimelineFixtures.baseDate.addingTimeInterval(1),
+                kind: .text("Review the design draft"),
+                replyToEventID: nil,
+                isEdited: false,
+                reactions: [:]
+            )
+        ]
+
+        let filtered = TimelineSearchFilter.applySearchQuery("release", to: items)
+
+        XCTAssertEqual(filtered.map(\.eventID), ["$one"])
+    }
+
+    func testTimelineSearchFilterMatchesSenderID() {
+        let items = [
+            TimelineItem(
+                id: "$one",
+                eventID: "$one",
+                senderID: "@mina:matrix.org",
+                timestamp: TimelineFixtures.baseDate,
+                kind: .text("Hello"),
+                replyToEventID: nil,
+                isEdited: false,
+                reactions: [:]
+            )
+        ]
+
+        let filtered = TimelineSearchFilter.applySearchQuery("mina", to: items)
+
+        XCTAssertEqual(filtered.map(\.eventID), ["$one"])
+    }
+
+    func testTimelineSearchFilterReturnsAllItemsForEmptyQuery() {
+        let items = TimelineFixtures.largeTimeline(count: 3)
+
+        let filtered = TimelineSearchFilter.applySearchQuery("   ", to: items)
+
+        XCTAssertEqual(filtered, items)
+    }
+
 }
