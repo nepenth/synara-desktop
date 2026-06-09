@@ -36,8 +36,12 @@ private struct NotificationsTabView: View {
                                     environment.router.route(to: .room(id: room.id, title: room.name))
                                 } label: {
                                     NotificationsInboxRow(room: room)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                        .contentShape(Rectangle())
                                 }
-                                .buttonStyle(.plain)
+                                .buttonStyle(SynaraListRowButtonStyle())
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .contentShape(Rectangle())
                                 .accessibilityIdentifier("NotificationsRow-\(room.id)")
                             }
                         } header: {
@@ -119,6 +123,7 @@ private struct NotificationsInboxRow: View {
 
             SynaraUnreadBadge(count: room.unreadCount, highlighted: room.hasHighlight)
         }
+        .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
         .padding(.vertical, SynaraSpacing.xSmall)
     }
 }

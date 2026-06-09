@@ -325,10 +325,13 @@ struct RoomListView: View {
                 environment.router.route(to: .room(id: room.id, title: room.name))
             } label: {
                 RoomListRow(room: room)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
                     .accessibilityIdentifier("RoomRow-\(room.id)")
                     .padding(.vertical, SynaraSpacing.xSmall)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(SynaraListRowButtonStyle())
+            .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
             .accessibilityLabel(room.accessibilitySummary)
             .accessibilityHint("Opens the room timeline")

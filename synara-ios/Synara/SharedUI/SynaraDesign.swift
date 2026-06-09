@@ -159,6 +159,17 @@ struct SynaraUnreadBadge: View {
     }
 }
 
+struct SynaraListRowButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .background(
+                RoundedRectangle(cornerRadius: SynaraRadius.card, style: .continuous)
+                    .fill(configuration.isPressed ? SynaraColor.secondaryText.opacity(0.10) : Color.clear)
+            )
+            .animation(.easeOut(duration: 0.14), value: configuration.isPressed)
+    }
+}
+
 struct SynaraFilterChip: View {
     let title: String
     let isSelected: Bool
