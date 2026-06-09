@@ -216,9 +216,9 @@ actor MatrixRustSDKClientStore {
         allowsStoreRepair: Bool
     ) async -> RoomListState {
         do {
-            _ = try await ensureClient(for: session, allowsStoreRepair: allowsStoreRepair)
+            let activeClient = try await ensureClient(for: session, allowsStoreRepair: allowsStoreRepair)
             let cachedState = await MatrixRoomListStateBuilder.build(
-                from: client,
+                from: activeClient,
                 fallbackCache: fallbackCache
             )
             if case .loaded(let rooms) = cachedState, rooms.isEmpty == false {
@@ -234,7 +234,7 @@ actor MatrixRustSDKClientStore {
                     return cachedState
                 }
                 return await MatrixRoomListStateBuilder.build(
-                    from: client,
+                    from: activeClient,
                     fallbackCache: fallbackCache
                 )
             }
@@ -255,7 +255,7 @@ actor MatrixRustSDKClientStore {
             }
 
             return await MatrixRoomListStateBuilder.build(
-                from: client,
+                from: activeClient,
                 fallbackCache: fallbackCache
             )
         } catch {
@@ -846,9 +846,17 @@ actor MatrixRustSDKClientStore {
         for session: AuthenticatedSession,
         allowsStoreRepair: Bool
     ) async throws -> Client {
+        if let client, activeSession == session {
+            return client
+        }
+
         var allowRepair = allowsStoreRepair
 
         while true {
+            if let client, activeSession == session {
+                return client
+            }
+
             if let activeSession, activeSession != session {
                 await detachSyncServices()
                 client = nil

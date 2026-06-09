@@ -24,6 +24,7 @@ struct AppEnvironment {
     let mediaUploader: MediaUploading
     let crypto: CryptoStatusServicing
     let roomManagement: RoomManagementServicing
+    let sessionReadiness: SignedInSessionReadinessServicing
 
     @MainActor
     static func live() -> AppEnvironment {
@@ -71,6 +72,7 @@ struct AppEnvironment {
         let roomMembership = MatrixRustSDKRoomMembershipService(sessionStore: session, clientStore: matrixSDKClientStore)
         let crypto = MatrixRustSDKCryptoStatusService(sessionStore: session, clientStore: matrixSDKClientStore)
         let roomManagement = MatrixRustSDKRoomManagementService(sessionStore: session, clientStore: matrixSDKClientStore)
+        let sessionReadiness = SignedInSessionReadiness()
         return AppEnvironment(
             session: session,
             matrix: matrix,
@@ -102,7 +104,8 @@ struct AppEnvironment {
             mediaLoader: MatrixMediaLoader(sessionStore: session, clientStore: matrixSDKClientStore),
             mediaUploader: MatrixMediaUploadService(sessionStore: session, clientStore: matrixSDKClientStore),
             crypto: crypto,
-            roomManagement: roomManagement
+            roomManagement: roomManagement,
+            sessionReadiness: sessionReadiness
         )
     }
 
@@ -127,7 +130,8 @@ struct AppEnvironment {
         mediaLoader: MediaLoading = MockMediaLoader(),
         mediaUploader: MediaUploading = MockMediaUploadService(),
         crypto: CryptoStatusServicing = MockCryptoStatusService(),
-        roomManagement: RoomManagementServicing = MockRoomManagementService()
+        roomManagement: RoomManagementServicing = MockRoomManagementService(),
+        sessionReadiness: SignedInSessionReadinessServicing = ImmediateSignedInSessionReadiness()
     ) -> AppEnvironment {
         AppEnvironment(
             session: session,
@@ -160,7 +164,8 @@ struct AppEnvironment {
             mediaLoader: mediaLoader,
             mediaUploader: mediaUploader,
             crypto: crypto,
-            roomManagement: roomManagement
+            roomManagement: roomManagement,
+            sessionReadiness: sessionReadiness
         )
     }
 
