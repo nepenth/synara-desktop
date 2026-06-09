@@ -18,7 +18,34 @@ struct RoomListView: View {
         Group {
             switch state {
             case .idle, .loading:
-                SynaraLoadingState(title: environment.matrix.syncStatusDescription)
+                VStack(spacing: 0) {
+                    VStack(spacing: SynaraSpacing.medium) {
+                        RoomListHeader(
+                            title: accountMenuTitle,
+                            onAccount: { environment.router.present(.accountSwitcher) },
+                            onSearch: { presentSearch() },
+                            onNewRoom: { isRoomManagementSheetPresented = true }
+                        )
+                        RoomFilterStrip(selectedFilter: $selectedFilter)
+                    }
+                    .padding(.horizontal, SynaraSpacing.large)
+                    .padding(.top, SynaraSpacing.medium)
+                    .padding(.bottom, SynaraSpacing.small)
+                    .background(SynaraColor.surface)
+
+                    List {
+                        Section {
+                            SynaraSkeletonList(rowCount: 9)
+                                .listRowSeparator(.hidden)
+                                .listRowInsets(EdgeInsets(top: 3, leading: SynaraSpacing.large, bottom: 3, trailing: SynaraSpacing.large))
+                                .listRowBackground(SynaraColor.surface)
+                        }
+                    }
+                    .listStyle(.plain)
+                    .scrollContentBackground(.hidden)
+                    .background(SynaraColor.surface)
+                    .accessibilityIdentifier("RoomListLoading")
+                }
             case .empty:
                 SynaraEmptyState(
                     title: "No Rooms",
@@ -91,6 +118,9 @@ struct RoomListView: View {
                     .listStyle(.plain)
                     .scrollContentBackground(.hidden)
                     .background(SynaraColor.surface)
+                    .refreshable {
+                        await reloadRoomsForRefresh()
+                    }
                     .accessibilityIdentifier("RoomList")
                 }
             }
@@ -145,6 +175,23 @@ struct RoomListView: View {
         .onDisappear {
             loadRoomsTask?.cancel()
             roomUpdatesTask?.cancel()
+        }
+    }
+
+    private func reloadRoomsForRefresh() async {
+        loadRoomsTask?.cancel()
+        let signpostID = PerformanceTrace.begin("RoomListLoad")
+        defer {
+            PerformanceTrace.end("RoomListLoad", id: signpostID)
+        }
+        let loadedState = await environment.roomList.loadRooms()
+        guard Task.isCancelled == false else {
+            return
+        }
+        await MainActor.run {
+            state = loadedState
+            autoOpenRoomIfRequested(from: loadedState)
+            startRoomUpdatesIfReady(for: loadedState)
         }
     }
 

@@ -6,6 +6,10 @@ import UIKit
 #endif
 
 struct RoomTimelineView: View {
+    private static let olderPaginationTopThreshold = 3
+    private static let olderPaginationDebounceInterval: TimeInterval = 0.5
+    private static let markFullyReadDelayNanoseconds: UInt64 = 1_000_000_000
+
     let roomID: String
     let roomTitle: String?
     let focusedEventID: String?
@@ -29,6 +33,11 @@ struct RoomTimelineView: View {
     @State private var showJumpToLatest = false
     @State private var hasPositionedInitialTimeline = false
     @State private var initialReadMarkerEventID: String?
+    @State private var hasReachedOldestMessages = false
+    @State private var lastOlderPaginationAt = Date.distantPast
+    @State private var paginationScrollAnchorID: String?
+    @State private var lastMarkedFullyReadEventID: String?
+    @State private var markFullyReadTask: Task<Void, Never>?
     @State private var timelineUpdatesTask: Task<Void, Never>?
     @Environment(\.openURL) private var openURL
     @Environment(\.dismiss) private var dismiss
@@ -126,6 +135,7 @@ struct RoomTimelineView: View {
         }
         .onDisappear {
             timelineUpdatesTask?.cancel()
+            cancelMarkFullyRead()
         }
         .onChange(of: draft) { value in
             environment.drafts.setDraft(value, roomID: roomID)
@@ -142,7 +152,14 @@ struct RoomTimelineView: View {
     private var timelineContent: some View {
         switch state {
         case .idle, .loading:
-            SynaraLoadingState(title: "Loading timeline")
+            ScrollView {
+                SynaraTimelineSkeletonList(rowCount: 8)
+                    .padding(.horizontal, SynaraSpacing.large)
+                    .padding(.top, SynaraSpacing.medium)
+                    .padding(.bottom, SynaraSpacing.small)
+            }
+            .background(isAgentRoom ? SynaraColor.agentReviewBackground : SynaraColor.surface)
+            .accessibilityIdentifier("TimelineLoading")
         case .empty:
             SynaraEmptyState(title: "No Messages", systemImage: "text.bubble", message: "Messages will appear here.")
         case .failed(let message):
@@ -158,7 +175,10 @@ struct RoomTimelineView: View {
                     LazyVStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
                         if isPaginating {
                             ProgressView()
+                                .controlSize(.small)
                                 .frame(maxWidth: .infinity)
+                                .padding(.vertical, SynaraSpacing.xSmall)
+                                .accessibilityIdentifier("TimelinePaginationIndicator")
                         }
 
                         if shouldShowRecoveryBanner(items: items) {
@@ -167,23 +187,6 @@ struct RoomTimelineView: View {
                                 onRetry: retryDecryption,
                                 onReviewSecurity: { environment.router.route(to: .settings) }
                             )
-                        }
-
-                        if isAgentRoom == false {
-                            Button {
-                                loadOlderTimeline(before: items.first?.eventID)
-                            } label: {
-                                Label("Load older messages", systemImage: "chevron.up")
-                                    .font(.caption.weight(.semibold))
-                                    .foregroundStyle(SynaraColor.secondaryText)
-                                    .frame(maxWidth: .infinity)
-                            }
-                            .buttonStyle(.plain)
-                            .padding(.vertical, SynaraSpacing.xSmall)
-                            .background(SynaraColor.secondarySurface.opacity(0.55))
-                            .clipShape(Capsule())
-                            .disabled(isPaginating || items.isEmpty)
-                            .accessibilityIdentifier("LoadOlderTimelineButton")
                         }
 
                         let threadReplyCounts = TimelineReplyCounter.replyCounts(for: items)
@@ -213,9 +216,26 @@ struct RoomTimelineView: View {
                                 onOpenMedia: { resource in viewerResource = resource },
                                 onAgentAction: { action in
                                     executeAgentAction(action, sourceEventID: item.eventID)
+                                },
+                                onRetryFailedSend: {
+                                    retryFailedMessage(item)
                                 }
                             )
                             .id(item.eventID)
+                            .onAppear {
+                                if item.eventID == items.last?.eventID {
+                                    showJumpToLatest = false
+                                    scheduleMarkFullyRead(eventID: item.eventID)
+                                }
+                                if isAgentRoom == false, index < Self.olderPaginationTopThreshold {
+                                    loadOlderTimelineIfNeeded(anchorItem: item, index: index, items: items)
+                                }
+                            }
+                            .onDisappear {
+                                if item.eventID == items.last?.eventID {
+                                    cancelMarkFullyRead()
+                                }
+                            }
                         }
                     }
                     .padding(.horizontal, SynaraSpacing.large)
@@ -247,8 +267,16 @@ struct RoomTimelineView: View {
                     scrollToAnchoredEvent(items: items, proxy: proxy)
                 }
                 .onChange(of: state) { currentState in
-                    guard case .loaded(let updatedItems, _) = currentState else {
+                    guard case .loaded(let updatedItems, let isPaginating) = currentState else {
                         return
+                    }
+                    if let anchorID = paginationScrollAnchorID, isPaginating == false {
+                        paginationScrollAnchorID = nil
+                        Task {
+                            await MainActor.run {
+                                proxy.scrollTo(anchorID, anchor: .top)
+                            }
+                        }
                     }
                     scrollToInitialPosition(items: updatedItems, proxy: proxy)
                     scrollToLatestMessageIfNeeded(items: updatedItems, proxy: proxy)
@@ -390,6 +418,11 @@ struct RoomTimelineView: View {
         showJumpToLatest = false
         hasPositionedInitialTimeline = false
         initialReadMarkerEventID = nil
+        hasReachedOldestMessages = false
+        lastOlderPaginationAt = .distantPast
+        paginationScrollAnchorID = nil
+        lastMarkedFullyReadEventID = nil
+        cancelMarkFullyRead()
     }
 
     private func shouldShowUnreadDivider(before item: TimelineItem, at index: Int, in items: [TimelineItem]) -> Bool {
@@ -418,12 +451,40 @@ struct RoomTimelineView: View {
     private func applyTimelineOutcome(_ outcome: TimelineLoadOutcome, isPaginating: Bool = false) {
         switch outcome {
         case .loaded(let items):
-            state = .loaded(items, isPaginating: isPaginating)
+            let merged = mergeTimelineItems(items, isPaginating: isPaginating)
+            state = .loaded(merged, isPaginating: isPaginating)
         case .empty:
-            state = .empty
+            if let pendingItems = localPendingItems, pendingItems.isEmpty == false {
+                state = .loaded(pendingItems, isPaginating: isPaginating)
+            } else {
+                state = .empty
+            }
         case .failed(let message):
             state = .failed(message)
         }
+    }
+
+    private var localPendingItems: [TimelineItem]? {
+        guard case .loaded(let items, _) = state else {
+            return nil
+        }
+        let pendingItems = TimelinePendingReconciler.pendingItems(from: items)
+        return pendingItems.isEmpty ? nil : pendingItems
+    }
+
+    private func mergeTimelineItems(_ streamItems: [TimelineItem], isPaginating: Bool) -> [TimelineItem] {
+        let localItems: [TimelineItem]
+        if case .loaded(let items, _) = state {
+            localItems = items
+        } else {
+            localItems = []
+        }
+
+        return TimelinePendingReconciler.merge(
+            streamItems: streamItems,
+            localItems: localItems,
+            currentUserID: currentUserID
+        )
     }
 
     private func openThread(root item: TimelineItem) {
@@ -526,6 +587,29 @@ struct RoomTimelineView: View {
     }
 
     private func sendMessage(body rawBody: String) {
+        performSend(body: rawBody, replyToEventID: replyTarget?.eventID, editEventID: editTarget?.eventID)
+    }
+
+    private func retryFailedMessage(_ item: TimelineItem) {
+        guard item.deliveryStatus == .failed,
+              let body = TimelinePendingReconciler.messageBody(for: item) else {
+            return
+        }
+
+        performSend(
+            body: body,
+            replyToEventID: item.replyToEventID,
+            editEventID: nil,
+            retrying: item
+        )
+    }
+
+    private func performSend(
+        body rawBody: String,
+        replyToEventID: String?,
+        editEventID: String?,
+        retrying failedItem: TimelineItem? = nil
+    ) {
         let body = rawBody.trimmingCharacters(in: .whitespacesAndNewlines)
         guard body.isEmpty == false else {
             sendError = MessageSendError.emptyMessage.localizedDescription
@@ -535,10 +619,36 @@ struct RoomTimelineView: View {
         let request = MessageSendRequest(
             roomID: roomID,
             body: body,
-            replyToEventID: replyTarget?.eventID,
-            editEventID: editTarget?.eventID
+            replyToEventID: replyToEventID,
+            editEventID: editEventID
         )
         let isEditing = request.editEventID != nil
+
+        let pendingLocalID: String?
+        if isEditing == false {
+            let pendingItem = TimelineItem.pendingMessage(
+                localID: failedItem?.id ?? "$pending-\(UUID().uuidString)",
+                body: body,
+                senderID: currentUserID,
+                replyToEventID: replyToEventID,
+                deliveryStatus: .sending,
+                timestamp: failedItem?.timestamp ?? Date()
+            )
+            pendingLocalID = pendingItem.id
+
+            if failedItem != nil {
+                replace(pendingItem)
+            } else {
+                append(pendingItem)
+            }
+
+            draft = ""
+            environment.drafts.clearDraft(roomID: roomID)
+            clearComposerRelation()
+            sendError = nil
+        } else {
+            pendingLocalID = nil
+        }
 
         Task {
             do {
@@ -549,23 +659,49 @@ struct RoomTimelineView: View {
                 let item = try await environment.messageSender.send(request)
                 await MainActor.run {
                     if isEditing {
-                        // Edits may not stream back immediately; keep a local replace.
                         replace(item)
-                    } else if ProcessInfo.processInfo.environment["SYNARA_UI_TESTS"] == "1" {
-                        append(item)
+                        draft = ""
+                        environment.drafts.clearDraft(roomID: roomID)
+                        clearComposerRelation()
+                    } else if ProcessInfo.processInfo.environment["SYNARA_UI_TESTS"] == "1",
+                              let pendingLocalID {
+                        reconcilePendingSend(localID: pendingLocalID, confirmed: item)
                     }
-                    // New sends rely on timeline streaming instead of optimistic append.
-                    draft = ""
-                    environment.drafts.clearDraft(roomID: roomID)
-                    clearComposerRelation()
                     sendError = nil
                 }
             } catch {
                 await MainActor.run {
-                    sendError = MessageSendError.failed.localizedDescription
+                    if isEditing {
+                        sendError = MessageSendError.failed.localizedDescription
+                    } else if let pendingLocalID {
+                        markPendingSendFailed(localID: pendingLocalID)
+                    }
                 }
             }
         }
+    }
+
+    private func markPendingSendFailed(localID: String) {
+        guard case .loaded(let items, let isPaginating) = state,
+              let item = items.first(where: { $0.id == localID }) else {
+            return
+        }
+
+        replace(item.withDeliveryStatus(.failed))
+    }
+
+    private func reconcilePendingSend(localID: String, confirmed: TimelineItem) {
+        guard case .loaded(let items, let isPaginating) = state else {
+            return
+        }
+
+        let withoutPending = items.filter { $0.id != localID }
+        if withoutPending.contains(where: { $0.eventID == confirmed.eventID }) {
+            state = .loaded(withoutPending, isPaginating: isPaginating)
+            return
+        }
+
+        state = .loaded(withoutPending + [confirmed], isPaginating: isPaginating)
     }
 
     private func uploadMockMedia(source: MediaUploadSource) {
@@ -735,10 +871,29 @@ struct RoomTimelineView: View {
         }
     }
 
-    private func loadOlderTimeline(before eventID: String?) {
+    private func loadOlderTimelineIfNeeded(anchorItem: TimelineItem, index: Int, items: [TimelineItem]) {
+        guard index < Self.olderPaginationTopThreshold,
+              let oldestEventID = items.first?.eventID else {
+            return
+        }
+        loadOlderTimeline(before: oldestEventID, scrollAnchorID: anchorItem.eventID)
+    }
+
+    private func loadOlderTimeline(before eventID: String?, scrollAnchorID: String? = nil) {
         guard let eventID,
+              hasReachedOldestMessages == false,
               case .loaded(let items, false) = state else {
             return
+        }
+
+        let now = Date()
+        guard now.timeIntervalSince(lastOlderPaginationAt) >= Self.olderPaginationDebounceInterval else {
+            return
+        }
+        lastOlderPaginationAt = now
+
+        if let scrollAnchorID {
+            paginationScrollAnchorID = scrollAnchorID
         }
 
         state = .loaded(items, isPaginating: true)
@@ -756,14 +911,51 @@ struct RoomTimelineView: View {
                     state = .loaded(uniqueOlder + items, isPaginating: false)
                     if uniqueOlder.isEmpty == false {
                         showJumpToLatest = true
+                    } else {
+                        hasReachedOldestMessages = true
                     }
                 case .empty:
+                    hasReachedOldestMessages = true
+                    paginationScrollAnchorID = nil
                     state = .loaded(items, isPaginating: false)
                 case .failed(let message):
+                    paginationScrollAnchorID = nil
                     state = .failed(message)
                 }
             }
         }
+    }
+
+    private func scheduleMarkFullyRead(eventID: String) {
+        markFullyReadTask?.cancel()
+        guard lastMarkedFullyReadEventID != eventID else {
+            return
+        }
+
+        markFullyReadTask = Task {
+            try? await Task.sleep(nanoseconds: Self.markFullyReadDelayNanoseconds)
+            guard Task.isCancelled == false else {
+                return
+            }
+
+            let didMark = await environment.readMarkers.markFullyRead(roomID: roomID, eventID: eventID)
+            guard Task.isCancelled == false else {
+                return
+            }
+
+            await MainActor.run {
+                if didMark {
+                    lastMarkedFullyReadEventID = eventID
+                    initialReadMarkerEventID = eventID
+                }
+                showJumpToLatest = false
+            }
+        }
+    }
+
+    private func cancelMarkFullyRead() {
+        markFullyReadTask?.cancel()
+        markFullyReadTask = nil
     }
 
     private func jumpToLatest(proxy: ScrollViewProxy, currentItems: [TimelineItem], fallbackEventID: String) {
@@ -2323,9 +2515,10 @@ private struct TimelineRow: View {
     let onReact: () -> Void
     let onOpenMedia: (MediaResource) -> Void
     let onAgentAction: (SynaraAgentCardAction) -> Void
+    let onRetryFailedSend: () -> Void
 
     var body: some View {
-        HStack(alignment: .top, spacing: SynaraSpacing.small) {
+        let row = HStack(alignment: .top, spacing: SynaraSpacing.small) {
             if isGroupedWithPrevious {
                 Color.clear
                     .frame(width: 34, height: 1)
@@ -2357,6 +2550,7 @@ private struct TimelineRow: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.top, isGroupedWithPrevious ? 0 : 7)
+        .opacity(item.deliveryStatus == .sending ? 0.72 : 1)
         .contextMenu {
             if availability.canReply {
                 Button("Reply", action: onReply)
@@ -2378,6 +2572,48 @@ private struct TimelineRow: View {
         .accessibilityLabel(accessibilitySummary)
         .accessibilityHint(accessibilityHint)
         .accessibilityIdentifier("TimelineItem-\(item.eventID)")
+
+        if item.deliveryStatus == .failed {
+            Button(action: onRetryFailedSend) {
+                row
+            }
+            .buttonStyle(.plain)
+            .overlay(alignment: .bottomTrailing) {
+                deliveryStatusIndicator
+                    .padding(.trailing, SynaraSpacing.xSmall)
+                    .padding(.bottom, SynaraSpacing.xSmall)
+            }
+            .accessibilityHint("Tap to retry sending this message")
+            .accessibilityIdentifier("TimelineItemRetry-\(item.eventID)")
+        } else {
+            row
+                .overlay(alignment: .bottomTrailing) {
+                    deliveryStatusIndicator
+                        .padding(.trailing, SynaraSpacing.xSmall)
+                        .padding(.bottom, SynaraSpacing.xSmall)
+                }
+        }
+    }
+
+    @ViewBuilder
+    private var deliveryStatusIndicator: some View {
+        switch item.deliveryStatus {
+        case .sending where isOutgoing:
+            ProgressView()
+                .controlSize(.mini)
+                .accessibilityLabel("Sending")
+        case .failed where isOutgoing:
+            Label("Retry", systemImage: "arrow.clockwise")
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(SynaraColor.critical)
+                .padding(.horizontal, SynaraSpacing.small)
+                .padding(.vertical, SynaraSpacing.xSmall)
+                .background(SynaraColor.critical.opacity(0.12))
+                .clipShape(Capsule())
+                .accessibilityLabel("Failed to send. Tap to retry.")
+        default:
+            EmptyView()
+        }
     }
 
     @ViewBuilder
@@ -2559,8 +2795,42 @@ private struct TimelineRow: View {
 
 private struct MediaAttachmentCard: View {
     let resource: MediaResource
+    @Environment(\.appEnvironment) private var environment
+    @State private var thumbnailImage: UIImage?
+    @State private var isLoadingThumbnail = false
+
+    private let imageThumbnailHeight: CGFloat = 180
 
     var body: some View {
+        Group {
+            if resource.isImageMedia {
+                imageAttachmentCard
+            } else {
+                fileAttachmentCard
+            }
+        }
+        .task(id: thumbnailTaskID) {
+            await loadThumbnailIfNeeded()
+        }
+    }
+
+    @ViewBuilder
+    private var imageAttachmentCard: some View {
+        VStack(alignment: .leading, spacing: SynaraSpacing.small) {
+            imageThumbnailView
+                .frame(maxWidth: .infinity)
+                .frame(height: imageThumbnailHeight)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+            mediaMetadataRow(showDownloadIcon: false)
+        }
+        .padding(.horizontal, SynaraSpacing.medium)
+        .padding(.vertical, SynaraSpacing.small)
+        .synaraCard(fill: SynaraColor.surface)
+    }
+
+    @ViewBuilder
+    private var fileAttachmentCard: some View {
         HStack(spacing: SynaraSpacing.small) {
             SynaraIconTile(
                 title: resource.safeDescription,
@@ -2569,14 +2839,28 @@ private struct MediaAttachmentCard: View {
                 size: 30
             )
 
+            mediaMetadataRow(showDownloadIcon: true)
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, SynaraSpacing.medium)
+        .padding(.vertical, SynaraSpacing.small)
+        .synaraCard(fill: SynaraColor.surface)
+    }
+
+    @ViewBuilder
+    private func mediaMetadataRow(showDownloadIcon: Bool) -> some View {
+        HStack(spacing: SynaraSpacing.small) {
             VStack(alignment: .leading, spacing: 3) {
                 Text(resource.safeDescription)
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(SynaraColor.primaryText)
                     .lineLimit(1)
-                Text(resource.safeDescription.localizedCaseInsensitiveContains(".pdf") ? "1.2 MB" : (resource.requiresAuthentication ? "Authenticated file" : "Attachment"))
-                    .font(.caption)
-                    .foregroundStyle(SynaraColor.secondaryText)
+                if let sizeText = MediaFormatting.formattedFileSize(resource.byteSize) {
+                    Text(sizeText)
+                        .font(.caption)
+                        .foregroundStyle(SynaraColor.secondaryText)
+                }
                 if resource.isEncrypted {
                     Text("Encrypted media requires recovered keys")
                         .font(.caption2)
@@ -2585,15 +2869,74 @@ private struct MediaAttachmentCard: View {
                 }
             }
 
-            Spacer()
+            Spacer(minLength: 0)
 
-            Image(systemName: resource.isEncrypted ? "lock.fill" : "arrow.down.to.line")
-                .font(.system(size: 17, weight: .medium))
+            if showDownloadIcon {
+                Image(systemName: resource.isEncrypted ? "lock.fill" : "arrow.down.to.line")
+                    .font(.system(size: 17, weight: .medium))
+                    .foregroundStyle(SynaraColor.secondaryText)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var imageThumbnailView: some View {
+        if resource.isEncrypted || resource.authenticatedURL == nil {
+            unavailableImagePlaceholder
+        } else if let thumbnailImage {
+            Image(uiImage: thumbnailImage)
+                .resizable()
+                .scaledToFill()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .clipped()
+        } else if isLoadingThumbnail {
+            ZStack {
+                unavailableImagePlaceholder
+                ProgressView()
+            }
+        } else {
+            unavailableImagePlaceholder
+        }
+    }
+
+    private var unavailableImagePlaceholder: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(SynaraColor.secondarySurface)
+            Image(systemName: resource.isEncrypted ? "lock.fill" : "photo")
+                .font(.system(size: 28, weight: .semibold))
                 .foregroundStyle(SynaraColor.secondaryText)
         }
-        .padding(.horizontal, SynaraSpacing.medium)
-        .padding(.vertical, SynaraSpacing.small)
-        .synaraCard(fill: SynaraColor.surface)
+    }
+
+    private var thumbnailTaskID: String {
+        "\(resource.id)|\(resource.authenticatedURL?.absoluteString ?? "unavailable")|\(resource.isEncrypted)"
+    }
+
+    @MainActor
+    private func loadThumbnailIfNeeded() async {
+        thumbnailImage = nil
+        isLoadingThumbnail = false
+
+        guard resource.isImageMedia,
+              resource.isEncrypted == false,
+              resource.authenticatedURL != nil else {
+            return
+        }
+
+        isLoadingThumbnail = true
+        defer { isLoadingThumbnail = false }
+
+        let pixelWidth = UInt64(max(1, Int(UIScreen.main.bounds.width * UIScreen.main.scale)))
+        let pixelHeight = UInt64(max(1, Int(imageThumbnailHeight * UIScreen.main.scale)))
+        if let data = await environment.mediaLoader.loadThumbnailData(
+            for: resource,
+            width: pixelWidth,
+            height: pixelHeight
+        ),
+           let image = UIImage(data: data) {
+            thumbnailImage = image
+        }
     }
 }
 
@@ -3326,24 +3669,35 @@ private struct ComposerRelationBanner: View {
 private struct MediaViewer: View {
     let resource: MediaResource
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.appEnvironment) private var environment
+    @State private var image: UIImage?
+    @State private var isLoading = false
+    @State private var errorMessage: String?
+    @State private var scale: CGFloat = 1
+    @State private var lastScale: CGFloat = 1
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: SynaraSpacing.large) {
-                Image(systemName: "photo")
-                    .font(.system(size: 64, weight: .semibold))
-                    .foregroundStyle(SynaraColor.secondaryText)
-                Text(resource.safeDescription)
-                    .font(SynaraTypography.screenTitle)
-                    .multilineTextAlignment(.center)
-                if resource.requiresAuthentication {
-                    Text("Authenticated media")
-                        .font(SynaraTypography.supporting)
-                        .foregroundStyle(SynaraColor.secondaryText)
+            Group {
+                if let errorMessage {
+                    mediaErrorView(message: errorMessage)
+                } else if let image {
+                    ZoomableMediaImage(image: image, scale: $scale, lastScale: $lastScale)
+                } else if isLoading {
+                    VStack(spacing: SynaraSpacing.medium) {
+                        ProgressView()
+                        Text("Loading media...")
+                            .font(SynaraTypography.supporting)
+                            .foregroundStyle(SynaraColor.secondaryText)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    mediaErrorView(message: "Media could not be loaded.")
                 }
             }
-            .padding(SynaraSpacing.xLarge)
-            .navigationTitle("Media")
+            .padding(.horizontal, resource.isImageMedia ? 0 : SynaraSpacing.xLarge)
+            .navigationTitle(resource.safeDescription)
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Done") {
@@ -3352,7 +3706,85 @@ private struct MediaViewer: View {
                 }
             }
         }
+        .task(id: resource.id) {
+            await loadMedia()
+        }
         .accessibilityIdentifier("MediaViewer")
+    }
+
+    @ViewBuilder
+    private func mediaErrorView(message: String) -> some View {
+        VStack(spacing: SynaraSpacing.large) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 48, weight: .semibold))
+                .foregroundStyle(SynaraColor.warning)
+            Text(message)
+                .font(SynaraTypography.supporting)
+                .foregroundStyle(SynaraColor.secondaryText)
+                .multilineTextAlignment(.center)
+        }
+        .padding(SynaraSpacing.xLarge)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    @MainActor
+    private func loadMedia() async {
+        image = nil
+        errorMessage = nil
+        scale = 1
+        lastScale = 1
+
+        guard resource.isEncrypted == false else {
+            errorMessage = "Encrypted media requires recovered keys before it can be opened."
+            return
+        }
+
+        guard resource.authenticatedURL != nil else {
+            errorMessage = "Media is unavailable."
+            return
+        }
+
+        isLoading = true
+        defer { isLoading = false }
+
+        guard let data = await environment.mediaLoader.loadMediaData(for: resource),
+              let loadedImage = UIImage(data: data) else {
+            errorMessage = "Media could not be loaded."
+            return
+        }
+
+        image = loadedImage
+    }
+}
+
+private struct ZoomableMediaImage: View {
+    let image: UIImage
+    @Binding var scale: CGFloat
+    @Binding var lastScale: CGFloat
+
+    var body: some View {
+        GeometryReader { geometry in
+            ScrollView([.horizontal, .vertical], showsIndicators: false) {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(
+                        width: geometry.size.width * max(scale, 1),
+                        height: geometry.size.height * max(scale, 1)
+                    )
+                    .gesture(
+                        MagnificationGesture()
+                            .onChanged { value in
+                                scale = max(1, lastScale * value)
+                            }
+                            .onEnded { value in
+                                lastScale = max(1, lastScale * value)
+                                scale = lastScale
+                            }
+                    )
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
     }
 }
 
