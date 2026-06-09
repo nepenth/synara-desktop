@@ -1661,6 +1661,10 @@ final class MatrixRustSDKRoomListService: RoomListServicing {
         cachedRoomsSnapshot().first { $0.id == roomID }?.name
     }
 
+    func isAgentRoom(roomID: String) -> Bool {
+        cachedRoomsSnapshot().first { $0.id == roomID }?.isAgentRoom ?? false
+    }
+
     func clearCache() {
         cacheLock.lock()
         defer { cacheLock.unlock() }
@@ -1704,7 +1708,8 @@ final class MatrixRustSDKRoomListService: RoomListServicing {
             membership: membership,
             lastActivityAt: latestPreview.timestamp ?? .distantPast,
             parentSpaces: parentSpaces,
-            avatarURL: room.avatarUrl().flatMap(URL.init(string:))
+            avatarURL: room.avatarUrl().flatMap(URL.init(string:)),
+            hasAgentActivity: latestPreview.hasAgentActivity
         )
     }
 
@@ -1721,23 +1726,56 @@ final class MatrixRustSDKRoomListService: RoomListServicing {
     private static func latestPreview(for room: Room) async -> LatestRoomEventPreview {
         switch await room.latestEvent() {
         case .none:
-            return LatestRoomEventPreview(text: nil, timestamp: nil)
+            return LatestRoomEventPreview(text: nil, timestamp: nil, hasAgentActivity: false)
         case .remote(let timestamp, let sender, let isOwn, _, let content):
+            let preview = previewDetails(content: content, sender: sender, isOwn: isOwn)
             return LatestRoomEventPreview(
-                text: previewText(content: content, sender: sender, isOwn: isOwn),
-                timestamp: Date(timeIntervalSince1970: TimeInterval(timestamp) / 1_000)
+                text: preview.text,
+                timestamp: Date(timeIntervalSince1970: TimeInterval(timestamp) / 1_000),
+                hasAgentActivity: preview.hasAgentActivity
             )
         case .local(let timestamp, let sender, _, let content, _):
+            let preview = previewDetails(content: content, sender: sender, isOwn: true)
             return LatestRoomEventPreview(
-                text: previewText(content: content, sender: sender, isOwn: true),
-                timestamp: Date(timeIntervalSince1970: TimeInterval(timestamp) / 1_000)
+                text: preview.text,
+                timestamp: Date(timeIntervalSince1970: TimeInterval(timestamp) / 1_000),
+                hasAgentActivity: preview.hasAgentActivity
             )
         case .remoteInvite(let timestamp, let inviter, _):
             let inviterName = inviter.map { senderDisplayName($0, isOwn: false) } ?? "Someone"
             return LatestRoomEventPreview(
                 text: "\(inviterName) invited you",
-                timestamp: Date(timeIntervalSince1970: TimeInterval(timestamp) / 1_000)
+                timestamp: Date(timeIntervalSince1970: TimeInterval(timestamp) / 1_000),
+                hasAgentActivity: false
             )
+        }
+    }
+
+    private struct RoomPreviewDetails {
+        let text: String?
+        let hasAgentActivity: Bool
+    }
+
+    private static func previewDetails(content: TimelineItemContent, sender: String, isOwn: Bool) -> RoomPreviewDetails {
+        RoomPreviewDetails(
+            text: previewText(content: content, sender: sender, isOwn: isOwn),
+            hasAgentActivity: contentContainsAgentActivity(content)
+        )
+    }
+
+    private static func contentContainsAgentActivity(_ content: TimelineItemContent) -> Bool {
+        switch content {
+        case .msgLike(let content):
+            switch content.kind {
+            case .message(let message):
+                return SynaraAgentCardPayloadParser.parse(body: message.body) != nil
+            default:
+                return false
+            }
+        case .failedToParseMessageLike(let eventType, _):
+            return eventType == "in.synara.agent"
+        default:
+            return false
         }
     }
 
@@ -1814,6 +1852,7 @@ final class MatrixRustSDKRoomListService: RoomListServicing {
 private struct LatestRoomEventPreview {
     let text: String?
     let timestamp: Date?
+    let hasAgentActivity: Bool
 }
 
 final class MatrixRustSDKRoomMembershipService: RoomMembershipServicing {

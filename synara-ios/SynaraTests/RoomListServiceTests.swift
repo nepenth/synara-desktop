@@ -222,10 +222,43 @@ final class RoomListServiceTests: XCTestCase {
         XCTAssertEqual(filtered.map(\.id), ["!agent-workflows:matrix.org"])
     }
 
-    func testIsAgentRoomNameDetectsWorkflowRooms() {
-        XCTAssertTrue(RoomSummary.isAgentRoomName("Agent Workflows"))
-        XCTAssertTrue(RoomSummary.isAgentRoomName("Release Workflow"))
-        XCTAssertFalse(RoomSummary.isAgentRoomName("General"))
+    func testAgentRoomRequiresRecentAgentActivity() {
+        let agentRoom = RoomSummary(
+            id: "!agent:matrix.org",
+            name: "Agent Workflows",
+            lastMessagePreview: "Approval required",
+            unreadCount: 1,
+            hasHighlight: false,
+            kind: .room,
+            membership: .joined,
+            lastActivityAt: RoomListFixtures.now,
+            hasAgentActivity: true
+        )
+        let generalRoom = RoomSummary(
+            id: "!general:matrix.org",
+            name: "General",
+            lastMessagePreview: "Hello",
+            unreadCount: 0,
+            hasHighlight: false,
+            kind: .room,
+            membership: .joined,
+            lastActivityAt: RoomListFixtures.now,
+            hasAgentActivity: false
+        )
+
+        XCTAssertTrue(agentRoom.isAgentRoom)
+        XCTAssertFalse(generalRoom.isAgentRoom)
+    }
+
+    func testNotificationsInboxCaughtUpWhenNoSectionsOrPendingAgents() {
+        let sections = NotificationsInboxSections(
+            mentions: [],
+            invites: [],
+            unreadRooms: []
+        )
+
+        XCTAssertTrue(NotificationsInboxSections.isCaughtUp(sections: sections, agentPendingCount: 0))
+        XCTAssertFalse(NotificationsInboxSections.isCaughtUp(sections: sections, agentPendingCount: 2))
     }
 
     func testSpaceUnreadCountsSumUnreadRoomsPerSpace() {

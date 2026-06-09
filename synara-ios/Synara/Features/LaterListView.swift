@@ -9,7 +9,15 @@ struct LaterListView: View {
         Group {
             switch state {
             case .idle, .loading:
-                SynaraLoadingState(title: "Loading Later")
+                List {
+                    Section {
+                        SynaraSkeletonList(rowCount: 6, showsAvatar: false)
+                            .listRowSeparator(.hidden)
+                            .listRowInsets(EdgeInsets(top: 3, leading: SynaraSpacing.large, bottom: 3, trailing: SynaraSpacing.large))
+                    }
+                }
+                .listStyle(.insetGrouped)
+                .accessibilityIdentifier("LaterLoading")
             case .empty:
                 SynaraEmptyState(
                     title: "No Later Items",

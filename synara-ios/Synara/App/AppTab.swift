@@ -48,10 +48,8 @@ private struct NotificationsTabView: View {
     @ViewBuilder
     private func notificationsContent(for rooms: [RoomSummary]) -> some View {
         let sections = NotificationsInboxSections.make(from: rooms)
-        let showsAgentEmptyState = environment.agentApprovals.supportsPendingApprovalInbox == false
-        let hasVisibleContent = sections.hasRoomSections || agentPendingCount > 0 || showsAgentEmptyState
 
-        if hasVisibleContent == false {
+        if NotificationsInboxSections.isCaughtUp(sections: sections, agentPendingCount: agentPendingCount) {
             caughtUpEmptyState
         } else {
             List {
@@ -88,17 +86,6 @@ private struct NotificationsTabView: View {
                         .accessibilityIdentifier("NotificationsAgentPendingSummary")
                     } header: {
                         notificationsSectionHeader("Agent actions", count: agentPendingCount)
-                    }
-                } else if showsAgentEmptyState {
-                    Section {
-                        Text("No pending agent actions")
-                            .font(SynaraTypography.supporting)
-                            .foregroundStyle(SynaraColor.secondaryText)
-                            .accessibilityIdentifier("NotificationsAgentEmptyState")
-                    } header: {
-                        Text("Agent actions")
-                            .font(SynaraTypography.supporting)
-                            .foregroundStyle(SynaraColor.secondaryText)
                     }
                 }
 
@@ -223,6 +210,18 @@ private struct NotificationsInboxRow: View {
     }
 }
 
+private struct OptionalTabBadge: ViewModifier {
+    let count: Int
+
+    func body(content: Content) -> some View {
+        if count > 0 {
+            content.badge(count)
+        } else {
+            content
+        }
+    }
+}
+
 enum AppTab: String, CaseIterable, Identifiable {
     case rooms
     case later
@@ -251,11 +250,11 @@ enum AppTab: String, CaseIterable, Identifiable {
         case .rooms:
             Label("Rooms", systemImage: "bubble.left.and.bubble.right")
                 .accessibilityIdentifier("RoomsTab")
-                .badge(badgeCounts.rooms > 0 ? badgeCounts.rooms : 0)
+                .modifier(OptionalTabBadge(count: badgeCounts.rooms))
         case .notifications:
             Label("Notifications", systemImage: "bell")
                 .accessibilityIdentifier("NotificationsTab")
-                .badge(badgeCounts.notifications > 0 ? badgeCounts.notifications : 0)
+                .modifier(OptionalTabBadge(count: badgeCounts.notifications))
         case .later:
             Label("Later", systemImage: "clock")
                 .accessibilityIdentifier("LaterTab")

@@ -17,7 +17,6 @@ struct RoomListView: View {
     @State private var roomUpdatesTask: Task<Void, Never>?
     @State private var isSearchPresented = ProcessInfo.processInfo.environment["SYNARA_UI_TEST_ROOM_SEARCH"] != nil
     @State private var roomPendingLeave: RoomSummary?
-    @State private var agentPendingCount = 0
     @FocusState private var isSearchFocused: Bool
 
     var body: some View {
@@ -242,7 +241,6 @@ struct RoomListView: View {
             hasStartedInitialLoad = true
             await environment.sessionReadiness.waitUntilPrepared(for: session)
             loadRooms(startUpdatesAfterLoad: true)
-            agentPendingCount = await environment.agentApprovals.pendingApprovalCount()
         }
         .onAppear {
             if hasStartedInitialLoad {
@@ -431,10 +429,7 @@ struct RoomListView: View {
                 dismissSearch(clearQuery: false)
                 environment.router.route(to: .room(id: room.id, title: room.name))
             } label: {
-                RoomListRow(
-                    room: room,
-                    showsPendingApproval: room.isAgentRoom && agentPendingCount > 0
-                )
+                RoomListRow(room: room)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .contentShape(Rectangle())
                     .accessibilityIdentifier("RoomRow-\(room.id)")
@@ -1003,7 +998,6 @@ private struct RoomSearchField: View {
 
 private struct RoomListRow: View {
     let room: RoomSummary
-    var showsPendingApproval = false
 
     var body: some View {
         HStack(spacing: SynaraSpacing.medium) {
@@ -1027,10 +1021,7 @@ private struct RoomListRow: View {
                         SynaraStatusChip(title: "Mention", tint: SynaraColor.accent, systemImage: "at")
                     }
 
-                    if showsPendingApproval {
-                        SynaraStatusChip(title: "Pending", tint: SynaraColor.warning, systemImage: "clock.badge.exclamationmark")
-                            .accessibilityIdentifier("RoomPendingApproval-\(room.id)")
-                    }
+
 
                     Spacer(minLength: SynaraSpacing.small)
 

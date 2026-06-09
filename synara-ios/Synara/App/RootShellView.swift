@@ -62,7 +62,6 @@ struct RootShellView: View {
             await SessionCoordinator.startSignedInSession(environment: environment, session: authenticatedSession)
             PerformanceTrace.end("SignedInSessionStart", id: signpostID)
             environment.router.replayPendingDeepLinkIfNeeded(sessionIsSignedIn: true)
-            await refreshTabBadges()
             startTabBadgeUpdates()
         }
         .onDisappear {
@@ -82,16 +81,6 @@ struct RootShellView: View {
             tab.label(badgeCounts: tabBadgeCounts)
         }
         .tag(tab)
-    }
-
-    private func refreshTabBadges() async {
-        let roomState = await environment.roomList.loadRooms()
-        let agentPendingCount = await environment.agentApprovals.pendingApprovalCount()
-        let rooms = rooms(from: roomState)
-
-        await MainActor.run {
-            tabBadgeCounts = TabBadgeCounts.make(from: rooms, agentApprovalCount: agentPendingCount)
-        }
     }
 
     private func startTabBadgeUpdates() {

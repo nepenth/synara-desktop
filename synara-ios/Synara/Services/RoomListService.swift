@@ -21,6 +21,7 @@ struct RoomSummary: Identifiable, Equatable {
     let lastActivityAt: Date
     let parentSpaces: [SpaceSummary]
     let avatarURL: URL?
+    let hasAgentActivity: Bool
 
     init(
         id: String,
@@ -32,7 +33,8 @@ struct RoomSummary: Identifiable, Equatable {
         membership: Membership,
         lastActivityAt: Date,
         parentSpaces: [SpaceSummary] = [],
-        avatarURL: URL? = nil
+        avatarURL: URL? = nil,
+        hasAgentActivity: Bool = false
     ) {
         self.id = id
         self.name = name
@@ -44,15 +46,11 @@ struct RoomSummary: Identifiable, Equatable {
         self.lastActivityAt = lastActivityAt
         self.parentSpaces = parentSpaces
         self.avatarURL = avatarURL
-    }
-
-    static func isAgentRoomName(_ name: String) -> Bool {
-        name.localizedCaseInsensitiveContains("agent")
-            || name.localizedCaseInsensitiveContains("workflow")
+        self.hasAgentActivity = hasAgentActivity
     }
 
     var isAgentRoom: Bool {
-        Self.isAgentRoomName(name)
+        hasAgentActivity
     }
 
     var primaryParentSpace: SpaceSummary? {
@@ -85,6 +83,7 @@ protocol RoomListServicing: AnyObject {
     func loadRooms() async -> RoomListState
     func roomUpdates() -> AsyncStream<RoomListState>
     func roomDisplayName(roomID: String) -> String?
+    func isAgentRoom(roomID: String) -> Bool
     func clearCache()
 }
 
@@ -97,6 +96,10 @@ extension RoomListServicing {
 
     func roomDisplayName(roomID: String) -> String? {
         nil
+    }
+
+    func isAgentRoom(roomID: String) -> Bool {
+        false
     }
 }
 
@@ -193,13 +196,14 @@ enum RoomListFixtures {
             RoomSummary(
                 id: "!agent-workflows:matrix.org",
                 name: "Agent Workflows",
-                lastMessagePreview: "Workflow run completed",
+                lastMessagePreview: "Agent: Deploy approval required",
                 unreadCount: 1,
                 hasHighlight: false,
                 kind: .room,
                 membership: .joined,
                 lastActivityAt: now.addingTimeInterval(-1_200),
-                parentSpaces: [SpaceSummary(id: "!ops:matrix.org", name: "Ops")]
+                parentSpaces: [SpaceSummary(id: "!ops:matrix.org", name: "Ops")],
+                hasAgentActivity: true
             ),
             RoomSummary(
                 id: "!alice:matrix.org",
@@ -355,6 +359,10 @@ struct NotificationsInboxSections: Equatable {
 
     var hasRoomSections: Bool {
         mentions.isEmpty == false || invites.isEmpty == false || unreadRooms.isEmpty == false
+    }
+
+    static func isCaughtUp(sections: NotificationsInboxSections, agentPendingCount: Int) -> Bool {
+        sections.hasRoomSections == false && agentPendingCount == 0
     }
 
     static func notificationRooms(from rooms: [RoomSummary]) -> [RoomSummary] {
@@ -552,6 +560,10 @@ final class PlaceholderRoomListService: RoomListServicing {
         cachedRooms.first { $0.id == roomID }?.name
     }
 
+    func isAgentRoom(roomID: String) -> Bool {
+        cachedRooms.first { $0.id == roomID }?.isAgentRoom ?? false
+    }
+
     func clearCache() {
         cachedRooms = []
     }
@@ -594,6 +606,14 @@ final class MockRoomListService: RoomListServicing {
         }
 
         return rooms.first { $0.id == roomID }?.name
+    }
+
+    func isAgentRoom(roomID: String) -> Bool {
+        guard case .loaded(let rooms) = state else {
+            return false
+        }
+
+        return rooms.first { $0.id == roomID }?.isAgentRoom ?? false
     }
 
     func roomUpdates() -> AsyncStream<RoomListState> {
