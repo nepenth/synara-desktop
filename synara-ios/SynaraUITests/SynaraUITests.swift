@@ -241,16 +241,14 @@ final class SynaraUITests: XCTestCase {
         XCTAssertTrue(app.buttons["MediaPlaceholder-synara-upload.jpg"].waitForExistence(timeout: 5))
     }
 
-    func testUnavailableAttachmentOptionShowsHonestState() {
+    func testFileUploadAddsAttachmentPlaceholder() {
         let app = launchRoomApp()
 
         tap(app.buttons["AttachmentButton"])
         XCTAssertTrue(app.otherElements["AttachmentOptionsSheet"].waitForExistence(timeout: 5))
         tap(app.buttons["AttachmentOption-File"])
 
-        let alert = app.alerts["Attachment Unavailable"]
-        XCTAssertTrue(alert.waitForExistence(timeout: 5))
-        XCTAssertTrue(alert.staticTexts["File attachments are not available in this build yet."].exists)
+        XCTAssertTrue(app.buttons["MediaPlaceholder-synara-upload.pdf"].waitForExistence(timeout: 5))
     }
 
     func testThreadViewOpensAndRepliesFromTimeline() {

@@ -30,6 +30,12 @@ final class MediaServiceTests: XCTestCase {
         XCTAssertFalse(resource.safeDescription.contains("matrix.org"))
     }
 
+    func testMediaAttachmentSupportResolvesMimeTypeFromExtension() throws {
+        let url = try XCTUnwrap(URL(fileURLWithPath: "/tmp/report.pdf"))
+        XCTAssertEqual(MediaAttachmentSupport.mimeType(for: url), "application/pdf")
+        XCTAssertEqual(MediaAttachmentSupport.displayName(for: url), "report.pdf")
+    }
+
     func testUploadSanitizesLocalFilePath() async {
         let request = MediaUploadRequest(
             roomID: "!room:matrix.org",

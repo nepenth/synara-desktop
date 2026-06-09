@@ -213,6 +213,51 @@ enum RoomListFixtures {
     }
 }
 
+enum RoomListScopeFilter {
+    enum Kind: Equatable {
+        case all
+        case unread
+        case mentions
+    }
+
+    static func apply(_ filter: Kind, to rooms: [RoomSummary]) -> [RoomSummary] {
+        switch filter {
+        case .all:
+            return rooms
+        case .unread:
+            return rooms.filter { $0.unreadCount > 0 }
+        case .mentions:
+            return rooms.filter(\.hasHighlight)
+        }
+    }
+
+    static func filteredRooms(
+        from rooms: [RoomSummary],
+        filter: Kind,
+        selectedSpaceID: String?,
+        searchQuery: String
+    ) -> [RoomSummary] {
+        let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        let invitedRooms = rooms.filter { $0.membership == .invited }
+        var scopedRooms = rooms.filter { $0.membership != .invited }
+
+        if let selectedSpaceID {
+            scopedRooms = scopedRooms.filter { room in
+                room.parentSpaces.contains(where: { $0.id == selectedSpaceID })
+            }
+        }
+
+        scopedRooms = apply(filter, to: scopedRooms)
+        var filtered = RoomListSearchFilter.mergeInvitedRooms(invitedRooms, into: scopedRooms)
+
+        guard query.isEmpty == false else {
+            return filtered
+        }
+
+        return RoomListSearchFilter.applySearchQuery(query, to: filtered, invitedRooms: invitedRooms)
+    }
+}
+
 enum RoomListSearchFilter {
     static func roomMatchesQuery(_ room: RoomSummary, query: String) -> Bool {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)

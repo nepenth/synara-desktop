@@ -1,4 +1,8 @@
 import Foundation
+import UniformTypeIdentifiers
+#if canImport(UIKit)
+import UIKit
+#endif
 
 struct MediaResource: Identifiable, Equatable {
     let id: String
@@ -76,6 +80,35 @@ enum MediaUploadState: Equatable {
 
 protocol MediaUploading {
     func upload(_ request: MediaUploadRequest) async -> MediaUploadState
+}
+
+enum MediaAttachmentSupport {
+    static func mimeType(for url: URL) -> String {
+        if let type = try? url.resourceValues(forKeys: [.contentTypeKey]).contentType,
+           let mimeType = type.preferredMIMEType {
+            return mimeType
+        }
+
+        let fileExtension = url.pathExtension
+        if fileExtension.isEmpty == false,
+           let type = UTType(filenameExtension: fileExtension),
+           let mimeType = type.preferredMIMEType {
+            return mimeType
+        }
+
+        return "application/octet-stream"
+    }
+
+    static func displayName(for url: URL) -> String {
+        let name = url.lastPathComponent
+        return name.isEmpty ? "Attachment" : name
+    }
+
+    #if canImport(UIKit)
+    static func jpegData(from image: UIImage, compressionQuality: CGFloat = 0.85) -> Data? {
+        image.jpegData(compressionQuality: compressionQuality)
+    }
+    #endif
 }
 
 struct MockMediaLoader: MediaLoading {
