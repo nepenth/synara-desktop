@@ -143,7 +143,11 @@ struct RoomListView: View {
             guard hasStartedInitialLoad == false else {
                 return
             }
+            guard case .signedIn(let session) = environment.session.currentState else {
+                return
+            }
             hasStartedInitialLoad = true
+            await environment.sessionReadiness.waitUntilPrepared(for: session)
             loadRooms(startUpdatesAfterLoad: true)
         }
         .onAppear {

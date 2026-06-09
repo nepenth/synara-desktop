@@ -16,6 +16,7 @@
 		1DB7278B67BE35BB7DC62210 /* AgentActionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80584058D243DE7197CF3096 /* AgentActionService.swift */; };
 		2AEC9CA069983AED2A534D47 /* AuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C830BF9B8F7ED001CA8AC317 /* AuthService.swift */; };
 		2F7828F754C6D475F5E161B4 /* RoomListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 417DD4194803886BB803C6A6 /* RoomListView.swift */; };
+		3321B54F4A9FFE147A737368 /* SignedInSessionReadiness.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF389D46848BA1444F7035D0 /* SignedInSessionReadiness.swift */; };
 		3AB84959BA0C8A2EB98CF309 /* ComposerService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7A9908B77A7CB8F4A4CC55A /* ComposerService.swift */; };
 		3C76DA11CB749760025BAB3F /* MatrixRustSDK in Frameworks */ = {isa = PBXBuildFile; productRef = 04B49FA4F6E9D7346F1EDC97 /* MatrixRustSDK */; };
 		3CF0BDAD36854DC8962393D4 /* LogRedactorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15DF14E92067B54B5BF14404 /* LogRedactorTests.swift */; };
@@ -146,6 +147,7 @@
 		CB040EB752E246AD052AC7E7 /* AppEnvironment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppEnvironment.swift; sourceTree = "<group>"; };
 		CDD7517A55AC0E513E708AA0 /* SecureSessionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecureSessionStore.swift; sourceTree = "<group>"; };
 		CEE944AA45DCF6DA43357823 /* MatrixRustSDKService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MatrixRustSDKService.swift; sourceTree = "<group>"; };
+		CF389D46848BA1444F7035D0 /* SignedInSessionReadiness.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignedInSessionReadiness.swift; sourceTree = "<group>"; };
 		D3219D555ED36F65BF9FE332 /* SynaraTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = SynaraTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		DCD86C72DEE3F411D1FABB6B /* AppTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppTab.swift; sourceTree = "<group>"; };
 		E23CEDAB04604A54EF7EAF9B /* PlaceholderScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceholderScreen.swift; sourceTree = "<group>"; };
@@ -248,6 +250,7 @@
 				A4B44B25CB0277A9BAD73943 /* RoomReadMarkerService.swift */,
 				CDD7517A55AC0E513E708AA0 /* SecureSessionStore.swift */,
 				75DD7BEECD59D41C5461C892 /* SessionCoordinator.swift */,
+				CF389D46848BA1444F7035D0 /* SignedInSessionReadiness.swift */,
 				EDFDD334C6EF890B453477E1 /* TimelineService.swift */,
 			);
 			path = Services;
@@ -506,6 +509,7 @@
 				A4B52FFB382C8BD8FFFDF5F9 /* SecureSessionStore.swift in Sources */,
 				901EB2CE7F90AED37B5827E0 /* SessionCoordinator.swift in Sources */,
 				EE7410A9C8E4EB56072632D8 /* SettingsView.swift in Sources */,
+				3321B54F4A9FFE147A737368 /* SignedInSessionReadiness.swift in Sources */,
 				CC89EE97042280F04BD29498 /* SynaraApp.swift in Sources */,
 				9F74223A8F55C5CF1DBAE27B /* SynaraContracts.swift in Sources */,
 				BE33F8C817E797AB7182C4C0 /* SynaraDesign.swift in Sources */,
@@ -632,7 +636,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 1.1.21;
+				CURRENT_PROJECT_VERSION = 1.1.22;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
@@ -715,7 +719,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 1.1.21;
+				CURRENT_PROJECT_VERSION = 1.1.22;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
