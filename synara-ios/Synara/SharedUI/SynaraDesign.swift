@@ -34,6 +34,7 @@ enum SynaraRadius {
     static let small: CGFloat = 6
     static let card: CGFloat = 8
     static let control: CGFloat = 8
+    static let composer: CGFloat = 22
 }
 
 enum SynaraTypography {
@@ -41,6 +42,11 @@ enum SynaraTypography {
     static let sectionTitle = Font.headline
     static let body = Font.body
     static let supporting = Font.callout
+    static let messageBody = Font.callout
+    static let messageMeta = Font.caption
+    static let roomPreview = Font.callout
+    static let chipLabel = Font.caption.weight(.semibold)
+    static let composerPlaceholder = Font.callout
 }
 
 struct SynaraAvatar: View {
@@ -122,7 +128,7 @@ struct SynaraStatusChip: View {
     var body: some View {
         Label {
             Text(title)
-                .font(.caption.weight(.semibold))
+                .font(SynaraTypography.chipLabel)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
         } icon: {
@@ -172,27 +178,49 @@ struct SynaraListRowButtonStyle: ButtonStyle {
 
 struct SynaraFilterChip: View {
     let title: String
+    var badgeCount: Int? = nil
     let isSelected: Bool
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
+            HStack(spacing: SynaraSpacing.xSmall) {
             Text(title)
-                .font(.caption.weight(.medium))
-                .lineLimit(1)
-                .padding(.horizontal, SynaraSpacing.medium)
-                .frame(height: 32)
-                .background(isSelected ? SynaraColor.accent : SynaraColor.secondarySurface)
-                .foregroundStyle(isSelected ? Color.white : SynaraColor.secondaryText)
-                .clipShape(Capsule())
-                .overlay(
-                    Capsule()
-                        .stroke(isSelected ? Color.clear : SynaraColor.separator.opacity(0.55), lineWidth: 0.5)
-                        .allowsHitTesting(false)
-                )
+                .font(SynaraTypography.chipLabel.weight(.medium))
+                    .lineLimit(1)
+
+                if let badgeCount, badgeCount > 0 {
+                    Text(badgeCount > 99 ? "99+" : "\(badgeCount)")
+                        .font(.caption2.weight(.bold))
+                        .monospacedDigit()
+                        .padding(.horizontal, SynaraSpacing.xSmall)
+                        .frame(minWidth: 18, minHeight: 18)
+                        .background(isSelected ? Color.white.opacity(0.22) : SynaraColor.accent.opacity(0.14))
+                        .foregroundStyle(isSelected ? Color.white : SynaraColor.accent)
+                        .clipShape(Capsule())
+                }
+            }
+            .padding(.horizontal, SynaraSpacing.medium)
+            .frame(height: 32)
+            .background(isSelected ? SynaraColor.accent : SynaraColor.secondarySurface)
+            .foregroundStyle(isSelected ? Color.white : SynaraColor.secondaryText)
+            .clipShape(Capsule())
+            .overlay(
+                Capsule()
+                    .stroke(isSelected ? Color.clear : SynaraColor.separator.opacity(0.55), lineWidth: 0.5)
+                    .allowsHitTesting(false)
+            )
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(accessibilityLabel)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    private var accessibilityLabel: String {
+        if let badgeCount, badgeCount > 0 {
+            return "\(title), \(badgeCount) unread"
+        }
+        return title
     }
 }
 

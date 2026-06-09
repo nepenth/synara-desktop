@@ -1,4 +1,7 @@
 import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#endif
 
 struct RoomListView: View {
     @Environment(\.appEnvironment) private var environment
@@ -7,12 +10,14 @@ struct RoomListView: View {
     @State private var searchQuery: String = ProcessInfo.processInfo.environment["SYNARA_UI_TEST_ROOM_SEARCH"] ?? ""
     @State private var selectedFilter: RoomListFilter = .all
     @State private var selectedSpaceID: String?
+    @State private var expandedSpaceIDs: Set<String> = []
     @State private var isRoomManagementSheetPresented = ProcessInfo.processInfo.environment["SYNARA_UI_TEST_ROOM_MANAGEMENT_SHEET"] == "1"
     @State private var hasStartedInitialLoad = false
     @State private var loadRoomsTask: Task<Void, Never>?
     @State private var roomUpdatesTask: Task<Void, Never>?
     @State private var isSearchPresented = ProcessInfo.processInfo.environment["SYNARA_UI_TEST_ROOM_SEARCH"] != nil
     @State private var roomPendingLeave: RoomSummary?
+    @State private var agentPendingCount = 0
     @FocusState private var isSearchFocused: Bool
 
     var body: some View {
@@ -62,6 +67,13 @@ struct RoomListView: View {
                 let channelRooms = filteredRooms.filter { $0.kind == .room }
                 let directRooms = filteredRooms.filter { $0.kind == .directMessage }
                 let spaces = spaces(from: rooms)
+                let spaceUnreadCounts = RoomListSpaceGrouping.unreadCountsBySpaceID(from: rooms)
+                let selectedSpaceTitle = RoomListSpaceGrouping.selectedSpaceName(
+                    in: spaces,
+                    selectedSpaceID: selectedSpaceID
+                )
+                let spaceChannelGroups = RoomListSpaceGrouping.spaceChannelGroups(from: channelRooms)
+                let ungroupedChannelRooms = RoomListSpaceGrouping.ungroupedChannelRooms(from: channelRooms)
                 VStack(spacing: 0) {
                     VStack(spacing: SynaraSpacing.medium) {
                         RoomListHeader(
@@ -78,7 +90,11 @@ struct RoomListView: View {
                         }
                         RoomFilterStrip(selectedFilter: $selectedFilter)
                         if spaces.isEmpty == false {
-                            SpaceFilterStrip(spaces: spaces, selectedSpaceID: $selectedSpaceID)
+                            SpaceFilterStrip(
+                                spaces: spaces,
+                                unreadCountsBySpaceID: spaceUnreadCounts,
+                                selectedSpaceID: $selectedSpaceID
+                            )
                         }
                     }
                     .padding(.horizontal, SynaraSpacing.large)
@@ -96,13 +112,46 @@ struct RoomListView: View {
                             .listRowInsets(EdgeInsets())
                         }
 
-                        if channelRooms.isEmpty == false {
-                            Section {
-                                ForEach(channelRooms) { room in
-                                    roomRow(room)
+                        if let selectedSpaceTitle {
+                            if channelRooms.isEmpty == false {
+                                Section {
+                                    ForEach(channelRooms) { room in
+                                        roomRow(room)
+                                    }
+                                } header: {
+                                    SpaceSelectedHeader(
+                                        title: selectedSpaceTitle,
+                                        roomCount: channelRooms.count
+                                    )
                                 }
-                            } header: {
-                                RoomSectionHeader(title: "Channels", count: channelRooms.count)
+                            }
+                        } else if channelRooms.isEmpty == false {
+                            ForEach(spaceChannelGroups) { group in
+                                Section {
+                                    DisclosureGroup(
+                                        isExpanded: spaceExpansionBinding(for: group.id)
+                                    ) {
+                                        ForEach(group.rooms) { room in
+                                            roomRow(room)
+                                        }
+                                    } label: {
+                                        SpaceDisclosureLabel(
+                                            title: group.space.name,
+                                            roomCount: group.rooms.count,
+                                            unreadCount: spaceUnreadCounts[group.space.id] ?? 0
+                                        )
+                                    }
+                                }
+                            }
+
+                            if ungroupedChannelRooms.isEmpty == false {
+                                Section {
+                                    ForEach(ungroupedChannelRooms) { room in
+                                        roomRow(room)
+                                    }
+                                } header: {
+                                    RoomSectionHeader(title: "Channels", count: ungroupedChannelRooms.count)
+                                }
                             }
                         }
 
@@ -193,6 +242,7 @@ struct RoomListView: View {
             hasStartedInitialLoad = true
             await environment.sessionReadiness.waitUntilPrepared(for: session)
             loadRooms(startUpdatesAfterLoad: true)
+            agentPendingCount = await environment.agentApprovals.pendingApprovalCount()
         }
         .onAppear {
             if hasStartedInitialLoad {
@@ -315,6 +365,9 @@ struct RoomListView: View {
                     try await environment.roomMembership.rejectInvite(roomID: roomID)
                 }
                 await MainActor.run {
+                    if accept {
+                        SynaraHaptics.trigger(.success)
+                    }
                     loadRooms()
                 }
             } catch {
@@ -335,7 +388,22 @@ struct RoomListView: View {
     }
 
     private func spaces(from rooms: [RoomSummary]) -> [SpaceSummary] {
-        Array(Set(rooms.flatMap(\.parentSpaces))).sorted { $0.name < $1.name }
+        Array(Set(rooms.flatMap(\.parentSpaces))).sorted {
+            $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+        }
+    }
+
+    private func spaceExpansionBinding(for spaceID: String) -> Binding<Bool> {
+        Binding(
+            get: { expandedSpaceIDs.contains(spaceID) },
+            set: { isExpanded in
+                if isExpanded {
+                    expandedSpaceIDs.insert(spaceID)
+                } else {
+                    expandedSpaceIDs.remove(spaceID)
+                }
+            }
+        )
     }
 
     private var accountMenuTitle: String {
@@ -363,7 +431,10 @@ struct RoomListView: View {
                 dismissSearch(clearQuery: false)
                 environment.router.route(to: .room(id: room.id, title: room.name))
             } label: {
-                RoomListRow(room: room)
+                RoomListRow(
+                    room: room,
+                    showsPendingApproval: room.isAgentRoom && agentPendingCount > 0
+                )
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .contentShape(Rectangle())
                     .accessibilityIdentifier("RoomRow-\(room.id)")
@@ -471,6 +542,7 @@ private enum RoomListFilter: String, CaseIterable, Identifiable {
     case all = "All"
     case unread = "Unread"
     case mentions = "Mentions"
+    case agents = "Agents"
 
     var id: String { rawValue }
 
@@ -482,6 +554,8 @@ private enum RoomListFilter: String, CaseIterable, Identifiable {
             return .unread
         case .mentions:
             return .mentions
+        case .agents:
+            return .agents
         }
     }
 }
@@ -772,13 +846,18 @@ private struct RoomManagementSheet: View {
 
 private struct RoomFilterStrip: View {
     @Binding var selectedFilter: RoomListFilter
+    @State private var hapticTrigger = 0
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: SynaraSpacing.small) {
                 ForEach(RoomListFilter.allCases) { filter in
                     SynaraFilterChip(title: filter.rawValue, isSelected: filter == selectedFilter) {
+                        guard filter != selectedFilter else {
+                            return
+                        }
                         selectedFilter = filter
+                        hapticTrigger += 1
                     }
                     .accessibilityIdentifier("RoomFilter-\(filter.rawValue)")
                 }
@@ -786,11 +865,13 @@ private struct RoomFilterStrip: View {
             .padding(.trailing, SynaraSpacing.large)
         }
         .accessibilityIdentifier("RoomFilterStrip")
+        .synaraHapticFeedback(.selection, trigger: hapticTrigger)
     }
 }
 
 private struct SpaceFilterStrip: View {
     let spaces: [SpaceSummary]
+    let unreadCountsBySpaceID: [String: Int]
     @Binding var selectedSpaceID: String?
 
     var body: some View {
@@ -801,7 +882,11 @@ private struct SpaceFilterStrip: View {
                 }
 
                 ForEach(spaces) { space in
-                    SynaraFilterChip(title: space.name, isSelected: selectedSpaceID == space.id) {
+                    SynaraFilterChip(
+                        title: space.name,
+                        badgeCount: unreadCountsBySpaceID[space.id],
+                        isSelected: selectedSpaceID == space.id
+                    ) {
                         selectedSpaceID = space.id
                     }
                     .accessibilityIdentifier("SpaceFilter-\(space.id)")
@@ -828,6 +913,52 @@ private struct RoomSectionHeader: View {
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(SynaraColor.secondaryText)
         }
+    }
+}
+
+private struct SpaceSelectedHeader: View {
+    let title: String
+    let roomCount: Int
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
+            Text(title)
+                .font(.title2.weight(.bold))
+                .foregroundStyle(SynaraColor.primaryText)
+            Text("\(roomCount) channel\(roomCount == 1 ? "" : "s")")
+                .font(.caption.weight(.medium))
+                .foregroundStyle(SynaraColor.secondaryText)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .textCase(nil)
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("SpaceSelectedHeader-\(title)")
+    }
+}
+
+private struct SpaceDisclosureLabel: View {
+    let title: String
+    let roomCount: Int
+    let unreadCount: Int
+
+    var body: some View {
+        HStack(spacing: SynaraSpacing.small) {
+            Text(title)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(SynaraColor.primaryText)
+
+            Spacer(minLength: SynaraSpacing.small)
+
+            if unreadCount > 0 {
+                SynaraUnreadBadge(count: unreadCount, highlighted: false)
+            }
+
+            Text("\(roomCount)")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(SynaraColor.secondaryText)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("SpaceDisclosureLabel-\(title)")
     }
 }
 
@@ -872,6 +1003,7 @@ private struct RoomSearchField: View {
 
 private struct RoomListRow: View {
     let room: RoomSummary
+    var showsPendingApproval = false
 
     var body: some View {
         HStack(spacing: SynaraSpacing.medium) {
@@ -895,6 +1027,11 @@ private struct RoomListRow: View {
                         SynaraStatusChip(title: "Mention", tint: SynaraColor.accent, systemImage: "at")
                     }
 
+                    if showsPendingApproval {
+                        SynaraStatusChip(title: "Pending", tint: SynaraColor.warning, systemImage: "clock.badge.exclamationmark")
+                            .accessibilityIdentifier("RoomPendingApproval-\(room.id)")
+                    }
+
                     Spacer(minLength: SynaraSpacing.small)
 
                     if room.relativeActivity.isEmpty == false {
@@ -906,7 +1043,7 @@ private struct RoomListRow: View {
                 }
 
                 Text(room.lastMessagePreview)
-                    .font(SynaraTypography.supporting)
+                    .font(SynaraTypography.roomPreview)
                     .foregroundStyle(SynaraColor.secondaryText)
                     .lineLimit(1)
             }
@@ -920,32 +1057,79 @@ private struct RoomListRow: View {
 private struct RoomAvatarTile: View {
     let room: RoomSummary
     let size: CGFloat
+    @Environment(\.appEnvironment) private var environment
+    @State private var avatarImage: UIImage?
 
     var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 11, style: .continuous)
-                .fill(room.avatarGradient)
-                .overlay(alignment: .topLeading) {
-                    RoundedRectangle(cornerRadius: 11, style: .continuous)
-                        .fill(Color.white.opacity(0.18))
-                        .blendMode(.softLight)
-                }
+        avatarContent
+            .frame(width: size, height: size)
+            .shadow(color: room.avatarShadow.opacity(0.22), radius: 5, x: 0, y: 2)
+            .task(id: avatarTaskID) {
+                await loadAvatar()
+            }
+            .accessibilityHidden(true)
+    }
 
-            if let systemImage = room.avatarSystemImage {
-                Image(systemName: systemImage)
-                    .font(.system(size: size * 0.43, weight: .bold))
-                    .foregroundStyle(.white)
-                    .symbolRenderingMode(.hierarchical)
-            } else {
-                Text(room.avatarInitials)
-                    .font(.system(size: size * 0.34, weight: .bold))
-                    .foregroundStyle(.white)
-                    .minimumScaleFactor(0.72)
+    @ViewBuilder
+    private var avatarContent: some View {
+        if let avatarImage {
+            Image(uiImage: avatarImage)
+                .resizable()
+                .scaledToFill()
+                .frame(width: size, height: size)
+                .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
+        } else {
+            ZStack {
+                RoundedRectangle(cornerRadius: 11, style: .continuous)
+                    .fill(room.avatarGradient)
+                    .overlay(alignment: .topLeading) {
+                        RoundedRectangle(cornerRadius: 11, style: .continuous)
+                            .fill(Color.white.opacity(0.18))
+                            .blendMode(.softLight)
+                    }
+
+                if let systemImage = room.avatarSystemImage {
+                    Image(systemName: systemImage)
+                        .font(.system(size: size * 0.43, weight: .bold))
+                        .foregroundStyle(.white)
+                        .symbolRenderingMode(.hierarchical)
+                } else {
+                    Text(room.avatarInitials)
+                        .font(.system(size: size * 0.34, weight: .bold))
+                        .foregroundStyle(.white)
+                        .minimumScaleFactor(0.72)
+                }
             }
         }
-        .frame(width: size, height: size)
-        .shadow(color: room.avatarShadow.opacity(0.22), radius: 5, x: 0, y: 2)
-        .accessibilityHidden(true)
+    }
+
+    @MainActor
+    private func loadAvatar() async {
+        avatarImage = nil
+
+        guard let avatarURL = room.avatarURL,
+              avatarURL.scheme == "mxc" else {
+            return
+        }
+
+        let resource = MediaResource(
+            id: avatarURL.absoluteString,
+            filename: "\(room.id)-avatar",
+            authenticatedURL: avatarURL,
+            requiresAuthentication: true
+        )
+        if let data = await environment.mediaLoader.loadThumbnailData(
+            for: resource,
+            width: UInt64(max(1, Int(size * 3))),
+            height: UInt64(max(1, Int(size * 3)))
+        ),
+           let image = UIImage(data: data) {
+            avatarImage = image
+        }
+    }
+
+    private var avatarTaskID: String {
+        "\(room.id)|\(room.avatarURL?.absoluteString ?? "profile")"
     }
 }
 
@@ -1044,11 +1228,6 @@ private extension RoomSummary {
         name.localizedCaseInsensitiveContains("security")
             || name.localizedCaseInsensitiveContains("secure")
             || name.localizedCaseInsensitiveContains("e2e")
-    }
-
-    var isAgentRoom: Bool {
-        name.localizedCaseInsensitiveContains("agent")
-            || name.localizedCaseInsensitiveContains("workflow")
     }
 
     var roomIconName: String {
