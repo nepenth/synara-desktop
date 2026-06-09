@@ -30,6 +30,26 @@ final class MediaServiceTests: XCTestCase {
         XCTAssertFalse(resource.safeDescription.contains("matrix.org"))
     }
 
+    func testMediaResourceDetectsImageFromFilename() throws {
+        let resource = MediaResource(
+            id: "$image",
+            filename: "photo.jpg",
+            authenticatedURL: try XCTUnwrap(URL(string: "mxc://matrix.org/photo")),
+            requiresAuthentication: true
+        )
+
+        XCTAssertTrue(resource.isImageMedia)
+        XCTAssertEqual(resource.resolvedMimeType, "image/jpeg")
+    }
+
+    func testMediaFormattingOmitsMissingFileSize() {
+        XCTAssertNil(MediaFormatting.formattedFileSize(nil))
+    }
+
+    func testMediaFormattingFormatsFileSize() {
+        XCTAssertEqual(MediaFormatting.formattedFileSize(1_024), "1 KB")
+    }
+
     func testMediaAttachmentSupportResolvesMimeTypeFromExtension() throws {
         let url = try XCTUnwrap(URL(fileURLWithPath: "/tmp/report.pdf"))
         XCTAssertEqual(MediaAttachmentSupport.mimeType(for: url), "application/pdf")

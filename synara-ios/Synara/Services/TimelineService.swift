@@ -40,6 +40,11 @@ enum TimelineSearchFilter {
     }
 }
 
+enum TimelineDeliveryStatus: Equatable {
+    case sending
+    case failed
+}
+
 struct TimelineItem: Identifiable, Equatable {
     enum Kind: Equatable {
         case text(String)
@@ -61,6 +66,7 @@ struct TimelineItem: Identifiable, Equatable {
     let isEdited: Bool
     let reactions: [String: Int]
     let isEncrypted: Bool
+    let deliveryStatus: TimelineDeliveryStatus?
 
     init(
         id: String,
@@ -72,7 +78,8 @@ struct TimelineItem: Identifiable, Equatable {
         replyToEventID: String?,
         isEdited: Bool,
         reactions: [String: Int],
-        isEncrypted: Bool = false
+        isEncrypted: Bool = false,
+        deliveryStatus: TimelineDeliveryStatus? = nil
     ) {
         self.id = id
         self.eventID = eventID
@@ -84,6 +91,109 @@ struct TimelineItem: Identifiable, Equatable {
         self.isEdited = isEdited
         self.reactions = reactions
         self.isEncrypted = isEncrypted
+        self.deliveryStatus = deliveryStatus
+    }
+
+    var isLocalPending: Bool {
+        deliveryStatus != nil
+    }
+
+    func withDeliveryStatus(_ deliveryStatus: TimelineDeliveryStatus?) -> TimelineItem {
+        TimelineItem(
+            id: id,
+            eventID: eventID,
+            senderID: senderID,
+            senderAvatarURL: senderAvatarURL,
+            timestamp: timestamp,
+            kind: kind,
+            replyToEventID: replyToEventID,
+            isEdited: isEdited,
+            reactions: reactions,
+            isEncrypted: isEncrypted,
+            deliveryStatus: deliveryStatus
+        )
+    }
+
+    static func pendingMessage(
+        localID: String = "$pending-\(UUID().uuidString)",
+        body: String,
+        senderID: String,
+        senderAvatarURL: URL? = nil,
+        replyToEventID: String?,
+        deliveryStatus: TimelineDeliveryStatus = .sending,
+        timestamp: Date = Date()
+    ) -> TimelineItem {
+        TimelineItem(
+            id: localID,
+            eventID: localID,
+            senderID: senderID,
+            senderAvatarURL: senderAvatarURL,
+            timestamp: timestamp,
+            kind: .text(body),
+            replyToEventID: replyToEventID,
+            isEdited: false,
+            reactions: [:],
+            deliveryStatus: deliveryStatus
+        )
+    }
+}
+
+enum TimelinePendingReconciler {
+    static func messageBody(for item: TimelineItem) -> String? {
+        switch item.kind {
+        case .text(let body):
+            return body
+        case .formattedText(let body, _):
+            return body
+        default:
+            return nil
+        }
+    }
+
+    static func pendingItems(from items: [TimelineItem]) -> [TimelineItem] {
+        items.filter(\.isLocalPending)
+    }
+
+    static func matchesPending(_ pending: TimelineItem, serverItem: TimelineItem) -> Bool {
+        guard pending.deliveryStatus == .sending else {
+            return false
+        }
+        guard pending.senderID == serverItem.senderID else {
+            return false
+        }
+        guard pending.replyToEventID == serverItem.replyToEventID else {
+            return false
+        }
+        guard let pendingBody = messageBody(for: pending),
+              let serverBody = messageBody(for: serverItem),
+              pendingBody == serverBody else {
+            return false
+        }
+        return abs(serverItem.timestamp.timeIntervalSince(pending.timestamp)) < 5 * 60
+    }
+
+    static func merge(
+        streamItems: [TimelineItem],
+        localItems: [TimelineItem],
+        currentUserID: String
+    ) -> [TimelineItem] {
+        let pendingItems = pendingItems(from: localItems)
+        guard pendingItems.isEmpty == false else {
+            return streamItems
+        }
+
+        var unmatchedPending = pendingItems
+        for serverItem in streamItems where serverItem.senderID == currentUserID {
+            if let index = unmatchedPending.firstIndex(where: { matchesPending($0, serverItem: serverItem) }) {
+                unmatchedPending.remove(at: index)
+            }
+        }
+
+        guard unmatchedPending.isEmpty == false else {
+            return streamItems
+        }
+
+        return (streamItems + unmatchedPending).sorted { $0.timestamp < $1.timestamp }
     }
 }
 
@@ -356,6 +466,8 @@ struct RawTimelineEvent: Equatable {
     let replyToEventID: String?
     let isEdited: Bool
     let mediaURL: URL?
+    let mediaMimeType: String?
+    let mediaByteSize: UInt64?
     let isEncrypted: Bool
     let agentCard: SynaraAgentCard?
     let reactions: [String: Int]
@@ -371,6 +483,8 @@ struct RawTimelineEvent: Equatable {
         replyToEventID: String?,
         isEdited: Bool,
         mediaURL: URL?,
+        mediaMimeType: String? = nil,
+        mediaByteSize: UInt64? = nil,
         isEncrypted: Bool = false,
         agentCard: SynaraAgentCard? = nil,
         reactions: [String: Int] = [:]
@@ -385,6 +499,8 @@ struct RawTimelineEvent: Equatable {
         self.replyToEventID = replyToEventID
         self.isEdited = isEdited
         self.mediaURL = mediaURL
+        self.mediaMimeType = mediaMimeType
+        self.mediaByteSize = mediaByteSize
         self.isEncrypted = isEncrypted
         self.agentCard = agentCard
         self.reactions = reactions
@@ -464,7 +580,9 @@ enum TimelineMapper {
                     filename: event.body ?? "Attachment",
                     authenticatedURL: event.mediaURL,
                     requiresAuthentication: true,
-                    isEncrypted: event.isEncrypted
+                    isEncrypted: event.isEncrypted,
+                    mimeType: event.mediaMimeType,
+                    byteSize: event.mediaByteSize
                 )
             )
         default:

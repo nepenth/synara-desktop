@@ -25,7 +25,12 @@ private final class SynaraUnableToDecryptRecorder: UnableToDecryptDelegate, @unc
 }
 
 enum MatrixRustSDKTimelineMessageMapper {
-    static func mapMessageLike(_ content: MsgLikeContent, eventTypeRaw: String?) -> TimelineItem.Kind {
+    static func mapMessageLike(
+        _ content: MsgLikeContent,
+        eventID: String,
+        eventTypeRaw: String?,
+        isEncrypted: Bool
+    ) -> TimelineItem.Kind {
         switch content.kind {
         case .message(let message):
             if let agentCard = SynaraAgentCardPayloadParser.parse(body: message.body) {
@@ -40,7 +45,25 @@ enum MatrixRustSDKTimelineMessageMapper {
                 return mapTextMessage(body: content.body, formatted: content.formatted)
             case .other(_, let body):
                 return .text(body)
-            case .image, .audio, .video, .file, .gallery, .location:
+            case .image(let content):
+                return mapMediaPlaceholder(
+                    eventID: eventID,
+                    filename: content.filename,
+                    source: content.source,
+                    mimeType: content.info?.mimetype,
+                    byteSize: content.info?.size,
+                    isEncrypted: isEncrypted
+                )
+            case .file(let content):
+                return mapMediaPlaceholder(
+                    eventID: eventID,
+                    filename: content.filename,
+                    source: content.source,
+                    mimeType: content.info?.mimetype,
+                    byteSize: content.info?.size,
+                    isEncrypted: isEncrypted
+                )
+            case .audio, .video, .gallery, .location:
                 return .text(message.body)
             }
         case .unableToDecrypt:
@@ -64,6 +87,27 @@ enum MatrixRustSDKTimelineMessageMapper {
         }
 
         return .formattedText(body: body, html: formatted.body)
+    }
+
+    private static func mapMediaPlaceholder(
+        eventID: String,
+        filename: String,
+        source: MediaSource,
+        mimeType: String?,
+        byteSize: UInt64?,
+        isEncrypted: Bool
+    ) -> TimelineItem.Kind {
+        .mediaPlaceholder(
+            MediaResource(
+                id: eventID,
+                filename: filename,
+                authenticatedURL: URL(string: source.url()),
+                requiresAuthentication: true,
+                isEncrypted: isEncrypted,
+                mimeType: mimeType,
+                byteSize: byteSize
+            )
+        )
     }
 }
 
@@ -724,6 +768,12 @@ actor MatrixRustSDKClientStore {
         let client = try await ensureClient(for: session)
         let source = try MediaSource.fromUrl(url: mxcURL.absoluteString)
         return try await client.getMediaThumbnail(mediaSource: source, width: width, height: height)
+    }
+
+    func mediaContentData(mxcURL: URL, session: AuthenticatedSession) async throws -> Data {
+        let client = try await ensureClient(for: session)
+        let source = try MediaSource.fromUrl(url: mxcURL.absoluteString)
+        return try await client.getMediaContent(mediaSource: source)
     }
 
     func uploadMedia(data: Data, mimeType: String, session: AuthenticatedSession) async throws -> String {
@@ -2261,7 +2311,12 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
 
         switch item.content {
         case .msgLike(let content):
-            kind = MatrixRustSDKTimelineMessageMapper.mapMessageLike(content, eventTypeRaw: item.eventTypeRaw)
+            kind = MatrixRustSDKTimelineMessageMapper.mapMessageLike(
+                content,
+                eventID: eventID,
+                eventTypeRaw: item.eventTypeRaw,
+                isEncrypted: item.eventTypeRaw == "m.room.encrypted"
+            )
         case .state:
             return nil
         case .failedToParseMessageLike(let eventType, _):
