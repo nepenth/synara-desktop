@@ -303,23 +303,27 @@ actor MatrixRustSDKClientStore {
             return syncService
         }
 
+        let service = try await prepareSyncService(session: session)
+        await service.start()
+        return service
+    }
+
+    private func prepareSyncService(session: AuthenticatedSession) async throws -> SyncService {
         await acquireClientMutationLock()
         defer { releaseClientMutationLock() }
 
         if let syncService, activeSession == session, client != nil {
-            syncStatus = .syncing
             return syncService
         }
 
         await detachSyncServices()
 
         let client = try await prepareClient(for: session, allowsStoreRepair: true)
-        let service = try await client.syncService().finish()
-        syncService = service
-        roomListService = service.roomListService()
+        let builtService = try await client.syncService().finish()
+        syncService = builtService
+        roomListService = builtService.roomListService()
         syncStatus = .syncing
-        await service.start()
-        return service
+        return builtService
     }
 
     func streamingRoomListService(session: AuthenticatedSession) async throws -> RoomListService {
@@ -819,12 +823,14 @@ actor MatrixRustSDKClientStore {
     }
 
     private func acquireClientMutationLock() async {
-        while isMutatingClient {
-            await withCheckedContinuation { continuation in
-                clientMutationWaiters.append(continuation)
-            }
+        if isMutatingClient == false {
+            isMutatingClient = true
+            return
         }
-        isMutatingClient = true
+
+        await withCheckedContinuation { continuation in
+            clientMutationWaiters.append(continuation)
+        }
     }
 
     private func releaseClientMutationLock() {
