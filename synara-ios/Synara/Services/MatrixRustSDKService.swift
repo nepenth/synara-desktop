@@ -77,6 +77,11 @@ actor MatrixRustSDKClientStore {
     private var roomListService: RoomListService?
     private var syncStatus: MatrixSyncStatus = .stopped
     private let unableToDecryptRecorder = SynaraUnableToDecryptRecorder()
+    /// Serializes client creation, restoration, and teardown. Actors allow reentrancy
+    /// across `await`, so concurrent ensure/reset calls could otherwise free the Rust
+    /// client while another task still reads rooms from it.
+    private var isMutatingClient = false
+    private var clientMutationWaiters: [CheckedContinuation<Void, Never>] = []
 
     var syncStatusDescription: String {
         syncStatus.description
@@ -94,6 +99,18 @@ actor MatrixRustSDKClientStore {
 
         guard request.password.isEmpty == false else {
             throw LoginError.missingPassword
+        }
+
+        await acquireClientMutationLock()
+        defer { releaseClientMutationLock() }
+
+        if activeSession != nil {
+            await detachSyncServices()
+            client = nil
+            activeSession = nil
+            syncService = nil
+            roomListService = nil
+            unableToDecryptRecorder.reset()
         }
 
         let storeID = Self.storeID(for: username, homeserverURL: request.homeserverURL)
@@ -160,6 +177,9 @@ actor MatrixRustSDKClientStore {
     }
 
     func resetLocalState(for session: AuthenticatedSession? = nil) async {
+        await acquireClientMutationLock()
+        defer { releaseClientMutationLock() }
+
         if let syncService {
             await syncService.stop()
         }
@@ -177,6 +197,9 @@ actor MatrixRustSDKClientStore {
     }
 
     func resetPersistedStore(for session: AuthenticatedSession) async {
+        await acquireClientMutationLock()
+        defer { releaseClientMutationLock() }
+
         if activeSession == session {
             await detachSyncServices()
             client = nil
@@ -275,15 +298,22 @@ actor MatrixRustSDKClientStore {
 
     @discardableResult
     func startSyncService(session: AuthenticatedSession) async throws -> SyncService {
-        _ = try await ensureClient(for: session)
-        if let syncService, activeSession == session {
+        if let syncService, activeSession == session, client != nil {
+            syncStatus = .syncing
+            return syncService
+        }
+
+        await acquireClientMutationLock()
+        defer { releaseClientMutationLock() }
+
+        if let syncService, activeSession == session, client != nil {
             syncStatus = .syncing
             return syncService
         }
 
         await detachSyncServices()
 
-        let client = try await ensureClient(for: session)
+        let client = try await prepareClient(for: session, allowsStoreRepair: true)
         let service = try await client.syncService().finish()
         syncService = service
         roomListService = service.roomListService()
@@ -778,37 +808,73 @@ actor MatrixRustSDKClientStore {
             return client
         }
 
-        if let activeSession, activeSession != session {
-            await detachSyncServices()
-            client = nil
-            self.activeSession = nil
-            unableToDecryptRecorder.reset()
+        await acquireClientMutationLock()
+        defer { releaseClientMutationLock() }
+
+        if let client, activeSession == session {
+            return client
         }
 
-        let storeID = session.sdkStoreID ?? Self.storeID(for: session.userID, homeserverURL: session.homeserverURL)
-        let client = try await buildClient(homeserverURL: session.homeserverURL, storeID: storeID)
+        return try await prepareClient(for: session, allowsStoreRepair: allowsStoreRepair)
+    }
 
-        do {
-            try await installUnableToDecryptDelegate(on: client)
-            try await client.restoreSession(session: session.sdkSession)
-            await client.encryption().waitForE2eeInitializationTasks()
-            await ensurePlatformDeviceDisplayName(session: session)
+    private func acquireClientMutationLock() async {
+        while isMutatingClient {
+            await withCheckedContinuation { continuation in
+                clientMutationWaiters.append(continuation)
+            }
+        }
+        isMutatingClient = true
+    }
 
-            self.client = client
-            self.activeSession = session
-            return client
-        } catch {
-            if allowsStoreRepair {
-                if activeSession == session {
+    private func releaseClientMutationLock() {
+        if let next = clientMutationWaiters.first {
+            clientMutationWaiters.removeFirst()
+            next.resume()
+        } else {
+            isMutatingClient = false
+        }
+    }
+
+    private func prepareClient(
+        for session: AuthenticatedSession,
+        allowsStoreRepair: Bool
+    ) async throws -> Client {
+        var allowRepair = allowsStoreRepair
+
+        while true {
+            if let activeSession, activeSession != session {
+                await detachSyncServices()
+                client = nil
+                self.activeSession = nil
+                unableToDecryptRecorder.reset()
+            }
+
+            let storeID = session.sdkStoreID ?? Self.storeID(for: session.userID, homeserverURL: session.homeserverURL)
+            let newClient = try await buildClient(homeserverURL: session.homeserverURL, storeID: storeID)
+
+            do {
+                try await installUnableToDecryptDelegate(on: newClient)
+                try await newClient.restoreSession(session: session.sdkSession)
+                await newClient.encryption().waitForE2eeInitializationTasks()
+                await ensurePlatformDeviceDisplayName(session: session)
+
+                self.client = newClient
+                self.activeSession = session
+                return newClient
+            } catch {
+                if allowRepair {
+                    await detachSyncServices()
                     self.client = nil
                     activeSession = nil
                     syncService = nil
                     roomListService = nil
+                    try? Self.deletePersistedStore(for: session)
+                    allowRepair = false
+                    continue
                 }
-                try? Self.deletePersistedStore(for: session)
-                return try await ensureClient(for: session, allowsStoreRepair: false)
+                throw error
             }
-            throw error
         }
     }
 
