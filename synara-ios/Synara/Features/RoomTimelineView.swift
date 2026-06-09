@@ -500,8 +500,8 @@ struct RoomTimelineView: View {
         }
     }
 
-    private func sendMessage() {
-        let body = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+    private func sendMessage(body rawBody: String) {
+        let body = rawBody.trimmingCharacters(in: .whitespacesAndNewlines)
         guard body.isEmpty == false else {
             sendError = MessageSendError.emptyMessage.localizedDescription
             return
@@ -1028,8 +1028,8 @@ struct ThreadTimelineView: View {
         items
     }
 
-    private func sendThreadReply() {
-        let body = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+    private func sendThreadReply(body rawBody: String) {
+        let body = rawBody.trimmingCharacters(in: .whitespacesAndNewlines)
         guard body.isEmpty == false else {
             sendError = MessageSendError.emptyMessage.localizedDescription
             return
@@ -2477,13 +2477,15 @@ private struct ComposerView: View {
     let uploadState: MediaUploadState
     let sendError: String?
     let onCancelRelation: () -> Void
-    let onSend: () -> Void
+    let onSend: (String) -> Void
     let onUpload: () -> Void
     @Binding var selectedPhoto: PhotosPickerItem?
     @State private var isAttachmentSheetPresented = false
     @State private var unavailableAttachmentMessage: String?
     @State private var isFormattingBarVisible = false
     @State private var composerSelection = ComposerTextSelection.empty
+    @State private var formattingRevision = 0
+    @State private var composerFlushToken = 0
     @FocusState private var isComposerFocused: Bool
 
     var body: some View {
@@ -2630,6 +2632,31 @@ private struct ComposerView: View {
 
     @ViewBuilder
     private var composerField: some View {
+        #if canImport(UIKit)
+        if ProcessInfo.processInfo.environment["SYNARA_UI_TESTS"] == "1" {
+            uiTestComposerField
+        } else {
+            ComposerTextView(
+                text: $text,
+                selection: $composerSelection,
+                placeholder: placeholder,
+                formattingRevision: formattingRevision,
+                flushToken: composerFlushToken,
+                isFocused: $isComposerFocused
+            )
+            .frame(minHeight: 36, maxHeight: 112)
+        }
+        #else
+        TextEditor(text: $text)
+            .font(SynaraTypography.body)
+            .focused($isComposerFocused)
+            .frame(minHeight: 36, maxHeight: 112)
+            .scrollContentBackground(.hidden)
+            .accessibilityIdentifier("ComposerTextField")
+        #endif
+    }
+
+    private var uiTestComposerField: some View {
         ZStack(alignment: .topLeading) {
             if text.isEmpty {
                 Text(placeholder)
@@ -2652,16 +2679,28 @@ private struct ComposerView: View {
     }
 
     private func applyFormatting(_ format: ComposerMarkdownFormat) {
-        let end = (text as NSString).length
-        let selection = composerSelection.length > 0 ? composerSelection : ComposerTextSelection(location: end, length: 0)
-        let result = ComposerMarkdown.apply(format, to: text, selection: selection)
+        let result = ComposerMarkdown.apply(format, to: text, selection: composerSelection)
         text = result.text
         composerSelection = result.selection
+        formattingRevision += 1
         isComposerFocused = true
     }
 
     private func submitMessage() {
-        onSend()
+        isComposerFocused = false
+        composerFlushToken += 1
+        let messageBody: String
+        #if canImport(UIKit)
+        if ProcessInfo.processInfo.environment["SYNARA_UI_TESTS"] == "1" {
+            messageBody = text
+        } else {
+            messageBody = ComposerTextInputRegistry.currentText() ?? text
+        }
+        #else
+        messageBody = text
+        #endif
+        text = messageBody
+        onSend(messageBody)
     }
 }
 
