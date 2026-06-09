@@ -1270,6 +1270,36 @@ struct MatrixRustSDKAuthService: AuthServicing {
     }
 }
 
+enum RoomUnreadPresentation {
+    static func make(
+        membership: RoomSummary.Membership,
+        numUnreadMessages: UInt64 = 0,
+        numUnreadNotifications: UInt64 = 0,
+        notificationCount: UInt64 = 0,
+        numUnreadMentions: UInt64 = 0,
+        highlightCount: UInt64 = 0,
+        isMarkedUnread: Bool = false
+    ) -> (unreadCount: Int, hasHighlight: Bool) {
+        if membership == .invited {
+            return (1, true)
+        }
+
+        let messages = Int(numUnreadMessages)
+        let notifications = Int(numUnreadNotifications)
+        let notifyTotal = Int(notificationCount)
+        let mentions = Int(numUnreadMentions)
+        let highlights = Int(highlightCount)
+
+        var unreadCount = max(messages, notifications, notifyTotal)
+        if isMarkedUnread, unreadCount == 0 {
+            unreadCount = 1
+        }
+
+        let hasHighlight = mentions > 0 || highlights > 0
+        return (unreadCount, hasHighlight)
+    }
+}
+
 private enum MatrixRoomListStateBuilder {
     static func build(from client: Client?, fallbackCache: [RoomSummary]) async -> RoomListState {
         guard let client else {
@@ -1466,6 +1496,15 @@ final class MatrixRustSDKRoomListService: RoomListServicing {
         }
 
         let roomInfo = try? await room.roomInfo()
+        let unread = RoomUnreadPresentation.make(
+            membership: membership,
+            numUnreadMessages: roomInfo?.numUnreadMessages ?? 0,
+            numUnreadNotifications: roomInfo?.numUnreadNotifications ?? 0,
+            notificationCount: roomInfo?.notificationCount ?? 0,
+            numUnreadMentions: roomInfo?.numUnreadMentions ?? 0,
+            highlightCount: roomInfo?.highlightCount ?? 0,
+            isMarkedUnread: roomInfo?.isMarkedUnread ?? false
+        )
         let latestPreview = await latestPreview(for: room)
         let name = room.displayName() ?? room.canonicalAlias() ?? room.id()
         let preview = latestPreview.text ?? defaultPreview(for: room, membership: membership)
@@ -1476,8 +1515,8 @@ final class MatrixRustSDKRoomListService: RoomListServicing {
             id: room.id(),
             name: name,
             lastMessagePreview: preview,
-            unreadCount: membership == .invited ? 1 : Int(roomInfo?.numUnreadNotifications ?? 0),
-            hasHighlight: membership == .invited || (roomInfo?.numUnreadMentions ?? 0) > 0 || (roomInfo?.highlightCount ?? 0) > 0,
+            unreadCount: unread.unreadCount,
+            hasHighlight: unread.hasHighlight,
             kind: (await room.isDirect()) ? .directMessage : .room,
             membership: membership,
             lastActivityAt: latestPreview.timestamp ?? .distantPast,
