@@ -78,7 +78,7 @@ struct AppEnvironment {
             matrix: matrix,
             push: push,
             logger: logger,
-            settings: InMemorySettingsStore(),
+            settings: UserDefaultsSettingsStore(),
             router: router,
             homeserverDiscovery: PlaceholderHomeserverDiscoveryService(),
             auth: MatrixRustSDKAuthService(clientStore: matrixSDKClientStore),
@@ -131,14 +131,15 @@ struct AppEnvironment {
         mediaUploader: MediaUploading = MockMediaUploadService(),
         crypto: CryptoStatusServicing = MockCryptoStatusService(),
         roomManagement: RoomManagementServicing = MockRoomManagementService(),
-        sessionReadiness: SignedInSessionReadinessServicing = ImmediateSignedInSessionReadiness()
+        sessionReadiness: SignedInSessionReadinessServicing = ImmediateSignedInSessionReadiness(),
+        settings: SettingsStoring = InMemorySettingsStore()
     ) -> AppEnvironment {
         AppEnvironment(
             session: session,
             matrix: matrix,
             push: push,
             logger: MockLoggingService(),
-            settings: InMemorySettingsStore(),
+            settings: settings,
             router: router,
             homeserverDiscovery: homeserverDiscovery,
             auth: auth,

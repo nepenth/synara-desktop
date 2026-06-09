@@ -15,6 +15,27 @@ final class SessionCoordinatorTests: XCTestCase {
         XCTAssertEqual(push.configureCallCount, 1)
     }
 
+    func testStartSignedInSessionPromptsForNotificationsOnFirstSignIn() async throws {
+        let settings = InMemorySettingsStore()
+        let permission = MockNotificationPermissionService(
+            status: .notDetermined,
+            statusAfterRequest: .authorized
+        )
+        let push = MockPushService(isRegistrationAvailable: true)
+        let environment = AppEnvironment.mock(
+            push: push,
+            notificationPermission: permission,
+            settings: settings
+        )
+        let session = try makeSession()
+
+        await SessionCoordinator.startSignedInSession(environment: environment, session: session)
+
+        XCTAssertEqual(permission.requestCallCount, 1)
+        XCTAssertTrue(settings.bool(for: NotificationPermissionSettingsKey.hasPromptedOnSignIn))
+        XCTAssertEqual(push.beginRegistrationCallCount, 1)
+    }
+
     private func makeSession() throws -> AuthenticatedSession {
         AuthenticatedSession(
             userID: "@alice:matrix.org",

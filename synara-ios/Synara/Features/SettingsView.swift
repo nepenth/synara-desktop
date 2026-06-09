@@ -233,7 +233,7 @@ struct SettingsView: View {
                 notificationStatus = status
                 isRequestingNotifications = false
                 environment.logger.info("Notification permission status refreshed", category: .push)
-                if status == .authorized || status == .provisional || status == .ephemeral {
+                if status.allowsPushRegistration {
                     environment.push.beginRegistration()
                 }
             }
