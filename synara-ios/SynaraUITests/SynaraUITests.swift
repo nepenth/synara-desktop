@@ -220,12 +220,15 @@ final class SynaraUITests: XCTestCase {
     func testComposerSendsMockMessage() {
         let app = launchRoomApp()
 
-        XCTAssertTrue(app.textFields["ComposerTextField"].waitForExistence(timeout: 5))
-        app.textFields["ComposerTextField"].tap()
-        app.textFields["ComposerTextField"].typeText("hello from ui")
+        let composer = composerField(in: app)
+        XCTAssertTrue(composer.waitForExistence(timeout: 5))
+        composer.tap()
+        composer.typeText("hello from ui")
+        XCTAssertTrue(app.buttons["ComposerSendButton"].waitForExistence(timeout: 5))
         tap(app.buttons["ComposerSendButton"])
 
-        XCTAssertTrue(app.staticTexts["hello from ui"].waitForExistence(timeout: 5))
+        let sentMessage = app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "hello from ui")).firstMatch
+        XCTAssertTrue(sentMessage.waitForExistence(timeout: 5))
     }
 
     func testMediaUploadAddsAttachmentPlaceholder() {
@@ -259,7 +262,7 @@ final class SynaraUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["ThreadTimelineTitle"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.scrollViews["ThreadTimelineList"].exists)
 
-        let composer = app.textFields["ComposerTextField"]
+        let composer = composerField(in: app)
         XCTAssertTrue(composer.waitForExistence(timeout: 5))
         composer.tap()
         composer.typeText("replying in thread")
@@ -446,7 +449,7 @@ final class SynaraUITests: XCTestCase {
             dismissPasswordSavePromptIfPresent(app: app)
         }
 
-        let composer = app.textFields["ComposerTextField"]
+        let composer = composerField(in: app)
         XCTAssertTrue(composer.waitForExistence(timeout: 60))
 
         let liveClient = try MatrixLiveTestClient.login(
@@ -486,7 +489,7 @@ final class SynaraUITests: XCTestCase {
             dismissPasswordSavePromptIfPresent(app: app)
         }
 
-        let composer = app.textFields["ComposerTextField"]
+        let composer = composerField(in: app)
         if composer.waitForExistence(timeout: 5) == false {
             XCTAssertTrue(app.tabBars.buttons["Rooms"].waitForExistence(timeout: 60))
         }
@@ -581,7 +584,7 @@ final class SynaraUITests: XCTestCase {
             dismissPasswordSavePromptIfPresent(app: app)
         }
 
-        let composer = app.textFields["ComposerTextField"]
+        let composer = composerField(in: app)
         XCTAssertTrue(composer.waitForExistence(timeout: 60))
         XCTAssertTrue(
             waitForAnyStaticText(
@@ -604,7 +607,7 @@ final class SynaraUITests: XCTestCase {
         app.launchEnvironment["SYNARA_AUTO_OPEN_ROOM_ID"] = roomID
         launch(app)
 
-        XCTAssertTrue(app.textFields["ComposerTextField"].waitForExistence(timeout: 60))
+        XCTAssertTrue(composerField(in: app).waitForExistence(timeout: 60))
         XCTAssertTrue(waitForTimelineElement(app.staticTexts[message], app: app, timeout: 90))
         XCTAssertTrue(
             waitForAnyStaticText(
@@ -647,7 +650,7 @@ final class SynaraUITests: XCTestCase {
         app.textFields["CreateRoomTopicField"].typeText("Disposable live room-management smoke")
         tap(app.buttons["RoomManagementSubmitButton"], timeout: 10)
 
-        XCTAssertTrue(app.textFields["ComposerTextField"].waitForExistence(timeout: 90))
+        XCTAssertTrue(composerField(in: app).waitForExistence(timeout: 90))
         XCTAssertTrue(app.buttons["RoomDetailsButton"].waitForExistence(timeout: 10))
         tap(app.buttons["RoomDetailsButton"], timeout: 10)
 
@@ -708,11 +711,11 @@ final class SynaraUITests: XCTestCase {
             tap(app.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", roomName)).firstMatch, timeout: 15)
         }
 
-        XCTAssertTrue(app.textFields["ComposerTextField"].waitForExistence(timeout: 60))
+        XCTAssertTrue(composerField(in: app).waitForExistence(timeout: 60))
         XCTAssertTrue(app.scrollViews["TimelineList"].waitForExistence(timeout: 60))
         try saveScreenshot(app: app, directory: screenshotDirectory, name: "02-live-room-timeline")
 
-        let composer = app.textFields["ComposerTextField"]
+        let composer = composerField(in: app)
         composer.tap()
         composer.typeText("Visual validation draft")
         try saveScreenshot(app: app, directory: screenshotDirectory, name: "03-live-composer-typing")
@@ -738,7 +741,7 @@ final class SynaraUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["ThreadTimelineTitle"].waitForExistence(timeout: 5))
         try saveScreenshot(app: app, directory: screenshotDirectory, name: "05-mock-thread")
 
-        let composer = app.textFields["ComposerTextField"]
+        let composer = composerField(in: app)
         XCTAssertTrue(composer.waitForExistence(timeout: 5))
         composer.tap()
         composer.typeText("Thread validation draft")
@@ -777,10 +780,10 @@ final class SynaraUITests: XCTestCase {
 
         tap(app.buttons["RoomRow-!project:matrix.org"], timeout: 5)
         XCTAssertTrue(app.scrollViews["TimelineList"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.textFields["ComposerTextField"].waitForExistence(timeout: 5))
+        XCTAssertTrue(composerField(in: app).waitForExistence(timeout: 5))
         try saveScreenshot(app: app, directory: screenshotDirectory, name: "02-mock-room-timeline")
 
-        let composer = app.textFields["ComposerTextField"]
+        let composer = composerField(in: app)
         composer.tap()
         composer.typeText("Sounds good. I'll prep some notes before our sync.")
         try saveScreenshot(app: app, directory: screenshotDirectory, name: "03-mock-composer-typing")
@@ -1005,6 +1008,14 @@ final class SynaraUITests: XCTestCase {
         let alias = liveEnvironmentValue("SYNARA_LIVE_E2EE_ROOM_ALIAS", in: environment)
             ?? "#test-e2e-room:matrix.whyland.com"
         return try liveClient.resolveRoomAlias(alias)
+    }
+
+    private func composerField(in app: XCUIApplication) -> XCUIElement {
+        let textView = app.textViews["ComposerTextField"]
+        if textView.exists {
+            return textView
+        }
+        return app.textFields["ComposerTextField"]
     }
 
     private func tap(_ element: XCUIElement, timeout: TimeInterval = 5) {
