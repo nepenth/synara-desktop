@@ -33,9 +33,6 @@ struct RoomListView: View {
                 let filteredRooms = filteredRooms(from: rooms)
                 let channelRooms = filteredRooms.filter { $0.kind == .room }
                 let directRooms = filteredRooms.filter { $0.kind == .directMessage }
-                let favoriteRooms = favoriteRooms(from: channelRooms)
-                let favoriteRoomIDs = Set(favoriteRooms.map(\.id))
-                let otherRooms = channelRooms.filter { favoriteRoomIDs.contains($0.id) == false }
                 let spaces = spaces(from: rooms)
                 VStack(spacing: 0) {
                     VStack(spacing: SynaraSpacing.medium) {
@@ -71,23 +68,13 @@ struct RoomListView: View {
                             .listRowInsets(EdgeInsets())
                         }
 
-                        if favoriteRooms.isEmpty == false {
+                        if channelRooms.isEmpty == false {
                             Section {
-                                ForEach(favoriteRooms) { room in
+                                ForEach(channelRooms) { room in
                                     roomRow(room)
                                 }
                             } header: {
-                                RoomSectionHeader(title: "Favorites", count: favoriteRooms.count)
-                            }
-                        }
-
-                        if otherRooms.isEmpty == false {
-                            Section {
-                                ForEach(otherRooms) { room in
-                                    roomRow(room)
-                                }
-                            } header: {
-                                RoomSectionHeader(title: "Other", count: otherRooms.count)
+                                RoomSectionHeader(title: "Channels", count: channelRooms.count)
                             }
                         }
 
@@ -265,42 +252,16 @@ struct RoomListView: View {
     }
 
     private func filteredRooms(from rooms: [RoomSummary]) -> [RoomSummary] {
-        let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
-        let invitedRooms = rooms.filter { $0.membership == .invited }
-        var scopedRooms = rooms.filter { $0.membership != .invited }
-
-        if let selectedSpaceID {
-            scopedRooms = scopedRooms.filter { room in
-                room.parentSpaces.contains(where: { $0.id == selectedSpaceID })
-            }
-        }
-
-        switch selectedFilter {
-        case .all:
-            break
-        case .unread:
-            scopedRooms = scopedRooms.filter { $0.unreadCount > 0 }
-        case .mentions:
-            scopedRooms = scopedRooms.filter(\.hasHighlight)
-        case .favorites:
-            scopedRooms = scopedRooms.filter(\.isFavoriteLike)
-        }
-
-        var filtered = RoomListSearchFilter.mergeInvitedRooms(invitedRooms, into: scopedRooms)
-
-        guard query.isEmpty == false else {
-            return filtered
-        }
-
-        return RoomListSearchFilter.applySearchQuery(query, to: filtered, invitedRooms: invitedRooms)
+        RoomListScopeFilter.filteredRooms(
+            from: rooms,
+            filter: selectedFilter.scopeFilter,
+            selectedSpaceID: selectedSpaceID,
+            searchQuery: searchQuery
+        )
     }
 
     private func spaces(from rooms: [RoomSummary]) -> [SpaceSummary] {
         Array(Set(rooms.flatMap(\.parentSpaces))).sorted { $0.name < $1.name }
-    }
-
-    private func favoriteRooms(from rooms: [RoomSummary]) -> [RoomSummary] {
-        rooms.filter(\.isFavoriteLike)
     }
 
     private var accountMenuTitle: String {
@@ -370,9 +331,19 @@ private enum RoomListFilter: String, CaseIterable, Identifiable {
     case all = "All"
     case unread = "Unread"
     case mentions = "Mentions"
-    case favorites = "Favorites"
 
     var id: String { rawValue }
+
+    var scopeFilter: RoomListScopeFilter.Kind {
+        switch self {
+        case .all:
+            return .all
+        case .unread:
+            return .unread
+        case .mentions:
+            return .mentions
+        }
+    }
 }
 
 private struct RoomListHeader: View {
@@ -385,13 +356,7 @@ private struct RoomListHeader: View {
         HStack(spacing: SynaraSpacing.medium) {
             Button(action: onAccount) {
                 HStack(spacing: SynaraSpacing.small) {
-                    ZStack(alignment: .bottomTrailing) {
-                        SynaraBrandMark(size: 38)
-                        Circle()
-                            .fill(SynaraColor.success)
-                            .frame(width: 10, height: 10)
-                            .overlay(Circle().stroke(SynaraColor.surface, lineWidth: 2))
-                    }
+                    SynaraBrandMark(size: 38)
 
                     HStack(spacing: SynaraSpacing.xSmall) {
                         Text(title)
@@ -944,14 +909,6 @@ private extension RoomSummary {
     var isAgentRoom: Bool {
         name.localizedCaseInsensitiveContains("agent")
             || name.localizedCaseInsensitiveContains("workflow")
-    }
-
-    var isFavoriteLike: Bool {
-        hasHighlight
-            || isAgentRoom
-            || isSecureRoom
-            || name.localizedCaseInsensitiveContains("product")
-            || name.localizedCaseInsensitiveContains("design")
     }
 
     var roomIconName: String {
