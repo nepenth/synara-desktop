@@ -62,6 +62,9 @@ protocol MatrixClientServicing: AnyObject {
     func start(session: AuthenticatedSession) async
     func warmSync(session: AuthenticatedSession) async
     func stop() async
+    func pauseForBackground() async
+    func resumeFromForeground(session: AuthenticatedSession) async
+    func syncForBackgroundNotification(session: AuthenticatedSession) async -> Bool
     func resetLocalState(for session: AuthenticatedSession?) async
 }
 
@@ -104,6 +107,15 @@ enum NotificationPermissionStatus: Equatable {
             return "Ephemeral"
         case .unavailable:
             return "Unavailable"
+        }
+    }
+
+    var allowsPushRegistration: Bool {
+        switch self {
+        case .authorized, .provisional, .ephemeral:
+            return true
+        case .notDetermined, .denied, .unavailable:
+            return false
         }
     }
 
@@ -508,6 +520,20 @@ final class PlaceholderMatrixClientService: MatrixClientServicing {
         syncStatus = .stopped
     }
 
+    func pauseForBackground() async {
+        syncStatus = .stopped
+    }
+
+    func resumeFromForeground(session: AuthenticatedSession) async {
+        _ = session
+        syncStatus = .syncing
+    }
+
+    func syncForBackgroundNotification(session: AuthenticatedSession) async -> Bool {
+        _ = session
+        return false
+    }
+
     func resetLocalState(for session: AuthenticatedSession?) async {
         _ = session
         syncStatus = .stopped
@@ -803,6 +829,22 @@ struct UserNotificationPermissionService: NotificationPermissionServicing {
     }
 }
 
+final class UserDefaultsSettingsStore: SettingsStoring {
+    private let defaults: UserDefaults
+
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+    }
+
+    func bool(for key: String) -> Bool {
+        defaults.bool(forKey: key)
+    }
+
+    func set(_ value: Bool, for key: String) {
+        defaults.set(value, forKey: key)
+    }
+}
+
 final class InMemorySettingsStore: SettingsStoring {
     private var values: [String: Bool] = [:]
 
@@ -842,6 +884,29 @@ final class MockMatrixClientService: MatrixClientServicing {
     func stop() async {
         stopCallCount += 1
         syncStatus = .stopped
+    }
+
+    private(set) var pauseCallCount = 0
+    private(set) var resumeCallCount = 0
+    private(set) var resumedSessions: [AuthenticatedSession] = []
+    private(set) var backgroundSyncCallCount = 0
+    var backgroundSyncResult = false
+
+    func pauseForBackground() async {
+        pauseCallCount += 1
+        syncStatus = .stopped
+    }
+
+    func resumeFromForeground(session: AuthenticatedSession) async {
+        resumeCallCount += 1
+        resumedSessions.append(session)
+        syncStatus = .syncing
+    }
+
+    func syncForBackgroundNotification(session: AuthenticatedSession) async -> Bool {
+        backgroundSyncCallCount += 1
+        _ = session
+        return backgroundSyncResult
     }
 
     private(set) var resetSessions: [AuthenticatedSession?] = []
@@ -936,10 +1001,15 @@ final class MockPushService: PushServicing {
 
 final class MockNotificationPermissionService: NotificationPermissionServicing {
     var status: NotificationPermissionStatus
+    var statusAfterRequest: NotificationPermissionStatus?
     private(set) var requestCallCount = 0
 
-    init(status: NotificationPermissionStatus = .notDetermined) {
+    init(
+        status: NotificationPermissionStatus = .notDetermined,
+        statusAfterRequest: NotificationPermissionStatus? = nil
+    ) {
         self.status = status
+        self.statusAfterRequest = statusAfterRequest
     }
 
     func currentStatus() async -> NotificationPermissionStatus {
@@ -948,6 +1018,9 @@ final class MockNotificationPermissionService: NotificationPermissionServicing {
 
     func requestAuthorization() async -> NotificationPermissionStatus {
         requestCallCount += 1
+        if let statusAfterRequest {
+            status = statusAfterRequest
+        }
         return status
     }
 }

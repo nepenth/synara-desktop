@@ -23,6 +23,23 @@ struct SynaraApp: App {
         }
     }
 
+    private func handleScenePhaseChange(_ phase: ScenePhase) async {
+        switch phase {
+        case .active:
+            PerformanceTrace.event("SceneActive")
+            if case .signedIn(let session) = environment.session.currentState {
+                await environment.matrix.resumeFromForeground(session: session)
+            }
+        case .background:
+            PerformanceTrace.event("SceneBackground")
+            await environment.matrix.pauseForBackground()
+        case .inactive:
+            PerformanceTrace.event("SceneInactive")
+        @unknown default:
+            PerformanceTrace.event("SceneUnknown")
+        }
+    }
+
     var body: some Scene {
         WindowGroup {
             RootShellView(environment: environment)
@@ -31,15 +48,8 @@ struct SynaraApp: App {
                     appDelegate.bind(to: environment)
                 }
                 .onChange(of: scenePhase) { phase in
-                    switch phase {
-                    case .active:
-                        PerformanceTrace.event("SceneActive")
-                    case .background:
-                        PerformanceTrace.event("SceneBackground")
-                    case .inactive:
-                        PerformanceTrace.event("SceneInactive")
-                    @unknown default:
-                        PerformanceTrace.event("SceneUnknown")
+                    Task {
+                        await handleScenePhaseChange(phase)
                     }
                 }
         }
@@ -48,6 +58,8 @@ struct SynaraApp: App {
 
 final class SynaraAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
     private var push: PushServicing?
+    private var matrix: MatrixClientServicing?
+    private var session: AppSessionStore?
     private var router: AppRouter?
     private var logger: LoggingServicing?
     private var pendingRoute: AppRoute?
@@ -55,6 +67,8 @@ final class SynaraAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificati
 
     func bind(to environment: AppEnvironment) {
         push = environment.push
+        matrix = environment.matrix
+        session = environment.session
         router = environment.router
         logger = environment.logger
         UNUserNotificationCenter.current().delegate = self
@@ -104,6 +118,17 @@ final class SynaraAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificati
         logger?.error("APNs registration failed: \(error.localizedDescription)", category: .push)
     }
 
+    func application(
+        _ application: UIApplication,
+        didReceiveRemoteNotification userInfo: [AnyHashable: Any],
+        fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void
+    ) {
+        Task {
+            let result = await handleBackgroundRemoteNotification(userInfo)
+            completionHandler(result)
+        }
+    }
+
     func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         didReceive response: UNNotificationResponse
@@ -135,6 +160,27 @@ final class SynaraAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificati
         }
 
         return [.banner, .sound, .badge, .list]
+    }
+
+    private func handleBackgroundRemoteNotification(_ userInfo: [AnyHashable: Any]) async -> UIBackgroundFetchResult {
+        await MainActor.run {
+            push?.applyIncomingBadge(from: userInfo)
+        }
+
+        if let badge = push?.parseBadgeCount(from: userInfo) {
+            logger?.info("Background push updated badge to \(badge)", category: .push)
+        }
+
+        guard let matrix, let session, case .signedIn(let authenticatedSession) = session.currentState else {
+            return push?.parseBadgeCount(from: userInfo) == nil ? .noData : .newData
+        }
+
+        if await matrix.syncForBackgroundNotification(session: authenticatedSession) {
+            logger?.info("Background push sync completed", category: .push)
+            return .newData
+        }
+
+        return push?.parseBadgeCount(from: userInfo) == nil ? .noData : .newData
     }
 
     private func resolveNotificationRoute(from payload: [AnyHashable: Any]) async {
