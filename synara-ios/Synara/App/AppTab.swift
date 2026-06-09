@@ -9,7 +9,15 @@ private struct NotificationsTabView: View {
         Group {
             switch state {
             case .idle, .loading:
-                SynaraLoadingState(title: "Loading unread rooms")
+                List {
+                    Section {
+                        SynaraSkeletonList(rowCount: 8, showsAvatar: false)
+                            .listRowSeparator(.hidden)
+                            .listRowInsets(EdgeInsets(top: 3, leading: SynaraSpacing.large, bottom: 3, trailing: SynaraSpacing.large))
+                    }
+                }
+                .listStyle(.plain)
+                .accessibilityIdentifier("NotificationsLoading")
             case .empty:
                 SynaraEmptyState(
                     title: "You're Caught Up",
@@ -55,6 +63,9 @@ private struct NotificationsTabView: View {
                 }
             }
         }
+        .refreshable {
+            await reloadInbox()
+        }
         .navigationTitle("Notifications")
         .accessibilityIdentifier("NotificationsScreen")
         .task {
@@ -70,10 +81,14 @@ private struct NotificationsTabView: View {
     private func loadInbox() {
         state = .loading
         Task {
-            let nextState = await environment.roomList.loadRooms()
-            await MainActor.run {
-                state = nextState
-            }
+            await reloadInbox()
+        }
+    }
+
+    private func reloadInbox() async {
+        let nextState = await environment.roomList.loadRooms()
+        await MainActor.run {
+            state = nextState
         }
     }
 

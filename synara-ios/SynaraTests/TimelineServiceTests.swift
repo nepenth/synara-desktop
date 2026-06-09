@@ -75,7 +75,12 @@ final class TimelineServiceTests: XCTestCase {
             threadSummary: nil
         )
 
-        let kind = MatrixRustSDKTimelineMessageMapper.mapMessageLike(content, eventTypeRaw: "m.room.message")
+        let kind = MatrixRustSDKTimelineMessageMapper.mapMessageLike(
+            content,
+            eventID: "$formatted-text",
+            eventTypeRaw: "m.room.message",
+            isEncrypted: false
+        )
 
         if case .formattedText(let body, let html) = kind {
             XCTAssertEqual(body, "- **Ship it**\n- Review fallback")
@@ -293,6 +298,88 @@ final class TimelineServiceTests: XCTestCase {
 
         XCTAssertEqual(items.count, 10_000)
         XCTAssertEqual(Set(items.map(\.id)).count, 10_000)
+    }
+
+    func testPendingMessageFactoryMarksLocalDeliveryState() {
+        let pending = TimelineItem.pendingMessage(
+            localID: "$pending-test",
+            body: "Hello world",
+            senderID: "@alice:matrix.org",
+            replyToEventID: "$parent:matrix.org"
+        )
+
+        XCTAssertTrue(pending.isLocalPending)
+        XCTAssertEqual(pending.deliveryStatus, .sending)
+        XCTAssertEqual(pending.kind, .text("Hello world"))
+        XCTAssertEqual(pending.replyToEventID, "$parent:matrix.org")
+    }
+
+    func testPendingReconcilerDropsMatchedLocalEchoes() {
+        let pending = TimelineItem.pendingMessage(
+            localID: "$pending-test",
+            body: "Ship it",
+            senderID: "@alice:matrix.org",
+            replyToEventID: nil,
+            timestamp: TimelineFixtures.baseDate.addingTimeInterval(30)
+        )
+        let confirmed = TimelineItem(
+            id: "$server:matrix.org",
+            eventID: "$server:matrix.org",
+            senderID: "@alice:matrix.org",
+            timestamp: TimelineFixtures.baseDate.addingTimeInterval(31),
+            kind: .text("Ship it"),
+            replyToEventID: nil,
+            isEdited: false,
+            reactions: [:]
+        )
+
+        let merged = TimelinePendingReconciler.merge(
+            streamItems: [confirmed],
+            localItems: [pending],
+            currentUserID: "@alice:matrix.org"
+        )
+
+        XCTAssertEqual(merged.count, 1)
+        XCTAssertEqual(merged.first?.eventID, "$server:matrix.org")
+        XCTAssertNil(merged.first?.deliveryStatus)
+    }
+
+    func testPendingReconcilerKeepsFailedAndUnmatchedPendingItems() {
+        let failed = TimelineItem.pendingMessage(
+            localID: "$pending-failed",
+            body: "Retry me",
+            senderID: "@alice:matrix.org",
+            replyToEventID: nil,
+            deliveryStatus: .failed,
+            timestamp: TimelineFixtures.baseDate.addingTimeInterval(40)
+        )
+        let stillSending = TimelineItem.pendingMessage(
+            localID: "$pending-open",
+            body: "Still sending",
+            senderID: "@alice:matrix.org",
+            replyToEventID: nil,
+            timestamp: TimelineFixtures.baseDate.addingTimeInterval(50)
+        )
+        let server = TimelineItem(
+            id: "$other:matrix.org",
+            eventID: "$other:matrix.org",
+            senderID: "@bob:matrix.org",
+            timestamp: TimelineFixtures.baseDate,
+            kind: .text("Earlier"),
+            replyToEventID: nil,
+            isEdited: false,
+            reactions: [:]
+        )
+
+        let merged = TimelinePendingReconciler.merge(
+            streamItems: [server],
+            localItems: [failed, stillSending],
+            currentUserID: "@alice:matrix.org"
+        )
+
+        XCTAssertEqual(merged.count, 3)
+        XCTAssertTrue(merged.contains(where: { $0.id == failed.id && $0.deliveryStatus == .failed }))
+        XCTAssertTrue(merged.contains(where: { $0.id == stillSending.id && $0.deliveryStatus == .sending }))
     }
 
     func testTimelineReplyCounterCountsRepliesByRootEvent() {

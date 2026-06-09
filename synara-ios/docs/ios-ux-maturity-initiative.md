@@ -8,19 +8,19 @@ Branch: `feature/ios-ux-maturity`
 2. Never block the whole screen on navigation — skeleton/shimmer + incremental content
 3. Never make the user wait to see their own message — optimistic send
 
-## Phase 1 — Stop feeling beta
+## Phase 1 — Stop feeling beta (complete)
 
-- [ ] Remove fake presence dots (room list header, timeline avatars)
-- [ ] Remove heuristic favorites; replace with user-starred or remove Favorites filter until backed by data
-- [ ] Wire timeline header search; remove non-functional phone icon
-- [ ] Attachment sheet: keep Photo/Video, File, Camera; remove unavailable stubs; clean grid UI
-- [ ] Inline media thumbnails + real MediaViewer via mediaLoader
-- [ ] Reply/edit composer banners show quoted snippet, not raw eventID
-- [ ] Optimistic send with sending/sent/failed bubble states + tap-to-retry
-- [ ] Skeleton loading for room list, timeline, notifications inbox
-- [ ] Scroll-triggered older-message pagination
-- [ ] Mark-read when latest messages visible ~1s
-- [ ] Pull-to-refresh on Rooms + Notifications
+- [x] Remove fake presence dots (room list header, timeline avatars)
+- [x] Remove heuristic favorites; replace with user-starred or remove Favorites filter until backed by data
+- [x] Wire timeline header search; remove non-functional phone icon
+- [x] Attachment sheet: keep Photo/Video, File, Camera; remove unavailable stubs; clean grid UI
+- [x] Inline media thumbnails + real MediaViewer via mediaLoader
+- [x] Reply/edit composer banners show quoted snippet, not raw eventID
+- [x] Optimistic send with sending/sent/failed bubble states + tap-to-retry
+- [x] Skeleton loading for room list, timeline, notifications inbox
+- [x] Scroll-triggered older-message pagination
+- [x] Mark-read when latest messages visible ~1s
+- [x] Pull-to-refresh on Rooms + Notifications
 
 ## Phase 2 — Feel like iOS chat
 
