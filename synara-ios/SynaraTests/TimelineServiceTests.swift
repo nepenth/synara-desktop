@@ -463,6 +463,75 @@ final class TimelineServiceTests: XCTestCase {
         XCTAssertEqual(sorted.map(\.id), ["b", "c", "a"])
     }
 
+    func testLaterDueUrgencyClassifiesOverdueSoonAndFuture() {
+        let now = 1_760_000_000_000
+
+        XCTAssertEqual(
+            LaterDueUrgency.classify(dueTs: now - 1, isCompleted: false, now: now),
+            .overdue
+        )
+        XCTAssertEqual(
+            LaterDueUrgency.classify(dueTs: now + 3_600_000, isCompleted: false, now: now),
+            .dueSoon
+        )
+        XCTAssertEqual(
+            LaterDueUrgency.classify(dueTs: now + (25 * 60 * 60 * 1_000), isCompleted: false, now: now),
+            .future
+        )
+        XCTAssertEqual(
+            LaterDueUrgency.classify(dueTs: now + 3_600_000, isCompleted: true, now: now),
+            .none
+        )
+    }
+
+    func testLaterContentCompletingItemSetsCompletedAt() throws {
+        let content = try SynaraLaterContent(
+            version: 1,
+            items: [
+                "saved": .init(
+                    id: "saved",
+                    kind: .saved,
+                    roomId: "!room:example.org",
+                    eventId: "$one",
+                    createdAt: 1
+                )
+            ]
+        )
+
+        let completed = try content.completingItem(id: "saved", at: 9_999)
+
+        XCTAssertEqual(completed.items["saved"]?.completedAt, 9_999)
+    }
+
+    func testMockLaterServiceCompletesActiveItem() async {
+        let service = MockLaterService(
+            items: [
+                SynaraLaterListItem(
+                    id: "saved",
+                    roomID: "!room:example.org",
+                    eventID: "$one",
+                    kind: .saved,
+                    dueTs: nil,
+                    completedAt: nil,
+                    createdAt: 1,
+                    isCompleted: false
+                )
+            ],
+            now: { 9_999 }
+        )
+
+        let result = await service.completeItem(id: "saved")
+        let loaded = await service.loadItems()
+
+        XCTAssertEqual(result, .success(true))
+        guard case .success((let items, _)) = loaded else {
+            XCTFail("Expected loaded items")
+            return
+        }
+        XCTAssertEqual(items.first?.completedAt, 9_999)
+        XCTAssertTrue(items.first?.isCompleted == true)
+    }
+
     func testTimelineSearchFilterMatchesMessageBody() {
         let items = [
             TimelineItem(

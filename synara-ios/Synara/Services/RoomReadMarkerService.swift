@@ -3,6 +3,7 @@ import Foundation
 protocol RoomReadMarkerServicing {
     func fullyReadEventID(roomID: String) async -> String?
     func markFullyRead(roomID: String, eventID: String) async -> Bool
+    func markRoomAsRead(roomID: String) async -> Bool
 }
 
 protocol RoomReadMarkerHTTPClient {
@@ -85,6 +86,26 @@ final class MatrixRoomReadMarkerService: RoomReadMarkerServicing {
         }
     }
 
+    func markRoomAsRead(roomID: String) async -> Bool {
+        guard case .signedIn(let session) = sessionStore.currentState else {
+            return false
+        }
+
+        guard let clientStore else {
+            return false
+        }
+
+        do {
+            guard let eventID = try await clientStore.latestEventID(roomID: roomID, session: session) else {
+                return false
+            }
+
+            return await markFullyRead(roomID: roomID, eventID: eventID)
+        } catch {
+            return false
+        }
+    }
+
     private func fullyReadURL(session: AuthenticatedSession, roomID: String) -> URL {
         var url = session.homeserverURL
         url.appendPathComponent("_matrix")
@@ -114,6 +135,10 @@ final class MockRoomReadMarkerService: RoomReadMarkerServicing {
     func markFullyRead(roomID: String, eventID: String) async -> Bool {
         self.eventID = eventID
         return true
+    }
+
+    func markRoomAsRead(roomID: String) async -> Bool {
+        await markFullyRead(roomID: roomID, eventID: "$latest:\(roomID)")
     }
 }
 

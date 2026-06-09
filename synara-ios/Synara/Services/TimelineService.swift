@@ -199,6 +199,7 @@ enum TimelinePendingReconciler {
 
 protocol LaterServicing {
     func loadItems() async -> Result<([SynaraLaterListItem], LaterInboxError?), Never>
+    func completeItem(id: String) async -> Result<Bool, LaterInboxError>
 }
 
 enum LaterInboxError: Error, LocalizedError, Equatable {
@@ -313,17 +314,20 @@ final class MatrixRustSDKLaterService: LaterServicing {
     private let sessionStore: AppSessionStore
     private let clientStore: MatrixRustSDKClientStore
     private let jsonDecoder: JSONDecoder
+    private let jsonEncoder: JSONEncoder
     private let now: () -> Int
 
     init(
         sessionStore: AppSessionStore,
         clientStore: MatrixRustSDKClientStore,
         jsonDecoder: JSONDecoder = JSONDecoder(),
+        jsonEncoder: JSONEncoder = JSONEncoder(),
         now: @escaping () -> Int = { Int(Date().timeIntervalSince1970 * 1000) }
     ) {
         self.sessionStore = sessionStore
         self.clientStore = clientStore
         self.jsonDecoder = jsonDecoder
+        self.jsonEncoder = jsonEncoder
         self.now = now
     }
 
@@ -333,18 +337,74 @@ final class MatrixRustSDKLaterService: LaterServicing {
         }
 
         do {
-            guard let rawContent = try await clientStore.accountData(eventType: "in.synara.later", session: session) else {
+            guard let items = try await loadContent(session: session) else {
                 return .success(([], nil))
-            }
-
-            guard let items = SynaraLaterAccountDataCodec.decodeContentString(rawContent, jsonDecoder: jsonDecoder) else {
-                return .success(([], .malformedPayload))
             }
 
             return .success((SynaraLaterListItem.sorted(items: items, now: now()), nil))
         } catch {
             return .success(([], .networkFailure))
         }
+    }
+
+    func completeItem(id: String) async -> Result<Bool, LaterInboxError> {
+        guard case .signedIn(let session) = sessionStore.currentState else {
+            return .failure(.noSession)
+        }
+
+        do {
+            guard var content = try await loadContent(session: session) else {
+                return .success(false)
+            }
+
+            content = try content.completingItem(id: id, at: now())
+            let encoded = try jsonEncoder.encode(content)
+            guard let payload = String(data: encoded, encoding: .utf8) else {
+                return .failure(.malformedPayload)
+            }
+
+            try await clientStore.setAccountData(eventType: "in.synara.later", content: payload, session: session)
+            return .success(true)
+        } catch let error as LaterInboxError {
+            return .failure(error)
+        } catch {
+            return .failure(.networkFailure)
+        }
+    }
+
+    private func loadContent(session: AuthenticatedSession) async throws -> SynaraLaterContent? {
+        guard let rawContent = try await clientStore.accountData(eventType: "in.synara.later", session: session) else {
+            return nil
+        }
+
+        guard let items = SynaraLaterAccountDataCodec.decodeContentString(rawContent, jsonDecoder: jsonDecoder) else {
+            throw LaterInboxError.malformedPayload
+        }
+
+        return items
+    }
+}
+
+extension SynaraLaterContent {
+    func completingItem(id: String, at completedAt: Int) throws -> SynaraLaterContent {
+        guard let item = items[id] else {
+            return self
+        }
+
+        let completedItem = try SynaraLaterItem(
+            id: item.id,
+            kind: item.kind,
+            roomId: item.roomId,
+            eventId: item.eventId,
+            createdAt: item.createdAt,
+            dueTs: item.dueTs,
+            remindedAt: item.remindedAt,
+            completedAt: completedAt
+        )
+
+        var updatedItems = items
+        updatedItems[id] = completedItem
+        return try SynaraLaterContent(version: version, items: updatedItems)
     }
 }
 
@@ -401,15 +461,40 @@ extension SynaraLaterListItem {
     )
 }
 
-struct MockLaterService: LaterServicing {
-    private let items: [SynaraLaterListItem]
+final class MockLaterService: LaterServicing {
+    private var items: [SynaraLaterListItem]
+    private let now: () -> Int
 
-    init(items: [SynaraLaterListItem] = []) {
+    init(items: [SynaraLaterListItem] = [], now: @escaping () -> Int = { Int(Date().timeIntervalSince1970 * 1000) }) {
         self.items = items
+        self.now = now
     }
 
     func loadItems() async -> Result<([SynaraLaterListItem], LaterInboxError?), Never> {
         .success((items, nil))
+    }
+
+    func completeItem(id: String) async -> Result<Bool, LaterInboxError> {
+        guard let index = items.firstIndex(where: { $0.id == id }) else {
+            return .success(false)
+        }
+
+        let item = items[index]
+        guard item.isCompleted == false else {
+            return .success(false)
+        }
+
+        items[index] = SynaraLaterListItem(
+            id: item.id,
+            roomID: item.roomID,
+            eventID: item.eventID,
+            kind: item.kind,
+            dueTs: item.dueTs,
+            completedAt: now(),
+            createdAt: item.createdAt,
+            isCompleted: true
+        )
+        return .success(true)
     }
 }
 

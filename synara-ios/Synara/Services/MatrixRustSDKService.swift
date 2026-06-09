@@ -867,6 +867,15 @@ actor MatrixRustSDKClientStore {
         )
     }
 
+    func latestEventID(roomID: String, session: AuthenticatedSession) async throws -> String? {
+        guard let room = try await room(roomID: roomID, session: session) else {
+            return nil
+        }
+
+        let timeline = try await room.timeline()
+        return await timeline.latestEventId()
+    }
+
     func markRoomReadUpTo(roomID: String, eventID: String, session: AuthenticatedSession) async throws {
         guard let room = try await room(roomID: roomID, session: session) else {
             throw MessageSendError.failed
@@ -1646,6 +1655,10 @@ final class MatrixRustSDKRoomListService: RoomListServicing {
             setCachedRooms(rooms)
         }
         return state
+    }
+
+    func roomDisplayName(roomID: String) -> String? {
+        cachedRoomsSnapshot().first { $0.id == roomID }?.name
     }
 
     func clearCache() {
