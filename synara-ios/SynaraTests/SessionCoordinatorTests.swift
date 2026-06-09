@@ -10,7 +10,7 @@ final class SessionCoordinatorTests: XCTestCase {
 
         await SessionCoordinator.startSignedInSession(environment: environment, session: session)
 
-        XCTAssertEqual(matrix.startedSessions, [session, session])
+        XCTAssertEqual(matrix.startedSessions, [session])
         XCTAssertEqual(matrix.syncStatus, .syncing)
         XCTAssertEqual(push.configureCallCount, 1)
     }
