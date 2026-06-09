@@ -65,6 +65,7 @@ struct RoomTimelineView: View {
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
         .toolbar(.hidden, for: .tabBar)
+        .synaraInteractiveSwipeBack()
         .preferredColorScheme(isAgentRoom ? .dark : nil)
         .sheet(item: $viewerResource) { resource in
             MediaViewer(resource: resource)
@@ -922,6 +923,7 @@ struct ThreadTimelineView: View {
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
         .toolbar(.hidden, for: .tabBar)
+        .synaraInteractiveSwipeBack()
         .task(id: roomID + rootEventID) {
             await loadThread()
             startThreadUpdates()
