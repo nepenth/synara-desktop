@@ -26,6 +26,7 @@ struct RoomTimelineView: View {
     @State private var agentActionMessage: String?
     @State private var cryptoStatus: RoomCryptoStatus = .unknown
     @State private var cryptoActionMessage: String?
+    @State private var isCryptoBannerDismissed = false
     @State private var isRoomDetailsPresented = false
     @State private var isTimelineSearchPresented = false
     @State private var timelineSearchQuery = ""
@@ -53,7 +54,6 @@ struct RoomTimelineView: View {
             TimelineHeader(
                 title: roomTitle ?? "Room",
                 subtitle: timelineSubtitle,
-                cryptoStatus: cryptoStatus,
                 onSearch: { isTimelineSearchPresented = true },
                 onDetails: { isRoomDetailsPresented = true },
                 onBack: { dismiss() }
@@ -181,11 +181,12 @@ struct RoomTimelineView: View {
                                 .accessibilityIdentifier("TimelinePaginationIndicator")
                         }
 
-                        if shouldShowRecoveryBanner(items: items) {
+                        if shouldShowCryptoBanner(items: items) {
                             CryptoRecoveryBanner(
                                 status: cryptoStatus,
                                 onRetry: retryDecryption,
-                                onReviewSecurity: { environment.router.route(to: .settings) }
+                                onReviewSecurity: { environment.router.route(to: .settings) },
+                                onDismiss: { isCryptoBannerDismissed = true }
                             )
                         }
 
@@ -380,7 +381,7 @@ struct RoomTimelineView: View {
     }
 
     private var isAgentRoom: Bool {
-        (roomTitle ?? "").localizedCaseInsensitiveContains("agent")
+        RoomSummary.isAgentRoomName(roomTitle ?? "")
     }
 
     private func isGroupedWithPrevious(index: Int, items: [TimelineItem]) -> Bool {
@@ -413,6 +414,7 @@ struct RoomTimelineView: View {
         agentActionMessage = nil
         cryptoStatus = .unknown
         cryptoActionMessage = nil
+        isCryptoBannerDismissed = false
         isRoomDetailsPresented = false
         lastRenderedTimelineCount = 0
         showJumpToLatest = false
@@ -577,8 +579,16 @@ struct RoomTimelineView: View {
         }
     }
 
-    private func shouldShowRecoveryBanner(items: [TimelineItem]) -> Bool {
-        cryptoStatus.needsRecoveryAttention || items.contains { item in
+    private func shouldShowCryptoBanner(items: [TimelineItem]) -> Bool {
+        guard isCryptoBannerDismissed == false else {
+            return false
+        }
+
+        if cryptoStatus.needsCryptoActionBanner {
+            return true
+        }
+
+        return items.contains { item in
             if case .encryptedPlaceholder = item.kind {
                 return true
             }
@@ -668,6 +678,9 @@ struct RoomTimelineView: View {
                         reconcilePendingSend(localID: pendingLocalID, confirmed: item)
                     }
                     sendError = nil
+                    if isEditing == false {
+                        SynaraHaptics.trigger(.lightImpact)
+                    }
                 }
             } catch {
                 await MainActor.run {
@@ -676,6 +689,7 @@ struct RoomTimelineView: View {
                     } else if let pendingLocalID {
                         markPendingSendFailed(localID: pendingLocalID)
                     }
+                    SynaraHaptics.trigger(.warning)
                 }
             }
         }
@@ -1150,7 +1164,6 @@ private struct JumpToLatestButton: View {
 private struct TimelineHeader: View {
     let title: String
     let subtitle: String
-    let cryptoStatus: RoomCryptoStatus
     let onSearch: () -> Void
     let onDetails: () -> Void
     let onBack: () -> Void
@@ -1182,10 +1195,6 @@ private struct TimelineHeader: View {
             Spacer()
 
             HStack(spacing: SynaraSpacing.small) {
-                if cryptoStatus.encryption != .unknown && cryptoStatus.encryption != .notEncrypted {
-                    CryptoStatusPill(status: cryptoStatus)
-                }
-
                 Button(action: onSearch) {
                     Image(systemName: "magnifyingglass")
                         .font(.system(size: 17, weight: .medium))
@@ -2420,57 +2429,30 @@ private struct SettingsInfo: View {
     }
 }
 
-private struct CryptoStatusPill: View {
-    let status: RoomCryptoStatus
-
-    var body: some View {
-        Label(title, systemImage: systemImage)
-            .font(.caption.weight(.semibold))
-            .lineLimit(1)
-            .padding(.horizontal, SynaraSpacing.small)
-            .padding(.vertical, SynaraSpacing.xSmall)
-            .background(tint.opacity(0.14))
-            .foregroundStyle(tint)
-            .clipShape(Capsule())
-            .accessibilityIdentifier("RoomCryptoStatusPill")
-            .accessibilityLabel(title)
-    }
-
-    private var title: String {
-        if status.encryption == .unavailable {
-            return "Encryption Unknown"
-        }
-        if status.unableToDecryptCount > 0 || status.recovery == .disabled || status.recovery == .incomplete {
-            return "Recovery Needed"
-        }
-        if status.backup == .unavailable {
-            return "No Key Backup"
-        }
-        if status.verification == .unverified {
-            return "Unverified"
-        }
-        return "Encrypted"
-    }
-
-    private var systemImage: String {
-        title == "Encrypted" ? "lock.fill" : "exclamationmark.lock.fill"
-    }
-
-    private var tint: Color {
-        title == "Encrypted" ? SynaraColor.success : SynaraColor.warning
-    }
-}
-
 private struct CryptoRecoveryBanner: View {
     let status: RoomCryptoStatus
     let onRetry: () -> Void
     let onReviewSecurity: () -> Void
+    let onDismiss: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: SynaraSpacing.small) {
-            Label("Encrypted history needs attention", systemImage: "lock.trianglebadge.exclamationmark")
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(SynaraColor.primaryText)
+            HStack(alignment: .top, spacing: SynaraSpacing.small) {
+                Label(title, systemImage: "lock.trianglebadge.exclamationmark")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(SynaraColor.primaryText)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                Button(action: onDismiss) {
+                    Image(systemName: "xmark")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(SynaraColor.secondaryText)
+                        .frame(width: 24, height: 24)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Dismiss encryption banner")
+                .accessibilityIdentifier("EncryptedRecoveryDismissButton")
+            }
 
             Text(detail)
                 .font(SynaraTypography.supporting)
@@ -2491,14 +2473,21 @@ private struct CryptoRecoveryBanner: View {
         .accessibilityIdentifier("EncryptedRecoveryBanner")
     }
 
+    private var title: String {
+        "Encrypted history needs attention"
+    }
+
     private var detail: String {
-        if status.recovery == .disabled || status.backup == .unavailable {
-            return "This room is encrypted, but key backup or recovery is not available on this device. Retry sync, or verify/recover this device from Settings."
+        if status.verification == .unverified {
+            return "This device is not verified. Verify another session from Settings before trusting encrypted history."
         }
         if status.recovery == .incomplete {
             return "This room is encrypted, but recovery is incomplete. Verify another session or recover keys before acting on undecrypted messages."
         }
-        return "Some encrypted events are missing keys. Retry decryption after sync, or review device verification and recovery in Settings."
+        if status.unableToDecryptCount > 0 {
+            return "Some encrypted events are missing keys. Retry decryption after sync, or review device verification and recovery in Settings."
+        }
+        return "Encrypted messages in this room need attention. Review device verification and recovery in Settings."
     }
 }
 
@@ -2534,11 +2523,11 @@ private struct TimelineRow: View {
                             .foregroundStyle(SynaraColor.primaryText)
                             .lineLimit(1)
                         Text(item.timestamp.timelineTime)
-                            .font(.caption)
+                            .font(SynaraTypography.messageMeta)
                             .foregroundStyle(SynaraColor.secondaryText)
                         if item.isEdited {
                             Text("edited")
-                                .font(.caption)
+                                .font(SynaraTypography.messageMeta)
                                 .foregroundStyle(SynaraColor.tertiaryText)
                         }
                     }
@@ -2550,7 +2539,6 @@ private struct TimelineRow: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.top, isGroupedWithPrevious ? 0 : 7)
-        .opacity(item.deliveryStatus == .sending ? 0.72 : 1)
         .contextMenu {
             if availability.canReply {
                 Button("Reply", action: onReply)
@@ -2578,41 +2566,10 @@ private struct TimelineRow: View {
                 row
             }
             .buttonStyle(.plain)
-            .overlay(alignment: .bottomTrailing) {
-                deliveryStatusIndicator
-                    .padding(.trailing, SynaraSpacing.xSmall)
-                    .padding(.bottom, SynaraSpacing.xSmall)
-            }
             .accessibilityHint("Tap to retry sending this message")
             .accessibilityIdentifier("TimelineItemRetry-\(item.eventID)")
         } else {
             row
-                .overlay(alignment: .bottomTrailing) {
-                    deliveryStatusIndicator
-                        .padding(.trailing, SynaraSpacing.xSmall)
-                        .padding(.bottom, SynaraSpacing.xSmall)
-                }
-        }
-    }
-
-    @ViewBuilder
-    private var deliveryStatusIndicator: some View {
-        switch item.deliveryStatus {
-        case .sending where isOutgoing:
-            ProgressView()
-                .controlSize(.mini)
-                .accessibilityLabel("Sending")
-        case .failed where isOutgoing:
-            Label("Retry", systemImage: "arrow.clockwise")
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(SynaraColor.critical)
-                .padding(.horizontal, SynaraSpacing.small)
-                .padding(.vertical, SynaraSpacing.xSmall)
-                .background(SynaraColor.critical.opacity(0.12))
-                .clipShape(Capsule())
-                .accessibilityLabel("Failed to send. Tap to retry.")
-        default:
-            EmptyView()
         }
     }
 
@@ -2621,12 +2578,12 @@ private struct TimelineRow: View {
         let content = VStack(alignment: .leading, spacing: SynaraSpacing.small) {
             if let replyToEventID = item.replyToEventID {
                 Label("Replying to \(replyToEventID)", systemImage: "arrowshape.turn.up.left")
-                    .font(.caption)
+                    .font(SynaraTypography.messageMeta)
                     .foregroundStyle(SynaraColor.secondaryText)
                     .lineLimit(1)
             }
 
-            bodyContent
+            bubbleWrappedBodyContent
 
             if item.reactions.isEmpty == false {
                 HStack(spacing: SynaraSpacing.xSmall) {
@@ -2651,29 +2608,69 @@ private struct TimelineRow: View {
             }
         }
 
-        if usesBubble {
-            content
-                .padding(SynaraSpacing.small)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .synaraCard(fill: bubbleFill, stroke: bubbleStroke)
-        } else {
-            content
-                .frame(maxWidth: .infinity, alignment: .leading)
+        content
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    @ViewBuilder
+    private var bubbleWrappedBodyContent: some View {
+        switch item.kind {
+        case .text(let body):
+            SynaraMessageBubble(
+                text: body,
+                alignment: bubbleAlignment,
+                isGrouped: isGroupedWithPrevious,
+                deliveryStatus: item.deliveryStatus
+            )
+        case .formattedText(let body, let html):
+            SynaraMessageBubble(
+                alignment: bubbleAlignment,
+                variant: .standard,
+                isGrouped: isGroupedWithPrevious,
+                showsBackground: false,
+                deliveryStatus: item.deliveryStatus
+            ) {
+                MatrixFormattedMessageView(
+                    fallbackBody: body,
+                    html: html,
+                    font: SynaraTypography.messageBody
+                )
+            }
+        case .encryptedPlaceholder:
+            SynaraMessageBubble(
+                alignment: bubbleAlignment,
+                variant: .encrypted,
+                isGrouped: isGroupedWithPrevious,
+                showsBackground: true,
+                deliveryStatus: nil
+            ) {
+                Label(
+                    "Encrypted content unavailable. Actions and media downloads are blocked until keys are available.",
+                    systemImage: "lock"
+                )
+                .font(SynaraTypography.messageBody)
+                .foregroundStyle(SynaraColor.secondaryText)
+            }
+        case .agentCard(let card):
+            SynaraMessageBubble(
+                alignment: bubbleAlignment,
+                variant: .agent,
+                isGrouped: isGroupedWithPrevious,
+                showsBackground: true,
+                deliveryStatus: nil
+            ) {
+                AgentCardTimelineRow(card: card, onAction: onAgentAction)
+            }
+        default:
+            bodyContent
         }
     }
 
     @ViewBuilder
     private var bodyContent: some View {
         switch item.kind {
-        case .text(let body):
-            Text(body)
-                .font(.callout)
-                .foregroundStyle(SynaraColor.primaryText)
-                .lineLimit(nil)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .fixedSize(horizontal: false, vertical: true)
-        case .formattedText(let body, let html):
-            MatrixFormattedMessageView(fallbackBody: body, html: html, font: .callout)
+        case .text, .formattedText, .encryptedPlaceholder, .agentCard:
+            EmptyView()
         case .mediaPlaceholder(let resource):
             if resource.isEncrypted {
                 MediaAttachmentCard(resource: resource)
@@ -2688,20 +2685,34 @@ private struct TimelineRow: View {
                 .accessibilityIdentifier("MediaPlaceholder-\(resource.filename)")
             }
         case .redacted:
-            Text("Message deleted")
-                .font(SynaraTypography.body)
-                .foregroundStyle(SynaraColor.secondaryText)
-        case .encryptedPlaceholder:
-            Label("Encrypted content unavailable. Actions and media downloads are blocked until keys are available.", systemImage: "lock")
-                .font(SynaraTypography.body)
-                .foregroundStyle(SynaraColor.secondaryText)
+            SynaraMessageBubble(
+                alignment: bubbleAlignment,
+                variant: .standard,
+                isGrouped: isGroupedWithPrevious,
+                showsBackground: true,
+                deliveryStatus: nil
+            ) {
+                Text("Message deleted")
+                    .font(SynaraTypography.messageBody)
+                    .foregroundStyle(SynaraColor.secondaryText)
+            }
         case .unknown(let type):
-            Text("Unsupported event: \(type)")
-                .font(SynaraTypography.body)
-                .foregroundStyle(SynaraColor.secondaryText)
-        case .agentCard(let card):
-            AgentCardTimelineRow(card: card, onAction: onAgentAction)
+            SynaraMessageBubble(
+                alignment: bubbleAlignment,
+                variant: .standard,
+                isGrouped: isGroupedWithPrevious,
+                showsBackground: true,
+                deliveryStatus: nil
+            ) {
+                Text("Unsupported event: \(type)")
+                    .font(SynaraTypography.messageBody)
+                    .foregroundStyle(SynaraColor.secondaryText)
+            }
         }
+    }
+
+    private var bubbleAlignment: SynaraMessageBubbleAlignment {
+        isOutgoing ? .own : .other
     }
 
     private var accessibilitySummary: String {
@@ -2762,35 +2773,6 @@ private struct TimelineRow: View {
         return item.resolvedSenderDisplayName(currentUserID: currentUserID)
     }
 
-    private var avatarTint: Color {
-        if case .agentCard = item.kind {
-            return SynaraColor.agent
-        }
-        return isOutgoing ? SynaraColor.accent : SynaraColor.secondaryText
-    }
-
-    private var bubbleFill: Color {
-        if case .agentCard = item.kind {
-            return SynaraColor.agent.opacity(0.08)
-        }
-        return isOutgoing ? SynaraColor.accent.opacity(0.12) : SynaraColor.secondarySurface
-    }
-
-    private var bubbleStroke: Color {
-        if case .agentCard = item.kind {
-            return SynaraColor.agent.opacity(0.28)
-        }
-        return isOutgoing ? SynaraColor.accent.opacity(0.22) : SynaraColor.separator.opacity(0.35)
-    }
-
-    private var usesBubble: Bool {
-        switch item.kind {
-        case .text, .formattedText, .mediaPlaceholder:
-            return false
-        default:
-            return true
-        }
-    }
 }
 
 private struct MediaAttachmentCard: View {
@@ -2985,6 +2967,28 @@ private struct ReactionPill: View {
     }
 }
 
+private struct AgentApprovalButtonStyle: ViewModifier {
+    let action: SynaraAgentCardAction
+
+    func body(content: Content) -> some View {
+        switch action.kind {
+        case .some("approve"):
+            content
+                .buttonStyle(.bordered)
+                .tint(SynaraColor.success)
+        case .some("reject"):
+            content
+                .buttonStyle(.bordered)
+                .tint(SynaraColor.critical)
+                .foregroundStyle(SynaraColor.critical)
+        default:
+            content
+                .buttonStyle(.borderedProminent)
+                .tint(action.tint)
+        }
+    }
+}
+
 private struct AgentCardTimelineRow: View {
     let card: SynaraAgentCard
     let onAction: (SynaraAgentCardAction) -> Void
@@ -3086,8 +3090,7 @@ private struct AgentCardTimelineRow: View {
                                     .font(.subheadline.weight(.semibold))
                                     .frame(maxWidth: .infinity)
                             }
-                            .buttonStyle(.borderedProminent)
-                            .tint(action.tint)
+                            .modifier(AgentApprovalButtonStyle(action: action))
                             .accessibilityHint("Performs \(action.title)")
                             .accessibilityIdentifier("AgentCardAction-\(action.id)")
                         }
@@ -3206,6 +3209,7 @@ private struct ComposerView: View {
     @State private var formattingRevision = 0
     @State private var composerFlushToken = 0
     @FocusState private var isComposerFocused: Bool
+    @Namespace private var composerChromeNamespace
 
     var body: some View {
         VStack(alignment: .leading, spacing: SynaraSpacing.small) {
@@ -3227,6 +3231,13 @@ private struct ComposerView: View {
             if isFormattingBarVisible {
                 ComposerFormattingBar { format in
                     applyFormatting(format)
+                }
+                .padding(.horizontal, SynaraSpacing.medium)
+                .padding(.vertical, SynaraSpacing.xSmall)
+                .background {
+                    RoundedRectangle(cornerRadius: SynaraRadius.composer, style: .continuous)
+                        .fill(SynaraColor.surface)
+                        .matchedGeometryEffect(id: "composerChrome", in: composerChromeNamespace)
                 }
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
@@ -3275,13 +3286,17 @@ private struct ComposerView: View {
                 .padding(.leading, SynaraSpacing.medium)
                 .padding(.trailing, SynaraSpacing.small)
                 .padding(.vertical, SynaraSpacing.xSmall)
-                .background(SynaraColor.surface)
-                .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                .background {
+                    RoundedRectangle(cornerRadius: SynaraRadius.composer, style: .continuous)
+                        .fill(SynaraColor.surface)
+                        .matchedGeometryEffect(id: "composerChrome", in: composerChromeNamespace)
+                }
                 .overlay(
-                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    RoundedRectangle(cornerRadius: SynaraRadius.composer, style: .continuous)
                         .stroke(SynaraColor.separator.opacity(0.35), lineWidth: 0.5)
                         .allowsHitTesting(false)
                 )
+                .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 2)
 
                 if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     Color.clear
@@ -3318,6 +3333,7 @@ private struct ComposerView: View {
         .padding(.top, SynaraSpacing.small)
         .padding(.bottom, SynaraSpacing.small)
         .background(SynaraColor.surface)
+        .animation(.easeInOut(duration: 0.18), value: isFormattingBarVisible)
         .sheet(isPresented: $isAttachmentSheetPresented) {
             AttachmentOptionsSheet(
                 onMockMediaUpload: { source in
@@ -3408,7 +3424,7 @@ private struct ComposerView: View {
         ZStack(alignment: .topLeading) {
             if text.isEmpty {
                 Text(placeholder)
-                    .font(SynaraTypography.body)
+                    .font(SynaraTypography.composerPlaceholder)
                     .foregroundStyle(SynaraColor.tertiaryText)
                     .padding(.top, 8)
                     .padding(.leading, 4)

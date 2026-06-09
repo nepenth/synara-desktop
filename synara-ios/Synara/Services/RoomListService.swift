@@ -20,6 +20,7 @@ struct RoomSummary: Identifiable, Equatable {
     let membership: Membership
     let lastActivityAt: Date
     let parentSpaces: [SpaceSummary]
+    let avatarURL: URL?
 
     init(
         id: String,
@@ -30,7 +31,8 @@ struct RoomSummary: Identifiable, Equatable {
         kind: RoomKind,
         membership: Membership,
         lastActivityAt: Date,
-        parentSpaces: [SpaceSummary] = []
+        parentSpaces: [SpaceSummary] = [],
+        avatarURL: URL? = nil
     ) {
         self.id = id
         self.name = name
@@ -41,6 +43,28 @@ struct RoomSummary: Identifiable, Equatable {
         self.membership = membership
         self.lastActivityAt = lastActivityAt
         self.parentSpaces = parentSpaces
+        self.avatarURL = avatarURL
+    }
+
+    static func isAgentRoomName(_ name: String) -> Bool {
+        name.localizedCaseInsensitiveContains("agent")
+            || name.localizedCaseInsensitiveContains("workflow")
+    }
+
+    var isAgentRoom: Bool {
+        Self.isAgentRoomName(name)
+    }
+
+    var primaryParentSpace: SpaceSummary? {
+        parentSpaces.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }.first
+    }
+
+    var parentSpaceID: String? {
+        primaryParentSpace?.id
+    }
+
+    var spaceName: String? {
+        primaryParentSpace?.name
     }
 }
 
@@ -372,11 +396,72 @@ struct TabBadgeCounts: Equatable {
     }
 }
 
+struct SpaceChannelGroup: Identifiable, Equatable {
+    let space: SpaceSummary
+    let rooms: [RoomSummary]
+
+    var id: String { space.id }
+}
+
+enum RoomListSpaceGrouping {
+    static func unreadCountsBySpaceID(from rooms: [RoomSummary]) -> [String: Int] {
+        var counts: [String: Int] = [:]
+
+        for room in rooms where room.membership != .invited {
+            for space in room.parentSpaces {
+                counts[space.id, default: 0] += room.unreadCount
+            }
+        }
+
+        return counts
+    }
+
+    static func spaceChannelGroups(from channelRooms: [RoomSummary]) -> [SpaceChannelGroup] {
+        var groupedRooms: [String: [RoomSummary]] = [:]
+        var spacesByID: [String: SpaceSummary] = [:]
+
+        for room in channelRooms {
+            guard let space = room.primaryParentSpace else {
+                continue
+            }
+
+            groupedRooms[space.id, default: []].append(room)
+            spacesByID[space.id] = space
+        }
+
+        return groupedRooms
+            .compactMap { spaceID, rooms in
+                guard let space = spacesByID[spaceID] else {
+                    return nil
+                }
+
+                return SpaceChannelGroup(space: space, rooms: rooms)
+            }
+            .sorted { $0.space.name.localizedCaseInsensitiveCompare($1.space.name) == .orderedAscending }
+    }
+
+    static func ungroupedChannelRooms(from channelRooms: [RoomSummary]) -> [RoomSummary] {
+        channelRooms.filter { $0.primaryParentSpace == nil }
+    }
+
+    static func selectedSpaceName(
+        in spaces: [SpaceSummary],
+        selectedSpaceID: String?
+    ) -> String? {
+        guard let selectedSpaceID else {
+            return nil
+        }
+
+        return spaces.first(where: { $0.id == selectedSpaceID })?.name
+    }
+}
+
 enum RoomListScopeFilter {
     enum Kind: Equatable {
         case all
         case unread
         case mentions
+        case agents
     }
 
     static func apply(_ filter: Kind, to rooms: [RoomSummary]) -> [RoomSummary] {
@@ -387,6 +472,8 @@ enum RoomListScopeFilter {
             return rooms.filter { $0.unreadCount > 0 }
         case .mentions:
             return rooms.filter(\.hasHighlight)
+        case .agents:
+            return rooms.filter(\.isAgentRoom)
         }
     }
 
@@ -585,7 +672,8 @@ final class MockInviteTransitionService: RoomListServicing, RoomMembershipServic
                 kind: room.kind,
                 membership: .joined,
                 lastActivityAt: Date(),
-                parentSpaces: room.parentSpaces
+                parentSpaces: room.parentSpaces,
+                avatarURL: room.avatarURL
             )
         }
     }

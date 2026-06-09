@@ -208,6 +208,76 @@ final class RoomListServiceTests: XCTestCase {
         )
     }
 
+    func testScopeFilterAgentsIncludesOnlyAgentRooms() {
+        let rooms = RoomListFixtures.small()
+
+        let filtered = RoomListScopeFilter.filteredRooms(
+            from: rooms,
+            filter: .agents,
+            selectedSpaceID: nil,
+            searchQuery: ""
+        )
+
+        XCTAssertTrue(filtered.allSatisfy(\.isAgentRoom))
+        XCTAssertEqual(filtered.map(\.id), ["!agent-workflows:matrix.org"])
+    }
+
+    func testIsAgentRoomNameDetectsWorkflowRooms() {
+        XCTAssertTrue(RoomSummary.isAgentRoomName("Agent Workflows"))
+        XCTAssertTrue(RoomSummary.isAgentRoomName("Release Workflow"))
+        XCTAssertFalse(RoomSummary.isAgentRoomName("General"))
+    }
+
+    func testSpaceUnreadCountsSumUnreadRoomsPerSpace() {
+        let rooms = RoomListFixtures.small()
+
+        let counts = RoomListSpaceGrouping.unreadCountsBySpaceID(from: rooms)
+
+        XCTAssertEqual(counts["!workspace:matrix.org"], 10)
+        XCTAssertEqual(counts["!ops:matrix.org"], 3)
+    }
+
+    func testSpaceChannelGroupsUsePrimaryParentSpace() {
+        let rooms = RoomListFixtures.small().filter { $0.kind == .room }
+
+        let groups = RoomListSpaceGrouping.spaceChannelGroups(from: rooms)
+
+        XCTAssertEqual(groups.map(\.space.name), ["Ops", "Workspace"])
+        XCTAssertEqual(
+            groups.first(where: { $0.space.id == "!workspace:matrix.org" })?.rooms.map(\.id),
+            ["!general:matrix.org", "!project:matrix.org", "!design:matrix.org"]
+        )
+        XCTAssertEqual(
+            groups.first(where: { $0.space.id == "!ops:matrix.org" })?.rooms.map(\.id),
+            ["!security:matrix.org", "!agent-workflows:matrix.org"]
+        )
+    }
+
+    func testUngroupedChannelRoomsExcludeParentedChannels() {
+        let rooms = RoomListFixtures.small().filter { $0.kind == .room }
+
+        let ungrouped = RoomListSpaceGrouping.ungroupedChannelRooms(from: rooms)
+
+        XCTAssertTrue(ungrouped.isEmpty)
+    }
+
+    func testRoomSummarySpaceConveniencesExposePrimaryParent() {
+        let room = RoomListFixtures.small().first { $0.id == "!general:matrix.org" }
+
+        XCTAssertEqual(room?.parentSpaceID, "!workspace:matrix.org")
+        XCTAssertEqual(room?.spaceName, "Workspace")
+    }
+
+    func testSelectedSpaceNameResolvesFromSpaceSummaries() {
+        let spaces = Array(Set(RoomListFixtures.small().flatMap(\.parentSpaces)))
+
+        XCTAssertEqual(
+            RoomListSpaceGrouping.selectedSpaceName(in: spaces, selectedSpaceID: "!ops:matrix.org"),
+            "Ops"
+        )
+        XCTAssertNil(RoomListSpaceGrouping.selectedSpaceName(in: spaces, selectedSpaceID: nil))
+    }
+
     func testNotificationBadgeSummaryMatchesSharedContractFixture() {
         let summary = NotificationBadgeSummary.summarizeNotifications(
             NotificationSummaryInput(

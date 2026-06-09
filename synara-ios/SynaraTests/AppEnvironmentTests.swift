@@ -48,6 +48,19 @@ final class AppEnvironmentTests: XCTestCase {
 
         XCTAssertTrue(status.isEncrypted)
         XCTAssertTrue(status.needsRecoveryAttention)
+        XCTAssertTrue(status.needsCryptoActionBanner)
+    }
+
+    func testRoomCryptoStatusOmitsCryptoActionBannerWhenHealthy() {
+        let status = RoomCryptoStatus(
+            encryption: .encrypted,
+            verification: .verified,
+            recovery: .enabled,
+            backup: .enabled,
+            unableToDecryptCount: 0
+        )
+
+        XCTAssertFalse(status.needsCryptoActionBanner)
     }
 
     func testMockCryptoRecoverRejectsEmptyRecoveryKey() async {

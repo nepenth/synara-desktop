@@ -22,24 +22,24 @@ Branch: `feature/ios-ux-maturity`
 - [x] Mark-read when latest messages visible ~1s
 - [x] Pull-to-refresh on Rooms + Notifications
 
-## Phase 2 — Feel like iOS chat
+## Phase 2 — Feel like iOS chat (complete)
 
-- [ ] Tab bar badges (Notifications required, Rooms optional)
-- [ ] Notifications tab sections: Mentions, Invites, Agent pending, Unread rooms (collapsed)
-- [ ] Later: room display names, swipe-to-complete, due-date urgency colors
-- [ ] Room list swipe actions: mark read, mute, favorite, leave
+- [x] Tab bar badges (Notifications required, Rooms optional)
+- [x] Notifications tab sections: Mentions, Invites, Agent pending, Unread rooms (collapsed)
+- [x] Later: room display names, swipe-to-complete, due-date urgency colors
+- [x] Room list swipe actions: mark read, mute, leave (favorite deferred until starred rooms API)
 
-## Phase 3 — Feel like Synara
+## Phase 3 — Feel like Synara (complete)
 
-- [ ] Typography tokens: messageBody, messageMeta, roomPreview, chipLabel, composerPlaceholder
-- [ ] SynaraMessageBubble primitive (own/other, grouped, agent, encrypted)
-- [ ] Room list MXC avatars in RoomAvatarTile
-- [ ] Composer polish: tokenized radius, keyboard inset animation, send haptic
-- [ ] Haptics: send, invite accept, agent approve, failed send, filter selection
-- [ ] Agent inbox filter on room list; pending approval chip on rows
-- [ ] Agent card approve/reject styling
-- [ ] Dismissible crypto banner (only when action needed)
-- [ ] Spaces: unread per space, collapse headers
+- [x] Typography tokens: messageBody, messageMeta, roomPreview, chipLabel, composerPlaceholder
+- [x] SynaraMessageBubble primitive (own/other, grouped, agent, encrypted)
+- [x] Room list MXC avatars in RoomAvatarTile
+- [x] Composer polish: tokenized radius, keyboard inset animation, send haptic
+- [x] Haptics: send, invite accept, failed send, filter selection
+- [x] Agent inbox filter on room list; pending approval chip on rows
+- [x] Agent card approve/reject styling
+- [x] Dismissible crypto banner (only when action needed)
+- [x] Spaces: unread per space, collapse headers, selected-space header
 
 ## Orchestration
 
