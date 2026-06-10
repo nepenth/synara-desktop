@@ -1709,7 +1709,8 @@ final class MatrixRustSDKRoomListService: RoomListServicing {
             lastActivityAt: latestPreview.timestamp ?? .distantPast,
             parentSpaces: parentSpaces,
             avatarURL: room.avatarUrl().flatMap(URL.init(string:)),
-            hasAgentActivity: latestPreview.hasAgentActivity
+            hasAgentActivity: latestPreview.hasAgentActivity,
+            latestAgentCard: latestPreview.agentCard
         )
     }
 
@@ -1726,27 +1727,30 @@ final class MatrixRustSDKRoomListService: RoomListServicing {
     private static func latestPreview(for room: Room) async -> LatestRoomEventPreview {
         switch await room.latestEvent() {
         case .none:
-            return LatestRoomEventPreview(text: nil, timestamp: nil, hasAgentActivity: false)
+            return LatestRoomEventPreview(text: nil, timestamp: nil, hasAgentActivity: false, agentCard: nil)
         case .remote(let timestamp, let sender, let isOwn, _, let content):
             let preview = previewDetails(content: content, sender: sender, isOwn: isOwn)
             return LatestRoomEventPreview(
                 text: preview.text,
                 timestamp: Date(timeIntervalSince1970: TimeInterval(timestamp) / 1_000),
-                hasAgentActivity: preview.hasAgentActivity
+                hasAgentActivity: preview.hasAgentActivity,
+                agentCard: preview.agentCard
             )
         case .local(let timestamp, let sender, _, let content, _):
             let preview = previewDetails(content: content, sender: sender, isOwn: true)
             return LatestRoomEventPreview(
                 text: preview.text,
                 timestamp: Date(timeIntervalSince1970: TimeInterval(timestamp) / 1_000),
-                hasAgentActivity: preview.hasAgentActivity
+                hasAgentActivity: preview.hasAgentActivity,
+                agentCard: preview.agentCard
             )
         case .remoteInvite(let timestamp, let inviter, _):
             let inviterName = inviter.map { senderDisplayName($0, isOwn: false) } ?? "Someone"
             return LatestRoomEventPreview(
                 text: "\(inviterName) invited you",
                 timestamp: Date(timeIntervalSince1970: TimeInterval(timestamp) / 1_000),
-                hasAgentActivity: false
+                hasAgentActivity: false,
+                agentCard: nil
             )
         }
     }
@@ -1754,28 +1758,29 @@ final class MatrixRustSDKRoomListService: RoomListServicing {
     private struct RoomPreviewDetails {
         let text: String?
         let hasAgentActivity: Bool
+        let agentCard: SynaraAgentCard?
     }
 
     private static func previewDetails(content: TimelineItemContent, sender: String, isOwn: Bool) -> RoomPreviewDetails {
-        RoomPreviewDetails(
+        let agentCard = agentCard(from: content)
+        return RoomPreviewDetails(
             text: previewText(content: content, sender: sender, isOwn: isOwn),
-            hasAgentActivity: contentContainsAgentActivity(content)
+            hasAgentActivity: agentCard != nil,
+            agentCard: agentCard
         )
     }
 
-    private static func contentContainsAgentActivity(_ content: TimelineItemContent) -> Bool {
+    private static func agentCard(from content: TimelineItemContent) -> SynaraAgentCard? {
         switch content {
         case .msgLike(let content):
             switch content.kind {
             case .message(let message):
-                return SynaraAgentCardPayloadParser.parse(body: message.body) != nil
+                return SynaraAgentCardPayloadParser.parse(body: message.body)
             default:
-                return false
+                return nil
             }
-        case .failedToParseMessageLike(let eventType, _):
-            return eventType == "in.synara.agent"
         default:
-            return false
+            return nil
         }
     }
 
@@ -1853,6 +1858,7 @@ private struct LatestRoomEventPreview {
     let text: String?
     let timestamp: Date?
     let hasAgentActivity: Bool
+    let agentCard: SynaraAgentCard?
 }
 
 final class MatrixRustSDKRoomMembershipService: RoomMembershipServicing {
@@ -1914,6 +1920,11 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
 
     func loadInitialTimeline(roomID: String, focusedEventID: String?) async -> TimelineLoadOutcome {
         await loadTimeline(roomID: roomID, focusedEventID: focusedEventID, pageSize: 20, enrichProfiles: false)
+    }
+
+    func loadLatestTimeline(roomID: String) async -> TimelineLoadOutcome {
+        invalidateTimelineCache(roomID: roomID, focus: .live)
+        return await loadTimeline(roomID: roomID, focusedEventID: nil, pageSize: 20, enrichProfiles: false)
     }
 
     func loadThreadTimeline(roomID: String, rootEventID: String) async -> TimelineLoadOutcome {
@@ -2157,6 +2168,13 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
 
         try await clientStore.syncOnce(session: session, fullState: false)
         return try await clientStore.room(roomID: roomID, session: session)
+    }
+
+    private func invalidateTimelineCache(roomID: String, focus: TimelineCacheFocus) {
+        let cacheKey = timelineCacheKey(roomID: roomID, focus: focus)
+        timelineCacheLock.lock()
+        cachedTimelines.removeValue(forKey: cacheKey)
+        timelineCacheLock.unlock()
     }
 
     private func timelineCacheKey(roomID: String, focus: TimelineCacheFocus) -> String {

@@ -42,11 +42,16 @@ enum SynaraTypography {
     static let sectionTitle = Font.headline
     static let body = Font.body
     static let supporting = Font.callout
+    static let emphasis = Font.body.weight(.semibold)
     static let messageBody = Font.callout
     static let messageMeta = Font.caption
     static let roomPreview = Font.callout
     static let chipLabel = Font.caption.weight(.semibold)
+    static let fineMeta = Font.caption2
+    static let fineMetaBold = Font.caption2.weight(.bold)
+    static let monoBody = Font.system(.callout, design: .monospaced)
     static let composerPlaceholder = Font.callout
+    static let composerMetric = Font.caption2
 }
 
 struct SynaraAvatar: View {
@@ -134,7 +139,7 @@ struct SynaraStatusChip: View {
         } icon: {
             if let systemImage {
                 Image(systemName: systemImage)
-                    .font(.caption.weight(.semibold))
+                    .font(SynaraTypography.chipLabel)
             }
         }
         .labelStyle(.titleAndIcon)
@@ -153,7 +158,7 @@ struct SynaraUnreadBadge: View {
     var body: some View {
         if count > 0 {
             Text(count > 99 ? "99+" : "\(count)")
-                .font(.caption2.weight(.bold))
+                .font(SynaraTypography.fineMetaBold)
                 .monospacedDigit()
                 .padding(.horizontal, SynaraSpacing.small)
                 .frame(minWidth: 24, minHeight: 20)
@@ -191,7 +196,7 @@ struct SynaraFilterChip: View {
 
                 if let badgeCount, badgeCount > 0 {
                     Text(badgeCount > 99 ? "99+" : "\(badgeCount)")
-                        .font(.caption2.weight(.bold))
+                        .font(SynaraTypography.fineMetaBold)
                         .monospacedDigit()
                         .padding(.horizontal, SynaraSpacing.xSmall)
                         .frame(minWidth: 18, minHeight: 18)
