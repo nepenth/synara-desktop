@@ -33,9 +33,9 @@ struct ComposerTextView: UIViewRepresentable {
         let textView = container.textView
         textView.delegate = context.coordinator
         textView.backgroundColor = .clear
-        textView.font = .preferredFont(forTextStyle: .body)
+        textView.font = .preferredFont(forTextStyle: .callout)
         textView.adjustsFontForContentSizeCategory = true
-        textView.textContainerInset = UIEdgeInsets(top: 10, left: 0, bottom: 10, right: 0)
+        textView.textContainerInset = UIEdgeInsets(top: 6, left: 0, bottom: 6, right: 0)
         textView.textContainer.lineFragmentPadding = 0
         textView.isScrollEnabled = true
         textView.keyboardDismissMode = .interactive
@@ -167,7 +167,7 @@ final class ComposerTextContainer: UIView {
             textView.bottomAnchor.constraint(equalTo: bottomAnchor),
             placeholderLabel.leadingAnchor.constraint(equalTo: leadingAnchor),
             placeholderLabel.trailingAnchor.constraint(equalTo: trailingAnchor),
-            placeholderLabel.topAnchor.constraint(equalTo: topAnchor, constant: 10)
+            placeholderLabel.topAnchor.constraint(equalTo: topAnchor, constant: 6)
         ])
     }
 

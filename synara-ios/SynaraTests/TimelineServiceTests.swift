@@ -344,6 +344,37 @@ final class TimelineServiceTests: XCTestCase {
         XCTAssertNil(merged.first?.deliveryStatus)
     }
 
+    func testPendingReconcilerDropsMatchedSentLocalEchoes() {
+        let pending = TimelineItem.pendingMessage(
+            localID: "$pending-sent",
+            body: "Acknowledged locally",
+            senderID: "@alice:matrix.org",
+            replyToEventID: nil,
+            deliveryStatus: .sent,
+            timestamp: TimelineFixtures.baseDate.addingTimeInterval(35)
+        )
+        let confirmed = TimelineItem(
+            id: "$server-sent:matrix.org",
+            eventID: "$server-sent:matrix.org",
+            senderID: "@alice:matrix.org",
+            timestamp: TimelineFixtures.baseDate.addingTimeInterval(36),
+            kind: .text("Acknowledged locally"),
+            replyToEventID: nil,
+            isEdited: false,
+            reactions: [:]
+        )
+
+        let merged = TimelinePendingReconciler.merge(
+            streamItems: [confirmed],
+            localItems: [pending],
+            currentUserID: "@alice:matrix.org"
+        )
+
+        XCTAssertEqual(merged.count, 1)
+        XCTAssertEqual(merged.first?.eventID, "$server-sent:matrix.org")
+        XCTAssertNil(merged.first?.deliveryStatus)
+    }
+
     func testPendingReconcilerKeepsFailedAndUnmatchedPendingItems() {
         let failed = TimelineItem.pendingMessage(
             localID: "$pending-failed",

@@ -42,6 +42,7 @@ enum TimelineSearchFilter {
 
 enum TimelineDeliveryStatus: Equatable {
     case sending
+    case sent
     case failed
 }
 
@@ -155,7 +156,7 @@ enum TimelinePendingReconciler {
     }
 
     static func matchesPending(_ pending: TimelineItem, serverItem: TimelineItem) -> Bool {
-        guard pending.deliveryStatus == .sending else {
+        guard pending.deliveryStatus == .sending || pending.deliveryStatus == .sent else {
             return false
         }
         guard pending.senderID == serverItem.senderID else {
@@ -601,6 +602,7 @@ enum TimelineLoadOutcome: Equatable {
 protocol TimelineServicing: AnyObject {
     func loadInitialTimeline(roomID: String) async -> TimelineLoadOutcome
     func loadInitialTimeline(roomID: String, focusedEventID: String?) async -> TimelineLoadOutcome
+    func loadLatestTimeline(roomID: String) async -> TimelineLoadOutcome
     func loadThreadTimeline(roomID: String, rootEventID: String) async -> TimelineLoadOutcome
     func loadOlderTimeline(roomID: String, before eventID: String) async -> TimelineLoadOutcome
     func timelineUpdates(roomID: String, focusedEventID: String?) -> AsyncStream<TimelineLoadOutcome>
@@ -612,6 +614,10 @@ extension TimelineServicing {
     func clearSessionCaches() {}
 
     func loadInitialTimeline(roomID: String) async -> TimelineLoadOutcome {
+        await loadInitialTimeline(roomID: roomID, focusedEventID: nil)
+    }
+
+    func loadLatestTimeline(roomID: String) async -> TimelineLoadOutcome {
         await loadInitialTimeline(roomID: roomID, focusedEventID: nil)
     }
 
