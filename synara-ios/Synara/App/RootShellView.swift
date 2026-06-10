@@ -91,11 +91,10 @@ struct RootShellView: View {
                     return
                 }
 
-                let agentPendingCount = await environment.agentApprovals.pendingApprovalCount()
                 let rooms = rooms(from: update)
 
                 await MainActor.run {
-                    tabBadgeCounts = TabBadgeCounts.make(from: rooms, agentApprovalCount: agentPendingCount)
+                    tabBadgeCounts = TabBadgeCounts.make(from: rooms)
                 }
             }
         }

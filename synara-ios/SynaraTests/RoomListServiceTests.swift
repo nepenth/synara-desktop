@@ -405,10 +405,42 @@ final class RoomListServiceTests: XCTestCase {
     }
 
     func testTabBadgeCountsUseRoomListState() {
-        let badges = TabBadgeCounts.make(from: RoomListFixtures.small(), agentApprovalCount: 2)
+        let badges = TabBadgeCounts.make(from: RoomListFixtures.small())
 
-        XCTAssertEqual(badges.notifications, 7)
+        XCTAssertEqual(badges.notifications, 6)
         XCTAssertEqual(badges.rooms, 12)
+    }
+
+    func testAgentPendingInboxBuildsRowsFromLatestAgentCard() {
+        let rooms = RoomListFixtures.small()
+        let pending = AgentPendingInbox.pendingApprovals(from: rooms)
+
+        XCTAssertEqual(pending.count, 1)
+        XCTAssertEqual(pending.first?.roomID, "!agent-workflows:matrix.org")
+        XCTAssertEqual(pending.first?.title, "Deploy approval required")
+    }
+
+    func testRoomSummaryRequiresAgentApprovalFromLatestCard() {
+        let rooms = RoomListFixtures.small()
+        let agentRoom = rooms.first { $0.id == "!agent-workflows:matrix.org" }
+        let generalRoom = rooms.first { $0.id == "!general:matrix.org" }
+
+        XCTAssertEqual(agentRoom?.requiresAgentApproval, true)
+        XCTAssertEqual(generalRoom?.requiresAgentApproval, false)
+    }
+
+    func testAgentCardRequiresUserApprovalWhenApproveActionsPresent() throws {
+        let card = try SynaraAgentCard(
+            title: "Review deploy",
+            status: "pending",
+            summary: "Needs your review",
+            actions: [
+                try SynaraAgentCardAction(id: "approve", title: "Approve", kind: "approve", prompt: "ok"),
+                try SynaraAgentCardAction(id: "reject", title: "Reject", kind: "reject", prompt: "no")
+            ]
+        )
+
+        XCTAssertTrue(card.requiresUserApproval)
     }
 
     func testMockRoomListStreamYieldsMultipleStates() async {

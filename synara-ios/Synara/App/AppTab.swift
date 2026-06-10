@@ -3,7 +3,6 @@ import SwiftUI
 private struct NotificationsTabView: View {
     @Environment(\.appEnvironment) private var environment
     @State private var state: RoomListState = .idle
-    @State private var agentPendingCount = 0
     @State private var isUnreadRoomsExpanded = false
     @State private var roomUpdatesTask: Task<Void, Never>?
 
@@ -13,7 +12,7 @@ private struct NotificationsTabView: View {
             case .idle, .loading:
                 List {
                     Section {
-                        SynaraSkeletonList(rowCount: 8, showsAvatar: false)
+                        SynaraSkeletonList(rowCount: 8)
                             .listRowSeparator(.hidden)
                             .listRowInsets(EdgeInsets(top: 3, leading: SynaraSpacing.large, bottom: 3, trailing: SynaraSpacing.large))
                     }
@@ -48,8 +47,9 @@ private struct NotificationsTabView: View {
     @ViewBuilder
     private func notificationsContent(for rooms: [RoomSummary]) -> some View {
         let sections = NotificationsInboxSections.make(from: rooms)
+        let agentPendingApprovals = AgentPendingInbox.pendingApprovals(from: rooms)
 
-        if NotificationsInboxSections.isCaughtUp(sections: sections, agentPendingCount: agentPendingCount) {
+        if NotificationsInboxSections.isCaughtUp(sections: sections, agentPendingCount: agentPendingApprovals.count) {
             caughtUpEmptyState
         } else {
             List {
@@ -73,19 +73,13 @@ private struct NotificationsTabView: View {
                     }
                 }
 
-                if agentPendingCount > 0 {
+                if agentPendingApprovals.isEmpty == false {
                     Section {
-                        Label {
-                            Text(agentPendingCount == 1 ? "1 pending agent action" : "\(agentPendingCount) pending agent actions")
-                                .font(SynaraTypography.body)
-                                .foregroundStyle(SynaraColor.primaryText)
-                        } icon: {
-                            Image(systemName: "cpu")
-                                .foregroundStyle(SynaraColor.agent)
+                        ForEach(agentPendingApprovals) { item in
+                            agentPendingRow(item)
                         }
-                        .accessibilityIdentifier("NotificationsAgentPendingSummary")
                     } header: {
-                        notificationsSectionHeader("Agent actions", count: agentPendingCount)
+                        notificationsSectionHeader("Agent actions", count: agentPendingApprovals.count)
                     }
                 }
 
@@ -138,6 +132,22 @@ private struct NotificationsTabView: View {
         .accessibilityIdentifier("NotificationsRow-\(room.id)")
     }
 
+    private func agentPendingRow(_ item: AgentPendingApprovalItem) -> some View {
+        Button {
+            environment.router.route(to: .room(id: item.roomID, title: item.roomName))
+        } label: {
+            AgentPendingApprovalRow(item: item)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(SynaraListRowButtonStyle())
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+        .accessibilityLabel("\(item.title) in \(item.roomName)")
+        .accessibilityHint("Opens the room to review this agent action")
+        .accessibilityIdentifier("NotificationsAgentRow-\(item.roomID)")
+    }
+
     private func loadInbox() {
         state = .loading
         Task {
@@ -146,14 +156,9 @@ private struct NotificationsTabView: View {
     }
 
     private func reloadInbox() async {
-        async let nextState = environment.roomList.loadRooms()
-        async let pendingApprovals = environment.agentApprovals.pendingApprovalCount()
-        let resolvedState = await nextState
-        let resolvedPendingApprovals = await pendingApprovals
-
+        let resolvedState = await environment.roomList.loadRooms()
         await MainActor.run {
             state = resolvedState
-            agentPendingCount = resolvedPendingApprovals
         }
     }
 
@@ -164,10 +169,8 @@ private struct NotificationsTabView: View {
                 guard Task.isCancelled == false else {
                     return
                 }
-                let pendingApprovals = await environment.agentApprovals.pendingApprovalCount()
                 await MainActor.run {
                     state = update
-                    agentPendingCount = pendingApprovals
                 }
             }
         }
@@ -179,6 +182,8 @@ private struct NotificationsInboxRow: View {
 
     var body: some View {
         HStack(spacing: SynaraSpacing.medium) {
+            SynaraRoomAvatarTile(room: room, size: 42)
+
             VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
                 HStack(spacing: SynaraSpacing.small) {
                     Text(room.name)
@@ -196,7 +201,7 @@ private struct NotificationsInboxRow: View {
                 }
 
                 Text(room.lastMessagePreview)
-                    .font(SynaraTypography.supporting)
+                    .font(SynaraTypography.roomPreview)
                     .foregroundStyle(SynaraColor.secondaryText)
                     .lineLimit(2)
             }
@@ -204,6 +209,56 @@ private struct NotificationsInboxRow: View {
             Spacer(minLength: SynaraSpacing.small)
 
             SynaraUnreadBadge(count: room.unreadCount, highlighted: room.hasHighlight)
+        }
+        .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
+        .padding(.vertical, SynaraSpacing.xSmall)
+    }
+}
+
+private struct AgentPendingApprovalRow: View {
+    let item: AgentPendingApprovalItem
+
+    var body: some View {
+        HStack(spacing: SynaraSpacing.medium) {
+            SynaraRoomAvatarTile(room: item.roomSummary, size: 42)
+
+            VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
+                HStack(spacing: SynaraSpacing.small) {
+                    Text(item.title)
+                        .font(SynaraTypography.body.weight(.semibold))
+                        .foregroundStyle(SynaraColor.primaryText)
+                        .lineLimit(1)
+
+                    SynaraStatusChip(title: "Agent", tint: SynaraColor.agent, systemImage: "sparkles")
+                }
+
+                Text(item.summary ?? item.roomName)
+                    .font(SynaraTypography.roomPreview)
+                    .foregroundStyle(SynaraColor.secondaryText)
+                    .lineLimit(2)
+
+                Text(item.roomName)
+                    .font(SynaraTypography.supporting)
+                    .foregroundStyle(SynaraColor.tertiaryText)
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: SynaraSpacing.small)
+
+            if let status = item.status, status.isEmpty == false {
+                Text(status)
+                    .font(SynaraTypography.chipLabel)
+                    .foregroundStyle(SynaraColor.agent)
+                    .padding(.horizontal, SynaraSpacing.small)
+                    .padding(.vertical, SynaraSpacing.xSmall)
+                    .background(SynaraColor.agent.opacity(0.12))
+                    .clipShape(Capsule())
+            } else {
+                Image(systemName: "chevron.right")
+                    .font(SynaraTypography.chipLabel)
+                    .foregroundStyle(SynaraColor.tertiaryText)
+                    .accessibilityHidden(true)
+            }
         }
         .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
         .padding(.vertical, SynaraSpacing.xSmall)

@@ -52,6 +52,11 @@ struct SynaraMessageBubble<Content: View>: View {
             ProgressView()
                 .controlSize(.mini)
                 .accessibilityLabel("Sending")
+        case .sent where alignment == .own:
+            Image(systemName: "checkmark")
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(SynaraColor.secondaryText)
+                .accessibilityLabel("Sent")
         case .failed where alignment == .own:
             Label("Retry", systemImage: "arrow.clockwise")
                 .font(SynaraTypography.chipLabel)

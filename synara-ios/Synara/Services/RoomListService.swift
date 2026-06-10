@@ -22,6 +22,7 @@ struct RoomSummary: Identifiable, Equatable {
     let parentSpaces: [SpaceSummary]
     let avatarURL: URL?
     let hasAgentActivity: Bool
+    let latestAgentCard: SynaraAgentCard?
 
     init(
         id: String,
@@ -34,7 +35,8 @@ struct RoomSummary: Identifiable, Equatable {
         lastActivityAt: Date,
         parentSpaces: [SpaceSummary] = [],
         avatarURL: URL? = nil,
-        hasAgentActivity: Bool = false
+        hasAgentActivity: Bool = false,
+        latestAgentCard: SynaraAgentCard? = nil
     ) {
         self.id = id
         self.name = name
@@ -47,10 +49,15 @@ struct RoomSummary: Identifiable, Equatable {
         self.parentSpaces = parentSpaces
         self.avatarURL = avatarURL
         self.hasAgentActivity = hasAgentActivity
+        self.latestAgentCard = latestAgentCard
     }
 
     var isAgentRoom: Bool {
         hasAgentActivity
+    }
+
+    var requiresAgentApproval: Bool {
+        latestAgentCard?.requiresUserApproval == true
     }
 
     var primaryParentSpace: SpaceSummary? {
@@ -147,6 +154,28 @@ enum RoomListFixtures {
         Date(timeIntervalSince1970: baseTimestamp)
     }
 
+    static func pendingAgentApprovalCard() -> SynaraAgentCard {
+        try! SynaraAgentCard(
+            title: "Deploy approval required",
+            status: "pending",
+            summary: "Review the proposed deployment before it runs.",
+            actions: [
+                try! SynaraAgentCardAction(
+                    id: "approve-deploy",
+                    title: "Approve",
+                    kind: "approve",
+                    prompt: "approve"
+                ),
+                try! SynaraAgentCardAction(
+                    id: "reject-deploy",
+                    title: "Reject",
+                    kind: "reject",
+                    prompt: "reject"
+                )
+            ]
+        )
+    }
+
     static func small() -> [RoomSummary] {
         [
             RoomSummary(
@@ -203,7 +232,8 @@ enum RoomListFixtures {
                 membership: .joined,
                 lastActivityAt: now.addingTimeInterval(-1_200),
                 parentSpaces: [SpaceSummary(id: "!ops:matrix.org", name: "Ops")],
-                hasAgentActivity: true
+                hasAgentActivity: true,
+                latestAgentCard: RoomListFixtures.pendingAgentApprovalCard()
             ),
             RoomSummary(
                 id: "!alice:matrix.org",
@@ -343,12 +373,62 @@ enum NotificationBadgeSummary {
         )?.appBadgeCount ?? 0
     }
 
-    static func notificationsTabBadgeCount(
-        from rooms: [RoomSummary],
-        agentApprovalCount: Int = 0
-    ) -> Int {
-        let inboxRooms = NotificationsInboxSections.notificationRooms(from: rooms)
-        return inboxRooms.count + clampCount(agentApprovalCount)
+    static func notificationsTabBadgeCount(from rooms: [RoomSummary]) -> Int {
+        let sections = NotificationsInboxSections.make(from: rooms)
+        let agentPendingCount = AgentPendingInbox.pendingApprovals(from: rooms).count
+        return sections.mentions.count
+            + sections.invites.count
+            + sections.unreadRooms.count
+            + agentPendingCount
+    }
+}
+
+struct AgentPendingApprovalItem: Identifiable, Equatable {
+    let id: String
+    let roomID: String
+    let roomName: String
+    let title: String
+    let summary: String?
+    let status: String?
+    let avatarURL: URL?
+    let lastActivityAt: Date
+
+    var roomSummary: RoomSummary {
+        RoomSummary(
+            id: roomID,
+            name: roomName,
+            lastMessagePreview: summary ?? title,
+            unreadCount: 0,
+            hasHighlight: false,
+            kind: .room,
+            membership: .joined,
+            lastActivityAt: lastActivityAt,
+            avatarURL: avatarURL,
+            hasAgentActivity: true,
+            latestAgentCard: nil
+        )
+    }
+}
+
+enum AgentPendingInbox {
+    static func pendingApprovals(from rooms: [RoomSummary]) -> [AgentPendingApprovalItem] {
+        rooms.compactMap { room in
+            guard let card = room.latestAgentCard, card.requiresUserApproval else {
+                return nil
+            }
+
+            return AgentPendingApprovalItem(
+                id: room.id,
+                roomID: room.id,
+                roomName: room.name,
+                title: card.title,
+                summary: card.summary,
+                status: card.status,
+                avatarURL: room.avatarURL,
+                lastActivityAt: room.lastActivityAt
+            )
+        }
+        .sorted { $0.lastActivityAt > $1.lastActivityAt }
     }
 }
 
@@ -393,12 +473,9 @@ struct TabBadgeCounts: Equatable {
     var notifications: Int = 0
     var rooms: Int = 0
 
-    static func make(from rooms: [RoomSummary], agentApprovalCount: Int = 0) -> TabBadgeCounts {
+    static func make(from rooms: [RoomSummary]) -> TabBadgeCounts {
         TabBadgeCounts(
-            notifications: NotificationBadgeSummary.notificationsTabBadgeCount(
-                from: rooms,
-                agentApprovalCount: agentApprovalCount
-            ),
+            notifications: NotificationBadgeSummary.notificationsTabBadgeCount(from: rooms),
             rooms: NotificationBadgeSummary.roomsTabBadgeCount(from: rooms)
         )
     }
