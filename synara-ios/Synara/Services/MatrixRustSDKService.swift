@@ -1500,14 +1500,20 @@ private enum MatrixRoomListStateBuilder {
         return .empty
     }
 
-    static func roomSummaries(from rooms: [Room], spaceService: SpaceService?) async -> [RoomSummary] {
+    static func roomSummaries(
+        from rooms: [Room],
+        spaceService: SpaceService?,
+        previous: [RoomSummary] = []
+    ) async -> [RoomSummary] {
         let shouldMapSpaces = rooms.count <= 80
+        let previousByID = Dictionary(uniqueKeysWithValues: previous.map { ($0.id, $0) })
         var summaries: [RoomSummary] = []
         summaries.reserveCapacity(rooms.count)
         for room in rooms {
             if let summary = await MatrixRustSDKRoomListService.mapRoom(
                 room,
-                spaceService: shouldMapSpaces ? spaceService : nil
+                spaceService: shouldMapSpaces ? spaceService : nil,
+                previous: previousByID[room.id()]
             ) {
                 summaries.append(summary)
             }
@@ -1593,7 +1599,8 @@ final class MatrixRustSDKRoomListService: RoomListServicing {
 
                             let summaries = await MatrixRoomListStateBuilder.roomSummaries(
                                 from: rooms,
-                                spaceService: spaceService
+                                spaceService: spaceService,
+                                previous: self.cachedRoomsSnapshot()
                             )
                             if summaries.isEmpty == false {
                                 self.setCachedRooms(summaries)
@@ -1671,7 +1678,11 @@ final class MatrixRustSDKRoomListService: RoomListServicing {
         cachedRooms = []
     }
 
-    fileprivate static func mapRoom(_ room: Room, spaceService: SpaceService?) async -> RoomSummary? {
+    fileprivate static func mapRoom(
+        _ room: Room,
+        spaceService: SpaceService?,
+        previous: RoomSummary? = nil
+    ) async -> RoomSummary? {
         let membership: RoomSummary.Membership
         switch room.membership() {
         case .joined:
@@ -1693,6 +1704,16 @@ final class MatrixRustSDKRoomListService: RoomListServicing {
             isMarkedUnread: roomInfo?.isMarkedUnread ?? false
         )
         let latestPreview = await latestPreview(for: room)
+        let latestAgentCardEventID = latestPreview.agentCard == nil
+            ? nil
+            : await latestAgentEventID(for: room)
+        let shouldScanPendingApprovals = latestPreview.hasAgentActivity || previous?.hasAgentActivity == true
+        let pendingAgentApprovals = shouldScanPendingApprovals
+            ? await MatrixRustSDKTimelineService.pendingAgentApprovalCards(in: room)
+            : []
+        let hasAgentActivity = latestPreview.hasAgentActivity
+            || previous?.hasAgentActivity == true
+            || pendingAgentApprovals.isEmpty == false
         let name = room.displayName() ?? room.canonicalAlias() ?? room.id()
         let preview = latestPreview.text ?? defaultPreview(for: room, membership: membership)
         let parentSpaces = (try? await spaceService?.joinedParentsOfChild(childId: room.id()).map {
@@ -1709,9 +1730,18 @@ final class MatrixRustSDKRoomListService: RoomListServicing {
             lastActivityAt: latestPreview.timestamp ?? .distantPast,
             parentSpaces: parentSpaces,
             avatarURL: room.avatarUrl().flatMap(URL.init(string:)),
-            hasAgentActivity: latestPreview.hasAgentActivity,
-            latestAgentCard: latestPreview.agentCard
+            hasAgentActivity: hasAgentActivity,
+            latestAgentCard: latestPreview.agentCard,
+            latestAgentCardEventID: latestAgentCardEventID,
+            pendingAgentApprovals: pendingAgentApprovals
         )
+    }
+
+    private static func latestAgentEventID(for room: Room) async -> String? {
+        guard let timeline = try? await room.timeline() else {
+            return nil
+        }
+        return await timeline.latestEventId()
     }
 
     private static func defaultPreview(for room: Room, membership: RoomSummary.Membership) -> String {
@@ -2237,6 +2267,47 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
             trackReadReceipts: .messageLikeEvents,
             reportUtds: true
         )
+    }
+
+    static func pendingAgentApprovalCards(in room: Room, pageSize: UInt16 = 25) async -> [PendingAgentCardRef] {
+        guard let timeline = try? await room.timeline() else {
+            return []
+        }
+
+        let collector = MatrixRustSDKTimelineCollector()
+        let handle = await timeline.addListener(listener: collector)
+        defer { handle.cancel() }
+
+        _ = try? await timeline.paginateBackwards(numEvents: pageSize)
+        let items = await waitForMappedTimelineItems(
+            collector: collector,
+            timeoutNanoseconds: 1_000_000_000
+        )
+
+        var refs: [PendingAgentCardRef] = []
+        refs.reserveCapacity(items.count)
+        for item in items {
+            guard case .agentCard(let card) = item.kind else {
+                continue
+            }
+            refs.append(
+                PendingAgentCardRef(
+                    eventID: item.eventID,
+                    card: card,
+                    timestamp: item.timestamp
+                )
+            )
+        }
+
+        var seenEventIDs = Set<String>()
+        return refs
+            .filter { ref in
+                guard ref.card.requiresUserApproval else {
+                    return false
+                }
+                return seenEventIDs.insert(ref.eventID).inserted
+            }
+            .sorted { $0.timestamp > $1.timestamp }
     }
 
     private static func waitForMappedTimelineItems(
