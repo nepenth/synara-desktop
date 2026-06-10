@@ -3372,6 +3372,13 @@ private struct ComposerView: View {
     @State private var composerSelection = ComposerTextSelection.empty
     @State private var formattingRevision = 0
     @State private var composerFlushToken = 0
+    @State private var composerFieldHeight: CGFloat = {
+        #if canImport(UIKit)
+        ComposerTextMetrics.singleLineHeight(font: UIFont.preferredFont(forTextStyle: .callout))
+        #else
+        34
+        #endif
+    }()
     @FocusState private var isComposerFocused: Bool
     @Namespace private var composerChromeNamespace
 
@@ -3587,18 +3594,19 @@ private struct ComposerView: View {
             ComposerTextView(
                 text: $text,
                 selection: $composerSelection,
+                height: $composerFieldHeight,
                 placeholder: placeholder,
                 formattingRevision: formattingRevision,
                 flushToken: composerFlushToken,
                 isFocused: $isComposerFocused
             )
-            .frame(minHeight: 28, maxHeight: 112)
+            .frame(height: composerFieldHeight)
         }
         #else
         TextEditor(text: $text)
             .font(SynaraTypography.body)
             .focused($isComposerFocused)
-            .frame(minHeight: 28, maxHeight: 112)
+            .frame(height: composerFieldHeight)
             .scrollContentBackground(.hidden)
             .accessibilityIdentifier("ComposerTextField")
         #endif
@@ -3618,12 +3626,40 @@ private struct ComposerView: View {
             TextEditor(text: $text)
                 .font(SynaraTypography.body)
                 .focused($isComposerFocused)
-                .frame(minHeight: 28, maxHeight: 112)
+                .frame(height: composerFieldHeight)
                 .scrollContentBackground(.hidden)
                 .accessibilityIdentifier("ComposerTextField")
                 .accessibilityLabel("Message")
                 .accessibilityHint("Enter a message for this room")
         }
+        .onChange(of: text) { _ in
+            updateComposerFieldHeight()
+        }
+        .onChange(of: isComposerFocused) { _ in
+            updateComposerFieldHeight()
+        }
+    }
+
+    private func updateComposerFieldHeight() {
+        #if canImport(UIKit)
+        let singleLineHeight = ComposerTextMetrics.singleLineHeight(
+            font: UIFont.preferredFont(forTextStyle: .callout)
+        )
+        if text.isEmpty, isComposerFocused == false {
+            composerFieldHeight = singleLineHeight
+            return
+        }
+
+        let lineCount = max(1, text.components(separatedBy: .newlines).count)
+        let estimatedLineHeight = UIFont.preferredFont(forTextStyle: .callout).lineHeight
+        let estimatedHeight = ceil(estimatedLineHeight * CGFloat(lineCount))
+            + ComposerTextMetrics.textContainerInset.top
+            + ComposerTextMetrics.textContainerInset.bottom
+        composerFieldHeight = min(
+            max(estimatedHeight, singleLineHeight),
+            ComposerTextMetrics.maxHeight
+        )
+        #endif
     }
 
     private func applyFormatting(_ format: ComposerMarkdownFormat) {
