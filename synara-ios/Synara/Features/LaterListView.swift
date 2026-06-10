@@ -36,7 +36,6 @@ struct LaterListView: View {
                                 LaterListRow(
                                     item: item,
                                     roomName: roomDisplayName(for: item.roomID),
-                                    onTap: openItem,
                                     onComplete: completeItem
                                 )
                             }
@@ -49,7 +48,6 @@ struct LaterListView: View {
                                 LaterListRow(
                                     item: item,
                                     roomName: roomDisplayName(for: item.roomID),
-                                    onTap: openItem,
                                     onComplete: nil
                                 )
                             }
@@ -115,20 +113,6 @@ struct LaterListView: View {
         }
     }
 
-    private func openItem(_ item: SynaraLaterListItem) {
-        guard item.canNavigate else {
-            return
-        }
-
-        environment.router.route(
-            to: .room(
-                id: item.roomID,
-                eventID: item.eventID,
-                title: roomDisplayName(for: item.roomID)
-            )
-        )
-    }
-
     private func completeItem(_ item: SynaraLaterListItem) {
         guard item.isCompleted == false else {
             return
@@ -150,62 +134,24 @@ struct LaterListView: View {
 private struct LaterListRow: View {
     let item: SynaraLaterListItem
     let roomName: String
-    let onTap: (SynaraLaterListItem) -> Void
     let onComplete: ((SynaraLaterListItem) -> Void)?
 
     var body: some View {
-        Button {
-            onTap(item)
-        } label: {
-            HStack(alignment: .top, spacing: SynaraSpacing.small) {
-                Image(systemName: item.icon)
-                    .foregroundStyle(item.statusTint)
-                    .padding(.top, 2)
-                    .accessibilityHidden(true)
-
-                VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
-                    HStack {
-                        Text(item.stateLabel)
-                            .font(SynaraTypography.supporting)
-                            .foregroundStyle(item.statusTint)
-
-                        if item.isCompleted {
-                            Text("Completed")
-                                .font(.caption)
-                                .foregroundStyle(SynaraColor.secondaryText)
-                        }
-
-                        Spacer()
-
-                        if item.showsDueBadge {
-                            Text(item.dueLabel)
-                                .font(.caption)
-                                .padding(.horizontal, SynaraSpacing.xSmall)
-                                .padding(.vertical, 2)
-                                .foregroundStyle(item.dueBadgeForeground)
-                                .background(item.dueBadgeBackground)
-                                .clipShape(Capsule())
-                                .accessibilityLabel(item.dueAccessibilityLabel)
-                        }
-                    }
-
-                    Text(item.preview(roomName: roomName))
-                        .font(SynaraTypography.body)
-                        .foregroundStyle(item.canNavigate ? SynaraColor.primaryText : SynaraColor.secondaryText)
-                        .lineLimit(2)
-
-                    if !item.canNavigate {
-                        Text("Destination unavailable")
-                            .font(.caption)
-                            .foregroundStyle(.red)
-                    }
+        Group {
+            if item.canNavigate {
+                NavigationLink(
+                    value: AppRoute.room(
+                        id: item.roomID,
+                        eventID: item.eventID,
+                        title: roomName
+                    )
+                ) {
+                    rowContent
                 }
+            } else {
+                rowContent
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.vertical, 2)
         }
-        .disabled(!item.canNavigate)
-        .buttonStyle(.plain)
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
             if let onComplete, item.isCompleted == false {
                 Button {
@@ -218,6 +164,55 @@ private struct LaterListRow: View {
             }
         }
         .accessibilityIdentifier(item.accessibilityRowIdentifier)
+    }
+
+    private var rowContent: some View {
+        HStack(alignment: .top, spacing: SynaraSpacing.small) {
+            Image(systemName: item.icon)
+                .foregroundStyle(item.statusTint)
+                .padding(.top, 2)
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
+                HStack {
+                    Text(item.stateLabel)
+                        .font(SynaraTypography.supporting)
+                        .foregroundStyle(item.statusTint)
+
+                    if item.isCompleted {
+                        Text("Completed")
+                            .font(.caption)
+                            .foregroundStyle(SynaraColor.secondaryText)
+                    }
+
+                    Spacer()
+
+                    if item.showsDueBadge {
+                        Text(item.dueLabel)
+                            .font(.caption)
+                            .padding(.horizontal, SynaraSpacing.xSmall)
+                            .padding(.vertical, 2)
+                            .foregroundStyle(item.dueBadgeForeground)
+                            .background(item.dueBadgeBackground)
+                            .clipShape(Capsule())
+                            .accessibilityLabel(item.dueAccessibilityLabel)
+                    }
+                }
+
+                Text(item.preview(roomName: roomName))
+                    .font(SynaraTypography.body)
+                    .foregroundStyle(item.canNavigate ? SynaraColor.primaryText : SynaraColor.secondaryText)
+                    .lineLimit(2)
+
+                if !item.canNavigate {
+                    Text("Destination unavailable")
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 2)
     }
 }
 

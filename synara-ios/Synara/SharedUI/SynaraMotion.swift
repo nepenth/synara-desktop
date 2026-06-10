@@ -33,6 +33,7 @@ struct SynaraSendSlideInModifier: ViewModifier {
 
 struct SynaraReactionPopModifier: ViewModifier {
     let animationIndex: Int
+    let animationKey: String
     @State private var isVisible = false
 
     func body(content: Content) -> some View {
@@ -40,10 +41,16 @@ struct SynaraReactionPopModifier: ViewModifier {
             .scaleEffect(isVisible ? 1 : 0.55)
             .opacity(isVisible ? 1 : 0)
             .onAppear {
+                guard isVisible == false else {
+                    return
+                }
                 let delay = Double(animationIndex) * 0.04
                 withAnimation(.spring(response: 0.32, dampingFraction: 0.68).delay(delay)) {
                     isVisible = true
                 }
+            }
+            .onChange(of: animationKey) { _ in
+                isVisible = false
             }
     }
 }
@@ -66,20 +73,29 @@ private struct SynaraKeyboardAdaptiveInsetModifier: ViewModifier {
         }
 
         let duration = (notification.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double) ?? 0.25
-        let overlap = max(0, frame.height - bottomSafeAreaInset)
-        let isHidden = frame.origin.y >= UIScreen.main.bounds.height
+        let overlap = keyboardOverlapAmount(for: frame)
 
         withAnimation(.easeOut(duration: duration)) {
-            keyboardOverlap = isHidden ? 0 : overlap
+            keyboardOverlap = overlap
         }
     }
 
-    private var bottomSafeAreaInset: CGFloat {
-        UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
+    private func keyboardOverlapAmount(for keyboardFrame: CGRect) -> CGFloat {
+        guard let window = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
             .flatMap(\.windows)
-            .first { $0.isKeyWindow }?
-            .safeAreaInsets.bottom ?? 0
+            .first(where: \.isKeyWindow) else {
+            return 0
+        }
+
+        let keyboardFrameInWindow = window.convert(keyboardFrame, from: nil)
+        let intersection = window.bounds.intersection(keyboardFrameInWindow)
+        guard intersection.height > 0 else {
+            return 0
+        }
+
+        // The system already reserves the home-indicator safe area; subtract it so we do not double-lift.
+        return max(0, intersection.height - window.safeAreaInsets.bottom)
     }
 }
 #endif
@@ -89,8 +105,8 @@ extension View {
         modifier(SynaraSendSlideInModifier(isEnabled: isEnabled, fromTrailing: fromTrailing))
     }
 
-    func synaraReactionPop(animationIndex: Int = 0) -> some View {
-        modifier(SynaraReactionPopModifier(animationIndex: animationIndex))
+    func synaraReactionPop(animationIndex: Int = 0, animationKey: String = "") -> some View {
+        modifier(SynaraReactionPopModifier(animationIndex: animationIndex, animationKey: animationKey))
     }
 
     func synaraKeyboardAdaptiveInset() -> some View {

@@ -197,6 +197,10 @@ struct RoomTimelineView: View {
                         }
 
                         let threadReplyCounts = TimelineReplyCounter.replyCounts(for: items)
+                        let replyPreviewsByEventID = TimelineReplyPreview.previewsByEventID(
+                            in: items,
+                            currentUserID: currentUserID
+                        )
 
                         ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
                             if shouldShowUnreadDivider(before: item, at: index, in: items) {
@@ -208,6 +212,7 @@ struct RoomTimelineView: View {
                                 currentUserID: currentUserID,
                                 isGroupedWithPrevious: isGroupedWithPrevious(index: index, items: items),
                                 animateSend: sendAnimationItemIDs.contains(item.id),
+                                replyPreviewsByEventID: replyPreviewsByEventID,
                                 replyCount: threadReplyCounts[item.eventID] ?? 0,
                                 availability: environment.eventActions.availability(for: item, currentUserID: currentUserID),
                                 onReply: {
@@ -2592,6 +2597,7 @@ private struct TimelineRow: View {
     let currentUserID: String
     let isGroupedWithPrevious: Bool
     let animateSend: Bool
+    let replyPreviewsByEventID: [String: TimelineReplyPreview]
     let replyCount: Int
     let availability: EventActionAvailability
     let onReply: () -> Void
@@ -2677,10 +2683,7 @@ private struct TimelineRow: View {
     private var messageContent: some View {
         let content = VStack(alignment: .leading, spacing: SynaraSpacing.small) {
             if let replyToEventID = item.replyToEventID {
-                Label("Replying to \(replyToEventID)", systemImage: "arrowshape.turn.up.left")
-                    .font(SynaraTypography.messageMeta)
-                    .foregroundStyle(SynaraColor.secondaryText)
-                    .lineLimit(1)
+                replyQuoteLabel(for: replyToEventID)
             }
 
             bubbleWrappedBodyContent
@@ -2870,6 +2873,33 @@ private struct TimelineRow: View {
         item.senderID == currentUserID
     }
 
+    @ViewBuilder
+    private func replyQuoteLabel(for replyToEventID: String) -> some View {
+        if let preview = replyPreviewsByEventID[replyToEventID] {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Replying to \(preview.senderName)")
+                    .font(SynaraTypography.messageMeta.weight(.semibold))
+                    .foregroundStyle(SynaraColor.secondaryText)
+                    .lineLimit(1)
+                Text(preview.snippet)
+                    .font(SynaraTypography.messageMeta)
+                    .foregroundStyle(SynaraColor.tertiaryText)
+                    .lineLimit(2)
+            }
+            .padding(.leading, SynaraSpacing.small)
+            .overlay(alignment: .leading) {
+                RoundedRectangle(cornerRadius: 2, style: .continuous)
+                    .fill(SynaraColor.accent.opacity(0.55))
+                    .frame(width: 3)
+            }
+        } else {
+            Label("Replying to a message", systemImage: "arrowshape.turn.up.left")
+                .font(SynaraTypography.messageMeta)
+                .foregroundStyle(SynaraColor.secondaryText)
+                .lineLimit(1)
+        }
+    }
+
     private var senderDisplayName: String {
         guard item.senderID.hasPrefix("@") else {
             return item.senderID
@@ -3051,6 +3081,13 @@ private struct ReactionPill: View {
     var isSystemImage = false
     var animationIndex = 0
 
+    private var reactionAnimationKey: String {
+        if let count {
+            return "\(title)-\(count)-\(isSystemImage)"
+        }
+        return "\(title)-\(isSystemImage)"
+    }
+
     var body: some View {
         HStack(spacing: SynaraSpacing.xSmall) {
             if isSystemImage {
@@ -3070,7 +3107,7 @@ private struct ReactionPill: View {
         .padding(.vertical, 3)
         .background(SynaraColor.elevatedSurface)
         .clipShape(Capsule())
-        .synaraReactionPop(animationIndex: animationIndex)
+        .synaraReactionPop(animationIndex: animationIndex, animationKey: reactionAnimationKey)
     }
 }
 
@@ -3108,6 +3145,43 @@ private struct AgentApprovalButtonStyle: ViewModifier {
                 .buttonStyle(.borderedProminent)
                 .tint(action.tint)
         }
+    }
+}
+
+private struct AgentCardLinkPreview: View {
+    let urlString: String
+
+    private var isPolicySafeLink: Bool {
+        SynaraContractURLPolicy.isSafeHTTPS(urlString)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
+            Text("Preview")
+                .font(SynaraTypography.messageMeta)
+                .foregroundStyle(SynaraColor.secondaryText)
+            HStack {
+                Text(urlString)
+                    .font(SynaraTypography.messageMeta)
+                    .foregroundStyle(SynaraColor.accent)
+                    .lineLimit(1)
+                Spacer()
+                Image(systemName: "arrow.up.right.square")
+                    .foregroundStyle(SynaraColor.secondaryText)
+            }
+            if isPolicySafeLink {
+                HStack(spacing: SynaraSpacing.xSmall) {
+                    Image(systemName: "link")
+                        .font(SynaraTypography.messageMeta)
+                        .foregroundStyle(SynaraColor.secondaryText)
+                    Text("Opens HTTPS link")
+                        .font(SynaraTypography.messageMeta)
+                        .foregroundStyle(SynaraColor.secondaryText)
+                }
+            }
+        }
+        .padding(SynaraSpacing.small)
+        .synaraCard(fill: SynaraColor.surface.opacity(0.7), stroke: SynaraColor.agent.opacity(0.2))
     }
 }
 
@@ -3150,31 +3224,9 @@ private struct AgentCardTimelineRow: View {
 
             AgentApprovalDetails(card: card)
 
-            if let preview = visibleActions.first(where: { $0.url != nil })?.url {
-                VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
-                    Text("Preview")
-                        .font(SynaraTypography.messageMeta)
-                        .foregroundStyle(SynaraColor.secondaryText)
-                    HStack {
-                        Text(preview)
-                            .font(SynaraTypography.messageMeta)
-                            .foregroundStyle(SynaraColor.accent)
-                            .lineLimit(1)
-                        Spacer()
-                        Image(systemName: "arrow.up.right.square")
-                            .foregroundStyle(SynaraColor.secondaryText)
-                    }
-                    HStack(spacing: SynaraSpacing.xSmall) {
-                        Image(systemName: "shield")
-                            .font(SynaraTypography.messageMeta)
-                            .foregroundStyle(SynaraColor.success)
-                        Text("Safe link · Verified domain")
-                            .font(SynaraTypography.messageMeta)
-                            .foregroundStyle(SynaraColor.secondaryText)
-                    }
-                }
-                .padding(SynaraSpacing.small)
-                .synaraCard(fill: SynaraColor.surface.opacity(0.7), stroke: SynaraColor.agent.opacity(0.2))
+            if let linkAction = visibleActions.first(where: { $0.url != nil }),
+               let previewURL = linkAction.url {
+                AgentCardLinkPreview(urlString: previewURL)
             }
 
             if visibleActions.isEmpty == false {

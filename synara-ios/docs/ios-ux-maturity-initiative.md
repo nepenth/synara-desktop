@@ -16,6 +16,7 @@ Branch: `feature/ios-ux-maturity`
 - [x] Attachment sheet: keep Photo/Video, File, Camera; remove unavailable stubs; clean grid UI
 - [x] Inline media thumbnails + real MediaViewer via mediaLoader
 - [x] Reply/edit composer banners show quoted snippet, not raw eventID
+- [x] In-timeline reply quotes show sender + snippet (not raw eventID)
 - [x] Optimistic send with sending/sent/failed bubble states + tap-to-retry
 - [x] Skeleton loading for room list, timeline, notifications inbox
 - [x] Scroll-triggered older-message pagination
@@ -33,25 +34,28 @@ Branch: `feature/ios-ux-maturity`
 
 - [x] Typography tokens: messageBody, messageMeta, roomPreview, chipLabel, composerPlaceholder
 - [x] SynaraMessageBubble primitive (own/other, grouped, agent, encrypted)
-- [x] Room list MXC avatars in RoomAvatarTile
-- [x] Composer polish: tokenized radius, keyboard inset animation, send haptic
+- [x] Room list MXC avatars in SynaraRoomAvatarTile
+- [x] Composer polish: tokenized radius, keyboard inset animation, send haptic, agent prompt metrics
+- [x] Motion: send slide-in, reaction pop, keyboard-driven composer lift
 - [x] Haptics: send, invite accept, failed send, filter selection
 - [x] Agent inbox filter on room list; pending approval chip on rows
-- [x] Agent card approve/reject styling
-- [x] Dismissible crypto banner (only when action needed)
-- [x] Spaces: unread per space, collapse headers, selected-space header
+- [x] Agent card approve/reject styling (green/red outline)
+- [x] Dismissible crypto banner (only when action needed in encrypted rooms)
+- [x] Spaces: unread per space, collapse headers, selected-space header, auto-expand unread spaces
 
 ## Validation (2026-06-09)
 
-- **202 unit tests passing** on iPhone 17 / iOS 26.5 simulator after review fixes.
-- Post-review fixes: notifications caught-up logic, removed misleading global agent pending chips, agent rooms detected from latest agent event (not room name), Later/thread skeleton loading, tab badges only when count > 0, removed duplicate `loadRooms` for tab badges.
+- **209 unit tests passing** on iPhone 17 / iOS 26.5 simulator.
+- Agent rooms detected from latest agent event and sticky client cache (not room name heuristics).
+- Notifications agent rows deep-link to focused timeline events when event IDs are available.
+- Agent link previews show factual HTTPS policy text only (no fake “verified domain” claims).
 
 ## Known follow-ups
 
-- Per-room agent pending approval chips (needs inbox API).
-- Favorite swipe / starred rooms (needs Matrix account data).
+- Favorite swipe / starred rooms (needs shared Matrix account-data contract).
 - Push gateway deployment (paused).
-- Notifications inbox rows still omit room avatars (parity with room list).
+- Media viewer: non-image attachments (PDF/video) full-screen parity.
+- Agent approval status field in shared contract (reduce string-heuristic `requiresUserApproval`).
 
 ## Orchestration
 

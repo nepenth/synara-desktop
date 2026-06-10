@@ -23,6 +23,8 @@ struct RoomSummary: Identifiable, Equatable {
     let avatarURL: URL?
     let hasAgentActivity: Bool
     let latestAgentCard: SynaraAgentCard?
+    let latestAgentCardEventID: String?
+    let pendingAgentApprovals: [PendingAgentCardRef]
 
     init(
         id: String,
@@ -36,7 +38,9 @@ struct RoomSummary: Identifiable, Equatable {
         parentSpaces: [SpaceSummary] = [],
         avatarURL: URL? = nil,
         hasAgentActivity: Bool = false,
-        latestAgentCard: SynaraAgentCard? = nil
+        latestAgentCard: SynaraAgentCard? = nil,
+        latestAgentCardEventID: String? = nil,
+        pendingAgentApprovals: [PendingAgentCardRef] = []
     ) {
         self.id = id
         self.name = name
@@ -50,10 +54,12 @@ struct RoomSummary: Identifiable, Equatable {
         self.avatarURL = avatarURL
         self.hasAgentActivity = hasAgentActivity
         self.latestAgentCard = latestAgentCard
+        self.latestAgentCardEventID = latestAgentCardEventID
+        self.pendingAgentApprovals = pendingAgentApprovals
     }
 
     var isAgentRoom: Bool {
-        hasAgentActivity
+        hasAgentActivity || pendingAgentApprovals.isEmpty == false || latestAgentCard != nil
     }
 
     var requiresAgentApproval: Bool {
@@ -154,9 +160,9 @@ enum RoomListFixtures {
         Date(timeIntervalSince1970: baseTimestamp)
     }
 
-    static func pendingAgentApprovalCard() -> SynaraAgentCard {
+    static func pendingAgentApprovalCard(title: String = "Deploy approval required") -> SynaraAgentCard {
         try! SynaraAgentCard(
-            title: "Deploy approval required",
+            title: title,
             status: "pending",
             summary: "Review the proposed deployment before it runs.",
             actions: [
@@ -233,7 +239,22 @@ enum RoomListFixtures {
                 lastActivityAt: now.addingTimeInterval(-1_200),
                 parentSpaces: [SpaceSummary(id: "!ops:matrix.org", name: "Ops")],
                 hasAgentActivity: true,
-                latestAgentCard: RoomListFixtures.pendingAgentApprovalCard()
+                latestAgentCard: RoomListFixtures.pendingAgentApprovalCard(),
+                latestAgentCardEventID: "$agent-deploy-approval:matrix.org"
+            ),
+            RoomSummary(
+                id: "!security-agent:matrix.org",
+                name: "Security Agent",
+                lastMessagePreview: "Agent: Access review required",
+                unreadCount: 1,
+                hasHighlight: false,
+                kind: .room,
+                membership: .joined,
+                lastActivityAt: now.addingTimeInterval(-900),
+                parentSpaces: [SpaceSummary(id: "!ops:matrix.org", name: "Ops")],
+                hasAgentActivity: true,
+                latestAgentCard: RoomListFixtures.pendingAgentApprovalCard(title: "Access review required"),
+                latestAgentCardEventID: "$agent-access-approval:matrix.org"
             ),
             RoomSummary(
                 id: "!alice:matrix.org",
@@ -383,8 +404,15 @@ enum NotificationBadgeSummary {
     }
 }
 
+struct PendingAgentCardRef: Equatable {
+    let eventID: String
+    let card: SynaraAgentCard
+    let timestamp: Date
+}
+
 struct AgentPendingApprovalItem: Identifiable, Equatable {
     let id: String
+    let eventID: String
     let roomID: String
     let roomName: String
     let title: String
@@ -412,23 +440,39 @@ struct AgentPendingApprovalItem: Identifiable, Equatable {
 
 enum AgentPendingInbox {
     static func pendingApprovals(from rooms: [RoomSummary]) -> [AgentPendingApprovalItem] {
-        rooms.compactMap { room in
-            guard let card = room.latestAgentCard, card.requiresUserApproval else {
-                return nil
-            }
+        rooms.flatMap { room in
+            pendingCardRefs(for: room).compactMap { ref in
+                guard ref.card.requiresUserApproval else {
+                    return nil
+                }
 
-            return AgentPendingApprovalItem(
-                id: room.id,
-                roomID: room.id,
-                roomName: room.name,
-                title: card.title,
-                summary: card.summary,
-                status: card.status,
-                avatarURL: room.avatarURL,
-                lastActivityAt: room.lastActivityAt
-            )
+                return AgentPendingApprovalItem(
+                    id: "\(room.id)-\(ref.eventID)",
+                    eventID: ref.eventID,
+                    roomID: room.id,
+                    roomName: room.name,
+                    title: ref.card.title,
+                    summary: ref.card.summary,
+                    status: ref.card.status,
+                    avatarURL: room.avatarURL,
+                    lastActivityAt: ref.timestamp
+                )
+            }
         }
         .sorted { $0.lastActivityAt > $1.lastActivityAt }
+    }
+
+    private static func pendingCardRefs(for room: RoomSummary) -> [PendingAgentCardRef] {
+        if room.pendingAgentApprovals.isEmpty == false {
+            return room.pendingAgentApprovals
+        }
+
+        guard let card = room.latestAgentCard else {
+            return []
+        }
+
+        let eventID = room.latestAgentCardEventID ?? room.id
+        return [PendingAgentCardRef(eventID: eventID, card: card, timestamp: room.lastActivityAt)]
     }
 }
 
