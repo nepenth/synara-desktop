@@ -219,7 +219,27 @@ final class RoomListServiceTests: XCTestCase {
         )
 
         XCTAssertTrue(filtered.allSatisfy(\.isAgentRoom))
-        XCTAssertEqual(filtered.map(\.id), ["!agent-workflows:matrix.org"])
+        XCTAssertEqual(
+            filtered.map(\.id),
+            ["!agent-workflows:matrix.org", "!security-agent:matrix.org"]
+        )
+    }
+
+    func testAgentRoomStaysClassifiedWithLatestAgentCardWithoutRecentActivityFlag() {
+        let room = RoomSummary(
+            id: "!agent:matrix.org",
+            name: "Agent Workflows",
+            lastMessagePreview: "Latest message",
+            unreadCount: 0,
+            hasHighlight: false,
+            kind: .room,
+            membership: .joined,
+            lastActivityAt: RoomListFixtures.now,
+            hasAgentActivity: false,
+            latestAgentCard: RoomListFixtures.pendingAgentApprovalCard()
+        )
+
+        XCTAssertTrue(room.isAgentRoom)
     }
 
     func testAgentRoomRequiresRecentAgentActivity() {
@@ -267,7 +287,7 @@ final class RoomListServiceTests: XCTestCase {
         let counts = RoomListSpaceGrouping.unreadCountsBySpaceID(from: rooms)
 
         XCTAssertEqual(counts["!workspace:matrix.org"], 10)
-        XCTAssertEqual(counts["!ops:matrix.org"], 3)
+        XCTAssertEqual(counts["!ops:matrix.org"], 4)
     }
 
     func testSpaceChannelGroupsUsePrimaryParentSpace() {
@@ -282,7 +302,7 @@ final class RoomListServiceTests: XCTestCase {
         )
         XCTAssertEqual(
             groups.first(where: { $0.space.id == "!ops:matrix.org" })?.rooms.map(\.id),
-            ["!security:matrix.org", "!agent-workflows:matrix.org"]
+            ["!security:matrix.org", "!agent-workflows:matrix.org", "!security-agent:matrix.org"]
         )
     }
 
@@ -407,17 +427,21 @@ final class RoomListServiceTests: XCTestCase {
     func testTabBadgeCountsUseRoomListState() {
         let badges = TabBadgeCounts.make(from: RoomListFixtures.small())
 
-        XCTAssertEqual(badges.notifications, 6)
-        XCTAssertEqual(badges.rooms, 12)
+        XCTAssertEqual(badges.notifications, 8)
+        XCTAssertEqual(badges.rooms, 13)
     }
 
     func testAgentPendingInboxBuildsRowsFromLatestAgentCard() {
         let rooms = RoomListFixtures.small()
         let pending = AgentPendingInbox.pendingApprovals(from: rooms)
 
-        XCTAssertEqual(pending.count, 1)
-        XCTAssertEqual(pending.first?.roomID, "!agent-workflows:matrix.org")
-        XCTAssertEqual(pending.first?.title, "Deploy approval required")
+        XCTAssertEqual(pending.count, 2)
+        XCTAssertEqual(pending.first?.roomID, "!security-agent:matrix.org")
+        XCTAssertEqual(pending.first?.title, "Access review required")
+        XCTAssertEqual(pending.first?.eventID, "$agent-access-approval:matrix.org")
+        XCTAssertEqual(pending.last?.roomID, "!agent-workflows:matrix.org")
+        XCTAssertEqual(pending.last?.title, "Deploy approval required")
+        XCTAssertEqual(pending.last?.eventID, "$agent-deploy-approval:matrix.org")
     }
 
     func testRoomSummaryRequiresAgentApprovalFromLatestCard() {

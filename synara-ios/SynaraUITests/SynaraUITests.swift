@@ -285,7 +285,12 @@ final class SynaraUITests: XCTestCase {
 
         XCTAssertTrue(app.staticTexts["Notifications"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["NotificationsRow-!project:matrix.org"].waitForExistence(timeout: 10))
-        XCTAssertTrue(app.buttons["NotificationsRow-!general:matrix.org"].exists)
+
+        let unreadRoomsDisclosure = app.buttons["Unread rooms"]
+        if unreadRoomsDisclosure.waitForExistence(timeout: 2) {
+            tap(unreadRoomsDisclosure)
+            XCTAssertTrue(app.buttons["NotificationsRow-!general:matrix.org"].waitForExistence(timeout: 5))
+        }
 
         tap(app.buttons["NotificationsRow-!project:matrix.org"])
         XCTAssertTrue(app.scrollViews["TimelineList"].waitForExistence(timeout: 5))
@@ -385,8 +390,10 @@ final class SynaraUITests: XCTestCase {
         XCTAssertTrue(row.waitForExistence(timeout: 5))
         tap(row)
 
-        XCTAssertTrue(app.staticTexts["!project:matrix.org"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.scrollViews["TimelineList"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.scrollViews["TimelineList"].waitForExistence(timeout: 10))
+        XCTAssertTrue(
+            app.staticTexts["Here's the latest spec for the new permissions model."].waitForExistence(timeout: 5)
+        )
     }
 
     func testAgentCardApproveActionShowsSubmittedState() {

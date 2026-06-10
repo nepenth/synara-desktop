@@ -119,28 +119,24 @@ private struct NotificationsTabView: View {
     }
 
     private func notificationsRow(_ room: RoomSummary) -> some View {
-        Button {
-            environment.router.route(to: .room(id: room.id, title: room.name))
-        } label: {
+        NavigationLink(value: AppRoute.room(id: room.id, title: room.name)) {
             NotificationsInboxRow(room: room)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(Rectangle())
         }
-        .buttonStyle(SynaraListRowButtonStyle())
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
         .accessibilityIdentifier("NotificationsRow-\(room.id)")
     }
 
     private func agentPendingRow(_ item: AgentPendingApprovalItem) -> some View {
-        Button {
-            environment.router.route(to: .room(id: item.roomID, title: item.roomName))
-        } label: {
+        NavigationLink(
+            value: AppRoute.room(id: item.roomID, eventID: item.eventID, title: item.roomName)
+        ) {
             AgentPendingApprovalRow(item: item)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(Rectangle())
         }
-        .buttonStyle(SynaraListRowButtonStyle())
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
         .accessibilityLabel("\(item.title) in \(item.roomName)")

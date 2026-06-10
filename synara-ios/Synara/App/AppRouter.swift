@@ -34,8 +34,16 @@ final class AppRouter: ObservableObject {
         case .login:
             authPath = [route]
         case .room(let id, let eventID, let title):
-            selectedTab = .rooms
-            roomsPath = [.room(id: id, eventID: eventID, title: title)]
+            let destination: AppRoute = .room(id: id, eventID: eventID, title: title)
+            switch selectedTab {
+            case .notifications:
+                notificationsPath = [destination]
+            case .later:
+                laterPath = [destination]
+            default:
+                selectedTab = .rooms
+                roomsPath = [destination]
+            }
         case .thread:
             selectedTab = .rooms
             if roomsPath.isEmpty {

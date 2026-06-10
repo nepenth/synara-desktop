@@ -73,6 +73,15 @@ struct TimelineReplyPreview: Equatable {
         return truncatedSnippet(raw)
     }
 
+    static func previewsByEventID(in items: [TimelineItem], currentUserID: String) -> [String: TimelineReplyPreview] {
+        var previews: [String: TimelineReplyPreview] = [:]
+        previews.reserveCapacity(items.count)
+        for item in items {
+            previews[item.eventID] = from(item: item, currentUserID: currentUserID)
+        }
+        return previews
+    }
+
     static func truncatedSnippet(_ text: String) -> String {
         let collapsed = text
             .replacingOccurrences(of: "\n", with: " ")
