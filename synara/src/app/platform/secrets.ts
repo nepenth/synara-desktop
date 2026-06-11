@@ -18,6 +18,21 @@ export type PlatformSecretStoreStatus = {
 
 export type PlatformSecretStoreSessionPersistence = 'persistent' | 'session-scoped' | 'fallback';
 
+export const DESKTOP_SECRET_STORE_OPERATION_ERRORS = [
+  'desktop-secret-store-locked',
+  'desktop-secret-store-unavailable',
+  'desktop-secret-store-denied',
+] as const;
+
+export type DesktopSecretStoreOperationError =
+  (typeof DESKTOP_SECRET_STORE_OPERATION_ERRORS)[number];
+
+export const isDesktopSecretStoreOperationError = (
+  value: unknown
+): value is DesktopSecretStoreOperationError =>
+  typeof value === 'string' &&
+  (DESKTOP_SECRET_STORE_OPERATION_ERRORS as readonly string[]).includes(value);
+
 const PLATFORM_SECRET_STORE_BACKENDS = new Set<PlatformSecretStoreBackend>([
   'none',
   'desktop-native',

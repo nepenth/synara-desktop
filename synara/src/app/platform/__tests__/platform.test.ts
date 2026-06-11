@@ -10,6 +10,7 @@ import {
   getPlatformSecretStoreStatusLabel,
   getPlatformNotificationCount,
   getPlatformSecretStoreStatus,
+  isDesktopSecretStoreOperationError,
   isDesktopPlatform,
   platformSessionStore,
   repairPlatformDeviceDisplayName,
@@ -244,6 +245,15 @@ test('platform capabilities expose secure secret store only when bridge opts in'
   } finally {
     (globalThis as any).window = originalWindow;
   }
+});
+
+test('platform secret-store operation errors recognize stable desktop IPC codes', () => {
+  assert.equal(isDesktopSecretStoreOperationError('desktop-secret-store-locked'), true);
+  assert.equal(isDesktopSecretStoreOperationError('desktop-secret-store-unavailable'), true);
+  assert.equal(isDesktopSecretStoreOperationError('desktop-secret-store-denied'), true);
+  assert.equal(isDesktopSecretStoreOperationError('desktop-secret-store-operation-failed'), false);
+  assert.equal(isDesktopSecretStoreOperationError('native-session-store-error'), false);
+  assert.equal(isDesktopSecretStoreOperationError(undefined), false);
 });
 
 test('platform secret-store helpers describe persistence behavior', () => {

@@ -224,7 +224,9 @@ const DESKTOP_SECRET_STORE_KEYUTILS_PROBE_SERVICE: &str =
 const DESKTOP_SECRET_STORE_KEYUTILS_PROBE_ACCOUNT: &str = "availability-probe";
 #[cfg(target_os = "linux")]
 const DESKTOP_SECRET_STORE_KEYUTILS_PROBE_SECRET: &str = "synara-keyutils-availability-probe";
-const DESKTOP_SECRET_STORE_OPERATION_FAILED: &str = "desktop-secret-store-operation-failed";
+const DESKTOP_SECRET_STORE_OPERATION_LOCKED: &str = "desktop-secret-store-locked";
+const DESKTOP_SECRET_STORE_OPERATION_UNAVAILABLE: &str = "desktop-secret-store-unavailable";
+const DESKTOP_SECRET_STORE_OPERATION_DENIED: &str = "desktop-secret-store-denied";
 #[cfg(target_os = "linux")]
 const DESKTOP_SECRET_STORE_PROBE_TIMEOUT: Duration = Duration::from_secs(2);
 const DESKTOP_STORED_SESSION_INVALID: &str = "desktop-stored-session-invalid";
@@ -497,8 +499,60 @@ impl DesktopSessionSecretStore for KeyringDesktopSessionSecretStore {
     }
 }
 
-fn map_keyring_error(_operation: &'static str, _error: KeyringError) -> String {
-    DESKTOP_SECRET_STORE_OPERATION_FAILED.to_owned()
+#[cfg(any(target_os = "macos", test))]
+fn secret_store_error_indicates_access_denied(err: &(dyn std::error::Error + Send + Sync)) -> bool {
+    if macos_keychain_error_indicates_access_denied(err) {
+        return true;
+    }
+
+    #[cfg(test)]
+    {
+        let message = err.to_string();
+        if message.starts_with("test secret store error denied") {
+            return true;
+        }
+    }
+
+    let message = err.to_string().to_lowercase();
+    message.contains("access denied")
+        || message.contains("permission denied")
+        || message.contains("not authorized")
+        || message.contains("auth denied")
+}
+
+#[cfg(not(any(target_os = "macos", test)))]
+fn secret_store_error_indicates_access_denied(err: &(dyn std::error::Error + Send + Sync)) -> bool {
+    let message = err.to_string().to_lowercase();
+    message.contains("access denied")
+        || message.contains("permission denied")
+        || message.contains("not authorized")
+        || message.contains("auth denied")
+}
+
+fn secret_store_operation_error_code(error: &KeyringError) -> &'static str {
+    match error {
+        KeyringError::NoStorageAccess(err) => {
+            if secret_store_error_indicates_access_denied(err.as_ref()) {
+                DESKTOP_SECRET_STORE_OPERATION_DENIED
+            } else {
+                DESKTOP_SECRET_STORE_OPERATION_LOCKED
+            }
+        }
+        KeyringError::PlatformFailure(err) => {
+            if secret_store_error_indicates_access_denied(err.as_ref()) {
+                DESKTOP_SECRET_STORE_OPERATION_DENIED
+            } else {
+                DESKTOP_SECRET_STORE_OPERATION_UNAVAILABLE
+            }
+        }
+        _ => DESKTOP_SECRET_STORE_OPERATION_UNAVAILABLE,
+    }
+}
+
+fn map_keyring_error(operation: &'static str, error: KeyringError) -> String {
+    let code = secret_store_operation_error_code(&error);
+    eprintln!("desktop secret store {operation} failed: code={code} detail={error}");
+    code.to_owned()
 }
 
 #[allow(dead_code)]
@@ -2985,6 +3039,133 @@ mod tests {
 
         assert!(desktop_set_session_in_store(&store, session).is_err());
         assert_eq!(store.stored_secret(), None);
+    }
+
+    struct FailingSessionSecretStore {
+        status: DesktopSecretStoreStatus,
+        set_error: String,
+    }
+
+    impl FailingSessionSecretStore {
+        fn with_set_error(set_error: String) -> Self {
+            Self {
+                status: available_test_secret_store_status(),
+                set_error,
+            }
+        }
+    }
+
+    impl DesktopSessionSecretStore for FailingSessionSecretStore {
+        fn status(&self) -> DesktopSecretStoreStatus {
+            self.status
+        }
+
+        fn get_secret(&self) -> Result<Option<String>, String> {
+            Ok(None)
+        }
+
+        fn set_secret(&self, _secret: &str) -> Result<bool, String> {
+            Err(self.set_error.clone())
+        }
+
+        fn remove_secret(&self) -> Result<bool, String> {
+            Ok(false)
+        }
+    }
+
+    #[test]
+    fn map_keyring_error_reports_locked_when_storage_is_inaccessible() {
+        let error = map_keyring_error(
+            "write-session",
+            KeyringError::NoStorageAccess(Box::new(std::io::Error::new(
+                std::io::ErrorKind::PermissionDenied,
+                "keychain locked",
+            ))),
+        );
+
+        assert_eq!(error, DESKTOP_SECRET_STORE_OPERATION_LOCKED);
+    }
+
+    #[test]
+    fn map_keyring_error_reports_denied_when_access_is_blocked() {
+        let error = map_keyring_error(
+            "write-session",
+            KeyringError::NoStorageAccess(Box::new(std::io::Error::other(
+                "test keychain error -25293",
+            ))),
+        );
+
+        assert_eq!(error, DESKTOP_SECRET_STORE_OPERATION_DENIED);
+    }
+
+    #[test]
+    fn map_keyring_error_reports_unavailable_on_platform_failures() {
+        let error = map_keyring_error(
+            "write-session",
+            KeyringError::PlatformFailure(Box::new(std::io::Error::other(
+                "dbus service unavailable",
+            ))),
+        );
+
+        assert_eq!(error, DESKTOP_SECRET_STORE_OPERATION_UNAVAILABLE);
+    }
+
+    #[test]
+    fn map_keyring_error_never_echoes_sensitive_payloads() {
+        let secret_payload = r#"{"accessToken":"super-secret-token","baseUrl":"https://x"}"#;
+        let error = map_keyring_error(
+            "write-session",
+            KeyringError::PlatformFailure(Box::new(std::io::Error::other(secret_payload))),
+        );
+
+        assert_eq!(error, DESKTOP_SECRET_STORE_OPERATION_UNAVAILABLE);
+        assert!(!error.contains("super-secret-token"));
+        assert!(!error.contains("accessToken"));
+    }
+
+    #[test]
+    fn desktop_set_session_reports_locked_when_keychain_is_locked() {
+        let locked_error = map_keyring_error(
+            "write-session",
+            KeyringError::NoStorageAccess(Box::new(std::io::Error::new(
+                std::io::ErrorKind::PermissionDenied,
+                "keychain locked",
+            ))),
+        );
+        let store = FailingSessionSecretStore::with_set_error(locked_error);
+        let session = valid_session_envelope();
+        let access_token = session.access_token.clone();
+
+        let error = desktop_set_session_in_store(&store, session)
+            .err()
+            .expect("set session should fail");
+
+        assert_eq!(error, DESKTOP_SECRET_STORE_OPERATION_LOCKED);
+        assert!(!error.contains(&access_token));
+        assert!(!error.contains("access-token"));
+    }
+
+    #[test]
+    fn desktop_set_session_error_never_contains_session_json() {
+        let unavailable_error = map_keyring_error(
+            "write-session",
+            KeyringError::PlatformFailure(Box::new(std::io::Error::other(
+                "secret service write failed",
+            ))),
+        );
+        let store = FailingSessionSecretStore::with_set_error(unavailable_error);
+        let session = valid_session_envelope();
+        let session_json =
+            serde_json::to_string(&session).expect("session envelope should encode");
+
+        let error = desktop_set_session_in_store(&store, session)
+            .err()
+            .expect("set session should fail");
+
+        assert_eq!(error, DESKTOP_SECRET_STORE_OPERATION_UNAVAILABLE);
+        assert!(!error.contains(&session_json));
+        assert!(!error.contains("access-token"));
+        assert!(!error.contains("matrix.example.org"));
     }
 
     #[test]
