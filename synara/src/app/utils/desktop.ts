@@ -1,5 +1,6 @@
 import { getBadgeCount } from '../notifications/badgeSummary';
 import { recordDesktopDiagnostic } from './desktopDiagnostics';
+import { isSafeHttpsUrl } from './remoteContent';
 import { getHomeRoomPath } from '../pages/pathUtils';
 import {
   normalizeAgentActionPayload,
@@ -519,13 +520,40 @@ export const sendDesktopAgentAction = async (
   return result === true;
 };
 
+const isSafeDesktopExternalUrl = (url: string): boolean => {
+  if (isSafeHttpsUrl(url)) return true;
+
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol === 'http:') {
+      const host = parsed.hostname.toLowerCase();
+      return host === 'localhost' || host === '127.0.0.1' || host === '::1';
+    }
+    if (parsed.protocol === 'mailto:') {
+      const address = parsed.pathname.trim();
+      return address.length > 0 && address.includes('@');
+    }
+    if (parsed.protocol === 'matrix:') {
+      return parsed.hostname.length > 0 || parsed.pathname.replace(/^\//, '').length > 0;
+    }
+  } catch {
+    return false;
+  }
+
+  return false;
+};
+
 export const openDesktopExternalUrl = async (url: string): Promise<boolean> => {
   const normalizedUrl = normalizeActionField(url, MAX_DESKTOP_ACTION_URL_LENGTH);
-  if (!normalizedUrl || !isSynaraDesktop()) return false;
+  if (!normalizedUrl || !isSynaraDesktop() || !isSafeDesktopExternalUrl(normalizedUrl)) {
+    return false;
+  }
   const result = await invokeDesktop<boolean>('desktop_open_external_url', { url: normalizedUrl });
   return result === true;
 };
 
+// Tauri IPC currently serializes byte payloads as number[]; chunked transfers avoid
+// a single giant buffer but still allocate per chunk in the renderer.
 const saveDesktopFileInline = async (
   blob: Blob,
   safeFilename: string

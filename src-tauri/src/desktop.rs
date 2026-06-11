@@ -57,6 +57,7 @@ const DROPPED_FILE_ALLOWLIST_TTL: Option<Duration> = Some(Duration::from_millis(
 pub const DESKTOP_FILE_IPC_INLINE_THRESHOLD: usize = 8 * 1024 * 1024;
 pub const DESKTOP_FILE_IPC_CHUNK_SIZE: usize = 1024 * 1024;
 const MAX_ACTIVE_FILE_TRANSFERS: usize = 16;
+const FILE_TRANSFER_SESSION_TTL: Duration = Duration::from_secs(300);
 
 #[derive(Clone, Serialize, serde::Deserialize)]
 pub struct DesktopAgentActionPayload {
@@ -119,11 +120,13 @@ struct SaveFileSession {
     filename: String,
     expected_size: u64,
     bytes_received: u64,
+    created_at: Instant,
 }
 
 struct DroppedReadSession {
     path: PathBuf,
     size: u64,
+    created_at: Instant,
 }
 
 #[derive(Clone, serde::Deserialize, Serialize)]
@@ -456,6 +459,90 @@ fn is_loopback_session_host(host: &str) -> bool {
     host.eq_ignore_ascii_case("localhost") || host == "127.0.0.1" || host == "::1"
 }
 
+fn normalize_url_host(host: &str) -> String {
+    host.trim_matches(|character| character == '[' || character == ']')
+        .trim_end_matches('.')
+        .to_ascii_lowercase()
+}
+
+fn is_local_hostname(host: &str) -> bool {
+    let host = normalize_url_host(host);
+    if host == "localhost" || host == "0.0.0.0" {
+        return true;
+    }
+
+    const LOCAL_SUFFIXES: &[&str] = &[
+        ".localhost",
+        ".local",
+        ".localdomain",
+        ".internal",
+        ".lan",
+        ".home.arpa",
+    ];
+    LOCAL_SUFFIXES.iter().any(|suffix| host.ends_with(suffix))
+}
+
+fn is_private_ipv4(host: &str) -> bool {
+    let host = normalize_url_host(host);
+    if host.starts_with("0.")
+        || host.starts_with("10.")
+        || host.starts_with("127.")
+        || host.starts_with("169.254.")
+        || host.starts_with("192.168.")
+    {
+        return true;
+    }
+
+    if let Some(second_octet) = host.split('.').nth(1).and_then(|value| value.parse::<u8>().ok()) {
+        if host.starts_with("172.") && (16..=31).contains(&second_octet) {
+            return true;
+        }
+        if host.starts_with("100.") && (64..=127).contains(&second_octet) {
+            return true;
+        }
+    }
+
+    false
+}
+
+fn is_private_ipv6(host: &str) -> bool {
+    let host = normalize_url_host(host);
+    host == "::1"
+        || host == "::"
+        || host.starts_with("fc")
+        || host.starts_with("fd")
+        || host.starts_with("fe80")
+        || host.starts_with("::ffff:")
+}
+
+fn is_safe_public_https_host(host: &str) -> bool {
+    let normalized = normalize_url_host(host);
+    if normalized.is_empty() || is_local_hostname(&normalized) {
+        return false;
+    }
+
+    if normalized.contains(':') {
+        return !is_private_ipv6(&normalized);
+    }
+
+    !is_private_ipv4(&normalized)
+}
+
+fn is_safe_structured_external_url(url: &Url) -> bool {
+    match url.scheme() {
+        "mailto" => {
+            let address = url.path().trim();
+            !address.is_empty() && address.contains('@')
+        }
+        "matrix" => {
+            url.host_str().is_some()
+                || (!url.path().is_empty() && url.path() != "/")
+                || !url.path().trim().is_empty()
+        }
+        _ => false,
+    }
+}
+
 fn is_allowed_session_base_url(value: &str) -> bool {
     let Ok(url) = Url::parse(value) else {
         return false;
@@ -676,7 +763,7 @@ fn secret_store_operation_error_code(error: &KeyringError) -> &'static str {
 
 fn map_keyring_error(operation: &'static str, error: KeyringError) -> String {
     let code = secret_store_operation_error_code(&error);
-    eprintln!("desktop secret store {operation} failed: code={code} detail={error}");
+    eprintln!("desktop secret store {operation} failed: code={code}");
     code.to_owned()
 }
 
@@ -1162,12 +1249,15 @@ pub fn is_safe_external_url(value: &str) -> bool {
     }
 
     match url.scheme() {
-        "https" => url.host_str().is_some(),
+        "https" => url
+            .host_str()
+            .map(is_safe_public_https_host)
+            .unwrap_or(false),
         "http" => url
             .host_str()
             .map(is_loopback_session_host)
             .unwrap_or(false),
-        "mailto" | "matrix" => true,
+        "mailto" | "matrix" => is_safe_structured_external_url(&url),
         _ => false,
     }
 }
@@ -1266,9 +1356,38 @@ pub fn dropped_file_read_mode(byte_count: u64) -> DroppedFileReadMode {
 }
 
 fn new_file_transfer_id(prefix: &str) -> String {
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+    use std::thread;
+
     static TRANSFER_COUNTER: AtomicU64 = AtomicU64::new(0);
     let counter = TRANSFER_COUNTER.fetch_add(1, Ordering::Relaxed);
-    format!("{prefix}-{counter}-{}", chrono_like_timestamp())
+    let mut hasher = DefaultHasher::new();
+    counter.hash(&mut hasher);
+    chrono_like_timestamp().hash(&mut hasher);
+    thread::current().id().hash(&mut hasher);
+    format!("{prefix}-{:016x}", hasher.finish())
+}
+
+fn purge_stale_file_transfer_sessions(now: Instant) {
+    if let Ok(mut sessions) = save_file_sessions().lock() {
+        let stale_ids: Vec<String> = sessions
+            .iter()
+            .filter_map(|(session_id, session)| {
+                (now.duration_since(session.created_at) > FILE_TRANSFER_SESSION_TTL)
+                    .then_some(session_id.clone())
+            })
+            .collect();
+        for session_id in stale_ids {
+            if let Some(session) = sessions.remove(&session_id) {
+                let _ = fs::remove_file(session.temp_path);
+            }
+        }
+    }
+
+    if let Ok(mut sessions) = dropped_read_sessions().lock() {
+        sessions.retain(|_, session| now.duration_since(session.created_at) <= FILE_TRANSFER_SESSION_TTL);
+    }
 }
 
 fn save_file_sessions() -> &'static Mutex<HashMap<String, SaveFileSession>> {
@@ -1283,6 +1402,7 @@ fn dropped_read_sessions() -> &'static Mutex<HashMap<String, DroppedReadSession>
 }
 
 fn register_save_session(session: SaveFileSession) -> Result<String, String> {
+    purge_stale_file_transfer_sessions(Instant::now());
     let session_id = new_file_transfer_id("save");
     let mut sessions = save_file_sessions()
         .lock()
@@ -1303,6 +1423,7 @@ fn take_save_session(session_id: &str) -> Result<SaveFileSession, String> {
 }
 
 fn register_dropped_read_session(session: DroppedReadSession) -> Result<String, String> {
+    purge_stale_file_transfer_sessions(Instant::now());
     let transfer_id = new_file_transfer_id("drop");
     let mut sessions = dropped_read_sessions()
         .lock()
@@ -1385,6 +1506,7 @@ pub fn desktop_save_file_begin(
         filename: safe_filename,
         expected_size: total_size,
         bytes_received: 0,
+        created_at: Instant::now(),
     })?;
 
     Ok(DesktopSaveFileBeginResult { session_id })
@@ -1685,6 +1807,7 @@ pub fn desktop_read_dropped_files(
                 let transfer_id = register_dropped_read_session(DroppedReadSession {
                     path: canonical,
                     size: file_size,
+                    created_at: Instant::now(),
                 })?;
                 files.push(DesktopDroppedFilePayload {
                     name,
@@ -1750,7 +1873,10 @@ fn is_safe_agent_url(value: &str) -> bool {
     };
 
     url.scheme() == "https"
-        && url.host_str().is_some()
+        && url
+            .host_str()
+            .map(is_safe_public_https_host)
+            .unwrap_or(false)
         && url.username().is_empty()
         && url.password().is_none()
 }
@@ -3421,9 +3547,19 @@ mod tests {
         assert!(is_safe_external_url("http://127.0.0.1:8080"));
         assert!(is_safe_external_url("http://localhost:8080"));
         assert!(is_safe_external_url("mailto:test@example.org"));
+        assert!(is_safe_external_url("matrix:r/#room:example.org"));
         assert!(!is_safe_external_url("javascript:alert(1)"));
         assert!(!is_safe_external_url("file:///Users/example/.ssh/id_rsa"));
         assert!(!is_safe_external_url("https://user:pass@example.org/"));
+        assert!(!is_safe_external_url("https://127.0.0.1/admin"));
+        assert!(!is_safe_external_url("https://192.168.1.1/"));
+        assert!(!is_safe_external_url("https://169.254.169.254/latest/meta-data/"));
+        assert!(!is_safe_external_url("https://metadata.google.internal/"));
+        assert!(!is_safe_external_url("https://app.local/"));
+        assert!(!is_safe_external_url("mailto:not-an-email"));
+        assert!(!is_safe_external_url("matrix:"));
+        assert!(!is_safe_agent_url("https://10.0.0.5/run"));
+        assert!(is_safe_agent_url("https://agent.example.org/run"));
     }
 
     #[test]
@@ -4226,6 +4362,14 @@ mod tests {
             sanitize_notification_route("#/room/abc".to_owned()).unwrap(),
             "#/room/abc"
         );
+        let notification = sanitize_notification_payload(DesktopNotificationPayload {
+            title: "Later".to_owned(),
+            body: Some("Reminder".to_owned()),
+            route: Some("/inbox/later/".to_owned()),
+        })
+        .expect("notification payload should sanitize");
+        let route = notification.route.expect("route should be present");
+        assert_eq!(sanitize_route(route.clone()).unwrap(), route);
         assert!(sanitize_notification_route("https://example.org".to_owned()).is_err());
         assert!(sanitize_notification_route("room/abc".to_owned()).is_err());
     }
@@ -4388,6 +4532,27 @@ VERSION_ID=24
                 "CmdOrCtrl+Shift+L".to_string(),
                 "CmdOrCtrl+Shift+N".to_string()
             ]
+        );
+    }
+
+    #[test]
+    fn shortcut_registration_rollback_scope_matches_brand_new_shortcuts() {
+        let previous = DesktopShortcutConfig {
+            show: "CmdOrCtrl+Shift+C".to_string(),
+            later: "CmdOrCtrl+Shift+L".to_string(),
+            notifications: "CmdOrCtrl+Shift+N".to_string(),
+        };
+        let next = DesktopShortcutConfig {
+            show: "CmdOrCtrl+Shift+1".to_string(),
+            later: "CmdOrCtrl+Shift+L".to_string(),
+            notifications: "CmdOrCtrl+Shift+N".to_string(),
+        };
+
+        let brand_new = shortcuts_needing_registration(Some(&previous), &next);
+        assert_eq!(brand_new, vec!["CmdOrCtrl+Shift+1".to_string()]);
+        assert_eq!(
+            retired_shortcut_strings(&previous, &next),
+            vec!["CmdOrCtrl+Shift+C".to_string()]
         );
     }
 

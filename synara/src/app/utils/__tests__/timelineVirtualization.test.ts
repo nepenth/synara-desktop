@@ -236,6 +236,30 @@ test('incremental timeline row build preserves row order for appended events', (
   );
 });
 
+test('timeline row build rebuilds when same-length events mutate in place', () => {
+  const timeline = createHarnessTimeline(6);
+  const initial = buildTimelineRowsWithState([timeline], harnessBuildOptions, harnessBuildDeps);
+
+  timeline.events[2] = createHarnessEvent(2, {
+    type: 'm.room.message',
+    ts: 1_700_000_000_000 + 2 * 60_000 + 1,
+  });
+
+  resetTimelineRowBuildInstrumentation();
+  const rebuilt = buildTimelineRowsWithState(
+    [timeline],
+    harnessBuildOptions,
+    harnessBuildDeps,
+    initial.state
+  );
+  const instrumentation = getTimelineRowBuildInstrumentation();
+
+  assert.equal(rebuilt.strategy, 'full');
+  assert.equal(instrumentation.fullBuilds, 1);
+  assert.equal(instrumentation.skippedBuilds, 0);
+  assert.notEqual(rebuilt.rows, initial.rows);
+});
+
 test('incremental timeline row build skips work for no-op refresh', () => {
   const timeline = createHarnessTimeline(12);
   const initial = buildTimelineRowsWithState([timeline], harnessBuildOptions, harnessBuildDeps);

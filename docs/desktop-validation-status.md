@@ -1,100 +1,89 @@
 # Desktop Validation Status
 
-Reviewed: 2026-06-10  
-Desktop version: **1.1.1** (`npm run check:versions`)
+Reviewed: 2026-06-11  
+Desktop version: **1.2.3** (`npm run check:versions`)  
+Branch: `maturity_improvement_plan1` (rebased on `main` with iOS UX maturity)
+
+## Automated gates (branch tip)
+
+| Gate | Status | Notes |
+|------|--------|-------|
+| `npm run check:versions` | Pass | 1.2.3 desktop + iOS build metadata |
+| `npm run test:modernization` | Pass | 255 tests |
+| `npm run typecheck:modernization` | Pass | |
+| `npm run check:mip1-evidence` | Pass | 46/46 items mapped |
+| `npm run check:runtime-assets` | Pass | devAssets ↔ synara/dist |
+| `cargo test --lib` | Pass | 78 tests (macOS workstation) |
+| `cargo check --locked --release` | Pass | |
+
+## MIP1 remediation (2026-06-11)
+
+Post-review fixes landed on `maturity_improvement_plan1`:
+
+| Item | Status |
+|------|--------|
+| Rust/TS URL policy parity (private IP, local hosts) | Done |
+| `map_keyring_error` stderr sanitization (G-NFR-1) | Done |
+| Timeline revision fingerprint (MIP1-18 correctness) | Done |
+| File transfer session TTL (5 min) + opaque IDs | Done |
+| Notification route → navigation contract test | Done |
+| Shortcut rollback scope test | Done |
+| Validation doc refresh | Done |
+| localStorage fallback risk documented | Done |
 
 ## Pre-iOS Prep
 
-Status: complete.
-
-The local pre-iOS implementation gate is closed. The runtime now has platform
-APIs, native-first session storage, scoped desktop credential commands, shared
-settings/platform settings split, and machine-readable shared contracts for:
-
-- agent actions
-- agent cards
-- Later account data
-- media/external URL policy
-- notification summaries
-- room notes
-- room/event/thread anchors
-- route paths
-- settings compatibility
-- space/sidebar folders
-- unread anchors
-
-Validation:
-
-- `npm run test:modernization`: passing (see branch tip for current count).
-- `npm run typecheck:modernization`: passing.
-- `npm run check:eslint`: passing.
-- `npm run check:prettier`: passing.
-- `npm run check:versions`: passing at `1.1.1`.
+Status: complete on `main` (merged `feature/ios-ux-maturity`).
 
 ## macOS
 
-Status: locally and CI package-validated.
+Status: **CI package-validated; interactive smoke pending (merge gate).**
 
-Validated from the current `maturity_improvement_plan1` branch:
+Validated:
 
-- `cargo check`: passing.
-- `npm run tauri build -- --bundles app`: passing.
-- Built bundle:
-  `src-tauri/target/release/bundle/macos/Synara.app`.
-- Bundle version:
-  `CFBundleShortVersionString = 1.1.1`,
-  `CFBundleVersion = 1.1.1`.
-- Configured bundle identifier:
-  `com.whylandcreative.synara.desktop`.
-- Strict code-signing verification:
-  `codesign --verify --deep --strict --verbose=2 ...`: passing (ad-hoc).
-- No local Synara crash reports were present in
-  `~/Library/Logs/DiagnosticReports`.
-- GitHub `Desktop Package Smoke` run `26464395682`: passing on
-  `31c6ce6`, including macOS app build, signature verification, and artifact
-  upload.
+- `cargo check` / `cargo test --lib` passing on branch tip.
+- Release hardening: DevTools denied in release builds (`build.rs` + `release-hardening` capability).
+- GitHub `Desktop Package Smoke` previously passing (see workflow history).
 
-The local macOS build is ad-hoc signed with hardened runtime and sealed
-resources. Developer ID signing and notarization remain release-channel work
-after Apple Developer credentials are available.
+### macOS interactive smoke checklist (required before merge)
+
+Execute on a logged-in macOS session with the branch tip build:
+
+- [ ] Launch app, login, confirm session persists across restart (Keychain).
+- [ ] Logout clears session; re-login succeeds without crypto store mismatch.
+- [ ] Global shortcuts: register, trigger navigation, permission-denied messaging.
+- [ ] Notification: show + click navigates to sanitized internal route.
+- [ ] Tray: Show Synara, Later, Notifications, Quit (macOS subset per parity matrix).
+- [ ] Release build: DevTools shortcut denied.
+
+Record pass/fail and build revision in this file when complete.
 
 ### macOS signing and notarization (release scaffolding)
 
-Release signing is not yet wired in CI. Before shipping a signed macOS channel:
-
-1. Obtain an Apple Developer ID Application certificate and install it in the
-   macOS keychain used by release builds.
-2. Set `bundle.macOS.signingIdentity` in `src-tauri/tauri.conf.json` to the
-   Developer ID identity (replace the current `"-"` ad-hoc placeholder).
-3. Add an entitlements plist (for example `src-tauri/entitlements.plist`) and
-   reference it from `bundle.macOS.entitlements`.
-4. Set `bundle.macOS.minimumSystemVersion` to the supported macOS floor (for
-   example `13.0`).
-5. After `cargo tauri build`, run `codesign` verification, then `notarytool
-   submit` and `stapler staple` on the `.app` / `.dmg` artifacts.
-6. Gate the `Release Desktop` workflow macOS job on successful notarization once
-   signing secrets (`APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`,
-   `APPLE_API_KEY`, etc.) are available in GitHub Actions — see workflow
-   comments in `.github/workflows/release-desktop.yml`.
-
-Local development builds continue to use ad-hoc signing (`signingIdentity: "-"`).
+Release signing is not yet wired in CI. See prior scaffolding in this document
+(`bundle.macOS.signingIdentity`, entitlements, notarytool workflow comments).
 
 ## Linux
 
 Status: **partial workstation smoke** (headless + packaging pass; interactive GUI checklist pending).
 
-Validated on CachyOS / KDE Plasma Wayland (2026-06-10, branch `maturity_improvement_plan1`):
+Validated on CachyOS / KDE Plasma Wayland (2026-06-10, refreshed 2026-06-11):
 
-- `npm run check:versions`: passing at `1.1.1`.
-- `npm run build:runtime` + `cargo build --release`: passing; release binary launches and serves bundled UI on localhost.
-- `cargo test --lib` (85/85), including live Secret Service and keyutils probe tests on session D-Bus.
-- `packaging/arch/PKGBUILD`: `synara-desktop-bin` / `1.1.1` / `pkgrel=1`; `makepkg -f` produced `synara-desktop-bin-1.1.1-1-x86_64.pkg.tar.zst`.
-- `packaging/arch/synara.desktop` and Wayland/WebKit wrapper script present.
-- GitHub `Desktop Package Smoke` run `26464395682`: passing on `31c6ce6` (`.deb` build).
+- `npm run check:versions`: passing at `1.2.3`.
+- `npm run build:runtime` + `cargo build --release`: passing.
+- `cargo test --lib`: passing (includes live Secret Service / keyutils probes on session D-Bus when available).
+- `packaging/arch/PKGBUILD`: `synara-desktop-bin` / `1.2.3` / `pkgrel=1`.
 
-**Headless pass (automated proxy):** build pipeline, Arch packaging, secret-store probes, process launch.
+### Linux interactive smoke checklist (required before merge)
 
-**Interactive pending (requires logged-in GUI session):** tray icon/menu/DND, in-session notifications + click routing, global shortcuts + KDE permission help, Desktop Integration panel rows, portal file/media flows, full `pacman -U` install from launcher. Use the checklist in [linux.md](./linux.md).
+- [ ] Tray icon, menu, DND toggle (`synara-tray-dnd-toggle`).
+- [ ] In-session notifications + click routing to Later/Notifications/Home.
+- [ ] Global shortcuts + KDE Plasma Wayland permission help text.
+- [ ] Desktop Integration panel rows in Settings.
+- [ ] Portal file/media flows (drag-drop allowlist + streamed read).
+- [ ] `pacman -U` install from launcher.
+
+See [linux.md](./linux.md) for platform notes.
 
 ## Tray Parity Matrix (MIP1-35 — Option A: documented)
 
@@ -112,34 +101,27 @@ minimal subset by design until product requests parity work.
 | Build label | Supported (disabled) | Supported (disabled) | Read-only build identity |
 | Quit | Supported | Supported | Exits application |
 
-macOS intentionally omits unread summary, Desktop Integration, and DND tray
-entries. None of the macOS tray items are no-op placeholders. Linux-only items
-are documented here rather than mirrored on macOS in this wave.
+## MIP1 validation waves
 
-## MIP1 validation (Wave I — final review placeholders)
+| Wave | Theme | Automated | Interactive |
+|------|-------|-----------|-------------|
+| A | Security & trust boundaries | Pass | Release DevTools manual |
+| B | Broken native UX | Pass | Notifications/tray smoke pending |
+| C | Secret store truthfulness | Pass | Keychain/SS session UI |
+| D | Session lifecycle & logout | Pass | Login/logout smoke pending |
+| E | Performance & memory | Pass | Large-file manual optional |
+| F | Rust shell hardening | Pass | Shortcut smoke pending |
+| G | Frontend resilience & UX | Pass | Sync splash timeout manual |
+| H | Platform parity & packaging | Pass | Arch install smoke pending |
+| I | Polish, docs, long-term | Pass | User review pending |
 
-Record orchestrator pass/fail for each wave during Phase 3 close-out. Update
-status and evidence links before merge to `main`.
+## Merge readiness
 
-| Wave | Theme | Status | Notes |
-|------|-------|--------|-------|
-| A | Security & trust boundaries | Pass (automated) | DevTools release hardening, bridge caps, CSP, Windows honesty |
-| B | Broken native UX | Pass (automated) | Notification routes, tray DND, `synara://agent-action` listener |
-| C | Secret store truthfulness | Pass (automated) | Keyutils probe, Secret Service live probe, Keychain probe, error codes |
-| D | Session lifecycle & logout | Pass (automated) | `performLogout`, selective `clearSessionLocalStorage`, SW session |
-| E | Performance & memory | Pass (automated) | Incremental timeline, streaming file IPC, tray throttle, bounded caches |
-| F | Rust shell hardening | Pass (automated) | Shortcuts, port fallback, badge clamp, URL policy, session expiry |
-| G | Frontend resilience & UX | Pass (automated) | Sync splash recovery, pagination errors, invoke diagnostics |
-| H | Platform parity & packaging | Pass (automated) | Shortcut help, tray matrix (Option A), Arch PKGBUILD, CI smoke |
-| I | Polish, docs, long-term | Pass (automated) | Validation docs, linux.md, pkgrel, repo URLs, refresh token, spellcheck log |
+- [x] Code remediation for PR review findings (2026-06-11)
+- [x] Automated gates on branch tip
+- [ ] macOS interactive smoke completed
+- [ ] Linux interactive GUI checklist completed
+- [ ] User personal review completed
 
-### MIP1 global gate checklist (branch tip)
-
-- [x] `npm run check:versions`
-- [x] `npm run test:modernization` (254/254, root script delegates to `synara/`)
-- [x] `npm run check:mip1-evidence` (46/46 items mapped; compensates for bundled commits)
-- [x] `npm run check:runtime-assets` (devAssets ↔ synara/dist sync)
-- [x] `cargo test` + `cargo check --locked --release` (85/85)
-- [ ] macOS manual smoke (tray, notifications, shortcuts, login/logout) — CI package smoke only; interactive pending
-- [x] Linux manual smoke — **partial**: headless + packaging + live Secret Service probes pass; interactive GUI checklist pending
-- [x] Zero open Critical/High orchestrator issues
+**Recommendation:** squash-merge to `main` after interactive gates pass (bundled
+commit history documented in `docs/mip1-commit-evidence.md`).
