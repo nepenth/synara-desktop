@@ -81,20 +81,20 @@ Local development builds continue to use ad-hoc signing (`signingIdentity: "-"`)
 
 ## Linux
 
-Status: CI package-validated; target workstation smoke pending.
+Status: **partial workstation smoke** (headless + packaging pass; interactive GUI checklist pending).
 
-Validated locally from this repository:
+Validated on CachyOS / KDE Plasma Wayland (2026-06-10, branch `maturity_improvement_plan1`):
 
 - `npm run check:versions`: passing at `1.1.1`.
-- `packaging/arch/PKGBUILD` resolves:
-  `pkgname=synara-desktop-bin`, `pkgver=1.1.1`, `pkgrel=1`.
-- GitHub `Desktop Package Smoke` run `26464395682`: passing on
-  `31c6ce6`, including Linux `.deb` package build and artifact upload.
+- `npm run build:runtime` + `cargo build --release`: passing; release binary launches and serves bundled UI on localhost.
+- `cargo test --lib` (85/85), including live Secret Service and keyutils probe tests on session D-Bus.
+- `packaging/arch/PKGBUILD`: `synara-desktop-bin` / `1.1.1` / `pkgrel=1`; `makepkg -f` produced `synara-desktop-bin-1.1.1-1-x86_64.pkg.tar.zst`.
+- `packaging/arch/synara.desktop` and Wayland/WebKit wrapper script present.
+- GitHub `Desktop Package Smoke` run `26464395682`: passing on `31c6ce6` (`.deb` build).
 
-Remaining validation requires the Linux target machine because WebKitGTK,
-GStreamer, Secret Service, portals, Wayland, tray, notification, and global
-shortcut behavior depend on the desktop session. Use the CachyOS / KDE Plasma
-Wayland smoke checklist in [linux.md](./linux.md).
+**Headless pass (automated proxy):** build pipeline, Arch packaging, secret-store probes, process launch.
+
+**Interactive pending (requires logged-in GUI session):** tray icon/menu/DND, in-session notifications + click routing, global shortcuts + KDE permission help, Desktop Integration panel rows, portal file/media flows, full `pacman -U` install from launcher. Use the checklist in [linux.md](./linux.md).
 
 ## Tray Parity Matrix (MIP1-35 — Option A: documented)
 
@@ -136,8 +136,10 @@ status and evidence links before merge to `main`.
 ### MIP1 global gate checklist (branch tip)
 
 - [x] `npm run check:versions`
-- [x] `npm run test:modernization` (254/254)
+- [x] `npm run test:modernization` (254/254, root script delegates to `synara/`)
+- [x] `npm run check:mip1-evidence` (46/46 items mapped; compensates for bundled commits)
+- [x] `npm run check:runtime-assets` (devAssets ↔ synara/dist sync)
 - [x] `cargo test` + `cargo check --locked --release` (85/85)
-- [ ] macOS manual smoke (tray, notifications, shortcuts, login/logout)
-- [ ] Linux manual smoke (Arch package, Secret Service, Wayland WebKit)
+- [ ] macOS manual smoke (tray, notifications, shortcuts, login/logout) — CI package smoke only; interactive pending
+- [x] Linux manual smoke — **partial**: headless + packaging + live Secret Service probes pass; interactive GUI checklist pending
 - [x] Zero open Critical/High orchestrator issues

@@ -15,9 +15,7 @@ export function pushSessionToSW(baseUrl?: string, accessToken?: string): void {
   });
 }
 
-export function pushActiveSessionToSW(
-  getSession: () => SessionPushCredentials | undefined
-): void {
+export function pushActiveSessionToSW(getSession: () => SessionPushCredentials | undefined): void {
   const session = getSession();
   pushSessionToSW(session?.baseUrl, session?.accessToken);
 }

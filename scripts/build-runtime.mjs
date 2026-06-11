@@ -33,3 +33,6 @@ await cp(rootConfig, runtimeConfig);
 await run("npm", ["run", "build"], runtimeDir);
 await rm(desktopAssets, { recursive: true, force: true });
 await cp(runtimeDist, desktopAssets, { recursive: true });
+console.log(
+  "Runtime copied to devAssets/. If index.html hash changed, run npm run check:runtime-assets before committing."
+);

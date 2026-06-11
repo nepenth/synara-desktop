@@ -1065,10 +1065,7 @@ function SecretStoreSection() {
       : 'Secondary';
   const statusLabel = status ? getPlatformSecretStoreStatusLabel(status) : 'Checking';
   const details = status ? getPlatformSecretStoreStatusDescription(status) : statusLabel;
-  const showNativeStoreErrorWarning = shouldSurfaceNativeStoreErrorWarning(
-    nativeStoreError,
-    true
-  );
+  const showNativeStoreErrorWarning = shouldSurfaceNativeStoreErrorWarning(nativeStoreError, true);
   const nativeStoreErrorWarning = showNativeStoreErrorWarning
     ? t(
         'modernization.settings.secret_store.native_store_error',
@@ -1078,9 +1075,7 @@ function SecretStoreSection() {
 
   return (
     <Box direction="Column" gap="100">
-      <Text size="L400">
-        {t('modernization.settings.secret_store.title', 'Session Storage')}
-      </Text>
+      <Text size="L400">{t('modernization.settings.secret_store.title', 'Session Storage')}</Text>
       <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
         <SettingTile
           title={t('modernization.settings.secret_store.status_title', 'Native Session Store')}

@@ -22,7 +22,8 @@ export const clearDesktopDiagnostics = (): void => {
 
 export const formatDesktopDiagnosticsSection = (): string => {
   if (desktopDiagnosticEntries.length === 0) return '';
-  return ['Recent desktop IPC events:', ...desktopDiagnosticEntries.map((entry) => `- ${entry}`)].join(
-    '\n'
-  );
+  return [
+    'Recent desktop IPC events:',
+    ...desktopDiagnosticEntries.map((entry) => `- ${entry}`),
+  ].join('\n');
 };

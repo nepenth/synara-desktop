@@ -57,9 +57,7 @@ export const getLastBootstrappedMatrixIdentity = (
     return undefined;
   }
 
-  return parseMatrixSessionIdentity(
-    resolvedStorage.getItem(LAST_BOOTSTRAPPED_MATRIX_IDENTITY_KEY)
-  );
+  return parseMatrixSessionIdentity(resolvedStorage.getItem(LAST_BOOTSTRAPPED_MATRIX_IDENTITY_KEY));
 };
 
 export const setLastBootstrappedMatrixIdentity = (
@@ -71,10 +69,7 @@ export const setLastBootstrappedMatrixIdentity = (
     return;
   }
 
-  resolvedStorage.setItem(
-    LAST_BOOTSTRAPPED_MATRIX_IDENTITY_KEY,
-    JSON.stringify(identity)
-  );
+  resolvedStorage.setItem(LAST_BOOTSTRAPPED_MATRIX_IDENTITY_KEY, JSON.stringify(identity));
 };
 
 export const getLastPersistedMatrixIdentity = (
@@ -129,10 +124,7 @@ export type ClearMatrixStoresForIdentityChangeOptions = {
 
 export const clearMatrixStoresForIdentityChange = async (
   session: MatrixSessionIdentity,
-  {
-    storage,
-    clearStores = clearMatrixLocalStores,
-  }: ClearMatrixStoresForIdentityChangeOptions = {}
+  { storage, clearStores = clearMatrixLocalStores }: ClearMatrixStoresForIdentityChangeOptions = {}
 ): Promise<boolean> => {
   if (!shouldClearMatrixStoresBeforeInit(session, getLastBootstrappedMatrixIdentity(storage))) {
     return false;

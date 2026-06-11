@@ -113,7 +113,8 @@ function ClientRootOptions({ mx }: { mx?: MatrixClient }) {
                     </Text>
                   </MenuItem>
                 )}
-                <MenuItem onClick={() => performLogout(mx)}
+                <MenuItem
+                  onClick={() => performLogout(mx)}
                   size="300"
                   radii="300"
                   variant="Critical"

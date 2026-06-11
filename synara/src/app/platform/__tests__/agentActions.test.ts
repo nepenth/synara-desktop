@@ -9,7 +9,8 @@ import {
 } from '../agentActions';
 
 test('registerPlatformAgentActionListener registers synara://agent-action via listen', async () => {
-  const registrations: Array<{ event: string; handler: (event: { payload: unknown }) => void }> = [];
+  const registrations: Array<{ event: string; handler: (event: { payload: unknown }) => void }> =
+    [];
   const originalWindow = globalThis.window;
   (globalThis as any).window = {
     __SYNARA_DESKTOP__: {
@@ -91,7 +92,10 @@ test('handleIncomingPlatformAgentAction executes valid payloads and rejects inva
       false
     );
 
-    assert.equal(await handleIncomingPlatformAgentAction({ action: { title: 'Missing id' } }), false);
+    assert.equal(
+      await handleIncomingPlatformAgentAction({ action: { title: 'Missing id' } }),
+      false
+    );
     assert.equal(
       await handleIncomingPlatformAgentAction({
         action: {

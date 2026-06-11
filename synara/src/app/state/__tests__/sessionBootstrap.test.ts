@@ -102,14 +102,8 @@ test('session bootstrap returns none when no storage source has a session', asyn
 });
 
 test('shouldSurfaceNativeStoreErrorWarning is shown only on desktop when native store fails', () => {
-  assert.equal(
-    shouldSurfaceNativeStoreErrorWarning(NATIVE_SESSION_STORE_ERROR, true),
-    true
-  );
-  assert.equal(
-    shouldSurfaceNativeStoreErrorWarning(NATIVE_SESSION_STORE_ERROR, false),
-    false
-  );
+  assert.equal(shouldSurfaceNativeStoreErrorWarning(NATIVE_SESSION_STORE_ERROR, true), true);
+  assert.equal(shouldSurfaceNativeStoreErrorWarning(NATIVE_SESSION_STORE_ERROR, false), false);
   assert.equal(shouldSurfaceNativeStoreErrorWarning(undefined, true), false);
 });
 
