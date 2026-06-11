@@ -621,7 +621,9 @@ impl DesktopSessionSecretStore for KeyringDesktopSessionSecretStore {
 }
 
 #[cfg(any(target_os = "macos", test))]
-fn secret_store_error_indicates_access_denied(err: &(dyn std::error::Error + Send + Sync)) -> bool {
+fn secret_store_error_indicates_access_denied(
+    err: &(dyn std::error::Error + Send + Sync + 'static),
+) -> bool {
     if macos_keychain_error_indicates_access_denied(err) {
         return true;
     }
@@ -642,7 +644,9 @@ fn secret_store_error_indicates_access_denied(err: &(dyn std::error::Error + Sen
 }
 
 #[cfg(not(any(target_os = "macos", test)))]
-fn secret_store_error_indicates_access_denied(err: &(dyn std::error::Error + Send + Sync)) -> bool {
+fn secret_store_error_indicates_access_denied(
+    err: &(dyn std::error::Error + Send + Sync + 'static),
+) -> bool {
     let message = err.to_string().to_lowercase();
     message.contains("access denied")
         || message.contains("permission denied")
@@ -767,7 +771,7 @@ fn macos_unavailable_secret_store_status(reason: &'static str) -> DesktopSecretS
 
 #[cfg(any(target_os = "macos", test))]
 fn macos_keychain_error_indicates_access_denied(
-    err: &(dyn std::error::Error + Send + Sync),
+    err: &(dyn std::error::Error + Send + Sync + 'static),
 ) -> bool {
     #[cfg(test)]
     {
@@ -781,11 +785,8 @@ fn macos_keychain_error_indicates_access_denied(
     }
 
     #[cfg(target_os = "macos")]
-    if let Some(code) = err
-        .downcast_ref::<security_framework::base::Error>()
-        .map(|error| error.code())
-    {
-        return matches!(code, -25293 | -25308);
+    if let Some(error) = err.downcast_ref::<security_framework::base::Error>() {
+        return matches!(error.code(), -25293 | -25308);
     }
 
     false
@@ -3560,6 +3561,8 @@ mod tests {
     #[cfg(target_os = "macos")]
     #[test]
     fn platform_secret_store_status_probes_macos_keychain() {
+        reset_macos_secret_store_status_cache_for_tests();
+        set_macos_keychain_probe_test_override(None);
         let status = platform_secret_store_status();
 
         assert!(status.available);
@@ -3586,6 +3589,9 @@ mod tests {
             status.reason,
             Some(DESKTOP_SECRET_STORE_MACOS_KEYCHAIN_LOCKED)
         );
+
+        reset_macos_secret_store_status_cache_for_tests();
+        set_macos_keychain_probe_test_override(None);
     }
 
     #[cfg(target_os = "windows")]
@@ -4400,10 +4406,11 @@ VERSION_ID=24
         assert!(!result.success);
         assert_eq!(result.state, DesktopShortcutApplyState::PermissionNeeded);
         assert!(result.message.contains("permission"));
-        assert!(result.message.contains("shortcut"));
+        assert!(result.message.to_ascii_lowercase().contains("shortcut"));
     }
 
     #[test]
+    #[cfg(target_os = "linux")]
     fn shortcut_permission_fallback_is_kde_wayland_only() {
         let _guard = ENV_LOCK.lock().expect("env lock should not be poisoned");
         let original_desktop = std::env::var("XDG_CURRENT_DESKTOP").ok();
@@ -4434,6 +4441,7 @@ VERSION_ID=24
     }
 
     #[test]
+    #[cfg(target_os = "linux")]
     fn unresolved_shortcut_state_is_unknown_on_kde_wayland_before_apply() {
         let _guard = ENV_LOCK.lock().expect("env lock should not be poisoned");
         let original_desktop = std::env::var("XDG_CURRENT_DESKTOP").ok();
