@@ -18,7 +18,9 @@ use url::Url;
 
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, Ordering};
+#[cfg(debug_assertions)]
+use std::sync::atomic::AtomicU64;
 
 use crate::build_info;
 
@@ -43,6 +45,7 @@ const ROUTE_SETTINGS: &str = "/settings/";
 const TRAY_ICON_ID: &str = "synara-tray";
 const TRAY_STATE_APPLY_MIN_INTERVAL_MS: u64 = 500;
 
+#[cfg(debug_assertions)]
 #[cfg(debug_assertions)]
 static TRAY_MENU_REBUILD_COUNT: AtomicU64 = AtomicU64::new(0);
 const MAX_DROPPED_FILES: usize = 32;
@@ -1510,12 +1513,16 @@ pub fn desktop_save_file_begin(
     let temp_path = std::env::temp_dir().join(new_file_transfer_id("save-temp"));
     File::create(&temp_path).map_err(|err| format!("Unable to create temp save file: {err}"))?;
 
-    let session_id = register_save_session(SaveFileSession {
-        temp_path,
+    let session = SaveFileSession {
+        temp_path: temp_path.clone(),
         filename: safe_filename,
         expected_size: total_size,
         bytes_received: 0,
         created_at: Instant::now(),
+    };
+    let session_id = register_save_session(session).map_err(|err| {
+        let _ = fs::remove_file(temp_path);
+        err
     })?;
 
     Ok(DesktopSaveFileBeginResult { session_id })
@@ -2420,6 +2427,7 @@ fn shortcut_apply_state_message(state: DesktopShortcutApplyState) -> &'static st
     }
 }
 
+#[cfg(target_os = "linux")]
 fn is_gnome_session() -> bool {
     env::var("XDG_CURRENT_DESKTOP")
         .map(|value| value.to_ascii_lowercase().contains("gnome"))
