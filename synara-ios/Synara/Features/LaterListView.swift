@@ -3,12 +3,21 @@ import SwiftUI
 struct LaterListView: View {
     @Environment(\.appEnvironment) private var environment
     @State private var state: LaterInboxState = .idle
+    @State private var roomNames: [String: String] = [:]
 
     var body: some View {
         Group {
             switch state {
             case .idle, .loading:
-                SynaraLoadingState(title: "Loading Later")
+                List {
+                    Section {
+                        SynaraSkeletonList(rowCount: 6, showsAvatar: false)
+                            .listRowSeparator(.hidden)
+                            .listRowInsets(EdgeInsets(top: 3, leading: SynaraSpacing.large, bottom: 3, trailing: SynaraSpacing.large))
+                    }
+                }
+                .listStyle(.insetGrouped)
+                .accessibilityIdentifier("LaterLoading")
             case .empty:
                 SynaraEmptyState(
                     title: "No Later Items",
@@ -24,7 +33,11 @@ struct LaterListView: View {
                     if activeItems.isEmpty == false {
                         Section("Active") {
                             ForEach(activeItems) { item in
-                                LaterListRow(item: item, onTap: openItem)
+                                LaterListRow(
+                                    item: item,
+                                    roomName: roomDisplayName(for: item.roomID),
+                                    onComplete: completeItem
+                                )
                             }
                         }
                     }
@@ -32,7 +45,11 @@ struct LaterListView: View {
                     if completedItems.isEmpty == false {
                         Section("Completed") {
                             ForEach(completedItems) { item in
-                                LaterListRow(item: item, onTap: openItem)
+                                LaterListRow(
+                                    item: item,
+                                    roomName: roomDisplayName(for: item.roomID),
+                                    onComplete: nil
+                                )
                             }
                         }
                     }
@@ -59,13 +76,22 @@ struct LaterListView: View {
         }
     }
 
+    private func roomDisplayName(for roomID: String) -> String {
+        RoomDisplayNameLookup.resolve(roomID: roomID, names: roomNames)
+    }
+
     private func load() {
         state = .loading
 
         Task {
-            let result = await environment.later.loadItems()
+            async let laterResult = environment.later.loadItems()
+            async let roomListState = environment.roomList.loadRooms()
+            let result = await laterResult
+            let rooms = await roomListState
 
             await MainActor.run {
+                roomNames = RoomDisplayNameLookup.names(from: rooms)
+
                 guard case let .success((items, error)) = result else {
                     state = .failed(.networkFailure)
                     return
@@ -87,72 +113,106 @@ struct LaterListView: View {
         }
     }
 
-    private func openItem(_ item: SynaraLaterListItem) {
-        guard item.canNavigate else {
+    private func completeItem(_ item: SynaraLaterListItem) {
+        guard item.isCompleted == false else {
             return
         }
 
-        environment.router.route(to: .room(id: item.roomID, eventID: item.eventID, title: item.detailTitle))
+        Task {
+            let result = await environment.later.completeItem(id: item.id)
+            await MainActor.run {
+                guard case .success(true) = result else {
+                    return
+                }
+
+                load()
+            }
+        }
     }
 }
 
 private struct LaterListRow: View {
     let item: SynaraLaterListItem
-    let onTap: (SynaraLaterListItem) -> Void
+    let roomName: String
+    let onComplete: ((SynaraLaterListItem) -> Void)?
 
     var body: some View {
-        Button {
-            onTap(item)
-        } label: {
-            HStack(alignment: .top, spacing: SynaraSpacing.small) {
-                Image(systemName: item.icon)
-                    .foregroundStyle(item.statusTint)
-                    .padding(.top, 2)
-                    .accessibilityHidden(true)
+        Group {
+            if item.canNavigate {
+                NavigationLink(
+                    value: AppRoute.room(
+                        id: item.roomID,
+                        eventID: item.eventID,
+                        title: roomName
+                    )
+                ) {
+                    rowContent
+                }
+            } else {
+                rowContent
+            }
+        }
+        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+            if let onComplete, item.isCompleted == false {
+                Button {
+                    onComplete(item)
+                } label: {
+                    Label("Complete", systemImage: "checkmark.circle")
+                }
+                .tint(SynaraColor.success)
+                .accessibilityIdentifier("LaterComplete-\(item.id)")
+            }
+        }
+        .accessibilityIdentifier(item.accessibilityRowIdentifier)
+    }
 
-                VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
-                    HStack {
-                        Text(item.stateLabel)
-                            .font(SynaraTypography.supporting)
-                            .foregroundStyle(item.statusTint)
+    private var rowContent: some View {
+        HStack(alignment: .top, spacing: SynaraSpacing.small) {
+            Image(systemName: item.icon)
+                .foregroundStyle(item.statusTint)
+                .padding(.top, 2)
+                .accessibilityHidden(true)
 
-                        if item.isCompleted {
-                            Text("Completed")
-                                .font(.caption)
-                                .foregroundStyle(SynaraColor.secondaryText)
-                        }
+            VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
+                HStack {
+                    Text(item.stateLabel)
+                        .font(SynaraTypography.supporting)
+                        .foregroundStyle(item.statusTint)
 
-                        Spacer()
-
-                        if item.isDueSoon {
-                            Text(item.dueLabel)
-                                .font(.caption)
-                                .padding(.horizontal, SynaraSpacing.xSmall)
-                                .padding(.vertical, 2)
-                                .background(SynaraColor.secondarySurface)
-                                .clipShape(Capsule())
-                                .accessibilityLabel("Due soon")
-                        }
+                    if item.isCompleted {
+                        Text("Completed")
+                            .font(.caption)
+                            .foregroundStyle(SynaraColor.secondaryText)
                     }
 
-                    Text(item.preview)
-                        .font(SynaraTypography.body)
-                        .foregroundStyle(item.canNavigate ? SynaraColor.primaryText : SynaraColor.secondaryText)
-                        .lineLimit(2)
+                    Spacer()
 
-                    if !item.canNavigate {
-                        Text("Destination unavailable")
+                    if item.showsDueBadge {
+                        Text(item.dueLabel)
                             .font(.caption)
-                            .foregroundStyle(.red)
+                            .padding(.horizontal, SynaraSpacing.xSmall)
+                            .padding(.vertical, 2)
+                            .foregroundStyle(item.dueBadgeForeground)
+                            .background(item.dueBadgeBackground)
+                            .clipShape(Capsule())
+                            .accessibilityLabel(item.dueAccessibilityLabel)
                     }
                 }
+
+                Text(item.preview(roomName: roomName))
+                    .font(SynaraTypography.body)
+                    .foregroundStyle(item.canNavigate ? SynaraColor.primaryText : SynaraColor.secondaryText)
+                    .lineLimit(2)
+
+                if !item.canNavigate {
+                    Text("Destination unavailable")
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.vertical, 2)
         }
-        .disabled(!item.canNavigate)
-        .buttonStyle(.plain)
-        .accessibilityIdentifier(item.accessibilityRowIdentifier)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 2)
     }
 }
 
@@ -162,6 +222,53 @@ private enum LaterInboxState: Equatable {
     case empty
     case failed(LaterInboxError)
     case loaded(active: [SynaraLaterListItem], completed: [SynaraLaterListItem])
+}
+
+enum LaterDueUrgency: Equatable {
+    case none
+    case future
+    case dueSoon
+    case overdue
+
+    var tint: Color {
+        switch self {
+        case .none, .future:
+            return SynaraColor.secondaryText
+        case .dueSoon:
+            return SynaraColor.warning
+        case .overdue:
+            return SynaraColor.critical
+        }
+    }
+
+    var badgeBackground: Color {
+        switch self {
+        case .none:
+            return SynaraColor.secondarySurface
+        case .future:
+            return SynaraColor.secondarySurface
+        case .dueSoon:
+            return SynaraColor.warning.opacity(0.16)
+        case .overdue:
+            return SynaraColor.critical.opacity(0.16)
+        }
+    }
+
+    static func classify(dueTs: Int?, isCompleted: Bool, now: Int = Int(Date().timeIntervalSince1970 * 1_000)) -> LaterDueUrgency {
+        guard isCompleted == false, let dueTs else {
+            return .none
+        }
+
+        if dueTs <= now {
+            return .overdue
+        }
+
+        if dueTs <= now + (24 * 60 * 60 * 1_000) {
+            return .dueSoon
+        }
+
+        return .future
+    }
 }
 
 private extension SynaraLaterListItem {
@@ -177,8 +284,8 @@ private extension SynaraLaterListItem {
         return kind == .saved ? "Saved" : "Reminder"
     }
 
-    var detailTitle: String {
-        roomID
+    var dueUrgency: LaterDueUrgency {
+        LaterDueUrgency.classify(dueTs: dueTs, isCompleted: isCompleted)
     }
 
     var dueLabel: String {
@@ -189,8 +296,8 @@ private extension SynaraLaterListItem {
         let now = Date()
         let dueDate = Date(timeIntervalSince1970: TimeInterval(dueTs) / 1_000)
 
-        if dueTs <= Int(now.timeIntervalSince1970 * 1000) {
-            return "Due now"
+        if dueUrgency == .overdue {
+            return "Overdue"
         }
 
         let formatter = RelativeDateTimeFormatter()
@@ -198,13 +305,29 @@ private extension SynaraLaterListItem {
         return "Due \(formatter.localizedString(for: dueDate, relativeTo: now))"
     }
 
-    var isDueSoon: Bool {
-        guard isCompleted == false, let dueTs else {
-            return false
-        }
+    var showsDueBadge: Bool {
+        isCompleted == false && dueTs != nil
+    }
 
-        let now = Int(Date().timeIntervalSince1970 * 1_000)
-        return dueTs <= now + (24 * 60 * 60 * 1000)
+    var dueBadgeForeground: Color {
+        dueUrgency.tint
+    }
+
+    var dueBadgeBackground: Color {
+        dueUrgency.badgeBackground
+    }
+
+    var dueAccessibilityLabel: String {
+        switch dueUrgency {
+        case .overdue:
+            return "Overdue"
+        case .dueSoon:
+            return "Due soon"
+        case .future:
+            return "Due later"
+        case .none:
+            return "No due date"
+        }
     }
 
     var icon: String {
@@ -212,23 +335,31 @@ private extension SynaraLaterListItem {
     }
 
     var statusTint: Color {
-        isCompleted ? .green : isDueSoon ? .orange : SynaraColor.accent
+        if isCompleted {
+            return SynaraColor.success
+        }
+
+        if kind == .reminder {
+            return dueUrgency.tint
+        }
+
+        return SynaraColor.accent
     }
 
-    var preview: String {
+    func preview(roomName: String) -> String {
         switch kind {
         case .saved:
-            return "Saved\nRoom: \(roomID)"
+            return "Saved\nRoom: \(roomName)"
         case .reminder:
             if let dueTs {
                 let formatter = RelativeDateTimeFormatter()
                 formatter.unitsStyle = .full
                 let dueDate = Date(timeIntervalSince1970: TimeInterval(dueTs) / 1_000)
                 let relative = formatter.localizedString(for: dueDate, relativeTo: Date())
-                return "Reminder: \(relative)\nRoom: \(roomID)"
+                return "Reminder: \(relative)\nRoom: \(roomName)"
             }
 
-            return "Reminder\nRoom: \(roomID)"
+            return "Reminder\nRoom: \(roomName)"
         }
     }
 

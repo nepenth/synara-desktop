@@ -57,5 +57,7 @@
 	<array>
 		<string>remote-notification</string>
 	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>Synara needs camera access to capture photos and videos for messages.</string>
 </dict>
 </plist>

@@ -1,4 +1,8 @@
 import Foundation
+import UniformTypeIdentifiers
+#if canImport(UIKit)
+import UIKit
+#endif
 
 struct MediaResource: Identifiable, Equatable {
     let id: String
@@ -6,24 +10,49 @@ struct MediaResource: Identifiable, Equatable {
     let authenticatedURL: URL?
     let requiresAuthentication: Bool
     let isEncrypted: Bool
+    let mimeType: String?
+    let byteSize: UInt64?
 
     init(
         id: String,
         filename: String,
         authenticatedURL: URL?,
         requiresAuthentication: Bool,
-        isEncrypted: Bool = false
+        isEncrypted: Bool = false,
+        mimeType: String? = nil,
+        byteSize: UInt64? = nil
     ) {
         self.id = id
         self.filename = filename
         self.authenticatedURL = authenticatedURL
         self.requiresAuthentication = requiresAuthentication
         self.isEncrypted = isEncrypted
+        self.mimeType = mimeType
+        self.byteSize = byteSize
     }
 
     var safeDescription: String {
         let safeName = URL(fileURLWithPath: filename).lastPathComponent
         return safeName.isEmpty ? "Attachment" : safeName
+    }
+
+    var resolvedMimeType: String? {
+        if let mimeType {
+            return mimeType
+        }
+
+        let fileExtension = URL(fileURLWithPath: safeDescription).pathExtension
+        guard fileExtension.isEmpty == false,
+              let type = UTType(filenameExtension: fileExtension),
+              let resolved = type.preferredMIMEType else {
+            return nil
+        }
+
+        return resolved
+    }
+
+    var isImageMedia: Bool {
+        resolvedMimeType?.hasPrefix("image/") == true
     }
 }
 
@@ -37,6 +66,7 @@ enum MediaLoadState: Equatable {
 protocol MediaLoading {
     func loadThumbnail(for resource: MediaResource) async -> MediaLoadState
     func loadThumbnailData(for resource: MediaResource, width: UInt64, height: UInt64) async -> Data?
+    func loadMediaData(for resource: MediaResource) async -> Data?
 }
 
 enum MediaUploadSource: Equatable {
@@ -78,6 +108,48 @@ protocol MediaUploading {
     func upload(_ request: MediaUploadRequest) async -> MediaUploadState
 }
 
+enum MediaFormatting {
+    static func formattedFileSize(_ byteSize: UInt64?) -> String? {
+        guard let byteSize else {
+            return nil
+        }
+
+        return ByteCountFormatter.string(
+            fromByteCount: Int64(byteSize),
+            countStyle: .file
+        )
+    }
+}
+
+enum MediaAttachmentSupport {
+    static func mimeType(for url: URL) -> String {
+        if let type = try? url.resourceValues(forKeys: [.contentTypeKey]).contentType,
+           let mimeType = type.preferredMIMEType {
+            return mimeType
+        }
+
+        let fileExtension = url.pathExtension
+        if fileExtension.isEmpty == false,
+           let type = UTType(filenameExtension: fileExtension),
+           let mimeType = type.preferredMIMEType {
+            return mimeType
+        }
+
+        return "application/octet-stream"
+    }
+
+    static func displayName(for url: URL) -> String {
+        let name = url.lastPathComponent
+        return name.isEmpty ? "Attachment" : name
+    }
+
+    #if canImport(UIKit)
+    static func jpegData(from image: UIImage, compressionQuality: CGFloat = 0.85) -> Data? {
+        image.jpegData(compressionQuality: compressionQuality)
+    }
+    #endif
+}
+
 struct MockMediaLoader: MediaLoading {
     func loadThumbnail(for resource: MediaResource) async -> MediaLoadState {
         guard resource.isEncrypted == false else {
@@ -94,6 +166,10 @@ struct MockMediaLoader: MediaLoading {
     func loadThumbnailData(for resource: MediaResource, width: UInt64, height: UInt64) async -> Data? {
         nil
     }
+
+    func loadMediaData(for resource: MediaResource) async -> Data? {
+        nil
+    }
 }
 
 struct MockMediaUploadService: MediaUploading {
@@ -103,7 +179,9 @@ struct MockMediaUploadService: MediaUploading {
             id: "$upload-\(UUID().uuidString)",
             filename: safeName.isEmpty ? "Attachment" : safeName,
             authenticatedURL: URL(string: "mxc://local/upload"),
-            requiresAuthentication: true
+            requiresAuthentication: true,
+            mimeType: request.mimeType,
+            byteSize: UInt64(request.data.count)
         )
         let item = TimelineItem(
             id: resource.id,
@@ -164,6 +242,17 @@ final class MatrixMediaLoader: MediaLoading {
             session: session
         )
     }
+
+    func loadMediaData(for resource: MediaResource) async -> Data? {
+        guard resource.isEncrypted == false,
+              case .signedIn(let session) = sessionStore.currentState,
+              let url = resource.authenticatedURL,
+              url.scheme == "mxc" else {
+            return nil
+        }
+
+        return try? await clientStore.mediaContentData(mxcURL: url, session: session)
+    }
 }
 
 final class MatrixMediaUploadService: MediaUploading {
@@ -210,7 +299,9 @@ final class MatrixMediaUploadService: MediaUploading {
                 id: eventID,
                 filename: filename,
                 authenticatedURL: URL(string: contentURI),
-                requiresAuthentication: true
+                requiresAuthentication: true,
+                mimeType: request.mimeType,
+                byteSize: UInt64(request.data.count)
             )
             let item = TimelineItem(
                 id: eventID,

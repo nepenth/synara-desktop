@@ -640,6 +640,47 @@ struct SynaraAgentCard: Codable, Equatable {
     }
 }
 
+extension SynaraAgentCardAction {
+    var isApprovalDecision: Bool {
+        switch SynaraAgentCardActionKind.resolved(from: kind) {
+        case SynaraAgentCardActionKind.approve.rawValue,
+             SynaraAgentCardActionKind.reject.rawValue:
+            return true
+        default:
+            return false
+        }
+    }
+}
+
+extension SynaraAgentCard {
+    var requiresUserApproval: Bool {
+        guard actions.contains(where: \.isApprovalDecision) else {
+            return false
+        }
+
+        guard let status = status?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
+              status.isEmpty == false else {
+            return true
+        }
+
+        if status.contains("pending") || status.contains("await") || status.contains("review") {
+            return true
+        }
+
+        if status.contains("approved")
+            || status.contains("rejected")
+            || status.contains("completed")
+            || status.contains("denied")
+            || status.contains("cancelled")
+            || status.contains("canceled")
+            || status.contains("failed") {
+            return false
+        }
+
+        return true
+    }
+}
+
 struct SynaraRoutePath: Codable, Equatable {
     let rawValue: String
 
