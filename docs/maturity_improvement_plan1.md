@@ -1271,7 +1271,7 @@ For each MIP1-NN commit:
 | 12 SW session after login | MIP1-14 | D | Done | mip1-14 |
 | 27 Unified logout | MIP1-15 | D | Done | mip1-15 |
 | 28 Clear secret keys | MIP1-16 | D | Done | mip1-16 |
-| 30 Account switch safety | MIP1-17 | D | Planned | — |
+| 30 Account switch safety | MIP1-17 | D | Done | mip1-17 |
 | 8 Incremental timeline | MIP1-18 | E | Done | mip1-18 |
 | 9 Stream file IPC | MIP1-19 | E | Done | mip1-19 |
 | 10 Drop allowlist lifecycle | MIP1-20 | E | Done | mip1-20 |
