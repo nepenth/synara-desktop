@@ -1,4 +1,10 @@
-export function pushSessionToSW(baseUrl?: string, accessToken?: string) {
+export type SessionPushCredentials = {
+  baseUrl?: string;
+  accessToken?: string;
+};
+
+export function pushSessionToSW(baseUrl?: string, accessToken?: string): void {
+  if (typeof navigator === 'undefined') return;
   if (!('serviceWorker' in navigator)) return;
   if (!navigator.serviceWorker.controller) return;
 
@@ -7,4 +13,11 @@ export function pushSessionToSW(baseUrl?: string, accessToken?: string) {
     accessToken,
     baseUrl,
   });
+}
+
+export function pushActiveSessionToSW(
+  getSession: () => SessionPushCredentials | undefined
+): void {
+  const session = getSession();
+  pushSessionToSW(session?.baseUrl, session?.accessToken);
 }
