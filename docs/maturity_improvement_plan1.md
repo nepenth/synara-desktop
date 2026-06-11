@@ -1264,7 +1264,7 @@ For each MIP1-NN commit:
 | 3 Agent-action listener | MIP1-07 | B | Done | mip1-07 |
 | 6 Keyutils detection | MIP1-08 | C | Done | mip1-08 |
 | 14 Native store UI warning | MIP1-09 | C | Planned | — |
-| 15 Secret Service probe | MIP1-10 | C | Planned | — |
+| 15 Secret Service probe | MIP1-10 | C | Done | mip1-10 |
 | 16 macOS Keychain probe | MIP1-11 | C | Done | mip1-11 |
 | 17 Secret-store errors | MIP1-12 | C | Planned | — |
 | 7 Selective logout | MIP1-13 | D | Planned | — |
