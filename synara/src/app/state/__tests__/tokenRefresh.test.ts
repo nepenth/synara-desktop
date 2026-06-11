@@ -1,4 +1,4 @@
-import test from 'node:test';
+import test, { mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { MatrixError, type IRefreshTokenResponse, type MatrixClient } from 'matrix-js-sdk';
 import {
@@ -162,38 +162,55 @@ test('scheduleProactiveTokenRefresh refreshes shortly before token expiry', asyn
 });
 
 test('scheduleProactiveTokenRefresh schedules a follow-up refresh after rotation', async () => {
-  let refreshCount = 0;
-  const persistCalls: MatrixClientSession[] = [];
-  const mx = {
-    refreshToken: async () => {
-      refreshCount += 1;
-      return {
-        access_token: `access-${refreshCount}`,
-        refresh_token: `refresh-${refreshCount}`,
-        expires_in_ms: 5_000,
-      };
-    },
-    setAccessToken: () => undefined,
-    http: { opts: { refreshToken: baseSession.refreshToken } },
-  } as unknown as MatrixClient;
+  mock.timers.enable({ apis: ['setTimeout', 'Date'] });
 
-  const handle = scheduleProactiveTokenRefresh(
-    mx,
-    baseSession,
-    {
-      persistAuthenticatedSession: async (session) => {
-        persistCalls.push(session);
-        return { session, source: 'native' };
+  try {
+    let refreshCount = 0;
+    const persistCalls: MatrixClientSession[] = [];
+    const mx = {
+      refreshToken: async () => {
+        refreshCount += 1;
+        return {
+          access_token: `access-${refreshCount}`,
+          refresh_token: `refresh-${refreshCount}`,
+          expires_in_ms: refreshResponse.expires_in_ms,
+        };
       },
-      pushSessionToSW: () => undefined,
-    },
-    baseSession.storedAtMs! + baseSession.expiresInMs! - REFRESH_BEFORE_EXPIRY_MS
-  );
+      setAccessToken: () => undefined,
+      http: { opts: { refreshToken: baseSession.refreshToken } },
+    } as unknown as MatrixClient;
 
-  await new Promise((resolve) => setTimeout(resolve, 50));
+    const initialNow =
+      baseSession.storedAtMs! + baseSession.expiresInMs! - REFRESH_BEFORE_EXPIRY_MS;
+    mock.timers.setTime(initialNow);
 
-  assert.equal(refreshCount, 2);
-  assert.equal(persistCalls.length, 2);
-  assert.equal(persistCalls[1]?.refreshToken, 'refresh-2');
-  handle.dispose();
+    const handle = scheduleProactiveTokenRefresh(
+      mx,
+      baseSession,
+      {
+        persistAuthenticatedSession: async (session) => {
+          persistCalls.push(session);
+          return { session, source: 'native' };
+        },
+        pushSessionToSW: () => undefined,
+      },
+      initialNow
+    );
+
+    mock.timers.runAll();
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(refreshCount, 1);
+    assert.equal(persistCalls.length, 1);
+
+    mock.timers.tick(REFRESH_BEFORE_EXPIRY_MS);
+    mock.timers.runAll();
+    await new Promise((resolve) => setImmediate(resolve));
+
+    assert.equal(refreshCount, 2);
+    assert.equal(persistCalls.length, 2);
+    assert.equal(persistCalls[1]?.refreshToken, 'refresh-2');
+    handle.dispose();
+  } finally {
+    mock.timers.reset();
+  }
 });
