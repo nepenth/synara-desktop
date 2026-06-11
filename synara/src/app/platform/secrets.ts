@@ -24,8 +24,7 @@ export const DESKTOP_SECRET_STORE_OPERATION_ERRORS = [
   'desktop-secret-store-denied',
 ] as const;
 
-export type DesktopSecretStoreOperationError =
-  (typeof DESKTOP_SECRET_STORE_OPERATION_ERRORS)[number];
+export type DesktopSecretStoreOperationError = typeof DESKTOP_SECRET_STORE_OPERATION_ERRORS[number];
 
 export const isDesktopSecretStoreOperationError = (
   value: unknown

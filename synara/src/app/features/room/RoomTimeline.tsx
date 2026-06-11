@@ -418,10 +418,7 @@ const useTimelinePagination = (
   timeline: Timeline,
   setTimeline: Dispatch<SetStateAction<Timeline>>,
   limit: number,
-  onPaginationError: (
-    direction: TimelinePaginationDirection,
-    err: unknown | null
-  ) => void
+  onPaginationError: (direction: TimelinePaginationDirection, err: unknown | null) => void
 ) => {
   const timelineRef = useRef(timeline);
   timelineRef.current = timeline;
@@ -748,7 +745,9 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
   const handlePaginationError = useCallback(
     (direction: TimelinePaginationDirection, err: unknown | null) => {
       setPaginationErrors((current) =>
-        err ? setTimelinePaginationError(current, direction, err) : clearTimelinePaginationError(current, direction)
+        err
+          ? setTimelinePaginationError(current, direction, err)
+          : clearTimelinePaginationError(current, direction)
       );
     },
     []
@@ -840,7 +839,11 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
           paginationErrors,
           'backward'
         ),
-        showFrontLoader: shouldShowTimelinePaginationLoader(!loadedAtEnd, paginationErrors, 'forward'),
+        showFrontLoader: shouldShowTimelinePaginationLoader(
+          !loadedAtEnd,
+          paginationErrors,
+          'forward'
+        ),
         compact: messageLayout === MessageLayout.Compact,
         ignoredUsersSet,
         showHiddenEvents,

@@ -307,10 +307,8 @@ export const sanitizeDesktopNotificationRoute = (value: unknown): string | undef
   return normalized;
 };
 
-export const buildDesktopNotificationRoomRoute = (
-  roomId: string,
-  eventId?: string
-): string => getHomeRoomPath(roomId, eventId);
+export const buildDesktopNotificationRoomRoute = (roomId: string, eventId?: string): string =>
+  getHomeRoomPath(roomId, eventId);
 
 const toShortcutApplyState = (value: unknown): DesktopShortcutApplyState | undefined => {
   if (value === 'active') return 'active';

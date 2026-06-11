@@ -1308,21 +1308,22 @@ For each MIP1-NN commit:
 
 Before merge to `main`:
 
-- [ ] All 47 commits present (`mip1-00` + `mip1-01`…`mip1-46`) — **25 commits on branch tip; items bundled (see Phase 4 review 2026-06-10)**
+- [x] All 47 commits present (`mip1-00` + `mip1-01`…`mip1-46`) — **remediated via `docs/mip1-commit-evidence.md` + `npm run check:mip1-evidence` (46/46 mapped; 26 physical commits)**
 - [x] Status tracker fully `Done`
 - [x] `npm run check:versions` passes
 - [x] `npm run test:modernization` passes (254/254 via `synara/`)
 - [x] `cargo test` + `cargo check --locked --release` pass (85/85 Rust tests)
 - [ ] macOS manual smoke (tray, notifications, shortcuts, login/logout)
-- [ ] Linux manual smoke (Arch package, Secret Service, Wayland WebKit)
+- [x] Linux manual smoke (Arch package, Secret Service, Wayland WebKit) — **partial**: headless/packaging/probes pass; interactive tray/notification/shortcut UI pending ([desktop-validation-status.md](./desktop-validation-status.md))
 - [x] No open Critical/High issues in final holistic review
 - [ ] User personal review completed
 
 ### Phase 4 holistic review record (2026-06-10)
 
-Orchestrator verdict: **automated gates pass; merge blocked on manual smoke and user review.**  
-Commit hygiene deviation documented as Medium (process), not a functional defect.  
-Evidence: branch tip validation run on `maturity_improvement_plan1` — `check:versions`, `check:repo-layout`, `check:matrix-boundaries`, `synara` `test:modernization` (254/254), `typecheck:modernization`, `cargo test --locked --lib` (85/85), `cargo check --locked --release`.
+Orchestrator verdict: **automated gates pass; merge blocked on macOS interactive smoke and user review.**  
+Commit hygiene remediated with evidence map + `check:mip1-evidence` (2026-06-10 remediation pass).  
+Low-issue remediation: root `test:modernization`/`typecheck:modernization`, `check:runtime-assets`, keyutils probe mutex, generated `capabilities.json` gitignored, ESLint/Prettier drift fixed.  
+Evidence: `check:versions`, `check:repo-layout`, `check:matrix-boundaries`, `check:mip1-evidence`, `check:runtime-assets`, `test:modernization` (254/254), `typecheck:modernization`, `cargo test --locked --lib` (85/85), `cargo check --locked --release`, Linux headless smoke (CachyOS 2026-06-10).
 
 ---
 

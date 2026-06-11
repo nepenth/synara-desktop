@@ -135,9 +135,7 @@ export const completeAuthenticatedLogin = async (
     userId: loginRes.user_id,
     baseUrl: loginBaseUrl,
     ...(loginRes.refresh_token ? { refreshToken: loginRes.refresh_token } : {}),
-    ...(typeof loginRes.expires_in_ms === 'number'
-      ? { expiresInMs: loginRes.expires_in_ms }
-      : {}),
+    ...(typeof loginRes.expires_in_ms === 'number' ? { expiresInMs: loginRes.expires_in_ms } : {}),
   };
 
   await persistSession(session, { nativeSessionStore });

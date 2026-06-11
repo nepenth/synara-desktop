@@ -203,12 +203,11 @@ test('incremental timeline row build visits at most 10% of events on live append
   assert.equal(appendInstrumentation.eventsVisited, 1);
   assert.ok(
     appendInstrumentation.eventsVisited <= baselineInstrumentation.eventsVisited * 0.1,
-    `expected <= ${baselineInstrumentation.eventsVisited * 0.1} visits, got ${appendInstrumentation.eventsVisited}`
+    `expected <= ${baselineInstrumentation.eventsVisited * 0.1} visits, got ${
+      appendInstrumentation.eventsVisited
+    }`
   );
-  assert.equal(
-    appended.rows.filter((row) => row.kind === 'event').length,
-    eventCount + 1
-  );
+  assert.equal(appended.rows.filter((row) => row.kind === 'event').length, eventCount + 1);
 });
 
 test('incremental timeline row build preserves row order for appended events', () => {
@@ -229,9 +228,7 @@ test('incremental timeline row build preserves row order for appended events', (
 
   assert.equal(strategy, 'incremental');
   assert.deepEqual(
-    appendedRows
-      .filter((row) => row.kind === 'event')
-      .map((row) => row.eventId),
+    appendedRows.filter((row) => row.kind === 'event').map((row) => row.eventId),
     initialRows
       .filter((row) => row.kind === 'event')
       .map((row) => row.eventId)

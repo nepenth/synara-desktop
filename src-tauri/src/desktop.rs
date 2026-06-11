@@ -1067,9 +1067,16 @@ fn linux_keyutils_probe_passes() -> bool {
 }
 
 #[cfg(target_os = "linux")]
+static LINUX_KEYUTILS_PROBE_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+#[cfg(target_os = "linux")]
 fn linux_keyutils_probe_round_trip() -> Result<(), KeyringError> {
     use keyring::credential::CredentialApi;
     use keyring::keyutils::KeyutilsCredential;
+
+    let _probe_guard = LINUX_KEYUTILS_PROBE_LOCK
+        .lock()
+        .map_err(|_| KeyringError::PlatformFailure(std::io::Error::other("linux keyutils probe lock poisoned").into()))?;
 
     let credential = KeyutilsCredential::new_with_target(
         None,

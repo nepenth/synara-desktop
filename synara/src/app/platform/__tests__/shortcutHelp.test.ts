@@ -47,7 +47,9 @@ test('shortcut help selects KDE Wayland guidance only for KDE Wayland', () => {
     sessionType: 'wayland',
   };
   assert.equal(selectShortcutPermissionHelp(gnomeWayland), GNOME_WAYLAND_SHORTCUT_HELP);
-  assert.ok(!selectShortcutPermissionHelp(gnomeWayland).toLowerCase().includes('kde plasma wayland'));
+  assert.ok(
+    !selectShortcutPermissionHelp(gnomeWayland).toLowerCase().includes('kde plasma wayland')
+  );
 });
 
 test('shortcut help selects Linux X11 guidance for X11 sessions', () => {

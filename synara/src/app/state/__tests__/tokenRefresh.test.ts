@@ -1,7 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { MatrixError, type IRefreshTokenResponse } from 'matrix-js-sdk';
-import type { MatrixClient } from 'matrix-js-sdk';
+import { MatrixError, type IRefreshTokenResponse, type MatrixClient } from 'matrix-js-sdk';
 import {
   REFRESH_BEFORE_EXPIRY_MS,
   createTokenRefreshFunction,
@@ -70,9 +69,7 @@ test('refreshAndPersistSession persists refreshed credentials', async () => {
 
   assert.equal(tokens.accessToken, 'new-access-token');
   assert.deepEqual(persistCalls[0], toRefreshedSession(baseSession, refreshResponse));
-  assert.deepEqual(swCalls, [
-    { baseUrl: baseSession.baseUrl, accessToken: 'new-access-token' },
-  ]);
+  assert.deepEqual(swCalls, [{ baseUrl: baseSession.baseUrl, accessToken: 'new-access-token' }]);
 });
 
 test('createTokenRefreshFunction rethrows MatrixError refresh failures', async () => {

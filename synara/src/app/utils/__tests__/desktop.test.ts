@@ -9,7 +9,6 @@ import {
   DESKTOP_TRAY_STATE_DEBOUNCE_MS,
   flushPendingDesktopTrayStateUpdate,
   getDesktopIntegrationStatus,
-
   getDesktopNotificationCount,
   getDesktopPerformanceCapabilities,
   invokeDesktopWithAvailability,
@@ -207,13 +206,17 @@ test('desktop tray state debounce coalesces rapid updates with trailing flush', 
 
 test('desktop tray state debounce flush applies the latest pending state immediately', async () => {
   const calls: DesktopTrayState[] = [];
-  const debounced = createDebouncedTrayStateUpdater(async (state) => {
-    calls.push(state);
-    return true;
-  }, DESKTOP_TRAY_STATE_DEBOUNCE_MS, {
-    schedule: () => 1,
-    cancel: () => undefined,
-  });
+  const debounced = createDebouncedTrayStateUpdater(
+    async (state) => {
+      calls.push(state);
+      return true;
+    },
+    DESKTOP_TRAY_STATE_DEBOUNCE_MS,
+    {
+      schedule: () => 1,
+      cancel: () => undefined,
+    }
+  );
 
   void debounced({
     unreadCount: 4,
@@ -325,7 +328,10 @@ test('desktop invoke distinguishes missing bridge from explicit false failures',
       false
     );
     await flushPendingDesktopTrayStateUpdate();
-    assert.match(getDesktopDiagnosticEntries().join('\n'), /desktop_update_tray_state returned false/);
+    assert.match(
+      getDesktopDiagnosticEntries().join('\n'),
+      /desktop_update_tray_state returned false/
+    );
   } finally {
     (globalThis as any).window = originalWindow;
     clearDesktopDiagnostics();
@@ -714,10 +720,7 @@ test('desktop file save streams large blobs through begin chunk end commands', a
   };
 
   try {
-    assert.equal(
-      await saveDesktopFile(blob, 'large.bin'),
-      '/Users/example/Downloads/large.bin'
-    );
+    assert.equal(await saveDesktopFile(blob, 'large.bin'), '/Users/example/Downloads/large.bin');
   } finally {
     (globalThis as any).window = originalWindow;
   }
@@ -729,10 +732,7 @@ test('desktop file save streams large blobs through begin chunk end commands', a
   });
   assert.equal(calls.at(-1)?.command, 'desktop_save_file_end');
   assert.deepEqual(calls.at(-1)?.args, { sessionId: 'save-session-1' });
-  assert.equal(
-    calls.filter((call) => call.command === 'desktop_save_file_chunk').length,
-    9
-  );
+  assert.equal(calls.filter((call) => call.command === 'desktop_save_file_chunk').length, 9);
   assert.equal(
     calls.some((call) => call.command === 'desktop_save_file'),
     false
