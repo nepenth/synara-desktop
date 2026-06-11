@@ -1311,7 +1311,7 @@ Before merge to `main`:
 - [x] All 47 commits present (`mip1-00` + `mip1-01`…`mip1-46`) — **remediated via `docs/mip1-commit-evidence.md` + `npm run check:mip1-evidence` (46/46 mapped; 26 physical commits)**
 - [x] Status tracker fully `Done`
 - [x] `npm run check:versions` passes
-- [x] `npm run test:modernization` passes (259/259 via `synara/`)
+- [x] `npm run test:modernization` passes (260/260 via `synara/`)
 - [x] `cargo test --lib` + `cargo check --locked --release` pass (82/82 Rust tests)
 - [ ] macOS manual smoke (tray, notifications, shortcuts, login/logout) — checklist in [desktop-validation-status.md](./desktop-validation-status.md)
 - [x] Linux manual smoke (Arch package, Secret Service, Wayland WebKit) — **partial**: headless/packaging/probes pass; interactive tray/notification/shortcut UI pending ([desktop-validation-status.md](./desktop-validation-status.md))
@@ -1325,7 +1325,7 @@ Commit hygiene remediated with evidence map + `check:mip1-evidence` (2026-06-10 
 2026-06-11 remediation (pass 1): Rust/TS URL policy parity, `map_keyring_error` log sanitization, timeline revision fingerprint, file transfer TTL/opaque IDs, expanded tests, validation doc refresh.
 2026-06-11 remediation (pass 2, PR #10 review): prettier/whitespace, Tauri toolchain gate, `storedAtMs` bootstrap, timeline divider semantics, transfer TTL on IPC, crypto IDs, incremental revision token, agent contract parity, port test resilience, smoke path filter, DND approval notifications.
 2026-06-11 remediation (pass 3, PR #10 re-review @ `f1a3d00`): timeline test typecheck fix, Prettier-clean `config.json`, live client credential update + recurring proactive refresh, clone-safe evidence base ref, save-begin temp cleanup, truncated drop-read guard, release warning cleanup.
-Evidence: `check:versions` (1.2.3 + Tauri 2.11), `check:prettier`, `typecheck:modernization`, `check:mip1-evidence`, `test:modernization` (259/259), `cargo test --lib` (82/82 macOS), `cargo check --locked --release`, [desktop-validation-status.md](./desktop-validation-status.md).
+Evidence: `check:versions` (1.2.3 + Tauri 2.11), `check:prettier`, `typecheck:modernization`, `check:mip1-evidence`, `test:modernization` (260/260), `cargo test --lib` (82/82 macOS), `cargo check --locked --release`, [desktop-validation-status.md](./desktop-validation-status.md).
 
 ---
 

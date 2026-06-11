@@ -10,7 +10,7 @@ Branch: `maturity_improvement_plan1` (rebased on `main` with iOS UX maturity)
 |------|--------|-------|
 | `npm run check:versions` | Pass | App metadata + Tauri toolchain major.minor alignment |
 | `npm --prefix synara run check:prettier` | Pass | |
-| `npm run test:modernization` | Pass | 259/259 (after pass 3 remediation) |
+| `npm run test:modernization` | Pass | 260/260 (after pass 3 remediation) |
 | `npm run typecheck:modernization` | Pass | |
 | `npm run check:mip1-evidence` | Pass | 46/46 items mapped; falls back to `origin/main` when local `main` is absent |
 | `npm run check:runtime-assets` | Pass | devAssets ↔ synara/dist |
