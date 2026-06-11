@@ -60,6 +60,27 @@ export const toAccessTokens = (response: IRefreshTokenResponse): AccessTokens =>
   expiry: new Date(Date.now() + response.expires_in_ms),
 });
 
+type MatrixClientWithRefreshToken = MatrixClient & {
+  http: {
+    opts: {
+      refreshToken?: string;
+    };
+  };
+};
+
+export const applyRefreshedCredentialsToClient = (
+  mx: MatrixClient,
+  response: IRefreshTokenResponse
+): void => {
+  mx.setAccessToken(response.access_token);
+  (mx as MatrixClientWithRefreshToken).http.opts.refreshToken = response.refresh_token;
+};
+
+export type RefreshAndPersistResult = {
+  tokens: AccessTokens;
+  session: MatrixClientSession;
+};
+
 export const refreshAndPersistSession = async (
   mx: MatrixClient,
   session: MatrixClientSession,
@@ -69,12 +90,19 @@ export const refreshAndPersistSession = async (
     pushSessionToSW: pushSession,
     nativeSessionStore,
   }: RefreshAndPersistSessionDeps
-): Promise<AccessTokens> => {
+): Promise<RefreshAndPersistResult> => {
   const response = await mx.refreshToken(refreshToken);
-  const refreshedSession = toRefreshedSession(session, response);
+  applyRefreshedCredentialsToClient(mx, response);
+  const refreshedSession: MatrixClientSession = {
+    ...toRefreshedSession(session, response),
+    storedAtMs: Date.now(),
+  };
   await persistSession(refreshedSession, { nativeSessionStore });
   pushSession(refreshedSession.baseUrl, refreshedSession.accessToken);
-  return toAccessTokens(response);
+  return {
+    tokens: toAccessTokens(response),
+    session: refreshedSession,
+  };
 };
 
 export const createTokenRefreshFunction = (
@@ -84,7 +112,8 @@ export const createTokenRefreshFunction = (
 ): TokenRefreshFunction => {
   return async (refreshToken: string) => {
     try {
-      return await refreshAndPersistSession(getClient(), session, refreshToken, deps);
+      const { tokens } = await refreshAndPersistSession(getClient(), session, refreshToken, deps);
+      return tokens;
     } catch (error) {
       if (error instanceof MatrixError) {
         throw error;
@@ -278,6 +307,11 @@ export const clearLoginData = async (
   storage = typeof window === 'undefined' ? undefined : window.localStorage
 ) => performLogout(undefined, { storage: storage as SessionLocalStorage });
 
+const canScheduleProactiveTokenRefresh = (session: MatrixClientSession): boolean =>
+  Boolean(session.refreshToken) &&
+  typeof session.expiresInMs === 'number' &&
+  typeof session.storedAtMs === 'number';
+
 export const scheduleProactiveTokenRefresh = (
   mx: MatrixClient,
   session: MatrixClientSession,
@@ -286,38 +320,59 @@ export const scheduleProactiveTokenRefresh = (
 ): ProactiveTokenRefreshHandle => {
   const resolvedDeps = { ...defaultRefreshDeps(), ...deps };
 
-  if (
-    !session.refreshToken ||
-    typeof session.expiresInMs !== 'number' ||
-    typeof session.storedAtMs !== 'number'
-  ) {
+  if (!canScheduleProactiveTokenRefresh(session)) {
     return { dispose: () => undefined };
   }
 
-  const refreshAtMs = session.storedAtMs + session.expiresInMs - REFRESH_BEFORE_EXPIRY_MS;
-  const delayMs = Math.max(0, refreshAtMs - nowMs);
   let disposed = false;
+  let timer: ReturnType<typeof setTimeout> | undefined;
 
-  const runRefresh = async () => {
-    if (disposed) return;
+  const clearScheduledRefresh = (): void => {
+    if (timer !== undefined) {
+      clearTimeout(timer);
+      timer = undefined;
+    }
+  };
+
+  const scheduleRefreshForSession = (
+    activeSession: MatrixClientSession,
+    scheduleAtMs = Date.now()
+  ): void => {
+    clearScheduledRefresh();
+    if (disposed || !canScheduleProactiveTokenRefresh(activeSession)) return;
+
+    const refreshAtMs =
+      activeSession.storedAtMs! + activeSession.expiresInMs! - REFRESH_BEFORE_EXPIRY_MS;
+    const delayMs = Math.max(0, refreshAtMs - scheduleAtMs);
+
+    timer = setTimeout(() => {
+      void runRefresh(activeSession);
+    }, delayMs);
+  };
+
+  const runRefresh = async (activeSession: MatrixClientSession) => {
+    if (disposed || !activeSession.refreshToken) return;
 
     try {
-      await refreshAndPersistSession(mx, session, session.refreshToken!, resolvedDeps);
+      const { session: refreshedSession } = await refreshAndPersistSession(
+        mx,
+        activeSession,
+        activeSession.refreshToken,
+        resolvedDeps
+      );
+      scheduleRefreshForSession(refreshedSession);
     } catch {
+      clearScheduledRefresh();
       await performLogout(mx, { nativeSessionStore: resolvedDeps.nativeSessionStore });
     }
   };
 
-  const timer = setTimeout(() => {
-    void runRefresh();
-  }, delayMs);
+  scheduleRefreshForSession(session, nowMs);
 
   return {
     dispose: () => {
       disposed = true;
-      if (timer !== undefined) {
-        clearTimeout(timer);
-      }
+      clearScheduledRefresh();
     },
   };
 };
