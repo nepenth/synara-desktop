@@ -1552,13 +1552,17 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
       });
     }
 
-    setTimeout(() => {
+    if (!focusItem) return undefined;
+
+    const timeout = window.setTimeout(() => {
       if (!alive()) return;
       setFocusItem((currentItem) => {
         if (currentItem === focusItem) return undefined;
         return currentItem;
       });
     }, 2000);
+
+    return () => window.clearTimeout(timeout);
   }, [alive, focusItem, scrollToItem]);
 
   // scroll to bottom of timeline
