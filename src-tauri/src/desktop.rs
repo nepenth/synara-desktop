@@ -194,6 +194,8 @@ const DESKTOP_SECRET_STORE_NOT_CONFIGURED: &str = "secure-secret-store-not-confi
 #[allow(dead_code)]
 const DESKTOP_SECRET_STORE_UNSUPPORTED_PLATFORM: &str = "secure-secret-store-unsupported-platform";
 #[allow(dead_code)]
+const DESKTOP_SECRET_STORE_WINDOWS_UNSUPPORTED: &str = "windows-native-session-store-unsupported";
+#[allow(dead_code)]
 const DESKTOP_SECRET_STORE_SESSION_SCOPED: &str = "linux-keyutils-session-scoped";
 #[allow(dead_code)]
 const DESKTOP_SECRET_STORE_LINUX_UNAVAILABLE: &str = "linux-secret-store-unavailable";
@@ -500,7 +502,12 @@ fn platform_secret_store_status() -> DesktopSecretStoreStatus {
         )
     }
 
-    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+    #[cfg(target_os = "windows")]
+    {
+        unavailable_secret_store_status(DESKTOP_SECRET_STORE_WINDOWS_UNSUPPORTED)
+    }
+
+    #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
     {
         unavailable_secret_store_status(DESKTOP_SECRET_STORE_UNSUPPORTED_PLATFORM)
     }
@@ -1994,6 +2001,36 @@ mod tests {
         assert_eq!(status.backend, DESKTOP_SECRET_STORE_BACKEND_MACOS_KEYCHAIN);
         assert_eq!(status.can_persist_session, true);
         assert_eq!(status.reason, None);
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn platform_secret_store_status_reports_windows_unsupported() {
+        let status = platform_secret_store_status();
+
+        assert_eq!(status.available, false);
+        assert_eq!(status.backend, DESKTOP_SECRET_STORE_BACKEND_NONE);
+        assert_eq!(status.can_persist_session, false);
+        assert_eq!(
+            status.reason,
+            Some(DESKTOP_SECRET_STORE_WINDOWS_UNSUPPORTED)
+        );
+        assert!(!bridge_supports_secure_secret_store(&status));
+    }
+
+    #[test]
+    fn windows_secret_store_status_mapping_is_explicit_and_non_persistent() {
+        let status =
+            unavailable_secret_store_status(DESKTOP_SECRET_STORE_WINDOWS_UNSUPPORTED);
+
+        assert_eq!(status.available, false);
+        assert_eq!(status.backend, DESKTOP_SECRET_STORE_BACKEND_NONE);
+        assert_eq!(status.can_persist_session, false);
+        assert_eq!(
+            status.reason,
+            Some(DESKTOP_SECRET_STORE_WINDOWS_UNSUPPORTED)
+        );
+        assert!(!bridge_supports_secure_secret_store(&status));
     }
 
     #[test]
