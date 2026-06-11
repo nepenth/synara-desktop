@@ -6,13 +6,17 @@ import {
   MATRIX_LEGACY_CRYPTO_STORE_NAME,
   MATRIX_SYNC_STORE_NAME,
 } from './matrixLocalStores';
-import { cryptoCallbacks } from './secretStorageKeys';
+import { clearSecretStorageKeys, cryptoCallbacks } from './secretStorageKeys';
 import { clearNavToActivePathStore } from '../app/state/navToActivePath';
 import { pushSessionToSW } from '../sw-session';
-import { clearPersistedSessions } from '../app/state/sessionPersistence';
+import {
+  clearMatrixStoresForIdentityChange,
+  clearPersistedSessions,
+  setLastBootstrappedMatrixIdentity,
+  type SessionPersistenceOptions,
+} from '../app/state/sessionPersistence';
 import { clearSessionLocalStorage, type SessionLocalStorage } from '../app/state/sessions';
 import { platformSessionStore } from '../app/platform';
-import type { SessionPersistenceOptions } from '../app/state/sessionPersistence';
 
 type Session = {
   baseUrl: string;
@@ -56,16 +60,47 @@ const startMatrixClient = async (session: Session): Promise<MatrixClient> => {
   return mx;
 };
 
-export const initClient = async (session: Session): Promise<MatrixClient> => {
+export type InitClientDeps = {
+  clearMatrixStoresForIdentityChange?: typeof clearMatrixStoresForIdentityChange;
+  clearMatrixLocalStores?: typeof clearMatrixLocalStores;
+  setLastBootstrappedMatrixIdentity?: typeof setLastBootstrappedMatrixIdentity;
+  startMatrixClient?: typeof startMatrixClient;
+};
+
+const recordBootstrappedMatrixIdentity = (
+  session: Session,
+  setLastBootstrapped: InitClientDeps['setLastBootstrappedMatrixIdentity'] = setLastBootstrappedMatrixIdentity
+): void => {
+  setLastBootstrapped?.({
+    userId: session.userId,
+    deviceId: session.deviceId,
+  });
+};
+
+export const initClient = async (
+  session: Session,
+  {
+    clearMatrixStoresForIdentityChange: clearStoresForIdentityChange = clearMatrixStoresForIdentityChange,
+    clearMatrixLocalStores: clearStores = clearMatrixLocalStores,
+    setLastBootstrappedMatrixIdentity: setLastBootstrapped = setLastBootstrappedMatrixIdentity,
+    startMatrixClient: startClient = startMatrixClient,
+  }: InitClientDeps = {}
+): Promise<MatrixClient> => {
+  await clearStoresForIdentityChange(session);
+
   try {
-    return await startMatrixClient(session);
+    const client = await startClient(session);
+    recordBootstrappedMatrixIdentity(session, setLastBootstrapped);
+    return client;
   } catch (error) {
     if (!isCryptoAccountMismatchError(error)) {
       throw error;
     }
 
-    await clearMatrixLocalStores();
-    return startMatrixClient(session);
+    await clearStores();
+    const client = await startClient(session);
+    recordBootstrappedMatrixIdentity(session, setLastBootstrapped);
+    return client;
   }
 };
 
@@ -121,6 +156,7 @@ export const performLogout = async (
   }
 
   deps.clearSessionLocalStorage(storage);
+  clearSecretStorageKeys();
   deps.reload();
 };
 
