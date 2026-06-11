@@ -12,3 +12,4 @@ DerivedData/
 *.xcuserstate
 xcuserdata/
 synara-ios/.build/
+src-tauri/capabilities/release-hardening.json
