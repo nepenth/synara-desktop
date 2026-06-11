@@ -1442,6 +1442,14 @@ pub fn desktop_set_shortcuts(
     shortcut_result(DesktopShortcutApplyState::Active, None, None)
 }
 
+pub fn bridge_supports_secure_secret_store(status: &DesktopSecretStoreStatus) -> bool {
+    status.available && status.can_persist_session
+}
+
+pub fn desktop_bridge_supports_secure_secret_store() -> bool {
+    bridge_supports_secure_secret_store(&KeyringDesktopSessionSecretStore.status())
+}
+
 #[tauri::command]
 pub fn desktop_secret_store_status() -> DesktopSecretStoreStatus {
     KeyringDesktopSessionSecretStore.status()
@@ -2019,6 +2027,17 @@ mod tests {
         assert_eq!(status.backend, DESKTOP_SECRET_STORE_BACKEND_NONE);
         assert_eq!(status.can_persist_session, false);
         assert_eq!(status.reason, Some(DESKTOP_SECRET_STORE_LINUX_UNAVAILABLE));
+    }
+
+    #[test]
+    fn bridge_supports_secure_secret_store_only_when_persistence_is_available() {
+        let persistent = linux_secret_store_status_from_signals(true, false);
+        let session_scoped = linux_secret_store_status_from_signals(false, true);
+        let unavailable = linux_secret_store_status_from_signals(false, false);
+
+        assert!(bridge_supports_secure_secret_store(&persistent));
+        assert!(!bridge_supports_secure_secret_store(&session_scoped));
+        assert!(!bridge_supports_secure_secret_store(&unavailable));
     }
 
     #[test]

@@ -1,5 +1,6 @@
 import { type Session } from '../state/sessions';
-import { invokeDesktop } from '../utils/desktop';
+import { invokeDesktop, isSynaraDesktop } from '../utils/desktop';
+import { syncDesktopSecretStoreCapability } from './capabilities';
 import {
   getPlatformSecretStoreStatus,
   normalizePlatformSecretStoreStatus,
@@ -63,21 +64,26 @@ const serializePlatformSession = (session: Session) => {
   return envelope;
 };
 
+const unavailableDesktopSecretStoreStatus = (): PlatformSecretStoreStatus => ({
+  available: false,
+  backend: 'none',
+  canPersistSession: false,
+  reason: 'secure-secret-store-unavailable',
+});
+
 export const platformSessionStore: PlatformSessionStore = {
   getStatus: async () => {
-    const localStatus = getPlatformSecretStoreStatus();
-    if (!localStatus.available || localStatus.backend !== 'desktop-native') return localStatus;
+    if (!isSynaraDesktop()) {
+      return getPlatformSecretStoreStatus();
+    }
 
     try {
       const status = await invokeDesktop<unknown>('desktop_secret_store_status');
-      return normalizePlatformSecretStoreStatus(status) ?? localStatus;
+      return (
+        (await syncDesktopSecretStoreCapability(status)) ?? unavailableDesktopSecretStoreStatus()
+      );
     } catch {
-      return {
-        available: false,
-        backend: 'desktop-native',
-        canPersistSession: false,
-        reason: 'secure-secret-store-unavailable',
-      };
+      return unavailableDesktopSecretStoreStatus();
     }
   },
 

@@ -74,10 +74,24 @@ export const getPlatformSecretStoreStatus = (): PlatformSecretStoreStatus => {
   }
 
   if (capabilities.channel === 'desktop-tauri') {
+    if (!capabilities.supportsSecureSecretStore) {
+      return {
+        available: false,
+        backend: 'none',
+        canPersistSession: false,
+        reason: 'secure-secret-store-not-configured',
+      };
+    }
+
     return { available: true, backend: 'desktop-native', canPersistSession: true };
   }
 
-  return { available: true, backend: 'unknown', canPersistSession: true };
+  return {
+    available: false,
+    backend: 'none',
+    canPersistSession: false,
+    reason: 'secure-secret-store-not-configured',
+  };
 };
 
 export const getPlatformSecretStoreBackendLabel = (backend: PlatformSecretStoreBackend): string => {
