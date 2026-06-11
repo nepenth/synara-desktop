@@ -33,6 +33,7 @@ const tests = [
   'src/app/state/__tests__/sessionBootstrap.test.ts',
   'src/app/state/__tests__/sessionPersistence.test.ts',
   'src/app/state/__tests__/sessions.test.ts',
+  'src/app/state/__tests__/clearLoginData.test.ts',
   'src/app/state/__tests__/settings.test.ts',
   'src/app/components/editor/__tests__/richText.test.ts',
   'src/app/pages/auth/login/__tests__/loginUtil.test.ts',

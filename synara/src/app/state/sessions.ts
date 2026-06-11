@@ -32,12 +32,33 @@ export type SessionStore = {
   getFallbackSession: () => Session | undefined;
 };
 
-const FALLBACK_SESSION_KEYS = {
+export const FALLBACK_SESSION_KEYS = {
   accessToken: 'synara_access_token',
   deviceId: 'synara_device_id',
   userId: 'synara_user_id',
   baseUrl: 'synara_hs_base_url',
 } as const;
+
+export const AFTER_LOGIN_REDIRECT_PATH_KEY = 'after_login_redirect_url';
+
+export const NAV_TO_ACTIVE_PATH_PREFIX = 'navToActivePath';
+
+/** Exact localStorage keys removed on logout. User settings keys are intentionally excluded. */
+export const SESSION_LOCAL_STORAGE_EXACT_KEYS = [
+  FALLBACK_SESSION_KEYS.accessToken,
+  FALLBACK_SESSION_KEYS.deviceId,
+  FALLBACK_SESSION_KEYS.userId,
+  FALLBACK_SESSION_KEYS.baseUrl,
+  AFTER_LOGIN_REDIRECT_PATH_KEY,
+] as const;
+
+/** localStorage key prefixes removed on logout (e.g. per-user navigation state). */
+export const SESSION_LOCAL_STORAGE_PREFIXES = [NAV_TO_ACTIVE_PATH_PREFIX] as const;
+
+export type SessionLocalStorage = SessionStorage & {
+  readonly length?: number;
+  key?: (index: number) => string | null;
+};
 
 /**
  * Single-session fallback storage for Synara.
@@ -114,6 +135,31 @@ export const removeFallbackSession = () => {
 };
 export const getFallbackSession = (): Session | undefined => {
   return fallbackSessionStore.getFallbackSession();
+};
+
+const removePrefixedSessionKeys = (storage: SessionLocalStorage, prefix: string): void => {
+  if (typeof storage.length !== 'number' || typeof storage.key !== 'function') {
+    return;
+  }
+
+  const keysToRemove: string[] = [];
+  for (let index = 0; index < storage.length; index += 1) {
+    const key = storage.key(index);
+    if (key?.startsWith(prefix)) {
+      keysToRemove.push(key);
+    }
+  }
+
+  keysToRemove.forEach((key) => storage.removeItem(key));
+};
+
+export const clearSessionLocalStorage = (
+  storage: SessionLocalStorage = getDefaultSessionStorage() as SessionLocalStorage
+): void => {
+  if (!storage) return;
+
+  SESSION_LOCAL_STORAGE_EXACT_KEYS.forEach((key) => storage.removeItem(key));
+  SESSION_LOCAL_STORAGE_PREFIXES.forEach((prefix) => removePrefixedSessionKeys(storage, prefix));
 };
 /**
  * End of single-session fallback storage.
