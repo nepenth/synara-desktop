@@ -18,9 +18,8 @@ import FocusTrap from 'focus-trap-react';
 import React, { MouseEventHandler, ReactNode, useCallback, useEffect, useState } from 'react';
 import {
   clearCacheAndReload,
-  clearLoginData,
   initClient,
-  logoutClient,
+  performLogout,
   startClient,
 } from '../../../client/initMatrix';
 import { SplashScreen } from '../../components/splash-screen';
@@ -37,11 +36,7 @@ import { AuthMetadataProvider } from '../../hooks/useAuthMetadata';
 import { getActiveSession } from '../../state/sessionBootstrap';
 import { AutoDiscovery } from './AutoDiscovery';
 import { platformSessionStore, repairPlatformDeviceDisplayName } from '../../platform';
-import {
-  clearPersistedSessions,
-  migrateLegacySessionToNativeAfterClientInit,
-} from '../../state/sessionPersistence';
-import { clearSessionLocalStorage } from '../../state/sessions';
+import { migrateLegacySessionToNativeAfterClientInit } from '../../state/sessionPersistence';
 import { shouldRetrySyncOnResume } from '../../utils/syncLifecycle';
 
 function ClientRootLoading() {
@@ -104,14 +99,7 @@ function ClientRootOptions({ mx }: { mx?: MatrixClient }) {
                     </Text>
                   </MenuItem>
                 )}
-                <MenuItem
-                  onClick={() => {
-                    if (mx) {
-                      logoutClient(mx);
-                      return;
-                    }
-                    clearLoginData();
-                  }}
+                <MenuItem onClick={() => performLogout(mx)}
                   size="300"
                   radii="300"
                   variant="Critical"
@@ -133,11 +121,7 @@ function ClientRootOptions({ mx }: { mx?: MatrixClient }) {
 const useLogoutListener = (mx?: MatrixClient) => {
   useEffect(() => {
     const handleLogout: HttpApiEventHandlerMap[HttpApiEvent.SessionLoggedOut] = async () => {
-      mx?.stopClient();
-      await mx?.clearStores();
-      await clearPersistedSessions({ nativeSessionStore: platformSessionStore });
-      clearSessionLocalStorage();
-      window.location.reload();
+      await performLogout(mx);
     };
 
     mx?.on(HttpApiEvent.SessionLoggedOut, handleLogout);
