@@ -11,6 +11,7 @@ export type Session = {
   deviceId: string;
   accessToken: string;
   expiresInMs?: number;
+  storedAtMs?: number;
   refreshToken?: string;
   fallbackSdkStores?: boolean;
 };
