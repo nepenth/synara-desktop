@@ -1288,12 +1288,12 @@ For each MIP1-NN commit:
 | 25 Pagination errors | MIP1-31 | G | Done | mip1-31 |
 | 26 Invoke error strictness | MIP1-32 | G | Done | mip1-32 |
 | 29 Sync status copy | MIP1-33 | G | Done | mip1-33 |
-| 31 Shortcut help per platform | MIP1-34 | H | Planned | — |
-| 32 Tray parity matrix | MIP1-35 | H | Planned | — |
-| 33 Arch depends | MIP1-36 | H | Planned | — |
-| 34 Standalone desktop file | MIP1-37 | H | Planned | — |
-| 35 Config sync | MIP1-38 | H | Planned | — |
-| 36 CI hardening | MIP1-39 | H | Planned | — |
+| 31 Shortcut help per platform | MIP1-34 | H | Done | mip1-34 |
+| 32 Tray parity matrix | MIP1-35 | H | Done | mip1-35 |
+| 33 Arch depends | MIP1-36 | H | Done | mip1-36 |
+| 34 Standalone desktop file | MIP1-37 | H | Done | mip1-37 |
+| 35 Config sync | MIP1-38 | H | Done | mip1-38 |
+| 36 CI hardening | MIP1-39 | H | Done | mip1-39 |
 | 37 Validation docs | MIP1-40 | I | Planned | — |
 | 38 linux.md fixes | MIP1-41 | I | Planned | — |
 | 39 pkgrel bump | MIP1-42 | I | Planned | — |
