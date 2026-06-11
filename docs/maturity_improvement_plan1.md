@@ -1294,13 +1294,13 @@ For each MIP1-NN commit:
 | 34 Standalone desktop file | MIP1-37 | H | Done | mip1-37 |
 | 35 Config sync | MIP1-38 | H | Done | mip1-38 |
 | 36 CI hardening | MIP1-39 | H | Done | mip1-39 |
-| 37 Validation docs | MIP1-40 | I | Planned | — |
-| 38 linux.md fixes | MIP1-41 | I | Planned | — |
-| 39 pkgrel bump | MIP1-42 | I | Planned | — |
-| 40 Repo URL normalize | MIP1-43 | I | Planned | — |
-| 43 Refresh token | MIP1-44 | I | Planned | — |
+| 37 Validation docs | MIP1-40 | I | Done | mip1-40 |
+| 38 linux.md fixes | MIP1-41 | I | Done | mip1-41 |
+| 39 pkgrel bump | MIP1-42 | I | Done | mip1-42 |
+| 40 Repo URL normalize | MIP1-43 | I | Done | mip1-43 |
+| 43 Refresh token | MIP1-44 | I | Done | mip1-44 |
 | 44 macOS signing docs | MIP1-45 | I | Planned | — |
-| 45 Spellcheck logging | MIP1-46 | I | Planned | — |
+| 45 Spellcheck logging | MIP1-46 | I | Done | mip1-46 |
 
 ---
 

@@ -91,8 +91,12 @@ fn linux_spellcheck_languages() -> Vec<String> {
 
 #[cfg(target_os = "linux")]
 fn configure_webview_spellcheck<R: tauri::Runtime>(window: &tauri::WebviewWindow<R>) {
+    use std::sync::atomic::{AtomicBool, Ordering};
+
     let languages = linux_spellcheck_languages();
-    let _ = window.with_webview(move |webview| {
+    let spellcheck_configured = std::sync::Arc::new(AtomicBool::new(false));
+    let configured_flag = spellcheck_configured.clone();
+    let configure_result = window.with_webview(move |webview| {
         use webkit2gtk::{WebContextExt, WebViewExt};
 
         let Some(context) = webview.inner().context() else {
@@ -102,7 +106,15 @@ fn configure_webview_spellcheck<R: tauri::Runtime>(window: &tauri::WebviewWindow
         let language_refs = languages.iter().map(String::as_str).collect::<Vec<_>>();
         context.set_spell_checking_languages(&language_refs);
         context.set_spell_checking_enabled(true);
+        configured_flag.store(true, Ordering::Relaxed);
     });
+
+    if configure_result.is_err() || !spellcheck_configured.load(Ordering::Relaxed) {
+        eprintln!(
+            "WebKit spellcheck WebContext unavailable; continuing without spellcheck for window {}",
+            window.label()
+        );
+    }
 }
 
 #[cfg(not(target_os = "linux"))]

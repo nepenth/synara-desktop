@@ -46,6 +46,7 @@ const cargoLockVersion = matchRequired(
   cargoLock,
   /\[\[package\]\]\s*\nname = "synara"\s*\nversion = "([^"]+)"/
 );
+const archStartDir = path.join(root, "packaging/arch");
 const archPkgver = execFileSync(
   "/bin/bash",
   [
@@ -56,10 +57,28 @@ const archPkgver = execFileSync(
     cwd: root,
     env: {
       ...process.env,
-      SYNARA_ARCH_STARTDIR: path.join(root, "packaging/arch"),
+      SYNARA_ARCH_STARTDIR: archStartDir,
     },
     encoding: "utf8",
   }
+);
+const archPkgrel = Number.parseInt(
+  execFileSync(
+    "/bin/bash",
+    [
+      "-lc",
+      'startdir="$SYNARA_ARCH_STARTDIR"; source "$SYNARA_ARCH_STARTDIR/PKGBUILD"; printf "%s" "$pkgrel"',
+    ],
+    {
+      cwd: root,
+      env: {
+        ...process.env,
+        SYNARA_ARCH_STARTDIR: archStartDir,
+      },
+      encoding: "utf8",
+    }
+  ),
+  10
 );
 
 assertEqual("package.json version", desktopPackage.version, expectedVersion);
@@ -79,6 +98,9 @@ assertEqual(
   expectedVersion
 );
 assertEqual("packaging/arch/PKGBUILD pkgver", archPkgver, expectedVersion.replaceAll("-", "_"));
+if (!Number.isInteger(archPkgrel) || archPkgrel < 1) {
+  throw new Error(`packaging/arch/PKGBUILD pkgrel is ${archPkgrel}, expected a positive integer`);
+}
 assertEqual(
   "synara-ios/project.yml MARKETING_VERSION",
   matchRequired("synara-ios/project.yml MARKETING_VERSION", iosXcodeGenProject, /MARKETING_VERSION:\s*"([^"]+)"/),
@@ -97,7 +119,7 @@ const iosMarketingVersion = matchRequired(
   /MARKETING_VERSION:\s*"([^"]+)"/
 );
 
-console.log(`Version metadata is consistent at ${expectedVersion}.`);
+console.log(`Version metadata is consistent at ${expectedVersion} (Arch pkgrel ${archPkgrel}).`);
 if (iosMarketingVersion === expectedVersion) {
   console.log(
     `iOS App Store build number is ${iosBuildVersion} (CURRENT_PROJECT_VERSION); marketing version matches desktop at ${expectedVersion}.`
