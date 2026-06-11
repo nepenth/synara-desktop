@@ -124,6 +124,31 @@ test('persistAuthenticatedSession keeps fallback when native write fails', async
   }
 });
 
+test('migrateLegacySessionToNativeAfterClientInit clears native store error after successful migration', async () => {
+  resetSessionBootstrapForTests();
+  const fallbackStore = createLocalStorageSessionStore(createMemoryStorage());
+  fallbackStore.setFallbackSession(session);
+  setSessionBootstrapResult({
+    session,
+    source: 'legacy-fallback',
+    nativeStoreError: 'native-session-store-error',
+  });
+  const nativeStore = createNativeSessionStore();
+
+  try {
+    const result = await migrateLegacySessionToNativeAfterClientInit({
+      nativeSessionStore: nativeStore.store,
+      fallbackStore,
+    });
+
+    assert.equal(result.status, 'migrated');
+    assert.equal(getSessionBootstrapResult().nativeStoreError, undefined);
+    assert.equal(getSessionBootstrapResult().source, 'native');
+  } finally {
+    resetSessionBootstrapForTests();
+  }
+});
+
 test('migrateLegacySessionToNativeAfterClientInit removes fallback only after native write', async () => {
   resetSessionBootstrapForTests();
   const fallbackStore = createLocalStorageSessionStore(createMemoryStorage());

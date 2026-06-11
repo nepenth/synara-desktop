@@ -1,8 +1,10 @@
 import {
   clearSessionBootstrap,
   getSessionBootstrapResult,
+  NATIVE_SESSION_STORE_ERROR,
   setSessionBootstrapResult,
   type AsyncSessionStore,
+  type NativeSessionStoreError,
   type SessionBootstrapResult,
 } from './sessionBootstrap';
 import { clearMatrixLocalStores } from '../../client/matrixLocalStores';
@@ -13,7 +15,7 @@ import {
   type SessionStore,
 } from './sessions';
 
-export type NativeSessionStoreError = 'native-session-store-error';
+export type { NativeSessionStoreError };
 
 export type PersistedSessionResult = {
   session: Session;
@@ -82,7 +84,7 @@ export const persistAuthenticatedSession = async (
         };
       }
     } catch {
-      nativeStoreError = 'native-session-store-error';
+      nativeStoreError = NATIVE_SESSION_STORE_ERROR;
     }
   }
 
@@ -123,7 +125,7 @@ export const migrateLegacySessionToNativeAfterClientInit = async ({
     return {
       status: 'failed',
       session: bootstrapResult.session,
-      nativeStoreError: 'native-session-store-error',
+      nativeStoreError: NATIVE_SESSION_STORE_ERROR,
     };
   }
 
