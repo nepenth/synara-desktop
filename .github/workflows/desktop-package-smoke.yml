@@ -12,7 +12,7 @@ on:
       - "scripts/**"
       - "packaging/arch/**"
       - "src-tauri/**"
-      - "synara"
+      - "synara/**"
   workflow_dispatch:
 
 concurrency:
