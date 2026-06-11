@@ -103,7 +103,7 @@ import { markAsRead, markAsUnread, markEventAsUnread } from '../../utils/notific
 import { useDebounce } from '../../hooks/useDebounce';
 import { getResizeObserverEntry, useResizeObserver } from '../../hooks/useResizeObserver';
 import * as css from './RoomTimeline.css';
-import { inSameDay, minuteDifference, timeDayMonthYear, today, yesterday } from '../../utils/time';
+import { timeDayMonthYear, today, yesterday } from '../../utils/time';
 import { createMentionElement, isEmptyEditor, moveCursor } from '../../components/editor';
 import { roomIdToReplyDraftAtomFamily } from '../../state/room/roomInputDrafts';
 import { usePowerLevelsContext } from '../../hooks/usePowerLevels';
@@ -139,6 +139,7 @@ import { parsePollStartContent } from '../../utils/polls';
 import { addRoomNoteItemAccountData, createMessageRoomNoteItem } from '../../utils/roomNotes';
 import { isPerformanceDebugEnabled, perfLog } from '../../utils/performance';
 import {
+  buildTimelineRowsWithState,
   estimateTimelineRowSize,
   getRestoredVirtualScrollTop,
   getTimelineRowKey,
@@ -146,6 +147,7 @@ import {
   isVirtualRangeAtEnd,
   shouldPaginateVirtualRange,
   TIMELINE_VIRTUAL_OVERSCAN,
+  TimelineRowsBuildState,
   TimelineVirtualAnchor,
   TimelineVirtualRow,
 } from '../../utils/timelineVirtualization';
@@ -568,129 +570,6 @@ const getRoomUnreadInfo = (room: Room, anchorEventId?: string, scrollTo = false)
 const hasUnreadForInitialScroll = (unread: Unread | undefined, unreadAnchorEventId?: string) =>
   Boolean(unreadAnchorEventId || (unread && (unread.total > 0 || unread.highlight > 0)));
 
-const getLoaderRows = (
-  direction: 'backward' | 'forward',
-  compact: boolean,
-  count: number
-): TimelineLoaderRow[] =>
-  Array.from({ length: compact ? 5 : 3 }, (_, index) => ({
-    kind: 'loader',
-    key: `loader:${direction}:${count}:${index}`,
-    direction,
-    observe: direction === 'backward' ? index === (compact ? 4 : 2) : index === 0,
-    placeholderIndex: index,
-  }));
-
-const buildTimelineRows = (
-  linkedTimelines: EventTimeline[],
-  options: {
-    showIntro: boolean;
-    showBackLoader: boolean;
-    showFrontLoader: boolean;
-    compact: boolean;
-    ignoredUsersSet: Set<string>;
-    showHiddenEvents: boolean;
-    readUptoEventId?: string;
-    unreadAnchorEventId?: string;
-    currentUserId?: string | null;
-  }
-): TimelineRow[] => {
-  const rows: TimelineRow[] = [];
-  const {
-    showIntro,
-    showBackLoader,
-    showFrontLoader,
-    compact,
-    ignoredUsersSet,
-    showHiddenEvents,
-    readUptoEventId,
-    unreadAnchorEventId,
-    currentUserId,
-  } = options;
-
-  if (showIntro) {
-    rows.push({ kind: 'intro', key: 'intro' });
-  }
-  if (showBackLoader) {
-    rows.push(...getLoaderRows('backward', compact, getTimelinesEventsCount(linkedTimelines)));
-  }
-
-  let prevEvent: MatrixEvent | undefined;
-  let isPrevRendered = false;
-  let pendingNewDivider = false;
-  let absoluteIndex = 0;
-
-  linkedTimelines.forEach((eventTimeline) => {
-    const timelineSet = eventTimeline.getTimelineSet();
-    eventTimeline.getEvents().forEach((mEvent) => {
-      const eventIndex = absoluteIndex;
-      absoluteIndex += 1;
-
-      const eventId = mEvent.getId();
-      if (!eventId) return;
-
-      const eventSender = mEvent.getSender();
-      if (eventSender && ignoredUsersSet.has(eventSender)) return;
-      if (mEvent.isRedacted() && !showHiddenEvents) return;
-
-      if (!pendingNewDivider && readUptoEventId && prevEvent?.getId() === readUptoEventId) {
-        pendingNewDivider = true;
-      }
-      const dayDividerTs =
-        prevEvent && !inSameDay(prevEvent.getTs(), mEvent.getTs()) ? mEvent.getTs() : undefined;
-
-      const collapsed =
-        isPrevRendered &&
-        !dayDividerTs &&
-        (!pendingNewDivider || eventSender === currentUserId) &&
-        prevEvent !== undefined &&
-        prevEvent.getSender() === eventSender &&
-        prevEvent.getType() === mEvent.getType() &&
-        minuteDifference(prevEvent.getTs(), mEvent.getTs()) < 2;
-
-      const renderable = !reactionOrEditEvent(mEvent);
-      if (renderable) {
-        if (pendingNewDivider && eventSender !== currentUserId) {
-          rows.push({
-            kind: 'divider',
-            key: `divider:unread:${eventId}`,
-            divider: readUptoEventId === unreadAnchorEventId ? 'client-unread' : 'server-unread',
-          });
-          pendingNewDivider = false;
-        }
-        if (dayDividerTs) {
-          rows.push({
-            kind: 'divider',
-            key: `divider:day:${eventId}`,
-            divider: 'day',
-            ts: dayDividerTs,
-          });
-        }
-        rows.push({
-          kind: 'event',
-          key: eventId,
-          eventId,
-          eventIndex,
-          mEvent,
-          eventTimeline,
-          timelineSet,
-          collapse: collapsed,
-        });
-      }
-
-      prevEvent = mEvent;
-      isPrevRendered = renderable;
-    });
-  });
-
-  if (showFrontLoader) {
-    rows.push(...getLoaderRows('forward', compact, getTimelinesEventsCount(linkedTimelines)));
-  }
-
-  rows.push({ kind: 'bottom', key: 'bottom' });
-  return rows;
-};
-
 const toScrollBehavior = (behavior?: ScrollToOptions['behavior']): 'auto' | 'smooth' | undefined =>
   behavior === 'instant' ? 'auto' : behavior;
 
@@ -861,6 +740,9 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
   );
 
   const getScrollElement = useCallback(() => scrollRef.current, []);
+  const timelineRowsBuildStateRef = useRef<
+    TimelineRowsBuildState<TimelineRow, MatrixEvent> | undefined
+  >(undefined);
   const currentReadUptoEventId = readUptoEventIdRef.current;
   const cancelLiveEndPin = useCallback(() => {
     liveEndPinRef.current = false;
@@ -917,9 +799,14 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
     };
   }, [cancelLiveEndPin]);
 
-  const timelineRows = useMemo(
-    () =>
-      buildTimelineRows(timeline.linkedTimelines, {
+  useEffect(() => {
+    timelineRowsBuildStateRef.current = undefined;
+  }, [room.roomId, eventId]);
+
+  const timelineRows = useMemo(() => {
+    const { rows, state } = buildTimelineRowsWithState(
+      timeline.linkedTimelines,
+      {
         showIntro: loadedAtStart && eventsLength > 0,
         showBackLoader: canPaginateBack,
         showFrontLoader: !loadedAtEnd,
@@ -929,21 +816,38 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
         readUptoEventId: currentReadUptoEventId,
         unreadAnchorEventId,
         currentUserId: mx.getUserId(),
-      }),
-    [
-      timeline.linkedTimelines,
-      loadedAtStart,
-      eventsLength,
-      canPaginateBack,
-      loadedAtEnd,
-      messageLayout,
-      ignoredUsersSet,
-      showHiddenEvents,
-      currentReadUptoEventId,
-      unreadAnchorEventId,
-      mx,
-    ]
-  );
+      },
+      {
+        getTimelinesEventsCount,
+        isReactionOrEditEvent: reactionOrEditEvent,
+        createEventRow: ({ mEvent, eventId: rowEventId, eventIndex, eventTimeline, collapse }) => ({
+          kind: 'event',
+          key: rowEventId,
+          eventId: rowEventId,
+          eventIndex,
+          mEvent,
+          eventTimeline,
+          timelineSet: eventTimeline.getTimelineSet(),
+          collapse,
+        }),
+      },
+      timelineRowsBuildStateRef.current
+    );
+    timelineRowsBuildStateRef.current = state;
+    return rows;
+  }, [
+    timeline.linkedTimelines,
+    loadedAtStart,
+    eventsLength,
+    canPaginateBack,
+    loadedAtEnd,
+    messageLayout,
+    ignoredUsersSet,
+    showHiddenEvents,
+    currentReadUptoEventId,
+    unreadAnchorEventId,
+    mx,
+  ]);
   const eventIndexToRowIndex = useMemo(() => {
     const eventMap = new Map<number, number>();
     timelineRows.forEach((row, rowIndex) => {
