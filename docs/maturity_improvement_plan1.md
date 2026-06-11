@@ -1272,7 +1272,7 @@ For each MIP1-NN commit:
 | 27 Unified logout | MIP1-15 | D | Planned | — |
 | 28 Clear secret keys | MIP1-16 | D | Planned | — |
 | 30 Account switch safety | MIP1-17 | D | Planned | — |
-| 8 Incremental timeline | MIP1-18 | E | Planned | — |
+| 8 Incremental timeline | MIP1-18 | E | Done | mip1-18 |
 | 9 Stream file IPC | MIP1-19 | E | Planned | — |
 | 10 Drop allowlist lifecycle | MIP1-20 | E | Planned | — |
 | 20 Throttle tray rebuild | MIP1-21 | E | Planned | — |
