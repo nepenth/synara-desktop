@@ -55,6 +55,11 @@ jobs:
   macos:
     name: macOS release artifacts
     runs-on: macos-latest
+    # Release-channel gate (not yet enabled):
+    # 1. Import Developer ID Application cert + set APPLE_CERTIFICATE* secrets.
+    # 2. Set bundle.macOS.signingIdentity and entitlements in tauri.conf.json.
+    # 3. After build: codesign verify, notarytool submit, stapler staple.
+    # 4. Fail this job if notarization is required but credentials are absent.
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
