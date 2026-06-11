@@ -12,7 +12,13 @@ import {
   setSessionBootstrapResult,
   type AsyncSessionStore,
 } from '../sessionBootstrap';
-import { createLocalStorageSessionStore, type Session, type SessionStorage } from '../sessions';
+import {
+  clearSessionLocalStorage,
+  createLocalStorageSessionStore,
+  type Session,
+  type SessionLocalStorage,
+  type SessionStorage,
+} from '../sessions';
 
 const session: Session = {
   accessToken: 'access-token',
@@ -33,6 +39,26 @@ const createMemoryStorage = (initialValues: Record<string, string> = {}): Sessio
     removeItem: (key) => {
       values.delete(key);
     },
+  };
+};
+
+const createEnumeratedMemoryStorage = (
+  initialValues: Record<string, string> = {}
+): SessionLocalStorage => {
+  const values = new Map(Object.entries(initialValues));
+
+  return {
+    getItem: (key) => values.get(key) ?? null,
+    setItem: (key, value) => {
+      values.set(key, value);
+    },
+    removeItem: (key) => {
+      values.delete(key);
+    },
+    get length() {
+      return values.size;
+    },
+    key: (index) => Array.from(values.keys())[index] ?? null,
   };
 };
 
@@ -205,6 +231,38 @@ test('migrateLegacySessionToNativeAfterClientInit keeps fallback when native is 
   } finally {
     resetSessionBootstrapForTests();
   }
+});
+
+test('clearPersistedSessions with clearSessionLocalStorage preserves user settings', async () => {
+  resetSessionBootstrapForTests();
+  const storage = createEnumeratedMemoryStorage({
+    synara_access_token: 'access-token',
+    synara_device_id: 'DEVICEID',
+    synara_user_id: '@alice:example.org',
+    synara_hs_base_url: 'https://matrix.example.org',
+    after_login_redirect_url: '/home',
+    settings: JSON.stringify({ themeId: 'aurora', pageZoom: 125 }),
+    platformSettings: JSON.stringify({ desktopShortcutShow: 'CmdOrCtrl+1' }),
+  });
+  const fallbackStore = createLocalStorageSessionStore(storage);
+  fallbackStore.setFallbackSession(session);
+  setSessionBootstrapResult({ session, source: 'legacy-fallback' });
+  const nativeStore = createNativeSessionStore();
+
+  await clearPersistedSessions({
+    nativeSessionStore: nativeStore.store,
+    fallbackStore,
+  });
+  clearSessionLocalStorage(storage);
+
+  assert.equal(nativeStore.removed, true);
+  assert.equal(fallbackStore.getFallbackSession(), undefined);
+  assert.equal(getActiveSession(), undefined);
+  assert.equal(storage.getItem('settings'), JSON.stringify({ themeId: 'aurora', pageZoom: 125 }));
+  assert.equal(
+    storage.getItem('platformSettings'),
+    JSON.stringify({ desktopShortcutShow: 'CmdOrCtrl+1' })
+  );
 });
 
 test('clearPersistedSessions clears native and legacy session locations', async () => {

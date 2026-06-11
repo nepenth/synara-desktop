@@ -6,8 +6,9 @@ import {
   getLocalStorageItem,
   setLocalStorageItem,
 } from './utils/atomWithLocalStorage';
+import { NAV_TO_ACTIVE_PATH_PREFIX } from './sessions';
 
-const NAV_TO_ACTIVE_PATH = 'navToActivePath';
+const NAV_TO_ACTIVE_PATH = NAV_TO_ACTIVE_PATH_PREFIX;
 
 const getStoreKey = (userId: string): string => `${NAV_TO_ACTIVE_PATH}${userId}`;
 
