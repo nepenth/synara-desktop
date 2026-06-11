@@ -1266,7 +1266,7 @@ For each MIP1-NN commit:
 | 14 Native store UI warning | MIP1-09 | C | Done | mip1-09 |
 | 15 Secret Service probe | MIP1-10 | C | Done | mip1-10 |
 | 16 macOS Keychain probe | MIP1-11 | C | Done | mip1-11 |
-| 17 Secret-store errors | MIP1-12 | C | Planned | — |
+| 17 Secret-store errors | MIP1-12 | C | Done | mip1-12 |
 | 7 Selective logout | MIP1-13 | D | Done | mip1-13 |
 | 12 SW session after login | MIP1-14 | D | Done | mip1-14 |
 | 27 Unified logout | MIP1-15 | D | Done | mip1-15 |
@@ -1299,7 +1299,7 @@ For each MIP1-NN commit:
 | 39 pkgrel bump | MIP1-42 | I | Done | mip1-42 |
 | 40 Repo URL normalize | MIP1-43 | I | Done | mip1-43 |
 | 43 Refresh token | MIP1-44 | I | Done | mip1-44 |
-| 44 macOS signing docs | MIP1-45 | I | Planned | — |
+| 44 macOS signing docs | MIP1-45 | I | Done | mip1-45 |
 | 45 Spellcheck logging | MIP1-46 | I | Done | mip1-46 |
 
 ---
