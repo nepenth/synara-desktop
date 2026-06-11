@@ -124,6 +124,8 @@ test('platform capabilities describe Tauri desktop runtime when bridge is presen
       notificationInboxCount: 4,
       doNotDisturb: true,
     });
+    const { flushPendingDesktopTrayStateUpdate } = await import('../../utils/desktop.js');
+    await flushPendingDesktopTrayStateUpdate();
     assert.deepEqual(calls, [
       {
         command: 'desktop_set_badge_count',

@@ -2,9 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   buildDesktopNotificationRoomRoute,
+  createDebouncedTrayStateUpdater,
   DESKTOP_FILE_IPC_CHUNK_SIZE,
   DESKTOP_FILE_IPC_INLINE_THRESHOLD,
   DESKTOP_TRAY_DND_TOGGLE_EVENT,
+  DESKTOP_TRAY_STATE_DEBOUNCE_MS,
+  flushPendingDesktopTrayStateUpdate,
   getDesktopIntegrationStatus,
   getDesktopNotificationCount,
   getDesktopPerformanceCapabilities,
@@ -18,6 +21,7 @@ import {
   shouldStreamDesktopFileIpc,
   showDesktopNotification,
   subscribeDesktopTrayDndToggle,
+  type DesktopTrayState,
 } from '../desktop';
 
 type DesktopActionCallArgs = {
@@ -147,6 +151,86 @@ test('desktop shortcuts normalize structured bridge results', async () => {
   }
 });
 
+test('desktop tray state debounce coalesces rapid updates with trailing flush', async () => {
+  const calls: DesktopTrayState[] = [];
+  const scheduled: Array<{ callback: () => void; delayMs: number }> = [];
+  const debounced = createDebouncedTrayStateUpdater(
+    async (state) => {
+      calls.push(state);
+      return true;
+    },
+    DESKTOP_TRAY_STATE_DEBOUNCE_MS,
+    {
+      schedule: (callback, delayMs) => {
+        scheduled.push({ callback, delayMs });
+        return scheduled.length;
+      },
+      cancel: () => undefined,
+    }
+  );
+
+  void debounced({
+    unreadCount: 1,
+    highlightCount: 0,
+    laterCount: 0,
+    notificationInboxCount: 0,
+    doNotDisturb: false,
+  });
+  void debounced({
+    unreadCount: 7,
+    highlightCount: 2,
+    laterCount: 1,
+    notificationInboxCount: 3,
+    doNotDisturb: true,
+  });
+
+  assert.equal(calls.length, 0);
+  assert.equal(scheduled.length, 2);
+  assert.equal(scheduled[0]?.delayMs, DESKTOP_TRAY_STATE_DEBOUNCE_MS);
+  assert.equal(scheduled[1]?.delayMs, DESKTOP_TRAY_STATE_DEBOUNCE_MS);
+
+  scheduled.at(-1)?.callback();
+  assert.deepEqual(calls, [
+    {
+      unreadCount: 7,
+      highlightCount: 2,
+      laterCount: 1,
+      notificationInboxCount: 3,
+      doNotDisturb: true,
+    },
+  ]);
+});
+
+test('desktop tray state debounce flush applies the latest pending state immediately', async () => {
+  const calls: DesktopTrayState[] = [];
+  const debounced = createDebouncedTrayStateUpdater(async (state) => {
+    calls.push(state);
+    return true;
+  }, DESKTOP_TRAY_STATE_DEBOUNCE_MS, {
+    schedule: () => 1,
+    cancel: () => undefined,
+  });
+
+  void debounced({
+    unreadCount: 4,
+    highlightCount: 0,
+    laterCount: 0,
+    notificationInboxCount: 0,
+    doNotDisturb: false,
+  });
+  await debounced.flush();
+
+  assert.deepEqual(calls, [
+    {
+      unreadCount: 4,
+      highlightCount: 0,
+      laterCount: 0,
+      notificationInboxCount: 0,
+      doNotDisturb: false,
+    },
+  ]);
+});
+
 test('desktop tray state is capability gated and clamps counts', async () => {
   const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
   const originalWindow = globalThis.window;
@@ -185,6 +269,7 @@ test('desktop tray state is capability gated and clamps counts', async () => {
       }),
       true
     );
+    await flushPendingDesktopTrayStateUpdate();
   } finally {
     (globalThis as any).window = originalWindow;
   }
