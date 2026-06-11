@@ -141,6 +141,7 @@ pub enum DesktopShortcutApplyState {
     Active,
     PermissionNeeded,
     Unsupported,
+    Unknown,
     Failed,
 }
 
@@ -2249,7 +2250,57 @@ fn shortcut_apply_state_message(state: DesktopShortcutApplyState) -> &'static st
         DesktopShortcutApplyState::Unsupported => {
             "Desktop shortcuts are unsupported in this environment."
         }
+        DesktopShortcutApplyState::Unknown => {
+            "Desktop shortcut registration has not been attempted yet."
+        }
         DesktopShortcutApplyState::Failed => "Desktop shortcut registration failed.",
+    }
+}
+
+fn is_gnome_session() -> bool {
+    env::var("XDG_CURRENT_DESKTOP")
+        .map(|value| value.to_ascii_lowercase().contains("gnome"))
+        .unwrap_or(false)
+}
+
+fn shortcut_permission_help_hint() -> Option<&'static str> {
+    #[cfg(target_os = "macos")]
+    {
+        return Some(
+            "On macOS, grant Synara Input Monitoring permission in System Settings > Privacy & Security.",
+        );
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        if is_kde_wayland_session() {
+            return Some(
+                "On KDE Plasma Wayland, global shortcut capture can require manual registration in System Settings > Shortcuts.",
+            );
+        }
+        if is_wayland() {
+            if is_gnome_session() {
+                return Some(
+                    "On GNOME Wayland, global shortcuts may require portal or compositor permission. Check Settings > Keyboard > Keyboard Shortcuts.",
+                );
+            }
+            return Some(
+                "On Wayland sessions, global shortcuts may require portal or compositor permission. Check your desktop environment shortcut settings.",
+            );
+        }
+        if is_kde() {
+            return Some(
+                "On KDE X11, verify shortcut bindings in System Settings > Shortcuts and ensure no other app has claimed the keys.",
+            );
+        }
+        return Some(
+            "On Linux X11, verify no other application has claimed the shortcut and check your desktop environment shortcut settings.",
+        );
+    }
+
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+    {
+        Some("Check the session permissions for global shortcuts and try again.")
     }
 }
 
@@ -2262,23 +2313,39 @@ fn desktop_shortcut_fallback_command() -> Option<String> {
     None
 }
 
+fn unresolved_shortcut_apply_state() -> DesktopShortcutApplyState {
+    if is_kde_wayland_session() {
+        DesktopShortcutApplyState::Unknown
+    } else {
+        DesktopShortcutApplyState::Failed
+    }
+}
+
 fn shortcut_result(
     state: DesktopShortcutApplyState,
     message: Option<String>,
     fallback_command: Option<String>,
 ) -> DesktopShortcutApplyResult {
     let fallback_command = if matches!(state, DesktopShortcutApplyState::PermissionNeeded) {
-        Some(
-            "Open System Settings > Shortcuts and create a custom shortcut for Synara.".to_string(),
-        )
+        desktop_shortcut_fallback_command()
     } else {
         fallback_command
     };
+    let message = message.unwrap_or_else(|| {
+        if matches!(state, DesktopShortcutApplyState::PermissionNeeded) {
+            let mut parts = vec![shortcut_apply_state_message(state).to_owned()];
+            if let Some(hint) = shortcut_permission_help_hint() {
+                parts.push(hint.to_owned());
+            }
+            return parts.join(" ");
+        }
+        shortcut_apply_state_message(state).to_owned()
+    });
 
     DesktopShortcutApplyResult {
         success: matches!(state, DesktopShortcutApplyState::Active),
         state,
-        message: message.unwrap_or_else(|| shortcut_apply_state_message(state).to_owned()),
+        message,
         fallback_command,
     }
 }
@@ -2929,7 +2996,8 @@ pub fn desktop_get_integration_status(app: AppHandle) -> DesktopIntegrationStatu
             message: "Notification state could not be read.".to_string(),
         });
 
-    let shortcut_state = read_last_shortcut_apply_state().unwrap_or(DesktopShortcutApplyState::Failed);
+    let shortcut_state =
+        read_last_shortcut_apply_state().unwrap_or_else(unresolved_shortcut_apply_state);
     let global_shortcuts = DesktopIntegrationCheck {
         name: "Global Shortcuts".to_string(),
         supported: cfg!(not(any(target_os = "android", target_os = "ios"))),
@@ -2937,16 +3005,27 @@ pub fn desktop_get_integration_status(app: AppHandle) -> DesktopIntegrationStatu
         message: match shortcut_state {
             DesktopShortcutApplyState::Active => "Global shortcuts are active.".to_string(),
             DesktopShortcutApplyState::PermissionNeeded => {
-                "Global shortcuts require permission in this desktop session.".to_string()
+                let mut parts = vec![
+                    "Global shortcuts require permission in this desktop session.".to_string(),
+                ];
+                if let Some(hint) = shortcut_permission_help_hint() {
+                    parts.push(hint.to_owned());
+                }
+                parts.join(" ")
             }
             DesktopShortcutApplyState::Unsupported => {
                 "Global shortcuts are unsupported in this build.".to_string()
             }
+            DesktopShortcutApplyState::Unknown => {
+                if read_last_active_shortcut_config().is_none() {
+                    "Global shortcuts are configured after the client loads.".to_string()
+                } else {
+                    "Global shortcut registration has not been attempted yet.".to_string()
+                }
+            }
             DesktopShortcutApplyState::Failed => {
                 if read_last_active_shortcut_config().is_none() {
                     "Global shortcuts are configured after the client loads.".to_string()
-                } else if is_kde_wayland_session() {
-                    "Global shortcuts may require permission on KDE Wayland.".to_string()
                 } else {
                     "Global shortcuts not currently active.".to_string()
                 }
@@ -4313,7 +4392,70 @@ VERSION_ID=24
         let result = shortcut_result(DesktopShortcutApplyState::PermissionNeeded, None, None);
         assert!(!result.success);
         assert_eq!(result.state, DesktopShortcutApplyState::PermissionNeeded);
-        assert!(result.fallback_command.is_some());
+        assert!(result.message.contains("permission"));
+        assert!(result.message.contains("shortcut"));
+    }
+
+    #[test]
+    fn shortcut_permission_fallback_is_kde_wayland_only() {
+        let _guard = ENV_LOCK.lock().expect("env lock should not be poisoned");
+        let original_desktop = std::env::var("XDG_CURRENT_DESKTOP").ok();
+        let original_wayland = std::env::var("WAYLAND_DISPLAY").ok();
+
+        std::env::remove_var("XDG_CURRENT_DESKTOP");
+        std::env::remove_var("WAYLAND_DISPLAY");
+        let generic = shortcut_result(DesktopShortcutApplyState::PermissionNeeded, None, None);
+        assert!(generic.fallback_command.is_none());
+        assert!(!generic.message.to_ascii_lowercase().contains("kde plasma wayland"));
+
+        std::env::set_var("XDG_CURRENT_DESKTOP", "KDE");
+        std::env::set_var("WAYLAND_DISPLAY", "wayland-0");
+        let kde = shortcut_result(DesktopShortcutApplyState::PermissionNeeded, None, None);
+        assert!(kde.fallback_command.is_some());
+        assert!(kde.message.to_ascii_lowercase().contains("kde plasma wayland"));
+
+        if let Some(value) = original_desktop {
+            std::env::set_var("XDG_CURRENT_DESKTOP", value);
+        } else {
+            std::env::remove_var("XDG_CURRENT_DESKTOP");
+        }
+        if let Some(value) = original_wayland {
+            std::env::set_var("WAYLAND_DISPLAY", value);
+        } else {
+            std::env::remove_var("WAYLAND_DISPLAY");
+        }
+    }
+
+    #[test]
+    fn unresolved_shortcut_state_is_unknown_on_kde_wayland_before_apply() {
+        let _guard = ENV_LOCK.lock().expect("env lock should not be poisoned");
+        let original_desktop = std::env::var("XDG_CURRENT_DESKTOP").ok();
+        let original_wayland = std::env::var("WAYLAND_DISPLAY").ok();
+
+        std::env::set_var("XDG_CURRENT_DESKTOP", "KDE");
+        std::env::set_var("WAYLAND_DISPLAY", "wayland-0");
+        assert_eq!(
+            unresolved_shortcut_apply_state(),
+            DesktopShortcutApplyState::Unknown
+        );
+
+        std::env::remove_var("WAYLAND_DISPLAY");
+        std::env::remove_var("XDG_SESSION_TYPE");
+        assert_eq!(
+            unresolved_shortcut_apply_state(),
+            DesktopShortcutApplyState::Failed
+        );
+
+        if let Some(value) = original_desktop {
+            std::env::set_var("XDG_CURRENT_DESKTOP", value);
+        } else {
+            std::env::remove_var("XDG_CURRENT_DESKTOP");
+        }
+        if let Some(value) = original_wayland {
+            std::env::set_var("WAYLAND_DISPLAY", value);
+        } else {
+            std::env::remove_var("WAYLAND_DISPLAY");
+        }
     }
 
     #[test]

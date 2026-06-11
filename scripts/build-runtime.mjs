@@ -6,6 +6,8 @@ const root = resolve(new URL("..", import.meta.url).pathname);
 const runtimeDir = join(root, "synara");
 const runtimeDist = join(runtimeDir, "dist");
 const desktopAssets = join(root, "devAssets");
+const rootConfig = join(root, "config.json");
+const runtimeConfig = join(runtimeDir, "config.json");
 
 const run = (command, args, cwd) =>
   new Promise((resolvePromise, reject) => {
@@ -27,6 +29,7 @@ const run = (command, args, cwd) =>
     });
   });
 
+await cp(rootConfig, runtimeConfig);
 await run("npm", ["run", "build"], runtimeDir);
 await rm(desktopAssets, { recursive: true, force: true });
 await cp(runtimeDist, desktopAssets, { recursive: true });

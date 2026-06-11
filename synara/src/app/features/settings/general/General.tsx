@@ -62,6 +62,7 @@ import { gifPickerEnabled } from '../../../utils/gifProvider';
 import { DEFAULT_ACCENT_COLOR, normalizeAccentColor } from '../../../utils/themeAccent';
 import {
   getPlatformIntegrationStatus,
+  buildShortcutFailureMessage,
   getPlatformSecretStoreSessionPersistence,
   getPlatformSecretStoreStatusDescription,
   getPlatformSecretStoreStatusLabel,
@@ -71,7 +72,6 @@ import {
   supportsPlatformGlobalShortcuts,
   type PlatformIntegrationStatus,
   type PlatformSecretStoreStatus,
-  type PlatformShortcutApplyResult,
 } from '../../../platform';
 import {
   getNativeStoreErrorWarningMessage,
@@ -797,10 +797,6 @@ const DEFAULT_INTEGRATION_STATUS: PlatformIntegrationStatus = {
   },
 };
 
-const BASELINE_SHORTCUT_HELP = 'Check the session permissions for global shortcuts and try again.';
-const KDE_WAYLAND_SHORTCUT_HELP =
-  'On KDE Plasma Wayland, global shortcut capture can require manual registration in System Settings > Shortcuts.';
-
 function formatSessionLabel(status: PlatformIntegrationStatus): string {
   const desktopEnvironment = status.desktopEnvironment.toLowerCase();
   const sessionType = status.sessionType.toLowerCase();
@@ -856,26 +852,6 @@ function buildDiagnosticsPayload(status: PlatformIntegrationStatus): string {
     undefined,
     2
   );
-}
-
-function isKdeWaylandStatus(status: PlatformIntegrationStatus): boolean {
-  return (
-    status.desktopEnvironment.toLowerCase().includes('kde') &&
-    status.sessionType.toLowerCase().includes('wayland')
-  );
-}
-
-function buildShortcutFailureMessage(
-  result: PlatformShortcutApplyResult,
-  status: PlatformIntegrationStatus
-): string {
-  const helper =
-    isKdeWaylandStatus(status) || result.state === 'permission-needed'
-      ? KDE_WAYLAND_SHORTCUT_HELP
-      : BASELINE_SHORTCUT_HELP;
-  return [result.message, result.fallbackCommand, helper]
-    .filter((value): value is string => typeof value === 'string' && value.length > 0)
-    .join(' ');
 }
 
 function DesktopShortcutsSection() {

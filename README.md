@@ -37,6 +37,9 @@ the native session store as unavailable on Windows.
 
 First, set up Rust, Node.js, and build tools by following the [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/).
 
+Edit the repository root `config.json` only. `scripts/build-runtime.mjs` and
+`npm run tauri` keep `synara/config.json` synchronized before builds.
+
 Then set up development locally:
 
 - `git clone https://github.com/nepenth/synara-desktop.git`
