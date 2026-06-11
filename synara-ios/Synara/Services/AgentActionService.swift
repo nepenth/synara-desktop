@@ -43,7 +43,15 @@ struct SynaraAgentApprovalRequest: Equatable {
 }
 
 protocol AgentApprovalServicing {
+    var supportsPendingApprovalInbox: Bool { get }
     func submit(_ request: SynaraAgentApprovalRequest) async throws
+    func pendingApprovalCount() async -> Int
+}
+
+extension AgentApprovalServicing {
+    var supportsPendingApprovalInbox: Bool { false }
+
+    func pendingApprovalCount() async -> Int { 0 }
 }
 
 func encodeAgentApprovalMatrixEvent(
@@ -203,9 +211,21 @@ final class MatrixRustSDKAgentApprovalService: AgentApprovalServicing {
 final class MockAgentApprovalService: AgentApprovalServicing {
     private(set) var submitted: [SynaraAgentApprovalRequest] = []
     var error: SynaraAgentApprovalError?
+    var pendingCount = 0
+    var supportsPendingApprovalInbox = false
 
-    init(error: SynaraAgentApprovalError? = nil) {
+    init(
+        error: SynaraAgentApprovalError? = nil,
+        pendingCount: Int = 0,
+        supportsPendingApprovalInbox: Bool = false
+    ) {
         self.error = error
+        self.pendingCount = pendingCount
+        self.supportsPendingApprovalInbox = supportsPendingApprovalInbox
+    }
+
+    func pendingApprovalCount() async -> Int {
+        pendingCount
     }
 
     func submit(_ request: SynaraAgentApprovalRequest) async throws {

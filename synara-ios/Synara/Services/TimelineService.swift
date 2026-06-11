@@ -1,5 +1,51 @@
 import Foundation
 
+enum TimelineSearchFilter {
+    static func searchableText(for item: TimelineItem) -> String {
+        switch item.kind {
+        case .text(let body):
+            return body
+        case .formattedText(let body, _):
+            return body
+        case .mediaPlaceholder(let resource):
+            return resource.safeDescription
+        case .agentCard(let card):
+            return card.title
+        case .redacted:
+            return "Deleted message"
+        case .encryptedPlaceholder:
+            return "Encrypted message"
+        case .unknown(let type):
+            return type
+        }
+    }
+
+    static func itemMatchesQuery(_ item: TimelineItem, query: String) -> Bool {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.isEmpty == false else {
+            return true
+        }
+
+        return searchableText(for: item).localizedCaseInsensitiveContains(trimmed)
+            || item.senderID.localizedCaseInsensitiveContains(trimmed)
+    }
+
+    static func applySearchQuery(_ query: String, to items: [TimelineItem]) -> [TimelineItem] {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.isEmpty == false else {
+            return items
+        }
+
+        return items.filter { itemMatchesQuery($0, query: trimmed) }
+    }
+}
+
+enum TimelineDeliveryStatus: Equatable {
+    case sending
+    case sent
+    case failed
+}
+
 struct TimelineItem: Identifiable, Equatable {
     enum Kind: Equatable {
         case text(String)
@@ -21,6 +67,7 @@ struct TimelineItem: Identifiable, Equatable {
     let isEdited: Bool
     let reactions: [String: Int]
     let isEncrypted: Bool
+    let deliveryStatus: TimelineDeliveryStatus?
 
     init(
         id: String,
@@ -32,7 +79,8 @@ struct TimelineItem: Identifiable, Equatable {
         replyToEventID: String?,
         isEdited: Bool,
         reactions: [String: Int],
-        isEncrypted: Bool = false
+        isEncrypted: Bool = false,
+        deliveryStatus: TimelineDeliveryStatus? = nil
     ) {
         self.id = id
         self.eventID = eventID
@@ -44,11 +92,115 @@ struct TimelineItem: Identifiable, Equatable {
         self.isEdited = isEdited
         self.reactions = reactions
         self.isEncrypted = isEncrypted
+        self.deliveryStatus = deliveryStatus
+    }
+
+    var isLocalPending: Bool {
+        deliveryStatus != nil
+    }
+
+    func withDeliveryStatus(_ deliveryStatus: TimelineDeliveryStatus?) -> TimelineItem {
+        TimelineItem(
+            id: id,
+            eventID: eventID,
+            senderID: senderID,
+            senderAvatarURL: senderAvatarURL,
+            timestamp: timestamp,
+            kind: kind,
+            replyToEventID: replyToEventID,
+            isEdited: isEdited,
+            reactions: reactions,
+            isEncrypted: isEncrypted,
+            deliveryStatus: deliveryStatus
+        )
+    }
+
+    static func pendingMessage(
+        localID: String = "$pending-\(UUID().uuidString)",
+        body: String,
+        senderID: String,
+        senderAvatarURL: URL? = nil,
+        replyToEventID: String?,
+        deliveryStatus: TimelineDeliveryStatus = .sending,
+        timestamp: Date = Date()
+    ) -> TimelineItem {
+        TimelineItem(
+            id: localID,
+            eventID: localID,
+            senderID: senderID,
+            senderAvatarURL: senderAvatarURL,
+            timestamp: timestamp,
+            kind: .text(body),
+            replyToEventID: replyToEventID,
+            isEdited: false,
+            reactions: [:],
+            deliveryStatus: deliveryStatus
+        )
+    }
+}
+
+enum TimelinePendingReconciler {
+    static func messageBody(for item: TimelineItem) -> String? {
+        switch item.kind {
+        case .text(let body):
+            return body
+        case .formattedText(let body, _):
+            return body
+        default:
+            return nil
+        }
+    }
+
+    static func pendingItems(from items: [TimelineItem]) -> [TimelineItem] {
+        items.filter(\.isLocalPending)
+    }
+
+    static func matchesPending(_ pending: TimelineItem, serverItem: TimelineItem) -> Bool {
+        guard pending.deliveryStatus == .sending || pending.deliveryStatus == .sent else {
+            return false
+        }
+        guard pending.senderID == serverItem.senderID else {
+            return false
+        }
+        guard pending.replyToEventID == serverItem.replyToEventID else {
+            return false
+        }
+        guard let pendingBody = messageBody(for: pending),
+              let serverBody = messageBody(for: serverItem),
+              pendingBody == serverBody else {
+            return false
+        }
+        return abs(serverItem.timestamp.timeIntervalSince(pending.timestamp)) < 5 * 60
+    }
+
+    static func merge(
+        streamItems: [TimelineItem],
+        localItems: [TimelineItem],
+        currentUserID: String
+    ) -> [TimelineItem] {
+        let pendingItems = pendingItems(from: localItems)
+        guard pendingItems.isEmpty == false else {
+            return streamItems
+        }
+
+        var unmatchedPending = pendingItems
+        for serverItem in streamItems where serverItem.senderID == currentUserID {
+            if let index = unmatchedPending.firstIndex(where: { matchesPending($0, serverItem: serverItem) }) {
+                unmatchedPending.remove(at: index)
+            }
+        }
+
+        guard unmatchedPending.isEmpty == false else {
+            return streamItems
+        }
+
+        return (streamItems + unmatchedPending).sorted { $0.timestamp < $1.timestamp }
     }
 }
 
 protocol LaterServicing {
     func loadItems() async -> Result<([SynaraLaterListItem], LaterInboxError?), Never>
+    func completeItem(id: String) async -> Result<Bool, LaterInboxError>
 }
 
 enum LaterInboxError: Error, LocalizedError, Equatable {
@@ -163,17 +315,20 @@ final class MatrixRustSDKLaterService: LaterServicing {
     private let sessionStore: AppSessionStore
     private let clientStore: MatrixRustSDKClientStore
     private let jsonDecoder: JSONDecoder
+    private let jsonEncoder: JSONEncoder
     private let now: () -> Int
 
     init(
         sessionStore: AppSessionStore,
         clientStore: MatrixRustSDKClientStore,
         jsonDecoder: JSONDecoder = JSONDecoder(),
+        jsonEncoder: JSONEncoder = JSONEncoder(),
         now: @escaping () -> Int = { Int(Date().timeIntervalSince1970 * 1000) }
     ) {
         self.sessionStore = sessionStore
         self.clientStore = clientStore
         self.jsonDecoder = jsonDecoder
+        self.jsonEncoder = jsonEncoder
         self.now = now
     }
 
@@ -183,18 +338,74 @@ final class MatrixRustSDKLaterService: LaterServicing {
         }
 
         do {
-            guard let rawContent = try await clientStore.accountData(eventType: "in.synara.later", session: session) else {
+            guard let items = try await loadContent(session: session) else {
                 return .success(([], nil))
-            }
-
-            guard let items = SynaraLaterAccountDataCodec.decodeContentString(rawContent, jsonDecoder: jsonDecoder) else {
-                return .success(([], .malformedPayload))
             }
 
             return .success((SynaraLaterListItem.sorted(items: items, now: now()), nil))
         } catch {
             return .success(([], .networkFailure))
         }
+    }
+
+    func completeItem(id: String) async -> Result<Bool, LaterInboxError> {
+        guard case .signedIn(let session) = sessionStore.currentState else {
+            return .failure(.noSession)
+        }
+
+        do {
+            guard var content = try await loadContent(session: session) else {
+                return .success(false)
+            }
+
+            content = try content.completingItem(id: id, at: now())
+            let encoded = try jsonEncoder.encode(content)
+            guard let payload = String(data: encoded, encoding: .utf8) else {
+                return .failure(.malformedPayload)
+            }
+
+            try await clientStore.setAccountData(eventType: "in.synara.later", content: payload, session: session)
+            return .success(true)
+        } catch let error as LaterInboxError {
+            return .failure(error)
+        } catch {
+            return .failure(.networkFailure)
+        }
+    }
+
+    private func loadContent(session: AuthenticatedSession) async throws -> SynaraLaterContent? {
+        guard let rawContent = try await clientStore.accountData(eventType: "in.synara.later", session: session) else {
+            return nil
+        }
+
+        guard let items = SynaraLaterAccountDataCodec.decodeContentString(rawContent, jsonDecoder: jsonDecoder) else {
+            throw LaterInboxError.malformedPayload
+        }
+
+        return items
+    }
+}
+
+extension SynaraLaterContent {
+    func completingItem(id: String, at completedAt: Int) throws -> SynaraLaterContent {
+        guard let item = items[id] else {
+            return self
+        }
+
+        let completedItem = try SynaraLaterItem(
+            id: item.id,
+            kind: item.kind,
+            roomId: item.roomId,
+            eventId: item.eventId,
+            createdAt: item.createdAt,
+            dueTs: item.dueTs,
+            remindedAt: item.remindedAt,
+            completedAt: completedAt
+        )
+
+        var updatedItems = items
+        updatedItems[id] = completedItem
+        return try SynaraLaterContent(version: version, items: updatedItems)
     }
 }
 
@@ -251,15 +462,40 @@ extension SynaraLaterListItem {
     )
 }
 
-struct MockLaterService: LaterServicing {
-    private let items: [SynaraLaterListItem]
+final class MockLaterService: LaterServicing {
+    private var items: [SynaraLaterListItem]
+    private let now: () -> Int
 
-    init(items: [SynaraLaterListItem] = []) {
+    init(items: [SynaraLaterListItem] = [], now: @escaping () -> Int = { Int(Date().timeIntervalSince1970 * 1000) }) {
         self.items = items
+        self.now = now
     }
 
     func loadItems() async -> Result<([SynaraLaterListItem], LaterInboxError?), Never> {
         .success((items, nil))
+    }
+
+    func completeItem(id: String) async -> Result<Bool, LaterInboxError> {
+        guard let index = items.firstIndex(where: { $0.id == id }) else {
+            return .success(false)
+        }
+
+        let item = items[index]
+        guard item.isCompleted == false else {
+            return .success(false)
+        }
+
+        items[index] = SynaraLaterListItem(
+            id: item.id,
+            roomID: item.roomID,
+            eventID: item.eventID,
+            kind: item.kind,
+            dueTs: item.dueTs,
+            completedAt: now(),
+            createdAt: item.createdAt,
+            isCompleted: true
+        )
+        return .success(true)
     }
 }
 
@@ -316,6 +552,8 @@ struct RawTimelineEvent: Equatable {
     let replyToEventID: String?
     let isEdited: Bool
     let mediaURL: URL?
+    let mediaMimeType: String?
+    let mediaByteSize: UInt64?
     let isEncrypted: Bool
     let agentCard: SynaraAgentCard?
     let reactions: [String: Int]
@@ -331,6 +569,8 @@ struct RawTimelineEvent: Equatable {
         replyToEventID: String?,
         isEdited: Bool,
         mediaURL: URL?,
+        mediaMimeType: String? = nil,
+        mediaByteSize: UInt64? = nil,
         isEncrypted: Bool = false,
         agentCard: SynaraAgentCard? = nil,
         reactions: [String: Int] = [:]
@@ -345,6 +585,8 @@ struct RawTimelineEvent: Equatable {
         self.replyToEventID = replyToEventID
         self.isEdited = isEdited
         self.mediaURL = mediaURL
+        self.mediaMimeType = mediaMimeType
+        self.mediaByteSize = mediaByteSize
         self.isEncrypted = isEncrypted
         self.agentCard = agentCard
         self.reactions = reactions
@@ -360,6 +602,7 @@ enum TimelineLoadOutcome: Equatable {
 protocol TimelineServicing: AnyObject {
     func loadInitialTimeline(roomID: String) async -> TimelineLoadOutcome
     func loadInitialTimeline(roomID: String, focusedEventID: String?) async -> TimelineLoadOutcome
+    func loadLatestTimeline(roomID: String) async -> TimelineLoadOutcome
     func loadThreadTimeline(roomID: String, rootEventID: String) async -> TimelineLoadOutcome
     func loadOlderTimeline(roomID: String, before eventID: String) async -> TimelineLoadOutcome
     func timelineUpdates(roomID: String, focusedEventID: String?) -> AsyncStream<TimelineLoadOutcome>
@@ -371,6 +614,10 @@ extension TimelineServicing {
     func clearSessionCaches() {}
 
     func loadInitialTimeline(roomID: String) async -> TimelineLoadOutcome {
+        await loadInitialTimeline(roomID: roomID, focusedEventID: nil)
+    }
+
+    func loadLatestTimeline(roomID: String) async -> TimelineLoadOutcome {
         await loadInitialTimeline(roomID: roomID, focusedEventID: nil)
     }
 
@@ -424,7 +671,9 @@ enum TimelineMapper {
                     filename: event.body ?? "Attachment",
                     authenticatedURL: event.mediaURL,
                     requiresAuthentication: true,
-                    isEncrypted: event.isEncrypted
+                    isEncrypted: event.isEncrypted,
+                    mimeType: event.mediaMimeType,
+                    byteSize: event.mediaByteSize
                 )
             )
         default:

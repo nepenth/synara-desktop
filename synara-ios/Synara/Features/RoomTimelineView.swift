@@ -1,18 +1,24 @@
 import SwiftUI
 import PhotosUI
+import UniformTypeIdentifiers
 #if canImport(UIKit)
 import UIKit
 #endif
 
 struct RoomTimelineView: View {
+    private static let olderPaginationTopThreshold = 3
+    private static let olderPaginationDebounceInterval: TimeInterval = 0.5
+    private static let markFullyReadDelayNanoseconds: UInt64 = 1_000_000_000
+    private static let timelineBottomAnchorID = "timeline-bottom-anchor"
+
     let roomID: String
     let roomTitle: String?
     let focusedEventID: String?
     @Environment(\.appEnvironment) private var environment
     @State private var state: TimelineViewState = .idle
     @State private var draft: String = ""
-    @State private var replyTarget: TimelineItem?
-    @State private var editTarget: TimelineItem?
+    @State private var replyTarget: ComposerRelationTarget?
+    @State private var editTarget: ComposerRelationTarget?
     @State private var sendError: String?
     @State private var hasAnchoredEvent = false
     @State private var uploadState: MediaUploadState = .idle
@@ -21,12 +27,21 @@ struct RoomTimelineView: View {
     @State private var agentActionMessage: String?
     @State private var cryptoStatus: RoomCryptoStatus = .unknown
     @State private var cryptoActionMessage: String?
+    @State private var isCryptoBannerDismissed = false
     @State private var isRoomDetailsPresented = false
+    @State private var isTimelineSearchPresented = false
+    @State private var timelineSearchQuery = ""
     @State private var lastRenderedTimelineCount = 0
     @State private var showJumpToLatest = false
     @State private var hasPositionedInitialTimeline = false
     @State private var initialReadMarkerEventID: String?
+    @State private var hasReachedOldestMessages = false
+    @State private var lastOlderPaginationAt = Date.distantPast
+    @State private var paginationScrollAnchorID: String?
+    @State private var lastMarkedFullyReadEventID: String?
+    @State private var markFullyReadTask: Task<Void, Never>?
     @State private var timelineUpdatesTask: Task<Void, Never>?
+    @State private var sendAnimationItemIDs: Set<String> = []
     @Environment(\.openURL) private var openURL
     @Environment(\.dismiss) private var dismiss
 
@@ -41,7 +56,7 @@ struct RoomTimelineView: View {
             TimelineHeader(
                 title: roomTitle ?? "Room",
                 subtitle: timelineSubtitle,
-                cryptoStatus: cryptoStatus,
+                onSearch: { isTimelineSearchPresented = true },
                 onDetails: { isRoomDetailsPresented = true },
                 onBack: { dismiss() }
             )
@@ -49,29 +64,47 @@ struct RoomTimelineView: View {
             Divider()
             ComposerView(
                 text: $draft,
-                placeholder: "Send a message...",
+                placeholder: isAgentRoom ? "Reply to the agent workflow..." : "Send a message...",
+                showsPromptMetrics: isAgentRoom,
                 replyTarget: replyTarget,
                 editTarget: editTarget,
                 uploadState: uploadState,
                 sendError: sendError,
                 onCancelRelation: clearComposerRelation,
                 onSend: sendMessage,
-                onUpload: uploadTestMedia,
+                onMockMediaUpload: uploadMockMedia,
+                onFileURL: uploadPickedFile,
+                onCameraImage: uploadCameraImage,
+                onUploadFailed: { message in
+                    uploadState = .failed(message)
+                },
                 selectedPhoto: $selectedPhoto
             )
+            .background(SynaraColor.surface)
+            .shadow(color: Color.black.opacity(isAgentRoom ? 0.22 : 0.06), radius: 10, x: 0, y: -3)
+            .synaraKeyboardAdaptiveInset()
         }
         .background(isAgentRoom ? SynaraColor.agentReviewBackground : SynaraColor.surface)
         .navigationTitle(roomTitle ?? "Room")
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
         .toolbar(.hidden, for: .tabBar)
-        .synaraInteractiveSwipeBack()
         .preferredColorScheme(isAgentRoom ? .dark : nil)
         .sheet(item: $viewerResource) { resource in
             MediaViewer(resource: resource)
         }
         .sheet(isPresented: $isRoomDetailsPresented) {
             RoomDetailsView(roomID: roomID, fallbackTitle: roomTitle ?? "Room")
+        }
+        .sheet(isPresented: $isTimelineSearchPresented) {
+            TimelineSearchSheet(
+                query: $timelineSearchQuery,
+                items: loadedTimelineItems,
+                onDismiss: {
+                    timelineSearchQuery = ""
+                    isTimelineSearchPresented = false
+                }
+            )
         }
         .alert("Agent Action", isPresented: Binding(
             get: { agentActionMessage != nil },
@@ -107,6 +140,7 @@ struct RoomTimelineView: View {
         }
         .onDisappear {
             timelineUpdatesTask?.cancel()
+            cancelMarkFullyRead()
         }
         .onChange(of: draft) { value in
             environment.drafts.setDraft(value, roomID: roomID)
@@ -123,7 +157,14 @@ struct RoomTimelineView: View {
     private var timelineContent: some View {
         switch state {
         case .idle, .loading:
-            SynaraLoadingState(title: "Loading timeline")
+            ScrollView {
+                SynaraTimelineSkeletonList(rowCount: 8)
+                    .padding(.horizontal, SynaraSpacing.large)
+                    .padding(.top, SynaraSpacing.medium)
+                    .padding(.bottom, SynaraSpacing.small)
+            }
+            .background(isAgentRoom ? SynaraColor.agentReviewBackground : SynaraColor.surface)
+            .accessibilityIdentifier("TimelineLoading")
         case .empty:
             SynaraEmptyState(title: "No Messages", systemImage: "text.bubble", message: "Messages will appear here.")
         case .failed(let message):
@@ -139,35 +180,26 @@ struct RoomTimelineView: View {
                     LazyVStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
                         if isPaginating {
                             ProgressView()
+                                .controlSize(.small)
                                 .frame(maxWidth: .infinity)
+                                .padding(.vertical, SynaraSpacing.xSmall)
+                                .accessibilityIdentifier("TimelinePaginationIndicator")
                         }
 
-                        if shouldShowRecoveryBanner(items: items) {
+                        if shouldShowCryptoBanner(items: items) {
                             CryptoRecoveryBanner(
                                 status: cryptoStatus,
                                 onRetry: retryDecryption,
-                                onReviewSecurity: { environment.router.route(to: .settings) }
+                                onReviewSecurity: { environment.router.route(to: .settings) },
+                                onDismiss: { isCryptoBannerDismissed = true }
                             )
                         }
 
-                        if isAgentRoom == false {
-                            Button {
-                                loadOlderTimeline(before: items.first?.eventID)
-                            } label: {
-                                Label("Load older messages", systemImage: "chevron.up")
-                                    .font(.caption.weight(.semibold))
-                                    .foregroundStyle(SynaraColor.secondaryText)
-                                    .frame(maxWidth: .infinity)
-                            }
-                            .buttonStyle(.plain)
-                            .padding(.vertical, SynaraSpacing.xSmall)
-                            .background(SynaraColor.secondarySurface.opacity(0.55))
-                            .clipShape(Capsule())
-                            .disabled(isPaginating || items.isEmpty)
-                            .accessibilityIdentifier("LoadOlderTimelineButton")
-                        }
-
                         let threadReplyCounts = TimelineReplyCounter.replyCounts(for: items)
+                        let replyPreviewsByEventID = TimelineReplyPreview.previewsByEventID(
+                            in: items,
+                            currentUserID: currentUserID
+                        )
 
                         ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
                             if shouldShowUnreadDivider(before: item, at: index, in: items) {
@@ -178,9 +210,17 @@ struct RoomTimelineView: View {
                                 item: item,
                                 currentUserID: currentUserID,
                                 isGroupedWithPrevious: isGroupedWithPrevious(index: index, items: items),
+                                animateSend: sendAnimationItemIDs.contains(item.id),
+                                replyPreviewsByEventID: replyPreviewsByEventID,
                                 replyCount: threadReplyCounts[item.eventID] ?? 0,
                                 availability: environment.eventActions.availability(for: item, currentUserID: currentUserID),
-                                onReply: { replyTarget = item },
+                                onReply: {
+                                    replyTarget = ComposerRelationTarget(
+                                        item: item,
+                                        kind: .reply,
+                                        currentUserID: currentUserID
+                                    )
+                                },
                                 onOpenThread: { openThread(root: item) },
                                 onEdit: { beginEdit(item) },
                                 onRedact: { applyAction(.redact, to: item) },
@@ -188,10 +228,32 @@ struct RoomTimelineView: View {
                                 onOpenMedia: { resource in viewerResource = resource },
                                 onAgentAction: { action in
                                     executeAgentAction(action, sourceEventID: item.eventID)
+                                },
+                                onRetryFailedSend: {
+                                    retryFailedMessage(item)
                                 }
                             )
                             .id(item.eventID)
+                            .onAppear {
+                                if item.eventID == items.last?.eventID {
+                                    showJumpToLatest = false
+                                    scheduleMarkFullyRead(eventID: item.eventID)
+                                }
+                                if isAgentRoom == false, index < Self.olderPaginationTopThreshold {
+                                    loadOlderTimelineIfNeeded(anchorItem: item, index: index, items: items)
+                                }
+                            }
+                            .onDisappear {
+                                if item.eventID == items.last?.eventID {
+                                    cancelMarkFullyRead()
+                                }
+                            }
                         }
+
+                        Color.clear
+                            .frame(height: 1)
+                            .id(Self.timelineBottomAnchorID)
+                            .accessibilityHidden(true)
                     }
                     .padding(.horizontal, SynaraSpacing.large)
                     .padding(.top, isAgentRoom ? SynaraSpacing.medium : SynaraSpacing.small)
@@ -222,8 +284,16 @@ struct RoomTimelineView: View {
                     scrollToAnchoredEvent(items: items, proxy: proxy)
                 }
                 .onChange(of: state) { currentState in
-                    guard case .loaded(let updatedItems, _) = currentState else {
+                    guard case .loaded(let updatedItems, let isPaginating) = currentState else {
                         return
+                    }
+                    if let anchorID = paginationScrollAnchorID, isPaginating == false {
+                        paginationScrollAnchorID = nil
+                        Task {
+                            await MainActor.run {
+                                proxy.scrollTo(anchorID, anchor: .top)
+                            }
+                        }
                     }
                     scrollToInitialPosition(items: updatedItems, proxy: proxy)
                     scrollToLatestMessageIfNeeded(items: updatedItems, proxy: proxy)
@@ -250,8 +320,13 @@ struct RoomTimelineView: View {
         hasPositionedInitialTimeline = true
         Task {
             await MainActor.run {
-                proxy.scrollTo(target.eventID, anchor: isLatestTarget ? .bottom : .center)
-                showJumpToLatest = initialReadMarkerEventID != nil || isLatestTarget == false
+                if isLatestTarget {
+                    scrollToTimelineBottomTargets(proxy: proxy, eventID: target.eventID)
+                    showJumpToLatest = false
+                } else {
+                    proxy.scrollTo(target.eventID, anchor: .center)
+                    showJumpToLatest = initialReadMarkerEventID != nil || isLatestTarget == false
+                }
             }
         }
     }
@@ -294,13 +369,39 @@ struct RoomTimelineView: View {
             return
         }
 
-        Task {
-            await MainActor.run {
-                withAnimation {
-                    proxy.scrollTo(latest.eventID, anchor: .bottom)
+        scrollToTimelineBottom(proxy: proxy, eventID: latest.eventID, animated: true)
+    }
+
+    private func scrollToTimelineBottom(
+        proxy: ScrollViewProxy,
+        eventID: String?,
+        animated: Bool
+    ) {
+        Task { @MainActor in
+            let delays: [UInt64] = [0, 50, 150, 300]
+            for (index, delayMilliseconds) in delays.enumerated() {
+                if delayMilliseconds > 0 {
+                    try? await Task.sleep(nanoseconds: delayMilliseconds * 1_000_000)
+                }
+
+                let shouldAnimate = animated && index > 0
+                if shouldAnimate {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        scrollToTimelineBottomTargets(proxy: proxy, eventID: eventID)
+                    }
+                } else {
+                    scrollToTimelineBottomTargets(proxy: proxy, eventID: eventID)
                 }
             }
+            showJumpToLatest = false
         }
+    }
+
+    private func scrollToTimelineBottomTargets(proxy: ScrollViewProxy, eventID: String?) {
+        if let eventID {
+            proxy.scrollTo(eventID, anchor: .bottom)
+        }
+        proxy.scrollTo(Self.timelineBottomAnchorID, anchor: .bottom)
     }
 
     private var currentUserID: String {
@@ -327,7 +428,7 @@ struct RoomTimelineView: View {
     }
 
     private var isAgentRoom: Bool {
-        (roomTitle ?? "").localizedCaseInsensitiveContains("agent")
+        environment.roomList.isAgentRoom(roomID: roomID)
     }
 
     private func isGroupedWithPrevious(index: Int, items: [TimelineItem]) -> Bool {
@@ -360,11 +461,17 @@ struct RoomTimelineView: View {
         agentActionMessage = nil
         cryptoStatus = .unknown
         cryptoActionMessage = nil
+        isCryptoBannerDismissed = false
         isRoomDetailsPresented = false
         lastRenderedTimelineCount = 0
         showJumpToLatest = false
         hasPositionedInitialTimeline = false
         initialReadMarkerEventID = nil
+        hasReachedOldestMessages = false
+        lastOlderPaginationAt = .distantPast
+        paginationScrollAnchorID = nil
+        lastMarkedFullyReadEventID = nil
+        cancelMarkFullyRead()
     }
 
     private func shouldShowUnreadDivider(before item: TimelineItem, at index: Int, in items: [TimelineItem]) -> Bool {
@@ -393,12 +500,40 @@ struct RoomTimelineView: View {
     private func applyTimelineOutcome(_ outcome: TimelineLoadOutcome, isPaginating: Bool = false) {
         switch outcome {
         case .loaded(let items):
-            state = .loaded(items, isPaginating: isPaginating)
+            let merged = mergeTimelineItems(items, isPaginating: isPaginating)
+            state = .loaded(merged, isPaginating: isPaginating)
         case .empty:
-            state = .empty
+            if let pendingItems = localPendingItems, pendingItems.isEmpty == false {
+                state = .loaded(pendingItems, isPaginating: isPaginating)
+            } else {
+                state = .empty
+            }
         case .failed(let message):
             state = .failed(message)
         }
+    }
+
+    private var localPendingItems: [TimelineItem]? {
+        guard case .loaded(let items, _) = state else {
+            return nil
+        }
+        let pendingItems = TimelinePendingReconciler.pendingItems(from: items)
+        return pendingItems.isEmpty ? nil : pendingItems
+    }
+
+    private func mergeTimelineItems(_ streamItems: [TimelineItem], isPaginating: Bool) -> [TimelineItem] {
+        let localItems: [TimelineItem]
+        if case .loaded(let items, _) = state {
+            localItems = items
+        } else {
+            localItems = []
+        }
+
+        return TimelinePendingReconciler.merge(
+            streamItems: streamItems,
+            localItems: localItems,
+            currentUserID: currentUserID
+        )
     }
 
     private func openThread(root item: TimelineItem) {
@@ -491,8 +626,20 @@ struct RoomTimelineView: View {
         }
     }
 
-    private func shouldShowRecoveryBanner(items: [TimelineItem]) -> Bool {
-        cryptoStatus.needsRecoveryAttention || items.contains { item in
+    private func shouldShowCryptoBanner(items: [TimelineItem]) -> Bool {
+        guard isCryptoBannerDismissed == false else {
+            return false
+        }
+
+        if cryptoStatus.needsCryptoActionBanner {
+            return true
+        }
+
+        guard cryptoStatus.isEncrypted else {
+            return false
+        }
+
+        return items.contains { item in
             if case .encryptedPlaceholder = item.kind {
                 return true
             }
@@ -501,6 +648,29 @@ struct RoomTimelineView: View {
     }
 
     private func sendMessage(body rawBody: String) {
+        performSend(body: rawBody, replyToEventID: replyTarget?.eventID, editEventID: editTarget?.eventID)
+    }
+
+    private func retryFailedMessage(_ item: TimelineItem) {
+        guard item.deliveryStatus == .failed,
+              let body = TimelinePendingReconciler.messageBody(for: item) else {
+            return
+        }
+
+        performSend(
+            body: body,
+            replyToEventID: item.replyToEventID,
+            editEventID: nil,
+            retrying: item
+        )
+    }
+
+    private func performSend(
+        body rawBody: String,
+        replyToEventID: String?,
+        editEventID: String?,
+        retrying failedItem: TimelineItem? = nil
+    ) {
         let body = rawBody.trimmingCharacters(in: .whitespacesAndNewlines)
         guard body.isEmpty == false else {
             sendError = MessageSendError.emptyMessage.localizedDescription
@@ -510,10 +680,37 @@ struct RoomTimelineView: View {
         let request = MessageSendRequest(
             roomID: roomID,
             body: body,
-            replyToEventID: replyTarget?.eventID,
-            editEventID: editTarget?.eventID
+            replyToEventID: replyToEventID,
+            editEventID: editEventID
         )
         let isEditing = request.editEventID != nil
+
+        let pendingLocalID: String?
+        if isEditing == false {
+            let pendingItem = TimelineItem.pendingMessage(
+                localID: failedItem?.id ?? "$pending-\(UUID().uuidString)",
+                body: body,
+                senderID: currentUserID,
+                replyToEventID: replyToEventID,
+                deliveryStatus: .sending,
+                timestamp: failedItem?.timestamp ?? Date()
+            )
+            pendingLocalID = pendingItem.id
+
+            if failedItem != nil {
+                replace(pendingItem)
+            } else {
+                append(pendingItem)
+            }
+            registerSendAnimation(for: pendingItem.id, isRetry: failedItem != nil)
+
+            draft = ""
+            environment.drafts.clearDraft(roomID: roomID)
+            clearComposerRelation()
+            sendError = nil
+        } else {
+            pendingLocalID = nil
+        }
 
         Task {
             do {
@@ -524,38 +721,177 @@ struct RoomTimelineView: View {
                 let item = try await environment.messageSender.send(request)
                 await MainActor.run {
                     if isEditing {
-                        // Edits may not stream back immediately; keep a local replace.
                         replace(item)
-                    } else if ProcessInfo.processInfo.environment["SYNARA_UI_TESTS"] == "1" {
-                        append(item)
+                        draft = ""
+                        environment.drafts.clearDraft(roomID: roomID)
+                        clearComposerRelation()
+                    } else if let pendingLocalID {
+                        markPendingSendSent(localID: pendingLocalID)
+                        if ProcessInfo.processInfo.environment["SYNARA_UI_TESTS"] == "1" {
+                            reconcilePendingSend(localID: pendingLocalID, confirmed: item)
+                        }
                     }
-                    // New sends rely on timeline streaming instead of optimistic append.
-                    draft = ""
-                    environment.drafts.clearDraft(roomID: roomID)
-                    clearComposerRelation()
                     sendError = nil
+                    if isEditing == false {
+                        SynaraHaptics.trigger(.lightImpact)
+                    }
                 }
             } catch {
                 await MainActor.run {
-                    sendError = MessageSendError.failed.localizedDescription
+                    if isEditing {
+                        sendError = MessageSendError.failed.localizedDescription
+                    } else if let pendingLocalID {
+                        markPendingSendFailed(localID: pendingLocalID)
+                    }
+                    SynaraHaptics.trigger(.warning)
                 }
             }
         }
     }
 
-    private func uploadTestMedia() {
+    private func markPendingSendSent(localID: String) {
+        guard case .loaded(let items, let isPaginating) = state,
+              let item = items.first(where: { $0.id == localID }) else {
+            return
+        }
+
+        replace(item.withDeliveryStatus(.sent))
+    }
+
+    private func markPendingSendFailed(localID: String) {
+        guard case .loaded(let items, let isPaginating) = state,
+              let item = items.first(where: { $0.id == localID }) else {
+            return
+        }
+
+        replace(item.withDeliveryStatus(.failed))
+    }
+
+    private func reconcilePendingSend(localID: String, confirmed: TimelineItem) {
+        guard case .loaded(let items, let isPaginating) = state else {
+            return
+        }
+
+        let withoutPending = items.filter { $0.id != localID }
+        if withoutPending.contains(where: { $0.eventID == confirmed.eventID }) {
+            state = .loaded(withoutPending, isPaginating: isPaginating)
+            return
+        }
+
+        state = .loaded(withoutPending + [confirmed], isPaginating: isPaginating)
+    }
+
+    private func uploadMockMedia(source: MediaUploadSource) {
         uploadState = .uploading(progress: 0.5)
         Task {
             let signpostID = PerformanceTrace.begin("MediaUpload")
             defer {
                 PerformanceTrace.end("MediaUpload", id: signpostID)
             }
+            let displayName: String
+            let mimeType: String
+            let data: Data
+            switch source {
+            case .photoLibrary:
+                displayName = "synara-upload.jpg"
+                mimeType = "image/jpeg"
+                data = Data("Synara test image".utf8)
+            case .file:
+                displayName = "synara-upload.pdf"
+                mimeType = "application/pdf"
+                data = Data("Synara test file".utf8)
+            case .camera:
+                displayName = "synara-camera.jpg"
+                mimeType = "image/jpeg"
+                data = Data("Synara test camera image".utf8)
+            }
             let result = await environment.mediaUploader.upload(
                 MediaUploadRequest(
                     roomID: roomID,
-                    source: .photoLibrary,
-                    displayName: "synara-upload.jpg",
-                    data: Data("Synara test image".utf8),
+                    source: source,
+                    displayName: displayName,
+                    data: data,
+                    mimeType: mimeType
+                )
+            )
+            await MainActor.run {
+                uploadState = result
+                if case .uploaded(let item) = result {
+                    append(item)
+                }
+            }
+        }
+    }
+
+    private func uploadPickedFile(_ url: URL) {
+        uploadState = .uploading(progress: 0.25)
+        Task {
+            let signpostID = PerformanceTrace.begin("FilePickerUpload")
+            defer {
+                PerformanceTrace.end("FilePickerUpload", id: signpostID)
+            }
+
+            let didAccess = url.startAccessingSecurityScopedResource()
+            defer {
+                if didAccess {
+                    url.stopAccessingSecurityScopedResource()
+                }
+            }
+
+            do {
+                let data = try Data(contentsOf: url)
+                guard data.isEmpty == false else {
+                    await MainActor.run {
+                        uploadState = .failed("Attachment is empty.")
+                    }
+                    return
+                }
+
+                let result = await environment.mediaUploader.upload(
+                    MediaUploadRequest(
+                        roomID: roomID,
+                        source: .file,
+                        displayName: MediaAttachmentSupport.displayName(for: url),
+                        data: data,
+                        mimeType: MediaAttachmentSupport.mimeType(for: url)
+                    )
+                )
+                await MainActor.run {
+                    uploadState = result
+                    if case .uploaded(let item) = result {
+                        append(item)
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    uploadState = .failed("Attachment could not be loaded. Try again.")
+                }
+            }
+        }
+    }
+
+    #if canImport(UIKit)
+    private func uploadCameraImage(_ image: UIImage) {
+        uploadState = .uploading(progress: 0.25)
+        Task {
+            let signpostID = PerformanceTrace.begin("CameraCaptureUpload")
+            defer {
+                PerformanceTrace.end("CameraCaptureUpload", id: signpostID)
+            }
+
+            guard let data = MediaAttachmentSupport.jpegData(from: image) else {
+                await MainActor.run {
+                    uploadState = .failed("Attachment could not be loaded. Try again.")
+                }
+                return
+            }
+
+            let result = await environment.mediaUploader.upload(
+                MediaUploadRequest(
+                    roomID: roomID,
+                    source: .camera,
+                    displayName: "synara-camera.jpg",
+                    data: data,
                     mimeType: "image/jpeg"
                 )
             )
@@ -567,6 +903,7 @@ struct RoomTimelineView: View {
             }
         }
     }
+    #endif
 
     private func uploadPickedPhoto(_ item: PhotosPickerItem) {
         uploadState = .uploading(progress: 0.25)
@@ -611,10 +948,29 @@ struct RoomTimelineView: View {
         }
     }
 
-    private func loadOlderTimeline(before eventID: String?) {
+    private func loadOlderTimelineIfNeeded(anchorItem: TimelineItem, index: Int, items: [TimelineItem]) {
+        guard index < Self.olderPaginationTopThreshold,
+              let oldestEventID = items.first?.eventID else {
+            return
+        }
+        loadOlderTimeline(before: oldestEventID, scrollAnchorID: anchorItem.eventID)
+    }
+
+    private func loadOlderTimeline(before eventID: String?, scrollAnchorID: String? = nil) {
         guard let eventID,
+              hasReachedOldestMessages == false,
               case .loaded(let items, false) = state else {
             return
+        }
+
+        let now = Date()
+        guard now.timeIntervalSince(lastOlderPaginationAt) >= Self.olderPaginationDebounceInterval else {
+            return
+        }
+        lastOlderPaginationAt = now
+
+        if let scrollAnchorID {
+            paginationScrollAnchorID = scrollAnchorID
         }
 
         state = .loaded(items, isPaginating: true)
@@ -632,61 +988,113 @@ struct RoomTimelineView: View {
                     state = .loaded(uniqueOlder + items, isPaginating: false)
                     if uniqueOlder.isEmpty == false {
                         showJumpToLatest = true
+                    } else {
+                        hasReachedOldestMessages = true
                     }
                 case .empty:
+                    hasReachedOldestMessages = true
+                    paginationScrollAnchorID = nil
                     state = .loaded(items, isPaginating: false)
                 case .failed(let message):
+                    paginationScrollAnchorID = nil
                     state = .failed(message)
                 }
             }
         }
     }
 
-    private func jumpToLatest(proxy: ScrollViewProxy, currentItems: [TimelineItem], fallbackEventID: String) {
-        guard case .loaded(_, false) = state else {
-            withAnimation(.easeInOut(duration: 0.2)) {
-                proxy.scrollTo(fallbackEventID, anchor: .bottom)
-            }
-            showJumpToLatest = false
+    private func scheduleMarkFullyRead(eventID: String) {
+        markFullyReadTask?.cancel()
+        guard lastMarkedFullyReadEventID != eventID else {
             return
         }
 
-        state = .loaded(currentItems, isPaginating: true)
+        markFullyReadTask = Task {
+            try? await Task.sleep(nanoseconds: Self.markFullyReadDelayNanoseconds)
+            guard Task.isCancelled == false else {
+                return
+            }
+
+            let didMark = await environment.readMarkers.markFullyRead(roomID: roomID, eventID: eventID)
+            guard Task.isCancelled == false else {
+                return
+            }
+
+            await MainActor.run {
+                if didMark {
+                    lastMarkedFullyReadEventID = eventID
+                    initialReadMarkerEventID = eventID
+                }
+                showJumpToLatest = false
+            }
+        }
+    }
+
+    private func cancelMarkFullyRead() {
+        markFullyReadTask?.cancel()
+        markFullyReadTask = nil
+    }
+
+    private func jumpToLatest(proxy: ScrollViewProxy, currentItems: [TimelineItem], fallbackEventID: String) {
+        cancelMarkFullyRead()
+        paginationScrollAnchorID = nil
+        hasReachedOldestMessages = false
+
+        let baselineItems: [TimelineItem]
+        if case .loaded(let items, _) = state {
+            baselineItems = items
+        } else {
+            baselineItems = currentItems
+        }
+
+        state = .loaded(baselineItems, isPaginating: true)
         Task {
             let signpostID = PerformanceTrace.begin("TimelineJumpToLatest")
             defer {
                 PerformanceTrace.end("TimelineJumpToLatest", id: signpostID)
             }
-            let outcome = await environment.timeline.loadInitialTimeline(roomID: roomID, focusedEventID: nil)
+            let outcome = await environment.timeline.loadLatestTimeline(roomID: roomID)
             await MainActor.run {
                 let nextItems: [TimelineItem]
                 switch outcome {
                 case .loaded(let items):
-                    nextItems = items.isEmpty ? currentItems : items
+                    nextItems = items.isEmpty ? baselineItems : items
                 case .empty:
-                    nextItems = currentItems
+                    nextItems = baselineItems
                 case .failed:
-                    nextItems = currentItems
+                    nextItems = baselineItems
                 }
+                let merged = TimelinePendingReconciler.merge(
+                    streamItems: nextItems,
+                    localItems: baselineItems,
+                    currentUserID: currentUserID
+                )
                 initialReadMarkerEventID = nil
                 hasPositionedInitialTimeline = true
-                state = .loaded(nextItems, isPaginating: false)
-                if let latest = nextItems.last {
+                state = .loaded(merged, isPaginating: false)
+                if let latest = merged.last {
                     Task {
                         _ = await environment.readMarkers.markFullyRead(roomID: roomID, eventID: latest.eventID)
+                        await MainActor.run {
+                            lastMarkedFullyReadEventID = latest.eventID
+                        }
                     }
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        proxy.scrollTo(latest.eventID, anchor: .bottom)
-                    }
+                    scrollToTimelineBottom(proxy: proxy, eventID: latest.eventID, animated: true)
+                } else {
+                    scrollToTimelineBottom(proxy: proxy, eventID: fallbackEventID, animated: true)
+                    showJumpToLatest = false
                 }
-                showJumpToLatest = false
                 startTimelineUpdates(streamFocusEventID: .some(nil))
             }
         }
     }
 
     private func beginEdit(_ item: TimelineItem) {
-        editTarget = item
+        editTarget = ComposerRelationTarget(
+            item: item,
+            kind: .edit,
+            currentUserID: currentUserID
+        )
         if case .text(let body) = item.kind {
             draft = body
             environment.drafts.setDraft(body, roomID: roomID)
@@ -722,6 +1130,17 @@ struct RoomTimelineView: View {
             state = .loaded(items + [item], isPaginating: isPaginating)
         default:
             state = .loaded([item], isPaginating: false)
+        }
+    }
+
+    private func registerSendAnimation(for itemID: String, isRetry: Bool = false) {
+        guard isRetry == false else {
+            return
+        }
+        sendAnimationItemIDs.insert(itemID)
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 700_000_000)
+            sendAnimationItemIDs.remove(itemID)
         }
     }
 
@@ -775,6 +1194,11 @@ struct RoomTimelineView: View {
                     )
                 )
                 await MainActor.run {
+                    if decision == .approve {
+                        SynaraHaptics.trigger(.success)
+                    } else {
+                        SynaraHaptics.trigger(.lightImpact)
+                    }
                     agentActionMessage = decision == .approve ? "Agent action approved" : "Agent action rejected"
                 }
             } catch let error as SynaraAgentApprovalError {
@@ -787,6 +1211,13 @@ struct RoomTimelineView: View {
                 }
             }
         }
+    }
+
+    private var loadedTimelineItems: [TimelineItem] {
+        guard case .loaded(let items, _) = state else {
+            return []
+        }
+        return items
     }
 }
 
@@ -823,7 +1254,7 @@ private struct JumpToLatestButton: View {
 private struct TimelineHeader: View {
     let title: String
     let subtitle: String
-    let cryptoStatus: RoomCryptoStatus
+    let onSearch: () -> Void
     let onDetails: () -> Void
     let onBack: () -> Void
 
@@ -842,28 +1273,25 @@ private struct TimelineHeader: View {
                     Text("#")
                         .foregroundStyle(SynaraColor.secondaryText)
                     Text(title)
-                        .font(.headline.weight(.semibold))
+                        .font(SynaraTypography.sectionTitle.weight(.semibold))
                         .foregroundStyle(SynaraColor.primaryText)
                         .lineLimit(1)
                 }
                 Text(subtitle)
-                    .font(.caption)
+                    .font(SynaraTypography.messageMeta)
                     .foregroundStyle(SynaraColor.secondaryText)
             }
 
             Spacer()
 
             HStack(spacing: SynaraSpacing.small) {
-                if cryptoStatus.encryption != .unknown && cryptoStatus.encryption != .notEncrypted {
-                    CryptoStatusPill(status: cryptoStatus)
+                Button(action: onSearch) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 17, weight: .medium))
                 }
-
-                Image(systemName: "magnifyingglass")
-                    .font(.system(size: 17, weight: .medium))
-                    .accessibilityHidden(true)
-                Image(systemName: "phone")
-                    .font(.system(size: 17, weight: .medium))
-                    .accessibilityHidden(true)
+                .buttonStyle(.plain)
+                .accessibilityLabel("Search messages")
+                .accessibilityIdentifier("TimelineSearchButton")
                 Button(action: onDetails) {
                     Image(systemName: "ellipsis")
                         .font(.system(size: 17, weight: .medium))
@@ -880,6 +1308,99 @@ private struct TimelineHeader: View {
         .overlay(alignment: .bottom) {
             Divider()
         }
+    }
+}
+
+private struct TimelineSearchSheet: View {
+    @Binding var query: String
+    let items: [TimelineItem]
+    let onDismiss: () -> Void
+    @FocusState private var isSearchFocused: Bool
+
+    private var filteredItems: [TimelineItem] {
+        TimelineSearchFilter.applySearchQuery(query, to: items)
+    }
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: SynaraSpacing.medium) {
+                HStack(spacing: SynaraSpacing.small) {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundStyle(SynaraColor.secondaryText)
+                        .accessibilityHidden(true)
+                    TextField("Search loaded messages", text: $query)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .focused($isSearchFocused)
+                        .accessibilityIdentifier("TimelineSearchField")
+                    if query.isEmpty == false {
+                        Button {
+                            query = ""
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundStyle(SynaraColor.tertiaryText)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Clear message search")
+                    }
+                }
+                .padding(SynaraSpacing.medium)
+                .synaraCard(fill: SynaraColor.secondarySurface)
+                .padding(.horizontal, SynaraSpacing.large)
+                .padding(.top, SynaraSpacing.small)
+
+                if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    SynaraEmptyState(
+                        title: "Search Messages",
+                        systemImage: "magnifyingglass",
+                        message: "Filter messages currently loaded in this room."
+                    )
+                    .frame(maxHeight: .infinity)
+                } else if filteredItems.isEmpty {
+                    SynaraEmptyState(
+                        title: "No Matching Messages",
+                        systemImage: "text.magnifyingglass",
+                        message: "Try another keyword from the loaded timeline."
+                    )
+                    .frame(maxHeight: .infinity)
+                } else {
+                    List(filteredItems) { item in
+                        VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
+                            HStack {
+                                Text(item.senderDisplayName)
+                                    .font(SynaraTypography.emphasis)
+                                    .foregroundStyle(SynaraColor.primaryText)
+                                Spacer()
+                                Text(item.timestamp.timelineTime)
+                                    .font(SynaraTypography.messageMeta)
+                                    .foregroundStyle(SynaraColor.secondaryText)
+                            }
+                            Text(item.threadTitle)
+                                .font(SynaraTypography.body)
+                                .foregroundStyle(SynaraColor.secondaryText)
+                                .lineLimit(3)
+                        }
+                        .padding(.vertical, SynaraSpacing.xSmall)
+                        .accessibilityIdentifier("TimelineSearchResult-\(item.eventID)")
+                    }
+                    .listStyle(.plain)
+                    .accessibilityIdentifier("TimelineSearchResults")
+                }
+            }
+            .background(SynaraColor.surface)
+            .navigationTitle("Search Messages")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Done", action: onDismiss)
+                        .accessibilityIdentifier("TimelineSearchDoneButton")
+                }
+            }
+            .onAppear {
+                isSearchFocused = true
+            }
+        }
+        .presentationDetents([.medium, .large])
     }
 }
 
@@ -917,7 +1438,12 @@ struct ThreadTimelineView: View {
                 sendError: sendError,
                 onCancelRelation: {},
                 onSend: sendThreadReply,
-                onUpload: uploadThreadAttachment,
+                onMockMediaUpload: uploadMockThreadAttachment,
+                onFileURL: uploadThreadFile,
+                onCameraImage: uploadThreadCameraImage,
+                onUploadFailed: { message in
+                    uploadState = .failed(message)
+                },
                 selectedPhoto: $selectedPhoto
             )
         }
@@ -925,7 +1451,6 @@ struct ThreadTimelineView: View {
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
         .toolbar(.hidden, for: .tabBar)
-        .synaraInteractiveSwipeBack()
         .task(id: roomID + rootEventID) {
             await loadThread()
             startThreadUpdates()
@@ -935,11 +1460,10 @@ struct ThreadTimelineView: View {
             threadUpdatesTask = nil
         }
         .onChange(of: selectedPhoto) { item in
-            guard item != nil else {
+            guard let item else {
                 return
             }
-            uploadThreadAttachment()
-            selectedPhoto = nil
+            uploadThreadPhoto(item)
         }
     }
 
@@ -947,7 +1471,12 @@ struct ThreadTimelineView: View {
     private var threadContent: some View {
         switch state {
         case .idle, .loading:
-            SynaraLoadingState(title: "Loading thread")
+            ScrollView {
+                SynaraTimelineSkeletonList(rowCount: 4)
+                    .padding(.horizontal, SynaraSpacing.xLarge)
+                    .padding(.vertical, SynaraSpacing.large)
+            }
+            .accessibilityIdentifier("ThreadLoading")
         case .empty:
             SynaraEmptyState(title: "No Thread Replies", systemImage: "bubble.left.and.bubble.right", message: "Replies will appear here.")
         case .failed(let message):
@@ -1066,19 +1595,160 @@ struct ThreadTimelineView: View {
         }
     }
 
-    private func uploadThreadAttachment() {
+    private func uploadMockThreadAttachment(source: MediaUploadSource) {
         uploadState = .uploading(progress: 0.5)
         Task {
             let signpostID = PerformanceTrace.begin("ThreadMediaUpload")
             defer {
                 PerformanceTrace.end("ThreadMediaUpload", id: signpostID)
             }
+            let displayName: String
+            let mimeType: String
+            let data: Data
+            switch source {
+            case .photoLibrary:
+                displayName = "thread-attachment.jpg"
+                mimeType = "image/jpeg"
+                data = Data("Synara thread attachment".utf8)
+            case .file:
+                displayName = "thread-attachment.pdf"
+                mimeType = "application/pdf"
+                data = Data("Synara thread file".utf8)
+            case .camera:
+                displayName = "thread-camera.jpg"
+                mimeType = "image/jpeg"
+                data = Data("Synara thread camera image".utf8)
+            }
             let result = await environment.mediaUploader.upload(
                 MediaUploadRequest(
                     roomID: roomID,
-                    source: .photoLibrary,
-                    displayName: "thread-attachment.jpg",
-                    data: Data("Synara thread attachment".utf8),
+                    source: source,
+                    displayName: displayName,
+                    data: data,
+                    mimeType: mimeType
+                )
+            )
+            await MainActor.run {
+                uploadState = result
+                if case .uploaded(let item) = result {
+                    append(item)
+                }
+            }
+        }
+    }
+
+    private func uploadThreadPhoto(_ item: PhotosPickerItem) {
+        uploadState = .uploading(progress: 0.25)
+        Task {
+            let signpostID = PerformanceTrace.begin("ThreadPhotoPickerUpload")
+            defer {
+                PerformanceTrace.end("ThreadPhotoPickerUpload", id: signpostID)
+            }
+            do {
+                guard let data = try await item.loadTransferable(type: Data.self) else {
+                    await MainActor.run {
+                        uploadState = .failed("Attachment could not be loaded. Try again.")
+                    }
+                    return
+                }
+
+                let contentType = item.supportedContentTypes.first
+                let fileExtension = contentType?.preferredFilenameExtension ?? "jpg"
+                let mimeType = contentType?.preferredMIMEType ?? "image/jpeg"
+                let result = await environment.mediaUploader.upload(
+                    MediaUploadRequest(
+                        roomID: roomID,
+                        source: .photoLibrary,
+                        displayName: "thread-photo.\(fileExtension)",
+                        data: data,
+                        mimeType: mimeType
+                    )
+                )
+                await MainActor.run {
+                    selectedPhoto = nil
+                    uploadState = result
+                    if case .uploaded(let item) = result {
+                        append(item)
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    selectedPhoto = nil
+                    uploadState = .failed("Attachment could not be loaded. Try again.")
+                }
+            }
+        }
+    }
+
+    private func uploadThreadFile(_ url: URL) {
+        uploadState = .uploading(progress: 0.25)
+        Task {
+            let signpostID = PerformanceTrace.begin("ThreadFilePickerUpload")
+            defer {
+                PerformanceTrace.end("ThreadFilePickerUpload", id: signpostID)
+            }
+
+            let didAccess = url.startAccessingSecurityScopedResource()
+            defer {
+                if didAccess {
+                    url.stopAccessingSecurityScopedResource()
+                }
+            }
+
+            do {
+                let data = try Data(contentsOf: url)
+                guard data.isEmpty == false else {
+                    await MainActor.run {
+                        uploadState = .failed("Attachment is empty.")
+                    }
+                    return
+                }
+
+                let result = await environment.mediaUploader.upload(
+                    MediaUploadRequest(
+                        roomID: roomID,
+                        source: .file,
+                        displayName: MediaAttachmentSupport.displayName(for: url),
+                        data: data,
+                        mimeType: MediaAttachmentSupport.mimeType(for: url)
+                    )
+                )
+                await MainActor.run {
+                    uploadState = result
+                    if case .uploaded(let item) = result {
+                        append(item)
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    uploadState = .failed("Attachment could not be loaded. Try again.")
+                }
+            }
+        }
+    }
+
+    #if canImport(UIKit)
+    private func uploadThreadCameraImage(_ image: UIImage) {
+        uploadState = .uploading(progress: 0.25)
+        Task {
+            let signpostID = PerformanceTrace.begin("ThreadCameraCaptureUpload")
+            defer {
+                PerformanceTrace.end("ThreadCameraCaptureUpload", id: signpostID)
+            }
+
+            guard let data = MediaAttachmentSupport.jpegData(from: image) else {
+                await MainActor.run {
+                    uploadState = .failed("Attachment could not be loaded. Try again.")
+                }
+                return
+            }
+
+            let result = await environment.mediaUploader.upload(
+                MediaUploadRequest(
+                    roomID: roomID,
+                    source: .camera,
+                    displayName: "thread-camera.jpg",
+                    data: data,
                     mimeType: "image/jpeg"
                 )
             )
@@ -1090,6 +1760,7 @@ struct ThreadTimelineView: View {
             }
         }
     }
+    #endif
 
     private func append(_ item: TimelineItem) {
         switch state {
@@ -1128,11 +1799,11 @@ private struct ThreadHeader: View {
 
             VStack(spacing: 2) {
                 Text("Thread")
-                    .font(.headline.weight(.semibold))
+                    .font(SynaraTypography.sectionTitle.weight(.semibold))
                     .foregroundStyle(SynaraColor.primaryText)
                     .accessibilityIdentifier("ThreadTimelineTitle")
                 Text(subtitle)
-                    .font(.caption)
+                    .font(SynaraTypography.messageMeta)
                     .foregroundStyle(SynaraColor.secondaryText)
                     .lineLimit(1)
             }
@@ -1155,10 +1826,10 @@ private struct ThreadMessageRow: View {
                 VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
                     HStack(alignment: .firstTextBaseline, spacing: SynaraSpacing.small) {
                         Text(item.senderDisplayName)
-                            .font(.subheadline.weight(.semibold))
+                            .font(SynaraTypography.emphasis)
                             .foregroundStyle(SynaraColor.primaryText)
                         Text(item.timestamp.timelineTime)
-                            .font(.caption)
+                            .font(SynaraTypography.messageMeta)
                             .foregroundStyle(SynaraColor.secondaryText)
                     }
 
@@ -1166,10 +1837,15 @@ private struct ThreadMessageRow: View {
 
                     if item.reactions.isEmpty == false {
                         HStack(spacing: SynaraSpacing.xSmall) {
-                            ForEach(item.reactions.keys.sorted(), id: \.self) { reaction in
-                                ReactionPill(title: reaction, count: item.reactions[reaction] ?? 0)
+                            ForEach(Array(item.reactions.keys.sorted().enumerated()), id: \.element) { index, reaction in
+                                ReactionPill(title: reaction, count: item.reactions[reaction] ?? 0, animationIndex: index)
                             }
-                            ReactionPill(title: "face.smiling", count: nil, isSystemImage: true)
+                            ReactionPill(
+                                title: "face.smiling",
+                                count: nil,
+                                isSystemImage: true,
+                                animationIndex: item.reactions.count
+                            )
                         }
                     }
                 }
@@ -1189,26 +1865,26 @@ private struct ThreadMessageRow: View {
         switch item.kind {
         case .text(let body):
             Text(body)
-                .font(.body)
+                .font(SynaraTypography.messageBody)
                 .foregroundStyle(SynaraColor.primaryText)
                 .fixedSize(horizontal: false, vertical: true)
         case .formattedText(let body, let html):
-            MatrixFormattedMessageView(fallbackBody: body, html: html, font: .body)
+            MatrixFormattedMessageView(fallbackBody: body, html: html, font: SynaraTypography.messageBody)
         case .mediaPlaceholder(let resource):
             MediaAttachmentCard(resource: resource)
         case .redacted:
             Text("Message deleted")
-                .font(.body)
+                .font(SynaraTypography.messageBody)
                 .foregroundStyle(SynaraColor.secondaryText)
         case .encryptedPlaceholder:
             Label("Encrypted content unavailable.", systemImage: "lock")
-                .font(.body)
+                .font(SynaraTypography.messageBody)
                 .foregroundStyle(SynaraColor.secondaryText)
         case .agentCard(let card):
             AgentCardTimelineRow(card: card, onAction: { _ in })
         case .unknown(let type):
             Text("Unsupported event: \(type)")
-                .font(.body)
+                .font(SynaraTypography.messageBody)
                 .foregroundStyle(SynaraColor.secondaryText)
         }
     }
@@ -1275,7 +1951,7 @@ private struct MatrixDetailsBlockView: View {
 
                 if block.body.isEmpty == false {
                     Text(block.body)
-                        .font(.callout)
+                        .font(SynaraTypography.messageBody)
                         .foregroundStyle(SynaraColor.primaryText)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .fixedSize(horizontal: false, vertical: true)
@@ -1284,7 +1960,7 @@ private struct MatrixDetailsBlockView: View {
             .padding(.top, SynaraSpacing.xSmall)
         } label: {
             Text(block.summary)
-                .font(.callout.weight(.semibold))
+                .font(SynaraTypography.messageBody.weight(.semibold))
                 .foregroundStyle(SynaraColor.primaryText)
                 .lineLimit(nil)
         }
@@ -1299,7 +1975,7 @@ private struct MatrixCodeBlockView: View {
         VStack(spacing: 0) {
             HStack {
                 Text("Code")
-                    .font(.caption.weight(.semibold))
+                    .font(SynaraTypography.chipLabel)
                     .foregroundStyle(SynaraColor.primaryText)
 
                 Spacer()
@@ -1309,7 +1985,7 @@ private struct MatrixCodeBlockView: View {
                     UIPasteboard.general.string = code
                     #endif
                 }
-                .font(.caption.weight(.semibold))
+                .font(SynaraTypography.chipLabel)
                 .buttonStyle(.plain)
                 .foregroundStyle(SynaraColor.primaryText)
             }
@@ -1321,7 +1997,7 @@ private struct MatrixCodeBlockView: View {
 
             ScrollView(.horizontal, showsIndicators: false) {
                 Text(code)
-                    .font(.system(.callout, design: .monospaced))
+                    .font(SynaraTypography.monoBody)
                     .foregroundStyle(SynaraColor.primaryText)
                     .textSelection(.enabled)
                     .padding(SynaraSpacing.medium)
@@ -1346,16 +2022,8 @@ private struct TimelineAvatar: View {
     @State private var avatarImage: UIImage?
 
     var body: some View {
-        ZStack(alignment: .bottomTrailing) {
-            avatarContent
-
-            Circle()
-                .fill(SynaraColor.success)
-                .frame(width: size * 0.24, height: size * 0.24)
-                .overlay(Circle().stroke(SynaraColor.surface, lineWidth: 1.4))
-                .offset(x: size * 0.03, y: size * 0.03)
-        }
-        .frame(width: size, height: size)
+        avatarContent
+            .frame(width: size, height: size)
         .task(id: avatarTaskID) {
             await loadAvatar()
         }
@@ -1825,7 +2493,7 @@ private struct PermissionInfo: View {
                     .font(SynaraTypography.body)
                     .foregroundStyle(SynaraColor.primaryText)
                 Text("Requires \(threshold)")
-                    .font(.caption)
+                    .font(SynaraTypography.messageMeta)
                     .foregroundStyle(SynaraColor.secondaryText)
             }
 
@@ -1848,7 +2516,7 @@ private struct SettingsInfo: View {
     var body: some View {
         VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
             Text(title)
-                .font(.caption)
+                .font(SynaraTypography.messageMeta)
                 .foregroundStyle(SynaraColor.secondaryText)
             Text(value)
                 .font(SynaraTypography.body)
@@ -1860,57 +2528,30 @@ private struct SettingsInfo: View {
     }
 }
 
-private struct CryptoStatusPill: View {
-    let status: RoomCryptoStatus
-
-    var body: some View {
-        Label(title, systemImage: systemImage)
-            .font(.caption.weight(.semibold))
-            .lineLimit(1)
-            .padding(.horizontal, SynaraSpacing.small)
-            .padding(.vertical, SynaraSpacing.xSmall)
-            .background(tint.opacity(0.14))
-            .foregroundStyle(tint)
-            .clipShape(Capsule())
-            .accessibilityIdentifier("RoomCryptoStatusPill")
-            .accessibilityLabel(title)
-    }
-
-    private var title: String {
-        if status.encryption == .unavailable {
-            return "Encryption Unknown"
-        }
-        if status.unableToDecryptCount > 0 || status.recovery == .disabled || status.recovery == .incomplete {
-            return "Recovery Needed"
-        }
-        if status.backup == .unavailable {
-            return "No Key Backup"
-        }
-        if status.verification == .unverified {
-            return "Unverified"
-        }
-        return "Encrypted"
-    }
-
-    private var systemImage: String {
-        title == "Encrypted" ? "lock.fill" : "exclamationmark.lock.fill"
-    }
-
-    private var tint: Color {
-        title == "Encrypted" ? SynaraColor.success : SynaraColor.warning
-    }
-}
-
 private struct CryptoRecoveryBanner: View {
     let status: RoomCryptoStatus
     let onRetry: () -> Void
     let onReviewSecurity: () -> Void
+    let onDismiss: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: SynaraSpacing.small) {
-            Label("Encrypted history needs attention", systemImage: "lock.trianglebadge.exclamationmark")
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(SynaraColor.primaryText)
+            HStack(alignment: .top, spacing: SynaraSpacing.small) {
+                Label(title, systemImage: "lock.trianglebadge.exclamationmark")
+                    .font(SynaraTypography.emphasis)
+                    .foregroundStyle(SynaraColor.primaryText)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                Button(action: onDismiss) {
+                    Image(systemName: "xmark")
+                        .font(SynaraTypography.chipLabel)
+                        .foregroundStyle(SynaraColor.secondaryText)
+                        .frame(width: 24, height: 24)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Dismiss encryption banner")
+                .accessibilityIdentifier("EncryptedRecoveryDismissButton")
+            }
 
             Text(detail)
                 .font(SynaraTypography.supporting)
@@ -1931,14 +2572,21 @@ private struct CryptoRecoveryBanner: View {
         .accessibilityIdentifier("EncryptedRecoveryBanner")
     }
 
+    private var title: String {
+        "Encrypted history needs attention"
+    }
+
     private var detail: String {
-        if status.recovery == .disabled || status.backup == .unavailable {
-            return "This room is encrypted, but key backup or recovery is not available on this device. Retry sync, or verify/recover this device from Settings."
+        if status.verification == .unverified {
+            return "This device is not verified. Verify another session from Settings before trusting encrypted history."
         }
         if status.recovery == .incomplete {
             return "This room is encrypted, but recovery is incomplete. Verify another session or recover keys before acting on undecrypted messages."
         }
-        return "Some encrypted events are missing keys. Retry decryption after sync, or review device verification and recovery in Settings."
+        if status.unableToDecryptCount > 0 {
+            return "Some encrypted events are missing keys. Retry decryption after sync, or review device verification and recovery in Settings."
+        }
+        return "Encrypted messages in this room need attention. Review device verification and recovery in Settings."
     }
 }
 
@@ -1946,6 +2594,8 @@ private struct TimelineRow: View {
     let item: TimelineItem
     let currentUserID: String
     let isGroupedWithPrevious: Bool
+    let animateSend: Bool
+    let replyPreviewsByEventID: [String: TimelineReplyPreview]
     let replyCount: Int
     let availability: EventActionAvailability
     let onReply: () -> Void
@@ -1955,9 +2605,10 @@ private struct TimelineRow: View {
     let onReact: () -> Void
     let onOpenMedia: (MediaResource) -> Void
     let onAgentAction: (SynaraAgentCardAction) -> Void
+    let onRetryFailedSend: () -> Void
 
     var body: some View {
-        HStack(alignment: .top, spacing: SynaraSpacing.small) {
+        let row = HStack(alignment: .top, spacing: SynaraSpacing.small) {
             if isGroupedWithPrevious {
                 Color.clear
                     .frame(width: 34, height: 1)
@@ -1969,15 +2620,15 @@ private struct TimelineRow: View {
                 if isGroupedWithPrevious == false {
                     HStack(alignment: .firstTextBaseline, spacing: SynaraSpacing.small) {
                         Text(senderDisplayName)
-                            .font(.subheadline.weight(.semibold))
+                            .font(SynaraTypography.emphasis)
                             .foregroundStyle(SynaraColor.primaryText)
                             .lineLimit(1)
                         Text(item.timestamp.timelineTime)
-                            .font(.caption)
+                            .font(SynaraTypography.messageMeta)
                             .foregroundStyle(SynaraColor.secondaryText)
                         if item.isEdited {
                             Text("edited")
-                                .font(.caption)
+                                .font(SynaraTypography.messageMeta)
                                 .foregroundStyle(SynaraColor.tertiaryText)
                         }
                     }
@@ -2010,26 +2661,42 @@ private struct TimelineRow: View {
         .accessibilityLabel(accessibilitySummary)
         .accessibilityHint(accessibilityHint)
         .accessibilityIdentifier("TimelineItem-\(item.eventID)")
+
+        let animatedRow = row
+            .synaraSendSlideIn(isEnabled: animateSend, fromTrailing: isOutgoing)
+
+        if item.deliveryStatus == .failed {
+            Button(action: onRetryFailedSend) {
+                animatedRow
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint("Tap to retry sending this message")
+            .accessibilityIdentifier("TimelineItemRetry-\(item.eventID)")
+        } else {
+            animatedRow
+        }
     }
 
     @ViewBuilder
     private var messageContent: some View {
         let content = VStack(alignment: .leading, spacing: SynaraSpacing.small) {
             if let replyToEventID = item.replyToEventID {
-                Label("Replying to \(replyToEventID)", systemImage: "arrowshape.turn.up.left")
-                    .font(.caption)
-                    .foregroundStyle(SynaraColor.secondaryText)
-                    .lineLimit(1)
+                replyQuoteLabel(for: replyToEventID)
             }
 
-            bodyContent
+            bubbleWrappedBodyContent
 
             if item.reactions.isEmpty == false {
                 HStack(spacing: SynaraSpacing.xSmall) {
-                    ForEach(item.reactions.keys.sorted(), id: \.self) { reaction in
-                        ReactionPill(title: reaction, count: item.reactions[reaction] ?? 0)
+                    ForEach(Array(item.reactions.keys.sorted().enumerated()), id: \.element) { index, reaction in
+                        ReactionPill(title: reaction, count: item.reactions[reaction] ?? 0, animationIndex: index)
                     }
-                    ReactionPill(title: "face.smiling", count: nil, isSystemImage: true)
+                    ReactionPill(
+                        title: "face.smiling",
+                        count: nil,
+                        isSystemImage: true,
+                        animationIndex: item.reactions.count
+                    )
                 }
             }
 
@@ -2039,7 +2706,7 @@ private struct TimelineRow: View {
                         Image(systemName: "bubble.left.and.bubble.right.fill")
                         Text(replyCount == 1 ? "1 reply" : "\(replyCount) replies")
                     }
-                    .font(.caption.weight(.semibold))
+                    .font(SynaraTypography.chipLabel)
                     .foregroundStyle(SynaraColor.accent)
                 }
                 .buttonStyle(.plain)
@@ -2047,29 +2714,69 @@ private struct TimelineRow: View {
             }
         }
 
-        if usesBubble {
-            content
-                .padding(SynaraSpacing.small)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .synaraCard(fill: bubbleFill, stroke: bubbleStroke)
-        } else {
-            content
-                .frame(maxWidth: .infinity, alignment: .leading)
+        content
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    @ViewBuilder
+    private var bubbleWrappedBodyContent: some View {
+        switch item.kind {
+        case .text(let body):
+            SynaraMessageBubble(
+                text: body,
+                alignment: bubbleAlignment,
+                isGrouped: isGroupedWithPrevious,
+                deliveryStatus: item.deliveryStatus
+            )
+        case .formattedText(let body, let html):
+            SynaraMessageBubble(
+                alignment: bubbleAlignment,
+                variant: .standard,
+                isGrouped: isGroupedWithPrevious,
+                showsBackground: false,
+                deliveryStatus: item.deliveryStatus
+            ) {
+                MatrixFormattedMessageView(
+                    fallbackBody: body,
+                    html: html,
+                    font: SynaraTypography.messageBody
+                )
+            }
+        case .encryptedPlaceholder:
+            SynaraMessageBubble(
+                alignment: bubbleAlignment,
+                variant: .encrypted,
+                isGrouped: isGroupedWithPrevious,
+                showsBackground: true,
+                deliveryStatus: nil
+            ) {
+                Label(
+                    "Encrypted content unavailable. Actions and media downloads are blocked until keys are available.",
+                    systemImage: "lock"
+                )
+                .font(SynaraTypography.messageBody)
+                .foregroundStyle(SynaraColor.secondaryText)
+            }
+        case .agentCard(let card):
+            SynaraMessageBubble(
+                alignment: bubbleAlignment,
+                variant: .agent,
+                isGrouped: isGroupedWithPrevious,
+                showsBackground: true,
+                deliveryStatus: nil
+            ) {
+                AgentCardTimelineRow(card: card, onAction: onAgentAction)
+            }
+        default:
+            bodyContent
         }
     }
 
     @ViewBuilder
     private var bodyContent: some View {
         switch item.kind {
-        case .text(let body):
-            Text(body)
-                .font(.callout)
-                .foregroundStyle(SynaraColor.primaryText)
-                .lineLimit(nil)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .fixedSize(horizontal: false, vertical: true)
-        case .formattedText(let body, let html):
-            MatrixFormattedMessageView(fallbackBody: body, html: html, font: .callout)
+        case .text, .formattedText, .encryptedPlaceholder, .agentCard:
+            EmptyView()
         case .mediaPlaceholder(let resource):
             if resource.isEncrypted {
                 MediaAttachmentCard(resource: resource)
@@ -2084,20 +2791,34 @@ private struct TimelineRow: View {
                 .accessibilityIdentifier("MediaPlaceholder-\(resource.filename)")
             }
         case .redacted:
-            Text("Message deleted")
-                .font(SynaraTypography.body)
-                .foregroundStyle(SynaraColor.secondaryText)
-        case .encryptedPlaceholder:
-            Label("Encrypted content unavailable. Actions and media downloads are blocked until keys are available.", systemImage: "lock")
-                .font(SynaraTypography.body)
-                .foregroundStyle(SynaraColor.secondaryText)
+            SynaraMessageBubble(
+                alignment: bubbleAlignment,
+                variant: .standard,
+                isGrouped: isGroupedWithPrevious,
+                showsBackground: true,
+                deliveryStatus: nil
+            ) {
+                Text("Message deleted")
+                    .font(SynaraTypography.messageBody)
+                    .foregroundStyle(SynaraColor.secondaryText)
+            }
         case .unknown(let type):
-            Text("Unsupported event: \(type)")
-                .font(SynaraTypography.body)
-                .foregroundStyle(SynaraColor.secondaryText)
-        case .agentCard(let card):
-            AgentCardTimelineRow(card: card, onAction: onAgentAction)
+            SynaraMessageBubble(
+                alignment: bubbleAlignment,
+                variant: .standard,
+                isGrouped: isGroupedWithPrevious,
+                showsBackground: true,
+                deliveryStatus: nil
+            ) {
+                Text("Unsupported event: \(type)")
+                    .font(SynaraTypography.messageBody)
+                    .foregroundStyle(SynaraColor.secondaryText)
+            }
         }
+    }
+
+    private var bubbleAlignment: SynaraMessageBubbleAlignment {
+        isOutgoing ? .own : .other
     }
 
     private var accessibilitySummary: String {
@@ -2150,49 +2871,81 @@ private struct TimelineRow: View {
         item.senderID == currentUserID
     }
 
+    @ViewBuilder
+    private func replyQuoteLabel(for replyToEventID: String) -> some View {
+        if let preview = replyPreviewsByEventID[replyToEventID] {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Replying to \(preview.senderName)")
+                    .font(SynaraTypography.messageMeta.weight(.semibold))
+                    .foregroundStyle(SynaraColor.secondaryText)
+                    .lineLimit(1)
+                Text(preview.snippet)
+                    .font(SynaraTypography.messageMeta)
+                    .foregroundStyle(SynaraColor.tertiaryText)
+                    .lineLimit(2)
+            }
+            .padding(.leading, SynaraSpacing.small)
+            .overlay(alignment: .leading) {
+                RoundedRectangle(cornerRadius: 2, style: .continuous)
+                    .fill(SynaraColor.accent.opacity(0.55))
+                    .frame(width: 3)
+            }
+        } else {
+            Label("Replying to a message", systemImage: "arrowshape.turn.up.left")
+                .font(SynaraTypography.messageMeta)
+                .foregroundStyle(SynaraColor.secondaryText)
+                .lineLimit(1)
+        }
+    }
+
     private var senderDisplayName: String {
         guard item.senderID.hasPrefix("@") else {
             return item.senderID
         }
 
-        return item.senderDisplayName
+        return item.resolvedSenderDisplayName(currentUserID: currentUserID)
     }
 
-    private var avatarTint: Color {
-        if case .agentCard = item.kind {
-            return SynaraColor.agent
-        }
-        return isOutgoing ? SynaraColor.accent : SynaraColor.secondaryText
-    }
-
-    private var bubbleFill: Color {
-        if case .agentCard = item.kind {
-            return SynaraColor.agent.opacity(0.08)
-        }
-        return isOutgoing ? SynaraColor.accent.opacity(0.12) : SynaraColor.secondarySurface
-    }
-
-    private var bubbleStroke: Color {
-        if case .agentCard = item.kind {
-            return SynaraColor.agent.opacity(0.28)
-        }
-        return isOutgoing ? SynaraColor.accent.opacity(0.22) : SynaraColor.separator.opacity(0.35)
-    }
-
-    private var usesBubble: Bool {
-        switch item.kind {
-        case .text, .formattedText, .mediaPlaceholder:
-            return false
-        default:
-            return true
-        }
-    }
 }
 
 private struct MediaAttachmentCard: View {
     let resource: MediaResource
+    @Environment(\.appEnvironment) private var environment
+    @State private var thumbnailImage: UIImage?
+    @State private var isLoadingThumbnail = false
+
+    private let imageThumbnailHeight: CGFloat = 180
 
     var body: some View {
+        Group {
+            if resource.isImageMedia {
+                imageAttachmentCard
+            } else {
+                fileAttachmentCard
+            }
+        }
+        .task(id: thumbnailTaskID) {
+            await loadThumbnailIfNeeded()
+        }
+    }
+
+    @ViewBuilder
+    private var imageAttachmentCard: some View {
+        VStack(alignment: .leading, spacing: SynaraSpacing.small) {
+            imageThumbnailView
+                .frame(maxWidth: .infinity)
+                .frame(height: imageThumbnailHeight)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+            mediaMetadataRow(showDownloadIcon: false)
+        }
+        .padding(.horizontal, SynaraSpacing.medium)
+        .padding(.vertical, SynaraSpacing.small)
+        .synaraCard(fill: SynaraColor.surface)
+    }
+
+    @ViewBuilder
+    private var fileAttachmentCard: some View {
         HStack(spacing: SynaraSpacing.small) {
             SynaraIconTile(
                 title: resource.safeDescription,
@@ -2201,31 +2954,104 @@ private struct MediaAttachmentCard: View {
                 size: 30
             )
 
+            mediaMetadataRow(showDownloadIcon: true)
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, SynaraSpacing.medium)
+        .padding(.vertical, SynaraSpacing.small)
+        .synaraCard(fill: SynaraColor.surface)
+    }
+
+    @ViewBuilder
+    private func mediaMetadataRow(showDownloadIcon: Bool) -> some View {
+        HStack(spacing: SynaraSpacing.small) {
             VStack(alignment: .leading, spacing: 3) {
                 Text(resource.safeDescription)
-                    .font(.subheadline.weight(.semibold))
+                    .font(SynaraTypography.emphasis)
                     .foregroundStyle(SynaraColor.primaryText)
                     .lineLimit(1)
-                Text(resource.safeDescription.localizedCaseInsensitiveContains(".pdf") ? "1.2 MB" : (resource.requiresAuthentication ? "Authenticated file" : "Attachment"))
-                    .font(.caption)
-                    .foregroundStyle(SynaraColor.secondaryText)
+                if let sizeText = MediaFormatting.formattedFileSize(resource.byteSize) {
+                    Text(sizeText)
+                        .font(SynaraTypography.messageMeta)
+                        .foregroundStyle(SynaraColor.secondaryText)
+                }
                 if resource.isEncrypted {
                     Text("Encrypted media requires recovered keys")
-                        .font(.caption2)
+                        .font(SynaraTypography.fineMeta)
                         .foregroundStyle(SynaraColor.warning)
                         .lineLimit(2)
                 }
             }
 
-            Spacer()
+            Spacer(minLength: 0)
 
-            Image(systemName: resource.isEncrypted ? "lock.fill" : "arrow.down.to.line")
-                .font(.system(size: 17, weight: .medium))
+            if showDownloadIcon {
+                Image(systemName: resource.isEncrypted ? "lock.fill" : "arrow.down.to.line")
+                    .font(.system(size: 17, weight: .medium))
+                    .foregroundStyle(SynaraColor.secondaryText)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var imageThumbnailView: some View {
+        if resource.isEncrypted || resource.authenticatedURL == nil {
+            unavailableImagePlaceholder
+        } else if let thumbnailImage {
+            Image(uiImage: thumbnailImage)
+                .resizable()
+                .scaledToFill()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .clipped()
+        } else if isLoadingThumbnail {
+            ZStack {
+                unavailableImagePlaceholder
+                ProgressView()
+            }
+        } else {
+            unavailableImagePlaceholder
+        }
+    }
+
+    private var unavailableImagePlaceholder: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(SynaraColor.secondarySurface)
+            Image(systemName: resource.isEncrypted ? "lock.fill" : "photo")
+                .font(.system(size: 28, weight: .semibold))
                 .foregroundStyle(SynaraColor.secondaryText)
         }
-        .padding(.horizontal, SynaraSpacing.medium)
-        .padding(.vertical, SynaraSpacing.small)
-        .synaraCard(fill: SynaraColor.surface)
+    }
+
+    private var thumbnailTaskID: String {
+        "\(resource.id)|\(resource.authenticatedURL?.absoluteString ?? "unavailable")|\(resource.isEncrypted)"
+    }
+
+    @MainActor
+    private func loadThumbnailIfNeeded() async {
+        thumbnailImage = nil
+        isLoadingThumbnail = false
+
+        guard resource.isImageMedia,
+              resource.isEncrypted == false,
+              resource.authenticatedURL != nil else {
+            return
+        }
+
+        isLoadingThumbnail = true
+        defer { isLoadingThumbnail = false }
+
+        let pixelWidth = UInt64(max(1, Int(UIScreen.main.bounds.width * UIScreen.main.scale)))
+        let pixelHeight = UInt64(max(1, Int(imageThumbnailHeight * UIScreen.main.scale)))
+        if let data = await environment.mediaLoader.loadThumbnailData(
+            for: resource,
+            width: pixelWidth,
+            height: pixelHeight
+        ),
+           let image = UIImage(data: data) {
+            thumbnailImage = image
+        }
     }
 }
 
@@ -2236,7 +3062,7 @@ private struct UnreadMessagesDivider: View {
                 .fill(SynaraColor.separator.opacity(0.55))
                 .frame(height: 0.5)
             Text("Unread messages")
-                .font(.caption.weight(.semibold))
+                .font(SynaraTypography.chipLabel)
                 .foregroundStyle(SynaraColor.accent)
                 .lineLimit(1)
             Rectangle()
@@ -2251,19 +3077,27 @@ private struct ReactionPill: View {
     let title: String
     let count: Int?
     var isSystemImage = false
+    var animationIndex = 0
+
+    private var reactionAnimationKey: String {
+        if let count {
+            return "\(title)-\(count)-\(isSystemImage)"
+        }
+        return "\(title)-\(isSystemImage)"
+    }
 
     var body: some View {
         HStack(spacing: SynaraSpacing.xSmall) {
             if isSystemImage {
                 Image(systemName: title)
-                    .font(.caption)
+                    .font(SynaraTypography.messageMeta)
             } else {
                 Text(title)
-                    .font(.caption)
+                    .font(SynaraTypography.messageMeta)
             }
             if let count {
                 Text("\(count)")
-                    .font(.caption.weight(.semibold))
+                    .font(SynaraTypography.chipLabel)
                     .monospacedDigit()
             }
         }
@@ -2271,6 +3105,81 @@ private struct ReactionPill: View {
         .padding(.vertical, 3)
         .background(SynaraColor.elevatedSurface)
         .clipShape(Capsule())
+        .synaraReactionPop(animationIndex: animationIndex, animationKey: reactionAnimationKey)
+    }
+}
+
+private struct AgentApprovalButtonStyle: ViewModifier {
+    let action: SynaraAgentCardAction
+
+    func body(content: Content) -> some View {
+        switch action.kind {
+        case .some("approve"):
+            content
+                .buttonStyle(.plain)
+                .padding(.vertical, SynaraSpacing.small)
+                .padding(.horizontal, SynaraSpacing.medium)
+                .foregroundStyle(SynaraColor.success)
+                .background(SynaraColor.success.opacity(0.08))
+                .overlay(
+                    RoundedRectangle(cornerRadius: SynaraRadius.control, style: .continuous)
+                        .stroke(SynaraColor.success, lineWidth: 1.5)
+                )
+                .clipShape(RoundedRectangle(cornerRadius: SynaraRadius.control, style: .continuous))
+        case .some("reject"):
+            content
+                .buttonStyle(.plain)
+                .padding(.vertical, SynaraSpacing.small)
+                .padding(.horizontal, SynaraSpacing.medium)
+                .foregroundStyle(SynaraColor.critical)
+                .background(SynaraColor.critical.opacity(0.06))
+                .overlay(
+                    RoundedRectangle(cornerRadius: SynaraRadius.control, style: .continuous)
+                        .stroke(SynaraColor.critical, lineWidth: 1.5)
+                )
+                .clipShape(RoundedRectangle(cornerRadius: SynaraRadius.control, style: .continuous))
+        default:
+            content
+                .buttonStyle(.borderedProminent)
+                .tint(action.tint)
+        }
+    }
+}
+
+private struct AgentCardLinkPreview: View {
+    let urlString: String
+
+    private var isPolicySafeLink: Bool {
+        SynaraContractURLPolicy.isSafeHTTPS(urlString)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
+            Text("Preview")
+                .font(SynaraTypography.messageMeta)
+                .foregroundStyle(SynaraColor.secondaryText)
+            HStack {
+                Text(urlString)
+                    .font(SynaraTypography.messageMeta)
+                    .foregroundStyle(SynaraColor.accent)
+                    .lineLimit(1)
+                Spacer()
+                Image(systemName: "arrow.up.right.square")
+                    .foregroundStyle(SynaraColor.secondaryText)
+            }
+            if isPolicySafeLink {
+                HStack(spacing: SynaraSpacing.xSmall) {
+                    Image(systemName: "link")
+                        .font(SynaraTypography.messageMeta)
+                        .foregroundStyle(SynaraColor.secondaryText)
+                    Text("Opens HTTPS link")
+                        .font(SynaraTypography.messageMeta)
+                        .foregroundStyle(SynaraColor.secondaryText)
+                }
+            }
+        }
+        .padding(SynaraSpacing.small)
+        .synaraCard(fill: SynaraColor.surface.opacity(0.7), stroke: SynaraColor.agent.opacity(0.2))
     }
 }
 
@@ -2287,12 +3196,12 @@ private struct AgentCardTimelineRow: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(card.title)
-                        .font(.subheadline.weight(.semibold))
+                        .font(SynaraTypography.emphasis)
                         .foregroundStyle(SynaraColor.primaryText)
                         .lineLimit(2)
                         .accessibilityIdentifier("AgentCardTitle")
                     Text("Agent workflow")
-                        .font(.caption)
+                        .font(SynaraTypography.messageMeta)
                         .foregroundStyle(SynaraColor.secondaryText)
                 }
 
@@ -2306,38 +3215,16 @@ private struct AgentCardTimelineRow: View {
 
             if let summary = card.summary {
                 Text(summary)
-                    .font(.subheadline)
+                    .font(SynaraTypography.body)
                     .foregroundStyle(SynaraColor.primaryText)
                     .lineLimit(2)
             }
 
             AgentApprovalDetails(card: card)
 
-            if let preview = visibleActions.first(where: { $0.url != nil })?.url {
-                VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
-                    Text("Preview")
-                        .font(.caption)
-                        .foregroundStyle(SynaraColor.secondaryText)
-                    HStack {
-                        Text(preview)
-                            .font(.caption)
-                            .foregroundStyle(SynaraColor.accent)
-                            .lineLimit(1)
-                        Spacer()
-                        Image(systemName: "arrow.up.right.square")
-                            .foregroundStyle(SynaraColor.secondaryText)
-                    }
-                    HStack(spacing: SynaraSpacing.xSmall) {
-                        Image(systemName: "shield")
-                            .font(.caption)
-                            .foregroundStyle(SynaraColor.success)
-                        Text("Safe link · Verified domain")
-                            .font(.caption)
-                            .foregroundStyle(SynaraColor.secondaryText)
-                    }
-                }
-                .padding(SynaraSpacing.small)
-                .synaraCard(fill: SynaraColor.surface.opacity(0.7), stroke: SynaraColor.agent.opacity(0.2))
+            if let linkAction = visibleActions.first(where: { $0.url != nil }),
+               let previewURL = linkAction.url {
+                AgentCardLinkPreview(urlString: previewURL)
             }
 
             if visibleActions.isEmpty == false {
@@ -2352,7 +3239,7 @@ private struct AgentCardTimelineRow: View {
                     } label: {
                         HStack {
                             Text(action.title)
-                                .font(.subheadline.weight(.semibold))
+                                .font(SynaraTypography.emphasis)
                             Spacer()
                             Image(systemName: "chevron.right")
                                 .accessibilityHidden(true)
@@ -2372,11 +3259,10 @@ private struct AgentCardTimelineRow: View {
                                 onAction(action)
                             } label: {
                                 Label(action.title, systemImage: action.systemImage)
-                                    .font(.subheadline.weight(.semibold))
+                                    .font(SynaraTypography.emphasis)
                                     .frame(maxWidth: .infinity)
                             }
-                            .buttonStyle(.borderedProminent)
-                            .tint(action.tint)
+                            .modifier(AgentApprovalButtonStyle(action: action))
                             .accessibilityHint("Performs \(action.title)")
                             .accessibilityIdentifier("AgentCardAction-\(action.id)")
                         }
@@ -2422,11 +3308,11 @@ private struct AgentDetailRow: View {
     var body: some View {
         HStack(alignment: .top, spacing: SynaraSpacing.medium) {
             Text(title)
-                .font(.caption)
+                .font(SynaraTypography.messageMeta)
                 .foregroundStyle(SynaraColor.secondaryText)
                 .frame(width: 76, alignment: .leading)
             Text(value)
-                .font(.caption)
+                .font(SynaraTypography.messageMeta)
                 .foregroundStyle(valueTint)
                 .lineLimit(3)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -2435,15 +3321,6 @@ private struct AgentDetailRow: View {
 }
 
 private extension SynaraAgentCardAction {
-    var isApprovalDecision: Bool {
-        switch kind {
-        case .some("approve"), .some("reject"):
-            return true
-        default:
-            return false
-        }
-    }
-
     var systemImage: String {
         switch kind {
         case .some("approve"):
@@ -2472,30 +3349,47 @@ private extension SynaraAgentCardAction {
 private struct ComposerView: View {
     @Binding var text: String
     let placeholder: String
-    let replyTarget: TimelineItem?
-    let editTarget: TimelineItem?
+    var showsPromptMetrics = false
+    let replyTarget: ComposerRelationTarget?
+    let editTarget: ComposerRelationTarget?
     let uploadState: MediaUploadState
     let sendError: String?
     let onCancelRelation: () -> Void
     let onSend: (String) -> Void
-    let onUpload: () -> Void
+    let onMockMediaUpload: (MediaUploadSource) -> Void
+    let onFileURL: (URL) -> Void
+    #if canImport(UIKit)
+    let onCameraImage: (UIImage) -> Void
+    #endif
+    let onUploadFailed: (String) -> Void
     @Binding var selectedPhoto: PhotosPickerItem?
     @State private var isAttachmentSheetPresented = false
-    @State private var unavailableAttachmentMessage: String?
+    @State private var isFileImporterPresented = false
+    #if canImport(UIKit)
+    @State private var isCameraPresented = false
+    #endif
     @State private var isFormattingBarVisible = false
     @State private var composerSelection = ComposerTextSelection.empty
     @State private var formattingRevision = 0
     @State private var composerFlushToken = 0
+    @State private var composerFieldHeight: CGFloat = {
+        #if canImport(UIKit)
+        ComposerTextMetrics.singleLineHeight(font: UIFont.preferredFont(forTextStyle: .callout))
+        #else
+        34
+        #endif
+    }()
     @FocusState private var isComposerFocused: Bool
+    @Namespace private var composerChromeNamespace
 
     var body: some View {
-        VStack(alignment: .leading, spacing: SynaraSpacing.small) {
+        VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
             if let replyTarget {
-                ComposerRelationBanner(title: "Replying", eventID: replyTarget.eventID, onCancel: onCancelRelation)
+                ComposerRelationBanner(target: replyTarget, onCancel: onCancelRelation)
             }
 
             if let editTarget {
-                ComposerRelationBanner(title: "Editing", eventID: editTarget.eventID, onCancel: onCancelRelation)
+                ComposerRelationBanner(target: editTarget, onCancel: onCancelRelation)
             }
 
             if let sendError {
@@ -2509,16 +3403,23 @@ private struct ComposerView: View {
                 ComposerFormattingBar { format in
                     applyFormatting(format)
                 }
+                .padding(.horizontal, SynaraSpacing.small)
+                .padding(.vertical, SynaraSpacing.xSmall)
+                .background {
+                    RoundedRectangle(cornerRadius: SynaraRadius.composer, style: .continuous)
+                        .fill(SynaraColor.surface)
+                        .matchedGeometryEffect(id: "composerChrome", in: composerChromeNamespace)
+                }
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
 
-            HStack(alignment: .bottom, spacing: SynaraSpacing.small) {
+            HStack(alignment: .center, spacing: SynaraSpacing.xSmall) {
                 Button {
                     isAttachmentSheetPresented = true
                 } label: {
                     Image(systemName: "plus")
-                        .font(.system(size: 17, weight: .semibold))
-                        .frame(width: 40, height: 40)
+                        .font(.system(size: 16, weight: .semibold))
+                        .frame(width: 34, height: 34)
                         .background(SynaraColor.secondarySurface)
                         .foregroundStyle(SynaraColor.secondaryText)
                         .clipShape(Circle())
@@ -2533,7 +3434,7 @@ private struct ComposerView: View {
                 .accessibilityLabel("Attach")
                 .accessibilityIdentifier("AttachmentButton")
 
-                HStack(alignment: .bottom, spacing: SynaraSpacing.xSmall) {
+                HStack(alignment: .center, spacing: SynaraSpacing.xSmall) {
                     composerField
 
                     Button {
@@ -2543,8 +3444,8 @@ private struct ComposerView: View {
                         isComposerFocused = true
                     } label: {
                         Image(systemName: isFormattingBarVisible ? "textformat.alt" : "textformat")
-                            .font(.system(size: 16, weight: .semibold))
-                            .frame(width: 32, height: 32)
+                            .font(.system(size: 14, weight: .semibold))
+                            .frame(width: 28, height: 28)
                             .foregroundStyle(isFormattingBarVisible ? SynaraColor.accent : SynaraColor.secondaryText)
                     }
                     .buttonStyle(.plain)
@@ -2553,26 +3454,25 @@ private struct ComposerView: View {
                     .accessibilityAddTraits(isFormattingBarVisible ? .isSelected : [])
                     .accessibilityIdentifier("ComposerFormattingToggle")
                 }
-                .padding(.leading, SynaraSpacing.medium)
-                .padding(.trailing, SynaraSpacing.small)
-                .padding(.vertical, SynaraSpacing.xSmall)
-                .background(SynaraColor.surface)
-                .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                .padding(.leading, SynaraSpacing.small)
+                .padding(.trailing, SynaraSpacing.xSmall)
+                .padding(.vertical, 5)
+                .background {
+                    RoundedRectangle(cornerRadius: SynaraRadius.composer, style: .continuous)
+                        .fill(SynaraColor.surface)
+                        .matchedGeometryEffect(id: "composerChrome", in: composerChromeNamespace)
+                }
                 .overlay(
-                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    RoundedRectangle(cornerRadius: SynaraRadius.composer, style: .continuous)
                         .stroke(SynaraColor.separator.opacity(0.35), lineWidth: 0.5)
                         .allowsHitTesting(false)
                 )
 
-                if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    Color.clear
-                        .frame(width: 40, height: 40)
-                        .accessibilityHidden(true)
-                } else {
+                if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
                     Button(action: submitMessage) {
                         Image(systemName: "paperplane.fill")
-                            .font(.system(size: 17, weight: .semibold))
-                            .frame(width: 40, height: 40)
+                            .font(.system(size: 16, weight: .semibold))
+                            .frame(width: 34, height: 34)
                             .background(sendButtonTint)
                             .foregroundStyle(Color.white)
                             .clipShape(Circle())
@@ -2585,6 +3485,10 @@ private struct ComposerView: View {
                 }
             }
 
+            if showsPromptMetrics, shouldShowPromptMetrics {
+                composerPromptMetrics
+            }
+
             if case .uploading(let progress) = uploadState {
                 ProgressView(value: progress)
                     .accessibilityIdentifier("MediaUploadProgress")
@@ -2595,39 +3499,90 @@ private struct ComposerView: View {
                     .accessibilityIdentifier("MediaUploadErrorText")
             }
         }
-        .padding(.horizontal, SynaraSpacing.medium)
-        .padding(.top, SynaraSpacing.small)
-        .padding(.bottom, SynaraSpacing.small)
+        .padding(.horizontal, SynaraSpacing.small)
+        .padding(.top, SynaraSpacing.xSmall)
+        .padding(.bottom, SynaraSpacing.xSmall)
         .background(SynaraColor.surface)
+        .animation(.easeInOut(duration: 0.18), value: isFormattingBarVisible)
+        .animation(.easeInOut(duration: 0.18), value: shouldShowPromptMetrics)
         .sheet(isPresented: $isAttachmentSheetPresented) {
             AttachmentOptionsSheet(
-                onMockPhotoUpload: {
+                onMockMediaUpload: { source in
                     isAttachmentSheetPresented = false
-                    onUpload()
+                    onMockMediaUpload(source)
                 },
-                onUnavailable: { option in
+                onFile: {
                     isAttachmentSheetPresented = false
-                    unavailableAttachmentMessage = "\(option) attachments are not available in this build yet."
+                    isFileImporterPresented = true
+                },
+                onCamera: {
+                    isAttachmentSheetPresented = false
+                    #if canImport(UIKit)
+                    if CameraCaptureSupport.isAvailable {
+                        isCameraPresented = true
+                    } else {
+                        onUploadFailed("Camera is not available on this device.")
+                    }
+                    #endif
                 },
                 selectedPhoto: $selectedPhoto
             )
-            .presentationDetents([.height(304)])
+            .presentationDetents([.height(260)])
             .presentationDragIndicator(.visible)
         }
-        .alert("Attachment Unavailable", isPresented: Binding(
-            get: { unavailableAttachmentMessage != nil },
-            set: { if !$0 { unavailableAttachmentMessage = nil } }
-        )) {
-            Button("OK") {
-                unavailableAttachmentMessage = nil
+        .fileImporter(
+            isPresented: $isFileImporterPresented,
+            allowedContentTypes: [.item],
+            allowsMultipleSelection: false
+        ) { result in
+            switch result {
+            case .success(let urls):
+                guard let url = urls.first else {
+                    return
+                }
+                onFileURL(url)
+            case .failure:
+                onUploadFailed("Attachment could not be loaded. Try again.")
             }
-        } message: {
-            Text(unavailableAttachmentMessage ?? "")
         }
+        #if canImport(UIKit)
+        .fullScreenCover(isPresented: $isCameraPresented) {
+            CameraImagePicker(
+                onImage: { image in
+                    isCameraPresented = false
+                    onCameraImage(image)
+                },
+                onCancel: {
+                    isCameraPresented = false
+                }
+            )
+            .ignoresSafeArea()
+        }
+        #endif
     }
 
     private var sendButtonTint: Color {
         text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? SynaraColor.secondarySurface : SynaraColor.accent
+    }
+
+    private var shouldShowPromptMetrics: Bool {
+        text.isEmpty == false || isComposerFocused
+    }
+
+    private var composerLineCount: Int {
+        max(1, text.components(separatedBy: .newlines).count)
+    }
+
+    private var composerPromptMetrics: some View {
+        HStack(spacing: SynaraSpacing.small) {
+            Spacer()
+            Text("\(text.count) chars · \(composerLineCount) line\(composerLineCount == 1 ? "" : "s")")
+                .font(SynaraTypography.composerMetric)
+                .foregroundStyle(SynaraColor.tertiaryText)
+                .monospacedDigit()
+                .accessibilityIdentifier("ComposerPromptMetrics")
+        }
+        .transition(.opacity.combined(with: .move(edge: .bottom)))
     }
 
     @ViewBuilder
@@ -2639,18 +3594,19 @@ private struct ComposerView: View {
             ComposerTextView(
                 text: $text,
                 selection: $composerSelection,
+                height: $composerFieldHeight,
                 placeholder: placeholder,
                 formattingRevision: formattingRevision,
                 flushToken: composerFlushToken,
                 isFocused: $isComposerFocused
             )
-            .frame(minHeight: 36, maxHeight: 112)
+            .frame(height: composerFieldHeight)
         }
         #else
         TextEditor(text: $text)
             .font(SynaraTypography.body)
             .focused($isComposerFocused)
-            .frame(minHeight: 36, maxHeight: 112)
+            .frame(height: composerFieldHeight)
             .scrollContentBackground(.hidden)
             .accessibilityIdentifier("ComposerTextField")
         #endif
@@ -2660,22 +3616,50 @@ private struct ComposerView: View {
         ZStack(alignment: .topLeading) {
             if text.isEmpty {
                 Text(placeholder)
-                    .font(SynaraTypography.body)
+                    .font(SynaraTypography.composerPlaceholder)
                     .foregroundStyle(SynaraColor.tertiaryText)
-                    .padding(.top, 8)
-                    .padding(.leading, 4)
+                    .padding(.top, 6)
+                    .padding(.leading, 2)
                     .allowsHitTesting(false)
             }
 
             TextEditor(text: $text)
                 .font(SynaraTypography.body)
                 .focused($isComposerFocused)
-                .frame(minHeight: 36, maxHeight: 112)
+                .frame(height: composerFieldHeight)
                 .scrollContentBackground(.hidden)
                 .accessibilityIdentifier("ComposerTextField")
                 .accessibilityLabel("Message")
                 .accessibilityHint("Enter a message for this room")
         }
+        .onChange(of: text) { _ in
+            updateComposerFieldHeight()
+        }
+        .onChange(of: isComposerFocused) { _ in
+            updateComposerFieldHeight()
+        }
+    }
+
+    private func updateComposerFieldHeight() {
+        #if canImport(UIKit)
+        let singleLineHeight = ComposerTextMetrics.singleLineHeight(
+            font: UIFont.preferredFont(forTextStyle: .callout)
+        )
+        if text.isEmpty, isComposerFocused == false {
+            composerFieldHeight = singleLineHeight
+            return
+        }
+
+        let lineCount = max(1, text.components(separatedBy: .newlines).count)
+        let estimatedLineHeight = UIFont.preferredFont(forTextStyle: .callout).lineHeight
+        let estimatedHeight = ceil(estimatedLineHeight * CGFloat(lineCount))
+            + ComposerTextMetrics.textContainerInset.top
+            + ComposerTextMetrics.textContainerInset.bottom
+        composerFieldHeight = min(
+            max(estimatedHeight, singleLineHeight),
+            ComposerTextMetrics.maxHeight
+        )
+        #endif
     }
 
     private func applyFormatting(_ format: ComposerMarkdownFormat) {
@@ -2734,65 +3718,92 @@ private struct ComposerFormattingBar: View {
 }
 
 private struct AttachmentOptionsSheet: View {
-    let onMockPhotoUpload: () -> Void
-    let onUnavailable: (String) -> Void
+    let onMockMediaUpload: (MediaUploadSource) -> Void
+    let onFile: () -> Void
+    let onCamera: () -> Void
     @Binding var selectedPhoto: PhotosPickerItem?
 
     private let options: [AttachmentOption] = [
-        AttachmentOption(title: "Photo or Video", systemImage: "photo", tint: .green, kind: .photo),
-        AttachmentOption(title: "File", systemImage: "doc", tint: .indigo, kind: .unavailable),
-        AttachmentOption(title: "Location", systemImage: "mappin.circle", tint: .red, kind: .unavailable),
-        AttachmentOption(title: "Poll", systemImage: "chart.bar.doc.horizontal", tint: .blue, kind: .unavailable),
-        AttachmentOption(title: "Code Snippet", systemImage: "chevron.left.forwardslash.chevron.right", tint: .purple, kind: .unavailable),
-        AttachmentOption(title: "Camera", systemImage: "camera", tint: .orange, kind: .unavailable),
-        AttachmentOption(title: "Voice Message", systemImage: "mic", tint: .mint, kind: .unavailable),
-        AttachmentOption(title: "Contact", systemImage: "person.crop.circle", tint: .mint, kind: .unavailable)
+        AttachmentOption(title: "Photo or Video", systemImage: "photo", tint: SynaraColor.success, kind: .photo),
+        AttachmentOption(title: "File", systemImage: "doc", tint: SynaraColor.accent, kind: .file),
+        AttachmentOption(title: "Camera", systemImage: "camera", tint: SynaraColor.warning, kind: .camera)
     ]
 
+    private var isUITestEnvironment: Bool {
+        ProcessInfo.processInfo.environment["SYNARA_UI_TESTS"] == "1"
+    }
+
     var body: some View {
-        VStack(spacing: SynaraSpacing.medium) {
-            LazyVGrid(columns: [GridItem(.flexible(), spacing: SynaraSpacing.small), GridItem(.flexible(), spacing: SynaraSpacing.small)], spacing: SynaraSpacing.small) {
+        NavigationStack {
+            VStack(spacing: SynaraSpacing.small) {
                 ForEach(options) { option in
-                    switch option.kind {
-                    case .photo:
-                        if ProcessInfo.processInfo.environment["SYNARA_UI_TESTS"] == "1" {
-                            Button(action: onMockPhotoUpload) {
-                                AttachmentOptionLabel(option: option)
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityIdentifier("AttachmentOption-\(option.title)")
-                        } else {
-                            PhotosPicker(selection: $selectedPhoto, matching: .any(of: [.images, .videos])) {
-                                AttachmentOptionLabel(option: option)
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityIdentifier("AttachmentOption-\(option.title)")
-                        }
-                    case .unavailable:
-                        Button {
-                            onUnavailable(option.title)
-                        } label: {
-                            AttachmentOptionLabel(option: option)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityHint("Not available in this build yet")
-                        .accessibilityIdentifier("AttachmentOption-\(option.title)")
-                    }
+                    attachmentButton(for: option)
                 }
             }
+            .padding(.horizontal, SynaraSpacing.medium)
+            .padding(.top, SynaraSpacing.small)
+            .padding(.bottom, SynaraSpacing.medium)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .background(SynaraColor.surface)
+            .navigationTitle("Attach")
+            .navigationBarTitleDisplayMode(.inline)
         }
-        .padding(.horizontal, SynaraSpacing.medium)
-        .padding(.top, SynaraSpacing.medium)
-        .padding(.bottom, SynaraSpacing.xSmall)
-        .background(SynaraColor.surface)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("AttachmentOptionsSheet")
+    }
+
+    @ViewBuilder
+    private func attachmentButton(for option: AttachmentOption) -> some View {
+        switch option.kind {
+        case .photo:
+            if isUITestEnvironment {
+                Button {
+                    onMockMediaUpload(.photoLibrary)
+                } label: {
+                    AttachmentOptionLabel(option: option)
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("AttachmentOption-\(option.title)")
+            } else {
+                PhotosPicker(selection: $selectedPhoto, matching: .any(of: [.images, .videos])) {
+                    AttachmentOptionLabel(option: option)
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("AttachmentOption-\(option.title)")
+            }
+        case .file:
+            Button {
+                if isUITestEnvironment {
+                    onMockMediaUpload(.file)
+                } else {
+                    onFile()
+                }
+            } label: {
+                AttachmentOptionLabel(option: option)
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("AttachmentOption-\(option.title)")
+        case .camera:
+            Button {
+                if isUITestEnvironment {
+                    onMockMediaUpload(.camera)
+                } else {
+                    onCamera()
+                }
+            } label: {
+                AttachmentOptionLabel(option: option)
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("AttachmentOption-\(option.title)")
+        }
     }
 }
 
 private struct AttachmentOption: Identifiable {
     enum Kind {
         case photo
-        case unavailable
+        case file
+        case camera
     }
 
     let title: String
@@ -2816,7 +3827,7 @@ private struct AttachmentOptionLabel: View {
                 .clipShape(Circle())
 
             Text(option.title)
-                .font(.callout.weight(.semibold))
+                .font(SynaraTypography.supporting.weight(.semibold))
                 .foregroundStyle(SynaraColor.primaryText)
                 .lineLimit(1)
                 .minimumScaleFactor(0.68)
@@ -2854,10 +3865,10 @@ private struct ComposerToolIcon: View {
         Group {
             if let title {
                 Text(title)
-                    .font(.callout.weight(.medium))
+                    .font(SynaraTypography.messageBody.weight(.medium))
             } else if let systemImage {
                 Image(systemName: systemImage)
-                    .font(.callout.weight(.medium))
+                    .font(SynaraTypography.messageBody.weight(.medium))
             }
         }
         .foregroundStyle(SynaraColor.secondaryText)
@@ -2866,46 +3877,63 @@ private struct ComposerToolIcon: View {
 }
 
 private struct ComposerRelationBanner: View {
-    let title: String
-    let eventID: String
+    let target: ComposerRelationTarget
     let onCancel: () -> Void
 
     var body: some View {
-        HStack {
-            Label("\(title) \(eventID)", systemImage: title == "Editing" ? "pencil" : "arrowshape.turn.up.left")
-                .font(SynaraTypography.supporting)
-                .foregroundStyle(SynaraColor.secondaryText)
-                .lineLimit(1)
-            Spacer()
+        HStack(alignment: .top, spacing: SynaraSpacing.small) {
+            VStack(alignment: .leading, spacing: 2) {
+                Label(target.bannerTitle, systemImage: target.kind == .edit ? "pencil" : "arrowshape.turn.up.left")
+                    .font(SynaraTypography.supporting.weight(.semibold))
+                    .foregroundStyle(SynaraColor.primaryText)
+                    .lineLimit(1)
+                Text(target.snippet)
+                    .font(SynaraTypography.supporting)
+                    .foregroundStyle(SynaraColor.secondaryText)
+                    .lineLimit(2)
+            }
+            Spacer(minLength: SynaraSpacing.small)
             Button("Cancel", action: onCancel)
-                .accessibilityLabel("Cancel \(title.lowercased())")
+                .accessibilityLabel("Cancel \(target.kind == .edit ? "editing" : "reply")")
         }
         .padding(SynaraSpacing.small)
         .synaraCard(fill: SynaraColor.accent.opacity(0.08), stroke: SynaraColor.accent.opacity(0.18))
+        .accessibilityIdentifier(target.kind == .edit ? "ComposerEditBanner" : "ComposerReplyBanner")
     }
 }
 
 private struct MediaViewer: View {
     let resource: MediaResource
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.appEnvironment) private var environment
+    @State private var image: UIImage?
+    @State private var isLoading = false
+    @State private var errorMessage: String?
+    @State private var scale: CGFloat = 1
+    @State private var lastScale: CGFloat = 1
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: SynaraSpacing.large) {
-                Image(systemName: "photo")
-                    .font(.system(size: 64, weight: .semibold))
-                    .foregroundStyle(SynaraColor.secondaryText)
-                Text(resource.safeDescription)
-                    .font(SynaraTypography.screenTitle)
-                    .multilineTextAlignment(.center)
-                if resource.requiresAuthentication {
-                    Text("Authenticated media")
-                        .font(SynaraTypography.supporting)
-                        .foregroundStyle(SynaraColor.secondaryText)
+            Group {
+                if let errorMessage {
+                    mediaErrorView(message: errorMessage)
+                } else if let image {
+                    ZoomableMediaImage(image: image, scale: $scale, lastScale: $lastScale)
+                } else if isLoading {
+                    VStack(spacing: SynaraSpacing.medium) {
+                        ProgressView()
+                        Text("Loading media...")
+                            .font(SynaraTypography.supporting)
+                            .foregroundStyle(SynaraColor.secondaryText)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    mediaErrorView(message: "Media could not be loaded.")
                 }
             }
-            .padding(SynaraSpacing.xLarge)
-            .navigationTitle("Media")
+            .padding(.horizontal, resource.isImageMedia ? 0 : SynaraSpacing.xLarge)
+            .navigationTitle(resource.safeDescription)
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Done") {
@@ -2914,7 +3942,85 @@ private struct MediaViewer: View {
                 }
             }
         }
+        .task(id: resource.id) {
+            await loadMedia()
+        }
         .accessibilityIdentifier("MediaViewer")
+    }
+
+    @ViewBuilder
+    private func mediaErrorView(message: String) -> some View {
+        VStack(spacing: SynaraSpacing.large) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 48, weight: .semibold))
+                .foregroundStyle(SynaraColor.warning)
+            Text(message)
+                .font(SynaraTypography.supporting)
+                .foregroundStyle(SynaraColor.secondaryText)
+                .multilineTextAlignment(.center)
+        }
+        .padding(SynaraSpacing.xLarge)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    @MainActor
+    private func loadMedia() async {
+        image = nil
+        errorMessage = nil
+        scale = 1
+        lastScale = 1
+
+        guard resource.isEncrypted == false else {
+            errorMessage = "Encrypted media requires recovered keys before it can be opened."
+            return
+        }
+
+        guard resource.authenticatedURL != nil else {
+            errorMessage = "Media is unavailable."
+            return
+        }
+
+        isLoading = true
+        defer { isLoading = false }
+
+        guard let data = await environment.mediaLoader.loadMediaData(for: resource),
+              let loadedImage = UIImage(data: data) else {
+            errorMessage = "Media could not be loaded."
+            return
+        }
+
+        image = loadedImage
+    }
+}
+
+private struct ZoomableMediaImage: View {
+    let image: UIImage
+    @Binding var scale: CGFloat
+    @Binding var lastScale: CGFloat
+
+    var body: some View {
+        GeometryReader { geometry in
+            ScrollView([.horizontal, .vertical], showsIndicators: false) {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(
+                        width: geometry.size.width * max(scale, 1),
+                        height: geometry.size.height * max(scale, 1)
+                    )
+                    .gesture(
+                        MagnificationGesture()
+                            .onChanged { value in
+                                scale = max(1, lastScale * value)
+                            }
+                            .onEnded { value in
+                                lastScale = max(1, lastScale * value)
+                                scale = lastScale
+                            }
+                    )
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
     }
 }
 
@@ -2928,31 +4034,6 @@ private extension Date {
 }
 
 private extension TimelineItem {
-    var senderDisplayName: String {
-        switch senderID.lowercased() {
-        case "@mina:matrix.org":
-            return "Mina"
-        case "@alex:matrix.org":
-            return "Alex"
-        case "@ravi:matrix.org":
-            return "Ravi"
-        case "@local:matrix.org", "@you:matrix.org":
-            return "You"
-        default:
-            break
-        }
-
-        guard senderID.hasPrefix("@") else {
-            return senderID
-        }
-
-        return senderID
-            .dropFirst()
-            .split(separator: ":")
-            .first
-            .map(String.init) ?? senderID
-    }
-
     var threadTitle: String {
         switch kind {
         case .text(let body):

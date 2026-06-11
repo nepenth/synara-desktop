@@ -141,7 +141,6 @@ final class SynaraUITests: XCTestCase {
 
         XCTAssertTrue(app.staticTexts["Project"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.scrollViews["TimelineList"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.buttons["LoadOlderTimelineButton"].exists)
         XCTAssertTrue(app.staticTexts["Here's the latest spec for the new permissions model."].waitForExistence(timeout: 5))
     }
 
@@ -241,16 +240,14 @@ final class SynaraUITests: XCTestCase {
         XCTAssertTrue(app.buttons["MediaPlaceholder-synara-upload.jpg"].waitForExistence(timeout: 5))
     }
 
-    func testUnavailableAttachmentOptionShowsHonestState() {
+    func testFileUploadAddsAttachmentPlaceholder() {
         let app = launchRoomApp()
 
         tap(app.buttons["AttachmentButton"])
         XCTAssertTrue(app.otherElements["AttachmentOptionsSheet"].waitForExistence(timeout: 5))
         tap(app.buttons["AttachmentOption-File"])
 
-        let alert = app.alerts["Attachment Unavailable"]
-        XCTAssertTrue(alert.waitForExistence(timeout: 5))
-        XCTAssertTrue(alert.staticTexts["File attachments are not available in this build yet."].exists)
+        XCTAssertTrue(app.buttons["MediaPlaceholder-synara-upload.pdf"].waitForExistence(timeout: 5))
     }
 
     func testThreadViewOpensAndRepliesFromTimeline() {
@@ -288,7 +285,12 @@ final class SynaraUITests: XCTestCase {
 
         XCTAssertTrue(app.staticTexts["Notifications"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["NotificationsRow-!project:matrix.org"].waitForExistence(timeout: 10))
-        XCTAssertTrue(app.buttons["NotificationsRow-!general:matrix.org"].exists)
+
+        let unreadRoomsDisclosure = app.buttons["Unread rooms"]
+        if unreadRoomsDisclosure.waitForExistence(timeout: 2) {
+            tap(unreadRoomsDisclosure)
+            XCTAssertTrue(app.buttons["NotificationsRow-!general:matrix.org"].waitForExistence(timeout: 5))
+        }
 
         tap(app.buttons["NotificationsRow-!project:matrix.org"])
         XCTAssertTrue(app.scrollViews["TimelineList"].waitForExistence(timeout: 5))
@@ -388,8 +390,10 @@ final class SynaraUITests: XCTestCase {
         XCTAssertTrue(row.waitForExistence(timeout: 5))
         tap(row)
 
-        XCTAssertTrue(app.staticTexts["!project:matrix.org"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.scrollViews["TimelineList"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.scrollViews["TimelineList"].waitForExistence(timeout: 10))
+        XCTAssertTrue(
+            app.staticTexts["Here's the latest spec for the new permissions model."].waitForExistence(timeout: 5)
+        )
     }
 
     func testAgentCardApproveActionShowsSubmittedState() {

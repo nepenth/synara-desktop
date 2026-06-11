@@ -74,7 +74,7 @@ timeline_and_composer=(
   testLargeTimelineFixtureRendersAndScrolls
   testComposerSendsMockMessage
   testMediaUploadAddsAttachmentPlaceholder
-  testUnavailableAttachmentOptionShowsHonestState
+  testFileUploadAddsAttachmentPlaceholder
   testThreadViewOpensAndRepliesFromTimeline
   testEncryptedTimelineShowsCryptoStatusRecoveryBannerAndSafePlaceholder
 )

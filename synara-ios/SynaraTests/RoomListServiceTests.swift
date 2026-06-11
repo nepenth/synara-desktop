@@ -27,6 +27,24 @@ final class RoomListServiceTests: XCTestCase {
         XCTAssertEqual(service.loadCallCount, 1)
     }
 
+    func testRoomDisplayNameLookupResolvesCachedNames() async {
+        let service = MockRoomListService(state: .loaded(RoomListFixtures.small()))
+        let state = await service.loadRooms()
+
+        XCTAssertEqual(service.roomDisplayName(roomID: "!project:matrix.org"), "Product")
+        XCTAssertEqual(
+            RoomDisplayNameLookup.resolve(
+                roomID: "!project:matrix.org",
+                names: RoomDisplayNameLookup.names(from: state)
+            ),
+            "Product"
+        )
+        XCTAssertEqual(
+            RoomDisplayNameLookup.resolve(roomID: "!missing:matrix.org", names: [:]),
+            "!missing:matrix.org"
+        )
+    }
+
     func testClearCacheReturnsEmptyState() async {
         let service = MockRoomListService()
 
@@ -116,6 +134,337 @@ final class RoomListServiceTests: XCTestCase {
         let filtered = RoomListSearchFilter.applySearchQuery("Alerts", to: rooms, invitedRooms: [invite])
 
         XCTAssertEqual(filtered.map(\.id), ["!alerts:matrix.org"])
+    }
+
+    func testScopeFilterUnreadKeepsInvitesAndUnreadRooms() {
+        let invite = RoomSummary(
+            id: "!alerts:matrix.org",
+            name: "Alerts",
+            lastMessagePreview: "You are invited",
+            unreadCount: 1,
+            hasHighlight: false,
+            kind: .room,
+            membership: .invited,
+            lastActivityAt: RoomListFixtures.now
+        )
+        let unread = RoomSummary(
+            id: "!project:matrix.org",
+            name: "Product",
+            lastMessagePreview: "Mina: Here's the latest spec",
+            unreadCount: 3,
+            hasHighlight: true,
+            kind: .room,
+            membership: .joined,
+            lastActivityAt: RoomListFixtures.now
+        )
+        let read = RoomSummary(
+            id: "!general:matrix.org",
+            name: "General",
+            lastMessagePreview: "Kai: Project update looks good",
+            unreadCount: 0,
+            hasHighlight: false,
+            kind: .room,
+            membership: .joined,
+            lastActivityAt: RoomListFixtures.now
+        )
+
+        let filtered = RoomListScopeFilter.filteredRooms(
+            from: [invite, unread, read],
+            filter: .unread,
+            selectedSpaceID: nil,
+            searchQuery: ""
+        )
+
+        XCTAssertEqual(Set(filtered.map(\.id)), Set(["!alerts:matrix.org", "!project:matrix.org"]))
+    }
+
+    func testScopeFilterMentionsExcludesNonHighlightedRooms() {
+        let rooms = RoomListFixtures.small()
+
+        let filtered = RoomListScopeFilter.filteredRooms(
+            from: rooms,
+            filter: .mentions,
+            selectedSpaceID: nil,
+            searchQuery: ""
+        )
+
+        XCTAssertTrue(filtered.allSatisfy(\.hasHighlight))
+        XCTAssertEqual(filtered.map(\.id), ["!project:matrix.org"])
+    }
+
+    func testScopeFilterRespectsSelectedSpace() {
+        let rooms = RoomListFixtures.small()
+
+        let filtered = RoomListScopeFilter.filteredRooms(
+            from: rooms,
+            filter: .all,
+            selectedSpaceID: "!workspace:matrix.org",
+            searchQuery: ""
+        )
+
+        XCTAssertEqual(
+            filtered.map(\.id),
+            ["!general:matrix.org", "!project:matrix.org", "!design:matrix.org"]
+        )
+    }
+
+    func testScopeFilterAgentsIncludesOnlyAgentRooms() {
+        let rooms = RoomListFixtures.small()
+
+        let filtered = RoomListScopeFilter.filteredRooms(
+            from: rooms,
+            filter: .agents,
+            selectedSpaceID: nil,
+            searchQuery: ""
+        )
+
+        XCTAssertTrue(filtered.allSatisfy(\.isAgentRoom))
+        XCTAssertEqual(
+            filtered.map(\.id),
+            ["!agent-workflows:matrix.org", "!security-agent:matrix.org"]
+        )
+    }
+
+    func testAgentRoomStaysClassifiedWithLatestAgentCardWithoutRecentActivityFlag() {
+        let room = RoomSummary(
+            id: "!agent:matrix.org",
+            name: "Agent Workflows",
+            lastMessagePreview: "Latest message",
+            unreadCount: 0,
+            hasHighlight: false,
+            kind: .room,
+            membership: .joined,
+            lastActivityAt: RoomListFixtures.now,
+            hasAgentActivity: false,
+            latestAgentCard: RoomListFixtures.pendingAgentApprovalCard()
+        )
+
+        XCTAssertTrue(room.isAgentRoom)
+    }
+
+    func testAgentRoomRequiresRecentAgentActivity() {
+        let agentRoom = RoomSummary(
+            id: "!agent:matrix.org",
+            name: "Agent Workflows",
+            lastMessagePreview: "Approval required",
+            unreadCount: 1,
+            hasHighlight: false,
+            kind: .room,
+            membership: .joined,
+            lastActivityAt: RoomListFixtures.now,
+            hasAgentActivity: true
+        )
+        let generalRoom = RoomSummary(
+            id: "!general:matrix.org",
+            name: "General",
+            lastMessagePreview: "Hello",
+            unreadCount: 0,
+            hasHighlight: false,
+            kind: .room,
+            membership: .joined,
+            lastActivityAt: RoomListFixtures.now,
+            hasAgentActivity: false
+        )
+
+        XCTAssertTrue(agentRoom.isAgentRoom)
+        XCTAssertFalse(generalRoom.isAgentRoom)
+    }
+
+    func testNotificationsInboxCaughtUpWhenNoSectionsOrPendingAgents() {
+        let sections = NotificationsInboxSections(
+            mentions: [],
+            invites: [],
+            unreadRooms: []
+        )
+
+        XCTAssertTrue(NotificationsInboxSections.isCaughtUp(sections: sections, agentPendingCount: 0))
+        XCTAssertFalse(NotificationsInboxSections.isCaughtUp(sections: sections, agentPendingCount: 2))
+    }
+
+    func testSpaceUnreadCountsSumUnreadRoomsPerSpace() {
+        let rooms = RoomListFixtures.small()
+
+        let counts = RoomListSpaceGrouping.unreadCountsBySpaceID(from: rooms)
+
+        XCTAssertEqual(counts["!workspace:matrix.org"], 10)
+        XCTAssertEqual(counts["!ops:matrix.org"], 4)
+    }
+
+    func testSpaceChannelGroupsUsePrimaryParentSpace() {
+        let rooms = RoomListFixtures.small().filter { $0.kind == .room }
+
+        let groups = RoomListSpaceGrouping.spaceChannelGroups(from: rooms)
+
+        XCTAssertEqual(groups.map(\.space.name), ["Ops", "Workspace"])
+        XCTAssertEqual(
+            groups.first(where: { $0.space.id == "!workspace:matrix.org" })?.rooms.map(\.id),
+            ["!general:matrix.org", "!project:matrix.org", "!design:matrix.org"]
+        )
+        XCTAssertEqual(
+            groups.first(where: { $0.space.id == "!ops:matrix.org" })?.rooms.map(\.id),
+            ["!security:matrix.org", "!agent-workflows:matrix.org", "!security-agent:matrix.org"]
+        )
+    }
+
+    func testUngroupedChannelRoomsExcludeParentedChannels() {
+        let rooms = RoomListFixtures.small().filter { $0.kind == .room }
+
+        let ungrouped = RoomListSpaceGrouping.ungroupedChannelRooms(from: rooms)
+
+        XCTAssertTrue(ungrouped.isEmpty)
+    }
+
+    func testRoomSummarySpaceConveniencesExposePrimaryParent() {
+        let room = RoomListFixtures.small().first { $0.id == "!general:matrix.org" }
+
+        XCTAssertEqual(room?.parentSpaceID, "!workspace:matrix.org")
+        XCTAssertEqual(room?.spaceName, "Workspace")
+    }
+
+    func testSelectedSpaceNameResolvesFromSpaceSummaries() {
+        let spaces = Array(Set(RoomListFixtures.small().flatMap(\.parentSpaces)))
+
+        XCTAssertEqual(
+            RoomListSpaceGrouping.selectedSpaceName(in: spaces, selectedSpaceID: "!ops:matrix.org"),
+            "Ops"
+        )
+        XCTAssertNil(RoomListSpaceGrouping.selectedSpaceName(in: spaces, selectedSpaceID: nil))
+    }
+
+    func testNotificationBadgeSummaryMatchesSharedContractFixture() {
+        let summary = NotificationBadgeSummary.summarizeNotifications(
+            NotificationSummaryInput(
+                unreadCounts: [
+                    BadgeUnreadSource(total: 4, highlight: 2),
+                    BadgeUnreadSource(total: 3)
+                ],
+                laterActiveCount: 5,
+                inviteCount: 2,
+                agentApprovalCount: 1
+            )
+        )
+
+        XCTAssertEqual(summary?.appBadgeCount, 10)
+        XCTAssertEqual(summary?.inboxBadgeCount, 8)
+        XCTAssertEqual(summary?.laterActiveCount, 5)
+        XCTAssertEqual(summary?.inviteCount, 2)
+        XCTAssertEqual(summary?.agentApprovalCount, 1)
+        XCTAssertEqual(summary?.highlightCount, 2)
+        XCTAssertEqual(summary?.unreadCount, 3)
+    }
+
+    func testNotificationBadgeSummaryClampsInvalidCounts() {
+        let summary = NotificationBadgeSummary.summarizeNotifications(
+            NotificationSummaryInput(
+                unreadCounts: [
+                    BadgeUnreadSource(total: -1, highlight: -2),
+                    BadgeUnreadSource(total: 3)
+                ],
+                laterActiveCount: 2,
+                inviteCount: -1,
+                agentApprovalCount: -4
+            )
+        )
+
+        XCTAssertEqual(summary?.appBadgeCount, 5)
+        XCTAssertEqual(summary?.inboxBadgeCount, 2)
+        XCTAssertEqual(summary?.highlightCount, 0)
+        XCTAssertEqual(summary?.unreadCount, 3)
+    }
+
+    func testNotificationsInboxSectionsPartitionRooms() {
+        let rooms = [
+            RoomSummary(
+                id: "!project:matrix.org",
+                name: "Product",
+                lastMessagePreview: "Mention",
+                unreadCount: 3,
+                hasHighlight: true,
+                kind: .room,
+                membership: .joined,
+                lastActivityAt: RoomListFixtures.now
+            ),
+            RoomSummary(
+                id: "!alerts:matrix.org",
+                name: "Alerts",
+                lastMessagePreview: "Invite",
+                unreadCount: 1,
+                hasHighlight: true,
+                kind: .room,
+                membership: .invited,
+                lastActivityAt: RoomListFixtures.now
+            ),
+            RoomSummary(
+                id: "!general:matrix.org",
+                name: "General",
+                lastMessagePreview: "Unread only",
+                unreadCount: 2,
+                hasHighlight: false,
+                kind: .room,
+                membership: .joined,
+                lastActivityAt: RoomListFixtures.now
+            ),
+            RoomSummary(
+                id: "!design:matrix.org",
+                name: "Design",
+                lastMessagePreview: "Read",
+                unreadCount: 0,
+                hasHighlight: false,
+                kind: .room,
+                membership: .joined,
+                lastActivityAt: RoomListFixtures.now
+            )
+        ]
+
+        let sections = NotificationsInboxSections.make(from: rooms)
+
+        XCTAssertEqual(sections.mentions.map(\.id), ["!project:matrix.org"])
+        XCTAssertEqual(sections.invites.map(\.id), ["!alerts:matrix.org"])
+        XCTAssertEqual(sections.unreadRooms.map(\.id), ["!general:matrix.org"])
+        XCTAssertEqual(NotificationsInboxSections.notificationRooms(from: rooms).count, 3)
+    }
+
+    func testTabBadgeCountsUseRoomListState() {
+        let badges = TabBadgeCounts.make(from: RoomListFixtures.small())
+
+        XCTAssertEqual(badges.notifications, 8)
+        XCTAssertEqual(badges.rooms, 13)
+    }
+
+    func testAgentPendingInboxBuildsRowsFromLatestAgentCard() {
+        let rooms = RoomListFixtures.small()
+        let pending = AgentPendingInbox.pendingApprovals(from: rooms)
+
+        XCTAssertEqual(pending.count, 2)
+        XCTAssertEqual(pending.first?.roomID, "!security-agent:matrix.org")
+        XCTAssertEqual(pending.first?.title, "Access review required")
+        XCTAssertEqual(pending.first?.eventID, "$agent-access-approval:matrix.org")
+        XCTAssertEqual(pending.last?.roomID, "!agent-workflows:matrix.org")
+        XCTAssertEqual(pending.last?.title, "Deploy approval required")
+        XCTAssertEqual(pending.last?.eventID, "$agent-deploy-approval:matrix.org")
+    }
+
+    func testRoomSummaryRequiresAgentApprovalFromLatestCard() {
+        let rooms = RoomListFixtures.small()
+        let agentRoom = rooms.first { $0.id == "!agent-workflows:matrix.org" }
+        let generalRoom = rooms.first { $0.id == "!general:matrix.org" }
+
+        XCTAssertEqual(agentRoom?.requiresAgentApproval, true)
+        XCTAssertEqual(generalRoom?.requiresAgentApproval, false)
+    }
+
+    func testAgentCardRequiresUserApprovalWhenApproveActionsPresent() throws {
+        let card = try SynaraAgentCard(
+            title: "Review deploy",
+            status: "pending",
+            summary: "Needs your review",
+            actions: [
+                try SynaraAgentCardAction(id: "approve", title: "Approve", kind: "approve", prompt: "ok"),
+                try SynaraAgentCardAction(id: "reject", title: "Reject", kind: "reject", prompt: "no")
+            ]
+        )
+
+        XCTAssertTrue(card.requiresUserApproval)
     }
 
     func testMockRoomListStreamYieldsMultipleStates() async {

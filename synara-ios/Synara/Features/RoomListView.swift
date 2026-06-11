@@ -1,4 +1,7 @@
 import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#endif
 
 struct RoomListView: View {
     @Environment(\.appEnvironment) private var environment
@@ -7,18 +10,50 @@ struct RoomListView: View {
     @State private var searchQuery: String = ProcessInfo.processInfo.environment["SYNARA_UI_TEST_ROOM_SEARCH"] ?? ""
     @State private var selectedFilter: RoomListFilter = .all
     @State private var selectedSpaceID: String?
+    @State private var expandedSpaceIDs: Set<String> = []
     @State private var isRoomManagementSheetPresented = ProcessInfo.processInfo.environment["SYNARA_UI_TEST_ROOM_MANAGEMENT_SHEET"] == "1"
     @State private var hasStartedInitialLoad = false
     @State private var loadRoomsTask: Task<Void, Never>?
     @State private var roomUpdatesTask: Task<Void, Never>?
     @State private var isSearchPresented = ProcessInfo.processInfo.environment["SYNARA_UI_TEST_ROOM_SEARCH"] != nil
+    @State private var roomPendingLeave: RoomSummary?
     @FocusState private var isSearchFocused: Bool
 
     var body: some View {
         Group {
             switch state {
             case .idle, .loading:
-                SynaraLoadingState(title: environment.matrix.syncStatusDescription)
+                VStack(spacing: 0) {
+                    VStack(spacing: SynaraSpacing.medium) {
+                        RoomListHeader(
+                            title: accountMenuTitle,
+                            onAccount: { environment.router.present(.accountSwitcher) },
+                            onSearch: { presentSearch() },
+                            onNewRoom: { isRoomManagementSheetPresented = true }
+                        )
+                        RoomFilterStrip(
+                            selectedFilter: $selectedFilter,
+                            filterBadges: [:]
+                        )
+                    }
+                    .padding(.horizontal, SynaraSpacing.large)
+                    .padding(.top, SynaraSpacing.medium)
+                    .padding(.bottom, SynaraSpacing.small)
+                    .background(SynaraColor.surface)
+
+                    List {
+                        Section {
+                            SynaraSkeletonList(rowCount: 9)
+                                .listRowSeparator(.hidden)
+                                .listRowInsets(EdgeInsets(top: 3, leading: SynaraSpacing.large, bottom: 3, trailing: SynaraSpacing.large))
+                                .listRowBackground(SynaraColor.surface)
+                        }
+                    }
+                    .listStyle(.plain)
+                    .scrollContentBackground(.hidden)
+                    .background(SynaraColor.surface)
+                    .accessibilityIdentifier("RoomListLoading")
+                }
             case .empty:
                 SynaraEmptyState(
                     title: "No Rooms",
@@ -33,10 +68,14 @@ struct RoomListView: View {
                 let filteredRooms = filteredRooms(from: rooms)
                 let channelRooms = filteredRooms.filter { $0.kind == .room }
                 let directRooms = filteredRooms.filter { $0.kind == .directMessage }
-                let favoriteRooms = favoriteRooms(from: channelRooms)
-                let favoriteRoomIDs = Set(favoriteRooms.map(\.id))
-                let otherRooms = channelRooms.filter { favoriteRoomIDs.contains($0.id) == false }
                 let spaces = spaces(from: rooms)
+                let spaceUnreadCounts = RoomListSpaceGrouping.unreadCountsBySpaceID(from: rooms)
+                let selectedSpaceTitle = RoomListSpaceGrouping.selectedSpaceName(
+                    in: spaces,
+                    selectedSpaceID: selectedSpaceID
+                )
+                let spaceChannelGroups = RoomListSpaceGrouping.spaceChannelGroups(from: channelRooms)
+                let ungroupedChannelRooms = RoomListSpaceGrouping.ungroupedChannelRooms(from: channelRooms)
                 VStack(spacing: 0) {
                     VStack(spacing: SynaraSpacing.medium) {
                         RoomListHeader(
@@ -51,9 +90,16 @@ struct RoomListView: View {
                             }
                             .transition(.move(edge: .top).combined(with: .opacity))
                         }
-                        RoomFilterStrip(selectedFilter: $selectedFilter)
+                        RoomFilterStrip(
+                            selectedFilter: $selectedFilter,
+                            filterBadges: filterBadges(from: rooms)
+                        )
                         if spaces.isEmpty == false {
-                            SpaceFilterStrip(spaces: spaces, selectedSpaceID: $selectedSpaceID)
+                            SpaceFilterStrip(
+                                spaces: spaces,
+                                unreadCountsBySpaceID: spaceUnreadCounts,
+                                selectedSpaceID: $selectedSpaceID
+                            )
                         }
                     }
                     .padding(.horizontal, SynaraSpacing.large)
@@ -71,23 +117,46 @@ struct RoomListView: View {
                             .listRowInsets(EdgeInsets())
                         }
 
-                        if favoriteRooms.isEmpty == false {
-                            Section {
-                                ForEach(favoriteRooms) { room in
-                                    roomRow(room)
+                        if let selectedSpaceTitle {
+                            if channelRooms.isEmpty == false {
+                                Section {
+                                    ForEach(channelRooms) { room in
+                                        roomRow(room)
+                                    }
+                                } header: {
+                                    SpaceSelectedHeader(
+                                        title: selectedSpaceTitle,
+                                        roomCount: channelRooms.count
+                                    )
                                 }
-                            } header: {
-                                RoomSectionHeader(title: "Favorites", count: favoriteRooms.count)
                             }
-                        }
-
-                        if otherRooms.isEmpty == false {
-                            Section {
-                                ForEach(otherRooms) { room in
-                                    roomRow(room)
+                        } else if channelRooms.isEmpty == false {
+                            ForEach(spaceChannelGroups) { group in
+                                Section {
+                                    DisclosureGroup(
+                                        isExpanded: spaceExpansionBinding(for: group.id)
+                                    ) {
+                                        ForEach(group.rooms) { room in
+                                            roomRow(room)
+                                        }
+                                    } label: {
+                                        SpaceDisclosureLabel(
+                                            title: group.space.name,
+                                            roomCount: group.rooms.count,
+                                            unreadCount: spaceUnreadCounts[group.space.id] ?? 0
+                                        )
+                                    }
                                 }
-                            } header: {
-                                RoomSectionHeader(title: "Other", count: otherRooms.count)
+                            }
+
+                            if ungroupedChannelRooms.isEmpty == false {
+                                Section {
+                                    ForEach(ungroupedChannelRooms) { room in
+                                        roomRow(room)
+                                    }
+                                } header: {
+                                    RoomSectionHeader(title: "Channels", count: ungroupedChannelRooms.count)
+                                }
                             }
                         }
 
@@ -104,7 +173,16 @@ struct RoomListView: View {
                     .listStyle(.plain)
                     .scrollContentBackground(.hidden)
                     .background(SynaraColor.surface)
+                    .refreshable {
+                        await reloadRoomsForRefresh()
+                    }
                     .accessibilityIdentifier("RoomList")
+                    .onAppear {
+                        seedExpandedSpacesIfNeeded(
+                            groups: spaceChannelGroups,
+                            unreadCounts: spaceUnreadCounts
+                        )
+                    }
                 }
             }
         }
@@ -139,6 +217,32 @@ struct RoomListView: View {
                 environment.router.route(to: .room(id: result.roomID, title: result.name))
             }
         }
+        .confirmationDialog(
+            "Leave this room?",
+            isPresented: Binding(
+                get: { roomPendingLeave != nil },
+                set: { isPresented in
+                    if isPresented == false {
+                        roomPendingLeave = nil
+                    }
+                }
+            ),
+            titleVisibility: .visible
+        ) {
+            if let roomPendingLeave {
+                Button("Leave Room", role: .destructive) {
+                    leaveRoom(roomPendingLeave)
+                }
+                .accessibilityIdentifier("LeaveRoomConfirm-\(roomPendingLeave.id)")
+            }
+            Button("Cancel", role: .cancel) {
+                roomPendingLeave = nil
+            }
+        } message: {
+            if let roomPendingLeave {
+                Text("\(roomPendingLeave.name) will be removed from your joined room list.")
+            }
+        }
         .task {
             guard hasStartedInitialLoad == false else {
                 return
@@ -158,6 +262,23 @@ struct RoomListView: View {
         .onDisappear {
             loadRoomsTask?.cancel()
             roomUpdatesTask?.cancel()
+        }
+    }
+
+    private func reloadRoomsForRefresh() async {
+        loadRoomsTask?.cancel()
+        let signpostID = PerformanceTrace.begin("RoomListLoad")
+        defer {
+            PerformanceTrace.end("RoomListLoad", id: signpostID)
+        }
+        let loadedState = await environment.roomList.loadRooms()
+        guard Task.isCancelled == false else {
+            return
+        }
+        await MainActor.run {
+            state = loadedState
+            autoOpenRoomIfRequested(from: loadedState)
+            startRoomUpdatesIfReady(for: loadedState)
         }
     }
 
@@ -254,6 +375,9 @@ struct RoomListView: View {
                     try await environment.roomMembership.rejectInvite(roomID: roomID)
                 }
                 await MainActor.run {
+                    if accept {
+                        SynaraHaptics.trigger(.success)
+                    }
                     loadRooms()
                 }
             } catch {
@@ -265,42 +389,31 @@ struct RoomListView: View {
     }
 
     private func filteredRooms(from rooms: [RoomSummary]) -> [RoomSummary] {
-        let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
-        let invitedRooms = rooms.filter { $0.membership == .invited }
-        var scopedRooms = rooms.filter { $0.membership != .invited }
-
-        if let selectedSpaceID {
-            scopedRooms = scopedRooms.filter { room in
-                room.parentSpaces.contains(where: { $0.id == selectedSpaceID })
-            }
-        }
-
-        switch selectedFilter {
-        case .all:
-            break
-        case .unread:
-            scopedRooms = scopedRooms.filter { $0.unreadCount > 0 }
-        case .mentions:
-            scopedRooms = scopedRooms.filter(\.hasHighlight)
-        case .favorites:
-            scopedRooms = scopedRooms.filter(\.isFavoriteLike)
-        }
-
-        var filtered = RoomListSearchFilter.mergeInvitedRooms(invitedRooms, into: scopedRooms)
-
-        guard query.isEmpty == false else {
-            return filtered
-        }
-
-        return RoomListSearchFilter.applySearchQuery(query, to: filtered, invitedRooms: invitedRooms)
+        RoomListScopeFilter.filteredRooms(
+            from: rooms,
+            filter: selectedFilter.scopeFilter,
+            selectedSpaceID: selectedSpaceID,
+            searchQuery: searchQuery
+        )
     }
 
     private func spaces(from rooms: [RoomSummary]) -> [SpaceSummary] {
-        Array(Set(rooms.flatMap(\.parentSpaces))).sorted { $0.name < $1.name }
+        Array(Set(rooms.flatMap(\.parentSpaces))).sorted {
+            $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+        }
     }
 
-    private func favoriteRooms(from rooms: [RoomSummary]) -> [RoomSummary] {
-        rooms.filter(\.isFavoriteLike)
+    private func spaceExpansionBinding(for spaceID: String) -> Binding<Bool> {
+        Binding(
+            get: { expandedSpaceIDs.contains(spaceID) },
+            set: { isExpanded in
+                if isExpanded {
+                    expandedSpaceIDs.insert(spaceID)
+                } else {
+                    expandedSpaceIDs.remove(spaceID)
+                }
+            }
+        )
     }
 
     private var accountMenuTitle: String {
@@ -343,6 +456,72 @@ struct RoomListView: View {
             .listRowSeparator(.hidden)
             .listRowInsets(EdgeInsets(top: 3, leading: SynaraSpacing.large, bottom: 3, trailing: SynaraSpacing.large))
             .listRowBackground(SynaraColor.surface)
+            .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                if room.unreadCount > 0 {
+                    Button {
+                        markRoomAsRead(room)
+                    } label: {
+                        Label("Read", systemImage: "envelope.open")
+                    }
+                    .tint(SynaraColor.accent)
+                    .accessibilityIdentifier("MarkRead-\(room.id)")
+                }
+            }
+            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                Button {
+                    muteRoom(room)
+                } label: {
+                    Label("Mute", systemImage: "bell.slash")
+                }
+                .tint(SynaraColor.secondaryText)
+                .accessibilityIdentifier("MuteRoom-\(room.id)")
+
+                Button(role: .destructive) {
+                    roomPendingLeave = room
+                } label: {
+                    Label("Leave", systemImage: "rectangle.portrait.and.arrow.right")
+                }
+                .accessibilityIdentifier("LeaveRoom-\(room.id)")
+            }
+        }
+    }
+
+    private func markRoomAsRead(_ room: RoomSummary) {
+        Task {
+            _ = await environment.readMarkers.markRoomAsRead(roomID: room.id)
+            await MainActor.run {
+                loadRooms(showLoading: false)
+            }
+        }
+    }
+
+    private func muteRoom(_ room: RoomSummary) {
+        Task {
+            do {
+                try await environment.roomManagement.setNotificationMode(.mute, roomID: room.id)
+            } catch {
+                await MainActor.run {
+                    membershipError = RoomManagementError.failed.localizedDescription
+                }
+            }
+        }
+    }
+
+    private func leaveRoom(_ room: RoomSummary) {
+        membershipError = nil
+        roomPendingLeave = nil
+
+        Task {
+            do {
+                try await environment.roomManagement.leaveRoom(roomID: room.id)
+                await MainActor.run {
+                    loadRooms()
+                }
+            } catch {
+                await MainActor.run {
+                    membershipError = RoomManagementError.failed.localizedDescription
+                }
+            }
         }
     }
 
@@ -351,6 +530,33 @@ struct RoomListView: View {
             isSearchPresented = true
         }
         isSearchFocused = true
+    }
+
+    private func filterBadges(from rooms: [RoomSummary]) -> [RoomListFilter: Int] {
+        let pendingApprovals = AgentPendingInbox.pendingApprovals(from: rooms).count
+        let agentRooms = rooms.filter(\.isAgentRoom).count
+        return [
+            .unread: rooms.filter { $0.unreadCount > 0 }.count,
+            .mentions: rooms.filter(\.hasHighlight).count,
+            .agents: pendingApprovals > 0 ? pendingApprovals : (agentRooms > 0 ? agentRooms : 0)
+        ]
+    }
+
+    private func seedExpandedSpacesIfNeeded(
+        groups: [SpaceChannelGroup],
+        unreadCounts: [String: Int]
+    ) {
+        guard expandedSpaceIDs.isEmpty else {
+            return
+        }
+
+        let unreadSpaceIDs = groups
+            .filter { unreadCounts[$0.space.id, default: 0] > 0 }
+            .map(\.id)
+        guard unreadSpaceIDs.isEmpty == false else {
+            return
+        }
+        expandedSpaceIDs = Set(unreadSpaceIDs)
     }
 
     private func dismissSearch(clearQuery: Bool) {
@@ -370,9 +576,22 @@ private enum RoomListFilter: String, CaseIterable, Identifiable {
     case all = "All"
     case unread = "Unread"
     case mentions = "Mentions"
-    case favorites = "Favorites"
+    case agents = "Agents"
 
     var id: String { rawValue }
+
+    var scopeFilter: RoomListScopeFilter.Kind {
+        switch self {
+        case .all:
+            return .all
+        case .unread:
+            return .unread
+        case .mentions:
+            return .mentions
+        case .agents:
+            return .agents
+        }
+    }
 }
 
 private struct RoomListHeader: View {
@@ -385,13 +604,7 @@ private struct RoomListHeader: View {
         HStack(spacing: SynaraSpacing.medium) {
             Button(action: onAccount) {
                 HStack(spacing: SynaraSpacing.small) {
-                    ZStack(alignment: .bottomTrailing) {
-                        SynaraBrandMark(size: 38)
-                        Circle()
-                            .fill(SynaraColor.success)
-                            .frame(width: 10, height: 10)
-                            .overlay(Circle().stroke(SynaraColor.surface, lineWidth: 2))
-                    }
+                    SynaraBrandMark(size: 38)
 
                     HStack(spacing: SynaraSpacing.xSmall) {
                         Text(title)
@@ -562,15 +775,15 @@ private struct RoomManagementSheet: View {
                     } label: {
                         VStack(alignment: .leading, spacing: 3) {
                             Text(result.name)
-                                .font(.body.weight(.semibold))
+                                .font(SynaraTypography.emphasis)
                             if let topic = result.topic, topic.isEmpty == false {
                                 Text(topic)
-                                    .font(.caption)
+                                    .font(SynaraTypography.messageMeta)
                                     .foregroundStyle(SynaraColor.secondaryText)
                                     .lineLimit(2)
                             }
                             Text("\(result.memberCount) members")
-                                .font(.caption2)
+                                .font(SynaraTypography.fineMeta)
                                 .foregroundStyle(SynaraColor.secondaryText)
                         }
                     }
@@ -667,13 +880,23 @@ private struct RoomManagementSheet: View {
 
 private struct RoomFilterStrip: View {
     @Binding var selectedFilter: RoomListFilter
+    let filterBadges: [RoomListFilter: Int]
+    @State private var hapticTrigger = 0
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: SynaraSpacing.small) {
                 ForEach(RoomListFilter.allCases) { filter in
-                    SynaraFilterChip(title: filter.rawValue, isSelected: filter == selectedFilter) {
+                    SynaraFilterChip(
+                        title: filter.rawValue,
+                        badgeCount: filterBadges[filter],
+                        isSelected: filter == selectedFilter
+                    ) {
+                        guard filter != selectedFilter else {
+                            return
+                        }
                         selectedFilter = filter
+                        hapticTrigger += 1
                     }
                     .accessibilityIdentifier("RoomFilter-\(filter.rawValue)")
                 }
@@ -681,11 +904,13 @@ private struct RoomFilterStrip: View {
             .padding(.trailing, SynaraSpacing.large)
         }
         .accessibilityIdentifier("RoomFilterStrip")
+        .synaraHapticFeedback(.selection, trigger: hapticTrigger)
     }
 }
 
 private struct SpaceFilterStrip: View {
     let spaces: [SpaceSummary]
+    let unreadCountsBySpaceID: [String: Int]
     @Binding var selectedSpaceID: String?
 
     var body: some View {
@@ -696,7 +921,11 @@ private struct SpaceFilterStrip: View {
                 }
 
                 ForEach(spaces) { space in
-                    SynaraFilterChip(title: space.name, isSelected: selectedSpaceID == space.id) {
+                    SynaraFilterChip(
+                        title: space.name,
+                        badgeCount: unreadCountsBySpaceID[space.id],
+                        isSelected: selectedSpaceID == space.id
+                    ) {
                         selectedSpaceID = space.id
                     }
                     .accessibilityIdentifier("SpaceFilter-\(space.id)")
@@ -715,14 +944,60 @@ private struct RoomSectionHeader: View {
     var body: some View {
         HStack {
             Text(title)
-                .font(.subheadline.weight(.semibold))
+                .font(SynaraTypography.emphasis)
                 .textCase(nil)
                 .foregroundStyle(SynaraColor.primaryText)
             Spacer()
             Text("\(count)")
-                .font(.caption.weight(.semibold))
+                .font(SynaraTypography.chipLabel)
                 .foregroundStyle(SynaraColor.secondaryText)
         }
+    }
+}
+
+private struct SpaceSelectedHeader: View {
+    let title: String
+    let roomCount: Int
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
+            Text(title)
+                .font(SynaraTypography.screenTitle.weight(.bold))
+                .foregroundStyle(SynaraColor.primaryText)
+            Text("\(roomCount) channel\(roomCount == 1 ? "" : "s")")
+                .font(SynaraTypography.messageMeta.weight(.medium))
+                .foregroundStyle(SynaraColor.secondaryText)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .textCase(nil)
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("SpaceSelectedHeader-\(title)")
+    }
+}
+
+private struct SpaceDisclosureLabel: View {
+    let title: String
+    let roomCount: Int
+    let unreadCount: Int
+
+    var body: some View {
+        HStack(spacing: SynaraSpacing.small) {
+            Text(title)
+                .font(SynaraTypography.emphasis)
+                .foregroundStyle(SynaraColor.primaryText)
+
+            Spacer(minLength: SynaraSpacing.small)
+
+            if unreadCount > 0 {
+                SynaraUnreadBadge(count: unreadCount, highlighted: false)
+            }
+
+            Text("\(roomCount)")
+                .font(SynaraTypography.chipLabel)
+                .foregroundStyle(SynaraColor.secondaryText)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("SpaceDisclosureLabel-\(title)")
     }
 }
 
@@ -770,13 +1045,13 @@ private struct RoomListRow: View {
 
     var body: some View {
         HStack(spacing: SynaraSpacing.medium) {
-            RoomAvatarTile(room: room, size: 42)
+            SynaraRoomAvatarTile(room: room, size: 42)
 
             VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
                 HStack(alignment: .firstTextBaseline, spacing: SynaraSpacing.small) {
                     if room.kind == .room {
                         Image(systemName: room.isSecureRoom ? "lock.fill" : "number")
-                            .font(.caption.weight(.bold))
+                            .font(SynaraTypography.chipLabel.weight(.bold))
                             .foregroundStyle(room.isSecureRoom ? SynaraColor.secure : SynaraColor.secondaryText)
                             .accessibilityHidden(true)
                     }
@@ -790,18 +1065,25 @@ private struct RoomListRow: View {
                         SynaraStatusChip(title: "Mention", tint: SynaraColor.accent, systemImage: "at")
                     }
 
+                    if room.requiresAgentApproval {
+                        SynaraStatusChip(title: "Approval", tint: SynaraColor.agent, systemImage: "hand.raised")
+                            .accessibilityIdentifier("RoomRowApprovalChip-\(room.id)")
+                    } else if room.isAgentRoom {
+                        SynaraStatusChip(title: "Agent", tint: SynaraColor.agent, systemImage: "sparkles")
+                    }
+
                     Spacer(minLength: SynaraSpacing.small)
 
                     if room.relativeActivity.isEmpty == false {
                         Text(room.relativeActivity)
-                            .font(.caption)
+                            .font(SynaraTypography.messageMeta)
                             .foregroundStyle(SynaraColor.tertiaryText)
                             .lineLimit(1)
                     }
                 }
 
                 Text(room.lastMessagePreview)
-                    .font(SynaraTypography.supporting)
+                    .font(SynaraTypography.roomPreview)
                     .foregroundStyle(SynaraColor.secondaryText)
                     .lineLimit(1)
             }
@@ -809,38 +1091,6 @@ private struct RoomListRow: View {
             SynaraUnreadBadge(count: room.unreadCount, highlighted: room.hasHighlight)
         }
         .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
-    }
-}
-
-private struct RoomAvatarTile: View {
-    let room: RoomSummary
-    let size: CGFloat
-
-    var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 11, style: .continuous)
-                .fill(room.avatarGradient)
-                .overlay(alignment: .topLeading) {
-                    RoundedRectangle(cornerRadius: 11, style: .continuous)
-                        .fill(Color.white.opacity(0.18))
-                        .blendMode(.softLight)
-                }
-
-            if let systemImage = room.avatarSystemImage {
-                Image(systemName: systemImage)
-                    .font(.system(size: size * 0.43, weight: .bold))
-                    .foregroundStyle(.white)
-                    .symbolRenderingMode(.hierarchical)
-            } else {
-                Text(room.avatarInitials)
-                    .font(.system(size: size * 0.34, weight: .bold))
-                    .foregroundStyle(.white)
-                    .minimumScaleFactor(0.72)
-            }
-        }
-        .frame(width: size, height: size)
-        .shadow(color: room.avatarShadow.opacity(0.22), radius: 5, x: 0, y: 2)
-        .accessibilityHidden(true)
     }
 }
 
@@ -853,7 +1103,7 @@ private struct RoomListSyncBanner: View {
             SynaraStatusChip(title: status, tint: SynaraColor.agent, systemImage: "arrow.triangle.2.circlepath")
             Spacer()
             Text("\(roomCount) rooms")
-                .font(.caption)
+                .font(SynaraTypography.messageMeta)
                 .foregroundStyle(SynaraColor.secondaryText)
         }
         .padding(.vertical, SynaraSpacing.xSmall)
@@ -933,138 +1183,6 @@ private extension RoomSummary {
         let formatter = DateFormatter()
         formatter.dateFormat = calendar.component(.year, from: lastActivityAt) == calendar.component(.year, from: referenceDate) ? "MMM d" : "MMM d, yyyy"
         return formatter.string(from: lastActivityAt)
-    }
-
-    var isSecureRoom: Bool {
-        name.localizedCaseInsensitiveContains("security")
-            || name.localizedCaseInsensitiveContains("secure")
-            || name.localizedCaseInsensitiveContains("e2e")
-    }
-
-    var isAgentRoom: Bool {
-        name.localizedCaseInsensitiveContains("agent")
-            || name.localizedCaseInsensitiveContains("workflow")
-    }
-
-    var isFavoriteLike: Bool {
-        hasHighlight
-            || isAgentRoom
-            || isSecureRoom
-            || name.localizedCaseInsensitiveContains("product")
-            || name.localizedCaseInsensitiveContains("design")
-    }
-
-    var roomIconName: String {
-        if kind == .directMessage {
-            return "person.fill"
-        }
-        if isAgentRoom {
-            return "sparkles"
-        }
-        if isSecureRoom {
-            return "lock.fill"
-        }
-        if name.localizedCaseInsensitiveContains("design") {
-            return "megaphone.fill"
-        }
-        if name.localizedCaseInsensitiveContains("ops") {
-            return "briefcase.fill"
-        }
-        return "number"
-    }
-
-    var avatarSystemImage: String? {
-        if kind == .directMessage {
-            return "person.fill"
-        }
-        if isAgentRoom {
-            return "sparkles"
-        }
-        if isSecureRoom {
-            return "lock.fill"
-        }
-        if name.localizedCaseInsensitiveContains("alert") || name.localizedCaseInsensitiveContains("incident") {
-            return "bell.badge.fill"
-        }
-        if name.localizedCaseInsensitiveContains("ops") || name.localizedCaseInsensitiveContains("infra") {
-            return "briefcase.fill"
-        }
-        if name.localizedCaseInsensitiveContains("design") || name.localizedCaseInsensitiveContains("creative") {
-            return "paintpalette.fill"
-        }
-        return nil
-    }
-
-    var avatarInitials: String {
-        let cleaned = name
-            .replacingOccurrences(of: "#", with: " ")
-            .replacingOccurrences(of: "_", with: " ")
-            .replacingOccurrences(of: "-", with: " ")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-
-        let ignoredWords: Set<String> = ["the", "and", "room", "channel", "chat"]
-        let words = cleaned
-            .split(separator: " ")
-            .map(String.init)
-            .filter { ignoredWords.contains($0.lowercased()) == false }
-
-        if words.count >= 2 {
-            return words.prefix(2).compactMap(\.first).map(String.init).joined().uppercased()
-        }
-
-        if let word = words.first, word.count > 1 {
-            let letters = word.filter(\.isLetter)
-            let first = letters.first.map(String.init) ?? String(word.prefix(1))
-            let second = letters.dropFirst().first(where: { !"AEIOUaeiou".contains($0) }).map(String.init)
-                ?? letters.dropFirst().first.map(String.init)
-                ?? ""
-            return "\(first)\(second)".uppercased()
-        }
-
-        return cleaned.first.map { String($0).uppercased() } ?? "S"
-    }
-
-    var avatarGradient: LinearGradient {
-        let palette = avatarPalette
-        return LinearGradient(colors: palette, startPoint: .topLeading, endPoint: .bottomTrailing)
-    }
-
-    var avatarShadow: Color {
-        avatarPalette.last ?? SynaraColor.accent
-    }
-
-    private var avatarPalette: [Color] {
-        if kind == .directMessage {
-            return [Color(red: 0.35, green: 0.42, blue: 0.53), Color(red: 0.12, green: 0.16, blue: 0.24)]
-        }
-        if isAgentRoom {
-            return [Color(red: 0.58, green: 0.32, blue: 0.94), Color(red: 0.20, green: 0.63, blue: 0.86)]
-        }
-        if isSecureRoom {
-            return [Color(red: 0.05, green: 0.55, blue: 0.43), Color(red: 0.02, green: 0.26, blue: 0.25)]
-        }
-        if name.localizedCaseInsensitiveContains("alert") || name.localizedCaseInsensitiveContains("incident") {
-            return [Color(red: 0.97, green: 0.42, blue: 0.22), Color(red: 0.78, green: 0.12, blue: 0.24)]
-        }
-        if name.localizedCaseInsensitiveContains("design") || name.localizedCaseInsensitiveContains("creative") {
-            return [Color(red: 0.49, green: 0.29, blue: 0.95), Color(red: 0.95, green: 0.32, blue: 0.58)]
-        }
-        if name.localizedCaseInsensitiveContains("ops") || name.localizedCaseInsensitiveContains("infra") {
-            return [Color(red: 0.04, green: 0.48, blue: 0.46), Color(red: 0.05, green: 0.23, blue: 0.38)]
-        }
-
-        let palettes: [[Color]] = [
-            [Color(red: 0.12, green: 0.45, blue: 0.91), Color(red: 0.26, green: 0.24, blue: 0.77)],
-            [Color(red: 0.04, green: 0.58, blue: 0.74), Color(red: 0.02, green: 0.31, blue: 0.58)],
-            [Color(red: 0.80, green: 0.25, blue: 0.43), Color(red: 0.48, green: 0.20, blue: 0.74)],
-            [Color(red: 0.12, green: 0.60, blue: 0.38), Color(red: 0.08, green: 0.35, blue: 0.42)],
-            [Color(red: 0.90, green: 0.45, blue: 0.16), Color(red: 0.68, green: 0.20, blue: 0.34)]
-        ]
-        let seed = "\(id)|\(name)".unicodeScalars.reduce(0) { partial, scalar in
-            (partial &* 31 &+ Int(scalar.value)) & 0x7fffffff
-        }
-        let index = seed % palettes.count
-        return palettes[index]
     }
 
     var roomTint: Color {

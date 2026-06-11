@@ -90,6 +90,31 @@ final class AppRouteTests: XCTestCase {
         XCTAssertEqual(router.roomsPath, [.room(id: "!roomid:example.org", title: "Alerts")])
     }
 
+    func testRouterRoutesRoomOnActiveLaterTabStack() {
+        let router = AppRouter()
+        router.selectedTab = .later
+
+        router.route(to: .room(id: "!roomid:example.org", eventID: "$evt", title: "Product"))
+
+        XCTAssertEqual(router.selectedTab, .later)
+        XCTAssertEqual(
+            router.laterPath,
+            [.room(id: "!roomid:example.org", eventID: "$evt", title: "Product")]
+        )
+        XCTAssertTrue(router.roomsPath.isEmpty)
+    }
+
+    func testRouterRoutesRoomOnActiveNotificationsTabStack() {
+        let router = AppRouter()
+        router.selectedTab = .notifications
+
+        router.route(to: .room(id: "!roomid:example.org", title: "Alerts"))
+
+        XCTAssertEqual(router.selectedTab, .notifications)
+        XCTAssertEqual(router.notificationsPath, [.room(id: "!roomid:example.org", title: "Alerts")])
+        XCTAssertTrue(router.roomsPath.isEmpty)
+    }
+
     func testRouterCanRouteToThreadSurface() {
         let router = AppRouter()
 

@@ -37,6 +37,7 @@ struct RoutePlaceholderView: View {
                 focusedEventID: eventID
             )
             .id("\(id)-\(eventID ?? "")")
+            .synaraInteractiveSwipeBack()
         case .thread(let roomID, let rootEventID, let roomTitle, let rootTitle):
             ThreadTimelineView(
                 roomID: roomID,
@@ -44,6 +45,7 @@ struct RoutePlaceholderView: View {
                 roomTitle: roomTitle,
                 rootTitle: rootTitle
             )
+            .synaraInteractiveSwipeBack()
         case .settings:
             EmptyView()
         case .notifications:

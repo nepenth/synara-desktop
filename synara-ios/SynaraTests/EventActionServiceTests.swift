@@ -14,6 +14,23 @@ final class EventActionServiceTests: XCTestCase {
         XCTAssertTrue(availability.canReact)
     }
 
+    func testPendingLocalMessagesHaveNoActions() {
+        let service = MockEventActionService()
+        let item = TimelineItem.pendingMessage(
+            body: "Retry me",
+            senderID: "@alice:matrix.org",
+            replyToEventID: nil,
+            deliveryStatus: .failed
+        )
+
+        let availability = service.availability(for: item, currentUserID: "@alice:matrix.org")
+
+        XCTAssertFalse(availability.canReply)
+        XCTAssertFalse(availability.canEdit)
+        XCTAssertFalse(availability.canRedact)
+        XCTAssertFalse(availability.canReact)
+    }
+
     func testRedactedEventsHaveNoActions() {
         let service = MockEventActionService()
         let item = TimelineItem(
