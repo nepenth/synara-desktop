@@ -22,7 +22,7 @@ import {
   getUnreadInfo,
   isNotificationEvent,
 } from '../../utils/room';
-import { NotificationType, UnreadInfo } from '../../../types/matrix/room';
+import { NotificationType } from '../../../types/matrix/room';
 import { getMxIdLocalPart } from '../../utils/matrix';
 import { useSelectedRoom } from '../../hooks/router/useSelectedRoom';
 import { useInboxNotificationsSelected } from '../../hooks/router/useInbox';
@@ -34,16 +34,23 @@ import { useRoomNavigate } from '../../hooks/useRoomNavigate';
 import { PerformanceDebugOverlay } from '../../components/performance/PerformanceDebugOverlay';
 import {
   getPlatformNotificationSummary,
+  registerPlatformAgentActionListener,
   setPlatformBadgeCount,
   setPlatformShortcuts,
   setPlatformTrayState,
   showPlatformNotification,
+  subscribePlatformTrayDndToggle,
   supportsPlatformGlobalShortcuts,
   supportsPlatformSystemNotifications,
   supportsPlatformTrayState,
 } from '../../platform';
 import { detectAgentApprovalPrompt } from '../../utils/agentApprovals';
 import { resolveMatrixThumbnailUrl } from '../../matrix/media';
+import { buildDesktopNotificationRoomRoute } from '../../utils/desktop';
+import {
+  notifiedEventIdsCache,
+  unreadNotificationCache,
+} from '../../notifications/notificationCaches';
 
 const RECENT_AGENT_APPROVAL_MS = 10 * 60 * 1000;
 
@@ -92,6 +99,20 @@ function FaviconUpdater() {
       setFavicon(LogoPNG);
     }
   }, [roomToUnread]);
+
+  return null;
+}
+
+function TrayDoNotDisturbSync() {
+  const [, setShowNotifications] = useSetting(settingsAtom, 'showNotifications');
+
+  useEffect(() => {
+    if (!supportsPlatformTrayState()) return undefined;
+
+    return subscribePlatformTrayDndToggle(() => {
+      setShowNotifications((current) => !current);
+    });
+  }, [setShowNotifications]);
 
   return null;
 }
@@ -194,7 +215,7 @@ function InviteNotifications() {
 function MessageNotifications() {
   const audioRef = useRef<HTMLAudioElement>(null);
   const notifRef = useRef<Notification | undefined>(undefined);
-  const unreadCacheRef = useRef<Map<string, UnreadInfo>>(new Map());
+
   const mx = useMatrixClient();
   const useAuthentication = useMediaAuthentication();
   const [showNotifications] = useSetting(settingsAtom, 'showNotifications');
@@ -222,6 +243,7 @@ function MessageNotifications() {
         showPlatformNotification({
           title: roomName,
           body: `New inbox notification from ${username}`,
+          route: buildDesktopNotificationRoomRoute(roomId, eventId),
         }).catch(() => undefined);
         return;
       }
@@ -276,8 +298,8 @@ function MessageNotifications() {
       if (detectAgentApprovalPrompt(mEvent.getContent<Record<string, unknown>>())) return;
       const openEventId = getThreadRootEventId(room.findEventById(eventId)) ?? eventId;
       const unreadInfo = getUnreadInfo(room);
-      const cachedUnreadInfo = unreadCacheRef.current.get(room.roomId);
-      unreadCacheRef.current.set(room.roomId, unreadInfo);
+      const cachedUnreadInfo = unreadNotificationCache.get(room.roomId);
+      unreadNotificationCache.set(room.roomId, unreadInfo);
 
       if (unreadInfo.total === 0) return;
       if (
@@ -333,9 +355,10 @@ function MessageNotifications() {
 
 function AgentApprovalNotifications() {
   const audioRef = useRef<HTMLAudioElement>(null);
-  const notifiedEventIdsRef = useRef<Set<string>>(new Set());
+
   const mx = useMatrixClient();
   const { navigateRoom } = useRoomNavigate();
+  const [showNotifications] = useSetting(settingsAtom, 'showNotifications');
 
   const notify = useCallback(
     ({
@@ -359,7 +382,7 @@ function AgentApprovalNotifications() {
         showPlatformNotification({
           title,
           body: `${roomName}: ${notificationBody}`,
-          route: `/home/${encodeURIComponent(roomId)}/${encodeURIComponent(eventId)}/`,
+          route: buildDesktopNotificationRoomRoute(roomId, eventId),
         }).catch(() => undefined);
         return;
       }
@@ -390,14 +413,17 @@ function AgentApprovalNotifications() {
       if (Date.now() - mEvent.getTs() > RECENT_AGENT_APPROVAL_MS) return;
 
       const eventId = mEvent.getId();
-      if (!eventId || notifiedEventIdsRef.current.has(eventId)) return;
+      if (!eventId || notifiedEventIdsCache.has(eventId)) return;
 
       const prompt = detectAgentApprovalPrompt(mEvent.getContent<Record<string, unknown>>());
       if (!prompt) return;
 
-      notifiedEventIdsRef.current.add(eventId);
+      notifiedEventIdsCache.add(eventId);
       const openEventId = getThreadRootEventId(room.findEventById(eventId)) ?? eventId;
-      if (supportsPlatformSystemNotifications() || notificationPermission('granted')) {
+      if (
+        showNotifications &&
+        (supportsPlatformSystemNotifications() || notificationPermission('granted'))
+      ) {
         notify({
           roomId: room.roomId,
           eventId: openEventId,
@@ -408,9 +434,11 @@ function AgentApprovalNotifications() {
         });
       }
 
-      playSound();
+      if (showNotifications) {
+        playSound();
+      }
     },
-    [mx, notify, playSound]
+    [mx, notify, playSound, showNotifications]
   );
 
   useEffect(() => {
@@ -479,6 +507,7 @@ function LaterReminderNotifications() {
         showPlatformNotification({
           title: 'Reminder',
           body,
+          route: buildDesktopNotificationRoomRoute(roomId, eventId),
         }).catch(() => undefined);
         return;
       }
@@ -541,6 +570,28 @@ function LaterReminderNotifications() {
   return null;
 }
 
+function PlatformAgentActionListener() {
+  useEffect(() => {
+    let disposed = false;
+    let unlisten: (() => void | Promise<void>) | undefined;
+
+    void registerPlatformAgentActionListener().then((cleanup) => {
+      if (disposed) {
+        void cleanup?.();
+        return;
+      }
+      unlisten = cleanup;
+    });
+
+    return () => {
+      disposed = true;
+      void unlisten?.();
+    };
+  }, []);
+
+  return null;
+}
+
 function DesktopShortcutSync() {
   const [showShortcut] = useSetting(desktopPlatformSettingsAtom, 'desktopShortcutShow');
   const [laterShortcut] = useSetting(desktopPlatformSettingsAtom, 'desktopShortcutLater');
@@ -584,8 +635,10 @@ export function ClientNonUIFeatures({ children }: ClientNonUIFeaturesProps) {
       <SystemEmojiFeature />
       <PageZoomFeature />
       <FaviconUpdater />
+      <TrayDoNotDisturbSync />
       <PlatformBadgeAndTrayUpdater />
       <DesktopShortcutSync />
+      <PlatformAgentActionListener />
       <InviteNotifications />
       <AgentApprovalNotifications />
       <MessageNotifications />

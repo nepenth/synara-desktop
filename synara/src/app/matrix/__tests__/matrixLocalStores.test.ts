@@ -4,6 +4,10 @@ import {
   isCryptoAccountMismatchError,
   MATRIX_LOCAL_STORE_NAMES,
 } from '../../../client/matrixLocalStores';
+import {
+  clearMatrixStoresForIdentityChange,
+  shouldClearMatrixStoresBeforeInit,
+} from '../../state/sessionPersistence';
 
 test('isCryptoAccountMismatchError detects rust crypto account mismatch failures', () => {
   const error = new Error(
@@ -25,4 +29,33 @@ test('matrix local store names include sync, legacy crypto, and rust crypto stor
     'matrix-js-sdk::matrix-sdk-crypto',
     'matrix-js-sdk::matrix-sdk-crypto-meta',
   ]);
+});
+
+test('account switch proactive clear complements crypto mismatch fallback detection', async () => {
+  const previousIdentity = { userId: '@alice:example.org', deviceId: 'ALICE_DEVICE' };
+  const nextIdentity = { userId: '@bob:example.org', deviceId: 'BOB_DEVICE' };
+  const mismatchError = new Error(
+    "the account in the store doesn't match the account in the constructor: expected @alice:example.org:ALICE_DEVICE, got @bob:example.org:BOB_DEVICE"
+  );
+
+  assert.equal(shouldClearMatrixStoresBeforeInit(nextIdentity, previousIdentity), true);
+  assert.equal(isCryptoAccountMismatchError(mismatchError), true);
+
+  let proactiveClearCalls = 0;
+  const proactivelyCleared = await clearMatrixStoresForIdentityChange(nextIdentity, {
+    storage: {
+      getItem: (key) =>
+        key === 'synara_last_bootstrapped_matrix_identity'
+          ? JSON.stringify(previousIdentity)
+          : null,
+      setItem: () => undefined,
+      removeItem: () => undefined,
+    },
+    clearStores: async () => {
+      proactiveClearCalls += 1;
+    },
+  });
+
+  assert.equal(proactivelyCleared, true);
+  assert.equal(proactiveClearCalls, 1);
 });

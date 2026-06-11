@@ -10,8 +10,9 @@ on:
       - ".node-version"
       - "config.json"
       - "scripts/**"
+      - "packaging/arch/**"
       - "src-tauri/**"
-      - "synara"
+      - "synara/**"
   workflow_dispatch:
 
 concurrency:
@@ -51,6 +52,9 @@ jobs:
         run: npm ci
         working-directory: synara
 
+      - name: Check version metadata
+        run: npm run check:versions
+
       - name: Build Linux package
         run: npm run tauri build -- --bundles deb --config '{"bundle":{"createUpdaterArtifacts":false}}'
         env:
@@ -86,6 +90,9 @@ jobs:
       - name: Install runtime dependencies
         run: npm ci
         working-directory: synara
+
+      - name: Check version metadata
+        run: npm run check:versions
 
       - name: Build macOS app bundle
         run: npm run tauri build -- --bundles app --config '{"bundle":{"createUpdaterArtifacts":false}}'

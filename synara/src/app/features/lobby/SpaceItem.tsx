@@ -484,7 +484,9 @@ export const SpaceItemCard = as<'div', SpaceItemCardProps>(
                     name={summary.name || summary.canonical_alias || roomId}
                     avatarUrl={
                       summary?.avatar_url
-                        ? resolveMatrixThumbnailUrl(mx, summary.avatar_url, 96, { useAuthentication })
+                        ? resolveMatrixThumbnailUrl(mx, summary.avatar_url, 96, {
+                            useAuthentication,
+                          })
                         : undefined
                     }
                     suggested={content.suggested}

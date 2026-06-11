@@ -3794,7 +3794,11 @@ dependencies = [
 name = "synara"
 version = "1.2.3"
 dependencies = [
+ "getrandom 0.3.4",
  "keyring",
+ "mac-notification-sys",
+ "notify-rust",
+ "security-framework 3.7.0",
  "serde",
  "serde_json",
  "tauri",

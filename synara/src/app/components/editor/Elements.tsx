@@ -93,7 +93,9 @@ function RenderEmoticonElement({
         {element.key.startsWith('mxc://') ? (
           <img
             className={css.EmoticonImg}
-            src={resolveOptionalMatrixMediaUrl(mx, element.key, { useAuthentication }) ?? element.key}
+            src={
+              resolveOptionalMatrixMediaUrl(mx, element.key, { useAuthentication }) ?? element.key
+            }
             alt={element.shortcode}
           />
         ) : (
