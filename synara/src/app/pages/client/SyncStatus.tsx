@@ -1,12 +1,13 @@
-import { MatrixClient, SyncState } from 'matrix-js-sdk';
+import { MatrixClient } from 'matrix-js-sdk';
 import React, { useCallback, useState } from 'react';
 import { Box, config, Line, Text } from 'folds';
 import { useSyncState } from '../../hooks/useSyncState';
 import { ContainerColor } from '../../styles/ContainerColor.css';
+import { getSyncStatusBannerCopy, getSyncStatusBannerVariant } from './syncStatusCopy';
 
 type StateData = {
-  current: SyncState | null;
-  previous: SyncState | null | undefined;
+  current: ReturnType<MatrixClient['getSyncState']>;
+  previous: ReturnType<MatrixClient['getSyncState']> | null | undefined;
 };
 
 type SyncStatusProps = {
@@ -30,53 +31,23 @@ export function SyncStatus({ mx }: SyncStatusProps) {
     }, [])
   );
 
-  if (stateData.current === SyncState.Prepared || stateData.current === SyncState.Catchup) {
-    return (
-      <Box direction="Column" shrink="No">
-        <Box
-          className={ContainerColor({ variant: 'Success' })}
-          style={{ padding: `${config.space.S100} 0` }}
-          alignItems="Center"
-          justifyContent="Center"
-        >
-          <Text size="L400">Connecting...</Text>
-        </Box>
-        <Line variant="Success" size="300" />
-      </Box>
-    );
+  const bannerCopy = getSyncStatusBannerCopy(stateData.current);
+  const bannerVariant = getSyncStatusBannerVariant(stateData.current);
+  if (!bannerCopy || !bannerVariant) {
+    return null;
   }
 
-  if (stateData.current === SyncState.Reconnecting) {
-    return (
-      <Box direction="Column" shrink="No">
-        <Box
-          className={ContainerColor({ variant: 'Warning' })}
-          style={{ padding: `${config.space.S100} 0` }}
-          alignItems="Center"
-          justifyContent="Center"
-        >
-          <Text size="L400">Connection Lost! Reconnecting...</Text>
-        </Box>
-        <Line variant="Warning" size="300" />
+  return (
+    <Box direction="Column" shrink="No">
+      <Box
+        className={ContainerColor({ variant: bannerVariant })}
+        style={{ padding: `${config.space.S100} 0` }}
+        alignItems="Center"
+        justifyContent="Center"
+      >
+        <Text size="L400">{bannerCopy}</Text>
       </Box>
-    );
-  }
-
-  if (stateData.current === SyncState.Error) {
-    return (
-      <Box direction="Column" shrink="No">
-        <Box
-          className={ContainerColor({ variant: 'Critical' })}
-          style={{ padding: `${config.space.S100} 0` }}
-          alignItems="Center"
-          justifyContent="Center"
-        >
-          <Text size="L400">Connection Lost!</Text>
-        </Box>
-        <Line variant="Critical" size="300" />
-      </Box>
-    );
-  }
-
-  return null;
+      <Line variant={bannerVariant} size="300" />
+    </Box>
+  );
 }

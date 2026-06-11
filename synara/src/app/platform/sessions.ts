@@ -1,5 +1,9 @@
 import { type Session } from '../state/sessions';
-import { invokeDesktop, isSynaraDesktop } from '../utils/desktop';
+import {
+  invokeDesktopWithAvailability,
+  isDesktopBridgeAvailable,
+  isSynaraDesktop,
+} from '../utils/desktop';
 import { syncDesktopSecretStoreCapability } from './capabilities';
 import {
   getPlatformSecretStoreStatus,
@@ -78,9 +82,15 @@ export const platformSessionStore: PlatformSessionStore = {
     }
 
     try {
-      const status = await invokeDesktop<unknown>('desktop_secret_store_status');
+      const invokeResult = await invokeDesktopWithAvailability<unknown>(
+        'desktop_secret_store_status'
+      );
+      if (!invokeResult.available) {
+        return unavailableDesktopSecretStoreStatus();
+      }
       return (
-        (await syncDesktopSecretStoreCapability(status)) ?? unavailableDesktopSecretStoreStatus()
+        (await syncDesktopSecretStoreCapability(invokeResult.value)) ??
+        unavailableDesktopSecretStoreStatus()
       );
     } catch {
       return unavailableDesktopSecretStoreStatus();
@@ -91,25 +101,43 @@ export const platformSessionStore: PlatformSessionStore = {
     const status = await platformSessionStore.getStatus();
     if (!canUsePlatformSessionStore(status)) return undefined;
 
-    const session = await invokeDesktop<unknown>('desktop_get_session');
-    return normalizePlatformSession(session);
+    if (!isDesktopBridgeAvailable()) {
+      return undefined;
+    }
+    const invokeResult = await invokeDesktopWithAvailability<unknown>('desktop_get_session');
+    if (!invokeResult.available) {
+      return undefined;
+    }
+    return normalizePlatformSession(invokeResult.value);
   },
 
   setSession: async (session) => {
     const status = await platformSessionStore.getStatus();
     if (!canUsePlatformSessionStore(status)) return false;
 
-    const stored = await invokeDesktop<boolean>('desktop_set_session', {
+    if (!isDesktopBridgeAvailable()) {
+      return false;
+    }
+    const invokeResult = await invokeDesktopWithAvailability<boolean>('desktop_set_session', {
       session: serializePlatformSession(session),
     });
-    return stored === true;
+    if (!invokeResult.available) {
+      return false;
+    }
+    return invokeResult.value === true;
   },
 
   removeSession: async () => {
     const status = await platformSessionStore.getStatus();
     if (!canUsePlatformSessionStore(status)) return false;
 
-    const removed = await invokeDesktop<boolean>('desktop_remove_session');
-    return removed === true;
+    if (!isDesktopBridgeAvailable()) {
+      return false;
+    }
+    const invokeResult = await invokeDesktopWithAvailability<boolean>('desktop_remove_session');
+    if (!invokeResult.available) {
+      return false;
+    }
+    return invokeResult.value === true;
   },
 };

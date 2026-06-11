@@ -8,5 +8,6 @@ export * from './links';
 export * from './notifications';
 export * from './secrets';
 export * from './sessions';
+export * from './shortcutHelp';
 export * from './shortcuts';
 export * from './tray';

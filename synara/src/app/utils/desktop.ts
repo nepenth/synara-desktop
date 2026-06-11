@@ -1,4 +1,5 @@
 import { getBadgeCount } from '../notifications/badgeSummary';
+import { recordDesktopDiagnostic } from './desktopDiagnostics';
 import { getHomeRoomPath } from '../pages/pathUtils';
 import {
   normalizeAgentActionPayload,
@@ -85,7 +86,12 @@ export type DesktopIntegrationStatus = {
   mediaPortal: DesktopIntegrationCheck;
 };
 
-export type DesktopShortcutApplyState = 'active' | 'permission-needed' | 'unsupported' | 'failed';
+export type DesktopShortcutApplyState =
+  | 'active'
+  | 'permission-needed'
+  | 'unsupported'
+  | 'unknown'
+  | 'failed';
 
 export type DesktopShortcutApplyResult = {
   success: boolean;
@@ -278,6 +284,12 @@ const normalizeActionField = (
 
 const getBridge = (): SynaraDesktopBridge | undefined => window.__SYNARA_DESKTOP__;
 
+const getDesktopInvoke = ():
+  | (<T = unknown>(command: string, args?: Record<string, unknown>) => Promise<T>)
+  | undefined => window.__SYNARA_DESKTOP__?.invoke ?? window.__TAURI_INTERNALS__?.invoke;
+
+export const isDesktopBridgeAvailable = (): boolean => typeof getDesktopInvoke() === 'function';
+
 const normalizeValue = (value: unknown): string => {
   if (typeof value !== 'string') return '';
   return value.trim();
@@ -304,6 +316,7 @@ const toShortcutApplyState = (value: unknown): DesktopShortcutApplyState | undef
   if (value === 'active') return 'active';
   if (value === 'permission-needed') return 'permission-needed';
   if (value === 'unsupported') return 'unsupported';
+  if (value === 'unknown') return 'unknown';
   if (value === 'failed') return 'failed';
   return undefined;
 };
@@ -437,13 +450,40 @@ export const isSynaraDesktop = (): boolean =>
   window.__SYNARA_DESKTOP__?.platform === 'tauri' ||
   typeof window.__TAURI_INTERNALS__?.invoke === 'function';
 
+export type DesktopInvokeResult<T> =
+  | { available: false }
+  | { available: true; value: T | undefined };
+
+export const invokeDesktopWithAvailability = async <T = unknown>(
+  command: string,
+  args?: Record<string, unknown>
+): Promise<DesktopInvokeResult<T>> => {
+  const invoke = getDesktopInvoke();
+  if (!invoke) {
+    return { available: false };
+  }
+
+  try {
+    return { available: true, value: await invoke<T>(command, args) };
+  } catch (error) {
+    recordDesktopDiagnostic(
+      `${command} failed: ${error instanceof Error ? error.message : 'unknown error'}`
+    );
+    throw error;
+  }
+};
+
 export const invokeDesktop = async <T = unknown>(
   command: string,
   args?: Record<string, unknown>
 ): Promise<T | undefined> => {
-  const invoke = window.__SYNARA_DESKTOP__?.invoke ?? window.__TAURI_INTERNALS__?.invoke;
-  if (!invoke) return undefined;
-  return invoke<T>(command, args);
+  const result = await invokeDesktopWithAvailability<T>(command, args);
+  if (!result.available) return undefined;
+  return result.value;
+};
+
+const recordDesktopInvokeFailure = (command: string, detail: string): void => {
+  recordDesktopDiagnostic(`${command} ${detail}`);
 };
 
 export const listen = async <T>(
@@ -624,8 +664,17 @@ export const setDesktopShortcuts = async (
   }
 
   try {
-    const result = await invokeDesktop<unknown>('desktop_set_shortcuts', { shortcuts });
-    return normalizeDesktopShortcutApplyResult(result);
+    const invokeResult = await invokeDesktopWithAvailability<unknown>('desktop_set_shortcuts', {
+      shortcuts,
+    });
+    if (!invokeResult.available) {
+      return normalizeDesktopShortcutApplyResult(undefined);
+    }
+    const normalized = normalizeDesktopShortcutApplyResult(invokeResult.value);
+    if (!normalized.success) {
+      recordDesktopInvokeFailure('desktop_set_shortcuts', normalized.message);
+    }
+    return normalized;
   } catch {
     return normalizeDesktopShortcutApplyResult(undefined);
   }
@@ -633,7 +682,7 @@ export const setDesktopShortcuts = async (
 
 const invokeDesktopTrayState = async (state: DesktopTrayState): Promise<boolean> => {
   try {
-    const result = await invokeDesktop<unknown>('desktop_update_tray_state', {
+    const invokeResult = await invokeDesktopWithAvailability<unknown>('desktop_update_tray_state', {
       state: {
         unreadCount: clampCount(state.unreadCount),
         highlightCount: clampCount(state.highlightCount),
@@ -642,7 +691,17 @@ const invokeDesktopTrayState = async (state: DesktopTrayState): Promise<boolean>
         doNotDisturb: state.doNotDisturb === true,
       },
     });
-    return result === true || result === undefined || result === null;
+    if (!invokeResult.available) {
+      return false;
+    }
+    if (invokeResult.value === true) {
+      return true;
+    }
+    recordDesktopInvokeFailure(
+      'desktop_update_tray_state',
+      invokeResult.value === false ? 'returned false' : 'returned no result'
+    );
+    return false;
   } catch {
     return false;
   }
@@ -651,7 +710,9 @@ const invokeDesktopTrayState = async (state: DesktopTrayState): Promise<boolean>
 const debouncedSetDesktopTrayState = createDebouncedTrayStateUpdater(invokeDesktopTrayState);
 
 export const setDesktopTrayState = async (state: DesktopTrayState): Promise<boolean> => {
-  if (getBridge()?.supportsTrayState !== true) return false;
+  if (!isDesktopBridgeAvailable() || getBridge()?.supportsTrayState !== true) {
+    return false;
+  }
   return debouncedSetDesktopTrayState(state);
 };
 
