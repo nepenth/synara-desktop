@@ -35,6 +35,8 @@ const tests = [
   'src/app/state/__tests__/sessions.test.ts',
   'src/app/state/__tests__/settings.test.ts',
   'src/app/components/editor/__tests__/richText.test.ts',
+  'src/app/pages/auth/login/__tests__/loginUtil.test.ts',
+  'src/app/state/__tests__/sw-session.test.ts',
 ];
 
 const outdir = await mkdtemp(join(tmpdir(), 'synara-modernization-tests-'));
