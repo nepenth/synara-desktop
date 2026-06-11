@@ -102,6 +102,103 @@ export type DesktopTrayState = {
   doNotDisturb: boolean;
 };
 
+export const DESKTOP_TRAY_STATE_DEBOUNCE_MS = 500;
+
+export type DesktopTrayStateUpdater = (state: DesktopTrayState) => Promise<boolean>;
+
+export type DebouncedDesktopTrayStateUpdater = DesktopTrayStateUpdater & {
+  flush: () => Promise<boolean | undefined>;
+  cancel: () => void;
+};
+
+type DesktopTrayStateDebounceScheduler = {
+  schedule: (callback: () => void, delayMs: number) => number;
+  cancel: (handle: number) => void;
+};
+
+const scheduleTimeout = (callback: () => void, delayMs: number): number => {
+  if (typeof window !== 'undefined' && typeof window.setTimeout === 'function') {
+    return window.setTimeout(callback, delayMs);
+  }
+  return setTimeout(callback, delayMs) as unknown as number;
+};
+
+const cancelTimeout = (handle: number): void => {
+  if (typeof window !== 'undefined' && typeof window.clearTimeout === 'function') {
+    window.clearTimeout(handle);
+    return;
+  }
+  clearTimeout(handle);
+};
+
+const defaultTrayStateDebounceScheduler: DesktopTrayStateDebounceScheduler = {
+  schedule: scheduleTimeout,
+  cancel: cancelTimeout,
+};
+
+export const createDebouncedTrayStateUpdater = (
+  updater: DesktopTrayStateUpdater,
+  waitMs = DESKTOP_TRAY_STATE_DEBOUNCE_MS,
+  scheduler: DesktopTrayStateDebounceScheduler = defaultTrayStateDebounceScheduler
+): DebouncedDesktopTrayStateUpdater => {
+  let timeoutId: number | undefined;
+  let pendingState: DesktopTrayState | undefined;
+  let flushResolvers: Array<(result: boolean | undefined) => void> = [];
+
+  const settleFlushWaiters = (result: boolean | undefined) => {
+    const resolvers = flushResolvers;
+    flushResolvers = [];
+    resolvers.forEach((resolve) => resolve(result));
+  };
+
+  const invokePendingState = async (): Promise<boolean | undefined> => {
+    timeoutId = undefined;
+    const stateToSend = pendingState;
+    pendingState = undefined;
+    if (!stateToSend) {
+      settleFlushWaiters(undefined);
+      return undefined;
+    }
+
+    const result = await updater(stateToSend);
+    settleFlushWaiters(result);
+    return result;
+  };
+
+  const debounced: DebouncedDesktopTrayStateUpdater = async (state) => {
+    pendingState = state;
+    if (timeoutId !== undefined) {
+      scheduler.cancel(timeoutId);
+    }
+
+    return new Promise<boolean>((resolve) => {
+      flushResolvers.push((result) => resolve(result === true));
+      timeoutId = scheduler.schedule(() => {
+        void invokePendingState();
+      }, waitMs);
+    });
+  };
+
+  debounced.flush = async () => {
+    if (timeoutId !== undefined) {
+      scheduler.cancel(timeoutId);
+      timeoutId = undefined;
+    }
+    return invokePendingState();
+  };
+
+  debounced.cancel = () => {
+    if (timeoutId !== undefined) {
+      scheduler.cancel(timeoutId);
+      timeoutId = undefined;
+    }
+    pendingState = undefined;
+    settleFlushWaiters(undefined);
+  };
+
+  return debounced;
+};
+
 export type DesktopPerformanceCapabilities = {
   platform: string;
   appVersion?: string;
@@ -534,9 +631,7 @@ export const setDesktopShortcuts = async (
   }
 };
 
-export const setDesktopTrayState = async (state: DesktopTrayState): Promise<boolean> => {
-  if (getBridge()?.supportsTrayState !== true) return false;
-
+const invokeDesktopTrayState = async (state: DesktopTrayState): Promise<boolean> => {
   try {
     const result = await invokeDesktop<unknown>('desktop_update_tray_state', {
       state: {
@@ -552,6 +647,16 @@ export const setDesktopTrayState = async (state: DesktopTrayState): Promise<bool
     return false;
   }
 };
+
+const debouncedSetDesktopTrayState = createDebouncedTrayStateUpdater(invokeDesktopTrayState);
+
+export const setDesktopTrayState = async (state: DesktopTrayState): Promise<boolean> => {
+  if (getBridge()?.supportsTrayState !== true) return false;
+  return debouncedSetDesktopTrayState(state);
+};
+
+export const flushPendingDesktopTrayStateUpdate = (): Promise<boolean | undefined> =>
+  debouncedSetDesktopTrayState.flush();
 
 export const getDesktopIntegrationStatus = async (): Promise<DesktopIntegrationStatus> => {
   if (!getBridge()?.supportsIntegrationStatus) {

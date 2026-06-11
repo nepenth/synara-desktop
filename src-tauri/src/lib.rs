@@ -108,8 +108,58 @@ fn configure_webview_spellcheck<R: tauri::Runtime>(window: &tauri::WebviewWindow
 #[cfg(not(target_os = "linux"))]
 fn configure_webview_spellcheck<R: tauri::Runtime>(_window: &tauri::WebviewWindow<R>) {}
 
+const PREFERRED_LOCALHOST_PORT: u16 = 44548;
+const LOCALHOST_PORT_FALLBACK_COUNT: u16 = 10;
+
+fn is_localhost_port_available(port: u16) -> bool {
+    std::net::TcpListener::bind(("127.0.0.1", port)).is_ok()
+}
+
+fn select_localhost_port() -> Result<u16, String> {
+    for offset in 0..LOCALHOST_PORT_FALLBACK_COUNT {
+        let port = PREFERRED_LOCALHOST_PORT.saturating_add(offset);
+        if is_localhost_port_available(port) {
+            if offset == 0 {
+                eprintln!("[synara] Serving bundled UI on localhost:{port}");
+            } else {
+                eprintln!(
+                    "[synara] Preferred port {PREFERRED_LOCALHOST_PORT} busy; using localhost:{port}"
+                );
+            }
+            return Ok(port);
+        }
+    }
+
+    Err(format!(
+        "No available localhost port in range {PREFERRED_LOCALHOST_PORT}-{}",
+        PREFERRED_LOCALHOST_PORT + LOCALHOST_PORT_FALLBACK_COUNT - 1
+    ))
+}
+
+#[cfg(test)]
+mod localhost_port_tests {
+    use super::{is_localhost_port_available, select_localhost_port, PREFERRED_LOCALHOST_PORT};
+
+    #[test]
+    fn preferred_localhost_port_is_available_in_test_environment() {
+        assert!(is_localhost_port_available(PREFERRED_LOCALHOST_PORT));
+    }
+
+    #[test]
+    fn select_localhost_port_returns_first_available_port() {
+        let port = select_localhost_port().expect("localhost port should be available");
+        assert!((PREFERRED_LOCALHOST_PORT..PREFERRED_LOCALHOST_PORT + 10).contains(&port));
+    }
+}
+
 pub fn run() {
-    let port: u16 = 44548;
+    let port = match select_localhost_port() {
+        Ok(port) => port,
+        Err(error) => {
+            eprintln!("Failed to start Synara: {error}");
+            std::process::exit(1);
+        }
+    };
     let context = tauri::generate_context!();
     let mut builder = tauri::Builder::default()
         .plugin(tauri_plugin_localhost::Builder::new(port).build())
@@ -224,8 +274,11 @@ pub fn run() {
             // Release: tauri-plugin-localhost serves bundled frontend assets on this port
             #[cfg(not(debug_assertions))]
             let window_url = {
-                let url = format!("http://localhost:{}", port).parse().unwrap();
-                WebviewUrl::External(url)
+                let localhost_url = format!("http://localhost:{port}");
+                let parsed_url = localhost_url
+                    .parse::<url::Url>()
+                    .map_err(|error| format!("Invalid localhost URL for port {port}: {error}"))?;
+                WebviewUrl::External(parsed_url)
             };
 
             let app_handle = app.handle().clone();

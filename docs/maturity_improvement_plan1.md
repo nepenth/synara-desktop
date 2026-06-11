@@ -1275,15 +1275,15 @@ For each MIP1-NN commit:
 | 8 Incremental timeline | MIP1-18 | E | Done | mip1-18 |
 | 9 Stream file IPC | MIP1-19 | E | Done | mip1-19 |
 | 10 Drop allowlist lifecycle | MIP1-20 | E | Done | mip1-20 |
-| 20 Throttle tray rebuild | MIP1-21 | E | Planned | — |
+| 20 Throttle tray rebuild | MIP1-21 | E | Done | mip1-21 |
 | 41 Bound notification caches | MIP1-22 | E | Planned | — |
 | 42 Focus timeout cleanup | MIP1-23 | E | Done | mip1-23 |
-| 11 Atomic shortcuts | MIP1-24 | F | Planned | — |
-| 18 Single shortcut path | MIP1-25 | F | Planned | — |
-| 19 Port fallback | MIP1-26 | F | Planned | — |
-| 21 Badge clamp | MIP1-27 | F | Planned | — |
-| 22 External URL policy | MIP1-28 | F | Planned | — |
-| 23 Session expiry | MIP1-29 | F | Planned | — |
+| 11 Atomic shortcuts | MIP1-24 | F | Done | mip1-24 |
+| 18 Single shortcut path | MIP1-25 | F | Done | mip1-25 |
+| 19 Port fallback | MIP1-26 | F | Done | mip1-26 |
+| 21 Badge clamp | MIP1-27 | F | Done | mip1-27 |
+| 22 External URL policy | MIP1-28 | F | Done | mip1-28 |
+| 23 Session expiry | MIP1-29 | F | Done | mip1-29 |
 | 24 Sync timeout UI | MIP1-30 | G | Planned | — |
 | 25 Pagination errors | MIP1-31 | G | Planned | — |
 | 26 Invoke error strictness | MIP1-32 | G | Planned | — |

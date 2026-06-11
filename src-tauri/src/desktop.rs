@@ -1,24 +1,24 @@
 use keyring::{Entry, Error as KeyringError};
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::env;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 #[cfg(target_os = "macos")]
 use tauri::image::Image;
 use tauri::menu::{Menu, MenuEvent, MenuItem, PredefinedMenuItem};
 use tauri::tray::TrayIconBuilder;
 use tauri::{AppHandle, Emitter, Manager, Runtime, WebviewWindow};
 use tauri_plugin_clipboard_manager::ClipboardExt;
-use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutEvent, ShortcutState};
+use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 use tauri_plugin_notification::NotificationExt;
 use tauri_plugin_opener::OpenerExt;
 use url::Url;
 
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 use crate::build_info;
 
@@ -41,6 +41,10 @@ const ROUTE_NOTIFICATIONS: &str = "/inbox/notifications/";
 const ROUTE_SETTINGS: &str = "/settings/";
 
 const TRAY_ICON_ID: &str = "synara-tray";
+const TRAY_STATE_APPLY_MIN_INTERVAL_MS: u64 = 500;
+
+#[cfg(debug_assertions)]
+static TRAY_MENU_REBUILD_COUNT: AtomicU64 = AtomicU64::new(0);
 const MAX_DROPPED_FILES: usize = 32;
 const MAX_DROPPED_FILE_ALLOWLIST: usize = 256;
 const MAX_DROPPED_FILE_BYTES: u64 = 256 * 1024 * 1024;
@@ -176,8 +180,60 @@ pub struct DesktopTrayState {
     pub do_not_disturb: bool,
 }
 
+struct TrayMenuItems<R: Runtime> {
+    later: MenuItem<R>,
+    notifications: MenuItem<R>,
+    #[cfg(target_os = "linux")]
+    unread_summary: MenuItem<R>,
+    #[cfg(target_os = "linux")]
+    dnd: MenuItem<R>,
+}
+
+struct TrayStateCoalescer {
+    pending: Mutex<Option<DesktopTrayState>>,
+    last_applied_at: Mutex<Option<Instant>>,
+    flush_scheduled: AtomicBool,
+}
+
+#[cfg(debug_assertions)]
+#[allow(dead_code)]
+pub fn debug_tray_menu_rebuild_count() -> u64 {
+    TRAY_MENU_REBUILD_COUNT.load(Ordering::Relaxed)
+}
+
+impl TrayStateCoalescer {
+    fn new() -> Self {
+        Self {
+            pending: Mutex::new(None),
+            last_applied_at: Mutex::new(None),
+            flush_scheduled: AtomicBool::new(false),
+        }
+    }
+}
+
+fn tray_state_apply_min_interval() -> Duration {
+    Duration::from_millis(TRAY_STATE_APPLY_MIN_INTERVAL_MS)
+}
+
+fn should_apply_tray_state_now(last_applied_at: Option<Instant>, now: Instant) -> bool {
+    last_applied_at
+        .map(|applied_at| now.duration_since(applied_at) >= tray_state_apply_min_interval())
+        .unwrap_or(true)
+}
+
+fn normalize_tray_state(state: DesktopTrayState) -> DesktopTrayState {
+    DesktopTrayState {
+        unread_count: clamp_count(state.unread_count),
+        highlight_count: clamp_count(state.highlight_count),
+        later_count: clamp_count(state.later_count),
+        notification_inbox_count: clamp_count(state.notification_inbox_count),
+        do_not_disturb: state.do_not_disturb,
+    }
+}
+
 static LAST_SHORTCUT_APPLY_STATE: OnceLock<Mutex<Option<DesktopShortcutApplyState>>> =
     OnceLock::new();
+static LAST_ACTIVE_SHORTCUT_CONFIG: OnceLock<Mutex<Option<DesktopShortcutConfig>>> = OnceLock::new();
 
 #[derive(Clone, Serialize)]
 struct DesktopAgentActionEvent {
@@ -212,6 +268,7 @@ pub struct DesktopSessionEnvelope {
     access_token: String,
     refresh_token: Option<String>,
     expires_in_ms: Option<u64>,
+    stored_at_ms: Option<u64>,
 }
 
 const DESKTOP_AGENT_ACTION_MAX_TEXT_CHARS: usize = 1024;
@@ -274,6 +331,7 @@ const MAX_DESKTOP_ROUTE_CHARS: usize = 2_048;
 const ALLOWED_SHORTCUT_LEN: usize = 128;
 const UNKNOWN_INTEGRATION_VALUE: &str = "unknown";
 const MAX_TRAY_COUNT: i64 = 9_999;
+const SESSION_EXPIRY_CLOCK_SKEW_TOLERANCE_MS: u64 = 60_000;
 const ALLOWED_AGENT_ACTION_KIND: &[&str] = &[
     "agent",
     "copy",
@@ -455,7 +513,29 @@ fn sanitize_session_envelope(
         access_token,
         refresh_token,
         expires_in_ms: session.expires_in_ms,
+        stored_at_ms: session.stored_at_ms,
     })
+}
+
+fn current_timestamp_ms() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as u64
+}
+
+fn session_envelope_is_expired(session: &DesktopSessionEnvelope, now_ms: u64) -> bool {
+    let Some(expires_in_ms) = session.expires_in_ms else {
+        return false;
+    };
+    let Some(stored_at_ms) = session.stored_at_ms else {
+        return false;
+    };
+
+    now_ms
+        > stored_at_ms
+            .saturating_add(expires_in_ms)
+            .saturating_add(SESSION_EXPIRY_CLOCK_SKEW_TOLERANCE_MS)
 }
 
 trait DesktopSessionSecretStore {
@@ -1011,6 +1091,13 @@ fn linux_keyutils_probe_round_trip() -> Result<(), KeyringError> {
 fn desktop_get_session_from_store(
     store: &impl DesktopSessionSecretStore,
 ) -> Result<Option<DesktopSessionEnvelope>, String> {
+    desktop_get_session_from_store_at(store, current_timestamp_ms())
+}
+
+fn desktop_get_session_from_store_at(
+    store: &impl DesktopSessionSecretStore,
+    now_ms: u64,
+) -> Result<Option<DesktopSessionEnvelope>, String> {
     if !store.status().can_persist_session {
         return Ok(None);
     }
@@ -1020,16 +1107,22 @@ fn desktop_get_session_from_store(
     };
     let session = serde_json::from_str::<DesktopSessionEnvelope>(&secret)
         .map_err(|_| DESKTOP_STORED_SESSION_INVALID.to_owned())?;
-    sanitize_session_envelope(session)
-        .map(Some)
-        .map_err(|_| DESKTOP_STORED_SESSION_INVALID.to_owned())
+    let session = sanitize_session_envelope(session)
+        .map_err(|_| DESKTOP_STORED_SESSION_INVALID.to_owned())?;
+    if session_envelope_is_expired(&session, now_ms) {
+        let _ = desktop_remove_session_from_store(store);
+        return Ok(None);
+    }
+
+    Ok(Some(session))
 }
 
 fn desktop_set_session_in_store(
     store: &impl DesktopSessionSecretStore,
     session: DesktopSessionEnvelope,
 ) -> Result<bool, String> {
-    let session = sanitize_session_envelope(session)?;
+    let mut session = sanitize_session_envelope(session)?;
+    session.stored_at_ms = Some(current_timestamp_ms());
     if !store.status().can_persist_session {
         return Ok(false);
     }
@@ -1049,15 +1142,22 @@ fn desktop_remove_session_from_store(
     store.remove_secret()
 }
 
+/// External URLs must use HTTPS unless they target a loopback host (development).
 pub fn is_safe_external_url(value: &str) -> bool {
     let Ok(url) = Url::parse(value) else {
         return false;
     };
 
+    if !url.username().is_empty() || url.password().is_some() {
+        return false;
+    }
+
     match url.scheme() {
-        "https" | "http" => {
-            url.host_str().is_some() && url.username().is_empty() && url.password().is_none()
-        }
+        "https" => url.host_str().is_some(),
+        "http" => url
+            .host_str()
+            .map(is_loopback_session_host)
+            .unwrap_or(false),
         "mailto" | "matrix" => true,
         _ => false,
     }
@@ -1808,6 +1908,228 @@ fn read_last_shortcut_apply_state() -> Option<DesktopShortcutApplyState> {
         .and_then(|state| state.clone())
 }
 
+fn last_active_shortcut_config() -> &'static Mutex<Option<DesktopShortcutConfig>> {
+    LAST_ACTIVE_SHORTCUT_CONFIG.get_or_init(|| Mutex::new(None))
+}
+
+fn read_last_active_shortcut_config() -> Option<DesktopShortcutConfig> {
+    last_active_shortcut_config()
+        .lock()
+        .ok()
+        .and_then(|config| config.clone())
+}
+
+fn set_last_active_shortcut_config(config: DesktopShortcutConfig) {
+    if let Ok(mut guard) = last_active_shortcut_config().lock() {
+        *guard = Some(config);
+    }
+}
+
+fn shortcut_route_for_slot(config: &DesktopShortcutConfig, shortcut: &str) -> Option<&'static str> {
+    if config.show == shortcut {
+        return Some(ROUTE_HOME);
+    }
+    if config.later == shortcut {
+        return Some(ROUTE_LATER);
+    }
+    if config.notifications == shortcut {
+        return Some(ROUTE_NOTIFICATIONS);
+    }
+    None
+}
+
+fn shortcut_strings_for_config(config: &DesktopShortcutConfig) -> [&str; 3] {
+    [
+        config.show.as_str(),
+        config.later.as_str(),
+        config.notifications.as_str(),
+    ]
+}
+
+fn shortcuts_needing_registration(
+    previous: Option<&DesktopShortcutConfig>,
+    normalized: &DesktopShortcutConfig,
+) -> Vec<String> {
+    let Some(previous) = previous else {
+        return vec![
+            normalized.show.clone(),
+            normalized.later.clone(),
+            normalized.notifications.clone(),
+        ];
+    };
+
+    let mut shortcuts = Vec::new();
+    if previous.show != normalized.show {
+        shortcuts.push(normalized.show.clone());
+    }
+    if previous.later != normalized.later {
+        shortcuts.push(normalized.later.clone());
+    }
+    if previous.notifications != normalized.notifications {
+        shortcuts.push(normalized.notifications.clone());
+    }
+    shortcuts
+}
+
+fn shortcuts_needing_handler_rebind(
+    previous: &DesktopShortcutConfig,
+    normalized: &DesktopShortcutConfig,
+) -> Vec<String> {
+    let mut shortcuts = Vec::new();
+    for shortcut in shortcut_strings_for_config(normalized) {
+        let Some(new_route) = shortcut_route_for_slot(normalized, shortcut) else {
+            continue;
+        };
+        let Some(old_route) = shortcut_route_for_slot(previous, shortcut) else {
+            continue;
+        };
+        if old_route != new_route {
+            shortcuts.push(shortcut.to_owned());
+        }
+    }
+    shortcuts
+}
+
+fn retired_shortcut_strings(
+    previous: &DesktopShortcutConfig,
+    normalized: &DesktopShortcutConfig,
+) -> Vec<String> {
+    let new_strings: HashSet<&str> = shortcut_strings_for_config(normalized).into_iter().collect();
+    shortcut_strings_for_config(previous)
+        .into_iter()
+        .filter(|shortcut| !new_strings.contains(shortcut))
+        .map(str::to_owned)
+        .collect()
+}
+
+fn build_shortcut_route_map(
+    normalized: &DesktopShortcutConfig,
+    parsed_show: &Shortcut,
+    parsed_later: &Shortcut,
+    parsed_notifications: &Shortcut,
+) -> HashMap<u32, &'static str> {
+    let mut route_by_id = HashMap::new();
+    route_by_id.insert(parsed_show.id(), ROUTE_HOME);
+    route_by_id.insert(parsed_later.id(), ROUTE_LATER);
+    route_by_id.insert(parsed_notifications.id(), ROUTE_NOTIFICATIONS);
+    debug_assert_eq!(normalized.show, parsed_show.to_string());
+    debug_assert_eq!(normalized.later, parsed_later.to_string());
+    debug_assert_eq!(normalized.notifications, parsed_notifications.to_string());
+    route_by_id
+}
+
+fn register_desktop_shortcut_batch(
+    global_shortcut: &tauri_plugin_global_shortcut::GlobalShortcut<tauri::Wry>,
+    shortcuts: &[String],
+    route_by_id: HashMap<u32, &'static str>,
+) -> Result<(), String> {
+    if shortcuts.is_empty() {
+        return Ok(());
+    }
+
+    let shortcut_refs = shortcuts.iter().map(String::as_str).collect::<Vec<_>>();
+    global_shortcut
+        .on_shortcuts(shortcut_refs, move |app, shortcut, event| {
+            if event.state() != ShortcutState::Pressed {
+                return;
+            }
+
+            let Some(route) = route_by_id.get(&shortcut.id()) else {
+                return;
+            };
+            if let Err(error) = navigate_main_window(app, route) {
+                eprintln!("failed to handle desktop shortcut: {error}");
+            }
+        })
+        .map_err(|error| error.to_string())
+}
+
+fn unregister_desktop_shortcut_batch(
+    global_shortcut: &tauri_plugin_global_shortcut::GlobalShortcut<tauri::Wry>,
+    shortcuts: &[String],
+) {
+    if shortcuts.is_empty() {
+        return;
+    }
+
+    let shortcut_refs = shortcuts.iter().map(String::as_str).collect::<Vec<_>>();
+    let _ = global_shortcut.unregister_multiple(shortcut_refs);
+}
+
+fn rebind_desktop_shortcut_handlers(
+    global_shortcut: &tauri_plugin_global_shortcut::GlobalShortcut<tauri::Wry>,
+    shortcuts: &[String],
+    route_by_id: HashMap<u32, &'static str>,
+) -> Result<(), String> {
+    for shortcut in shortcuts {
+        let _ = global_shortcut.unregister(shortcut.as_str());
+        register_desktop_shortcut_batch(
+            global_shortcut,
+            std::slice::from_ref(shortcut),
+            route_by_id.clone(),
+        )?;
+    }
+    Ok(())
+}
+
+fn apply_desktop_shortcuts(
+    app: &AppHandle,
+    normalized: DesktopShortcutConfig,
+    parsed_show: Shortcut,
+    parsed_later: Shortcut,
+    parsed_notifications: Shortcut,
+) -> DesktopShortcutApplyResult {
+    let previous_config = read_last_active_shortcut_config();
+    let global_shortcut = app.global_shortcut();
+    let route_by_id = build_shortcut_route_map(
+        &normalized,
+        &parsed_show,
+        &parsed_later,
+        &parsed_notifications,
+    );
+
+    let brand_new_shortcuts = shortcuts_needing_registration(previous_config.as_ref(), &normalized);
+    if let Err(error) =
+        register_desktop_shortcut_batch(&global_shortcut, &brand_new_shortcuts, route_by_id.clone())
+    {
+        unregister_desktop_shortcut_batch(&global_shortcut, &brand_new_shortcuts);
+        let state = shortcut_state_from_error(&error);
+        let preserved_state = read_last_shortcut_apply_state().unwrap_or(state.clone());
+        set_last_shortcut_apply_state(preserved_state);
+        return shortcut_result(
+            state,
+            Some(format!("Failed to register desktop shortcuts: {error}")),
+            desktop_shortcut_fallback_command(),
+        );
+    }
+
+    if let Some(previous) = previous_config.as_ref() {
+        let rebind_shortcuts = shortcuts_needing_handler_rebind(previous, &normalized);
+        if let Err(error) = rebind_desktop_shortcut_handlers(
+            &global_shortcut,
+            &rebind_shortcuts,
+            route_by_id.clone(),
+        ) {
+            unregister_desktop_shortcut_batch(&global_shortcut, &brand_new_shortcuts);
+            let state = shortcut_state_from_error(&error);
+            let preserved_state = read_last_shortcut_apply_state().unwrap_or(state.clone());
+            set_last_shortcut_apply_state(preserved_state);
+            return shortcut_result(
+                state,
+                Some(format!("Failed to update desktop shortcuts: {error}")),
+                desktop_shortcut_fallback_command(),
+            );
+        }
+
+        let retired_shortcuts = retired_shortcut_strings(previous, &normalized);
+        unregister_desktop_shortcut_batch(&global_shortcut, &retired_shortcuts);
+    }
+
+    set_last_active_shortcut_config(normalized);
+    set_last_shortcut_apply_state(DesktopShortcutApplyState::Active);
+    shortcut_result(DesktopShortcutApplyState::Active, None, None)
+}
+
 fn is_kde() -> bool {
     env::var("XDG_CURRENT_DESKTOP")
         .map(|value| value.to_ascii_lowercase().contains("kde"))
@@ -1998,10 +2320,141 @@ fn tray_route_labels(state: &DesktopTrayState) -> [String; 5] {
     ]
 }
 
+fn apply_tray_menu_labels<R: Runtime>(
+    items: &TrayMenuItems<R>,
+    state: &DesktopTrayState,
+) -> tauri::Result<()> {
+    let route_labels = tray_route_labels(state);
+    items.later.set_text(route_labels[1].as_str())?;
+    items.notifications.set_text(route_labels[2].as_str())?;
+    #[cfg(target_os = "linux")]
+    {
+        items.unread_summary.set_text(route_labels[0].as_str())?;
+        items.dnd.set_text(route_labels[3].as_str())?;
+    }
+    Ok(())
+}
+
+fn apply_tray_state_in_place<R: Runtime>(
+    app: &AppHandle<R>,
+    items: &TrayMenuItems<R>,
+    state: &DesktopTrayState,
+) -> Result<(), String> {
+    apply_tray_menu_labels(items, state).map_err(|error| error.to_string())?;
+    if let Some(tray) = app.tray_by_id(TRAY_ICON_ID) {
+        tray.set_tooltip(Some(tray_tooltip(state)))
+            .map_err(|error| error.to_string())?;
+    }
+    Ok(())
+}
+
+fn rebuild_tray_menu<R: Runtime>(
+    app: &AppHandle<R>,
+    state: &DesktopTrayState,
+) -> Result<(), String> {
+    let Some(tray) = app.tray_by_id(TRAY_ICON_ID) else {
+        return Ok(());
+    };
+
+    #[cfg(debug_assertions)]
+    TRAY_MENU_REBUILD_COUNT.fetch_add(1, Ordering::Relaxed);
+
+    let built_menu = build_tray_menu(app, state).map_err(|error| error.to_string())?;
+    tray.set_menu(Some(built_menu.0))
+        .map_err(|error| error.to_string())?;
+    tray.set_tooltip(Some(tray_tooltip(state)))
+        .map_err(|error| error.to_string())?;
+    Ok(())
+}
+
+fn apply_pending_tray_state<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
+    let coalescer = app.state::<TrayStateCoalescer>();
+    let state = {
+        let mut pending = coalescer.pending.lock().map_err(|error| error.to_string())?;
+        pending.take()
+    };
+    let Some(state) = state else {
+        return Ok(());
+    };
+
+    let normalized = normalize_tray_state(state);
+    if let Some(items) = app.try_state::<TrayMenuItems<R>>() {
+        apply_tray_state_in_place(app, &items, &normalized)?;
+    } else {
+        rebuild_tray_menu(app, &normalized)?;
+    }
+
+    let mut last_applied_at = coalescer
+        .last_applied_at
+        .lock()
+        .map_err(|error| error.to_string())?;
+    *last_applied_at = Some(Instant::now());
+    Ok(())
+}
+
+fn schedule_tray_state_flush<R: Runtime>(app: AppHandle<R>) {
+    let coalescer = app.state::<TrayStateCoalescer>();
+    if coalescer
+        .flush_scheduled
+        .swap(true, Ordering::AcqRel)
+    {
+        return;
+    }
+
+    let delay = {
+        let last_applied_at = coalescer.last_applied_at.lock().ok().and_then(|guard| *guard);
+        let elapsed = last_applied_at
+            .map(|applied_at| Instant::now().duration_since(applied_at))
+            .unwrap_or(tray_state_apply_min_interval());
+        tray_state_apply_min_interval()
+            .checked_sub(elapsed)
+            .unwrap_or(Duration::ZERO)
+    };
+
+    tauri::async_runtime::spawn(async move {
+        if !delay.is_zero() {
+            let _ = tauri::async_runtime::spawn_blocking(move || std::thread::sleep(delay)).await;
+        }
+
+        let coalescer = app.state::<TrayStateCoalescer>();
+        coalescer.flush_scheduled.store(false, Ordering::Release);
+        if let Err(error) = apply_pending_tray_state(&app) {
+            eprintln!("failed to apply coalesced tray state: {error}");
+        }
+    });
+}
+
+fn queue_tray_state_update<R: Runtime>(
+    app: AppHandle<R>,
+    state: DesktopTrayState,
+) -> Result<(), String> {
+    let coalescer = app.state::<TrayStateCoalescer>();
+    {
+        let mut pending = coalescer.pending.lock().map_err(|error| error.to_string())?;
+        *pending = Some(state);
+    }
+
+    let now = Instant::now();
+    let apply_now = {
+        let last_applied_at = coalescer
+            .last_applied_at
+            .lock()
+            .map_err(|error| error.to_string())?;
+        should_apply_tray_state_now(*last_applied_at, now)
+    };
+
+    if apply_now {
+        apply_pending_tray_state(&app)
+    } else {
+        schedule_tray_state_flush(app);
+        Ok(())
+    }
+}
+
 fn build_tray_menu<R: Runtime>(
     app: &AppHandle<R>,
     state: &DesktopTrayState,
-) -> tauri::Result<Menu<R>> {
+) -> tauri::Result<(Menu<R>, TrayMenuItems<R>)> {
     let route_labels = tray_route_labels(state);
 
     let show = MenuItem::with_id(
@@ -2047,6 +2500,11 @@ fn build_tray_menu<R: Runtime>(
             &quit,
         ],
     )?;
+    #[cfg(not(target_os = "linux"))]
+    let items = TrayMenuItems {
+        later,
+        notifications,
+    };
 
     #[cfg(target_os = "linux")]
     let unread_summary = MenuItem::with_id(
@@ -2087,8 +2545,15 @@ fn build_tray_menu<R: Runtime>(
             &quit,
         ],
     )?;
+    #[cfg(target_os = "linux")]
+    let items = TrayMenuItems {
+        later,
+        notifications,
+        unread_summary,
+        dnd,
+    };
 
-    Ok(menu)
+    Ok((menu, items))
 }
 
 fn tray_tooltip(state: &DesktopTrayState) -> String {
@@ -2244,7 +2709,7 @@ fn emit_tray_dnd_toggle<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
 
 pub fn set_badge_count<R: Runtime>(app: &AppHandle<R>, count: Option<i64>) -> tauri::Result<()> {
     if let Some(window) = main_window(app) {
-        let normalized_count = count.filter(|value| *value > 0);
+        let normalized_count = count.map(clamp_count).filter(|value| *value > 0);
         window.set_badge_count(normalized_count)?;
 
         #[cfg(target_os = "macos")]
@@ -2266,6 +2731,8 @@ pub fn performance_capabilities() -> DesktopPerformanceCapabilities {
 }
 
 pub fn create_tray<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
+    app.manage(TrayStateCoalescer::new());
+
     let initial_state = DesktopTrayState {
         unread_count: 0,
         highlight_count: 0,
@@ -2273,7 +2740,8 @@ pub fn create_tray<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
         notification_inbox_count: 0,
         do_not_disturb: false,
     };
-    let menu = build_tray_menu(app, &initial_state)?;
+    let (menu, tray_items) = build_tray_menu(app, &initial_state)?;
+    app.manage(tray_items);
 
     let mut builder = TrayIconBuilder::with_id("synara-tray")
         .tooltip(&tray_tooltip(&initial_state))
@@ -2335,7 +2803,7 @@ pub fn desktop_navigate(app: AppHandle, route: String) -> Result<(), String> {
 
 #[tauri::command]
 pub fn desktop_set_badge_count(app: AppHandle, count: i64) -> Result<(), String> {
-    set_badge_count(&app, Some(count)).map_err(|error| error.to_string())
+    set_badge_count(&app, Some(clamp_count(count))).map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -2378,54 +2846,13 @@ pub fn desktop_set_shortcuts(
         }
     };
 
-    let mut route_by_id = HashMap::new();
-    route_by_id.insert(parsed_show.id(), ROUTE_HOME);
-    route_by_id.insert(parsed_later.id(), ROUTE_LATER);
-    route_by_id.insert(parsed_notifications.id(), ROUTE_NOTIFICATIONS);
-
-    let global_shortcut = app.global_shortcut();
-    if let Err(error) = global_shortcut.unregister_all() {
-        let state = shortcut_state_from_error(&error.to_string());
-        let result = shortcut_result(
-            state,
-            Some(format!("Failed to clear previous shortcuts: {error}")),
-            desktop_shortcut_fallback_command(),
-        );
-        set_last_shortcut_apply_state(state);
-        return result;
-    };
-
-    if let Err(error) = global_shortcut.on_shortcuts(
-        [
-            normalized.show.as_str(),
-            normalized.later.as_str(),
-            normalized.notifications.as_str(),
-        ],
-        move |app: &AppHandle<tauri::Wry>, shortcut: &Shortcut, event: ShortcutEvent| {
-            if event.state() != ShortcutState::Pressed {
-                return;
-            }
-
-            let Some(route) = route_by_id.get(&shortcut.id()) else {
-                return;
-            };
-            if let Err(error) = navigate_main_window(app, route) {
-                eprintln!("failed to handle desktop shortcut: {error}");
-            }
-        },
-    ) {
-        let state = shortcut_state_from_error(&error.to_string());
-        let result = shortcut_result(
-            state,
-            Some(format!("Failed to register desktop shortcuts: {error}")),
-            desktop_shortcut_fallback_command(),
-        );
-        set_last_shortcut_apply_state(state);
-        return result;
-    }
-
-    set_last_shortcut_apply_state(DesktopShortcutApplyState::Active);
-    shortcut_result(DesktopShortcutApplyState::Active, None, None)
+    apply_desktop_shortcuts(
+        &app,
+        normalized,
+        parsed_show,
+        parsed_later,
+        parsed_notifications,
+    )
 }
 
 pub fn bridge_supports_secure_secret_store(status: &DesktopSecretStoreStatus) -> bool {
@@ -2502,13 +2929,7 @@ pub fn desktop_get_integration_status(app: AppHandle) -> DesktopIntegrationStatu
             message: "Notification state could not be read.".to_string(),
         });
 
-    let shortcut_state = read_last_shortcut_apply_state().unwrap_or_else(|| {
-        if is_kde_wayland_session() {
-            DesktopShortcutApplyState::Failed
-        } else {
-            DesktopShortcutApplyState::Active
-        }
-    });
+    let shortcut_state = read_last_shortcut_apply_state().unwrap_or(DesktopShortcutApplyState::Failed);
     let global_shortcuts = DesktopIntegrationCheck {
         name: "Global Shortcuts".to_string(),
         supported: cfg!(not(any(target_os = "android", target_os = "ios"))),
@@ -2522,7 +2943,9 @@ pub fn desktop_get_integration_status(app: AppHandle) -> DesktopIntegrationStatu
                 "Global shortcuts are unsupported in this build.".to_string()
             }
             DesktopShortcutApplyState::Failed => {
-                if is_kde_wayland_session() {
+                if read_last_active_shortcut_config().is_none() {
+                    "Global shortcuts are configured after the client loads.".to_string()
+                } else if is_kde_wayland_session() {
                     "Global shortcuts may require permission on KDE Wayland.".to_string()
                 } else {
                     "Global shortcuts not currently active.".to_string()
@@ -2574,19 +2997,8 @@ pub fn desktop_get_integration_status(app: AppHandle) -> DesktopIntegrationStatu
 
 #[tauri::command]
 pub fn desktop_update_tray_state(app: AppHandle, state: DesktopTrayState) -> Result<(), String> {
-    if let Some(tray) = app.tray_by_id(TRAY_ICON_ID) {
-        let state = DesktopTrayState {
-            unread_count: clamp_count(state.unread_count),
-            highlight_count: clamp_count(state.highlight_count),
-            later_count: clamp_count(state.later_count),
-            notification_inbox_count: clamp_count(state.notification_inbox_count),
-            do_not_disturb: state.do_not_disturb,
-        };
-        let menu = build_tray_menu(&app, &state).map_err(|error| error.to_string())?;
-        tray.set_menu(Some(menu))
-            .map_err(|error| error.to_string())?;
-        tray.set_tooltip(Some(tray_tooltip(&state)))
-            .map_err(|error| error.to_string())?;
+    if app.tray_by_id(TRAY_ICON_ID).is_some() {
+        queue_tray_state_update(app, state)?;
     }
     Ok(())
 }
@@ -2688,6 +3100,7 @@ mod tests {
             access_token: "access-token".to_owned(),
             refresh_token: None,
             expires_in_ms: Some(3_600_000),
+            stored_at_ms: None,
         }
     }
 
@@ -2915,9 +3328,11 @@ mod tests {
     }
 
     #[test]
-    fn external_url_filter_allows_http_links_and_blocks_scriptable_schemes() {
+    fn external_url_filter_allows_https_and_loopback_http_only() {
         assert!(is_safe_external_url("https://example.org/path"));
-        assert!(is_safe_external_url("http://example.org/path"));
+        assert!(!is_safe_external_url("http://example.org/path"));
+        assert!(is_safe_external_url("http://127.0.0.1:8080"));
+        assert!(is_safe_external_url("http://localhost:8080"));
         assert!(is_safe_external_url("mailto:test@example.org"));
         assert!(!is_safe_external_url("javascript:alert(1)"));
         assert!(!is_safe_external_url("file:///Users/example/.ssh/id_rsa"));
@@ -2933,6 +3348,7 @@ mod tests {
             access_token: " access-token ".to_owned(),
             refresh_token: Some(" refresh-token ".to_owned()),
             expires_in_ms: Some(3_600_000),
+            stored_at_ms: None,
         })
         .expect("session envelope should pass");
 
@@ -3409,6 +3825,7 @@ mod tests {
                 access_token: " access-token ".to_owned(),
                 refresh_token: Some(" refresh-token ".to_owned()),
                 expires_in_ms: Some(3_600_000),
+                stored_at_ms: None,
             },
         )
         .expect("session should store");
@@ -3461,6 +3878,62 @@ mod tests {
 
         assert_eq!(error, DESKTOP_STORED_SESSION_INVALID);
         assert!(!error.contains(raw_secret));
+    }
+
+    #[test]
+    fn session_envelope_expiry_honors_tolerance_and_missing_metadata() {
+        let stored_at_ms = 1_000_000;
+        let session = DesktopSessionEnvelope {
+            stored_at_ms: Some(stored_at_ms),
+            expires_in_ms: Some(3_600_000),
+            ..valid_session_envelope()
+        };
+
+        assert!(!session_envelope_is_expired(&session, stored_at_ms));
+        assert!(!session_envelope_is_expired(
+            &session,
+            stored_at_ms + 3_600_000 + SESSION_EXPIRY_CLOCK_SKEW_TOLERANCE_MS
+        ));
+        assert!(session_envelope_is_expired(
+            &session,
+            stored_at_ms + 3_600_000 + SESSION_EXPIRY_CLOCK_SKEW_TOLERANCE_MS + 1
+        ));
+
+        let without_expiry = DesktopSessionEnvelope {
+            expires_in_ms: None,
+            stored_at_ms: Some(stored_at_ms),
+            ..valid_session_envelope()
+        };
+        assert!(!session_envelope_is_expired(&without_expiry, stored_at_ms + 9_999_999));
+
+        let without_stored_at = DesktopSessionEnvelope {
+            expires_in_ms: Some(3_600_000),
+            stored_at_ms: None,
+            ..valid_session_envelope()
+        };
+        assert!(!session_envelope_is_expired(&without_stored_at, stored_at_ms + 9_999_999));
+    }
+
+    #[test]
+    fn desktop_session_store_clears_expired_sessions_on_read() {
+        let store = TestSessionSecretStore::available();
+        let stored_at_ms = 1_000_000;
+        let mut session = valid_session_envelope();
+        session.stored_at_ms = Some(stored_at_ms);
+        session.expires_in_ms = Some(60_000);
+
+        let secret = serde_json::to_string(&session).expect("session should encode");
+        store.set_secret(&secret).expect("session should store");
+        assert!(desktop_get_session_from_store_at(&store, stored_at_ms + 30_000)
+            .expect("session should read")
+            .is_some());
+        assert!(desktop_get_session_from_store_at(
+            &store,
+            stored_at_ms + 60_000 + SESSION_EXPIRY_CLOCK_SKEW_TOLERANCE_MS + 1
+        )
+        .expect("expired session should read as none")
+        .is_none());
+        assert_eq!(store.stored_secret(), None);
     }
 
     #[test]
@@ -3766,6 +4239,67 @@ VERSION_ID=24
     }
 
     #[test]
+    fn shortcut_slot_helpers_detect_rebind_and_retired_shortcuts() {
+        let previous = DesktopShortcutConfig {
+            show: "CmdOrCtrl+Shift+C".to_string(),
+            later: "CmdOrCtrl+Shift+L".to_string(),
+            notifications: "CmdOrCtrl+Shift+N".to_string(),
+        };
+        let swapped = DesktopShortcutConfig {
+            show: "CmdOrCtrl+Shift+L".to_string(),
+            later: "CmdOrCtrl+Shift+C".to_string(),
+            notifications: "CmdOrCtrl+Shift+N".to_string(),
+        };
+
+        assert_eq!(
+            shortcuts_needing_registration(Some(&previous), &swapped),
+            vec![
+                "CmdOrCtrl+Shift+L".to_string(),
+                "CmdOrCtrl+Shift+C".to_string()
+            ]
+        );
+        assert_eq!(
+            shortcuts_needing_handler_rebind(&previous, &swapped),
+            vec![
+                "CmdOrCtrl+Shift+L".to_string(),
+                "CmdOrCtrl+Shift+C".to_string()
+            ]
+        );
+        assert!(retired_shortcut_strings(&previous, &swapped).is_empty());
+    }
+
+    #[test]
+    fn shortcut_slot_helpers_detect_retired_shortcuts_on_replacement() {
+        let previous = DesktopShortcutConfig {
+            show: "CmdOrCtrl+Shift+C".to_string(),
+            later: "CmdOrCtrl+Shift+L".to_string(),
+            notifications: "CmdOrCtrl+Shift+N".to_string(),
+        };
+        let replaced = DesktopShortcutConfig {
+            show: "CmdOrCtrl+Shift+1".to_string(),
+            later: "CmdOrCtrl+Shift+2".to_string(),
+            notifications: "CmdOrCtrl+Shift+3".to_string(),
+        };
+
+        assert_eq!(
+            shortcuts_needing_registration(Some(&previous), &replaced),
+            vec![
+                "CmdOrCtrl+Shift+1".to_string(),
+                "CmdOrCtrl+Shift+2".to_string(),
+                "CmdOrCtrl+Shift+3".to_string()
+            ]
+        );
+        assert_eq!(
+            retired_shortcut_strings(&previous, &replaced),
+            vec![
+                "CmdOrCtrl+Shift+C".to_string(),
+                "CmdOrCtrl+Shift+L".to_string(),
+                "CmdOrCtrl+Shift+N".to_string()
+            ]
+        );
+    }
+
+    #[test]
     fn shortcut_state_classifier_detects_permission_errors_and_result_shapes() {
         assert_eq!(
             shortcut_state_from_error("failed with denied"),
@@ -3780,6 +4314,44 @@ VERSION_ID=24
         assert!(!result.success);
         assert_eq!(result.state, DesktopShortcutApplyState::PermissionNeeded);
         assert!(result.fallback_command.is_some());
+    }
+
+    #[test]
+    fn tray_state_apply_interval_allows_first_update_and_blocks_rapid_rebuilds() {
+        let interval = tray_state_apply_min_interval();
+        let started_at = Instant::now();
+        assert!(should_apply_tray_state_now(None, started_at));
+        assert!(!should_apply_tray_state_now(
+            Some(started_at),
+            started_at + Duration::from_millis(100)
+        ));
+        assert!(should_apply_tray_state_now(
+            Some(started_at),
+            started_at + interval
+        ));
+    }
+
+    #[test]
+    fn normalize_tray_state_clamps_all_count_fields() {
+        let normalized = normalize_tray_state(DesktopTrayState {
+            unread_count: -3,
+            highlight_count: 12_345,
+            later_count: 4,
+            notification_inbox_count: -1,
+            do_not_disturb: true,
+        });
+
+        assert_eq!(normalized.unread_count, 0);
+        assert_eq!(normalized.highlight_count, 9_999);
+        assert_eq!(normalized.later_count, 4);
+        assert_eq!(normalized.notification_inbox_count, 0);
+        assert!(normalized.do_not_disturb);
+    }
+
+    #[test]
+    fn badge_count_uses_same_clamp_as_tray_state() {
+        assert_eq!(clamp_count(50_000), 9_999);
+        assert_eq!(clamp_count(-3), 0);
     }
 
     #[test]
@@ -4084,30 +4656,7 @@ VERSION_ID=24
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 pub fn global_shortcut_plugin() -> tauri::plugin::TauriPlugin<tauri::Wry> {
-    use tauri_plugin_global_shortcut::ShortcutState;
-
-    tauri_plugin_global_shortcut::Builder::new()
-        .with_shortcuts([
-            "CmdOrCtrl+Shift+C",
-            "CmdOrCtrl+Shift+L",
-            "CmdOrCtrl+Shift+N",
-        ])
-        .expect("desktop global shortcuts must parse")
-        .with_handler(|app, shortcut, event| {
-            if event.state() != ShortcutState::Pressed {
-                return;
-            }
-
-            let result = match shortcut.to_string().as_str() {
-                "CmdOrCtrl+Shift+C" => navigate_main_window(app, ROUTE_HOME),
-                "CmdOrCtrl+Shift+L" => navigate_main_window(app, ROUTE_LATER),
-                "CmdOrCtrl+Shift+N" => navigate_main_window(app, ROUTE_NOTIFICATIONS),
-                _ => Ok(()),
-            };
-
-            if let Err(error) = result {
-                eprintln!("failed to handle desktop shortcut: {error}");
-            }
-        })
-        .build()
+    // Global shortcuts are registered only via `desktop_set_shortcuts` after the
+    // frontend DesktopShortcutSync mounts. Until then, no shortcuts are active.
+    tauri_plugin_global_shortcut::Builder::new().build()
 }
