@@ -1,4 +1,5 @@
 import { getBadgeCount } from '../notifications/badgeSummary';
+import { getHomeRoomPath } from '../pages/pathUtils';
 import {
   normalizeAgentActionPayload,
   type AgentActionPayload,
@@ -7,6 +8,11 @@ import {
 
 type TauriInternals = {
   invoke?: <T = unknown>(command: string, args?: Record<string, unknown>) => Promise<T>;
+  transformCallback?: <T>(callback: (response: T) => void, once?: boolean) => number;
+};
+
+type TauriEventPluginInternals = {
+  unregisterListener?: (event: string, eventId: number) => void;
 };
 
 type SynaraDesktopBridge = {
@@ -134,10 +140,23 @@ declare global {
   interface Window {
     __SYNARA_DESKTOP__?: SynaraDesktopBridge;
     __TAURI_INTERNALS__?: TauriInternals;
+    __TAURI_EVENT_PLUGIN_INTERNALS__?: TauriEventPluginInternals;
   }
 }
 
 export type DesktopAgentActionPayload = AgentActionPayload;
+
+export type DesktopAgentActionEventPayload = {
+  action: DesktopAgentActionPayload;
+};
+
+export type DesktopEvent<T> = {
+  event: string;
+  id: number;
+  payload: T;
+};
+
+export type DesktopUnlisten = () => void | Promise<void>;
 
 const normalizeActionField = (
   value: unknown,
@@ -160,12 +179,17 @@ const clampCount = (value: unknown): number => {
   return Math.max(0, Math.floor(value));
 };
 
-const sanitizeRoute = (value: unknown): string | undefined => {
+export const sanitizeDesktopNotificationRoute = (value: unknown): string | undefined => {
   const normalized = normalizeActionField(value, MAX_DESKTOP_ROUTE_LENGTH);
   if (!normalized || normalized.includes('://')) return undefined;
   if (!normalized.startsWith('/') && !normalized.startsWith('#')) return undefined;
   return normalized;
 };
+
+export const buildDesktopNotificationRoomRoute = (
+  roomId: string,
+  eventId?: string
+): string => getHomeRoomPath(roomId, eventId);
 
 const toShortcutApplyState = (value: unknown): DesktopShortcutApplyState | undefined => {
   if (value === 'active') return 'active';
@@ -311,6 +335,25 @@ export const invokeDesktop = async <T = unknown>(
   const invoke = window.__SYNARA_DESKTOP__?.invoke ?? window.__TAURI_INTERNALS__?.invoke;
   if (!invoke) return undefined;
   return invoke<T>(command, args);
+};
+
+export const listen = async <T>(
+  event: string,
+  handler: (event: DesktopEvent<T>) => void
+): Promise<DesktopUnlisten | undefined> => {
+  const internals = window.__TAURI_INTERNALS__;
+  if (!internals?.invoke || !internals.transformCallback) return undefined;
+
+  const eventId = await internals.invoke<number>('plugin:event|listen', {
+    event,
+    target: { kind: 'Any' },
+    handler: internals.transformCallback(handler),
+  });
+
+  return async () => {
+    window.__TAURI_EVENT_PLUGIN_INTERNALS__?.unregisterListener?.(event, eventId);
+    await internals.invoke?.('plugin:event|unlisten', { event, eventId });
+  };
 };
 
 export const setDesktopBadgeCount = async (count: number): Promise<void> => {
@@ -461,7 +504,7 @@ export const showDesktopNotification = async (
     notification: {
       title: normalizeValue(notification.title),
       body: notification.body === undefined ? undefined : normalizeValue(notification.body),
-      route: sanitizeRoute(notification.route),
+      route: sanitizeDesktopNotificationRoute(notification.route),
     },
   });
   return result === true;
@@ -471,3 +514,11 @@ export const getDesktopNotificationCount = (
   unreadCounts: Iterable<{ total?: number; highlight?: number }>,
   laterActiveCount: number
 ): number => getBadgeCount(unreadCounts, laterActiveCount);
+
+export const DESKTOP_TRAY_DND_TOGGLE_EVENT = 'synara-tray-dnd-toggle';
+
+export const subscribeDesktopTrayDndToggle = (handler: () => void): (() => void) => {
+  const listener = () => handler();
+  window.addEventListener(DESKTOP_TRAY_DND_TOGGLE_EVENT, listener);
+  return () => window.removeEventListener(DESKTOP_TRAY_DND_TOGGLE_EVENT, listener);
+};

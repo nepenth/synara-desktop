@@ -60,6 +60,56 @@ const normalizeUrl = (value: unknown): string | undefined => {
   return safeRemoteContentUrl(url);
 };
 
+const WORKFLOW_AGENT_ACTION_KINDS = new Set<AgentActionKind>([
+  'agent',
+  'continue',
+  'export',
+  'prompt',
+  'regenerate',
+  'run',
+]);
+
+export type AgentActionExecutionPlan =
+  | { type: 'open-url'; url: string }
+  | { type: 'copy-text'; text: string }
+  | { type: 'unsupported' };
+
+const copyTextFromAction = (action: NormalizedAgentActionPayload): string | undefined =>
+  action.markdown ?? action.prompt ?? action.title;
+
+export const planAgentActionExecution = (
+  action: NormalizedAgentActionPayload
+): AgentActionExecutionPlan => {
+  const kind = action.kind;
+
+  if (kind === 'open' || kind === 'open_url') {
+    return action.url ? { type: 'open-url', url: action.url } : { type: 'unsupported' };
+  }
+
+  if (kind === 'copy') {
+    const text = copyTextFromAction(action);
+    return text ? { type: 'copy-text', text } : { type: 'unsupported' };
+  }
+
+  if (kind === 'approve' || kind === 'reject') {
+    return { type: 'unsupported' };
+  }
+
+  if (kind && WORKFLOW_AGENT_ACTION_KINDS.has(kind)) {
+    if (action.url) return { type: 'open-url', url: action.url };
+    const text = action.prompt ?? action.markdown;
+    return text ? { type: 'copy-text', text } : { type: 'unsupported' };
+  }
+
+  if (!kind) {
+    if (action.url) return { type: 'open-url', url: action.url };
+    const text = action.prompt ?? action.markdown;
+    return text ? { type: 'copy-text', text } : { type: 'unsupported' };
+  }
+
+  return { type: 'unsupported' };
+};
+
 export const normalizeAgentActionPayload = (
   action: AgentActionPayload
 ): NormalizedAgentActionPayload | undefined => {

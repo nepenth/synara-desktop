@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  buildDesktopNotificationRoomRoute,
+  DESKTOP_TRAY_DND_TOGGLE_EVENT,
   getDesktopIntegrationStatus,
   getDesktopNotificationCount,
   getDesktopPerformanceCapabilities,
@@ -11,6 +13,7 @@ import {
   setDesktopShortcuts,
   setDesktopTrayState,
   showDesktopNotification,
+  subscribeDesktopTrayDndToggle,
 } from '../desktop';
 
 type DesktopActionCallArgs = {
@@ -402,6 +405,84 @@ test('desktop notifications trim text and reject external routes', async () => {
   ]);
 });
 
+test('desktop notification room routes encode room and event anchors', () => {
+  assert.equal(
+    buildDesktopNotificationRoomRoute('!room:example.org', '$event:example.org'),
+    '/home/!room%3Aexample.org/%24event%3Aexample.org'
+  );
+});
+
+test('desktop notification payloads include routes for message, later, and agent approvals', async () => {
+  const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
+  const originalWindow = globalThis.window;
+  const roomId = '!room:example.org';
+  const eventId = '$event:example.org';
+  const route = buildDesktopNotificationRoomRoute(roomId, eventId);
+
+  (globalThis as any).window = {
+    __SYNARA_DESKTOP__: {
+      platform: 'tauri',
+      invoke: async (command: string, args?: Record<string, unknown>) => {
+        calls.push({ command, args });
+        return true;
+      },
+    },
+  };
+
+  try {
+    await showDesktopNotification({
+      title: 'Room',
+      body: 'New inbox notification from Alice',
+      route,
+    });
+    await showDesktopNotification({
+      title: 'Reminder',
+      body: 'A saved reminder is due.',
+      route,
+    });
+    await showDesktopNotification({
+      title: 'Approve command',
+      body: 'Room: Run `npm test`',
+      route,
+    });
+  } finally {
+    (globalThis as any).window = originalWindow;
+  }
+
+  assert.deepEqual(calls, [
+    {
+      command: 'desktop_notify',
+      args: {
+        notification: {
+          title: 'Room',
+          body: 'New inbox notification from Alice',
+          route,
+        },
+      },
+    },
+    {
+      command: 'desktop_notify',
+      args: {
+        notification: {
+          title: 'Reminder',
+          body: 'A saved reminder is due.',
+          route,
+        },
+      },
+    },
+    {
+      command: 'desktop_notify',
+      args: {
+        notification: {
+          title: 'Approve command',
+          body: 'Room: Run `npm test`',
+          route,
+        },
+      },
+    },
+  ]);
+});
+
 test('desktop file save sends bytes and filename through the desktop bridge', async () => {
   const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
   const originalWindow = globalThis.window;
@@ -436,6 +517,63 @@ test('desktop file save sends bytes and filename through the desktop bridge', as
       },
     },
   ]);
+});
+
+const createWindowEventTarget = () => {
+  const listeners = new Map<string, Set<() => void>>();
+
+  return {
+    addEventListener(type: string, listener: () => void) {
+      const handlers = listeners.get(type) ?? new Set<() => void>();
+      handlers.add(listener);
+      listeners.set(type, handlers);
+    },
+    removeEventListener(type: string, listener: () => void) {
+      listeners.get(type)?.delete(listener);
+    },
+    dispatchEvent(event: { type: string }) {
+      listeners.get(event.type)?.forEach((listener) => listener());
+      return true;
+    },
+  };
+};
+
+test('desktop tray DND toggle subscription flips handler on custom event', () => {
+  let toggles = 0;
+  const originalWindow = globalThis.window;
+  (globalThis as any).window = createWindowEventTarget();
+
+  const unsubscribe = subscribeDesktopTrayDndToggle(() => {
+    toggles += 1;
+  });
+
+  window.dispatchEvent(new CustomEvent(DESKTOP_TRAY_DND_TOGGLE_EVENT));
+  assert.equal(toggles, 1);
+
+  unsubscribe();
+  window.dispatchEvent(new CustomEvent(DESKTOP_TRAY_DND_TOGGLE_EVENT));
+  assert.equal(toggles, 1);
+
+  (globalThis as any).window = originalWindow;
+});
+
+test('desktop tray DND toggle maps to inverted showNotifications state', () => {
+  let showNotifications = true;
+  const originalWindow = globalThis.window;
+  (globalThis as any).window = createWindowEventTarget();
+
+  const unsubscribe = subscribeDesktopTrayDndToggle(() => {
+    showNotifications = !showNotifications;
+  });
+
+  window.dispatchEvent(new CustomEvent(DESKTOP_TRAY_DND_TOGGLE_EVENT));
+  assert.equal(showNotifications, false);
+
+  window.dispatchEvent(new CustomEvent(DESKTOP_TRAY_DND_TOGGLE_EVENT));
+  assert.equal(showNotifications, true);
+
+  unsubscribe();
+  (globalThis as any).window = originalWindow;
 });
 
 test('desktop performance capabilities fall back on the web', async () => {

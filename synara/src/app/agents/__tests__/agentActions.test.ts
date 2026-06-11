@@ -5,6 +5,7 @@ import {
   MAX_AGENT_ACTION_TEXT_LENGTH,
   MAX_AGENT_ACTION_URL_LENGTH,
   normalizeAgentActionPayload,
+  planAgentActionExecution,
 } from '../agentActions';
 
 test('normalizeAgentActionPayload accepts safe allowed actions', () => {
@@ -97,6 +98,47 @@ test('normalizeAgentActionPayload rejects unsafe urls and unsupported kinds', ()
       prompt: 'rm -rf /',
     }),
     undefined
+  );
+});
+
+test('planAgentActionExecution maps workflow and fallback actions to safe execution plans', () => {
+  assert.deepEqual(
+    planAgentActionExecution({
+      id: 'continue',
+      title: 'Continue',
+      kind: 'continue',
+      prompt: 'Continue from checkpoint',
+    }),
+    { type: 'copy-text', text: 'Continue from checkpoint' }
+  );
+
+  assert.deepEqual(
+    planAgentActionExecution({
+      id: 'regenerate',
+      title: 'Regenerate',
+      kind: 'regenerate',
+      url: 'https://agent.example.org/runs/1/regenerate',
+    }),
+    { type: 'open-url', url: 'https://agent.example.org/runs/1/regenerate' }
+  );
+
+  assert.deepEqual(
+    planAgentActionExecution({
+      id: 'artifact',
+      title: 'Open artifact',
+      url: 'https://artifacts.example.org/report.html',
+    }),
+    { type: 'open-url', url: 'https://artifacts.example.org/report.html' }
+  );
+
+  assert.deepEqual(
+    planAgentActionExecution({
+      id: 'approve',
+      title: 'Approve',
+      kind: 'approve',
+      prompt: 'Approve deployment',
+    }),
+    { type: 'unsupported' }
   );
 });
 
