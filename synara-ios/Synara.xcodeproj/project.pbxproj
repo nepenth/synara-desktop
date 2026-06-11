@@ -21,7 +21,9 @@
 		3AB84959BA0C8A2EB98CF309 /* ComposerService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7A9908B77A7CB8F4A4CC55A /* ComposerService.swift */; };
 		3C76DA11CB749760025BAB3F /* MatrixRustSDK in Frameworks */ = {isa = PBXBuildFile; productRef = 04B49FA4F6E9D7346F1EDC97 /* MatrixRustSDK */; };
 		3CF0BDAD36854DC8962393D4 /* LogRedactorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15DF14E92067B54B5BF14404 /* LogRedactorTests.swift */; };
+		41FC7B292DE64AD0C485C6E3 /* SynaraMotion.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDBE1E4A32C918309E6AA85A /* SynaraMotion.swift */; };
 		45DB0A08CF868FFA984A3B0D /* SecureSessionStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C0070A890F80B56DD756D02 /* SecureSessionStoreTests.swift */; };
+		46D1B37442FA446C39C64390 /* SynaraMessageBubble.swift in Sources */ = {isa = PBXBuildFile; fileRef = A250FE1A7BB064F16F28C795 /* SynaraMessageBubble.swift */; };
 		480BE3E7090674BEB4144D36 /* ComposerServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28004193A008B4EDFF0E6E18 /* ComposerServiceTests.swift */; };
 		48CE91CF86CBAC3081878AC9 /* AppRoute.swift in Sources */ = {isa = PBXBuildFile; fileRef = 253AA6941119C1C9D4F2DE3D /* AppRoute.swift */; };
 		49A35E5B574613614328D6E4 /* ComposerMarkdown.swift in Sources */ = {isa = PBXBuildFile; fileRef = 275642FB89913A7B3E8AD14A /* ComposerMarkdown.swift */; };
@@ -41,6 +43,7 @@
 		76AE72648BA28AFF732BB8F6 /* RoomListServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D42B2D11968F0B23193A4ED /* RoomListServiceTests.swift */; };
 		7BD7C2DB346D071A5121FC36 /* AppRouteTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F55BBDF32970A214C2829B1B /* AppRouteTests.swift */; };
 		7D325777FCB71B71B460A30F /* RoomUnreadPresentationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 643AFA2D05F02E0DB1C2B849 /* RoomUnreadPresentationTests.swift */; };
+		828A1EF26C245C22F21B95EF /* CameraImagePicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2B32ACB6B0CEC48C00B0D21 /* CameraImagePicker.swift */; };
 		88AAAD208C97C1A9EFF8AFE5 /* PushServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40037D97F31F787EA20BD7AE /* PushServiceTests.swift */; };
 		89761685411B7F9D7FCCD863 /* HomeserverSelectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C52EDC986E0B57231E77F695 /* HomeserverSelectionView.swift */; };
 		8B42041876057A9091D2F463 /* PerformanceInstrumentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00D51C4E0E89D32C8D99CC22 /* PerformanceInstrumentation.swift */; };
@@ -49,6 +52,8 @@
 		901EB2CE7F90AED37B5827E0 /* SessionCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75DD7BEECD59D41C5461C892 /* SessionCoordinator.swift */; };
 		90B73234B5A1DC142783A451 /* AppTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCD86C72DEE3F411D1FABB6B /* AppTab.swift */; };
 		9105AE3CB60343D07B999895 /* RoomReadMarkerServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA398093E16277847EDB79DB /* RoomReadMarkerServiceTests.swift */; };
+		919BCCE1F8A9D3525404023E /* SynaraRoomAvatar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3823216AA8763374F18EB0D0 /* SynaraRoomAvatar.swift */; };
+		94C8E8F56034DCA1284A9A13 /* TimelineReplyPreviewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90A203B905E3CBD0DC7BD126 /* TimelineReplyPreviewTests.swift */; };
 		969D33C61DAE6C1B12C9BCDB /* AgentActionResolverTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9DA6E8858D607B040754AF0E /* AgentActionResolverTests.swift */; };
 		97901F6C1B589C2271A4975D /* AuthServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 017B2EBED1FF4FF0EC25CB24 /* AuthServiceTests.swift */; };
 		9B792F2B4073B7792ED943D8 /* MediaService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3ECC92EE34CCE4DB57A5D3E /* MediaService.swift */; };
@@ -60,6 +65,7 @@
 		BE33F8C817E797AB7182C4C0 /* SynaraDesign.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E13415F14EC8A65D465380C /* SynaraDesign.swift */; };
 		BFD957777F3C28C1ED7C69AD /* MatrixLifecycleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CBE437294BD93B48D7CDF75 /* MatrixLifecycleTests.swift */; };
 		C6EA1FD3F81C8AEB782893D7 /* SynaraNavigation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8809AE831952D397FC6221F3 /* SynaraNavigation.swift */; };
+		C8BCA6C5B2041510969B6EBC /* TimelineReplyPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2F0DA8C678C322C53FF89A0 /* TimelineReplyPreview.swift */; };
 		CC89EE97042280F04BD29498 /* SynaraApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2E4F1A7ADF247942C6D0059 /* SynaraApp.swift */; };
 		D21F2D94FEAEE8E93F3E2A6A /* RoomReadMarkerService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4B44B25CB0277A9BAD73943 /* RoomReadMarkerService.swift */; };
 		D46F130EFA2B2D58B79B605D /* AppServices.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A4D48D89C01C70901919CAB /* AppServices.swift */; };
@@ -71,6 +77,7 @@
 		EE7410A9C8E4EB56072632D8 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0FBB16EA6FF93511B2EE8F0 /* SettingsView.swift */; };
 		EFAE66D8EA286E31E189C876 /* LaterListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5BE26F02C5C59C8ED097BF8 /* LaterListView.swift */; };
 		F2A315907EC47F18BB54CC1C /* AppEnvironmentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FF241378CB1601D3575AF03 /* AppEnvironmentTests.swift */; };
+		FA245616FD7A5D32D22AC4E7 /* SynaraHaptics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5160F29A03489EC72ED66FE4 /* SynaraHaptics.swift */; };
 		FFB6A97B5F18519D154EAC9C /* AppRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DE2FB3D6ADFFA295C9B956F /* AppRouter.swift */; };
 /* End PBXBuildFile section */
 
@@ -109,6 +116,7 @@
 		275642FB89913A7B3E8AD14A /* ComposerMarkdown.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerMarkdown.swift; sourceTree = "<group>"; };
 		28004193A008B4EDFF0E6E18 /* ComposerServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerServiceTests.swift; sourceTree = "<group>"; };
 		2CBE437294BD93B48D7CDF75 /* MatrixLifecycleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MatrixLifecycleTests.swift; sourceTree = "<group>"; };
+		3823216AA8763374F18EB0D0 /* SynaraRoomAvatar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SynaraRoomAvatar.swift; sourceTree = "<group>"; };
 		3C94FF43A1B1DDDCF8067FB1 /* AppLogging.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLogging.swift; sourceTree = "<group>"; };
 		3FF241378CB1601D3575AF03 /* AppEnvironmentTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppEnvironmentTests.swift; sourceTree = "<group>"; };
 		40037D97F31F787EA20BD7AE /* PushServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushServiceTests.swift; sourceTree = "<group>"; };
@@ -116,6 +124,7 @@
 		45436B56CDB7CBBD40303484 /* AgentApprovalServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentApprovalServiceTests.swift; sourceTree = "<group>"; };
 		4697063405B601DC0FE6F086 /* PerformanceFixtureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PerformanceFixtureTests.swift; sourceTree = "<group>"; };
 		4E13415F14EC8A65D465380C /* SynaraDesign.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SynaraDesign.swift; sourceTree = "<group>"; };
+		5160F29A03489EC72ED66FE4 /* SynaraHaptics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SynaraHaptics.swift; sourceTree = "<group>"; };
 		57076E7E82206F1492033846 /* RootShellView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootShellView.swift; sourceTree = "<group>"; };
 		5DE2FB3D6ADFFA295C9B956F /* AppRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppRouter.swift; sourceTree = "<group>"; };
 		633F1D9CBE601BF3E42E4B1B /* TimelineServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineServiceTests.swift; sourceTree = "<group>"; };
@@ -127,8 +136,11 @@
 		8809AE831952D397FC6221F3 /* SynaraNavigation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SynaraNavigation.swift; sourceTree = "<group>"; };
 		8A4D48D89C01C70901919CAB /* AppServices.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppServices.swift; sourceTree = "<group>"; };
 		8A5CC96CDA94EE562BDBA416 /* Synara.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Synara.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		90A203B905E3CBD0DC7BD126 /* TimelineReplyPreviewTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineReplyPreviewTests.swift; sourceTree = "<group>"; };
 		9D0A5EA751CC5D570C324084 /* SynaraUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SynaraUITests.swift; sourceTree = "<group>"; };
 		9DA6E8858D607B040754AF0E /* AgentActionResolverTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentActionResolverTests.swift; sourceTree = "<group>"; };
+		A250FE1A7BB064F16F28C795 /* SynaraMessageBubble.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SynaraMessageBubble.swift; sourceTree = "<group>"; };
+		A2B32ACB6B0CEC48C00B0D21 /* CameraImagePicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraImagePicker.swift; sourceTree = "<group>"; };
 		A460B0098799FF6C79F0756E /* RoomTimelineView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomTimelineView.swift; sourceTree = "<group>"; };
 		A4B44B25CB0277A9BAD73943 /* RoomReadMarkerService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomReadMarkerService.swift; sourceTree = "<group>"; };
 		A5077C08931AFE23ABB6EBFB /* LocalWipeService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalWipeService.swift; sourceTree = "<group>"; };
@@ -156,10 +168,12 @@
 		D0394B6246C8637014BEDC20 /* NotificationPermissionCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationPermissionCoordinator.swift; sourceTree = "<group>"; };
 		D3219D555ED36F65BF9FE332 /* SynaraTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = SynaraTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		DCD86C72DEE3F411D1FABB6B /* AppTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppTab.swift; sourceTree = "<group>"; };
+		DDBE1E4A32C918309E6AA85A /* SynaraMotion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SynaraMotion.swift; sourceTree = "<group>"; };
 		E23CEDAB04604A54EF7EAF9B /* PlaceholderScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceholderScreen.swift; sourceTree = "<group>"; };
 		E8CE546B97B6AE15795C6E76 /* EventActionServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventActionServiceTests.swift; sourceTree = "<group>"; };
 		EDFDD334C6EF890B453477E1 /* TimelineService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineService.swift; sourceTree = "<group>"; };
 		EE92B48EA7FF49B2D9FED1FE /* SynaraContractsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SynaraContractsTests.swift; sourceTree = "<group>"; };
+		F2F0DA8C678C322C53FF89A0 /* TimelineReplyPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineReplyPreview.swift; sourceTree = "<group>"; };
 		F55BBDF32970A214C2829B1B /* AppRouteTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppRouteTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -204,7 +218,11 @@
 			isa = PBXGroup;
 			children = (
 				4E13415F14EC8A65D465380C /* SynaraDesign.swift */,
+				5160F29A03489EC72ED66FE4 /* SynaraHaptics.swift */,
+				A250FE1A7BB064F16F28C795 /* SynaraMessageBubble.swift */,
+				DDBE1E4A32C918309E6AA85A /* SynaraMotion.swift */,
 				8809AE831952D397FC6221F3 /* SynaraNavigation.swift */,
+				3823216AA8763374F18EB0D0 /* SynaraRoomAvatar.swift */,
 			);
 			path = SharedUI;
 			sourceTree = "<group>";
@@ -230,6 +248,7 @@
 		8CF673C34A136F23E32F8EFB /* Composer */ = {
 			isa = PBXGroup;
 			children = (
+				A2B32ACB6B0CEC48C00B0D21 /* CameraImagePicker.swift */,
 				275642FB89913A7B3E8AD14A /* ComposerMarkdown.swift */,
 				69B679E7F5741D45B587B578 /* ComposerTextView.swift */,
 			);
@@ -258,6 +277,7 @@
 				CDD7517A55AC0E513E708AA0 /* SecureSessionStore.swift */,
 				75DD7BEECD59D41C5461C892 /* SessionCoordinator.swift */,
 				CF389D46848BA1444F7035D0 /* SignedInSessionReadiness.swift */,
+				F2F0DA8C678C322C53FF89A0 /* TimelineReplyPreview.swift */,
 				EDFDD334C6EF890B453477E1 /* TimelineService.swift */,
 			);
 			path = Services;
@@ -320,6 +340,7 @@
 				1C0070A890F80B56DD756D02 /* SecureSessionStoreTests.swift */,
 				26D5EAB60408E1F01AB36535 /* SessionCoordinatorTests.swift */,
 				EE92B48EA7FF49B2D9FED1FE /* SynaraContractsTests.swift */,
+				90A203B905E3CBD0DC7BD126 /* TimelineReplyPreviewTests.swift */,
 				633F1D9CBE601BF3E42E4B1B /* TimelineServiceTests.swift */,
 			);
 			path = SynaraTests;
@@ -482,6 +503,7 @@
 				45DB0A08CF868FFA984A3B0D /* SecureSessionStoreTests.swift in Sources */,
 				7247DDD14FE03A17AEC96541 /* SessionCoordinatorTests.swift in Sources */,
 				504E908432E2659D05DE87F8 /* SynaraContractsTests.swift in Sources */,
+				94C8E8F56034DCA1284A9A13 /* TimelineReplyPreviewTests.swift in Sources */,
 				70328744CB4C90A1526E9E28 /* TimelineServiceTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -498,6 +520,7 @@
 				D46F130EFA2B2D58B79B605D /* AppServices.swift in Sources */,
 				90B73234B5A1DC142783A451 /* AppTab.swift in Sources */,
 				2AEC9CA069983AED2A534D47 /* AuthService.swift in Sources */,
+				828A1EF26C245C22F21B95EF /* CameraImagePicker.swift in Sources */,
 				49A35E5B574613614328D6E4 /* ComposerMarkdown.swift in Sources */,
 				3AB84959BA0C8A2EB98CF309 /* ComposerService.swift in Sources */,
 				0B6FED64AA988069902712C4 /* ComposerTextView.swift in Sources */,
@@ -525,7 +548,12 @@
 				CC89EE97042280F04BD29498 /* SynaraApp.swift in Sources */,
 				9F74223A8F55C5CF1DBAE27B /* SynaraContracts.swift in Sources */,
 				BE33F8C817E797AB7182C4C0 /* SynaraDesign.swift in Sources */,
+				FA245616FD7A5D32D22AC4E7 /* SynaraHaptics.swift in Sources */,
+				46D1B37442FA446C39C64390 /* SynaraMessageBubble.swift in Sources */,
+				41FC7B292DE64AD0C485C6E3 /* SynaraMotion.swift in Sources */,
 				C6EA1FD3F81C8AEB782893D7 /* SynaraNavigation.swift in Sources */,
+				919BCCE1F8A9D3525404023E /* SynaraRoomAvatar.swift in Sources */,
+				C8BCA6C5B2041510969B6EBC /* TimelineReplyPreview.swift in Sources */,
 				4A665A8695E281B0E96F0A54 /* TimelineService.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -648,7 +676,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 1.1.23;
+				CURRENT_PROJECT_VERSION = 1.2.3;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
@@ -667,7 +695,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
-				MARKETING_VERSION = 1.1.1;
+				MARKETING_VERSION = 1.2.3;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -731,7 +759,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 1.1.23;
+				CURRENT_PROJECT_VERSION = 1.2.3;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -744,7 +772,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
-				MARKETING_VERSION = 1.1.1;
+				MARKETING_VERSION = 1.2.3;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";

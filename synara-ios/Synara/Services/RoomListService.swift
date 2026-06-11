@@ -20,6 +20,11 @@ struct RoomSummary: Identifiable, Equatable {
     let membership: Membership
     let lastActivityAt: Date
     let parentSpaces: [SpaceSummary]
+    let avatarURL: URL?
+    let hasAgentActivity: Bool
+    let latestAgentCard: SynaraAgentCard?
+    let latestAgentCardEventID: String?
+    let pendingAgentApprovals: [PendingAgentCardRef]
 
     init(
         id: String,
@@ -30,7 +35,12 @@ struct RoomSummary: Identifiable, Equatable {
         kind: RoomKind,
         membership: Membership,
         lastActivityAt: Date,
-        parentSpaces: [SpaceSummary] = []
+        parentSpaces: [SpaceSummary] = [],
+        avatarURL: URL? = nil,
+        hasAgentActivity: Bool = false,
+        latestAgentCard: SynaraAgentCard? = nil,
+        latestAgentCardEventID: String? = nil,
+        pendingAgentApprovals: [PendingAgentCardRef] = []
     ) {
         self.id = id
         self.name = name
@@ -41,6 +51,31 @@ struct RoomSummary: Identifiable, Equatable {
         self.membership = membership
         self.lastActivityAt = lastActivityAt
         self.parentSpaces = parentSpaces
+        self.avatarURL = avatarURL
+        self.hasAgentActivity = hasAgentActivity
+        self.latestAgentCard = latestAgentCard
+        self.latestAgentCardEventID = latestAgentCardEventID
+        self.pendingAgentApprovals = pendingAgentApprovals
+    }
+
+    var isAgentRoom: Bool {
+        hasAgentActivity || pendingAgentApprovals.isEmpty == false || latestAgentCard != nil
+    }
+
+    var requiresAgentApproval: Bool {
+        latestAgentCard?.requiresUserApproval == true
+    }
+
+    var primaryParentSpace: SpaceSummary? {
+        parentSpaces.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }.first
+    }
+
+    var parentSpaceID: String? {
+        primaryParentSpace?.id
+    }
+
+    var spaceName: String? {
+        primaryParentSpace?.name
     }
 }
 
@@ -60,6 +95,8 @@ enum RoomListState: Equatable {
 protocol RoomListServicing: AnyObject {
     func loadRooms() async -> RoomListState
     func roomUpdates() -> AsyncStream<RoomListState>
+    func roomDisplayName(roomID: String) -> String?
+    func isAgentRoom(roomID: String) -> Bool
     func clearCache()
 }
 
@@ -68,6 +105,32 @@ extension RoomListServicing {
         AsyncStream { continuation in
             continuation.finish()
         }
+    }
+
+    func roomDisplayName(roomID: String) -> String? {
+        nil
+    }
+
+    func isAgentRoom(roomID: String) -> Bool {
+        false
+    }
+}
+
+enum RoomDisplayNameLookup {
+    static func names(from state: RoomListState) -> [String: String] {
+        guard case .loaded(let rooms) = state else {
+            return [:]
+        }
+
+        return Dictionary(uniqueKeysWithValues: rooms.map { ($0.id, $0.name) })
+    }
+
+    static func resolve(roomID: String, names: [String: String]) -> String {
+        guard roomID.isEmpty == false else {
+            return "Unknown room"
+        }
+
+        return names[roomID] ?? roomID
     }
 }
 
@@ -95,6 +158,28 @@ enum RoomListFixtures {
 
     static var now: Date {
         Date(timeIntervalSince1970: baseTimestamp)
+    }
+
+    static func pendingAgentApprovalCard(title: String = "Deploy approval required") -> SynaraAgentCard {
+        try! SynaraAgentCard(
+            title: title,
+            status: "pending",
+            summary: "Review the proposed deployment before it runs.",
+            actions: [
+                try! SynaraAgentCardAction(
+                    id: "approve-deploy",
+                    title: "Approve",
+                    kind: "approve",
+                    prompt: "approve"
+                ),
+                try! SynaraAgentCardAction(
+                    id: "reject-deploy",
+                    title: "Reject",
+                    kind: "reject",
+                    prompt: "reject"
+                )
+            ]
+        )
     }
 
     static func small() -> [RoomSummary] {
@@ -146,13 +231,30 @@ enum RoomListFixtures {
             RoomSummary(
                 id: "!agent-workflows:matrix.org",
                 name: "Agent Workflows",
-                lastMessagePreview: "Workflow run completed",
+                lastMessagePreview: "Agent: Deploy approval required",
                 unreadCount: 1,
                 hasHighlight: false,
                 kind: .room,
                 membership: .joined,
                 lastActivityAt: now.addingTimeInterval(-1_200),
-                parentSpaces: [SpaceSummary(id: "!ops:matrix.org", name: "Ops")]
+                parentSpaces: [SpaceSummary(id: "!ops:matrix.org", name: "Ops")],
+                hasAgentActivity: true,
+                latestAgentCard: RoomListFixtures.pendingAgentApprovalCard(),
+                latestAgentCardEventID: "$agent-deploy-approval:matrix.org"
+            ),
+            RoomSummary(
+                id: "!security-agent:matrix.org",
+                name: "Security Agent",
+                lastMessagePreview: "Agent: Access review required",
+                unreadCount: 1,
+                hasHighlight: false,
+                kind: .room,
+                membership: .joined,
+                lastActivityAt: now.addingTimeInterval(-900),
+                parentSpaces: [SpaceSummary(id: "!ops:matrix.org", name: "Ops")],
+                hasAgentActivity: true,
+                latestAgentCard: RoomListFixtures.pendingAgentApprovalCard(title: "Access review required"),
+                latestAgentCardEventID: "$agent-access-approval:matrix.org"
             ),
             RoomSummary(
                 id: "!alice:matrix.org",
@@ -213,6 +315,324 @@ enum RoomListFixtures {
     }
 }
 
+struct BadgeUnreadSource: Equatable {
+    let total: Int
+    let highlight: Int?
+
+    init(total: Int, highlight: Int? = nil) {
+        self.total = total
+        self.highlight = highlight
+    }
+}
+
+struct NotificationSummaryInput: Equatable {
+    let unreadCounts: [BadgeUnreadSource]
+    let laterActiveCount: Int
+    let inviteCount: Int
+    let agentApprovalCount: Int
+
+    init(
+        unreadCounts: [BadgeUnreadSource],
+        laterActiveCount: Int = 0,
+        inviteCount: Int = 0,
+        agentApprovalCount: Int = 0
+    ) {
+        self.unreadCounts = unreadCounts
+        self.laterActiveCount = laterActiveCount
+        self.inviteCount = inviteCount
+        self.agentApprovalCount = agentApprovalCount
+    }
+}
+
+enum NotificationBadgeSummary {
+    private static func clampCount(_ value: Int) -> Int {
+        max(0, value)
+    }
+
+    static func summarizeNotifications(_ input: NotificationSummaryInput) -> SynaraNotificationSummary? {
+        let laterCount = clampCount(input.laterActiveCount)
+        let invites = clampCount(input.inviteCount)
+        let agentApprovals = clampCount(input.agentApprovalCount)
+        var highlightCount = 0
+        var unreadCount = 0
+
+        for unread in input.unreadCounts {
+            if let highlight = unread.highlight {
+                highlightCount += clampCount(highlight)
+            } else {
+                unreadCount += clampCount(unread.total)
+            }
+        }
+
+        return try? SynaraNotificationSummary(
+            appBadgeCount: laterCount + highlightCount + unreadCount,
+            inboxBadgeCount: laterCount + invites + agentApprovals,
+            laterActiveCount: laterCount,
+            inviteCount: invites,
+            agentApprovalCount: agentApprovals,
+            highlightCount: highlightCount,
+            unreadCount: unreadCount
+        )
+    }
+
+    static func unreadSources(from rooms: [RoomSummary]) -> [BadgeUnreadSource] {
+        rooms.map { room in
+            if room.hasHighlight {
+                return BadgeUnreadSource(total: room.unreadCount, highlight: 1)
+            }
+            return BadgeUnreadSource(total: room.unreadCount)
+        }
+    }
+
+    static func inviteCount(from rooms: [RoomSummary]) -> Int {
+        rooms.filter { $0.membership == .invited }.count
+    }
+
+    static func roomsTabBadgeCount(from rooms: [RoomSummary]) -> Int {
+        summarizeNotifications(
+            NotificationSummaryInput(unreadCounts: unreadSources(from: rooms))
+        )?.appBadgeCount ?? 0
+    }
+
+    static func notificationsTabBadgeCount(from rooms: [RoomSummary]) -> Int {
+        let sections = NotificationsInboxSections.make(from: rooms)
+        let agentPendingCount = AgentPendingInbox.pendingApprovals(from: rooms).count
+        return sections.mentions.count
+            + sections.invites.count
+            + sections.unreadRooms.count
+            + agentPendingCount
+    }
+}
+
+struct PendingAgentCardRef: Equatable {
+    let eventID: String
+    let card: SynaraAgentCard
+    let timestamp: Date
+}
+
+struct AgentPendingApprovalItem: Identifiable, Equatable {
+    let id: String
+    let eventID: String
+    let roomID: String
+    let roomName: String
+    let title: String
+    let summary: String?
+    let status: String?
+    let avatarURL: URL?
+    let lastActivityAt: Date
+
+    var roomSummary: RoomSummary {
+        RoomSummary(
+            id: roomID,
+            name: roomName,
+            lastMessagePreview: summary ?? title,
+            unreadCount: 0,
+            hasHighlight: false,
+            kind: .room,
+            membership: .joined,
+            lastActivityAt: lastActivityAt,
+            avatarURL: avatarURL,
+            hasAgentActivity: true,
+            latestAgentCard: nil
+        )
+    }
+}
+
+enum AgentPendingInbox {
+    static func pendingApprovals(from rooms: [RoomSummary]) -> [AgentPendingApprovalItem] {
+        rooms.flatMap { room in
+            pendingCardRefs(for: room).compactMap { ref in
+                guard ref.card.requiresUserApproval else {
+                    return nil
+                }
+
+                return AgentPendingApprovalItem(
+                    id: "\(room.id)-\(ref.eventID)",
+                    eventID: ref.eventID,
+                    roomID: room.id,
+                    roomName: room.name,
+                    title: ref.card.title,
+                    summary: ref.card.summary,
+                    status: ref.card.status,
+                    avatarURL: room.avatarURL,
+                    lastActivityAt: ref.timestamp
+                )
+            }
+        }
+        .sorted { $0.lastActivityAt > $1.lastActivityAt }
+    }
+
+    private static func pendingCardRefs(for room: RoomSummary) -> [PendingAgentCardRef] {
+        if room.pendingAgentApprovals.isEmpty == false {
+            return room.pendingAgentApprovals
+        }
+
+        guard let card = room.latestAgentCard else {
+            return []
+        }
+
+        let eventID = room.latestAgentCardEventID ?? room.id
+        return [PendingAgentCardRef(eventID: eventID, card: card, timestamp: room.lastActivityAt)]
+    }
+}
+
+struct NotificationsInboxSections: Equatable {
+    let mentions: [RoomSummary]
+    let invites: [RoomSummary]
+    let unreadRooms: [RoomSummary]
+
+    var hasRoomSections: Bool {
+        mentions.isEmpty == false || invites.isEmpty == false || unreadRooms.isEmpty == false
+    }
+
+    static func isCaughtUp(sections: NotificationsInboxSections, agentPendingCount: Int) -> Bool {
+        sections.hasRoomSections == false && agentPendingCount == 0
+    }
+
+    static func notificationRooms(from rooms: [RoomSummary]) -> [RoomSummary] {
+        rooms.filter { $0.unreadCount > 0 || $0.hasHighlight || $0.membership == .invited }
+    }
+
+    static func make(from rooms: [RoomSummary]) -> NotificationsInboxSections {
+        let invites = rooms.filter { $0.membership == .invited }
+        let inviteIDs = Set(invites.map(\.id))
+        let mentions = rooms.filter { $0.hasHighlight && inviteIDs.contains($0.id) == false }
+        let mentionIDs = Set(mentions.map(\.id))
+        let unreadRooms = rooms.filter { room in
+            guard inviteIDs.contains(room.id) == false, mentionIDs.contains(room.id) == false else {
+                return false
+            }
+            return room.unreadCount > 0
+        }
+
+        return NotificationsInboxSections(
+            mentions: mentions,
+            invites: invites,
+            unreadRooms: unreadRooms
+        )
+    }
+}
+
+struct TabBadgeCounts: Equatable {
+    var notifications: Int = 0
+    var rooms: Int = 0
+
+    static func make(from rooms: [RoomSummary]) -> TabBadgeCounts {
+        TabBadgeCounts(
+            notifications: NotificationBadgeSummary.notificationsTabBadgeCount(from: rooms),
+            rooms: NotificationBadgeSummary.roomsTabBadgeCount(from: rooms)
+        )
+    }
+}
+
+struct SpaceChannelGroup: Identifiable, Equatable {
+    let space: SpaceSummary
+    let rooms: [RoomSummary]
+
+    var id: String { space.id }
+}
+
+enum RoomListSpaceGrouping {
+    static func unreadCountsBySpaceID(from rooms: [RoomSummary]) -> [String: Int] {
+        var counts: [String: Int] = [:]
+
+        for room in rooms where room.membership != .invited {
+            for space in room.parentSpaces {
+                counts[space.id, default: 0] += room.unreadCount
+            }
+        }
+
+        return counts
+    }
+
+    static func spaceChannelGroups(from channelRooms: [RoomSummary]) -> [SpaceChannelGroup] {
+        var groupedRooms: [String: [RoomSummary]] = [:]
+        var spacesByID: [String: SpaceSummary] = [:]
+
+        for room in channelRooms {
+            guard let space = room.primaryParentSpace else {
+                continue
+            }
+
+            groupedRooms[space.id, default: []].append(room)
+            spacesByID[space.id] = space
+        }
+
+        return groupedRooms
+            .compactMap { spaceID, rooms in
+                guard let space = spacesByID[spaceID] else {
+                    return nil
+                }
+
+                return SpaceChannelGroup(space: space, rooms: rooms)
+            }
+            .sorted { $0.space.name.localizedCaseInsensitiveCompare($1.space.name) == .orderedAscending }
+    }
+
+    static func ungroupedChannelRooms(from channelRooms: [RoomSummary]) -> [RoomSummary] {
+        channelRooms.filter { $0.primaryParentSpace == nil }
+    }
+
+    static func selectedSpaceName(
+        in spaces: [SpaceSummary],
+        selectedSpaceID: String?
+    ) -> String? {
+        guard let selectedSpaceID else {
+            return nil
+        }
+
+        return spaces.first(where: { $0.id == selectedSpaceID })?.name
+    }
+}
+
+enum RoomListScopeFilter {
+    enum Kind: Equatable {
+        case all
+        case unread
+        case mentions
+        case agents
+    }
+
+    static func apply(_ filter: Kind, to rooms: [RoomSummary]) -> [RoomSummary] {
+        switch filter {
+        case .all:
+            return rooms
+        case .unread:
+            return rooms.filter { $0.unreadCount > 0 }
+        case .mentions:
+            return rooms.filter(\.hasHighlight)
+        case .agents:
+            return rooms.filter(\.isAgentRoom)
+        }
+    }
+
+    static func filteredRooms(
+        from rooms: [RoomSummary],
+        filter: Kind,
+        selectedSpaceID: String?,
+        searchQuery: String
+    ) -> [RoomSummary] {
+        let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        let invitedRooms = rooms.filter { $0.membership == .invited }
+        var scopedRooms = rooms.filter { $0.membership != .invited }
+
+        if let selectedSpaceID {
+            scopedRooms = scopedRooms.filter { room in
+                room.parentSpaces.contains(where: { $0.id == selectedSpaceID })
+            }
+        }
+
+        scopedRooms = apply(filter, to: scopedRooms)
+        var filtered = RoomListSearchFilter.mergeInvitedRooms(invitedRooms, into: scopedRooms)
+
+        guard query.isEmpty == false else {
+            return filtered
+        }
+
+        return RoomListSearchFilter.applySearchQuery(query, to: filtered, invitedRooms: invitedRooms)
+    }
+}
+
 enum RoomListSearchFilter {
     static func roomMatchesQuery(_ room: RoomSummary, query: String) -> Bool {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -257,6 +677,14 @@ final class PlaceholderRoomListService: RoomListServicing {
         cachedRooms.isEmpty ? .empty : .loaded(RoomListFixtures.sorted(cachedRooms))
     }
 
+    func roomDisplayName(roomID: String) -> String? {
+        cachedRooms.first { $0.id == roomID }?.name
+    }
+
+    func isAgentRoom(roomID: String) -> Bool {
+        cachedRooms.first { $0.id == roomID }?.isAgentRoom ?? false
+    }
+
     func clearCache() {
         cachedRooms = []
     }
@@ -291,6 +719,22 @@ final class MockRoomListService: RoomListServicing {
             return .loaded(RoomListFixtures.sorted(rooms))
         }
         return state
+    }
+
+    func roomDisplayName(roomID: String) -> String? {
+        guard case .loaded(let rooms) = state else {
+            return nil
+        }
+
+        return rooms.first { $0.id == roomID }?.name
+    }
+
+    func isAgentRoom(roomID: String) -> Bool {
+        guard case .loaded(let rooms) = state else {
+            return false
+        }
+
+        return rooms.first { $0.id == roomID }?.isAgentRoom ?? false
     }
 
     func roomUpdates() -> AsyncStream<RoomListState> {
@@ -345,6 +789,10 @@ final class MockInviteTransitionService: RoomListServicing, RoomMembershipServic
         rooms.isEmpty ? .empty : .loaded(RoomListFixtures.sorted(rooms))
     }
 
+    func roomDisplayName(roomID: String) -> String? {
+        rooms.first { $0.id == roomID }?.name
+    }
+
     func clearCache() {
         rooms = []
     }
@@ -365,7 +813,8 @@ final class MockInviteTransitionService: RoomListServicing, RoomMembershipServic
                 kind: room.kind,
                 membership: .joined,
                 lastActivityAt: Date(),
-                parentSpaces: room.parentSpaces
+                parentSpaces: room.parentSpaces,
+                avatarURL: room.avatarURL
             )
         }
     }

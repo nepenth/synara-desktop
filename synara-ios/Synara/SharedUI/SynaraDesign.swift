@@ -34,6 +34,7 @@ enum SynaraRadius {
     static let small: CGFloat = 6
     static let card: CGFloat = 8
     static let control: CGFloat = 8
+    static let composer: CGFloat = 22
 }
 
 enum SynaraTypography {
@@ -41,6 +42,16 @@ enum SynaraTypography {
     static let sectionTitle = Font.headline
     static let body = Font.body
     static let supporting = Font.callout
+    static let emphasis = Font.body.weight(.semibold)
+    static let messageBody = Font.callout
+    static let messageMeta = Font.caption
+    static let roomPreview = Font.callout
+    static let chipLabel = Font.caption.weight(.semibold)
+    static let fineMeta = Font.caption2
+    static let fineMetaBold = Font.caption2.weight(.bold)
+    static let monoBody = Font.system(.callout, design: .monospaced)
+    static let composerPlaceholder = Font.callout
+    static let composerMetric = Font.caption2
 }
 
 struct SynaraAvatar: View {
@@ -122,13 +133,13 @@ struct SynaraStatusChip: View {
     var body: some View {
         Label {
             Text(title)
-                .font(.caption.weight(.semibold))
+                .font(SynaraTypography.chipLabel)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
         } icon: {
             if let systemImage {
                 Image(systemName: systemImage)
-                    .font(.caption.weight(.semibold))
+                    .font(SynaraTypography.chipLabel)
             }
         }
         .labelStyle(.titleAndIcon)
@@ -147,7 +158,7 @@ struct SynaraUnreadBadge: View {
     var body: some View {
         if count > 0 {
             Text(count > 99 ? "99+" : "\(count)")
-                .font(.caption2.weight(.bold))
+                .font(SynaraTypography.fineMetaBold)
                 .monospacedDigit()
                 .padding(.horizontal, SynaraSpacing.small)
                 .frame(minWidth: 24, minHeight: 20)
@@ -172,27 +183,49 @@ struct SynaraListRowButtonStyle: ButtonStyle {
 
 struct SynaraFilterChip: View {
     let title: String
+    var badgeCount: Int? = nil
     let isSelected: Bool
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
+            HStack(spacing: SynaraSpacing.xSmall) {
             Text(title)
-                .font(.caption.weight(.medium))
-                .lineLimit(1)
-                .padding(.horizontal, SynaraSpacing.medium)
-                .frame(height: 32)
-                .background(isSelected ? SynaraColor.accent : SynaraColor.secondarySurface)
-                .foregroundStyle(isSelected ? Color.white : SynaraColor.secondaryText)
-                .clipShape(Capsule())
-                .overlay(
-                    Capsule()
-                        .stroke(isSelected ? Color.clear : SynaraColor.separator.opacity(0.55), lineWidth: 0.5)
-                        .allowsHitTesting(false)
-                )
+                .font(SynaraTypography.chipLabel.weight(.medium))
+                    .lineLimit(1)
+
+                if let badgeCount, badgeCount > 0 {
+                    Text(badgeCount > 99 ? "99+" : "\(badgeCount)")
+                        .font(SynaraTypography.fineMetaBold)
+                        .monospacedDigit()
+                        .padding(.horizontal, SynaraSpacing.xSmall)
+                        .frame(minWidth: 18, minHeight: 18)
+                        .background(isSelected ? Color.white.opacity(0.22) : SynaraColor.accent.opacity(0.14))
+                        .foregroundStyle(isSelected ? Color.white : SynaraColor.accent)
+                        .clipShape(Capsule())
+                }
+            }
+            .padding(.horizontal, SynaraSpacing.medium)
+            .frame(height: 32)
+            .background(isSelected ? SynaraColor.accent : SynaraColor.secondarySurface)
+            .foregroundStyle(isSelected ? Color.white : SynaraColor.secondaryText)
+            .clipShape(Capsule())
+            .overlay(
+                Capsule()
+                    .stroke(isSelected ? Color.clear : SynaraColor.separator.opacity(0.55), lineWidth: 0.5)
+                    .allowsHitTesting(false)
+            )
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(accessibilityLabel)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    private var accessibilityLabel: String {
+        if let badgeCount, badgeCount > 0 {
+            return "\(title), \(badgeCount) unread"
+        }
+        return title
     }
 }
 
@@ -353,6 +386,149 @@ struct SynaraLoadingState: View {
     }
 }
 
+struct SynaraShimmerModifier: ViewModifier {
+    @State private var phase: CGFloat = -1
+
+    func body(content: Content) -> some View {
+        content
+            .overlay {
+                GeometryReader { geometry in
+                    LinearGradient(
+                        colors: [
+                            .clear,
+                            SynaraColor.elevatedSurface.opacity(0.75),
+                            .clear
+                        ],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                    .frame(width: geometry.size.width * 1.8)
+                    .offset(x: geometry.size.width * phase)
+                }
+                .mask(content)
+            }
+            .onAppear {
+                withAnimation(.linear(duration: 1.15).repeatForever(autoreverses: false)) {
+                    phase = 1.8
+                }
+            }
+    }
+}
+
+struct SynaraSkeletonBlock: View {
+    var width: CGFloat? = nil
+    var height: CGFloat
+    var cornerRadius: CGFloat = SynaraRadius.small
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            .fill(SynaraColor.mutedControl.opacity(0.65))
+            .frame(width: width, height: height)
+            .modifier(SynaraShimmerModifier())
+            .accessibilityHidden(true)
+    }
+}
+
+struct SynaraSkeletonRow: View {
+    var showsAvatar = true
+    var titleWidth: CGFloat = 148
+    var subtitleWidth: CGFloat = 212
+
+    var body: some View {
+        HStack(spacing: SynaraSpacing.medium) {
+            if showsAvatar {
+                SynaraSkeletonBlock(width: 42, height: 42, cornerRadius: 11)
+            }
+
+            VStack(alignment: .leading, spacing: SynaraSpacing.small) {
+                SynaraSkeletonBlock(width: titleWidth, height: 14)
+                SynaraSkeletonBlock(width: subtitleWidth, height: 12)
+            }
+
+            Spacer(minLength: SynaraSpacing.small)
+
+            SynaraSkeletonBlock(width: 28, height: 20, cornerRadius: 10)
+        }
+        .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
+        .padding(.vertical, SynaraSpacing.xSmall)
+        .accessibilityLabel("Loading")
+        .accessibilityIdentifier("SynaraSkeletonRow")
+    }
+}
+
+struct SynaraSkeletonList: View {
+    let rowCount: Int
+    var showsAvatar = true
+
+    var body: some View {
+        VStack(spacing: SynaraSpacing.small) {
+            ForEach(0..<rowCount, id: \.self) { index in
+                SynaraSkeletonRow(
+                    showsAvatar: showsAvatar,
+                    titleWidth: index.isMultiple(of: 2) ? 148 : 124,
+                    subtitleWidth: index.isMultiple(of: 3) ? 196 : 228
+                )
+            }
+        }
+        .accessibilityIdentifier("SynaraSkeletonList")
+    }
+}
+
+struct SynaraTimelineSkeletonRow: View {
+    var isOutgoing = false
+    var lineCount = 2
+
+    var body: some View {
+        HStack(alignment: .top, spacing: SynaraSpacing.small) {
+            if isOutgoing {
+                Spacer(minLength: 48)
+            } else {
+                SynaraSkeletonBlock(width: 34, height: 34, cornerRadius: SynaraRadius.card)
+            }
+
+            VStack(alignment: isOutgoing ? .trailing : .leading, spacing: SynaraSpacing.small) {
+                if isOutgoing == false {
+                    SynaraSkeletonBlock(width: 92, height: 12)
+                }
+
+                VStack(alignment: isOutgoing ? .trailing : .leading, spacing: SynaraSpacing.xSmall) {
+                    ForEach(0..<lineCount, id: \.self) { line in
+                        SynaraSkeletonBlock(
+                            width: line == lineCount - 1 ? 132 : 196,
+                            height: 12
+                        )
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: isOutgoing ? .trailing : .leading)
+
+            if isOutgoing {
+                SynaraSkeletonBlock(width: 34, height: 34, cornerRadius: SynaraRadius.card)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, SynaraSpacing.xSmall)
+        .accessibilityLabel("Loading message")
+        .accessibilityIdentifier("SynaraTimelineSkeletonRow")
+    }
+}
+
+struct SynaraTimelineSkeletonList: View {
+    let rowCount: Int
+
+    var body: some View {
+        VStack(spacing: SynaraSpacing.medium) {
+            ForEach(0..<rowCount, id: \.self) { index in
+                SynaraTimelineSkeletonRow(
+                    isOutgoing: index.isMultiple(of: 3),
+                    lineCount: index.isMultiple(of: 2) ? 1 : 2
+                )
+            }
+        }
+        .accessibilityIdentifier("SynaraTimelineSkeletonList")
+    }
+}
+
 struct SynaraErrorState: View {
     let title: String
     let message: String
@@ -393,6 +569,8 @@ struct SynaraDesignTokenGallery: View {
                         .frame(minHeight: 220)
                     SynaraLoadingState(title: "Syncing rooms")
                         .frame(minHeight: 120)
+                    SynaraSkeletonList(rowCount: 3)
+                        .padding(.vertical, SynaraSpacing.small)
                 }
 
                 Section("Controls") {
