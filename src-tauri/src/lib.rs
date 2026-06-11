@@ -150,17 +150,22 @@ fn select_localhost_port() -> Result<u16, String> {
 
 #[cfg(test)]
 mod localhost_port_tests {
-    use super::{is_localhost_port_available, select_localhost_port, PREFERRED_LOCALHOST_PORT};
-
-    #[test]
-    fn preferred_localhost_port_is_available_in_test_environment() {
-        assert!(is_localhost_port_available(PREFERRED_LOCALHOST_PORT));
-    }
+    use super::{select_localhost_port, PREFERRED_LOCALHOST_PORT};
 
     #[test]
     fn select_localhost_port_returns_first_available_port() {
         let port = select_localhost_port().expect("localhost port should be available");
         assert!((PREFERRED_LOCALHOST_PORT..PREFERRED_LOCALHOST_PORT + 10).contains(&port));
+    }
+
+    #[test]
+    fn select_localhost_port_skips_busy_preferred_port() {
+        let listener = std::net::TcpListener::bind(("127.0.0.1", PREFERRED_LOCALHOST_PORT))
+            .expect("test listener should bind");
+        let port = select_localhost_port().expect("fallback localhost port should be available");
+        assert_ne!(port, PREFERRED_LOCALHOST_PORT);
+        assert!((PREFERRED_LOCALHOST_PORT + 1..PREFERRED_LOCALHOST_PORT + 10).contains(&port));
+        drop(listener);
     }
 }
 
