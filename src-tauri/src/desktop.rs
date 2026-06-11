@@ -183,6 +183,7 @@ const DESKTOP_SESSION_LEGACY_CREDENTIAL_SERVICE: &str = "app.synara.desktop";
 const DESKTOP_SESSION_CREDENTIAL_ACCOUNT: &str = "matrix-session";
 #[allow(dead_code)]
 const DESKTOP_SECRET_STORE_BACKEND_NONE: &str = "none";
+#[allow(dead_code)]
 const DESKTOP_SECRET_STORE_BACKEND_MACOS_KEYCHAIN: &str = "macos-keychain";
 #[allow(dead_code)]
 const DESKTOP_SECRET_STORE_BACKEND_LINUX_SECRET_SERVICE: &str = "linux-secret-service";

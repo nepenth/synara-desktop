@@ -91,4 +91,15 @@ for (const buildVersion of iosProject.matchAll(/CURRENT_PROJECT_VERSION = ([^;]+
   assertEqual("synara-ios/Synara.xcodeproj CURRENT_PROJECT_VERSION", buildVersion[1], iosBuildVersion);
 }
 
+const iosMarketingVersion = matchRequired(
+  "synara-ios/project.yml MARKETING_VERSION",
+  iosXcodeGenProject,
+  /MARKETING_VERSION:\s*"([^"]+)"/
+);
+
 console.log(`Version metadata is consistent at ${expectedVersion}.`);
+if (iosMarketingVersion === expectedVersion) {
+  console.log(
+    `iOS App Store build number is ${iosBuildVersion} (CURRENT_PROJECT_VERSION); marketing version matches desktop at ${expectedVersion}.`
+  );
+}
