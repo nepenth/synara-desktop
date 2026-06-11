@@ -15,12 +15,21 @@ import {
 } from 'folds';
 import { HttpApiEvent, HttpApiEventHandlerMap, MatrixClient } from 'matrix-js-sdk';
 import FocusTrap from 'focus-trap-react';
-import React, { MouseEventHandler, ReactNode, useCallback, useEffect, useState } from 'react';
+import React, {
+  MouseEventHandler,
+  ReactNode,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
 import {
   clearCacheAndReload,
   initClient,
   performLogout,
+  scheduleProactiveTokenRefresh,
   startClient,
+  type ProactiveTokenRefreshHandle,
 } from '../../../client/initMatrix';
 import { SplashScreen } from '../../components/splash-screen';
 import { ServerConfigsLoader } from '../../components/ServerConfigsLoader';
@@ -38,6 +47,11 @@ import { AutoDiscovery } from './AutoDiscovery';
 import { platformSessionStore, repairPlatformDeviceDisplayName } from '../../platform';
 import { migrateLegacySessionToNativeAfterClientInit } from '../../state/sessionPersistence';
 import { shouldRetrySyncOnResume } from '../../utils/syncLifecycle';
+import {
+  logSyncStateTransition,
+  shouldShowSyncRecoveryUI,
+  SYNC_PREPARED_TIMEOUT_MS,
+} from '../../utils/syncSplashRecovery';
 
 function ClientRootLoading() {
   return (
@@ -169,6 +183,23 @@ const useSyncResumeRetry = (mx?: MatrixClient) => {
   }, [mx]);
 };
 
+const useProactiveTokenRefresh = (mx?: MatrixClient) => {
+  useEffect(() => {
+    if (!mx) return undefined;
+
+    const session = getActiveSession();
+    if (!session?.refreshToken) return undefined;
+
+    const handle: ProactiveTokenRefreshHandle = scheduleProactiveTokenRefresh(mx, session, {
+      nativeSessionStore: platformSessionStore,
+    });
+
+    return () => {
+      handle.dispose();
+    };
+  }, [mx]);
+};
+
 const usePlatformDeviceDisplayNameRepair = (mx?: MatrixClient) => {
   useEffect(() => {
     const deviceId = mx?.getDeviceId();
@@ -191,6 +222,8 @@ type ClientRootProps = {
 };
 export function ClientRoot({ children }: ClientRootProps) {
   const [loading, setLoading] = useState(true);
+  const [syncTimedOut, setSyncTimedOut] = useState(false);
+  const syncRetryInFlightRef = useRef(false);
   const { baseUrl, userId } = getActiveSession() ?? {};
 
   const [loadState, loadMatrix] = useAsyncCallback<MatrixClient, Error, []>(
@@ -214,6 +247,7 @@ export function ClientRoot({ children }: ClientRootProps) {
 
   useLogoutListener(mx);
   useSyncResumeRetry(mx);
+  useProactiveTokenRefresh(mx);
   usePlatformDeviceDisplayNameRepair(mx);
 
   useEffect(() => {
@@ -230,12 +264,49 @@ export function ClientRoot({ children }: ClientRootProps) {
 
   useSyncState(
     mx,
-    useCallback((state) => {
+    useCallback((state, previous) => {
+      logSyncStateTransition(state, previous);
       if (state === 'PREPARED') {
         setLoading(false);
+        setSyncTimedOut(false);
       }
     }, [])
   );
+
+  useEffect(() => {
+    if (!loading || !mx) {
+      setSyncTimedOut(false);
+      return undefined;
+    }
+
+    const timer = window.setTimeout(() => {
+      setSyncTimedOut(true);
+    }, SYNC_PREPARED_TIMEOUT_MS);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [loading, mx]);
+
+  const handleSyncRecoveryRetry = useCallback(async () => {
+    if (!mx || syncRetryInFlightRef.current) return;
+    syncRetryInFlightRef.current = true;
+    setSyncTimedOut(false);
+
+    try {
+      if (mx.clientRunning) {
+        mx.retryImmediately();
+        return;
+      }
+      if (startState.status !== AsyncStatus.Loading) {
+        await startMatrix(mx);
+      }
+    } finally {
+      syncRetryInFlightRef.current = false;
+    }
+  }, [mx, startMatrix, startState.status]);
+
+  const showSyncRecoveryUI = shouldShowSyncRecoveryUI(loading, syncTimedOut);
 
   return (
     <AutoDiscovery userId={userId!} baseUrl={baseUrl!}>
@@ -262,6 +333,43 @@ export function ClientRoot({ children }: ClientRootProps) {
                   <Button variant="Critical" onClick={mx ? () => startMatrix(mx) : loadMatrix}>
                     <Text as="span" size="B400">
                       Retry
+                    </Text>
+                  </Button>
+                </Box>
+              </Dialog>
+            </Box>
+          </SplashScreen>
+        )}
+        {showSyncRecoveryUI && (
+          <SplashScreen>
+            <Box
+              direction="Column"
+              grow="Yes"
+              alignItems="Center"
+              justifyContent="Center"
+              gap="400"
+            >
+              <Dialog>
+                <Box direction="Column" gap="400" style={{ padding: config.space.S400 }}>
+                  <Text>Sync is taking longer than expected.</Text>
+                  <Text size="T300" priority="400">
+                    You can retry, clear the local cache, or sign out.
+                  </Text>
+                  <Button variant="Primary" onClick={() => void handleSyncRecoveryRetry()}>
+                    <Text as="span" size="B400">
+                      Retry
+                    </Text>
+                  </Button>
+                  {mx && (
+                    <Button variant="Secondary" onClick={() => void clearCacheAndReload(mx)}>
+                      <Text as="span" size="B400">
+                        Clear Cache and Reload
+                      </Text>
+                    </Button>
+                  )}
+                  <Button variant="Critical" onClick={() => void performLogout(mx)}>
+                    <Text as="span" size="B400">
+                      Logout
                     </Text>
                   </Button>
                 </Box>

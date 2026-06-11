@@ -151,6 +151,13 @@ import {
   TimelineVirtualAnchor,
   TimelineVirtualRow,
 } from '../../utils/timelineVirtualization';
+import {
+  clearTimelinePaginationError,
+  setTimelinePaginationError,
+  shouldShowTimelinePaginationLoader,
+  type TimelinePaginationDirection,
+  type TimelinePaginationErrors,
+} from '../../utils/timelinePagination';
 
 const PollContent = lazy(() =>
   import('../../components/message/content/PollContent').then((module) => ({
@@ -410,7 +417,11 @@ const useTimelinePagination = (
   mx: MatrixClient,
   timeline: Timeline,
   setTimeline: Dispatch<SetStateAction<Timeline>>,
-  limit: number
+  limit: number,
+  onPaginationError: (
+    direction: TimelinePaginationDirection,
+    err: unknown | null
+  ) => void
 ) => {
   const timelineRef = useRef(timeline);
   timelineRef.current = timeline;
@@ -476,9 +487,10 @@ const useTimelinePagination = (
       );
       fetching = false;
       if (err) {
-        // TODO: handle pagination error.
+        onPaginationError(backwards ? 'backward' : 'forward', err);
         return;
       }
+      onPaginationError(backwards ? 'backward' : 'forward', null);
       const fetchedTimeline =
         timelineToPaginate.getNeighbouringTimeline(
           backwards ? Direction.Backward : Direction.Forward
@@ -494,7 +506,7 @@ const useTimelinePagination = (
         recalibratePagination(lTimelines, timelinesEventsCount, backwards);
       }
     };
-  }, [mx, alive, setTimeline, limit]);
+  }, [mx, alive, onPaginationError, setTimeline, limit]);
   return handleTimelinePagination;
 };
 
@@ -717,6 +729,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
   const [timeline, setTimeline] = useState<Timeline>(() =>
     eventId ? getEmptyTimeline() : getInitialTimeline(room)
   );
+  const [paginationErrors, setPaginationErrors] = useState<TimelinePaginationErrors>({});
   const [, startTimelineTransition] = useTransition();
   const eventsLength = getTimelinesEventsCount(timeline.linkedTimelines);
   const liveTimelineLinked =
@@ -732,11 +745,21 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
   const atLiveEndRef = useRef(loadedAtEnd);
   atLiveEndRef.current = loadedAtEnd;
 
+  const handlePaginationError = useCallback(
+    (direction: TimelinePaginationDirection, err: unknown | null) => {
+      setPaginationErrors((current) =>
+        err ? setTimelinePaginationError(current, direction, err) : clearTimelinePaginationError(current, direction)
+      );
+    },
+    []
+  );
+
   const handleTimelinePagination = useTimelinePagination(
     mx,
     timeline,
     setTimeline,
-    PAGINATION_LIMIT
+    PAGINATION_LIMIT,
+    handlePaginationError
   );
 
   const getScrollElement = useCallback(() => scrollRef.current, []);
@@ -803,13 +826,21 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
     timelineRowsBuildStateRef.current = undefined;
   }, [room.roomId, eventId]);
 
+  useEffect(() => {
+    setPaginationErrors({});
+  }, [room.roomId, eventId]);
+
   const timelineRows = useMemo(() => {
     const { rows, state } = buildTimelineRowsWithState(
       timeline.linkedTimelines,
       {
         showIntro: loadedAtStart && eventsLength > 0,
-        showBackLoader: canPaginateBack,
-        showFrontLoader: !loadedAtEnd,
+        showBackLoader: shouldShowTimelinePaginationLoader(
+          canPaginateBack,
+          paginationErrors,
+          'backward'
+        ),
+        showFrontLoader: shouldShowTimelinePaginationLoader(!loadedAtEnd, paginationErrors, 'forward'),
         compact: messageLayout === MessageLayout.Compact,
         ignoredUsersSet,
         showHiddenEvents,
@@ -841,6 +872,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
     eventsLength,
     canPaginateBack,
     loadedAtEnd,
+    paginationErrors,
     messageLayout,
     ignoredUsersSet,
     showHiddenEvents,
@@ -2654,6 +2686,36 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
             onClick={() => setForwardSelection([])}
           >
             <Text size="L400">{t('modernization.forward.clear_selection')}</Text>
+          </Chip>
+        </TimelineFloat>
+      )}
+      {paginationErrors.backward && (
+        <TimelineFloat position="Top">
+          <Chip
+            variant="Critical"
+            radii="Pill"
+            outlined
+            onClick={() => {
+              setPaginationErrors((current) => clearTimelinePaginationError(current, 'backward'));
+              void handleTimelinePagination(true);
+            }}
+          >
+            <Text size="L400">{`Could not load older messages. ${paginationErrors.backward}`}</Text>
+          </Chip>
+        </TimelineFloat>
+      )}
+      {paginationErrors.forward && (
+        <TimelineFloat position="Bottom">
+          <Chip
+            variant="Critical"
+            radii="Pill"
+            outlined
+            onClick={() => {
+              setPaginationErrors((current) => clearTimelinePaginationError(current, 'forward'));
+              void handleTimelinePagination(false);
+            }}
+          >
+            <Text size="L400">{`Could not load newer messages. ${paginationErrors.forward}`}</Text>
           </Chip>
         </TimelineFloat>
       )}

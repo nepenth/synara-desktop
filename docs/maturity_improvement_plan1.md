@@ -1284,10 +1284,10 @@ For each MIP1-NN commit:
 | 21 Badge clamp | MIP1-27 | F | Done | mip1-27 |
 | 22 External URL policy | MIP1-28 | F | Done | mip1-28 |
 | 23 Session expiry | MIP1-29 | F | Done | mip1-29 |
-| 24 Sync timeout UI | MIP1-30 | G | Planned | — |
-| 25 Pagination errors | MIP1-31 | G | Planned | — |
-| 26 Invoke error strictness | MIP1-32 | G | Planned | — |
-| 29 Sync status copy | MIP1-33 | G | Planned | — |
+| 24 Sync timeout UI | MIP1-30 | G | Done | mip1-30 |
+| 25 Pagination errors | MIP1-31 | G | Done | mip1-31 |
+| 26 Invoke error strictness | MIP1-32 | G | Done | mip1-32 |
+| 29 Sync status copy | MIP1-33 | G | Done | mip1-33 |
 | 31 Shortcut help per platform | MIP1-34 | H | Planned | — |
 | 32 Tray parity matrix | MIP1-35 | H | Planned | — |
 | 33 Arch depends | MIP1-36 | H | Planned | — |

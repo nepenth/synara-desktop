@@ -9,8 +9,11 @@ import {
   DESKTOP_TRAY_STATE_DEBOUNCE_MS,
   flushPendingDesktopTrayStateUpdate,
   getDesktopIntegrationStatus,
+
   getDesktopNotificationCount,
   getDesktopPerformanceCapabilities,
+  invokeDesktopWithAvailability,
+  isDesktopBridgeAvailable,
   openDesktopExternalUrl,
   readDesktopDroppedFiles,
   saveDesktopFile,
@@ -23,6 +26,7 @@ import {
   subscribeDesktopTrayDndToggle,
   type DesktopTrayState,
 } from '../desktop';
+import { clearDesktopDiagnostics, getDesktopDiagnosticEntries } from '../desktopDiagnostics';
 
 type DesktopActionCallArgs = {
   action?: {
@@ -236,7 +240,9 @@ test('desktop tray state is capability gated and clamps counts', async () => {
   const originalWindow = globalThis.window;
 
   try {
+    clearDesktopDiagnostics();
     (globalThis as any).window = {};
+    assert.equal(isDesktopBridgeAvailable(), false);
     assert.equal(
       await setDesktopTrayState({
         unreadCount: 1,
@@ -254,7 +260,7 @@ test('desktop tray state is capability gated and clamps counts', async () => {
         supportsTrayState: true,
         invoke: async (command: string, args?: Record<string, unknown>) => {
           calls.push({ command, args });
-          return null;
+          return true;
         },
       },
     };
@@ -288,6 +294,76 @@ test('desktop tray state is capability gated and clamps counts', async () => {
       },
     },
   ]);
+});
+
+test('desktop invoke distinguishes missing bridge from explicit false failures', async () => {
+  const originalWindow = globalThis.window;
+  clearDesktopDiagnostics();
+
+  try {
+    (globalThis as any).window = {};
+    assert.deepEqual(await invokeDesktopWithAvailability('desktop_update_tray_state'), {
+      available: false,
+    });
+
+    (globalThis as any).window = {
+      __SYNARA_DESKTOP__: {
+        platform: 'tauri',
+        supportsTrayState: true,
+        invoke: async () => false,
+      },
+    };
+
+    assert.equal(
+      await setDesktopTrayState({
+        unreadCount: 1,
+        highlightCount: 0,
+        laterCount: 0,
+        notificationInboxCount: 0,
+        doNotDisturb: false,
+      }),
+      false
+    );
+    await flushPendingDesktopTrayStateUpdate();
+    assert.match(getDesktopDiagnosticEntries().join('\n'), /desktop_update_tray_state returned false/);
+  } finally {
+    (globalThis as any).window = originalWindow;
+    clearDesktopDiagnostics();
+  }
+});
+
+test('desktop shortcut failures are recorded in diagnostics', async () => {
+  const originalWindow = globalThis.window;
+  clearDesktopDiagnostics();
+
+  try {
+    (globalThis as any).window = {
+      __SYNARA_DESKTOP__: {
+        platform: 'tauri',
+        supportsGlobalShortcuts: true,
+        invoke: async () => ({
+          success: false,
+          state: 'failed',
+          message: 'Shortcut registration failed.',
+        }),
+      },
+    };
+
+    const result = await setDesktopShortcuts({
+      show: 'CmdOrCtrl+Shift+C',
+      later: 'CmdOrCtrl+Shift+L',
+      notifications: 'CmdOrCtrl+Shift+N',
+    });
+
+    assert.equal(result.success, false);
+    assert.match(
+      getDesktopDiagnosticEntries().join('\n'),
+      /desktop_set_shortcuts Shortcut registration failed/
+    );
+  } finally {
+    (globalThis as any).window = originalWindow;
+    clearDesktopDiagnostics();
+  }
 });
 
 test('desktop integration status falls back when the bridge does not support diagnostics', async () => {
