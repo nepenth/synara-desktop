@@ -10,7 +10,7 @@ const session = {
   deviceId: 'ALICE_DEVICE',
 };
 
-const createMockMatrixClient = (): MatrixClient => ({}) as MatrixClient;
+const createMockMatrixClient = (): MatrixClient => ({} as MatrixClient);
 
 test('initClient clears matrix stores before init when bootstrapped identity differs', async () => {
   const calls: string[] = [];

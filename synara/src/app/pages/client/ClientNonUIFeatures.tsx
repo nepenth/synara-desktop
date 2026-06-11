@@ -22,7 +22,7 @@ import {
   getUnreadInfo,
   isNotificationEvent,
 } from '../../utils/room';
-import { NotificationType, UnreadInfo } from '../../../types/matrix/room';
+import { NotificationType } from '../../../types/matrix/room';
 import { getMxIdLocalPart } from '../../utils/matrix';
 import { useSelectedRoom } from '../../hooks/router/useSelectedRoom';
 import { useInboxNotificationsSelected } from '../../hooks/router/useInbox';

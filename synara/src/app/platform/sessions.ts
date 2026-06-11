@@ -5,11 +5,7 @@ import {
   isSynaraDesktop,
 } from '../utils/desktop';
 import { syncDesktopSecretStoreCapability } from './capabilities';
-import {
-  getPlatformSecretStoreStatus,
-  normalizePlatformSecretStoreStatus,
-  type PlatformSecretStoreStatus,
-} from './secrets';
+import { getPlatformSecretStoreStatus, type PlatformSecretStoreStatus } from './secrets';
 
 export type PlatformSessionStore = {
   getStatus: () => Promise<PlatformSecretStoreStatus>;

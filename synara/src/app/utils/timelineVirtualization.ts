@@ -229,7 +229,9 @@ const getTimelineBuildOptionsKey = (options: TimelineBuildOptions): string =>
     [...options.ignoredUsersSet].sort().join(','),
   ].join('|');
 
-export const createTimelineBuildFingerprint = <TTimeline extends TimelineRowBuildTimeline<TimelineRowBuildEvent>>(
+export const createTimelineBuildFingerprint = <
+  TTimeline extends TimelineRowBuildTimeline<TimelineRowBuildEvent>
+>(
   linkedTimelines: TTimeline[],
   options: TimelineBuildOptions,
   getTimelinesEventsCount: (timelines: TTimeline[]) => number
@@ -277,7 +279,10 @@ const getTrailingSyntheticRowCount = (rows: TimelineBuildRow[]): number => {
   return trailingRows;
 };
 
-const getEventAtAbsoluteIndex = <TEvt extends TimelineRowBuildEvent, TTimeline extends TimelineRowBuildTimeline<TEvt>>(
+const getEventAtAbsoluteIndex = <
+  TEvt extends TimelineRowBuildEvent,
+  TTimeline extends TimelineRowBuildTimeline<TEvt>
+>(
   linkedTimelines: TTimeline[],
   absoluteIndex: number
 ): TEvt | undefined => {
@@ -306,14 +311,10 @@ const processTimelineEvent = <
   deps: TimelineRowBuildDeps<TEvt, TTimeline, TRow>;
 }): TimelineRowBuildContext<TEvt> => {
   const { mEvent, eventIndex, eventTimeline, options, rows, deps } = args;
-  let { prevEvent, isPrevRendered, pendingNewDivider } = args.context;
-  const {
-    ignoredUsersSet,
-    showHiddenEvents,
-    readUptoEventId,
-    unreadAnchorEventId,
-    currentUserId,
-  } = options;
+  const { prevEvent, isPrevRendered } = args.context;
+  let { pendingNewDivider } = args.context;
+  const { ignoredUsersSet, showHiddenEvents, readUptoEventId, unreadAnchorEventId, currentUserId } =
+    options;
 
   const eventId = mEvent.getId();
   if (!eventId) {
@@ -458,7 +459,11 @@ export const buildTimelineRows = <
   }
   if (showBackLoader) {
     rows.push(
-      ...(getLoaderRows('backward', compact, deps.getTimelinesEventsCount(linkedTimelines)) as TRow[])
+      ...(getLoaderRows(
+        'backward',
+        compact,
+        deps.getTimelinesEventsCount(linkedTimelines)
+      ) as TRow[])
     );
   }
 
@@ -477,7 +482,11 @@ export const buildTimelineRows = <
 
   if (showFrontLoader) {
     rows.push(
-      ...(getLoaderRows('forward', compact, deps.getTimelinesEventsCount(linkedTimelines)) as TRow[])
+      ...(getLoaderRows(
+        'forward',
+        compact,
+        deps.getTimelinesEventsCount(linkedTimelines)
+      ) as TRow[])
     );
   }
 
@@ -510,7 +519,10 @@ const verifyIncrementalAnchor = <
   const anchorEventId = previous.context.anchorEventId;
   if (!anchorEventId) return true;
 
-  const anchorEvent = getEventAtAbsoluteIndex(linkedTimelines, previous.fingerprint.eventsLength - 1);
+  const anchorEvent = getEventAtAbsoluteIndex(
+    linkedTimelines,
+    previous.fingerprint.eventsLength - 1
+  );
   return anchorEvent?.getId() === anchorEventId;
 };
 
@@ -533,7 +545,11 @@ export const buildTimelineRowsWithState = <
   deps: TimelineRowBuildDeps<TEvt, TTimeline, TRow>,
   previous?: TimelineRowsBuildState<TRow, TEvt>
 ): TimelineRowsBuildResult<TRow, TEvt> => {
-  const fingerprint = createTimelineBuildFingerprint(linkedTimelines, options, deps.getTimelinesEventsCount);
+  const fingerprint = createTimelineBuildFingerprint(
+    linkedTimelines,
+    options,
+    deps.getTimelinesEventsCount
+  );
 
   if (
     previous &&

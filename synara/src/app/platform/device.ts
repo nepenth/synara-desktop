@@ -7,10 +7,7 @@ export type PlatformDeviceRecord = {
 export type PlatformDeviceNameClient = {
   getDeviceId: () => string | undefined;
   getDevice: (deviceId: string) => Promise<PlatformDeviceRecord | undefined>;
-  setDeviceDetails: (
-    deviceId: string,
-    details: { display_name: string }
-  ) => Promise<unknown>;
+  setDeviceDetails: (deviceId: string, details: { display_name: string }) => Promise<unknown>;
 };
 
 export const getPlatformDeviceDisplayName = synaraDeviceDisplayName;

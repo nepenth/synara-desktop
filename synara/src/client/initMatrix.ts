@@ -24,7 +24,11 @@ import {
   setLastBootstrappedMatrixIdentity,
   type SessionPersistenceOptions,
 } from '../app/state/sessionPersistence';
-import { clearSessionLocalStorage, type Session, type SessionLocalStorage } from '../app/state/sessions';
+import {
+  clearSessionLocalStorage,
+  type Session,
+  type SessionLocalStorage,
+} from '../app/state/sessions';
 import { platformSessionStore } from '../app/platform';
 import { clearNotificationCaches } from '../app/notifications/notificationCaches';
 
@@ -116,7 +120,7 @@ const createMatrixClient = (
     MATRIX_LEGACY_CRYPTO_STORE_NAME
   );
 
-  let mx!: MatrixClient;
+  const mxHolder: { client?: MatrixClient } = {};
   const clientOptions = {
     baseUrl: session.baseUrl,
     accessToken: session.accessToken,
@@ -132,11 +136,16 @@ const createMatrixClient = (
   if (session.refreshToken && refreshDeps) {
     Object.assign(clientOptions, {
       refreshToken: session.refreshToken,
-      tokenRefreshFunction: createTokenRefreshFunction(() => mx, session, refreshDeps),
+      tokenRefreshFunction: createTokenRefreshFunction(
+        () => mxHolder.client!,
+        session,
+        refreshDeps
+      ),
     });
   }
 
-  mx = createClient(clientOptions);
+  const mx = createClient(clientOptions);
+  mxHolder.client = mx;
   mx.setMaxListeners(50);
   return mx;
 };
@@ -180,7 +189,8 @@ const recordBootstrappedMatrixIdentity = (
 export const initClient = async (
   session: MatrixClientSession,
   {
-    clearMatrixStoresForIdentityChange: clearStoresForIdentityChange = clearMatrixStoresForIdentityChange,
+    clearMatrixStoresForIdentityChange:
+      clearStoresForIdentityChange = clearMatrixStoresForIdentityChange,
     clearMatrixLocalStores: clearStores = clearMatrixLocalStores,
     setLastBootstrappedMatrixIdentity: setLastBootstrapped = setLastBootstrappedMatrixIdentity,
     startMatrixClient: startClient = startMatrixClient,
@@ -239,10 +249,7 @@ const defaultPerformLogoutDeps = (): PerformLogoutDeps => ({
 
 export const performLogout = async (
   mx?: MatrixClient,
-  {
-    storage,
-    ...depsOverrides
-  }: Partial<PerformLogoutDeps> & { storage?: SessionLocalStorage } = {}
+  { storage, ...depsOverrides }: Partial<PerformLogoutDeps> & { storage?: SessionLocalStorage } = {}
 ): Promise<void> => {
   const deps = { ...defaultPerformLogoutDeps(), ...depsOverrides };
 
@@ -279,14 +286,17 @@ export const scheduleProactiveTokenRefresh = (
 ): ProactiveTokenRefreshHandle => {
   const resolvedDeps = { ...defaultRefreshDeps(), ...deps };
 
-  if (!session.refreshToken || typeof session.expiresInMs !== 'number' || typeof session.storedAtMs !== 'number') {
+  if (
+    !session.refreshToken ||
+    typeof session.expiresInMs !== 'number' ||
+    typeof session.storedAtMs !== 'number'
+  ) {
     return { dispose: () => undefined };
   }
 
   const refreshAtMs = session.storedAtMs + session.expiresInMs - REFRESH_BEFORE_EXPIRY_MS;
   const delayMs = Math.max(0, refreshAtMs - nowMs);
   let disposed = false;
-  let timer: ReturnType<typeof setTimeout> | undefined;
 
   const runRefresh = async () => {
     if (disposed) return;
@@ -298,7 +308,7 @@ export const scheduleProactiveTokenRefresh = (
     }
   };
 
-  timer = setTimeout(() => {
+  const timer = setTimeout(() => {
     void runRefresh();
   }, delayMs);
 
