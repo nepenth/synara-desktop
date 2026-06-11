@@ -47,6 +47,10 @@ import {
 import { detectAgentApprovalPrompt } from '../../utils/agentApprovals';
 import { resolveMatrixThumbnailUrl } from '../../matrix/media';
 import { buildDesktopNotificationRoomRoute } from '../../utils/desktop';
+import {
+  notifiedEventIdsCache,
+  unreadNotificationCache,
+} from '../../notifications/notificationCaches';
 
 const RECENT_AGENT_APPROVAL_MS = 10 * 60 * 1000;
 
@@ -211,7 +215,7 @@ function InviteNotifications() {
 function MessageNotifications() {
   const audioRef = useRef<HTMLAudioElement>(null);
   const notifRef = useRef<Notification | undefined>(undefined);
-  const unreadCacheRef = useRef<Map<string, UnreadInfo>>(new Map());
+
   const mx = useMatrixClient();
   const useAuthentication = useMediaAuthentication();
   const [showNotifications] = useSetting(settingsAtom, 'showNotifications');
@@ -294,8 +298,8 @@ function MessageNotifications() {
       if (detectAgentApprovalPrompt(mEvent.getContent<Record<string, unknown>>())) return;
       const openEventId = getThreadRootEventId(room.findEventById(eventId)) ?? eventId;
       const unreadInfo = getUnreadInfo(room);
-      const cachedUnreadInfo = unreadCacheRef.current.get(room.roomId);
-      unreadCacheRef.current.set(room.roomId, unreadInfo);
+      const cachedUnreadInfo = unreadNotificationCache.get(room.roomId);
+      unreadNotificationCache.set(room.roomId, unreadInfo);
 
       if (unreadInfo.total === 0) return;
       if (
@@ -351,7 +355,7 @@ function MessageNotifications() {
 
 function AgentApprovalNotifications() {
   const audioRef = useRef<HTMLAudioElement>(null);
-  const notifiedEventIdsRef = useRef<Set<string>>(new Set());
+
   const mx = useMatrixClient();
   const { navigateRoom } = useRoomNavigate();
 
@@ -408,12 +412,12 @@ function AgentApprovalNotifications() {
       if (Date.now() - mEvent.getTs() > RECENT_AGENT_APPROVAL_MS) return;
 
       const eventId = mEvent.getId();
-      if (!eventId || notifiedEventIdsRef.current.has(eventId)) return;
+      if (!eventId || notifiedEventIdsCache.has(eventId)) return;
 
       const prompt = detectAgentApprovalPrompt(mEvent.getContent<Record<string, unknown>>());
       if (!prompt) return;
 
-      notifiedEventIdsRef.current.add(eventId);
+      notifiedEventIdsCache.add(eventId);
       const openEventId = getThreadRootEventId(room.findEventById(eventId)) ?? eventId;
       if (supportsPlatformSystemNotifications() || notificationPermission('granted')) {
         notify({

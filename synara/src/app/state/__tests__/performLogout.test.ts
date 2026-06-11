@@ -2,6 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import type { MatrixClient } from 'matrix-js-sdk';
 import { performLogout } from '../../../client/initMatrix';
+import {
+  notifiedEventIdsCache,
+  unreadNotificationCache,
+} from '../../notifications/notificationCaches';
 import { cryptoCallbacks, storePrivateKey } from '../../../client/secretStorageKeys';
 import {
   clearSessionLocalStorage,
@@ -133,6 +137,20 @@ test('performLogout clears secret storage keys with matrix client', async () => 
   await performLogout(mx, createLogoutDeps().deps);
 
   assert.equal(await getCachedKey(), undefined);
+});
+
+test('performLogout clears bounded notification caches', async () => {
+  notifiedEventIdsCache.add('$approval-event');
+  unreadNotificationCache.set('!room:example.org', {
+    roomId: '!room:example.org',
+    total: 1,
+    highlight: 0,
+  });
+
+  await performLogout(undefined, createLogoutDeps().deps);
+
+  assert.equal(notifiedEventIdsCache.size, 0);
+  assert.equal(unreadNotificationCache.size, 0);
 });
 
 test('performLogout without matrix client removes session keys only', async () => {

@@ -1276,7 +1276,7 @@ For each MIP1-NN commit:
 | 9 Stream file IPC | MIP1-19 | E | Done | mip1-19 |
 | 10 Drop allowlist lifecycle | MIP1-20 | E | Done | mip1-20 |
 | 20 Throttle tray rebuild | MIP1-21 | E | Done | mip1-21 |
-| 41 Bound notification caches | MIP1-22 | E | Planned | — |
+| 41 Bound notification caches | MIP1-22 | E | Done | mip1-22 |
 | 42 Focus timeout cleanup | MIP1-23 | E | Done | mip1-23 |
 | 11 Atomic shortcuts | MIP1-24 | F | Done | mip1-24 |
 | 18 Single shortcut path | MIP1-25 | F | Done | mip1-25 |
