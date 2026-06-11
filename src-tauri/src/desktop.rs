@@ -30,6 +30,8 @@ const MENU_DND_TOGGLE: &str = "desktop.dnd";
 const MENU_BUILD_INFO: &str = "desktop.build-info";
 const MENU_QUIT: &str = "desktop.quit";
 
+pub const DESKTOP_TRAY_DND_TOGGLE_EVENT: &str = "synara-tray-dnd-toggle";
+
 const ROUTE_HOME: &str = "/";
 const ROUTE_LATER: &str = "/inbox/later/";
 const ROUTE_NOTIFICATIONS: &str = "/inbox/notifications/";
@@ -283,9 +285,10 @@ fn sanitize_notification_payload(
         .map(|value| sanitize_action_text(value, DESKTOP_NOTIFICATION_MAX_BODY_CHARS))
         .filter(|value| !value.is_empty());
 
-    let route = notification
-        .route
-        .and_then(|value| sanitize_route(value).ok());
+    let route = match notification.route {
+        Some(value) => Some(sanitize_notification_route(value)?),
+        None => None,
+    };
 
     Ok(DesktopNotificationPayload { title, body, route })
 }
@@ -817,6 +820,129 @@ fn sanitize_route(route: String) -> Result<String, String> {
     Ok(route)
 }
 
+fn sanitize_notification_route(route: String) -> Result<String, String> {
+    sanitize_route(route)
+}
+
+fn show_notification_without_route_click_handler<R: Runtime>(
+    app: &AppHandle<R>,
+    title: &str,
+    body: Option<&str>,
+) -> Result<(), String> {
+    let mut builder = app.notification().builder().title(title.to_owned());
+    if let Some(body) = body {
+        builder = builder.body(body.to_owned());
+    }
+    builder.show().map_err(|error| error.to_string())
+}
+
+#[cfg(target_os = "linux")]
+fn show_notification_with_route_click_handler<R: Runtime>(
+    app: &AppHandle<R>,
+    title: &str,
+    body: Option<&str>,
+    route: &str,
+) -> Result<(), String> {
+    use notify_rust::Notification;
+
+    let mut notification = Notification::new();
+    notification.summary(title);
+    if let Some(body) = body {
+        notification.body(body);
+    }
+    notification.auto_icon();
+    notification.action("default", "Open Synara");
+
+    let handle = notification.show().map_err(|error| error.to_string())?;
+    let app = app.clone();
+    let route = route.to_owned();
+
+    tauri::async_runtime::spawn(async move {
+        let _ = tauri::async_runtime::spawn_blocking(move || {
+            handle.wait_for_action(move |action| {
+                if action == "default" {
+                    if let Err(error) = navigate_main_window(&app, &route) {
+                        eprintln!("failed to navigate from notification click: {error}");
+                    }
+                }
+            });
+        })
+        .await;
+    });
+
+    Ok(())
+}
+
+#[cfg(target_os = "macos")]
+fn configure_macos_notification_application() {
+    use mac_notification_sys::set_application;
+
+    let bundle_identifier = if tauri::is_dev() {
+        "com.apple.Terminal"
+    } else {
+        "com.whylandcreative.synara.desktop"
+    };
+
+    if let Err(error) = set_application(bundle_identifier) {
+        eprintln!("failed to configure macOS notification application: {error}");
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn show_notification_with_route_click_handler<R: Runtime>(
+    app: &AppHandle<R>,
+    title: &str,
+    body: Option<&str>,
+    route: &str,
+) -> Result<(), String> {
+    use mac_notification_sys::{Notification, NotificationResponse};
+
+    configure_macos_notification_application();
+
+    let title = title.to_owned();
+    let body = body.map(str::to_owned);
+    let app = app.clone();
+    let route = route.to_owned();
+
+    tauri::async_runtime::spawn(async move {
+        let app = app.clone();
+        let route = route.clone();
+        let response = tauri::async_runtime::spawn_blocking(move || {
+            let mut notification = Notification::new();
+            notification.title(&title);
+            if let Some(ref body) = body {
+                notification.message(body);
+            }
+            notification.wait_for_click(true);
+            notification.send()
+        })
+        .await;
+
+        if let Ok(Ok(response)) = response {
+            match response {
+                NotificationResponse::Click | NotificationResponse::ActionButton(_) => {
+                    if let Err(error) = navigate_main_window(&app, &route) {
+                        eprintln!("failed to navigate from notification click: {error}");
+                    }
+                }
+                _ => {}
+            }
+        }
+    });
+
+    Ok(())
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "macos")))]
+fn show_notification_with_route_click_handler<R: Runtime>(
+    app: &AppHandle<R>,
+    title: &str,
+    body: Option<&str>,
+    _route: &str,
+) -> Result<(), String> {
+    show_notification_without_route_click_handler(app, title, body)
+}
+
 fn clamp_count(value: i64) -> i64 {
     match value {
         value if value < 0 => 0,
@@ -1263,6 +1389,19 @@ pub fn navigate_main_window<R: Runtime>(app: &AppHandle<R>, route: &str) -> taur
     Ok(())
 }
 
+pub fn tray_dnd_toggle_dispatch_script() -> String {
+    format!(
+        "window.dispatchEvent(new CustomEvent('{DESKTOP_TRAY_DND_TOGGLE_EVENT}'));"
+    )
+}
+
+fn emit_tray_dnd_toggle<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
+    if let Some(window) = main_window(app) {
+        window.eval(tray_dnd_toggle_dispatch_script())?;
+    }
+    Ok(())
+}
+
 pub fn set_badge_count<R: Runtime>(app: &AppHandle<R>, count: Option<i64>) -> tauri::Result<()> {
     if let Some(window) = main_window(app) {
         let normalized_count = count.filter(|value| *value > 0);
@@ -1324,7 +1463,7 @@ pub fn handle_menu_event<R: Runtime>(app: &AppHandle<R>, event: MenuEvent) {
         MENU_NOTIFICATIONS => navigate_main_window(app, ROUTE_NOTIFICATIONS),
         MENU_UNREAD_SUMMARY => navigate_main_window(app, ROUTE_HOME),
         MENU_DESKTOP_INTEGRATION => navigate_main_window(app, ROUTE_SETTINGS),
-        MENU_DND_TOGGLE => Ok(()),
+        MENU_DND_TOGGLE => emit_tray_dnd_toggle(app),
         MENU_BUILD_INFO => Ok(()),
         MENU_QUIT => {
             app.exit(0);
@@ -1634,11 +1773,22 @@ pub fn desktop_notify(
     notification: DesktopNotificationPayload,
 ) -> Result<bool, String> {
     let notification = sanitize_notification_payload(notification)?;
-    let mut builder = app.notification().builder().title(notification.title);
-    if let Some(body) = notification.body {
-        builder = builder.body(body);
+
+    if let Some(route) = notification.route.as_deref() {
+        show_notification_with_route_click_handler(
+            &app,
+            &notification.title,
+            notification.body.as_deref(),
+            route,
+        )?;
+        return Ok(true);
     }
-    builder.show().map_err(|error| error.to_string())?;
+
+    show_notification_without_route_click_handler(
+        &app,
+        &notification.title,
+        notification.body.as_deref(),
+    )?;
     Ok(true)
 }
 
@@ -2205,7 +2355,21 @@ mod tests {
     }
 
     #[test]
-    fn sanitize_notification_payload_accepts_safe_route_and_strips_invalid_route() {
+    fn sanitize_notification_route_allows_only_internal_routes() {
+        assert_eq!(
+            sanitize_notification_route("/inbox/later/".to_owned()).unwrap(),
+            "/inbox/later/"
+        );
+        assert_eq!(
+            sanitize_notification_route("#/room/abc".to_owned()).unwrap(),
+            "#/room/abc"
+        );
+        assert!(sanitize_notification_route("https://example.org".to_owned()).is_err());
+        assert!(sanitize_notification_route("room/abc".to_owned()).is_err());
+    }
+
+    #[test]
+    fn sanitize_notification_payload_accepts_safe_route() {
         let payload = sanitize_notification_payload(DesktopNotificationPayload {
             title: "Reminder".to_owned(),
             body: Some("body".to_owned()),
@@ -2213,14 +2377,17 @@ mod tests {
         })
         .expect("notification payload should pass");
         assert_eq!(payload.route, Some("/inbox/notifications/".to_string()));
+    }
 
-        let invalid = sanitize_notification_payload(DesktopNotificationPayload {
+    #[test]
+    fn sanitize_notification_payload_rejects_unsafe_route() {
+        let result = sanitize_notification_payload(DesktopNotificationPayload {
             title: "Reminder".to_owned(),
             body: Some("body".to_owned()),
             route: Some("https://evil.example.com".to_owned()),
-        })
-        .expect("notification payload should pass without route");
-        assert_eq!(invalid.route, None);
+        });
+
+        assert!(result.is_err());
     }
 
     #[test]
@@ -2335,6 +2502,35 @@ VERSION_ID=24
         assert!(labels[0].contains("Highlights: 9999"));
         assert!(labels[0].contains("Later: 3"));
         assert!(labels[0].contains("Notifications: 0"));
+    }
+
+    #[test]
+    fn tray_route_labels_reflect_do_not_disturb_state() {
+        let on = tray_route_labels(&DesktopTrayState {
+            unread_count: 0,
+            highlight_count: 0,
+            later_count: 0,
+            notification_inbox_count: 0,
+            do_not_disturb: true,
+        });
+        let off = tray_route_labels(&DesktopTrayState {
+            unread_count: 0,
+            highlight_count: 0,
+            later_count: 0,
+            notification_inbox_count: 0,
+            do_not_disturb: false,
+        });
+
+        assert_eq!(on[3], "Do Not Disturb: On");
+        assert_eq!(off[3], "Do Not Disturb: Off");
+    }
+
+    #[test]
+    fn tray_dnd_toggle_dispatch_script_emits_custom_event() {
+        assert_eq!(
+            tray_dnd_toggle_dispatch_script(),
+            "window.dispatchEvent(new CustomEvent('synara-tray-dnd-toggle'));"
+        );
     }
 
     fn sanitize_action_payload_with_no_kind(
