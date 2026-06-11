@@ -1,5 +1,11 @@
 import { createClient, MatrixClient, IndexedDBStore, IndexedDBCryptoStore } from 'matrix-js-sdk';
 
+import {
+  clearMatrixLocalStores,
+  isCryptoAccountMismatchError,
+  MATRIX_LEGACY_CRYPTO_STORE_NAME,
+  MATRIX_SYNC_STORE_NAME,
+} from './matrixLocalStores';
 import { cryptoCallbacks } from './secretStorageKeys';
 import { clearNavToActivePathStore } from '../app/state/navToActivePath';
 import { pushSessionToSW } from '../sw-session';
@@ -13,14 +19,17 @@ type Session = {
   deviceId: string;
 };
 
-export const initClient = async (session: Session): Promise<MatrixClient> => {
+const createMatrixClient = (session: Session) => {
   const indexedDBStore = new IndexedDBStore({
     indexedDB: global.indexedDB,
     localStorage: global.localStorage,
-    dbName: 'web-sync-store',
+    dbName: MATRIX_SYNC_STORE_NAME,
   });
 
-  const legacyCryptoStore = new IndexedDBCryptoStore(global.indexedDB, 'crypto-store');
+  const legacyCryptoStore = new IndexedDBCryptoStore(
+    global.indexedDB,
+    MATRIX_LEGACY_CRYPTO_STORE_NAME
+  );
 
   const mx = createClient({
     baseUrl: session.baseUrl,
@@ -34,12 +43,28 @@ export const initClient = async (session: Session): Promise<MatrixClient> => {
     verificationMethods: ['m.sas.v1'],
   });
 
-  await indexedDBStore.startup();
-  await mx.initRustCrypto();
-
   mx.setMaxListeners(50);
-
   return mx;
+};
+
+const startMatrixClient = async (session: Session): Promise<MatrixClient> => {
+  const mx = createMatrixClient(session);
+  await mx.store.startup();
+  await mx.initRustCrypto();
+  return mx;
+};
+
+export const initClient = async (session: Session): Promise<MatrixClient> => {
+  try {
+    return await startMatrixClient(session);
+  } catch (error) {
+    if (!isCryptoAccountMismatchError(error)) {
+      throw error;
+    }
+
+    await clearMatrixLocalStores();
+    return startMatrixClient(session);
+  }
 };
 
 export const startClient = async (mx: MatrixClient) => {
@@ -71,15 +96,7 @@ export const logoutClient = async (mx: MatrixClient) => {
 
 export const clearLoginData = async () => {
   await clearPersistedSessions({ nativeSessionStore: platformSessionStore });
-  const dbs = await window.indexedDB.databases();
-
-  dbs.forEach((idbInfo) => {
-    const { name } = idbInfo;
-    if (name) {
-      window.indexedDB.deleteDatabase(name);
-    }
-  });
-
+  await clearMatrixLocalStores();
   window.localStorage.clear();
   window.location.reload();
 };

@@ -5,6 +5,7 @@ import {
   type AsyncSessionStore,
   type SessionBootstrapResult,
 } from './sessionBootstrap';
+import { clearMatrixLocalStores } from '../../client/matrixLocalStores';
 import {
   fallbackSessionStore,
   type FallbackSessionInput,
@@ -144,5 +145,10 @@ export const clearPersistedSessions = async ({
   }
 
   fallbackStore.removeFallbackSession();
+  try {
+    await clearMatrixLocalStores();
+  } catch {
+    // Logout must continue even if IndexedDB cleanup is unavailable.
+  }
   clearSessionBootstrap();
 };
