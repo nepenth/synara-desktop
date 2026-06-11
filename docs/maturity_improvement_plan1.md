@@ -1262,10 +1262,10 @@ For each MIP1-NN commit:
 | 1 Notification route | MIP1-05 | B | Done | mip1-05 |
 | 2 Tray DND | MIP1-06 | B | Done | mip1-06 |
 | 3 Agent-action listener | MIP1-07 | B | Done | mip1-07 |
-| 6 Keyutils detection | MIP1-08 | C | Planned | — |
+| 6 Keyutils detection | MIP1-08 | C | Done | mip1-08 |
 | 14 Native store UI warning | MIP1-09 | C | Planned | — |
 | 15 Secret Service probe | MIP1-10 | C | Planned | — |
-| 16 macOS Keychain probe | MIP1-11 | C | Planned | — |
+| 16 macOS Keychain probe | MIP1-11 | C | Done | mip1-11 |
 | 17 Secret-store errors | MIP1-12 | C | Planned | — |
 | 7 Selective logout | MIP1-13 | D | Planned | — |
 | 12 SW session after login | MIP1-14 | D | Planned | — |

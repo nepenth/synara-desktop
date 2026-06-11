@@ -183,9 +183,10 @@ const DESKTOP_SESSION_MAX_TOKEN_CHARS: usize = 8_192;
 const DESKTOP_SESSION_CREDENTIAL_SERVICE: &str = "com.whylandcreative.synara.desktop";
 const DESKTOP_SESSION_LEGACY_CREDENTIAL_SERVICE: &str = "app.synara.desktop";
 const DESKTOP_SESSION_CREDENTIAL_ACCOUNT: &str = "matrix-session";
-#[allow(dead_code)]
+#[cfg(target_os = "macos")]
+const DESKTOP_SESSION_KEYCHAIN_PROBE_ACCOUNT: &str = "matrix-session-probe";
 const DESKTOP_SECRET_STORE_BACKEND_NONE: &str = "none";
-#[allow(dead_code)]
+#[cfg(any(target_os = "macos", test))]
 const DESKTOP_SECRET_STORE_BACKEND_MACOS_KEYCHAIN: &str = "macos-keychain";
 #[allow(dead_code)]
 const DESKTOP_SECRET_STORE_BACKEND_LINUX_SECRET_SERVICE: &str = "linux-secret-service";
@@ -201,6 +202,19 @@ const DESKTOP_SECRET_STORE_WINDOWS_UNSUPPORTED: &str = "windows-native-session-s
 const DESKTOP_SECRET_STORE_SESSION_SCOPED: &str = "linux-keyutils-session-scoped";
 #[allow(dead_code)]
 const DESKTOP_SECRET_STORE_LINUX_UNAVAILABLE: &str = "linux-secret-store-unavailable";
+#[cfg(any(target_os = "macos", test))]
+const DESKTOP_SECRET_STORE_MACOS_KEYCHAIN_LOCKED: &str = "macos-keychain-locked";
+#[cfg(any(target_os = "macos", test))]
+const DESKTOP_SECRET_STORE_MACOS_KEYCHAIN_ACCESS_DENIED: &str = "macos-keychain-access-denied";
+#[cfg(any(target_os = "macos", test))]
+const DESKTOP_SECRET_STORE_MACOS_KEYCHAIN_UNAVAILABLE: &str = "macos-keychain-unavailable";
+#[cfg(target_os = "linux")]
+const DESKTOP_SECRET_STORE_KEYUTILS_PROBE_SERVICE: &str =
+    "com.whylandcreative.synara.desktop.keyutils-probe";
+#[cfg(target_os = "linux")]
+const DESKTOP_SECRET_STORE_KEYUTILS_PROBE_ACCOUNT: &str = "availability-probe";
+#[cfg(target_os = "linux")]
+const DESKTOP_SECRET_STORE_KEYUTILS_PROBE_SECRET: &str = "synara-keyutils-availability-probe";
 const DESKTOP_SECRET_STORE_OPERATION_FAILED: &str = "desktop-secret-store-operation-failed";
 const DESKTOP_STORED_SESSION_INVALID: &str = "desktop-stored-session-invalid";
 const MAX_DESKTOP_ROUTE_CHARS: usize = 2_048;
@@ -486,15 +500,151 @@ fn unavailable_secret_store_status(reason: &'static str) -> DesktopSecretStoreSt
     }
 }
 
-fn platform_secret_store_status() -> DesktopSecretStoreStatus {
-    #[cfg(target_os = "macos")]
+#[cfg(target_os = "macos")]
+static MACOS_SECRET_STORE_STATUS_CACHE: OnceLock<Mutex<Option<DesktopSecretStoreStatus>>> =
+    OnceLock::new();
+
+#[cfg(target_os = "macos")]
+fn macos_secret_store_status_cached() -> DesktopSecretStoreStatus {
+    let cache = MACOS_SECRET_STORE_STATUS_CACHE.get_or_init(|| Mutex::new(None));
+    let mut guard = cache
+        .lock()
+        .expect("macos secret store status cache should not be poisoned");
+    if let Some(status) = *guard {
+        return status;
+    }
+
+    let status = macos_secret_store_status_from_probe(macos_keychain_probe());
+    *guard = Some(status);
+    status
+}
+
+#[cfg(target_os = "macos")]
+fn macos_keychain_probe_entry() -> Result<Entry, KeyringError> {
+    Entry::new(
+        DESKTOP_SESSION_CREDENTIAL_SERVICE,
+        DESKTOP_SESSION_KEYCHAIN_PROBE_ACCOUNT,
+    )
+}
+
+#[cfg(all(test, target_os = "macos"))]
+static MACOS_KEYCHAIN_PROBE_TEST_OVERRIDE: Mutex<Option<Result<(), KeyringError>>> =
+    Mutex::new(None);
+
+#[cfg(all(test, target_os = "macos"))]
+fn set_macos_keychain_probe_test_override(result: Option<Result<(), KeyringError>>) {
+    if let Ok(mut guard) = MACOS_KEYCHAIN_PROBE_TEST_OVERRIDE.lock() {
+        *guard = result;
+    }
+}
+
+#[cfg(all(test, target_os = "macos"))]
+fn take_macos_keychain_probe_test_override() -> Option<Result<(), KeyringError>> {
+    MACOS_KEYCHAIN_PROBE_TEST_OVERRIDE
+        .lock()
+        .ok()
+        .and_then(|mut guard| guard.take())
+}
+
+#[cfg(all(test, target_os = "macos"))]
+fn reset_macos_secret_store_status_cache_for_tests() {
+    if let Some(cache) = MACOS_SECRET_STORE_STATUS_CACHE.get() {
+        *cache
+            .lock()
+            .expect("macos secret store status cache should not be poisoned") = None;
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn macos_keychain_probe() -> Result<(), KeyringError> {
+    #[cfg(all(test, target_os = "macos"))]
+    if let Some(override_result) = take_macos_keychain_probe_test_override() {
+        return override_result;
+    }
+
+    let entry = macos_keychain_probe_entry()?;
+    match entry.get_password() {
+        Ok(_) | Err(KeyringError::NoEntry) => Ok(()),
+        Err(error) => Err(error),
+    }
+}
+
+#[cfg(any(target_os = "macos", test))]
+fn macos_unavailable_secret_store_status(reason: &'static str) -> DesktopSecretStoreStatus {
+    DesktopSecretStoreStatus {
+        available: false,
+        backend: DESKTOP_SECRET_STORE_BACKEND_MACOS_KEYCHAIN,
+        can_persist_session: false,
+        reason: Some(reason),
+    }
+}
+
+#[cfg(any(target_os = "macos", test))]
+fn macos_keychain_error_indicates_access_denied(
+    err: &(dyn std::error::Error + Send + Sync),
+) -> bool {
+    #[cfg(test)]
     {
-        DesktopSecretStoreStatus {
+        let message = err.to_string();
+        if let Some(code) = message
+            .strip_prefix("test keychain error ")
+            .and_then(|value| value.parse::<i32>().ok())
+        {
+            return matches!(code, -25293 | -25308);
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    if let Some(code) = err
+        .downcast_ref::<security_framework::base::Error>()
+        .map(|error| error.code())
+    {
+        return matches!(code, -25293 | -25308);
+    }
+
+    false
+}
+
+#[cfg(any(target_os = "macos", test))]
+fn macos_keychain_unavailable_reason(error: &KeyringError) -> &'static str {
+    match error {
+        KeyringError::NoStorageAccess(err) => {
+            if macos_keychain_error_indicates_access_denied(err.as_ref()) {
+                DESKTOP_SECRET_STORE_MACOS_KEYCHAIN_ACCESS_DENIED
+            } else {
+                DESKTOP_SECRET_STORE_MACOS_KEYCHAIN_LOCKED
+            }
+        }
+        KeyringError::PlatformFailure(err) => {
+            if macos_keychain_error_indicates_access_denied(err.as_ref()) {
+                DESKTOP_SECRET_STORE_MACOS_KEYCHAIN_ACCESS_DENIED
+            } else {
+                DESKTOP_SECRET_STORE_MACOS_KEYCHAIN_UNAVAILABLE
+            }
+        }
+        _ => DESKTOP_SECRET_STORE_MACOS_KEYCHAIN_UNAVAILABLE,
+    }
+}
+
+#[cfg(any(target_os = "macos", test))]
+fn macos_secret_store_status_from_probe(probe: Result<(), KeyringError>) -> DesktopSecretStoreStatus {
+    match probe {
+        Ok(()) => DesktopSecretStoreStatus {
             available: true,
             backend: DESKTOP_SECRET_STORE_BACKEND_MACOS_KEYCHAIN,
             can_persist_session: true,
             reason: None,
+        },
+        Err(error) => {
+            macos_unavailable_secret_store_status(macos_keychain_unavailable_reason(&error))
         }
+    }
+}
+
+fn platform_secret_store_status() -> DesktopSecretStoreStatus {
+    #[cfg(target_os = "macos")]
+    {
+        macos_secret_store_status_cached()
     }
 
     #[cfg(target_os = "linux")]
@@ -567,7 +717,35 @@ fn has_secret_service_backend() -> bool {
 
 #[cfg(target_os = "linux")]
 fn has_linux_keyutils_backend() -> bool {
-    Path::new("/proc/keys").exists() || Path::new("/proc/key-users").exists()
+    linux_keyutils_probe_passes()
+}
+
+#[cfg(target_os = "linux")]
+fn linux_keyutils_probe_passes() -> bool {
+    linux_keyutils_probe_round_trip().is_ok()
+}
+
+#[cfg(target_os = "linux")]
+fn linux_keyutils_probe_round_trip() -> Result<(), KeyringError> {
+    use keyring::credential::CredentialApi;
+    use keyring::keyutils::KeyutilsCredential;
+
+    let credential = KeyutilsCredential::new_with_target(
+        None,
+        DESKTOP_SECRET_STORE_KEYUTILS_PROBE_SERVICE,
+        DESKTOP_SECRET_STORE_KEYUTILS_PROBE_ACCOUNT,
+    )?;
+
+    credential.set_password(DESKTOP_SECRET_STORE_KEYUTILS_PROBE_SECRET)?;
+    let stored = credential.get_password()?;
+    if stored != DESKTOP_SECRET_STORE_KEYUTILS_PROBE_SECRET {
+        return Err(KeyringError::PlatformFailure(
+            std::io::Error::other("linux keyutils probe round-trip mismatch").into(),
+        ));
+    }
+
+    let _ = credential.delete_credential();
+    Ok(())
 }
 
 fn desktop_get_session_from_store(
@@ -1817,6 +1995,22 @@ pub fn desktop_agent_action(
 }
 
 #[cfg(test)]
+#[derive(Debug)]
+struct MacosKeychainTestError {
+    code: i32,
+}
+
+#[cfg(test)]
+impl std::fmt::Display for MacosKeychainTestError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "test keychain error {}", self.code)
+    }
+}
+
+#[cfg(test)]
+impl std::error::Error for MacosKeychainTestError {}
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use std::sync::Mutex;
@@ -2142,15 +2336,91 @@ mod tests {
         assert_eq!(DESKTOP_SESSION_CREDENTIAL_ACCOUNT, "matrix-session");
     }
 
+    #[test]
+    fn macos_secret_store_status_from_probe_reports_available_when_keychain_accessible() {
+        let status = macos_secret_store_status_from_probe(Ok(()));
+
+        assert!(status.available);
+        assert_eq!(status.backend, DESKTOP_SECRET_STORE_BACKEND_MACOS_KEYCHAIN);
+        assert!(status.can_persist_session);
+        assert_eq!(status.reason, None);
+        assert!(bridge_supports_secure_secret_store(&status));
+    }
+
+    #[test]
+    fn macos_secret_store_status_from_probe_reports_locked_when_keychain_unavailable() {
+        let status = macos_secret_store_status_from_probe(Err(KeyringError::NoStorageAccess(
+            Box::new(std::io::Error::new(
+                std::io::ErrorKind::PermissionDenied,
+                "keychain locked",
+            )),
+        )));
+
+        assert!(!status.available);
+        assert_eq!(status.backend, DESKTOP_SECRET_STORE_BACKEND_MACOS_KEYCHAIN);
+        assert!(!status.can_persist_session);
+        assert_eq!(
+            status.reason,
+            Some(DESKTOP_SECRET_STORE_MACOS_KEYCHAIN_LOCKED)
+        );
+        assert!(!bridge_supports_secure_secret_store(&status));
+    }
+
+    #[test]
+    fn macos_secret_store_status_from_probe_reports_denied_when_acl_blocks_access() {
+        let status = macos_secret_store_status_from_probe(Err(KeyringError::PlatformFailure(
+            Box::new(MacosKeychainTestError { code: -25293 }),
+        )));
+
+        assert!(!status.available);
+        assert_eq!(
+            status.reason,
+            Some(DESKTOP_SECRET_STORE_MACOS_KEYCHAIN_ACCESS_DENIED)
+        );
+    }
+
+    #[test]
+    fn macos_secret_store_status_from_probe_reports_unavailable_on_other_failures() {
+        let status = macos_secret_store_status_from_probe(Err(KeyringError::PlatformFailure(
+            Box::new(std::io::Error::other("unexpected keychain failure")),
+        )));
+
+        assert!(!status.available);
+        assert_eq!(
+            status.reason,
+            Some(DESKTOP_SECRET_STORE_MACOS_KEYCHAIN_UNAVAILABLE)
+        );
+    }
+
     #[cfg(target_os = "macos")]
     #[test]
-    fn platform_secret_store_status_reports_macos_keychain() {
+    fn platform_secret_store_status_probes_macos_keychain() {
         let status = platform_secret_store_status();
 
-        assert_eq!(status.available, true);
+        assert!(status.available);
         assert_eq!(status.backend, DESKTOP_SECRET_STORE_BACKEND_MACOS_KEYCHAIN);
-        assert_eq!(status.can_persist_session, true);
+        assert!(status.can_persist_session);
         assert_eq!(status.reason, None);
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn platform_secret_store_status_honors_injected_macos_keychain_probe_failure() {
+        reset_macos_secret_store_status_cache_for_tests();
+        set_macos_keychain_probe_test_override(Some(Err(KeyringError::NoStorageAccess(
+            Box::new(std::io::Error::new(
+                std::io::ErrorKind::PermissionDenied,
+                "simulated locked keychain",
+            )),
+        ))));
+
+        let status = platform_secret_store_status();
+
+        assert!(!status.available);
+        assert_eq!(
+            status.reason,
+            Some(DESKTOP_SECRET_STORE_MACOS_KEYCHAIN_LOCKED)
+        );
     }
 
     #[cfg(target_os = "windows")]
@@ -2197,7 +2467,7 @@ mod tests {
     }
 
     #[test]
-    fn linux_secret_store_status_marks_keyutils_as_session_scoped() {
+    fn linux_secret_store_status_reports_keyutils_when_probe_passes() {
         let status = linux_secret_store_status_from_signals(false, true);
 
         assert_eq!(status.available, true);
@@ -2207,13 +2477,46 @@ mod tests {
     }
 
     #[test]
-    fn linux_secret_store_status_reports_unavailable_without_backends() {
+    fn linux_secret_store_status_reports_unavailable_when_probe_fails() {
         let status = linux_secret_store_status_from_signals(false, false);
 
         assert_eq!(status.available, false);
         assert_eq!(status.backend, DESKTOP_SECRET_STORE_BACKEND_NONE);
         assert_eq!(status.can_persist_session, false);
         assert_eq!(status.reason, Some(DESKTOP_SECRET_STORE_LINUX_UNAVAILABLE));
+    }
+
+    #[test]
+    fn linux_secret_store_status_does_not_prefer_keyutils_over_unavailable() {
+        let status = linux_secret_store_status_from_signals(false, false);
+
+        assert_ne!(status.backend, DESKTOP_SECRET_STORE_BACKEND_LINUX_KEYUTILS);
+        assert!(!status.available);
+        assert!(!status.can_persist_session);
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn has_linux_keyutils_backend_matches_probe_not_proc_keys_existence() {
+        let probe_passes = linux_keyutils_probe_passes();
+
+        assert_eq!(has_linux_keyutils_backend(), probe_passes);
+
+        if Path::new("/proc/keys").exists() && !probe_passes {
+            assert!(
+                !has_linux_keyutils_backend(),
+                "/proc/keys alone must not mark keyutils as available"
+            );
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn linux_keyutils_probe_round_trip_is_non_destructive() {
+        let first = linux_keyutils_probe_round_trip();
+        let second = linux_keyutils_probe_round_trip();
+
+        assert_eq!(first.is_ok(), second.is_ok());
     }
 
     #[test]
