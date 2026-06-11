@@ -10,12 +10,12 @@ Branch: `maturity_improvement_plan1` (rebased on `main` with iOS UX maturity)
 |------|--------|-------|
 | `npm run check:versions` | Pass | App metadata + Tauri toolchain major.minor alignment |
 | `npm --prefix synara run check:prettier` | Pass | |
-| `npm run test:modernization` | Pass | Run locally after remediation for current count |
+| `npm run test:modernization` | Pass | 259/259 (after pass 3 remediation) |
 | `npm run typecheck:modernization` | Pass | |
-| `npm run check:mip1-evidence` | Pass | 46/46 items mapped |
+| `npm run check:mip1-evidence` | Pass | 46/46 items mapped; falls back to `origin/main` when local `main` is absent |
 | `npm run check:runtime-assets` | Pass | devAssets ↔ synara/dist |
-| `cargo test --lib` | Pass | Run locally after remediation for current count |
-| `cargo check --locked --release` | Pass | |
+| `cargo test --lib` | Pass | 82/82 (macOS workstation) |
+| `cargo check --locked --release` | Pass | No warnings after pass 3 cleanup |
 
 ## PR #10 remediation (2026-06-11)
 
@@ -34,6 +34,21 @@ Second review pass (`77e2282`) findings addressed on `maturity_improvement_plan1
 | Localhost port tests resilient to busy preferred port | Done |
 | Package smoke path filter `synara/**` | Done |
 | Agent approval notifications respect DND/showNotifications | Done |
+
+## PR #10 remediation pass 3 (2026-06-11)
+
+Third review (`f1a3d00`) findings addressed:
+
+| Item | Status |
+|------|--------|
+| Timeline test TS2367/TS2339 type error | Done |
+| `config.json` Prettier drift after `build-runtime` copy | Done |
+| Live Matrix client credentials after proactive refresh | Done |
+| Recurring proactive refresh scheduling after rotation | Done |
+| `check:mip1-evidence` clone-safe base ref resolution | Done |
+| `desktop_save_file_begin` temp file leak on transfer cap | Done |
+| Truncated streamed dropped-file reads rejected | Done |
+| Release `cargo check` warning cleanup (`AtomicU64`, `is_gnome_session`) | Done |
 
 ## Pre-iOS Prep
 
