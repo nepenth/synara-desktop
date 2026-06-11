@@ -643,9 +643,17 @@ const readDesktopDroppedFileStreamed = async (
       offset,
       length,
     });
-    if (!chunk || chunk.length === 0) break;
+    if (!chunk || chunk.length === 0) {
+      await invokeDesktop('desktop_read_dropped_file_end', { transferId });
+      return undefined;
+    }
     chunks.push(new Uint8Array(chunk));
     offset += chunk.length;
+  }
+
+  if (offset !== size) {
+    await invokeDesktop('desktop_read_dropped_file_end', { transferId });
+    return undefined;
   }
 
   await invokeDesktop('desktop_read_dropped_file_end', { transferId });

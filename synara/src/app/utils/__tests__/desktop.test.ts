@@ -741,6 +741,46 @@ test('desktop file save streams large blobs through begin chunk end commands', a
   );
 });
 
+test('desktop dropped file read rejects truncated streamed transfers', async () => {
+  const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
+  const originalWindow = globalThis.window;
+  const totalSize = DESKTOP_FILE_IPC_INLINE_THRESHOLD + 2;
+
+  (globalThis as any).window = {
+    __SYNARA_DESKTOP__: {
+      platform: 'tauri',
+      invoke: async (command: string, args?: Record<string, unknown>) => {
+        calls.push({ command, args });
+        if (command === 'desktop_read_dropped_files') {
+          return [
+            {
+              name: 'truncated-drop.bin',
+              transferId: 'drop-transfer-truncated',
+              size: totalSize,
+            },
+          ];
+        }
+        if (command === 'desktop_read_dropped_file_chunk') {
+          return [];
+        }
+        return true;
+      },
+    },
+  };
+
+  try {
+    const files = await readDesktopDroppedFiles(['/tmp/truncated-drop.bin']);
+    assert.deepEqual(files, []);
+  } finally {
+    (globalThis as any).window = originalWindow;
+  }
+
+  assert.deepEqual(calls.at(-1), {
+    command: 'desktop_read_dropped_file_end',
+    args: { transferId: 'drop-transfer-truncated' },
+  });
+});
+
 test('desktop dropped file read streams large transfers through chunk commands', async () => {
   const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
   const originalWindow = globalThis.window;
