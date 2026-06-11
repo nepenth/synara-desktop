@@ -123,21 +123,21 @@ status and evidence links before merge to `main`.
 
 | Wave | Theme | Status | Notes |
 |------|-------|--------|-------|
-| A | Security & trust boundaries | _pending final review_ | DevTools gate, bridge caps, CSP, Windows honesty |
-| B | Broken native UX | _pending final review_ | Notifications, tray DND, agent-action listener |
-| C | Secret store truthfulness | _pending final review_ | Keyutils, Secret Service probe, Keychain probe, error codes |
-| D | Session lifecycle & logout | _pending final review_ | Selective logout, SW session, unified logout |
-| E | Performance & memory | _pending final review_ | Timeline, file IPC, tray throttle, caches |
-| F | Rust shell hardening | _pending final review_ | Shortcuts, port fallback, badge, URLs, expiry |
-| G | Frontend resilience & UX | _pending final review_ | Sync timeout, pagination errors, invoke strictness |
-| H | Platform parity & packaging | _pending final review_ | Shortcut help, tray matrix, Arch packaging, CI |
-| I | Polish, docs, long-term | _pending final review_ | This doc, linux.md, pkgrel, repo URLs, refresh token, signing scaffold, spellcheck |
+| A | Security & trust boundaries | Pass (automated) | DevTools release hardening, bridge caps, CSP, Windows honesty |
+| B | Broken native UX | Pass (automated) | Notification routes, tray DND, `synara://agent-action` listener |
+| C | Secret store truthfulness | Pass (automated) | Keyutils probe, Secret Service live probe, Keychain probe, error codes |
+| D | Session lifecycle & logout | Pass (automated) | `performLogout`, selective `clearSessionLocalStorage`, SW session |
+| E | Performance & memory | Pass (automated) | Incremental timeline, streaming file IPC, tray throttle, bounded caches |
+| F | Rust shell hardening | Pass (automated) | Shortcuts, port fallback, badge clamp, URL policy, session expiry |
+| G | Frontend resilience & UX | Pass (automated) | Sync splash recovery, pagination errors, invoke diagnostics |
+| H | Platform parity & packaging | Pass (automated) | Shortcut help, tray matrix (Option A), Arch PKGBUILD, CI smoke |
+| I | Polish, docs, long-term | Pass (automated) | Validation docs, linux.md, pkgrel, repo URLs, refresh token, spellcheck log |
 
 ### MIP1 global gate checklist (branch tip)
 
-- [ ] `npm run check:versions`
-- [ ] `npm run test:modernization`
-- [ ] `cargo test` + `cargo check --locked --release`
+- [x] `npm run check:versions`
+- [x] `npm run test:modernization` (254/254)
+- [x] `cargo test` + `cargo check --locked --release` (85/85)
 - [ ] macOS manual smoke (tray, notifications, shortcuts, login/logout)
 - [ ] Linux manual smoke (Arch package, Secret Service, Wayland WebKit)
-- [ ] Zero open Critical/High orchestrator issues
+- [x] Zero open Critical/High orchestrator issues
