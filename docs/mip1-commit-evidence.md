@@ -10,7 +10,7 @@
 | Metric | Plan | Actual (2026-06-10) |
 |--------|------|---------------------|
 | Total commits `main..HEAD` | 47 | **26** |
-| Plan commits (`mip1-00`) | 1 | **4** (`ecb405e`, `fb92b2f`, `1f79559`, `9d89ae5`) |
+| Plan commits (`mip1-00`) | 1 | **4** (`5ad722a`, `950a12f`, `1d59bdd`, `c0a8f9a`) |
 | Implementation commits (`mip1-01`…`mip1-46`) | 46 | **22** subject lines; **46/46 items** evidenced |
 | Dedicated 1:1 item commits | 46 | **22** |
 | Bundled items (shared commit) | 0 | **24** across **6** mega-commits |
@@ -19,66 +19,66 @@
 
 | Commit | Subject | Items bundled in body |
 |--------|---------|------------------------|
-| `2ec455d` | mip1-05 | MIP1-05, MIP1-06, MIP1-07 |
-| `e893b2b` | mip1-08 | MIP1-08, MIP1-11 |
-| `0011eb7` | mip1-19 | MIP1-19, MIP1-20 |
-| `d1aa30b` | mip1-21 | MIP1-21, MIP1-24, MIP1-25, MIP1-26, MIP1-27, MIP1-28, MIP1-29 |
-| `dfbd2d3` | mip1-30 | MIP1-30, MIP1-31, MIP1-32, MIP1-33 |
-| `f9da50f` | mip1-34 | MIP1-34, MIP1-35, MIP1-36, MIP1-37, MIP1-38, MIP1-39, MIP1-41 |
-| `40ac646` | mip1-40 | MIP1-42, MIP1-43, MIP1-44, MIP1-45, MIP1-46 (subject also claims MIP1-40; doc diff in `f9da50f`/`9d89ae5`) |
+| `1a1cc78` | mip1-05 | MIP1-05, MIP1-06, MIP1-07 |
+| `924dc70` | mip1-08 | MIP1-08, MIP1-11 |
+| `98c24fc` | mip1-19 | MIP1-19, MIP1-20 |
+| `e196a90` | mip1-21 | MIP1-21, MIP1-24, MIP1-25, MIP1-26, MIP1-27, MIP1-28, MIP1-29 |
+| `b0b7967` | mip1-30 | MIP1-30, MIP1-31, MIP1-32, MIP1-33 |
+| `bd519cb` | mip1-34 | MIP1-34, MIP1-35, MIP1-36, MIP1-37, MIP1-38, MIP1-39, MIP1-41 |
+| `ea9ddc7` | mip1-40 | MIP1-42, MIP1-43, MIP1-44, MIP1-45, MIP1-46 (subject also claims MIP1-40; doc diff in `bd519cb`/`c0a8f9a`) |
 
-**Note:** MIP1-41 (`linux.md`) landed in `f9da50f` (file diff); `40ac646` commit message also claims MIP1-41 but does not touch `docs/linux.md`.
+**Note:** MIP1-41 (`linux.md`) landed in `bd519cb` (file diff); `ea9ddc7` commit message also claims MIP1-41 but does not touch `docs/linux.md`.
 
 ### Quick reference table
 
 | ID | Title (short) | Commit(s) | Kind |
 |----|---------------|-----------|------|
-| MIP1-01 | DevTools gate | `74414a7` | dedicated |
-| MIP1-02 | Bridge capabilities | `20fd678` | dedicated |
-| MIP1-03 | CSP tighten | `a7d871b` | dedicated |
-| MIP1-04 | Windows honesty | `9edd959` | dedicated |
-| MIP1-05 | Notification route | `2ec455d` | bundled |
-| MIP1-06 | Tray DND | `2ec455d` | bundled |
-| MIP1-07 | Agent-action listener | `2ec455d` | bundled |
-| MIP1-08 | Keyutils fix | `e893b2b` | bundled |
-| MIP1-09 | Native store UI | `bd8392a` | dedicated |
-| MIP1-10 | Secret Service probe | `3bc458b` | dedicated |
-| MIP1-11 | macOS Keychain probe | `e893b2b` | bundled |
-| MIP1-12 | Secret-store errors | `08391aa` | dedicated |
-| MIP1-13 | Selective logout | `da72fe1` | dedicated |
-| MIP1-14 | SW session push | `faaac52` | dedicated |
-| MIP1-15 | Unified logout | `a8b4798` | dedicated |
-| MIP1-16 | Clear secret keys | `43ace8a` | dedicated |
-| MIP1-17 | Account switch | `0c43203` | dedicated |
-| MIP1-18 | Incremental timeline | `54d54d4` | dedicated |
-| MIP1-19 | Stream file IPC | `0011eb7` | bundled |
-| MIP1-20 | Drop allowlist | `0011eb7` | bundled |
-| MIP1-21 | Throttle tray | `d1aa30b` | bundled |
-| MIP1-22 | Notification LRU | `dfc76c1` | dedicated |
-| MIP1-23 | Focus timeout | `226053c` | dedicated |
-| MIP1-24 | Atomic shortcuts | `d1aa30b` | bundled |
-| MIP1-25 | Single shortcut path | `d1aa30b` | bundled |
-| MIP1-26 | Port fallback | `d1aa30b` | bundled |
-| MIP1-27 | Badge clamp | `d1aa30b` | bundled |
-| MIP1-28 | External URL policy | `d1aa30b` | bundled |
-| MIP1-29 | Session expiry | `d1aa30b`, `0c43203` | bundled |
-| MIP1-30 | Sync splash timeout | `dfbd2d3` | bundled |
-| MIP1-31 | Pagination errors | `dfbd2d3` | bundled |
-| MIP1-32 | Invoke strictness | `dfbd2d3` | bundled |
-| MIP1-33 | Sync status copy | `dfbd2d3` | bundled |
-| MIP1-34 | Shortcut help | `f9da50f` | bundled |
-| MIP1-35 | Tray parity doc | `f9da50f` | bundled |
-| MIP1-36 | Arch depends | `f9da50f` | bundled |
-| MIP1-37 | Standalone .desktop | `f9da50f` | bundled |
-| MIP1-38 | config.json sync | `f9da50f` | bundled |
-| MIP1-39 | CI hardening | `f9da50f` | bundled |
-| MIP1-40 | Validation docs | `f9da50f`, `9d89ae5` | bundled |
-| MIP1-41 | linux.md fixes | `f9da50f` | bundled |
-| MIP1-42 | pkgrel bump | `40ac646` | bundled |
-| MIP1-43 | Repo URL normalize | `40ac646` | bundled |
-| MIP1-44 | Refresh token | `40ac646` | bundled |
-| MIP1-45 | macOS signing docs | `40ac646` | bundled |
-| MIP1-46 | Spellcheck logging | `40ac646` | bundled |
+| MIP1-01 | DevTools gate | `3459e52` | dedicated |
+| MIP1-02 | Bridge capabilities | `a7a17f3` | dedicated |
+| MIP1-03 | CSP tighten | `d68a713` | dedicated |
+| MIP1-04 | Windows honesty | `7093069` | dedicated |
+| MIP1-05 | Notification route | `1a1cc78` | bundled |
+| MIP1-06 | Tray DND | `1a1cc78` | bundled |
+| MIP1-07 | Agent-action listener | `1a1cc78` | bundled |
+| MIP1-08 | Keyutils fix | `924dc70` | bundled |
+| MIP1-09 | Native store UI | `0628b2a` | dedicated |
+| MIP1-10 | Secret Service probe | `85594c0` | dedicated |
+| MIP1-11 | macOS Keychain probe | `924dc70` | bundled |
+| MIP1-12 | Secret-store errors | `a3c5ef1` | dedicated |
+| MIP1-13 | Selective logout | `2f4d96c` | dedicated |
+| MIP1-14 | SW session push | `cea7fd8` | dedicated |
+| MIP1-15 | Unified logout | `11a76ad` | dedicated |
+| MIP1-16 | Clear secret keys | `f0c2b37` | dedicated |
+| MIP1-17 | Account switch | `3e31110` | dedicated |
+| MIP1-18 | Incremental timeline | `cd8b27c` | dedicated |
+| MIP1-19 | Stream file IPC | `98c24fc` | bundled |
+| MIP1-20 | Drop allowlist | `98c24fc` | bundled |
+| MIP1-21 | Throttle tray | `e196a90` | bundled |
+| MIP1-22 | Notification LRU | `e2a3e06` | dedicated |
+| MIP1-23 | Focus timeout | `4d237db` | dedicated |
+| MIP1-24 | Atomic shortcuts | `e196a90` | bundled |
+| MIP1-25 | Single shortcut path | `e196a90` | bundled |
+| MIP1-26 | Port fallback | `e196a90` | bundled |
+| MIP1-27 | Badge clamp | `e196a90` | bundled |
+| MIP1-28 | External URL policy | `e196a90` | bundled |
+| MIP1-29 | Session expiry | `e196a90`, `3e31110` | bundled |
+| MIP1-30 | Sync splash timeout | `b0b7967` | bundled |
+| MIP1-31 | Pagination errors | `b0b7967` | bundled |
+| MIP1-32 | Invoke strictness | `b0b7967` | bundled |
+| MIP1-33 | Sync status copy | `b0b7967` | bundled |
+| MIP1-34 | Shortcut help | `bd519cb` | bundled |
+| MIP1-35 | Tray parity doc | `bd519cb` | bundled |
+| MIP1-36 | Arch depends | `bd519cb` | bundled |
+| MIP1-37 | Standalone .desktop | `bd519cb` | bundled |
+| MIP1-38 | config.json sync | `bd519cb` | bundled |
+| MIP1-39 | CI hardening | `bd519cb` | bundled |
+| MIP1-40 | Validation docs | `bd519cb`, `c0a8f9a` | bundled |
+| MIP1-41 | linux.md fixes | `bd519cb` | bundled |
+| MIP1-42 | pkgrel bump | `ea9ddc7` | bundled |
+| MIP1-43 | Repo URL normalize | `ea9ddc7` | bundled |
+| MIP1-44 | Refresh token | `ea9ddc7` | bundled |
+| MIP1-45 | macOS signing docs | `ea9ddc7` | bundled |
+| MIP1-46 | Spellcheck logging | `ea9ddc7` | bundled |
 
 ---
 
@@ -87,7 +87,7 @@
 The blocks below are parsed by `scripts/check-mip1-commit-evidence.mjs`.
 
 <!-- mip1-evidence:MIP1-01
-commits: 74414a7
+commits: 3459e52
 kind: dedicated
 title: Gate DevTools to debug builds only
 evidence:
@@ -98,7 +98,7 @@ evidence:
 -->
 
 <!-- mip1-evidence:MIP1-02
-commits: 20fd678
+commits: a7a17f3
 kind: dedicated
 title: Runtime-accurate desktop bridge capabilities
 evidence:
@@ -111,7 +111,7 @@ evidence:
 -->
 
 <!-- mip1-evidence:MIP1-03
-commits: a7d871b
+commits: d68a713
 kind: dedicated
 title: Tighten Content-Security-Policy
 evidence:
@@ -122,7 +122,7 @@ evidence:
 -->
 
 <!-- mip1-evidence:MIP1-04
-commits: 9edd959
+commits: 7093069
 kind: dedicated
 title: Windows session storage honesty (Option A)
 evidence:
@@ -135,7 +135,7 @@ evidence:
 -->
 
 <!-- mip1-evidence:MIP1-05
-commits: 2ec455d
+commits: 1a1cc78
 kind: bundled
 title: Notification click navigates to sanitized route
 evidence:
@@ -148,7 +148,7 @@ evidence:
 -->
 
 <!-- mip1-evidence:MIP1-06
-commits: 2ec455d
+commits: 1a1cc78
 kind: bundled
 title: Tray Do Not Disturb toggle works
 evidence:
@@ -161,7 +161,7 @@ evidence:
 -->
 
 <!-- mip1-evidence:MIP1-07
-commits: 2ec455d
+commits: 1a1cc78
 kind: bundled
 title: Frontend listens for synara://agent-action
 evidence:
@@ -172,7 +172,7 @@ evidence:
 -->
 
 <!-- mip1-evidence:MIP1-08
-commits: e893b2b
+commits: 924dc70
 kind: bundled
 title: Fix Linux keyutils detection false positive
 evidence:
@@ -181,7 +181,7 @@ evidence:
 -->
 
 <!-- mip1-evidence:MIP1-09
-commits: bd8392a
+commits: 0628b2a
 kind: dedicated
 title: Surface nativeStoreError in Settings UI
 evidence:
@@ -192,7 +192,7 @@ evidence:
 -->
 
 <!-- mip1-evidence:MIP1-10
-commits: 3bc458b
+commits: 85594c0
 kind: dedicated
 title: Live Secret Service probe
 evidence:
@@ -201,7 +201,7 @@ evidence:
 -->
 
 <!-- mip1-evidence:MIP1-11
-commits: e893b2b
+commits: 924dc70
 kind: bundled
 title: macOS Keychain probe
 evidence:
@@ -210,7 +210,7 @@ evidence:
 -->
 
 <!-- mip1-evidence:MIP1-12
-commits: 08391aa
+commits: a3c5ef1
 kind: dedicated
 title: Structured secret-store error reporting
 evidence:
@@ -221,7 +221,7 @@ evidence:
 -->
 
 <!-- mip1-evidence:MIP1-13
-commits: da72fe1
+commits: 2f4d96c
 kind: dedicated
 title: Selective logout preserves user settings
 evidence:
@@ -232,7 +232,7 @@ evidence:
 -->
 
 <!-- mip1-evidence:MIP1-14
-commits: faaac52
+commits: cea7fd8
 kind: dedicated
 title: Push session to service worker after login
 evidence:
@@ -243,7 +243,7 @@ evidence:
 -->
 
 <!-- mip1-evidence:MIP1-15
-commits: a8b4798
+commits: 11a76ad
 kind: dedicated
 title: Unify logout code paths
 evidence:
@@ -254,7 +254,7 @@ evidence:
 -->
 
 <!-- mip1-evidence:MIP1-16
-commits: 43ace8a
+commits: f0c2b37
 kind: dedicated
 title: Clear secret storage keys on logout
 evidence:
@@ -265,7 +265,7 @@ evidence:
 -->
 
 <!-- mip1-evidence:MIP1-17
-commits: 0c43203
+commits: 3e31110
 kind: dedicated
 title: Account switch safety for fixed IndexedDB names
 evidence:
@@ -274,7 +274,7 @@ evidence:
 -->
 
 <!-- mip1-evidence:MIP1-18
-commits: 54d54d4
+commits: cd8b27c
 kind: dedicated
 title: Incremental timeline row building
 evidence:
@@ -285,7 +285,7 @@ evidence:
 -->
 
 <!-- mip1-evidence:MIP1-19
-commits: 0011eb7
+commits: 98c24fc
 kind: bundled
 title: Stream large file save/drop IPC
 evidence:
@@ -296,7 +296,7 @@ evidence:
 -->
 
 <!-- mip1-evidence:MIP1-20
-commits: 0011eb7
+commits: 98c24fc
 kind: bundled
 title: Dropped-file allowlist lifecycle
 evidence:
@@ -307,7 +307,7 @@ evidence:
 -->
 
 <!-- mip1-evidence:MIP1-21
-commits: d1aa30b
+commits: e196a90
 kind: bundled
 title: Throttle tray menu rebuilds
 evidence:
@@ -318,7 +318,7 @@ evidence:
 -->
 
 <!-- mip1-evidence:MIP1-22
-commits: dfc76c1
+commits: e2a3e06
 kind: dedicated
 title: Bound in-memory notification caches
 evidence:
@@ -329,7 +329,7 @@ evidence:
 -->
 
 <!-- mip1-evidence:MIP1-23
-commits: 226053c
+commits: 4d237db
 kind: dedicated
 title: Cleanup focus highlight timeout on unmount
 evidence:
@@ -338,7 +338,7 @@ evidence:
 -->
 
 <!-- mip1-evidence:MIP1-24
-commits: d1aa30b
+commits: e196a90
 kind: bundled
 title: Atomic global shortcut updates
 evidence:
@@ -347,7 +347,7 @@ evidence:
 -->
 
 <!-- mip1-evidence:MIP1-25
-commits: d1aa30b
+commits: e196a90
 kind: bundled
 title: Single global shortcut registration path
 evidence:
@@ -356,7 +356,7 @@ evidence:
 -->
 
 <!-- mip1-evidence:MIP1-26
-commits: d1aa30b
+commits: e196a90
 kind: bundled
 title: Resilient localhost port binding
 evidence:
@@ -365,7 +365,7 @@ evidence:
 -->
 
 <!-- mip1-evidence:MIP1-27
-commits: d1aa30b
+commits: e196a90
 kind: bundled
 title: Clamp dock badge count on macOS
 evidence:
@@ -374,7 +374,7 @@ evidence:
 -->
 
 <!-- mip1-evidence:MIP1-28
-commits: d1aa30b
+commits: e196a90
 kind: bundled
 title: Align external URL policy with agent URLs
 evidence:
@@ -383,18 +383,18 @@ evidence:
 -->
 
 <!-- mip1-evidence:MIP1-29
-commits: d1aa30b, 0c43203
+commits: e196a90, 3e31110
 kind: bundled
 title: Session expiry metadata enforcement
 evidence:
   - file: src-tauri/src/desktop.rs
-    note: SESSION_EXPIRY_CLOCK_SKEW_TOLERANCE_MS on desktop_get_session (d1aa30b)
+    note: SESSION_EXPIRY_CLOCK_SKEW_TOLERANCE_MS on desktop_get_session (e196a90)
   - file: synara/src/app/state/sessionPersistence.ts
-    note: isSessionEnvelopeExpired helper with clock-skew tolerance (0c43203)
+    note: isSessionEnvelopeExpired helper with clock-skew tolerance (3e31110)
 -->
 
 <!-- mip1-evidence:MIP1-30
-commits: dfbd2d3
+commits: b0b7967
 kind: bundled
 title: Sync splash timeout and recovery UI
 evidence:
@@ -405,7 +405,7 @@ evidence:
 -->
 
 <!-- mip1-evidence:MIP1-31
-commits: dfbd2d3
+commits: b0b7967
 kind: bundled
 title: Timeline pagination error surfacing
 evidence:
@@ -416,7 +416,7 @@ evidence:
 -->
 
 <!-- mip1-evidence:MIP1-32
-commits: dfbd2d3
+commits: b0b7967
 kind: bundled
 title: Strict desktop invoke error handling
 evidence:
@@ -427,7 +427,7 @@ evidence:
 -->
 
 <!-- mip1-evidence:MIP1-33
-commits: dfbd2d3
+commits: b0b7967
 kind: bundled
 title: Distinct sync status for Catchup vs Prepared
 evidence:
@@ -438,7 +438,7 @@ evidence:
 -->
 
 <!-- mip1-evidence:MIP1-34
-commits: f9da50f
+commits: bd519cb
 kind: bundled
 title: Platform-specific shortcut permission help
 evidence:
@@ -449,7 +449,7 @@ evidence:
 -->
 
 <!-- mip1-evidence:MIP1-35
-commits: f9da50f
+commits: bd519cb
 kind: bundled
 title: Document macOS/Linux tray parity (Option A)
 evidence:
@@ -458,7 +458,7 @@ evidence:
 -->
 
 <!-- mip1-evidence:MIP1-36
-commits: f9da50f
+commits: bd519cb
 kind: bundled
 title: Arch PKGBUILD runtime dependencies
 evidence:
@@ -467,7 +467,7 @@ evidence:
 -->
 
 <!-- mip1-evidence:MIP1-37
-commits: f9da50f
+commits: bd519cb
 kind: bundled
 title: Standalone .desktop file for Arch packaging
 evidence:
@@ -476,7 +476,7 @@ evidence:
 -->
 
 <!-- mip1-evidence:MIP1-38
-commits: f9da50f
+commits: bd519cb
 kind: bundled
 title: Unified config.json sync in build pipeline
 evidence:
@@ -485,7 +485,7 @@ evidence:
 -->
 
 <!-- mip1-evidence:MIP1-39
-commits: f9da50f
+commits: bd519cb
 kind: bundled
 title: CI and smoke workflow hardening
 evidence:
@@ -498,16 +498,16 @@ evidence:
 -->
 
 <!-- mip1-evidence:MIP1-40
-commits: f9da50f, 9d89ae5
+commits: bd519cb, c0a8f9a
 kind: bundled
 title: Refresh desktop validation docs to 1.1.1+
 evidence:
   - file: docs/desktop-validation-status.md
-    note: wave matrix + 1.1.1 references (f9da50f); Phase 4 gate refresh (9d89ae5)
+    note: wave matrix + 1.1.1 references (bd519cb); Phase 4 gate refresh (c0a8f9a)
 -->
 
 <!-- mip1-evidence:MIP1-41
-commits: f9da50f
+commits: bd519cb
 kind: bundled
 title: Fix docs/linux.md consistency
 evidence:
@@ -516,7 +516,7 @@ evidence:
 -->
 
 <!-- mip1-evidence:MIP1-42
-commits: 40ac646
+commits: ea9ddc7
 kind: bundled
 title: Arch pkgrel bump support in bump-version.mjs
 evidence:
@@ -529,7 +529,7 @@ evidence:
 -->
 
 <!-- mip1-evidence:MIP1-43
-commits: 40ac646
+commits: ea9ddc7
 kind: bundled
 title: Normalize GitHub repository URLs
 evidence:
@@ -538,7 +538,7 @@ evidence:
 -->
 
 <!-- mip1-evidence:MIP1-44
-commits: 40ac646
+commits: ea9ddc7
 kind: bundled
 title: Refresh token support
 evidence:
@@ -549,7 +549,7 @@ evidence:
 -->
 
 <!-- mip1-evidence:MIP1-45
-commits: 40ac646
+commits: ea9ddc7
 kind: bundled
 title: macOS signing configuration scaffolding
 evidence:
@@ -560,7 +560,7 @@ evidence:
 -->
 
 <!-- mip1-evidence:MIP1-46
-commits: 40ac646
+commits: ea9ddc7
 kind: bundled
 title: Linux spellcheck failure logging
 evidence:
