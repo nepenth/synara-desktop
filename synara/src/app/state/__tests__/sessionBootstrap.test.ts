@@ -2,10 +2,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   getActiveSession,
+  getNativeStoreErrorWarningMessage,
   getSessionBootstrapResult,
   initializeSessionBootstrap,
+  NATIVE_SESSION_STORE_ERROR,
   resetSessionBootstrapForTests,
   resolveSessionBootstrap,
+  shouldSurfaceNativeStoreErrorWarning,
   type AsyncSessionStore,
 } from '../sessionBootstrap';
 import { type SessionStore } from '../sessions';
@@ -96,6 +99,26 @@ test('session bootstrap returns none when no storage source has a session', asyn
       nativeStoreError: undefined,
     }
   );
+});
+
+test('shouldSurfaceNativeStoreErrorWarning is shown only on desktop when native store fails', () => {
+  assert.equal(
+    shouldSurfaceNativeStoreErrorWarning(NATIVE_SESSION_STORE_ERROR, true),
+    true
+  );
+  assert.equal(
+    shouldSurfaceNativeStoreErrorWarning(NATIVE_SESSION_STORE_ERROR, false),
+    false
+  );
+  assert.equal(shouldSurfaceNativeStoreErrorWarning(undefined, true), false);
+});
+
+test('getNativeStoreErrorWarningMessage explains legacy fallback without exposing tokens', () => {
+  const message = getNativeStoreErrorWarningMessage();
+
+  assert.match(message, /legacy browser storage/i);
+  assert.doesNotMatch(message, /token/i);
+  assert.doesNotMatch(message, /access/i);
 });
 
 test('initializeSessionBootstrap caches resolved sessions for synchronous consumers', async () => {
