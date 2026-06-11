@@ -64,9 +64,9 @@ test('refreshAndPersistSession persists refreshed credentials', async () => {
   } as unknown as MatrixClient;
 
   const { tokens, session } = await refreshAndPersistSession(mx, baseSession, 'refresh-token', {
-    persistAuthenticatedSession: async (session) => {
-      persistCalls.push(session);
-      return { session, source: 'native' };
+    persistAuthenticatedSession: async (persistedSession) => {
+      persistCalls.push(persistedSession);
+      return { session: persistedSession, source: 'native' };
     },
     pushSessionToSW: (baseUrl, accessToken) => {
       swCalls.push({ baseUrl, accessToken });
