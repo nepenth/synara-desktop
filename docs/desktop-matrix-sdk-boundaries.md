@@ -206,6 +206,22 @@ calls for non-default servers. `frame-src` was narrowed from `http: https:` to
 `'self' blob:` because call embeds load only from the bundled Element Call
 assets (see `synara/src/app/plugins/call/CallEmbed.ts`).
 
+## External URL policy (MIP1 remediation)
+
+Desktop external navigation is enforced in two layers:
+
+- **Rust (authoritative):** `is_safe_external_url` and `is_safe_agent_url` in
+  `src-tauri/src/desktop.rs` reject credentialed URLs, non-loopback HTTP, private
+  IPv4/IPv6 targets, and local host suffixes. `mailto:` and `matrix:` schemes require
+  minimal structure validation.
+- **TypeScript (defense in depth):** `isSafeHttpsUrl` / `safeRemoteContentUrl` in
+  `synara/src/app/utils/remoteContent.ts` and `isSafeDesktopExternalUrl` in
+  `synara/src/app/utils/desktop.ts` mirror the public HTTPS rules before IPC.
+
+`global-shortcut:allow-register-all` remains broad at the Tauri capability layer;
+shortcut strings are validated and registered only through Rust
+`apply_desktop_shortcuts`.
+
 ## Guardrails
 
 - `npm run check:matrix-boundaries` blocks new direct Matrix REST usage outside

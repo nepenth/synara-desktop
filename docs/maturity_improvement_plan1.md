@@ -1313,17 +1313,17 @@ Before merge to `main`:
 - [x] `npm run check:versions` passes
 - [x] `npm run test:modernization` passes (254/254 via `synara/`)
 - [x] `cargo test` + `cargo check --locked --release` pass (85/85 Rust tests)
-- [ ] macOS manual smoke (tray, notifications, shortcuts, login/logout)
+- [ ] macOS manual smoke (tray, notifications, shortcuts, login/logout) — checklist in [desktop-validation-status.md](./desktop-validation-status.md)
 - [x] Linux manual smoke (Arch package, Secret Service, Wayland WebKit) — **partial**: headless/packaging/probes pass; interactive tray/notification/shortcut UI pending ([desktop-validation-status.md](./desktop-validation-status.md))
-- [x] No open Critical/High issues in final holistic review
+- [x] No open Critical/High code issues after 2026-06-11 remediation (URL policy, logging, timeline fingerprint, file transfer TTL)
 - [ ] User personal review completed
 
 ### Phase 4 holistic review record (2026-06-10)
 
-Orchestrator verdict: **automated gates pass; merge blocked on macOS interactive smoke and user review.**  
+Orchestrator verdict: **automated gates pass; merge blocked on macOS/Linux interactive smoke and user review.**  
 Commit hygiene remediated with evidence map + `check:mip1-evidence` (2026-06-10 remediation pass).  
-Low-issue remediation: root `test:modernization`/`typecheck:modernization`, `check:runtime-assets`, keyutils probe mutex, generated `capabilities.json` gitignored, ESLint/Prettier drift fixed.  
-Evidence: `check:versions`, `check:repo-layout`, `check:matrix-boundaries`, `check:mip1-evidence`, `check:runtime-assets`, `test:modernization` (254/254), `typecheck:modernization`, `cargo test --locked --lib` (85/85), `cargo check --locked --release`, Linux headless smoke (CachyOS 2026-06-10).
+2026-06-11 remediation: Rust/TS URL policy parity, `map_keyring_error` log sanitization, timeline revision fingerprint, file transfer TTL/opaque IDs, expanded tests, validation doc refresh.  
+Evidence: `check:versions` (1.2.3), `check:mip1-evidence`, `test:modernization` (255/255), `cargo test --lib` (78/78 macOS), `cargo check --locked --release`, [desktop-validation-status.md](./desktop-validation-status.md).
 
 ---
 

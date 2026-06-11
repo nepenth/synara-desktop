@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "main",
-  "description": "Synara desktop runtime permissions for the main webview.",
+  "description": "Synara desktop runtime permissions for the main webview. Global shortcuts are validated in Rust before registration; external URLs are filtered in desktop.rs and synara remoteContent policy.",
   "windows": ["main"],
   "permissions": [
     "core:default",
