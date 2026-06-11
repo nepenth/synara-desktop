@@ -1,9 +1,9 @@
 # Maturity Improvement Plan 1
 
-**Branch:** `maturity_improvement_plan1`  
-**Status:** Phase 4 — Holistic review complete (merge blocked on manual smoke + user review)  
-**Scope:** macOS + Linux Synara Desktop (Tauri shell + `synara/` runtime)  
-**Process:** `mip1-00` (plan) + 46 implementation commits (`mip1-01`…`mip1-46`), one item per commit  
+**Branch:** `maturity_improvement_plan1`
+**Status:** Phase 4 — Holistic review complete (merge blocked on manual smoke + user review)
+**Scope:** macOS + Linux Synara Desktop (Tauri shell + `synara/` runtime)
+**Process:** `mip1-00` (plan) + 46 implementation commits (`mip1-01`…`mip1-46`), one item per commit
 **Reviewed:** 2026-06-10
 
 ---
@@ -80,7 +80,7 @@ mip1-NN: <imperative title ≤72 chars>
 
 #### MIP1-01 (Item 4) — Gate DevTools to debug builds only
 
-**Priority:** P0  
+**Priority:** P0
 **Files:** `src-tauri/Cargo.toml`, `src-tauri/capabilities/main.json`, `src-tauri/src/lib.rs` (if feature-gated)
 
 **Requirements**
@@ -97,15 +97,15 @@ mip1-NN: <imperative title ≤72 chars>
 - T-01: `cargo check --release` in CI-equivalent mode
 - T-02: Manual: release binary cannot open DevTools via documented shortcut (record in validation notes)
 
-**Dependencies:** None  
-**Risks:** Accidentally breaking `tauri dev` — mitigate with explicit feature split  
+**Dependencies:** None
+**Risks:** Accidentally breaking `tauri dev` — mitigate with explicit feature split
 **Success metric:** Release `Cargo.toml` features list excludes `devtools`
 
 ---
 
 #### MIP1-02 (Item 5) — Runtime-accurate desktop bridge capabilities
 
-**Priority:** P0  
+**Priority:** P0
 **Files:** `src-tauri/src/desktop_bridge.js`, `src-tauri/src/lib.rs`, `synara/src/app/platform/capabilities.ts`, `synara/src/app/platform/secrets.ts`
 
 **Requirements**
@@ -122,14 +122,14 @@ mip1-NN: <imperative title ≤72 chars>
 - T-01: Extend `synara/src/app/platform/__tests__/platform.test.ts` for false-by-default bridge
 - T-02: Rust unit test for status → bridge flag mapping (if bridge becomes dynamic)
 
-**Dependencies:** Complements MIP1-08, MIP1-09  
+**Dependencies:** Complements MIP1-08, MIP1-09
 **Risks:** Race on first paint — mitigate with loading state in settings until `desktop_secret_store_status` resolves
 
 ---
 
 #### MIP1-03 (Item 13) — Tighten Content-Security-Policy
 
-**Priority:** P0  
+**Priority:** P0
 **Files:** `src-tauri/tauri.conf.json`, `docs/desktop-matrix-sdk-boundaries.md` (exception list only)
 
 **Requirements**
@@ -146,15 +146,15 @@ mip1-NN: <imperative title ≤72 chars>
 - T-01: Manual smoke checklist (login, room timeline, image, notification, external link)
 - T-02: Optional: automated CSP diff test in `scripts/check-matrix-boundaries.mjs` if applicable
 
-**Dependencies:** None  
-**Risks:** Breaking Element Call embed — test call route explicitly  
+**Dependencies:** None
+**Risks:** Breaking Element Call embed — test call route explicitly
 **Trade-off:** Full strict CSP may be impossible with Matrix federation; document residual risk
 
 ---
 
 #### MIP1-04 (Item 46) — Windows session storage: disable honestly or implement
 
-**Priority:** P3 (out of macOS/Linux scope unless Windows shipping)  
+**Priority:** P3 (out of macOS/Linux scope unless Windows shipping)
 **Files:** `src-tauri/Cargo.toml`, `src-tauri/src/desktop.rs`, `synara/src/app/platform/capabilities.ts`, `README.md`
 
 **Requirements**
@@ -170,8 +170,8 @@ mip1-NN: <imperative title ≤72 chars>
 - T-01: `#[cfg(target_os = "windows")]` unit tests if Option B
 - T-02: Capability documentation test / snapshot
 
-**Dependencies:** MIP1-02  
-**Risks:** Scope creep — default to Option A for this branch  
+**Dependencies:** MIP1-02
+**Risks:** Scope creep — default to Option A for this branch
 **Decision:** **Option A** unless product direction changes before merge
 
 ---
@@ -182,7 +182,7 @@ mip1-NN: <imperative title ≤72 chars>
 
 #### MIP1-05 (Item 1) — Notification click navigates to sanitized route
 
-**Priority:** P0  
+**Priority:** P0
 **Files:** `src-tauri/src/desktop.rs`, `synara/src/app/utils/desktop.ts`, `synara/src/app/pages/client/ClientNonUIFeatures.tsx`, `tauri-plugin-notification` integration
 
 **Requirements**
@@ -202,14 +202,14 @@ mip1-NN: <imperative title ≤72 chars>
 - T-03: Manual Linux smoke: click notification → correct room
 - T-04: Manual macOS smoke: click notification → correct room (or documented gap filed as follow-up)
 
-**Dependencies:** None  
+**Dependencies:** None
 **Risks:** `tauri-plugin-notification` click API differs per OS — implement per-platform handler module with shared `navigate_main_window` core
 
 ---
 
 #### MIP1-06 (Item 2) — Tray Do Not Disturb toggle works
 
-**Priority:** P0  
+**Priority:** P0
 **Files:** `src-tauri/src/desktop.rs`, `synara/src/app/pages/client/ClientNonUIFeatures.tsx` or settings state, tray update path
 
 **Requirements**
@@ -227,14 +227,14 @@ mip1-NN: <imperative title ≤72 chars>
 - T-02: TS test for DND state flip via tray event listener
 - T-03: Manual Linux tray smoke
 
-**Dependencies:** None  
+**Dependencies:** None
 **Risks:** macOS tray may lack DND item today — document parity gap or add macOS item (see MIP1-31)
 
 ---
 
 #### MIP1-07 (Item 3) — Frontend listens for `synara://agent-action`
 
-**Priority:** P0  
+**Priority:** P0
 **Files:** `synara/src/app/platform/` or `ClientNonUIFeatures.tsx`, `src-tauri/src/desktop.rs`
 
 **Requirements**
@@ -251,7 +251,7 @@ mip1-NN: <imperative title ≤72 chars>
 - T-01: TS unit test with mocked `listen` + handler
 - T-02: Contract schema validation test reusing `synara-agent-action.schema.json`
 
-**Dependencies:** None  
+**Dependencies:** None
 **Risks:** Duplicate handling if both tray and web fire — idempotency key on action id
 
 ---
@@ -262,7 +262,7 @@ mip1-NN: <imperative title ≤72 chars>
 
 #### MIP1-08 (Item 6) — Fix Linux keyutils detection false positive
 
-**Priority:** P0  
+**Priority:** P0
 **Files:** `src-tauri/src/desktop.rs`
 
 **Requirements**
@@ -279,14 +279,14 @@ mip1-NN: <imperative title ≤72 chars>
 - T-01: Update `desktop.rs` unit tests for `has_linux_keyutils_backend` / status aggregation
 - T-02: `cargo test` in `src-tauri`
 
-**Dependencies:** None  
+**Dependencies:** None
 **Risks:** Probe side effects — use dry-run or test key name
 
 ---
 
 #### MIP1-09 (Item 14) — Surface `nativeStoreError` in Settings UI
 
-**Priority:** P1  
+**Priority:** P1
 **Files:** `synara/src/app/features/settings/general/General.tsx`, `synara/src/app/state/sessionBootstrap.ts`
 
 **Requirements**
@@ -303,14 +303,14 @@ mip1-NN: <imperative title ≤72 chars>
 - T-01: Extend `sessionPersistence.test.ts` + settings component test if feasible
 - T-02: Manual screenshot-less DOM assertion via unit test mock
 
-**Dependencies:** MIP1-02, MIP1-08  
+**Dependencies:** MIP1-02, MIP1-08
 **Risks:** None
 
 ---
 
 #### MIP1-10 (Item 15) — Live Secret Service probe
 
-**Priority:** P2  
+**Priority:** P2
 **Files:** `src-tauri/src/desktop.rs`
 
 **Requirements**
@@ -327,14 +327,14 @@ mip1-NN: <imperative title ≤72 chars>
 - T-01: Unit tests with injected/mock probe trait
 - T-02: CI-safe tests do not require live dbus (mocked)
 
-**Dependencies:** MIP1-08  
+**Dependencies:** MIP1-08
 **Risks:** CI without dbus — mandatory mock abstraction
 
 ---
 
 #### MIP1-11 (Item 16) — macOS Keychain probe
 
-**Priority:** P2  
+**Priority:** P2
 **Files:** `src-tauri/src/desktop.rs`
 
 **Requirements**
@@ -351,14 +351,14 @@ mip1-NN: <imperative title ≤72 chars>
 - T-01: macOS-target unit tests with mock keyring backend (or `#[cfg(test)]` injection)
 - T-02: Linux CI compiles without macOS-only deps leaking
 
-**Dependencies:** None  
+**Dependencies:** None
 **Risks:** Keychain prompts on probe — use non-interactive test account
 
 ---
 
 #### MIP1-12 (Item 17) — Structured secret-store error reporting
 
-**Priority:** P2  
+**Priority:** P2
 **Files:** `src-tauri/src/desktop.rs`
 
 **Requirements**
@@ -375,7 +375,7 @@ mip1-NN: <imperative title ≤72 chars>
 - T-01: Extend `desktop.rs` secret store tests for error code mapping
 - T-02: Red-team test: error messages never contain session JSON
 
-**Dependencies:** MIP1-10, MIP1-11  
+**Dependencies:** MIP1-10, MIP1-11
 **Risks:** Frontend must handle new codes — update TS types
 
 ---
@@ -386,7 +386,7 @@ mip1-NN: <imperative title ≤72 chars>
 
 #### MIP1-13 (Item 7) — Selective logout: preserve user settings
 
-**Priority:** P1  
+**Priority:** P1
 **Files:** `synara/src/client/initMatrix.ts`, `synara/src/app/pages/client/ClientRoot.tsx`, `synara/src/app/state/sessions.ts`
 
 **Requirements**
@@ -403,14 +403,14 @@ mip1-NN: <imperative title ≤72 chars>
 - T-01: Unit test: `clearLoginData` removes session keys only (mock localStorage)
 - T-02: Extend `sessionPersistence.test.ts`
 
-**Dependencies:** MIP1-14  
+**Dependencies:** MIP1-14
 **Risks:** Missing a session key — maintain central key list in `sessions.ts`
 
 ---
 
 #### MIP1-14 (Item 12) — Push session to service worker after login
 
-**Priority:** P1  
+**Priority:** P1
 **Files:** `synara/src/app/pages/auth/login/loginUtil.ts`, `synara/src/index.tsx`, `synara/src/sw-session.ts`
 
 **Requirements**
@@ -427,14 +427,14 @@ mip1-NN: <imperative title ≤72 chars>
 - T-01: Unit test mocking `pushSessionToSW` from login util
 - T-02: Manual: login → open attachment without manual reload
 
-**Dependencies:** None  
+**Dependencies:** None
 **Risks:** SW not registered in dev — guard with feature detection
 
 ---
 
 #### MIP1-15 (Item 27) — Unify logout code paths
 
-**Priority:** P2  
+**Priority:** P2
 **Files:** `synara/src/client/initMatrix.ts`, `synara/src/app/pages/client/ClientRoot.tsx`
 
 **Requirements**
@@ -451,14 +451,14 @@ mip1-NN: <imperative title ≤72 chars>
 - T-01: Unit tests for shared logout helper with mocked dependencies
 - T-02: Regression test ensuring SW push called in both paths
 
-**Dependencies:** MIP1-13  
+**Dependencies:** MIP1-13
 **Risks:** None
 
 ---
 
 #### MIP1-16 (Item 28) — Clear secret storage keys on logout
 
-**Priority:** P2  
+**Priority:** P2
 **Files:** `synara/src/client/secretStorageKeys.js`, `synara/src/client/initMatrix.ts`
 
 **Requirements**
@@ -473,14 +473,14 @@ mip1-NN: <imperative title ≤72 chars>
 **Tests**
 - T-01: Unit test for clear function idempotency
 
-**Dependencies:** MIP1-15  
+**Dependencies:** MIP1-15
 **Risks:** None
 
 ---
 
 #### MIP1-17 (Item 30) — Account switch safety for fixed IndexedDB names
 
-**Priority:** P2  
+**Priority:** P2
 **Files:** `synara/src/client/initMatrix.ts`, `synara/src/app/state/sessionPersistence.ts`
 
 **Requirements**
@@ -497,7 +497,7 @@ mip1-NN: <imperative title ≤72 chars>
 - T-01: Unit test identity comparison logic
 - T-02: Integration with existing `isCryptoAccountMismatchError` tests
 
-**Dependencies:** MIP1-13  
+**Dependencies:** MIP1-13
 **Risks:** Over-clearing — only clear on identity change
 
 ---
@@ -508,7 +508,7 @@ mip1-NN: <imperative title ≤72 chars>
 
 #### MIP1-18 (Item 8) — Incremental timeline row building
 
-**Priority:** P1  
+**Priority:** P1
 **Files:** `synara/src/app/features/room/RoomTimeline.tsx`, `synara/src/app/utils/timelineVirtualization.ts`
 
 **Requirements**
@@ -526,15 +526,15 @@ mip1-NN: <imperative title ≤72 chars>
 - T-02: New perf harness or instrumented unit test counting `buildTimelineRows` invocations / nodes visited
 - T-03: `npm run test:timeline-performance` if applicable
 
-**Dependencies:** None  
-**Risks:** Regression in anchor restore — run full timeline tests  
+**Dependencies:** None
+**Risks:** Regression in anchor restore — run full timeline tests
 **Success metric:** ≥50% reduction in row-build work for append-only update in harness
 
 ---
 
 #### MIP1-19 (Item 9) — Stream large file save/drop IPC
 
-**Priority:** P1  
+**Priority:** P1
 **Files:** `src-tauri/src/desktop.rs`, `synara/src/app/utils/desktop.ts`, `synara/src/app/platform/files.ts`
 
 **Requirements**
@@ -551,14 +551,14 @@ mip1-NN: <imperative title ≤72 chars>
 - T-01: Rust tests for chunked/temp path selection
 - T-02: TS test mocking large blob uses stream API
 
-**Dependencies:** None  
+**Dependencies:** None
 **Risks:** Tauri IPC chunk API design — may need new commands `desktop_save_file_begin/chunk/end`
 
 ---
 
 #### MIP1-20 (Item 10) — Dropped-file allowlist lifecycle
 
-**Priority:** P1  
+**Priority:** P1
 **Files:** `src-tauri/src/desktop.rs`, `src-tauri/src/lib.rs`
 
 **Requirements**
@@ -575,14 +575,14 @@ mip1-NN: <imperative title ≤72 chars>
 - T-01: Rust unit tests for registry eviction
 - T-02: Manual drag-drop smoke
 
-**Dependencies:** None  
+**Dependencies:** None
 **Risks:** None
 
 ---
 
 #### MIP1-21 (Item 20) — Throttle tray menu rebuilds
 
-**Priority:** P2  
+**Priority:** P2
 **Files:** `src-tauri/src/desktop.rs`, `synara/src/app/pages/client/ClientNonUIFeatures.tsx`
 
 **Requirements**
@@ -599,14 +599,14 @@ mip1-NN: <imperative title ≤72 chars>
 - T-01: TS unit test for throttle helper
 - T-02: Manual observation with log counter in Rust debug builds
 
-**Dependencies:** None  
+**Dependencies:** None
 **Risks:** Stale count display — ensure trailing edge flush
 
 ---
 
 #### MIP1-22 (Item 41) — Bound in-memory notification caches
 
-**Priority:** P3  
+**Priority:** P3
 **Files:** `synara/src/app/pages/client/ClientNonUIFeatures.tsx`
 
 **Requirements**
@@ -622,14 +622,14 @@ mip1-NN: <imperative title ≤72 chars>
 **Tests**
 - T-01: Unit tests for both LRU eviction helpers
 
-**Dependencies:** MIP1-15 (logout clears caches)  
+**Dependencies:** MIP1-15 (logout clears caches)
 **Risks:** Re-notify after eviction — acceptable for stale entries
 
 ---
 
 #### MIP1-23 (Item 42) — Cleanup focus highlight timeout on unmount
 
-**Priority:** P3  
+**Priority:** P3
 **Files:** `synara/src/app/features/room/RoomTimeline.tsx`
 
 **Requirements**
@@ -644,7 +644,7 @@ mip1-NN: <imperative title ≤72 chars>
 - T-01: React testing optional; lint rule or manual code review checklist
 - T-02: Unit test timer mock if extracted to helper
 
-**Dependencies:** None  
+**Dependencies:** None
 **Risks:** None
 
 ---
@@ -655,7 +655,7 @@ mip1-NN: <imperative title ≤72 chars>
 
 #### MIP1-24 (Item 11) — Atomic global shortcut updates
 
-**Priority:** P2  
+**Priority:** P2
 **Files:** `src-tauri/src/desktop.rs`
 
 **Requirements**
@@ -671,14 +671,14 @@ mip1-NN: <imperative title ≤72 chars>
 **Tests**
 - T-01: Existing shortcut validation tests extended for rollback behavior
 
-**Dependencies:** MIP1-25  
+**Dependencies:** MIP1-25
 **Risks:** Platform shortcut API differences
 
 ---
 
 #### MIP1-25 (Item 18) — Single global shortcut registration path
 
-**Priority:** P2  
+**Priority:** P2
 **Files:** `src-tauri/src/lib.rs`, `src-tauri/src/desktop.rs`
 
 **Requirements**
@@ -693,14 +693,14 @@ mip1-NN: <imperative title ≤72 chars>
 **Tests**
 - T-01: Integration test or manual startup log verification
 
-**Dependencies:** MIP1-24  
+**Dependencies:** MIP1-24
 **Risks:** Breaking default shortcuts before web loads
 
 ---
 
 #### MIP1-26 (Item 19) — Resilient localhost port binding
 
-**Priority:** P2  
+**Priority:** P2
 **Files:** `src-tauri/src/lib.rs`
 
 **Requirements**
@@ -717,14 +717,14 @@ mip1-NN: <imperative title ≤72 chars>
 - T-01: Rust unit test for port selection helper
 - T-02: Manual: bind blocker to 44548 and launch app
 
-**Dependencies:** None  
+**Dependencies:** None
 **Risks:** Frontend assuming fixed port — localhost plugin must read actual port
 
 ---
 
 #### MIP1-27 (Item 21) — Clamp dock badge count on macOS
 
-**Priority:** P2  
+**Priority:** P2
 **Files:** `src-tauri/src/desktop.rs`
 
 **Requirements**
@@ -738,14 +738,14 @@ mip1-NN: <imperative title ≤72 chars>
 **Tests**
 - T-01: Rust unit test for clamp parity
 
-**Dependencies:** None  
+**Dependencies:** None
 **Risks:** None
 
 ---
 
 #### MIP1-28 (Item 22) — Align external URL policy with agent URLs
 
-**Priority:** P2  
+**Priority:** P2
 **Files:** `src-tauri/src/desktop.rs`
 
 **Requirements**
@@ -761,14 +761,14 @@ mip1-NN: <imperative title ≤72 chars>
 **Tests**
 - T-01: Extend existing URL safety tests in `desktop.rs`
 
-**Dependencies:** None  
+**Dependencies:** None
 **Risks:** User homeservers on http LAN — loopback/LAN exception may be needed
 
 ---
 
 #### MIP1-29 (Item 23) — Session expiry metadata enforcement
 
-**Priority:** P2  
+**Priority:** P2
 **Files:** `src-tauri/src/desktop.rs`, `synara/src/app/state/sessionPersistence.ts`
 
 **Requirements**
@@ -784,7 +784,7 @@ mip1-NN: <imperative title ≤72 chars>
 **Tests**
 - T-01: Rust tests with injected timestamps
 
-**Dependencies:** None  
+**Dependencies:** None
 **Risks:** Matrix tokens may outlive envelope expiry — align with HS policy
 
 ---
@@ -795,7 +795,7 @@ mip1-NN: <imperative title ≤72 chars>
 
 #### MIP1-30 (Item 24) — Sync splash timeout and recovery UI
 
-**Priority:** P2  
+**Priority:** P2
 **Files:** `synara/src/app/pages/client/ClientRoot.tsx`
 
 **Requirements**
@@ -811,14 +811,14 @@ mip1-NN: <imperative title ≤72 chars>
 **Tests**
 - T-01: Unit test with mocked timer + sync state
 
-**Dependencies:** None  
+**Dependencies:** None
 **Risks:** False positive on slow first sync — tune timeout constant
 
 ---
 
 #### MIP1-31 (Item 25) — Timeline pagination error surfacing
 
-**Priority:** P2  
+**Priority:** P2
 **Files:** `synara/src/app/features/room/RoomTimeline.tsx`
 
 **Requirements**
@@ -834,14 +834,14 @@ mip1-NN: <imperative title ≤72 chars>
 **Tests**
 - T-01: Unit test error state setter
 
-**Dependencies:** None  
+**Dependencies:** None
 **Risks:** None
 
 ---
 
 #### MIP1-32 (Item 26) — Strict desktop invoke error handling
 
-**Priority:** P2  
+**Priority:** P2
 **Files:** `synara/src/app/utils/desktop.ts`, `synara/src/app/platform/sessions.ts`
 
 **Requirements**
@@ -857,14 +857,14 @@ mip1-NN: <imperative title ≤72 chars>
 **Tests**
 - T-01: Extend `desktop.test.ts` and `platform.test.ts`
 
-**Dependencies:** None  
+**Dependencies:** None
 **Risks:** More error noise — gate behind diagnostics
 
 ---
 
 #### MIP1-33 (Item 29) — Distinct sync status for Catchup vs Prepared
 
-**Priority:** P2  
+**Priority:** P2
 **Files:** `synara/src/app/pages/client/SyncStatus.tsx`
 
 **Requirements**
@@ -879,7 +879,7 @@ mip1-NN: <imperative title ≤72 chars>
 **Tests**
 - T-01: Snapshot or unit test of state → label map
 
-**Dependencies:** None  
+**Dependencies:** None
 **Risks:** None
 
 ---
@@ -890,7 +890,7 @@ mip1-NN: <imperative title ≤72 chars>
 
 #### MIP1-34 (Item 31) — Platform-specific shortcut permission help
 
-**Priority:** P2  
+**Priority:** P2
 **Files:** `src-tauri/src/desktop.rs`, `synara/src/app/features/settings/general/General.tsx`
 
 **Requirements**
@@ -909,14 +909,14 @@ mip1-NN: <imperative title ≤72 chars>
 - T-01: Rust tests for `shortcut_result` per environment mock
 - T-02: TS test for settings help selection
 
-**Dependencies:** None  
+**Dependencies:** None
 **Risks:** None
 
 ---
 
 #### MIP1-35 (Item 32) — Document or align macOS/Linux tray parity
 
-**Priority:** P2  
+**Priority:** P2
 **Files:** `docs/desktop-validation-status.md`, `src-tauri/src/desktop.rs`, optional macOS tray items
 
 **Requirements**
@@ -934,14 +934,14 @@ mip1-NN: <imperative title ≤72 chars>
 - T-01: Doc review checklist against live tray menus
 - T-02: Manual tray audit macOS + Linux
 
-**Dependencies:** MIP1-06  
+**Dependencies:** MIP1-06
 **Risks:** Option B expands scope — **default Option A** unless you direct Option B before MIP1-35 starts
 
 ---
 
 #### MIP1-36 (Item 33) — Arch PKGBUILD runtime dependencies
 
-**Priority:** P2  
+**Priority:** P2
 **Files:** `packaging/arch/PKGBUILD`, `docs/linux.md`
 
 **Requirements**
@@ -957,14 +957,14 @@ mip1-NN: <imperative title ≤72 chars>
 - T-01: `makepkg --printsrcinfo` dependency list review
 - T-02: Manual install on clean VM if available
 
-**Dependencies:** None  
+**Dependencies:** None
 **Risks:** Over-broad depends — prefer optdepends for wallet variants
 
 ---
 
 #### MIP1-37 (Item 34) — Standalone `.desktop` file for Arch packaging
 
-**Priority:** P2  
+**Priority:** P2
 **Files:** `packaging/arch/PKGBUILD`, `packaging/arch/synara.desktop` (new), `docs/linux.md`
 
 **Requirements**
@@ -980,14 +980,14 @@ mip1-NN: <imperative title ≤72 chars>
 - T-01: PKGBUILD `package()` installs desktop file from `srcdir`
 - T-02: Desktop file validates with `desktop-file-validate` if available
 
-**Dependencies:** None  
+**Dependencies:** None
 **Risks:** None
 
 ---
 
 #### MIP1-38 (Item 35) — Unified `config.json` sync in build pipeline
 
-**Priority:** P2  
+**Priority:** P2
 **Files:** `scripts/build-runtime.mjs`, `package.json`, `docs/linux.md`
 
 **Requirements**
@@ -1003,14 +1003,14 @@ mip1-NN: <imperative title ≤72 chars>
 - T-01: Script integration test comparing hashes
 - T-02: `check:repo-layout` still passes
 
-**Dependencies:** None  
+**Dependencies:** None
 **Risks:** None
 
 ---
 
 #### MIP1-39 (Item 36) — CI and smoke workflow hardening
 
-**Priority:** P2  
+**Priority:** P2
 **Files:** `.github/workflows/ci.yml`, `.github/workflows/desktop-package-smoke.yml`, `MODERNIZATION.md`
 
 **Requirements**
@@ -1028,7 +1028,7 @@ mip1-NN: <imperative title ≤72 chars>
 - T-01: Workflow YAML lint/review
 - T-02: Dry-run `act` optional
 
-**Dependencies:** MIP1-40  
+**Dependencies:** MIP1-40
 **Risks:** CI time increase — acceptable
 
 ---
@@ -1039,7 +1039,7 @@ mip1-NN: <imperative title ≤72 chars>
 
 #### MIP1-40 (Item 37) — Refresh desktop validation docs to 1.1.1+
 
-**Priority:** P3  
+**Priority:** P3
 **Files:** `docs/desktop-validation-status.md`
 
 **Requirements**
@@ -1052,14 +1052,14 @@ mip1-NN: <imperative title ≤72 chars>
 **Tests**
 - T-01: `npm run check:versions` + manual doc grep
 
-**Dependencies:** None  
+**Dependencies:** None
 **Risks:** None
 
 ---
 
 #### MIP1-41 (Item 38) — Fix `docs/linux.md` consistency
 
-**Priority:** P3  
+**Priority:** P3
 **Files:** `docs/linux.md`
 
 **Requirements**
@@ -1074,14 +1074,14 @@ mip1-NN: <imperative title ≤72 chars>
 **Tests**
 - T-01: Doc walkthrough review
 
-**Dependencies:** MIP1-37  
+**Dependencies:** MIP1-37
 **Risks:** None
 
 ---
 
 #### MIP1-42 (Item 39) — Arch `pkgrel` bump support in `bump-version.mjs`
 
-**Priority:** P3  
+**Priority:** P3
 **Files:** `scripts/bump-version.mjs`, `packaging/arch/PKGBUILD`, `scripts/check-version-consistency.mjs`
 
 **Requirements**
@@ -1095,14 +1095,14 @@ mip1-NN: <imperative title ≤72 chars>
 **Tests**
 - T-01: Unit test bump script pkgrel path
 
-**Dependencies:** None  
+**Dependencies:** None
 **Risks:** None
 
 ---
 
 #### MIP1-43 (Item 40) — Normalize GitHub repository URLs
 
-**Priority:** P3  
+**Priority:** P3
 **Files:** `src-tauri/Cargo.toml`, `packaging/arch/PKGBUILD`, `README.md`
 
 **Requirements**
@@ -1115,14 +1115,14 @@ mip1-NN: <imperative title ≤72 chars>
 **Tests**
 - T-01: `scripts/check-repo-layout.mjs` or new grep check
 
-**Dependencies:** None  
+**Dependencies:** None
 **Risks:** None
 
 ---
 
 #### MIP1-44 (Item 43) — Refresh token support (if HS provides)
 
-**Priority:** P3  
+**Priority:** P3
 **Files:** `synara/src/client/initMatrix.ts`, `synara/src/app/state/sessions.ts`, Matrix client token refresh hooks
 
 **Requirements**
@@ -1138,14 +1138,14 @@ mip1-NN: <imperative title ≤72 chars>
 **Tests**
 - T-01: Unit tests with mocked http refresh endpoint
 
-**Dependencies:** MIP1-15, MIP1-29  
+**Dependencies:** MIP1-15, MIP1-29
 **Risks:** Not all homeservers support refresh — feature-detect
 
 ---
 
 #### MIP1-45 (Item 44) — macOS signing configuration scaffolding
 
-**Priority:** P3  
+**Priority:** P3
 **Files:** `src-tauri/tauri.conf.json`, `docs/desktop-validation-status.md`, `.github/workflows/release-desktop.yml`
 
 **Requirements**
@@ -1160,14 +1160,14 @@ mip1-NN: <imperative title ≤72 chars>
 **Tests**
 - T-01: Doc review
 
-**Dependencies:** None  
+**Dependencies:** None
 **Risks:** None
 
 ---
 
 #### MIP1-46 (Item 45) — Linux spellcheck failure logging
 
-**Priority:** P3  
+**Priority:** P3
 **Files:** `src-tauri/src/lib.rs`
 
 **Requirements**
@@ -1181,7 +1181,7 @@ mip1-NN: <imperative title ≤72 chars>
 **Tests**
 - T-01: Unit test log hook if extractable; else manual
 
-**Dependencies:** None  
+**Dependencies:** None
 **Risks:** None
 
 ---
@@ -1226,11 +1226,11 @@ For **each** MIP1-NN item:
 
 ### Orchestrator Review Template (mandatory per item)
 
-1. **Executive Summary** — Pass / Fail / Pass with notes  
-2. **Requirements & AC Compliance** — AC-xx checklist with evidence  
-3. **Key Strengths**  
-4. **Issues & Opportunities** — Critical / High / Medium / Low  
-5. **Validation Performed & Next Steps** — commands run + next item ID  
+1. **Executive Summary** — Pass / Fail / Pass with notes
+2. **Requirements & AC Compliance** — AC-xx checklist with evidence
+3. **Key Strengths**
+4. **Issues & Opportunities** — Critical / High / Medium / Low
+5. **Validation Performed & Next Steps** — commands run + next item ID
 
 **Gate:** Do not start next item while any Critical/High issue is open for current item.
 
@@ -1320,10 +1320,11 @@ Before merge to `main`:
 
 ### Phase 4 holistic review record (2026-06-10)
 
-Orchestrator verdict: **automated gates pass; merge blocked on macOS/Linux interactive smoke and user review.**  
-Commit hygiene remediated with evidence map + `check:mip1-evidence` (2026-06-10 remediation pass).  
-2026-06-11 remediation: Rust/TS URL policy parity, `map_keyring_error` log sanitization, timeline revision fingerprint, file transfer TTL/opaque IDs, expanded tests, validation doc refresh.  
-Evidence: `check:versions` (1.2.3), `check:mip1-evidence`, `test:modernization` (255/255), `cargo test --lib` (78/78 macOS), `cargo check --locked --release`, [desktop-validation-status.md](./desktop-validation-status.md).
+Orchestrator verdict: **automated gates must be green on CI; merge blocked on macOS/Linux interactive smoke and user review.**
+Commit hygiene remediated with evidence map + `check:mip1-evidence` (2026-06-10 remediation pass).
+2026-06-11 remediation (pass 1): Rust/TS URL policy parity, `map_keyring_error` log sanitization, timeline revision fingerprint, file transfer TTL/opaque IDs, expanded tests, validation doc refresh.
+2026-06-11 remediation (pass 2, PR #10 review): prettier/whitespace, Tauri toolchain gate, `storedAtMs` bootstrap, timeline divider semantics, transfer TTL on IPC, crypto IDs, incremental revision token, agent contract parity, port test resilience, smoke path filter, DND approval notifications.
+Evidence: `check:versions` (1.2.3 + Tauri 2.11), `check:prettier`, `check:mip1-evidence`, `test:modernization` (257/257), `cargo test --lib` (82/82 macOS), `cargo check --locked --release`, [desktop-validation-status.md](./desktop-validation-status.md).
 
 ---
 
@@ -1410,7 +1411,7 @@ Lower-severity review findings **not** in the 46-item list. Track for MIP2 or op
 
 ## Phase 2 Self-Review Record (2026-06-10)
 
-**Reviewer:** Orchestrator (plan author)  
+**Reviewer:** Orchestrator (plan author)
 **Verdict:** ✅ **Airtight — approved to begin Phase 3**
 
 | Criterion | Result |

@@ -172,6 +172,7 @@ export type TimelineRowsBuildState<
 
 export type TimelineRowBuildInstrumentation = {
   eventsVisited: number;
+  revisionTokenEventsScanned: number;
   fullBuilds: number;
   incrementalBuilds: number;
   skippedBuilds: number;
@@ -191,6 +192,7 @@ export type TimelineRowBuildDeps<TEvt extends TimelineRowBuildEvent, TTimeline, 
 
 let timelineRowBuildInstrumentation: TimelineRowBuildInstrumentation = {
   eventsVisited: 0,
+  revisionTokenEventsScanned: 0,
   fullBuilds: 0,
   incrementalBuilds: 0,
   skippedBuilds: 0,
@@ -199,6 +201,7 @@ let timelineRowBuildInstrumentation: TimelineRowBuildInstrumentation = {
 export const resetTimelineRowBuildInstrumentation = (): void => {
   timelineRowBuildInstrumentation = {
     eventsVisited: 0,
+    revisionTokenEventsScanned: 0,
     fullBuilds: 0,
     incrementalBuilds: 0,
     skippedBuilds: 0,
@@ -217,20 +220,64 @@ const getTimelineToken = <TTimeline extends TimelineRowBuildTimeline<TimelineRow
   linkedTimelines: TTimeline[]
 ): string => linkedTimelines.map((timeline) => timeline.getEvents().length).join(':');
 
-const getTimelineRevisionToken = <TTimeline extends TimelineRowBuildTimeline<TimelineRowBuildEvent>>(
-  linkedTimelines: TTimeline[]
-): string =>
-  linkedTimelines
-    .map((timeline) =>
-      timeline
-        .getEvents()
-        .map(
-          (event) =>
-            `${event.getId() ?? ''}:${event.isRedacted() ? 1 : 0}:${event.getTs()}:${event.getType()}`
-        )
-        .join(',')
-    )
-    .join('|');
+const getEventRevisionToken = (event: TimelineRowBuildEvent): string =>
+  `${event.getId() ?? ''}:${event.isRedacted() ? 1 : 0}:${event.getTs()}:${event.getType()}`;
+
+const getTimelineRevisionToken = <
+  TTimeline extends TimelineRowBuildTimeline<TimelineRowBuildEvent>
+>(
+  linkedTimelines: TTimeline[],
+  startAbsoluteIndex = 0
+): string => {
+  let currentIndex = 0;
+  const timelineTokens: string[] = [];
+
+  for (const timeline of linkedTimelines) {
+    const events = timeline.getEvents();
+    const timelineStart = currentIndex;
+    const timelineEnd = currentIndex + events.length;
+    if (startAbsoluteIndex < timelineEnd) {
+      const localStart = Math.max(0, startAbsoluteIndex - timelineStart);
+      const scannedEvents = events.slice(localStart);
+      timelineRowBuildInstrumentation.revisionTokenEventsScanned += scannedEvents.length;
+      timelineTokens.push(scannedEvents.map(getEventRevisionToken).join(','));
+    }
+    currentIndex = timelineEnd;
+  }
+
+  return timelineTokens.join('|');
+};
+
+const appendTimelineRevisionToken = (
+  previousToken: string,
+  linkedTimelines: TimelineRowBuildTimeline<TimelineRowBuildEvent>[],
+  startAbsoluteIndex: number
+): string => {
+  const appendedToken = getTimelineRevisionToken(linkedTimelines, startAbsoluteIndex);
+  if (!appendedToken) return previousToken;
+  if (!previousToken) return appendedToken;
+
+  const leadingTimelineEventCount = linkedTimelines
+    .slice(0, -1)
+    .reduce((sum, timeline) => sum + timeline.getEvents().length, 0);
+
+  if (startAbsoluteIndex >= leadingTimelineEventCount) {
+    if (linkedTimelines.length === 1) {
+      return `${previousToken},${appendedToken}`;
+    }
+
+    const separator = previousToken.lastIndexOf('|');
+    if (separator === -1) {
+      return `${previousToken},${appendedToken}`;
+    }
+
+    const prefix = previousToken.slice(0, separator + 1);
+    const lastSegment = previousToken.slice(separator + 1);
+    return `${prefix}${lastSegment},${appendedToken}`;
+  }
+
+  return `${previousToken}|${appendedToken}`;
+};
 
 const fingerprintsAreEquivalent = (
   left: TimelineBuildFingerprint,
@@ -345,7 +392,7 @@ const processTimelineEvent = <
   const eventId = mEvent.getId();
   if (!eventId) {
     return {
-      prevEvent: mEvent,
+      prevEvent,
       isPrevRendered,
       pendingNewDivider,
       absoluteIndex: eventIndex + 1,
@@ -356,7 +403,7 @@ const processTimelineEvent = <
   const eventSender = mEvent.getSender();
   if (eventSender && ignoredUsersSet.has(eventSender)) {
     return {
-      prevEvent: mEvent,
+      prevEvent,
       isPrevRendered: false,
       pendingNewDivider,
       absoluteIndex: eventIndex + 1,
@@ -365,7 +412,7 @@ const processTimelineEvent = <
   }
   if (mEvent.isRedacted() && !showHiddenEvents) {
     return {
-      prevEvent: mEvent,
+      prevEvent,
       isPrevRendered: false,
       pendingNewDivider,
       absoluteIndex: eventIndex + 1,
@@ -571,62 +618,100 @@ export const buildTimelineRowsWithState = <
   deps: TimelineRowBuildDeps<TEvt, TTimeline, TRow>,
   previous?: TimelineRowsBuildState<TRow, TEvt>
 ): TimelineRowsBuildResult<TRow, TEvt> => {
-  const fingerprint = createTimelineBuildFingerprint(
-    linkedTimelines,
-    options,
-    deps.getTimelinesEventsCount
-  );
+  const eventsLength = deps.getTimelinesEventsCount(linkedTimelines);
+  const timelineToken = getTimelineToken(linkedTimelines);
+  const optionsKey = getTimelineBuildOptionsKey(options);
+  const cheapFingerprint = {
+    timelineToken,
+    eventsLength,
+    optionsKey,
+  };
 
-  if (previous && fingerprintsAreEquivalent(previous.fingerprint, fingerprint)) {
-    timelineRowBuildInstrumentation.skippedBuilds += 1;
-    return {
-      rows: previous.rows,
-      state: previous,
-      strategy: 'skipped',
-    };
-  }
+  if (previous) {
+    const previousFingerprint = previous.fingerprint;
 
-  if (
-    previous &&
-    canIncrementallyAppendRows(previous, fingerprint) &&
-    fingerprint.eventsLength > previous.fingerprint.eventsLength &&
-    verifyIncrementalAnchor(linkedTimelines, previous)
-  ) {
-    timelineRowBuildInstrumentation.incrementalBuilds += 1;
+    if (
+      previousFingerprint.optionsKey === optionsKey &&
+      previousFingerprint.eventsLength === eventsLength &&
+      previousFingerprint.timelineToken === timelineToken
+    ) {
+      const revisionToken = getTimelineRevisionToken(linkedTimelines);
+      const fingerprint: TimelineBuildFingerprint = {
+        ...cheapFingerprint,
+        revisionToken,
+      };
 
-    const trailingRows = getTrailingSyntheticRowCount(previous.rows);
-    const rows = previous.rows.slice(0, previous.rows.length - trailingRows) as TRow[];
-    const context = appendTimelineRowsFromIndex({
-      linkedTimelines,
-      options,
-      rows,
-      context: previous.context,
-      startAbsoluteIndex: previous.fingerprint.eventsLength,
-      deps,
-    });
-
-    if (options.showFrontLoader) {
-      rows.push(
-        ...(getLoaderRows(
-          'forward',
-          options.compact,
-          deps.getTimelinesEventsCount(linkedTimelines)
-        ) as TRow[])
-      );
+      if (fingerprintsAreEquivalent(previousFingerprint, fingerprint)) {
+        timelineRowBuildInstrumentation.skippedBuilds += 1;
+        return {
+          rows: previous.rows,
+          state: previous,
+          strategy: 'skipped',
+        };
+      }
     }
-    rows.push({ kind: 'bottom', key: 'bottom' } as TRow);
 
-    return {
-      rows,
-      state: {
-        fingerprint,
-        rows,
-        context,
-      },
-      strategy: 'incremental',
+    const candidateFingerprint: TimelineBuildFingerprint = {
+      ...cheapFingerprint,
+      revisionToken: previousFingerprint.revisionToken,
     };
+
+    if (
+      canIncrementallyAppendRows(previous, candidateFingerprint) &&
+      eventsLength > previousFingerprint.eventsLength &&
+      verifyIncrementalAnchor(linkedTimelines, previous)
+    ) {
+      timelineRowBuildInstrumentation.incrementalBuilds += 1;
+
+      const revisionToken = appendTimelineRevisionToken(
+        previousFingerprint.revisionToken,
+        linkedTimelines,
+        previousFingerprint.eventsLength
+      );
+      const fingerprint: TimelineBuildFingerprint = {
+        ...cheapFingerprint,
+        revisionToken,
+      };
+
+      const trailingRows = getTrailingSyntheticRowCount(previous.rows);
+      const rows = previous.rows.slice(0, previous.rows.length - trailingRows) as TRow[];
+      const context = appendTimelineRowsFromIndex({
+        linkedTimelines,
+        options,
+        rows,
+        context: previous.context,
+        startAbsoluteIndex: previousFingerprint.eventsLength,
+        deps,
+      });
+
+      if (options.showFrontLoader) {
+        rows.push(
+          ...(getLoaderRows(
+            'forward',
+            options.compact,
+            deps.getTimelinesEventsCount(linkedTimelines)
+          ) as TRow[])
+        );
+      }
+      rows.push({ kind: 'bottom', key: 'bottom' } as TRow);
+
+      return {
+        rows,
+        state: {
+          fingerprint,
+          rows,
+          context,
+        },
+        strategy: 'incremental',
+      };
+    }
   }
 
+  const revisionToken = getTimelineRevisionToken(linkedTimelines);
+  const fingerprint: TimelineBuildFingerprint = {
+    ...cheapFingerprint,
+    revisionToken,
+  };
   const { rows, context } = buildTimelineRows(linkedTimelines, options, deps);
 
   return {
