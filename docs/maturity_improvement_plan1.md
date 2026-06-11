@@ -1269,7 +1269,7 @@ For each MIP1-NN commit:
 | 17 Secret-store errors | MIP1-12 | C | Planned | — |
 | 7 Selective logout | MIP1-13 | D | Done | mip1-13 |
 | 12 SW session after login | MIP1-14 | D | Done | mip1-14 |
-| 27 Unified logout | MIP1-15 | D | Planned | — |
+| 27 Unified logout | MIP1-15 | D | Done | mip1-15 |
 | 28 Clear secret keys | MIP1-16 | D | Planned | — |
 | 30 Account switch safety | MIP1-17 | D | Planned | — |
 | 8 Incremental timeline | MIP1-18 | E | Done | mip1-18 |

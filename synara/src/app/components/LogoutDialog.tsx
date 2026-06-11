@@ -1,7 +1,7 @@
 import React, { forwardRef, useCallback } from 'react';
 import { Dialog, Header, config, Box, Text, Button, Spinner, color } from 'folds';
 import { AsyncStatus, useAsyncCallback } from '../hooks/useAsyncCallback';
-import { logoutClient } from '../../client/initMatrix';
+import { performLogout } from '../../client/initMatrix';
 import { useMatrixClient } from '../hooks/useMatrixClient';
 import { useCrossSigningActive } from '../hooks/useCrossSigning';
 import { InfoCard } from './info-card';
@@ -26,7 +26,7 @@ export const LogoutDialog = forwardRef<HTMLDivElement, LogoutDialogProps>(
 
     const [logoutState, logout] = useAsyncCallback<void, Error, []>(
       useCallback(async () => {
-        await logoutClient(mx);
+        await performLogout(mx);
       }, [mx])
     );
 

@@ -10,8 +10,9 @@ import { cryptoCallbacks } from './secretStorageKeys';
 import { clearNavToActivePathStore } from '../app/state/navToActivePath';
 import { pushSessionToSW } from '../sw-session';
 import { clearPersistedSessions } from '../app/state/sessionPersistence';
-import { clearSessionLocalStorage } from '../app/state/sessions';
+import { clearSessionLocalStorage, type SessionLocalStorage } from '../app/state/sessions';
 import { platformSessionStore } from '../app/platform';
+import type { SessionPersistenceOptions } from '../app/state/sessionPersistence';
 
 type Session = {
   baseUrl: string;
@@ -81,25 +82,50 @@ export const clearCacheAndReload = async (mx: MatrixClient) => {
   window.location.reload();
 };
 
-export const logoutClient = async (mx: MatrixClient) => {
-  await clearPersistedSessions({ nativeSessionStore: platformSessionStore });
-  pushSessionToSW();
-  mx.stopClient();
-  try {
-    await mx.logout();
-  } catch {
-    // ignore if failed to logout
-  }
-  await mx.clearStores();
-  clearSessionLocalStorage();
-  window.location.reload();
+export type PerformLogoutDeps = {
+  clearPersistedSessions: (options?: SessionPersistenceOptions) => Promise<void>;
+  pushSessionToSW: typeof pushSessionToSW;
+  clearSessionLocalStorage: typeof clearSessionLocalStorage;
+  nativeSessionStore: SessionPersistenceOptions['nativeSessionStore'];
+  reload: () => void;
 };
+
+const defaultPerformLogoutDeps = (): PerformLogoutDeps => ({
+  clearPersistedSessions,
+  pushSessionToSW,
+  clearSessionLocalStorage,
+  nativeSessionStore: platformSessionStore,
+  reload: () => window.location.reload(),
+});
+
+export const performLogout = async (
+  mx?: MatrixClient,
+  {
+    storage,
+    ...depsOverrides
+  }: Partial<PerformLogoutDeps> & { storage?: SessionLocalStorage } = {}
+): Promise<void> => {
+  const deps = { ...defaultPerformLogoutDeps(), ...depsOverrides };
+
+  await deps.clearPersistedSessions({ nativeSessionStore: deps.nativeSessionStore });
+  deps.pushSessionToSW();
+
+  if (mx) {
+    mx.stopClient();
+    try {
+      await mx.logout();
+    } catch {
+      // ignore if failed to logout
+    }
+    await mx.clearStores();
+  }
+
+  deps.clearSessionLocalStorage(storage);
+  deps.reload();
+};
+
+export const logoutClient = async (mx: MatrixClient) => performLogout(mx);
 
 export const clearLoginData = async (
   storage = typeof window === 'undefined' ? undefined : window.localStorage
-) => {
-  await clearPersistedSessions({ nativeSessionStore: platformSessionStore });
-  await clearMatrixLocalStores();
-  clearSessionLocalStorage(storage);
-  window.location.reload();
-};
+) => performLogout(undefined, { storage: storage as SessionLocalStorage });
