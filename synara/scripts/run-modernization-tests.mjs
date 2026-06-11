@@ -30,6 +30,8 @@ const tests = [
   'src/app/platform/__tests__/agentActions.test.ts',
   'src/app/matrix/__tests__/media.test.ts',
   'src/app/matrix/__tests__/matrixLocalStores.test.ts',
+  'src/app/state/__tests__/initMatrix.test.ts',
+  'src/app/matrix/__tests__/secretStorageKeys.test.ts',
   'src/app/state/__tests__/sessionBootstrap.test.ts',
   'src/app/state/__tests__/sessionPersistence.test.ts',
   'src/app/state/__tests__/sessions.test.ts',
