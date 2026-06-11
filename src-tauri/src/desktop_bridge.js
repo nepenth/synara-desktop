@@ -2,7 +2,7 @@
   const invoke = (command, args) =>
     window.__TAURI_INTERNALS__?.invoke?.(command, args);
 
-  window.__SYNARA_DESKTOP__ = Object.freeze({
+  window.__SYNARA_DESKTOP__ = {
     platform: "tauri",
     supportsTray: true,
     supportsGlobalShortcuts: true,
@@ -10,7 +10,7 @@
     supportsTrayState: true,
     supportsUpdater: false,
     supportsMediaPermissions: true,
-    supportsSecureSecretStore: true,
+    supportsSecureSecretStore: false,
     desktopEnvironment: "unknown",
     sessionType: "unknown",
     routes: Object.freeze({
@@ -19,5 +19,5 @@
       settings: "/settings/",
     }),
     invoke,
-  });
+  };
 })();

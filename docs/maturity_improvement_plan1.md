@@ -1256,7 +1256,7 @@ For each MIP1-NN commit:
 | Item | ID | Wave | Status | Commit |
 |------|-----|------|--------|--------|
 | 4 DevTools gate | MIP1-01 | A | Done | mip1-01 |
-| 5 Bridge capabilities | MIP1-02 | A | Planned | — |
+| 5 Bridge capabilities | MIP1-02 | A | Done | mip1-02 |
 | 13 CSP tighten | MIP1-03 | A | Planned | — |
 | 46 Windows honesty | MIP1-04 | A | Planned | — |
 | 1 Notification route | MIP1-05 | B | Planned | — |

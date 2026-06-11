@@ -221,11 +221,16 @@ pub fn run() {
             };
 
             let app_handle = app.handle().clone();
+            let bridge_script = format!(
+                "{}\nif (window.__SYNARA_DESKTOP__) {{ window.__SYNARA_DESKTOP__.supportsSecureSecretStore = {}; }}",
+                include_str!("desktop_bridge.js"),
+                desktop::desktop_bridge_supports_secure_secret_store()
+            );
             let window = WebviewWindowBuilder::new(app, "main".to_string(), window_url)
                 .title("Synara")
                 .inner_size(1280.0, 900.0)
                 .min_inner_size(960.0, 720.0)
-                .initialization_script(include_str!("desktop_bridge.js"))
+                .initialization_script(bridge_script)
                 .on_new_window(move |url, _features| {
                     if desktop::is_safe_external_url(url.as_str()) {
                         let _ = app_handle.opener().open_url(url.as_str(), None::<&str>);
