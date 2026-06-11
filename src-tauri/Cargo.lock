@@ -3797,6 +3797,7 @@ dependencies = [
  "keyring",
  "mac-notification-sys",
  "notify-rust",
+ "security-framework 3.7.0",
  "serde",
  "serde_json",
  "tauri",
