@@ -119,6 +119,45 @@ const iosMarketingVersion = matchRequired(
   /MARKETING_VERSION:\s*"([^"]+)"/
 );
 
+const parseMajorMinor = (version) => {
+  const match = `${version}`.match(/^(\d+)\.(\d+)/);
+  if (!match) throw new Error(`Unable to parse major.minor from version ${version}`);
+  return `${match[1]}.${match[2]}`;
+};
+
+const cargoTauriVersion = matchRequired(
+  "src-tauri/Cargo.lock tauri crate version",
+  cargoLock,
+  /name = "tauri"\nversion = "([^"]+)"/
+);
+const npmTauriApiVersion = desktopPackage.dependencies?.["@tauri-apps/api"];
+const npmTauriCliVersion = desktopPackage.devDependencies?.["@tauri-apps/cli"];
+
+if (!npmTauriApiVersion) {
+  throw new Error("package.json is missing @tauri-apps/api dependency");
+}
+if (!npmTauriCliVersion) {
+  throw new Error("package.json is missing @tauri-apps/cli devDependency");
+}
+
+const cargoTauriMajorMinor = parseMajorMinor(cargoTauriVersion);
+const npmTauriApiMajorMinor = parseMajorMinor(npmTauriApiVersion);
+const npmTauriCliMajorMinor = parseMajorMinor(npmTauriCliVersion);
+
+assertEqual(
+  "Tauri npm api major.minor vs Cargo.lock tauri",
+  npmTauriApiMajorMinor,
+  cargoTauriMajorMinor
+);
+assertEqual(
+  "Tauri npm cli major.minor vs Cargo.lock tauri",
+  npmTauriCliMajorMinor,
+  cargoTauriMajorMinor
+);
+
+console.log(
+  `Tauri toolchain aligned at ${cargoTauriMajorMinor} (api ${npmTauriApiVersion}, cli ${npmTauriCliVersion}, cargo ${cargoTauriVersion}).`
+);
 console.log(`Version metadata is consistent at ${expectedVersion} (Arch pkgrel ${archPkgrel}).`);
 if (iosMarketingVersion === expectedVersion) {
   console.log(

@@ -22,7 +22,8 @@ keyring = { version = "3.6.3", default-features = false, features = [
   "linux-native-sync-persistent",
   "crypto-rust",
 ] }
-tauri = { version = "2.10", features = ["tray-icon", "image-png"] }
+tauri = { version = "2.11", features = ["tray-icon", "image-png"] }
+getrandom = "0.3"
 tauri-plugin-localhost = "2"
 tauri-plugin-window-state = "2"
 tauri-plugin-clipboard-manager = "2"
