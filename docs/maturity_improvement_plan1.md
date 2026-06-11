@@ -1,16 +1,30 @@
 # Maturity Improvement Plan 1
 
 **Branch:** `maturity_improvement_plan1`  
-**Status:** Phase 1 — Planning (awaiting implementation)  
+**Status:** Phase 2 — Plan validated (ready for Phase 3 implementation)  
 **Scope:** macOS + Linux Synara Desktop (Tauri shell + `synara/` runtime)  
-**Process:** One commit per item (`mip1-NN: <title>`), 46 items total  
+**Process:** `mip1-00` (plan) + 46 implementation commits (`mip1-01`…`mip1-46`), one item per commit  
 **Reviewed:** 2026-06-10
 
 ---
 
 ## Executive Overview
 
-This plan converts the desktop maturity review into 46 independently committable work items. Each item has explicit requirements, measurable acceptance criteria, and tests where applicable. Items are grouped into seven implementation waves that respect dependencies.
+This plan converts the desktop maturity review into 46 independently committable work items. Each item has explicit requirements, measurable acceptance criteria, and tests where applicable. Items are grouped into nine implementation waves (A–I) that respect dependencies.
+
+### Prerequisites Already Landed on `main` (pre-MIP1)
+
+These concerns from our discussion are **not** duplicated as MIP1 items because they are already implemented on `main` before this branch:
+
+| Concern | Resolution on `main` |
+|---------|----------------------|
+| Rust `dead_code` warning (macOS keychain constant) | `#[allow(dead_code)]` added |
+| Tauri CLI/API vs Rust crate version skew | `@tauri-apps/cli` + `api` → 2.10.1; `tauri` pinned 2.10 |
+| `__TAURI_BUNDLE_TYPE` bundler warning | Addressed by version alignment |
+| Account/device crypto store mismatch on re-login | `matrixLocalStores.ts` + init retry + logout cleanup |
+| Version numbering tooling | `bump-version.mjs`, enhanced `check:versions` (iOS build # reporting) |
+
+MIP1 branch should merge/rebase from current `main` before Wave A implementation.
 
 ### Global Non-Functional Requirements (all items)
 
@@ -21,6 +35,7 @@ This plan converts the desktop maturity review into 46 independently committable
 | **G-NFR-3** | Public Tauri IPC command signatures remain backward-compatible unless the item explicitly documents a breaking change |
 | **G-NFR-4** | New Rust code follows existing `desktop.rs` sanitization and error-string patterns |
 | **G-NFR-5** | New TypeScript follows existing `synara/` test patterns (`node:test` + esbuild bundle via `test:modernization`) |
+| **G-NFR-6** | Every implementation commit passes minimum gate: `npm run check:versions` (if versions touched), `npm run test:modernization` (if TS touched), `cargo test` + `cargo check` (if Rust touched) |
 
 ### Global Success Metrics (program-level)
 
@@ -28,7 +43,7 @@ This plan converts the desktop maturity review into 46 independently committable
 |--------|--------|
 | AC pass rate | 46/46 items pass orchestrator review with zero Critical/High open issues |
 | Test regression | `npm run check:versions`, `npm run test:modernization`, `cargo test`, `cargo check --locked` pass on branch tip |
-| Commit hygiene | Exactly 46 commits on `maturity_improvement_plan1`, one per item, in dependency order |
+| Commit hygiene | Exactly 47 commits on branch: `mip1-00` (plan) + `mip1-01`…`mip1-46` (one per item), in implementation sequence order |
 | Documentation | Plan self-review and final holistic review recorded in branch history |
 
 ### Commit Convention
@@ -107,8 +122,8 @@ mip1-NN: <imperative title ≤72 chars>
 - T-01: Extend `synara/src/app/platform/__tests__/platform.test.ts` for false-by-default bridge
 - T-02: Rust unit test for status → bridge flag mapping (if bridge becomes dynamic)
 
-**Dependencies:** Complements MIP1-06..09  
-**Risks:** Race on first paint — document loading state in settings
+**Dependencies:** Complements MIP1-08, MIP1-09  
+**Risks:** Race on first paint — mitigate with loading state in settings until `desktop_secret_store_status` resolves
 
 ---
 
@@ -178,15 +193,17 @@ mip1-NN: <imperative title ≤72 chars>
 **Acceptance Criteria**
 - **AC-01:** Given a desktop notification with `route: "room/!abc:server"`, when the user clicks it, then the main window focuses and navigates to that route
 - **AC-02:** Given an unsafe route in payload, when notify is invoked, then request is rejected with stable error (no navigation)
-- **AC-03:** Given macOS and Linux, when click handler fires, then behavior is identical
+- **AC-03:** Given Linux, when notification clicked, then main window focuses and navigates
+- **AC-04:** Given macOS, when notification clicked, then equivalent navigation occurs via platform-supported click API (or documented limitation with fallback deep-link via tray)
 
 **Tests**
 - T-01: Rust unit tests for route attachment + sanitization rejection
-- T-02: TS unit test for notification payload including route
-- T-03: Manual desktop smoke: click notification → correct room
+- T-02: TS unit test for notification payload including route on all desktop notification call sites
+- T-03: Manual Linux smoke: click notification → correct room
+- T-04: Manual macOS smoke: click notification → correct room (or documented gap filed as follow-up)
 
 **Dependencies:** None  
-**Risks:** Platform differences in `tauri-plugin-notification` click API — abstract per OS
+**Risks:** `tauri-plugin-notification` click API differs per OS — implement per-platform handler module with shared `navigate_main_window` core
 
 ---
 
@@ -500,7 +517,7 @@ mip1-NN: <imperative title ≤72 chars>
 - R-03: Measurable improvement: single new message append does not walk entire history
 
 **Acceptance Criteria**
-- **AC-01:** Given room with 5,000 events, when one message arrives at live end, then row build work is O(1) or O(window) not O(5000) — verified via test hook or benchmark
+- **AC-01:** Given room with ≥5,000 events (harness fixture), when one message appends at live end, then instrumented `buildTimelineRows` visits ≤10% of events compared to baseline full-scan (baseline captured before change in same harness)
 - **AC-02:** Given existing `timelineVirtualization.test.ts`, when run, then all pass
 - **AC-03:** Given jump-to-unread and pagination, when exercised, then behavior unchanged
 
@@ -587,24 +604,26 @@ mip1-NN: <imperative title ≤72 chars>
 
 ---
 
-#### MIP1-22 (Item 41) — Bound agent-approval notification IDs
+#### MIP1-22 (Item 41) — Bound in-memory notification caches
 
 **Priority:** P3  
 **Files:** `synara/src/app/pages/client/ClientNonUIFeatures.tsx`
 
 **Requirements**
-- R-01: `notifiedEventIdsRef` uses bounded structure (LRU max 500 ids)
-- R-02: Prune on room switch or daily session reset
+- R-01: `notifiedEventIdsRef` (agent approvals) uses bounded LRU (max 500 ids)
+- R-02: `unreadCacheRef` (message notifications) uses bounded LRU (max 200 room entries)
+- R-03: Prune both on logout and session reset
 
 **Acceptance Criteria**
-- **AC-01:** Given 10,000 unique approval events, when tracked, then set size ≤ 500
-- **AC-02:** Given duplicate event id, when notified, then still deduped
+- **AC-01:** Given 10,000 unique approval event ids, when tracked, then approval set size ≤ 500
+- **AC-02:** Given 1,000 unique room ids in unread cache, when tracked, then cache size ≤ 200
+- **AC-03:** Given duplicate event id or room id, when notified, then still deduped
 
 **Tests**
-- T-01: Unit test for LRU eviction
+- T-01: Unit tests for both LRU eviction helpers
 
-**Dependencies:** None  
-**Risks:** Re-notify after eviction — acceptable for old approvals
+**Dependencies:** MIP1-15 (logout clears caches)  
+**Risks:** Re-notify after eviction — acceptable for stale entries
 
 ---
 
@@ -878,11 +897,13 @@ mip1-NN: <imperative title ≤72 chars>
 - R-01: KDE Wayland help text only when `is_kde_wayland_session()`
 - R-02: macOS shows macOS Settings guidance (or generic)
 - R-03: GNOME/X11 Linux gets appropriate portal/DE text
+- R-04: KDE Wayland default shortcut state is `unknown` (not `Failed`) until first apply attempt
 
 **Acceptance Criteria**
 - **AC-01:** Given macOS status mock, when permission needed shown, then no KDE string
 - **AC-02:** Given KDE Wayland mock, when shown, then KDE help present
 - **AC-03:** Given shortcut_result in Rust, when KDE not detected, then generic message
+- **AC-04:** Given fresh KDE Wayland session before first shortcut apply, when integration status read, then shortcut state is not pre-marked `Failed`
 
 **Tests**
 - T-01: Rust tests for `shortcut_result` per environment mock
@@ -900,20 +921,21 @@ mip1-NN: <imperative title ≤72 chars>
 
 **Requirements**
 - R-01: Publish platform feature matrix (tray items, DND, unread summary)
-- R-02: **Either** add macOS parity for agreed items **or** document intentional Linux-only items
-- R-03: No dead menu entries on any platform
+- R-02: **Decision gate (record in commit):** Choose **Option A** document-only parity matrix (default) **or** **Option B** implement macOS tray items (unread summary, integration link, DND)
+- R-03: No dead/no-op menu entries on any platform without doc explanation
 
 **Acceptance Criteria**
-- **AC-01:** Given docs matrix, when read, then each tray item marked macOS/Linux/Web
-- **AC-02:** Given macOS app, when tray opened, then no no-op items without explanation
-- **AC-03:** Given Linux app, when tray opened, then DND works (after MIP1-06)
+- **AC-01:** Given docs matrix in `docs/desktop-validation-status.md`, when read, then each tray item has macOS/Linux/Support column
+- **AC-02:** Given macOS app, when tray opened, then no unexplained no-op items
+- **AC-03:** Given Linux app, when tray opened, then DND works (requires MIP1-06)
+- **AC-04:** Given chosen option recorded in commit message, when reviewed, then scope matches option (A=docs only, B=code+docs)
 
 **Tests**
-- T-01: Doc review checklist
-- T-02: Manual tray audit both platforms
+- T-01: Doc review checklist against live tray menus
+- T-02: Manual tray audit macOS + Linux
 
 **Dependencies:** MIP1-06  
-**Risks:** Scope creep if full macOS tray parity chosen — default to document-first
+**Risks:** Option B expands scope — **default Option A** unless you direct Option B before MIP1-35 starts
 
 ---
 
@@ -1183,14 +1205,45 @@ flowchart TD
 
 ---
 
+## Implementation Sequence (Phase 3 order)
+
+Execute strictly in this order (matches waves; one commit each):
+
+`01 → 02 → 03 → 04 → 05 → 06 → 07 → 08 → 09 → 10 → 11 → 12 → 13 → 14 → 15 → 16 → 17 → 18 → 19 → 20 → 21 → 22 → 23 → 24 → 25 → 26 → 27 → 28 → 29 → 30 → 31 → 32 → 33 → 34 → 35 → 36 → 37 → 38 → 39 → 40 → 41 → 42 → 43 → 44 → 45 → 46`
+
+---
+
+## Phase 3 Orchestration Protocol
+
+For **each** MIP1-NN item:
+
+1. **Implement** — minimal diff scoped to item files only
+2. **Implementer self-check** — map every AC-xx to evidence (test output, grep, manual step)
+3. **Orchestrator review** — structured format (see below); zero open Critical/High
+4. **Fix loop** — repeat 1–3 until clean
+5. **Commit** — `mip1-NN: <title>`; update status tracker row
+6. **Report** — short status to user every item (or every wave)
+
+### Orchestrator Review Template (mandatory per item)
+
+1. **Executive Summary** — Pass / Fail / Pass with notes  
+2. **Requirements & AC Compliance** — AC-xx checklist with evidence  
+3. **Key Strengths**  
+4. **Issues & Opportunities** — Critical / High / Medium / Low  
+5. **Validation Performed & Next Steps** — commands run + next item ID  
+
+**Gate:** Do not start next item while any Critical/High issue is open for current item.
+
+---
+
 ## Per-Item Implementation Checklist (Phase 3)
 
 For each MIP1-NN commit:
 
 1. [ ] Read item requirements + ACs
 2. [ ] Implement minimal diff
-3. [ ] Run item tests (T-xx) + global checks
-4. [ ] Implementer self-check against ACs
+3. [ ] Run item tests (T-xx) + G-NFR-6 global checks
+4. [ ] Implementer self-check against ACs (document evidence)
 5. [ ] Orchestrator review (structured format)
 6. [ ] Fix loop until clean
 7. [ ] Commit `mip1-NN: ...`
@@ -1223,7 +1276,7 @@ For each MIP1-NN commit:
 | 9 Stream file IPC | MIP1-19 | E | Planned | — |
 | 10 Drop allowlist lifecycle | MIP1-20 | E | Planned | — |
 | 20 Throttle tray rebuild | MIP1-21 | E | Planned | — |
-| 41 Bound approval IDs | MIP1-22 | E | Planned | — |
+| 41 Bound notification caches | MIP1-22 | E | Planned | — |
 | 42 Focus timeout cleanup | MIP1-23 | E | Planned | — |
 | 11 Atomic shortcuts | MIP1-24 | F | Planned | — |
 | 18 Single shortcut path | MIP1-25 | F | Planned | — |
@@ -1255,7 +1308,7 @@ For each MIP1-NN commit:
 
 Before merge to `main`:
 
-- [ ] All 46 commits present, one per item
+- [ ] All 47 commits present (`mip1-00` + `mip1-01`…`mip1-46`)
 - [ ] Status tracker fully `Done`
 - [ ] `npm run check:versions` passes
 - [ ] `npm run test:modernization` passes
@@ -1264,6 +1317,109 @@ Before merge to `main`:
 - [ ] Linux manual smoke (Arch package, Secret Service, Wayland WebKit)
 - [ ] No open Critical/High issues in final holistic review
 - [ ] User personal review completed
+
+---
+
+## Discussion Coverage Matrix (Review Item → MIP1)
+
+| Review # | Topic | MIP1 ID | Notes |
+|----------|-------|---------|-------|
+| 1 | Notification route | MIP1-05 | |
+| 2 | Tray DND no-op | MIP1-06 | |
+| 3 | Agent-action listener | MIP1-07 | |
+| 4 | DevTools in release | MIP1-01 | |
+| 5 | Bridge capability overclaim | MIP1-02 | |
+| 6 | Keyutils false positive | MIP1-08 | |
+| 7 | Logout wipes settings | MIP1-13 | |
+| 8 | Timeline O(n) rebuild | MIP1-18 | |
+| 9 | Large file IPC | MIP1-19 | |
+| 10 | Drop allowlist leak | MIP1-20 | |
+| 11 | Shortcut atomic update | MIP1-24 | |
+| 12 | SW session after login | MIP1-14 | |
+| 13 | Permissive CSP | MIP1-03 | |
+| 14 | nativeStoreError UI | MIP1-09 | |
+| 15 | Secret Service probe | MIP1-10 | |
+| 16 | macOS Keychain probe | MIP1-11 | |
+| 17 | Secret-store error codes | MIP1-12 | |
+| 18 | Duplicate shortcut paths | MIP1-25 | |
+| 19 | Port 44548 collision | MIP1-26 | |
+| 20 | Tray rebuild throttle | MIP1-21 | |
+| 21 | Badge clamp | MIP1-27 | |
+| 22 | External URL policy | MIP1-28 | |
+| 23 | Session expiry | MIP1-29 | |
+| 24 | Sync splash timeout | MIP1-30 | |
+| 25 | Pagination errors | MIP1-31 | |
+| 26 | invokeDesktop strictness | MIP1-32 | |
+| 27 | Unified logout | MIP1-15 | |
+| 28 | Secret keys on logout | MIP1-16 | |
+| 29 | Sync status copy | MIP1-33 | |
+| 30 | Account switch / IDB | MIP1-17 | |
+| 31 | KDE shortcut help scope | MIP1-34 | incl. default Failed state |
+| 32 | Tray parity matrix | MIP1-35 | |
+| 33 | Arch depends | MIP1-36 | |
+| 34 | Standalone .desktop | MIP1-37 | |
+| 35 | config.json sync | MIP1-38 | |
+| 36 | CI hardening | MIP1-39 | |
+| 37 | Validation docs | MIP1-40 | |
+| 38 | linux.md consistency | MIP1-41 | |
+| 39 | pkgrel bump | MIP1-42 | |
+| 40 | Repo URL normalize | MIP1-43 | |
+| 41 | Notification cache bounds | MIP1-22 | approval + unread caches |
+| 42 | Focus timeout cleanup | MIP1-23 | |
+| 43 | Refresh token | MIP1-44 | |
+| 44 | macOS signing scaffold | MIP1-45 | |
+| 45 | Spellcheck logging | MIP1-46 | |
+| 46 | Windows persistence honesty | MIP1-04 | Option A default |
+
+### Prerequisite concerns (on `main`, not MIP1 items)
+
+| Concern | Status |
+|---------|--------|
+| Build warnings (dead_code, bundle type) | Fixed on `main` |
+| Version tooling / iOS build # clarity | Fixed on `main` |
+| Crypto account/device mismatch | Fixed on `main` |
+
+---
+
+## Deferred Findings (Out of MIP1 Scope)
+
+Lower-severity review findings **not** in the 46-item list. Track for MIP2 or opportunistic fixes:
+
+| Finding | Rationale for deferral |
+|---------|------------------------|
+| `getActiveSession()` vs bootstrap cache divergence | Edge case; partial overlap with MIP1-17 |
+| Redundant `desktop_secret_store_status` on every session IPC | Perf optimization; no correctness bug |
+| `AutoDiscovery` non-null assertions on session fields | Low risk if session gate upstream holds |
+| `useFileDropZone` stale `onDrop` deps | Low; native drop path separate |
+| `roomTimelineViewports` module Map survives HMR | Dev-only annoyance |
+| Legacy credential migration delete failure edge case | Rare; logging sufficient for now |
+| `TRAY_ICON_ID` string literal duplication | Cosmetic |
+| macOS-only app menu / no Linux menu bar | By design unless product requests |
+| `build.rs` git metadata `unknown` in tarballs | Packaging nicety |
+| No Linux equivalent of `warn-macos-app-replace.mjs` | Low priority |
+| `platform/secrets.ts` sync status assumes persist true | Addressed by MIP1-02 |
+
+---
+
+## Phase 2 Self-Review Record (2026-06-10)
+
+**Reviewer:** Orchestrator (plan author)  
+**Verdict:** ✅ **Airtight — approved to begin Phase 3**
+
+| Criterion | Result |
+|-----------|--------|
+| All 46 review items mapped | ✅ Coverage matrix complete |
+| Discussion prerequisites documented | ✅ Pre-MIP1 table |
+| Each item has Requirements | ✅ 46/46 |
+| Each item has testable ACs | ✅ Given/When/Then; MIP1-18 quantified |
+| Tests specified | ✅ 44/46 automated+manual; 2 doc-primary (MIP1-35, MIP1-45) |
+| Dependencies & risks | ✅ Per item + mermaid critical path |
+| Implementation order | ✅ Explicit 01→46 sequence |
+| Phase 3/4 protocol | ✅ Orchestrator template + gates |
+| Workflow alignment | ✅ Matches user 4-phase process |
+| Gaps fixed this review | ✅ unreadCache merged into MIP1-22; KDE default state → MIP1-34; wave count; commit count; platform notification ACs |
+
+**Residual risks (accepted):** MIP1-18 and MIP1-19 may require sub-split if single-commit scope exceeded — orchestrator must approve split before proceeding.
 
 ---
 
