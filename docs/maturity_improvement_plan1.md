@@ -1277,7 +1277,7 @@ For each MIP1-NN commit:
 | 10 Drop allowlist lifecycle | MIP1-20 | E | Done | mip1-20 |
 | 20 Throttle tray rebuild | MIP1-21 | E | Planned | — |
 | 41 Bound notification caches | MIP1-22 | E | Planned | — |
-| 42 Focus timeout cleanup | MIP1-23 | E | Planned | — |
+| 42 Focus timeout cleanup | MIP1-23 | E | Done | mip1-23 |
 | 11 Atomic shortcuts | MIP1-24 | F | Planned | — |
 | 18 Single shortcut path | MIP1-25 | F | Planned | — |
 | 19 Port fallback | MIP1-26 | F | Planned | — |
