@@ -41,6 +41,7 @@ import {
   clearPersistedSessions,
   migrateLegacySessionToNativeAfterClientInit,
 } from '../../state/sessionPersistence';
+import { clearSessionLocalStorage } from '../../state/sessions';
 import { shouldRetrySyncOnResume } from '../../utils/syncLifecycle';
 
 function ClientRootLoading() {
@@ -135,7 +136,7 @@ const useLogoutListener = (mx?: MatrixClient) => {
       mx?.stopClient();
       await mx?.clearStores();
       await clearPersistedSessions({ nativeSessionStore: platformSessionStore });
-      window.localStorage.clear();
+      clearSessionLocalStorage();
       window.location.reload();
     };
 

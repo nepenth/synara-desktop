@@ -10,6 +10,7 @@ import { cryptoCallbacks } from './secretStorageKeys';
 import { clearNavToActivePathStore } from '../app/state/navToActivePath';
 import { pushSessionToSW } from '../sw-session';
 import { clearPersistedSessions } from '../app/state/sessionPersistence';
+import { clearSessionLocalStorage } from '../app/state/sessions';
 import { platformSessionStore } from '../app/platform';
 
 type Session = {
@@ -90,13 +91,15 @@ export const logoutClient = async (mx: MatrixClient) => {
     // ignore if failed to logout
   }
   await mx.clearStores();
-  window.localStorage.clear();
+  clearSessionLocalStorage();
   window.location.reload();
 };
 
-export const clearLoginData = async () => {
+export const clearLoginData = async (
+  storage = typeof window === 'undefined' ? undefined : window.localStorage
+) => {
   await clearPersistedSessions({ nativeSessionStore: platformSessionStore });
   await clearMatrixLocalStores();
-  window.localStorage.clear();
+  clearSessionLocalStorage(storage);
   window.location.reload();
 };
