@@ -12,6 +12,7 @@ import {
   resetTimelineRowBuildInstrumentation,
   shouldPaginateVirtualRange,
   TimelineBuildOptions,
+  TimelineBuildRow,
   TimelineRowBuildEvent,
   TimelineRowBuildTimeline,
   TimelineVirtualRow,
@@ -316,7 +317,12 @@ test('ignored events do not shift day divider comparison to the next visible row
   };
 
   const { rows } = buildTimelineRows([timeline], ignoredOptions, harnessBuildDeps);
-  assert.equal(rows.filter((row) => row.kind === 'divider' && row.divider === 'day').length, 0);
+  const buildRows = rows as TimelineBuildRow[];
+  assert.equal(
+    buildRows.filter((row) => row.kind === 'divider').length,
+    0,
+    'ignored events must not introduce day dividers before the next visible row'
+  );
 });
 
 test('incremental revision fingerprint matches full rebuild after live append', () => {

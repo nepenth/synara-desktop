@@ -30,6 +30,7 @@ const run = (command, args, cwd) =>
   });
 
 await cp(rootConfig, runtimeConfig);
+await run("npx", ["prettier", "--write", "config.json"], runtimeDir);
 await run("npm", ["run", "build"], runtimeDir);
 await rm(desktopAssets, { recursive: true, force: true });
 await cp(runtimeDist, desktopAssets, { recursive: true });
