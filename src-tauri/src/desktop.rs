@@ -276,6 +276,7 @@ pub struct DesktopSessionEnvelope {
 }
 
 const DESKTOP_AGENT_ACTION_MAX_TEXT_CHARS: usize = 1024;
+const DESKTOP_AGENT_ACTION_MAX_URL_CHARS: usize = 2048;
 const DESKTOP_AGENT_ACTION_MAX_MARKDOWN_CHARS: usize = 16_384;
 const DESKTOP_NOTIFICATION_MAX_TITLE_CHARS: usize = 120;
 const DESKTOP_NOTIFICATION_MAX_BODY_CHARS: usize = 500;
@@ -1356,17 +1357,9 @@ pub fn dropped_file_read_mode(byte_count: u64) -> DroppedFileReadMode {
 }
 
 fn new_file_transfer_id(prefix: &str) -> String {
-    use std::collections::hash_map::DefaultHasher;
-    use std::hash::{Hash, Hasher};
-    use std::thread;
-
-    static TRANSFER_COUNTER: AtomicU64 = AtomicU64::new(0);
-    let counter = TRANSFER_COUNTER.fetch_add(1, Ordering::Relaxed);
-    let mut hasher = DefaultHasher::new();
-    counter.hash(&mut hasher);
-    chrono_like_timestamp().hash(&mut hasher);
-    thread::current().id().hash(&mut hasher);
-    format!("{prefix}-{:016x}", hasher.finish())
+    let mut bytes = [0_u8; 16];
+    getrandom::fill(&mut bytes).expect("cryptographic random bytes for file transfer id");
+    format!("{prefix}-{}", bytes.iter().map(|byte| format!("{byte:02x}")).collect::<String>())
 }
 
 fn purge_stale_file_transfer_sessions(now: Instant) {
@@ -1414,12 +1407,28 @@ fn register_save_session(session: SaveFileSession) -> Result<String, String> {
     Ok(session_id)
 }
 
+fn save_session_is_stale(session: &SaveFileSession, now: Instant) -> bool {
+    now.duration_since(session.created_at) > FILE_TRANSFER_SESSION_TTL
+}
+
+fn dropped_read_session_is_stale(session: &DroppedReadSession, now: Instant) -> bool {
+    now.duration_since(session.created_at) > FILE_TRANSFER_SESSION_TTL
+}
+
 fn take_save_session(session_id: &str) -> Result<SaveFileSession, String> {
-    save_file_sessions()
+    purge_stale_file_transfer_sessions(Instant::now());
+    let now = Instant::now();
+    let mut sessions = save_file_sessions()
         .lock()
-        .map_err(|_| "Unable to access save file sessions".to_owned())?
+        .map_err(|_| "Unable to access save file sessions".to_owned())?;
+    let session = sessions
         .remove(session_id)
-        .ok_or_else(|| "Save file session is not available".to_owned())
+        .ok_or_else(|| "Save file session is not available".to_owned())?;
+    if save_session_is_stale(&session, now) {
+        let _ = fs::remove_file(session.temp_path);
+        return Err("Save file session has expired".to_owned());
+    }
+    Ok(session)
 }
 
 fn register_dropped_read_session(session: DroppedReadSession) -> Result<String, String> {
@@ -1528,9 +1537,19 @@ pub fn desktop_save_file_chunk(
         ));
     }
 
+    purge_stale_file_transfer_sessions(Instant::now());
+    let now = Instant::now();
     let mut sessions = save_file_sessions()
         .lock()
         .map_err(|_| "Unable to access save file sessions".to_owned())?;
+    if let Some(session) = sessions.get(&session_id) {
+        if save_session_is_stale(session, now) {
+            if let Some(stale_session) = sessions.remove(&session_id) {
+                let _ = fs::remove_file(stale_session.temp_path);
+            }
+            return Err("Save file session has expired".to_owned());
+        }
+    }
     let session = sessions
         .get_mut(&session_id)
         .ok_or_else(|| "Save file session is not available".to_owned())?;
@@ -1563,6 +1582,7 @@ pub fn desktop_save_file_end(session_id: String) -> Result<String, String> {
 
 #[tauri::command]
 pub fn desktop_save_file_abort(session_id: String) -> Result<bool, String> {
+    purge_stale_file_transfer_sessions(Instant::now());
     remove_save_session(&session_id);
     Ok(true)
 }
@@ -1833,9 +1853,17 @@ pub fn desktop_read_dropped_file_chunk(
     }
     let chunk_length = length.min(DESKTOP_FILE_IPC_CHUNK_SIZE);
 
-    let sessions = dropped_read_sessions()
+    purge_stale_file_transfer_sessions(Instant::now());
+    let now = Instant::now();
+    let mut sessions = dropped_read_sessions()
         .lock()
         .map_err(|_| "Unable to access dropped file read sessions".to_owned())?;
+    if let Some(session) = sessions.get(&transfer_id) {
+        if dropped_read_session_is_stale(session, now) {
+            sessions.remove(&transfer_id);
+            return Err("Dropped file read transfer has expired".to_owned());
+        }
+    }
     let session = sessions
         .get(&transfer_id)
         .ok_or_else(|| "Dropped file read transfer is not available".to_owned())?;
@@ -1863,6 +1891,7 @@ pub fn desktop_read_dropped_file_chunk(
 
 #[tauri::command]
 pub fn desktop_read_dropped_file_end(transfer_id: String) -> Result<bool, String> {
+    purge_stale_file_transfer_sessions(Instant::now());
     remove_dropped_read_session(&transfer_id);
     Ok(true)
 }
@@ -2789,10 +2818,7 @@ fn sanitize_agent_action_payload(
         if !is_safe_agent_url(&url) {
             return Err("Agent action URL must use https".to_owned());
         }
-        action.url = Some(sanitize_action_text(
-            url,
-            DESKTOP_AGENT_ACTION_MAX_TEXT_CHARS,
-        ));
+        action.url = Some(sanitize_action_text(url, DESKTOP_AGENT_ACTION_MAX_URL_CHARS));
     }
 
     if let Some(prompt) = action.prompt.take() {
@@ -2856,10 +2882,11 @@ fn handle_agent_action_locally<R: Runtime>(
 }
 
 fn is_supported_agent_action(action: &DesktopAgentActionPayload) -> bool {
-    match (&action.kind, &action.url) {
-        (Some(kind), _) => ALLOWED_AGENT_ACTION_KIND.contains(&kind.as_str()),
-        (None, Some(_)) => true,
-        _ => false,
+    match &action.kind {
+        Some(kind) => ALLOWED_AGENT_ACTION_KIND.contains(&kind.as_str()),
+        None => {
+            action.url.is_some() || action.prompt.is_some() || action.markdown.is_some()
+        }
     }
 }
 
@@ -3511,6 +3538,86 @@ mod tests {
         });
 
         assert!(is_supported_agent_action(&payload));
+    }
+
+    #[test]
+    fn supported_agent_action_detects_no_kind_with_prompt() {
+        let payload = sanitize_agent_action_payload(DesktopAgentActionPayload {
+            id: "abc".to_owned(),
+            title: "Action".to_owned(),
+            kind: None,
+            prompt: Some("Run the workflow".to_owned()),
+            url: None,
+            markdown: None,
+        })
+        .expect("prompt-only action should sanitize");
+
+        assert!(is_supported_agent_action(&payload));
+    }
+
+    #[test]
+    fn sanitize_action_payload_allows_urls_up_to_desktop_max_url_chars() {
+        let long_path = "a".repeat(DESKTOP_AGENT_ACTION_MAX_URL_CHARS - "https://example.org/".len());
+        let payload = sanitize_agent_action_payload(DesktopAgentActionPayload {
+            id: "abc".to_owned(),
+            title: "Action".to_owned(),
+            kind: Some("open".to_owned()),
+            prompt: None,
+            url: Some(format!("https://example.org/{long_path}")),
+            markdown: None,
+        })
+        .expect("long https url should sanitize");
+
+        assert_eq!(
+            payload.url.as_deref().map(str::len),
+            Some(DESKTOP_AGENT_ACTION_MAX_URL_CHARS)
+        );
+    }
+
+    #[test]
+    fn save_session_is_stale_after_transfer_ttl() {
+        let session = SaveFileSession {
+            temp_path: PathBuf::from("/tmp/synara-save-test"),
+            filename: "test.bin".to_owned(),
+            expected_size: 1,
+            bytes_received: 0,
+            created_at: Instant::now()
+                .checked_sub(FILE_TRANSFER_SESSION_TTL + Duration::from_secs(1))
+                .unwrap_or_else(Instant::now),
+        };
+
+        assert!(save_session_is_stale(&session, Instant::now()));
+    }
+
+    #[test]
+    fn desktop_save_file_chunk_rejects_expired_session() {
+        let temp_path = std::env::temp_dir().join(new_file_transfer_id("save-expired-test"));
+        File::create(&temp_path).expect("temp save file should be created");
+        let session_id = new_file_transfer_id("save");
+        let mut sessions = save_file_sessions()
+            .lock()
+            .expect("save sessions lock should succeed");
+        sessions.insert(
+            session_id.clone(),
+            SaveFileSession {
+                temp_path: temp_path.clone(),
+                filename: "expired.bin".to_owned(),
+                expected_size: 1,
+                bytes_received: 0,
+                created_at: Instant::now()
+                    .checked_sub(FILE_TRANSFER_SESSION_TTL + Duration::from_secs(1))
+                    .unwrap_or_else(Instant::now),
+            },
+        );
+        drop(sessions);
+
+        let result = desktop_save_file_chunk(session_id.clone(), 0, vec![1]);
+        assert!(result.is_err());
+        let sessions = save_file_sessions()
+            .lock()
+            .expect("save sessions lock should succeed");
+        assert!(!sessions.contains_key(&session_id));
+        let _ = fs::remove_file(temp_path);
     }
 
     #[test]
