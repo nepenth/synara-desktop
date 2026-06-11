@@ -1259,9 +1259,9 @@ For each MIP1-NN commit:
 | 5 Bridge capabilities | MIP1-02 | A | Done | mip1-02 |
 | 13 CSP tighten | MIP1-03 | A | Done | mip1-03 |
 | 46 Windows honesty | MIP1-04 | A | Done | mip1-04 |
-| 1 Notification route | MIP1-05 | B | Planned | — |
-| 2 Tray DND | MIP1-06 | B | Planned | — |
-| 3 Agent-action listener | MIP1-07 | B | Planned | — |
+| 1 Notification route | MIP1-05 | B | Done | mip1-05 |
+| 2 Tray DND | MIP1-06 | B | Done | mip1-06 |
+| 3 Agent-action listener | MIP1-07 | B | Done | mip1-07 |
 | 6 Keyutils detection | MIP1-08 | C | Planned | — |
 | 14 Native store UI warning | MIP1-09 | C | Planned | — |
 | 15 Secret Service probe | MIP1-10 | C | Planned | — |

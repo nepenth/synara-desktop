@@ -34,16 +34,19 @@ import { useRoomNavigate } from '../../hooks/useRoomNavigate';
 import { PerformanceDebugOverlay } from '../../components/performance/PerformanceDebugOverlay';
 import {
   getPlatformNotificationSummary,
+  registerPlatformAgentActionListener,
   setPlatformBadgeCount,
   setPlatformShortcuts,
   setPlatformTrayState,
   showPlatformNotification,
+  subscribePlatformTrayDndToggle,
   supportsPlatformGlobalShortcuts,
   supportsPlatformSystemNotifications,
   supportsPlatformTrayState,
 } from '../../platform';
 import { detectAgentApprovalPrompt } from '../../utils/agentApprovals';
 import { resolveMatrixThumbnailUrl } from '../../matrix/media';
+import { buildDesktopNotificationRoomRoute } from '../../utils/desktop';
 
 const RECENT_AGENT_APPROVAL_MS = 10 * 60 * 1000;
 
@@ -92,6 +95,20 @@ function FaviconUpdater() {
       setFavicon(LogoPNG);
     }
   }, [roomToUnread]);
+
+  return null;
+}
+
+function TrayDoNotDisturbSync() {
+  const [, setShowNotifications] = useSetting(settingsAtom, 'showNotifications');
+
+  useEffect(() => {
+    if (!supportsPlatformTrayState()) return undefined;
+
+    return subscribePlatformTrayDndToggle(() => {
+      setShowNotifications((current) => !current);
+    });
+  }, [setShowNotifications]);
 
   return null;
 }
@@ -222,6 +239,7 @@ function MessageNotifications() {
         showPlatformNotification({
           title: roomName,
           body: `New inbox notification from ${username}`,
+          route: buildDesktopNotificationRoomRoute(roomId, eventId),
         }).catch(() => undefined);
         return;
       }
@@ -359,7 +377,7 @@ function AgentApprovalNotifications() {
         showPlatformNotification({
           title,
           body: `${roomName}: ${notificationBody}`,
-          route: `/home/${encodeURIComponent(roomId)}/${encodeURIComponent(eventId)}/`,
+          route: buildDesktopNotificationRoomRoute(roomId, eventId),
         }).catch(() => undefined);
         return;
       }
@@ -479,6 +497,7 @@ function LaterReminderNotifications() {
         showPlatformNotification({
           title: 'Reminder',
           body,
+          route: buildDesktopNotificationRoomRoute(roomId, eventId),
         }).catch(() => undefined);
         return;
       }
@@ -541,6 +560,28 @@ function LaterReminderNotifications() {
   return null;
 }
 
+function PlatformAgentActionListener() {
+  useEffect(() => {
+    let disposed = false;
+    let unlisten: (() => void | Promise<void>) | undefined;
+
+    void registerPlatformAgentActionListener().then((cleanup) => {
+      if (disposed) {
+        void cleanup?.();
+        return;
+      }
+      unlisten = cleanup;
+    });
+
+    return () => {
+      disposed = true;
+      void unlisten?.();
+    };
+  }, []);
+
+  return null;
+}
+
 function DesktopShortcutSync() {
   const [showShortcut] = useSetting(desktopPlatformSettingsAtom, 'desktopShortcutShow');
   const [laterShortcut] = useSetting(desktopPlatformSettingsAtom, 'desktopShortcutLater');
@@ -584,8 +625,10 @@ export function ClientNonUIFeatures({ children }: ClientNonUIFeaturesProps) {
       <SystemEmojiFeature />
       <PageZoomFeature />
       <FaviconUpdater />
+      <TrayDoNotDisturbSync />
       <PlatformBadgeAndTrayUpdater />
       <DesktopShortcutSync />
+      <PlatformAgentActionListener />
       <InviteNotifications />
       <AgentApprovalNotifications />
       <MessageNotifications />

@@ -3795,6 +3795,8 @@ name = "synara"
 version = "1.2.3"
 dependencies = [
  "keyring",
+ "mac-notification-sys",
+ "notify-rust",
  "serde",
  "serde_json",
  "tauri",
