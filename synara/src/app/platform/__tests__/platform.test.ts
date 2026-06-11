@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  applyDesktopSecretStoreCapability,
   getPlatformCapabilities,
   getPlatformIntegrationStatus,
   getPlatformSecretStoreBackendLabel,
@@ -203,6 +204,27 @@ test('platform diagnostics reads desktop integration status when supported', asy
   }
 });
 
+test('platform bridge defaults to secure secret store disabled before runtime sync', () => {
+  const originalWindow = globalThis.window;
+  (globalThis as any).window = {
+    __SYNARA_DESKTOP__: {
+      platform: 'tauri',
+    },
+  };
+
+  try {
+    assert.equal(getPlatformCapabilities().supportsSecureSecretStore, false);
+    assert.deepEqual(getPlatformSecretStoreStatus(), {
+      available: false,
+      backend: 'none',
+      canPersistSession: false,
+      reason: 'secure-secret-store-not-configured',
+    });
+  } finally {
+    (globalThis as any).window = originalWindow;
+  }
+});
+
 test('platform capabilities expose secure secret store only when bridge opts in', () => {
   const originalWindow = globalThis.window;
   (globalThis as any).window = {
@@ -266,13 +288,12 @@ test('platform secret-store helpers describe persistence behavior', () => {
   );
 });
 
-test('platform session store reads desktop secret-store status command', async () => {
+test('platform session store probes desktop secret-store status without bridge opt-in', async () => {
   const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
   const originalWindow = globalThis.window;
   (globalThis as any).window = {
     __SYNARA_DESKTOP__: {
       platform: 'tauri',
-      supportsSecureSecretStore: true,
       invoke: async (command: string, args?: Record<string, unknown>) => {
         calls.push({ command, args });
         return {
@@ -293,6 +314,34 @@ test('platform session store reads desktop secret-store status command', async (
       reason: 'secure-secret-store-not-configured',
     });
     assert.deepEqual(calls, [{ command: 'desktop_secret_store_status', args: undefined }]);
+    assert.equal(getPlatformCapabilities().supportsSecureSecretStore, false);
+  } finally {
+    (globalThis as any).window = originalWindow;
+  }
+});
+
+test('platform secret-store capability sync advertises persistence only when probed', () => {
+  const originalWindow = globalThis.window;
+  (globalThis as any).window = {
+    __SYNARA_DESKTOP__: {
+      platform: 'tauri',
+    },
+  };
+
+  try {
+    applyDesktopSecretStoreCapability({
+      available: true,
+      backend: 'macos-keychain',
+      canPersistSession: true,
+    });
+    assert.equal(getPlatformCapabilities().supportsSecureSecretStore, true);
+
+    applyDesktopSecretStoreCapability({
+      available: true,
+      backend: 'linux-keyutils',
+      canPersistSession: false,
+    });
+    assert.equal(getPlatformCapabilities().supportsSecureSecretStore, false);
   } finally {
     (globalThis as any).window = originalWindow;
   }
