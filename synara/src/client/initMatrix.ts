@@ -310,7 +310,8 @@ export const clearLoginData = async (
 const canScheduleProactiveTokenRefresh = (session: MatrixClientSession): boolean =>
   Boolean(session.refreshToken) &&
   typeof session.expiresInMs === 'number' &&
-  typeof session.storedAtMs === 'number';
+  typeof session.storedAtMs === 'number' &&
+  session.expiresInMs >= REFRESH_BEFORE_EXPIRY_MS;
 
 export const scheduleProactiveTokenRefresh = (
   mx: MatrixClient,
