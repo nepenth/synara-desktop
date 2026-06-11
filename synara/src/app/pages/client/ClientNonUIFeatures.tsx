@@ -358,6 +358,7 @@ function AgentApprovalNotifications() {
 
   const mx = useMatrixClient();
   const { navigateRoom } = useRoomNavigate();
+  const [showNotifications] = useSetting(settingsAtom, 'showNotifications');
 
   const notify = useCallback(
     ({
@@ -419,7 +420,10 @@ function AgentApprovalNotifications() {
 
       notifiedEventIdsCache.add(eventId);
       const openEventId = getThreadRootEventId(room.findEventById(eventId)) ?? eventId;
-      if (supportsPlatformSystemNotifications() || notificationPermission('granted')) {
+      if (
+        showNotifications &&
+        (supportsPlatformSystemNotifications() || notificationPermission('granted'))
+      ) {
         notify({
           roomId: room.roomId,
           eventId: openEventId,
@@ -430,9 +434,11 @@ function AgentApprovalNotifications() {
         });
       }
 
-      playSound();
+      if (showNotifications) {
+        playSound();
+      }
     },
-    [mx, notify, playSound]
+    [mx, notify, playSound, showNotifications]
   );
 
   useEffect(() => {
