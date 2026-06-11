@@ -1273,8 +1273,8 @@ For each MIP1-NN commit:
 | 28 Clear secret keys | MIP1-16 | D | Planned | — |
 | 30 Account switch safety | MIP1-17 | D | Planned | — |
 | 8 Incremental timeline | MIP1-18 | E | Done | mip1-18 |
-| 9 Stream file IPC | MIP1-19 | E | Planned | — |
-| 10 Drop allowlist lifecycle | MIP1-20 | E | Planned | — |
+| 9 Stream file IPC | MIP1-19 | E | Done | mip1-19 |
+| 10 Drop allowlist lifecycle | MIP1-20 | E | Done | mip1-20 |
 | 20 Throttle tray rebuild | MIP1-21 | E | Planned | — |
 | 41 Bound notification caches | MIP1-22 | E | Planned | — |
 | 42 Focus timeout cleanup | MIP1-23 | E | Planned | — |

@@ -131,10 +131,22 @@ export type DesktopNativeFileDropPayload = {
   y: number;
 };
 
+export const DESKTOP_FILE_IPC_INLINE_THRESHOLD = 8 * 1024 * 1024;
+export const DESKTOP_FILE_IPC_CHUNK_SIZE = 1024 * 1024;
+
 type DesktopDroppedFilePayload = {
   name: string;
-  bytes: number[];
+  bytes?: number[];
+  transferId?: string;
+  size?: number;
 };
+
+type DesktopSaveFileBeginResult = {
+  sessionId: string;
+};
+
+export const shouldStreamDesktopFileIpc = (byteLength: number): boolean =>
+  byteLength > DESKTOP_FILE_IPC_INLINE_THRESHOLD;
 
 declare global {
   interface Window {
@@ -379,12 +391,10 @@ export const openDesktopExternalUrl = async (url: string): Promise<boolean> => {
   return result === true;
 };
 
-export const saveDesktopFile = async (
+const saveDesktopFileInline = async (
   blob: Blob,
-  filename: string
+  safeFilename: string
 ): Promise<string | undefined> => {
-  if (!isSynaraDesktop()) return undefined;
-  const safeFilename = normalizeActionField(filename || 'download', 240) || 'download';
   const bytes = Array.from(new Uint8Array(await blob.arrayBuffer()));
   if (bytes.length === 0) return undefined;
 
@@ -396,10 +406,89 @@ export const saveDesktopFile = async (
   });
 };
 
+const saveDesktopFileStreamed = async (
+  blob: Blob,
+  safeFilename: string
+): Promise<string | undefined> => {
+  const totalSize = blob.size;
+  const begin = await invokeDesktop<DesktopSaveFileBeginResult>('desktop_save_file_begin', {
+    filename: safeFilename,
+    totalSize,
+  });
+  if (!begin?.sessionId) return undefined;
+
+  let offset = 0;
+  try {
+    while (offset < totalSize) {
+      const chunkEnd = Math.min(offset + DESKTOP_FILE_IPC_CHUNK_SIZE, totalSize);
+      const chunk = blob.slice(offset, chunkEnd);
+      const bytes = Array.from(new Uint8Array(await chunk.arrayBuffer()));
+      const accepted = await invokeDesktop<boolean>('desktop_save_file_chunk', {
+        sessionId: begin.sessionId,
+        offset,
+        bytes,
+      });
+      if (accepted !== true) {
+        throw new Error('Desktop save chunk was rejected');
+      }
+      offset = chunkEnd;
+    }
+
+    return invokeDesktop<string>('desktop_save_file_end', {
+      sessionId: begin.sessionId,
+    });
+  } catch {
+    await invokeDesktop('desktop_save_file_abort', { sessionId: begin.sessionId });
+    return undefined;
+  }
+};
+
+export const saveDesktopFile = async (
+  blob: Blob,
+  filename: string
+): Promise<string | undefined> => {
+  if (!isSynaraDesktop()) return undefined;
+  const safeFilename = normalizeActionField(filename || 'download', 240) || 'download';
+  if (blob.size === 0) return undefined;
+
+  if (shouldStreamDesktopFileIpc(blob.size)) {
+    return saveDesktopFileStreamed(blob, safeFilename);
+  }
+
+  return saveDesktopFileInline(blob, safeFilename);
+};
+
 const inferFileMime = (filename: string): string => {
   const extension = filename.split('.').pop()?.toLowerCase();
   if (!extension) return '';
   return FILE_MIME_BY_EXTENSION[extension] ?? '';
+};
+
+const readDesktopDroppedFileStreamed = async (
+  file: DesktopDroppedFilePayload
+): Promise<File | undefined> => {
+  const transferId = file.transferId;
+  const size = file.size;
+  if (!transferId || typeof size !== 'number' || size <= 0) return undefined;
+
+  const chunks: BlobPart[] = [];
+  let offset = 0;
+  while (offset < size) {
+    const length = Math.min(DESKTOP_FILE_IPC_CHUNK_SIZE, size - offset);
+    const chunk = await invokeDesktop<number[]>('desktop_read_dropped_file_chunk', {
+      transferId,
+      offset,
+      length,
+    });
+    if (!chunk || chunk.length === 0) break;
+    chunks.push(new Uint8Array(chunk));
+    offset += chunk.length;
+  }
+
+  await invokeDesktop('desktop_read_dropped_file_end', { transferId });
+  return new File(chunks, file.name, {
+    type: inferFileMime(file.name),
+  });
 };
 
 export const readDesktopDroppedFiles = async (paths: string[]): Promise<File[]> => {
@@ -410,12 +499,24 @@ export const readDesktopDroppedFiles = async (paths: string[]): Promise<File[]> 
   );
   if (!droppedFiles) return [];
 
-  return droppedFiles.map(
-    (file) =>
-      new File([new Uint8Array(file.bytes)], file.name, {
-        type: inferFileMime(file.name),
-      })
-  );
+  const files: File[] = [];
+  for (const file of droppedFiles) {
+    if (Array.isArray(file.bytes) && file.bytes.length > 0) {
+      files.push(
+        new File([new Uint8Array(file.bytes)], file.name, {
+          type: inferFileMime(file.name),
+        })
+      );
+      continue;
+    }
+
+    const streamed = await readDesktopDroppedFileStreamed(file);
+    if (streamed) {
+      files.push(streamed);
+    }
+  }
+
+  return files;
 };
 
 export const setDesktopShortcuts = async (

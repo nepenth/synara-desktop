@@ -134,7 +134,13 @@ pub fn run() {
             desktop::desktop_notify,
             desktop::desktop_open_external_url,
             desktop::desktop_save_file,
+            desktop::desktop_save_file_begin,
+            desktop::desktop_save_file_chunk,
+            desktop::desktop_save_file_end,
+            desktop::desktop_save_file_abort,
             desktop::desktop_read_dropped_files,
+            desktop::desktop_read_dropped_file_chunk,
+            desktop::desktop_read_dropped_file_end,
             desktop::desktop_get_performance_capabilities,
             desktop::desktop_agent_action
         ])
@@ -149,6 +155,7 @@ pub fn run() {
                     let _ = window.hide();
                 }
                 WindowEvent::DragDrop(DragDropEvent::Enter { paths, position }) => {
+                    desktop::reset_drag_drop_session();
                     emit_native_file_drop(
                         window,
                         NativeFileDropPayload {
@@ -183,6 +190,7 @@ pub fn run() {
                     );
                 }
                 WindowEvent::DragDrop(DragDropEvent::Leave) => {
+                    desktop::clear_dropped_file_allowlist_on_drag_leave();
                     emit_native_file_drop(
                         window,
                         NativeFileDropPayload {
