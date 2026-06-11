@@ -62,11 +62,22 @@ import { gifPickerEnabled } from '../../../utils/gifProvider';
 import { DEFAULT_ACCENT_COLOR, normalizeAccentColor } from '../../../utils/themeAccent';
 import {
   getPlatformIntegrationStatus,
+  buildShortcutFailureMessage,
+  getPlatformSecretStoreSessionPersistence,
+  getPlatformSecretStoreStatusDescription,
+  getPlatformSecretStoreStatusLabel,
+  isDesktopPlatform,
+  platformSessionStore,
   setPlatformShortcuts,
   supportsPlatformGlobalShortcuts,
   type PlatformIntegrationStatus,
-  type PlatformShortcutApplyResult,
+  type PlatformSecretStoreStatus,
 } from '../../../platform';
+import {
+  getNativeStoreErrorWarningMessage,
+  getSessionBootstrapResult,
+  shouldSurfaceNativeStoreErrorWarning,
+} from '../../../state/sessionBootstrap';
 
 type ThemeSelectorProps = {
   themeNames: Record<string, string>;
@@ -786,10 +797,6 @@ const DEFAULT_INTEGRATION_STATUS: PlatformIntegrationStatus = {
   },
 };
 
-const BASELINE_SHORTCUT_HELP = 'Check the session permissions for global shortcuts and try again.';
-const KDE_WAYLAND_SHORTCUT_HELP =
-  'On KDE Plasma Wayland, global shortcut capture can require manual registration in System Settings > Shortcuts.';
-
 function formatSessionLabel(status: PlatformIntegrationStatus): string {
   const desktopEnvironment = status.desktopEnvironment.toLowerCase();
   const sessionType = status.sessionType.toLowerCase();
@@ -845,26 +852,6 @@ function buildDiagnosticsPayload(status: PlatformIntegrationStatus): string {
     undefined,
     2
   );
-}
-
-function isKdeWaylandStatus(status: PlatformIntegrationStatus): boolean {
-  return (
-    status.desktopEnvironment.toLowerCase().includes('kde') &&
-    status.sessionType.toLowerCase().includes('wayland')
-  );
-}
-
-function buildShortcutFailureMessage(
-  result: PlatformShortcutApplyResult,
-  status: PlatformIntegrationStatus
-): string {
-  const helper =
-    isKdeWaylandStatus(status) || result.state === 'permission-needed'
-      ? KDE_WAYLAND_SHORTCUT_HELP
-      : BASELINE_SHORTCUT_HELP;
-  return [result.message, result.fallbackCommand, helper]
-    .filter((value): value is string => typeof value === 'string' && value.length > 0)
-    .join(' ');
 }
 
 function DesktopShortcutsSection() {
@@ -1041,6 +1028,73 @@ function DesktopShortcutsSection() {
         </Button>
       </Box>
     </SequenceCard>
+  );
+}
+
+function SecretStoreSection() {
+  const { t } = useTranslation();
+  const [status, setStatus] = useState<PlatformSecretStoreStatus>();
+  const [nativeStoreError, setNativeStoreError] = useState(
+    () => getSessionBootstrapResult().nativeStoreError
+  );
+
+  useEffect(() => {
+    let active = true;
+
+    platformSessionStore.getStatus().then((nextStatus) => {
+      if (!active) return;
+      setStatus(nextStatus);
+      setNativeStoreError(getSessionBootstrapResult().nativeStoreError);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  if (!isDesktopPlatform()) return null;
+
+  const persistence = status ? getPlatformSecretStoreSessionPersistence(status) : undefined;
+  const badgeVariant =
+    persistence === 'persistent'
+      ? 'Success'
+      : persistence === 'session-scoped'
+      ? 'Warning'
+      : status
+      ? 'Critical'
+      : 'Secondary';
+  const statusLabel = status ? getPlatformSecretStoreStatusLabel(status) : 'Checking';
+  const details = status ? getPlatformSecretStoreStatusDescription(status) : statusLabel;
+  const showNativeStoreErrorWarning = shouldSurfaceNativeStoreErrorWarning(nativeStoreError, true);
+  const nativeStoreErrorWarning = showNativeStoreErrorWarning
+    ? t(
+        'modernization.settings.secret_store.native_store_error',
+        getNativeStoreErrorWarningMessage()
+      )
+    : undefined;
+
+  return (
+    <Box direction="Column" gap="100">
+      <Text size="L400">{t('modernization.settings.secret_store.title', 'Session Storage')}</Text>
+      <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
+        <SettingTile
+          title={t('modernization.settings.secret_store.status_title', 'Native Session Store')}
+          description={details}
+          after={
+            <Chip variant={badgeVariant} radii="Pill" outlined>
+              <Text size="B300">{statusLabel}</Text>
+            </Chip>
+          }
+        />
+        {nativeStoreErrorWarning && (
+          <Box style={{ padding: 12, paddingTop: 0 }}>
+            <Text size="T200" priority="500">
+              {nativeStoreErrorWarning}
+            </Text>
+          </Box>
+        )}
+      </SequenceCard>
+    </Box>
   );
 }
 
@@ -1478,6 +1532,7 @@ export function General({ requestClose }: GeneralProps) {
               <DateAndTime />
               <Editor />
               <Messages />
+              <SecretStoreSection />
               <DesktopShortcutsSection />
               <DesktopIntegrationSection />
             </Box>

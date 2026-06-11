@@ -12,6 +12,7 @@ import {
 import { getHomePath } from '../../pathUtils';
 import { platformSessionStore } from '../../../platform';
 import { persistAuthenticatedSession } from '../../../state/sessionPersistence';
+import { pushSessionToSW } from '../../../../sw-session';
 
 export enum GetBaseUrlError {
   NotAllow = 'NotAllow',
@@ -109,6 +110,38 @@ export const login = async (
   };
 };
 
+export type CompleteAuthenticatedLoginDeps = {
+  persistAuthenticatedSession: typeof persistAuthenticatedSession;
+  pushSessionToSW: typeof pushSessionToSW;
+  nativeSessionStore: typeof platformSessionStore;
+};
+
+export const completeAuthenticatedLogin = async (
+  data: CustomLoginResponse,
+  {
+    persistAuthenticatedSession: persistSession,
+    pushSessionToSW: pushSession,
+    nativeSessionStore,
+  }: CompleteAuthenticatedLoginDeps = {
+    persistAuthenticatedSession,
+    pushSessionToSW,
+    nativeSessionStore: platformSessionStore,
+  }
+) => {
+  const { response: loginRes, baseUrl: loginBaseUrl } = data;
+  const session = {
+    accessToken: loginRes.access_token,
+    deviceId: loginRes.device_id,
+    userId: loginRes.user_id,
+    baseUrl: loginBaseUrl,
+    ...(loginRes.refresh_token ? { refreshToken: loginRes.refresh_token } : {}),
+    ...(typeof loginRes.expires_in_ms === 'number' ? { expiresInMs: loginRes.expires_in_ms } : {}),
+  };
+
+  await persistSession(session, { nativeSessionStore });
+  pushSession(loginBaseUrl, loginRes.access_token);
+};
+
 export const useLoginComplete = (data?: CustomLoginResponse) => {
   const navigate = useNavigate();
 
@@ -117,16 +150,7 @@ export const useLoginComplete = (data?: CustomLoginResponse) => {
 
     let active = true;
     const persistAndNavigate = async () => {
-      const { response: loginRes, baseUrl: loginBaseUrl } = data;
-      await persistAuthenticatedSession(
-        {
-          accessToken: loginRes.access_token,
-          deviceId: loginRes.device_id,
-          userId: loginRes.user_id,
-          baseUrl: loginBaseUrl,
-        },
-        { nativeSessionStore: platformSessionStore }
-      );
+      await completeAuthenticatedLogin(data);
       if (!active) return;
       const afterLoginRedirectUrl = getAfterLoginRedirectPath();
       deleteAfterLoginRedirectPath();

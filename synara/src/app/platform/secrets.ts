@@ -18,6 +18,20 @@ export type PlatformSecretStoreStatus = {
 
 export type PlatformSecretStoreSessionPersistence = 'persistent' | 'session-scoped' | 'fallback';
 
+export const DESKTOP_SECRET_STORE_OPERATION_ERRORS = [
+  'desktop-secret-store-locked',
+  'desktop-secret-store-unavailable',
+  'desktop-secret-store-denied',
+] as const;
+
+export type DesktopSecretStoreOperationError = typeof DESKTOP_SECRET_STORE_OPERATION_ERRORS[number];
+
+export const isDesktopSecretStoreOperationError = (
+  value: unknown
+): value is DesktopSecretStoreOperationError =>
+  typeof value === 'string' &&
+  (DESKTOP_SECRET_STORE_OPERATION_ERRORS as readonly string[]).includes(value);
+
 const PLATFORM_SECRET_STORE_BACKENDS = new Set<PlatformSecretStoreBackend>([
   'none',
   'desktop-native',
@@ -74,10 +88,24 @@ export const getPlatformSecretStoreStatus = (): PlatformSecretStoreStatus => {
   }
 
   if (capabilities.channel === 'desktop-tauri') {
+    if (!capabilities.supportsSecureSecretStore) {
+      return {
+        available: false,
+        backend: 'none',
+        canPersistSession: false,
+        reason: 'secure-secret-store-not-configured',
+      };
+    }
+
     return { available: true, backend: 'desktop-native', canPersistSession: true };
   }
 
-  return { available: true, backend: 'unknown', canPersistSession: true };
+  return {
+    available: false,
+    backend: 'none',
+    canPersistSession: false,
+    reason: 'secure-secret-store-not-configured',
+  };
 };
 
 export const getPlatformSecretStoreBackendLabel = (backend: PlatformSecretStoreBackend): string => {
@@ -134,6 +162,10 @@ export const getPlatformSecretStoreStatusDescription = (
 
   if (status.reason === 'secure-secret-store-unavailable') {
     return `${backendLabel} is unavailable.`;
+  }
+
+  if (status.reason === 'windows-native-session-store-unsupported') {
+    return 'Windows builds do not persist sessions to a native credential store.';
   }
 
   return 'Synara is using the fallback session store.';

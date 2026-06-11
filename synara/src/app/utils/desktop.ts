@@ -1,4 +1,7 @@
 import { getBadgeCount } from '../notifications/badgeSummary';
+import { recordDesktopDiagnostic } from './desktopDiagnostics';
+import { isSafeHttpsUrl } from './remoteContent';
+import { getHomeRoomPath } from '../pages/pathUtils';
 import {
   normalizeAgentActionPayload,
   type AgentActionPayload,
@@ -7,6 +10,11 @@ import {
 
 type TauriInternals = {
   invoke?: <T = unknown>(command: string, args?: Record<string, unknown>) => Promise<T>;
+  transformCallback?: <T>(callback: (response: T) => void, once?: boolean) => number;
+};
+
+type TauriEventPluginInternals = {
+  unregisterListener?: (event: string, eventId: number) => void;
 };
 
 type SynaraDesktopBridge = {
@@ -79,7 +87,12 @@ export type DesktopIntegrationStatus = {
   mediaPortal: DesktopIntegrationCheck;
 };
 
-export type DesktopShortcutApplyState = 'active' | 'permission-needed' | 'unsupported' | 'failed';
+export type DesktopShortcutApplyState =
+  | 'active'
+  | 'permission-needed'
+  | 'unsupported'
+  | 'unknown'
+  | 'failed';
 
 export type DesktopShortcutApplyResult = {
   success: boolean;
@@ -94,6 +107,103 @@ export type DesktopTrayState = {
   laterCount: number;
   notificationInboxCount: number;
   doNotDisturb: boolean;
+};
+
+export const DESKTOP_TRAY_STATE_DEBOUNCE_MS = 500;
+
+export type DesktopTrayStateUpdater = (state: DesktopTrayState) => Promise<boolean>;
+
+export type DebouncedDesktopTrayStateUpdater = DesktopTrayStateUpdater & {
+  flush: () => Promise<boolean | undefined>;
+  cancel: () => void;
+};
+
+type DesktopTrayStateDebounceScheduler = {
+  schedule: (callback: () => void, delayMs: number) => number;
+  cancel: (handle: number) => void;
+};
+
+const scheduleTimeout = (callback: () => void, delayMs: number): number => {
+  if (typeof window !== 'undefined' && typeof window.setTimeout === 'function') {
+    return window.setTimeout(callback, delayMs);
+  }
+  return setTimeout(callback, delayMs) as unknown as number;
+};
+
+const cancelTimeout = (handle: number): void => {
+  if (typeof window !== 'undefined' && typeof window.clearTimeout === 'function') {
+    window.clearTimeout(handle);
+    return;
+  }
+  clearTimeout(handle);
+};
+
+const defaultTrayStateDebounceScheduler: DesktopTrayStateDebounceScheduler = {
+  schedule: scheduleTimeout,
+  cancel: cancelTimeout,
+};
+
+export const createDebouncedTrayStateUpdater = (
+  updater: DesktopTrayStateUpdater,
+  waitMs = DESKTOP_TRAY_STATE_DEBOUNCE_MS,
+  scheduler: DesktopTrayStateDebounceScheduler = defaultTrayStateDebounceScheduler
+): DebouncedDesktopTrayStateUpdater => {
+  let timeoutId: number | undefined;
+  let pendingState: DesktopTrayState | undefined;
+  let flushResolvers: Array<(result: boolean | undefined) => void> = [];
+
+  const settleFlushWaiters = (result: boolean | undefined) => {
+    const resolvers = flushResolvers;
+    flushResolvers = [];
+    resolvers.forEach((resolve) => resolve(result));
+  };
+
+  const invokePendingState = async (): Promise<boolean | undefined> => {
+    timeoutId = undefined;
+    const stateToSend = pendingState;
+    pendingState = undefined;
+    if (!stateToSend) {
+      settleFlushWaiters(undefined);
+      return undefined;
+    }
+
+    const result = await updater(stateToSend);
+    settleFlushWaiters(result);
+    return result;
+  };
+
+  const debounced: DebouncedDesktopTrayStateUpdater = async (state) => {
+    pendingState = state;
+    if (timeoutId !== undefined) {
+      scheduler.cancel(timeoutId);
+    }
+
+    return new Promise<boolean>((resolve) => {
+      flushResolvers.push((result) => resolve(result === true));
+      timeoutId = scheduler.schedule(() => {
+        void invokePendingState();
+      }, waitMs);
+    });
+  };
+
+  debounced.flush = async () => {
+    if (timeoutId !== undefined) {
+      scheduler.cancel(timeoutId);
+      timeoutId = undefined;
+    }
+    return invokePendingState();
+  };
+
+  debounced.cancel = () => {
+    if (timeoutId !== undefined) {
+      scheduler.cancel(timeoutId);
+      timeoutId = undefined;
+    }
+    pendingState = undefined;
+    settleFlushWaiters(undefined);
+  };
+
+  return debounced;
 };
 
 export type DesktopPerformanceCapabilities = {
@@ -125,19 +235,44 @@ export type DesktopNativeFileDropPayload = {
   y: number;
 };
 
+export const DESKTOP_FILE_IPC_INLINE_THRESHOLD = 8 * 1024 * 1024;
+export const DESKTOP_FILE_IPC_CHUNK_SIZE = 1024 * 1024;
+
 type DesktopDroppedFilePayload = {
   name: string;
-  bytes: number[];
+  bytes?: number[];
+  transferId?: string;
+  size?: number;
 };
+
+type DesktopSaveFileBeginResult = {
+  sessionId: string;
+};
+
+export const shouldStreamDesktopFileIpc = (byteLength: number): boolean =>
+  byteLength > DESKTOP_FILE_IPC_INLINE_THRESHOLD;
 
 declare global {
   interface Window {
     __SYNARA_DESKTOP__?: SynaraDesktopBridge;
     __TAURI_INTERNALS__?: TauriInternals;
+    __TAURI_EVENT_PLUGIN_INTERNALS__?: TauriEventPluginInternals;
   }
 }
 
 export type DesktopAgentActionPayload = AgentActionPayload;
+
+export type DesktopAgentActionEventPayload = {
+  action: DesktopAgentActionPayload;
+};
+
+export type DesktopEvent<T> = {
+  event: string;
+  id: number;
+  payload: T;
+};
+
+export type DesktopUnlisten = () => void | Promise<void>;
 
 const normalizeActionField = (
   value: unknown,
@@ -150,6 +285,12 @@ const normalizeActionField = (
 
 const getBridge = (): SynaraDesktopBridge | undefined => window.__SYNARA_DESKTOP__;
 
+const getDesktopInvoke = ():
+  | (<T = unknown>(command: string, args?: Record<string, unknown>) => Promise<T>)
+  | undefined => window.__SYNARA_DESKTOP__?.invoke ?? window.__TAURI_INTERNALS__?.invoke;
+
+export const isDesktopBridgeAvailable = (): boolean => typeof getDesktopInvoke() === 'function';
+
 const normalizeValue = (value: unknown): string => {
   if (typeof value !== 'string') return '';
   return value.trim();
@@ -160,17 +301,21 @@ const clampCount = (value: unknown): number => {
   return Math.max(0, Math.floor(value));
 };
 
-const sanitizeRoute = (value: unknown): string | undefined => {
+export const sanitizeDesktopNotificationRoute = (value: unknown): string | undefined => {
   const normalized = normalizeActionField(value, MAX_DESKTOP_ROUTE_LENGTH);
   if (!normalized || normalized.includes('://')) return undefined;
   if (!normalized.startsWith('/') && !normalized.startsWith('#')) return undefined;
   return normalized;
 };
 
+export const buildDesktopNotificationRoomRoute = (roomId: string, eventId?: string): string =>
+  getHomeRoomPath(roomId, eventId);
+
 const toShortcutApplyState = (value: unknown): DesktopShortcutApplyState | undefined => {
   if (value === 'active') return 'active';
   if (value === 'permission-needed') return 'permission-needed';
   if (value === 'unsupported') return 'unsupported';
+  if (value === 'unknown') return 'unknown';
   if (value === 'failed') return 'failed';
   return undefined;
 };
@@ -304,13 +449,59 @@ export const isSynaraDesktop = (): boolean =>
   window.__SYNARA_DESKTOP__?.platform === 'tauri' ||
   typeof window.__TAURI_INTERNALS__?.invoke === 'function';
 
+export type DesktopInvokeResult<T> =
+  | { available: false }
+  | { available: true; value: T | undefined };
+
+export const invokeDesktopWithAvailability = async <T = unknown>(
+  command: string,
+  args?: Record<string, unknown>
+): Promise<DesktopInvokeResult<T>> => {
+  const invoke = getDesktopInvoke();
+  if (!invoke) {
+    return { available: false };
+  }
+
+  try {
+    return { available: true, value: await invoke<T>(command, args) };
+  } catch (error) {
+    recordDesktopDiagnostic(
+      `${command} failed: ${error instanceof Error ? error.message : 'unknown error'}`
+    );
+    throw error;
+  }
+};
+
 export const invokeDesktop = async <T = unknown>(
   command: string,
   args?: Record<string, unknown>
 ): Promise<T | undefined> => {
-  const invoke = window.__SYNARA_DESKTOP__?.invoke ?? window.__TAURI_INTERNALS__?.invoke;
-  if (!invoke) return undefined;
-  return invoke<T>(command, args);
+  const result = await invokeDesktopWithAvailability<T>(command, args);
+  if (!result.available) return undefined;
+  return result.value;
+};
+
+const recordDesktopInvokeFailure = (command: string, detail: string): void => {
+  recordDesktopDiagnostic(`${command} ${detail}`);
+};
+
+export const listen = async <T>(
+  event: string,
+  handler: (event: DesktopEvent<T>) => void
+): Promise<DesktopUnlisten | undefined> => {
+  const internals = window.__TAURI_INTERNALS__;
+  if (!internals?.invoke || !internals.transformCallback) return undefined;
+
+  const eventId = await internals.invoke<number>('plugin:event|listen', {
+    event,
+    target: { kind: 'Any' },
+    handler: internals.transformCallback(handler),
+  });
+
+  return async () => {
+    window.__TAURI_EVENT_PLUGIN_INTERNALS__?.unregisterListener?.(event, eventId);
+    await internals.invoke?.('plugin:event|unlisten', { event, eventId });
+  };
 };
 
 export const setDesktopBadgeCount = async (count: number): Promise<void> => {
@@ -329,19 +520,44 @@ export const sendDesktopAgentAction = async (
   return result === true;
 };
 
+const isSafeDesktopExternalUrl = (url: string): boolean => {
+  if (isSafeHttpsUrl(url)) return true;
+
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol === 'http:') {
+      const host = parsed.hostname.toLowerCase();
+      return host === 'localhost' || host === '127.0.0.1' || host === '::1';
+    }
+    if (parsed.protocol === 'mailto:') {
+      const address = parsed.pathname.trim();
+      return address.length > 0 && address.includes('@');
+    }
+    if (parsed.protocol === 'matrix:') {
+      return parsed.hostname.length > 0 || parsed.pathname.replace(/^\//, '').length > 0;
+    }
+  } catch {
+    return false;
+  }
+
+  return false;
+};
+
 export const openDesktopExternalUrl = async (url: string): Promise<boolean> => {
   const normalizedUrl = normalizeActionField(url, MAX_DESKTOP_ACTION_URL_LENGTH);
-  if (!normalizedUrl || !isSynaraDesktop()) return false;
+  if (!normalizedUrl || !isSynaraDesktop() || !isSafeDesktopExternalUrl(normalizedUrl)) {
+    return false;
+  }
   const result = await invokeDesktop<boolean>('desktop_open_external_url', { url: normalizedUrl });
   return result === true;
 };
 
-export const saveDesktopFile = async (
+// Tauri IPC currently serializes byte payloads as number[]; chunked transfers avoid
+// a single giant buffer but still allocate per chunk in the renderer.
+const saveDesktopFileInline = async (
   blob: Blob,
-  filename: string
+  safeFilename: string
 ): Promise<string | undefined> => {
-  if (!isSynaraDesktop()) return undefined;
-  const safeFilename = normalizeActionField(filename || 'download', 240) || 'download';
   const bytes = Array.from(new Uint8Array(await blob.arrayBuffer()));
   if (bytes.length === 0) return undefined;
 
@@ -353,10 +569,97 @@ export const saveDesktopFile = async (
   });
 };
 
+const saveDesktopFileStreamed = async (
+  blob: Blob,
+  safeFilename: string
+): Promise<string | undefined> => {
+  const totalSize = blob.size;
+  const begin = await invokeDesktop<DesktopSaveFileBeginResult>('desktop_save_file_begin', {
+    filename: safeFilename,
+    totalSize,
+  });
+  if (!begin?.sessionId) return undefined;
+
+  let offset = 0;
+  try {
+    while (offset < totalSize) {
+      const chunkEnd = Math.min(offset + DESKTOP_FILE_IPC_CHUNK_SIZE, totalSize);
+      const chunk = blob.slice(offset, chunkEnd);
+      const bytes = Array.from(new Uint8Array(await chunk.arrayBuffer()));
+      const accepted = await invokeDesktop<boolean>('desktop_save_file_chunk', {
+        sessionId: begin.sessionId,
+        offset,
+        bytes,
+      });
+      if (accepted !== true) {
+        throw new Error('Desktop save chunk was rejected');
+      }
+      offset = chunkEnd;
+    }
+
+    return invokeDesktop<string>('desktop_save_file_end', {
+      sessionId: begin.sessionId,
+    });
+  } catch {
+    await invokeDesktop('desktop_save_file_abort', { sessionId: begin.sessionId });
+    return undefined;
+  }
+};
+
+export const saveDesktopFile = async (
+  blob: Blob,
+  filename: string
+): Promise<string | undefined> => {
+  if (!isSynaraDesktop()) return undefined;
+  const safeFilename = normalizeActionField(filename || 'download', 240) || 'download';
+  if (blob.size === 0) return undefined;
+
+  if (shouldStreamDesktopFileIpc(blob.size)) {
+    return saveDesktopFileStreamed(blob, safeFilename);
+  }
+
+  return saveDesktopFileInline(blob, safeFilename);
+};
+
 const inferFileMime = (filename: string): string => {
   const extension = filename.split('.').pop()?.toLowerCase();
   if (!extension) return '';
   return FILE_MIME_BY_EXTENSION[extension] ?? '';
+};
+
+const readDesktopDroppedFileStreamed = async (
+  file: DesktopDroppedFilePayload
+): Promise<File | undefined> => {
+  const transferId = file.transferId;
+  const size = file.size;
+  if (!transferId || typeof size !== 'number' || size <= 0) return undefined;
+
+  const chunks: BlobPart[] = [];
+  let offset = 0;
+  while (offset < size) {
+    const length = Math.min(DESKTOP_FILE_IPC_CHUNK_SIZE, size - offset);
+    const chunk = await invokeDesktop<number[]>('desktop_read_dropped_file_chunk', {
+      transferId,
+      offset,
+      length,
+    });
+    if (!chunk || chunk.length === 0) {
+      await invokeDesktop('desktop_read_dropped_file_end', { transferId });
+      return undefined;
+    }
+    chunks.push(new Uint8Array(chunk));
+    offset += chunk.length;
+  }
+
+  if (offset !== size) {
+    await invokeDesktop('desktop_read_dropped_file_end', { transferId });
+    return undefined;
+  }
+
+  await invokeDesktop('desktop_read_dropped_file_end', { transferId });
+  return new File(chunks, file.name, {
+    type: inferFileMime(file.name),
+  });
 };
 
 export const readDesktopDroppedFiles = async (paths: string[]): Promise<File[]> => {
@@ -367,12 +670,24 @@ export const readDesktopDroppedFiles = async (paths: string[]): Promise<File[]> 
   );
   if (!droppedFiles) return [];
 
-  return droppedFiles.map(
-    (file) =>
-      new File([new Uint8Array(file.bytes)], file.name, {
-        type: inferFileMime(file.name),
-      })
-  );
+  const files: File[] = [];
+  for (const file of droppedFiles) {
+    if (Array.isArray(file.bytes) && file.bytes.length > 0) {
+      files.push(
+        new File([new Uint8Array(file.bytes)], file.name, {
+          type: inferFileMime(file.name),
+        })
+      );
+      continue;
+    }
+
+    const streamed = await readDesktopDroppedFileStreamed(file);
+    if (streamed) {
+      files.push(streamed);
+    }
+  }
+
+  return files;
 };
 
 export const setDesktopShortcuts = async (
@@ -383,18 +698,25 @@ export const setDesktopShortcuts = async (
   }
 
   try {
-    const result = await invokeDesktop<unknown>('desktop_set_shortcuts', { shortcuts });
-    return normalizeDesktopShortcutApplyResult(result);
+    const invokeResult = await invokeDesktopWithAvailability<unknown>('desktop_set_shortcuts', {
+      shortcuts,
+    });
+    if (!invokeResult.available) {
+      return normalizeDesktopShortcutApplyResult(undefined);
+    }
+    const normalized = normalizeDesktopShortcutApplyResult(invokeResult.value);
+    if (!normalized.success) {
+      recordDesktopInvokeFailure('desktop_set_shortcuts', normalized.message);
+    }
+    return normalized;
   } catch {
     return normalizeDesktopShortcutApplyResult(undefined);
   }
 };
 
-export const setDesktopTrayState = async (state: DesktopTrayState): Promise<boolean> => {
-  if (getBridge()?.supportsTrayState !== true) return false;
-
+const invokeDesktopTrayState = async (state: DesktopTrayState): Promise<boolean> => {
   try {
-    const result = await invokeDesktop<unknown>('desktop_update_tray_state', {
+    const invokeResult = await invokeDesktopWithAvailability<unknown>('desktop_update_tray_state', {
       state: {
         unreadCount: clampCount(state.unreadCount),
         highlightCount: clampCount(state.highlightCount),
@@ -403,11 +725,33 @@ export const setDesktopTrayState = async (state: DesktopTrayState): Promise<bool
         doNotDisturb: state.doNotDisturb === true,
       },
     });
-    return result === true || result === undefined || result === null;
+    if (!invokeResult.available) {
+      return false;
+    }
+    if (invokeResult.value === true) {
+      return true;
+    }
+    recordDesktopInvokeFailure(
+      'desktop_update_tray_state',
+      invokeResult.value === false ? 'returned false' : 'returned no result'
+    );
+    return false;
   } catch {
     return false;
   }
 };
+
+const debouncedSetDesktopTrayState = createDebouncedTrayStateUpdater(invokeDesktopTrayState);
+
+export const setDesktopTrayState = async (state: DesktopTrayState): Promise<boolean> => {
+  if (!isDesktopBridgeAvailable() || getBridge()?.supportsTrayState !== true) {
+    return false;
+  }
+  return debouncedSetDesktopTrayState(state);
+};
+
+export const flushPendingDesktopTrayStateUpdate = (): Promise<boolean | undefined> =>
+  debouncedSetDesktopTrayState.flush();
 
 export const getDesktopIntegrationStatus = async (): Promise<DesktopIntegrationStatus> => {
   if (!getBridge()?.supportsIntegrationStatus) {
@@ -461,7 +805,7 @@ export const showDesktopNotification = async (
     notification: {
       title: normalizeValue(notification.title),
       body: notification.body === undefined ? undefined : normalizeValue(notification.body),
-      route: sanitizeRoute(notification.route),
+      route: sanitizeDesktopNotificationRoute(notification.route),
     },
   });
   return result === true;
@@ -471,3 +815,11 @@ export const getDesktopNotificationCount = (
   unreadCounts: Iterable<{ total?: number; highlight?: number }>,
   laterActiveCount: number
 ): number => getBadgeCount(unreadCounts, laterActiveCount);
+
+export const DESKTOP_TRAY_DND_TOGGLE_EVENT = 'synara-tray-dnd-toggle';
+
+export const subscribeDesktopTrayDndToggle = (handler: () => void): (() => void) => {
+  const listener = () => handler();
+  window.addEventListener(DESKTOP_TRAY_DND_TOGGLE_EVENT, listener);
+  return () => window.removeEventListener(DESKTOP_TRAY_DND_TOGGLE_EVENT, listener);
+};

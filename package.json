@@ -7,12 +7,18 @@
     "node": "^20.19.0 || >=22.12.0"
   },
   "scripts": {
+    "build:runtime": "node scripts/build-runtime.mjs",
     "check:matrix-boundaries": "node scripts/check-matrix-boundaries.mjs",
+    "check:mip1-evidence": "node scripts/check-mip1-commit-evidence.mjs --base main",
     "check:repo-layout": "node scripts/check-repository-layout.mjs",
+    "check:runtime-assets": "node scripts/check-runtime-assets.mjs",
     "bump:version": "node scripts/bump-version.mjs",
     "check:versions": "node scripts/check-version-consistency.mjs",
     "pretauri": "node scripts/warn-macos-app-replace.mjs",
-    "tauri": "cp config.json synara/ && tauri"
+    "pretest:modernization": "node scripts/build-runtime.mjs",
+    "tauri": "cp config.json synara/ && tauri",
+    "test:modernization": "npm --prefix synara run test:modernization",
+    "typecheck:modernization": "npm --prefix synara run typecheck:modernization"
   },
   "keywords": [
     "matrix",
@@ -25,9 +31,9 @@
   "author": "Synara contributors",
   "license": "AGPL-3.0-only",
   "dependencies": {
-    "@tauri-apps/api": "2.10.1"
+    "@tauri-apps/api": "2.11.0"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "2.10.1"
+    "@tauri-apps/cli": "2.11.2"
   }
 }

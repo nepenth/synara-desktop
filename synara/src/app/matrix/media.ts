@@ -1,11 +1,6 @@
 import type { EncryptedAttachmentInfo } from 'browser-encrypt-attachment';
 import type { MatrixClient } from 'matrix-js-sdk';
-import {
-  decryptFile,
-  downloadEncryptedMedia,
-  downloadMedia,
-  mxcUrlToHttp,
-} from '../utils/matrix';
+import { decryptFile, downloadEncryptedMedia, downloadMedia, mxcUrlToHttp } from '../utils/matrix';
 
 export type MatrixMediaUrlOptions = {
   useAuthentication?: boolean;

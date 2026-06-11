@@ -6,7 +6,7 @@ version = "1.2.3"
 description = "A modern Matrix client"
 authors = ["Synara contributors"]
 license = "AGPL-3.0-only"
-repository = "https://github.com/operator/synara-desktop"
+repository = "https://github.com/nepenth/synara-desktop"
 default-run = "synara"
 edition = "2021"
 rust-version = "1.77.2"
@@ -22,7 +22,8 @@ keyring = { version = "3.6.3", default-features = false, features = [
   "linux-native-sync-persistent",
   "crypto-rust",
 ] }
-tauri = { version = "2.10", features = [ "devtools", "tray-icon", "image-png"] }
+tauri = { version = "2.11", features = ["tray-icon", "image-png"] }
+getrandom = "0.3"
 tauri-plugin-localhost = "2"
 tauri-plugin-window-state = "2"
 tauri-plugin-clipboard-manager = "2"
@@ -37,12 +38,18 @@ default = [ "custom-protocol" ]
 # this feature is used used for production builds where `devPath` points to the filesystem
 # DO NOT remove this
 custom-protocol = [ "tauri/custom-protocol" ]
+devtools = [ "tauri/devtools" ]
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-global-shortcut = "2"
 
 [target.'cfg(target_os = "linux")'.dependencies]
+notify-rust = "4.17"
 webkit2gtk = "2.0.2"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+mac-notification-sys = "0.6.12"
+security-framework = "3.7"
 
 [lib]
 name = "app_lib"

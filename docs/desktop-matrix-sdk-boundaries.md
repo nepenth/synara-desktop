@@ -170,6 +170,58 @@ Target boundary:
 - Call/widget Matrix access stays quarantined in call plugin code and does not
   leak into general timeline/domain helpers.
 
+## Content-Security-Policy Exceptions
+
+Synara Desktop sets its CSP in `src-tauri/tauri.conf.json`. The baseline is
+`default-src 'self'` with hardening directives (`base-uri 'none'`,
+`object-src 'none'`, `form-action 'none'`). The following sources deviate from
+that baseline and are required for Matrix federation, desktop shell integration,
+or embedded call UI.
+
+| Directive | Exception | Justification |
+| --- | --- | --- |
+| `script-src` | `'wasm-unsafe-eval'` | `matrix-js-sdk` initializes the Rust crypto backend via `initRustCrypto()` in `synara/src/client/initMatrix.ts`. WebAssembly compilation requires this CSP keyword; without it E2EE, verification, and encrypted media fail. |
+| `style-src` | `'unsafe-inline'` | Runtime theme and layout code sets inline styles (`ThemeManager.tsx`, `ClientNonUIFeatures.tsx`, `CallEmbed.ts`). UI libraries also emit inline style attributes. A nonce/hash-only policy would require a large refactor. |
+| `img-src` | `data:` | Inline data-URI avatars, placeholders, and generated thumbnails in the message timeline. |
+| `img-src` | `blob:` | Object URLs created by the media domain (`synara/src/app/matrix/media.ts`) for decrypted attachments and local previews before upload. |
+| `img-src` | `filesystem:` | Legacy Chromium/Tauri file-picker preview URLs for local image selection flows. |
+| `img-src` | `http:` `https:` | Matrix federation media: MXC URLs resolve to arbitrary homeserver and CDN hosts (`/_matrix/media/...`). Users connect to any federated homeserver; host allowlists are not practical. |
+| `font-src` | `data:` | Embedded icon and font data URIs shipped with the bundled frontend assets. |
+| `media-src` | `data:` `blob:` | Local and decrypted audio/video playback via object URLs and inline media previews in the timeline. |
+| `media-src` | `http:` `https:` | Matrix federation media playback (voice messages, video, call recordings) from homeserver media endpoints. |
+| `connect-src` | `blob:` | Fetch/XHR against blob URLs produced by the media and crypto layers (e.g. decrypted attachment buffers). |
+| `connect-src` | `ipc:` `http://ipc.localhost` | Tauri v2 IPC custom protocol for native command invocation (`@tauri-apps/api`). Required for desktop shell features (session persistence, filesystem, notifications). |
+| `connect-src` | `ws:` `wss:` | Matrix sync long-polling fallback and live sync WebSockets to the connected homeserver and federated endpoints. |
+| `connect-src` | `http:` `https:` | Matrix Client-Server API, identity lookups, push gateways, Element Call widget API traffic, and authenticated media fetches via the service worker (`synara/src/sw.ts`). Homeserver host is user-configured and federated. |
+| `worker-src` | `blob:` | Service worker and module-worker bootstrap paths used by the authenticated media fetch worker (`synara/src/sw.ts`) and bundler-generated worker chunks. |
+| `frame-src` | `'self'` | Element Call is embedded from the same-origin bundled path `/public/element-call/index.html` via `CallEmbed.ts`; no remote iframe origins are used. |
+| `frame-src` | `blob:` | Retained for blob-backed iframe/worker fallbacks inside the Element Call embed; same-origin `'self'` covers the primary call surface. |
+
+### Residual risk
+
+`http:` and `https:` wildcards on `img-src`, `media-src`, and `connect-src`
+remain because Matrix clients must reach arbitrary federated homeservers and
+their media CDNs. Tightening these further would break login, sync, media, and
+calls for non-default servers. `frame-src` was narrowed from `http: https:` to
+`'self' blob:` because call embeds load only from the bundled Element Call
+assets (see `synara/src/app/plugins/call/CallEmbed.ts`).
+
+## External URL policy (MIP1 remediation)
+
+Desktop external navigation is enforced in two layers:
+
+- **Rust (authoritative):** `is_safe_external_url` and `is_safe_agent_url` in
+  `src-tauri/src/desktop.rs` reject credentialed URLs, non-loopback HTTP, private
+  IPv4/IPv6 targets, and local host suffixes. `mailto:` and `matrix:` schemes require
+  minimal structure validation.
+- **TypeScript (defense in depth):** `isSafeHttpsUrl` / `safeRemoteContentUrl` in
+  `synara/src/app/utils/remoteContent.ts` and `isSafeDesktopExternalUrl` in
+  `synara/src/app/utils/desktop.ts` mirror the public HTTPS rules before IPC.
+
+`global-shortcut:allow-register-all` remains broad at the Tauri capability layer;
+shortcut strings are validated and registered only through Rust
+`apply_desktop_shortcuts`.
+
 ## Guardrails
 
 - `npm run check:matrix-boundaries` blocks new direct Matrix REST usage outside

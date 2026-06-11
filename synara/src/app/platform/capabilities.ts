@@ -1,6 +1,26 @@
 import { isSynaraDesktop } from '../utils/desktop';
+import { normalizePlatformSecretStoreStatus, type PlatformSecretStoreStatus } from './secrets';
 
 export type PlatformChannel = 'local-dev-runtime' | 'desktop-tauri' | 'ios-native' | 'unknown';
+
+// Windows builds report canPersistSession=false from the desktop bridge; never infer
+// Keychain-equivalent persistence from the desktop channel alone.
+export const applyDesktopSecretStoreCapability = (status: PlatformSecretStoreStatus): void => {
+  if (!isSynaraDesktop() || !window.__SYNARA_DESKTOP__) return;
+
+  window.__SYNARA_DESKTOP__.supportsSecureSecretStore =
+    status.available && status.canPersistSession;
+};
+
+export const syncDesktopSecretStoreCapability = async (
+  status: unknown
+): Promise<PlatformSecretStoreStatus | undefined> => {
+  const normalized = normalizePlatformSecretStoreStatus(status);
+  if (normalized) {
+    applyDesktopSecretStoreCapability(normalized);
+  }
+  return normalized;
+};
 
 export type PlatformCapabilities = {
   channel: PlatformChannel;

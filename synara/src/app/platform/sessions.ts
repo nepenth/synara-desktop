@@ -1,10 +1,11 @@
 import { type Session } from '../state/sessions';
-import { invokeDesktop } from '../utils/desktop';
 import {
-  getPlatformSecretStoreStatus,
-  normalizePlatformSecretStoreStatus,
-  type PlatformSecretStoreStatus,
-} from './secrets';
+  invokeDesktopWithAvailability,
+  isDesktopBridgeAvailable,
+  isSynaraDesktop,
+} from '../utils/desktop';
+import { syncDesktopSecretStoreCapability } from './capabilities';
+import { getPlatformSecretStoreStatus, type PlatformSecretStoreStatus } from './secrets';
 
 export type PlatformSessionStore = {
   getStatus: () => Promise<PlatformSecretStoreStatus>;
@@ -31,6 +32,7 @@ export const normalizePlatformSession = (value: unknown): Session | undefined =>
   if (!baseUrl || !userId || !deviceId || !accessToken) return undefined;
 
   const expiresInMs = record.expiresInMs;
+  const storedAtMs = record.storedAtMs;
   const refreshToken = readString(record, 'refreshToken');
 
   return {
@@ -41,6 +43,8 @@ export const normalizePlatformSession = (value: unknown): Session | undefined =>
     refreshToken,
     expiresInMs:
       typeof expiresInMs === 'number' && Number.isFinite(expiresInMs) ? expiresInMs : undefined,
+    storedAtMs:
+      typeof storedAtMs === 'number' && Number.isFinite(storedAtMs) ? storedAtMs : undefined,
   };
 };
 
@@ -59,25 +63,39 @@ const serializePlatformSession = (session: Session) => {
   if (typeof session.expiresInMs === 'number' && Number.isFinite(session.expiresInMs)) {
     envelope.expiresInMs = session.expiresInMs;
   }
+  if (typeof session.storedAtMs === 'number' && Number.isFinite(session.storedAtMs)) {
+    envelope.storedAtMs = session.storedAtMs;
+  }
 
   return envelope;
 };
 
+const unavailableDesktopSecretStoreStatus = (): PlatformSecretStoreStatus => ({
+  available: false,
+  backend: 'none',
+  canPersistSession: false,
+  reason: 'secure-secret-store-unavailable',
+});
+
 export const platformSessionStore: PlatformSessionStore = {
   getStatus: async () => {
-    const localStatus = getPlatformSecretStoreStatus();
-    if (!localStatus.available || localStatus.backend !== 'desktop-native') return localStatus;
+    if (!isSynaraDesktop()) {
+      return getPlatformSecretStoreStatus();
+    }
 
     try {
-      const status = await invokeDesktop<unknown>('desktop_secret_store_status');
-      return normalizePlatformSecretStoreStatus(status) ?? localStatus;
+      const invokeResult = await invokeDesktopWithAvailability<unknown>(
+        'desktop_secret_store_status'
+      );
+      if (!invokeResult.available) {
+        return unavailableDesktopSecretStoreStatus();
+      }
+      return (
+        (await syncDesktopSecretStoreCapability(invokeResult.value)) ??
+        unavailableDesktopSecretStoreStatus()
+      );
     } catch {
-      return {
-        available: false,
-        backend: 'desktop-native',
-        canPersistSession: false,
-        reason: 'secure-secret-store-unavailable',
-      };
+      return unavailableDesktopSecretStoreStatus();
     }
   },
 
@@ -85,25 +103,43 @@ export const platformSessionStore: PlatformSessionStore = {
     const status = await platformSessionStore.getStatus();
     if (!canUsePlatformSessionStore(status)) return undefined;
 
-    const session = await invokeDesktop<unknown>('desktop_get_session');
-    return normalizePlatformSession(session);
+    if (!isDesktopBridgeAvailable()) {
+      return undefined;
+    }
+    const invokeResult = await invokeDesktopWithAvailability<unknown>('desktop_get_session');
+    if (!invokeResult.available) {
+      return undefined;
+    }
+    return normalizePlatformSession(invokeResult.value);
   },
 
   setSession: async (session) => {
     const status = await platformSessionStore.getStatus();
     if (!canUsePlatformSessionStore(status)) return false;
 
-    const stored = await invokeDesktop<boolean>('desktop_set_session', {
+    if (!isDesktopBridgeAvailable()) {
+      return false;
+    }
+    const invokeResult = await invokeDesktopWithAvailability<boolean>('desktop_set_session', {
       session: serializePlatformSession(session),
     });
-    return stored === true;
+    if (!invokeResult.available) {
+      return false;
+    }
+    return invokeResult.value === true;
   },
 
   removeSession: async () => {
     const status = await platformSessionStore.getStatus();
     if (!canUsePlatformSessionStore(status)) return false;
 
-    const removed = await invokeDesktop<boolean>('desktop_remove_session');
-    return removed === true;
+    if (!isDesktopBridgeAvailable()) {
+      return false;
+    }
+    const invokeResult = await invokeDesktopWithAvailability<boolean>('desktop_remove_session');
+    if (!invokeResult.available) {
+      return false;
+    }
+    return invokeResult.value === true;
   },
 };

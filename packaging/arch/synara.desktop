@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Synara
+GenericName=Matrix Client
+Comment=High-performance Matrix client optimized for AI agent workflows
+Exec=synara %U
+Icon=synara
+Terminal=false
+Categories=Network;InstantMessaging;Chat;
+StartupWMClass=synara

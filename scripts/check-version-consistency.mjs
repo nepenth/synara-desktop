@@ -46,6 +46,7 @@ const cargoLockVersion = matchRequired(
   cargoLock,
   /\[\[package\]\]\s*\nname = "synara"\s*\nversion = "([^"]+)"/
 );
+const archStartDir = path.join(root, "packaging/arch");
 const archPkgver = execFileSync(
   "/bin/bash",
   [
@@ -56,10 +57,28 @@ const archPkgver = execFileSync(
     cwd: root,
     env: {
       ...process.env,
-      SYNARA_ARCH_STARTDIR: path.join(root, "packaging/arch"),
+      SYNARA_ARCH_STARTDIR: archStartDir,
     },
     encoding: "utf8",
   }
+);
+const archPkgrel = Number.parseInt(
+  execFileSync(
+    "/bin/bash",
+    [
+      "-lc",
+      'startdir="$SYNARA_ARCH_STARTDIR"; source "$SYNARA_ARCH_STARTDIR/PKGBUILD"; printf "%s" "$pkgrel"',
+    ],
+    {
+      cwd: root,
+      env: {
+        ...process.env,
+        SYNARA_ARCH_STARTDIR: archStartDir,
+      },
+      encoding: "utf8",
+    }
+  ),
+  10
 );
 
 assertEqual("package.json version", desktopPackage.version, expectedVersion);
@@ -79,6 +98,9 @@ assertEqual(
   expectedVersion
 );
 assertEqual("packaging/arch/PKGBUILD pkgver", archPkgver, expectedVersion.replaceAll("-", "_"));
+if (!Number.isInteger(archPkgrel) || archPkgrel < 1) {
+  throw new Error(`packaging/arch/PKGBUILD pkgrel is ${archPkgrel}, expected a positive integer`);
+}
 assertEqual(
   "synara-ios/project.yml MARKETING_VERSION",
   matchRequired("synara-ios/project.yml MARKETING_VERSION", iosXcodeGenProject, /MARKETING_VERSION:\s*"([^"]+)"/),
@@ -97,7 +119,46 @@ const iosMarketingVersion = matchRequired(
   /MARKETING_VERSION:\s*"([^"]+)"/
 );
 
-console.log(`Version metadata is consistent at ${expectedVersion}.`);
+const parseMajorMinor = (version) => {
+  const match = `${version}`.match(/^(\d+)\.(\d+)/);
+  if (!match) throw new Error(`Unable to parse major.minor from version ${version}`);
+  return `${match[1]}.${match[2]}`;
+};
+
+const cargoTauriVersion = matchRequired(
+  "src-tauri/Cargo.lock tauri crate version",
+  cargoLock,
+  /name = "tauri"\nversion = "([^"]+)"/
+);
+const npmTauriApiVersion = desktopPackage.dependencies?.["@tauri-apps/api"];
+const npmTauriCliVersion = desktopPackage.devDependencies?.["@tauri-apps/cli"];
+
+if (!npmTauriApiVersion) {
+  throw new Error("package.json is missing @tauri-apps/api dependency");
+}
+if (!npmTauriCliVersion) {
+  throw new Error("package.json is missing @tauri-apps/cli devDependency");
+}
+
+const cargoTauriMajorMinor = parseMajorMinor(cargoTauriVersion);
+const npmTauriApiMajorMinor = parseMajorMinor(npmTauriApiVersion);
+const npmTauriCliMajorMinor = parseMajorMinor(npmTauriCliVersion);
+
+assertEqual(
+  "Tauri npm api major.minor vs Cargo.lock tauri",
+  npmTauriApiMajorMinor,
+  cargoTauriMajorMinor
+);
+assertEqual(
+  "Tauri npm cli major.minor vs Cargo.lock tauri",
+  npmTauriCliMajorMinor,
+  cargoTauriMajorMinor
+);
+
+console.log(
+  `Tauri toolchain aligned at ${cargoTauriMajorMinor} (api ${npmTauriApiVersion}, cli ${npmTauriCliVersion}, cargo ${cargoTauriVersion}).`
+);
+console.log(`Version metadata is consistent at ${expectedVersion} (Arch pkgrel ${archPkgrel}).`);
 if (iosMarketingVersion === expectedVersion) {
   console.log(
     `iOS App Store build number is ${iosBuildVersion} (CURRENT_PROJECT_VERSION); marketing version matches desktop at ${expectedVersion}.`

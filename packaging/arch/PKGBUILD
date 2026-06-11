@@ -14,34 +14,41 @@ arch=('x86_64')
 url='https://github.com/nepenth/synara-desktop'
 license=('AGPL-3.0-only')
 depends=(
+  'dbus'
   'gtk3'
+  'libsecret'
   'webkit2gtk-4.1'
+  'xdg-desktop-portal'
   'gst-plugins-good'
   'libayatana-appindicator'
   'librsvg'
   'openssl'
 )
 optdepends=(
+  'kwallet: KDE Wallet backend for Secret Service-compatible session storage'
+  'gnome-keyring: GNOME Secret Service provider for session storage'
   'xdg-desktop-portal-kde: KDE Plasma Wayland file and media portal support'
   'xdg-utils: open external links with the desktop default browser'
 )
 provides=('synara-desktop' 'synara')
 conflicts=('synara-desktop' 'synara')
-source=('synara')
-sha256sums=('SKIP')
+source=('synara' 'synara.desktop')
+sha256sums=('SKIP' 'SKIP')
 
 package() {
-  local desktop_file
-  desktop_file="${_repo_root}/src-tauri/target/release/bundle/deb/Synara_${_tauri_version}_amd64/data/usr/share/applications/Synara.desktop"
-  if [[ ! -f "${desktop_file}" ]]; then
-    desktop_file="$(find "${_repo_root}/src-tauri/target/release/bundle/deb" -path '*/data/usr/share/applications/Synara.desktop' -print -quit 2>/dev/null || true)"
+  local desktop_file="${startdir}/synara.desktop"
+  local release_binary="${_repo_root}/src-tauri/target/release/synara"
+
+  if [[ ! -f "${release_binary}" ]]; then
+    printf 'Synara release binary was not found. Run `npm run tauri build` from the repository root before `makepkg -f`.\n' >&2
+    return 1
   fi
   if [[ ! -f "${desktop_file}" ]]; then
-    printf 'Synara desktop entry was not found. Run `npm run tauri build -- --bundles deb` from the repository root before `makepkg -f`.\n' >&2
+    printf 'Synara desktop entry was not found at %s.\n' "${desktop_file}" >&2
     return 1
   fi
 
-  install -Dm755 "${_repo_root}/src-tauri/target/release/synara" "${pkgdir}/usr/lib/synara/synara"
+  install -Dm755 "${release_binary}" "${pkgdir}/usr/lib/synara/synara"
   install -Dm755 "${srcdir}/synara" "${pkgdir}/usr/bin/synara"
   install -Dm644 "${desktop_file}" "${pkgdir}/usr/share/applications/Synara.desktop"
   install -Dm644 "${_repo_root}/src-tauri/icons/32x32.png" "${pkgdir}/usr/share/icons/hicolor/32x32/apps/synara.png"

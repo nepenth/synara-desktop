@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  applyDesktopSecretStoreCapability,
   getPlatformCapabilities,
   getPlatformIntegrationStatus,
   getPlatformSecretStoreBackendLabel,
@@ -9,6 +10,7 @@ import {
   getPlatformSecretStoreStatusLabel,
   getPlatformNotificationCount,
   getPlatformSecretStoreStatus,
+  isDesktopSecretStoreOperationError,
   isDesktopPlatform,
   platformSessionStore,
   repairPlatformDeviceDisplayName,
@@ -122,6 +124,8 @@ test('platform capabilities describe Tauri desktop runtime when bridge is presen
       notificationInboxCount: 4,
       doNotDisturb: true,
     });
+    const { flushPendingDesktopTrayStateUpdate } = await import('../../utils/desktop.js');
+    await flushPendingDesktopTrayStateUpdate();
     assert.deepEqual(calls, [
       {
         command: 'desktop_set_badge_count',
@@ -203,6 +207,27 @@ test('platform diagnostics reads desktop integration status when supported', asy
   }
 });
 
+test('platform bridge defaults to secure secret store disabled before runtime sync', () => {
+  const originalWindow = globalThis.window;
+  (globalThis as any).window = {
+    __SYNARA_DESKTOP__: {
+      platform: 'tauri',
+    },
+  };
+
+  try {
+    assert.equal(getPlatformCapabilities().supportsSecureSecretStore, false);
+    assert.deepEqual(getPlatformSecretStoreStatus(), {
+      available: false,
+      backend: 'none',
+      canPersistSession: false,
+      reason: 'secure-secret-store-not-configured',
+    });
+  } finally {
+    (globalThis as any).window = originalWindow;
+  }
+});
+
 test('platform capabilities expose secure secret store only when bridge opts in', () => {
   const originalWindow = globalThis.window;
   (globalThis as any).window = {
@@ -222,6 +247,15 @@ test('platform capabilities expose secure secret store only when bridge opts in'
   } finally {
     (globalThis as any).window = originalWindow;
   }
+});
+
+test('platform secret-store operation errors recognize stable desktop IPC codes', () => {
+  assert.equal(isDesktopSecretStoreOperationError('desktop-secret-store-locked'), true);
+  assert.equal(isDesktopSecretStoreOperationError('desktop-secret-store-unavailable'), true);
+  assert.equal(isDesktopSecretStoreOperationError('desktop-secret-store-denied'), true);
+  assert.equal(isDesktopSecretStoreOperationError('desktop-secret-store-operation-failed'), false);
+  assert.equal(isDesktopSecretStoreOperationError('native-session-store-error'), false);
+  assert.equal(isDesktopSecretStoreOperationError(undefined), false);
 });
 
 test('platform secret-store helpers describe persistence behavior', () => {
@@ -264,15 +298,21 @@ test('platform secret-store helpers describe persistence behavior', () => {
     }),
     'Native credential storage is not configured for this runtime.'
   );
+  assert.equal(
+    getPlatformSecretStoreStatusDescription({
+      ...fallbackStatus,
+      reason: 'windows-native-session-store-unsupported',
+    }),
+    'Windows builds do not persist sessions to a native credential store.'
+  );
 });
 
-test('platform session store reads desktop secret-store status command', async () => {
+test('platform session store probes desktop secret-store status without bridge opt-in', async () => {
   const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
   const originalWindow = globalThis.window;
   (globalThis as any).window = {
     __SYNARA_DESKTOP__: {
       platform: 'tauri',
-      supportsSecureSecretStore: true,
       invoke: async (command: string, args?: Record<string, unknown>) => {
         calls.push({ command, args });
         return {
@@ -293,6 +333,34 @@ test('platform session store reads desktop secret-store status command', async (
       reason: 'secure-secret-store-not-configured',
     });
     assert.deepEqual(calls, [{ command: 'desktop_secret_store_status', args: undefined }]);
+    assert.equal(getPlatformCapabilities().supportsSecureSecretStore, false);
+  } finally {
+    (globalThis as any).window = originalWindow;
+  }
+});
+
+test('platform secret-store capability sync advertises persistence only when probed', () => {
+  const originalWindow = globalThis.window;
+  (globalThis as any).window = {
+    __SYNARA_DESKTOP__: {
+      platform: 'tauri',
+    },
+  };
+
+  try {
+    applyDesktopSecretStoreCapability({
+      available: true,
+      backend: 'macos-keychain',
+      canPersistSession: true,
+    });
+    assert.equal(getPlatformCapabilities().supportsSecureSecretStore, true);
+
+    applyDesktopSecretStoreCapability({
+      available: true,
+      backend: 'linux-keyutils',
+      canPersistSession: false,
+    });
+    assert.equal(getPlatformCapabilities().supportsSecureSecretStore, false);
   } finally {
     (globalThis as any).window = originalWindow;
   }
@@ -317,6 +385,7 @@ test('platform session store reads normalized desktop sessions when available', 
           accessToken: ' access-token ',
           refreshToken: ' refresh-token ',
           expiresInMs: 1234,
+          storedAtMs: 9_876_543,
         };
       },
     },
@@ -330,6 +399,7 @@ test('platform session store reads normalized desktop sessions when available', 
       accessToken: 'access-token',
       refreshToken: 'refresh-token',
       expiresInMs: 1234,
+      storedAtMs: 9_876_543,
     });
     assert.deepEqual(
       calls.map((call) => call.command),
@@ -364,6 +434,9 @@ test('platform session store strips fallback-only fields before desktop persiste
         userId: '@alice:example.org',
         deviceId: 'DEVICEID',
         accessToken: 'access-token',
+        storedAtMs: 1_700_000_000_000,
+        expiresInMs: 3_600_000,
+        refreshToken: 'refresh-token',
         fallbackSdkStores: true,
       }),
       true
@@ -378,6 +451,9 @@ test('platform session store strips fallback-only fields before desktop persiste
             userId: '@alice:example.org',
             deviceId: 'DEVICEID',
             accessToken: 'access-token',
+            refreshToken: 'refresh-token',
+            expiresInMs: 3_600_000,
+            storedAtMs: 1_700_000_000_000,
           },
         },
       },
