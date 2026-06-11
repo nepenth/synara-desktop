@@ -1,8 +1,8 @@
 # MIP1 Commit Evidence Map
 
-**Branch:** `maturity_improvement_plan1`  
-**Base:** `main`  
-**Recorded:** 2026-06-10  
+**Branch:** `maturity_improvement_plan1`
+**Base:** `main`
+**Recorded:** 2026-06-10
 **Purpose:** Reconcile plan commit hygiene (47 commits: `mip1-00` + `mip1-01`…`mip1-46`) with actual branch history when work was bundled.
 
 ## Summary
