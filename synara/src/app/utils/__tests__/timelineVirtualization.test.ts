@@ -201,6 +201,7 @@ test('incremental timeline row build visits at most 10% of events on live append
   assert.equal(appended.strategy, 'incremental');
   assert.equal(appendInstrumentation.incrementalBuilds, 1);
   assert.equal(appendInstrumentation.eventsVisited, 1);
+  assert.equal(appendInstrumentation.revisionTokenEventsScanned, 1);
   assert.ok(
     appendInstrumentation.eventsVisited <= baselineInstrumentation.eventsVisited * 0.1,
     `expected <= ${baselineInstrumentation.eventsVisited * 0.1} visits, got ${
@@ -296,6 +297,51 @@ test('timeline row build falls back to full scan when options change', () => {
   assert.equal(instrumentation.fullBuilds, 1);
   assert.equal(instrumentation.eventsVisited, 8);
   assert.equal(rebuilt.rows[0]?.kind, 'intro');
+});
+
+test('ignored events do not shift day divider comparison to the next visible row', () => {
+  const timeline = createHarnessTimeline(2);
+  timeline.events[0] = createHarnessEvent(0, {
+    sender: '@bob:example.org',
+    ts: 1_700_000_000_000,
+  });
+  timeline.events[1] = createHarnessEvent(1, {
+    sender: '@alice:example.org',
+    ts: 1_700_086_400_000,
+  });
+
+  const ignoredOptions: TimelineBuildOptions = {
+    ...harnessBuildOptions,
+    ignoredUsersSet: new Set(['@bob:example.org']),
+  };
+
+  const { rows } = buildTimelineRows([timeline], ignoredOptions, harnessBuildDeps);
+  assert.equal(rows.filter((row) => row.kind === 'divider' && row.divider === 'day').length, 0);
+});
+
+test('incremental revision fingerprint matches full rebuild after live append', () => {
+  const timeline = createHarnessTimeline(4);
+  const initial = buildTimelineRowsWithState([timeline], harnessBuildOptions, harnessBuildDeps);
+
+  timeline.events.push(createHarnessEvent(4));
+  const incremental = buildTimelineRowsWithState(
+    [timeline],
+    harnessBuildOptions,
+    harnessBuildDeps,
+    initial.state
+  );
+  const full = buildTimelineRows([timeline], harnessBuildOptions, harnessBuildDeps);
+
+  assert.equal(incremental.strategy, 'incremental');
+  assert.equal(
+    incremental.state.fingerprint.revisionToken,
+    buildTimelineRowsWithState([timeline], harnessBuildOptions, harnessBuildDeps).state.fingerprint
+      .revisionToken
+  );
+  assert.deepEqual(
+    incremental.rows.filter((row) => row.kind === 'event').map((row) => row.eventId),
+    full.rows.filter((row) => row.kind === 'event').map((row) => row.eventId)
+  );
 });
 
 test('buildTimelineRows full scan matches incremental baseline for same fixture', () => {
