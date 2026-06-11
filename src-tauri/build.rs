@@ -19,9 +19,36 @@ fn git_output(repo: &Path, args: &[&str]) -> Option<String> {
     }
 }
 
+fn sync_release_hardening_capability(manifest_dir: &Path) {
+    let path = manifest_dir.join("capabilities/release-hardening.json");
+    let profile = std::env::var("PROFILE").unwrap_or_else(|_| "debug".to_string());
+
+    println!("cargo:rerun-if-env-changed=PROFILE");
+
+    if profile == "release" {
+        let content = r#"{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "release-hardening",
+  "description": "Release-only hardening: deny DevTools IPC toggle on the main webview.",
+  "windows": ["main"],
+  "permissions": [
+    "core:webview:deny-internal-toggle-devtools"
+  ]
+}
+"#;
+        std::fs::write(&path, content).expect("write release-hardening capability");
+        println!("cargo:rerun-if-changed={}", path.display());
+    } else if path.exists() {
+        std::fs::remove_file(&path).expect("remove release-hardening capability");
+    }
+}
+
 fn main() {
     let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR is set");
-    let repo = Path::new(&manifest_dir)
+    let manifest_path = Path::new(&manifest_dir);
+    sync_release_hardening_capability(manifest_path);
+
+    let repo = manifest_path
         .parent()
         .unwrap_or(Path::new(&manifest_dir));
     let head_path = repo.join(".git/HEAD");
