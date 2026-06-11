@@ -62,11 +62,22 @@ import { gifPickerEnabled } from '../../../utils/gifProvider';
 import { DEFAULT_ACCENT_COLOR, normalizeAccentColor } from '../../../utils/themeAccent';
 import {
   getPlatformIntegrationStatus,
+  getPlatformSecretStoreSessionPersistence,
+  getPlatformSecretStoreStatusDescription,
+  getPlatformSecretStoreStatusLabel,
+  isDesktopPlatform,
+  platformSessionStore,
   setPlatformShortcuts,
   supportsPlatformGlobalShortcuts,
   type PlatformIntegrationStatus,
+  type PlatformSecretStoreStatus,
   type PlatformShortcutApplyResult,
 } from '../../../platform';
+import {
+  getNativeStoreErrorWarningMessage,
+  getSessionBootstrapResult,
+  shouldSurfaceNativeStoreErrorWarning,
+} from '../../../state/sessionBootstrap';
 
 type ThemeSelectorProps = {
   themeNames: Record<string, string>;
@@ -1044,6 +1055,78 @@ function DesktopShortcutsSection() {
   );
 }
 
+function SecretStoreSection() {
+  const { t } = useTranslation();
+  const [status, setStatus] = useState<PlatformSecretStoreStatus>();
+  const [nativeStoreError, setNativeStoreError] = useState(
+    () => getSessionBootstrapResult().nativeStoreError
+  );
+
+  useEffect(() => {
+    let active = true;
+
+    platformSessionStore.getStatus().then((nextStatus) => {
+      if (!active) return;
+      setStatus(nextStatus);
+      setNativeStoreError(getSessionBootstrapResult().nativeStoreError);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  if (!isDesktopPlatform()) return null;
+
+  const persistence = status ? getPlatformSecretStoreSessionPersistence(status) : undefined;
+  const badgeVariant =
+    persistence === 'persistent'
+      ? 'Success'
+      : persistence === 'session-scoped'
+      ? 'Warning'
+      : status
+      ? 'Critical'
+      : 'Secondary';
+  const statusLabel = status ? getPlatformSecretStoreStatusLabel(status) : 'Checking';
+  const details = status ? getPlatformSecretStoreStatusDescription(status) : statusLabel;
+  const showNativeStoreErrorWarning = shouldSurfaceNativeStoreErrorWarning(
+    nativeStoreError,
+    true
+  );
+  const nativeStoreErrorWarning = showNativeStoreErrorWarning
+    ? t(
+        'modernization.settings.secret_store.native_store_error',
+        getNativeStoreErrorWarningMessage()
+      )
+    : undefined;
+
+  return (
+    <Box direction="Column" gap="100">
+      <Text size="L400">
+        {t('modernization.settings.secret_store.title', 'Session Storage')}
+      </Text>
+      <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
+        <SettingTile
+          title={t('modernization.settings.secret_store.status_title', 'Native Session Store')}
+          description={details}
+          after={
+            <Chip variant={badgeVariant} radii="Pill" outlined>
+              <Text size="B300">{statusLabel}</Text>
+            </Chip>
+          }
+        />
+        {nativeStoreErrorWarning && (
+          <Box style={{ padding: 12, paddingTop: 0 }}>
+            <Text size="T200" priority="500">
+              {nativeStoreErrorWarning}
+            </Text>
+          </Box>
+        )}
+      </SequenceCard>
+    </Box>
+  );
+}
+
 function DesktopIntegrationSection() {
   const [status, setStatus] = useState<PlatformIntegrationStatus>(DEFAULT_INTEGRATION_STATUS);
   const [copyError, setCopyError] = useState(false);
@@ -1478,6 +1561,7 @@ export function General({ requestClose }: GeneralProps) {
               <DateAndTime />
               <Editor />
               <Messages />
+              <SecretStoreSection />
               <DesktopShortcutsSection />
               <DesktopIntegrationSection />
             </Box>

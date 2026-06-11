@@ -8,10 +8,14 @@ export type AsyncSessionStore = {
 
 export type SessionBootstrapSource = 'native' | 'legacy-fallback' | 'none';
 
+export const NATIVE_SESSION_STORE_ERROR = 'native-session-store-error' as const;
+
+export type NativeSessionStoreError = typeof NATIVE_SESSION_STORE_ERROR;
+
 export type SessionBootstrapResult = {
   session?: Session;
   source: SessionBootstrapSource;
-  nativeStoreError?: 'native-session-store-error';
+  nativeStoreError?: NativeSessionStoreError;
 };
 
 export type SessionBootstrapOptions = {
@@ -37,7 +41,7 @@ export const resolveSessionBootstrap = async ({
         return { session: nativeSession, source: 'native' };
       }
     } catch {
-      nativeStoreError = 'native-session-store-error';
+      nativeStoreError = NATIVE_SESSION_STORE_ERROR;
     }
   }
 
@@ -79,6 +83,14 @@ export const getSessionBootstrapResult = (): SessionBootstrapResult => ({
   source: activeSessionSource,
   nativeStoreError: activeNativeStoreError,
 });
+
+export const shouldSurfaceNativeStoreErrorWarning = (
+  nativeStoreError: SessionBootstrapResult['nativeStoreError'],
+  isDesktop: boolean
+): boolean => isDesktop && nativeStoreError === NATIVE_SESSION_STORE_ERROR;
+
+export const getNativeStoreErrorWarningMessage = (): string =>
+  'The native credential store could not be used. Your session is stored using legacy browser storage instead. Restart the app or sign in again to retry native storage.';
 
 export const setSessionBootstrapResult = (
   result: SessionBootstrapResult
