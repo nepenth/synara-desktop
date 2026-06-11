@@ -93,7 +93,7 @@ fn linux_spellcheck_languages() -> Vec<String> {
 fn configure_webview_spellcheck<R: tauri::Runtime>(window: &tauri::WebviewWindow<R>) {
     let languages = linux_spellcheck_languages();
     let _ = window.with_webview(move |webview| {
-        use webkit2gtk::prelude::{WebContextExt, WebViewExt};
+        use webkit2gtk::{WebContextExt, WebViewExt};
 
         let Some(context) = webview.inner().context() else {
             return;
