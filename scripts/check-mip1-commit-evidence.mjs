@@ -149,11 +149,24 @@ function main() {
 
   const head = git(["rev-parse", "HEAD"]);
   let baseRef = options.base;
-  try {
-    git(["rev-parse", "--verify", `${baseRef}^{commit}`]);
-  } catch {
-    errors.push(`Base ref "${baseRef}" is not a valid commit.`);
+  const baseCandidates = [baseRef, `origin/${baseRef}`];
+  let resolvedBaseRef = null;
+  for (const candidate of baseCandidates) {
+    try {
+      git(["rev-parse", "--verify", `${candidate}^{commit}`]);
+      resolvedBaseRef = candidate;
+      break;
+    } catch {
+      // try next candidate
+    }
+  }
+  if (!resolvedBaseRef) {
+    errors.push(
+      `Base ref "${baseRef}" is not a valid commit (also tried origin/${baseRef}).`
+    );
     baseRef = null;
+  } else {
+    baseRef = resolvedBaseRef;
   }
 
   let branchCommitCount = null;
