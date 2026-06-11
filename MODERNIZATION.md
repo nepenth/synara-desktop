@@ -61,6 +61,19 @@ cp -R src-tauri/target/release/bundle/macos/Synara.app /Applications/Synara.app
 Local `cargo check` and `cargo test` can run with the placeholder app shell, but
 runtime smoke testing should use a real app-runtime `dist/` bundle.
 
+## CI Environment Notes
+
+GitHub Actions uses `ubuntu-22.04` for the main `CI` workflow and the
+`Desktop Package Smoke` `.deb`/macOS bundle jobs. That runner validates Debian
+packaging and the shared Node/Rust gates (`check:versions`, `cargo test`,
+`test:modernization`).
+
+Rolling Arch/CachyOS workstation validation remains manual: WebKitGTK, portals,
+Secret Service, tray, and global-shortcut behavior differ from the Ubuntu CI
+image. Arch `PKGBUILD` changes under `packaging/arch/**` trigger the smoke
+workflow path filter; full pacman packaging is still validated on target
+machines, not in CI today.
+
 ## Runtime Smoke Test
 
 Before marking the desktop PR ready for broader review, capture screenshots or

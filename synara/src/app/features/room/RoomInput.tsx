@@ -63,12 +63,7 @@ import {
 } from '../../components/editor';
 import { EmojiBoard, EmojiBoardTab } from '../../components/emoji-board';
 import { UseStateProvider } from '../../components/UseStateProvider';
-import {
-  TUploadContent,
-  encryptFile,
-  getImageInfo,
-  getMxIdLocalPart,
-} from '../../utils/matrix';
+import { TUploadContent, encryptFile, getImageInfo, getMxIdLocalPart } from '../../utils/matrix';
 import { useTypingStatusUpdater } from '../../hooks/useTypingStatusUpdater';
 import { useFilePicker } from '../../hooks/useFilePicker';
 import { useFileDropZone } from '../../hooks/useFileDrop';

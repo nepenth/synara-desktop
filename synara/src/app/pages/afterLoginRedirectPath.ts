@@ -1,4 +1,4 @@
-const AFTER_LOGIN_REDIRECT_PATH_KEY = 'after_login_redirect_url';
+import { AFTER_LOGIN_REDIRECT_PATH_KEY } from '../state/sessions';
 
 export const setAfterLoginRedirectPath = (url: string): void => {
   localStorage.setItem(AFTER_LOGIN_REDIRECT_PATH_KEY, url);

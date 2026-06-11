@@ -91,8 +91,12 @@ fn linux_spellcheck_languages() -> Vec<String> {
 
 #[cfg(target_os = "linux")]
 fn configure_webview_spellcheck<R: tauri::Runtime>(window: &tauri::WebviewWindow<R>) {
+    use std::sync::atomic::{AtomicBool, Ordering};
+
     let languages = linux_spellcheck_languages();
-    let _ = window.with_webview(move |webview| {
+    let spellcheck_configured = std::sync::Arc::new(AtomicBool::new(false));
+    let configured_flag = spellcheck_configured.clone();
+    let configure_result = window.with_webview(move |webview| {
         use webkit2gtk::{WebContextExt, WebViewExt};
 
         let Some(context) = webview.inner().context() else {
@@ -102,14 +106,77 @@ fn configure_webview_spellcheck<R: tauri::Runtime>(window: &tauri::WebviewWindow
         let language_refs = languages.iter().map(String::as_str).collect::<Vec<_>>();
         context.set_spell_checking_languages(&language_refs);
         context.set_spell_checking_enabled(true);
+        configured_flag.store(true, Ordering::Relaxed);
     });
+
+    if configure_result.is_err() || !spellcheck_configured.load(Ordering::Relaxed) {
+        eprintln!(
+            "WebKit spellcheck WebContext unavailable; continuing without spellcheck for window {}",
+            window.label()
+        );
+    }
 }
 
 #[cfg(not(target_os = "linux"))]
 fn configure_webview_spellcheck<R: tauri::Runtime>(_window: &tauri::WebviewWindow<R>) {}
 
+const PREFERRED_LOCALHOST_PORT: u16 = 44548;
+const LOCALHOST_PORT_FALLBACK_COUNT: u16 = 10;
+
+fn is_localhost_port_available(port: u16) -> bool {
+    std::net::TcpListener::bind(("127.0.0.1", port)).is_ok()
+}
+
+fn select_localhost_port() -> Result<u16, String> {
+    for offset in 0..LOCALHOST_PORT_FALLBACK_COUNT {
+        let port = PREFERRED_LOCALHOST_PORT.saturating_add(offset);
+        if is_localhost_port_available(port) {
+            if offset == 0 {
+                eprintln!("[synara] Serving bundled UI on localhost:{port}");
+            } else {
+                eprintln!(
+                    "[synara] Preferred port {PREFERRED_LOCALHOST_PORT} busy; using localhost:{port}"
+                );
+            }
+            return Ok(port);
+        }
+    }
+
+    Err(format!(
+        "No available localhost port in range {PREFERRED_LOCALHOST_PORT}-{}",
+        PREFERRED_LOCALHOST_PORT + LOCALHOST_PORT_FALLBACK_COUNT - 1
+    ))
+}
+
+#[cfg(test)]
+mod localhost_port_tests {
+    use super::{select_localhost_port, PREFERRED_LOCALHOST_PORT};
+
+    #[test]
+    fn select_localhost_port_returns_first_available_port() {
+        let port = select_localhost_port().expect("localhost port should be available");
+        assert!((PREFERRED_LOCALHOST_PORT..PREFERRED_LOCALHOST_PORT + 10).contains(&port));
+    }
+
+    #[test]
+    fn select_localhost_port_skips_busy_preferred_port() {
+        let listener = std::net::TcpListener::bind(("127.0.0.1", PREFERRED_LOCALHOST_PORT))
+            .expect("test listener should bind");
+        let port = select_localhost_port().expect("fallback localhost port should be available");
+        assert_ne!(port, PREFERRED_LOCALHOST_PORT);
+        assert!((PREFERRED_LOCALHOST_PORT + 1..PREFERRED_LOCALHOST_PORT + 10).contains(&port));
+        drop(listener);
+    }
+}
+
 pub fn run() {
-    let port: u16 = 44548;
+    let port = match select_localhost_port() {
+        Ok(port) => port,
+        Err(error) => {
+            eprintln!("Failed to start Synara: {error}");
+            std::process::exit(1);
+        }
+    };
     let context = tauri::generate_context!();
     let mut builder = tauri::Builder::default()
         .plugin(tauri_plugin_localhost::Builder::new(port).build())
@@ -134,7 +201,13 @@ pub fn run() {
             desktop::desktop_notify,
             desktop::desktop_open_external_url,
             desktop::desktop_save_file,
+            desktop::desktop_save_file_begin,
+            desktop::desktop_save_file_chunk,
+            desktop::desktop_save_file_end,
+            desktop::desktop_save_file_abort,
             desktop::desktop_read_dropped_files,
+            desktop::desktop_read_dropped_file_chunk,
+            desktop::desktop_read_dropped_file_end,
             desktop::desktop_get_performance_capabilities,
             desktop::desktop_agent_action
         ])
@@ -149,6 +222,7 @@ pub fn run() {
                     let _ = window.hide();
                 }
                 WindowEvent::DragDrop(DragDropEvent::Enter { paths, position }) => {
+                    desktop::reset_drag_drop_session();
                     emit_native_file_drop(
                         window,
                         NativeFileDropPayload {
@@ -183,6 +257,7 @@ pub fn run() {
                     );
                 }
                 WindowEvent::DragDrop(DragDropEvent::Leave) => {
+                    desktop::clear_dropped_file_allowlist_on_drag_leave();
                     emit_native_file_drop(
                         window,
                         NativeFileDropPayload {
@@ -216,16 +291,24 @@ pub fn run() {
             // Release: tauri-plugin-localhost serves bundled frontend assets on this port
             #[cfg(not(debug_assertions))]
             let window_url = {
-                let url = format!("http://localhost:{}", port).parse().unwrap();
-                WebviewUrl::External(url)
+                let localhost_url = format!("http://localhost:{port}");
+                let parsed_url = localhost_url
+                    .parse::<url::Url>()
+                    .map_err(|error| format!("Invalid localhost URL for port {port}: {error}"))?;
+                WebviewUrl::External(parsed_url)
             };
 
             let app_handle = app.handle().clone();
+            let bridge_script = format!(
+                "{}\nif (window.__SYNARA_DESKTOP__) {{ window.__SYNARA_DESKTOP__.supportsSecureSecretStore = {}; }}",
+                include_str!("desktop_bridge.js"),
+                desktop::desktop_bridge_supports_secure_secret_store()
+            );
             let window = WebviewWindowBuilder::new(app, "main".to_string(), window_url)
                 .title("Synara")
                 .inner_size(1280.0, 900.0)
                 .min_inner_size(960.0, 720.0)
-                .initialization_script(include_str!("desktop_bridge.js"))
+                .initialization_script(bridge_script)
                 .on_new_window(move |url, _features| {
                     if desktop::is_safe_external_url(url.as_str()) {
                         let _ = app_handle.opener().open_url(url.as_str(), None::<&str>);
