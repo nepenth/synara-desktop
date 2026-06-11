@@ -1,4 +1,12 @@
-import { createClient, MatrixClient, IndexedDBStore, IndexedDBCryptoStore } from 'matrix-js-sdk';
+import {
+  createClient,
+  MatrixClient,
+  IndexedDBStore,
+  IndexedDBCryptoStore,
+  MatrixError,
+  type IRefreshTokenResponse,
+} from 'matrix-js-sdk';
+import type { AccessTokens, TokenRefreshFunction } from 'matrix-js-sdk/lib/http-api/interface';
 
 import {
   clearMatrixLocalStores,
@@ -12,20 +20,91 @@ import { pushSessionToSW } from '../sw-session';
 import {
   clearMatrixStoresForIdentityChange,
   clearPersistedSessions,
+  persistAuthenticatedSession,
   setLastBootstrappedMatrixIdentity,
   type SessionPersistenceOptions,
 } from '../app/state/sessionPersistence';
-import { clearSessionLocalStorage, type SessionLocalStorage } from '../app/state/sessions';
+import { clearSessionLocalStorage, type Session, type SessionLocalStorage } from '../app/state/sessions';
 import { platformSessionStore } from '../app/platform';
+import { clearNotificationCaches } from '../app/notifications/notificationCaches';
 
-type Session = {
-  baseUrl: string;
-  accessToken: string;
-  userId: string;
-  deviceId: string;
+export const REFRESH_BEFORE_EXPIRY_MS = 60_000;
+
+export type MatrixClientSession = Session;
+
+export type RefreshAndPersistSessionDeps = {
+  persistAuthenticatedSession: typeof persistAuthenticatedSession;
+  pushSessionToSW: typeof pushSessionToSW;
+  nativeSessionStore?: SessionPersistenceOptions['nativeSessionStore'];
 };
 
-const createMatrixClient = (session: Session) => {
+export const toRefreshedSession = (
+  session: MatrixClientSession,
+  response: IRefreshTokenResponse
+): MatrixClientSession => ({
+  baseUrl: session.baseUrl,
+  userId: session.userId,
+  deviceId: session.deviceId,
+  accessToken: response.access_token,
+  refreshToken: response.refresh_token,
+  expiresInMs: response.expires_in_ms,
+});
+
+export const toAccessTokens = (response: IRefreshTokenResponse): AccessTokens => ({
+  accessToken: response.access_token,
+  refreshToken: response.refresh_token,
+  expiry: new Date(Date.now() + response.expires_in_ms),
+});
+
+export const refreshAndPersistSession = async (
+  mx: MatrixClient,
+  session: MatrixClientSession,
+  refreshToken: string,
+  {
+    persistAuthenticatedSession: persistSession,
+    pushSessionToSW: pushSession,
+    nativeSessionStore,
+  }: RefreshAndPersistSessionDeps
+): Promise<AccessTokens> => {
+  const response = await mx.refreshToken(refreshToken);
+  const refreshedSession = toRefreshedSession(session, response);
+  await persistSession(refreshedSession, { nativeSessionStore });
+  pushSession(refreshedSession.baseUrl, refreshedSession.accessToken);
+  return toAccessTokens(response);
+};
+
+export const createTokenRefreshFunction = (
+  getClient: () => MatrixClient,
+  session: MatrixClientSession,
+  deps: RefreshAndPersistSessionDeps
+): TokenRefreshFunction => {
+  return async (refreshToken: string) => {
+    try {
+      return await refreshAndPersistSession(getClient(), session, refreshToken, deps);
+    } catch (error) {
+      if (error instanceof MatrixError) {
+        throw error;
+      }
+      throw new MatrixError({
+        errcode: 'M_UNKNOWN',
+        error: 'Token refresh failed',
+      });
+    }
+  };
+};
+
+export type ProactiveTokenRefreshHandle = {
+  dispose: () => void;
+};
+
+export type CreateMatrixClientOptions = {
+  refreshDeps?: RefreshAndPersistSessionDeps;
+};
+
+const createMatrixClient = (
+  session: MatrixClientSession,
+  { refreshDeps }: CreateMatrixClientOptions = {}
+): MatrixClient => {
   const indexedDBStore = new IndexedDBStore({
     indexedDB: global.indexedDB,
     localStorage: global.localStorage,
@@ -37,7 +116,8 @@ const createMatrixClient = (session: Session) => {
     MATRIX_LEGACY_CRYPTO_STORE_NAME
   );
 
-  const mx = createClient({
+  let mx!: MatrixClient;
+  const clientOptions = {
     baseUrl: session.baseUrl,
     accessToken: session.accessToken,
     userId: session.userId,
@@ -46,15 +126,35 @@ const createMatrixClient = (session: Session) => {
     deviceId: session.deviceId,
     timelineSupport: true,
     cryptoCallbacks: cryptoCallbacks as any,
-    verificationMethods: ['m.sas.v1'],
-  });
+    verificationMethods: ['m.sas.v1'] as const,
+  };
 
+  if (session.refreshToken && refreshDeps) {
+    Object.assign(clientOptions, {
+      refreshToken: session.refreshToken,
+      tokenRefreshFunction: createTokenRefreshFunction(() => mx, session, refreshDeps),
+    });
+  }
+
+  mx = createClient(clientOptions);
   mx.setMaxListeners(50);
   return mx;
 };
 
-const startMatrixClient = async (session: Session): Promise<MatrixClient> => {
-  const mx = createMatrixClient(session);
+const defaultRefreshDeps = (): RefreshAndPersistSessionDeps => ({
+  persistAuthenticatedSession,
+  pushSessionToSW,
+  nativeSessionStore: platformSessionStore,
+});
+
+const startMatrixClient = async (
+  session: MatrixClientSession,
+  options: CreateMatrixClientOptions = {}
+): Promise<MatrixClient> => {
+  const refreshDeps = session.refreshToken
+    ? { ...defaultRefreshDeps(), ...options.refreshDeps }
+    : undefined;
+  const mx = createMatrixClient(session, { refreshDeps });
   await mx.store.startup();
   await mx.initRustCrypto();
   return mx;
@@ -68,7 +168,7 @@ export type InitClientDeps = {
 };
 
 const recordBootstrappedMatrixIdentity = (
-  session: Session,
+  session: MatrixClientSession,
   setLastBootstrapped: InitClientDeps['setLastBootstrappedMatrixIdentity'] = setLastBootstrappedMatrixIdentity
 ): void => {
   setLastBootstrapped?.({
@@ -78,7 +178,7 @@ const recordBootstrappedMatrixIdentity = (
 };
 
 export const initClient = async (
-  session: Session,
+  session: MatrixClientSession,
   {
     clearMatrixStoresForIdentityChange: clearStoresForIdentityChange = clearMatrixStoresForIdentityChange,
     clearMatrixLocalStores: clearStores = clearMatrixLocalStores,
@@ -86,7 +186,10 @@ export const initClient = async (
     startMatrixClient: startClient = startMatrixClient,
   }: InitClientDeps = {}
 ): Promise<MatrixClient> => {
-  await clearStoresForIdentityChange(session);
+  const identityCleared = await clearStoresForIdentityChange(session);
+  if (identityCleared) {
+    clearNotificationCaches();
+  }
 
   try {
     const client = await startClient(session);
@@ -113,6 +216,7 @@ export const startClient = async (mx: MatrixClient) => {
 export const clearCacheAndReload = async (mx: MatrixClient) => {
   mx.stopClient();
   clearNavToActivePathStore(mx.getSafeUserId());
+  clearNotificationCaches();
   await mx.store.deleteAllData();
   window.location.reload();
 };
@@ -157,6 +261,7 @@ export const performLogout = async (
 
   deps.clearSessionLocalStorage(storage);
   clearSecretStorageKeys();
+  clearNotificationCaches();
   deps.reload();
 };
 
@@ -165,3 +270,44 @@ export const logoutClient = async (mx: MatrixClient) => performLogout(mx);
 export const clearLoginData = async (
   storage = typeof window === 'undefined' ? undefined : window.localStorage
 ) => performLogout(undefined, { storage: storage as SessionLocalStorage });
+
+export const scheduleProactiveTokenRefresh = (
+  mx: MatrixClient,
+  session: MatrixClientSession,
+  deps: Partial<RefreshAndPersistSessionDeps> = {},
+  nowMs = Date.now()
+): ProactiveTokenRefreshHandle => {
+  const resolvedDeps = { ...defaultRefreshDeps(), ...deps };
+
+  if (!session.refreshToken || typeof session.expiresInMs !== 'number' || typeof session.storedAtMs !== 'number') {
+    return { dispose: () => undefined };
+  }
+
+  const refreshAtMs = session.storedAtMs + session.expiresInMs - REFRESH_BEFORE_EXPIRY_MS;
+  const delayMs = Math.max(0, refreshAtMs - nowMs);
+  let disposed = false;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+
+  const runRefresh = async () => {
+    if (disposed) return;
+
+    try {
+      await refreshAndPersistSession(mx, session, session.refreshToken!, resolvedDeps);
+    } catch {
+      await performLogout(mx, { nativeSessionStore: resolvedDeps.nativeSessionStore });
+    }
+  };
+
+  timer = setTimeout(() => {
+    void runRefresh();
+  }, delayMs);
+
+  return {
+    dispose: () => {
+      disposed = true;
+      if (timer !== undefined) {
+        clearTimeout(timer);
+      }
+    },
+  };
+};
