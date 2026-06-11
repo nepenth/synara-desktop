@@ -2,16 +2,20 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   buildDesktopNotificationRoomRoute,
+  DESKTOP_FILE_IPC_CHUNK_SIZE,
+  DESKTOP_FILE_IPC_INLINE_THRESHOLD,
   DESKTOP_TRAY_DND_TOGGLE_EVENT,
   getDesktopIntegrationStatus,
   getDesktopNotificationCount,
   getDesktopPerformanceCapabilities,
   openDesktopExternalUrl,
+  readDesktopDroppedFiles,
   saveDesktopFile,
   sendDesktopAgentAction,
   setDesktopBadgeCount,
   setDesktopShortcuts,
   setDesktopTrayState,
+  shouldStreamDesktopFileIpc,
   showDesktopNotification,
   subscribeDesktopTrayDndToggle,
 } from '../desktop';
@@ -483,6 +487,13 @@ test('desktop notification payloads include routes for message, later, and agent
   ]);
 });
 
+test('desktop file streaming threshold uses eight mebibytes', () => {
+  assert.equal(DESKTOP_FILE_IPC_INLINE_THRESHOLD, 8 * 1024 * 1024);
+  assert.equal(DESKTOP_FILE_IPC_CHUNK_SIZE, 1024 * 1024);
+  assert.equal(shouldStreamDesktopFileIpc(DESKTOP_FILE_IPC_INLINE_THRESHOLD), false);
+  assert.equal(shouldStreamDesktopFileIpc(DESKTOP_FILE_IPC_INLINE_THRESHOLD + 1), true);
+});
+
 test('desktop file save sends bytes and filename through the desktop bridge', async () => {
   const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
   const originalWindow = globalThis.window;
@@ -517,6 +528,113 @@ test('desktop file save sends bytes and filename through the desktop bridge', as
       },
     },
   ]);
+});
+
+test('desktop file save streams large blobs through begin chunk end commands', async () => {
+  const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
+  const originalWindow = globalThis.window;
+  const totalSize = DESKTOP_FILE_IPC_INLINE_THRESHOLD + 3;
+  const blob = new Blob([new Uint8Array(totalSize).fill(42)]);
+
+  (globalThis as any).window = {
+    __SYNARA_DESKTOP__: {
+      platform: 'tauri',
+      invoke: async (command: string, args?: Record<string, unknown>) => {
+        calls.push({ command, args });
+        if (command === 'desktop_save_file_begin') {
+          return { sessionId: 'save-session-1' };
+        }
+        if (command === 'desktop_save_file_end') {
+          return '/Users/example/Downloads/large.bin';
+        }
+        return true;
+      },
+    },
+  };
+
+  try {
+    assert.equal(
+      await saveDesktopFile(blob, 'large.bin'),
+      '/Users/example/Downloads/large.bin'
+    );
+  } finally {
+    (globalThis as any).window = originalWindow;
+  }
+
+  assert.equal(calls[0]?.command, 'desktop_save_file_begin');
+  assert.deepEqual(calls[0]?.args, {
+    filename: 'large.bin',
+    totalSize,
+  });
+  assert.equal(calls.at(-1)?.command, 'desktop_save_file_end');
+  assert.deepEqual(calls.at(-1)?.args, { sessionId: 'save-session-1' });
+  assert.equal(
+    calls.filter((call) => call.command === 'desktop_save_file_chunk').length,
+    9
+  );
+  assert.equal(
+    calls.some((call) => call.command === 'desktop_save_file'),
+    false
+  );
+});
+
+test('desktop dropped file read streams large transfers through chunk commands', async () => {
+  const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
+  const originalWindow = globalThis.window;
+  const totalSize = DESKTOP_FILE_IPC_INLINE_THRESHOLD + 2;
+
+  (globalThis as any).window = {
+    __SYNARA_DESKTOP__: {
+      platform: 'tauri',
+      invoke: async (command: string, args?: Record<string, unknown>) => {
+        calls.push({ command, args });
+        if (command === 'desktop_read_dropped_files') {
+          return [
+            {
+              name: 'large-drop.bin',
+              transferId: 'drop-transfer-1',
+              size: totalSize,
+            },
+          ];
+        }
+        if (command === 'desktop_read_dropped_file_chunk') {
+          const offset = Number(args?.offset ?? 0);
+          const length = Number(args?.length ?? 0);
+          if (offset === 0) {
+            return Array.from({ length }, () => 7);
+          }
+          return Array.from({ length }, () => 8);
+        }
+        return true;
+      },
+    },
+  };
+
+  try {
+    const files = await readDesktopDroppedFiles(['/tmp/large-drop.bin']);
+    assert.equal(files.length, 1);
+    assert.equal(files[0]?.name, 'large-drop.bin');
+    assert.equal(files[0]?.size, totalSize);
+    const content = new Uint8Array(await files[0]!.arrayBuffer());
+    assert.equal(content[0], 7);
+    assert.equal(content[DESKTOP_FILE_IPC_INLINE_THRESHOLD], 8);
+    assert.equal(content.at(-1), 8);
+  } finally {
+    (globalThis as any).window = originalWindow;
+  }
+
+  assert.deepEqual(calls[0], {
+    command: 'desktop_read_dropped_files',
+    args: { paths: ['/tmp/large-drop.bin'] },
+  });
+  assert.equal(
+    calls.filter((call) => call.command === 'desktop_read_dropped_file_chunk').length,
+    9
+  );
+  assert.deepEqual(calls.at(-1), {
+    command: 'desktop_read_dropped_file_end',
+    args: { transferId: 'drop-transfer-1' },
+  });
 });
 
 const createWindowEventTarget = () => {
