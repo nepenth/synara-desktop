@@ -286,6 +286,13 @@ test('platform secret-store helpers describe persistence behavior', () => {
     }),
     'Native credential storage is not configured for this runtime.'
   );
+  assert.equal(
+    getPlatformSecretStoreStatusDescription({
+      ...fallbackStatus,
+      reason: 'windows-native-session-store-unsupported',
+    }),
+    'Windows builds do not persist sessions to a native credential store.'
+  );
 });
 
 test('platform session store probes desktop secret-store status without bridge opt-in', async () => {

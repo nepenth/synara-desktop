@@ -150,5 +150,9 @@ export const getPlatformSecretStoreStatusDescription = (
     return `${backendLabel} is unavailable.`;
   }
 
+  if (status.reason === 'windows-native-session-store-unsupported') {
+    return 'Windows builds do not persist sessions to a native credential store.';
+  }
+
   return 'Synara is using the fallback session store.';
 };

@@ -1258,7 +1258,7 @@ For each MIP1-NN commit:
 | 4 DevTools gate | MIP1-01 | A | Done | mip1-01 |
 | 5 Bridge capabilities | MIP1-02 | A | Done | mip1-02 |
 | 13 CSP tighten | MIP1-03 | A | Done | mip1-03 |
-| 46 Windows honesty | MIP1-04 | A | Planned | — |
+| 46 Windows honesty | MIP1-04 | A | Done | mip1-04 |
 | 1 Notification route | MIP1-05 | B | Planned | — |
 | 2 Tray DND | MIP1-06 | B | Planned | — |
 | 3 Agent-action listener | MIP1-07 | B | Planned | — |

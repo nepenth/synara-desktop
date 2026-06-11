@@ -3,6 +3,8 @@ import { normalizePlatformSecretStoreStatus, type PlatformSecretStoreStatus } fr
 
 export type PlatformChannel = 'local-dev-runtime' | 'desktop-tauri' | 'ios-native' | 'unknown';
 
+// Windows builds report canPersistSession=false from the desktop bridge; never infer
+// Keychain-equivalent persistence from the desktop channel alone.
 export const applyDesktopSecretStoreCapability = (status: PlatformSecretStoreStatus): void => {
   if (!isSynaraDesktop() || !window.__SYNARA_DESKTOP__) return;
 

@@ -17,6 +17,22 @@ Windows packaging is not part of the current supported release matrix.
 Developer ID signing, notarization, and updater metadata are release-channel
 work after the required distribution credentials are available.
 
+### Platform support — session persistence
+
+Native Matrix session persistence uses the platform credential store exposed by
+the desktop bridge. Supported backends:
+
+| Platform | Native session store | Persists across restarts |
+| -------- | -------------------- | ------------------------ |
+| macOS    | Keychain             | Yes                      |
+| Linux    | Secret Service       | Yes (when available)     |
+| Windows  | Not supported        | No                       |
+
+Windows builds do **not** persist sessions to a native credential store. The
+app falls back to the in-app session store on Windows; this is not equivalent
+to macOS Keychain or Linux Secret Service security. Developer Tools reports
+the native session store as unavailable on Windows.
+
 ## Local Development
 
 First, set up Rust, Node.js, and build tools by following the [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/).
