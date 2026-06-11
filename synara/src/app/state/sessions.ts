@@ -63,6 +63,11 @@ export type SessionLocalStorage = SessionStorage & {
 
 /**
  * Single-session fallback storage for Synara.
+ *
+ * Used only when the native secret store cannot persist sessions. Tokens live in
+ * localStorage, which is weaker than OS keychain storage under XSS. Settings
+ * surfaces `nativeStoreError` when this path is active; fallback keys are cleared
+ * on logout via `performLogout`.
  */
 // const FALLBACK_STORE_NAME: SessionStoreName = {
 //   sync: 'web-sync-store',

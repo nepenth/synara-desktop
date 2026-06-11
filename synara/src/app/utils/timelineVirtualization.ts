@@ -156,6 +156,7 @@ export type TimelineRowBuildContext<TEvt extends TimelineRowBuildEvent> = {
 
 export type TimelineBuildFingerprint = {
   timelineToken: string;
+  revisionToken: string;
   eventsLength: number;
   optionsKey: string;
 };
@@ -216,6 +217,30 @@ const getTimelineToken = <TTimeline extends TimelineRowBuildTimeline<TimelineRow
   linkedTimelines: TTimeline[]
 ): string => linkedTimelines.map((timeline) => timeline.getEvents().length).join(':');
 
+const getTimelineRevisionToken = <TTimeline extends TimelineRowBuildTimeline<TimelineRowBuildEvent>>(
+  linkedTimelines: TTimeline[]
+): string =>
+  linkedTimelines
+    .map((timeline) =>
+      timeline
+        .getEvents()
+        .map(
+          (event) =>
+            `${event.getId() ?? ''}:${event.isRedacted() ? 1 : 0}:${event.getTs()}:${event.getType()}`
+        )
+        .join(',')
+    )
+    .join('|');
+
+const fingerprintsAreEquivalent = (
+  left: TimelineBuildFingerprint,
+  right: TimelineBuildFingerprint
+): boolean =>
+  left.timelineToken === right.timelineToken &&
+  left.revisionToken === right.revisionToken &&
+  left.eventsLength === right.eventsLength &&
+  left.optionsKey === right.optionsKey;
+
 const getTimelineBuildOptionsKey = (options: TimelineBuildOptions): string =>
   [
     options.showIntro ? '1' : '0',
@@ -237,6 +262,7 @@ export const createTimelineBuildFingerprint = <
   getTimelinesEventsCount: (timelines: TTimeline[]) => number
 ): TimelineBuildFingerprint => ({
   timelineToken: getTimelineToken(linkedTimelines),
+  revisionToken: getTimelineRevisionToken(linkedTimelines),
   eventsLength: getTimelinesEventsCount(linkedTimelines),
   optionsKey: getTimelineBuildOptionsKey(options),
 });
@@ -504,7 +530,7 @@ const canIncrementallyAppendRows = <
 ): boolean => {
   if (previous.fingerprint.optionsKey !== fingerprint.optionsKey) return false;
   if (fingerprint.eventsLength < previous.fingerprint.eventsLength) return false;
-  if (fingerprint.eventsLength === previous.fingerprint.eventsLength) return true;
+  if (fingerprint.eventsLength === previous.fingerprint.eventsLength) return false;
   return isLiveEndAppendToken(previous.fingerprint.timelineToken, fingerprint.timelineToken);
 };
 
@@ -551,19 +577,11 @@ export const buildTimelineRowsWithState = <
     deps.getTimelinesEventsCount
   );
 
-  if (
-    previous &&
-    canIncrementallyAppendRows(previous, fingerprint) &&
-    fingerprint.eventsLength === previous.fingerprint.eventsLength
-  ) {
+  if (previous && fingerprintsAreEquivalent(previous.fingerprint, fingerprint)) {
     timelineRowBuildInstrumentation.skippedBuilds += 1;
     return {
       rows: previous.rows,
-      state: {
-        fingerprint,
-        rows: previous.rows,
-        context: previous.context,
-      },
+      state: previous,
       strategy: 'skipped',
     };
   }

@@ -507,6 +507,8 @@ test('desktop external link opener invokes the desktop bridge only on desktop', 
     };
 
     assert.equal(await openDesktopExternalUrl('https://example.org/path'), true);
+    assert.equal(await openDesktopExternalUrl('https://192.168.1.1/admin'), false);
+    assert.equal(await openDesktopExternalUrl('https://169.254.169.254/latest/meta-data/'), false);
   } finally {
     (globalThis as any).window = originalWindow;
   }
