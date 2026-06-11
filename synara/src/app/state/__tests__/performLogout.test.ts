@@ -1,0 +1,141 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import type { MatrixClient } from 'matrix-js-sdk';
+import { performLogout } from '../../../client/initMatrix';
+import {
+  clearSessionLocalStorage,
+  SESSION_LOCAL_STORAGE_EXACT_KEYS,
+  type SessionLocalStorage,
+} from '../sessions';
+
+const createEnumeratedMemoryStorage = (
+  initialValues: Record<string, string> = {}
+): SessionLocalStorage => {
+  const values = new Map(Object.entries(initialValues));
+
+  return {
+    getItem: (key) => values.get(key) ?? null,
+    setItem: (key, value) => {
+      values.set(key, value);
+    },
+    removeItem: (key) => {
+      values.delete(key);
+    },
+    get length() {
+      return values.size;
+    },
+    key: (index) => Array.from(values.keys())[index] ?? null,
+  };
+};
+
+const createMockMatrixClient = () => {
+  const calls: string[] = [];
+
+  const mx = {
+    stopClient: () => {
+      calls.push('stopClient');
+    },
+    logout: async () => {
+      calls.push('logout');
+    },
+    clearStores: async () => {
+      calls.push('clearStores');
+    },
+  } as unknown as MatrixClient;
+
+  return { mx, calls };
+};
+
+const createLogoutDeps = () => {
+  const clearPersistedCalls: Array<Record<string, unknown>> = [];
+  const pushCalls: Array<[string | undefined, string | undefined]> = [];
+  let reloaded = false;
+
+  const deps = {
+    clearPersistedSessions: async (options?: Record<string, unknown>) => {
+      clearPersistedCalls.push(options ?? {});
+    },
+    pushSessionToSW: (baseUrl?: string, accessToken?: string) => {
+      pushCalls.push([baseUrl, accessToken]);
+    },
+    clearSessionLocalStorage: () => undefined,
+    nativeSessionStore: { removeSession: async () => true },
+    reload: () => {
+      reloaded = true;
+    },
+  };
+
+  return { deps, clearPersistedCalls, pushCalls, getReloaded: () => reloaded };
+};
+
+test('performLogout with matrix client stops client, clears stores, and reloads', async () => {
+  const { mx, calls } = createMockMatrixClient();
+  const { deps, clearPersistedCalls, pushCalls, getReloaded } = createLogoutDeps();
+
+  await performLogout(mx, deps);
+
+  assert.deepEqual(calls, ['stopClient', 'logout', 'clearStores']);
+  assert.equal(clearPersistedCalls.length, 1);
+  assert.deepEqual(clearPersistedCalls[0], { nativeSessionStore: deps.nativeSessionStore });
+  assert.equal(pushCalls.length, 1);
+  assert.deepEqual(pushCalls[0], [undefined, undefined]);
+  assert.equal(getReloaded(), true);
+});
+
+test('performLogout without matrix client still clears persisted session and reloads', async () => {
+  const { deps, clearPersistedCalls, pushCalls, getReloaded } = createLogoutDeps();
+
+  await performLogout(undefined, deps);
+
+  assert.equal(clearPersistedCalls.length, 1);
+  assert.equal(pushCalls.length, 1);
+  assert.deepEqual(pushCalls[0], [undefined, undefined]);
+  assert.equal(getReloaded(), true);
+});
+
+test('performLogout pushes session to service worker with and without matrix client', async () => {
+  const pushCalls: Array<[string | undefined, string | undefined]> = [];
+  const deps = {
+    ...createLogoutDeps().deps,
+    pushSessionToSW: (baseUrl?: string, accessToken?: string) => {
+      pushCalls.push([baseUrl, accessToken]);
+    },
+  };
+  const { mx } = createMockMatrixClient();
+
+  await performLogout(mx, deps);
+  await performLogout(undefined, deps);
+
+  assert.equal(pushCalls.length, 2);
+  assert.deepEqual(pushCalls[0], [undefined, undefined]);
+  assert.deepEqual(pushCalls[1], [undefined, undefined]);
+});
+
+test('performLogout without matrix client removes session keys only', async () => {
+  const storage = createEnumeratedMemoryStorage({
+    synara_access_token: 'token',
+    synara_device_id: 'DEVICE',
+    synara_user_id: '@alice:example.org',
+    synara_hs_base_url: 'https://matrix.example.org',
+    after_login_redirect_url: '/room/123',
+    'navToActivePath@alice:example.org': '{"home":{"pathname":"/home"}}',
+    settings: JSON.stringify({ themeId: 'aurora', pageZoom: 120 }),
+  });
+  let reloaded = false;
+
+  await performLogout(undefined, {
+    ...createLogoutDeps().deps,
+    clearSessionLocalStorage,
+    reload: () => {
+      reloaded = true;
+    },
+    storage,
+  });
+
+  SESSION_LOCAL_STORAGE_EXACT_KEYS.forEach((key) => {
+    assert.equal(storage.getItem(key), null, `expected session key ${key} to be removed`);
+  });
+  assert.equal(storage.getItem('navToActivePath@alice:example.org'), null);
+  assert.equal(storage.getItem('settings'), JSON.stringify({ themeId: 'aurora', pageZoom: 120 }));
+  assert.equal(reloaded, true);
+});
