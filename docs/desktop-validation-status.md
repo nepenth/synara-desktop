@@ -77,10 +77,14 @@ Execute on a logged-in macOS session with the branch tip build:
 
 Record pass/fail and build revision in this file when complete.
 
-### macOS signing and notarization (release scaffolding)
+### macOS signing and notarization
 
-Release signing is not yet wired in CI. See prior scaffolding in this document
-(`bundle.macOS.signingIdentity`, entitlements, notarytool workflow comments).
+Local macOS smoke builds remain ad-hoc signed. Published macOS releases are
+gated by `.github/workflows/release-desktop.yml`: CI imports the configured
+Developer ID Application certificate, builds with that signing identity,
+submits notarization through Tauri's Apple credentials, verifies the resulting
+signature, and validates stapling on the app bundle and DMG. The release job
+fails before build when any required Apple signing secret is missing.
 
 ## Linux
 

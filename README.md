@@ -14,8 +14,10 @@ channel. Local builds do not contact update servers.
 | Linux            | Build from source |
 
 Windows packaging is not part of the current supported release matrix.
-Developer ID signing, notarization, and updater metadata are release-channel
-work after the required distribution credentials are available.
+Published macOS releases require Developer ID signing and notarization in CI.
+The release workflow fails if the required Apple distribution secrets are not
+configured. Updater metadata remains disabled until this project has a stable
+signed release metadata channel.
 
 ### Platform support — session persistence
 
@@ -55,6 +57,15 @@ To build the app locally, run:
 On macOS, local unsigned smoke-test builds should use ad-hoc signing:
 
 - `npm run tauri build -- --bundles app`
+
+Published macOS releases require these GitHub Actions secrets:
+
+- `APPLE_CERTIFICATE_BASE64`: base64-encoded Developer ID Application `.p12`.
+- `APPLE_CERTIFICATE_PASSWORD`: password for that `.p12`.
+- `APPLE_SIGNING_IDENTITY`: codesigning identity, for example `Developer ID Application: Example, Inc. (TEAMID)`.
+- `APPLE_ID`: Apple Developer account email used for notarization.
+- `APPLE_APP_SPECIFIC_PASSWORD`: app-specific password for notarization.
+- `APPLE_TEAM_ID`: Apple Developer Team ID.
 
 On Linux workstations, see [Linux builds](docs/linux.md) for distribution-specific system dependencies, KDE Plasma Wayland notes, and `.deb`/AppImage packaging commands.
 

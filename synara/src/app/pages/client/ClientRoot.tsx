@@ -13,7 +13,7 @@ import {
   Spinner,
   Text,
 } from 'folds';
-import { HttpApiEvent, HttpApiEventHandlerMap, MatrixClient } from 'matrix-js-sdk';
+import { HttpApiEvent, HttpApiEventHandlerMap, MatrixClient, type SyncState } from 'matrix-js-sdk';
 import FocusTrap from 'focus-trap-react';
 import React, {
   MouseEventHandler,
@@ -48,17 +48,23 @@ import { platformSessionStore, repairPlatformDeviceDisplayName } from '../../pla
 import { migrateLegacySessionToNativeAfterClientInit } from '../../state/sessionPersistence';
 import { shouldRetrySyncOnResume } from '../../utils/syncLifecycle';
 import {
+  formatSyncSplashStatus,
   logSyncStateTransition,
-  shouldShowSyncRecoveryUI,
+  selectSyncSplashView,
   SYNC_PREPARED_TIMEOUT_MS,
 } from '../../utils/syncSplashRecovery';
 
-function ClientRootLoading() {
+function ClientRootLoading({ status }: { status: string }) {
   return (
     <SplashScreen>
       <Box direction="Column" grow="Yes" alignItems="Center" justifyContent="Center" gap="400">
         <Spinner variant="Secondary" size="600" />
-        <Text>Heating up</Text>
+        <Box direction="Column" alignItems="Center" gap="100">
+          <Text>Heating up</Text>
+          <Text size="T300" priority="400">
+            {status}
+          </Text>
+        </Box>
       </Box>
     </SplashScreen>
   );
@@ -224,6 +230,7 @@ type ClientRootProps = {
 export function ClientRoot({ children }: ClientRootProps) {
   const [loading, setLoading] = useState(true);
   const [syncTimedOut, setSyncTimedOut] = useState(false);
+  const [syncState, setSyncState] = useState<SyncState | null>(null);
   const syncRetryInFlightRef = useRef(false);
   const { baseUrl, userId } = getActiveSession() ?? {};
 
@@ -266,6 +273,7 @@ export function ClientRoot({ children }: ClientRootProps) {
   useSyncState(
     mx,
     useCallback((state, previous) => {
+      setSyncState(state);
       logSyncStateTransition(state, previous);
       if (state === 'PREPARED') {
         setLoading(false);
@@ -273,6 +281,10 @@ export function ClientRoot({ children }: ClientRootProps) {
       }
     }, [])
   );
+
+  useEffect(() => {
+    if (!mx) setSyncState(null);
+  }, [mx]);
 
   useEffect(() => {
     if (!loading || !mx) {
@@ -307,14 +319,20 @@ export function ClientRoot({ children }: ClientRootProps) {
     }
   }, [mx, startMatrix, startState.status]);
 
-  const showSyncRecoveryUI = shouldShowSyncRecoveryUI(loading, syncTimedOut);
+  const splashStatus = formatSyncSplashStatus(syncState, Boolean(mx));
+  const splashView = selectSyncSplashView({
+    hasError: loadState.status === AsyncStatus.Error || startState.status === AsyncStatus.Error,
+    hasClient: Boolean(mx),
+    loading,
+    syncTimedOut,
+  });
 
   return (
     <AutoDiscovery userId={userId!} baseUrl={baseUrl!}>
       <SpecVersions baseUrl={baseUrl!}>
         {mx && <SyncStatus mx={mx} />}
         {loading && <ClientRootOptions mx={mx} />}
-        {(loadState.status === AsyncStatus.Error || startState.status === AsyncStatus.Error) && (
+        {splashView === 'error' && (
           <SplashScreen>
             <Box
               direction="Column"
@@ -341,7 +359,7 @@ export function ClientRoot({ children }: ClientRootProps) {
             </Box>
           </SplashScreen>
         )}
-        {showSyncRecoveryUI && (
+        {splashView === 'recovery' && (
           <SplashScreen>
             <Box
               direction="Column"
@@ -353,6 +371,9 @@ export function ClientRoot({ children }: ClientRootProps) {
               <Dialog>
                 <Box direction="Column" gap="400" style={{ padding: config.space.S400 }}>
                   <Text>Sync is taking longer than expected.</Text>
+                  <Text size="T300" priority="400">
+                    {splashStatus}
+                  </Text>
                   <Text size="T300" priority="400">
                     You can retry, clear the local cache, or sign out.
                   </Text>
@@ -378,9 +399,8 @@ export function ClientRoot({ children }: ClientRootProps) {
             </Box>
           </SplashScreen>
         )}
-        {loading || !mx ? (
-          <ClientRootLoading />
-        ) : (
+        {splashView === 'loading' && <ClientRootLoading status={splashStatus} />}
+        {splashView === 'client' && mx && (
           <MatrixClientProvider value={mx}>
             <ServerConfigsLoader>
               {(serverConfigs) => (
