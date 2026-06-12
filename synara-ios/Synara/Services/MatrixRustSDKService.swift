@@ -121,6 +121,8 @@ actor MatrixRustSDKClientStore {
     private var roomListService: RoomListService?
     private var syncStatus: MatrixSyncStatus = .stopped
     private let unableToDecryptRecorder = SynaraUnableToDecryptRecorder()
+    private var retainedClientHandles: [Client] = []
+    private var retainedRoomHandlesByID: [String: Room] = [:]
     /// Serializes client creation, restoration, and teardown. Actors allow reentrancy
     /// across `await`, so concurrent ensure/reset calls could otherwise free the Rust
     /// client while another task still reads rooms from it.
@@ -151,6 +153,7 @@ actor MatrixRustSDKClientStore {
 
         if activeSession != nil {
             await detachSyncServices()
+            retainClientHandle(client)
             client = nil
             activeSession = nil
             syncService = nil
@@ -190,9 +193,11 @@ actor MatrixRustSDKClientStore {
             self.syncStatus = .syncing
             return session
         } catch let error as ClientError {
+            retainClientHandle(client)
             self.syncStatus = .failed("Could not sign in.")
             throw Self.mapLoginError(error)
         } catch {
+            retainClientHandle(client)
             self.syncStatus = .failed("Could not sign in.")
             // TODO: Map additional non-ClientError login failures when the SDK exposes stable types.
             throw LoginError.networkFailure
@@ -330,6 +335,7 @@ actor MatrixRustSDKClientStore {
         if let syncService {
             await syncService.stop()
         }
+        retainClientHandle(client)
         client = nil
         activeSession = nil
         syncService = nil
@@ -350,6 +356,7 @@ actor MatrixRustSDKClientStore {
 
         if activeSession == session {
             await detachSyncServices()
+            retainClientHandle(client)
             client = nil
             activeSession = nil
         }
@@ -365,7 +372,7 @@ actor MatrixRustSDKClientStore {
     ) async -> RoomListState {
         do {
             let activeClient = try await ensureClient(for: session, allowsStoreRepair: allowsStoreRepair)
-            let cachedState = await MatrixRoomListStateBuilder.build(
+            let cachedState = await buildRoomListState(
                 from: activeClient,
                 fallbackCache: fallbackCache
             )
@@ -381,7 +388,7 @@ actor MatrixRustSDKClientStore {
                     }
                     return cachedState
                 }
-                return await MatrixRoomListStateBuilder.build(
+                return await buildRoomListState(
                     from: activeClient,
                     fallbackCache: fallbackCache
                 )
@@ -402,7 +409,7 @@ actor MatrixRustSDKClientStore {
                 return .failed("Could not load rooms. Try again.")
             }
 
-            return await MatrixRoomListStateBuilder.build(
+            return await buildRoomListState(
                 from: activeClient,
                 fallbackCache: fallbackCache
             )
@@ -487,15 +494,20 @@ actor MatrixRustSDKClientStore {
 
     func rooms(session: AuthenticatedSession) async throws -> [Room] {
         let client = try await ensureClient(for: session)
-        return client.rooms()
+        let rooms = client.rooms()
+        retainRoomHandles(rooms)
+        return rooms
     }
 
     func room(roomID: String, session: AuthenticatedSession) async throws -> Room? {
         let client = try await ensureClient(for: session)
         if let room = try client.getRoom(roomId: roomID) {
+            retainRoomHandles([room])
             return room
         }
-        return client.rooms().first { $0.id() == roomID }
+        let rooms = client.rooms()
+        retainRoomHandles(rooms)
+        return rooms.first { $0.id() == roomID }
     }
 
     func userProfile(userID: String, session: AuthenticatedSession) async throws -> UserProfile {
@@ -1022,6 +1034,7 @@ actor MatrixRustSDKClientStore {
 
             if let activeSession, activeSession != session {
                 await detachSyncServices()
+                retainClientHandle(client)
                 client = nil
                 self.activeSession = nil
                 unableToDecryptRecorder.reset()
@@ -1040,8 +1053,10 @@ actor MatrixRustSDKClientStore {
                 self.activeSession = session
                 return newClient
             } catch {
+                retainClientHandle(newClient)
                 if allowRepair {
                     await detachSyncServices()
+                    retainClientHandle(client)
                     self.client = nil
                     activeSession = nil
                     syncService = nil
@@ -1053,6 +1068,33 @@ actor MatrixRustSDKClientStore {
                 throw error
             }
         }
+    }
+
+    private func retainClientHandle(_ client: Client?) {
+        guard let client else {
+            return
+        }
+        retainedClientHandles.append(client)
+    }
+
+    func retainRoomHandles(_ rooms: [Room]) {
+        for room in rooms {
+            retainedRoomHandlesByID[room.id()] = room
+        }
+    }
+
+    private func buildRoomListState(
+        from client: Client,
+        fallbackCache: [RoomSummary]
+    ) async -> RoomListState {
+        let spaceService = await client.spaceService()
+        let sdkRooms = client.rooms()
+        retainRoomHandles(sdkRooms)
+        return await MatrixRoomListStateBuilder.build(
+            from: sdkRooms,
+            spaceService: spaceService,
+            fallbackCache: fallbackCache
+        )
     }
 
     private static func mapLoginError(_ error: ClientError) -> LoginError {
@@ -1480,16 +1522,11 @@ enum RoomUnreadPresentation {
 }
 
 private enum MatrixRoomListStateBuilder {
-    static func build(from client: Client?, fallbackCache: [RoomSummary]) async -> RoomListState {
-        guard let client else {
-            if fallbackCache.isEmpty == false {
-                return .loaded(fallbackCache)
-            }
-            return .failed("Could not load rooms. Try again.")
-        }
-
-        let spaceService = await client.spaceService()
-        let sdkRooms = client.rooms()
+    static func build(
+        from sdkRooms: [Room],
+        spaceService: SpaceService?,
+        fallbackCache: [RoomSummary]
+    ) async -> RoomListState {
         let sorted = await roomSummaries(from: sdkRooms, spaceService: spaceService)
         if sorted.isEmpty == false {
             return .loaded(sorted)
@@ -1597,6 +1634,7 @@ final class MatrixRustSDKRoomListService: RoomListServicing {
                                 return
                             }
 
+                            await self.clientStore.retainRoomHandles(rooms)
                             let summaries = await MatrixRoomListStateBuilder.roomSummaries(
                                 from: rooms,
                                 spaceService: spaceService,
