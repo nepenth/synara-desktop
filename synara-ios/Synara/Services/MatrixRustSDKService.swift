@@ -115,6 +115,7 @@ actor MatrixRustSDKClientStore {
     /// Bump when the on-disk Matrix SDK store layout or compatibility requirements change.
     static let persistedStoreSchemaVersion = 2
     private static let platformDeviceDisplayName = "Synara iOS"
+    private let logger: LoggingServicing
     private var client: Client?
     private var activeSession: AuthenticatedSession?
     private var syncService: SyncService?
@@ -129,6 +130,10 @@ actor MatrixRustSDKClientStore {
     private var isMutatingClient = false
     private var clientMutationWaiters: [CheckedContinuation<Void, Never>] = []
     private var isClientPaused = false
+
+    init(logger: LoggingServicing = AppLogger()) {
+        self.logger = logger
+    }
 
     var syncStatusDescription: String {
         syncStatus.description
@@ -380,6 +385,10 @@ actor MatrixRustSDKClientStore {
                 do {
                     try await syncOnceForInteractiveOpen(session: session)
                 } catch {
+                    logger.info(
+                        "Room list fast sync failed; using SDK cached rooms count=\(rooms.count): \(String(describing: error))",
+                        category: .sync
+                    )
                     return cachedState
                 }
                 return await buildRoomListState(
@@ -392,6 +401,10 @@ actor MatrixRustSDKClientStore {
                 try await syncOnceForInitialRoomList(session: session)
             } catch {
                 if fallbackCache.isEmpty == false {
+                    logger.info(
+                        "Room list initial sync failed; using fallback rooms count=\(fallbackCache.count): \(String(describing: error))",
+                        category: .sync
+                    )
                     return .loaded(fallbackCache)
                 }
 
@@ -400,10 +413,18 @@ actor MatrixRustSDKClientStore {
                     fallbackCache: fallbackCache
                 )
                 if case .loaded(let rooms) = localState, rooms.isEmpty == false {
+                    logger.info(
+                        "Room list initial sync failed; using local SDK rooms count=\(rooms.count): \(String(describing: error))",
+                        category: .sync
+                    )
                     return localState
                 }
 
-                return .failed("Could not load rooms. Try again.")
+                logger.info(
+                    "Room list initial sync failed with no local rooms; starting room-list stream: \(String(describing: error))",
+                    category: .sync
+                )
+                return .empty
             }
 
             return await buildRoomListState(
@@ -444,7 +465,7 @@ actor MatrixRustSDKClientStore {
 
     func syncOnceForInitialRoomList(session: AuthenticatedSession) async throws {
         let client = try await ensureClient(for: session)
-        _ = try await client.syncOnceV2(settings: SyncSettingsV2(timeoutMs: 15_000, fullState: true))
+        _ = try await client.syncOnceV2(settings: SyncSettingsV2(timeoutMs: 8_000, fullState: false))
         syncStatus = .syncing
     }
 
@@ -1565,12 +1586,18 @@ private enum MatrixRoomListStateBuilder {
 final class MatrixRustSDKRoomListService: RoomListServicing {
     private let sessionStore: AppSessionStore
     private let clientStore: MatrixRustSDKClientStore
+    private let logger: LoggingServicing
     private let cacheLock = NSLock()
     private var cachedRooms: [RoomSummary] = []
 
-    init(sessionStore: AppSessionStore, clientStore: MatrixRustSDKClientStore) {
+    init(
+        sessionStore: AppSessionStore,
+        clientStore: MatrixRustSDKClientStore,
+        logger: LoggingServicing = AppLogger()
+    ) {
         self.sessionStore = sessionStore
         self.clientStore = clientStore
+        self.logger = logger
     }
 
     func loadRooms() async -> RoomListState {
@@ -1645,6 +1672,10 @@ final class MatrixRustSDKRoomListService: RoomListServicing {
                             )
                             if summaries.isEmpty == false {
                                 self.setCachedRooms(summaries)
+                                self.logger.info(
+                                    "Room list stream mapped rooms count=\(summaries.count)",
+                                    category: .sync
+                                )
                             }
                             let state: RoomListState = summaries.isEmpty ? .empty : .loaded(summaries)
                             continuation.yield(state)
@@ -1660,15 +1691,89 @@ final class MatrixRustSDKRoomListService: RoomListServicing {
 
                     let cachedSnapshot = cachedRoomsSnapshot()
                     if cachedSnapshot.isEmpty == false {
+                        logger.info(
+                            "Room list stream failed; using cached rooms count=\(cachedSnapshot.count): \(String(describing: error))",
+                            category: .sync
+                        )
                         continuation.yield(.loaded(cachedSnapshot))
+                    } else {
+                        logger.info(
+                            "Room list stream failed with no cached rooms: \(String(describing: error))",
+                            category: .sync
+                        )
                     }
-                    continuation.finish()
+                    await runClassicRoomListUpdates(session: session, continuation: continuation)
                 }
             }
 
             continuation.onTermination = { _ in
                 task.cancel()
             }
+        }
+    }
+
+    private func runClassicRoomListUpdates(
+        session: AuthenticatedSession,
+        continuation: AsyncStream<RoomListState>.Continuation
+    ) async {
+        logger.info("Starting classic room-list sync fallback", category: .sync)
+        var didYieldEmptyState = false
+
+        while Task.isCancelled == false, isCurrentSignedInUser(session) {
+            do {
+                try await clientStore.syncOnce(session: session, fullState: false)
+            } catch {
+                logger.info(
+                    "Classic room-list sync attempt failed: \(String(describing: error))",
+                    category: .sync
+                )
+            }
+
+            do {
+                let client = try await clientStore.ensureClient(for: session)
+                let rooms = client.rooms()
+                await clientStore.retainRoomHandles(rooms)
+                let summaries = await MatrixRoomListStateBuilder.roomSummaries(
+                    from: rooms,
+                    spaceService: await client.spaceService(),
+                    previous: cachedRoomsSnapshot()
+                )
+
+                if summaries.isEmpty == false {
+                    setCachedRooms(summaries)
+                    logger.info(
+                        "Classic room-list fallback mapped rooms count=\(summaries.count)",
+                        category: .sync
+                    )
+                    continuation.yield(.loaded(summaries))
+                } else if cachedRoomsSnapshot().isEmpty == false {
+                    let cachedSnapshot = cachedRoomsSnapshot()
+                    logger.info(
+                        "Classic room-list fallback using cached rooms count=\(cachedSnapshot.count)",
+                        category: .sync
+                    )
+                    continuation.yield(.loaded(cachedSnapshot))
+                } else if didYieldEmptyState == false {
+                    didYieldEmptyState = true
+                    continuation.yield(.empty)
+                }
+            } catch {
+                let cachedSnapshot = cachedRoomsSnapshot()
+                if cachedSnapshot.isEmpty == false {
+                    logger.info(
+                        "Classic room-list fallback failed; using cached rooms count=\(cachedSnapshot.count): \(String(describing: error))",
+                        category: .sync
+                    )
+                    continuation.yield(.loaded(cachedSnapshot))
+                } else {
+                    logger.info(
+                        "Classic room-list fallback failed with no cached rooms: \(String(describing: error))",
+                        category: .sync
+                    )
+                }
+            }
+
+            try? await Task.sleep(nanoseconds: 8_000_000_000)
         }
     }
 
@@ -1699,6 +1804,11 @@ final class MatrixRustSDKRoomListService: RoomListServicing {
         )
         if case .loaded(let rooms) = state, rooms.isEmpty == false {
             setCachedRooms(rooms)
+            logger.info("Room list initial load mapped rooms count=\(rooms.count)", category: .sync)
+        } else if case .empty = state {
+            logger.info("Room list initial load returned empty; waiting for stream", category: .sync)
+        } else if case .failed(let message) = state {
+            logger.error("Room list initial load failed: \(message)", category: .sync)
         }
         return state
     }
