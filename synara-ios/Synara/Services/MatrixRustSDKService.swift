@@ -1967,9 +1967,9 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
 
     func clearSessionCaches() {
         profileAvatarCacheByUserID.removeAll()
-        timelineCacheLock.lock()
-        cachedTimelines.removeAll()
-        timelineCacheLock.unlock()
+        withTimelineCacheLock {
+            cachedTimelines.removeAll()
+        }
     }
 
     func threadTimelineUpdates(roomID: String, rootEventID: String) -> AsyncStream<TimelineLoadOutcome> {
@@ -2202,9 +2202,9 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
 
     private func invalidateTimelineCache(roomID: String, focus: TimelineCacheFocus) {
         let cacheKey = timelineCacheKey(roomID: roomID, focus: focus)
-        timelineCacheLock.lock()
-        cachedTimelines.removeValue(forKey: cacheKey)
-        timelineCacheLock.unlock()
+        withTimelineCacheLock {
+            _ = cachedTimelines.removeValue(forKey: cacheKey)
+        }
     }
 
     private func timelineCacheKey(roomID: String, focus: TimelineCacheFocus) -> String {
@@ -2225,12 +2225,9 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
     ) async throws -> Timeline {
         let cacheKey = timelineCacheKey(roomID: room.id(), focus: focus)
 
-        timelineCacheLock.lock()
-        if let cachedTimeline = cachedTimelines[cacheKey] {
-            timelineCacheLock.unlock()
+        if let cachedTimeline = withTimelineCacheLock({ cachedTimelines[cacheKey] }) {
             return cachedTimeline
         }
-        timelineCacheLock.unlock()
 
         let timeline: Timeline
         switch focus {
@@ -2252,10 +2249,16 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
             )
         }
 
-        timelineCacheLock.lock()
-        cachedTimelines[cacheKey] = timeline
-        timelineCacheLock.unlock()
+        withTimelineCacheLock {
+            cachedTimelines[cacheKey] = timeline
+        }
         return timeline
+    }
+
+    private func withTimelineCacheLock<T>(_ body: () throws -> T) rethrows -> T {
+        timelineCacheLock.lock()
+        defer { timelineCacheLock.unlock() }
+        return try body()
     }
 
     private static func timelineConfiguration(focus: TimelineFocus) -> TimelineConfiguration {
