@@ -49,7 +49,7 @@ struct AppEnvironment {
                 logger.error("Could not prune legacy Matrix SDK stores", category: .auth)
             }
         }
-        let matrixSDKClientStore = MatrixRustSDKClientStore()
+        let matrixSDKClientStore = MatrixRustSDKClientStore(logger: logger)
         let matrix = MatrixRustSDKMatrixClientService(clientStore: matrixSDKClientStore)
         let pusherService = MatrixPusherService(
             clientStore: matrixSDKClientStore,
@@ -68,7 +68,11 @@ struct AppEnvironment {
         let router = AppRouter()
         let drafts = DraftStore()
         let timeline = MatrixRustSDKTimelineService(sessionStore: session, clientStore: matrixSDKClientStore)
-        let roomList = MatrixRustSDKRoomListService(sessionStore: session, clientStore: matrixSDKClientStore)
+        let roomList = MatrixRustSDKRoomListService(
+            sessionStore: session,
+            clientStore: matrixSDKClientStore,
+            logger: logger
+        )
         let roomMembership = MatrixRustSDKRoomMembershipService(sessionStore: session, clientStore: matrixSDKClientStore)
         let crypto = MatrixRustSDKCryptoStatusService(sessionStore: session, clientStore: matrixSDKClientStore)
         let roomManagement = MatrixRustSDKRoomManagementService(sessionStore: session, clientStore: matrixSDKClientStore)
