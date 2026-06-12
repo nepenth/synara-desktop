@@ -52,13 +52,11 @@ repo:
 ```sh
 source "$HOME/.private_keys/appstoreconnect/synara.env"
 synara-ios/scripts/upload-testflight-internal.sh
-synara-ios/scripts/promote-testflight-internal.rb
 ```
 
-Use an App Store Connect API key with at least App Manager access for upload and
-TestFlight build management. Admin access is acceptable for this local key if you
-want the automation to cover future metadata and tester-management work, but the
-private key must remain outside the repository.
+Use an App Store Connect API key with at least App Manager access for upload.
+Admin access is acceptable for this local key if you want the automation to cover
+future metadata work, but the private key must remain outside the repository.
 
 Do not commit `.p8` files. The repo ignores `AuthKey_*.p8` and `*.p8` as a
 defense-in-depth measure.
@@ -70,8 +68,7 @@ After upload, Apple still performs server-side processing. If App Store Connect
 shows "Missing Compliance", answer the export-compliance prompt before the build
 can be installed through TestFlight.
 
-`promote-testflight-internal.rb` checks the uploaded build status and attempts to
-associate it with the configured internal TestFlight group. App Store Connect may
-reject explicit assignment to built-in internal groups; in that case the script
-reports the build as valid and leaves final propagation/compliance handling to
-App Store Connect.
+The upload uses `testFlightInternalTestingOnly`, and App Store Connect makes the
+processed build available to internal testers through the configured internal
+distribution settings. Do not run `promote-testflight-internal.rb` as part of the
+normal upload path.
