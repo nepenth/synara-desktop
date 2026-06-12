@@ -623,7 +623,7 @@ enum RoomListScopeFilter {
         }
 
         scopedRooms = apply(filter, to: scopedRooms)
-        var filtered = RoomListSearchFilter.mergeInvitedRooms(invitedRooms, into: scopedRooms)
+        let filtered = RoomListSearchFilter.mergeInvitedRooms(invitedRooms, into: scopedRooms)
 
         guard query.isEmpty == false else {
             return filtered

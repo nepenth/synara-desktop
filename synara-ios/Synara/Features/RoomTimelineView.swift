@@ -750,7 +750,7 @@ struct RoomTimelineView: View {
     }
 
     private func markPendingSendSent(localID: String) {
-        guard case .loaded(let items, let isPaginating) = state,
+        guard case .loaded(let items, _) = state,
               let item = items.first(where: { $0.id == localID }) else {
             return
         }
@@ -759,7 +759,7 @@ struct RoomTimelineView: View {
     }
 
     private func markPendingSendFailed(localID: String) {
-        guard case .loaded(let items, let isPaginating) = state,
+        guard case .loaded(let items, _) = state,
               let item = items.first(where: { $0.id == localID }) else {
             return
         }

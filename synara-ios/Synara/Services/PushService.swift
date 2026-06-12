@@ -5,7 +5,7 @@ import UserNotifications
 import UIKit
 #endif
 
-protocol SparsePushRouteResolving: Sendable {
+protocol SparsePushRouteResolving {
     func resolveRoute(eventID: String) async -> AppRoute?
 }
 
@@ -104,7 +104,7 @@ final class MatrixPusherService: MatrixPusherServicing {
 }
 
 @MainActor
-final class SynaraPushService: NSObject, PushServicing {
+final class SynaraPushService: NSObject, @preconcurrency PushServicing {
     private(set) var isRegistered = false
     private(set) var fullDeviceToken: String?
     private var sessionBoundPushKey: String?
@@ -127,7 +127,7 @@ final class SynaraPushService: NSObject, PushServicing {
     private let isSimulator = false
     #endif
 
-    nonisolated init(
+    init(
         logger: LoggingServicing = AppLogger(),
         pusherService: MatrixPusherServicing? = nil,
         sparseRouteResolver: SparsePushRouteResolving? = nil,
