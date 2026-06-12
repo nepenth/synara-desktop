@@ -46,6 +46,7 @@ final class MatrixStoreLifecycleTests: XCTestCase {
 
     func testKeychainSecureStoreMigratesLegacyEnvelope() throws {
         let store = KeychainSecureSessionStore()
+        try? store.delete()
         defer { try? store.delete() }
 
         let session = try makeSession()
