@@ -380,12 +380,6 @@ actor MatrixRustSDKClientStore {
                 do {
                     try await syncOnceForInteractiveOpen(session: session)
                 } catch {
-                    if allowsStoreRepair {
-                        return await repairInteractiveRoomListState(
-                            session: session,
-                            fallbackCache: fallbackCache
-                        )
-                    }
                     return cachedState
                 }
                 return await buildRoomListState(
@@ -395,17 +389,20 @@ actor MatrixRustSDKClientStore {
             }
 
             do {
-                try await syncOnce(session: session, fullState: false)
+                try await syncOnceForInitialRoomList(session: session)
             } catch {
                 if fallbackCache.isEmpty == false {
                     return .loaded(fallbackCache)
                 }
-                if allowsStoreRepair {
-                    return await repairInteractiveRoomListState(
-                        session: session,
-                        fallbackCache: fallbackCache
-                    )
+
+                let localState = await buildRoomListState(
+                    from: activeClient,
+                    fallbackCache: fallbackCache
+                )
+                if case .loaded(let rooms) = localState, rooms.isEmpty == false {
+                    return localState
                 }
+
                 return .failed("Could not load rooms. Try again.")
             }
 
@@ -442,6 +439,12 @@ actor MatrixRustSDKClientStore {
     func syncOnce(session: AuthenticatedSession, fullState: Bool = false) async throws {
         let client = try await ensureClient(for: session)
         _ = try await client.syncOnceV2(settings: SyncSettingsV2(timeoutMs: 5_000, fullState: fullState))
+        syncStatus = .syncing
+    }
+
+    func syncOnceForInitialRoomList(session: AuthenticatedSession) async throws {
+        let client = try await ensureClient(for: session)
+        _ = try await client.syncOnceV2(settings: SyncSettingsV2(timeoutMs: 15_000, fullState: true))
         syncStatus = .syncing
     }
 
@@ -1658,8 +1661,6 @@ final class MatrixRustSDKRoomListService: RoomListServicing {
                     let cachedSnapshot = cachedRoomsSnapshot()
                     if cachedSnapshot.isEmpty == false {
                         continuation.yield(.loaded(cachedSnapshot))
-                    } else {
-                        continuation.yield(.failed("Could not load rooms. Try again."))
                     }
                     continuation.finish()
                 }
