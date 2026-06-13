@@ -1,4 +1,5 @@
 import Security
+import MatrixRustSDK
 import XCTest
 @testable import Synara
 
@@ -63,6 +64,33 @@ final class MatrixStoreLifecycleTests: XCTestCase {
 
         XCTAssertEqual(try store.migrateIfNeeded(), .migrated)
         XCTAssertEqual(try store.load(), session)
+    }
+
+    func testSlidingSyncCompatibilityStoresNoneWhenNativeIsUnavailable() {
+        let rawValue = MatrixSlidingSyncCompatibility.storedRawValue(
+            reported: .native,
+            available: [.none]
+        )
+
+        XCTAssertEqual(rawValue, "none")
+    }
+
+    func testSlidingSyncCompatibilityPreservesNativeWhenAvailable() {
+        let rawValue = MatrixSlidingSyncCompatibility.storedRawValue(
+            reported: .native,
+            available: [.none, .native]
+        )
+
+        XCTAssertEqual(rawValue, "native")
+    }
+
+    func testSlidingSyncCompatibilityDowngradesOldNativeSessionWhenServerDoesNotAdvertiseNative() {
+        let version = MatrixSlidingSyncCompatibility.sdkVersion(
+            storedRawValue: "native",
+            available: [.none]
+        )
+
+        XCTAssertEqual(version, .none)
     }
 
     private func makeTemporaryStoreRoot() throws -> URL {
