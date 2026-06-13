@@ -26,6 +26,12 @@ enum ComposerTextInputRegistry {
 
     static func dismissKeyboard() {
         activeTextView?.resignFirstResponder()
+        UIApplication.shared.sendAction(
+            #selector(UIResponder.resignFirstResponder),
+            to: nil,
+            from: nil,
+            for: nil
+        )
     }
 }
 
@@ -49,6 +55,7 @@ struct ComposerTextView: UIViewRepresentable {
         textView.backgroundColor = .clear
         textView.font = .preferredFont(forTextStyle: .callout)
         textView.adjustsFontForContentSizeCategory = true
+        applyTextAppearance(to: textView)
         textView.textContainerInset = ComposerTextMetrics.textContainerInset
         textView.textContainer.lineFragmentPadding = 0
         textView.isScrollEnabled = false
@@ -77,6 +84,9 @@ struct ComposerTextView: UIViewRepresentable {
         let textView = uiView.textView
         context.coordinator.parent = self
         uiView.placeholderLabel.text = placeholder
+        applyTextAppearance(to: textView)
+        uiView.placeholderLabel.font = textView.font
+        uiView.placeholderLabel.textColor = .placeholderText
 
         if context.coordinator.lastFlushToken != flushToken {
             context.coordinator.lastFlushToken = flushToken
@@ -120,6 +130,20 @@ struct ComposerTextView: UIViewRepresentable {
             return
         }
         textView.selectedRange = desiredRange
+    }
+
+    private func applyTextAppearance(to textView: UITextView) {
+        let font = textView.font ?? .preferredFont(forTextStyle: .callout)
+        textView.font = font
+        textView.textColor = .label
+        textView.tintColor = .label
+        textView.linkTextAttributes = [
+            .foregroundColor: UIColor.label
+        ]
+        textView.typingAttributes = [
+            .font: font,
+            .foregroundColor: UIColor.label
+        ]
     }
 
     final class Coordinator: NSObject, UITextViewDelegate {
