@@ -23,6 +23,10 @@ enum ComposerTextInputRegistry {
     static func currentText() -> String? {
         activeTextView?.text
     }
+
+    static func dismissKeyboard() {
+        activeTextView?.resignFirstResponder()
+    }
 }
 
 struct ComposerTextView: UIViewRepresentable {
