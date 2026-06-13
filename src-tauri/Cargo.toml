@@ -2,7 +2,7 @@
 
 [package]
 name = "synara"
-version = "1.2.11"
+version = "1.2.12"
 description = "A modern Matrix client"
 authors = ["Synara contributors"]
 license = "AGPL-3.0-only"

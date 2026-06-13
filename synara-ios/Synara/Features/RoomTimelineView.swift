@@ -1105,7 +1105,6 @@ struct RoomTimelineView: View {
         cancelMarkFullyRead()
         paginationScrollAnchorID = nil
         hasReachedOldestMessages = false
-        isJumpingToLatest = true
 
         let baselineItems: [TimelineItem]
         if case .loaded(let items, _) = state {
@@ -1113,6 +1112,23 @@ struct RoomTimelineView: View {
         } else {
             baselineItems = currentItems
         }
+
+        initialReadMarkerEventID = nil
+        hasPositionedInitialTimeline = true
+        showJumpToLatest = false
+        isJumpingToLatest = false
+
+        let immediateLatest = baselineItems.last
+        scrollToTimelineBottom(
+            proxy: proxy,
+            eventID: immediateLatest?.eventID ?? fallbackEventID,
+            animated: true,
+            ignoreComposerFocus: true
+        )
+        if let immediateLatest {
+            markLatestAsRead(eventID: immediateLatest.eventID)
+        }
+        startTimelineUpdates(streamFocusEventID: .some(nil))
 
         Task {
             let signpostID = PerformanceTrace.begin("TimelineJumpToLatest")
@@ -1135,23 +1151,23 @@ struct RoomTimelineView: View {
                     localItems: baselineItems,
                     currentUserID: currentUserID
                 )
-                initialReadMarkerEventID = nil
-                hasPositionedInitialTimeline = true
                 state = .loaded(merged, isPaginating: false)
-                isJumpingToLatest = false
                 if let latest = merged.last {
                     pendingJumpToLatestEventID = latest.eventID
-                    Task {
-                        _ = await environment.readMarkers.markFullyRead(roomID: roomID, eventID: latest.eventID)
-                        await MainActor.run {
-                            lastMarkedFullyReadEventID = latest.eventID
-                        }
-                    }
+                    markLatestAsRead(eventID: latest.eventID)
                 } else {
                     scrollToTimelineBottom(proxy: proxy, eventID: fallbackEventID, animated: true, ignoreComposerFocus: true)
                     showJumpToLatest = false
                 }
-                startTimelineUpdates(streamFocusEventID: .some(nil))
+            }
+        }
+    }
+
+    private func markLatestAsRead(eventID: String) {
+        Task {
+            _ = await environment.readMarkers.markFullyRead(roomID: roomID, eventID: eventID)
+            await MainActor.run {
+                lastMarkedFullyReadEventID = eventID
             }
         }
     }
@@ -3464,7 +3480,6 @@ private struct ComposerView: View {
         #endif
     }()
     @FocusState private var isComposerFocused: Bool
-    @Namespace private var composerChromeNamespace
 
     var body: some View {
         VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
@@ -3487,13 +3502,7 @@ private struct ComposerView: View {
                 ComposerFormattingBar { format in
                     applyFormatting(format)
                 }
-                .padding(.horizontal, SynaraSpacing.small)
                 .padding(.vertical, SynaraSpacing.xSmall)
-                .background {
-                    RoundedRectangle(cornerRadius: SynaraRadius.composer, style: .continuous)
-                        .fill(SynaraColor.surface)
-                        .matchedGeometryEffect(id: "composerChrome", in: composerChromeNamespace)
-                }
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
 
@@ -3544,7 +3553,6 @@ private struct ComposerView: View {
                 .background {
                     RoundedRectangle(cornerRadius: SynaraRadius.composer, style: .continuous)
                         .fill(SynaraColor.surface)
-                        .matchedGeometryEffect(id: "composerChrome", in: composerChromeNamespace)
                 }
                 .overlay(
                     RoundedRectangle(cornerRadius: SynaraRadius.composer, style: .continuous)
@@ -3754,9 +3762,14 @@ private struct ComposerFormattingBar: View {
                         Image(systemName: format.systemImage)
                             .font(.system(size: 15, weight: .semibold))
                             .frame(width: 36, height: 36)
-                            .background(SynaraColor.secondarySurface)
+                            .background(SynaraColor.surface)
                             .foregroundStyle(SynaraColor.primaryText)
                             .clipShape(RoundedRectangle(cornerRadius: SynaraRadius.control))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: SynaraRadius.control)
+                                    .stroke(SynaraColor.separator.opacity(0.45), lineWidth: 0.5)
+                                    .allowsHitTesting(false)
+                            )
                     }
                     .buttonStyle(.plain)
                     .contentShape(Rectangle())
@@ -3764,8 +3777,20 @@ private struct ComposerFormattingBar: View {
                     .accessibilityIdentifier("ComposerFormat-\(format.rawValue)")
                 }
             }
-            .padding(.horizontal, SynaraSpacing.medium)
+            .padding(.horizontal, SynaraSpacing.small)
+            .padding(.vertical, SynaraSpacing.xSmall)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background {
+            RoundedRectangle(cornerRadius: SynaraRadius.composer, style: .continuous)
+                .fill(SynaraColor.secondarySurface)
+        }
+        .overlay(
+            RoundedRectangle(cornerRadius: SynaraRadius.composer, style: .continuous)
+                .stroke(SynaraColor.separator.opacity(0.55), lineWidth: 0.5)
+                .allowsHitTesting(false)
+        )
+        .shadow(color: Color.black.opacity(0.08), radius: 6, x: 0, y: 2)
         .accessibilityIdentifier("ComposerFormattingBar")
     }
 }
