@@ -413,6 +413,111 @@ final class TimelineServiceTests: XCTestCase {
         XCTAssertTrue(merged.contains(where: { $0.id == stillSending.id && $0.deliveryStatus == .sending }))
     }
 
+    func testStableWindowMergePreservesRenderedItemsWhenStreamWindowIsPartial() {
+        let older = TimelineItem(
+            id: "$older:matrix.org",
+            eventID: "$older:matrix.org",
+            senderID: "@bob:matrix.org",
+            timestamp: TimelineFixtures.baseDate,
+            kind: .text("Older"),
+            replyToEventID: nil,
+            isEdited: false,
+            reactions: [:]
+        )
+        let readMarkerContext = TimelineItem(
+            id: "$read-marker:matrix.org",
+            eventID: "$read-marker:matrix.org",
+            senderID: "@bob:matrix.org",
+            timestamp: TimelineFixtures.baseDate.addingTimeInterval(60),
+            kind: .text("Read marker context"),
+            replyToEventID: nil,
+            isEdited: false,
+            reactions: [:]
+        )
+        let latest = TimelineItem(
+            id: "$latest:matrix.org",
+            eventID: "$latest:matrix.org",
+            senderID: "@alice:matrix.org",
+            timestamp: TimelineFixtures.baseDate.addingTimeInterval(120),
+            kind: .text("Latest"),
+            replyToEventID: nil,
+            isEdited: false,
+            reactions: [:]
+        )
+
+        let merged = TimelinePendingReconciler.mergeStableWindow(
+            streamItems: [latest],
+            localItems: [older, readMarkerContext],
+            currentUserID: "@alice:matrix.org"
+        )
+
+        XCTAssertEqual(merged.map(\.eventID), ["$older:matrix.org", "$read-marker:matrix.org", "$latest:matrix.org"])
+    }
+
+    func testStableWindowMergeUpdatesExistingEventsFromIncomingStream() {
+        let original = TimelineItem(
+            id: "$event:matrix.org",
+            eventID: "$event:matrix.org",
+            senderID: "@bob:matrix.org",
+            timestamp: TimelineFixtures.baseDate,
+            kind: .text("Original"),
+            replyToEventID: nil,
+            isEdited: false,
+            reactions: [:]
+        )
+        let updated = TimelineItem(
+            id: "$event:matrix.org",
+            eventID: "$event:matrix.org",
+            senderID: "@bob:matrix.org",
+            timestamp: TimelineFixtures.baseDate,
+            kind: .text("Edited"),
+            replyToEventID: nil,
+            isEdited: true,
+            reactions: ["👍": 1]
+        )
+
+        let merged = TimelinePendingReconciler.mergeStableWindow(
+            streamItems: [updated],
+            localItems: [original],
+            currentUserID: "@alice:matrix.org"
+        )
+
+        XCTAssertEqual(merged.count, 1)
+        XCTAssertEqual(merged.first?.kind, .text("Edited"))
+        XCTAssertEqual(merged.first?.isEdited, true)
+        XCTAssertEqual(merged.first?.reactions["👍"], 1)
+    }
+
+    func testStableWindowMergeKeepsPendingReconciliation() {
+        let pending = TimelineItem.pendingMessage(
+            localID: "$pending-local",
+            body: "Ship it",
+            senderID: "@alice:matrix.org",
+            replyToEventID: nil,
+            timestamp: TimelineFixtures.baseDate.addingTimeInterval(30)
+        )
+        let confirmed = TimelineItem(
+            id: "$server:matrix.org",
+            eventID: "$server:matrix.org",
+            senderID: "@alice:matrix.org",
+            timestamp: TimelineFixtures.baseDate.addingTimeInterval(31),
+            kind: .text("Ship it"),
+            replyToEventID: nil,
+            isEdited: false,
+            reactions: [:]
+        )
+
+        let merged = TimelinePendingReconciler.mergeStableWindow(
+            streamItems: [confirmed],
+            localItems: [pending],
+            currentUserID: "@alice:matrix.org"
+        )
+
+        XCTAssertEqual(merged.count, 1)
+        XCTAssertEqual(merged.first?.eventID, "$server:matrix.org")
+        XCTAssertNil(merged.first?.deliveryStatus)
+    }
+
     func testTimelineReplyCounterCountsRepliesByRootEvent() {
         let root = TimelineItem(
             id: "$root",

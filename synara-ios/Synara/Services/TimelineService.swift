@@ -196,6 +196,39 @@ enum TimelinePendingReconciler {
 
         return (streamItems + unmatchedPending).sorted { $0.timestamp < $1.timestamp }
     }
+
+    static func mergeStableWindow(
+        streamItems: [TimelineItem],
+        localItems: [TimelineItem],
+        currentUserID: String
+    ) -> [TimelineItem] {
+        var mergedByID: [String: TimelineItem] = [:]
+
+        for item in localItems where item.isLocalPending == false {
+            mergedByID[stableKey(for: item)] = item
+        }
+
+        for item in streamItems where item.isLocalPending == false {
+            mergedByID[stableKey(for: item)] = item
+        }
+
+        let stableItems = mergedByID.values.sorted { lhs, rhs in
+            if lhs.timestamp == rhs.timestamp {
+                return stableKey(for: lhs) < stableKey(for: rhs)
+            }
+            return lhs.timestamp < rhs.timestamp
+        }
+
+        return merge(
+            streamItems: stableItems,
+            localItems: localItems,
+            currentUserID: currentUserID
+        )
+    }
+
+    private static func stableKey(for item: TimelineItem) -> String {
+        item.eventID.isEmpty ? item.id : item.eventID
+    }
 }
 
 protocol LaterServicing {
