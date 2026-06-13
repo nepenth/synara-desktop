@@ -38,6 +38,8 @@ struct RoomTimelineView: View {
     @State private var hasReachedOldestMessages = false
     @State private var lastOlderPaginationAt = Date.distantPast
     @State private var paginationScrollAnchorID: String?
+    @State private var isJumpingToLatest = false
+    @State private var pendingJumpToLatestEventID: String?
     @State private var lastMarkedFullyReadEventID: String?
     @State private var markFullyReadTask: Task<Void, Never>?
     @State private var timelineUpdatesTask: Task<Void, Never>?
@@ -58,7 +60,10 @@ struct RoomTimelineView: View {
                 subtitle: timelineSubtitle,
                 onSearch: { isTimelineSearchPresented = true },
                 onDetails: { isRoomDetailsPresented = true },
-                onBack: { dismiss() }
+                onBack: {
+                    dismissKeyboard()
+                    dismiss()
+                }
             )
             timelineContent
             Divider()
@@ -82,7 +87,6 @@ struct RoomTimelineView: View {
             )
             .background(SynaraColor.surface)
             .shadow(color: Color.black.opacity(isAgentRoom ? 0.22 : 0.06), radius: 10, x: 0, y: -3)
-            .synaraKeyboardAdaptiveInset()
         }
         .background(isAgentRoom ? SynaraColor.agentReviewBackground : SynaraColor.surface)
         .navigationTitle(roomTitle ?? "Room")
@@ -139,6 +143,7 @@ struct RoomTimelineView: View {
             startTimelineUpdates()
         }
         .onDisappear {
+            dismissKeyboard()
             timelineUpdatesTask?.cancel()
             cancelMarkFullyRead()
         }
@@ -246,6 +251,9 @@ struct RoomTimelineView: View {
                             .onDisappear {
                                 if item.eventID == items.last?.eventID {
                                     cancelMarkFullyRead()
+                                    if items.count > 1 {
+                                        showJumpToLatest = true
+                                    }
                                 }
                             }
                         }
@@ -259,6 +267,7 @@ struct RoomTimelineView: View {
                     .padding(.top, isAgentRoom ? SynaraSpacing.medium : SynaraSpacing.small)
                     .padding(.bottom, SynaraSpacing.small)
                 }
+                .scrollDismissesKeyboard(.interactively)
                 .background(isAgentRoom ? SynaraColor.agentReviewBackground : SynaraColor.surface)
                 .accessibilityIdentifier("TimelineList")
                 .simultaneousGesture(
@@ -270,7 +279,7 @@ struct RoomTimelineView: View {
                 )
                 .overlay(alignment: .bottomTrailing) {
                     if showJumpToLatest, let latest = items.last {
-                        JumpToLatestButton {
+                        JumpToLatestButton(isLoading: isJumpingToLatest) {
                             jumpToLatest(proxy: proxy, currentItems: items, fallbackEventID: latest.eventID)
                         }
                         .padding(.trailing, SynaraSpacing.large)
@@ -298,6 +307,7 @@ struct RoomTimelineView: View {
                     scrollToInitialPosition(items: updatedItems, proxy: proxy)
                     scrollToLatestMessageIfNeeded(items: updatedItems, proxy: proxy)
                     scrollToAnchoredEvent(items: updatedItems, proxy: proxy)
+                    scrollToPendingLatestIfNeeded(items: updatedItems, proxy: proxy)
                 }
             }
         }
@@ -372,6 +382,19 @@ struct RoomTimelineView: View {
         scrollToTimelineBottom(proxy: proxy, eventID: latest.eventID, animated: true)
     }
 
+    private func scrollToPendingLatestIfNeeded(items: [TimelineItem], proxy: ScrollViewProxy) {
+        guard let pendingJumpToLatestEventID else {
+            return
+        }
+        guard let latest = items.last,
+              latest.eventID == pendingJumpToLatestEventID || latest.id == pendingJumpToLatestEventID else {
+            return
+        }
+
+        self.pendingJumpToLatestEventID = nil
+        scrollToTimelineBottom(proxy: proxy, eventID: latest.eventID, animated: true)
+    }
+
     private func scrollToTimelineBottom(
         proxy: ScrollViewProxy,
         eventID: String?,
@@ -399,7 +422,8 @@ struct RoomTimelineView: View {
 
     private func scrollToTimelineBottomTargets(proxy: ScrollViewProxy, eventID: String?) {
         if let eventID {
-            proxy.scrollTo(eventID, anchor: .bottom)
+            proxy.scrollTo(eventID, anchor: UnitPoint(x: 0.5, y: 0.86))
+            return
         }
         proxy.scrollTo(Self.timelineBottomAnchorID, anchor: .bottom)
     }
@@ -470,6 +494,8 @@ struct RoomTimelineView: View {
         hasReachedOldestMessages = false
         lastOlderPaginationAt = .distantPast
         paginationScrollAnchorID = nil
+        isJumpingToLatest = false
+        pendingJumpToLatestEventID = nil
         lastMarkedFullyReadEventID = nil
         cancelMarkFullyRead()
     }
@@ -1036,9 +1062,15 @@ struct RoomTimelineView: View {
     }
 
     private func jumpToLatest(proxy: ScrollViewProxy, currentItems: [TimelineItem], fallbackEventID: String) {
+        guard isJumpingToLatest == false else {
+            return
+        }
+
+        dismissKeyboard()
         cancelMarkFullyRead()
         paginationScrollAnchorID = nil
         hasReachedOldestMessages = false
+        isJumpingToLatest = true
 
         let baselineItems: [TimelineItem]
         if case .loaded(let items, _) = state {
@@ -1047,7 +1079,6 @@ struct RoomTimelineView: View {
             baselineItems = currentItems
         }
 
-        state = .loaded(baselineItems, isPaginating: true)
         Task {
             let signpostID = PerformanceTrace.begin("TimelineJumpToLatest")
             defer {
@@ -1072,14 +1103,15 @@ struct RoomTimelineView: View {
                 initialReadMarkerEventID = nil
                 hasPositionedInitialTimeline = true
                 state = .loaded(merged, isPaginating: false)
+                isJumpingToLatest = false
                 if let latest = merged.last {
+                    pendingJumpToLatestEventID = latest.eventID
                     Task {
                         _ = await environment.readMarkers.markFullyRead(roomID: roomID, eventID: latest.eventID)
                         await MainActor.run {
                             lastMarkedFullyReadEventID = latest.eventID
                         }
                     }
-                    scrollToTimelineBottom(proxy: proxy, eventID: latest.eventID, animated: true)
                 } else {
                     scrollToTimelineBottom(proxy: proxy, eventID: fallbackEventID, animated: true)
                     showJumpToLatest = false
@@ -1087,6 +1119,12 @@ struct RoomTimelineView: View {
                 startTimelineUpdates(streamFocusEventID: .some(nil))
             }
         }
+    }
+
+    private func dismissKeyboard() {
+        #if canImport(UIKit)
+        ComposerTextInputRegistry.dismissKeyboard()
+        #endif
     }
 
     private func beginEdit(_ item: TimelineItem) {
@@ -1230,23 +1268,33 @@ private enum TimelineViewState: Equatable {
 }
 
 private struct JumpToLatestButton: View {
+    let isLoading: Bool
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            Image(systemName: "arrow.down")
-                .font(.system(size: 17, weight: .bold))
-                .frame(width: 44, height: 44)
-                .background(.ultraThinMaterial, in: Circle())
-                .overlay(
-                    Circle()
-                        .stroke(SynaraColor.separator.opacity(0.8), lineWidth: 1)
-                )
-                .foregroundStyle(SynaraColor.accent)
-                .shadow(color: .black.opacity(0.12), radius: 10, x: 0, y: 4)
+            ZStack {
+                Circle()
+                    .fill(.ultraThinMaterial)
+                Circle()
+                    .stroke(SynaraColor.separator.opacity(0.8), lineWidth: 1)
+                if isLoading {
+                    ProgressView()
+                        .controlSize(.small)
+                        .tint(SynaraColor.accent)
+                } else {
+                    Image(systemName: "arrow.down")
+                        .font(.system(size: 17, weight: .bold))
+                }
+            }
+            .frame(width: 44, height: 44)
+            .foregroundStyle(SynaraColor.accent)
+            .shadow(color: .black.opacity(0.12), radius: 10, x: 0, y: 4)
         }
         .buttonStyle(.plain)
+        .disabled(isLoading)
         .accessibilityLabel("Jump to latest")
+        .accessibilityValue(isLoading ? "Loading latest messages" : "")
         .accessibilityIdentifier("JumpToLatestButton")
     }
 }

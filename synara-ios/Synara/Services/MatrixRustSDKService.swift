@@ -2166,8 +2166,19 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
     }
 
     func loadLatestTimeline(roomID: String) async -> TimelineLoadOutcome {
+        guard case .signedIn(let session) = sessionStore.currentState else {
+            return .empty
+        }
+
+        try? await clientStore.syncOnce(session: session, fullState: false)
         invalidateTimelineCache(roomID: roomID, focus: .live)
-        return await loadTimeline(roomID: roomID, focusedEventID: nil, pageSize: 20, enrichProfiles: false)
+        return await loadTimelinePage(
+            roomID: roomID,
+            focus: .live,
+            pageSize: 50,
+            enrichProfiles: false,
+            paginateForwardWhenFocused: false
+        )
     }
 
     func loadThreadTimeline(roomID: String, rootEventID: String) async -> TimelineLoadOutcome {
