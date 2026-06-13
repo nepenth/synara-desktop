@@ -40,9 +40,11 @@ struct RoomTimelineView: View {
     @State private var paginationScrollAnchorID: String?
     @State private var isJumpingToLatest = false
     @State private var pendingJumpToLatestEventID: String?
+    @State private var isComposerFocused = false
     @State private var lastMarkedFullyReadEventID: String?
     @State private var markFullyReadTask: Task<Void, Never>?
     @State private var timelineUpdatesTask: Task<Void, Never>?
+    @State private var timelineScrollTask: Task<Void, Never>?
     @State private var sendAnimationItemIDs: Set<String> = []
     @Environment(\.openURL) private var openURL
     @Environment(\.dismiss) private var dismiss
@@ -83,7 +85,8 @@ struct RoomTimelineView: View {
                 onUploadFailed: { message in
                     uploadState = .failed(message)
                 },
-                selectedPhoto: $selectedPhoto
+                selectedPhoto: $selectedPhoto,
+                isFocusedExternally: $isComposerFocused
             )
             .background(SynaraColor.surface)
             .shadow(color: Color.black.opacity(isAgentRoom ? 0.22 : 0.06), radius: 10, x: 0, y: -3)
@@ -140,11 +143,12 @@ struct RoomTimelineView: View {
                 _ = await loadCryptoStatus()
             }
             await loadTimeline()
-            startTimelineUpdates()
+            startTimelineUpdates(streamFocusEventID: focusedEventID == nil ? .some(nil) : nil)
         }
         .onDisappear {
             dismissKeyboard()
             timelineUpdatesTask?.cancel()
+            cancelTimelineScroll()
             cancelMarkFullyRead()
         }
         .onChange(of: draft) { value in
@@ -155,6 +159,11 @@ struct RoomTimelineView: View {
                 return
             }
             uploadPickedPhoto(item)
+        }
+        .onChange(of: isComposerFocused) { focused in
+            if focused {
+                cancelTimelineScroll()
+            }
         }
     }
 
@@ -176,7 +185,7 @@ struct RoomTimelineView: View {
             SynaraErrorState(title: "Could Not Load Timeline", message: message) {
                 Task {
                     await loadTimeline()
-                    startTimelineUpdates()
+                    startTimelineUpdates(streamFocusEventID: focusedEventID == nil ? .some(nil) : nil)
                 }
             }
         case .loaded(let items, let isPaginating):
@@ -273,6 +282,7 @@ struct RoomTimelineView: View {
                 .simultaneousGesture(
                     DragGesture(minimumDistance: 8).onChanged { _ in
                         if items.count > 8 {
+                            cancelTimelineScroll()
                             showJumpToLatest = true
                         }
                     }
@@ -372,6 +382,8 @@ struct RoomTimelineView: View {
         }
 
         guard focusedEventID == nil,
+              isComposerFocused == false,
+              isReadingFromEarlierPosition == false,
               lastRenderedTimelineCount > 0,
               items.count > lastRenderedTimelineCount,
               showJumpToLatest == false,
@@ -392,19 +404,24 @@ struct RoomTimelineView: View {
         }
 
         self.pendingJumpToLatestEventID = nil
-        scrollToTimelineBottom(proxy: proxy, eventID: latest.eventID, animated: true)
+        scrollToTimelineBottom(proxy: proxy, eventID: latest.eventID, animated: true, ignoreComposerFocus: true)
     }
 
     private func scrollToTimelineBottom(
         proxy: ScrollViewProxy,
         eventID: String?,
-        animated: Bool
+        animated: Bool,
+        ignoreComposerFocus: Bool = false
     ) {
-        Task { @MainActor in
+        cancelTimelineScroll()
+        timelineScrollTask = Task { @MainActor in
             let delays: [UInt64] = [0, 50, 150, 300]
             for (index, delayMilliseconds) in delays.enumerated() {
                 if delayMilliseconds > 0 {
                     try? await Task.sleep(nanoseconds: delayMilliseconds * 1_000_000)
+                }
+                guard Task.isCancelled == false, (ignoreComposerFocus || isComposerFocused == false) else {
+                    return
                 }
 
                 let shouldAnimate = animated && index > 0
@@ -418,6 +435,20 @@ struct RoomTimelineView: View {
             }
             showJumpToLatest = false
         }
+    }
+
+    private var isReadingFromEarlierPosition: Bool {
+        guard focusedEventID == nil,
+              initialReadMarkerEventID != nil,
+              hasPositionedInitialTimeline else {
+            return false
+        }
+        return showJumpToLatest
+    }
+
+    private func cancelTimelineScroll() {
+        timelineScrollTask?.cancel()
+        timelineScrollTask = nil
     }
 
     private func scrollToTimelineBottomTargets(proxy: ScrollViewProxy, eventID: String?) {
@@ -473,6 +504,7 @@ struct RoomTimelineView: View {
     private func resetTimelineState() {
         timelineUpdatesTask?.cancel()
         timelineUpdatesTask = nil
+        cancelTimelineScroll()
         state = .idle
         draft = environment.drafts.draft(roomID: roomID)
         replyTarget = nil
@@ -496,6 +528,7 @@ struct RoomTimelineView: View {
         paginationScrollAnchorID = nil
         isJumpingToLatest = false
         pendingJumpToLatestEventID = nil
+        isComposerFocused = false
         lastMarkedFullyReadEventID = nil
         cancelMarkFullyRead()
     }
@@ -555,7 +588,7 @@ struct RoomTimelineView: View {
             localItems = []
         }
 
-        return TimelinePendingReconciler.merge(
+        return TimelinePendingReconciler.mergeStableWindow(
             streamItems: streamItems,
             localItems: localItems,
             currentUserID: currentUserID
@@ -1067,6 +1100,8 @@ struct RoomTimelineView: View {
         }
 
         dismissKeyboard()
+        isComposerFocused = false
+        cancelTimelineScroll()
         cancelMarkFullyRead()
         paginationScrollAnchorID = nil
         hasReachedOldestMessages = false
@@ -1095,7 +1130,7 @@ struct RoomTimelineView: View {
                 case .failed:
                     nextItems = baselineItems
                 }
-                let merged = TimelinePendingReconciler.merge(
+                let merged = TimelinePendingReconciler.mergeStableWindow(
                     streamItems: nextItems,
                     localItems: baselineItems,
                     currentUserID: currentUserID
@@ -1113,7 +1148,7 @@ struct RoomTimelineView: View {
                         }
                     }
                 } else {
-                    scrollToTimelineBottom(proxy: proxy, eventID: fallbackEventID, animated: true)
+                    scrollToTimelineBottom(proxy: proxy, eventID: fallbackEventID, animated: true, ignoreComposerFocus: true)
                     showJumpToLatest = false
                 }
                 startTimelineUpdates(streamFocusEventID: .some(nil))
@@ -1464,6 +1499,7 @@ struct ThreadTimelineView: View {
     @State private var sendError: String?
     @State private var uploadState: MediaUploadState = .idle
     @State private var selectedPhoto: PhotosPickerItem?
+    @State private var isComposerFocused = false
     @State private var threadUpdatesTask: Task<Void, Never>?
 
     var body: some View {
@@ -1492,7 +1528,8 @@ struct ThreadTimelineView: View {
                 onUploadFailed: { message in
                     uploadState = .failed(message)
                 },
-                selectedPhoto: $selectedPhoto
+                selectedPhoto: $selectedPhoto,
+                isFocusedExternally: $isComposerFocused
             )
         }
         .background(SynaraColor.surface)
@@ -3411,6 +3448,7 @@ private struct ComposerView: View {
     #endif
     let onUploadFailed: (String) -> Void
     @Binding var selectedPhoto: PhotosPickerItem?
+    @Binding var isFocusedExternally: Bool
     @State private var isAttachmentSheetPresented = false
     @State private var isFileImporterPresented = false
     #if canImport(UIKit)
@@ -3418,8 +3456,6 @@ private struct ComposerView: View {
     #endif
     @State private var isFormattingBarVisible = false
     @State private var composerSelection = ComposerTextSelection.empty
-    @State private var formattingRevision = 0
-    @State private var composerFlushToken = 0
     @State private var composerFieldHeight: CGFloat = {
         #if canImport(UIKit)
         ComposerTextMetrics.singleLineHeight(font: UIFont.preferredFont(forTextStyle: .callout))
@@ -3553,6 +3589,15 @@ private struct ComposerView: View {
         .background(SynaraColor.surface)
         .animation(.easeInOut(duration: 0.18), value: isFormattingBarVisible)
         .animation(.easeInOut(duration: 0.18), value: shouldShowPromptMetrics)
+        .onChange(of: isComposerFocused) { focused in
+            isFocusedExternally = focused
+        }
+        .onAppear {
+            isFocusedExternally = isComposerFocused
+        }
+        .onDisappear {
+            isFocusedExternally = false
+        }
         .sheet(isPresented: $isAttachmentSheetPresented) {
             AttachmentOptionsSheet(
                 onMockMediaUpload: { source in
@@ -3635,51 +3680,22 @@ private struct ComposerView: View {
 
     @ViewBuilder
     private var composerField: some View {
-        #if canImport(UIKit)
-        if ProcessInfo.processInfo.environment["SYNARA_UI_TESTS"] == "1" {
-            uiTestComposerField
-        } else {
-            ComposerTextView(
-                text: $text,
-                selection: $composerSelection,
-                height: $composerFieldHeight,
-                placeholder: placeholder,
-                formattingRevision: formattingRevision,
-                flushToken: composerFlushToken,
-                isFocused: $isComposerFocused
-            )
-            .frame(height: composerFieldHeight)
-        }
-        #else
-        TextEditor(text: $text)
+        TextField(placeholder, text: $text, axis: .vertical)
             .font(SynaraTypography.body)
+            .foregroundStyle(SynaraColor.primaryText)
+            .tint(SynaraColor.accent)
             .focused($isComposerFocused)
-            .frame(height: composerFieldHeight)
-            .scrollContentBackground(.hidden)
-            .accessibilityIdentifier("ComposerTextField")
-        #endif
-    }
-
-    private var uiTestComposerField: some View {
-        ZStack(alignment: .topLeading) {
-            if text.isEmpty {
-                Text(placeholder)
-                    .font(SynaraTypography.composerPlaceholder)
-                    .foregroundStyle(SynaraColor.tertiaryText)
-                    .padding(.top, 6)
-                    .padding(.leading, 2)
-                    .allowsHitTesting(false)
+            .lineLimit(1...5)
+            .submitLabel(.send)
+            .onSubmit {
+                if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
+                    submitMessage()
+                }
             }
-
-            TextEditor(text: $text)
-                .font(SynaraTypography.body)
-                .focused($isComposerFocused)
-                .frame(height: composerFieldHeight)
-                .scrollContentBackground(.hidden)
-                .accessibilityIdentifier("ComposerTextField")
-                .accessibilityLabel("Message")
-                .accessibilityHint("Enter a message for this room")
-        }
+            .frame(minHeight: composerFieldHeight)
+            .accessibilityLabel("Message")
+            .accessibilityHint("Enter a message for this room")
+            .accessibilityIdentifier("ComposerTextField")
         .onChange(of: text) { _ in
             updateComposerFieldHeight()
         }
@@ -3714,23 +3730,12 @@ private struct ComposerView: View {
         let result = ComposerMarkdown.apply(format, to: text, selection: composerSelection)
         text = result.text
         composerSelection = result.selection
-        formattingRevision += 1
         isComposerFocused = true
     }
 
     private func submitMessage() {
         isComposerFocused = false
-        composerFlushToken += 1
-        let messageBody: String
-        #if canImport(UIKit)
-        if ProcessInfo.processInfo.environment["SYNARA_UI_TESTS"] == "1" {
-            messageBody = text
-        } else {
-            messageBody = ComposerTextInputRegistry.currentText() ?? text
-        }
-        #else
-        messageBody = text
-        #endif
+        let messageBody = text
         text = messageBody
         onSend(messageBody)
     }
