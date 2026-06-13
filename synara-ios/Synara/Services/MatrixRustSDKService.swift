@@ -218,7 +218,16 @@ actor MatrixRustSDKClientStore {
     }
 
     func warmSync(session: AuthenticatedSession) async throws {
-        _ = try await startSyncService(session: session)
+        do {
+            if try await supportsNativeSlidingSyncService(session: session) {
+                _ = try await startSyncService(session: session)
+            } else {
+                try await syncOnce(session: session, fullState: false)
+            }
+        } catch {
+            logger.info("Warm Matrix sync service failed; falling back to classic sync: \(String(describing: error))", category: .sync)
+            try await syncOnce(session: session, fullState: false)
+        }
     }
 
     func start(session: AuthenticatedSession) async {
@@ -283,9 +292,22 @@ actor MatrixRustSDKClientStore {
         }
 
         do {
-            _ = try await startSyncService(session: session)
+            if try await supportsNativeSlidingSyncService(session: session) {
+                _ = try await startSyncService(session: session)
+            } else {
+                try await syncOnce(session: session, fullState: false)
+            }
         } catch {
-            syncStatus = .failed("Could not resume sync.")
+            logger.info(
+                "Foreground Matrix sync service failed; falling back to classic sync: \(String(describing: error))",
+                category: .sync
+            )
+            do {
+                try await syncOnce(session: session, fullState: false)
+            } catch {
+                logger.error("Foreground Matrix resume failed: \(String(describing: error))", category: .sync)
+                syncStatus = .failed("Could not resume sync.")
+            }
         }
     }
 
@@ -490,9 +512,28 @@ actor MatrixRustSDKClientStore {
             return syncService
         }
 
+        guard try await supportsNativeSlidingSyncService(session: session) else {
+            logger.info("Skipping Matrix sync service because native sliding sync is unavailable", category: .sync)
+            throw MatrixSyncServiceUnavailableError()
+        }
+
         let service = try await prepareSyncService(session: session)
         await service.start()
         return service
+    }
+
+    private func supportsNativeSlidingSyncService(session: AuthenticatedSession) async throws -> Bool {
+        guard session.slidingSyncVersion != SlidingSyncVersion.none.synaraRawValue else {
+            return false
+        }
+
+        let client = try await ensureClient(for: session)
+        let versions = await client.availableSlidingSyncVersions()
+        let supportsNative = versions.contains(.native)
+        if supportsNative == false {
+            logger.info("Native sliding sync is unavailable for this homeserver/session", category: .sync)
+        }
+        return supportsNative
     }
 
     private func prepareSyncService(session: AuthenticatedSession) async throws -> SyncService {
@@ -1464,6 +1505,8 @@ actor MatrixRustSDKClientStore {
         isPlatformInitialized = true
     }
 }
+
+private struct MatrixSyncServiceUnavailableError: Error {}
 
 final class MatrixRustSDKMatrixClientService: MatrixClientServicing {
     private let clientStore: MatrixRustSDKClientStore
