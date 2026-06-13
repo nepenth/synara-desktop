@@ -167,6 +167,7 @@ actor MatrixRustSDKClientStore {
         }
 
         let storeID = Self.storeID(for: username, homeserverURL: request.homeserverURL)
+        try? Self.deletePersistedStore(storeID: storeID)
         let client = try await buildClient(homeserverURL: request.homeserverURL, storeID: storeID)
 
         do {
@@ -181,13 +182,18 @@ actor MatrixRustSDKClientStore {
             await client.encryption().waitForE2eeInitializationTasks()
 
             let sdkSession = try client.session()
+            let availableSlidingSyncVersions = await client.availableSlidingSyncVersions()
+            let slidingSyncVersion = MatrixSlidingSyncCompatibility.storedRawValue(
+                reported: sdkSession.slidingSyncVersion,
+                available: availableSlidingSyncVersions
+            )
             let session = AuthenticatedSession(
                 userID: sdkSession.userId,
                 deviceID: sdkSession.deviceId,
                 homeserverURL: URL(string: sdkSession.homeserverUrl) ?? request.homeserverURL,
                 accessToken: sdkSession.accessToken,
                 refreshToken: sdkSession.refreshToken,
-                slidingSyncVersion: sdkSession.slidingSyncVersion.synaraRawValue,
+                slidingSyncVersion: slidingSyncVersion,
                 sdkStoreID: storeID
             )
             self.client = client
@@ -200,10 +206,12 @@ actor MatrixRustSDKClientStore {
         } catch let error as ClientError {
             retainClientHandle(client)
             self.syncStatus = .failed("Could not sign in.")
+            logger.error("Password login SDK client error: \(String(describing: error))", category: .auth)
             throw Self.mapLoginError(error)
         } catch {
             retainClientHandle(client)
             self.syncStatus = .failed("Could not sign in.")
+            logger.error("Password login SDK error: \(String(describing: error))", category: .auth)
             // TODO: Map additional non-ClientError login failures when the SDK exposes stable types.
             throw LoginError.networkFailure
         }
@@ -1069,7 +1077,15 @@ actor MatrixRustSDKClientStore {
 
             do {
                 try await installUnableToDecryptDelegate(on: newClient)
-                try await newClient.restoreSession(session: session.sdkSession)
+                let availableSlidingSyncVersions = await newClient.availableSlidingSyncVersions()
+                let restoreSession = session.sdkSession(availableSlidingSyncVersions: availableSlidingSyncVersions)
+                if session.slidingSyncVersion == "native", availableSlidingSyncVersions.contains(.native) == false {
+                    logger.info(
+                        "Restoring Matrix session without native sliding sync because homeserver does not advertise it",
+                        category: .sync
+                    )
+                }
+                try await newClient.restoreSession(session: restoreSession)
                 await newClient.encryption().waitForE2eeInitializationTasks()
                 await ensurePlatformDeviceDisplayName(session: session)
 
@@ -1302,6 +1318,7 @@ actor MatrixRustSDKClientStore {
         let paths = try Self.sessionPaths(storeID: storeID)
         return try await ClientBuilder()
             .homeserverUrl(url: homeserverURL.absoluteString)
+            .slidingSyncVersionBuilder(versionBuilder: .discoverNative)
             .sessionPaths(dataPath: paths.data.path, cachePath: paths.cache.path)
             .build()
     }
@@ -1326,6 +1343,10 @@ actor MatrixRustSDKClientStore {
 
     static func deletePersistedStore(for session: AuthenticatedSession) throws {
         let storeID = session.sdkStoreID ?? storeID(for: session.userID, homeserverURL: session.homeserverURL)
+        try deletePersistedStore(storeID: storeID)
+    }
+
+    private static func deletePersistedStore(storeID: String) throws {
         try deleteStoreDirectoryIfPresent(at: try versionedStoreRoot(storeID: storeID, create: false))
         try deleteStoreDirectoryIfPresent(at: try legacyStoreRoot(storeID: storeID, create: false))
     }
@@ -3160,8 +3181,27 @@ private final class MatrixRustSDKStreamingTimelineCollector: TimelineListener, @
     }
 }
 
+enum MatrixSlidingSyncCompatibility {
+    static func storedRawValue(reported: SlidingSyncVersion, available: [SlidingSyncVersion]) -> String {
+        guard reported == .native, available.contains(.native) == false else {
+            return reported.synaraRawValue
+        }
+        return SlidingSyncVersion.none.synaraRawValue
+    }
+
+    static func sdkVersion(storedRawValue: String, available: [SlidingSyncVersion]?) -> SlidingSyncVersion {
+        guard storedRawValue != SlidingSyncVersion.none.synaraRawValue else {
+            return .none
+        }
+        if let available, available.contains(.native) == false {
+            return .none
+        }
+        return .native
+    }
+}
+
 private extension AuthenticatedSession {
-    var sdkSession: MatrixRustSDK.Session {
+    func sdkSession(availableSlidingSyncVersions available: [SlidingSyncVersion]? = nil) -> MatrixRustSDK.Session {
         MatrixRustSDK.Session(
             accessToken: accessToken,
             refreshToken: refreshToken,
@@ -3169,7 +3209,10 @@ private extension AuthenticatedSession {
             deviceId: deviceID,
             homeserverUrl: homeserverURL.absoluteString,
             oauthData: nil,
-            slidingSyncVersion: slidingSyncVersion == "none" ? .none : .native
+            slidingSyncVersion: MatrixSlidingSyncCompatibility.sdkVersion(
+                storedRawValue: slidingSyncVersion,
+                available: available
+            )
         )
     }
 }
