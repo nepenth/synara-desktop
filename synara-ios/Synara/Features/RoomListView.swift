@@ -1043,6 +1043,21 @@ private struct RoomSearchField: View {
 private struct RoomListRow: View {
     let room: RoomSummary
 
+    private var hasUnreadActivity: Bool {
+        room.unreadCount > 0 || room.hasHighlight
+    }
+
+    private var roomGlyphColor: Color {
+        guard room.isSecureRoom == false else {
+            return SynaraColor.secure
+        }
+        return hasUnreadActivity ? SynaraColor.primaryText : SynaraColor.secondaryText
+    }
+
+    private var previewColor: Color {
+        hasUnreadActivity ? SynaraColor.primaryText.opacity(0.82) : SynaraColor.secondaryText
+    }
+
     var body: some View {
         HStack(spacing: SynaraSpacing.medium) {
             SynaraRoomAvatarTile(room: room, size: 42)
@@ -1052,12 +1067,12 @@ private struct RoomListRow: View {
                     if room.kind == .room {
                         Image(systemName: room.isSecureRoom ? "lock.fill" : "number")
                             .font(SynaraTypography.chipLabel.weight(.bold))
-                            .foregroundStyle(room.isSecureRoom ? SynaraColor.secure : SynaraColor.secondaryText)
+                            .foregroundStyle(roomGlyphColor)
                             .accessibilityHidden(true)
                     }
 
                     Text(room.name)
-                        .font(SynaraTypography.body.weight(room.hasHighlight ? .semibold : .regular))
+                        .font(SynaraTypography.body.weight(hasUnreadActivity ? .semibold : .regular))
                         .foregroundStyle(SynaraColor.primaryText)
                         .lineLimit(1)
 
@@ -1076,15 +1091,15 @@ private struct RoomListRow: View {
 
                     if room.relativeActivity.isEmpty == false {
                         Text(room.relativeActivity)
-                            .font(SynaraTypography.messageMeta)
-                            .foregroundStyle(SynaraColor.tertiaryText)
+                            .font(SynaraTypography.messageMeta.weight(hasUnreadActivity ? .medium : .regular))
+                            .foregroundStyle(hasUnreadActivity ? SynaraColor.secondaryText : SynaraColor.tertiaryText)
                             .lineLimit(1)
                     }
                 }
 
                 Text(room.lastMessagePreview)
-                    .font(SynaraTypography.roomPreview)
-                    .foregroundStyle(SynaraColor.secondaryText)
+                    .font(SynaraTypography.roomPreview.weight(hasUnreadActivity ? .medium : .regular))
+                    .foregroundStyle(previewColor)
                     .lineLimit(1)
             }
 

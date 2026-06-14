@@ -162,9 +162,17 @@ struct SynaraUnreadBadge: View {
                 .monospacedDigit()
                 .padding(.horizontal, SynaraSpacing.small)
                 .frame(minWidth: 24, minHeight: 20)
-                .background(highlighted ? SynaraColor.accent : SynaraColor.secondarySurface)
-                .foregroundStyle(highlighted ? Color.white : SynaraColor.primaryText)
+                .background(highlighted ? SynaraColor.accent : SynaraColor.accent.opacity(0.16))
+                .foregroundStyle(highlighted ? Color.white : SynaraColor.accent)
                 .clipShape(Capsule())
+                .overlay {
+                    Capsule()
+                        .stroke(
+                            highlighted ? Color.clear : SynaraColor.accent.opacity(0.24),
+                            lineWidth: 0.5
+                        )
+                        .allowsHitTesting(false)
+                }
                 .accessibilityLabel("\(count) unread")
         }
     }
