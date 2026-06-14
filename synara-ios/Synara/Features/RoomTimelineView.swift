@@ -9,6 +9,7 @@ struct RoomTimelineView: View {
     private static let olderPaginationTopThreshold = 3
     private static let olderPaginationDebounceInterval: TimeInterval = 0.5
     private static let markFullyReadDelayNanoseconds: UInt64 = 1_000_000_000
+    private static let timelineBottomLayoutDelayNanoseconds: UInt64 = 16_000_000
     private static let timelineBottomAnchorID = "timeline-bottom-anchor"
 
     let roomID: String
@@ -341,7 +342,12 @@ struct RoomTimelineView: View {
         Task {
             await MainActor.run {
                 if isLatestTarget {
-                    scrollToTimelineBottomTargets(proxy: proxy, eventID: target.eventID)
+                    scrollToTimelineBottom(
+                        proxy: proxy,
+                        eventID: target.eventID,
+                        animated: false,
+                        ignoreComposerFocus: true
+                    )
                     showJumpToLatest = false
                 } else {
                     proxy.scrollTo(target.eventID, anchor: .center)
@@ -427,10 +433,26 @@ struct RoomTimelineView: View {
                 let shouldAnimate = animated && index > 0
                 if shouldAnimate {
                     withAnimation(.easeInOut(duration: 0.2)) {
-                        scrollToTimelineBottomTargets(proxy: proxy, eventID: eventID)
+                        scrollToLatestMessageTarget(proxy: proxy, eventID: eventID)
                     }
                 } else {
-                    scrollToTimelineBottomTargets(proxy: proxy, eventID: eventID)
+                    scrollToLatestMessageTarget(proxy: proxy, eventID: eventID)
+                }
+
+                if eventID != nil {
+                    await Task.yield()
+                    try? await Task.sleep(nanoseconds: Self.timelineBottomLayoutDelayNanoseconds)
+                    guard Task.isCancelled == false, (ignoreComposerFocus || isComposerFocused == false) else {
+                        return
+                    }
+                }
+
+                if shouldAnimate {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        scrollToTimelineBottomAnchor(proxy: proxy)
+                    }
+                } else {
+                    scrollToTimelineBottomAnchor(proxy: proxy)
                 }
             }
             showJumpToLatest = false
@@ -451,10 +473,13 @@ struct RoomTimelineView: View {
         timelineScrollTask = nil
     }
 
-    private func scrollToTimelineBottomTargets(proxy: ScrollViewProxy, eventID: String?) {
+    private func scrollToLatestMessageTarget(proxy: ScrollViewProxy, eventID: String?) {
         if let eventID {
             proxy.scrollTo(eventID, anchor: UnitPoint(x: 0.5, y: 0.86))
         }
+    }
+
+    private func scrollToTimelineBottomAnchor(proxy: ScrollViewProxy) {
         proxy.scrollTo(Self.timelineBottomAnchorID, anchor: .bottom)
     }
 
