@@ -274,6 +274,7 @@ const LIVE_END_PIN_MAX_MS = 5000;
 const LIVE_END_PIN_STABLE_FRAMES = 10;
 const LIVE_END_BOTTOM_TOLERANCE = 24;
 const COMPOSER_RESIZE_BOTTOM_TOLERANCE = 160;
+const VIRTUAL_ANCHOR_RESTORE_SCROLL_TOLERANCE = 4;
 
 type ItemRange = {
   start: number;
@@ -925,6 +926,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
   const pendingVirtualAnchorRef = useRef<TimelineVirtualAnchor | undefined>(
     savedViewportRestoreAnchor
   );
+  const pendingVirtualAnchorScrollTopRef = useRef<number | undefined>(undefined);
   const savedViewportRestoreKeyRef = useRef(savedViewportRestoreKey);
   const restoringSavedViewportRef = useRef(Boolean(savedViewportRestoreAnchor));
   const requestedSavedViewportTimelineRef = useRef<string | undefined>(undefined);
@@ -988,6 +990,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
     const anchor = getCurrentVirtualAnchor();
     if (anchor) lastKnownVirtualAnchorRef.current = anchor;
     pendingVirtualAnchorRef.current = anchor;
+    pendingVirtualAnchorScrollTopRef.current = scrollRef.current?.scrollTop;
   }, [getCurrentVirtualAnchor]);
 
   const getPersistableVirtualAnchor = useCallback((): TimelineVirtualAnchor | undefined => {
@@ -1059,7 +1062,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
 
   const paginateVirtualTimeline = useCallback(
     (backwards: boolean) => {
-      captureVirtualAnchor();
+      if (backwards) captureVirtualAnchor();
       handleTimelinePagination(backwards);
     },
     [captureVirtualAnchor, handleTimelinePagination]
@@ -1073,21 +1076,35 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
       return undefined;
     }
 
+    const scrollEl = scrollRef.current;
+    const capturedScrollTop = pendingVirtualAnchorScrollTopRef.current;
+    if (
+      !restoringSavedViewportRef.current &&
+      scrollEl &&
+      typeof capturedScrollTop === 'number' &&
+      Math.abs(scrollEl.scrollTop - capturedScrollTop) > VIRTUAL_ANCHOR_RESTORE_SCROLL_TOLERANCE
+    ) {
+      pendingVirtualAnchorRef.current = undefined;
+      pendingVirtualAnchorScrollTopRef.current = undefined;
+      return undefined;
+    }
+
     virtualizer.scrollToIndex(rowIndex, { align: 'start', behavior: 'auto' });
     const raf = window.requestAnimationFrame(() => {
-      const scrollEl = scrollRef.current;
+      const restoreScrollEl = scrollRef.current;
       const anchorElement = getTimelineEventElement(anchor.eventId);
-      if (!scrollEl || !anchorElement) {
+      if (!restoreScrollEl || !anchorElement) {
         return;
       }
       const nextScrollTop = getRestoredVirtualScrollTop(
-        scrollEl.scrollTop,
+        restoreScrollEl.scrollTop,
         anchor,
-        scrollEl.getBoundingClientRect().top,
+        restoreScrollEl.getBoundingClientRect().top,
         anchorElement.getBoundingClientRect().top
       );
-      scrollEl.scrollTo({ top: nextScrollTop, behavior: 'instant' });
+      restoreScrollEl.scrollTo({ top: nextScrollTop, behavior: 'instant' });
       pendingVirtualAnchorRef.current = undefined;
+      pendingVirtualAnchorScrollTopRef.current = undefined;
       restoringSavedViewportRef.current = false;
       initialScrollPlacedRef.current = true;
     });
@@ -1646,6 +1663,10 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
       stableFrames: 0,
       startedAt: 0,
     };
+    pendingVirtualAnchorRef.current = undefined;
+    pendingVirtualAnchorScrollTopRef.current = undefined;
+    restoringSavedViewportRef.current = false;
+    lastKnownVirtualAnchorRef.current = undefined;
     setTimeline(getInitialTimeline(room));
     setAtBottomState(true);
     scrollToBottomRef.current.count += 1;
