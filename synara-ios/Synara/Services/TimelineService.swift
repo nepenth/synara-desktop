@@ -934,6 +934,12 @@ enum MatrixHTMLRenderer {
         let body: String
     }
 
+    enum Segment: Equatable {
+        case markdown(String)
+        case code(String)
+        case details(DetailsBlock)
+    }
+
     static func attributedString(body: String, html: String) -> AttributedString {
         let markdown = sanitizedMarkdown(body: body, html: html)
         if let attributed = try? AttributedString(
@@ -944,6 +950,54 @@ enum MatrixHTMLRenderer {
         }
 
         return AttributedString(body)
+    }
+
+    static func segments(body: String, html: String) -> [Segment] {
+        let sanitized = html
+            .removingHTMLBlocks(named: "script")
+            .removingHTMLBlocks(named: "style")
+        let pattern = #"<details(?:\s+[^>]*)?>[\s\S]*?</details\s*>|<pre(?:\s+[^>]*)?>[\s\S]*?</pre\s*>"#
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
+            let markdown = sanitizedMarkdown(body: body, html: html)
+            return markdown.isEmpty ? [] : [.markdown(markdown)]
+        }
+
+        let nsRange = NSRange(sanitized.startIndex..<sanitized.endIndex, in: sanitized)
+        let matches = regex.matches(in: sanitized, range: nsRange)
+        guard matches.isEmpty == false else {
+            let markdown = sanitizedMarkdown(body: body, html: html)
+            return markdown.isEmpty ? [] : [.markdown(markdown)]
+        }
+
+        var segments: [Segment] = []
+        var cursor = sanitized.startIndex
+
+        for match in matches {
+            guard let range = Range(match.range(at: 0), in: sanitized) else {
+                continue
+            }
+
+            appendMarkdownSegment(from: String(sanitized[cursor..<range.lowerBound]), to: &segments)
+
+            let blockHTML = String(sanitized[range])
+            if blockHTML.range(of: #"^\s*<details"#, options: [.regularExpression, .caseInsensitive]) != nil {
+                if let block = detailsBlocks(html: blockHTML).first {
+                    segments.append(.details(block))
+                }
+            } else if let code = codeBlock(html: blockHTML) {
+                segments.append(.code(code))
+            }
+
+            cursor = range.upperBound
+        }
+
+        appendMarkdownSegment(from: String(sanitized[cursor...]), to: &segments)
+
+        if segments.isEmpty {
+            let markdown = sanitizedMarkdown(body: body, html: html)
+            return markdown.isEmpty ? [] : [.markdown(markdown)]
+        }
+        return segments
     }
 
     static func detailsBlocks(html: String) -> [DetailsBlock] {
@@ -998,6 +1052,7 @@ enum MatrixHTMLRenderer {
             .removingHTMLBlocks(named: "script")
             .removingHTMLBlocks(named: "style")
 
+        output = output.replacingPreformattedBlocks()
         output = output.replacingAnchorTags()
         output = output.replacingTag("strong", with: "**")
         output = output.replacingTag("b", with: "**")
@@ -1021,6 +1076,30 @@ enum MatrixHTMLRenderer {
             .trimmingCharacters(in: .whitespacesAndNewlines)
 
         return output.isEmpty ? body : output
+    }
+
+    private static func appendMarkdownSegment(from html: String, to segments: inout [Segment]) {
+        let markdown = sanitizedMarkdown(body: "", html: html)
+        guard markdown.isEmpty == false else {
+            return
+        }
+        segments.append(.markdown(markdown))
+    }
+
+    private static func codeBlock(html: String) -> String? {
+        let rawCode = firstHTMLCapture(
+            in: html,
+            pattern: #"<pre(?:\s+[^>]*)?>\s*<code(?:\s+[^>]*)?>([\s\S]*?)</code\s*>\s*</pre\s*>"#
+        ) ?? firstHTMLCapture(
+            in: html,
+            pattern: #"<pre(?:\s+[^>]*)?>([\s\S]*?)</pre\s*>"#
+        )
+        let code = rawCode?
+            .replacingHTMLPattern(#"</?code(?:\s+[^>]*)?>"#, with: "")
+            .decodingBasicHTMLEntities()
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        return code?.isEmpty == false ? code : nil
     }
 
     private static func firstHTMLCapture(in html: String, pattern: String) -> String? {
@@ -1074,6 +1153,30 @@ private extension String {
             } else {
                 output.replaceCharacters(in: match.range(at: 0), with: label)
             }
+        }
+
+        return output as String
+    }
+
+    func replacingPreformattedBlocks() -> String {
+        let pattern = #"<pre(?:\s+[^>]*)?>\s*(?:<code(?:\s+[^>]*)?>)?([\s\S]*?)(?:</code\s*>)?\s*</pre\s*>"#
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
+            return self
+        }
+
+        let nsRange = NSRange(startIndex..<endIndex, in: self)
+        let matches = regex.matches(in: self, range: nsRange).reversed()
+        let source = self as NSString
+        let output = NSMutableString(string: self)
+
+        for match in matches {
+            guard match.numberOfRanges == 2 else {
+                continue
+            }
+            let code = source.substring(with: match.range(at: 1))
+                .decodingBasicHTMLEntities()
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            output.replaceCharacters(in: match.range(at: 0), with: "\n```\n\(code)\n```\n")
         }
 
         return output as String
