@@ -454,7 +454,6 @@ struct RoomTimelineView: View {
     private func scrollToTimelineBottomTargets(proxy: ScrollViewProxy, eventID: String?) {
         if let eventID {
             proxy.scrollTo(eventID, anchor: UnitPoint(x: 0.5, y: 0.86))
-            return
         }
         proxy.scrollTo(Self.timelineBottomAnchorID, anchor: .bottom)
     }
@@ -1116,7 +1115,7 @@ struct RoomTimelineView: View {
         initialReadMarkerEventID = nil
         hasPositionedInitialTimeline = true
         showJumpToLatest = false
-        isJumpingToLatest = false
+        isJumpingToLatest = true
 
         let immediateLatest = baselineItems.last
         scrollToTimelineBottom(
@@ -1159,6 +1158,7 @@ struct RoomTimelineView: View {
                     scrollToTimelineBottom(proxy: proxy, eventID: fallbackEventID, animated: true, ignoreComposerFocus: true)
                     showJumpToLatest = false
                 }
+                isJumpingToLatest = false
             }
         }
     }
