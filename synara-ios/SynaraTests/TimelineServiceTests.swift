@@ -49,6 +49,30 @@ final class TimelineServiceTests: XCTestCase {
             MatrixHTMLRenderer.markdownExcludingDetails(body: "", html: html),
             "**Practical decision:**\n\n- Do not use it for active/default bounty pipelines."
         )
+        XCTAssertEqual(
+            MatrixHTMLRenderer.segments(body: "", html: html),
+            [
+                .details(block),
+                .markdown("**Practical decision:**\n\n- Do not use it for active/default bounty pipelines.")
+            ]
+        )
+    }
+
+    func testMatrixHTMLRendererSegmentsCodeBlocksOutsideDetails() {
+        let html = #"""
+        <p>Plan:</p>
+        <pre><code>let value = 1&#10;print(value)</code></pre>
+        <ul><li><strong>Ship</strong></li><li>Verify</li></ul>
+        """#
+
+        XCTAssertEqual(
+            MatrixHTMLRenderer.segments(body: "fallback", html: html),
+            [
+                .markdown("Plan:"),
+                .code("let value = 1\nprint(value)"),
+                .markdown("- **Ship**\n- Verify")
+            ]
+        )
     }
 
     func testMatrixRustSDKMapperPreservesFormattedTextMessages() {
