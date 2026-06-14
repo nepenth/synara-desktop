@@ -388,7 +388,6 @@ struct RoomTimelineView: View {
         }
 
         guard focusedEventID == nil,
-              isComposerFocused == false,
               isReadingFromEarlierPosition == false,
               lastRenderedTimelineCount > 0,
               items.count > lastRenderedTimelineCount,
@@ -397,7 +396,12 @@ struct RoomTimelineView: View {
             return
         }
 
-        scrollToTimelineBottom(proxy: proxy, eventID: latest.eventID, animated: true)
+        scrollToTimelineBottom(
+            proxy: proxy,
+            eventID: latest.eventID,
+            animated: true,
+            ignoreComposerFocus: true
+        )
     }
 
     private func scrollToPendingLatestIfNeeded(items: [TimelineItem], proxy: ScrollViewProxy) {
@@ -2018,42 +2022,47 @@ private struct ThreadMessageRow: View {
 
 private struct MatrixFormattedMessageView: View {
     let fallbackBody: String
-    let html: String
     let font: Font
+    private let segments: [MatrixHTMLRenderer.Segment]
 
-    private var detailsBlocks: [MatrixHTMLRenderer.DetailsBlock] {
-        MatrixHTMLRenderer.detailsBlocks(html: html)
-    }
-
-    private var remainingMarkdown: String {
-        MatrixHTMLRenderer.markdownExcludingDetails(body: "", html: html)
+    init(fallbackBody: String, html: String, font: Font) {
+        self.fallbackBody = fallbackBody
+        self.font = font
+        self.segments = MatrixHTMLRenderer.segments(body: fallbackBody, html: html)
     }
 
     var body: some View {
-        if detailsBlocks.isEmpty {
-            Text(MatrixHTMLRenderer.attributedString(body: fallbackBody, html: html))
-                .font(font)
-                .foregroundStyle(SynaraColor.primaryText)
-                .lineLimit(nil)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .fixedSize(horizontal: false, vertical: true)
+        if segments.count == 1, case .markdown(let markdown) = segments[0] {
+            markdownText(markdown)
         } else {
             VStack(alignment: .leading, spacing: SynaraSpacing.small) {
-                ForEach(detailsBlocks.indices, id: \.self) { index in
-                    MatrixDetailsBlockView(block: detailsBlocks[index])
-                }
-
-                if remainingMarkdown.isEmpty == false {
-                    Text(attributedMarkdown(remainingMarkdown))
-                        .font(font)
-                        .foregroundStyle(SynaraColor.primaryText)
-                        .lineLimit(nil)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .fixedSize(horizontal: false, vertical: true)
+                ForEach(Array(segments.enumerated()), id: \.offset) { _, segment in
+                    segmentView(segment)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+    }
+
+    @ViewBuilder
+    private func segmentView(_ segment: MatrixHTMLRenderer.Segment) -> some View {
+        switch segment {
+        case .markdown(let markdown):
+            markdownText(markdown)
+        case .code(let code):
+            MatrixCodeBlockView(code: code)
+        case .details(let block):
+            MatrixDetailsBlockView(block: block)
+        }
+    }
+
+    private func markdownText(_ markdown: String) -> some View {
+        Text(attributedMarkdown(markdown.isEmpty ? fallbackBody : markdown))
+            .font(font)
+            .foregroundStyle(SynaraColor.primaryText)
+            .lineLimit(nil)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .fixedSize(horizontal: false, vertical: true)
     }
 
     private func attributedMarkdown(_ markdown: String) -> AttributedString {
