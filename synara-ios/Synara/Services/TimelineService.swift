@@ -937,6 +937,7 @@ enum MatrixHTMLRenderer {
     enum Segment: Equatable {
         case markdown(String)
         case code(String)
+        case quote(String)
         case details(DetailsBlock)
     }
 
@@ -956,7 +957,7 @@ enum MatrixHTMLRenderer {
         let sanitized = html
             .removingHTMLBlocks(named: "script")
             .removingHTMLBlocks(named: "style")
-        let pattern = #"<details(?:\s+[^>]*)?>[\s\S]*?</details\s*>|<pre(?:\s+[^>]*)?>[\s\S]*?</pre\s*>"#
+        let pattern = #"<details(?:\s+[^>]*)?>[\s\S]*?</details\s*>|<pre(?:\s+[^>]*)?>[\s\S]*?</pre\s*>|<blockquote(?:\s+[^>]*)?>[\s\S]*?</blockquote\s*>"#
         guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
             let markdown = sanitizedMarkdown(body: body, html: html)
             return markdown.isEmpty ? [] : [.markdown(markdown)]
@@ -984,6 +985,9 @@ enum MatrixHTMLRenderer {
                 if let block = detailsBlocks(html: blockHTML).first {
                     segments.append(.details(block))
                 }
+            } else if blockHTML.range(of: #"^\s*<blockquote"#, options: [.regularExpression, .caseInsensitive]) != nil,
+                      let quote = quoteBlock(html: blockHTML) {
+                segments.append(.quote(quote))
             } else if let code = codeBlock(html: blockHTML) {
                 segments.append(.code(code))
             }
@@ -1054,22 +1058,30 @@ enum MatrixHTMLRenderer {
 
         output = output.replacingPreformattedBlocks()
         output = output.replacingAnchorTags()
+        output = output.replacingHeadingTags()
         output = output.replacingTag("strong", with: "**")
         output = output.replacingTag("b", with: "**")
         output = output.replacingTag("em", with: "*")
         output = output.replacingTag("i", with: "*")
         output = output.replacingTag("code", with: "`")
         output = output.replacingTag("del", with: "~~")
+        output = output.replacingTag("s", with: "~~")
+        output = output.replacingTables()
         output = output.replacingHTMLPattern(#"<br\s*/?>"#, with: "\n")
         output = output.replacingHTMLPattern(#"</p\s*>"#, with: "\n\n")
         output = output.replacingHTMLPattern(#"<p(?:\s+[^>]*)?>"#, with: "")
+        output = output.replacingOrderedLists()
+        output = output.replacingUnorderedLists()
         output = output.replacingHTMLPattern(#"<li(?:\s+[^>]*)?>"#, with: "\n- ")
         output = output.replacingHTMLPattern(#"</li\s*>"#, with: "")
         output = output.replacingHTMLPattern(#"</?(ul|ol)(?:\s+[^>]*)?>"#, with: "\n")
         output = output.replacingHTMLPattern(#"<blockquote(?:\s+[^>]*)?>"#, with: "\n> ")
         output = output.replacingHTMLPattern(#"</blockquote\s*>"#, with: "\n")
+        output = output.replacingHTMLPattern(#"<hr(?:\s+[^>]*)?/?>"#, with: "\n---\n")
         output = output.replacingHTMLPattern(#"<span[^>]*data-mx-spoiler[^>]*>"#, with: "")
         output = output.replacingHTMLPattern(#"</?span(?:\s+[^>]*)?>"#, with: "")
+        output = output.replacingHTMLPattern(#"</div\s*>"#, with: "\n")
+        output = output.replacingHTMLPattern(#"<div(?:\s+[^>]*)?>"#, with: "")
         output = output.replacingHTMLPattern(#"</?[^>]+>"#, with: "")
         output = output.decodingBasicHTMLEntities()
         output = output.replacingHTMLPattern(#"\n{3,}"#, with: "\n\n")
@@ -1102,6 +1114,17 @@ enum MatrixHTMLRenderer {
         return code?.isEmpty == false ? code : nil
     }
 
+    private static func quoteBlock(html: String) -> String? {
+        let rawQuote = firstHTMLCapture(
+            in: html,
+            pattern: #"<blockquote(?:\s+[^>]*)?>([\s\S]*?)</blockquote\s*>"#
+        )
+        let quote = rawQuote.map { sanitizedMarkdown(body: "", html: $0) }
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+
+        return quote?.isEmpty == false ? quote : nil
+    }
+
     private static func firstHTMLCapture(in html: String, pattern: String) -> String? {
         guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
             return nil
@@ -1126,6 +1149,16 @@ private extension String {
     func replacingTag(_ tagName: String, with marker: String) -> String {
         replacingHTMLPattern(#"<\#(tagName)(?:\s+[^>]*)?>"#, with: marker)
             .replacingHTMLPattern(#"</\#(tagName)\s*>"#, with: marker)
+    }
+
+    func replacingHeadingTags() -> String {
+        var output = self
+        for level in 1...6 {
+            output = output
+                .replacingHTMLPattern(#"<h\#(level)(?:\s+[^>]*)?>"#, with: "\n\n**")
+                .replacingHTMLPattern(#"</h\#(level)\s*>"#, with: "**\n\n")
+        }
+        return output
     }
 
     func replacingAnchorTags() -> String {
@@ -1158,6 +1191,85 @@ private extension String {
         return output as String
     }
 
+    func replacingOrderedLists() -> String {
+        replacingList(named: "ol") { index, item in
+            "\(index + 1). \(item)"
+        }
+    }
+
+    func replacingUnorderedLists() -> String {
+        replacingList(named: "ul") { _, item in
+            "- \(item)"
+        }
+    }
+
+    func replacingTables() -> String {
+        let pattern = #"<table(?:\s+[^>]*)?>([\s\S]*?)</table\s*>"#
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
+            return self
+        }
+
+        let nsRange = NSRange(startIndex..<endIndex, in: self)
+        let matches = regex.matches(in: self, range: nsRange).reversed()
+        let source = self as NSString
+        let output = NSMutableString(string: self)
+
+        for match in matches {
+            guard match.numberOfRanges == 2 else {
+                continue
+            }
+
+            let tableHTML = source.substring(with: match.range(at: 1))
+            let rows = tableHTML.htmlTableRows()
+            guard rows.isEmpty == false else {
+                continue
+            }
+
+            var markdownRows: [String] = []
+            for (index, row) in rows.enumerated() {
+                markdownRows.append("| \(row.cells.joined(separator: " | ")) |")
+                if index == 0, row.isHeader {
+                    markdownRows.append("| \(Array(repeating: "---", count: row.cells.count).joined(separator: " | ")) |")
+                }
+            }
+
+            output.replaceCharacters(in: match.range(at: 0), with: "\n\(markdownRows.joined(separator: "\n"))\n")
+        }
+
+        return output as String
+    }
+
+    private func replacingList(named tagName: String, itemPrefix: (Int, String) -> String) -> String {
+        let pattern = #"<\#(tagName)(?:\s+[^>]*)?>([\s\S]*?)</\#(tagName)\s*>"#
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
+            return self
+        }
+
+        let nsRange = NSRange(startIndex..<endIndex, in: self)
+        let matches = regex.matches(in: self, range: nsRange).reversed()
+        let source = self as NSString
+        let output = NSMutableString(string: self)
+
+        for match in matches {
+            guard match.numberOfRanges == 2 else {
+                continue
+            }
+
+            let listHTML = source.substring(with: match.range(at: 1))
+            let items = listHTML.htmlListItems()
+            guard items.isEmpty == false else {
+                continue
+            }
+
+            let markdown = items.enumerated()
+                .map { itemPrefix($0.offset, $0.element) }
+                .joined(separator: "\n")
+            output.replaceCharacters(in: match.range(at: 0), with: "\n\(markdown)\n")
+        }
+
+        return output as String
+    }
+
     func replacingPreformattedBlocks() -> String {
         let pattern = #"<pre(?:\s+[^>]*)?>\s*(?:<code(?:\s+[^>]*)?>)?([\s\S]*?)(?:</code\s*>)?\s*</pre\s*>"#
         guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
@@ -1180,6 +1292,40 @@ private extension String {
         }
 
         return output as String
+    }
+
+    func htmlListItems() -> [String] {
+        htmlCaptures(pattern: #"<li(?:\s+[^>]*)?>([\s\S]*?)</li\s*>"#)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { $0.isEmpty == false }
+    }
+
+    func htmlTableRows() -> [(cells: [String], isHeader: Bool)] {
+        htmlCaptures(pattern: #"<tr(?:\s+[^>]*)?>([\s\S]*?)</tr\s*>"#)
+            .compactMap { rowHTML in
+                let headerCells = rowHTML.htmlCaptures(pattern: #"<th(?:\s+[^>]*)?>([\s\S]*?)</th\s*>"#)
+                let dataCells = rowHTML.htmlCaptures(pattern: #"<td(?:\s+[^>]*)?>([\s\S]*?)</td\s*>"#)
+                let cells = headerCells.isEmpty ? dataCells : headerCells
+                let trimmedCells = cells
+                    .map { $0.replacingHTMLPattern(#"</?[^>]+>"#, with: "").decodingBasicHTMLEntities().trimmingCharacters(in: .whitespacesAndNewlines) }
+                    .filter { $0.isEmpty == false }
+                return trimmedCells.isEmpty ? nil : (trimmedCells, headerCells.isEmpty == false)
+            }
+    }
+
+    func htmlCaptures(pattern: String) -> [String] {
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
+            return []
+        }
+
+        let nsRange = NSRange(startIndex..<endIndex, in: self)
+        let source = self as NSString
+        return regex.matches(in: self, range: nsRange).compactMap { match in
+            guard match.numberOfRanges == 2 else {
+                return nil
+            }
+            return source.substring(with: match.range(at: 1))
+        }
     }
 
     func replacingHTMLPattern(_ pattern: String, with replacement: String) -> String {
