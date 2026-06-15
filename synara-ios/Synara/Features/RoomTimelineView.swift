@@ -2087,18 +2087,17 @@ private struct MatrixQuoteBlockView: View {
     let font: Font
 
     var body: some View {
-        HStack(alignment: .top, spacing: SynaraSpacing.medium) {
-            RoundedRectangle(cornerRadius: 2, style: .continuous)
-                .fill(SynaraColor.secondaryText.opacity(0.75))
-                .frame(width: 3)
-
-            Text(attributedMarkdown(markdown))
-                .font(font)
-                .foregroundStyle(SynaraColor.secondaryText)
-                .lineLimit(nil)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .fixedSize(horizontal: false, vertical: true)
-        }
+        Text(attributedMarkdown(markdown))
+            .font(font)
+            .foregroundStyle(SynaraColor.secondaryText)
+            .lineLimit(nil)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.leading, SynaraSpacing.medium)
+            .overlay(alignment: .leading) {
+                RoundedRectangle(cornerRadius: 2, style: .continuous)
+                    .fill(SynaraColor.secondaryText.opacity(0.75))
+                    .frame(width: 3)
+            }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
