@@ -75,6 +75,54 @@ final class TimelineServiceTests: XCTestCase {
         )
     }
 
+    func testMatrixHTMLRendererSegmentsHeadingsAndBlockquotes() {
+        let html = #"""
+        <h2>App-agent handoff</h2>
+        <p>I wrote a copyable handoff file here:</p>
+        <blockquote><p>TestFlight <strong>MUST</strong> use production APNs.</p></blockquote>
+        """#
+
+        XCTAssertEqual(
+            MatrixHTMLRenderer.segments(body: "fallback", html: html),
+            [
+                .markdown("**App-agent handoff**\n\nI wrote a copyable handoff file here:"),
+                .quote("TestFlight **MUST** use production APNs.")
+            ]
+        )
+    }
+
+    func testMatrixHTMLRendererPreservesAgentRichFormattingContract() {
+        let html = #"""
+        <h3>Verification plan</h3>
+        <p><strong>Status:</strong> <em>ready</em> with <code>TimelineServiceTests</code>.</p>
+        <ol><li>Send the message</li><li>Confirm <s>plain</s> rich output</li></ol>
+        <ul><li><a href="https://matrix.org">Matrix link</a></li><li>Unsafe <a href="javascript:alert(1)">link</a></li></ul>
+        <hr>
+        <table><tr><th>Case</th><th>Expected</th></tr><tr><td>code</td><td>preserved</td></tr></table>
+        """#
+
+        XCTAssertEqual(
+            MatrixHTMLRenderer.sanitizedMarkdown(body: "fallback", html: html),
+            """
+            **Verification plan**
+
+            **Status:** *ready* with `TimelineServiceTests`.
+
+            1. Send the message
+            2. Confirm ~~plain~~ rich output
+
+            - [Matrix link](https://matrix.org)
+            - Unsafe link
+
+            ---
+
+            | Case | Expected |
+            | --- | --- |
+            | code | preserved |
+            """
+        )
+    }
+
     func testMatrixRustSDKMapperPreservesFormattedTextMessages() {
         let content = MsgLikeContent(
             kind: .message(
