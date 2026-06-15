@@ -24,6 +24,56 @@ private final class SynaraUnableToDecryptRecorder: UnableToDecryptDelegate, @unc
     }
 }
 
+private final class SynaraSessionVerificationDelegate: SessionVerificationControllerDelegate, @unchecked Sendable {
+    private let clientStore: MatrixRustSDKClientStore
+
+    init(clientStore: MatrixRustSDKClientStore) {
+        self.clientStore = clientStore
+    }
+
+    func didReceiveVerificationRequest(details: SessionVerificationRequestDetails) {
+        Task {
+            await clientStore.handleVerificationRequest(details: details)
+        }
+    }
+
+    func didAcceptVerificationRequest() {
+        Task {
+            await clientStore.handleVerificationAccepted()
+        }
+    }
+
+    func didStartSasVerification() {
+        Task {
+            await clientStore.handleVerificationSasStarted()
+        }
+    }
+
+    func didReceiveVerificationData(data: SessionVerificationData) {
+        Task {
+            await clientStore.handleVerificationData(data)
+        }
+    }
+
+    func didFail() {
+        Task {
+            await clientStore.handleVerificationFailed()
+        }
+    }
+
+    func didCancel() {
+        Task {
+            await clientStore.handleVerificationCancelled()
+        }
+    }
+
+    func didFinish() {
+        Task {
+            await clientStore.handleVerificationFinished()
+        }
+    }
+}
+
 enum MatrixRustSDKTimelineMessageMapper {
     static func mapMessageLike(
         _ content: MsgLikeContent,
@@ -122,6 +172,10 @@ actor MatrixRustSDKClientStore {
     private var roomListService: RoomListService?
     private var syncStatus: MatrixSyncStatus = .stopped
     private let unableToDecryptRecorder = SynaraUnableToDecryptRecorder()
+    private var verificationController: SessionVerificationController?
+    private var verificationDelegate: SynaraSessionVerificationDelegate?
+    private var verificationContinuations: [UUID: AsyncStream<CryptoVerificationState>.Continuation] = [:]
+    private var lastVerificationState: CryptoVerificationState?
     private var retainedClientHandles: [Client] = []
     private var retainedRoomHandlesByID: [String: Room] = [:]
     /// Serializes client creation, restoration, and teardown. Actors allow reentrancy
@@ -638,8 +692,53 @@ actor MatrixRustSDKClientStore {
 
     func requestDeviceVerification(session: AuthenticatedSession) async throws {
         let client = try await ensureClient(for: session)
-        let controller = try await client.getSessionVerificationController()
+        if verificationController == nil {
+            try await installSessionVerificationDelegate(on: client)
+        }
+        guard let controller = verificationController else {
+            throw MessageSendError.failed
+        }
         try await controller.requestDeviceVerification()
+        broadcastVerificationState(.requestSent)
+    }
+
+    func acceptVerificationRequest(session: AuthenticatedSession) async throws {
+        _ = try await ensureClient(for: session)
+        let controller = try requireVerificationController()
+        try await controller.acceptVerificationRequest()
+        broadcastVerificationState(.accepted)
+    }
+
+    func startSasVerification(session: AuthenticatedSession) async throws {
+        _ = try await ensureClient(for: session)
+        let controller = try requireVerificationController()
+        try await controller.startSasVerification()
+        broadcastVerificationState(.sasStarted)
+    }
+
+    func approveVerification(session: AuthenticatedSession) async throws {
+        _ = try await ensureClient(for: session)
+        let controller = try requireVerificationController()
+        try await controller.approveVerification()
+    }
+
+    func declineVerification(session: AuthenticatedSession) async throws {
+        _ = try await ensureClient(for: session)
+        let controller = try requireVerificationController()
+        try await controller.declineVerification()
+    }
+
+    func cancelVerification(session: AuthenticatedSession) async throws {
+        _ = try await ensureClient(for: session)
+        let controller = try requireVerificationController()
+        try await controller.cancelVerification()
+    }
+
+    private func requireVerificationController() throws -> SessionVerificationController {
+        guard let verificationController else {
+            throw MessageSendError.failed
+        }
+        return verificationController
     }
 
     func recover(recoveryKey: String, session: AuthenticatedSession) async throws {
@@ -1046,6 +1145,10 @@ actor MatrixRustSDKClientStore {
         }
         syncService = nil
         roomListService = nil
+        verificationController?.setDelegate(delegate: nil)
+        verificationController = nil
+        verificationDelegate = nil
+        lastVerificationState = nil
     }
 
     func sendRawRoomEvent(roomID: String, eventType: String, content: String, session: AuthenticatedSession) async throws {
@@ -1128,6 +1231,7 @@ actor MatrixRustSDKClientStore {
                 }
                 try await newClient.restoreSession(session: restoreSession)
                 await newClient.encryption().waitForE2eeInitializationTasks()
+                try await installSessionVerificationDelegate(on: newClient)
                 await ensurePlatformDeviceDisplayName(session: session)
 
                 self.client = newClient
@@ -1221,6 +1325,110 @@ actor MatrixRustSDKClientStore {
 
     private func installUnableToDecryptDelegate(on client: Client) async throws {
         try await client.setUtdDelegate(utdDelegate: unableToDecryptRecorder)
+    }
+
+    private func installSessionVerificationDelegate(on client: Client) async throws {
+        let controller = try await client.getSessionVerificationController()
+        let delegate = SynaraSessionVerificationDelegate(clientStore: self)
+        controller.setDelegate(delegate: delegate)
+        verificationController = controller
+        verificationDelegate = delegate
+    }
+
+    nonisolated func verificationUpdates(session: AuthenticatedSession) -> AsyncStream<CryptoVerificationState> {
+        AsyncStream { continuation in
+            let id = UUID()
+            let registrationTask = Task {
+                await addVerificationContinuation(id: id, continuation: continuation, session: session)
+            }
+            continuation.onTermination = { _ in
+                registrationTask.cancel()
+                Task {
+                    await self.removeVerificationContinuation(id: id)
+                }
+            }
+        }
+    }
+
+    private func addVerificationContinuation(
+        id: UUID,
+        continuation: AsyncStream<CryptoVerificationState>.Continuation,
+        session: AuthenticatedSession
+    ) async {
+        verificationContinuations[id] = continuation
+        do {
+            let client = try await ensureClient(for: session)
+            if verificationController == nil {
+                try await installSessionVerificationDelegate(on: client)
+            }
+        } catch {
+            continuation.yield(.failed)
+        }
+        if let lastVerificationState {
+            continuation.yield(lastVerificationState)
+        }
+    }
+
+    private func removeVerificationContinuation(id: UUID) {
+        verificationContinuations.removeValue(forKey: id)
+    }
+
+    private func broadcastVerificationState(_ state: CryptoVerificationState) {
+        lastVerificationState = state.isTerminal ? nil : state
+        for continuation in verificationContinuations.values {
+            continuation.yield(state)
+        }
+    }
+
+    func handleVerificationRequest(details: SessionVerificationRequestDetails) async {
+        do {
+            try await verificationController?.acknowledgeVerificationRequest(
+                senderId: details.senderProfile.userId,
+                flowId: details.flowId
+            )
+            broadcastVerificationState(.requestReceived(
+                CryptoVerificationRequest(
+                    userID: details.senderProfile.userId,
+                    displayName: details.senderProfile.displayName,
+                    deviceID: details.deviceId,
+                    deviceDisplayName: details.deviceDisplayName,
+                    flowID: details.flowId
+                )
+            ))
+        } catch {
+            broadcastVerificationState(.failed)
+        }
+    }
+
+    func handleVerificationAccepted() {
+        broadcastVerificationState(.accepted)
+    }
+
+    func handleVerificationSasStarted() {
+        broadcastVerificationState(.sasStarted)
+    }
+
+    func handleVerificationData(_ data: SessionVerificationData) {
+        switch data {
+        case .emojis(let emojis, _):
+            broadcastVerificationState(.emojis(emojis.map {
+                CryptoVerificationEmoji(symbol: $0.symbol(), description: $0.description())
+            }))
+        case .decimals(let values):
+            broadcastVerificationState(.decimals(values))
+        }
+    }
+
+    func handleVerificationFailed() {
+        broadcastVerificationState(.failed)
+    }
+
+    func handleVerificationCancelled() {
+        broadcastVerificationState(.cancelled)
+    }
+
+    func handleVerificationFinished() {
+        broadcastVerificationState(.finished)
     }
 
     private func cryptoSessionStatus(client: Client) async throws -> SessionCryptoStatus {
@@ -2821,6 +3029,15 @@ final class MatrixRustSDKCryptoStatusService: CryptoStatusServicing {
         }
     }
 
+    func verificationUpdates() -> AsyncStream<CryptoVerificationState> {
+        guard case .signedIn(let session) = sessionStore.currentState else {
+            return AsyncStream { continuation in
+                continuation.finish()
+            }
+        }
+        return clientStore.verificationUpdates(session: session)
+    }
+
     func retryDecryption(roomID: String) async -> CryptoActionResult {
         guard case .signedIn(let session) = sessionStore.currentState else {
             return .unavailable("Sign in before retrying encrypted message decryption.")
@@ -2844,6 +3061,71 @@ final class MatrixRustSDKCryptoStatusService: CryptoStatusServicing {
             return .completed("Device verification request sent to your other sessions.")
         } catch {
             return .failed("Could not start device verification from this device.")
+        }
+    }
+
+    func acceptVerificationRequest() async -> CryptoActionResult {
+        guard case .signedIn(let session) = sessionStore.currentState else {
+            return .unavailable("Sign in before accepting verification.")
+        }
+
+        do {
+            try await clientStore.acceptVerificationRequest(session: session)
+            return .completed("Verification request accepted.")
+        } catch {
+            return .failed("Could not accept verification.")
+        }
+    }
+
+    func startSasVerification() async -> CryptoActionResult {
+        guard case .signedIn(let session) = sessionStore.currentState else {
+            return .unavailable("Sign in before starting verification.")
+        }
+
+        do {
+            try await clientStore.startSasVerification(session: session)
+            return .completed("Secure comparison started.")
+        } catch {
+            return .failed("Could not start secure comparison.")
+        }
+    }
+
+    func approveVerification() async -> CryptoActionResult {
+        guard case .signedIn(let session) = sessionStore.currentState else {
+            return .unavailable("Sign in before approving verification.")
+        }
+
+        do {
+            try await clientStore.approveVerification(session: session)
+            return .completed("Device verified.")
+        } catch {
+            return .failed("Could not approve verification.")
+        }
+    }
+
+    func declineVerification() async -> CryptoActionResult {
+        guard case .signedIn(let session) = sessionStore.currentState else {
+            return .unavailable("Sign in before declining verification.")
+        }
+
+        do {
+            try await clientStore.declineVerification(session: session)
+            return .completed("Verification declined.")
+        } catch {
+            return .failed("Could not decline verification.")
+        }
+    }
+
+    func cancelVerification() async -> CryptoActionResult {
+        guard case .signedIn(let session) = sessionStore.currentState else {
+            return .unavailable("Sign in before cancelling verification.")
+        }
+
+        do {
+            try await clientStore.cancelVerification(session: session)
+            return .completed("Verification cancelled.")
+        } catch {
+            return .failed("Could not cancel verification.")
         }
     }
 
