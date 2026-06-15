@@ -234,6 +234,48 @@ struct SessionCryptoStatus: Equatable {
     )
 }
 
+struct CryptoVerificationRequest: Equatable {
+    let userID: String
+    let displayName: String?
+    let deviceID: String
+    let deviceDisplayName: String?
+    let flowID: String
+}
+
+struct CryptoVerificationEmoji: Equatable, Identifiable {
+    let symbol: String
+    let description: String
+
+    var id: String {
+        "\(symbol)-\(description)"
+    }
+}
+
+enum CryptoVerificationState: Equatable, Identifiable {
+    case requestReceived(CryptoVerificationRequest)
+    case requestSent
+    case accepted
+    case sasStarted
+    case emojis([CryptoVerificationEmoji])
+    case decimals([UInt16])
+    case finished
+    case cancelled
+    case failed
+
+    var id: String {
+        "session-verification"
+    }
+
+    var isTerminal: Bool {
+        switch self {
+        case .finished, .cancelled, .failed:
+            return true
+        case .requestReceived, .requestSent, .accepted, .sasStarted, .emojis, .decimals:
+            return false
+        }
+    }
+}
+
 enum CryptoActionResult: Equatable {
     case completed(String)
     case unavailable(String)
@@ -250,8 +292,14 @@ enum CryptoActionResult: Equatable {
 protocol CryptoStatusServicing {
     func roomStatus(roomID: String) async -> RoomCryptoStatus
     func sessionStatus() async -> SessionCryptoStatus
+    func verificationUpdates() -> AsyncStream<CryptoVerificationState>
     func retryDecryption(roomID: String) async -> CryptoActionResult
     func requestDeviceVerification() async -> CryptoActionResult
+    func acceptVerificationRequest() async -> CryptoActionResult
+    func startSasVerification() async -> CryptoActionResult
+    func approveVerification() async -> CryptoActionResult
+    func declineVerification() async -> CryptoActionResult
+    func cancelVerification() async -> CryptoActionResult
     func recover(recoveryKey: String) async -> CryptoActionResult
 }
 
@@ -596,12 +644,38 @@ struct MockCryptoStatusService: CryptoStatusServicing {
         sessionCryptoStatus
     }
 
+    func verificationUpdates() -> AsyncStream<CryptoVerificationState> {
+        AsyncStream { continuation in
+            continuation.finish()
+        }
+    }
+
     func retryDecryption(roomID: String) async -> CryptoActionResult {
         .completed("Decryption retry started.")
     }
 
     func requestDeviceVerification() async -> CryptoActionResult {
         .completed("Device verification request sent.")
+    }
+
+    func acceptVerificationRequest() async -> CryptoActionResult {
+        .completed("Verification request accepted.")
+    }
+
+    func startSasVerification() async -> CryptoActionResult {
+        .completed("Verification comparison started.")
+    }
+
+    func approveVerification() async -> CryptoActionResult {
+        .completed("Device verified.")
+    }
+
+    func declineVerification() async -> CryptoActionResult {
+        .completed("Verification declined.")
+    }
+
+    func cancelVerification() async -> CryptoActionResult {
+        .completed("Verification cancelled.")
     }
 
     func recover(recoveryKey: String) async -> CryptoActionResult {

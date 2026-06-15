@@ -6,6 +6,8 @@ struct RootShellView: View {
     @ObservedObject private var session: AppSessionStore
     @State private var tabBadgeCounts = TabBadgeCounts()
     @State private var tabBadgeUpdatesTask: Task<Void, Never>?
+    @State private var cryptoVerificationState: CryptoVerificationState?
+    @State private var cryptoVerificationUpdatesTask: Task<Void, Never>?
 
     init(environment: AppEnvironment = .mock()) {
         self.environment = environment
@@ -63,10 +65,24 @@ struct RootShellView: View {
             PerformanceTrace.end("SignedInSessionStart", id: signpostID)
             environment.router.replayPendingDeepLinkIfNeeded(sessionIsSignedIn: true)
             startTabBadgeUpdates()
+            startCryptoVerificationUpdates()
+        }
+        .sheet(item: $cryptoVerificationState) { state in
+            CryptoVerificationSheet(
+                state: state,
+                onAccept: { runCryptoVerificationAction { await environment.crypto.acceptVerificationRequest() } },
+                onStartSas: { runCryptoVerificationAction { await environment.crypto.startSasVerification() } },
+                onApprove: { runCryptoVerificationAction { await environment.crypto.approveVerification() } },
+                onDecline: { runCryptoVerificationAction { await environment.crypto.declineVerification() } },
+                onCancel: { runCryptoVerificationAction { await environment.crypto.cancelVerification() } },
+                onDismissTerminal: { cryptoVerificationState = nil }
+            )
         }
         .onDisappear {
             tabBadgeUpdatesTask?.cancel()
             tabBadgeUpdatesTask = nil
+            cryptoVerificationUpdatesTask?.cancel()
+            cryptoVerificationUpdatesTask = nil
         }
     }
 
@@ -100,6 +116,39 @@ struct RootShellView: View {
         }
     }
 
+    private func startCryptoVerificationUpdates() {
+        cryptoVerificationUpdatesTask?.cancel()
+        cryptoVerificationUpdatesTask = Task {
+            for await update in environment.crypto.verificationUpdates() {
+                guard Task.isCancelled == false else {
+                    return
+                }
+                await MainActor.run {
+                    cryptoVerificationState = update
+                }
+                if update.isTerminal {
+                    try? await Task.sleep(nanoseconds: 1_500_000_000)
+                    await MainActor.run {
+                        if cryptoVerificationState == update {
+                            cryptoVerificationState = nil
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func runCryptoVerificationAction(_ action: @escaping () async -> CryptoActionResult) {
+        Task {
+            let result = await action()
+            if case .failed = result {
+                await MainActor.run {
+                    cryptoVerificationState = .failed
+                }
+            }
+        }
+    }
+
     private func rooms(from state: RoomListState) -> [RoomSummary] {
         guard case .loaded(let rooms) = state else {
             return []
@@ -111,5 +160,205 @@ struct RootShellView: View {
 struct RootShellView_Previews: PreviewProvider {
     static var previews: some View {
         RootShellView(environment: .mock())
+    }
+}
+
+private struct CryptoVerificationSheet: View {
+    let state: CryptoVerificationState
+    let onAccept: () -> Void
+    let onStartSas: () -> Void
+    let onApprove: () -> Void
+    let onDecline: () -> Void
+    let onCancel: () -> Void
+    let onDismissTerminal: () -> Void
+
+    var body: some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: SynaraSpacing.large) {
+                header
+                content
+                Spacer(minLength: SynaraSpacing.small)
+                actions
+            }
+            .padding(SynaraSpacing.xLarge)
+            .navigationTitle("Verify Device")
+            .navigationBarTitleDisplayMode(.inline)
+        }
+        .presentationDetents([.medium, .large])
+    }
+
+    @ViewBuilder
+    private var header: some View {
+        VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
+            Text(title)
+                .font(SynaraTypography.screenTitle)
+            Text(detail)
+                .font(SynaraTypography.supporting)
+                .foregroundStyle(SynaraColor.secondaryText)
+        }
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        switch state {
+        case .requestReceived(let request):
+            VStack(alignment: .leading, spacing: SynaraSpacing.small) {
+                CryptoVerificationInfoRow(title: "User", value: request.displayName ?? request.userID)
+                CryptoVerificationInfoRow(title: "Device", value: request.deviceDisplayName ?? request.deviceID)
+            }
+        case .emojis(let emojis):
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 86), spacing: SynaraSpacing.small)], spacing: SynaraSpacing.small) {
+                ForEach(emojis) { emoji in
+                    VStack(spacing: SynaraSpacing.xSmall) {
+                        Text(emoji.symbol)
+                            .font(.system(size: 34))
+                        Text(emoji.description)
+                            .font(SynaraTypography.fineMetaBold)
+                            .multilineTextAlignment(.center)
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 78)
+                    .padding(SynaraSpacing.small)
+                    .synaraCard()
+                }
+            }
+        case .decimals(let values):
+            HStack(spacing: SynaraSpacing.medium) {
+                ForEach(Array(values.enumerated()), id: \.offset) { _, value in
+                    Text(String(value))
+                        .font(.system(.title2, design: .monospaced).weight(.semibold))
+                        .frame(maxWidth: .infinity)
+                        .padding(SynaraSpacing.medium)
+                        .synaraCard()
+                }
+            }
+        case .requestSent, .accepted, .sasStarted:
+            ProgressView()
+                .controlSize(.large)
+                .frame(maxWidth: .infinity, alignment: .center)
+                .padding(.vertical, SynaraSpacing.large)
+        case .finished, .cancelled, .failed:
+            Image(systemName: terminalSystemImage)
+                .font(.system(size: 44, weight: .semibold))
+                .foregroundStyle(terminalTint)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, SynaraSpacing.large)
+        }
+    }
+
+    @ViewBuilder
+    private var actions: some View {
+        switch state {
+        case .requestReceived:
+            HStack(spacing: SynaraSpacing.small) {
+                Button("Decline", role: .cancel, action: onDecline)
+                    .buttonStyle(.bordered)
+                Button("Accept", action: onAccept)
+                    .buttonStyle(.borderedProminent)
+            }
+        case .requestSent:
+            Button("Cancel Verification", role: .cancel, action: onCancel)
+                .buttonStyle(.bordered)
+        case .accepted, .sasStarted:
+            HStack(spacing: SynaraSpacing.small) {
+                Button("Cancel", role: .cancel, action: onCancel)
+                    .buttonStyle(.bordered)
+                Button("Start Comparison", action: onStartSas)
+                    .buttonStyle(.borderedProminent)
+            }
+        case .emojis, .decimals:
+            VStack(spacing: SynaraSpacing.small) {
+                Button("They Match", action: onApprove)
+                    .buttonStyle(.borderedProminent)
+                Button("They Do Not Match", role: .destructive, action: onDecline)
+                    .buttonStyle(.bordered)
+            }
+        case .finished, .cancelled, .failed:
+            Button("Done", action: onDismissTerminal)
+                .buttonStyle(.borderedProminent)
+        }
+    }
+
+    private var title: String {
+        switch state {
+        case .requestReceived:
+            return "Verification request"
+        case .requestSent:
+            return "Request sent"
+        case .accepted:
+            return "Ready to compare"
+        case .sasStarted:
+            return "Preparing comparison"
+        case .emojis, .decimals:
+            return "Compare on both devices"
+        case .finished:
+            return "Device verified"
+        case .cancelled:
+            return "Verification cancelled"
+        case .failed:
+            return "Verification failed"
+        }
+    }
+
+    private var detail: String {
+        switch state {
+        case .requestReceived:
+            return "Another session wants to verify this device."
+        case .requestSent:
+            return "Approve the request from one of your already trusted sessions."
+        case .accepted:
+            return "Start a secure emoji or number comparison on both devices."
+        case .sasStarted:
+            return "Waiting for short authentication strings from the Matrix SDK."
+        case .emojis, .decimals:
+            return "Only approve if the values match exactly on both devices."
+        case .finished:
+            return "This device is now verified for encrypted Matrix sessions."
+        case .cancelled:
+            return "The verification flow was cancelled."
+        case .failed:
+            return "The verification flow could not be completed."
+        }
+    }
+
+    private var terminalSystemImage: String {
+        switch state {
+        case .finished:
+            return "checkmark.seal.fill"
+        case .cancelled:
+            return "xmark.circle.fill"
+        case .failed:
+            return "exclamationmark.triangle.fill"
+        case .requestReceived, .requestSent, .accepted, .sasStarted, .emojis, .decimals:
+            return "lock.shield"
+        }
+    }
+
+    private var terminalTint: Color {
+        switch state {
+        case .finished:
+            return .green
+        case .cancelled:
+            return SynaraColor.secondaryText
+        case .failed:
+            return SynaraColor.critical
+        case .requestReceived, .requestSent, .accepted, .sasStarted, .emojis, .decimals:
+            return SynaraColor.accent
+        }
+    }
+}
+
+private struct CryptoVerificationInfoRow: View {
+    let title: String
+    let value: String
+
+    var body: some View {
+        HStack {
+            Text(title)
+                .foregroundStyle(SynaraColor.secondaryText)
+            Spacer(minLength: SynaraSpacing.medium)
+            Text(value)
+                .multilineTextAlignment(.trailing)
+        }
+        .font(SynaraTypography.body)
     }
 }
