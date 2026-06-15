@@ -42,6 +42,7 @@ struct RoomTimelineView: View {
     @State private var isJumpingToLatest = false
     @State private var pendingJumpToLatestEventID: String?
     @State private var isComposerFocused = false
+    @State private var isTimelineBottomVisible = false
     @State private var lastMarkedFullyReadEventID: String?
     @State private var markFullyReadTask: Task<Void, Never>?
     @State private var timelineUpdatesTask: Task<Void, Never>?
@@ -174,7 +175,7 @@ struct RoomTimelineView: View {
         case .idle, .loading:
             ScrollView {
                 SynaraTimelineSkeletonList(rowCount: 8)
-                    .padding(.horizontal, SynaraSpacing.large)
+                    .padding(.horizontal, SynaraSpacing.medium)
                     .padding(.top, SynaraSpacing.medium)
                     .padding(.bottom, SynaraSpacing.small)
             }
@@ -251,7 +252,6 @@ struct RoomTimelineView: View {
                             .id(item.eventID)
                             .onAppear {
                                 if item.eventID == items.last?.eventID {
-                                    showJumpToLatest = false
                                     scheduleMarkFullyRead(eventID: item.eventID)
                                 }
                                 if isAgentRoom == false, index < Self.olderPaginationTopThreshold {
@@ -261,9 +261,6 @@ struct RoomTimelineView: View {
                             .onDisappear {
                                 if item.eventID == items.last?.eventID {
                                     cancelMarkFullyRead()
-                                    if items.count > 1 {
-                                        showJumpToLatest = true
-                                    }
                                 }
                             }
                         }
@@ -272,8 +269,18 @@ struct RoomTimelineView: View {
                             .frame(height: 1)
                             .id(Self.timelineBottomAnchorID)
                             .accessibilityHidden(true)
+                            .onAppear {
+                                isTimelineBottomVisible = true
+                                showJumpToLatest = false
+                            }
+                            .onDisappear {
+                                isTimelineBottomVisible = false
+                                if items.count > 1 {
+                                    showJumpToLatest = true
+                                }
+                            }
                     }
-                    .padding(.horizontal, SynaraSpacing.large)
+                    .padding(.horizontal, SynaraSpacing.medium)
                     .padding(.top, isAgentRoom ? SynaraSpacing.medium : SynaraSpacing.small)
                     .padding(.bottom, SynaraSpacing.small)
                 }
@@ -284,12 +291,11 @@ struct RoomTimelineView: View {
                     DragGesture(minimumDistance: 8).onChanged { _ in
                         if items.count > 8 {
                             cancelTimelineScroll()
-                            showJumpToLatest = true
                         }
                     }
                 )
                 .overlay(alignment: .bottomTrailing) {
-                    if showJumpToLatest, let latest = items.last {
+                    if showJumpToLatest, isTimelineBottomVisible == false, let latest = items.last {
                         JumpToLatestButton(isLoading: isJumpingToLatest) {
                             jumpToLatest(proxy: proxy, currentItems: items, fallbackEventID: latest.eventID)
                         }
@@ -557,6 +563,7 @@ struct RoomTimelineView: View {
         isJumpingToLatest = false
         pendingJumpToLatestEventID = nil
         isComposerFocused = false
+        isTimelineBottomVisible = false
         lastMarkedFullyReadEventID = nil
         cancelMarkFullyRead()
     }
@@ -2051,6 +2058,8 @@ private struct MatrixFormattedMessageView: View {
             markdownText(markdown)
         case .code(let code):
             MatrixCodeBlockView(code: code)
+        case .quote(let markdown):
+            MatrixQuoteBlockView(markdown: markdown, font: font)
         case .details(let block):
             MatrixDetailsBlockView(block: block)
         }
@@ -2063,6 +2072,34 @@ private struct MatrixFormattedMessageView: View {
             .lineLimit(nil)
             .frame(maxWidth: .infinity, alignment: .leading)
             .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private func attributedMarkdown(_ markdown: String) -> AttributedString {
+        (try? AttributedString(
+            markdown: markdown,
+            options: AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace)
+        )) ?? AttributedString(markdown)
+    }
+}
+
+private struct MatrixQuoteBlockView: View {
+    let markdown: String
+    let font: Font
+
+    var body: some View {
+        HStack(alignment: .top, spacing: SynaraSpacing.medium) {
+            RoundedRectangle(cornerRadius: 2, style: .continuous)
+                .fill(SynaraColor.secondaryText.opacity(0.75))
+                .frame(width: 3)
+
+            Text(attributedMarkdown(markdown))
+                .font(font)
+                .foregroundStyle(SynaraColor.secondaryText)
+                .lineLimit(nil)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func attributedMarkdown(_ markdown: String) -> AttributedString {
@@ -2746,9 +2783,9 @@ private struct TimelineRow: View {
         let row = HStack(alignment: .top, spacing: SynaraSpacing.small) {
             if isGroupedWithPrevious {
                 Color.clear
-                    .frame(width: 34, height: 1)
+                    .frame(width: 30, height: 1)
             } else {
-                TimelineAvatar(senderID: item.senderID, avatarURL: item.senderAvatarURL, size: 34)
+                TimelineAvatar(senderID: item.senderID, avatarURL: item.senderAvatarURL, size: 30)
             }
 
             VStack(alignment: .leading, spacing: 5) {
