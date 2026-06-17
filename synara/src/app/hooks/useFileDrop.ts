@@ -1,4 +1,4 @@
-import { useCallback, DragEventHandler, RefObject, useState, useEffect, useRef } from 'react';
+import { useCallback, DragEventHandler, useState, useEffect, useRef } from 'react';
 import { getDataTransferFiles } from '../utils/dom';
 import {
   readPlatformDroppedFiles,
@@ -15,32 +15,27 @@ export const useFileDropHandler = (onDrop: (file: File[]) => void): DragEventHan
     [onDrop]
   );
 
-export const useFileDropZone = (
-  zoneRef: RefObject<HTMLElement | null>,
-  onDrop: (file: File[]) => void
-): boolean => {
+export const useFileDropZone = (onDrop: (file: File[]) => void): boolean => {
   const dragStateRef = useRef<'start' | 'leave' | 'over' | undefined>(undefined);
   const [active, setActive] = useState(false);
 
   useEffect(() => {
-    const target = zoneRef.current;
     const handleDrop = (evt: DragEvent) => {
+      if (!evt.dataTransfer?.types.includes('Files')) return;
       evt.preventDefault();
       dragStateRef.current = undefined;
       setActive(false);
-      if (!evt.dataTransfer) return;
       const files = getDataTransferFiles(evt.dataTransfer);
       if (files) onDrop(files);
     };
 
-    target?.addEventListener('drop', handleDrop);
+    window.addEventListener('drop', handleDrop);
     return () => {
-      target?.removeEventListener('drop', handleDrop);
+      window.removeEventListener('drop', handleDrop);
     };
-  }, [zoneRef, onDrop]);
+  }, [onDrop]);
 
   useEffect(() => {
-    const target = zoneRef.current;
     const handleDragEnter = (evt: DragEvent) => {
       if (evt.dataTransfer?.types.includes('Files')) {
         dragStateRef.current = 'start';
@@ -53,19 +48,20 @@ export const useFileDropZone = (
       setActive(false);
     };
     const handleDragOver = (evt: DragEvent) => {
+      if (!evt.dataTransfer?.types.includes('Files')) return;
       evt.preventDefault();
       dragStateRef.current = 'over';
     };
 
-    target?.addEventListener('dragenter', handleDragEnter);
-    target?.addEventListener('dragleave', handleDragLeave);
-    target?.addEventListener('dragover', handleDragOver);
+    window.addEventListener('dragenter', handleDragEnter);
+    window.addEventListener('dragleave', handleDragLeave);
+    window.addEventListener('dragover', handleDragOver);
     return () => {
-      target?.removeEventListener('dragenter', handleDragEnter);
-      target?.removeEventListener('dragleave', handleDragLeave);
-      target?.removeEventListener('dragover', handleDragOver);
+      window.removeEventListener('dragenter', handleDragEnter);
+      window.removeEventListener('dragleave', handleDragLeave);
+      window.removeEventListener('dragover', handleDragOver);
     };
-  }, [zoneRef]);
+  }, []);
 
   useEffect(() => {
     if (!supportsPlatformNativeFileDrop()) return undefined;

@@ -54,6 +54,31 @@ export const getFilesFromFileList = (fileList: FileList): File[] => {
   return files;
 };
 
+const clipboardFileName = (mimeType: string): string => {
+  const extension = mimeType.split('/')[1]?.split(';')[0]?.trim();
+  if (!extension) return 'clipboard-file';
+  return `clipboard-file.${extension === 'jpeg' ? 'jpg' : extension}`;
+};
+
+const normalizeDataTransferFile = (file: File): File => {
+  if (file.name) return file;
+  return new File([file], clipboardFileName(file.type), { type: file.type });
+};
+
+const getFilesFromDataTransferItems = (items: DataTransferItemList): File[] => {
+  const files: File[] = [];
+
+  for (let i = 0; i < items.length; i += 1) {
+    const item = items[i];
+    if (!item || item.kind !== 'file') continue;
+
+    const file = item.getAsFile();
+    if (file instanceof File) files.push(normalizeDataTransferFile(file));
+  }
+
+  return files;
+};
+
 export const selectFile = <M extends boolean | undefined = undefined>(
   accept: string,
   multiple?: M
@@ -80,10 +105,14 @@ export const selectFile = <M extends boolean | undefined = undefined>(
   });
 
 export const getDataTransferFiles = (dataTransfer: DataTransfer): File[] | undefined => {
-  const fileList = dataTransfer.files;
-  const files: File[] = getFilesFromFileList(fileList);
+  const files: File[] = getFilesFromFileList(dataTransfer.files);
+  if (files.length === 0 && dataTransfer.items) {
+    const itemFiles = getFilesFromDataTransferItems(dataTransfer.items);
+    if (itemFiles.length === 0) return undefined;
+    return itemFiles;
+  }
   if (files.length === 0) return undefined;
-  return files;
+  return files.map(normalizeDataTransferFile);
 };
 
 export const renameFile = (file: File, name: string): File =>
