@@ -88,7 +88,12 @@ import {
   UploadSuccess,
   createUploadFamilyObserverAtom,
 } from '../../state/upload';
-import { getDataTransferFiles, getImageUrlBlob, loadImageElement } from '../../utils/dom';
+import {
+  editableActiveElement,
+  getDataTransferFiles,
+  getImageUrlBlob,
+  loadImageElement,
+} from '../../utils/dom';
 import { safeFile } from '../../utils/mimeTypes';
 import { fulfilledPromiseSettledResult } from '../../utils/common';
 import { useSetting } from '../../state/hooks/settings';
@@ -266,7 +271,26 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
       },
       [editor, handleFiles, isMarkdown]
     );
-    const dropZoneVisible = useFileDropZone(fileDropContainerRef, handleFiles);
+    useEffect(() => {
+      const handleWindowPaste = (evt: ClipboardEvent) => {
+        if (editableActiveElement()) return;
+        const portalContainer = document.getElementById('portalContainer');
+        if (portalContainer && portalContainer.children.length > 0) return;
+        if (!evt.clipboardData) return;
+
+        const files = getDataTransferFiles(evt.clipboardData);
+        if (!files) return;
+
+        evt.preventDefault();
+        handleFiles(files);
+      };
+
+      window.addEventListener('paste', handleWindowPaste);
+      return () => {
+        window.removeEventListener('paste', handleWindowPaste);
+      };
+    }, [handleFiles]);
+    const dropZoneVisible = useFileDropZone(handleFiles);
     const [hideStickerBtn, setHideStickerBtn] = useState(document.body.clientWidth < 500);
 
     const isComposing = useComposingCheck();
