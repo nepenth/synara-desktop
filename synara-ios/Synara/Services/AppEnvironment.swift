@@ -53,7 +53,7 @@ struct AppEnvironment {
         let matrix = MatrixRustSDKMatrixClientService(clientStore: matrixSDKClientStore)
         let pusherService = MatrixPusherService(
             clientStore: matrixSDKClientStore,
-            gatewayURL: pushGatewayURL(),
+            gatewayURL: resolvedPushGatewayURL(),
             logger: logger
         )
         let sparsePushRouteResolver = MatrixSparsePushRouteResolver(
@@ -174,9 +174,20 @@ struct AppEnvironment {
         )
     }
 
-    private static func pushGatewayURL() -> URL? {
+    static func configuredPushGatewayURL(environmentValue: String?, bundleValue: String?) -> URL? {
+        parsePushGatewayURL(environmentValue) ?? parsePushGatewayURL(bundleValue)
+    }
+
+    private static func resolvedPushGatewayURL() -> URL? {
+        configuredPushGatewayURL(
+            environmentValue: ProcessInfo.processInfo.environment["SYNARA_PUSH_GATEWAY_URL"],
+            bundleValue: Bundle.main.object(forInfoDictionaryKey: "SynaraPushGatewayURL") as? String
+        )
+    }
+
+    private static func parsePushGatewayURL(_ value: String?) -> URL? {
         guard
-            let value = ProcessInfo.processInfo.environment["SYNARA_PUSH_GATEWAY_URL"]?.trimmingCharacters(in: .whitespacesAndNewlines),
+            let value = value?.trimmingCharacters(in: .whitespacesAndNewlines),
             value.isEmpty == false,
             let url = URL(string: value),
             url.scheme?.lowercased() == "https",

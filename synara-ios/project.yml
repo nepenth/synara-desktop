@@ -50,12 +50,14 @@ targets:
         UIBackgroundModes:
           - remote-notification
         NSCameraUsageDescription: Synara needs camera access to capture photos and videos for messages.
+        SynaraPushGatewayURL: "$(SYNARA_PUSH_GATEWAY_URL)"
     settings:
       base:
         CODE_SIGN_ENTITLEMENTS: Synara/Resources/Synara.entitlements
         DEVELOPMENT_TEAM: ABC123DEFG
         PRODUCT_BUNDLE_IDENTIFIER: com.whylandcreative.synara
         PRODUCT_NAME: Synara
+        SYNARA_PUSH_GATEWAY_URL: ""
       configs:
         Debug:
           APS_ENVIRONMENT: development
@@ -64,6 +66,7 @@ targets:
           CODE_SIGN_IDENTITY: Apple Distribution
           CODE_SIGN_STYLE: Manual
           PROVISIONING_PROFILE_SPECIFIER: Synara Matrix App Store
+          SYNARA_PUSH_GATEWAY_URL: "https://push.example.com/_matrix/push/v1/notify"
   SynaraTests:
     type: bundle.unit-test
     platform: iOS
