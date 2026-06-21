@@ -5,9 +5,16 @@ Purpose: prepare the Matrix-to-APNs delivery path for iOS push validation.
 ## Current Implementation State
 
 - Client-side Matrix pusher registration now includes `app_id`, `pushkey`, and
-  gateway URL payload data from `SYNARA_PUSH_GATEWAY_URL`.
+  gateway URL payload data.
+- Release builds read `SynaraPushGatewayURL` from the app bundle and currently
+  default to `https://push.whyland.com/_matrix/push/v1/notify`.
+- Local/debug runs can still override the bundled value with
+  `SYNARA_PUSH_GATEWAY_URL`.
 - Push routing and badge handling are fully implemented in app runtime.
-- No active staging gateway has been attached in this repository yet.
+- `https://push.whyland.com/_matrix/push/v1/notify` is the configured
+  production/TestFlight pusher endpoint.
+- The deployed gateway is expected to stay in mocked APNs mode until the Apple
+  APNs auth key is installed and `SYNARA_APNS_MODE=real` is enabled.
 
 In addition, unit coverage now verifies gateway registration payload shape and endpoint path for both set/delete operations:
 
@@ -25,24 +32,28 @@ xcodebuild -project Synara.xcodeproj -scheme Synara -destination 'platform=iOS S
 
 1. Matrix homeserver with a writable `pushers/set` endpoint.
 2. Staging Matrix push gateway that accepts Matrix Push Gateway API payloads.
-3. APNs key + app bundle sandbox credentials bound to the target iOS app ID.
+3. Production APNs key + app bundle credentials bound to the target iOS app ID.
+   TestFlight uses production APNs; do not use sandbox for the TestFlight smoke.
 
-## Environment Wiring
+## Gateway URL Wiring
 
-- Set `SYNARA_PUSH_GATEWAY_URL` in runtime launch or CI/test environment:
+- Release/TestFlight builds use the bundled `SynaraPushGatewayURL` Info.plist
+  value.
+- Set `SYNARA_PUSH_GATEWAY_URL` in runtime launch or CI/test environment when a
+  local override is needed:
 
 ```sh
 export SYNARA_PUSH_GATEWAY_URL="https://push.example.internal"
 ```
 
-Gateway URL is currently read from:
+Gateway URL is currently resolved from:
 
-- `synara-ios/Synara/Services/AppEnvironment.swift`
-- `SynaraPushService`
+- `SYNARA_PUSH_GATEWAY_URL`
+- `SynaraPushGatewayURL` in `Synara/App/Info.plist`
 
 ## Local Smoke Checklist
 
-1. Launch a signed simulator/device build.
+1. Launch a signed TestFlight/device build.
 2. Log in with a test account.
 3. Trigger notifications permission.
 4. Confirm registration state updates in Settings (`Register Push`).

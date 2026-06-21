@@ -600,6 +600,7 @@
 				PRODUCT_NAME = Synara;
 				PROVISIONING_PROFILE_SPECIFIER = "Synara Matrix App Store";
 				SDKROOT = iphoneos;
+				SYNARA_PUSH_GATEWAY_URL = "https://push.whyland.com/_matrix/push/v1/notify";
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Release;
@@ -620,6 +621,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.whylandcreative.synara;
 				PRODUCT_NAME = Synara;
 				SDKROOT = iphoneos;
+				SYNARA_PUSH_GATEWAY_URL = "";
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Debug;

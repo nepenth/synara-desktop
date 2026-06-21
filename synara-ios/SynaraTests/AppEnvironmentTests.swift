@@ -217,6 +217,33 @@ final class AppEnvironmentTests: XCTestCase {
         XCTAssertEqual((environment.push as? SynaraPushService)?.pushGatewayURL, "https://push.example.internal")
     }
 
+    func testPushGatewayConfigurationPrefersEnvironmentValue() {
+        let url = AppEnvironment.configuredPushGatewayURL(
+            environmentValue: "https://push.example.internal/_matrix/push/v1/notify",
+            bundleValue: "https://push.whyland.com/_matrix/push/v1/notify"
+        )
+
+        XCTAssertEqual(url?.absoluteString, "https://push.example.internal/_matrix/push/v1/notify")
+    }
+
+    func testPushGatewayConfigurationFallsBackToBundleValue() {
+        let url = AppEnvironment.configuredPushGatewayURL(
+            environmentValue: nil,
+            bundleValue: "https://push.whyland.com/_matrix/push/v1/notify"
+        )
+
+        XCTAssertEqual(url?.absoluteString, "https://push.whyland.com/_matrix/push/v1/notify")
+    }
+
+    func testPushGatewayConfigurationRejectsInvalidValues() {
+        let url = AppEnvironment.configuredPushGatewayURL(
+            environmentValue: "not a url",
+            bundleValue: "http://push.whyland.com/_matrix/push/v1/notify"
+        )
+
+        XCTAssertNil(url)
+    }
+
     @MainActor
     func testLiveEnvironmentIgnoresInvalidPushGatewayEnvironmentValue() {
         let variable = "SYNARA_PUSH_GATEWAY_URL"
