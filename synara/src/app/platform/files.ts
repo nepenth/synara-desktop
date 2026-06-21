@@ -1,6 +1,7 @@
 import {
   DESKTOP_FILE_IPC_CHUNK_SIZE,
   DESKTOP_FILE_IPC_INLINE_THRESHOLD,
+  readDesktopClipboardImage,
   readDesktopDroppedFiles,
   saveDesktopFile,
   shouldStreamDesktopFileIpc,
@@ -17,3 +18,4 @@ export {
 
 export const savePlatformFile = saveDesktopFile;
 export const readPlatformDroppedFiles = readDesktopDroppedFiles;
+export const readPlatformClipboardImage = readDesktopClipboardImage;

@@ -12,7 +12,7 @@ use serde::Serialize;
 use std::path::PathBuf;
 use tauri::{
     webview::{NewWindowResponse, WebviewWindowBuilder},
-    DragDropEvent, LogicalSize, Manager, Size, WebviewUrl, WindowEvent,
+    DragDropEvent, Emitter, LogicalSize, Manager, Size, WebviewUrl, WindowEvent,
 };
 use tauri_plugin_opener::OpenerExt;
 
@@ -33,16 +33,10 @@ fn native_drop_paths(paths: &[PathBuf]) -> Vec<String> {
 }
 
 fn emit_native_file_drop(window: &tauri::Window, payload: NativeFileDropPayload) {
-    let Ok(detail) = serde_json::to_string(&payload) else {
-        return;
-    };
     let Some(webview) = window.get_webview_window(desktop::MAIN_WINDOW_LABEL) else {
         return;
     };
-    let script = format!(
-        "window.dispatchEvent(new CustomEvent('synara-native-file-drop', {{ detail: {detail} }}));"
-    );
-    let _ = webview.eval(&script);
+    let _ = webview.emit("synara-native-file-drop", payload);
 }
 
 #[cfg(target_os = "linux")]
@@ -311,7 +305,10 @@ pub fn run() {
                 .initialization_script(bridge_script)
                 .on_new_window(move |url, _features| {
                     if desktop::is_safe_external_url(url.as_str()) {
-                        let _ = app_handle.opener().open_url(url.as_str(), None::<&str>);
+                        if let Err(error) = app_handle.opener().open_url(url.as_str(), None::<&str>)
+                        {
+                            eprintln!("[synara] Failed to open external URL: {error}");
+                        }
                     }
                     NewWindowResponse::Deny
                 })

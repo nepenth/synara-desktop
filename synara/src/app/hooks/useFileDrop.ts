@@ -5,6 +5,7 @@ import {
   supportsPlatformNativeFileDrop,
   type PlatformNativeFileDropPayload,
 } from '../platform';
+import { listen } from '../utils/desktop';
 
 export const useFileDropHandler = (onDrop: (file: File[]) => void): DragEventHandler =>
   useCallback(
@@ -66,8 +67,7 @@ export const useFileDropZone = (onDrop: (file: File[]) => void): boolean => {
   useEffect(() => {
     if (!supportsPlatformNativeFileDrop()) return undefined;
 
-    const handleNativeFileDrop = (evt: Event) => {
-      const detail = (evt as CustomEvent<PlatformNativeFileDropPayload>).detail;
+    const handleNativeFileDrop = (detail: PlatformNativeFileDropPayload | undefined) => {
       if (!detail) return;
 
       if (detail.phase === 'enter' || detail.phase === 'over') {
@@ -97,9 +97,30 @@ export const useFileDropZone = (onDrop: (file: File[]) => void): boolean => {
       }
     };
 
-    window.addEventListener('synara-native-file-drop', handleNativeFileDrop);
+    let unlisten: (() => void | Promise<void>) | undefined;
+    let disposed = false;
+
+    void listen<PlatformNativeFileDropPayload>('synara-native-file-drop', (evt) => {
+      handleNativeFileDrop(evt.payload);
+    })
+      .then((unsubscribe) => {
+        if (disposed) {
+          void unsubscribe?.();
+          return;
+        }
+        unlisten = unsubscribe;
+      })
+      .catch(() => undefined);
+
+    const handleNativeFileDropEvent = (evt: Event) => {
+      handleNativeFileDrop((evt as CustomEvent<PlatformNativeFileDropPayload>).detail);
+    };
+
+    window.addEventListener('synara-native-file-drop', handleNativeFileDropEvent);
     return () => {
-      window.removeEventListener('synara-native-file-drop', handleNativeFileDrop);
+      disposed = true;
+      void unlisten?.();
+      window.removeEventListener('synara-native-file-drop', handleNativeFileDropEvent);
     };
   }, [onDrop]);
 

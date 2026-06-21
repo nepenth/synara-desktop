@@ -14,6 +14,7 @@ import {
   invokeDesktopWithAvailability,
   isDesktopBridgeAvailable,
   openDesktopExternalUrl,
+  readDesktopClipboardImage,
   readDesktopDroppedFiles,
   saveDesktopFile,
   sendDesktopAgentAction,
@@ -507,8 +508,11 @@ test('desktop external link opener invokes the desktop bridge only on desktop', 
     };
 
     assert.equal(await openDesktopExternalUrl('https://example.org/path'), true);
-    assert.equal(await openDesktopExternalUrl('https://192.168.1.1/admin'), false);
-    assert.equal(await openDesktopExternalUrl('https://169.254.169.254/latest/meta-data/'), false);
+    assert.equal(await openDesktopExternalUrl('http://example.org/path'), true);
+    assert.equal(await openDesktopExternalUrl('https://192.168.1.1/admin'), true);
+    assert.equal(await openDesktopExternalUrl('https://169.254.169.254/latest/meta-data/'), true);
+    assert.equal(await openDesktopExternalUrl('https://user:pass@example.org/'), false);
+    assert.equal(await openDesktopExternalUrl('file:///Users/example/.ssh/id_rsa'), false);
   } finally {
     (globalThis as any).window = originalWindow;
   }
@@ -517,6 +521,18 @@ test('desktop external link opener invokes the desktop bridge only on desktop', 
     {
       command: 'desktop_open_external_url',
       args: { url: 'https://example.org/path' },
+    },
+    {
+      command: 'desktop_open_external_url',
+      args: { url: 'http://example.org/path' },
+    },
+    {
+      command: 'desktop_open_external_url',
+      args: { url: 'https://192.168.1.1/admin' },
+    },
+    {
+      command: 'desktop_open_external_url',
+      args: { url: 'https://169.254.169.254/latest/meta-data/' },
     },
   ]);
 });
@@ -838,6 +854,89 @@ test('desktop dropped file read streams large transfers through chunk commands',
     command: 'desktop_read_dropped_file_end',
     args: { transferId: 'drop-transfer-1' },
   });
+});
+
+test('desktop clipboard image read converts native RGBA into an attachable PNG file', async () => {
+  const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
+  const originalWindow = globalThis.window;
+  const originalDocument = globalThis.document;
+  let paintedPixels: number[] = [];
+
+  (globalThis as any).window = {
+    __SYNARA_DESKTOP__: {
+      platform: 'tauri',
+      invoke: async (command: string, args?: Record<string, unknown>) => {
+        calls.push({ command, args });
+        if (command === 'plugin:clipboard-manager|read_image') return 41;
+        if (command === 'plugin:image|size') return { width: 1, height: 1 };
+        if (command === 'plugin:image|rgba') return [255, 0, 0, 255];
+        return true;
+      },
+    },
+  };
+  (globalThis as any).document = {
+    createElement: (tagName: string) => {
+      assert.equal(tagName, 'canvas');
+      return {
+        width: 0,
+        height: 0,
+        getContext: (kind: string) => {
+          assert.equal(kind, '2d');
+          return {
+            createImageData: (width: number, height: number) => ({
+              data: new Uint8ClampedArray(width * height * 4),
+            }),
+            putImageData: (imageData: { data: Uint8ClampedArray }) => {
+              paintedPixels = Array.from(imageData.data);
+            },
+          };
+        },
+        toBlob: (callback: (blob: Blob | null) => void, type: string) => {
+          callback(new Blob([new Uint8Array([137, 80, 78, 71])], { type }));
+        },
+      };
+    },
+  };
+
+  try {
+    const file = await readDesktopClipboardImage();
+    assert.equal(file?.name, 'clipboard-image.png');
+    assert.equal(file?.type, 'image/png');
+    assert.deepEqual(paintedPixels, [255, 0, 0, 255]);
+  } finally {
+    (globalThis as any).window = originalWindow;
+    (globalThis as any).document = originalDocument;
+  }
+
+  assert.deepEqual(calls, [
+    { command: 'plugin:clipboard-manager|read_image', args: undefined },
+    { command: 'plugin:image|size', args: { rid: 41 } },
+    { command: 'plugin:image|rgba', args: { rid: 41 } },
+    { command: 'plugin:resources|close', args: { rid: 41 } },
+  ]);
+});
+
+test('desktop clipboard image read ignores clipboards without an image', async () => {
+  const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
+  const originalWindow = globalThis.window;
+
+  (globalThis as any).window = {
+    __SYNARA_DESKTOP__: {
+      platform: 'tauri',
+      invoke: async (command: string, args?: Record<string, unknown>) => {
+        calls.push({ command, args });
+        throw new Error('clipboard does not contain an image');
+      },
+    },
+  };
+
+  try {
+    assert.equal(await readDesktopClipboardImage(), undefined);
+  } finally {
+    (globalThis as any).window = originalWindow;
+  }
+
+  assert.deepEqual(calls, [{ command: 'plugin:clipboard-manager|read_image', args: undefined }]);
 });
 
 const createWindowEventTarget = () => {
