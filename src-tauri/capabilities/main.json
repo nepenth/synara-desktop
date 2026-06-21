@@ -1,10 +1,11 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "main",
-  "description": "Synara desktop runtime permissions for the main webview. Global shortcuts are validated in Rust before registration; external URLs are filtered in desktop.rs and synara remoteContent policy.",
+  "description": "Synara desktop runtime permissions for the main webview. Global shortcuts are validated in Rust before registration; external URLs are filtered in desktop.rs and the Synara desktop URL policy.",
   "windows": ["main"],
   "permissions": [
     "core:default",
+    "clipboard-manager:allow-read-image",
     "clipboard-manager:allow-write-text",
     "notification:allow-permission-state",
     "notification:allow-request-permission",

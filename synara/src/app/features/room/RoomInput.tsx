@@ -125,6 +125,7 @@ import { usePowerLevelTags } from '../../hooks/usePowerLevelTags';
 import { resolveOptionalMatrixMediaUrl } from '../../matrix/media';
 import { useComposingCheck } from '../../hooks/useComposingCheck';
 import { useClientConfig } from '../../hooks/useClientConfig';
+import { readPlatformClipboardImage } from '../../platform';
 import { fetchGifForUpload, gifPickerEnabled, gifSearchAvailable } from '../../utils/gifProvider';
 import type { GifResult } from '../../utils/gifProvider';
 import { GifPicker } from './gif/GifPicker';
@@ -136,6 +137,13 @@ import {
   POLL_START_EVENT_TYPE,
 } from '../../utils/polls';
 import { RoomComposer } from './RoomComposer';
+
+const shouldProbeNativeClipboardImage = (clipboardData: DataTransfer): boolean => {
+  const types = Array.from(clipboardData.types ?? []);
+  if (types.length === 0) return true;
+  if (types.includes('Files') || types.some((type) => type.startsWith('image/'))) return true;
+  return !types.some((type) => type.startsWith('text/'));
+};
 
 interface RoomInputProps {
   editor: Editor;
@@ -256,6 +264,12 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
       [setSelectedFiles, room]
     );
     const pickFile = useFilePicker(handleFiles, true);
+    const handleNativeClipboardImage = useCallback(async () => {
+      const file = await readPlatformClipboardImage();
+      if (file) {
+        handleFiles([file]);
+      }
+    }, [handleFiles]);
     const handlePaste: ClipboardEventHandler = useCallback(
       (evt) => {
         const files = getDataTransferFiles(evt.clipboardData);
@@ -267,9 +281,15 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
 
         if (insertClipboardData(editor, evt.clipboardData, isMarkdown)) {
           evt.preventDefault();
+          return;
+        }
+
+        if (shouldProbeNativeClipboardImage(evt.clipboardData)) {
+          evt.preventDefault();
+          void handleNativeClipboardImage();
         }
       },
-      [editor, handleFiles, isMarkdown]
+      [editor, handleFiles, handleNativeClipboardImage, isMarkdown]
     );
     useEffect(() => {
       const handleWindowPaste = (evt: ClipboardEvent) => {
@@ -279,7 +299,12 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
         if (!evt.clipboardData) return;
 
         const files = getDataTransferFiles(evt.clipboardData);
-        if (!files) return;
+        if (!files) {
+          if (!shouldProbeNativeClipboardImage(evt.clipboardData)) return;
+          evt.preventDefault();
+          void handleNativeClipboardImage();
+          return;
+        }
 
         evt.preventDefault();
         handleFiles(files);
@@ -289,7 +314,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
       return () => {
         window.removeEventListener('paste', handleWindowPaste);
       };
-    }, [handleFiles]);
+    }, [handleFiles, handleNativeClipboardImage]);
     const dropZoneVisible = useFileDropZone(handleFiles);
     const [hideStickerBtn, setHideStickerBtn] = useState(document.body.clientWidth < 500);
 

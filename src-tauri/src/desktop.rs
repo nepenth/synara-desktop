@@ -1242,7 +1242,9 @@ fn desktop_remove_session_from_store(
     store.remove_secret()
 }
 
-/// External URLs must use HTTPS unless they target a loopback host (development).
+/// User-clicked external URLs are handed to the OS browser, not fetched by Synara.
+/// Block local file/code schemes and embedded credentials, but allow ordinary
+/// http(s) links including LAN/internal hosts users intentionally click.
 pub fn is_safe_external_url(value: &str) -> bool {
     let Ok(url) = Url::parse(value) else {
         return false;
@@ -1253,14 +1255,7 @@ pub fn is_safe_external_url(value: &str) -> bool {
     }
 
     match url.scheme() {
-        "https" => url
-            .host_str()
-            .map(is_safe_public_https_host)
-            .unwrap_or(false),
-        "http" => url
-            .host_str()
-            .map(is_loopback_session_host)
-            .unwrap_or(false),
+        "http" | "https" => url.host_str().is_some(),
         "mailto" | "matrix" => is_safe_structured_external_url(&url),
         _ => false,
     }
@@ -1272,7 +1267,13 @@ pub fn desktop_open_external_url<R: Runtime>(app: AppHandle<R>, url: String) -> 
         return false;
     }
 
-    app.opener().open_url(url, None::<&str>).is_ok()
+    match app.opener().open_url(url, None::<&str>) {
+        Ok(()) => true,
+        Err(error) => {
+            eprintln!("[synara] Failed to open external URL: {error}");
+            false
+        }
+    }
 }
 
 fn sanitize_download_filename(filename: &str) -> String {
@@ -3656,21 +3657,22 @@ mod tests {
     }
 
     #[test]
-    fn external_url_filter_allows_https_and_loopback_http_only() {
+    fn external_url_filter_allows_user_clicked_http_https_links() {
         assert!(is_safe_external_url("https://example.org/path"));
-        assert!(!is_safe_external_url("http://example.org/path"));
+        assert!(is_safe_external_url("http://example.org/path"));
         assert!(is_safe_external_url("http://127.0.0.1:8080"));
         assert!(is_safe_external_url("http://localhost:8080"));
+        assert!(is_safe_external_url("https://192.168.1.1/"));
+        assert!(is_safe_external_url(
+            "https://169.254.169.254/latest/meta-data/"
+        ));
+        assert!(is_safe_external_url("https://metadata.google.internal/"));
+        assert!(is_safe_external_url("https://app.local/"));
         assert!(is_safe_external_url("mailto:test@example.org"));
         assert!(is_safe_external_url("matrix:r/#room:example.org"));
         assert!(!is_safe_external_url("javascript:alert(1)"));
         assert!(!is_safe_external_url("file:///Users/example/.ssh/id_rsa"));
         assert!(!is_safe_external_url("https://user:pass@example.org/"));
-        assert!(!is_safe_external_url("https://127.0.0.1/admin"));
-        assert!(!is_safe_external_url("https://192.168.1.1/"));
-        assert!(!is_safe_external_url("https://169.254.169.254/latest/meta-data/"));
-        assert!(!is_safe_external_url("https://metadata.google.internal/"));
-        assert!(!is_safe_external_url("https://app.local/"));
         assert!(!is_safe_external_url("mailto:not-an-email"));
         assert!(!is_safe_external_url("matrix:"));
         assert!(!is_safe_agent_url("https://10.0.0.5/run"));
