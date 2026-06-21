@@ -1,6 +1,5 @@
 import { getBadgeCount } from '../notifications/badgeSummary';
 import { recordDesktopDiagnostic } from './desktopDiagnostics';
-import { isSafeHttpsUrl } from './remoteContent';
 import { getHomeRoomPath } from '../pages/pathUtils';
 import {
   normalizeAgentActionPayload,
@@ -247,6 +246,11 @@ type DesktopDroppedFilePayload = {
 
 type DesktopSaveFileBeginResult = {
   sessionId: string;
+};
+
+type DesktopImageResourceSize = {
+  width: number;
+  height: number;
 };
 
 export const shouldStreamDesktopFileIpc = (byteLength: number): boolean =>
@@ -521,13 +525,13 @@ export const sendDesktopAgentAction = async (
 };
 
 const isSafeDesktopExternalUrl = (url: string): boolean => {
-  if (isSafeHttpsUrl(url)) return true;
-
   try {
     const parsed = new URL(url);
-    if (parsed.protocol === 'http:') {
-      const host = parsed.hostname.toLowerCase();
-      return host === 'localhost' || host === '127.0.0.1' || host === '::1';
+    if (parsed.username || parsed.password) {
+      return false;
+    }
+    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+      return !!parsed.hostname;
     }
     if (parsed.protocol === 'mailto:') {
       const address = parsed.pathname.trim();
@@ -688,6 +692,96 @@ export const readDesktopDroppedFiles = async (paths: string[]): Promise<File[]> 
   }
 
   return files;
+};
+
+const isDesktopImageResourceSize = (value: unknown): value is DesktopImageResourceSize => {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as Record<string, unknown>;
+  return (
+    typeof candidate.width === 'number' &&
+    Number.isInteger(candidate.width) &&
+    candidate.width > 0 &&
+    typeof candidate.height === 'number' &&
+    Number.isInteger(candidate.height) &&
+    candidate.height > 0
+  );
+};
+
+const normalizeDesktopByteArray = (value: unknown): Uint8Array | undefined => {
+  if (value instanceof Uint8Array) return value;
+  if (!Array.isArray(value)) return undefined;
+  if (!value.every((byte) => Number.isInteger(byte) && byte >= 0 && byte <= 255)) {
+    return undefined;
+  }
+  return new Uint8Array(value);
+};
+
+const createPngBlobFromRgba = (
+  rgba: Uint8Array,
+  size: DesktopImageResourceSize
+): Promise<Blob | undefined> =>
+  new Promise((resolve) => {
+    const expectedLength = size.width * size.height * 4;
+    if (rgba.length !== expectedLength) {
+      resolve(undefined);
+      return;
+    }
+
+    const canvas = document.createElement('canvas');
+    canvas.width = size.width;
+    canvas.height = size.height;
+
+    const context = canvas.getContext('2d');
+    if (!context) {
+      resolve(undefined);
+      return;
+    }
+
+    const imageData = context.createImageData(size.width, size.height);
+    imageData.data.set(rgba);
+    context.putImageData(imageData, 0, 0);
+    canvas.toBlob((blob) => resolve(blob ?? undefined), 'image/png');
+  });
+
+export const readDesktopClipboardImage = async (): Promise<File | undefined> => {
+  if (!isSynaraDesktop()) return undefined;
+  const invoke = getDesktopInvoke();
+  if (!invoke) return undefined;
+
+  let rid: number | undefined;
+  try {
+    const resourceId = await invoke<unknown>('plugin:clipboard-manager|read_image');
+    if (typeof resourceId !== 'number') return undefined;
+    rid = resourceId;
+
+    const size = await invoke<unknown>('plugin:image|size', { rid });
+    if (!isDesktopImageResourceSize(size)) return undefined;
+
+    const rgba = normalizeDesktopByteArray(await invoke<unknown>('plugin:image|rgba', { rid }));
+    if (!rgba) return undefined;
+
+    const blob = await createPngBlobFromRgba(rgba, size);
+    if (!blob) return undefined;
+
+    return new File([blob], 'clipboard-image.png', { type: 'image/png' });
+  } catch (error) {
+    if (rid !== undefined) {
+      recordDesktopDiagnostic(
+        `desktop clipboard image import failed: ${
+          error instanceof Error ? error.message : 'unknown error'
+        }`
+      );
+    }
+    return undefined;
+  } finally {
+    if (rid !== undefined) {
+      try {
+        await invoke('plugin:resources|close', { rid });
+      } catch {
+        // Resource cleanup is best-effort; a failed close should not block paste.
+      }
+    }
+  }
 };
 
 export const setDesktopShortcuts = async (
