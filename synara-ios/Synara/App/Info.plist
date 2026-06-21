@@ -59,5 +59,7 @@
 	</array>
 	<key>NSCameraUsageDescription</key>
 	<string>Synara needs camera access to capture photos and videos for messages.</string>
+	<key>SynaraPushGatewayURL</key>
+	<string>$(SYNARA_PUSH_GATEWAY_URL)</string>
 </dict>
 </plist>
