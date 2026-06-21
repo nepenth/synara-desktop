@@ -8,6 +8,7 @@ devAssets/*
 .DS_Store
 AuthKey_*.p8
 *.p8
+.env.macos-signing.local
 DerivedData/
 *.xcuserstate
 xcuserdata/
