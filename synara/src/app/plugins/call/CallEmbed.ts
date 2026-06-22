@@ -25,6 +25,7 @@ import {
 } from './types';
 import { CallControl } from './CallControl';
 import { CallControlState } from './CallControlState';
+import { getLoadedLiveTimelineEvents } from '../../utils/timelineLifecycle';
 
 export class CallEmbed {
   private mx: MatrixClient;
@@ -207,7 +208,7 @@ export class CallEmbed {
     // requests timeline capabilities in other rooms down the road. It's just easier to manage here.
     this.mx.getRooms().forEach((room) => {
       // Timelines are most recent last
-      const events = room.getLiveTimeline()?.getEvents() || [];
+      const events = getLoadedLiveTimelineEvents(room);
       const roomEvent = events[events.length - 1];
       if (!roomEvent) return; // force later code to think the room is fresh
       this.readUpToMap[room.roomId] = roomEvent.getId()!;
@@ -320,8 +321,7 @@ export class CallEmbed {
 
     // Timelines are most recent last, so reverse the order and limit ourselves to 100 events
     // to avoid overusing the CPU.
-    const timeline = room.getLiveTimeline();
-    const events = [...timeline.getEvents()].reverse().slice(0, 100);
+    const events = [...getLoadedLiveTimelineEvents(room)].reverse().slice(0, 100);
     function isRelevantTimelineEvent(timelineEvent: MatrixEvent): boolean {
       return timelineEvent.getId() === upToEventId || timelineEvent.getId() === ev.getId();
     }

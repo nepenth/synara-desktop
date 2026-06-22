@@ -4,7 +4,6 @@ import {
   encryptAttachment,
 } from 'browser-encrypt-attachment';
 import {
-  EventTimeline,
   MatrixClient,
   MatrixError,
   MatrixEvent,
@@ -18,6 +17,7 @@ import { IImageInfo, IThumbnailContent, IVideoInfo } from '../../types/matrix/co
 import { AccountDataEvent } from '../../types/matrix/accountData';
 import { getStateEvent } from './room';
 import { Membership, StateEvent } from '../../types/matrix/room';
+import { getRoomCurrentState } from './timelineLifecycle';
 
 const DOMAIN_REGEX = /\b(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}\b/;
 
@@ -219,9 +219,7 @@ export const guessDmRoomUserId = (room: Room, myUserId: string): string => {
   if (member) return member.userId;
 
   // if there are no joined members other than us, use the oldest member
-  const member1 = getOldestMember(
-    room.getLiveTimeline().getState(EventTimeline.FORWARDS)?.getMembers() ?? []
-  );
+  const member1 = getOldestMember(getRoomCurrentState(room)?.getMembers() ?? []);
   return member1?.userId ?? myUserId;
 };
 

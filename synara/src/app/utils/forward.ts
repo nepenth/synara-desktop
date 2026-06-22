@@ -1,9 +1,9 @@
 import { MsgType, RelationType } from 'matrix-js-sdk/lib/@types/event';
-import { EventTimeline } from 'matrix-js-sdk/lib/models/event-timeline';
 import type { MatrixEvent } from 'matrix-js-sdk/lib/models/event';
 import type { Room } from 'matrix-js-sdk/lib/models/room';
 import { sanitizeCustomHtml } from './sanitize';
 import { trimReplyFromBody, trimReplyFromFormattedBody } from './room';
+import { getRoomCurrentState } from './timelineLifecycle';
 
 export type ForwardSource = {
   roomId: string;
@@ -133,8 +133,7 @@ export const getForwardableEventContents = (
 
 export const canSendRoomMessage = (room: Room, userId?: string | null): boolean => {
   if (!userId) return true;
-  const timeline = typeof room.getLiveTimeline === 'function' ? room.getLiveTimeline() : undefined;
-  const state = timeline?.getState(EventTimeline.FORWARDS);
+  const state = getRoomCurrentState(room);
   const powerLevels = state?.getStateEvents('m.room.power_levels', '')?.getContent() as
     | {
         users?: Record<string, number>;

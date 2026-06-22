@@ -1,5 +1,6 @@
 import { Room, RoomEvent, RoomEventHandlerMap } from 'matrix-js-sdk';
 import { useEffect, useState } from 'react';
+import { getLoadedLiveTimelineEvents } from '../utils/timelineLifecycle';
 
 const getEventReaders = (room: Room, evtId?: string) => {
   if (!evtId) return [];
@@ -8,7 +9,7 @@ const getEventReaders = (room: Room, evtId?: string) => {
   // we don't have read receipt for it yet
   if (!evtId.startsWith('$')) return [];
 
-  const liveEvents = room.getLiveTimeline().getEvents();
+  const liveEvents = getLoadedLiveTimelineEvents(room);
   const userIds: string[] = [];
 
   for (let i = liveEvents.length - 1; i >= 0; i -= 1) {
@@ -29,6 +30,9 @@ export const useRoomEventReaders = (room: Room, eventId?: string): string[] => {
       if (r.roomId !== room.roomId) return;
       setReaders(getEventReaders(room, eventId));
     };
+    const handleTimelineLifecycleChange = () => {
+      setReaders(getEventReaders(room, eventId));
+    };
 
     const handleLocalEcho: RoomEventHandlerMap[RoomEvent.LocalEchoUpdated] = (
       event,
@@ -46,9 +50,13 @@ export const useRoomEventReaders = (room: Room, eventId?: string): string[] => {
 
     room.on(RoomEvent.Receipt, handleReceipt);
     room.on(RoomEvent.LocalEchoUpdated, handleLocalEcho);
+    room.on(RoomEvent.TimelineReset, handleTimelineLifecycleChange);
+    room.on(RoomEvent.TimelineRefresh, handleTimelineLifecycleChange);
     return () => {
       room.removeListener(RoomEvent.Receipt, handleReceipt);
       room.removeListener(RoomEvent.LocalEchoUpdated, handleLocalEcho);
+      room.removeListener(RoomEvent.TimelineReset, handleTimelineLifecycleChange);
+      room.removeListener(RoomEvent.TimelineRefresh, handleTimelineLifecycleChange);
     };
   }, [room, eventId]);
 
