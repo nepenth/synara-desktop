@@ -51,6 +51,7 @@ import {
   notifiedEventIdsCache,
   unreadNotificationCache,
 } from '../../notifications/notificationCaches';
+import { getLoadedLiveTimelineEvents } from '../../utils/timelineLifecycle';
 
 const RECENT_AGENT_APPROVAL_MS = 10 * 60 * 1000;
 
@@ -462,7 +463,7 @@ function AgentApprovalNotifications() {
     const scanRecentApprovalEvents = () => {
       mx.getRooms().forEach((room) => {
         if (room.isSpaceRoom()) return;
-        const events = room.getLiveTimeline().getEvents() as MatrixEvent[];
+        const events = getLoadedLiveTimelineEvents(room);
         for (let index = events.length - 1; index >= 0; index -= 1) {
           const event = events[index];
           if (!event) continue;

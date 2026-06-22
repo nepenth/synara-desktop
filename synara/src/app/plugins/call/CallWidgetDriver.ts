@@ -18,7 +18,6 @@ import {
   type IContent,
   MatrixError,
   type MatrixEvent,
-  Direction,
   type SendDelayedEventResponse,
   type StateEvents,
   type TimelineEvents,
@@ -26,6 +25,7 @@ import {
 } from 'matrix-js-sdk';
 import { getCallCapabilities } from './utils';
 import { downloadMedia, mxcUrlToHttp } from '../../utils/matrix';
+import { getLoadedLiveTimelineEvents, getRoomCurrentState } from '../../utils/timelineLifecycle';
 
 export class CallWidgetDriver extends WidgetDriver {
   private allowedCapabilities: Set<Capability>;
@@ -210,7 +210,7 @@ export class CallWidgetDriver extends WidgetDriver {
     const room = this.mx.getRoom(roomId);
     if (room === null) return [];
     const results: MatrixEvent[] = [];
-    const events = room.getLiveTimeline().getEvents();
+    const events = getLoadedLiveTimelineEvents(room);
 
     for (let i = events.length - 1; i >= 0; i -= 1) {
       const ev = events[i];
@@ -244,7 +244,7 @@ export class CallWidgetDriver extends WidgetDriver {
   ): Promise<IRoomEvent[]> {
     const room = this.mx.getRoom(roomId);
     if (room === null) return [];
-    const state = room.getLiveTimeline().getState(Direction.Forward);
+    const state = getRoomCurrentState(room);
     if (state === undefined) return [];
 
     if (stateKey === undefined)

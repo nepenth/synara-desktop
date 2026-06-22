@@ -94,7 +94,7 @@ Regression coverage:
 
 ### Finding 3: Desktop Read Helpers Use Cached Live Timeline Slices
 
-Status: open.
+Status: fixed in follow-up sweep.
 
 `synara/src/app/utils/notifications.ts` sends read receipts to the newest event
 in `room.getLiveTimeline().getEvents()`. This is usually correct when called
@@ -109,16 +109,20 @@ Risk:
   appearing unread.
 - Room unread state can be wrong when the local live timeline is partial.
 
-Recommendation:
+Remediation:
 
-- Introduce a desktop timeline/read boundary helper with two explicit modes:
-  `markLoadedLiveTailRead` for already-pinned UI and `markLatestRoomRead` for
-  user commands that should first resolve the latest SDK timeline.
-- Add tests around stale live slices and read receipt event selection.
+- `markAsRead(...)` now defaults to resolving the latest SDK timeline before
+  choosing the read receipt target.
+- Mounted-room auto-read paths explicitly opt into `loaded-live-tail` mode when
+  the UI has already proven it is pinned to the live end.
+- `roomHaveUnread(...)` no longer infers unread state from a partial loaded
+  slice unless that slice contains the read marker needed to order events.
+- Tests cover latest-timeline receipt selection, loaded-tail receipt selection,
+  and conservative unread inference.
 
 ### Finding 4: Desktop Room State Hooks Subscribe To Old RoomState References
 
-Status: open.
+Status: fixed in follow-up sweep.
 
 `useRoomState` subscribes to the current `room.getLiveTimeline().getState(...)`
 object once. `matrix-js-sdk` can replace the room state object when the live
@@ -130,27 +134,32 @@ Risk:
 - Room settings/state UI can stop updating after a limited sync or live timeline
   reset.
 
-Recommendation:
+Remediation:
 
-- Subscribe via room-level state update events or handle current-state reference
-  changes explicitly.
-- Add a unit-level hook test or extract the subscription policy into a pure
-  helper for deterministic testing.
+- Shared state helpers now read `room.currentState` rather than deriving current
+  state from the live timeline object.
+- `useRoomState` subscribes at the room level and handles
+  `RoomEvent.CurrentStateUpdated`, so SDK state replacement after timeline
+  refreshes cannot strand the hook on an old `RoomState`.
+- Tests cover the current-state helper preference.
 
 ### Finding 5: Desktop Notification/Preview Scans Are Cached-Slice Best Effort
 
-Status: accepted medium risk.
+Status: hardened in follow-up sweep.
 
 `useRoomLatestRenderedEvent`, notification rescans, and some reader/preview
 helpers inspect `room.getLiveTimeline().getEvents()`. These are display or
 best-effort notification paths, not viewport owners. They can miss events across
 timeline gaps but do not directly reposition the user.
 
-Recommendation:
+Remediation:
 
-- Keep them out of viewport/read-state ownership.
-- Add debug counters if users report stale previews or missed approval prompts
-  after reconnects.
+- Best-effort display paths now use an explicit `getLoadedLiveTimelineEvents`
+  helper rather than scattered direct live-timeline calls.
+- Latest-rendered-event and event-reader hooks refresh on SDK timeline
+  reset/refresh events so they do not retain stale display state.
+- Call widget timeline reads remain loaded-tail/local-cache reads by contract,
+  but direct SDK calls have been routed through the same helper.
 
 ## Mechanical Guardrails
 
@@ -160,6 +169,9 @@ Current guardrail:
   usage outside approved exceptions.
 - iOS `RoomTimelineFocusPolicy` tests cover initial-load focus versus mounted
   live-update stream focus.
+- Desktop tests cover latest-room versus loaded-live-tail read receipt modes,
+  conservative unread inference from partial live slices, and room current-state
+  helper preference.
 
 Needed guardrails:
 

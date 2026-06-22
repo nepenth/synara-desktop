@@ -1,19 +1,21 @@
 import {
-  Direction,
   MatrixEvent,
   Room,
+  RoomEvent,
+  RoomEventHandlerMap,
   RoomStateEvent,
   RoomStateEventHandlerMap,
 } from 'matrix-js-sdk';
 import { useCallback, useEffect, useState } from 'react';
 import { StateEvent } from '../../types/matrix/room';
+import { getRoomCurrentState } from '../utils/timelineLifecycle';
 
 export type StateKeyToEvents = Map<string, MatrixEvent>;
 export type StateTypeToState = Map<string, StateKeyToEvents>;
 
 export const useRoomState = (room: Room): StateTypeToState => {
   const getState = useCallback((): StateTypeToState => {
-    const roomState = room.getLiveTimeline().getState(Direction.Forward);
+    const roomState = getRoomCurrentState(room);
     const state: StateTypeToState = new Map();
 
     if (!roomState) return state;
@@ -35,14 +37,18 @@ export const useRoomState = (room: Room): StateTypeToState => {
   const [state, setState] = useState(getState);
 
   useEffect(() => {
-    const roomState = room.getLiveTimeline().getState(Direction.Forward);
     const handler: RoomStateEventHandlerMap[RoomStateEvent.Events] = () => {
       setState(getState());
     };
+    const handleCurrentStateUpdated: RoomEventHandlerMap[RoomEvent.CurrentStateUpdated] = () => {
+      setState(getState());
+    };
 
-    roomState?.on(RoomStateEvent.Events, handler);
+    room.on(RoomStateEvent.Events, handler);
+    room.on(RoomEvent.CurrentStateUpdated, handleCurrentStateUpdated);
     return () => {
-      roomState?.removeListener(RoomStateEvent.Events, handler);
+      room.removeListener(RoomStateEvent.Events, handler);
+      room.removeListener(RoomEvent.CurrentStateUpdated, handleCurrentStateUpdated);
     };
   }, [room, getState]);
 
