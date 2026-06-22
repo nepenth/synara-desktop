@@ -29,17 +29,17 @@ import {
   StateEvent,
   UnreadInfo,
 } from '../../types/matrix/room';
+import { getLoadedLiveTimelineEvents, getRoomCurrentState } from './timelineLifecycle';
 
 export const getStateEvent = (
   room: Room,
   eventType: StateEvent,
   stateKey = ''
 ): MatrixEvent | undefined =>
-  room.getLiveTimeline().getState(EventTimeline.FORWARDS)?.getStateEvents(eventType, stateKey) ??
-  undefined;
+  getRoomCurrentState(room)?.getStateEvents(eventType, stateKey) ?? undefined;
 
 export const getStateEvents = (room: Room, eventType: StateEvent): MatrixEvent[] =>
-  room.getLiveTimeline().getState(EventTimeline.FORWARDS)?.getStateEvents(eventType) ?? [];
+  getRoomCurrentState(room)?.getStateEvents(eventType) ?? [];
 
 export const getAccountData = (
   mx: MatrixClient,
@@ -218,19 +218,22 @@ export const roomHaveUnread = (mx: MatrixClient, room: Room) => {
   const userId = mx.getUserId();
   if (!userId) return false;
   const readUpToId = room.getEventReadUpTo(userId);
-  const liveEvents = room.getLiveTimeline().getEvents();
+  if (!readUpToId) return false;
+
+  const liveEvents = getLoadedLiveTimelineEvents(room);
 
   if (liveEvents[liveEvents.length - 1]?.getSender() === userId) {
     return false;
   }
 
+  let notificationAfterReadMarker = false;
   for (let i = liveEvents.length - 1; i >= 0; i -= 1) {
     const event = liveEvents[i];
     if (!event) return false;
-    if (event.getId() === readUpToId) return false;
-    if (isNotificationEvent(event)) return true;
+    if (event.getId() === readUpToId) return notificationAfterReadMarker;
+    if (isNotificationEvent(event)) notificationAfterReadMarker = true;
   }
-  return true;
+  return false;
 };
 
 export const isRoomMarkedUnread = (room: Room): boolean =>

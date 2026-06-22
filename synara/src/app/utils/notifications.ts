@@ -4,9 +4,15 @@ import type { MatrixEvent } from 'matrix-js-sdk/lib/models/event';
 import type { Room } from 'matrix-js-sdk/lib/models/room';
 import { AccountDataEvent, SynaraUnreadAnchorContent } from '../../types/matrix/accountData';
 import { isNotificationEvent, isRoomMarkedUnread } from './room';
+import {
+  getLatestReceiptEventFromEvents,
+  getLatestRoomTimeline,
+  getLoadedLiveTimelineEvents,
+} from './timelineLifecycle';
 
 const UNREAD_ANCHOR_ACCOUNT_DATA_VERSION = 1;
 const unreadAnchorWriteQueues = new WeakMap<MatrixClient, Promise<void>>();
+type MarkAsReadMode = 'latest-room' | 'loaded-live-tail';
 
 const normalizeUnreadAnchorContent = (
   content?: Partial<SynaraUnreadAnchorContent>
@@ -64,7 +70,7 @@ export async function markAsUnread(mx: MatrixClient, roomId: string) {
 
 export async function markEventAsUnread(mx: MatrixClient, room: Room, eventId: string) {
   const timeline = (room.getTimelineForEvent(eventId)?.getEvents() ??
-    room.getLiveTimeline().getEvents()) as MatrixEvent[];
+    getLoadedLiveTimelineEvents(room)) as MatrixEvent[];
   const eventIndex = timeline.findIndex((event) => event.getId() === eventId);
   const anchorEvent =
     eventIndex > 0
@@ -79,7 +85,12 @@ export async function markEventAsUnread(mx: MatrixClient, room: Room, eventId: s
   await markAsUnread(mx, room.roomId);
 }
 
-export async function markAsRead(mx: MatrixClient, roomId: string, privateReceipt: boolean) {
+export async function markAsRead(
+  mx: MatrixClient,
+  roomId: string,
+  privateReceipt: boolean,
+  mode: MarkAsReadMode = 'latest-room'
+) {
   const room = mx.getRoom(roomId);
   if (!room) return;
 
@@ -88,20 +99,16 @@ export async function markAsRead(mx: MatrixClient, roomId: string, privateReceip
   }
   await clearUnreadAnchor(mx, roomId);
 
-  const timeline = room.getLiveTimeline().getEvents() as MatrixEvent[];
-  const readEventId = room.getEventReadUpTo(mx.getUserId()!);
+  const userId = mx.getUserId();
+  if (!userId) return;
+  const readEventId = room.getEventReadUpTo(userId);
+  const timeline =
+    mode === 'latest-room'
+      ? (await getLatestRoomTimeline(mx, room))?.getEvents() ?? getLoadedLiveTimelineEvents(room)
+      : getLoadedLiveTimelineEvents(room);
+  const latestEvent = getLatestReceiptEventFromEvents(timeline, readEventId);
 
-  const getLatestValidEvent = () => {
-    for (let i = timeline.length - 1; i >= 0; i -= 1) {
-      const latestEvent = timeline[i];
-      if (latestEvent.getId() === readEventId) return null;
-      if (!latestEvent.isSending()) return latestEvent;
-    }
-    return null;
-  };
-  if (timeline.length === 0) return;
-  const latestEvent = getLatestValidEvent();
-  if (latestEvent === null) return;
+  if (!latestEvent) return;
 
   await mx.sendReadReceipt(
     latestEvent,

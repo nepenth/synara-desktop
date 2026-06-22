@@ -1,8 +1,38 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { AccountDataEvent } from '../../../types/matrix/accountData';
-import { clearUnreadAnchor } from '../notifications';
-import { getThreadRootEventId } from '../room';
+import { clearUnreadAnchor, markAsRead } from '../notifications';
+import { getThreadRootEventId, roomHaveUnread } from '../room';
+import { getLatestReceiptEventFromEvents, getRoomCurrentState } from '../timelineLifecycle';
+
+const createTimelineEvent = (
+  id: string,
+  {
+    sender = '@bob:example.org',
+    type = 'm.room.message',
+    sending = false,
+  }: {
+    sender?: string;
+    type?: string;
+    sending?: boolean;
+  } = {}
+) =>
+  ({
+    getId: () => id,
+    getSender: () => sender,
+    getType: () => type,
+    isSending: () => sending,
+    isRedacted: () => false,
+    getRelation: () => undefined,
+  }) as any;
+
+const createUnreadRoom = (events: any[], readUpToId?: string) =>
+  ({
+    getEventReadUpTo: () => readUpToId,
+    getLiveTimeline: () => ({
+      getEvents: () => events,
+    }),
+  }) as any;
 
 test('clearUnreadAnchor skips account-data writes when the room has no anchor', async () => {
   let writes = 0;
@@ -63,6 +93,113 @@ test('clearUnreadAnchor removes existing anchors with one account-data write', a
       },
     },
   });
+});
+
+test('latest receipt event helper skips local echoes and already-read tails', () => {
+  const older = createTimelineEvent('$older');
+  const sending = createTimelineEvent('$sending', { sending: true });
+  const latest = createTimelineEvent('$latest');
+
+  assert.equal(getLatestReceiptEventFromEvents([older, sending, latest], '$older'), latest);
+  assert.equal(getLatestReceiptEventFromEvents([older, sending], '$older'), undefined);
+  assert.equal(getLatestReceiptEventFromEvents([older], '$older'), undefined);
+});
+
+test('markAsRead resolves the latest SDK timeline by default', async () => {
+  const liveTail = createTimelineEvent('$loaded-live-tail');
+  const latest = createTimelineEvent('$latest');
+  let latestTimelineCalls = 0;
+  let receiptEvent: any;
+
+  const room = {
+    roomId: '!room:example.org',
+    accountData: {
+      get: () => undefined,
+    },
+    getEventReadUpTo: () => '$older',
+    getLiveTimeline: () => ({
+      getEvents: () => [liveTail],
+    }),
+    getUnfilteredTimelineSet: () => ({}),
+  } as any;
+  const mx = {
+    getRoom: () => room,
+    getUserId: () => '@alice:example.org',
+    getAccountData: () => undefined,
+    getLatestTimeline: async () => {
+      latestTimelineCalls += 1;
+      return {
+        getEvents: () => [latest],
+      };
+    },
+    sendReadReceipt: async (event: any) => {
+      receiptEvent = event;
+    },
+  } as any;
+
+  await markAsRead(mx, room.roomId, false);
+
+  assert.equal(latestTimelineCalls, 1);
+  assert.equal(receiptEvent, latest);
+});
+
+test('markAsRead can explicitly use the loaded live tail for mounted bottom state', async () => {
+  const liveTail = createTimelineEvent('$loaded-live-tail');
+  let latestTimelineCalls = 0;
+  let receiptEvent: any;
+
+  const room = {
+    roomId: '!room:example.org',
+    accountData: {
+      get: () => undefined,
+    },
+    getEventReadUpTo: () => '$older',
+    getLiveTimeline: () => ({
+      getEvents: () => [liveTail],
+    }),
+    getUnfilteredTimelineSet: () => ({}),
+  } as any;
+  const mx = {
+    getRoom: () => room,
+    getUserId: () => '@alice:example.org',
+    getAccountData: () => undefined,
+    getLatestTimeline: async () => {
+      latestTimelineCalls += 1;
+      return undefined;
+    },
+    sendReadReceipt: async (event: any) => {
+      receiptEvent = event;
+    },
+  } as any;
+
+  await markAsRead(mx, room.roomId, false, 'loaded-live-tail');
+
+  assert.equal(latestTimelineCalls, 0);
+  assert.equal(receiptEvent, liveTail);
+});
+
+test('roomHaveUnread only infers unread from a loaded slice containing the read marker', () => {
+  const readMarker = createTimelineEvent('$read');
+  const unread = createTimelineEvent('$unread');
+  const mx = {
+    getUserId: () => '@alice:example.org',
+  } as any;
+
+  assert.equal(roomHaveUnread(mx, createUnreadRoom([readMarker, unread], '$read')), true);
+  assert.equal(roomHaveUnread(mx, createUnreadRoom([unread], '$missing-read-marker')), false);
+});
+
+test('getRoomCurrentState prefers the SDK room current state over timeline state', () => {
+  const currentState = { marker: 'current' };
+  const timelineState = { marker: 'timeline' };
+  const room = {
+    currentState,
+    getLiveTimeline: () => ({
+      getState: () => timelineState,
+    }),
+  } as any;
+
+  assert.equal(getRoomCurrentState(room), currentState);
 });
 
 test('getThreadRootEventId returns thread root ids when available', () => {

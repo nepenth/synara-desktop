@@ -1,6 +1,5 @@
 import {
   Direction,
-  EventTimeline,
   IContextResponse,
   MatrixClient,
   Method,
@@ -29,6 +28,7 @@ import { getStateEvent } from '../utils/room';
 import { splitWithSpace } from '../utils/common';
 import { createRoomEncryptionState } from '../components/create-room';
 import { makePollStartContentFromCommand, POLL_START_EVENT_TYPE } from '../utils/polls';
+import { getRoomCurrentState } from '../utils/timelineLifecycle';
 
 export const SHRUG = '¯\\_(ツ)_/¯';
 export const TABLEFLIP = '(╯°□°)╯︵ ┻━┻';
@@ -362,10 +362,10 @@ export const useCommands = (mx: MatrixClient, room: Room): CommandRecord => {
         exe: async (payload) => {
           const nick = payload.trim();
           if (nick === '') return;
-          const mEvent = room
-            .getLiveTimeline()
-            .getState(EventTimeline.FORWARDS)
-            ?.getStateEvents(StateEvent.RoomMember, mx.getSafeUserId());
+          const mEvent = getRoomCurrentState(room)?.getStateEvents(
+            StateEvent.RoomMember,
+            mx.getSafeUserId()
+          );
           const content = mEvent?.getContent();
           if (!content) return;
           await mx.sendStateEvent(
@@ -384,10 +384,10 @@ export const useCommands = (mx: MatrixClient, room: Room): CommandRecord => {
         description: 'Change profile picture in current room. Example /myroomavatar mxc://xyzabc',
         exe: async (payload) => {
           if (payload.match(/^mxc:\/\/\S+$/)) {
-            const mEvent = room
-              .getLiveTimeline()
-              .getState(EventTimeline.FORWARDS)
-              ?.getStateEvents(StateEvent.RoomMember, mx.getSafeUserId());
+            const mEvent = getRoomCurrentState(room)?.getStateEvents(
+              StateEvent.RoomMember,
+              mx.getSafeUserId()
+            );
             const content = mEvent?.getContent();
             if (!content) return;
             await mx.sendStateEvent(

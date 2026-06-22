@@ -1293,7 +1293,9 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
             scrollToBottomRef.current.count += 1;
             scrollToBottomRef.current.smooth = true;
             if (document.hasFocus() && (!unreadInfo || mEvt.getSender() === mx.getUserId())) {
-              requestAnimationFrame(() => markAsRead(mx, mEvt.getRoomId()!, hideActivity));
+              requestAnimationFrame(() =>
+                markAsRead(mx, mEvt.getRoomId()!, hideActivity, 'loaded-live-tail')
+              );
             }
             return;
           }
@@ -1308,7 +1310,9 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
             // Check if the document is in focus (user is actively viewing the app),
             // and either there are no unread messages or the latest message is from the current user.
             // If either condition is met, trigger the markAsRead function to send a read receipt.
-            requestAnimationFrame(() => markAsRead(mx, mEvt.getRoomId()!, hideActivity));
+            requestAnimationFrame(() =>
+              markAsRead(mx, mEvt.getRoomId()!, hideActivity, 'loaded-live-tail')
+            );
           }
 
           if (!document.hasFocus() && !unreadInfo) {
@@ -1440,13 +1444,17 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
   const tryAutoMarkAsRead = useCallback(() => {
     const readUptoEventId = readUptoEventIdRef.current;
     if (!readUptoEventId) {
-      requestAnimationFrame(() => markAsRead(mx, room.roomId, hideActivity));
+      requestAnimationFrame(() =>
+        markAsRead(mx, room.roomId, hideActivity, 'loaded-live-tail')
+      );
       return;
     }
     const evtTimeline = getEventTimeline(room, readUptoEventId);
     const latestTimeline = evtTimeline && getFirstLinkedTimeline(evtTimeline, Direction.Forward);
     if (latestTimeline === room.getLiveTimeline()) {
-      requestAnimationFrame(() => markAsRead(mx, room.roomId, hideActivity));
+      requestAnimationFrame(() =>
+        markAsRead(mx, room.roomId, hideActivity, 'loaded-live-tail')
+      );
     }
   }, [mx, room, hideActivity]);
 
