@@ -5,6 +5,16 @@ import UniformTypeIdentifiers
 import UIKit
 #endif
 
+enum RoomTimelineFocusPolicy {
+    static func initialLoadFocus(focusedEventID: String?, initialReadMarkerEventID: String?) -> String? {
+        focusedEventID ?? initialReadMarkerEventID
+    }
+
+    static func updateStreamFocus(focusedEventID: String?, override: String?? = nil) -> String? {
+        override ?? focusedEventID
+    }
+}
+
 struct RoomTimelineView: View {
     private static let olderPaginationTopThreshold = 3
     private static let olderPaginationDebounceInterval: TimeInterval = 0.5
@@ -663,7 +673,10 @@ struct RoomTimelineView: View {
 
     private func loadTimeline() async {
         await prepareTimelineUpdates()
-        let readMarkerEventID = focusedEventID ?? initialReadMarkerEventID
+        let readMarkerEventID = RoomTimelineFocusPolicy.initialLoadFocus(
+            focusedEventID: focusedEventID,
+            initialReadMarkerEventID: initialReadMarkerEventID
+        )
         let outcome = await environment.timeline.loadInitialTimeline(roomID: roomID, focusedEventID: readMarkerEventID)
         await MainActor.run {
             applyTimelineOutcome(outcome)
@@ -672,7 +685,10 @@ struct RoomTimelineView: View {
 
     private func startTimelineUpdates(streamFocusEventID overrideFocus: String?? = nil) {
         timelineUpdatesTask?.cancel()
-        let streamFocusEventID = overrideFocus ?? focusedEventID ?? initialReadMarkerEventID
+        let streamFocusEventID = RoomTimelineFocusPolicy.updateStreamFocus(
+            focusedEventID: focusedEventID,
+            override: overrideFocus
+        )
         timelineUpdatesTask = Task {
             for await outcome in environment.timeline.timelineUpdates(roomID: roomID, focusedEventID: streamFocusEventID) {
                 guard Task.isCancelled == false else {
