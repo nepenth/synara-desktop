@@ -548,8 +548,33 @@ const useLiveTimelineRefresh = (room: Room, onRefresh: () => void) => {
   }, [room, onRefresh]);
 };
 
+const useLiveTimelineReset = (room: Room, onReset: () => void) => {
+  useEffect(() => {
+    const handleTimelineReset: EventTimelineSetHandlerMap[RoomEvent.TimelineReset] = (
+      eventRoom
+    ) => {
+      if (eventRoom?.roomId !== room.roomId) return;
+      onReset();
+    };
+
+    room.on(RoomEvent.TimelineReset, handleTimelineReset);
+    return () => {
+      room.removeListener(RoomEvent.TimelineReset, handleTimelineReset);
+    };
+  }, [room, onReset]);
+};
+
 const getInitialTimeline = (room: Room) => {
   const linkedTimelines = getLinkedTimelines(getLiveTimeline(room));
+  return getTimelineEndWindow(linkedTimelines);
+};
+
+const getEmptyTimeline = () => ({
+  range: { start: 0, end: 0 },
+  linkedTimelines: [],
+});
+
+const getTimelineEndWindow = (linkedTimelines: EventTimeline[]): Timeline => {
   const evLength = getTimelinesEventsCount(linkedTimelines);
   return {
     linkedTimelines,
@@ -559,11 +584,6 @@ const getInitialTimeline = (room: Room) => {
     },
   };
 };
-
-const getEmptyTimeline = () => ({
-  range: { start: 0, end: 0 },
-  linkedTimelines: [],
-});
 
 const getRoomUnreadInfo = (room: Room, anchorEventId?: string, scrollTo = false) => {
   const readUptoEventId = anchorEventId ?? room.getEventReadUpTo(room.client.getUserId() ?? '');
@@ -579,6 +599,9 @@ const getRoomUnreadInfo = (room: Room, anchorEventId?: string, scrollTo = false)
 
 const hasUnreadForInitialScroll = (unread: Unread | undefined, unreadAnchorEventId?: string) =>
   Boolean(unreadAnchorEventId || (unread && (unread.total > 0 || unread.highlight > 0)));
+
+const timelineHasEvents = (timeline: Timeline): boolean =>
+  getTimelinesEventsCount(timeline.linkedTimelines) > 0;
 
 const toScrollBehavior = (behavior?: ScrollToOptions['behavior']): 'auto' | 'smooth' | undefined =>
   behavior === 'instant' ? 'auto' : behavior;
@@ -679,6 +702,17 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
     stableFrames: 0,
     startedAt: 0,
   });
+  const liveTimelineResetPendingRef = useRef(false);
+  const latestTimelineRequestRef = useRef(0);
+  const startLiveEndPin = useCallback(() => {
+    liveEndPinRef.current = true;
+    liveEndPinStateRef.current = {
+      lastScrollHeight: 0,
+      lastTotalSize: 0,
+      stableFrames: 0,
+      startedAt: 0,
+    };
+  }, []);
 
   const [focusItem, setFocusItem] = useState<
     | {
@@ -707,7 +741,10 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
       return;
     }
     if (hasInitialUnread) {
-      setUnreadInfo(getRoomUnreadInfo(room, unreadAnchorEventId, true));
+      setUnreadInfo((currentUnreadInfo) => {
+        if (currentUnreadInfo?.scrollTo) return currentUnreadInfo;
+        return getRoomUnreadInfo(room, unreadAnchorEventId, false);
+      });
       return;
     }
     setUnreadInfo(undefined);
@@ -1235,11 +1272,38 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
     room,
     useCallback(
       (mEvt: MatrixEvent) => {
+        const shouldFollowLiveEnd =
+          liveEndPinRef.current || isActuallyAtLiveBottom() || atBottomRef.current;
+        const shouldReattachLiveTimeline =
+          liveTimelineResetPendingRef.current ||
+          (!liveTimelineLinked && shouldFollowLiveEnd) ||
+          timelineRows.length === 0;
+
+        if (shouldReattachLiveTimeline) {
+          const nextTimeline = getInitialTimeline(room);
+          const shouldReplaceVisibleTimeline = shouldFollowLiveEnd || timelineRows.length === 0;
+          if (shouldReplaceVisibleTimeline && timelineHasEvents(nextTimeline)) {
+            liveTimelineResetPendingRef.current = false;
+            setTimeline(nextTimeline);
+          }
+
+          if (shouldFollowLiveEnd) {
+            startLiveEndPin();
+            setAtBottomState(true);
+            scrollToBottomRef.current.count += 1;
+            scrollToBottomRef.current.smooth = true;
+            if (document.hasFocus() && (!unreadInfo || mEvt.getSender() === mx.getUserId())) {
+              requestAnimationFrame(() => markAsRead(mx, mEvt.getRoomId()!, hideActivity));
+            }
+            return;
+          }
+        }
+
         // if user is at bottom of timeline
         // keep paginating timeline and conditionally mark as read
         // otherwise we update timeline without paginating
         // so timeline can be updated with evt like: edits, reactions etc
-        if (isActuallyAtLiveBottom()) {
+        if (shouldFollowLiveEnd) {
           if (document.hasFocus() && (!unreadInfo || mEvt.getSender() === mx.getUserId())) {
             // Check if the document is in focus (user is actively viewing the app),
             // and either there are no unread messages or the latest message is from the current user.
@@ -1268,11 +1332,15 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
       [
         captureVirtualAnchor,
         isActuallyAtLiveBottom,
+        liveTimelineLinked,
         mx,
         room,
         unreadInfo,
         hideActivity,
+        setAtBottomState,
+        startLiveEndPin,
         startTimelineTransition,
+        timelineRows.length,
       ]
     )
   );
@@ -1310,13 +1378,37 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
   useLiveTimelineRefresh(
     room,
     useCallback(() => {
-      if (liveTimelineLinked) {
-        if (!isActuallyAtLiveBottom()) {
+      const nextTimeline = getInitialTimeline(room);
+      if (!timelineHasEvents(nextTimeline)) {
+        liveTimelineResetPendingRef.current = true;
+        perfLog('room-timeline.defer-empty-refresh', { roomId: room.roomId });
+        return;
+      }
+
+      if (liveTimelineLinked || atBottomRef.current || liveEndPinRef.current) {
+        if (!isActuallyAtLiveBottom() && !atBottomRef.current && !liveEndPinRef.current) {
           captureVirtualAnchor();
         }
-        setTimeline(getInitialTimeline(room));
+        setTimeline(nextTimeline);
       }
     }, [captureVirtualAnchor, isActuallyAtLiveBottom, room, liveTimelineLinked])
+  );
+
+  useLiveTimelineReset(
+    room,
+    useCallback(() => {
+      liveTimelineResetPendingRef.current = true;
+      perfLog('room-timeline.live-reset', {
+        roomId: room.roomId,
+        atBottom: atBottomRef.current,
+        liveEndPinned: liveEndPinRef.current,
+      });
+      if (atBottomRef.current || liveEndPinRef.current) {
+        startLiveEndPin();
+      } else {
+        captureVirtualAnchor();
+      }
+    }, [captureVirtualAnchor, room.roomId, startLiveEndPin])
   );
 
   // Stay at bottom when room editor resize
@@ -1488,20 +1580,10 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
     useCallback(
       (inFocus) => {
         if (inFocus && atBottomRef.current) {
-          if (unreadInfo?.inLiveTimeline) {
-            handleOpenEvent(unreadInfo.readUptoEventId, false, (scrolled) => {
-              // the unread event is already in view
-              // so, try mark as read;
-              if (!scrolled) {
-                tryAutoMarkAsRead();
-              }
-            });
-            return;
-          }
           tryAutoMarkAsRead();
         }
       },
-      [tryAutoMarkAsRead, unreadInfo, handleOpenEvent]
+      [tryAutoMarkAsRead]
     )
   );
 
@@ -1652,25 +1734,49 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
     }
   }, [scrollToElement, editId]);
 
-  const handleJumpToLatest = () => {
+  const handleJumpToLatest = async () => {
     if (eventId) {
       navigateRoom(room.roomId, undefined, { replace: true });
     }
-    liveEndPinRef.current = true;
-    liveEndPinStateRef.current = {
-      lastScrollHeight: 0,
-      lastTotalSize: 0,
-      stableFrames: 0,
-      startedAt: 0,
-    };
+    const requestId = latestTimelineRequestRef.current + 1;
+    latestTimelineRequestRef.current = requestId;
+    startLiveEndPin();
     pendingVirtualAnchorRef.current = undefined;
     pendingVirtualAnchorScrollTopRef.current = undefined;
     restoringSavedViewportRef.current = false;
     lastKnownVirtualAnchorRef.current = undefined;
-    setTimeline(getInitialTimeline(room));
     setAtBottomState(true);
-    scrollToBottomRef.current.count += 1;
-    scrollToBottomRef.current.smooth = false;
+
+    const scrollLatestToBottom = () => {
+      scrollToBottomRef.current.count += 1;
+      scrollToBottomRef.current.smooth = false;
+    };
+
+    try {
+      const latestTimeline = await mx.getLatestTimeline(room.getUnfilteredTimelineSet());
+      if (!alive() || latestTimelineRequestRef.current !== requestId) return;
+      const nextTimeline = latestTimeline
+        ? getTimelineEndWindow(getLinkedTimelines(latestTimeline))
+        : getInitialTimeline(room);
+      setTimeline(timelineHasEvents(nextTimeline) ? nextTimeline : getInitialTimeline(room));
+      liveTimelineResetPendingRef.current = false;
+      perfLog('room-timeline.jump-latest', {
+        roomId: room.roomId,
+        eventCount: getTimelinesEventsCount(nextTimeline.linkedTimelines),
+        fromLiveTimeline: nextTimeline.linkedTimelines.includes(getLiveTimeline(room)),
+      });
+    } catch (err) {
+      if (!alive() || latestTimelineRequestRef.current !== requestId) return;
+      setTimeline(getInitialTimeline(room));
+      perfLog('room-timeline.jump-latest-failed', {
+        roomId: room.roomId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      if (alive() && latestTimelineRequestRef.current === requestId) {
+        scrollLatestToBottom();
+      }
+    }
   };
 
   const handleJumpToUnread = () => {
