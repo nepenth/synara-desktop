@@ -3,6 +3,45 @@ import XCTest
 @testable import Synara
 
 final class TimelineServiceTests: XCTestCase {
+    func testRoomTimelineFocusPolicyUsesReadMarkerForInitialLoadOnly() {
+        XCTAssertEqual(
+            RoomTimelineFocusPolicy.initialLoadFocus(
+                focusedEventID: nil,
+                initialReadMarkerEventID: "$read-marker"
+            ),
+            "$read-marker"
+        )
+        XCTAssertNil(
+            RoomTimelineFocusPolicy.updateStreamFocus(
+                focusedEventID: nil,
+                override: nil
+            )
+        )
+    }
+
+    func testRoomTimelineFocusPolicyKeepsExplicitFocusedRoutesFocused() {
+        XCTAssertEqual(
+            RoomTimelineFocusPolicy.initialLoadFocus(
+                focusedEventID: "$focused",
+                initialReadMarkerEventID: "$read-marker"
+            ),
+            "$focused"
+        )
+        XCTAssertEqual(
+            RoomTimelineFocusPolicy.updateStreamFocus(
+                focusedEventID: "$focused",
+                override: nil
+            ),
+            "$focused"
+        )
+        XCTAssertNil(
+            RoomTimelineFocusPolicy.updateStreamFocus(
+                focusedEventID: "$focused",
+                override: .some(nil)
+            )
+        )
+    }
+
     func testMatrixHTMLSanitizerDropsUnsafeLinksAndKeepsFallback() {
         let markdown = MatrixHTMLRenderer.sanitizedMarkdown(
             body: "fallback",
