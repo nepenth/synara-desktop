@@ -208,14 +208,14 @@ pub fn run() {
             desktop_notifications::desktop_request_notification_permission,
             desktop_notifications::desktop_notify,
             desktop::desktop_open_external_url,
-            desktop::desktop_save_file,
-            desktop::desktop_save_file_begin,
-            desktop::desktop_save_file_chunk,
-            desktop::desktop_save_file_end,
-            desktop::desktop_save_file_abort,
-            desktop::desktop_read_dropped_files,
-            desktop::desktop_read_dropped_file_chunk,
-            desktop::desktop_read_dropped_file_end,
+            desktop_file_transfer::desktop_save_file,
+            desktop_file_transfer::desktop_save_file_begin,
+            desktop_file_transfer::desktop_save_file_chunk,
+            desktop_file_transfer::desktop_save_file_end,
+            desktop_file_transfer::desktop_save_file_abort,
+            desktop_file_transfer::desktop_read_dropped_files,
+            desktop_file_transfer::desktop_read_dropped_file_chunk,
+            desktop_file_transfer::desktop_read_dropped_file_end,
             desktop::desktop_get_performance_capabilities,
             desktop_agent_actions::desktop_agent_action
         ])
@@ -230,7 +230,7 @@ pub fn run() {
                     let _ = window.hide();
                 }
                 WindowEvent::DragDrop(DragDropEvent::Enter { paths, position }) => {
-                    desktop::reset_drag_drop_session();
+                    desktop_file_transfer::reset_drag_drop_session();
                     emit_native_file_drop(
                         window,
                         NativeFileDropPayload {
@@ -253,7 +253,7 @@ pub fn run() {
                     );
                 }
                 WindowEvent::DragDrop(DragDropEvent::Drop { paths, position }) => {
-                    desktop::remember_dropped_paths(paths);
+                    desktop_file_transfer::remember_dropped_paths(paths);
                     emit_native_file_drop(
                         window,
                         NativeFileDropPayload {
@@ -265,7 +265,7 @@ pub fn run() {
                     );
                 }
                 WindowEvent::DragDrop(DragDropEvent::Leave) => {
-                    desktop::clear_dropped_file_allowlist_on_drag_leave();
+                    desktop_file_transfer::clear_dropped_file_allowlist_on_drag_leave();
                     emit_native_file_drop(
                         window,
                         NativeFileDropPayload {

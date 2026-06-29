@@ -496,7 +496,9 @@ check:repo-layout → check:versions → check:matrix-boundaries
 2. **`desktop.rs` modularization** — First slices extracted external-link,
    session-base, and agent URL policy helpers to `src-tauri/src/desktop_url.rs`,
    shared text/route sanitization helpers to `src-tauri/src/desktop_sanitize.rs`,
-   file-transfer policy helpers to `src-tauri/src/desktop_file_transfer.rs`,
+   file-transfer policy helpers, save/drop IPC commands, transfer-session
+   state, and drag/drop allowlist lifecycle to
+   `src-tauri/src/desktop_file_transfer.rs`,
    and session-envelope validation/expiry helpers to
    `src-tauri/src/desktop_session.rs`, secret-store status/backend/error
    classification plus platform probe/cache mechanics to
@@ -510,8 +512,9 @@ check:repo-layout → check:versions → check:matrix-boundaries
    validation, permission commands, and route-click dispatch to
    `src-tauri/src/desktop_notifications.rs`, and Linux/KDE/session/portal
    integration status probes to `src-tauri/src/desktop_integration.rs`, all
-   with direct Rust tests; continue splitting into focused modules before
-   adding IPC.
+   with direct Rust tests. `desktop.rs` is now a 236 LOC command/window shell;
+   continue splitting only if future desktop surfaces grow beyond focused
+   modules.
 
 ### 7.3 Cross-Platform Expansion Protocol
 
