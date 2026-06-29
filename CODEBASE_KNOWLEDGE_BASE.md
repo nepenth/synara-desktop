@@ -63,8 +63,8 @@ release-grade.
 synara-desktop/                    # Root — Tauri project + orchestration
 ├── config.json                    # Canonical homeserver/config (synced → synara/)
 ├── package.json                   # Tauri CLI, build scripts, version gates
-├── src-tauri/                     # Rust desktop shell (~2.0k LOC in desktop.rs)
-│   ├── src/{main,lib,desktop,desktop_file_transfer,desktop_sanitize,desktop_secret_store,desktop_session,desktop_session_store,desktop_shortcuts,desktop_tray,desktop_url,build_info,menu}.rs
+├── src-tauri/                     # Rust desktop shell (~1.7k LOC in desktop.rs)
+│   ├── src/{main,lib,desktop,desktop_agent_actions,desktop_file_transfer,desktop_sanitize,desktop_secret_store,desktop_session,desktop_session_store,desktop_shortcuts,desktop_tray,desktop_url,build_info,menu}.rs
 │   ├── capabilities/{main,release-hardening}.json
 │   └── tauri.conf.json
 ├── synara/                        # React/Vite Matrix runtime (~865 TS/JS files)
@@ -199,7 +199,7 @@ Status labels: **Full** · **Partial** · **Stub** · **Planned**
 | **Unread anchors** (private markers + divider) | Full | `utils/notifications.ts` |
 | **Hermes agent cards** (code blocks, actions, copy) | Full | `HermesAgentCard.tsx`, `utils/hermes.ts` |
 | **Agent approvals** (detect + notify) | Full | `utils/agentApprovals.ts` |
-| **Agent action bridge** (copy/open/emit) | Full | `agents/agentActions.ts`, `desktop.rs` |
+| **Agent action bridge** (copy/open/emit) | Full | `agents/agentActions.ts`, `desktop_agent_actions.rs` |
 | Agent backend services (regenerate, export, etc.) | Planned | Bridge exists; no concrete backends |
 | Theme accent customization | Full | `settings/general/General.tsx` |
 
@@ -354,7 +354,7 @@ tracked in docs, contracts, and functionality matrices instead.
 |------|----------|--------|
 | Browser-shaped desktop runtime | Medium | IndexedDB sync/crypto, localStorage drafts, service worker media |
 | matrix-js-sdk coupling | High | ~209 runtime files; Rust SDK migration = multi-month rewrite |
-| Monolithic files | Medium | `RoomTimeline.tsx` (2857 LOC after helper extractions), `desktop.rs` (2025 LOC after URL, sanitization, file-transfer, session-envelope, secret-store classification/probe/cache, keyring session-store, global shortcut, and tray/menu helper extractions) |
+| Monolithic files | Medium | `RoomTimeline.tsx` (2857 LOC after helper extractions), `desktop.rs` (1717 LOC after URL, sanitization, file-transfer, session-envelope, secret-store classification/probe/cache, keyring session-store, global shortcut, tray/menu, and agent-action helper extractions) |
 | Limited UI test coverage | Medium | 44 unit test files, zero `*.test.tsx` component tests |
 | Windows unsupported | Low (by design) | No Keychain equivalent; excluded from release matrix |
 | Stale MIP1 branch | Low | Could confuse contributors |
@@ -407,6 +407,7 @@ tracked in docs, contracts, and functionality matrices instead.
 | Session persistence | `synara/src/app/state/sessionPersistence.ts` |
 | Desktop bridge (TS) | `synara/src/app/utils/desktop.ts` |
 | Desktop bridge (Rust) | `src-tauri/src/desktop.rs` |
+| Desktop agent actions (Rust) | `src-tauri/src/desktop_agent_actions.rs` |
 | Desktop file-transfer helpers (Rust) | `src-tauri/src/desktop_file_transfer.rs` |
 | Desktop sanitization helpers (Rust) | `src-tauri/src/desktop_sanitize.rs` |
 | Desktop secret-store status/classification contracts (Rust) | `src-tauri/src/desktop_secret_store.rs` |
@@ -501,8 +502,10 @@ check:repo-layout → check:versions → check:matrix-boundaries
    `src-tauri/src/desktop_session_store.rs`, global shortcut
    policy/registration to `src-tauri/src/desktop_shortcuts.rs`, and tray/menu
    state, badge, DND, and tray creation handling to
-   `src-tauri/src/desktop_tray.rs`, all with direct Rust tests; continue
-   splitting into focused modules before adding IPC.
+   `src-tauri/src/desktop_tray.rs`, and agent-action payload sanitization,
+   local handling, and event emission to
+   `src-tauri/src/desktop_agent_actions.rs`, all with direct Rust tests;
+   continue splitting into focused modules before adding IPC.
 
 ### 7.3 Cross-Platform Expansion Protocol
 
