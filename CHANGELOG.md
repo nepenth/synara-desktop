@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Stabilized the localhost-port Rust test so the validation gate still passes when the preferred dev port is already occupied.
 - Split desktop URL safety helpers out of `desktop.rs` into a focused Rust module with direct policy tests.
 - Extracted room timeline opening/window/unread helpers from `RoomTimeline.tsx` into a tested timeline utility.
 - Extracted Matrix linked-timeline helpers from `RoomTimeline.tsx` into a tested shared timeline utility.
