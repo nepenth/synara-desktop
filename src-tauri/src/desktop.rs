@@ -29,25 +29,31 @@ use crate::desktop_file_transfer::{
 use crate::desktop_sanitize::{
     sanitize_action_text, sanitize_notification_route, sanitize_route, truncate_text,
 };
+#[cfg(target_os = "macos")]
+use crate::desktop_secret_store::macos_secret_store_status_from_probe;
+#[cfg(all(target_os = "linux", test))]
+use crate::desktop_secret_store::DESKTOP_SECRET_STORE_BACKEND_LINUX_SECRET_SERVICE;
+#[cfg(target_os = "macos")]
+use crate::desktop_secret_store::DESKTOP_SECRET_STORE_BACKEND_MACOS_KEYCHAIN;
+#[cfg(target_os = "macos")]
+use crate::desktop_secret_store::DESKTOP_SECRET_STORE_MACOS_KEYCHAIN_LOCKED;
 #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
 use crate::desktop_secret_store::DESKTOP_SECRET_STORE_UNSUPPORTED_PLATFORM;
 #[cfg(any(target_os = "windows", test))]
 use crate::desktop_secret_store::DESKTOP_SECRET_STORE_WINDOWS_UNSUPPORTED;
 use crate::desktop_secret_store::{
-    bridge_supports_secure_secret_store, unavailable_secret_store_status, DesktopSecretStoreStatus,
-    DESKTOP_SECRET_STORE_BACKEND_LINUX_KEYUTILS, DESKTOP_SECRET_STORE_BACKEND_LINUX_SECRET_SERVICE,
-    DESKTOP_SECRET_STORE_LINUX_UNAVAILABLE, DESKTOP_SECRET_STORE_OPERATION_DENIED,
-    DESKTOP_SECRET_STORE_OPERATION_LOCKED, DESKTOP_SECRET_STORE_OPERATION_UNAVAILABLE,
-    DESKTOP_SECRET_STORE_SESSION_SCOPED,
-};
-#[cfg(any(target_os = "macos", test))]
-use crate::desktop_secret_store::{
-    DESKTOP_SECRET_STORE_BACKEND_MACOS_KEYCHAIN, DESKTOP_SECRET_STORE_MACOS_KEYCHAIN_ACCESS_DENIED,
-    DESKTOP_SECRET_STORE_MACOS_KEYCHAIN_LOCKED, DESKTOP_SECRET_STORE_MACOS_KEYCHAIN_UNAVAILABLE,
+    bridge_supports_secure_secret_store, linux_secret_store_status_from_signals_with_reason,
+    secret_store_operation_error_code, DesktopSecretStoreStatus,
+    DESKTOP_SECRET_STORE_LINUX_UNAVAILABLE,
 };
 #[cfg(test)]
 use crate::desktop_secret_store::{
+    unavailable_secret_store_status, DESKTOP_SECRET_STORE_BACKEND_MACOS_KEYCHAIN,
     DESKTOP_SECRET_STORE_BACKEND_NONE, DESKTOP_SECRET_STORE_NOT_CONFIGURED,
+};
+#[cfg(test)]
+use crate::desktop_secret_store::{
+    DESKTOP_SECRET_STORE_OPERATION_LOCKED, DESKTOP_SECRET_STORE_OPERATION_UNAVAILABLE,
 };
 use crate::desktop_session::{
     current_timestamp_ms, sanitize_session_envelope, session_envelope_is_expired,
@@ -469,60 +475,6 @@ impl DesktopSessionSecretStore for KeyringDesktopSessionSecretStore {
     }
 }
 
-#[cfg(any(target_os = "macos", test))]
-fn secret_store_error_indicates_access_denied(
-    err: &(dyn std::error::Error + Send + Sync + 'static),
-) -> bool {
-    if macos_keychain_error_indicates_access_denied(err) {
-        return true;
-    }
-
-    #[cfg(test)]
-    {
-        let message = err.to_string();
-        if message.starts_with("test secret store error denied") {
-            return true;
-        }
-    }
-
-    let message = err.to_string().to_lowercase();
-    message.contains("access denied")
-        || message.contains("permission denied")
-        || message.contains("not authorized")
-        || message.contains("auth denied")
-}
-
-#[cfg(not(any(target_os = "macos", test)))]
-fn secret_store_error_indicates_access_denied(
-    err: &(dyn std::error::Error + Send + Sync + 'static),
-) -> bool {
-    let message = err.to_string().to_lowercase();
-    message.contains("access denied")
-        || message.contains("permission denied")
-        || message.contains("not authorized")
-        || message.contains("auth denied")
-}
-
-fn secret_store_operation_error_code(error: &KeyringError) -> &'static str {
-    match error {
-        KeyringError::NoStorageAccess(err) => {
-            if secret_store_error_indicates_access_denied(err.as_ref()) {
-                DESKTOP_SECRET_STORE_OPERATION_DENIED
-            } else {
-                DESKTOP_SECRET_STORE_OPERATION_LOCKED
-            }
-        }
-        KeyringError::PlatformFailure(err) => {
-            if secret_store_error_indicates_access_denied(err.as_ref()) {
-                DESKTOP_SECRET_STORE_OPERATION_DENIED
-            } else {
-                DESKTOP_SECRET_STORE_OPERATION_UNAVAILABLE
-            }
-        }
-        _ => DESKTOP_SECRET_STORE_OPERATION_UNAVAILABLE,
-    }
-}
-
 fn map_keyring_error(operation: &'static str, error: KeyringError) -> String {
     let code = secret_store_operation_error_code(&error);
     eprintln!("desktop secret store {operation} failed: code={code}");
@@ -598,77 +550,6 @@ fn macos_keychain_probe() -> Result<(), KeyringError> {
     }
 }
 
-#[cfg(any(target_os = "macos", test))]
-fn macos_unavailable_secret_store_status(reason: &'static str) -> DesktopSecretStoreStatus {
-    DesktopSecretStoreStatus {
-        available: false,
-        backend: DESKTOP_SECRET_STORE_BACKEND_MACOS_KEYCHAIN,
-        can_persist_session: false,
-        reason: Some(reason),
-    }
-}
-
-#[cfg(any(target_os = "macos", test))]
-fn macos_keychain_error_indicates_access_denied(
-    err: &(dyn std::error::Error + Send + Sync + 'static),
-) -> bool {
-    #[cfg(test)]
-    {
-        let message = err.to_string();
-        if let Some(code) = message
-            .strip_prefix("test keychain error ")
-            .and_then(|value| value.parse::<i32>().ok())
-        {
-            return matches!(code, -25293 | -25308);
-        }
-    }
-
-    #[cfg(target_os = "macos")]
-    if let Some(error) = err.downcast_ref::<security_framework::base::Error>() {
-        return matches!(error.code(), -25293 | -25308);
-    }
-
-    false
-}
-
-#[cfg(any(target_os = "macos", test))]
-fn macos_keychain_unavailable_reason(error: &KeyringError) -> &'static str {
-    match error {
-        KeyringError::NoStorageAccess(err) => {
-            if macos_keychain_error_indicates_access_denied(err.as_ref()) {
-                DESKTOP_SECRET_STORE_MACOS_KEYCHAIN_ACCESS_DENIED
-            } else {
-                DESKTOP_SECRET_STORE_MACOS_KEYCHAIN_LOCKED
-            }
-        }
-        KeyringError::PlatformFailure(err) => {
-            if macos_keychain_error_indicates_access_denied(err.as_ref()) {
-                DESKTOP_SECRET_STORE_MACOS_KEYCHAIN_ACCESS_DENIED
-            } else {
-                DESKTOP_SECRET_STORE_MACOS_KEYCHAIN_UNAVAILABLE
-            }
-        }
-        _ => DESKTOP_SECRET_STORE_MACOS_KEYCHAIN_UNAVAILABLE,
-    }
-}
-
-#[cfg(any(target_os = "macos", test))]
-fn macos_secret_store_status_from_probe(
-    probe: Result<(), KeyringError>,
-) -> DesktopSecretStoreStatus {
-    match probe {
-        Ok(()) => DesktopSecretStoreStatus {
-            available: true,
-            backend: DESKTOP_SECRET_STORE_BACKEND_MACOS_KEYCHAIN,
-            can_persist_session: true,
-            reason: None,
-        },
-        Err(error) => {
-            macos_unavailable_secret_store_status(macos_keychain_unavailable_reason(&error))
-        }
-    }
-}
-
 fn platform_secret_store_status() -> DesktopSecretStoreStatus {
     #[cfg(target_os = "macos")]
     {
@@ -689,43 +570,6 @@ fn platform_secret_store_status() -> DesktopSecretStoreStatus {
     {
         unavailable_secret_store_status(DESKTOP_SECRET_STORE_UNSUPPORTED_PLATFORM)
     }
-}
-
-#[allow(dead_code)]
-fn linux_secret_store_status_from_signals(
-    has_secret_service: bool,
-    has_keyutils: bool,
-) -> DesktopSecretStoreStatus {
-    linux_secret_store_status_from_signals_with_reason(has_secret_service, has_keyutils, None)
-}
-
-#[allow(dead_code)]
-fn linux_secret_store_status_from_signals_with_reason(
-    has_secret_service: bool,
-    has_keyutils: bool,
-    secret_service_unavailable_reason: Option<&'static str>,
-) -> DesktopSecretStoreStatus {
-    if has_secret_service {
-        return DesktopSecretStoreStatus {
-            available: true,
-            backend: DESKTOP_SECRET_STORE_BACKEND_LINUX_SECRET_SERVICE,
-            can_persist_session: true,
-            reason: None,
-        };
-    }
-
-    if has_keyutils {
-        return DesktopSecretStoreStatus {
-            available: true,
-            backend: DESKTOP_SECRET_STORE_BACKEND_LINUX_KEYUTILS,
-            can_persist_session: false,
-            reason: Some(DESKTOP_SECRET_STORE_SESSION_SCOPED),
-        };
-    }
-
-    unavailable_secret_store_status(
-        secret_service_unavailable_reason.unwrap_or(DESKTOP_SECRET_STORE_LINUX_UNAVAILABLE),
-    )
 }
 
 #[cfg(target_os = "linux")]
@@ -2941,22 +2785,6 @@ pub fn desktop_agent_action(
 }
 
 #[cfg(test)]
-#[derive(Debug)]
-struct MacosKeychainTestError {
-    code: i32,
-}
-
-#[cfg(test)]
-impl std::fmt::Display for MacosKeychainTestError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "test keychain error {}", self.code)
-    }
-}
-
-#[cfg(test)]
-impl std::error::Error for MacosKeychainTestError {}
-
-#[cfg(test)]
 mod tests {
     use super::*;
     use std::sync::Mutex;
@@ -3318,60 +3146,6 @@ mod tests {
         assert_eq!(DESKTOP_SESSION_CREDENTIAL_ACCOUNT, "matrix-session");
     }
 
-    #[test]
-    fn macos_secret_store_status_from_probe_reports_available_when_keychain_accessible() {
-        let status = macos_secret_store_status_from_probe(Ok(()));
-
-        assert!(status.available);
-        assert_eq!(status.backend, DESKTOP_SECRET_STORE_BACKEND_MACOS_KEYCHAIN);
-        assert!(status.can_persist_session);
-        assert_eq!(status.reason, None);
-        assert!(bridge_supports_secure_secret_store(&status));
-    }
-
-    #[test]
-    fn macos_secret_store_status_from_probe_reports_locked_when_keychain_unavailable() {
-        let status =
-            macos_secret_store_status_from_probe(Err(KeyringError::NoStorageAccess(Box::new(
-                std::io::Error::new(std::io::ErrorKind::PermissionDenied, "keychain locked"),
-            ))));
-
-        assert!(!status.available);
-        assert_eq!(status.backend, DESKTOP_SECRET_STORE_BACKEND_MACOS_KEYCHAIN);
-        assert!(!status.can_persist_session);
-        assert_eq!(
-            status.reason,
-            Some(DESKTOP_SECRET_STORE_MACOS_KEYCHAIN_LOCKED)
-        );
-        assert!(!bridge_supports_secure_secret_store(&status));
-    }
-
-    #[test]
-    fn macos_secret_store_status_from_probe_reports_denied_when_acl_blocks_access() {
-        let status = macos_secret_store_status_from_probe(Err(KeyringError::PlatformFailure(
-            Box::new(MacosKeychainTestError { code: -25293 }),
-        )));
-
-        assert!(!status.available);
-        assert_eq!(
-            status.reason,
-            Some(DESKTOP_SECRET_STORE_MACOS_KEYCHAIN_ACCESS_DENIED)
-        );
-    }
-
-    #[test]
-    fn macos_secret_store_status_from_probe_reports_unavailable_on_other_failures() {
-        let status = macos_secret_store_status_from_probe(Err(KeyringError::PlatformFailure(
-            Box::new(std::io::Error::other("unexpected keychain failure")),
-        )));
-
-        assert!(!status.available);
-        assert_eq!(
-            status.reason,
-            Some(DESKTOP_SECRET_STORE_MACOS_KEYCHAIN_UNAVAILABLE)
-        );
-    }
-
     #[cfg(target_os = "macos")]
     #[test]
     fn platform_secret_store_status_probes_macos_keychain() {
@@ -3435,48 +3209,6 @@ mod tests {
             Some(DESKTOP_SECRET_STORE_WINDOWS_UNSUPPORTED)
         );
         assert!(!bridge_supports_secure_secret_store(&status));
-    }
-
-    #[test]
-    fn linux_secret_store_status_prefers_secret_service_for_persistence() {
-        let status = linux_secret_store_status_from_signals(true, true);
-
-        assert_eq!(status.available, true);
-        assert_eq!(
-            status.backend,
-            DESKTOP_SECRET_STORE_BACKEND_LINUX_SECRET_SERVICE
-        );
-        assert_eq!(status.can_persist_session, true);
-        assert_eq!(status.reason, None);
-    }
-
-    #[test]
-    fn linux_secret_store_status_reports_keyutils_when_probe_passes() {
-        let status = linux_secret_store_status_from_signals(false, true);
-
-        assert_eq!(status.available, true);
-        assert_eq!(status.backend, DESKTOP_SECRET_STORE_BACKEND_LINUX_KEYUTILS);
-        assert_eq!(status.can_persist_session, false);
-        assert_eq!(status.reason, Some(DESKTOP_SECRET_STORE_SESSION_SCOPED));
-    }
-
-    #[test]
-    fn linux_secret_store_status_reports_unavailable_when_probe_fails() {
-        let status = linux_secret_store_status_from_signals(false, false);
-
-        assert_eq!(status.available, false);
-        assert_eq!(status.backend, DESKTOP_SECRET_STORE_BACKEND_NONE);
-        assert_eq!(status.can_persist_session, false);
-        assert_eq!(status.reason, Some(DESKTOP_SECRET_STORE_LINUX_UNAVAILABLE));
-    }
-
-    #[test]
-    fn linux_secret_store_status_does_not_prefer_keyutils_over_unavailable() {
-        let status = linux_secret_store_status_from_signals(false, false);
-
-        assert_ne!(status.backend, DESKTOP_SECRET_STORE_BACKEND_LINUX_KEYUTILS);
-        assert!(!status.available);
-        assert!(!status.can_persist_session);
     }
 
     #[test]
@@ -3707,17 +3439,6 @@ mod tests {
     }
 
     #[test]
-    fn bridge_supports_secure_secret_store_only_when_persistence_is_available() {
-        let persistent = linux_secret_store_status_from_signals(true, false);
-        let session_scoped = linux_secret_store_status_from_signals(false, true);
-        let unavailable = linux_secret_store_status_from_signals(false, false);
-
-        assert!(bridge_supports_secure_secret_store(&persistent));
-        assert!(!bridge_supports_secure_secret_store(&session_scoped));
-        assert!(!bridge_supports_secure_secret_store(&unavailable));
-    }
-
-    #[test]
     fn desktop_session_store_persists_and_reads_sanitized_session_envelopes() {
         let store = TestSessionSecretStore::available();
         let stored = desktop_set_session_in_store(
@@ -3858,43 +3579,6 @@ mod tests {
         fn remove_secret(&self) -> Result<bool, String> {
             Ok(false)
         }
-    }
-
-    #[test]
-    fn map_keyring_error_reports_locked_when_storage_is_inaccessible() {
-        let error = map_keyring_error(
-            "write-session",
-            KeyringError::NoStorageAccess(Box::new(std::io::Error::new(
-                std::io::ErrorKind::PermissionDenied,
-                "keychain locked",
-            ))),
-        );
-
-        assert_eq!(error, DESKTOP_SECRET_STORE_OPERATION_LOCKED);
-    }
-
-    #[test]
-    fn map_keyring_error_reports_denied_when_access_is_blocked() {
-        let error = map_keyring_error(
-            "write-session",
-            KeyringError::NoStorageAccess(Box::new(std::io::Error::other(
-                "test keychain error -25293",
-            ))),
-        );
-
-        assert_eq!(error, DESKTOP_SECRET_STORE_OPERATION_DENIED);
-    }
-
-    #[test]
-    fn map_keyring_error_reports_unavailable_on_platform_failures() {
-        let error = map_keyring_error(
-            "write-session",
-            KeyringError::PlatformFailure(Box::new(std::io::Error::other(
-                "dbus service unavailable",
-            ))),
-        );
-
-        assert_eq!(error, DESKTOP_SECRET_STORE_OPERATION_UNAVAILABLE);
     }
 
     #[test]
