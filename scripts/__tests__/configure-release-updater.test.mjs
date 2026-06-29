@@ -72,6 +72,20 @@ test("release updater config satisfies strict release readiness inspection", () 
       files: |
         src-tauri/target/release/bundle/appimage/*.sig
         latest.json
+      updater-metadata:
+        needs: [linux, macos]
+        steps:
+          - uses: actions/download-artifact@v4
+          - run: |
+              node scripts/generate-release-updater-metadata.mjs \
+                --artifacts updater-artifacts \
+                --repo "$GITHUB_REPOSITORY" \
+                --tag "$GITHUB_REF_NAME" \
+                --version "1.2.20" \
+                --output latest.json
+          - uses: softprops/action-gh-release@v3
+            with:
+              files: latest.json
     `,
     requireEnabled: true,
   });
