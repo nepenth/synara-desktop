@@ -223,6 +223,22 @@ test('timeline viewport restore policy lets unread state win over saved history'
   );
 });
 
+test('timeline viewport restore policy lets unread state win over saved bottom snapshots', () => {
+  assert.equal(
+    shouldRestoreRoomTimelineViewport(
+      {
+        atBottom: true,
+        updatedAtMs: 10_000,
+      },
+      {
+        hasUnread: true,
+        nowMs: 10_000,
+      }
+    ),
+    false
+  );
+});
+
 test('timeline viewport restore policy expires stale historical anchors', () => {
   const nowMs = 10_000 + ROOM_TIMELINE_VIEWPORT_RESTORE_TTL_MS;
   const freshViewport = {
