@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { getDataTransferFiles } from '../dom';
+import { getDataTransferFiles, shouldProbeNativeClipboardImage } from '../dom';
 
 const emptyFileList = { length: 0 } as unknown as FileList;
 
@@ -46,4 +46,26 @@ test('anonymous clipboard files get a usable filename', () => {
 
   assert.equal(files?.[0]?.name, 'clipboard-file.png');
   assert.equal(files?.[0]?.type, 'image/png');
+});
+
+test('native clipboard image probing wins for image-like clipboard payloads', () => {
+  assert.equal(shouldProbeNativeClipboardImage({ types: [] as unknown as DOMStringList }), true);
+  assert.equal(
+    shouldProbeNativeClipboardImage({ types: ['Files'] as unknown as DOMStringList }),
+    true
+  );
+  assert.equal(
+    shouldProbeNativeClipboardImage({
+      types: ['text/html', 'image/png'] as unknown as DOMStringList,
+    }),
+    true
+  );
+  assert.equal(
+    shouldProbeNativeClipboardImage({ types: ['text/html'] as unknown as DOMStringList }),
+    false
+  );
+  assert.equal(
+    shouldProbeNativeClipboardImage({ types: ['text/plain'] as unknown as DOMStringList }),
+    false
+  );
 });

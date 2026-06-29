@@ -115,6 +115,15 @@ export const getDataTransferFiles = (dataTransfer: DataTransfer): File[] | undef
   return files.map(normalizeDataTransferFile);
 };
 
+export const shouldProbeNativeClipboardImage = (
+  clipboardData: Pick<DataTransfer, 'types'>
+): boolean => {
+  const types = Array.from(clipboardData.types ?? []);
+  if (types.length === 0) return true;
+  if (types.includes('Files') || types.some((type) => type.startsWith('image/'))) return true;
+  return !types.some((type) => type.startsWith('text/'));
+};
+
 export const renameFile = (file: File, name: string): File =>
   new File([file], name, { type: file.type });
 

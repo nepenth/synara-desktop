@@ -92,6 +92,7 @@ import {
   editableActiveElement,
   getDataTransferFiles,
   getImageUrlBlob,
+  shouldProbeNativeClipboardImage,
   loadImageElement,
 } from '../../utils/dom';
 import { safeFile } from '../../utils/mimeTypes';
@@ -125,7 +126,7 @@ import { usePowerLevelTags } from '../../hooks/usePowerLevelTags';
 import { resolveOptionalMatrixMediaUrl } from '../../matrix/media';
 import { useComposingCheck } from '../../hooks/useComposingCheck';
 import { useClientConfig } from '../../hooks/useClientConfig';
-import { readPlatformClipboardImage } from '../../platform';
+import { isDesktopPlatform, readPlatformClipboardImage } from '../../platform';
 import { fetchGifForUpload, gifPickerEnabled, gifSearchAvailable } from '../../utils/gifProvider';
 import type { GifResult } from '../../utils/gifProvider';
 import { GifPicker } from './gif/GifPicker';
@@ -137,13 +138,6 @@ import {
   POLL_START_EVENT_TYPE,
 } from '../../utils/polls';
 import { RoomComposer } from './RoomComposer';
-
-const shouldProbeNativeClipboardImage = (clipboardData: DataTransfer): boolean => {
-  const types = Array.from(clipboardData.types ?? []);
-  if (types.length === 0) return true;
-  if (types.includes('Files') || types.some((type) => type.startsWith('image/'))) return true;
-  return !types.some((type) => type.startsWith('text/'));
-};
 
 interface RoomInputProps {
   editor: Editor;
@@ -268,7 +262,9 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
       const file = await readPlatformClipboardImage();
       if (file) {
         handleFiles([file]);
+        return true;
       }
+      return false;
     }, [handleFiles]);
     const handlePaste: ClipboardEventHandler = useCallback(
       (evt) => {
@@ -279,14 +275,19 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
           return;
         }
 
-        if (insertClipboardData(editor, evt.clipboardData, isMarkdown)) {
+        if (isDesktopPlatform() && shouldProbeNativeClipboardImage(evt.clipboardData)) {
           evt.preventDefault();
+          const { clipboardData } = evt;
+          void handleNativeClipboardImage().then((handled) => {
+            if (!handled) {
+              insertClipboardData(editor, clipboardData, isMarkdown);
+            }
+          });
           return;
         }
 
-        if (shouldProbeNativeClipboardImage(evt.clipboardData)) {
+        if (insertClipboardData(editor, evt.clipboardData, isMarkdown)) {
           evt.preventDefault();
-          void handleNativeClipboardImage();
         }
       },
       [editor, handleFiles, handleNativeClipboardImage, isMarkdown]
@@ -300,7 +301,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
 
         const files = getDataTransferFiles(evt.clipboardData);
         if (!files) {
-          if (!shouldProbeNativeClipboardImage(evt.clipboardData)) return;
+          if (!isDesktopPlatform() || !shouldProbeNativeClipboardImage(evt.clipboardData)) return;
           evt.preventDefault();
           void handleNativeClipboardImage();
           return;
