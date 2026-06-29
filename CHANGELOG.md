@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Extracted Matrix linked-timeline helpers from `RoomTimeline.tsx` into a tested shared timeline utility.
 - Removed the commented legacy Jotai `sessionsAtom` implementation now that session bootstrap and persistence own the active session flow.
 - Replaced the `/home/join/` route stub with the existing join-address prompt flow and shared room-link URL construction.
 - Added desktop Tauri updater plugin scaffolding with check-only frontend permission while production updater metadata remains release-gated.

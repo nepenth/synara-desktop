@@ -166,7 +166,7 @@ Backlog reconciled from `CODEBASE_KNOWLEDGE_BASE.md` sections 7.1-7.5:
 
 #### 7.2 Refactoring Before Major Expansion
 
-1. Decompose `RoomTimeline.tsx`.
+1. Decompose `RoomTimeline.tsx`. **Status:** In progress; first slice extracted linked-timeline navigation/count/index helpers to `utils/timelineLinks.ts` with direct modernization coverage.
 2. Modularize `desktop.rs`.
 3. Implement join route (`_JOIN_PATH`). **Status:** Done; `/home/join/` now opens the shared join-address prompt and navigates to room routes with `viaServers` preserved.
 4. Remove or document commented `sessionsAtom` legacy session code. **Status:** Done; removed the commented legacy Jotai multi-session atom from `sessions.ts` now that `sessionBootstrap.ts` and `sessionPersistence.ts` own the active session flow.
@@ -227,14 +227,14 @@ Any cross-platform feature must follow this checklist before acceptance:
 | `npm run check:mip1-evidence` | Yes | Pass, 2026-06-29 | 46/46 mapped; warning about bundled history retained |
 | `npm run check:runtime-assets` | Yes | Pass, 2026-06-29 | Runtime assets match `synara/dist` |
 | `npm run typecheck:modernization` | Yes | Pass, 2026-06-29 | TypeScript modernization surface compiles |
-| `npm run test:modernization` | Yes | Pass, 2026-06-29 | Latest root build/test passed 285/285 after join-route path helper coverage |
+| `npm run test:modernization` | Yes | Pass, 2026-06-29 | Latest root build/test passed 289/289 after timeline link helper coverage |
 | `npm --prefix synara run check:eslint` | Yes | Pass, 2026-06-29 | Frontend lint clean |
 | `npm --prefix synara run check:prettier` | Yes | Pass after mechanical format fix, 2026-06-29 | Four pre-existing formatting drifts corrected |
 | `npm run check:release-updater` | Yes | Advisory pass with 8 warnings, 2026-06-29 | Plugin/package/check-only capability wiring is present; release metadata/channel prerequisites remain disabled |
 | `npm run check:release-updater -- --require-enabled` | Required for published releases | Expected fail, 2026-06-29 | Release workflow now runs this gate; it fails until updater artifacts, signed metadata, plugin wiring, and release signing secrets are configured |
 | `cargo check` in `src-tauri` | Yes | Pass, 2026-06-29 | Rust compile gate clean |
 | `cargo test` in `src-tauri` | Yes | Pass, 2026-06-29 | 90/90 Rust tests passed |
-| `npm --prefix synara run test:timeline-performance` | Required for timeline changes | Pass, 2026-06-29 | Latest rerun: 10k events 5.05 ms; 50k events 18.08 ms |
+| `npm --prefix synara run test:timeline-performance` | Required for timeline changes | Pass, 2026-06-29 | Latest rerun: 10k events 5.28 ms; 50k events 19.57 ms |
 | iOS tests | Required for iOS release | Queued for macOS workstation | `xcodebuild` and `swift` unavailable on this Linux host; see `MACOS_IOS_VALIDATION_QUEUE.md` |
 
 ## Status Table
@@ -246,7 +246,7 @@ Any cross-platform feature must follow this checklist before acceptance:
 | Phase 2: Timeline Resurrection | In progress | Desktop viewport restore policy first slice implemented; shared open-focus contract added; iOS policy tests expanded; macOS/iOS validation handoff is tracked in `MACOS_IOS_VALIDATION_QUEUE.md` | Run iOS tests on macOS/Xcode, then execute smoke checklist |
 | Phase 3: Link Opening | In progress | Desktop bridge hardening first slice implemented; Grok reviewed the diff and its findings were incorporated; local gates pass at 281/281 | Run macOS/Linux interactive link-opening smoke checklist |
 | Phase 4: Composer Parity | In progress | Clipboard image paste first slice and drag/drop detection hardening implemented; Grok reviewed both diffs and findings were incorporated/accepted; local gates pass at 283/283 | Run macOS/Linux interactive composer smoke checklist |
-| Phase 5: Release Readiness | In progress | Added release-updater readiness checker; wired published desktop release workflow to fail until signed updater channel prerequisites are configured; added desktop updater plugin/package/check-only permission scaffolding; completed `_JOIN_PATH` route stub; removed legacy commented session atom | Complete real updater config/channel/signing workflow work, then run macOS signing/updater verification |
+| Phase 5: Release Readiness | In progress | Added release-updater readiness checker; wired published desktop release workflow to fail until signed updater channel prerequisites are configured; added desktop updater plugin/package/check-only permission scaffolding; completed `_JOIN_PATH` route stub; removed legacy commented session atom; started `RoomTimeline.tsx` decomposition | Complete real updater config/channel/signing workflow work, then run macOS signing/updater verification |
 
 ## Decision Log
 
@@ -268,3 +268,4 @@ Any cross-platform feature must follow this checklist before acceptance:
 | 2026-06-29T10:20:36-04:00 | Accepted check-only desktop updater plugin scaffolding. | Added the Tauri updater Rust plugin, npm updater binding, generated ACL schemas, and `updater:allow-check` only. Advisory release checker now reports only production channel/signing/artifact blockers; Grok found registration safe without config because commands fail closed when endpoints are empty. |
 | 2026-06-29T10:31:32-04:00 | Accepted `_JOIN_PATH` route completion. | Replaced the `/home/join/` placeholder with the shared join-address prompt route, centralized room path generation with `viaServers`, routed the Home sidebar join action through the canonical route, and added modernization coverage for encoded room/event/via URL construction. |
 | 2026-06-29T10:38:00-04:00 | Accepted session layer dead-code cleanup. | Removed the commented legacy Jotai `sessionsAtom` implementation from `sessions.ts`; active session ownership remains with `sessionBootstrap.ts`, `sessionPersistence.ts`, native secret storage, and the tested localStorage fallback path. |
+| 2026-06-29T10:45:53-04:00 | Accepted first `RoomTimeline.tsx` decomposition slice. | Extracted linked-timeline navigation/count/index helpers into `utils/timelineLinks.ts`, added direct tests for linked chains, isolated timelines, index boundaries, wrapper behavior, and kept the component wired to the same helper behavior. Grok review found no blocking or high-impact issues. |
