@@ -1,5 +1,9 @@
 # Desktop Validation Status
 
+> Current production-release smoke evidence should be recorded against
+> `docs/production-smoke-checklist.md`. This file preserves the older MIP1
+> desktop validation snapshot and platform notes.
+
 Reviewed: 2026-06-11
 Desktop version: **1.2.3** (`npm run check:versions`)
 Branch: `maturity_improvement_plan1` (rebased on `main` with iOS UX maturity)
