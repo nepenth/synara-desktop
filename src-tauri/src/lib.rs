@@ -5,6 +5,7 @@
 
 mod build_info;
 mod desktop;
+mod desktop_agent_actions;
 mod desktop_file_transfer;
 mod desktop_sanitize;
 mod desktop_secret_store;
@@ -214,7 +215,7 @@ pub fn run() {
             desktop::desktop_read_dropped_file_chunk,
             desktop::desktop_read_dropped_file_end,
             desktop::desktop_get_performance_capabilities,
-            desktop::desktop_agent_action
+            desktop_agent_actions::desktop_agent_action
         ])
         .on_window_event(|window, event| {
             if window.label() != desktop::MAIN_WINDOW_LABEL {
