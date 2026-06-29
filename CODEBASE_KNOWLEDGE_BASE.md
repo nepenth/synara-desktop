@@ -354,7 +354,7 @@ tracked in docs, contracts, and functionality matrices instead.
 |------|----------|--------|
 | Browser-shaped desktop runtime | Medium | IndexedDB sync/crypto, localStorage drafts, service worker media |
 | matrix-js-sdk coupling | High | ~209 runtime files; Rust SDK migration = multi-month rewrite |
-| Monolithic files | Medium | `RoomTimeline.tsx` (2857 LOC after helper extractions), `desktop.rs` (4644 LOC after URL, sanitization, file-transfer, session-envelope, and secret-store status helper extractions) |
+| Monolithic files | Medium | `RoomTimeline.tsx` (2857 LOC after helper extractions), `desktop.rs` (4328 LOC after URL, sanitization, file-transfer, session-envelope, and secret-store classification helper extractions) |
 | Limited UI test coverage | Medium | 44 unit test files, zero `*.test.tsx` component tests |
 | Windows unsupported | Low (by design) | No Keychain equivalent; excluded from release matrix |
 | Stale MIP1 branch | Low | Could confuse contributors |
@@ -409,7 +409,7 @@ tracked in docs, contracts, and functionality matrices instead.
 | Desktop bridge (Rust) | `src-tauri/src/desktop.rs` |
 | Desktop file-transfer helpers (Rust) | `src-tauri/src/desktop_file_transfer.rs` |
 | Desktop sanitization helpers (Rust) | `src-tauri/src/desktop_sanitize.rs` |
-| Desktop secret-store status contracts (Rust) | `src-tauri/src/desktop_secret_store.rs` |
+| Desktop secret-store status/classification contracts (Rust) | `src-tauri/src/desktop_secret_store.rs` |
 | Desktop session-envelope policy (Rust) | `src-tauri/src/desktop_session.rs` |
 | Desktop URL policy (Rust) | `src-tauri/src/desktop_url.rs` |
 | Platform API | `synara/src/app/platform/index.ts` |
@@ -492,9 +492,10 @@ check:repo-layout → check:versions → check:matrix-boundaries
    shared text/route sanitization helpers to `src-tauri/src/desktop_sanitize.rs`,
    file-transfer policy helpers to `src-tauri/src/desktop_file_transfer.rs`,
    and session-envelope validation/expiry helpers to
-   `src-tauri/src/desktop_session.rs`, and secret-store status/error-code
-   contracts to `src-tauri/src/desktop_secret_store.rs`, all with direct Rust
-   tests; continue splitting into focused modules before adding IPC.
+   `src-tauri/src/desktop_session.rs`, and secret-store status/backend/error
+   classification contracts to `src-tauri/src/desktop_secret_store.rs`, all
+   with direct Rust tests; continue splitting into focused modules before adding
+   IPC.
 
 ### 7.3 Cross-Platform Expansion Protocol
 
