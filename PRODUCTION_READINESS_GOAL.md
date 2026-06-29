@@ -138,7 +138,7 @@ Initial task backlog:
 
 1. Audit existing Slate editor, `RoomInput.tsx`, `RoomComposer.tsx`, `useFileDrop`, upload board, and paste handlers. **Status:** First pass complete; spellcheck defaults to enabled in `CustomEditor`, drag/drop already routes through `useFileDropZone(handleFiles)`, and desktop clipboard image reads route through `readPlatformClipboardImage`.
 2. Enable native spellcheck without breaking Matrix markdown/rich text behaviors. **Status:** Existing `CustomEditor` default `spellCheck=true` covers the Slate composer; live desktop smoke still required.
-3. Wire drag/drop files into existing upload state. **Status:** Existing browser and native desktop drop paths call `handleFiles`, which encrypts when needed and appends to the upload board; live desktop smoke still required.
+3. Wire drag/drop files into existing upload state. **Status:** Browser and native desktop drop paths call `handleFiles`, which encrypts when needed and appends to the upload board. File-drop detection now tolerates desktop payloads that expose `files` or file items without a `Files` type marker; live desktop smoke still required.
 4. Wire clipboard image paste into upload flow. **Status:** Improved desktop image-like clipboard handling so native image upload wins before rich-text insertion, with rich-text fallback if native image read yields no file.
 5. Add unit/integration tests and desktop smoke checklist. **Status:** Added utility coverage for image-like clipboard probing; macOS smoke checklist queued in `MACOS_IOS_VALIDATION_QUEUE.md`.
 
@@ -146,6 +146,7 @@ Desktop first-slice finding, 2026-06-29:
 
 - Root cause: RoomInput already supported pasted `DataTransfer` files and Tauri clipboard image reads, but focused editor paste tried rich-text insertion before native clipboard image probing. A clipboard advertising both `text/html` and `image/*` could insert HTML instead of uploading the native image.
 - Implemented mitigation: exported a tested `shouldProbeNativeClipboardImage(...)` helper and made desktop focused composer paste try native image upload before Matrix rich-text insertion for image-like payloads. If the native image read returns no file, the handler falls back to the original rich/plain insertion path.
+- Drag/drop hardening: `useFileDropZone` now uses a tested `dataTransferHasFiles(...)` helper instead of requiring the `Files` type marker, so desktop/WebView drops that expose `files` or file items still activate the upload flow while text-only drags remain ignored.
 - Remaining gap: live desktop smoke is still required for native spellcheck, drag/drop files, clipboard screenshot paste, and mixed image+HTML clipboard sources.
 
 ### Epic 4: KB Section 7 Expansion Items
@@ -228,7 +229,7 @@ Any cross-platform feature must follow this checklist before acceptance:
 | `npm run check:mip1-evidence` | Yes | Pass, 2026-06-29 | 46/46 mapped; warning about bundled history retained |
 | `npm run check:runtime-assets` | Yes | Pass, 2026-06-29 | Runtime assets match `synara/dist` |
 | `npm run typecheck:modernization` | Yes | Pass, 2026-06-29 | TypeScript modernization surface compiles |
-| `npm run test:modernization` | Yes | Pass, 2026-06-29 | Latest root build/test passed 282/282 after composer clipboard image probe test |
+| `npm run test:modernization` | Yes | Pass, 2026-06-29 | Latest root build/test passed 283/283 after composer drag/drop detection test |
 | `npm --prefix synara run check:eslint` | Yes | Pass, 2026-06-29 | Frontend lint clean |
 | `npm --prefix synara run check:prettier` | Yes | Pass after mechanical format fix, 2026-06-29 | Four pre-existing formatting drifts corrected |
 | `cargo check` in `src-tauri` | Yes | Pass, 2026-06-29 | Rust compile gate clean |
@@ -244,7 +245,7 @@ Any cross-platform feature must follow this checklist before acceptance:
 | Phase 1: Validation & Reconciliation | In progress; externally blocked for full reconciliation | KB §7 read fully; Grok/composer-2.5-fast second opinion completed from pasted excerpts; original prompt, Grok Executive Report, and prior Section 7 not found locally | Commit KB Section 7 reconciliation edits, then continue repo/source validation |
 | Phase 2: Timeline Resurrection | In progress | Desktop viewport restore policy first slice implemented; shared open-focus contract added; iOS policy tests expanded; macOS/iOS validation handoff is tracked in `MACOS_IOS_VALIDATION_QUEUE.md` | Run iOS tests on macOS/Xcode, then execute smoke checklist |
 | Phase 3: Link Opening | In progress | Desktop bridge hardening first slice implemented; Grok reviewed the diff and its findings were incorporated; local gates pass at 281/281 | Run macOS/Linux interactive link-opening smoke checklist |
-| Phase 4: Composer Parity | In progress | Clipboard image paste first slice implemented; Grok reviewed the diff and its fallback finding was incorporated; local gates pass at 282/282 | Run macOS/Linux interactive composer smoke checklist |
+| Phase 4: Composer Parity | In progress | Clipboard image paste first slice and drag/drop detection hardening implemented; Grok reviewed both diffs and findings were incorporated/accepted; local gates pass at 283/283 | Run macOS/Linux interactive composer smoke checklist |
 | Phase 5: Release Readiness | Not started | N/A | Updater, smoke, signing, docs |
 
 ## Decision Log
@@ -262,3 +263,4 @@ Any cross-platform feature must follow this checklist before acceptance:
 | 2026-06-29T09:45:54-04:00 | Split macOS/iOS-only validation into a dedicated queue. | The current Linux host cannot execute `xcodebuild`, `swift`, or simulator checks, but the user has a macOS workstation available. `MACOS_IOS_VALIDATION_QUEUE.md` now tracks required commands, evidence, and handoff status separately from Linux-local gates. |
 | 2026-06-29T09:53:07-04:00 | Accepted desktop external-link bridge hardening first slice. | Programmatic external opens now route through the platform helper, agent actions no longer fall back to `window.open` after desktop bridge rejection, and explicit handlers preserve modified-click/native relative-link behavior. Grok reviewed the diff; composer CLI was unavailable locally. |
 | 2026-06-29T10:00:18-04:00 | Accepted desktop composer clipboard image first slice. | Desktop focused composer paste now prioritizes native image upload for image-like clipboard payloads before rich text insertion, with fallback to rich/plain insertion if the native image read yields no file. Grok reviewed the diff and the fallback finding was incorporated. |
+| 2026-06-29T10:05:21-04:00 | Accepted desktop composer drag/drop detection hardening. | File-drop detection now accepts desktop/WebView payloads that expose `files` or file items without a `Files` type marker while text-only drags remain ignored. Grok/composer-2.5-fast reviewed the diff and found no blocking issue; malformed file-like payload suppression is an accepted safety tradeoff. |
