@@ -40,6 +40,9 @@ jobs:
         run: npm ci
         working-directory: synara
 
+      - name: Require signed updater release channel
+        run: npm run check:release-updater -- --require-enabled
+
       - name: Build Linux release packages
         run: npm run tauri build -- --bundles deb,appimage --config '{"bundle":{"createUpdaterArtifacts":false}}'
         env:
@@ -84,6 +87,9 @@ jobs:
       - name: Install runtime dependencies
         run: npm ci
         working-directory: synara
+
+      - name: Require signed updater release channel
+        run: npm run check:release-updater -- --require-enabled
 
       - name: Validate macOS signing secrets
         shell: bash
