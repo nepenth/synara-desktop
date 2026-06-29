@@ -11,6 +11,7 @@
     "build:macos:local": "scripts/build-macos-local-release.sh",
     "check:matrix-boundaries": "node scripts/check-matrix-boundaries.mjs",
     "check:mip1-evidence": "node scripts/check-mip1-commit-evidence.mjs --base main",
+    "check:production-smoke": "node scripts/check-production-smoke-checklist.mjs",
     "check:release-updater": "node scripts/check-release-updater.mjs",
     "check:repo-layout": "node scripts/check-repository-layout.mjs",
     "check:runtime-assets": "node scripts/check-runtime-assets.mjs",

@@ -28,6 +28,7 @@ this file, `MACOS_IOS_VALIDATION_QUEUE.md`, or a linked release issue/PR.
 Run from the repository root before any interactive smoke pass:
 
 ```sh
+npm run check:production-smoke
 git status --short --branch
 git rev-parse --short HEAD
 npm run check:versions
