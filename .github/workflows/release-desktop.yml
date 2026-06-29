@@ -43,6 +43,12 @@ jobs:
         run: npm ci
         working-directory: synara
 
+      - name: Configure release updater channel
+        run: node scripts/configure-release-updater.mjs
+        env:
+          SYNARA_UPDATER_PUBKEY: ${{ vars.SYNARA_UPDATER_PUBKEY }}
+          SYNARA_UPDATER_ENDPOINT: ${{ vars.SYNARA_UPDATER_ENDPOINT }}
+
       - name: Require signed updater release channel
         run: npm run check:release-updater -- --require-enabled
 
@@ -123,6 +129,12 @@ jobs:
       - name: Install runtime dependencies
         run: npm ci
         working-directory: synara
+
+      - name: Configure release updater channel
+        run: node scripts/configure-release-updater.mjs
+        env:
+          SYNARA_UPDATER_PUBKEY: ${{ vars.SYNARA_UPDATER_PUBKEY }}
+          SYNARA_UPDATER_ENDPOINT: ${{ vars.SYNARA_UPDATER_ENDPOINT }}
 
       - name: Require signed updater release channel
         run: npm run check:release-updater -- --require-enabled
