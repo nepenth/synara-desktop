@@ -188,7 +188,7 @@ Status labels: **Full** · **Partial** · **Stub** · **Planned**
 | Favorites / folder organization | Full | Sidebar hooks |
 | Global search (`Cmd/Ctrl+K`, `>` action mode) | Full | `features/search/` |
 | Message search (sender, date, type filters) | Full | `features/message-search/` |
-| Join room by address prompt | Partial | Join **route is a stub** (`<p>join</p>`) |
+| Join room by address prompt | Full | `/home/join/` route and prompt-backed sidebar entry |
 
 ### 3.4 Synara-Specific Features
 
@@ -266,14 +266,8 @@ See `synara-ios/docs/ios-functionality-matrix.md` for the full capability matrix
 
 ### 4.1 Explicit Stubs & Incomplete Routes
 
-**Join route stub** — `synara/src/app/pages/Router.tsx`:
-
-```tsx
-<Route path={_JOIN_PATH} element={<p>join</p>} />
-```
-
-The `/home/join/` route renders a bare placeholder. Join still works via
-prompts/modals elsewhere. The 404 fallback is similarly minimal.
+**404 fallback** — still intentionally minimal. The previous `/home/join/`
+placeholder has been replaced with the prompt-backed `HomeJoin` route.
 
 ### 4.2 Commented-Out / Abandoned Code
 
@@ -488,8 +482,7 @@ check:repo-layout → check:versions → check:matrix-boundaries
 1. **`RoomTimeline.tsx` decomposition** — At 2945 LOC; extract sub-modules before
    adding timeline features.
 2. **`desktop.rs` modularization** — Split into focused modules before adding IPC.
-3. **Join route completion** — Replace `<p>join</p>` stub with proper navigation.
-4. **Session layer cleanup** — Remove or document commented `sessionsAtom` code.
+3. **Session layer cleanup** — Remove or document commented `sessionsAtom` code.
 
 ### 7.3 Cross-Platform Expansion Protocol
 
@@ -517,7 +510,6 @@ check:repo-layout → check:versions → check:matrix-boundaries
 | Priority | Action | Rationale |
 |----------|--------|-----------|
 | **P0** | Complete interactive macOS + Linux smoke checklists | Last human gate before release-grade desktop |
-| **P1** | Implement join route (`_JOIN_PATH`) | Only explicit UI stub in router |
 | **P1** | Agent backend service connections | Highest product differentiation; bridge ready |
 | **P1** | Decompose `RoomTimeline.tsx` | Prerequisite for safe timeline expansion |
 | **P2** | Enable auto-updater with signed metadata channel | Required for distribution at scale |

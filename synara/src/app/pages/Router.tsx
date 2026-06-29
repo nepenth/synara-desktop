@@ -43,7 +43,7 @@ import {
   getSpaceLobbyPath,
 } from './pathUtils';
 import { ClientBindAtoms, ClientLayout, ClientRoot } from './client';
-import { Home, HomeRouteRoomProvider, HomeSearch } from './client/home';
+import { Home, HomeJoin, HomeRouteRoomProvider, HomeSearch } from './client/home';
 import { Direct, DirectCreate, DirectRouteRoomProvider } from './client/direct';
 import { RouteSpaceProvider, Space, SpaceRouteRoomProvider, SpaceSearch } from './client/space';
 import { Explore, FeaturedRooms, PublicRooms } from './client/explore';
@@ -187,7 +187,7 @@ export const createRouter = (clientConfig: ClientConfig, screenSize: ScreenSize)
         >
           {mobile ? null : <Route index element={<WelcomePage />} />}
           <Route path={_CREATE_PATH} element={<HomeCreateRoom />} />
-          <Route path={_JOIN_PATH} element={<p>join</p>} />
+          <Route path={_JOIN_PATH} element={<HomeJoin />} />
           <Route path={_SEARCH_PATH} element={<HomeSearch />} />
           <Route
             path={_ROOM_PATH}
