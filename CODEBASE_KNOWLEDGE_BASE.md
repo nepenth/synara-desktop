@@ -63,8 +63,8 @@ release-grade.
 synara-desktop/                    # Root — Tauri project + orchestration
 ├── config.json                    # Canonical homeserver/config (synced → synara/)
 ├── package.json                   # Tauri CLI, build scripts, version gates
-├── src-tauri/                     # Rust desktop shell (~1.5k LOC in desktop.rs)
-│   ├── src/{main,lib,desktop,desktop_agent_actions,desktop_file_transfer,desktop_notifications,desktop_sanitize,desktop_secret_store,desktop_session,desktop_session_store,desktop_shortcuts,desktop_tray,desktop_url,build_info,menu}.rs
+├── src-tauri/                     # Rust desktop shell (~1.1k LOC in desktop.rs)
+│   ├── src/{main,lib,desktop,desktop_agent_actions,desktop_file_transfer,desktop_integration,desktop_notifications,desktop_sanitize,desktop_secret_store,desktop_session,desktop_session_store,desktop_shortcuts,desktop_tray,desktop_url,build_info,menu}.rs
 │   ├── capabilities/{main,release-hardening}.json
 │   └── tauri.conf.json
 ├── synara/                        # React/Vite Matrix runtime (~865 TS/JS files)
@@ -242,7 +242,7 @@ Status labels: **Full** · **Partial** · **Stub** · **Planned**
 | Native file save to Downloads | Full | Streaming IPC (≤8 MiB inline, chunked above) |
 | Drag-and-drop file upload | Full | Allowlist-gated native read |
 | External link handling | Full | `desktop_open_external_url` |
-| Linux integration status probe | Full | `desktop_get_integration_status` |
+| Linux integration status probe | Full | `desktop_integration.rs` `desktop_get_integration_status` |
 | Auto-updater | Disabled | `createUpdaterArtifacts: false`; release CI is prepared for Tauri signing secrets and updater signature artifacts once production public key/endpoints are committed |
 | Windows packaging | Not supported | README excludes from release matrix |
 
@@ -354,7 +354,7 @@ tracked in docs, contracts, and functionality matrices instead.
 |------|----------|--------|
 | Browser-shaped desktop runtime | Medium | IndexedDB sync/crypto, localStorage drafts, service worker media |
 | matrix-js-sdk coupling | High | ~209 runtime files; Rust SDK migration = multi-month rewrite |
-| Monolithic files | Medium | `RoomTimeline.tsx` (2857 LOC after helper extractions), `desktop.rs` (1456 LOC after URL, sanitization, file-transfer, session-envelope, secret-store classification/probe/cache, keyring session-store, global shortcut, tray/menu, agent-action, and notification helper extractions) |
+| Monolithic files | Medium | `RoomTimeline.tsx` (2857 LOC after helper extractions), `desktop.rs` (1142 LOC after URL, sanitization, file-transfer, session-envelope, secret-store classification/probe/cache, keyring session-store, global shortcut, tray/menu, agent-action, notification, and integration-status helper extractions) |
 | Limited UI test coverage | Medium | 44 unit test files, zero `*.test.tsx` component tests |
 | Windows unsupported | Low (by design) | No Keychain equivalent; excluded from release matrix |
 | Stale MIP1 branch | Low | Could confuse contributors |
@@ -409,6 +409,7 @@ tracked in docs, contracts, and functionality matrices instead.
 | Desktop bridge (Rust) | `src-tauri/src/desktop.rs` |
 | Desktop agent actions (Rust) | `src-tauri/src/desktop_agent_actions.rs` |
 | Desktop file-transfer helpers (Rust) | `src-tauri/src/desktop_file_transfer.rs` |
+| Desktop integration status (Rust) | `src-tauri/src/desktop_integration.rs` |
 | Desktop notifications (Rust) | `src-tauri/src/desktop_notifications.rs` |
 | Desktop sanitization helpers (Rust) | `src-tauri/src/desktop_sanitize.rs` |
 | Desktop secret-store status/classification contracts (Rust) | `src-tauri/src/desktop_secret_store.rs` |
@@ -505,10 +506,12 @@ check:repo-layout → check:versions → check:matrix-boundaries
    state, badge, DND, and tray creation handling to
    `src-tauri/src/desktop_tray.rs`, agent-action payload sanitization,
    local handling, and event emission to
-   `src-tauri/src/desktop_agent_actions.rs`, and notification payload
+   `src-tauri/src/desktop_agent_actions.rs`, notification payload
    validation, permission commands, and route-click dispatch to
-   `src-tauri/src/desktop_notifications.rs`, all with direct Rust tests;
-   continue splitting into focused modules before adding IPC.
+   `src-tauri/src/desktop_notifications.rs`, and Linux/KDE/session/portal
+   integration status probes to `src-tauri/src/desktop_integration.rs`, all
+   with direct Rust tests; continue splitting into focused modules before
+   adding IPC.
 
 ### 7.3 Cross-Platform Expansion Protocol
 
