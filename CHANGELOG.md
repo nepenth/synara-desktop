@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Split desktop URL safety helpers out of `desktop.rs` into a focused Rust module with direct policy tests.
 - Extracted room timeline opening/window/unread helpers from `RoomTimeline.tsx` into a tested timeline utility.
 - Extracted Matrix linked-timeline helpers from `RoomTimeline.tsx` into a tested shared timeline utility.
 - Removed the commented legacy Jotai `sessionsAtom` implementation now that session bootstrap and persistence own the active session flow.
