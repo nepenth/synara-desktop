@@ -11,6 +11,7 @@ mod desktop_secret_store;
 mod desktop_session;
 mod desktop_session_store;
 mod desktop_shortcuts;
+mod desktop_tray;
 mod desktop_url;
 #[cfg(target_os = "macos")]
 mod menu;
@@ -288,7 +289,7 @@ pub fn run() {
             #[cfg(target_os = "macos")]
             app.set_menu(menu::menu(app.handle())?)?;
 
-            desktop::create_tray(app.handle())?;
+            desktop_tray::create_tray(app.handle())?;
 
             // Dev: use devUrl from tauri.conf.json (http://localhost:8080) to support HMR
             #[cfg(debug_assertions)]
