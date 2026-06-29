@@ -77,12 +77,12 @@ The user-declared pain points are **release P0 epics** because they are current 
 ### Epic 1: Timeline Resurrection
 
 **Priority:** P0  
-**Status:** Not started  
+**Status:** In progress - desktop first slice implemented
 **Success criteria:** Fully-read rooms and rooms with one new message open near the expected live/read position without multi-second traversal through old history on desktop and iOS.
 
 Initial task backlog:
 
-1. Audit desktop timeline ownership in `RoomTimeline.tsx`, `timelineLifecycle.ts`, `timelinePagination.ts`, and `timelineVirtualization.ts`.
+1. Audit desktop timeline ownership in `RoomTimeline.tsx`, `timelineLifecycle.ts`, `timelinePagination.ts`, and `timelineVirtualization.ts`. **Status:** First pass complete for open-room viewport/read-marker policy.
 2. Audit iOS timeline focus behavior in `RoomTimelineView.swift`, `TimelineService.swift`, and related read-marker services.
 3. Reconcile Matrix semantics for `m.fully_read`, read receipts, live timelines, timeline gaps, `matrix-js-sdk` `getLatestTimeline`, and Matrix Rust SDK timeline focus.
 4. Define a shared room-open focus contract covering:
@@ -94,6 +94,12 @@ Initial task backlog:
 5. Implement narrowly scoped desktop fix with tests and timeline performance harness.
 6. Mirror contract and behavior in iOS with tests.
 7. Add smoke checklist evidence for large, encrypted, and unread room cases.
+
+Desktop first-slice finding, 2026-06-29:
+
+- Root cause: desktop kept a process-local saved timeline viewport for non-bottom positions and restored it before unread/read-marker placement. A user who had previously viewed old history could later reopen a room and force `RoomTimeline` back through that old event window even if the room had one new unread event or had been fully read elsewhere. This mixed UI viewport memory with SDK read-marker/timeline focus semantics.
+- Implemented mitigation: `RoomTimeline` now records viewport age, uses a tested `shouldRestoreRoomTimelineViewport(...)` policy, lets unread state and synchronous loaded-slice unread inference win over saved history, and expires non-bottom historical anchors after a 10 minute local-navigation window. Bottom snapshots still open at the live end.
+- Remaining gap: iOS already has read-marker initial-load focus policy, but the shared contract and live smoke matrix still need to be formalized and verified across desktop/iOS.
 
 ### Epic 2: Link Opening
 
@@ -203,12 +209,12 @@ Any cross-platform feature must follow this checklist before acceptance:
 | `npm run check:mip1-evidence` | Yes | Pass, 2026-06-29 | 46/46 mapped; warning about bundled history retained |
 | `npm run check:runtime-assets` | Yes | Pass, 2026-06-29 | Runtime assets match `synara/dist` |
 | `npm run typecheck:modernization` | Yes | Pass, 2026-06-29 | TypeScript modernization surface compiles |
-| `npm run test:modernization` | Yes | Pass, 2026-06-29 | Runtime build completed; 273/273 tests passed |
+| `npm run test:modernization` | Yes | Pass, 2026-06-29 | Runtime build completed; 276/276 tests passed after timeline viewport policy tests |
 | `npm --prefix synara run check:eslint` | Yes | Pass, 2026-06-29 | Frontend lint clean |
 | `npm --prefix synara run check:prettier` | Yes | Pass after mechanical format fix, 2026-06-29 | Four pre-existing formatting drifts corrected |
 | `cargo check` in `src-tauri` | Yes | Pass, 2026-06-29 | Rust compile gate clean |
 | `cargo test` in `src-tauri` | Yes | Pass, 2026-06-29 | 90/90 Rust tests passed |
-| `npm --prefix synara run test:timeline-performance` | Required for timeline changes | Pass, 2026-06-29 | 10k events: 5.03 ms; 50k events: 17.31 ms |
+| `npm --prefix synara run test:timeline-performance` | Required for timeline changes | Pass, 2026-06-29 | Latest rerun: 10k events 5.05 ms; 50k events 18.08 ms |
 | iOS tests | Required for iOS release | Not run in Phase 0 | `xcodebuild` unavailable on this Linux host |
 
 ## Status Table
@@ -217,7 +223,7 @@ Any cross-platform feature must follow this checklist before acceptance:
 |---|---|---|---|
 | Phase 0: Initializer | Committed and pushed | Current `HEAD` includes harness, validation evidence, changelog, and mechanical Prettier drift fix | Continue Phase 1 source reconciliation |
 | Phase 1: Validation & Reconciliation | In progress; externally blocked for full reconciliation | KB §7 read fully; Grok/composer-2.5-fast second opinion completed from pasted excerpts; original prompt, Grok Executive Report, and prior Section 7 not found locally | Commit KB Section 7 reconciliation edits, then continue repo/source validation |
-| Phase 2: Timeline Resurrection | Not started | N/A | Begin after Phase 1 baseline |
+| Phase 2: Timeline Resurrection | In progress | Desktop viewport restore policy first slice implemented and validated | Continue iOS/shared contract audit and add smoke checklist |
 | Phase 3: Link Opening | Not started | N/A | Pick scoped link inventory/fix |
 | Phase 4: Composer Parity | Not started | N/A | Pick scoped composer audit/fix |
 | Phase 5: Release Readiness | Not started | N/A | Updater, smoke, signing, docs |
@@ -232,3 +238,4 @@ Any cross-platform feature must follow this checklist before acceptance:
 | 2026-06-29T09:18:24-04:00 | Amended Phase 0 commit evidence. | `devAssets/index.html` remains an unstaged pre-existing generated hash drift. The exact final SHA is intentionally not embedded because amending the file changes the commit object. |
 | 2026-06-29T09:18:55-04:00 | Stabilized commit evidence wording. | Removed self-referential final-SHA wording from committed artifacts; use `git rev-parse --short HEAD` for the current commit id. |
 | 2026-06-29T09:22:51-04:00 | Accepted Grok/composer-2.5-fast Phase 1 reconciliation finding. | Reviewer found §7.5 coverage strong but §7.1, §7.3, §7.4, and session-layer cleanup underrepresented; goal backlog expanded accordingly. Missing external artifacts still prevent full reconciliation completion. |
+| 2026-06-29T09:34:44-04:00 | Accepted desktop Timeline Resurrection first slice. | Implemented bounded viewport restore policy: unread wins over saved history, non-bottom historical anchors expire after 10 minutes, and bottom snapshots still restore to live end. Grok/composer-2.5-fast approved with reservations; synchronous `roomHaveUnread` inference was added to reduce first-paint unread races. |

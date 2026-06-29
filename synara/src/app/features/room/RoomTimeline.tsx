@@ -87,6 +87,7 @@ import {
   getReactionContent,
   isMembershipChanged,
   reactionOrEditEvent,
+  roomHaveUnread,
 } from '../../utils/room';
 import { useSetting } from '../../state/hooks/settings';
 import { MessageLayout, settingsAtom } from '../../state/settings';
@@ -158,6 +159,7 @@ import {
   type TimelinePaginationDirection,
   type TimelinePaginationErrors,
 } from '../../utils/timelinePagination';
+import { shouldRestoreRoomTimelineViewport } from '../../utils/timelineLifecycle';
 
 const PollContent = lazy(() =>
   import('../../components/message/content/PollContent').then((module) => ({
@@ -329,14 +331,18 @@ type Timeline = {
 type RoomTimelineViewport = {
   atBottom: boolean;
   anchor?: TimelineVirtualAnchor;
+  updatedAtMs: number;
 };
 
 const ROOM_TIMELINE_VIEWPORT_LIMIT = 100;
 const roomTimelineViewports = new Map<string, RoomTimelineViewport>();
 
-const setRoomTimelineViewport = (roomId: string, viewport: RoomTimelineViewport) => {
+const setRoomTimelineViewport = (
+  roomId: string,
+  viewport: Omit<RoomTimelineViewport, 'updatedAtMs'>
+) => {
   roomTimelineViewports.delete(roomId);
-  roomTimelineViewports.set(roomId, viewport);
+  roomTimelineViewports.set(roomId, { ...viewport, updatedAtMs: Date.now() });
   if (roomTimelineViewports.size > ROOM_TIMELINE_VIEWPORT_LIMIT) {
     const oldestRoomId = roomTimelineViewports.keys().next().value;
     if (oldestRoomId) roomTimelineViewports.delete(oldestRoomId);
@@ -662,12 +668,19 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
   const space = useSpaceOptionally();
 
   const imagePackRooms: Room[] = useImagePackRooms(room.roomId, roomToParents);
+  const roomOpenedAtMsRef = useRef(Date.now());
 
   const savedViewportRef = useRef(!eventId ? roomTimelineViewports.get(room.roomId) : undefined);
   const savedViewport = savedViewportRef.current;
-  const shouldRestoreSavedViewport = !eventId && !!savedViewport;
+  const hasInitialUnread =
+    hasUnreadForInitialScroll(unread, unreadAnchorEventId) || roomHaveUnread(mx, room);
+  const shouldRestoreSavedViewport =
+    !eventId &&
+    shouldRestoreRoomTimelineViewport(savedViewport, {
+      hasUnread: hasInitialUnread,
+      nowMs: roomOpenedAtMsRef.current,
+    });
   const suppressInitialUnreadScrollRef = useRef(shouldRestoreSavedViewport);
-  const hasInitialUnread = hasUnreadForInitialScroll(unread, unreadAnchorEventId);
 
   // Only use the read-receipt marker for initial placement when the room is actually unread.
   // Otherwise a stale receipt can reopen a recently read room several messages above the live end.
@@ -679,7 +692,9 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
   readUptoEventIdRef.current = unreadInfo?.readUptoEventId;
 
   const atBottomAnchorRef = useRef<HTMLElement>(null);
-  const [atBottom, setAtBottom] = useState<boolean>(savedViewport?.atBottom ?? true);
+  const [atBottom, setAtBottom] = useState<boolean>(
+    shouldRestoreSavedViewport ? savedViewport?.atBottom ?? true : true
+  );
   const atBottomRef = useRef(atBottom);
   atBottomRef.current = atBottom;
   const setAtBottomState = useCallback((nextAtBottom: boolean) => {
@@ -694,7 +709,9 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
   });
   const initialScrollPlacedRef = useRef(false);
   const liveEndPinRef = useRef(
-    !eventId && !shouldOpenAtUnread && (!savedViewport || savedViewport.atBottom)
+    !eventId &&
+      !shouldOpenAtUnread &&
+      (!shouldRestoreSavedViewport || !savedViewport || savedViewport.atBottom)
   );
   const liveEndPinStateRef = useRef({
     lastScrollHeight: 0,
@@ -956,7 +973,9 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
   });
   const virtualItems = virtualizer.getVirtualItems();
   const savedViewportRestoreAnchor =
-    !eventId && savedViewport && !savedViewport.atBottom ? savedViewport.anchor : undefined;
+    !eventId && shouldRestoreSavedViewport && savedViewport && !savedViewport.atBottom
+      ? savedViewport.anchor
+      : undefined;
   const savedViewportRestoreKey = savedViewportRestoreAnchor
     ? `${room.roomId}:${savedViewportRestoreAnchor.eventId}:${savedViewportRestoreAnchor.offsetTop}`
     : undefined;
@@ -1650,16 +1669,16 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
   useLayoutEffect(() => {
     const scrollEl = scrollRef.current;
     if (!scrollEl || eventId) return;
-    if (savedViewport && !savedViewport.atBottom) {
+    if (shouldRestoreSavedViewport && savedViewport && !savedViewport.atBottom) {
       return;
     }
-    if (!savedViewport || savedViewport.atBottom) {
+    if (!shouldRestoreSavedViewport || !savedViewport || savedViewport.atBottom) {
       if (initialScrollPlacedRef.current) return;
       initialScrollPlacedRef.current = true;
       scrollToBottom(scrollEl);
       return;
     }
-  }, [eventId, savedViewport]);
+  }, [eventId, savedViewport, shouldRestoreSavedViewport]);
 
   // if live timeline is linked and unreadInfo change
   // Scroll to last read message
