@@ -232,8 +232,9 @@ Any cross-platform feature must follow this checklist before acceptance:
 | `npm --prefix synara run check:prettier` | Yes | Pass after mechanical format fix, 2026-06-29 | Four pre-existing formatting drifts corrected |
 | `npm run check:release-updater` | Yes | Advisory pass with 8 warnings, 2026-06-29 | Plugin/package/check-only capability wiring is present; release metadata/channel prerequisites remain disabled |
 | `npm run check:release-updater -- --require-enabled` | Required for published releases | Expected fail, 2026-06-29 | Release workflow now runs this gate; it fails until updater artifacts, signed metadata, plugin wiring, and release signing secrets are configured |
-| `cargo check` in `src-tauri` | Yes | Pass, 2026-06-29 | Rust compile gate clean after `desktop_url.rs` extraction |
-| `cargo test` in `src-tauri` | Yes | Pass, 2026-06-29 | 93/93 Rust tests passed serially after adding direct URL policy coverage |
+| `cargo fmt --manifest-path src-tauri/Cargo.toml --check` | Yes | Pass, 2026-06-29 | Rust formatting gate clean after normalizing `build.rs` |
+| `cargo check` in `src-tauri` | Yes | Pass, 2026-06-29 | Rust compile gate clean after localhost-port test hardening |
+| `cargo test` in `src-tauri` | Yes | Pass, 2026-06-29 | 93/93 Rust tests passed serially; localhost preferred-port test now tolerates externally occupied port |
 | `npm --prefix synara run test:timeline-performance` | Required for timeline changes | Pass, 2026-06-29 | Latest rerun: 10k events 8.51 ms; 50k events 20.69 ms |
 | iOS tests | Required for iOS release | Queued for macOS workstation | `xcodebuild` and `swift` unavailable on this Linux host; see `MACOS_IOS_VALIDATION_QUEUE.md` |
 
@@ -271,3 +272,4 @@ Any cross-platform feature must follow this checklist before acceptance:
 | 2026-06-29T10:45:53-04:00 | Accepted first `RoomTimeline.tsx` decomposition slice. | Extracted linked-timeline navigation/count/index helpers into `utils/timelineLinks.ts`, added direct tests for linked chains, isolated timelines, index boundaries, wrapper behavior, and kept the component wired to the same helper behavior. Grok review found no blocking or high-impact issues. |
 | 2026-06-29T10:56:30-04:00 | Accepted second `RoomTimeline.tsx` decomposition slice. | Extracted opening/window/unread helpers into `utils/timelineOpening.ts`, added direct tests for bounded live-end windows, empty timeline state, unread read-receipt/anchor resolution, detached timeline handling, and initial unread detection. Grok review was attempted twice but hit its max-turn cap without findings. |
 | 2026-06-29T11:04:38-04:00 | Accepted first `desktop.rs` modularization slice. | Extracted URL safety/session/agent URL helpers into `src-tauri/src/desktop_url.rs`, preserved the public `desktop::is_safe_external_url` wrapper, added direct Rust policy tests, and kept local Rust/repo guardrails green. Grok found no blocking issues; composer CLI remains unavailable locally. |
+| 2026-06-29T11:12:25-04:00 | Accepted Rust validation hardening slice. | The localhost-port test now treats an already-occupied preferred dev port as the busy-port condition under test instead of failing before exercising `select_localhost_port`; `build.rs` was normalized by rustfmt and a duplicate `cfg` attribute was removed. |

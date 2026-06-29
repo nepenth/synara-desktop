@@ -46,7 +46,6 @@ const TRAY_ICON_ID: &str = "synara-tray";
 const TRAY_STATE_APPLY_MIN_INTERVAL_MS: u64 = 500;
 
 #[cfg(debug_assertions)]
-#[cfg(debug_assertions)]
 static TRAY_MENU_REBUILD_COUNT: AtomicU64 = AtomicU64::new(0);
 const MAX_DROPPED_FILES: usize = 32;
 const MAX_DROPPED_FILE_ALLOWLIST: usize = 256;
