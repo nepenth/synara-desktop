@@ -243,7 +243,7 @@ Status labels: **Full** · **Partial** · **Stub** · **Planned**
 | Drag-and-drop file upload | Full | Allowlist-gated native read |
 | External link handling | Full | `desktop_open_external_url` |
 | Linux integration status probe | Full | `desktop_integration.rs` `desktop_get_integration_status` |
-| Auto-updater | Disabled | `createUpdaterArtifacts: false`; release CI is prepared for Tauri signing secrets and updater signature artifacts once production public key/endpoints are committed |
+| Auto-updater | Disabled locally / release-time configured | `createUpdaterArtifacts: false` in committed config; release CI materializes signed updater config from `SYNARA_UPDATER_PUBKEY` and optional `SYNARA_UPDATER_ENDPOINT`, generates `latest.json`, and uploads signature artifacts |
 | Windows packaging | Not supported | README excludes from release matrix |
 
 ### 3.9 iOS App (Parallel Product)
@@ -301,7 +301,7 @@ From iOS docs:
 | `maturity_improvement_plan1` branch | **Stale** — 28 commits not on `main`; `main` is 92 commits ahead |
 | MIP1 46/46 items | **Absorbed into `main`** via bundled commits |
 | Interactive macOS/Linux smoke | **Pending** — `docs/desktop-validation-status.md` |
-| Auto-updater | **Intentionally disabled** until stable signed release channel; published release CI no longer suppresses updater artifacts after the strict gate |
+| Auto-updater | **Intentionally disabled in committed config** until stable signed release channel; published release CI materializes updater config from repository variables before the strict gate, then uploads signed artifacts and `latest.json` |
 | Windows session persistence | **Explicitly unsupported** |
 
 ### 4.5 iOS Code TODOs

@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { buildReleaseUpdaterConfig } from "../configure-release-updater.mjs";
+import { inspectReleaseUpdaterReadiness } from "../check-release-updater.mjs";
 
 const baseConfig = {
   bundle: {
@@ -38,6 +39,45 @@ test("release updater config derives GitHub latest endpoint from repository", ()
   assert.deepEqual(config.plugins.updater.endpoints, [
     "https://github.com/nepenth/synara-desktop/releases/latest/download/latest.json",
   ]);
+});
+
+test("release updater config satisfies strict release readiness inspection", () => {
+  const tauriConfig = buildReleaseUpdaterConfig({
+    baseConfig,
+    pubkey,
+    repository: "nepenth/synara-desktop",
+  });
+
+  const result = inspectReleaseUpdaterReadiness({
+    tauriConfig,
+    cargoToml: 'tauri-plugin-updater = "2"\n',
+    rustLib: "tauri_plugin_updater::Builder::new().build()",
+    capabilities: {
+      permissions: ["core:default", "updater:allow-check"],
+    },
+    desktopPackage: {
+      dependencies: {
+        "@tauri-apps/plugin-updater": "2.10.1",
+      },
+    },
+    releaseWorkflow: `
+      - name: Configure release updater channel
+        run: node scripts/configure-release-updater.mjs
+        env:
+          SYNARA_UPDATER_PUBKEY: \${{ vars.SYNARA_UPDATER_PUBKEY }}
+          SYNARA_UPDATER_ENDPOINT: \${{ vars.SYNARA_UPDATER_ENDPOINT }}
+      env:
+        TAURI_SIGNING_PRIVATE_KEY: \${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        TAURI_SIGNING_PRIVATE_KEY_PASSWORD: \${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+      files: |
+        src-tauri/target/release/bundle/appimage/*.sig
+        latest.json
+    `,
+    requireEnabled: true,
+  });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.errors, []);
 });
 
 test("release updater config rejects missing or placeholder public keys", () => {
