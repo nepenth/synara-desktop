@@ -83,16 +83,17 @@ The user-declared pain points are **release P0 epics** because they are current 
 Initial task backlog:
 
 1. Audit desktop timeline ownership in `RoomTimeline.tsx`, `timelineLifecycle.ts`, `timelinePagination.ts`, and `timelineVirtualization.ts`. **Status:** First pass complete for open-room viewport/read-marker policy.
-2. Audit iOS timeline focus behavior in `RoomTimelineView.swift`, `TimelineService.swift`, and related read-marker services.
-3. Reconcile Matrix semantics for `m.fully_read`, read receipts, live timelines, timeline gaps, `matrix-js-sdk` `getLatestTimeline`, and Matrix Rust SDK timeline focus.
+2. Audit iOS timeline focus behavior in `RoomTimelineView.swift`, `TimelineService.swift`, and related read-marker services. **Status:** First pass complete for focus policy; local compile blocked by missing Xcode/Swift toolchain.
+3. Reconcile Matrix semantics for `m.fully_read`, read receipts, live timelines, timeline gaps, `matrix-js-sdk` `getLatestTimeline`, and Matrix Rust SDK timeline focus. **Status:** Captured in `docs/timeline-open-focus-contract.md`.
 4. Define a shared room-open focus contract covering:
    - Fully-read room.
    - Room with one or few unread events.
    - Saved historical viewport.
    - Explicit jump-to-event.
    - Timeline reset or gap.
-5. Implement narrowly scoped desktop fix with tests and timeline performance harness.
-6. Mirror contract and behavior in iOS with tests.
+   **Status:** Added `docs/timeline-open-focus-contract.md`.
+5. Implement narrowly scoped desktop fix with tests and timeline performance harness. **Status:** First slice shipped.
+6. Mirror contract and behavior in iOS with tests. **Status:** Added iOS policy tests for normal-room read-marker initial focus and jump-latest live-stream override; simulator/unit execution pending macOS/Xcode host.
 7. Add smoke checklist evidence for large, encrypted, and unread room cases.
 
 Desktop first-slice finding, 2026-06-29:
@@ -100,6 +101,12 @@ Desktop first-slice finding, 2026-06-29:
 - Root cause: desktop kept a process-local saved timeline viewport for non-bottom positions and restored it before unread/read-marker placement. A user who had previously viewed old history could later reopen a room and force `RoomTimeline` back through that old event window even if the room had one new unread event or had been fully read elsewhere. This mixed UI viewport memory with SDK read-marker/timeline focus semantics.
 - Implemented mitigation: `RoomTimeline` now records viewport age, uses a tested `shouldRestoreRoomTimelineViewport(...)` policy, lets unread state and synchronous loaded-slice unread inference win over saved history, and expires non-bottom historical anchors after a 10 minute local-navigation window. Bottom snapshots still open at the live end.
 - Remaining gap: iOS already has read-marker initial-load focus policy, but the shared contract and live smoke matrix still need to be formalized and verified across desktop/iOS.
+
+Shared contract update, 2026-06-29:
+
+- Added `docs/timeline-open-focus-contract.md` with ownership rules, desktop/iOS behavior matrix, and a smoke checklist covering fully-read rooms, unread rooms, stale saved history, jump-latest, stale sync state, live appends, and timeline reset/gap cases.
+- Updated `docs/matrix-sdk-lifecycle-semantics-audit.md` to point at the shared contract and record the desktop stale-viewport hardening.
+- Expanded `TimelineServiceTests` policy coverage for iOS normal room updates after read-marker initial focus and jump-latest override back to live stream.
 
 ### Epic 2: Link Opening
 
@@ -209,13 +216,13 @@ Any cross-platform feature must follow this checklist before acceptance:
 | `npm run check:mip1-evidence` | Yes | Pass, 2026-06-29 | 46/46 mapped; warning about bundled history retained |
 | `npm run check:runtime-assets` | Yes | Pass, 2026-06-29 | Runtime assets match `synara/dist` |
 | `npm run typecheck:modernization` | Yes | Pass, 2026-06-29 | TypeScript modernization surface compiles |
-| `npm run test:modernization` | Yes | Pass, 2026-06-29 | Runtime build completed; 276/276 tests passed after timeline viewport policy tests |
+| `npm run test:modernization` | Yes | Pass, 2026-06-29 | Runtime build completed previously; latest focused `npm --prefix synara run test:modernization` passed 277/277 after timeline viewport policy tests |
 | `npm --prefix synara run check:eslint` | Yes | Pass, 2026-06-29 | Frontend lint clean |
 | `npm --prefix synara run check:prettier` | Yes | Pass after mechanical format fix, 2026-06-29 | Four pre-existing formatting drifts corrected |
 | `cargo check` in `src-tauri` | Yes | Pass, 2026-06-29 | Rust compile gate clean |
 | `cargo test` in `src-tauri` | Yes | Pass, 2026-06-29 | 90/90 Rust tests passed |
 | `npm --prefix synara run test:timeline-performance` | Required for timeline changes | Pass, 2026-06-29 | Latest rerun: 10k events 5.05 ms; 50k events 18.08 ms |
-| iOS tests | Required for iOS release | Not run in Phase 0 | `xcodebuild` unavailable on this Linux host |
+| iOS tests | Required for iOS release | Not run locally | `xcodebuild` and `swift` unavailable on this Linux host |
 
 ## Status Table
 
@@ -223,7 +230,7 @@ Any cross-platform feature must follow this checklist before acceptance:
 |---|---|---|---|
 | Phase 0: Initializer | Committed and pushed | Current `HEAD` includes harness, validation evidence, changelog, and mechanical Prettier drift fix | Continue Phase 1 source reconciliation |
 | Phase 1: Validation & Reconciliation | In progress; externally blocked for full reconciliation | KB §7 read fully; Grok/composer-2.5-fast second opinion completed from pasted excerpts; original prompt, Grok Executive Report, and prior Section 7 not found locally | Commit KB Section 7 reconciliation edits, then continue repo/source validation |
-| Phase 2: Timeline Resurrection | In progress | Desktop viewport restore policy first slice implemented and validated | Continue iOS/shared contract audit and add smoke checklist |
+| Phase 2: Timeline Resurrection | In progress | Desktop viewport restore policy first slice implemented; shared open-focus contract added; iOS policy tests expanded | Run iOS tests on macOS/Xcode, then execute smoke checklist |
 | Phase 3: Link Opening | Not started | N/A | Pick scoped link inventory/fix |
 | Phase 4: Composer Parity | Not started | N/A | Pick scoped composer audit/fix |
 | Phase 5: Release Readiness | Not started | N/A | Updater, smoke, signing, docs |
@@ -239,3 +246,4 @@ Any cross-platform feature must follow this checklist before acceptance:
 | 2026-06-29T09:18:55-04:00 | Stabilized commit evidence wording. | Removed self-referential final-SHA wording from committed artifacts; use `git rev-parse --short HEAD` for the current commit id. |
 | 2026-06-29T09:22:51-04:00 | Accepted Grok/composer-2.5-fast Phase 1 reconciliation finding. | Reviewer found §7.5 coverage strong but §7.1, §7.3, §7.4, and session-layer cleanup underrepresented; goal backlog expanded accordingly. Missing external artifacts still prevent full reconciliation completion. |
 | 2026-06-29T09:34:44-04:00 | Accepted desktop Timeline Resurrection first slice. | Implemented bounded viewport restore policy: unread wins over saved history, non-bottom historical anchors expire after 10 minutes, and bottom snapshots still restore to live end. Grok/composer-2.5-fast approved with reservations; synchronous `roomHaveUnread` inference was added to reduce first-paint unread races. |
+| 2026-06-29T09:38:11-04:00 | Added shared Timeline Resurrection open-focus contract. | `docs/timeline-open-focus-contract.md` now defines cross-platform ownership rules, behavior matrix, and smoke checklist; iOS focus policy tests were expanded. Local validation passed for TS/runtime gates, but iOS execution remains pending because the host lacks Xcode/Swift. |

@@ -19,6 +19,20 @@ final class TimelineServiceTests: XCTestCase {
         )
     }
 
+    func testRoomTimelineFocusPolicyKeepsNormalRoomUpdatesLiveAfterReadMarkerInitialLoad() {
+        let initialFocus = RoomTimelineFocusPolicy.initialLoadFocus(
+            focusedEventID: nil,
+            initialReadMarkerEventID: "$read-marker"
+        )
+        let updateFocus = RoomTimelineFocusPolicy.updateStreamFocus(
+            focusedEventID: nil,
+            override: nil
+        )
+
+        XCTAssertEqual(initialFocus, "$read-marker")
+        XCTAssertNil(updateFocus)
+    }
+
     func testRoomTimelineFocusPolicyKeepsExplicitFocusedRoutesFocused() {
         XCTAssertEqual(
             RoomTimelineFocusPolicy.initialLoadFocus(
@@ -37,6 +51,15 @@ final class TimelineServiceTests: XCTestCase {
         XCTAssertNil(
             RoomTimelineFocusPolicy.updateStreamFocus(
                 focusedEventID: "$focused",
+                override: .some(nil)
+            )
+        )
+    }
+
+    func testRoomTimelineFocusPolicyJumpLatestOverrideReturnsFocusedRouteToLiveStream() {
+        XCTAssertNil(
+            RoomTimelineFocusPolicy.updateStreamFocus(
+                focusedEventID: "$focused-event",
                 override: .some(nil)
             )
         )
