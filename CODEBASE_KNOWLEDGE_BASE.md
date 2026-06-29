@@ -21,7 +21,7 @@
 | Gate | Result |
 |------|--------|
 | `npm run check:versions` | 1.2.19 consistent (Tauri 2.11 aligned) |
-| `npm run test:modernization` | 289/289 pass |
+| `npm run test:modernization` | 294/294 pass |
 | `npm run check:mip1-evidence` | 46/46 mapped on `main` |
 
 ---
@@ -165,7 +165,7 @@ Status labels: **Full** · **Partial** · **Stub** · **Planned**
 
 | Feature | Status | Location |
 |---------|--------|----------|
-| Room timeline (virtualized, ~2899 LOC) | Full | `features/room/RoomTimeline.tsx`; linked-timeline helpers extracted to `utils/timelineLinks.ts` |
+| Room timeline (virtualized, ~2857 LOC) | Full | `features/room/RoomTimeline.tsx`; linked/opening helpers extracted to `utils/timelineLinks.ts` and `utils/timelineOpening.ts` |
 | Rich composer (Slate editor) | Full | `components/editor/`, `RoomInput.tsx` |
 | Reactions, edit, redact, reply | Full | `features/room/message/` |
 | Threads (reply-backed UX) | Partial | UI distinct; true `m.thread` depth varies |
@@ -354,7 +354,7 @@ tracked in docs, contracts, and functionality matrices instead.
 |------|----------|--------|
 | Browser-shaped desktop runtime | Medium | IndexedDB sync/crypto, localStorage drafts, service worker media |
 | matrix-js-sdk coupling | High | ~209 runtime files; Rust SDK migration = multi-month rewrite |
-| Monolithic files | Medium | `RoomTimeline.tsx` (2899 LOC after first helper extraction), `desktop.rs` (5101 LOC) |
+| Monolithic files | Medium | `RoomTimeline.tsx` (2857 LOC after helper extractions), `desktop.rs` (5101 LOC) |
 | Limited UI test coverage | Medium | 44 unit test files, zero `*.test.tsx` component tests |
 | Windows unsupported | Low (by design) | No Keychain equivalent; excluded from release matrix |
 | Stale MIP1 branch | Low | Could confuse contributors |
@@ -440,7 +440,7 @@ external URLs, file save, drag-and-drop read, agent actions, performance metadat
 
 ```text
 check:repo-layout → check:versions → check:matrix-boundaries
-  → cargo check/test → typecheck:modernization → test:modernization (289)
+  → cargo check/test → typecheck:modernization → test:modernization (294)
   → eslint → prettier
 ```
 
@@ -478,9 +478,10 @@ check:repo-layout → check:versions → check:matrix-boundaries
 
 ### 7.2 Refactoring Before Major Expansion
 
-1. **`RoomTimeline.tsx` decomposition** — First slice extracted linked-timeline
-   helpers to `utils/timelineLinks.ts`; continue extracting sub-modules before
-   adding timeline features.
+1. **`RoomTimeline.tsx` decomposition** — First slices extracted linked-timeline
+   helpers to `utils/timelineLinks.ts` and opening/window/unread helpers to
+   `utils/timelineOpening.ts`; continue extracting sub-modules before adding
+   timeline features.
 2. **`desktop.rs` modularization** — Split into focused modules before adding IPC.
 
 ### 7.3 Cross-Platform Expansion Protocol

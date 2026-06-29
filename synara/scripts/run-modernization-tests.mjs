@@ -30,6 +30,7 @@ const tests = [
   'src/app/utils/__tests__/syncSplashRecovery.test.ts',
   'src/app/utils/__tests__/timelinePagination.test.ts',
   'src/app/utils/__tests__/timelineLinks.test.ts',
+  'src/app/utils/__tests__/timelineOpening.test.ts',
   'src/app/pages/client/__tests__/syncStatusCopy.test.ts',
   'src/app/pages/__tests__/pathUtils.test.ts',
   'src/app/utils/__tests__/timelineVirtualization.test.ts',

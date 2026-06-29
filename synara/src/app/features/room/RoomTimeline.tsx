@@ -108,7 +108,7 @@ import { timeDayMonthYear, today, yesterday } from '../../utils/time';
 import { createMentionElement, isEmptyEditor, moveCursor } from '../../components/editor';
 import { roomIdToReplyDraftAtomFamily } from '../../state/room/roomInputDrafts';
 import { usePowerLevelsContext } from '../../hooks/usePowerLevels';
-import { GetContentCallback, MessageEvent, StateEvent, Unread } from '../../../types/matrix/room';
+import { GetContentCallback, MessageEvent, StateEvent } from '../../../types/matrix/room';
 import { useKeyDown } from '../../hooks/useKeyDown';
 import { useDocumentFocusChange } from '../../hooks/useDocumentFocusChange';
 import { RenderMessageContent } from '../../components/RenderMessageContent';
@@ -163,12 +163,20 @@ import { shouldRestoreRoomTimelineViewport } from '../../utils/timelineLifecycle
 import {
   getEventIdAbsoluteIndex,
   getEventTimeline,
-  getFirstLinkedTimeline,
   getLinkedTimelines,
   getLiveTimeline,
   getTimelinesEventsCount,
   timelineToEventsCount,
 } from '../../utils/timelineLinks';
+import {
+  getEmptyTimeline,
+  getInitialTimeline,
+  getRoomUnreadInfo,
+  getTimelineEndWindow,
+  hasUnreadForInitialScroll,
+  timelineHasEvents,
+  type TimelineWindow,
+} from '../../utils/timelineOpening';
 
 const PollContent = lazy(() =>
   import('../../components/message/content/PollContent').then((module) => ({
@@ -214,11 +222,6 @@ const LIVE_END_BOTTOM_TOLERANCE = 24;
 const COMPOSER_RESIZE_BOTTOM_TOLERANCE = 160;
 const VIRTUAL_ANCHOR_RESTORE_SCROLL_TOLERANCE = 4;
 
-type ItemRange = {
-  start: number;
-  end: number;
-};
-
 type ScrollToOptions = {
   offset?: number;
   align?: 'start' | 'center' | 'end';
@@ -257,11 +260,6 @@ const isElementBottomInScrollView = (
   return (
     elementRect.bottom >= scrollRect.top && elementRect.bottom <= scrollRect.bottom + tolerance
   );
-};
-
-type Timeline = {
-  linkedTimelines: EventTimeline[];
-  range: ItemRange;
 };
 
 type RoomTimelineViewport = {
@@ -358,8 +356,8 @@ const useEventTimelineLoader = (
 
 const useTimelinePagination = (
   mx: MatrixClient,
-  timeline: Timeline,
-  setTimeline: Dispatch<SetStateAction<Timeline>>,
+  timeline: TimelineWindow,
+  setTimeline: Dispatch<SetStateAction<TimelineWindow>>,
   limit: number,
   onPaginationError: (direction: TimelinePaginationDirection, err: unknown | null) => void
 ) => {
@@ -505,45 +503,6 @@ const useLiveTimelineReset = (room: Room, onReset: () => void) => {
     };
   }, [room, onReset]);
 };
-
-const getInitialTimeline = (room: Room) => {
-  const linkedTimelines = getLinkedTimelines(getLiveTimeline(room));
-  return getTimelineEndWindow(linkedTimelines);
-};
-
-const getEmptyTimeline = () => ({
-  range: { start: 0, end: 0 },
-  linkedTimelines: [],
-});
-
-const getTimelineEndWindow = (linkedTimelines: EventTimeline[]): Timeline => {
-  const evLength = getTimelinesEventsCount(linkedTimelines);
-  return {
-    linkedTimelines,
-    range: {
-      start: Math.max(evLength - PAGINATION_LIMIT, 0),
-      end: evLength,
-    },
-  };
-};
-
-const getRoomUnreadInfo = (room: Room, anchorEventId?: string, scrollTo = false) => {
-  const readUptoEventId = anchorEventId ?? room.getEventReadUpTo(room.client.getUserId() ?? '');
-  if (!readUptoEventId) return undefined;
-  const evtTimeline = getEventTimeline(room, readUptoEventId);
-  const latestTimeline = evtTimeline && getFirstLinkedTimeline(evtTimeline, Direction.Forward);
-  return {
-    readUptoEventId,
-    inLiveTimeline: latestTimeline === room.getLiveTimeline(),
-    scrollTo,
-  };
-};
-
-const hasUnreadForInitialScroll = (unread: Unread | undefined, unreadAnchorEventId?: string) =>
-  Boolean(unreadAnchorEventId || (unread && (unread.total > 0 || unread.highlight > 0)));
-
-const timelineHasEvents = (timeline: Timeline): boolean =>
-  getTimelinesEventsCount(timeline.linkedTimelines) > 0;
 
 const toScrollBehavior = (behavior?: ScrollToOptions['behavior']): 'auto' | 'smooth' | undefined =>
   behavior === 'instant' ? 'auto' : behavior;
@@ -714,8 +673,8 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
   );
   const parseMemberEvent = useMemberEventParser();
 
-  const [timeline, setTimeline] = useState<Timeline>(() =>
-    eventId ? getEmptyTimeline() : getInitialTimeline(room)
+  const [timeline, setTimeline] = useState<TimelineWindow>(() =>
+    eventId ? getEmptyTimeline() : getInitialTimeline(room, PAGINATION_LIMIT)
   );
   const [paginationErrors, setPaginationErrors] = useState<TimelinePaginationErrors>({});
   const [, startTimelineTransition] = useTransition();
@@ -1217,7 +1176,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
     ),
     useCallback(() => {
       if (!alive()) return;
-      setTimeline(getInitialTimeline(room));
+      setTimeline(getInitialTimeline(room, PAGINATION_LIMIT));
       scrollToBottomRef.current.count += 1;
       scrollToBottomRef.current.smooth = false;
     }, [alive, room])
@@ -1235,7 +1194,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
           timelineRows.length === 0;
 
         if (shouldReattachLiveTimeline) {
-          const nextTimeline = getInitialTimeline(room);
+          const nextTimeline = getInitialTimeline(room, PAGINATION_LIMIT);
           const shouldReplaceVisibleTimeline = shouldFollowLiveEnd || timelineRows.length === 0;
           if (shouldReplaceVisibleTimeline && timelineHasEvents(nextTimeline)) {
             liveTimelineResetPendingRef.current = false;
@@ -1337,7 +1296,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
   useLiveTimelineRefresh(
     room,
     useCallback(() => {
-      const nextTimeline = getInitialTimeline(room);
+      const nextTimeline = getInitialTimeline(room, PAGINATION_LIMIT);
       if (!timelineHasEvents(nextTimeline)) {
         liveTimelineResetPendingRef.current = true;
         perfLog('room-timeline.defer-empty-refresh', { roomId: room.roomId });
@@ -1715,9 +1674,11 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
       const latestTimeline = await mx.getLatestTimeline(room.getUnfilteredTimelineSet());
       if (!alive() || latestTimelineRequestRef.current !== requestId) return;
       const nextTimeline = latestTimeline
-        ? getTimelineEndWindow(getLinkedTimelines(latestTimeline))
-        : getInitialTimeline(room);
-      setTimeline(timelineHasEvents(nextTimeline) ? nextTimeline : getInitialTimeline(room));
+        ? getTimelineEndWindow(getLinkedTimelines(latestTimeline), PAGINATION_LIMIT)
+        : getInitialTimeline(room, PAGINATION_LIMIT);
+      setTimeline(
+        timelineHasEvents(nextTimeline) ? nextTimeline : getInitialTimeline(room, PAGINATION_LIMIT)
+      );
       liveTimelineResetPendingRef.current = false;
       perfLog('room-timeline.jump-latest', {
         roomId: room.roomId,
@@ -1726,7 +1687,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
       });
     } catch (err) {
       if (!alive() || latestTimelineRequestRef.current !== requestId) return;
-      setTimeline(getInitialTimeline(room));
+      setTimeline(getInitialTimeline(room, PAGINATION_LIMIT));
       perfLog('room-timeline.jump-latest-failed', {
         roomId: room.roomId,
         error: err instanceof Error ? err.message : String(err),
