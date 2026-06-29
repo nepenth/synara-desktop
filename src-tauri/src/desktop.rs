@@ -29,6 +29,26 @@ use crate::desktop_file_transfer::{
 use crate::desktop_sanitize::{
     sanitize_action_text, sanitize_notification_route, sanitize_route, truncate_text,
 };
+#[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
+use crate::desktop_secret_store::DESKTOP_SECRET_STORE_UNSUPPORTED_PLATFORM;
+#[cfg(any(target_os = "windows", test))]
+use crate::desktop_secret_store::DESKTOP_SECRET_STORE_WINDOWS_UNSUPPORTED;
+use crate::desktop_secret_store::{
+    bridge_supports_secure_secret_store, unavailable_secret_store_status, DesktopSecretStoreStatus,
+    DESKTOP_SECRET_STORE_BACKEND_LINUX_KEYUTILS, DESKTOP_SECRET_STORE_BACKEND_LINUX_SECRET_SERVICE,
+    DESKTOP_SECRET_STORE_LINUX_UNAVAILABLE, DESKTOP_SECRET_STORE_OPERATION_DENIED,
+    DESKTOP_SECRET_STORE_OPERATION_LOCKED, DESKTOP_SECRET_STORE_OPERATION_UNAVAILABLE,
+    DESKTOP_SECRET_STORE_SESSION_SCOPED,
+};
+#[cfg(any(target_os = "macos", test))]
+use crate::desktop_secret_store::{
+    DESKTOP_SECRET_STORE_BACKEND_MACOS_KEYCHAIN, DESKTOP_SECRET_STORE_MACOS_KEYCHAIN_ACCESS_DENIED,
+    DESKTOP_SECRET_STORE_MACOS_KEYCHAIN_LOCKED, DESKTOP_SECRET_STORE_MACOS_KEYCHAIN_UNAVAILABLE,
+};
+#[cfg(test)]
+use crate::desktop_secret_store::{
+    DESKTOP_SECRET_STORE_BACKEND_NONE, DESKTOP_SECRET_STORE_NOT_CONFIGURED,
+};
 use crate::desktop_session::{
     current_timestamp_ms, sanitize_session_envelope, session_envelope_is_expired,
     DesktopSessionEnvelope, DESKTOP_STORED_SESSION_INVALID,
@@ -260,15 +280,6 @@ pub struct DesktopPerformanceCapabilities {
     build_label: String,
 }
 
-#[derive(Clone, Copy, Serialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct DesktopSecretStoreStatus {
-    pub available: bool,
-    pub backend: &'static str,
-    pub can_persist_session: bool,
-    pub reason: Option<&'static str>,
-}
-
 const DESKTOP_AGENT_ACTION_MAX_TEXT_CHARS: usize = 1024;
 const DESKTOP_AGENT_ACTION_MAX_URL_CHARS: usize = 2048;
 const DESKTOP_AGENT_ACTION_MAX_MARKDOWN_CHARS: usize = 16_384;
@@ -279,29 +290,6 @@ const DESKTOP_SESSION_LEGACY_CREDENTIAL_SERVICE: &str = "app.synara.desktop";
 const DESKTOP_SESSION_CREDENTIAL_ACCOUNT: &str = "matrix-session";
 #[cfg(target_os = "macos")]
 const DESKTOP_SESSION_KEYCHAIN_PROBE_ACCOUNT: &str = "matrix-session-probe";
-const DESKTOP_SECRET_STORE_BACKEND_NONE: &str = "none";
-#[cfg(any(target_os = "macos", test))]
-const DESKTOP_SECRET_STORE_BACKEND_MACOS_KEYCHAIN: &str = "macos-keychain";
-#[allow(dead_code)]
-const DESKTOP_SECRET_STORE_BACKEND_LINUX_SECRET_SERVICE: &str = "linux-secret-service";
-#[allow(dead_code)]
-const DESKTOP_SECRET_STORE_BACKEND_LINUX_KEYUTILS: &str = "linux-keyutils";
-#[allow(dead_code)]
-const DESKTOP_SECRET_STORE_NOT_CONFIGURED: &str = "secure-secret-store-not-configured";
-#[allow(dead_code)]
-const DESKTOP_SECRET_STORE_UNSUPPORTED_PLATFORM: &str = "secure-secret-store-unsupported-platform";
-#[allow(dead_code)]
-const DESKTOP_SECRET_STORE_WINDOWS_UNSUPPORTED: &str = "windows-native-session-store-unsupported";
-#[allow(dead_code)]
-const DESKTOP_SECRET_STORE_SESSION_SCOPED: &str = "linux-keyutils-session-scoped";
-#[allow(dead_code)]
-const DESKTOP_SECRET_STORE_LINUX_UNAVAILABLE: &str = "linux-secret-store-unavailable";
-#[cfg(any(target_os = "macos", test))]
-const DESKTOP_SECRET_STORE_MACOS_KEYCHAIN_LOCKED: &str = "macos-keychain-locked";
-#[cfg(any(target_os = "macos", test))]
-const DESKTOP_SECRET_STORE_MACOS_KEYCHAIN_ACCESS_DENIED: &str = "macos-keychain-access-denied";
-#[cfg(any(target_os = "macos", test))]
-const DESKTOP_SECRET_STORE_MACOS_KEYCHAIN_UNAVAILABLE: &str = "macos-keychain-unavailable";
 #[cfg(target_os = "linux")]
 const DESKTOP_SECRET_STORE_SECRET_SERVICE_PROBE_SERVICE: &str =
     "com.whylandcreative.synara.desktop.secret-service-probe";
@@ -317,9 +305,6 @@ const DESKTOP_SECRET_STORE_KEYUTILS_PROBE_SERVICE: &str =
 const DESKTOP_SECRET_STORE_KEYUTILS_PROBE_ACCOUNT: &str = "availability-probe";
 #[cfg(target_os = "linux")]
 const DESKTOP_SECRET_STORE_KEYUTILS_PROBE_SECRET: &str = "synara-keyutils-availability-probe";
-const DESKTOP_SECRET_STORE_OPERATION_LOCKED: &str = "desktop-secret-store-locked";
-const DESKTOP_SECRET_STORE_OPERATION_UNAVAILABLE: &str = "desktop-secret-store-unavailable";
-const DESKTOP_SECRET_STORE_OPERATION_DENIED: &str = "desktop-secret-store-denied";
 #[cfg(target_os = "linux")]
 const DESKTOP_SECRET_STORE_PROBE_TIMEOUT: Duration = Duration::from_secs(2);
 const ALLOWED_SHORTCUT_LEN: usize = 128;
@@ -542,16 +527,6 @@ fn map_keyring_error(operation: &'static str, error: KeyringError) -> String {
     let code = secret_store_operation_error_code(&error);
     eprintln!("desktop secret store {operation} failed: code={code}");
     code.to_owned()
-}
-
-#[allow(dead_code)]
-fn unavailable_secret_store_status(reason: &'static str) -> DesktopSecretStoreStatus {
-    DesktopSecretStoreStatus {
-        available: false,
-        backend: DESKTOP_SECRET_STORE_BACKEND_NONE,
-        can_persist_session: false,
-        reason: Some(reason),
-    }
 }
 
 #[cfg(target_os = "macos")]
@@ -2742,10 +2717,6 @@ pub fn desktop_set_shortcuts(
         parsed_later,
         parsed_notifications,
     )
-}
-
-pub fn bridge_supports_secure_secret_store(status: &DesktopSecretStoreStatus) -> bool {
-    status.available && status.can_persist_session
 }
 
 pub fn desktop_bridge_supports_secure_secret_store() -> bool {
