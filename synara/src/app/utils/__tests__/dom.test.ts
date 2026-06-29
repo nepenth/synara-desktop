@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { getDataTransferFiles, shouldProbeNativeClipboardImage } from '../dom';
+import {
+  dataTransferHasFiles,
+  getDataTransferFiles,
+  shouldProbeNativeClipboardImage,
+} from '../dom';
 
 const emptyFileList = { length: 0 } as unknown as FileList;
 
@@ -46,6 +50,47 @@ test('anonymous clipboard files get a usable filename', () => {
 
   assert.equal(files?.[0]?.name, 'clipboard-file.png');
   assert.equal(files?.[0]?.type, 'image/png');
+});
+
+test('data transfer file detection tolerates desktop payloads without Files type', () => {
+  const image = new File([new Uint8Array([1])], 'drop.png', { type: 'image/png' });
+
+  assert.equal(
+    dataTransferHasFiles({
+      files: { length: 1, 0: image } as unknown as FileList,
+      items: { length: 0 } as unknown as DataTransferItemList,
+      types: [] as unknown as DOMStringList,
+    }),
+    true
+  );
+  assert.equal(
+    dataTransferHasFiles({
+      files: emptyFileList,
+      items: {
+        length: 1,
+        0: {
+          kind: 'file',
+          getAsFile: () => image,
+        },
+      } as unknown as DataTransferItemList,
+      types: ['text/plain'] as unknown as DOMStringList,
+    }),
+    true
+  );
+  assert.equal(
+    dataTransferHasFiles({
+      files: emptyFileList,
+      items: {
+        length: 1,
+        0: {
+          kind: 'string',
+          getAsFile: () => null,
+        },
+      } as unknown as DataTransferItemList,
+      types: ['text/plain'] as unknown as DOMStringList,
+    }),
+    false
+  );
 });
 
 test('native clipboard image probing wins for image-like clipboard payloads', () => {

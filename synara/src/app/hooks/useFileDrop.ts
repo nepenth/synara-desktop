@@ -1,5 +1,5 @@
 import { useCallback, DragEventHandler, useState, useEffect, useRef } from 'react';
-import { getDataTransferFiles } from '../utils/dom';
+import { dataTransferHasFiles, getDataTransferFiles } from '../utils/dom';
 import {
   readPlatformDroppedFiles,
   supportsPlatformNativeFileDrop,
@@ -22,7 +22,7 @@ export const useFileDropZone = (onDrop: (file: File[]) => void): boolean => {
 
   useEffect(() => {
     const handleDrop = (evt: DragEvent) => {
-      if (!evt.dataTransfer?.types.includes('Files')) return;
+      if (!dataTransferHasFiles(evt.dataTransfer)) return;
       evt.preventDefault();
       dragStateRef.current = undefined;
       setActive(false);
@@ -38,7 +38,7 @@ export const useFileDropZone = (onDrop: (file: File[]) => void): boolean => {
 
   useEffect(() => {
     const handleDragEnter = (evt: DragEvent) => {
-      if (evt.dataTransfer?.types.includes('Files')) {
+      if (dataTransferHasFiles(evt.dataTransfer)) {
         dragStateRef.current = 'start';
         setActive(true);
       }
@@ -49,7 +49,7 @@ export const useFileDropZone = (onDrop: (file: File[]) => void): boolean => {
       setActive(false);
     };
     const handleDragOver = (evt: DragEvent) => {
-      if (!evt.dataTransfer?.types.includes('Files')) return;
+      if (!dataTransferHasFiles(evt.dataTransfer)) return;
       evt.preventDefault();
       dragStateRef.current = 'over';
     };
