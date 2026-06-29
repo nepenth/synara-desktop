@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Added root-level macOS workstation handoff and deferred GitHub Release updater project plan documents.
 - Added regression coverage proving release-time updater config materialization satisfies the strict release-updater readiness inspector.
 - Added release workflow updater-channel configuration from GitHub repository variables before strict updater validation and packaging.
 - Added release workflow generation and upload of static signed updater metadata from Linux and macOS updater artifacts.
