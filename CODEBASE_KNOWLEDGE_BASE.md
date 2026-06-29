@@ -63,7 +63,7 @@ release-grade.
 synara-desktop/                    # Root — Tauri project + orchestration
 ├── config.json                    # Canonical homeserver/config (synced → synara/)
 ├── package.json                   # Tauri CLI, build scripts, version gates
-├── src-tauri/                     # Rust desktop shell (~4.7k LOC in desktop.rs)
+├── src-tauri/                     # Rust desktop shell (~3.7k LOC in desktop.rs)
 │   ├── src/{main,lib,desktop,desktop_file_transfer,desktop_sanitize,desktop_secret_store,desktop_session,desktop_url,build_info,menu}.rs
 │   ├── capabilities/{main,release-hardening}.json
 │   └── tauri.conf.json
@@ -354,7 +354,7 @@ tracked in docs, contracts, and functionality matrices instead.
 |------|----------|--------|
 | Browser-shaped desktop runtime | Medium | IndexedDB sync/crypto, localStorage drafts, service worker media |
 | matrix-js-sdk coupling | High | ~209 runtime files; Rust SDK migration = multi-month rewrite |
-| Monolithic files | Medium | `RoomTimeline.tsx` (2857 LOC after helper extractions), `desktop.rs` (4328 LOC after URL, sanitization, file-transfer, session-envelope, and secret-store classification helper extractions) |
+| Monolithic files | Medium | `RoomTimeline.tsx` (2857 LOC after helper extractions), `desktop.rs` (3717 LOC after URL, sanitization, file-transfer, session-envelope, and secret-store classification/probe/cache helper extractions) |
 | Limited UI test coverage | Medium | 44 unit test files, zero `*.test.tsx` component tests |
 | Windows unsupported | Low (by design) | No Keychain equivalent; excluded from release matrix |
 | Stale MIP1 branch | Low | Could confuse contributors |
@@ -493,9 +493,9 @@ check:repo-layout → check:versions → check:matrix-boundaries
    file-transfer policy helpers to `src-tauri/src/desktop_file_transfer.rs`,
    and session-envelope validation/expiry helpers to
    `src-tauri/src/desktop_session.rs`, and secret-store status/backend/error
-   classification contracts to `src-tauri/src/desktop_secret_store.rs`, all
-   with direct Rust tests; continue splitting into focused modules before adding
-   IPC.
+   classification plus platform probe/cache mechanics to
+   `src-tauri/src/desktop_secret_store.rs`, all with direct Rust tests; continue
+   splitting into focused modules before adding IPC.
 
 ### 7.3 Cross-Platform Expansion Protocol
 
