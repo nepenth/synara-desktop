@@ -10,6 +10,7 @@ mod desktop_sanitize;
 mod desktop_secret_store;
 mod desktop_session;
 mod desktop_session_store;
+mod desktop_shortcuts;
 mod desktop_url;
 #[cfg(target_os = "macos")]
 mod menu;
@@ -278,7 +279,7 @@ pub fn run() {
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     {
         builder = builder
-            .plugin(desktop::global_shortcut_plugin())
+            .plugin(desktop_shortcuts::global_shortcut_plugin())
             .plugin(tauri_plugin_updater::Builder::new().build());
     }
 

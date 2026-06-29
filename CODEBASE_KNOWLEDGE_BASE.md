@@ -63,8 +63,8 @@ release-grade.
 synara-desktop/                    # Root — Tauri project + orchestration
 ├── config.json                    # Canonical homeserver/config (synced → synara/)
 ├── package.json                   # Tauri CLI, build scripts, version gates
-├── src-tauri/                     # Rust desktop shell (~3.3k LOC in desktop.rs)
-│   ├── src/{main,lib,desktop,desktop_file_transfer,desktop_sanitize,desktop_secret_store,desktop_session,desktop_session_store,desktop_url,build_info,menu}.rs
+├── src-tauri/                     # Rust desktop shell (~2.6k LOC in desktop.rs)
+│   ├── src/{main,lib,desktop,desktop_file_transfer,desktop_sanitize,desktop_secret_store,desktop_session,desktop_session_store,desktop_shortcuts,desktop_url,build_info,menu}.rs
 │   ├── capabilities/{main,release-hardening}.json
 │   └── tauri.conf.json
 ├── synara/                        # React/Vite Matrix runtime (~865 TS/JS files)
@@ -354,7 +354,7 @@ tracked in docs, contracts, and functionality matrices instead.
 |------|----------|--------|
 | Browser-shaped desktop runtime | Medium | IndexedDB sync/crypto, localStorage drafts, service worker media |
 | matrix-js-sdk coupling | High | ~209 runtime files; Rust SDK migration = multi-month rewrite |
-| Monolithic files | Medium | `RoomTimeline.tsx` (2857 LOC after helper extractions), `desktop.rs` (3281 LOC after URL, sanitization, file-transfer, session-envelope, secret-store classification/probe/cache, and keyring session-store helper extractions) |
+| Monolithic files | Medium | `RoomTimeline.tsx` (2857 LOC after helper extractions), `desktop.rs` (2560 LOC after URL, sanitization, file-transfer, session-envelope, secret-store classification/probe/cache, keyring session-store, and global shortcut helper extractions) |
 | Limited UI test coverage | Medium | 44 unit test files, zero `*.test.tsx` component tests |
 | Windows unsupported | Low (by design) | No Keychain equivalent; excluded from release matrix |
 | Stale MIP1 branch | Low | Could confuse contributors |
@@ -412,6 +412,7 @@ tracked in docs, contracts, and functionality matrices instead.
 | Desktop secret-store status/classification contracts (Rust) | `src-tauri/src/desktop_secret_store.rs` |
 | Desktop session-envelope policy (Rust) | `src-tauri/src/desktop_session.rs` |
 | Desktop session persistence store (Rust) | `src-tauri/src/desktop_session_store.rs` |
+| Desktop global shortcuts (Rust) | `src-tauri/src/desktop_shortcuts.rs` |
 | Desktop URL policy (Rust) | `src-tauri/src/desktop_url.rs` |
 | Platform API | `synara/src/app/platform/index.ts` |
 | Route parser | `synara/src/app/routes/synaraRoutes.ts` |
@@ -495,9 +496,10 @@ check:repo-layout → check:versions → check:matrix-boundaries
    and session-envelope validation/expiry helpers to
    `src-tauri/src/desktop_session.rs`, secret-store status/backend/error
    classification plus platform probe/cache mechanics to
-   `src-tauri/src/desktop_secret_store.rs`, and keyring session persistence flow
-   to `src-tauri/src/desktop_session_store.rs`, all with direct Rust tests;
-   continue splitting into focused modules before adding IPC.
+   `src-tauri/src/desktop_secret_store.rs`, keyring session persistence flow to
+   `src-tauri/src/desktop_session_store.rs`, and global shortcut
+   policy/registration to `src-tauri/src/desktop_shortcuts.rs`, all with direct
+   Rust tests; continue splitting into focused modules before adding IPC.
 
 ### 7.3 Cross-Platform Expansion Protocol
 
