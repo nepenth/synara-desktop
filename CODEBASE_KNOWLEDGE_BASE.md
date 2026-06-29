@@ -63,8 +63,8 @@ release-grade.
 synara-desktop/                    # Root — Tauri project + orchestration
 ├── config.json                    # Canonical homeserver/config (synced → synara/)
 ├── package.json                   # Tauri CLI, build scripts, version gates
-├── src-tauri/                     # Rust desktop shell (~5.0k LOC in desktop.rs)
-│   ├── src/{main,lib,desktop,desktop_file_transfer,desktop_sanitize,desktop_url,build_info,menu}.rs
+├── src-tauri/                     # Rust desktop shell (~4.7k LOC in desktop.rs)
+│   ├── src/{main,lib,desktop,desktop_file_transfer,desktop_sanitize,desktop_session,desktop_url,build_info,menu}.rs
 │   ├── capabilities/{main,release-hardening}.json
 │   └── tauri.conf.json
 ├── synara/                        # React/Vite Matrix runtime (~865 TS/JS files)
@@ -156,7 +156,7 @@ Status labels: **Full** · **Partial** · **Stub** · **Planned**
 | Password login, SSO, registration, reset | Full | `synara/src/app/pages/auth/` |
 | Matrix UIA stages (email, reCAPTCHA, terms) | Full | `synara/src/app/components/uia-stages/` |
 | Token refresh + proactive scheduling | Full | `initMatrix.ts`, `sessionPersistence.ts` |
-| Native session store (macOS Keychain, Linux Secret Service) | Full | `platform/sessions.ts`, `desktop.rs` |
+| Native session store (macOS Keychain, Linux Secret Service) | Full | `platform/sessions.ts`, `desktop.rs`, `desktop_session.rs` |
 | Windows native session store | Stub | Explicitly unsupported; localStorage fallback |
 | Logout + crypto store cleanup | Full | `performLogout`, `matrixLocalStores.ts` |
 | Auto-discovery of homeserver | Full | `ClientRoot.tsx` |
@@ -354,7 +354,7 @@ tracked in docs, contracts, and functionality matrices instead.
 |------|----------|--------|
 | Browser-shaped desktop runtime | Medium | IndexedDB sync/crypto, localStorage drafts, service worker media |
 | matrix-js-sdk coupling | High | ~209 runtime files; Rust SDK migration = multi-month rewrite |
-| Monolithic files | Medium | `RoomTimeline.tsx` (2857 LOC after helper extractions), `desktop.rs` (4887 LOC after URL, sanitization, and file-transfer helper extractions) |
+| Monolithic files | Medium | `RoomTimeline.tsx` (2857 LOC after helper extractions), `desktop.rs` (4673 LOC after URL, sanitization, file-transfer, and session-envelope helper extractions) |
 | Limited UI test coverage | Medium | 44 unit test files, zero `*.test.tsx` component tests |
 | Windows unsupported | Low (by design) | No Keychain equivalent; excluded from release matrix |
 | Stale MIP1 branch | Low | Could confuse contributors |
@@ -409,6 +409,7 @@ tracked in docs, contracts, and functionality matrices instead.
 | Desktop bridge (Rust) | `src-tauri/src/desktop.rs` |
 | Desktop file-transfer helpers (Rust) | `src-tauri/src/desktop_file_transfer.rs` |
 | Desktop sanitization helpers (Rust) | `src-tauri/src/desktop_sanitize.rs` |
+| Desktop session-envelope policy (Rust) | `src-tauri/src/desktop_session.rs` |
 | Desktop URL policy (Rust) | `src-tauri/src/desktop_url.rs` |
 | Platform API | `synara/src/app/platform/index.ts` |
 | Route parser | `synara/src/app/routes/synaraRoutes.ts` |
@@ -488,9 +489,10 @@ check:repo-layout → check:versions → check:matrix-boundaries
 2. **`desktop.rs` modularization** — First slices extracted external-link,
    session-base, and agent URL policy helpers to `src-tauri/src/desktop_url.rs`,
    shared text/route sanitization helpers to `src-tauri/src/desktop_sanitize.rs`,
-   and file-transfer policy helpers to `src-tauri/src/desktop_file_transfer.rs`,
-   all with direct Rust tests; continue splitting into focused modules before
-   adding IPC.
+   file-transfer policy helpers to `src-tauri/src/desktop_file_transfer.rs`,
+   and session-envelope validation/expiry helpers to
+   `src-tauri/src/desktop_session.rs`, all with direct Rust tests; continue
+   splitting into focused modules before adding IPC.
 
 ### 7.3 Cross-Platform Expansion Protocol
 
