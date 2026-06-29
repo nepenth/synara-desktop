@@ -64,7 +64,7 @@ Loop termination requires all of the following:
 |---|---|---|
 | Branch | `main` tracking `origin/main` | `git status --short --branch` |
 | Pre-existing dirty files | `devAssets/index.html` | Generated runtime hash drift existed before harness initialization; root modernization build confirms current runtime hash |
-| KB version | 1.2.19, last reviewed 2026-06-29 | `CODEBASE_KNOWLEDGE_BASE.md` |
+| KB version | 1.2.20, last reviewed 2026-06-29 | `CODEBASE_KNOWLEDGE_BASE.md` |
 | Desktop maturity per KB | Production-oriented, automated gates previously green | KB validation snapshot |
 | iOS maturity per KB | Strong MVP, not release-ready | KB maturity table |
 
@@ -225,7 +225,7 @@ Any cross-platform feature must follow this checklist before acceptance:
 
 | Gate | Required Before Release | Latest Phase 0 Result | Notes |
 |---|---:|---|---|
-| `npm run check:versions` | Yes | Pass, 2026-06-29 | Version metadata consistent at 1.2.19; Tauri aligned at 2.11 |
+| `npm run check:versions` | Yes | Pass, 2026-06-29 | Version metadata consistent at 1.2.20; Tauri aligned at 2.11; iOS build number and marketing version are 1.2.20 |
 | `npm run check:repo-layout` | Yes | Pass, 2026-06-29 | Repository layout canonical |
 | `npm run check:matrix-boundaries` | Yes | Pass, 2026-06-29 | Passed with 2 active iOS and 2 active desktop exceptions |
 | `npm run check:mip1-evidence` | Yes | Pass, 2026-06-29 | 46/46 mapped; warning about bundled history retained |
@@ -235,7 +235,7 @@ Any cross-platform feature must follow this checklist before acceptance:
 | `npm run test:modernization` | Yes | Pass, 2026-06-29 | Latest root build/test passed 294/294 after timeline opening helper coverage |
 | `npm --prefix synara run check:eslint` | Yes | Pass, 2026-06-29 | Frontend lint clean |
 | `npm --prefix synara run check:prettier` | Yes | Pass after mechanical format fix, 2026-06-29 | Four pre-existing formatting drifts corrected |
-| `npm run check:release-updater` | Yes | Advisory pass with 4 warnings, 2026-06-29 | Plugin/package/check-only capability wiring, release CI config materialization, strict-inspector compatibility coverage for materialized config, signing/artifact handoff, and generated `latest.json` upload are present; committed updater config remains disabled until release-time variables are applied |
+| `npm run check:release-updater` | Yes | Advisory pass with 4 expected warnings, 2026-06-29 | Plugin/package/check-only capability wiring, release CI config materialization, strict-inspector compatibility coverage for materialized config, signing/artifact handoff, and generated `latest.json` upload are present; committed updater config remains disabled until release-time variables are applied |
 | `npm run check:release-updater -- --require-enabled` | Required for published releases | Expected fail locally with 4 errors, 2026-06-29 | Release workflow materializes updater config from `SYNARA_UPDATER_PUBKEY`/optional `SYNARA_UPDATER_ENDPOINT` before this strict gate; local static config remains disabled |
 | `cargo fmt --manifest-path src-tauri/Cargo.toml --check` | Yes | Pass, 2026-06-29 | Rust formatting gate clean after normalizing `build.rs` |
 | `cargo check` in `src-tauri` | Yes | Pass, 2026-06-29 | Rust compile gate clean after localhost-port test hardening |
