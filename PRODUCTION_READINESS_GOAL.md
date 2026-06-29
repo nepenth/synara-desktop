@@ -213,7 +213,7 @@ Any cross-platform feature must follow this checklist before acceptance:
 1. Verify version consistency and release metadata.
 2. Validate signing/notarization path for macOS.
 3. Validate Linux packaging and CachyOS/KDE Wayland smoke.
-4. Complete updater signing and release-channel documentation. **Status:** Release guard and check-only updater plugin scaffolding added; production updater enablement remains blocked on real endpoint/key material, signing secrets, artifact generation, and release workflow upload.
+4. Complete updater signing and release-channel documentation. **Status:** Release guard, check-only updater plugin scaffolding, CI signing-secret exposure, artifact-generation handoff, and signature upload patterns are added; production updater enablement remains blocked on real endpoint/key material and flipping the committed Tauri updater config to enabled.
 5. Refresh `README.md`, release checklist, and user-facing installation docs.
 6. Confirm license, privacy, and security docs are current.
 
@@ -230,8 +230,8 @@ Any cross-platform feature must follow this checklist before acceptance:
 | `npm run test:modernization` | Yes | Pass, 2026-06-29 | Latest root build/test passed 294/294 after timeline opening helper coverage |
 | `npm --prefix synara run check:eslint` | Yes | Pass, 2026-06-29 | Frontend lint clean |
 | `npm --prefix synara run check:prettier` | Yes | Pass after mechanical format fix, 2026-06-29 | Four pre-existing formatting drifts corrected |
-| `npm run check:release-updater` | Yes | Advisory pass with 8 warnings, 2026-06-29 | Plugin/package/check-only capability wiring is present; release metadata/channel prerequisites remain disabled |
-| `npm run check:release-updater -- --require-enabled` | Required for published releases | Expected fail, 2026-06-29 | Release workflow now runs this gate; it fails until updater artifacts, signed metadata, plugin wiring, and release signing secrets are configured |
+| `npm run check:release-updater` | Yes | Advisory pass with 4 warnings, 2026-06-29 | Plugin/package/check-only capability wiring and release CI signing/artifact handoff are present; committed updater public key and endpoint config remain disabled |
+| `npm run check:release-updater -- --require-enabled` | Required for published releases | Expected fail, 2026-06-29 | Release workflow now runs this gate; it fails until `tauri.conf.json` enables updater artifacts and contains production public key/endpoint material |
 | `cargo fmt --manifest-path src-tauri/Cargo.toml --check` | Yes | Pass, 2026-06-29 | Rust formatting gate clean after normalizing `build.rs` |
 | `cargo check` in `src-tauri` | Yes | Pass, 2026-06-29 | Rust compile gate clean after localhost-port test hardening |
 | `cargo test` in `src-tauri` | Yes | Pass, 2026-06-29 | 100/100 Rust tests passed serially after file-transfer helper extraction |
@@ -247,7 +247,7 @@ Any cross-platform feature must follow this checklist before acceptance:
 | Phase 2: Timeline Resurrection | In progress | Desktop viewport restore policy first slice implemented; shared open-focus contract added; iOS policy tests expanded; macOS/iOS validation handoff is tracked in `MACOS_IOS_VALIDATION_QUEUE.md` | Run iOS tests on macOS/Xcode, then execute smoke checklist |
 | Phase 3: Link Opening | In progress | Desktop bridge hardening first slice implemented; Grok reviewed the diff and its findings were incorporated; local gates pass at 281/281 | Run macOS/Linux interactive link-opening smoke checklist |
 | Phase 4: Composer Parity | In progress | Clipboard image paste first slice and drag/drop detection hardening implemented; Grok reviewed both diffs and findings were incorporated/accepted; local gates pass at 283/283 | Run macOS/Linux interactive composer smoke checklist |
-| Phase 5: Release Readiness | In progress | Added release-updater readiness checker; wired published desktop release workflow to fail until signed updater channel prerequisites are configured; added desktop updater plugin/package/check-only permission scaffolding; completed `_JOIN_PATH` route stub; removed legacy commented session atom; continued `RoomTimeline.tsx` decomposition; started `desktop.rs` modularization with URL policy, sanitization helper, and file-transfer helper extractions | Complete real updater config/channel/signing workflow work, then run macOS signing/updater verification |
+| Phase 5: Release Readiness | In progress | Added release-updater readiness checker; wired published desktop release workflow to fail until signed updater channel prerequisites are configured; added desktop updater plugin/package/check-only permission scaffolding; aligned release CI with updater signing secrets, artifact generation, and signature uploads; completed `_JOIN_PATH` route stub; removed legacy commented session atom; continued `RoomTimeline.tsx` decomposition; started `desktop.rs` modularization with URL policy, sanitization helper, and file-transfer helper extractions | Commit real updater public key/endpoints, then run macOS signing/updater verification |
 
 ## Decision Log
 
@@ -275,3 +275,4 @@ Any cross-platform feature must follow this checklist before acceptance:
 | 2026-06-29T11:12:25-04:00 | Accepted Rust validation hardening slice. | The localhost-port test now treats an already-occupied preferred dev port as the busy-port condition under test instead of failing before exercising `select_localhost_port`; `build.rs` was normalized by rustfmt and a duplicate `cfg` attribute was removed. |
 | 2026-06-29T11:21:07-04:00 | Accepted second `desktop.rs` modularization slice. | Extracted shared text and route sanitization helpers into `src-tauri/src/desktop_sanitize.rs`, preserved notification/agent/route call sites, and added direct tests for trimming, truncation, and internal-route policy. Grok review hit its max-turn cap without findings. |
 | 2026-06-29T11:30:17-04:00 | Accepted third `desktop.rs` modularization slice. | Extracted file-transfer policy helpers into `src-tauri/src/desktop_file_transfer.rs`, preserved save/drop command state in `desktop.rs`, and added direct tests for filename sanitization, unique paths, streaming thresholds, and transfer id shape. Grok review hit its max-turn cap without findings. |
+| 2026-06-29T11:38:07-04:00 | Accepted release workflow updater-signing alignment. | The published desktop release jobs no longer force `createUpdaterArtifacts` off after the strict updater gate; they now expose and validate Tauri updater signing secrets and upload generated signature sidecars. Advisory updater warnings dropped from 8 to 4, leaving only committed updater public key/endpoint config blockers. |
