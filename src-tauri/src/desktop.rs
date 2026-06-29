@@ -22,6 +22,10 @@ use std::sync::atomic::AtomicU64;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::build_info;
+use crate::desktop_file_transfer::{
+    downloads_dir, dropped_file_read_mode, new_file_transfer_id, sanitize_download_filename,
+    should_stream_file_ipc, unique_download_path, DroppedFileReadMode, DESKTOP_FILE_IPC_CHUNK_SIZE,
+};
 use crate::desktop_sanitize::{
     sanitize_action_text, sanitize_notification_route, sanitize_route, truncate_text,
 };
@@ -59,8 +63,6 @@ const MAX_DROPPED_TOTAL_BYTES: u64 = 512 * 1024 * 1024;
 const DROPPED_FILE_ALLOWLIST_TTL: Option<Duration> = Some(Duration::from_secs(60));
 #[cfg(test)]
 const DROPPED_FILE_ALLOWLIST_TTL: Option<Duration> = Some(Duration::from_millis(5));
-pub const DESKTOP_FILE_IPC_INLINE_THRESHOLD: usize = 8 * 1024 * 1024;
-pub const DESKTOP_FILE_IPC_CHUNK_SIZE: usize = 1024 * 1024;
 const MAX_ACTIVE_FILE_TRANSFERS: usize = 16;
 const FILE_TRANSFER_SESSION_TTL: Duration = Duration::from_secs(300);
 
@@ -94,12 +96,6 @@ pub struct DesktopNotificationPayload {
 pub struct DesktopSaveFilePayload {
     pub filename: String,
     pub bytes: Vec<u8>,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum DroppedFileReadMode {
-    Inline,
-    Streamed,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -1154,102 +1150,6 @@ pub fn desktop_open_external_url<R: Runtime>(app: AppHandle<R>, url: String) -> 
             false
         }
     }
-}
-
-fn sanitize_download_filename(filename: &str) -> String {
-    let safe_name = Path::new(filename)
-        .file_name()
-        .and_then(|name| name.to_str())
-        .unwrap_or("download")
-        .chars()
-        .map(|ch| {
-            if ch.is_control() || matches!(ch, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|')
-            {
-                '_'
-            } else {
-                ch
-            }
-        })
-        .collect::<String>();
-
-    let trimmed = safe_name.trim().trim_matches('.').trim();
-    if trimmed.is_empty() {
-        "download".to_owned()
-    } else {
-        trimmed.chars().take(180).collect()
-    }
-}
-
-fn downloads_dir() -> Result<PathBuf, String> {
-    #[cfg(target_os = "windows")]
-    let home = env::var_os("USERPROFILE");
-
-    #[cfg(not(target_os = "windows"))]
-    let home = env::var_os("HOME");
-
-    let Some(home_dir) = home else {
-        return Err("Unable to resolve home directory".to_owned());
-    };
-
-    Ok(PathBuf::from(home_dir).join("Downloads"))
-}
-
-fn unique_download_path(downloads: &Path, filename: &str) -> PathBuf {
-    let initial = downloads.join(filename);
-    if !initial.exists() {
-        return initial;
-    }
-
-    let path = Path::new(filename);
-    let stem = path
-        .file_stem()
-        .and_then(|value| value.to_str())
-        .unwrap_or("download");
-    let extension = path.extension().and_then(|value| value.to_str());
-
-    for index in 1..1000 {
-        let candidate_name = match extension {
-            Some(ext) if !ext.is_empty() => format!("{stem} ({index}).{ext}"),
-            _ => format!("{stem} ({index})"),
-        };
-        let candidate = downloads.join(candidate_name);
-        if !candidate.exists() {
-            return candidate;
-        }
-    }
-
-    downloads.join(format!("{stem} ({})", chrono_like_timestamp()))
-}
-
-fn chrono_like_timestamp() -> u128 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|duration| duration.as_millis())
-        .unwrap_or_default()
-}
-
-pub fn should_stream_file_ipc(byte_count: u64) -> bool {
-    byte_count > DESKTOP_FILE_IPC_INLINE_THRESHOLD as u64
-}
-
-pub fn dropped_file_read_mode(byte_count: u64) -> DroppedFileReadMode {
-    if should_stream_file_ipc(byte_count) {
-        DroppedFileReadMode::Streamed
-    } else {
-        DroppedFileReadMode::Inline
-    }
-}
-
-fn new_file_transfer_id(prefix: &str) -> String {
-    let mut bytes = [0_u8; 16];
-    getrandom::fill(&mut bytes).expect("cryptographic random bytes for file transfer id");
-    format!(
-        "{prefix}-{}",
-        bytes
-            .iter()
-            .map(|byte| format!("{byte:02x}"))
-            .collect::<String>()
-    )
 }
 
 fn purge_stale_file_transfer_sessions(now: Instant) {
@@ -4718,28 +4618,33 @@ VERSION_ID=24
     #[test]
     fn should_stream_file_ipc_uses_eight_mebibyte_threshold() {
         assert!(!should_stream_file_ipc(
-            DESKTOP_FILE_IPC_INLINE_THRESHOLD as u64
+            crate::desktop_file_transfer::DESKTOP_FILE_IPC_INLINE_THRESHOLD as u64
         ));
         assert!(should_stream_file_ipc(
-            DESKTOP_FILE_IPC_INLINE_THRESHOLD as u64 + 1
+            crate::desktop_file_transfer::DESKTOP_FILE_IPC_INLINE_THRESHOLD as u64 + 1
         ));
     }
 
     #[test]
     fn dropped_file_read_mode_selects_inline_or_streamed_transfer() {
         assert_eq!(
-            dropped_file_read_mode(DESKTOP_FILE_IPC_INLINE_THRESHOLD as u64),
+            dropped_file_read_mode(
+                crate::desktop_file_transfer::DESKTOP_FILE_IPC_INLINE_THRESHOLD as u64
+            ),
             DroppedFileReadMode::Inline
         );
         assert_eq!(
-            dropped_file_read_mode(DESKTOP_FILE_IPC_INLINE_THRESHOLD as u64 + 1),
+            dropped_file_read_mode(
+                crate::desktop_file_transfer::DESKTOP_FILE_IPC_INLINE_THRESHOLD as u64 + 1
+            ),
             DroppedFileReadMode::Streamed
         );
     }
 
     #[test]
     fn desktop_save_file_rejects_inline_payload_over_threshold() {
-        let oversized = vec![0_u8; DESKTOP_FILE_IPC_INLINE_THRESHOLD + 1];
+        let oversized =
+            vec![0_u8; crate::desktop_file_transfer::DESKTOP_FILE_IPC_INLINE_THRESHOLD + 1];
         let result = desktop_save_file(DesktopSaveFilePayload {
             filename: "large.bin".to_owned(),
             bytes: oversized,
@@ -4773,7 +4678,8 @@ VERSION_ID=24
         fs::create_dir_all(&temp_home).expect("temp home should be created");
         std::env::set_var("HOME", &temp_home);
 
-        let total_size = (DESKTOP_FILE_IPC_INLINE_THRESHOLD + 1) as u64;
+        let total_size =
+            (crate::desktop_file_transfer::DESKTOP_FILE_IPC_INLINE_THRESHOLD + 1) as u64;
         let begin = desktop_save_file_begin("streamed.bin".to_owned(), total_size)
             .expect("streaming save should begin");
         let chunk_size = DESKTOP_FILE_IPC_CHUNK_SIZE as u64;
@@ -4793,8 +4699,9 @@ VERSION_ID=24
         assert_eq!(saved_bytes.len(), total_size as usize);
         assert_eq!(saved_bytes[0], 1);
         assert_eq!(
-            saved_bytes[DESKTOP_FILE_IPC_INLINE_THRESHOLD],
-            ((DESKTOP_FILE_IPC_INLINE_THRESHOLD as u64 % 251) + 1) as u8
+            saved_bytes[crate::desktop_file_transfer::DESKTOP_FILE_IPC_INLINE_THRESHOLD],
+            ((crate::desktop_file_transfer::DESKTOP_FILE_IPC_INLINE_THRESHOLD as u64 % 251) + 1)
+                as u8
         );
 
         if let Some(home) = original_home {
@@ -4814,7 +4721,8 @@ VERSION_ID=24
         let temp_dir = std::env::temp_dir().join(new_file_transfer_id("drop-read-test"));
         fs::create_dir_all(&temp_dir).expect("temp drop dir should be created");
         let file_path = temp_dir.join("streamed-drop.bin");
-        let total_size = (DESKTOP_FILE_IPC_INLINE_THRESHOLD + 512) as u64;
+        let total_size =
+            (crate::desktop_file_transfer::DESKTOP_FILE_IPC_INLINE_THRESHOLD + 512) as u64;
         let payload = vec![9_u8; total_size as usize];
         fs::write(&file_path, &payload).expect("dropped file fixture should be written");
 
@@ -4838,7 +4746,7 @@ VERSION_ID=24
 
         let second_chunk = desktop_read_dropped_file_chunk(
             transfer_id.clone(),
-            DESKTOP_FILE_IPC_INLINE_THRESHOLD as u64,
+            crate::desktop_file_transfer::DESKTOP_FILE_IPC_INLINE_THRESHOLD as u64,
             DESKTOP_FILE_IPC_CHUNK_SIZE,
         )
         .expect("second chunk should be readable");
