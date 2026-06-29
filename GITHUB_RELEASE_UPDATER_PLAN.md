@@ -51,12 +51,12 @@ Deferred:
 - Final product UX decision: silent check, manual "Check for Updates", or
   prompted download/install.
 
-Known local note:
+Latest local gate hardening:
 
-- There may be uncommitted local draft edits that further tighten
-  `scripts/check-release-updater.mjs` so signed metadata evidence requires the
-  generator/download/upload workflow rather than a broad `latest.json` string
-  match. Review before resuming updater work.
+- `scripts/check-release-updater.mjs` should require the workflow to download
+  updater artifacts, run `scripts/generate-release-updater-metadata.mjs`, and
+  upload generated `latest.json` instead of accepting a broad `latest.json`
+  string match as signed metadata evidence.
 
 ## Required Secrets And Variables
 
@@ -192,4 +192,3 @@ Park this work until after:
 After those P0 user-facing checks are evidence-backed, resume this plan at
 Milestone 1 or Milestone 2 depending on whether GitHub variables/secrets are
 already configured.
-

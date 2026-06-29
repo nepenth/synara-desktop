@@ -38,6 +38,20 @@ const readyInputs = {
     files: |
       src-tauri/target/release/bundle/appimage/*.sig
       latest.json
+    updater-metadata:
+      needs: [linux, macos]
+      steps:
+        - uses: actions/download-artifact@v4
+        - run: |
+            node scripts/generate-release-updater-metadata.mjs \
+              --artifacts updater-artifacts \
+              --repo "$GITHUB_REPOSITORY" \
+              --tag "$GITHUB_REF_NAME" \
+              --version "1.2.20" \
+              --output latest.json
+        - uses: softprops/action-gh-release@v3
+          with:
+            files: latest.json
   `,
 };
 
@@ -94,12 +108,13 @@ test("release updater gate requires signed update metadata upload", () => {
         TAURI_SIGNING_PRIVATE_KEY_PASSWORD: \${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
       files: |
         src-tauri/target/release/bundle/appimage/*.sig
+        latest.json
     `,
     requireEnabled: true,
   });
 
   assert.equal(result.ok, false);
-  assert.match(result.errors.join("\n"), /signed updater metadata/);
+  assert.match(result.errors.join("\n"), /generate and upload signed updater metadata/);
 });
 
 test("release updater gate requires updater signature sidecars", () => {

@@ -29,6 +29,16 @@ const workflowConfiguresUpdaterChannel = (workflow) =>
   hasWorkflowPattern(workflow, /SYNARA_UPDATER_PUBKEY/) &&
   hasWorkflowPattern(workflow, /SYNARA_UPDATER_ENDPOINT/);
 
+const workflowPublishesGeneratedUpdaterMetadata = (workflow) =>
+  hasWorkflowPattern(workflow, /updater-metadata:/) &&
+  hasWorkflowPattern(workflow, /needs:\s*\[\s*linux\s*,\s*macos\s*\]/) &&
+  hasWorkflowPattern(workflow, /actions\/download-artifact/) &&
+  hasWorkflowPattern(workflow, /generate-release-updater-metadata\.mjs/) &&
+  hasWorkflowPattern(workflow, /--repo\s+["']?\$GITHUB_REPOSITORY["']?/) &&
+  hasWorkflowPattern(workflow, /--tag\s+["']?\$GITHUB_REF_NAME["']?/) &&
+  hasWorkflowPattern(workflow, /softprops\/action-gh-release/) &&
+  hasWorkflowPattern(workflow, /files:\s*(?:\|\s*\n\s*)?latest\.json/);
+
 export function inspectReleaseUpdaterReadiness({
   tauriConfig,
   cargoToml,
@@ -170,9 +180,9 @@ export function inspectReleaseUpdaterReadiness({
     );
   }
 
-  if (!hasWorkflowPattern(releaseWorkflow, /latest\.json|platforms:/)) {
+  if (!workflowPublishesGeneratedUpdaterMetadata(releaseWorkflow)) {
     report(
-      ".github/workflows/release-desktop.yml must upload signed updater metadata such as latest.json."
+      ".github/workflows/release-desktop.yml must generate and upload signed updater metadata from Linux and macOS updater artifacts."
     );
   }
 

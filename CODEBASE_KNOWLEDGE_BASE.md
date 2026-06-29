@@ -3,7 +3,7 @@
 > **Purpose:** Shared starting point for onboarding agents and contributors to this
 > repository. Review this document before initiating new tasks or expansion work.
 >
-> **Last reviewed:** 2026-06-29 · **Version:** 1.2.19 · **Branch:** `main`
+> **Last reviewed:** 2026-06-29 · **Version:** 1.2.20 · **Branch:** `main`
 
 ---
 
@@ -20,7 +20,7 @@
 
 | Gate | Result |
 |------|--------|
-| `npm run check:versions` | 1.2.19 consistent (Tauri 2.11 aligned) |
+| `npm run check:versions` | 1.2.20 consistent (Tauri 2.11 aligned) |
 | `npm run test:modernization` | 294/294 pass |
 | `npm run check:mip1-evidence` | 46/46 mapped on `main` |
 
