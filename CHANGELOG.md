@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Extracted desktop session-envelope validation and expiry policy from `desktop.rs` into a focused Rust module with direct tests.
 - Aligned the published desktop release workflow with the signed updater gate by exposing Tauri updater signing secrets, removing release-time updater artifact suppression, and uploading generated updater signature artifacts.
 - Extracted desktop file-transfer policy helpers from `desktop.rs` into a focused Rust module with direct tests.
 - Extracted desktop text and route sanitization helpers from `desktop.rs` into a focused Rust module with direct tests.

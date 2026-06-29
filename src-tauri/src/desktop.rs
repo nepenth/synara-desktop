@@ -1,10 +1,10 @@
 use keyring::{Entry, Error as KeyringError};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::env;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant};
 #[cfg(target_os = "macos")]
 use tauri::image::Image;
 use tauri::menu::{Menu, MenuEvent, MenuItem, PredefinedMenuItem};
@@ -28,6 +28,10 @@ use crate::desktop_file_transfer::{
 };
 use crate::desktop_sanitize::{
     sanitize_action_text, sanitize_notification_route, sanitize_route, truncate_text,
+};
+use crate::desktop_session::{
+    current_timestamp_ms, sanitize_session_envelope, session_envelope_is_expired,
+    DesktopSessionEnvelope, DESKTOP_STORED_SESSION_INVALID,
 };
 use crate::desktop_url;
 
@@ -265,26 +269,11 @@ pub struct DesktopSecretStoreStatus {
     pub reason: Option<&'static str>,
 }
 
-#[derive(Clone, Deserialize, Serialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct DesktopSessionEnvelope {
-    base_url: String,
-    user_id: String,
-    device_id: String,
-    access_token: String,
-    refresh_token: Option<String>,
-    expires_in_ms: Option<u64>,
-    stored_at_ms: Option<u64>,
-}
-
 const DESKTOP_AGENT_ACTION_MAX_TEXT_CHARS: usize = 1024;
 const DESKTOP_AGENT_ACTION_MAX_URL_CHARS: usize = 2048;
 const DESKTOP_AGENT_ACTION_MAX_MARKDOWN_CHARS: usize = 16_384;
 const DESKTOP_NOTIFICATION_MAX_TITLE_CHARS: usize = 120;
 const DESKTOP_NOTIFICATION_MAX_BODY_CHARS: usize = 500;
-const DESKTOP_SESSION_MAX_BASE_URL_CHARS: usize = 2_048;
-const DESKTOP_SESSION_MAX_ID_CHARS: usize = 512;
-const DESKTOP_SESSION_MAX_TOKEN_CHARS: usize = 8_192;
 const DESKTOP_SESSION_CREDENTIAL_SERVICE: &str = "com.whylandcreative.synara.desktop";
 const DESKTOP_SESSION_LEGACY_CREDENTIAL_SERVICE: &str = "app.synara.desktop";
 const DESKTOP_SESSION_CREDENTIAL_ACCOUNT: &str = "matrix-session";
@@ -333,11 +322,9 @@ const DESKTOP_SECRET_STORE_OPERATION_UNAVAILABLE: &str = "desktop-secret-store-u
 const DESKTOP_SECRET_STORE_OPERATION_DENIED: &str = "desktop-secret-store-denied";
 #[cfg(target_os = "linux")]
 const DESKTOP_SECRET_STORE_PROBE_TIMEOUT: Duration = Duration::from_secs(2);
-const DESKTOP_STORED_SESSION_INVALID: &str = "desktop-stored-session-invalid";
 const ALLOWED_SHORTCUT_LEN: usize = 128;
 const UNKNOWN_INTEGRATION_VALUE: &str = "unknown";
 const MAX_TRAY_COUNT: i64 = 9_999;
-const SESSION_EXPIRY_CLOCK_SKEW_TOLERANCE_MS: u64 = 60_000;
 const ALLOWED_AGENT_ACTION_KIND: &[&str] = &[
     "agent",
     "copy",
@@ -414,103 +401,6 @@ fn sanitize_notification_payload(
     };
 
     Ok(DesktopNotificationPayload { title, body, route })
-}
-
-fn sanitize_required_session_field(
-    value: String,
-    field_name: &'static str,
-    max_chars: usize,
-) -> Result<String, String> {
-    let sanitized = value.trim().to_owned();
-    if sanitized.is_empty() {
-        return Err(format!("Session {field_name} cannot be empty"));
-    }
-    if sanitized.chars().count() > max_chars {
-        return Err(format!("Session {field_name} is too long"));
-    }
-    Ok(sanitized)
-}
-
-fn sanitize_optional_session_field(
-    value: Option<String>,
-    field_name: &'static str,
-    max_chars: usize,
-) -> Result<Option<String>, String> {
-    let Some(value) = value else {
-        return Ok(None);
-    };
-    let sanitized = value.trim().to_owned();
-    if sanitized.is_empty() {
-        return Ok(None);
-    }
-    if sanitized.chars().count() > max_chars {
-        return Err(format!("Session {field_name} is too long"));
-    }
-    Ok(Some(sanitized))
-}
-
-fn sanitize_session_envelope(
-    session: DesktopSessionEnvelope,
-) -> Result<DesktopSessionEnvelope, String> {
-    let base_url = sanitize_required_session_field(
-        session.base_url,
-        "baseUrl",
-        DESKTOP_SESSION_MAX_BASE_URL_CHARS,
-    )?;
-    if !desktop_url::is_allowed_session_base_url(&base_url) {
-        return Err(
-            "Session baseUrl must be an HTTPS URL or a loopback development URL".to_owned(),
-        );
-    }
-
-    let user_id =
-        sanitize_required_session_field(session.user_id, "userId", DESKTOP_SESSION_MAX_ID_CHARS)?;
-    let device_id = sanitize_required_session_field(
-        session.device_id,
-        "deviceId",
-        DESKTOP_SESSION_MAX_ID_CHARS,
-    )?;
-    let access_token = sanitize_required_session_field(
-        session.access_token,
-        "accessToken",
-        DESKTOP_SESSION_MAX_TOKEN_CHARS,
-    )?;
-    let refresh_token = sanitize_optional_session_field(
-        session.refresh_token,
-        "refreshToken",
-        DESKTOP_SESSION_MAX_TOKEN_CHARS,
-    )?;
-
-    Ok(DesktopSessionEnvelope {
-        base_url,
-        user_id,
-        device_id,
-        access_token,
-        refresh_token,
-        expires_in_ms: session.expires_in_ms,
-        stored_at_ms: session.stored_at_ms,
-    })
-}
-
-fn current_timestamp_ms() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis() as u64
-}
-
-fn session_envelope_is_expired(session: &DesktopSessionEnvelope, now_ms: u64) -> bool {
-    let Some(expires_in_ms) = session.expires_in_ms else {
-        return false;
-    };
-    let Some(stored_at_ms) = session.stored_at_ms else {
-        return false;
-    };
-
-    now_ms
-        > stored_at_ms
-            .saturating_add(expires_in_ms)
-            .saturating_add(SESSION_EXPIRY_CLOCK_SKEW_TOLERANCE_MS)
 }
 
 trait DesktopSessionSecretStore {
@@ -3445,69 +3335,6 @@ mod tests {
     }
 
     #[test]
-    fn sanitize_session_envelope_accepts_https_session() {
-        let session = sanitize_session_envelope(DesktopSessionEnvelope {
-            base_url: " https://matrix.example.org ".to_owned(),
-            user_id: " @alice:example.org ".to_owned(),
-            device_id: " DEVICEID ".to_owned(),
-            access_token: " access-token ".to_owned(),
-            refresh_token: Some(" refresh-token ".to_owned()),
-            expires_in_ms: Some(3_600_000),
-            stored_at_ms: None,
-        })
-        .expect("session envelope should pass");
-
-        assert_eq!(session.base_url, "https://matrix.example.org");
-        assert_eq!(session.user_id, "@alice:example.org");
-        assert_eq!(session.device_id, "DEVICEID");
-        assert_eq!(session.access_token, "access-token");
-        assert_eq!(session.refresh_token.as_deref(), Some("refresh-token"));
-        assert_eq!(session.expires_in_ms, Some(3_600_000));
-    }
-
-    #[test]
-    fn sanitize_session_envelope_allows_loopback_http_for_development() {
-        let mut session = valid_session_envelope();
-        session.base_url = "http://localhost:8008".to_owned();
-
-        let sanitized = sanitize_session_envelope(session).expect("loopback session should pass");
-
-        assert_eq!(sanitized.base_url, "http://localhost:8008");
-    }
-
-    #[test]
-    fn sanitize_session_envelope_rejects_empty_access_token() {
-        let mut session = valid_session_envelope();
-        session.access_token = "   ".to_owned();
-
-        assert!(sanitize_session_envelope(session).is_err());
-    }
-
-    #[test]
-    fn sanitize_session_envelope_rejects_plain_http_remote_base_url() {
-        let mut session = valid_session_envelope();
-        session.base_url = "http://matrix.example.org".to_owned();
-
-        let result = sanitize_session_envelope(session);
-
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn sanitize_session_envelope_does_not_echo_token_values_in_errors() {
-        let secret_token = "super-secret-access-token";
-        let mut session = valid_session_envelope();
-        session.base_url = "http://matrix.example.org".to_owned();
-        session.access_token = secret_token.to_owned();
-
-        let error = sanitize_session_envelope(session)
-            .err()
-            .expect("session envelope should fail");
-
-        assert!(!error.contains(secret_token));
-    }
-
-    #[test]
     fn credential_store_names_are_stable_and_scoped() {
         assert_eq!(
             DESKTOP_SESSION_CREDENTIAL_SERVICE,
@@ -3987,46 +3814,6 @@ mod tests {
     }
 
     #[test]
-    fn session_envelope_expiry_honors_tolerance_and_missing_metadata() {
-        let stored_at_ms = 1_000_000;
-        let session = DesktopSessionEnvelope {
-            stored_at_ms: Some(stored_at_ms),
-            expires_in_ms: Some(3_600_000),
-            ..valid_session_envelope()
-        };
-
-        assert!(!session_envelope_is_expired(&session, stored_at_ms));
-        assert!(!session_envelope_is_expired(
-            &session,
-            stored_at_ms + 3_600_000 + SESSION_EXPIRY_CLOCK_SKEW_TOLERANCE_MS
-        ));
-        assert!(session_envelope_is_expired(
-            &session,
-            stored_at_ms + 3_600_000 + SESSION_EXPIRY_CLOCK_SKEW_TOLERANCE_MS + 1
-        ));
-
-        let without_expiry = DesktopSessionEnvelope {
-            expires_in_ms: None,
-            stored_at_ms: Some(stored_at_ms),
-            ..valid_session_envelope()
-        };
-        assert!(!session_envelope_is_expired(
-            &without_expiry,
-            stored_at_ms + 9_999_999
-        ));
-
-        let without_stored_at = DesktopSessionEnvelope {
-            expires_in_ms: Some(3_600_000),
-            stored_at_ms: None,
-            ..valid_session_envelope()
-        };
-        assert!(!session_envelope_is_expired(
-            &without_stored_at,
-            stored_at_ms + 9_999_999
-        ));
-    }
-
-    #[test]
     fn desktop_session_store_clears_expired_sessions_on_read() {
         let store = TestSessionSecretStore::available();
         let stored_at_ms = 1_000_000;
@@ -4041,12 +3828,11 @@ mod tests {
                 .expect("session should read")
                 .is_some()
         );
-        assert!(desktop_get_session_from_store_at(
-            &store,
-            stored_at_ms + 60_000 + SESSION_EXPIRY_CLOCK_SKEW_TOLERANCE_MS + 1
-        )
-        .expect("expired session should read as none")
-        .is_none());
+        assert!(
+            desktop_get_session_from_store_at(&store, stored_at_ms + 10_000_000)
+                .expect("expired session should read as none")
+                .is_none()
+        );
         assert_eq!(store.stored_secret(), None);
     }
 
