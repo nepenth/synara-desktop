@@ -9,6 +9,9 @@ Tauri shell and the app runtime.
 
 Authoritative planning documents:
 
+- [Monorepo knowledge base](../CODEBASE_KNOWLEDGE_BASE.md) — start here for
+  architecture, feature status, shared contracts, and expansion guidance across
+  desktop, runtime, and iOS.
 - [iOS project spec](../synara/docs/synara-ios-project-spec.md)
 - [iOS App Store plan](../synara/docs/synara-ios-app-store-plan.md)
 - [iOS repository layout ADR](../docs/adr/0001-ios-repository-layout.md)
