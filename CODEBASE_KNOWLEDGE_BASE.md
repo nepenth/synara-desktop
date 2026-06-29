@@ -63,8 +63,8 @@ release-grade.
 synara-desktop/                    # Root — Tauri project + orchestration
 ├── config.json                    # Canonical homeserver/config (synced → synara/)
 ├── package.json                   # Tauri CLI, build scripts, version gates
-├── src-tauri/                     # Rust desktop shell (~1.7k LOC in desktop.rs)
-│   ├── src/{main,lib,desktop,desktop_agent_actions,desktop_file_transfer,desktop_sanitize,desktop_secret_store,desktop_session,desktop_session_store,desktop_shortcuts,desktop_tray,desktop_url,build_info,menu}.rs
+├── src-tauri/                     # Rust desktop shell (~1.5k LOC in desktop.rs)
+│   ├── src/{main,lib,desktop,desktop_agent_actions,desktop_file_transfer,desktop_notifications,desktop_sanitize,desktop_secret_store,desktop_session,desktop_session_store,desktop_shortcuts,desktop_tray,desktop_url,build_info,menu}.rs
 │   ├── capabilities/{main,release-hardening}.json
 │   └── tauri.conf.json
 ├── synara/                        # React/Vite Matrix runtime (~865 TS/JS files)
@@ -208,7 +208,7 @@ Status labels: **Full** · **Partial** · **Stub** · **Planned**
 | Feature | Status | Location |
 |---------|--------|----------|
 | In-app notification center | Full | `/inbox/notifications/` |
-| Desktop native notifications + click routing | Full | `ClientNonUIFeatures.tsx`, `desktop.rs` |
+| Desktop native notifications + click routing | Full | `ClientNonUIFeatures.tsx`, `desktop_notifications.rs` |
 | Dock/taskbar badge counts | Full | `badgeSummary.ts`, `desktop_set_badge_count` |
 | DND / tray state | Full | Linux tray DND toggle |
 | Service worker push (browser dev) | Full | `sw.ts`, `sw-session.ts` |
@@ -354,7 +354,7 @@ tracked in docs, contracts, and functionality matrices instead.
 |------|----------|--------|
 | Browser-shaped desktop runtime | Medium | IndexedDB sync/crypto, localStorage drafts, service worker media |
 | matrix-js-sdk coupling | High | ~209 runtime files; Rust SDK migration = multi-month rewrite |
-| Monolithic files | Medium | `RoomTimeline.tsx` (2857 LOC after helper extractions), `desktop.rs` (1717 LOC after URL, sanitization, file-transfer, session-envelope, secret-store classification/probe/cache, keyring session-store, global shortcut, tray/menu, and agent-action helper extractions) |
+| Monolithic files | Medium | `RoomTimeline.tsx` (2857 LOC after helper extractions), `desktop.rs` (1456 LOC after URL, sanitization, file-transfer, session-envelope, secret-store classification/probe/cache, keyring session-store, global shortcut, tray/menu, agent-action, and notification helper extractions) |
 | Limited UI test coverage | Medium | 44 unit test files, zero `*.test.tsx` component tests |
 | Windows unsupported | Low (by design) | No Keychain equivalent; excluded from release matrix |
 | Stale MIP1 branch | Low | Could confuse contributors |
@@ -409,6 +409,7 @@ tracked in docs, contracts, and functionality matrices instead.
 | Desktop bridge (Rust) | `src-tauri/src/desktop.rs` |
 | Desktop agent actions (Rust) | `src-tauri/src/desktop_agent_actions.rs` |
 | Desktop file-transfer helpers (Rust) | `src-tauri/src/desktop_file_transfer.rs` |
+| Desktop notifications (Rust) | `src-tauri/src/desktop_notifications.rs` |
 | Desktop sanitization helpers (Rust) | `src-tauri/src/desktop_sanitize.rs` |
 | Desktop secret-store status/classification contracts (Rust) | `src-tauri/src/desktop_secret_store.rs` |
 | Desktop session-envelope policy (Rust) | `src-tauri/src/desktop_session.rs` |
@@ -502,9 +503,11 @@ check:repo-layout → check:versions → check:matrix-boundaries
    `src-tauri/src/desktop_session_store.rs`, global shortcut
    policy/registration to `src-tauri/src/desktop_shortcuts.rs`, and tray/menu
    state, badge, DND, and tray creation handling to
-   `src-tauri/src/desktop_tray.rs`, and agent-action payload sanitization,
+   `src-tauri/src/desktop_tray.rs`, agent-action payload sanitization,
    local handling, and event emission to
-   `src-tauri/src/desktop_agent_actions.rs`, all with direct Rust tests;
+   `src-tauri/src/desktop_agent_actions.rs`, and notification payload
+   validation, permission commands, and route-click dispatch to
+   `src-tauri/src/desktop_notifications.rs`, all with direct Rust tests;
    continue splitting into focused modules before adding IPC.
 
 ### 7.3 Cross-Platform Expansion Protocol
