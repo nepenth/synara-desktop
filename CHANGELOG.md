@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Added Codex-Orchestrator-v2 persistent harness artifacts for production-readiness tracking.
+- Fixed existing Prettier drift in timeline, notification, app-link, and timeline lifecycle files so the formatting gate passes.
+
 ## 1.0.4 - 2026-05-18
 
 - Fixed room timeline viewport restoration when leaving and returning to a channel after scrolling into history.
