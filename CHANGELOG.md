@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Added a cross-platform timeline open-focus contract and expanded iOS focus-policy coverage for read-marker and jump-latest behavior.
 - Added a desktop timeline viewport restore policy so unread rooms and stale historical anchors no longer override live/read-marker opening.
 - Added Codex-Orchestrator-v2 persistent harness artifacts for production-readiness tracking.
 - Expanded the living production-readiness backlog to cover the full KB Section 7 recommendation set and reconciliation constraints.

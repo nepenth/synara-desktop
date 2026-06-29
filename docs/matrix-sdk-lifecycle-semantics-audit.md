@@ -30,6 +30,9 @@ scroll position after the room has mounted.
 - Focus changes, receipt/account-data updates, and unread count changes must not
   reposition an already-mounted room.
 
+See `docs/timeline-open-focus-contract.md` for the cross-platform open-room
+focus matrix used by the Timeline Resurrection epic.
+
 ## Confirmed SDK Semantics
 
 Desktop uses `matrix-js-sdk`. Its `EventTimelineSet` docs state that the live
@@ -53,7 +56,7 @@ itself is an explicit focused event/thread route.
 
 ### Finding 1: Desktop Timeline Viewport Ownership
 
-Status: fixed in `8baaf28`.
+Status: fixed in `8baaf28`; hardened in `fc9fc66`.
 
 `RoomTimeline` mixed saved viewport restoration, read-receipt/unread scrolling,
 live-end pinning, and SDK timeline refresh handling. A mounted room could be
@@ -70,6 +73,9 @@ Remediation:
   the viewport.
 - Live events reattach to a new live timeline only when the user is pinned to
   bottom or the viewport is empty.
+- Stale non-bottom local viewport anchors no longer override unread room opens;
+  desktop now restores saved historical anchors only when they are fresh and the
+  room has no unread state.
 
 ### Finding 2: iOS Read-Marker Focus Leaked Into Live Updates
 
@@ -172,6 +178,8 @@ Current guardrail:
 - Desktop tests cover latest-room versus loaded-live-tail read receipt modes,
   conservative unread inference from partial live slices, and room current-state
   helper preference.
+- `docs/timeline-open-focus-contract.md` defines the shared open-room focus
+  matrix and smoke checklist.
 
 Needed guardrails:
 
