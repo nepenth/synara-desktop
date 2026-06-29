@@ -5,6 +5,7 @@
 
 mod build_info;
 mod desktop;
+mod desktop_file_transfer;
 mod desktop_sanitize;
 mod desktop_url;
 #[cfg(target_os = "macos")]

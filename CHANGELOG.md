@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Extracted desktop file-transfer policy helpers from `desktop.rs` into a focused Rust module with direct tests.
 - Extracted desktop text and route sanitization helpers from `desktop.rs` into a focused Rust module with direct tests.
 - Stabilized the localhost-port Rust test so the validation gate still passes when the preferred dev port is already occupied.
 - Split desktop URL safety helpers out of `desktop.rs` into a focused Rust module with direct policy tests.
