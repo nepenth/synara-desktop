@@ -150,9 +150,15 @@ export function inspectReleaseUpdaterReadiness({
     );
   }
 
-  if (!hasWorkflowPattern(releaseWorkflow, /\.sig|latest\.json|platforms:/)) {
+  if (!hasWorkflowPattern(releaseWorkflow, /\.sig/)) {
     report(
-      ".github/workflows/release-desktop.yml must upload updater signatures or signed update metadata."
+      ".github/workflows/release-desktop.yml must upload updater signature sidecars."
+    );
+  }
+
+  if (!hasWorkflowPattern(releaseWorkflow, /latest\.json|platforms:/)) {
+    report(
+      ".github/workflows/release-desktop.yml must upload signed updater metadata such as latest.json."
     );
   }
 
