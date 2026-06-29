@@ -1,0 +1,162 @@
+# Production Smoke Checklist
+
+Reviewed: 2026-06-29
+
+This checklist is the release handoff surface for the remaining human-run
+desktop, macOS, and iOS validation gates. Automated gates stay tracked in
+`PRODUCTION_READINESS_GOAL.md`; macOS/iOS tool-bound tasks stay tracked in
+`MACOS_IOS_VALIDATION_QUEUE.md`.
+
+## Evidence Rules
+
+Every smoke pass must record:
+
+- Commit SHA and branch.
+- Build type: dev, local release, signed release candidate, or CI artifact.
+- OS name/version, desktop environment where relevant, and hardware class.
+- Test account/homeserver class, without secrets.
+- Exact command used to build or launch.
+- Per-case pass/fail, with reproduction notes for every failure.
+- Links or paths for screenshots, screen recordings, logs, updater metadata, or
+  crash reports when they exist.
+
+Do not mark a section signed off from memory. The evidence must be attached to
+this file, `MACOS_IOS_VALIDATION_QUEUE.md`, or a linked release issue/PR.
+
+## Common Preflight
+
+Run from the repository root before any interactive smoke pass:
+
+```sh
+git status --short --branch
+git rev-parse --short HEAD
+npm run check:versions
+npm run check:repo-layout
+npm run check:matrix-boundaries
+npm run check:release-updater
+```
+
+For a release candidate with updater material configured, replace the last
+command with:
+
+```sh
+npm run check:release-updater -- --require-enabled
+```
+
+## macOS Desktop Smoke
+
+Required host: macOS workstation with prior Synara build capability.
+
+Suggested local build command for unsigned smoke:
+
+```sh
+npm run tauri build -- --bundles app
+```
+
+Cases:
+
+| ID | Area | Pass Criteria | Evidence |
+|---|---|---|---|
+| MAC-DESK-001 | Launch/session | App launches, login succeeds, session persists after quit/reopen through Keychain. | Build SHA, macOS version, account class, pass/fail. |
+| MAC-DESK-002 | Logout/session | Logout clears session; relogin succeeds without crypto/session mismatch. | Pass/fail plus any session-store status. |
+| MAC-DESK-003 | Link opening | Rich text links, Matrix HTML links, normal message links, Hermes action/artifact links, settings/about links, profile/server links, OIDC account-management links, registration terms, feature-check help link, and location links open in the system browser, not an embedded webview. | Per-surface pass/fail; browser used. |
+| MAC-DESK-004 | Composer spellcheck | Slate composer shows native spellcheck behavior while normal Markdown/rich text editing still works. | Pass/fail with test words and locale. |
+| MAC-DESK-005 | Composer file drop | Drag/drop one file and multiple files into a room; upload board shows correct attachments and encrypted-room upload path still succeeds. | File types/sizes and pass/fail. |
+| MAC-DESK-006 | Composer clipboard image | Paste a screenshot/native clipboard image and an image copied from a browser that also advertises HTML/text; both upload as files instead of inserting unwanted rich HTML. | Source app, upload board evidence, pass/fail. |
+| MAC-DESK-007 | Notifications | In-session notification appears; click routes to the sanitized internal room/inbox route. | Notification permission state and route result. |
+| MAC-DESK-008 | Tray/status | Show Synara, Later, Notifications, Do Not Disturb, build label, and Quit behave as documented for macOS. | Menu screenshot or per-item pass/fail. |
+| MAC-DESK-009 | Shortcuts | Register global shortcuts, trigger navigation, and confirm permission-denied messaging if registration fails. | Shortcut config and pass/fail. |
+| MAC-DESK-010 | Release hardening | Release build denies DevTools shortcut and still exposes build identity in the tray/About surfaces. | Build type and pass/fail. |
+
+## Linux Desktop Smoke
+
+Primary target: CachyOS or another Arch-family KDE Plasma Wayland session.
+Secondary target: one Debian-family KDE Wayland session before public release.
+
+Suggested package smoke build:
+
+```sh
+npm run tauri build -- --bundles deb --config '{"bundle":{"createUpdaterArtifacts":false}}'
+```
+
+Cases:
+
+| ID | Area | Pass Criteria | Evidence |
+|---|---|---|---|
+| LINUX-DESK-001 | Environment detection | Desktop Integration reports KDE Plasma Wayland or the correct fallback session/distribution labels. | Screenshot or copied integration status. |
+| LINUX-DESK-002 | Tray/status | Tray icon appears; Show Synara, unread summary, Later, Notifications, Desktop Integration, Do Not Disturb, build label, and Quit work. | Per-item pass/fail. |
+| LINUX-DESK-003 | Notifications | In-session notifications appear and clicks route to sanitized internal destinations. | Permission state and route result. |
+| LINUX-DESK-004 | Shortcuts | Shortcut save/trigger works or KDE Wayland failure path gives actionable manual-binding guidance. | Shortcut config and pass/fail. |
+| LINUX-DESK-005 | Composer drop/paste | File drag/drop and clipboard image paste both attach files through the upload board. | File types/sizes and pass/fail. |
+| LINUX-DESK-006 | Link opening | Same external-link surfaces as `MAC-DESK-003` open in the system browser. | Browser used and per-surface pass/fail. |
+| LINUX-DESK-007 | Secret Service | Session persists through Secret Service when available; documented fallback appears when unavailable. | Backend status and restart result. |
+| LINUX-DESK-008 | Portals/media | File/media portal readiness rows are present and accurate; file download/open handoff works. | Portal status and pass/fail. |
+
+## Timeline Resurrection Smoke
+
+Run on desktop and iOS. These cases mirror
+`docs/timeline-open-focus-contract.md`.
+
+| ID | Scenario | Pass Criteria | Evidence |
+|---|---|---|---|
+| TL-001 | Fully read room, no saved viewport | Opens at live end without history traversal. | Room size class and pass/fail. |
+| TL-002 | Fully read room after old-history visit | Reopens at live end once saved historical anchor is stale. | Anchor age and pass/fail. |
+| TL-003 | One new message after old-history visit | Opens near unread/new context, not old history. | Sender account and pass/fail. |
+| TL-004 | Read-marker focused open | Shows jump-to-latest when latest is outside focused window. | Read marker event age and pass/fail. |
+| TL-005 | Jump latest | Reaches true latest event after external sender posts. | Event IDs/timestamps and pass/fail. |
+| TL-006 | Stale notification/read-marker state | Does not restore unrelated old history; jump-latest path is clear. | Sync state notes and pass/fail. |
+| TL-007 | Live append while pinned | Follows bottom and marks read after visible delay. | Pass/fail. |
+| TL-008 | Live append while scrolled up | Preserves visible anchor. | Anchor event and pass/fail. |
+| TL-009 | Timeline reset/gap while pinned | Reattaches to live tail without blank viewport. | Reset trigger notes and pass/fail. |
+| TL-010 | Timeline reset/gap while scrolled up | Preserves anchor or keeps clear jump-latest affordance. | Reset trigger notes and pass/fail. |
+
+## iOS Tool-Bound Smoke
+
+Required host: macOS workstation with Xcode, Swift, XcodeGen, and an installed
+iOS simulator.
+
+From `synara-ios`:
+
+```sh
+xcodegen generate
+xcodebuild -list -project Synara.xcodeproj
+RUN_IOS_TESTS=1 IOS_TEST_DESTINATION='platform=iOS Simulator,name=iPhone 16' scripts/ci-build.sh
+```
+
+Required cases:
+
+| ID | Area | Pass Criteria | Evidence |
+|---|---|---|---|
+| IOS-001 | TimelineServiceTests | Unit tests including `TimelineServiceTests` pass on the selected simulator. | Xcode version, simulator name/iOS version, command output. |
+| IOS-002 | Timeline focus smoke | Timeline Resurrection cases `TL-001` through `TL-010` pass where supported by current iOS functionality. | Per-case pass/fail and unsupported-case rationale. |
+| IOS-003 | Session/keychain | Login/session persistence behaves correctly on simulator or physical device. | Device target and pass/fail. |
+| IOS-004 | Push/E2EE release gaps | Push gateway and production E2EE remain explicitly marked pending until implemented and tested. | Current status and linked blocker. |
+
+## Updater Release Smoke
+
+Run only after real updater public key, endpoint, signing private key, and
+release metadata location are configured.
+
+```sh
+npm run check:release-updater -- --require-enabled
+```
+
+Cases:
+
+| ID | Area | Pass Criteria | Evidence |
+|---|---|---|---|
+| UPD-001 | Config gate | Strict updater gate passes with no placeholder key or endpoint. | Command output. |
+| UPD-002 | Signed artifacts | Release build creates updater artifacts and `.sig` sidecars or signed `latest.json` metadata. | Artifact paths and signatures. |
+| UPD-003 | Hosted metadata | Production HTTPS endpoint serves valid signed metadata for the built version. | URL and validation output. |
+| UPD-004 | App check | Installed app can check for updates without crashing or contacting placeholder/local endpoints. | App logs and pass/fail. |
+
+## Signoff Table
+
+| Section | Required Before Release | Status | Evidence Link |
+|---|---:|---|---|
+| Common preflight | Yes | Pending |  |
+| macOS desktop smoke | Yes | Pending |  |
+| Linux desktop smoke | Yes | Pending |  |
+| Timeline Resurrection smoke | Yes | Pending |  |
+| iOS tool-bound smoke | Yes for iOS release and shared Timeline signoff | Pending |  |
+| Updater release smoke | Yes | Pending |  |

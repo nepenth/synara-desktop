@@ -463,6 +463,7 @@ check:repo-layout → check:versions → check:matrix-boundaries
 | Modernization roadmap | `synara/docs/synara-modernization-roadmap.md` |
 | Desktop integration contract | `docs/desktop-modernization.md` |
 | Native-first architecture | `docs/native-first-architecture-spike.md` |
+| Production smoke checklist | `docs/production-smoke-checklist.md` |
 | Desktop validation status | `docs/desktop-validation-status.md` |
 | MIP1 plan | `docs/maturity_improvement_plan1.md` |
 | iOS functionality matrix | `synara-ios/docs/ios-functionality-matrix.md` |

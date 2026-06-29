@@ -30,6 +30,9 @@
 | MAC-IOS-004 | P1 | Release Operations | On the macOS workstation, run `npm run check:release-updater -- --require-enabled` after the updater channel is configured, then run the signed/notarized release build path with `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` present. | Command output, signing identity used, notarization status, updater metadata/signature verification, generated `.sig`/updater archive paths, and confirmation that the release workflow no longer overrides `createUpdaterArtifacts` to `false`. | Pending |
 | MAC-IOS-005 | P0 | Composer Desktop Parity | Smoke the desktop composer on macOS: native spellcheck in the Slate composer, drag/drop one and multiple files into a room, paste a screenshot/native clipboard image, and paste an image copied from a browser that also advertises HTML/text. | Commit SHA, macOS version, app build type, each surface pass/fail, upload board evidence for dropped/pasted files, and notes for any native spellcheck or paste failures. | Pending |
 
+Exact evidence fields and per-surface smoke cases are consolidated in
+`docs/production-smoke-checklist.md`.
+
 ## Completed Items
 
 | ID | Date | Evidence |
