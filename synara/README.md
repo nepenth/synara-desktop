@@ -45,6 +45,9 @@ npm run tauri dev
 
 ## Direction
 
+- [`../CODEBASE_KNOWLEDGE_BASE.md`](../CODEBASE_KNOWLEDGE_BASE.md) is the
+  monorepo onboarding map (architecture, features, contracts, and expansion
+  guidance). Start there for new work in this repository.
 - `docs/synara-namespaces.md` documents Synara Matrix account-data and event
   metadata contracts.
 - `docs/synara-ios-app-store-plan.md` and

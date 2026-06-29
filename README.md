@@ -2,6 +2,20 @@
 
 Synara Desktop is a Tauri-based native desktop Matrix client focused on fast, secure conversations, smooth desktop UX, Linux support, and agent workflows.
 
+## Documentation
+
+**Start here for codebase orientation:** [`CODEBASE_KNOWLEDGE_BASE.md`](CODEBASE_KNOWLEDGE_BASE.md) — architecture, feature inventory, in-progress work, critical file paths, and expansion guidance. Review it before starting new tasks in this repository (including AI-assisted work).
+
+| Area | Entry points |
+| ---- | ------------ |
+| Monorepo layout | [`docs/repository-layout.md`](docs/repository-layout.md) |
+| Desktop shell & native bridge | [`docs/desktop-modernization.md`](docs/desktop-modernization.md), [`MODERNIZATION.md`](MODERNIZATION.md) |
+| Architecture decisions | [`docs/adr/`](docs/adr/) |
+| Desktop validation & release | [`docs/desktop-validation-status.md`](docs/desktop-validation-status.md), [`docs/linux.md`](docs/linux.md) |
+| Shared Matrix contracts | [`synara/docs/synara-contracts.md`](synara/docs/synara-contracts.md), [`synara/docs/contracts/`](synara/docs/contracts/) |
+| App runtime (React/Vite) | [`synara/README.md`](synara/README.md), [`synara/docs/`](synara/docs/) |
+| iOS app | [`synara-ios/README.md`](synara-ios/README.md), [`synara-ios/docs/`](synara-ios/docs/) |
+
 ## Download
 
 Installers for macOS and Linux are built from this project. The in-app updater
@@ -101,3 +115,4 @@ For Linux workstation builds, install the required system packages and follow th
 
 See [Desktop modernization](docs/desktop-modernization.md) for the native integration contract. Build/test notes, runtime smoke-test evidence, and bridge security notes are tracked in [MODERNIZATION.md](MODERNIZATION.md).
 The native-first architecture decision is tracked in [Native-first architecture spike](docs/native-first-architecture-spike.md).
+For a consolidated map of the whole monorepo, see [CODEBASE_KNOWLEDGE_BASE.md](CODEBASE_KNOWLEDGE_BASE.md).
