@@ -7,6 +7,7 @@ mod build_info;
 mod desktop;
 mod desktop_agent_actions;
 mod desktop_file_transfer;
+mod desktop_notifications;
 mod desktop_sanitize;
 mod desktop_secret_store;
 mod desktop_session;
@@ -202,9 +203,9 @@ pub fn run() {
             desktop::desktop_remove_session,
             desktop::desktop_get_integration_status,
             desktop::desktop_update_tray_state,
-            desktop::desktop_get_notification_permission,
-            desktop::desktop_request_notification_permission,
-            desktop::desktop_notify,
+            desktop_notifications::desktop_get_notification_permission,
+            desktop_notifications::desktop_request_notification_permission,
+            desktop_notifications::desktop_notify,
             desktop::desktop_open_external_url,
             desktop::desktop_save_file,
             desktop::desktop_save_file_begin,
