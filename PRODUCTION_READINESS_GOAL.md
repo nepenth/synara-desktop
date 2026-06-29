@@ -215,7 +215,7 @@ Any cross-platform feature must follow this checklist before acceptance:
 1. Verify version consistency and release metadata.
 2. Validate signing/notarization path for macOS.
 3. Validate Linux packaging and CachyOS/KDE Wayland smoke.
-4. Complete updater signing and release-channel documentation. **Status:** Release guard added; production updater implementation remains blocked on real endpoint/key material and plugin wiring.
+4. Complete updater signing and release-channel documentation. **Status:** Release guard and check-only updater plugin scaffolding added; production updater enablement remains blocked on real endpoint/key material, signing secrets, artifact generation, and release workflow upload.
 5. Refresh `README.md`, release checklist, and user-facing installation docs.
 6. Confirm license, privacy, and security docs are current.
 
@@ -232,7 +232,7 @@ Any cross-platform feature must follow this checklist before acceptance:
 | `npm run test:modernization` | Yes | Pass, 2026-06-29 | Latest root build/test passed 283/283 after composer drag/drop detection test |
 | `npm --prefix synara run check:eslint` | Yes | Pass, 2026-06-29 | Frontend lint clean |
 | `npm --prefix synara run check:prettier` | Yes | Pass after mechanical format fix, 2026-06-29 | Four pre-existing formatting drifts corrected |
-| `npm run check:release-updater` | Yes | Advisory pass with warnings, 2026-06-29 | Current tree intentionally reports disabled updater state without failing local gates |
+| `npm run check:release-updater` | Yes | Advisory pass with 8 warnings, 2026-06-29 | Plugin/package/check-only capability wiring is present; release metadata/channel prerequisites remain disabled |
 | `npm run check:release-updater -- --require-enabled` | Required for published releases | Expected fail, 2026-06-29 | Release workflow now runs this gate; it fails until updater artifacts, signed metadata, plugin wiring, and release signing secrets are configured |
 | `cargo check` in `src-tauri` | Yes | Pass, 2026-06-29 | Rust compile gate clean |
 | `cargo test` in `src-tauri` | Yes | Pass, 2026-06-29 | 90/90 Rust tests passed |
@@ -248,7 +248,7 @@ Any cross-platform feature must follow this checklist before acceptance:
 | Phase 2: Timeline Resurrection | In progress | Desktop viewport restore policy first slice implemented; shared open-focus contract added; iOS policy tests expanded; macOS/iOS validation handoff is tracked in `MACOS_IOS_VALIDATION_QUEUE.md` | Run iOS tests on macOS/Xcode, then execute smoke checklist |
 | Phase 3: Link Opening | In progress | Desktop bridge hardening first slice implemented; Grok reviewed the diff and its findings were incorporated; local gates pass at 281/281 | Run macOS/Linux interactive link-opening smoke checklist |
 | Phase 4: Composer Parity | In progress | Clipboard image paste first slice and drag/drop detection hardening implemented; Grok reviewed both diffs and findings were incorporated/accepted; local gates pass at 283/283 | Run macOS/Linux interactive composer smoke checklist |
-| Phase 5: Release Readiness | In progress | Added release-updater readiness checker and wired published desktop release workflow to fail until signed updater channel prerequisites are configured | Complete real updater plugin/config/channel work, then run macOS signing/updater verification |
+| Phase 5: Release Readiness | In progress | Added release-updater readiness checker; wired published desktop release workflow to fail until signed updater channel prerequisites are configured; added desktop updater plugin/package/check-only permission scaffolding | Complete real updater config/channel/signing workflow work, then run macOS signing/updater verification |
 
 ## Decision Log
 
@@ -267,3 +267,4 @@ Any cross-platform feature must follow this checklist before acceptance:
 | 2026-06-29T10:00:18-04:00 | Accepted desktop composer clipboard image first slice. | Desktop focused composer paste now prioritizes native image upload for image-like clipboard payloads before rich text insertion, with fallback to rich/plain insertion if the native image read yields no file. Grok reviewed the diff and the fallback finding was incorporated. |
 | 2026-06-29T10:05:21-04:00 | Accepted desktop composer drag/drop detection hardening. | File-drop detection now accepts desktop/WebView payloads that expose `files` or file items without a `Files` type marker while text-only drags remain ignored. Grok/composer-2.5-fast reviewed the diff and found no blocking issue; malformed file-like payload suppression is an accepted safety tradeoff. |
 | 2026-06-29T10:11:36-04:00 | Added release-only updater readiness enforcement instead of enabling placeholder updater config. | Real production updater enablement requires signed metadata endpoint/key material and runtime plugin wiring. The release workflow now blocks artifact builds until those prerequisites are present, while local advisory checks keep the current disabled state visible. |
+| 2026-06-29T10:20:36-04:00 | Accepted check-only desktop updater plugin scaffolding. | Added the Tauri updater Rust plugin, npm updater binding, generated ACL schemas, and `updater:allow-check` only. Advisory release checker now reports only production channel/signing/artifact blockers; Grok found registration safe without config because commands fail closed when endpoints are empty. |

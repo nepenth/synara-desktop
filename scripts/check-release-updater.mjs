@@ -108,9 +108,14 @@ export function inspectReleaseUpdaterReadiness({
     report("src-tauri/src/lib.rs must register the Tauri updater plugin.");
   }
 
-  if (!permissions.some((permission) => permission === "updater:default")) {
+  if (
+    !permissions.some(
+      (permission) =>
+        permission === "updater:default" || permission === "updater:allow-check"
+    )
+  ) {
     report(
-      "src-tauri/capabilities/main.json must grant updater:default when the frontend owns update checks."
+      "src-tauri/capabilities/main.json must grant updater:allow-check or updater:default when the frontend owns update checks."
     );
   }
 
