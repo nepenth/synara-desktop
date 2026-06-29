@@ -14,15 +14,15 @@ use tauri_plugin_clipboard_manager::ClipboardExt;
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 use tauri_plugin_notification::NotificationExt;
 use tauri_plugin_opener::OpenerExt;
-use url::Url;
 
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
-use std::sync::atomic::{AtomicBool, Ordering};
 #[cfg(debug_assertions)]
 use std::sync::atomic::AtomicU64;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::build_info;
+use crate::desktop_url;
 
 pub const MAIN_WINDOW_LABEL: &str = "main";
 
@@ -240,7 +240,8 @@ fn normalize_tray_state(state: DesktopTrayState) -> DesktopTrayState {
 
 static LAST_SHORTCUT_APPLY_STATE: OnceLock<Mutex<Option<DesktopShortcutApplyState>>> =
     OnceLock::new();
-static LAST_ACTIVE_SHORTCUT_CONFIG: OnceLock<Mutex<Option<DesktopShortcutConfig>>> = OnceLock::new();
+static LAST_ACTIVE_SHORTCUT_CONFIG: OnceLock<Mutex<Option<DesktopShortcutConfig>>> =
+    OnceLock::new();
 
 #[derive(Clone, Serialize)]
 struct DesktopAgentActionEvent {
@@ -459,113 +460,6 @@ fn sanitize_optional_session_field(
     Ok(Some(sanitized))
 }
 
-fn is_loopback_session_host(host: &str) -> bool {
-    host.eq_ignore_ascii_case("localhost") || host == "127.0.0.1" || host == "::1"
-}
-
-fn normalize_url_host(host: &str) -> String {
-    host.trim_matches(|character| character == '[' || character == ']')
-        .trim_end_matches('.')
-        .to_ascii_lowercase()
-}
-
-fn is_local_hostname(host: &str) -> bool {
-    let host = normalize_url_host(host);
-    if host == "localhost" || host == "0.0.0.0" {
-        return true;
-    }
-
-    const LOCAL_SUFFIXES: &[&str] = &[
-        ".localhost",
-        ".local",
-        ".localdomain",
-        ".internal",
-        ".lan",
-        ".home.arpa",
-    ];
-    LOCAL_SUFFIXES.iter().any(|suffix| host.ends_with(suffix))
-}
-
-fn is_private_ipv4(host: &str) -> bool {
-    let host = normalize_url_host(host);
-    if host.starts_with("0.")
-        || host.starts_with("10.")
-        || host.starts_with("127.")
-        || host.starts_with("169.254.")
-        || host.starts_with("192.168.")
-    {
-        return true;
-    }
-
-    if let Some(second_octet) = host.split('.').nth(1).and_then(|value| value.parse::<u8>().ok()) {
-        if host.starts_with("172.") && (16..=31).contains(&second_octet) {
-            return true;
-        }
-        if host.starts_with("100.") && (64..=127).contains(&second_octet) {
-            return true;
-        }
-    }
-
-    false
-}
-
-fn is_private_ipv6(host: &str) -> bool {
-    let host = normalize_url_host(host);
-    host == "::1"
-        || host == "::"
-        || host.starts_with("fc")
-        || host.starts_with("fd")
-        || host.starts_with("fe80")
-        || host.starts_with("::ffff:")
-}
-
-fn is_safe_public_https_host(host: &str) -> bool {
-    let normalized = normalize_url_host(host);
-    if normalized.is_empty() || is_local_hostname(&normalized) {
-        return false;
-    }
-
-    if normalized.contains(':') {
-        return !is_private_ipv6(&normalized);
-    }
-
-    !is_private_ipv4(&normalized)
-}
-
-fn is_safe_structured_external_url(url: &Url) -> bool {
-    match url.scheme() {
-        "mailto" => {
-            let address = url.path().trim();
-            !address.is_empty() && address.contains('@')
-        }
-        "matrix" => {
-            url.host_str().is_some()
-                || (!url.path().is_empty() && url.path() != "/")
-                || !url.path().trim().is_empty()
-        }
-        _ => false,
-    }
-}
-
-fn is_allowed_session_base_url(value: &str) -> bool {
-    let Ok(url) = Url::parse(value) else {
-        return false;
-    };
-
-    if url.host_str().is_none() || !url.username().is_empty() || url.password().is_some() {
-        return false;
-    }
-
-    match url.scheme() {
-        "https" => true,
-        "http" => url
-            .host_str()
-            .map(is_loopback_session_host)
-            .unwrap_or(false),
-        _ => false,
-    }
-}
-
 fn sanitize_session_envelope(
     session: DesktopSessionEnvelope,
 ) -> Result<DesktopSessionEnvelope, String> {
@@ -574,7 +468,7 @@ fn sanitize_session_envelope(
         "baseUrl",
         DESKTOP_SESSION_MAX_BASE_URL_CHARS,
     )?;
-    if !is_allowed_session_base_url(&base_url) {
+    if !desktop_url::is_allowed_session_base_url(&base_url) {
         return Err(
             "Session baseUrl must be an HTTPS URL or a loopback development URL".to_owned(),
         );
@@ -905,7 +799,9 @@ fn macos_keychain_unavailable_reason(error: &KeyringError) -> &'static str {
 }
 
 #[cfg(any(target_os = "macos", test))]
-fn macos_secret_store_status_from_probe(probe: Result<(), KeyringError>) -> DesktopSecretStoreStatus {
+fn macos_secret_store_status_from_probe(
+    probe: Result<(), KeyringError>,
+) -> DesktopSecretStoreStatus {
     match probe {
         Ok(()) => DesktopSecretStoreStatus {
             available: true,
@@ -1102,8 +998,9 @@ fn linux_secret_store_status_from_live_probes(
         match linux_secret_service_probe_with_timeout(secret_service_probe) {
             Ok(()) => true,
             Err(error) => {
-                unavailable_reason =
-                    Some(linux_secret_service_unavailable_reason_from_probe_error(&error));
+                unavailable_reason = Some(
+                    linux_secret_service_unavailable_reason_from_probe_error(&error),
+                );
                 false
             }
         }
@@ -1166,9 +1063,11 @@ fn linux_keyutils_probe_round_trip() -> Result<(), KeyringError> {
     use keyring::credential::CredentialApi;
     use keyring::keyutils::KeyutilsCredential;
 
-    let _probe_guard = LINUX_KEYUTILS_PROBE_LOCK
-        .lock()
-        .map_err(|_| KeyringError::PlatformFailure(std::io::Error::other("linux keyutils probe lock poisoned").into()))?;
+    let _probe_guard = LINUX_KEYUTILS_PROBE_LOCK.lock().map_err(|_| {
+        KeyringError::PlatformFailure(
+            std::io::Error::other("linux keyutils probe lock poisoned").into(),
+        )
+    })?;
 
     let credential = KeyutilsCredential::new_with_target(
         None,
@@ -1246,19 +1145,7 @@ fn desktop_remove_session_from_store(
 /// Block local file/code schemes and embedded credentials, but allow ordinary
 /// http(s) links including LAN/internal hosts users intentionally click.
 pub fn is_safe_external_url(value: &str) -> bool {
-    let Ok(url) = Url::parse(value) else {
-        return false;
-    };
-
-    if !url.username().is_empty() || url.password().is_some() {
-        return false;
-    }
-
-    match url.scheme() {
-        "http" | "https" => url.host_str().is_some(),
-        "mailto" | "matrix" => is_safe_structured_external_url(&url),
-        _ => false,
-    }
+    desktop_url::is_safe_external_url(value)
 }
 
 #[tauri::command]
@@ -1363,7 +1250,13 @@ pub fn dropped_file_read_mode(byte_count: u64) -> DroppedFileReadMode {
 fn new_file_transfer_id(prefix: &str) -> String {
     let mut bytes = [0_u8; 16];
     getrandom::fill(&mut bytes).expect("cryptographic random bytes for file transfer id");
-    format!("{prefix}-{}", bytes.iter().map(|byte| format!("{byte:02x}")).collect::<String>())
+    format!(
+        "{prefix}-{}",
+        bytes
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect::<String>()
+    )
 }
 
 fn purge_stale_file_transfer_sessions(now: Instant) {
@@ -1383,7 +1276,9 @@ fn purge_stale_file_transfer_sessions(now: Instant) {
     }
 
     if let Ok(mut sessions) = dropped_read_sessions().lock() {
-        sessions.retain(|_, session| now.duration_since(session.created_at) <= FILE_TRANSFER_SESSION_TTL);
+        sessions.retain(|_, session| {
+            now.duration_since(session.created_at) <= FILE_TRANSFER_SESSION_TTL
+        });
     }
 }
 
@@ -1484,9 +1379,7 @@ pub fn desktop_save_file(payload: DesktopSaveFilePayload) -> Result<String, Stri
         return Err("File is empty".to_owned());
     }
     if should_stream_file_ipc(payload.bytes.len() as u64) {
-        return Err(
-            "File is too large for inline save; use streaming save commands".to_owned(),
-        );
+        return Err("File is too large for inline save; use streaming save commands".to_owned());
     }
 
     let downloads = downloads_dir()?;
@@ -1904,20 +1797,6 @@ pub fn desktop_read_dropped_file_end(transfer_id: String) -> Result<bool, String
     Ok(true)
 }
 
-fn is_safe_agent_url(value: &str) -> bool {
-    let Ok(url) = Url::parse(value) else {
-        return false;
-    };
-
-    url.scheme() == "https"
-        && url
-            .host_str()
-            .map(is_safe_public_https_host)
-            .unwrap_or(false)
-        && url.username().is_empty()
-        && url.password().is_none()
-}
-
 fn sanitize_route(route: String) -> Result<String, String> {
     let route = sanitize_action_text(route, MAX_DESKTOP_ROUTE_CHARS);
     if route.is_empty() {
@@ -2166,7 +2045,9 @@ fn retired_shortcut_strings(
     previous: &DesktopShortcutConfig,
     normalized: &DesktopShortcutConfig,
 ) -> Vec<String> {
-    let new_strings: HashSet<&str> = shortcut_strings_for_config(normalized).into_iter().collect();
+    let new_strings: HashSet<&str> = shortcut_strings_for_config(normalized)
+        .into_iter()
+        .collect();
     shortcut_strings_for_config(previous)
         .into_iter()
         .filter(|shortcut| !new_strings.contains(shortcut))
@@ -2609,7 +2490,10 @@ fn rebuild_tray_menu<R: Runtime>(
 fn apply_pending_tray_state<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
     let coalescer = app.state::<TrayStateCoalescer>();
     let state = {
-        let mut pending = coalescer.pending.lock().map_err(|error| error.to_string())?;
+        let mut pending = coalescer
+            .pending
+            .lock()
+            .map_err(|error| error.to_string())?;
         pending.take()
     };
     let Some(state) = state else {
@@ -2633,15 +2517,16 @@ fn apply_pending_tray_state<R: Runtime>(app: &AppHandle<R>) -> Result<(), String
 
 fn schedule_tray_state_flush<R: Runtime>(app: AppHandle<R>) {
     let coalescer = app.state::<TrayStateCoalescer>();
-    if coalescer
-        .flush_scheduled
-        .swap(true, Ordering::AcqRel)
-    {
+    if coalescer.flush_scheduled.swap(true, Ordering::AcqRel) {
         return;
     }
 
     let delay = {
-        let last_applied_at = coalescer.last_applied_at.lock().ok().and_then(|guard| *guard);
+        let last_applied_at = coalescer
+            .last_applied_at
+            .lock()
+            .ok()
+            .and_then(|guard| *guard);
         let elapsed = last_applied_at
             .map(|applied_at| Instant::now().duration_since(applied_at))
             .unwrap_or(tray_state_apply_min_interval());
@@ -2669,7 +2554,10 @@ fn queue_tray_state_update<R: Runtime>(
 ) -> Result<(), String> {
     let coalescer = app.state::<TrayStateCoalescer>();
     {
-        let mut pending = coalescer.pending.lock().map_err(|error| error.to_string())?;
+        let mut pending = coalescer
+            .pending
+            .lock()
+            .map_err(|error| error.to_string())?;
         *pending = Some(state);
     }
 
@@ -2824,10 +2712,13 @@ fn sanitize_agent_action_payload(
     }
 
     if let Some(url) = action.url.take() {
-        if !is_safe_agent_url(&url) {
+        if !desktop_url::is_safe_agent_url(&url) {
             return Err("Agent action URL must use https".to_owned());
         }
-        action.url = Some(sanitize_action_text(url, DESKTOP_AGENT_ACTION_MAX_URL_CHARS));
+        action.url = Some(sanitize_action_text(
+            url,
+            DESKTOP_AGENT_ACTION_MAX_URL_CHARS,
+        ));
     }
 
     if let Some(prompt) = action.prompt.take() {
@@ -2893,9 +2784,7 @@ fn handle_agent_action_locally<R: Runtime>(
 fn is_supported_agent_action(action: &DesktopAgentActionPayload) -> bool {
     match &action.kind {
         Some(kind) => ALLOWED_AGENT_ACTION_KIND.contains(&kind.as_str()),
-        None => {
-            action.url.is_some() || action.prompt.is_some() || action.markdown.is_some()
-        }
+        None => action.url.is_some() || action.prompt.is_some() || action.markdown.is_some(),
     }
 }
 
@@ -2932,9 +2821,7 @@ pub fn navigate_main_window<R: Runtime>(app: &AppHandle<R>, route: &str) -> taur
 }
 
 pub fn tray_dnd_toggle_dispatch_script() -> String {
-    format!(
-        "window.dispatchEvent(new CustomEvent('{DESKTOP_TRAY_DND_TOGGLE_EVENT}'));"
-    )
+    format!("window.dispatchEvent(new CustomEvent('{DESKTOP_TRAY_DND_TOGGLE_EVENT}'));")
 }
 
 fn emit_tray_dnd_toggle<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
@@ -3566,7 +3453,8 @@ mod tests {
 
     #[test]
     fn sanitize_action_payload_allows_urls_up_to_desktop_max_url_chars() {
-        let long_path = "a".repeat(DESKTOP_AGENT_ACTION_MAX_URL_CHARS - "https://example.org/".len());
+        let long_path =
+            "a".repeat(DESKTOP_AGENT_ACTION_MAX_URL_CHARS - "https://example.org/".len());
         let payload = sanitize_agent_action_payload(DesktopAgentActionPayload {
             id: "abc".to_owned(),
             title: "Action".to_owned(),
@@ -3675,8 +3563,10 @@ mod tests {
         assert!(!is_safe_external_url("https://user:pass@example.org/"));
         assert!(!is_safe_external_url("mailto:not-an-email"));
         assert!(!is_safe_external_url("matrix:"));
-        assert!(!is_safe_agent_url("https://10.0.0.5/run"));
-        assert!(is_safe_agent_url("https://agent.example.org/run"));
+        assert!(!desktop_url::is_safe_agent_url("https://10.0.0.5/run"));
+        assert!(desktop_url::is_safe_agent_url(
+            "https://agent.example.org/run"
+        ));
     }
 
     #[test]
@@ -3768,12 +3658,10 @@ mod tests {
 
     #[test]
     fn macos_secret_store_status_from_probe_reports_locked_when_keychain_unavailable() {
-        let status = macos_secret_store_status_from_probe(Err(KeyringError::NoStorageAccess(
-            Box::new(std::io::Error::new(
-                std::io::ErrorKind::PermissionDenied,
-                "keychain locked",
-            )),
-        )));
+        let status =
+            macos_secret_store_status_from_probe(Err(KeyringError::NoStorageAccess(Box::new(
+                std::io::Error::new(std::io::ErrorKind::PermissionDenied, "keychain locked"),
+            ))));
 
         assert!(!status.available);
         assert_eq!(status.backend, DESKTOP_SECRET_STORE_BACKEND_MACOS_KEYCHAIN);
@@ -3828,12 +3716,12 @@ mod tests {
     #[test]
     fn platform_secret_store_status_honors_injected_macos_keychain_probe_failure() {
         reset_macos_secret_store_status_cache_for_tests();
-        set_macos_keychain_probe_test_override(Some(Err(KeyringError::NoStorageAccess(
-            Box::new(std::io::Error::new(
+        set_macos_keychain_probe_test_override(Some(Err(KeyringError::NoStorageAccess(Box::new(
+            std::io::Error::new(
                 std::io::ErrorKind::PermissionDenied,
                 "simulated locked keychain",
-            )),
-        ))));
+            ),
+        )))));
 
         let status = platform_secret_store_status();
 
@@ -3864,8 +3752,7 @@ mod tests {
 
     #[test]
     fn windows_secret_store_status_mapping_is_explicit_and_non_persistent() {
-        let status =
-            unavailable_secret_store_status(DESKTOP_SECRET_STORE_WINDOWS_UNSUPPORTED);
+        let status = unavailable_secret_store_status(DESKTOP_SECRET_STORE_WINDOWS_UNSUPPORTED);
 
         assert_eq!(status.available, false);
         assert_eq!(status.backend, DESKTOP_SECRET_STORE_BACKEND_NONE);
@@ -4006,8 +3893,7 @@ mod tests {
         }
 
         #[test]
-        fn linux_secret_store_status_from_live_probe_reports_secret_service_when_probe_succeeds(
-        ) {
+        fn linux_secret_store_status_from_live_probe_reports_secret_service_when_probe_succeeds() {
             let _dbus = DbusSessionEnvGuard::with_fake_session_bus();
             let status = linux_secret_store_status_from_live_probes(MockLinuxSecretServiceProbe {
                 outcome: MockSecretServiceProbeOutcome::Success,
@@ -4024,8 +3910,7 @@ mod tests {
         }
 
         #[test]
-        fn linux_secret_store_status_reports_unavailable_when_probe_fails_despite_service_files(
-        ) {
+        fn linux_secret_store_status_reports_unavailable_when_probe_fails_despite_service_files() {
             let _dbus = DbusSessionEnvGuard::with_fake_session_bus();
             let status = linux_secret_store_status_from_signals_with_reason(
                 false,
@@ -4038,9 +3923,10 @@ mod tests {
             assert!(!status.can_persist_session);
             assert_eq!(status.reason, Some(DESKTOP_SECRET_STORE_LINUX_UNAVAILABLE));
 
-            let live_status = linux_secret_store_status_from_live_probes(MockLinuxSecretServiceProbe {
-                outcome: MockSecretServiceProbeOutcome::Unavailable,
-            });
+            let live_status =
+                linux_secret_store_status_from_live_probes(MockLinuxSecretServiceProbe {
+                    outcome: MockSecretServiceProbeOutcome::Unavailable,
+                });
             assert_ne!(
                 live_status.backend,
                 DESKTOP_SECRET_STORE_BACKEND_LINUX_SECRET_SERVICE
@@ -4249,14 +4135,20 @@ mod tests {
             stored_at_ms: Some(stored_at_ms),
             ..valid_session_envelope()
         };
-        assert!(!session_envelope_is_expired(&without_expiry, stored_at_ms + 9_999_999));
+        assert!(!session_envelope_is_expired(
+            &without_expiry,
+            stored_at_ms + 9_999_999
+        ));
 
         let without_stored_at = DesktopSessionEnvelope {
             expires_in_ms: Some(3_600_000),
             stored_at_ms: None,
             ..valid_session_envelope()
         };
-        assert!(!session_envelope_is_expired(&without_stored_at, stored_at_ms + 9_999_999));
+        assert!(!session_envelope_is_expired(
+            &without_stored_at,
+            stored_at_ms + 9_999_999
+        ));
     }
 
     #[test]
@@ -4269,9 +4161,11 @@ mod tests {
 
         let secret = serde_json::to_string(&session).expect("session should encode");
         store.set_secret(&secret).expect("session should store");
-        assert!(desktop_get_session_from_store_at(&store, stored_at_ms + 30_000)
-            .expect("session should read")
-            .is_some());
+        assert!(
+            desktop_get_session_from_store_at(&store, stored_at_ms + 30_000)
+                .expect("session should read")
+                .is_some()
+        );
         assert!(desktop_get_session_from_store_at(
             &store,
             stored_at_ms + 60_000 + SESSION_EXPIRY_CLOCK_SKEW_TOLERANCE_MS + 1
@@ -4416,8 +4310,7 @@ mod tests {
         );
         let store = FailingSessionSecretStore::with_set_error(unavailable_error);
         let session = valid_session_envelope();
-        let session_json =
-            serde_json::to_string(&session).expect("session envelope should encode");
+        let session_json = serde_json::to_string(&session).expect("session envelope should encode");
 
         let error = desktop_set_session_in_store(&store, session)
             .err()
@@ -4702,13 +4595,19 @@ VERSION_ID=24
         std::env::remove_var("WAYLAND_DISPLAY");
         let generic = shortcut_result(DesktopShortcutApplyState::PermissionNeeded, None, None);
         assert!(generic.fallback_command.is_none());
-        assert!(!generic.message.to_ascii_lowercase().contains("kde plasma wayland"));
+        assert!(!generic
+            .message
+            .to_ascii_lowercase()
+            .contains("kde plasma wayland"));
 
         std::env::set_var("XDG_CURRENT_DESKTOP", "KDE");
         std::env::set_var("WAYLAND_DISPLAY", "wayland-0");
         let kde = shortcut_result(DesktopShortcutApplyState::PermissionNeeded, None, None);
         assert!(kde.fallback_command.is_some());
-        assert!(kde.message.to_ascii_lowercase().contains("kde plasma wayland"));
+        assert!(kde
+            .message
+            .to_ascii_lowercase()
+            .contains("kde plasma wayland"));
 
         if let Some(value) = original_desktop {
             std::env::set_var("XDG_CURRENT_DESKTOP", value);
@@ -4843,7 +4742,9 @@ VERSION_ID=24
 
     #[test]
     fn should_stream_file_ipc_uses_eight_mebibyte_threshold() {
-        assert!(!should_stream_file_ipc(DESKTOP_FILE_IPC_INLINE_THRESHOLD as u64));
+        assert!(!should_stream_file_ipc(
+            DESKTOP_FILE_IPC_INLINE_THRESHOLD as u64
+        ));
         assert!(should_stream_file_ipc(
             DESKTOP_FILE_IPC_INLINE_THRESHOLD as u64 + 1
         ));
@@ -4943,8 +4844,9 @@ VERSION_ID=24
         fs::write(&file_path, &payload).expect("dropped file fixture should be written");
 
         remember_dropped_paths(&[file_path.clone()]);
-        let descriptors = desktop_read_dropped_files(vec![file_path.to_string_lossy().into_owned()])
-            .expect("dropped file metadata should be returned");
+        let descriptors =
+            desktop_read_dropped_files(vec![file_path.to_string_lossy().into_owned()])
+                .expect("dropped file metadata should be returned");
         assert_eq!(descriptors.len(), 1);
         assert!(descriptors[0].bytes.is_none());
         let transfer_id = descriptors[0]
@@ -4953,12 +4855,9 @@ VERSION_ID=24
             .expect("streamed transfer id should be present");
         assert_eq!(descriptors[0].size, Some(total_size));
 
-        let first_chunk = desktop_read_dropped_file_chunk(
-            transfer_id.clone(),
-            0,
-            DESKTOP_FILE_IPC_CHUNK_SIZE,
-        )
-        .expect("first chunk should be readable");
+        let first_chunk =
+            desktop_read_dropped_file_chunk(transfer_id.clone(), 0, DESKTOP_FILE_IPC_CHUNK_SIZE)
+                .expect("first chunk should be readable");
         assert_eq!(first_chunk.len(), DESKTOP_FILE_IPC_CHUNK_SIZE);
         assert!(first_chunk.iter().all(|byte| *byte == 9));
 
@@ -5033,13 +4932,17 @@ VERSION_ID=24
         let mut paths = Vec::with_capacity(300);
         for index in 0..300 {
             let file_path = temp_dir.join(format!("drop-{index}.txt"));
-            fs::write(&file_path, format!("payload-{index}")).expect("drop fixture should be written");
+            fs::write(&file_path, format!("payload-{index}"))
+                .expect("drop fixture should be written");
             paths.push(file_path);
         }
 
         remember_dropped_paths(&paths);
         assert!(dropped_file_allowlist_len_for_tests() <= MAX_DROPPED_FILE_ALLOWLIST);
-        assert_eq!(dropped_file_allowlist_len_for_tests(), MAX_DROPPED_FILE_ALLOWLIST);
+        assert_eq!(
+            dropped_file_allowlist_len_for_tests(),
+            MAX_DROPPED_FILE_ALLOWLIST
+        );
 
         let _ = fs::remove_dir_all(temp_dir);
     }

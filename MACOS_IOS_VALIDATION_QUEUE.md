@@ -12,6 +12,14 @@
 - Results should be pasted back into the session or committed into the relevant living artifacts.
 - A queued item is not release-signed-off until pass/fail evidence includes command output, simulator/device target, date, and commit SHA.
 
+## Tool-Bound Buckets
+
+| Tooling | Applies To | Current Owner |
+|---|---|---|
+| `xcodebuild` | iOS unit/UI tests, simulator runs, macOS signed/notarized release builds | macOS workstation or Mac-hosted agent |
+| `swift` | Swift package/test helpers and any local Swift contract validation outside Xcode | macOS workstation or Mac-hosted agent |
+| macOS desktop runtime | System-browser link smoke, composer spellcheck/clipboard/drop smoke, signing/notarization | macOS workstation or human tester |
+
 ## Pending Items
 
 | ID | Priority | Area | Command / Checklist | Required Evidence | Status |
