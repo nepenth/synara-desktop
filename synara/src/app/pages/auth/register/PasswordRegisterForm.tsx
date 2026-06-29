@@ -44,6 +44,7 @@ import { ConfirmPasswordMatch } from '../../../components/ConfirmPasswordMatch';
 import { UIAFlowOverlay } from '../../../components/UIAFlowOverlay';
 import { RequestEmailTokenCallback, RequestEmailTokenResponse } from '../../../hooks/types';
 import { synaraDeviceDisplayName } from '../../../utils/user-agent';
+import { openExternalUrlFromClick } from '../../../utils/appLinks';
 
 export const SUPPORTED_REGISTER_STAGES = [
   AuthType.RegistrationToken,
@@ -370,7 +371,12 @@ export function PasswordRegisterForm({
             <Checkbox name="termsInput" size="300" variant="Primary" required />
             <Text size="T300">
               I accept server{' '}
-              <a href={termUrl} target="_blank" rel="noreferrer">
+              <a
+                href={termUrl}
+                target="_blank"
+                rel="noreferrer"
+                onClick={(evt) => openExternalUrlFromClick(evt, termUrl)}
+              >
                 Terms and Conditions
               </a>
               .

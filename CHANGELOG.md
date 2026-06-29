@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Routed desktop external link opens through the native `desktop_open_external_url` bridge across Hermes cards, profile/server actions, account-management links, auth/info anchors, and agent actions without unsafe desktop `window.open` fallback.
 - Added a cross-platform timeline open-focus contract and expanded iOS focus-policy coverage for read-marker and jump-latest behavior.
 - Added a desktop timeline viewport restore policy so unread rooms and stale historical anchors no longer override live/read-marker opening.
 - Added Codex-Orchestrator-v2 persistent harness artifacts for production-readiness tracking.

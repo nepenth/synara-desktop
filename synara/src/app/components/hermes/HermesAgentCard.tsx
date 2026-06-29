@@ -21,6 +21,7 @@ import { useTranslation } from 'react-i18next';
 import { HermesAgentPayload, HermesCodeBlock, hermesPayloadToMarkdown } from '../../utils/hermes';
 import { copyToClipboard } from '../../utils/dom';
 import { sendPlatformAgentAction } from '../../platform';
+import { openExternalUrl } from '../../utils/appLinks';
 import * as customHtmlCss from '../../styles/CustomHtml.css';
 import { useIdleRender } from '../../hooks/useIdleRender';
 
@@ -217,7 +218,7 @@ export const HermesAgentCard = memo(({ payload }: HermesAgentCardProps) => {
 
   const handleActionOpenConfirmed = useCallback(() => {
     if (!pendingUrlAction?.url) return;
-    window.open(pendingUrlAction.url, '_blank', 'noopener,noreferrer');
+    void openExternalUrl(pendingUrlAction.url);
     setPendingUrlAction(undefined);
   }, [pendingUrlAction]);
 

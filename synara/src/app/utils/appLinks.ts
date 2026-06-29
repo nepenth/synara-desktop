@@ -9,14 +9,21 @@ export const SYNARA_RELEASES_URL = `${SYNARA_SOURCE_CODE_URL}/releases`;
 export const SYNARA_PROJECT_URL = `${SYNARA_SOURCE_CODE_URL}#readme`;
 export const MATRIX_URL = 'https://matrix.org';
 
-export const openExternalUrlFromClick = (evt: ReactMouseEvent<HTMLElement>, url: string): void => {
-  if (!isDesktopPlatform()) return;
+export const openExternalUrl = async (url: string): Promise<boolean> => {
+  if (isDesktopPlatform()) {
+    return openPlatformExternalUrl(url);
+  }
 
-  evt.preventDefault();
-  void openPlatformExternalUrl(url);
+  if (typeof window === 'undefined') return false;
+  return window.open(url, '_blank', 'noopener,noreferrer') !== null;
 };
 
-const shouldIgnoreAnchorClick = (evt: MouseEvent): boolean =>
+type ExternalClickEvent = Pick<
+  MouseEvent | ReactMouseEvent<HTMLElement>,
+  'altKey' | 'button' | 'ctrlKey' | 'defaultPrevented' | 'metaKey' | 'shiftKey'
+>;
+
+const shouldIgnoreAnchorClick = (evt: ExternalClickEvent): boolean =>
   evt.defaultPrevented ||
   evt.button !== 0 ||
   evt.metaKey ||
@@ -25,6 +32,20 @@ const shouldIgnoreAnchorClick = (evt: MouseEvent): boolean =>
   evt.altKey;
 
 const isAppRelativeHref = (href: string): boolean => href.startsWith('/') || href.startsWith('#');
+
+const getCurrentAnchorHref = (evt: ReactMouseEvent<HTMLElement>): string | undefined => {
+  if (typeof HTMLAnchorElement === 'undefined') return undefined;
+  return evt.currentTarget instanceof HTMLAnchorElement ? evt.currentTarget.href : undefined;
+};
+
+export const openExternalUrlFromClick = (evt: ReactMouseEvent<HTMLElement>, url: string): void => {
+  if (!isDesktopPlatform() || shouldIgnoreAnchorClick(evt)) return;
+
+  if (!url || isAppRelativeHref(url)) return;
+  const href = getCurrentAnchorHref(evt) ?? url;
+  evt.preventDefault();
+  void openExternalUrl(href);
+};
 
 const getClickedAnchor = (target: EventTarget | null): HTMLAnchorElement | undefined => {
   if (!(target instanceof Element)) return undefined;
@@ -44,7 +65,7 @@ export const openDesktopExternalAnchorFromClick = (evt: MouseEvent): void => {
   if (!href) return;
 
   evt.preventDefault();
-  void openPlatformExternalUrl(href);
+  void openExternalUrl(href);
 };
 
 export const useDesktopExternalLinkInterceptor = (): void => {

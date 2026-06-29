@@ -1,6 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { openDesktopExternalAnchorFromClick } from '../appLinks';
+import type { MouseEvent as ReactMouseEvent } from 'react';
+import {
+  openDesktopExternalAnchorFromClick,
+  openExternalUrl,
+  openExternalUrlFromClick,
+} from '../appLinks';
 
 const waitForAsyncOpen = () => new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -119,6 +124,107 @@ test('desktop anchor click ignores handled, modified, and app-relative links', a
   } finally {
     (globalThis as any).window = originalWindow;
     (globalThis as any).Element = originalElement;
+  }
+
+  assert.equal(prevented, false);
+  assert.deepEqual(calls, []);
+});
+
+test('openExternalUrl uses the desktop external-url bridge without window.open fallback', async () => {
+  const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
+  const openedUrls: string[] = [];
+  const originalWindow = globalThis.window;
+
+  (globalThis as any).window = {
+    __SYNARA_DESKTOP__: {
+      platform: 'tauri',
+      invoke: async (command: string, args?: Record<string, unknown>) => {
+        calls.push({ command, args });
+        return command === 'desktop_open_external_url' && args?.url === 'https://example.org/docs';
+      },
+    },
+    open: (url: string) => {
+      openedUrls.push(url);
+      return {};
+    },
+  };
+
+  try {
+    assert.equal(await openExternalUrl('https://example.org/docs'), true);
+    assert.equal(await openExternalUrl('file:///Users/example/.ssh/id_rsa'), false);
+  } finally {
+    (globalThis as any).window = originalWindow;
+  }
+
+  assert.deepEqual(calls, [
+    {
+      command: 'desktop_open_external_url',
+      args: { url: 'https://example.org/docs' },
+    },
+  ]);
+  assert.deepEqual(openedUrls, []);
+});
+
+test('openExternalUrl falls back to window.open outside desktop', async () => {
+  const openedUrls: string[] = [];
+  const originalWindow = globalThis.window;
+
+  (globalThis as any).window = {
+    open: (url: string, target: string, features: string) => {
+      openedUrls.push(`${url}|${target}|${features}`);
+      return {};
+    },
+  };
+
+  try {
+    assert.equal(await openExternalUrl('https://example.org/docs'), true);
+  } finally {
+    (globalThis as any).window = originalWindow;
+  }
+
+  assert.deepEqual(openedUrls, ['https://example.org/docs|_blank|noopener,noreferrer']);
+});
+
+test('openExternalUrlFromClick preserves modified and relative link behavior', async () => {
+  const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
+  let prevented = false;
+  const originalWindow = globalThis.window;
+
+  (globalThis as any).window = {
+    __SYNARA_DESKTOP__: {
+      platform: 'tauri',
+      invoke: async (command: string, args?: Record<string, unknown>) => {
+        calls.push({ command, args });
+        return true;
+      },
+    },
+  };
+
+  try {
+    for (const event of [
+      { metaKey: true, url: 'https://example.org/docs' },
+      { metaKey: false, url: '/terms' },
+    ]) {
+      openExternalUrlFromClick(
+        {
+          altKey: false,
+          button: 0,
+          ctrlKey: false,
+          currentTarget: {},
+          defaultPrevented: false,
+          preventDefault: () => {
+            prevented = true;
+          },
+          shiftKey: false,
+          ...event,
+        } as unknown as ReactMouseEvent<HTMLElement>,
+        event.url
+      );
+    }
+
+    await waitForAsyncOpen();
+  } finally {
+    (globalThis as any).window = originalWindow;
   }
 
   assert.equal(prevented, false);
