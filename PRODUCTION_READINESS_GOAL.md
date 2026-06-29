@@ -111,16 +111,22 @@ Shared contract update, 2026-06-29:
 ### Epic 2: Link Opening
 
 **Priority:** P0  
-**Status:** Not started  
+**Status:** In progress - desktop bridge hardening first slice implemented
 **Success criteria:** Every user-visible external link from rich text, message content, Hermes cards, and related surfaces opens through the system browser via `desktop_open_external_url` on desktop, with safe fallback behavior outside Tauri.
 
 Initial task backlog:
 
-1. Inventory all anchor/link rendering paths.
-2. Centralize link activation through platform link helpers.
-3. Cover rich text, Matrix HTML, Hermes cards, room topics, and attachment/link previews.
-4. Add tests for desktop bridge invocation and fallback.
-5. Smoke check external URL opening on macOS/Linux.
+1. Inventory all anchor/link rendering paths. **Status:** First pass complete; remaining direct `window.open` production path is SSO popup handoff, intentionally exempt because it relies on `postMessage`.
+2. Centralize link activation through platform link helpers. **Status:** Desktop helper now routes normal external opens through `desktop_open_external_url`; non-desktop fallback remains browser-native.
+3. Cover rich text, Matrix HTML, Hermes cards, room topics, and attachment/link previews. **Status:** Global anchor interceptor remains active for rendered anchors; Hermes cards, profile/server actions, OIDC account-management actions, registration terms, and feature-check anchors were wired explicitly.
+4. Add tests for desktop bridge invocation and fallback. **Status:** Added regression tests for desktop bridge use, unsafe desktop no-fallback behavior, modified-click preservation, relative-link preservation, and agent-action no-fallback behavior.
+5. Smoke check external URL opening on macOS/Linux. **Status:** Queued in `MACOS_IOS_VALIDATION_QUEUE.md`.
+
+Desktop first-slice finding, 2026-06-29:
+
+- Root cause: most anchors were protected by the global desktop click interceptor, but several programmatic link opens and confirmation flows still called `window.open` directly. Hermes confirmed URL/artifact opens were the main P0 gap because they bypassed `desktop_open_external_url` entirely.
+- Implemented mitigation: introduced a shared `openExternalUrl(...)` helper for normal external opens. Desktop calls use `openPlatformExternalUrl`/`desktop_open_external_url` with no browser fallback if the bridge rejects the URL; non-desktop keeps `window.open(..., 'noopener,noreferrer')`. Explicit link handlers now preserve modifier-click and app-relative native behavior.
+- Remaining gap: live desktop smoke on macOS/Linux is still required for rich text, message links, Hermes cards, settings/about links, profile/server links, OIDC account-management links, and location links.
 
 ### Epic 3: Composer Desktop Parity
 
@@ -216,13 +222,13 @@ Any cross-platform feature must follow this checklist before acceptance:
 | `npm run check:mip1-evidence` | Yes | Pass, 2026-06-29 | 46/46 mapped; warning about bundled history retained |
 | `npm run check:runtime-assets` | Yes | Pass, 2026-06-29 | Runtime assets match `synara/dist` |
 | `npm run typecheck:modernization` | Yes | Pass, 2026-06-29 | TypeScript modernization surface compiles |
-| `npm run test:modernization` | Yes | Pass, 2026-06-29 | Runtime build completed previously; latest focused `npm --prefix synara run test:modernization` passed 277/277 after timeline viewport policy tests |
+| `npm run test:modernization` | Yes | Pass, 2026-06-29 | Latest root build/test passed 281/281 after link-opening and agent-action bridge tests |
 | `npm --prefix synara run check:eslint` | Yes | Pass, 2026-06-29 | Frontend lint clean |
 | `npm --prefix synara run check:prettier` | Yes | Pass after mechanical format fix, 2026-06-29 | Four pre-existing formatting drifts corrected |
 | `cargo check` in `src-tauri` | Yes | Pass, 2026-06-29 | Rust compile gate clean |
 | `cargo test` in `src-tauri` | Yes | Pass, 2026-06-29 | 90/90 Rust tests passed |
 | `npm --prefix synara run test:timeline-performance` | Required for timeline changes | Pass, 2026-06-29 | Latest rerun: 10k events 5.05 ms; 50k events 18.08 ms |
-| iOS tests | Required for iOS release | Not run locally | `xcodebuild` and `swift` unavailable on this Linux host |
+| iOS tests | Required for iOS release | Queued for macOS workstation | `xcodebuild` and `swift` unavailable on this Linux host; see `MACOS_IOS_VALIDATION_QUEUE.md` |
 
 ## Status Table
 
@@ -230,8 +236,8 @@ Any cross-platform feature must follow this checklist before acceptance:
 |---|---|---|---|
 | Phase 0: Initializer | Committed and pushed | Current `HEAD` includes harness, validation evidence, changelog, and mechanical Prettier drift fix | Continue Phase 1 source reconciliation |
 | Phase 1: Validation & Reconciliation | In progress; externally blocked for full reconciliation | KB §7 read fully; Grok/composer-2.5-fast second opinion completed from pasted excerpts; original prompt, Grok Executive Report, and prior Section 7 not found locally | Commit KB Section 7 reconciliation edits, then continue repo/source validation |
-| Phase 2: Timeline Resurrection | In progress | Desktop viewport restore policy first slice implemented; shared open-focus contract added; iOS policy tests expanded | Run iOS tests on macOS/Xcode, then execute smoke checklist |
-| Phase 3: Link Opening | Not started | N/A | Pick scoped link inventory/fix |
+| Phase 2: Timeline Resurrection | In progress | Desktop viewport restore policy first slice implemented; shared open-focus contract added; iOS policy tests expanded; macOS/iOS validation handoff is tracked in `MACOS_IOS_VALIDATION_QUEUE.md` | Run iOS tests on macOS/Xcode, then execute smoke checklist |
+| Phase 3: Link Opening | In progress | Desktop bridge hardening first slice implemented; Grok reviewed the diff and its findings were incorporated; local gates pass at 281/281 | Run macOS/Linux interactive link-opening smoke checklist |
 | Phase 4: Composer Parity | Not started | N/A | Pick scoped composer audit/fix |
 | Phase 5: Release Readiness | Not started | N/A | Updater, smoke, signing, docs |
 
@@ -247,3 +253,5 @@ Any cross-platform feature must follow this checklist before acceptance:
 | 2026-06-29T09:22:51-04:00 | Accepted Grok/composer-2.5-fast Phase 1 reconciliation finding. | Reviewer found §7.5 coverage strong but §7.1, §7.3, §7.4, and session-layer cleanup underrepresented; goal backlog expanded accordingly. Missing external artifacts still prevent full reconciliation completion. |
 | 2026-06-29T09:34:44-04:00 | Accepted desktop Timeline Resurrection first slice. | Implemented bounded viewport restore policy: unread wins over saved history, non-bottom historical anchors expire after 10 minutes, and bottom snapshots still restore to live end. Grok/composer-2.5-fast approved with reservations; synchronous `roomHaveUnread` inference was added to reduce first-paint unread races. |
 | 2026-06-29T09:38:11-04:00 | Added shared Timeline Resurrection open-focus contract. | `docs/timeline-open-focus-contract.md` now defines cross-platform ownership rules, behavior matrix, and smoke checklist; iOS focus policy tests were expanded. Local validation passed for TS/runtime gates, but iOS execution remains pending because the host lacks Xcode/Swift. |
+| 2026-06-29T09:45:54-04:00 | Split macOS/iOS-only validation into a dedicated queue. | The current Linux host cannot execute `xcodebuild`, `swift`, or simulator checks, but the user has a macOS workstation available. `MACOS_IOS_VALIDATION_QUEUE.md` now tracks required commands, evidence, and handoff status separately from Linux-local gates. |
+| 2026-06-29T09:53:07-04:00 | Accepted desktop external-link bridge hardening first slice. | Programmatic external opens now route through the platform helper, agent actions no longer fall back to `window.open` after desktop bridge rejection, and explicit handlers preserve modified-click/native relative-link behavior. Grok reviewed the diff; composer CLI was unavailable locally. |

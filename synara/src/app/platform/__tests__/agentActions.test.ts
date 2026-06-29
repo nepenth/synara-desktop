@@ -156,3 +156,36 @@ test('executePlatformAgentAction opens safe workflow URLs', async () => {
     (globalThis as any).window = originalWindow;
   }
 });
+
+test('executePlatformAgentAction does not fall back to window.open on rejected desktop URLs', async () => {
+  const browserOpenedUrls: string[] = [];
+  const originalWindow = globalThis.window;
+
+  (globalThis as any).window = {
+    __SYNARA_DESKTOP__: {
+      platform: 'tauri',
+      invoke: async () => false,
+    },
+    open: (url: string) => {
+      browserOpenedUrls.push(url);
+      return {};
+    },
+  };
+
+  try {
+    const action = parseIncomingPlatformAgentAction({
+      action: {
+        id: 'unsafe',
+        title: 'Unsafe',
+        kind: 'open_url',
+        url: 'https://agent.example.org/runs/1',
+      },
+    });
+    assert.ok(action);
+    assert.equal(await executePlatformAgentAction(action!), false);
+  } finally {
+    (globalThis as any).window = originalWindow;
+  }
+
+  assert.deepEqual(browserOpenedUrls, []);
+});
