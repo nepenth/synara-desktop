@@ -79,6 +79,27 @@ const getFilesFromDataTransferItems = (items: DataTransferItemList): File[] => {
   return files;
 };
 
+const dataTransferItemsHaveFiles = (items: DataTransferItemList): boolean => {
+  for (let i = 0; i < items.length; i += 1) {
+    if (items[i]?.kind === 'file') return true;
+  }
+  return false;
+};
+
+export const dataTransferHasFiles = (
+  dataTransfer: Pick<DataTransfer, 'files' | 'items' | 'types'> | undefined | null
+): boolean => {
+  if (!dataTransfer) return false;
+
+  const types = Array.from(dataTransfer.types ?? []);
+  if (types.includes('Files')) return true;
+
+  if (dataTransfer.files && dataTransfer.files.length > 0) return true;
+  if (dataTransfer.items && dataTransferItemsHaveFiles(dataTransfer.items)) return true;
+
+  return false;
+};
+
 export const selectFile = <M extends boolean | undefined = undefined>(
   accept: string,
   multiple?: M
