@@ -57,6 +57,40 @@ test("release updater gate fails when release config forces updater artifacts of
   assert.match(result.errors.join("\n"), /createUpdaterArtifacts to false/);
 });
 
+test("release updater gate requires signed update metadata upload", () => {
+  const result = inspectReleaseUpdaterReadiness({
+    ...readyInputs,
+    releaseWorkflow: `
+      env:
+        TAURI_SIGNING_PRIVATE_KEY: \${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        TAURI_SIGNING_PRIVATE_KEY_PASSWORD: \${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+      files: |
+        src-tauri/target/release/bundle/appimage/*.sig
+    `,
+    requireEnabled: true,
+  });
+
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join("\n"), /signed updater metadata/);
+});
+
+test("release updater gate requires updater signature sidecars", () => {
+  const result = inspectReleaseUpdaterReadiness({
+    ...readyInputs,
+    releaseWorkflow: `
+      env:
+        TAURI_SIGNING_PRIVATE_KEY: \${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        TAURI_SIGNING_PRIVATE_KEY_PASSWORD: \${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+      files: |
+        latest.json
+    `,
+    requireEnabled: true,
+  });
+
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join("\n"), /signature sidecars/);
+});
+
 test("non-release check warns instead of failing while updater is intentionally disabled", () => {
   const result = inspectReleaseUpdaterReadiness({
     ...readyInputs,
