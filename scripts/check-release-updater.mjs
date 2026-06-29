@@ -24,6 +24,11 @@ const isHttpsEndpoint = (endpoint) => {
 
 const hasWorkflowPattern = (workflow, pattern) => pattern.test(workflow);
 
+const workflowConfiguresUpdaterChannel = (workflow) =>
+  hasWorkflowPattern(workflow, /configure-release-updater\.mjs/) &&
+  hasWorkflowPattern(workflow, /SYNARA_UPDATER_PUBKEY/) &&
+  hasWorkflowPattern(workflow, /SYNARA_UPDATER_ENDPOINT/);
+
 export function inspectReleaseUpdaterReadiness({
   tauriConfig,
   cargoToml,
@@ -133,6 +138,15 @@ export function inspectReleaseUpdaterReadiness({
   ) {
     report(
       ".github/workflows/release-desktop.yml still overrides bundle.createUpdaterArtifacts to false."
+    );
+  }
+
+  if (
+    updaterArtifacts !== true &&
+    !workflowConfiguresUpdaterChannel(releaseWorkflow)
+  ) {
+    report(
+      ".github/workflows/release-desktop.yml must configure the release updater channel before strict validation."
     );
   }
 

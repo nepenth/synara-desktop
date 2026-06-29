@@ -91,6 +91,13 @@ metadata channel is enabled:
 - `TAURI_SIGNING_PRIVATE_KEY`: updater private key used to sign release metadata.
 - `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`: password for the updater private key.
 
+Published release jobs also read these repository variables to materialize the
+release updater config before the strict updater gate runs:
+
+- `SYNARA_UPDATER_PUBKEY`: public key generated from the updater signing key.
+- `SYNARA_UPDATER_ENDPOINT`: optional HTTPS `latest.json` endpoint. If omitted,
+  the release workflow uses the GitHub latest-release asset URL for this repo.
+
 On Linux workstations, see [Linux builds](docs/linux.md) for distribution-specific system dependencies, KDE Plasma Wayland notes, and `.deb`/AppImage packaging commands.
 
 Packaged builds expose their identity in the tray menu and About dialog as `Build <version> <branch>@<short-sha>`.
