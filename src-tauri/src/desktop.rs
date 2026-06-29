@@ -22,6 +22,9 @@ use std::sync::atomic::AtomicU64;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::build_info;
+use crate::desktop_sanitize::{
+    sanitize_action_text, sanitize_notification_route, sanitize_route, truncate_text,
+};
 use crate::desktop_url;
 
 pub const MAIN_WINDOW_LABEL: &str = "main";
@@ -335,7 +338,6 @@ const DESKTOP_SECRET_STORE_OPERATION_DENIED: &str = "desktop-secret-store-denied
 #[cfg(target_os = "linux")]
 const DESKTOP_SECRET_STORE_PROBE_TIMEOUT: Duration = Duration::from_secs(2);
 const DESKTOP_STORED_SESSION_INVALID: &str = "desktop-stored-session-invalid";
-const MAX_DESKTOP_ROUTE_CHARS: usize = 2_048;
 const ALLOWED_SHORTCUT_LEN: usize = 128;
 const UNKNOWN_INTEGRATION_VALUE: &str = "unknown";
 const MAX_TRAY_COUNT: i64 = 9_999;
@@ -395,14 +397,6 @@ fn validate_shortcuts(shortcuts: &DesktopShortcutConfig) -> Result<DesktopShortc
         later,
         notifications,
     })
-}
-
-fn truncate_text(value: String, max_chars: usize) -> String {
-    value.chars().take(max_chars).collect()
-}
-
-fn sanitize_action_text(value: String, max_chars: usize) -> String {
-    truncate_text(value.trim().to_string(), max_chars)
 }
 
 fn sanitize_notification_payload(
@@ -1794,24 +1788,6 @@ pub fn desktop_read_dropped_file_end(transfer_id: String) -> Result<bool, String
     purge_stale_file_transfer_sessions(Instant::now());
     remove_dropped_read_session(&transfer_id);
     Ok(true)
-}
-
-fn sanitize_route(route: String) -> Result<String, String> {
-    let route = sanitize_action_text(route, MAX_DESKTOP_ROUTE_CHARS);
-    if route.is_empty() {
-        return Err("Route cannot be empty".to_owned());
-    }
-    if route.contains("://") {
-        return Err("Route must be an internal app route".to_owned());
-    }
-    if !route.starts_with('/') && !route.starts_with('#') {
-        return Err("Route must start with / or #".to_owned());
-    }
-    Ok(route)
-}
-
-fn sanitize_notification_route(route: String) -> Result<String, String> {
-    sanitize_route(route)
 }
 
 fn show_notification_without_route_click_handler<R: Runtime>(
