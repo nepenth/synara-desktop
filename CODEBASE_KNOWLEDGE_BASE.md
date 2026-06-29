@@ -132,7 +132,7 @@ desktop notifications and agent actions.
 | Primary client state | **Jotai** | Atoms bound to Matrix events via `useBindAtoms.ts` |
 | Fetch/cache | **React Query** | Devices, space hierarchy, message search (7 files) |
 | Persistence | `atomWithLocalStorage`, native keyring, IndexedDB | Matrix sync/crypto in IndexedDB |
-| Session | `sessionBootstrap.ts` / `sessionPersistence.ts` | Legacy Jotai `sessionsAtom` is **commented out** |
+| Session | `sessionBootstrap.ts` / `sessionPersistence.ts` | Single active session with native-store first persistence and localStorage fallback |
 
 ### 2.6 Build Pipeline
 
@@ -273,7 +273,6 @@ placeholder has been replaced with the prompt-backed `HomeJoin` route.
 
 | Location | What |
 |----------|------|
-| `synara/src/app/state/sessions.ts` | Entire Jotai `sessionsAtom` commented out (~100 lines). Session state migrated to `sessionBootstrap.ts` + native keyring. |
 | `synara/src/app/plugins/react-prism/ReactPrism.tsx` | Many Prism language imports commented out (bundle size). |
 | `synara/src/app/utils/ASCIILexicalTable.ts` | Debug `printLex` and perf harness commented out. |
 
@@ -482,7 +481,6 @@ check:repo-layout → check:versions → check:matrix-boundaries
 1. **`RoomTimeline.tsx` decomposition** — At 2945 LOC; extract sub-modules before
    adding timeline features.
 2. **`desktop.rs` modularization** — Split into focused modules before adding IPC.
-3. **Session layer cleanup** — Remove or document commented `sessionsAtom` code.
 
 ### 7.3 Cross-Platform Expansion Protocol
 

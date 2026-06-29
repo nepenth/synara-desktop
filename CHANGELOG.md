@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Removed the commented legacy Jotai `sessionsAtom` implementation now that session bootstrap and persistence own the active session flow.
 - Replaced the `/home/join/` route stub with the existing join-address prompt flow and shared room-link URL construction.
 - Added desktop Tauri updater plugin scaffolding with check-only frontend permission while production updater metadata remains release-gated.
 - Added a release-updater readiness checker and wired published desktop releases to fail until signed updater artifacts, metadata, plugin wiring, and release signing secrets are configured.
