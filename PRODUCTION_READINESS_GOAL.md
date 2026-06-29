@@ -70,6 +70,10 @@ Loop termination requires all of the following:
 
 ## Prioritized Backlog
 
+### Priority Model
+
+The user-declared pain points are **release P0 epics** because they are current client-facing blockers. The KB §7.5 **P0 interactive macOS/Linux smoke checklists** remain a mandatory release gate and run in parallel with implementation; they are not deprioritized by the pain-point epics.
+
 ### Epic 1: Timeline Resurrection
 
 **Priority:** P0  
@@ -124,19 +128,58 @@ Initial task backlog:
 **Priority:** P1-P4  
 **Status:** Not started
 
-Backlog imported from `CODEBASE_KNOWLEDGE_BASE.md` sections 7.1-7.5:
+Backlog reconciled from `CODEBASE_KNOWLEDGE_BASE.md` sections 7.1-7.5:
+
+#### 7.1 Safe Extension Areas
+
+1. Preserve and extend Synara-specific account-data features: Later, room notes, unread anchors.
+2. Deepen agent workflow support through `desktop_agent_action` / `synara://agent-action` backend service wiring.
+3. Improve search and inbox polish across message search, notifications, and Later.
+4. Extend desktop native surfaces using established tray, shortcut, notification, and Rust sanitization patterns.
+5. Require contract-first additions: human contract, JSON schema, fixture, desktop implementation/tests, and iOS mirror.
+
+#### 7.2 Refactoring Before Major Expansion
+
+1. Decompose `RoomTimeline.tsx`.
+2. Modularize `desktop.rs`.
+3. Implement join route (`_JOIN_PATH`).
+4. Remove or document commented `sessionsAtom` legacy session code.
+
+#### 7.3 Cross-Platform Expansion Protocol
+
+Any cross-platform feature must follow this checklist before acceptance:
+
+1. Update human contract docs, JSON schema, and fixture.
+2. Implement desktop owner utility and tests.
+3. Update contract schema tests.
+4. Mirror schema/fixture behavior in `synara-ios/Synara/Contracts/` and `SynaraContractsTests`.
+5. Implement iOS service adapter when in scope.
+6. Update iOS functionality matrix status.
+
+#### 7.4 Risk Controls
+
+| Risk | Control |
+|---|---|
+| Tauri IPC signature drift | Preserve backward-compatible command payloads unless an intentional migration is documented. |
+| Cross-platform schema drift | Require fixture conformance tests on desktop and iOS before acceptance. |
+| Timeline performance regression | Run `npm --prefix synara run test:timeline-performance` after timeline changes. |
+| Linux DE variance | Smoke on CachyOS/KDE Wayland before release signoff. |
+| iOS SDK API changes | Pin SDK versions and audit `matrix-rust-components-swift` changes before iOS release work. |
+
+#### 7.5 Prioritized Next Steps
 
 1. Complete interactive macOS + Linux smoke checklists.
 2. Implement join route (`_JOIN_PATH`).
 3. Connect agent backend services to existing bridge.
 4. Decompose `RoomTimeline.tsx`.
 5. Modularize `desktop.rs`.
-6. Enable auto-updater with signed metadata channel.
-7. Deploy iOS push gateway.
-8. Implement iOS production E2EE.
-9. Archive stale `maturity_improvement_plan1` branch.
-10. Add component/integration tests for auth and room flows.
-11. Evaluate Windows session store only if Windows enters the release matrix.
+6. Remove or document commented `sessionsAtom` legacy session code.
+7. Enable auto-updater with signed metadata channel.
+8. Deploy iOS push gateway.
+9. Implement iOS production E2EE.
+10. Archive stale `maturity_improvement_plan1` branch.
+11. Add component/integration tests for auth and room flows.
+12. Evaluate Windows session store only if Windows enters the release matrix.
 
 ### Epic 5: Production Release Operations
 
@@ -172,8 +215,8 @@ Backlog imported from `CODEBASE_KNOWLEDGE_BASE.md` sections 7.1-7.5:
 
 | Phase | Status | Evidence | Next Step |
 |---|---|---|---|
-| Phase 0: Initializer | Committed | Current `HEAD` includes harness, validation evidence, changelog, and mechanical Prettier drift fix | Push commit, then begin Phase 1 source reconciliation |
-| Phase 1: Validation & Reconciliation | Blocked pending source artifacts | Grok report and prior Section 7 not found locally | Locate/report missing context, then reconcile |
+| Phase 0: Initializer | Committed and pushed | Current `HEAD` includes harness, validation evidence, changelog, and mechanical Prettier drift fix | Continue Phase 1 source reconciliation |
+| Phase 1: Validation & Reconciliation | In progress; externally blocked for full reconciliation | KB §7 read fully; Grok/composer-2.5-fast second opinion completed from pasted excerpts; original prompt, Grok Executive Report, and prior Section 7 not found locally | Commit KB Section 7 reconciliation edits, then continue repo/source validation |
 | Phase 2: Timeline Resurrection | Not started | N/A | Begin after Phase 1 baseline |
 | Phase 3: Link Opening | Not started | N/A | Pick scoped link inventory/fix |
 | Phase 4: Composer Parity | Not started | N/A | Pick scoped composer audit/fix |
@@ -188,3 +231,4 @@ Backlog imported from `CODEBASE_KNOWLEDGE_BASE.md` sections 7.1-7.5:
 | 2026-06-29T09:17:59-04:00 | Created Phase 0 harness commit. | Initial commit `3f19dd2` used requested message `chore: initialize Codex Orchestrator v2 harness + living goal files`; evidence entry was amended into the same commit. |
 | 2026-06-29T09:18:24-04:00 | Amended Phase 0 commit evidence. | `devAssets/index.html` remains an unstaged pre-existing generated hash drift. The exact final SHA is intentionally not embedded because amending the file changes the commit object. |
 | 2026-06-29T09:18:55-04:00 | Stabilized commit evidence wording. | Removed self-referential final-SHA wording from committed artifacts; use `git rev-parse --short HEAD` for the current commit id. |
+| 2026-06-29T09:22:51-04:00 | Accepted Grok/composer-2.5-fast Phase 1 reconciliation finding. | Reviewer found §7.5 coverage strong but §7.1, §7.3, §7.4, and session-layer cleanup underrepresented; goal backlog expanded accordingly. Missing external artifacts still prevent full reconciliation completion. |
