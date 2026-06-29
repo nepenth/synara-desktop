@@ -268,7 +268,9 @@ pub fn run() {
 
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     {
-        builder = builder.plugin(desktop::global_shortcut_plugin());
+        builder = builder
+            .plugin(desktop::global_shortcut_plugin())
+            .plugin(tauri_plugin_updater::Builder::new().build());
     }
 
     builder
