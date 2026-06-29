@@ -11,6 +11,9 @@ jobs:
   linux:
     name: Linux release artifacts
     runs-on: ubuntu-22.04
+    env:
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -43,8 +46,26 @@ jobs:
       - name: Require signed updater release channel
         run: npm run check:release-updater -- --require-enabled
 
+      - name: Validate Tauri updater signing secrets
+        shell: bash
+        run: |
+          missing=()
+          for name in \
+            TAURI_SIGNING_PRIVATE_KEY \
+            TAURI_SIGNING_PRIVATE_KEY_PASSWORD; do
+            if [[ -z "${!name}" ]]; then
+              missing+=("$name")
+            fi
+          done
+
+          if (( ${#missing[@]} > 0 )); then
+            printf 'Missing required Tauri updater signing secrets:\n' >&2
+            printf ' - %s\n' "${missing[@]}" >&2
+            exit 1
+          fi
+
       - name: Build Linux release packages
-        run: npm run tauri build -- --bundles deb,appimage --config '{"bundle":{"createUpdaterArtifacts":false}}'
+        run: npm run tauri build -- --bundles deb,appimage
         env:
           NODE_OPTIONS: "--max_old_space_size=4096"
 
@@ -53,7 +74,11 @@ jobs:
         with:
           files: |
             src-tauri/target/release/bundle/deb/Synara_*.deb
+            src-tauri/target/release/bundle/deb/*.sig
             src-tauri/target/release/bundle/appimage/Synara_*.AppImage
+            src-tauri/target/release/bundle/appimage/*.sig
+            src-tauri/target/release/bundle/appimage/*.tar.gz
+            src-tauri/target/release/bundle/appimage/*.tar.gz.sig
 
   macos:
     name: macOS release artifacts
@@ -66,6 +91,8 @@ jobs:
       APPLE_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
       APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
       APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -91,7 +118,7 @@ jobs:
       - name: Require signed updater release channel
         run: npm run check:release-updater -- --require-enabled
 
-      - name: Validate macOS signing secrets
+      - name: Validate macOS and updater signing secrets
         shell: bash
         run: |
           missing=()
@@ -101,7 +128,9 @@ jobs:
             APPLE_SIGNING_IDENTITY \
             APPLE_ID \
             APPLE_APP_SPECIFIC_PASSWORD \
-            APPLE_TEAM_ID; do
+            APPLE_TEAM_ID \
+            TAURI_SIGNING_PRIVATE_KEY \
+            TAURI_SIGNING_PRIVATE_KEY_PASSWORD; do
             if [[ -z "${!name}" ]]; then
               missing+=("$name")
             fi
@@ -140,7 +169,7 @@ jobs:
           security find-identity -v -p codesigning "$keychain_path" | grep -F "$APPLE_SIGNING_IDENTITY"
 
       - name: Build macOS universal release packages
-        run: npm run tauri build -- --target universal-apple-darwin --bundles dmg --config "{\"bundle\":{\"createUpdaterArtifacts\":false,\"macOS\":{\"signingIdentity\":\"${APPLE_SIGNING_IDENTITY}\",\"providerShortName\":\"${APPLE_TEAM_ID}\"}}}"
+        run: npm run tauri build -- --target universal-apple-darwin --bundles dmg --config "{\"bundle\":{\"macOS\":{\"signingIdentity\":\"${APPLE_SIGNING_IDENTITY}\",\"providerShortName\":\"${APPLE_TEAM_ID}\"}}}"
         env:
           NODE_OPTIONS: "--max_old_space_size=4096"
 
@@ -160,3 +189,6 @@ jobs:
         with:
           files: |
             src-tauri/target/universal-apple-darwin/release/bundle/dmg/Synara_*.dmg
+            src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.sig
+            src-tauri/target/universal-apple-darwin/release/bundle/macos/*.tar.gz
+            src-tauri/target/universal-apple-darwin/release/bundle/macos/*.tar.gz.sig
