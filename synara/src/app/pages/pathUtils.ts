@@ -101,6 +101,18 @@ export const getHomeRoomPath = (roomIdOrAlias: string, eventId?: string): string
 
   return generatePath(HOME_ROOM_PATH, params);
 };
+export const getHomeRoomPathWithViaServers = (
+  roomIdOrAlias: string,
+  eventId?: string,
+  viaServers?: string[]
+): string => {
+  const path = getHomeRoomPath(roomIdOrAlias, eventId);
+  if (!viaServers || viaServers.length === 0) return path;
+
+  return withSearchParam(path, {
+    viaServers: encodeSearchParamValueArray(viaServers),
+  });
+};
 
 export const getDirectPath = (): string => DIRECT_PATH;
 export const getDirectCreatePath = (): string => DIRECT_CREATE_PATH;
