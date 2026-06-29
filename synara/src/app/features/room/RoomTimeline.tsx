@@ -1444,17 +1444,13 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
   const tryAutoMarkAsRead = useCallback(() => {
     const readUptoEventId = readUptoEventIdRef.current;
     if (!readUptoEventId) {
-      requestAnimationFrame(() =>
-        markAsRead(mx, room.roomId, hideActivity, 'loaded-live-tail')
-      );
+      requestAnimationFrame(() => markAsRead(mx, room.roomId, hideActivity, 'loaded-live-tail'));
       return;
     }
     const evtTimeline = getEventTimeline(room, readUptoEventId);
     const latestTimeline = evtTimeline && getFirstLinkedTimeline(evtTimeline, Direction.Forward);
     if (latestTimeline === room.getLiveTimeline()) {
-      requestAnimationFrame(() =>
-        markAsRead(mx, room.roomId, hideActivity, 'loaded-live-tail')
-      );
+      requestAnimationFrame(() => markAsRead(mx, room.roomId, hideActivity, 'loaded-live-tail'));
     }
   }, [mx, room, hideActivity]);
 
