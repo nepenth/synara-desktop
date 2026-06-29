@@ -3,7 +3,12 @@ import test from 'node:test';
 import { AccountDataEvent } from '../../../types/matrix/accountData';
 import { clearUnreadAnchor, markAsRead } from '../notifications';
 import { getThreadRootEventId, roomHaveUnread } from '../room';
-import { getLatestReceiptEventFromEvents, getRoomCurrentState } from '../timelineLifecycle';
+import {
+  ROOM_TIMELINE_VIEWPORT_RESTORE_TTL_MS,
+  getLatestReceiptEventFromEvents,
+  getRoomCurrentState,
+  shouldRestoreRoomTimelineViewport,
+} from '../timelineLifecycle';
 
 const createTimelineEvent = (
   id: string,
@@ -200,6 +205,64 @@ test('getRoomCurrentState prefers the SDK room current state over timeline state
   } as any;
 
   assert.equal(getRoomCurrentState(room), currentState);
+});
+
+test('timeline viewport restore policy lets unread state win over saved history', () => {
+  const nowMs = 10_000;
+  const viewport = {
+    atBottom: false,
+    updatedAtMs: nowMs,
+  };
+
+  assert.equal(
+    shouldRestoreRoomTimelineViewport(viewport, {
+      hasUnread: true,
+      nowMs,
+    }),
+    false
+  );
+});
+
+test('timeline viewport restore policy expires stale historical anchors', () => {
+  const nowMs = 10_000 + ROOM_TIMELINE_VIEWPORT_RESTORE_TTL_MS;
+  const freshViewport = {
+    atBottom: false,
+    updatedAtMs: 10_000,
+  };
+  const staleViewport = {
+    atBottom: false,
+    updatedAtMs: 9_999,
+  };
+
+  assert.equal(
+    shouldRestoreRoomTimelineViewport(freshViewport, {
+      hasUnread: false,
+      nowMs,
+    }),
+    true
+  );
+  assert.equal(
+    shouldRestoreRoomTimelineViewport(staleViewport, {
+      hasUnread: false,
+      nowMs,
+    }),
+    false
+  );
+});
+
+test('timeline viewport restore policy always allows bottom snapshots without unread', () => {
+  assert.equal(
+    shouldRestoreRoomTimelineViewport(
+      {
+        atBottom: true,
+      },
+      {
+        hasUnread: false,
+        nowMs: 10_000,
+      }
+    ),
+    true
+  );
 });
 
 test('getThreadRootEventId returns thread root ids when available', () => {

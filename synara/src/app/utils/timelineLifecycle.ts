@@ -1,6 +1,38 @@
 import { Direction, MatrixClient, MatrixEvent, Room, RoomState } from 'matrix-js-sdk';
 import type { EventTimeline } from 'matrix-js-sdk/lib/models/event-timeline';
 
+export const ROOM_TIMELINE_VIEWPORT_RESTORE_TTL_MS = 10 * 60 * 1000;
+
+type RoomTimelineViewportSnapshot = {
+  atBottom: boolean;
+  updatedAtMs?: number;
+};
+
+type RoomTimelineViewportRestoreOptions = {
+  hasUnread: boolean;
+  nowMs: number;
+  maxAgeMs?: number;
+};
+
+export const shouldRestoreRoomTimelineViewport = (
+  viewport: RoomTimelineViewportSnapshot | undefined,
+  {
+    hasUnread,
+    nowMs,
+    maxAgeMs = ROOM_TIMELINE_VIEWPORT_RESTORE_TTL_MS,
+  }: RoomTimelineViewportRestoreOptions
+): boolean => {
+  if (!viewport) return false;
+  if (hasUnread) return false;
+  if (viewport.atBottom) return true;
+  if (maxAgeMs < 0) return false;
+
+  const { updatedAtMs } = viewport;
+  if (typeof updatedAtMs !== 'number' || !Number.isFinite(updatedAtMs)) return false;
+
+  return Math.max(0, nowMs - updatedAtMs) <= maxAgeMs;
+};
+
 export const getRoomCurrentState = (room: Room): RoomState | undefined =>
   room.currentState ?? room.getLiveTimeline().getState(Direction.Forward);
 

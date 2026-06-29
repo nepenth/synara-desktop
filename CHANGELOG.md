@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Added a desktop timeline viewport restore policy so unread rooms and stale historical anchors no longer override live/read-marker opening.
 - Added Codex-Orchestrator-v2 persistent harness artifacts for production-readiness tracking.
 - Expanded the living production-readiness backlog to cover the full KB Section 7 recommendation set and reconciliation constraints.
 - Fixed existing Prettier drift in timeline, notification, app-link, and timeline lifecycle files so the formatting gate passes.
