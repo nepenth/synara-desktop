@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Replaced the `/home/join/` route stub with the existing join-address prompt flow and shared room-link URL construction.
 - Added desktop Tauri updater plugin scaffolding with check-only frontend permission while production updater metadata remains release-gated.
 - Added a release-updater readiness checker and wired published desktop releases to fail until signed updater artifacts, metadata, plugin wiring, and release signing secrets are configured.
 - Hardened desktop composer drag/drop detection so file payloads that expose `files` or file items without a `Files` type marker still activate the upload drop zone.

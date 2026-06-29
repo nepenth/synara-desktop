@@ -7,6 +7,7 @@
 
 - Codex in the current Linux environment prepares code changes, exact commands, expected evidence, and review notes.
 - The current Linux environment cannot run `xcodebuild` or `swift`; those checks require the established macOS workstation or a Mac-hosted agent.
+- Current host tool check, 2026-06-29: `grok` is available on PATH; `xcodebuild`, `swift`, and `composer-2.5-fast` are not available on PATH.
 - A human or a Mac-hosted agent runs the queued commands on the established macOS workstation.
 - Results should be pasted back into the session or committed into the relevant living artifacts.
 - A queued item is not release-signed-off until pass/fail evidence includes command output, simulator/device target, date, and commit SHA.
