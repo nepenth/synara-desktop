@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Added release workflow updater-channel configuration from GitHub repository variables before strict updater validation and packaging.
 - Added release workflow generation and upload of static signed updater metadata from Linux and macOS updater artifacts.
 - Tightened the release-updater gate so updater signature sidecars and signed updater metadata uploads are validated independently.
 - Added a `check:production-smoke` gate that keeps production smoke checklist cases, signoff rows, preflight commands, and macOS/iOS queue linkage intact.

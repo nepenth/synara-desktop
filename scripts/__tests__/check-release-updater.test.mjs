@@ -27,6 +27,11 @@ const readyInputs = {
     },
   },
   releaseWorkflow: `
+    - name: Configure release updater channel
+      run: node scripts/configure-release-updater.mjs
+      env:
+        SYNARA_UPDATER_PUBKEY: \${{ vars.SYNARA_UPDATER_PUBKEY }}
+        SYNARA_UPDATER_ENDPOINT: \${{ vars.SYNARA_UPDATER_ENDPOINT }}
     env:
       TAURI_SIGNING_PRIVATE_KEY: \${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
       TAURI_SIGNING_PRIVATE_KEY_PASSWORD: \${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
@@ -55,6 +60,29 @@ test("release updater gate fails when release config forces updater artifacts of
 
   assert.equal(result.ok, false);
   assert.match(result.errors.join("\n"), /createUpdaterArtifacts to false/);
+});
+
+test("release updater gate requires workflow updater channel materialization when config is disabled", () => {
+  const result = inspectReleaseUpdaterReadiness({
+    ...readyInputs,
+    tauriConfig: {
+      bundle: {
+        createUpdaterArtifacts: false,
+      },
+    },
+    releaseWorkflow: `
+      env:
+        TAURI_SIGNING_PRIVATE_KEY: \${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        TAURI_SIGNING_PRIVATE_KEY_PASSWORD: \${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+      files: |
+        src-tauri/target/release/bundle/appimage/*.sig
+        latest.json
+    `,
+    requireEnabled: false,
+  });
+
+  assert.equal(result.ok, true);
+  assert.match(result.warnings.join("\n"), /configure the release updater channel/);
 });
 
 test("release updater gate requires signed update metadata upload", () => {
