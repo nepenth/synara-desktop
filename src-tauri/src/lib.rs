@@ -155,8 +155,11 @@ mod localhost_port_tests {
 
     #[test]
     fn select_localhost_port_skips_busy_preferred_port() {
-        let listener = std::net::TcpListener::bind(("127.0.0.1", PREFERRED_LOCALHOST_PORT))
-            .expect("test listener should bind");
+        let listener = match std::net::TcpListener::bind(("127.0.0.1", PREFERRED_LOCALHOST_PORT)) {
+            Ok(listener) => Some(listener),
+            Err(error) if error.kind() == std::io::ErrorKind::AddrInUse => None,
+            Err(error) => panic!("test listener should bind or find an occupied port: {error}"),
+        };
         let port = select_localhost_port().expect("fallback localhost port should be available");
         assert_ne!(port, PREFERRED_LOCALHOST_PORT);
         assert!((PREFERRED_LOCALHOST_PORT + 1..PREFERRED_LOCALHOST_PORT + 10).contains(&port));

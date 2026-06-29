@@ -48,9 +48,7 @@ fn main() {
     let manifest_path = Path::new(&manifest_dir);
     sync_release_hardening_capability(manifest_path);
 
-    let repo = manifest_path
-        .parent()
-        .unwrap_or(Path::new(&manifest_dir));
+    let repo = manifest_path.parent().unwrap_or(Path::new(&manifest_dir));
     let head_path = repo.join(".git/HEAD");
     let revision = git_output(repo, &["rev-parse", "--short=12", "HEAD"])
         .unwrap_or_else(|| "unknown".to_owned());
