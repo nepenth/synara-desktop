@@ -167,7 +167,7 @@ Backlog reconciled from `CODEBASE_KNOWLEDGE_BASE.md` sections 7.1-7.5:
 #### 7.2 Refactoring Before Major Expansion
 
 1. Decompose `RoomTimeline.tsx`. **Status:** In progress; extracted linked-timeline navigation/count/index helpers to `utils/timelineLinks.ts` and opening/window/unread helpers to `utils/timelineOpening.ts` with direct modernization coverage. Component is now 2857 LOC.
-2. Modularize `desktop.rs`.
+2. Modularize `desktop.rs`. **Status:** In progress; first slice extracted external-link, session-base, and agent URL policy helpers into `src-tauri/src/desktop_url.rs` with direct Rust policy tests. `desktop.rs` is now 5004 LOC.
 3. Implement join route (`_JOIN_PATH`). **Status:** Done; `/home/join/` now opens the shared join-address prompt and navigates to room routes with `viaServers` preserved.
 4. Remove or document commented `sessionsAtom` legacy session code. **Status:** Done; removed the commented legacy Jotai multi-session atom from `sessions.ts` now that `sessionBootstrap.ts` and `sessionPersistence.ts` own the active session flow.
 
@@ -232,8 +232,8 @@ Any cross-platform feature must follow this checklist before acceptance:
 | `npm --prefix synara run check:prettier` | Yes | Pass after mechanical format fix, 2026-06-29 | Four pre-existing formatting drifts corrected |
 | `npm run check:release-updater` | Yes | Advisory pass with 8 warnings, 2026-06-29 | Plugin/package/check-only capability wiring is present; release metadata/channel prerequisites remain disabled |
 | `npm run check:release-updater -- --require-enabled` | Required for published releases | Expected fail, 2026-06-29 | Release workflow now runs this gate; it fails until updater artifacts, signed metadata, plugin wiring, and release signing secrets are configured |
-| `cargo check` in `src-tauri` | Yes | Pass, 2026-06-29 | Rust compile gate clean |
-| `cargo test` in `src-tauri` | Yes | Pass, 2026-06-29 | 90/90 Rust tests passed |
+| `cargo check` in `src-tauri` | Yes | Pass, 2026-06-29 | Rust compile gate clean after `desktop_url.rs` extraction |
+| `cargo test` in `src-tauri` | Yes | Pass, 2026-06-29 | 93/93 Rust tests passed serially after adding direct URL policy coverage |
 | `npm --prefix synara run test:timeline-performance` | Required for timeline changes | Pass, 2026-06-29 | Latest rerun: 10k events 8.51 ms; 50k events 20.69 ms |
 | iOS tests | Required for iOS release | Queued for macOS workstation | `xcodebuild` and `swift` unavailable on this Linux host; see `MACOS_IOS_VALIDATION_QUEUE.md` |
 
@@ -246,7 +246,7 @@ Any cross-platform feature must follow this checklist before acceptance:
 | Phase 2: Timeline Resurrection | In progress | Desktop viewport restore policy first slice implemented; shared open-focus contract added; iOS policy tests expanded; macOS/iOS validation handoff is tracked in `MACOS_IOS_VALIDATION_QUEUE.md` | Run iOS tests on macOS/Xcode, then execute smoke checklist |
 | Phase 3: Link Opening | In progress | Desktop bridge hardening first slice implemented; Grok reviewed the diff and its findings were incorporated; local gates pass at 281/281 | Run macOS/Linux interactive link-opening smoke checklist |
 | Phase 4: Composer Parity | In progress | Clipboard image paste first slice and drag/drop detection hardening implemented; Grok reviewed both diffs and findings were incorporated/accepted; local gates pass at 283/283 | Run macOS/Linux interactive composer smoke checklist |
-| Phase 5: Release Readiness | In progress | Added release-updater readiness checker; wired published desktop release workflow to fail until signed updater channel prerequisites are configured; added desktop updater plugin/package/check-only permission scaffolding; completed `_JOIN_PATH` route stub; removed legacy commented session atom; continued `RoomTimeline.tsx` decomposition | Complete real updater config/channel/signing workflow work, then run macOS signing/updater verification |
+| Phase 5: Release Readiness | In progress | Added release-updater readiness checker; wired published desktop release workflow to fail until signed updater channel prerequisites are configured; added desktop updater plugin/package/check-only permission scaffolding; completed `_JOIN_PATH` route stub; removed legacy commented session atom; continued `RoomTimeline.tsx` decomposition; started `desktop.rs` modularization with URL policy extraction | Complete real updater config/channel/signing workflow work, then run macOS signing/updater verification |
 
 ## Decision Log
 
@@ -270,3 +270,4 @@ Any cross-platform feature must follow this checklist before acceptance:
 | 2026-06-29T10:38:00-04:00 | Accepted session layer dead-code cleanup. | Removed the commented legacy Jotai `sessionsAtom` implementation from `sessions.ts`; active session ownership remains with `sessionBootstrap.ts`, `sessionPersistence.ts`, native secret storage, and the tested localStorage fallback path. |
 | 2026-06-29T10:45:53-04:00 | Accepted first `RoomTimeline.tsx` decomposition slice. | Extracted linked-timeline navigation/count/index helpers into `utils/timelineLinks.ts`, added direct tests for linked chains, isolated timelines, index boundaries, wrapper behavior, and kept the component wired to the same helper behavior. Grok review found no blocking or high-impact issues. |
 | 2026-06-29T10:56:30-04:00 | Accepted second `RoomTimeline.tsx` decomposition slice. | Extracted opening/window/unread helpers into `utils/timelineOpening.ts`, added direct tests for bounded live-end windows, empty timeline state, unread read-receipt/anchor resolution, detached timeline handling, and initial unread detection. Grok review was attempted twice but hit its max-turn cap without findings. |
+| 2026-06-29T11:04:38-04:00 | Accepted first `desktop.rs` modularization slice. | Extracted URL safety/session/agent URL helpers into `src-tauri/src/desktop_url.rs`, preserved the public `desktop::is_safe_external_url` wrapper, added direct Rust policy tests, and kept local Rust/repo guardrails green. Grok found no blocking issues; composer CLI remains unavailable locally. |

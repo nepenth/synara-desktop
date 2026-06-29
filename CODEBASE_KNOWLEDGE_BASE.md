@@ -63,8 +63,8 @@ release-grade.
 synara-desktop/                    # Root — Tauri project + orchestration
 ├── config.json                    # Canonical homeserver/config (synced → synara/)
 ├── package.json                   # Tauri CLI, build scripts, version gates
-├── src-tauri/                     # Rust desktop shell (~5.1k LOC in desktop.rs)
-│   ├── src/{main,lib,desktop,build_info,menu}.rs
+├── src-tauri/                     # Rust desktop shell (~5.0k LOC in desktop.rs)
+│   ├── src/{main,lib,desktop,desktop_url,build_info,menu}.rs
 │   ├── capabilities/{main,release-hardening}.json
 │   └── tauri.conf.json
 ├── synara/                        # React/Vite Matrix runtime (~865 TS/JS files)
@@ -354,7 +354,7 @@ tracked in docs, contracts, and functionality matrices instead.
 |------|----------|--------|
 | Browser-shaped desktop runtime | Medium | IndexedDB sync/crypto, localStorage drafts, service worker media |
 | matrix-js-sdk coupling | High | ~209 runtime files; Rust SDK migration = multi-month rewrite |
-| Monolithic files | Medium | `RoomTimeline.tsx` (2857 LOC after helper extractions), `desktop.rs` (5101 LOC) |
+| Monolithic files | Medium | `RoomTimeline.tsx` (2857 LOC after helper extractions), `desktop.rs` (5004 LOC after URL helper extraction) |
 | Limited UI test coverage | Medium | 44 unit test files, zero `*.test.tsx` component tests |
 | Windows unsupported | Low (by design) | No Keychain equivalent; excluded from release matrix |
 | Stale MIP1 branch | Low | Could confuse contributors |
@@ -367,7 +367,7 @@ tracked in docs, contracts, and functionality matrices instead.
 | Suite | Count | Runner |
 |-------|-------|--------|
 | Modernization (TS) | 273 pass | `node:test` via esbuild bundle |
-| Rust desktop | 82+ pass | `cargo test --lib` |
+| Rust desktop | 93 pass | `cargo test` |
 | Contract schemas | Included above | `contractSchemas.test.ts` |
 | Timeline perf harness | Separate | `test:timeline-performance` |
 | iOS unit + UI | 209+ | XCTest (local; CI compile-only) |
@@ -407,6 +407,7 @@ tracked in docs, contracts, and functionality matrices instead.
 | Session persistence | `synara/src/app/state/sessionPersistence.ts` |
 | Desktop bridge (TS) | `synara/src/app/utils/desktop.ts` |
 | Desktop bridge (Rust) | `src-tauri/src/desktop.rs` |
+| Desktop URL policy (Rust) | `src-tauri/src/desktop_url.rs` |
 | Platform API | `synara/src/app/platform/index.ts` |
 | Route parser | `synara/src/app/routes/synaraRoutes.ts` |
 | Agent cards | `synara/src/app/components/hermes/HermesAgentCard.tsx` |
@@ -482,7 +483,9 @@ check:repo-layout → check:versions → check:matrix-boundaries
    helpers to `utils/timelineLinks.ts` and opening/window/unread helpers to
    `utils/timelineOpening.ts`; continue extracting sub-modules before adding
    timeline features.
-2. **`desktop.rs` modularization** — Split into focused modules before adding IPC.
+2. **`desktop.rs` modularization** — First slice extracted external-link,
+   session-base, and agent URL policy helpers to `src-tauri/src/desktop_url.rs`
+   with direct Rust tests; continue splitting into focused modules before adding IPC.
 
 ### 7.3 Cross-Platform Expansion Protocol
 
