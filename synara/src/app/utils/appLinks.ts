@@ -9,10 +9,7 @@ export const SYNARA_RELEASES_URL = `${SYNARA_SOURCE_CODE_URL}/releases`;
 export const SYNARA_PROJECT_URL = `${SYNARA_SOURCE_CODE_URL}#readme`;
 export const MATRIX_URL = 'https://matrix.org';
 
-export const openExternalUrlFromClick = (
-  evt: ReactMouseEvent<HTMLElement>,
-  url: string
-): void => {
+export const openExternalUrlFromClick = (evt: ReactMouseEvent<HTMLElement>, url: string): void => {
   if (!isDesktopPlatform()) return;
 
   evt.preventDefault();
