@@ -169,7 +169,7 @@ Backlog reconciled from `CODEBASE_KNOWLEDGE_BASE.md` sections 7.1-7.5:
 1. Decompose `RoomTimeline.tsx`.
 2. Modularize `desktop.rs`.
 3. Implement join route (`_JOIN_PATH`). **Status:** Done; `/home/join/` now opens the shared join-address prompt and navigates to room routes with `viaServers` preserved.
-4. Remove or document commented `sessionsAtom` legacy session code.
+4. Remove or document commented `sessionsAtom` legacy session code. **Status:** Done; removed the commented legacy Jotai multi-session atom from `sessions.ts` now that `sessionBootstrap.ts` and `sessionPersistence.ts` own the active session flow.
 
 #### 7.3 Cross-Platform Expansion Protocol
 
@@ -198,10 +198,9 @@ Any cross-platform feature must follow this checklist before acceptance:
 2. Connect agent backend services to existing bridge.
 3. Decompose `RoomTimeline.tsx`.
 4. Modularize `desktop.rs`.
-5. Remove or document commented `sessionsAtom` legacy session code.
-6. Enable auto-updater with signed metadata channel.
-7. Deploy iOS push gateway.
-8. Implement iOS production E2EE.
+5. Enable auto-updater with signed metadata channel.
+6. Deploy iOS push gateway.
+7. Implement iOS production E2EE.
 10. Archive stale `maturity_improvement_plan1` branch.
 11. Add component/integration tests for auth and room flows.
 12. Evaluate Windows session store only if Windows enters the release matrix.
@@ -247,7 +246,7 @@ Any cross-platform feature must follow this checklist before acceptance:
 | Phase 2: Timeline Resurrection | In progress | Desktop viewport restore policy first slice implemented; shared open-focus contract added; iOS policy tests expanded; macOS/iOS validation handoff is tracked in `MACOS_IOS_VALIDATION_QUEUE.md` | Run iOS tests on macOS/Xcode, then execute smoke checklist |
 | Phase 3: Link Opening | In progress | Desktop bridge hardening first slice implemented; Grok reviewed the diff and its findings were incorporated; local gates pass at 281/281 | Run macOS/Linux interactive link-opening smoke checklist |
 | Phase 4: Composer Parity | In progress | Clipboard image paste first slice and drag/drop detection hardening implemented; Grok reviewed both diffs and findings were incorporated/accepted; local gates pass at 283/283 | Run macOS/Linux interactive composer smoke checklist |
-| Phase 5: Release Readiness | In progress | Added release-updater readiness checker; wired published desktop release workflow to fail until signed updater channel prerequisites are configured; added desktop updater plugin/package/check-only permission scaffolding; completed `_JOIN_PATH` route stub | Complete real updater config/channel/signing workflow work, then run macOS signing/updater verification |
+| Phase 5: Release Readiness | In progress | Added release-updater readiness checker; wired published desktop release workflow to fail until signed updater channel prerequisites are configured; added desktop updater plugin/package/check-only permission scaffolding; completed `_JOIN_PATH` route stub; removed legacy commented session atom | Complete real updater config/channel/signing workflow work, then run macOS signing/updater verification |
 
 ## Decision Log
 
@@ -268,3 +267,4 @@ Any cross-platform feature must follow this checklist before acceptance:
 | 2026-06-29T10:11:36-04:00 | Added release-only updater readiness enforcement instead of enabling placeholder updater config. | Real production updater enablement requires signed metadata endpoint/key material and runtime plugin wiring. The release workflow now blocks artifact builds until those prerequisites are present, while local advisory checks keep the current disabled state visible. |
 | 2026-06-29T10:20:36-04:00 | Accepted check-only desktop updater plugin scaffolding. | Added the Tauri updater Rust plugin, npm updater binding, generated ACL schemas, and `updater:allow-check` only. Advisory release checker now reports only production channel/signing/artifact blockers; Grok found registration safe without config because commands fail closed when endpoints are empty. |
 | 2026-06-29T10:31:32-04:00 | Accepted `_JOIN_PATH` route completion. | Replaced the `/home/join/` placeholder with the shared join-address prompt route, centralized room path generation with `viaServers`, routed the Home sidebar join action through the canonical route, and added modernization coverage for encoded room/event/via URL construction. |
+| 2026-06-29T10:38:00-04:00 | Accepted session layer dead-code cleanup. | Removed the commented legacy Jotai `sessionsAtom` implementation from `sessions.ts`; active session ownership remains with `sessionBootstrap.ts`, `sessionPersistence.ts`, native secret storage, and the tested localStorage fallback path. |
