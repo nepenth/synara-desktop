@@ -19,7 +19,7 @@ const readyInputs = {
   cargoToml: 'tauri-plugin-updater = "2"\n',
   rustLib: "tauri_plugin_updater::Builder::new().build()",
   capabilities: {
-    permissions: ["core:default", "updater:default"],
+    permissions: ["core:default", "updater:allow-check"],
   },
   desktopPackage: {
     dependencies: {
