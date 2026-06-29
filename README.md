@@ -32,6 +32,10 @@ Published macOS releases require Developer ID signing and notarization in CI.
 The release workflow fails if the required Apple distribution secrets are not
 configured. Updater metadata remains disabled until this project has a stable
 signed release metadata channel.
+Published release jobs also run `npm run check:release-updater -- --require-enabled`;
+until the Tauri updater plugin, signed metadata channel, and updater signing
+secrets are configured, release artifact builds intentionally fail before
+packaging.
 
 ### Platform support — session persistence
 
@@ -80,6 +84,12 @@ Published macOS releases require these GitHub Actions secrets:
 - `APPLE_ID`: Apple Developer account email used for notarization.
 - `APPLE_APP_SPECIFIC_PASSWORD`: app-specific password for notarization.
 - `APPLE_TEAM_ID`: Apple Developer Team ID.
+
+Published releases also require Tauri updater signing secrets once the signed
+metadata channel is enabled:
+
+- `TAURI_SIGNING_PRIVATE_KEY`: updater private key used to sign release metadata.
+- `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`: password for the updater private key.
 
 On Linux workstations, see [Linux builds](docs/linux.md) for distribution-specific system dependencies, KDE Plasma Wayland notes, and `.deb`/AppImage packaging commands.
 
