@@ -33,6 +33,7 @@ import { useRoomNavigate } from '../../hooks/useRoomNavigate';
 import { useDirectRooms } from '../../pages/client/direct/useDirectRooms';
 import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 import { useAllJoinedRoomsSet, useGetRoom } from '../../hooks/useGetRoom';
+import { openExternalUrl } from '../../utils/appLinks';
 import { RoomAvatar, RoomIcon } from '../room-avatar';
 import { getDirectRoomAvatarUrl, getRoomAvatarUrl } from '../../utils/room';
 import { nameInitials } from '../../utils/common';
@@ -110,7 +111,7 @@ export function ServerChip({ server }: { server: string }) {
                 size="300"
                 radii="300"
                 onClick={() => {
-                  window.open(`https://${server}`, '_blank');
+                  void openExternalUrl(`https://${server}`);
                   close();
                 }}
               >

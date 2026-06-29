@@ -37,7 +37,7 @@ export const sendPlatformAgentAction = sendDesktopAgentAction;
 const openAgentActionUrl = async (url: string): Promise<boolean> => {
   const opened = await openPlatformExternalUrl(url);
   if (opened) return true;
-  if (typeof window === 'undefined') return false;
+  if (isSynaraDesktop() || typeof window === 'undefined') return false;
   const popup = window.open(url, '_blank', 'noopener,noreferrer');
   return popup !== null;
 };

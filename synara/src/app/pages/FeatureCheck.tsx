@@ -3,6 +3,7 @@ import { Box, Dialog, Text, config } from 'folds';
 import { AsyncStatus, useAsyncCallback } from '../hooks/useAsyncCallback';
 import { checkIndexedDBSupport } from '../utils/featureCheck';
 import { SplashScreen } from '../components/splash-screen';
+import { openExternalUrlFromClick } from '../utils/appLinks';
 
 export function FeatureCheck({ children }: { children: ReactNode }) {
   const [idbSupportState, checkIDBSupport] = useAsyncCallback(checkIndexedDBSupport);
@@ -27,6 +28,12 @@ export function FeatureCheck({ children }: { children: ReactNode }) {
                   href="https://developer.mozilla.org/en-US/docs/Web/API/IndexedDB_API"
                   rel="noreferrer noopener"
                   target="_blank"
+                  onClick={(evt) =>
+                    openExternalUrlFromClick(
+                      evt,
+                      'https://developer.mozilla.org/en-US/docs/Web/API/IndexedDB_API'
+                    )
+                  }
                 >
                   What is IndexedDB?
                 </a>
