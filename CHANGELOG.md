@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Added release-branch Arch/CachyOS pacman package artifact generation for `synara-desktop-bin` package smoke.
 - Fixed room re-entry after Jump to Latest by persisting live-tail bottom snapshots and allowing them to override stale unread/read-marker state only when no newer live-tail event has arrived.
 - Hardened desktop external-link opening by mounting the interceptor at the app shell, using capture-phase link interception, surfacing native opener failures in desktop diagnostics, and making the injected Tauri bridge fail explicitly when IPC is unavailable.
 - Added release-branch CI triggers for core CI, desktop package smoke, and iOS skeleton validation.

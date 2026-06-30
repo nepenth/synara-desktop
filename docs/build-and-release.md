@@ -88,7 +88,11 @@ full app launch smoke are tracked in [../MACOS_WORKSTATION_HANDOFF.md](../MACOS_
    - `CI`
    - `Desktop Package Smoke`
    - `iOS Skeleton` when iOS paths changed
-6. Install and smoke the generated package artifacts.
+6. Install and smoke the generated package artifacts:
+   - `synara-macos-app`: unsigned/ad-hoc macOS `.app` release-candidate smoke artifact.
+   - `synara-linux-arch-pkg`: Arch/CachyOS pacman package artifact for
+     `pacman -U` smoke and future AUR `synara-desktop-bin` validation.
+   - `synara-linux-deb`: Debian-family package smoke artifact.
 7. Record smoke evidence in [production-smoke-checklist.md](production-smoke-checklist.md).
 
 Release branch pushes build candidate artifacts for validation. They must not
