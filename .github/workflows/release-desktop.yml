@@ -124,7 +124,9 @@ jobs:
     needs: [linux-arch]
     env:
       GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
       PACMAN_REPO_TAG: pacman-repo
+      RELEASE_TAG: ${{ github.event.release.tag_name }}
     steps:
       - name: Download pacman repository assets
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
@@ -132,8 +134,15 @@ jobs:
           name: synara-pacman-repo-assets
           path: pacman-repo
 
+      - name: Verify downloaded pacman repository assets
+        run: |
+          find pacman-repo -maxdepth 1 -type f -printf '%f\n' | sort
+          test -f pacman-repo/synara.db
+          test -f pacman-repo/synara.files
+          compgen -G 'pacman-repo/synara-desktop-bin-*.pkg.tar.zst' >/dev/null
+
       - name: Upload package to versioned release
-        run: gh release upload "$GITHUB_REF_NAME" pacman-repo/synara-desktop-bin-*.pkg.tar.zst --clobber
+        run: gh release upload "$RELEASE_TAG" pacman-repo/synara-desktop-bin-*.pkg.tar.zst --clobber
 
       - name: Create fixed pacman repository release
         run: |
@@ -257,7 +266,7 @@ jobs:
           security find-identity -v -p codesigning "$keychain_path" | grep -F "$APPLE_SIGNING_IDENTITY"
 
       - name: Build macOS universal release packages
-        run: npm run tauri build -- --target universal-apple-darwin --bundles dmg --config "{\"bundle\":{\"macOS\":{\"signingIdentity\":\"${APPLE_SIGNING_IDENTITY}\",\"providerShortName\":\"${APPLE_TEAM_ID}\"}}}"
+        run: npm run tauri build -- --target universal-apple-darwin --bundles app,dmg --config "{\"bundle\":{\"macOS\":{\"signingIdentity\":\"${APPLE_SIGNING_IDENTITY}\",\"providerShortName\":\"${APPLE_TEAM_ID}\"}}}"
         env:
           NODE_OPTIONS: "--max_old_space_size=4096"
 
