@@ -50,6 +50,16 @@ fn emit_native_file_drop(window: &tauri::Window, payload: NativeFileDropPayload)
     let _ = webview.emit("synara-native-file-drop", payload);
 }
 
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+fn updater_plugin_configured<R: tauri::Runtime>(context: &tauri::Context<R>) -> bool {
+    context
+        .config()
+        .plugins
+        .0
+        .get("updater")
+        .is_some_and(|config| !config.is_null())
+}
+
 #[cfg(target_os = "linux")]
 fn normalized_spellcheck_language(value: &str) -> Option<String> {
     let language = value
@@ -282,9 +292,15 @@ pub fn run() {
 
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     {
-        builder = builder
-            .plugin(desktop_shortcuts::global_shortcut_plugin())
-            .plugin(tauri_plugin_updater::Builder::new().build());
+        builder = builder.plugin(desktop_shortcuts::global_shortcut_plugin());
+
+        if updater_plugin_configured(&context) {
+            builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
+        } else {
+            eprintln!(
+                "[synara] Tauri updater plugin is disabled because plugins.updater is not configured."
+            );
+        }
     }
 
     builder
