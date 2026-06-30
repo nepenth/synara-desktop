@@ -208,6 +208,17 @@ Releases and verifies its checksum. `paru` then owns installation and updates.
 Do not point the AUR package at Tauri self-updater `.tar.gz` sidecar artifacts.
 Use a normal Linux release binary/archive intended for package installation.
 
+Release-branch CI currently builds and uploads a `synara-linux-arch-pkg`
+artifact from `packaging/arch/PKGBUILD`. This artifact is suitable for
+release-candidate smoke with:
+
+```sh
+sudo pacman -U synara-desktop-bin-*.pkg.tar.zst
+```
+
+Publishing or updating the public AUR package metadata is a separate maintainer
+step after the release artifact and checksum are finalized.
+
 ## KDE Plasma Wayland Scope
 
 KDE Plasma Wayland is in scope for Synara, but it needs direct validation on a Linux workstation before we call it release-proven.

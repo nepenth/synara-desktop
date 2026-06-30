@@ -75,6 +75,8 @@ Status:
 
 - Implemented on 2026-06-30 for `ci.yml`, `desktop-package-smoke.yml`, and
   `ios-skeleton.yml`.
+- `desktop-package-smoke.yml` now includes Linux `.deb`, Linux Arch pacman
+  package, and macOS `.app` artifacts for release-branch candidate smoke.
 - Waiting for first `release/vX.Y.Z` branch push to provide live Actions
   evidence.
 
@@ -84,6 +86,9 @@ Add or extend a workflow for release candidate artifacts:
 
 - Trigger: `workflow_dispatch` and optionally push to `release/**`.
 - Build Linux and macOS artifacts from the release branch.
+- Linux release-candidate artifact for the current goal is the Arch/CachyOS
+  pacman package used by `synara-desktop-bin`, not a Tauri AppImage self-update
+  channel.
 - Use signing/notarization where available.
 - Upload artifacts to the workflow run or a GitHub prerelease marked as
   prerelease.
