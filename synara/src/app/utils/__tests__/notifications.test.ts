@@ -228,14 +228,33 @@ test('timeline viewport restore policy lets unread state win over saved bottom s
     shouldRestoreRoomTimelineViewport(
       {
         atBottom: true,
-        updatedAtMs: 10_000,
+        liveTailEventId: '$old-tail',
       },
       {
         hasUnread: true,
+        currentLiveTailEventId: '$new-tail',
         nowMs: 10_000,
       }
     ),
     false
+  );
+});
+
+test('timeline viewport restore policy keeps explicit bottom when unread state is stale', () => {
+  assert.equal(
+    shouldRestoreRoomTimelineViewport(
+      {
+        atBottom: true,
+        liveTailEventId: '$tail',
+        updatedAtMs: 10_000,
+      },
+      {
+        hasUnread: true,
+        currentLiveTailEventId: '$tail',
+        nowMs: 10_000,
+      }
+    ),
+    true
   );
 });
 
