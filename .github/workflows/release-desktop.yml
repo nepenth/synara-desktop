@@ -50,7 +50,7 @@ jobs:
           NODE_OPTIONS: "--max_old_space_size=4096"
 
       - name: Upload Linux .deb release artifact
-        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0
+        uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3.0.1
         with:
           files: src-tauri/target/release/bundle/deb/Synara_*.deb
 
@@ -282,7 +282,7 @@ jobs:
             src-tauri/target/universal-apple-darwin/release/bundle/macos/*.tar.gz.sig
 
       - name: Upload macOS release artifacts
-        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0
+        uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3.0.1
         with:
           files: |
             src-tauri/target/universal-apple-darwin/release/bundle/dmg/Synara_*.dmg
@@ -321,6 +321,6 @@ jobs:
             --output latest.json
 
       - name: Upload signed updater metadata
-        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0
+        uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3.0.1
         with:
           files: latest.json
