@@ -1,6 +1,6 @@
 # macOS Workstation Handoff
 
-Reviewed: 2026-06-29
+Reviewed: 2026-06-30
 
 Purpose: give a Mac-hosted Codex session or human operator the exact context,
 commands, evidence requirements, and prompt needed to execute the remaining
@@ -47,9 +47,9 @@ out of committed files.
 
 | ID | Priority | Area | Required Work |
 |---|---:|---|---|
+| MAC-IOS-003 | P0 | Link Opening | Re-test after the next link-opening fix; current 2026-06-30 smoke says macOS links do not open the browser. |
 | MAC-IOS-001 | P0 | Timeline Resurrection | Run iOS unit tests including `TimelineServiceTests`. |
 | MAC-IOS-002 | P0 | Timeline Resurrection | Execute Timeline smoke cases from `docs/timeline-open-focus-contract.md` and `docs/production-smoke-checklist.md`. |
-| MAC-IOS-003 | P0 | Link Opening | Smoke desktop external-link surfaces on macOS and verify system-browser opening. |
 | MAC-IOS-005 | P0 | Composer Desktop Parity | Smoke native spellcheck, file drag/drop, screenshot paste, and mixed image+HTML paste on macOS. |
 | MAC-IOS-004 | P1 | Release Operations | If updater/signing variables are configured, run strict updater, signing, notarization, and artifact verification. |
 
@@ -69,6 +69,9 @@ npm run check:repo-layout
 npm run check:matrix-boundaries
 npm run check:production-smoke
 npm run check:release-updater
+npm run typecheck:modernization
+npm --prefix synara run check:eslint
+npm --prefix synara run check:prettier
 ```
 
 From `synara-ios`:
@@ -80,6 +83,21 @@ RUN_IOS_TESTS=1 IOS_TEST_DESTINATION='platform=iOS Simulator,name=iPhone 16' scr
 ```
 
 If the previously used simulator differs, use that destination and record it.
+
+## Required macOS Desktop Launch Guardrail
+
+Before executing detailed smoke cases, prove the committed desktop app can launch
+with the local disabled-updater config:
+
+```sh
+npm run tauri dev
+```
+
+Record whether the main window opens and reaches the login/session screen. This
+is specifically required because the 2026-06-29 `f938246` fix restored launch by
+making updater plugin registration conditional on active `plugins.updater`
+configuration. A successful compile is not enough evidence for native-shell
+plugin/config changes.
 
 ## Mac Codex Prompt
 
@@ -101,10 +119,12 @@ Read these files first:
 - synara-ios/docs/testflight-readiness.md
 
 Execute the queued macOS/iOS validation items with exact command output and evidence:
-1. Run iOS unit tests including TimelineServiceTests.
-2. Run Timeline Resurrection smoke cases TL-001 through TL-010 where supported.
-3. Run macOS desktop smoke for link opening and composer parity.
-4. If updater variables/secrets are configured, run strict updater/signing/notarization validation.
+1. Prove macOS desktop launch with committed disabled-updater config.
+2. Run iOS unit tests including TimelineServiceTests.
+3. Run Timeline Resurrection smoke cases TL-001 through TL-010 where supported.
+4. Re-run macOS desktop smoke for link opening after the Linux/macOS shared fix lands.
+5. Run macOS desktop smoke for composer parity.
+6. If updater variables/secrets are configured, run strict updater/signing/notarization validation.
 
 Do not mark anything complete without commit SHA, branch, Xcode version, macOS version, simulator/device target, commands run, pass/fail notes, and failure reproduction details.
 
@@ -120,4 +140,3 @@ The Mac session should return or commit:
 - Any failing commands with exact output and reproduction notes.
 - If all P0 smoke passes, a clear statement that Timeline, link opening, and
   composer parity are evidence-ready for release review.
-

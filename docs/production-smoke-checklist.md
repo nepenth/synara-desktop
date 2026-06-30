@@ -7,6 +7,18 @@ desktop, macOS, and iOS validation gates. Automated gates stay tracked in
 `PRODUCTION_READINESS_GOAL.md`; macOS/iOS tool-bound tasks stay tracked in
 `MACOS_IOS_VALIDATION_QUEUE.md`.
 
+## Latest Smoke Feedback
+
+2026-06-30 human smoke feedback:
+
+- macOS desktop builds, launches, and broadly works after the disabled-updater
+  launch fix; formal command/log evidence is still needed for signoff.
+- macOS and Linux link opening currently fails: clicking external links does not
+  open the system browser. `MAC-DESK-003` and `LINUX-DESK-006` are release
+  blockers until fixed.
+- Timeline/session-history behavior appears tentatively improved during use, but
+  the Timeline Resurrection cases still need formal evidence before signoff.
+
 ## Evidence Rules
 
 Every smoke pass must record:
@@ -58,6 +70,7 @@ Cases:
 
 | ID | Area | Pass Criteria | Evidence |
 |---|---|---|---|
+| MAC-DESK-000 | Launch with disabled updater config | App launches from the committed local config and reaches login/session UI; updater plugin may log that it is disabled, but startup must not fail. | Build SHA, macOS version, command/log excerpt, pass/fail. |
 | MAC-DESK-001 | Launch/session | App launches, login succeeds, session persists after quit/reopen through Keychain. | Build SHA, macOS version, account class, pass/fail. |
 | MAC-DESK-002 | Logout/session | Logout clears session; relogin succeeds without crypto/session mismatch. | Pass/fail plus any session-store status. |
 | MAC-DESK-003 | Link opening | Rich text links, Matrix HTML links, normal message links, Hermes action/artifact links, settings/about links, profile/server links, OIDC account-management links, registration terms, feature-check help link, and location links open in the system browser, not an embedded webview. | Per-surface pass/fail; browser used. |
@@ -156,8 +169,8 @@ Cases:
 | Section | Required Before Release | Status | Evidence Link |
 |---|---:|---|---|
 | Common preflight | Yes | Pending |  |
-| macOS desktop smoke | Yes | Pending |  |
-| Linux desktop smoke | Yes | Pending |  |
-| Timeline Resurrection smoke | Yes | Pending |  |
+| macOS desktop smoke | Yes | Failed link-opening smoke | 2026-06-30 human report |
+| Linux desktop smoke | Yes | Failed link-opening smoke | 2026-06-30 human report |
+| Timeline Resurrection smoke | Yes | Tentatively improved; formal evidence pending | 2026-06-30 human report |
 | iOS tool-bound smoke | Yes for iOS release and shared Timeline signoff | Pending |  |
 | Updater release smoke | Yes | Pending |  |
