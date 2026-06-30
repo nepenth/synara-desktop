@@ -12,12 +12,14 @@ import { FeatureCheck } from './FeatureCheck';
 import { createRouter } from './Router';
 import { ScreenSizeProvider, useScreenSize } from '../hooks/useScreenSize';
 import { useCompositionEndTracking } from '../hooks/useComposingCheck';
+import { useDesktopExternalLinkInterceptor } from '../utils/appLinks';
 
 const queryClient = new QueryClient();
 
 function App() {
   const screenSize = useScreenSize();
   useCompositionEndTracking();
+  useDesktopExternalLinkInterceptor();
 
   const portalContainer = document.getElementById('portalContainer') ?? undefined;
 

@@ -53,7 +53,6 @@ import {
   selectSyncSplashView,
   SYNC_PREPARED_TIMEOUT_MS,
 } from '../../utils/syncSplashRecovery';
-import { useDesktopExternalLinkInterceptor } from '../../utils/appLinks';
 
 function ClientRootLoading({ status }: { status: string }) {
   return (
@@ -258,7 +257,6 @@ export function ClientRoot({ children }: ClientRootProps) {
   useSyncResumeRetry(mx);
   useProactiveTokenRefresh(mx);
   usePlatformDeviceDisplayNameRepair(mx);
-  useDesktopExternalLinkInterceptor();
 
   useEffect(() => {
     if (loadState.status === AsyncStatus.Idle) {

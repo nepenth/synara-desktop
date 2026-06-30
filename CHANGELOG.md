@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Hardened desktop external-link opening by mounting the interceptor at the app shell, using capture-phase link interception, surfacing native opener failures in desktop diagnostics, and making the injected Tauri bridge fail explicitly when IPC is unavailable.
+- Added release-branch CI triggers for core CI, desktop package smoke, and iOS skeleton validation.
+- Added a build-and-release runbook and linked it from the README documentation index.
 - Added a release-branch CI and controlled client-update publication plan.
 - Configured GitHub Actions updater signing secrets and updater public endpoint variables for future signed release workflow validation.
 - Updated production-readiness plans with 2026-06-30 smoke feedback: desktop launch works, link opening fails on macOS/Linux, Timeline behavior is tentatively improved, and updater work remains deferred.

@@ -71,6 +71,13 @@ Acceptance:
 - Pull requests targeting `release/**` run the same gates as release branch
   pushes.
 
+Status:
+
+- Implemented on 2026-06-30 for `ci.yml`, `desktop-package-smoke.yml`, and
+  `ios-skeleton.yml`.
+- Waiting for first `release/vX.Y.Z` branch push to provide live Actions
+  evidence.
+
 ### Milestone 2: Release Candidate Artifact Workflow
 
 Add or extend a workflow for release candidate artifacts:
@@ -149,4 +156,3 @@ Clients should only see a new update after:
 4. Signed/notarized artifacts are generated.
 5. Updater `.sig` files and `latest.json` are generated and verified.
 6. The GitHub Release is intentionally published.
-
