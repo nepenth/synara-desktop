@@ -7,10 +7,17 @@ Synara Desktop is a Tauri 2 app. Linux builds should be produced on Linux, becau
 Start with these package formats:
 
 - `.deb` for Debian, Ubuntu, KDE neon, and related distributions.
-- AppImage for broader workstation smoke testing.
 - Native pacman package for CachyOS, Arch, and other Arch-family local installs.
+- Future AUR/paru distribution via `synara-desktop-bin` pulling GitHub Release
+  artifacts.
 
-Tauri can also target RPM, Flatpak, Snap, and AUR packaging, but those formats should be treated as follow-up distribution work until they have their own install and update testing. See Tauri's Linux distribution notes for the current package formats and per-format caveats: <https://v2.tauri.app/distribute/>.
+Tauri can also target RPM, Flatpak, Snap, and AppImage packaging, but those formats should be treated as follow-up distribution work until they have their own install and update testing. See Tauri's Linux distribution notes for the current package formats and per-format caveats: <https://v2.tauri.app/distribute/>.
+
+For the current release goal, Linux updates are package-manager-owned. The app
+may notify users that a newer Linux package is available, but it must not
+self-update a pacman/paru installation. Prefer an AUR version check for
+`synara-desktop-bin`; a GitHub latest-release check can be a fallback but may
+notify before the AUR package has been updated.
 
 ## Workstation Prerequisites
 
@@ -186,7 +193,20 @@ On CachyOS and other rolling Arch-family systems, `npm run tauri build -- --bund
 
 The Arch pacman package no longer depends on Tauri's `.deb` desktop entry output. `packaging/arch/synara.desktop` is installed directly, so `npm run tauri build` (release binary only) is sufficient before `makepkg -f`.
 
-Use AppImage as a release artifact only after validating it on a packaging host or container whose `linuxdeploy` toolchain can strip the host libraries successfully.
+AppImage is not part of the current supported Linux update strategy. Revisit it
+only after the AUR/paru path is stable and tested.
+
+#### AUR/paru release artifact notes
+
+The current in-repo `packaging/arch/PKGBUILD` is a local packaging helper: it
+expects a release binary already built in `src-tauri/target/release/synara`.
+
+For public AUR distribution, add or publish an AUR-ready `synara-desktop-bin`
+PKGBUILD that downloads a versioned Linux x86_64 binary/archive from GitHub
+Releases and verifies its checksum. `paru` then owns installation and updates.
+
+Do not point the AUR package at Tauri self-updater `.tar.gz` sidecar artifacts.
+Use a normal Linux release binary/archive intended for package installation.
 
 ## KDE Plasma Wayland Scope
 

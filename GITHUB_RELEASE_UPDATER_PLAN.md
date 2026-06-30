@@ -75,6 +75,9 @@ Deferred:
 - Frontend updater invocation UX. The Tauri plugin/package scaffolding is
   present, but the runtime does not yet expose a user-facing check/install
   control. A signed build alone cannot prove installed-app updater behavior.
+- Linux AppImage self-update. Product decision on 2026-06-30 is to use
+  AUR/paru package-manager-owned Linux updates through GitHub Release artifacts
+  instead.
 
 Current blocking precondition:
 
@@ -85,6 +88,8 @@ Current blocking precondition:
   signed/notarized DMG smoke, but it is not an updater-channel proof because it
   builds with `createUpdaterArtifacts:false` and does not materialize
   `plugins.updater`.
+- Linux updater work should not wire Tauri self-install for pacman/paru installs.
+  Linux app behavior should be notification/instruction only.
 
 Latest local gate hardening:
 
@@ -117,8 +122,11 @@ GitHub repository secrets:
    - Release workflow injects `SYNARA_UPDATER_PUBKEY`.
    - Release workflow derives or injects the endpoint.
 
-2. Release jobs build signed updater artifacts.
-   - Linux builds AppImage updater archive plus `.sig`.
+2. Release jobs build signed updater artifacts and package-managed Linux
+   artifacts.
+   - Linux builds a GitHub Release binary/archive intended for the
+     `synara-desktop-bin` AUR package.
+   - Linux does not self-install updates from inside the app for this goal.
    - macOS builds app updater archive plus `.sig`.
    - macOS app signing/notarization remains separate and mandatory.
 
@@ -132,6 +140,32 @@ GitHub repository secrets:
    - Initial safe mode: expose a manual check in Settings/About.
    - Later mode: periodic background check with a clear prompt.
    - Do not silently install without explicit product decision.
+
+## Linux Distribution Policy
+
+Decision, 2026-06-30:
+
+- Linux release distribution is AUR/paru-owned for the current goal.
+- Do not support Linux AppImage self-update right now.
+- The Linux desktop app may notify that a newer package-managed release exists,
+  but it must not download/install/replace itself.
+
+Recommended Linux release shape:
+
+1. Publish a Linux x86_64 release binary/archive on GitHub Releases.
+2. Update the AUR `synara-desktop-bin` PKGBUILD to point at that artifact and
+   checksum.
+3. Users update with `paru -Syu` or `paru -S synara-desktop-bin`.
+4. In-app Linux update UI reports package-manager instructions only.
+
+For notification-only UX, prefer checking the AUR package version for
+`synara-desktop-bin` when network access is available. Checking the latest
+GitHub Release version is acceptable as a fallback, but it can notify before the
+AUR package metadata has been updated.
+
+Do not point the app or AUR package at Tauri self-updater sidecar artifacts for
+Linux. The GitHub Release artifact for AUR should be a normal Linux
+binary/archive intended for package installation.
 
 ## Implementation Milestones
 
@@ -170,24 +204,28 @@ Acceptance evidence:
 
 Scope note:
 
-- The current release workflow targets both macOS and Linux updater metadata:
-  `darwin-x86_64`, `darwin-aarch64`, and `linux-x86_64`.
+- The current release workflow draft still targets Linux Tauri updater metadata
+  (`linux-x86_64`). Revise this before production updater validation so Linux is
+  package-manager-owned and notification-only for the current goal.
 - Local workstation builds and the manual macOS signed-build workflow are not
   updater-enabled unless they run the release updater config step.
-- Linux updater coverage is for the Tauri AppImage updater archive path emitted
-  by the release workflow. `.deb` package installation/update should still be
-  treated as a separate package-management path.
+- Linux release evidence should verify GitHub Release artifact publication,
+  AUR/paru package metadata, and package-manager update behavior, not Tauri
+  self-update install behavior.
 
 ### Milestone 3: Installed-App Smoke
 
 0. Implement a minimal updater invocation surface, preferably a manual "Check
    for Updates" control in Settings/About with no silent install behavior.
-1. Install version N from a signed release artifact built by the release
+1. Install macOS version N from a signed release artifact built by the release
    workflow, not the manual macOS signed-build workflow.
-2. Publish version N+1 as a test release through the release workflow.
+2. Publish macOS version N+1 as a test release through the release workflow.
 3. Run app update check against the GitHub latest endpoint.
 4. Verify no placeholder/local endpoints are contacted.
 5. Verify update download/install behavior matches the chosen UX.
+6. Separately install Linux version N through `paru`/AUR, publish N+1, update
+   the AUR package metadata, and verify the Linux app only notifies/instructs the
+   user to run package-manager updates.
 
 Acceptance evidence:
 
