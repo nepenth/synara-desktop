@@ -9,6 +9,7 @@
   "scripts": {
     "build:runtime": "node scripts/build-runtime.mjs",
     "build:macos:local": "scripts/build-macos-local-release.sh",
+    "build:pacman-repo": "scripts/build-pacman-repo.sh",
     "check:matrix-boundaries": "node scripts/check-matrix-boundaries.mjs",
     "check:mip1-evidence": "node scripts/check-mip1-commit-evidence.mjs --base main",
     "check:production-smoke": "node scripts/check-production-smoke-checklist.mjs",

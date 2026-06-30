@@ -7,17 +7,15 @@ Synara Desktop is a Tauri 2 app. Linux builds should be produced on Linux, becau
 Start with these package formats:
 
 - `.deb` for Debian, Ubuntu, KDE neon, and related distributions.
-- Native pacman package for CachyOS, Arch, and other Arch-family local installs.
-- Future AUR/paru distribution via `synara-desktop-bin` pulling GitHub Release
-  artifacts.
+- Native pacman package for CachyOS, Arch, and other Arch-family installs
+  through the Synara GitHub Release-backed pacman repository.
 
 Tauri can also target RPM, Flatpak, Snap, and AppImage packaging, but those formats should be treated as follow-up distribution work until they have their own install and update testing. See Tauri's Linux distribution notes for the current package formats and per-format caveats: <https://v2.tauri.app/distribute/>.
 
 For the current release goal, Linux updates are package-manager-owned. The app
 may notify users that a newer Linux package is available, but it must not
-self-update a pacman/paru installation. Prefer an AUR version check for
-`synara-desktop-bin`; a GitHub latest-release check can be a fallback but may
-notify before the AUR package has been updated.
+self-update a pacman/paru installation. Arch-family users configure the Synara
+pacman repo once, then update with normal `paru -Syu` or `sudo pacman -Syu`.
 
 ## Workstation Prerequisites
 
@@ -118,9 +116,57 @@ root `config.json` into `synara/config.json`, builds the `synara/` app runtime,
 copies `synara/dist` into `devAssets`, then packages with Tauri. Edit the root
 `config.json` only; the build pipeline keeps `synara/config.json` in sync.
 
-### CachyOS / Arch-family local package
+### CachyOS / Arch-family package
 
-This is the recommended path for a CachyOS KDE Plasma Wayland workstation. Build on the CachyOS machine, then install the local pacman package.
+Recommended install path for a CachyOS KDE Plasma Wayland workstation:
+
+```sh
+sudo install -d -m 0755 /etc/pacman.d
+printf '%s\n' \
+  '[synara]' \
+  'SigLevel = Optional TrustAll' \
+  'Server = https://github.com/nepenth/synara-desktop/releases/download/pacman-repo' |
+  sudo tee /etc/pacman.d/synara.conf >/dev/null
+
+if ! grep -q 'Include = /etc/pacman.d/synara.conf' /etc/pacman.conf; then
+  printf '\nInclude = /etc/pacman.d/synara.conf\n' | sudo tee -a /etc/pacman.conf >/dev/null
+fi
+
+sudo pacman -Sy synara-desktop-bin
+```
+
+After that one-time setup, updates are normal package-manager updates:
+
+```sh
+paru -Syu
+```
+
+or:
+
+```sh
+sudo pacman -Syu
+```
+
+The `synara` repository is backed by the fixed public GitHub Release tag
+`pacman-repo`. Production release CI owns package creation, `repo-add`, pacman
+database generation, and release asset replacement. Do not manually run
+`repo-add` for the production repository.
+
+Current trust policy is `SigLevel = Optional TrustAll` because package signing
+is not enabled yet. Before broad public distribution, add a dedicated package
+signing key, publish its public key, and tighten this to a required signature
+policy.
+
+To remove the package:
+
+```sh
+sudo pacman -R synara-desktop-bin
+```
+
+### CachyOS / Arch-family local build
+
+Use this only for local development or emergency smoke builds. Build on the
+CachyOS machine, then install the local pacman package.
 
 From a fresh clone:
 
@@ -160,7 +206,7 @@ WEBKIT_DISABLE_COMPOSITING_MODE=1
 
 Keep `gst-plugins-good` installed so WebKitGTK can resolve the `autoaudiosink` GStreamer element during Matrix media setup.
 
-#### Updating an existing CachyOS install
+#### Updating an existing clone-built CachyOS install
 
 From the existing clone:
 
@@ -177,15 +223,11 @@ makepkg -f
 sudo pacman -U synara-desktop-bin-*.pkg.tar.zst
 ```
 
-`pacman -U` upgrades the installed package in place when `pkgver` or `pkgrel` changes. If you are rebuilding the same package version for local testing, `pacman -U` will still reinstall the local package.
+`pacman -U` upgrades the installed package in place when `pkgver` or `pkgrel`
+changes. If you are rebuilding the same package version for local testing,
+`pacman -U` will still reinstall the local package.
 
 The Arch `PKGBUILD` derives `pkgver` from `src-tauri/tauri.conf.json`, so a desktop app version bump automatically changes the local pacman package version. Run `npm run check:versions` before packaging if you need to verify all desktop, runtime, Cargo, and Arch package metadata are aligned.
-
-To remove the package:
-
-```sh
-sudo pacman -R synara-desktop-bin
-```
 
 #### AppImage and `.deb` bundler notes
 
@@ -194,19 +236,25 @@ On CachyOS and other rolling Arch-family systems, `npm run tauri build -- --bund
 The Arch pacman package no longer depends on Tauri's `.deb` desktop entry output. `packaging/arch/synara.desktop` is installed directly, so `npm run tauri build` (release binary only) is sufficient before `makepkg -f`.
 
 AppImage is not part of the current supported Linux update strategy. Revisit it
-only after the AUR/paru path is stable and tested.
+only after the pacman repo path is stable and tested.
 
-#### AUR/paru release artifact notes
+#### GitHub Release-backed pacman repo notes
 
-The current in-repo `packaging/arch/PKGBUILD` is a local packaging helper: it
-expects a release binary already built in `src-tauri/target/release/synara`.
+The in-repo `packaging/arch/PKGBUILD` expects a release binary already built in
+`src-tauri/target/release/synara`. CI builds that binary inside an Arch
+container, runs `makepkg`, then runs:
 
-For public AUR distribution, add or publish an AUR-ready `synara-desktop-bin`
-PKGBUILD that downloads a versioned Linux x86_64 binary/archive from GitHub
-Releases and verifies its checksum. `paru` then owns installation and updates.
+```sh
+scripts/build-pacman-repo.sh
+```
 
-Do not point the AUR package at Tauri self-updater `.tar.gz` sidecar artifacts.
-Use a normal Linux release binary/archive intended for package installation.
+That script creates a `synara` pacman database with:
+
+- `synara.db`
+- `synara.db.tar.gz`
+- `synara.files`
+- `synara.files.tar.gz`
+- `synara-desktop-bin-<version>-<pkgrel>-x86_64.pkg.tar.zst`
 
 Release-branch CI currently builds and uploads a `synara-linux-arch-pkg`
 artifact from `packaging/arch/PKGBUILD`. This artifact is suitable for
@@ -216,8 +264,13 @@ release-candidate smoke with:
 sudo pacman -U synara-desktop-bin-*.pkg.tar.zst
 ```
 
-Publishing or updating the public AUR package metadata is a separate maintainer
-step after the release artifact and checksum are finalized.
+The production release workflow uploads the package to the versioned GitHub
+Release for traceability and replaces the fixed `pacman-repo` release assets
+for package-manager updates.
+
+Do not point Linux installs at Tauri self-updater `.tar.gz` sidecar artifacts.
+Those artifacts are for app-managed update flows; Synara Linux updates are
+package-manager-owned for this release goal.
 
 ## KDE Plasma Wayland Scope
 
@@ -226,7 +279,7 @@ KDE Plasma Wayland is in scope for Synara, but it needs direct validation on a L
 Expected to work:
 
 - Matrix login, sync, timeline rendering, account data, local notes, and app-runtime UI behavior.
-- Native Linux packaging through Tauri `.deb` and AppImage.
+- Native Linux packaging through Tauri `.deb` and the Arch-family pacman repo.
 - StatusNotifier/AppIndicator tray integration on KDE Plasma when the tray widget and appindicator dependencies are present.
 - Native notifications through the desktop notification stack.
 
@@ -264,7 +317,8 @@ Environment report:
 - Portals:
   - File and media portal readiness rows are present and accurate (Ready / Not Ready / Unavailable).
 - Build/deploy check:
-  - Confirm app starts with Tauri defaults (Debian family or AppImage as configured).
+  - Confirm app starts with Tauri defaults (Debian family package or pacman repo
+    package as configured).
   - Validate using documented dependencies from Tauri Linux prerequisites and packaging format notes.
 
 Reference links for local environment prep:
