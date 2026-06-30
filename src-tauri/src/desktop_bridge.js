@@ -1,6 +1,10 @@
 (() => {
-  const invoke = (command, args) =>
-    window.__TAURI_INTERNALS__?.invoke?.(command, args);
+  const invoke = (command, args) => {
+    if (typeof window.__TAURI_INTERNALS__?.invoke !== "function") {
+      throw new Error("Tauri IPC bridge is unavailable");
+    }
+    return window.__TAURI_INTERNALS__.invoke(command, args ?? {});
+  };
 
   window.__SYNARA_DESKTOP__ = {
     platform: "tauri",

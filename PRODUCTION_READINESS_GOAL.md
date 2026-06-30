@@ -88,8 +88,9 @@ Latest human smoke feedback, 2026-06-30:
   in `GITHUB_RELEASE_UPDATER_PLAN.md` until P0 user-facing desktop behavior is
   proven or release workflow validation is explicitly resumed.
 - Release branch and client-visible update CI planning is captured in
-  `RELEASE_BRANCH_CI_PLAN.md`; do not implement workflow changes before the P0
-  desktop link-opening blocker unless explicitly approved.
+  `RELEASE_BRANCH_CI_PLAN.md`. Milestone 1 trigger coverage has been
+  implemented after explicit approval; first release-branch push evidence is
+  still pending.
 
 ### Epic 1: Timeline Resurrection
 
@@ -135,7 +136,7 @@ Shared contract update, 2026-06-29:
 ### Epic 2: Link Opening
 
 **Priority:** P0  
-**Status:** Failed smoke on macOS and Linux - next execution target
+**Status:** Hardened in code after failed smoke - pending macOS/Linux re-smoke
 **Success criteria:** Every user-visible external link from rich text, message content, Hermes cards, and related surfaces opens through the system browser via `desktop_open_external_url` on desktop, with safe fallback behavior outside Tauri.
 
 Initial task backlog:
@@ -144,13 +145,16 @@ Initial task backlog:
 2. Centralize link activation through platform link helpers. **Status:** Desktop helper now routes normal external opens through `desktop_open_external_url`; non-desktop fallback remains browser-native.
 3. Cover rich text, Matrix HTML, Hermes cards, room topics, and attachment/link previews. **Status:** Global anchor interceptor remains active for rendered anchors; Hermes cards, profile/server actions, OIDC account-management actions, registration terms, and feature-check anchors were wired explicitly.
 4. Add tests for desktop bridge invocation and fallback. **Status:** Added regression tests for desktop bridge use, unsafe desktop no-fallback behavior, modified-click preservation, relative-link preservation, and agent-action no-fallback behavior.
-5. Smoke check external URL opening on macOS/Linux. **Status:** Failed by human report on 2026-06-30; clicking links does not open the system browser on either desktop platform.
+5. Smoke check external URL opening on macOS/Linux. **Status:** Failed by human report on 2026-06-30; clicking links did not open the system browser on either desktop platform. Re-smoke required after latest bridge/interceptor hardening.
 6. Perform an end-to-end bridge/runtime diagnosis:
    - Confirm `window.__SYNARA_DESKTOP__` is present in packaged/dev runtime.
    - Confirm click interception calls `desktop_open_external_url`.
    - Confirm the Tauri command reaches Rust.
    - Confirm `tauri_plugin_opener` succeeds or captures a useful platform error.
    - Add a runtime diagnostic or smokeable test surface if needed.
+   **Status:** Partial code hardening complete on 2026-06-30: app-shell
+   capture-phase link interception, explicit injected-bridge IPC failures, and
+   desktop diagnostics for unavailable/rejected/false opener results.
 
 Desktop first-slice finding, 2026-06-29:
 
@@ -160,6 +164,11 @@ Desktop first-slice finding, 2026-06-29:
   the browser on macOS or Linux. Because both desktop platforms fail, prioritize
   the shared frontend-to-Tauri bridge and command path before platform-specific
   opener debugging.
+- Latest hardening: the desktop anchor interceptor is mounted in `App` instead
+  of `ClientRoot`, listens in capture phase, records native opener failures in
+  diagnostics, and the injected desktop bridge throws a clear IPC-unavailable
+  error instead of returning `undefined`. Frontend modernization tests and
+  typecheck pass; live macOS/Linux smoke remains the release gate.
 
 ### Epic 3: Composer Desktop Parity
 
@@ -249,8 +258,8 @@ Any cross-platform feature must follow this checklist before acceptance:
 2. Validate signing/notarization path for macOS.
 3. Validate Linux packaging and CachyOS/KDE Wayland smoke.
 4. Complete updater signing and release-channel documentation. **Status:** Release guard, check-only updater plugin scaffolding, CI signing-secret exposure, release-time updater config materialization from repository variables, strict-inspector compatibility coverage for the materialized config, artifact-generation handoff, signature upload patterns, and generated `latest.json` upload are added. GitHub updater secrets/variables are configured as of 2026-06-30; production updater enablement is parked in `GITHUB_RELEASE_UPDATER_PLAN.md` until signed release workflow and hosted metadata evidence are available.
-5. Implement release branch CI and controlled production publish flow. **Status:** Planned in `RELEASE_BRANCH_CI_PLAN.md`; not implemented.
-6. Refresh `README.md`, release checklist, and user-facing installation docs.
+5. Implement release branch CI and controlled production publish flow. **Status:** Milestone 1 release-branch validation triggers implemented for `ci.yml`, `desktop-package-smoke.yml`, and `ios-skeleton.yml`; controlled production publish flow remains deferred.
+6. Refresh `README.md`, release checklist, and user-facing installation docs. **Status:** Added `docs/build-and-release.md` as the repo entry point and linked it from `README.md`.
 7. Confirm license, privacy, and security docs are current.
 
 ## Validation Gates

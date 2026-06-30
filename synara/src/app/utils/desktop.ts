@@ -549,11 +549,26 @@ const isSafeDesktopExternalUrl = (url: string): boolean => {
 
 export const openDesktopExternalUrl = async (url: string): Promise<boolean> => {
   const normalizedUrl = normalizeActionField(url, MAX_DESKTOP_ACTION_URL_LENGTH);
-  if (!normalizedUrl || !isSynaraDesktop() || !isSafeDesktopExternalUrl(normalizedUrl)) {
+  if (!normalizedUrl || !isSynaraDesktop()) {
     return false;
   }
-  const result = await invokeDesktop<boolean>('desktop_open_external_url', { url: normalizedUrl });
-  return result === true;
+  if (!isSafeDesktopExternalUrl(normalizedUrl)) {
+    recordDesktopInvokeFailure('desktop_open_external_url', 'rejected unsafe URL');
+    return false;
+  }
+
+  const result = await invokeDesktopWithAvailability<boolean>('desktop_open_external_url', {
+    url: normalizedUrl,
+  });
+  if (!result.available) {
+    recordDesktopInvokeFailure('desktop_open_external_url', 'bridge unavailable');
+    return false;
+  }
+  if (result.value !== true) {
+    recordDesktopInvokeFailure('desktop_open_external_url', 'returned false');
+    return false;
+  }
+  return true;
 };
 
 // Tauri IPC currently serializes byte payloads as number[]; chunked transfers avoid

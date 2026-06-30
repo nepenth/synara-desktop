@@ -1,8 +1,20 @@
 name: Desktop Package Smoke
 
 on:
+  push:
+    branches: ["release/**"]
+    paths:
+      - ".github/workflows/desktop-package-smoke.yml"
+      - "package.json"
+      - "package-lock.json"
+      - ".node-version"
+      - "config.json"
+      - "scripts/**"
+      - "packaging/arch/**"
+      - "src-tauri/**"
+      - "synara/**"
   pull_request:
-    branches: [main]
+    branches: [main, "release/**"]
     paths:
       - ".github/workflows/desktop-package-smoke.yml"
       - "package.json"
