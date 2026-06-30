@@ -31,7 +31,7 @@ const workflowConfiguresUpdaterChannel = (workflow) =>
 
 const workflowPublishesGeneratedUpdaterMetadata = (workflow) =>
   hasWorkflowPattern(workflow, /updater-metadata:/) &&
-  hasWorkflowPattern(workflow, /needs:\s*\[\s*linux\s*,\s*macos\s*\]/) &&
+  hasWorkflowPattern(workflow, /needs:\s*\[\s*macos\s*\]/) &&
   hasWorkflowPattern(workflow, /actions\/download-artifact/) &&
   hasWorkflowPattern(workflow, /generate-release-updater-metadata\.mjs/) &&
   hasWorkflowPattern(workflow, /--repo\s+["']?\$GITHUB_REPOSITORY["']?/) &&
@@ -182,7 +182,7 @@ export function inspectReleaseUpdaterReadiness({
 
   if (!workflowPublishesGeneratedUpdaterMetadata(releaseWorkflow)) {
     report(
-      ".github/workflows/release-desktop.yml must generate and upload signed updater metadata from Linux and macOS updater artifacts."
+      ".github/workflows/release-desktop.yml must generate and upload signed updater metadata from macOS updater artifacts."
     );
   }
 

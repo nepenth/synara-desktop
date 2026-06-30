@@ -11,10 +11,10 @@ Release branch and client-visible publication strategy lives in
 
 ## Executive Summary
 
-Synara can use the Tauri v2 updater plugin with GitHub Releases as the update
-channel. The app checks a static `latest.json` file hosted on the latest GitHub
-release, downloads the platform-specific updater artifact, and verifies the
-artifact signature against a public key embedded in the release-time app config.
+Synara can use the Tauri v2 updater plugin with GitHub Releases as the macOS
+update channel. The app checks a static `latest.json` file hosted on the latest
+GitHub release, downloads the macOS updater artifact, and verifies the artifact
+signature against a public key embedded in the release-time app config.
 
 Recommended endpoint shape:
 
@@ -50,10 +50,13 @@ Implemented:
   config from repository variables.
 - `.github/workflows/release-desktop.yml` runs release-time updater config before
   strict validation and packaging.
-- The release workflow is prepared to upload updater archives, `.sig` sidecars,
-  and generated `latest.json`.
+- The release workflow is prepared to upload macOS updater archives, `.sig`
+  sidecars, and generated `latest.json`.
 - `scripts/generate-release-updater-metadata.mjs` can generate static metadata
-  for Linux and macOS updater artifacts.
+  for macOS updater artifacts, while still tolerating Linux entries if a future
+  product decision adds them back.
+- `scripts/build-pacman-repo.sh` generates a GitHub Release-backed pacman repo
+  database for Arch-family Linux updates.
 
 Configured:
 
@@ -75,9 +78,9 @@ Deferred:
 - Frontend updater invocation UX. The Tauri plugin/package scaffolding is
   present, but the runtime does not yet expose a user-facing check/install
   control. A signed build alone cannot prove installed-app updater behavior.
-- Linux AppImage self-update. Product decision on 2026-06-30 is to use
-  AUR/paru package-manager-owned Linux updates through GitHub Release artifacts
-  instead.
+- Linux AppImage self-update. Product decision on 2026-06-30 is to use a
+  package-manager-owned Linux update path through a GitHub Release-backed
+  pacman repo instead.
 
 Current blocking precondition:
 
@@ -88,7 +91,7 @@ Current blocking precondition:
   signed/notarized DMG smoke, but it is not an updater-channel proof because it
   builds with `createUpdaterArtifacts:false` and does not materialize
   `plugins.updater`.
-- Linux updater work should not wire Tauri self-install for pacman/paru installs.
+- Linux updater work must not wire Tauri self-install for pacman/paru installs.
   Linux app behavior should be notification/instruction only.
 
 Latest local gate hardening:
@@ -124,16 +127,17 @@ GitHub repository secrets:
 
 2. Release jobs build signed updater artifacts and package-managed Linux
    artifacts.
-   - Linux builds a GitHub Release binary/archive intended for the
-     `synara-desktop-bin` AUR package.
-   - Linux does not self-install updates from inside the app for this goal.
    - macOS builds app updater archive plus `.sig`.
    - macOS app signing/notarization remains separate and mandatory.
+   - Linux builds the `synara-desktop-bin` pacman package in an Arch container.
+   - Linux runs `scripts/build-pacman-repo.sh` and publishes the fixed
+     `pacman-repo` release assets.
+   - Linux does not self-install updates from inside the app for this goal.
 
 3. Metadata job generates `latest.json`.
-   - Downloads Linux and macOS updater artifacts from workflow artifacts.
+   - Downloads macOS updater artifacts from workflow artifacts.
    - Validates each updater archive has a non-empty `.sig`.
-   - Emits Linux and macOS platform entries.
+   - Emits macOS platform entries.
    - Uploads `latest.json` to the GitHub release.
 
 4. App-side update UX checks the endpoint.
@@ -145,27 +149,27 @@ GitHub repository secrets:
 
 Decision, 2026-06-30:
 
-- Linux release distribution is AUR/paru-owned for the current goal.
+- Linux release distribution is pacman/paru-owned for the current goal.
 - Do not support Linux AppImage self-update right now.
 - The Linux desktop app may notify that a newer package-managed release exists,
   but it must not download/install/replace itself.
 
 Recommended Linux release shape:
 
-1. Publish a Linux x86_64 release binary/archive on GitHub Releases.
-2. Update the AUR `synara-desktop-bin` PKGBUILD to point at that artifact and
-   checksum.
-3. Users update with `paru -Syu` or `paru -S synara-desktop-bin`.
+1. Publish a fixed `pacman-repo` GitHub Release containing `synara.db`,
+   `synara.files`, and `synara-desktop-bin-<version>-<pkgrel>-x86_64.pkg.tar.zst`.
+2. Users configure `/etc/pacman.conf` once with the `synara` repository URL.
+3. Users update with `paru -Syu` or `sudo pacman -Syu`.
 4. In-app Linux update UI reports package-manager instructions only.
 
-For notification-only UX, prefer checking the AUR package version for
-`synara-desktop-bin` when network access is available. Checking the latest
-GitHub Release version is acceptable as a fallback, but it can notify before the
-AUR package metadata has been updated.
+For notification-only UX, prefer checking the fixed pacman repo database or
+package version for `synara-desktop-bin` when network access is available.
+Checking the latest GitHub Release version is acceptable as a fallback, but it
+can notify before the pacman repo assets have been replaced.
 
-Do not point the app or AUR package at Tauri self-updater sidecar artifacts for
-Linux. The GitHub Release artifact for AUR should be a normal Linux
-binary/archive intended for package installation.
+Do not point Linux installs at Tauri self-updater sidecar artifacts. The GitHub
+Release-backed pacman repo should contain normal pacman package files intended
+for package-manager installation.
 
 ## Implementation Milestones
 
@@ -191,26 +195,28 @@ Acceptance evidence:
 ### Milestone 2: Release Workflow Proof
 
 1. Publish a draft/test release from a disposable tag.
-2. Confirm Linux and macOS jobs produce updater archives and `.sig` sidecars.
-3. Confirm metadata job generates and uploads `latest.json`.
-4. Download `latest.json` and verify it contains expected version/platform URLs.
+2. Confirm macOS job produces updater archives and `.sig` sidecars.
+3. Confirm metadata job generates and uploads macOS `latest.json`.
+4. Confirm Linux Arch job produces `synara-desktop-bin` and the fixed
+   `pacman-repo` release assets.
+5. Download `latest.json` and `synara.db` and verify they contain expected
+   version/platform/package data.
 
 Acceptance evidence:
 
 - GitHub Actions run URL.
 - Release URL.
 - Artifact names.
-- Redacted `latest.json` content or validation output.
+- Redacted `latest.json` and pacman repo validation output.
 
 Scope note:
 
-- The current release workflow draft still targets Linux Tauri updater metadata
-  (`linux-x86_64`). Revise this before production updater validation so Linux is
-  package-manager-owned and notification-only for the current goal.
+- The release workflow now treats Linux as package-manager-owned and
+  notification-only for the current goal.
 - Local workstation builds and the manual macOS signed-build workflow are not
   updater-enabled unless they run the release updater config step.
 - Linux release evidence should verify GitHub Release artifact publication,
-  AUR/paru package metadata, and package-manager update behavior, not Tauri
+  pacman repo metadata, and package-manager update behavior, not Tauri
   self-update install behavior.
 
 ### Milestone 3: Installed-App Smoke
@@ -223,9 +229,10 @@ Scope note:
 3. Run app update check against the GitHub latest endpoint.
 4. Verify no placeholder/local endpoints are contacted.
 5. Verify update download/install behavior matches the chosen UX.
-6. Separately install Linux version N through `paru`/AUR, publish N+1, update
-   the AUR package metadata, and verify the Linux app only notifies/instructs the
-   user to run package-manager updates.
+6. Separately install Linux version N through the `synara` pacman repo, publish
+   N+1, and verify `paru -Syu` or `sudo pacman -Syu` updates
+   `synara-desktop-bin`. The Linux app should only notify/instruct the user to
+   run package-manager updates.
 
 Acceptance evidence:
 

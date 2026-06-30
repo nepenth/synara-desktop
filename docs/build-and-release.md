@@ -91,7 +91,7 @@ full app launch smoke are tracked in [../MACOS_WORKSTATION_HANDOFF.md](../MACOS_
 6. Install and smoke the generated package artifacts:
    - `synara-macos-app`: unsigned/ad-hoc macOS `.app` release-candidate smoke artifact.
    - `synara-linux-arch-pkg`: Arch/CachyOS pacman package artifact for
-     `pacman -U` smoke and future AUR `synara-desktop-bin` validation.
+     `pacman -U` smoke and GitHub Release-backed pacman repo validation.
    - `synara-linux-deb`: Debian-family package smoke artifact.
 7. Record smoke evidence in [production-smoke-checklist.md](production-smoke-checklist.md).
 
@@ -105,11 +105,23 @@ validation.
 
 1. Create or update a GitHub Release for tag `vX.Y.Z`.
 2. Publish only after the release branch and smoke evidence are approved.
-3. The `Release Desktop` workflow builds release artifacts, updater archives,
-   signatures, and `latest.json`.
-4. Verify hosted `latest.json` before advertising the release.
-5. Confirm installed-app update behavior on macOS and Linux before declaring the
-   updater release ready.
+3. The `Release Desktop` workflow builds:
+   - macOS signed/notarized DMG, macOS updater archive, signatures, and
+     `latest.json`.
+   - Linux `.deb`.
+   - Arch-family `synara-desktop-bin` package plus fixed `pacman-repo` release
+     assets (`synara.db`, `synara.files`, and package file).
+4. Verify hosted macOS `latest.json` before advertising in-app macOS updates.
+5. Verify the fixed pacman repo URL before advertising Arch-family updates:
+
+```text
+https://github.com/nepenth/synara-desktop/releases/download/pacman-repo/synara.db
+```
+
+6. Confirm installed-app update behavior:
+   - macOS updates through the Tauri updater flow.
+   - Linux updates through `paru -Syu` or `sudo pacman -Syu`; the app may only
+     notify/instruct.
 
 The updater implementation plan and required GitHub variables/secrets live in
 [../GITHUB_RELEASE_UPDATER_PLAN.md](../GITHUB_RELEASE_UPDATER_PLAN.md). The
@@ -130,11 +142,33 @@ Updater-enabled releases require:
 Never commit updater private keys, Apple certificates, passwords, or notarization
 credentials.
 
+## Linux Pacman Repo
+
+The production pacman repo is a public GitHub Release-backed repository:
+
+```ini
+[synara]
+SigLevel = Optional TrustAll
+Server = https://github.com/nepenth/synara-desktop/releases/download/pacman-repo
+```
+
+Release CI must own every production repo mutation:
+
+1. Build the Arch package in an Arch container.
+2. Run `scripts/build-pacman-repo.sh`.
+3. Upload the package to the versioned release.
+4. Create the fixed `pacman-repo` release with `--latest=false` if needed.
+5. Delete old fixed-repo database/package assets.
+6. Upload the new fixed-repo database/package assets.
+
+Maintainers and agents should not manually run `repo-add` for production
+publication. Manual commands are acceptable only for local smoke packages.
+
 ## Current Release Constraints
 
 - Desktop external-link opening is a P0 smoke gate for macOS and Linux.
 - Timeline/session-history behavior has a shipped mitigation but still needs
   daily-use and checklist evidence.
-- GitHub-release updater key material is configured, but production updater
-  workflow proof and installed-app update smoke remain deferred until P0 desktop
-  behavior is green.
+- GitHub-release updater key material is configured. Production workflow proof
+  now splits by platform: macOS uses Tauri updater metadata, while Linux uses
+  the GitHub Release-backed pacman repo.
