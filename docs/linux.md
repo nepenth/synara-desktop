@@ -135,6 +135,16 @@ fi
 sudo pacman -Sy synara-desktop-bin
 ```
 
+If `synara-desktop-bin` was already installed from a local package or an older
+helper path, reinstall it after adding the repo so pacman records the package
+against the `synara` repository:
+
+```sh
+sudo pacman -R synara-desktop-bin
+sudo pacman -Syy synara-desktop-bin
+pacman -Q synara-desktop-bin
+```
+
 After that one-time setup, updates are normal package-manager updates:
 
 ```sh
