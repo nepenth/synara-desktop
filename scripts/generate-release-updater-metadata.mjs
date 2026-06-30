@@ -4,6 +4,8 @@ import { pathToFileURL } from "node:url";
 
 const LINUX_PLATFORM = "linux-x86_64";
 const MACOS_PLATFORMS = ["darwin-x86_64", "darwin-aarch64"];
+const ALL_PLATFORMS = [LINUX_PLATFORM, ...MACOS_PLATFORMS];
+const DEFAULT_REQUIRED_PLATFORMS = MACOS_PLATFORMS;
 
 const parseArgs = (argv) => {
   const args = {};
@@ -68,6 +70,7 @@ export function generateReleaseUpdaterMetadata({
   tag,
   version,
   pubDate = new Date().toISOString(),
+  requiredPlatforms = DEFAULT_REQUIRED_PLATFORMS,
 }) {
   if (!repo || !/^[^/]+\/[^/]+$/.test(repo)) {
     throw new Error("repo must be in owner/name format");
@@ -80,6 +83,11 @@ export function generateReleaseUpdaterMetadata({
   }
   if (!existsSync(artifactsDir)) {
     throw new Error(`Artifacts directory does not exist: ${artifactsDir}`);
+  }
+  for (const platform of requiredPlatforms) {
+    if (!ALL_PLATFORMS.includes(platform)) {
+      throw new Error(`Unsupported required updater platform: ${platform}`);
+    }
   }
 
   const updaterArchives = walk(artifactsDir).filter(
@@ -110,7 +118,7 @@ export function generateReleaseUpdaterMetadata({
     }
   }
 
-  for (const requiredPlatform of [LINUX_PLATFORM, ...MACOS_PLATFORMS]) {
+  for (const requiredPlatform of requiredPlatforms) {
     if (!platforms[requiredPlatform]) {
       throw new Error(`Missing updater metadata for ${requiredPlatform}`);
     }
@@ -132,6 +140,9 @@ function main() {
     tag: args.tag,
     version: args.version,
     pubDate: args["pub-date"],
+    requiredPlatforms: args["required-platforms"]
+      ? args["required-platforms"].split(",").map((value) => value.trim()).filter(Boolean)
+      : undefined,
   });
   writeFileSync(output, `${JSON.stringify(metadata, null, 2)}\n`);
   console.log(`[updater-metadata] wrote ${output}`);

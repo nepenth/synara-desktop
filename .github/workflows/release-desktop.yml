@@ -8,12 +8,10 @@ permissions:
   contents: write
 
 jobs:
-  linux:
-    name: Linux release artifacts
+  linux-deb:
+    name: Linux .deb release artifact
+    if: startsWith(github.ref_name, 'v')
     runs-on: ubuntu-22.04
-    env:
-      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -43,60 +41,129 @@ jobs:
         run: npm ci
         working-directory: synara
 
-      - name: Configure release updater channel
-        run: node scripts/configure-release-updater.mjs
-        env:
-          SYNARA_UPDATER_PUBKEY: ${{ vars.SYNARA_UPDATER_PUBKEY }}
-          SYNARA_UPDATER_ENDPOINT: ${{ vars.SYNARA_UPDATER_ENDPOINT }}
+      - name: Check version metadata
+        run: npm run check:versions
 
-      - name: Require signed updater release channel
-        run: npm run check:release-updater -- --require-enabled
-
-      - name: Validate Tauri updater signing secrets
-        shell: bash
-        run: |
-          missing=()
-          for name in \
-            TAURI_SIGNING_PRIVATE_KEY \
-            TAURI_SIGNING_PRIVATE_KEY_PASSWORD; do
-            if [[ -z "${!name}" ]]; then
-              missing+=("$name")
-            fi
-          done
-
-          if (( ${#missing[@]} > 0 )); then
-            printf 'Missing required Tauri updater signing secrets:\n' >&2
-            printf ' - %s\n' "${missing[@]}" >&2
-            exit 1
-          fi
-
-      - name: Build Linux release packages
-        run: npm run tauri build -- --bundles deb,appimage
+      - name: Build Linux .deb package
+        run: npm run tauri build -- --bundles deb
         env:
           NODE_OPTIONS: "--max_old_space_size=4096"
 
-      - name: Collect Linux updater artifacts
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: linux-updater-artifacts
-          if-no-files-found: error
-          path: |
-            src-tauri/target/release/bundle/appimage/*.tar.gz
-            src-tauri/target/release/bundle/appimage/*.tar.gz.sig
-
-      - name: Upload Linux release artifacts
+      - name: Upload Linux .deb release artifact
         uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0
         with:
-          files: |
-            src-tauri/target/release/bundle/deb/Synara_*.deb
-            src-tauri/target/release/bundle/deb/*.sig
-            src-tauri/target/release/bundle/appimage/Synara_*.AppImage
-            src-tauri/target/release/bundle/appimage/*.sig
-            src-tauri/target/release/bundle/appimage/*.tar.gz
-            src-tauri/target/release/bundle/appimage/*.tar.gz.sig
+          files: src-tauri/target/release/bundle/deb/Synara_*.deb
+
+  linux-arch:
+    name: Linux pacman repo artifact
+    if: startsWith(github.ref_name, 'v')
+    runs-on: ubuntu-22.04
+    container: archlinux:base-devel
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install Arch build dependencies
+        run: |
+          pacman -Syu --noconfirm
+          pacman -S --needed --noconfirm \
+            dbus \
+            libsecret \
+            webkit2gtk-4.1 \
+            xdg-desktop-portal \
+            nodejs \
+            npm \
+            rust \
+            base-devel \
+            pacman-contrib \
+            curl \
+            wget \
+            file \
+            openssl \
+            gst-plugins-good \
+            appmenu-gtk-module \
+            libayatana-appindicator \
+            librsvg \
+            xdotool
+
+      - name: Install desktop dependencies
+        run: npm ci
+
+      - name: Install runtime dependencies
+        run: npm ci
+        working-directory: synara
+
+      - name: Check version metadata
+        run: npm run check:versions
+
+      - name: Build Linux release binary
+        run: npm run tauri build -- --no-bundle
+        env:
+          NODE_OPTIONS: "--max_old_space_size=4096"
+
+      - name: Build Arch pacman package
+        run: |
+          useradd -m builder
+          chown -R builder:builder "$GITHUB_WORKSPACE"
+          su builder -c "cd '$GITHUB_WORKSPACE/packaging/arch' && makepkg -f --noconfirm"
+
+      - name: Generate pacman repository assets
+        run: scripts/build-pacman-repo.sh
+
+      - name: Upload pacman repository assets
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: synara-pacman-repo-assets
+          path: dist/pacman-repo/*
+          if-no-files-found: error
+
+  publish-pacman-repo:
+    name: Publish GitHub Release backed pacman repo
+    if: startsWith(github.ref_name, 'v')
+    runs-on: ubuntu-22.04
+    needs: [linux-arch]
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PACMAN_REPO_TAG: pacman-repo
+    steps:
+      - name: Download pacman repository assets
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: synara-pacman-repo-assets
+          path: pacman-repo
+
+      - name: Upload package to versioned release
+        run: gh release upload "$GITHUB_REF_NAME" pacman-repo/synara-desktop-bin-*.pkg.tar.zst --clobber
+
+      - name: Create fixed pacman repository release
+        run: |
+          if gh release view "$PACMAN_REPO_TAG" >/dev/null 2>&1; then
+            exit 0
+          fi
+
+          gh release create "$PACMAN_REPO_TAG" \
+            --target "$GITHUB_SHA" \
+            --title "Synara pacman repository" \
+            --notes "Stable pacman repository assets for Synara Desktop Arch-family installs." \
+            --latest=false
+
+      - name: Replace fixed pacman repository assets
+        run: |
+          mapfile -t asset_names < <(
+            gh release view "$PACMAN_REPO_TAG" --json assets --jq '.assets[].name' |
+              grep -E '^(synara[.](db|db[.]tar[.]gz|files|files[.]tar[.]gz)|synara-desktop-bin-.*[.]pkg[.]tar[.]zst)$' ||
+              true
+          )
+
+          for asset_name in "${asset_names[@]}"; do
+            gh release delete-asset "$PACMAN_REPO_TAG" "$asset_name" --yes
+          done
+
+          gh release upload "$PACMAN_REPO_TAG" pacman-repo/* --clobber
 
   macos:
     name: macOS release artifacts
+    if: startsWith(github.ref_name, 'v')
     runs-on: macos-latest
     env:
       APPLE_CERTIFICATE_BASE64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
@@ -224,9 +291,10 @@ jobs:
             src-tauri/target/universal-apple-darwin/release/bundle/macos/*.tar.gz.sig
 
   updater-metadata:
-    name: Signed updater metadata
+    name: Signed macOS updater metadata
+    if: startsWith(github.ref_name, 'v')
     runs-on: ubuntu-22.04
-    needs: [linux, macos]
+    needs: [macos]
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2

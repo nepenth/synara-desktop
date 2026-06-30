@@ -36,10 +36,10 @@ const readyInputs = {
       TAURI_SIGNING_PRIVATE_KEY: \${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
       TAURI_SIGNING_PRIVATE_KEY_PASSWORD: \${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
     files: |
-      src-tauri/target/release/bundle/appimage/*.sig
+      src-tauri/target/universal-apple-darwin/release/bundle/macos/*.sig
       latest.json
     updater-metadata:
-      needs: [linux, macos]
+      needs: [macos]
       steps:
         - uses: actions/download-artifact@v4
         - run: |

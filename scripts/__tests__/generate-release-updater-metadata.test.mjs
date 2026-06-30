@@ -22,7 +22,7 @@ const writeArtifact = (root, relativePath, signature) => {
   writeFileSync(`${artifactPath}.sig`, signature);
 };
 
-test("generates static updater metadata for linux and macos release assets", () =>
+test("generates static updater metadata for discovered release assets", () =>
   withTempDir((dir) => {
     writeArtifact(
       dir,
@@ -80,7 +80,7 @@ test("rejects updater archives without signature sidecars", () =>
     );
   }));
 
-test("requires all release updater platforms", () =>
+test("requires macos updater platforms by default", () =>
   withTempDir((dir) => {
     writeArtifact(
       dir,

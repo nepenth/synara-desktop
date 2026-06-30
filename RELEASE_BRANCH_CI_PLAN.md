@@ -13,7 +13,7 @@ changing GitHub Actions behavior.
 | `.github/workflows/desktop-package-smoke.yml` | PR to `main` for package/runtime paths, manual | Linux `.deb` package and macOS `.app` package smoke with updater artifacts disabled. |
 | `.github/workflows/ios-skeleton.yml` | Push/PR to `main` for iOS paths, manual | Unsigned iOS simulator build/test bundle compile. |
 | `.github/workflows/macos-signed-build.yml` | Manual only | Signed/notarized macOS DMG artifact, updater artifacts disabled. |
-| `.github/workflows/release-desktop.yml` | GitHub Release `published` event | Linux/macOS release artifacts, updater artifacts, signatures, and generated `latest.json`. |
+| `.github/workflows/release-desktop.yml` | GitHub Release `published` event | macOS updater artifacts/signatures/`latest.json`, Linux `.deb`, and GitHub Release-backed pacman repo assets. |
 
 ## Problem Statement
 
@@ -27,8 +27,8 @@ workflow trigger model is not ideal for a controlled client-visible update:
   are present.
 - `main` CI proves code health, but it does not represent a stabilized release
   candidate lane.
-- Manual signed macOS build exists, but it is separate from final Linux/macOS
-  updater artifact publication.
+- Manual signed macOS build exists, but it is separate from final macOS updater
+  and Linux pacman repo publication.
 
 ## Recommended Release Model
 
@@ -109,9 +109,11 @@ publish workflow:
   `vX.Y.Z` plus an explicit publish step.
 - Create or update a draft GitHub Release.
 - Build Linux and macOS release artifacts.
-- Upload updater archives and `.sig` sidecars.
-- Generate and upload `latest.json`.
-- Verify hosted `latest.json`.
+- Upload macOS updater archives and `.sig` sidecars.
+- Generate and upload macOS `latest.json`.
+- Build the Arch-family pacman package, generate `synara.db` / `synara.files`,
+  and publish the fixed `pacman-repo` GitHub Release assets.
+- Verify hosted macOS `latest.json` and fixed pacman repo database.
 - Publish the release only after the assets and metadata are present.
 
 Acceptance:
@@ -119,7 +121,8 @@ Acceptance:
 - Clients cannot see the update until the workflow has uploaded and verified all
   required assets.
 - Release evidence includes the GitHub Actions run URL, release URL, signed
-  artifact names, metadata URL, and updater verification output.
+  artifact names, metadata URL, fixed pacman repo URL, and updater verification
+  output.
 
 ### Milestone 4: Environment Protection
 
@@ -159,5 +162,7 @@ Clients should only see a new update after:
 2. Release branch CI passes.
 3. macOS/Linux package smoke passes.
 4. Signed/notarized artifacts are generated.
-5. Updater `.sig` files and `latest.json` are generated and verified.
-6. The GitHub Release is intentionally published.
+5. macOS updater `.sig` files and `latest.json` are generated and verified.
+6. The fixed `pacman-repo` release assets are replaced by CI, not by manual
+   `repo-add` commands.
+7. The GitHub Release is intentionally published.
