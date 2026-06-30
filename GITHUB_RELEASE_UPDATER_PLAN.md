@@ -1,6 +1,6 @@
 # GitHub Release Updater Project Plan
 
-Reviewed: 2026-06-29
+Reviewed: 2026-06-30
 
 Purpose: park the auto-update work behind a clear plan so the team can resume it
 later without blocking Timeline, link-opening, composer, macOS smoke, or iOS
@@ -24,11 +24,21 @@ It is not the highest-priority local task right now because the remaining proof
 requires real signing secrets, repository variables, release artifacts, and a
 signed release workflow run.
 
+2026-06-30 planning update: keep this feature parked. The current Codex session
+has GitHub CLI authentication with repository/workflow scope, so it can likely
+help set repository variables/secrets if provided with intentional signing key
+material. It should not generate/store production updater secrets or run release
+automation until the desktop P0 link-opening blocker is fixed and the maintainer
+explicitly resumes this plan.
+
 ## Current Repository State
 
 Implemented:
 
 - Tauri updater plugin dependency and frontend package are present.
+- Desktop runtime registers the Tauri updater plugin only when `plugins.updater`
+  is present in the active config, so the committed disabled local config can
+  still launch.
 - Check-only updater permission scaffolding exists.
 - `scripts/check-release-updater.mjs` provides advisory and strict readiness
   modes.
@@ -50,6 +60,12 @@ Deferred:
 - Installed-app update check/install smoke.
 - Final product UX decision: silent check, manual "Check for Updates", or
   prompted download/install.
+
+Current blocking precondition:
+
+- Desktop link opening is failing on both macOS and Linux by human smoke report
+  on 2026-06-30. Do not spend additional implementation time on updater UX or
+  release-channel proof until that P0 behavior is fixed and smoke-tested.
 
 Latest local gate hardening:
 
@@ -165,6 +181,7 @@ Acceptance evidence:
 | Bad `latest.json` metadata | Generate from actual artifacts and `.sig` sidecars, then validate hosted output. |
 | macOS update artifact not notarized/signed correctly | Keep macOS signing/notarization gates separate and release-blocking. |
 | Accidental placeholder endpoint/key | Strict release checker must fail on placeholders and non-HTTPS endpoints. |
+| Disabled local config breaks desktop launch | Keep updater plugin registration conditional on active `plugins.updater`; run macOS desktop launch smoke before resuming updater implementation. |
 | Silent disruptive updates | Start with manual or prompted UX until product policy is explicit. |
 | GitHub latest endpoint ambiguity | Use semver release discipline and avoid publishing broken latest releases. |
 
@@ -184,11 +201,15 @@ Do not expose secrets. Implement only the next smallest milestone toward signed 
 
 Park this work until after:
 
-1. Timeline Resurrection smoke evidence is collected.
-2. macOS link-opening smoke passes.
+1. macOS and Linux link-opening smoke passes.
+2. Timeline Resurrection smoke evidence is collected or daily use remains stable.
 3. macOS composer parity smoke passes.
 4. iOS Timeline/Xcode validation has a pass/fail result.
 
 After those P0 user-facing checks are evidence-backed, resume this plan at
 Milestone 1 or Milestone 2 depending on whether GitHub variables/secrets are
 already configured.
+
+Before making more updater changes, rerun the postmortem guardrail from
+`PRODUCTION_READINESS_GOAL.md`: prove both committed disabled-config desktop
+launch and release-time strict updater readiness.

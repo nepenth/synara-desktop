@@ -74,10 +74,23 @@ Loop termination requires all of the following:
 
 The user-declared pain points are **release P0 epics** because they are current client-facing blockers. The KB §7.5 **P0 interactive macOS/Linux smoke checklists** remain a mandatory release gate and run in parallel with implementation; they are not deprioritized by the pain-point epics.
 
+Latest human smoke feedback, 2026-06-30:
+
+- macOS desktop now builds, launches, and broadly works with the committed
+  disabled-updater config after `f938246`.
+- External link opening is still broken on both macOS and Linux desktop clients.
+  This supersedes prior "first slice implemented" status as the immediate P0
+  execution target.
+- Timeline/session-history behavior appears tentatively improved, but requires
+  continued daily-use confirmation and targeted smoke evidence before signoff.
+- Tauri/GitHub Release updater remains desirable but non-urgent. Keep it parked
+  in `GITHUB_RELEASE_UPDATER_PLAN.md` until P0 user-facing desktop behavior is
+  proven or real updater signing material is intentionally provided.
+
 ### Epic 1: Timeline Resurrection
 
 **Priority:** P0  
-**Status:** In progress - desktop first slice implemented
+**Status:** In progress - desktop first slice implemented; human use tentatively improved
 **Success criteria:** Fully-read rooms and rooms with one new message open near the expected live/read position without multi-second traversal through old history on desktop and iOS.
 
 Initial task backlog:
@@ -104,7 +117,10 @@ Desktop first-slice finding, 2026-06-29:
 
 - Root cause: desktop kept a process-local saved timeline viewport for non-bottom positions and restored it before unread/read-marker placement. A user who had previously viewed old history could later reopen a room and force `RoomTimeline` back through that old event window even if the room had one new unread event or had been fully read elsewhere. This mixed UI viewport memory with SDK read-marker/timeline focus semantics.
 - Implemented mitigation: `RoomTimeline` now records viewport age, uses a tested `shouldRestoreRoomTimelineViewport(...)` policy, lets unread state and synchronous loaded-slice unread inference win over saved history, and expires non-bottom historical anchors after a 10 minute local-navigation window. Bottom snapshots still open at the live end.
-- Remaining gap: iOS already has read-marker initial-load focus policy, but the shared contract and live smoke matrix still need to be formalized and verified across desktop/iOS.
+- Remaining gap: iOS already has read-marker initial-load focus policy, but the
+  shared contract and live smoke matrix still need to be formalized and verified
+  across desktop/iOS. 2026-06-30 human feedback says desktop session-history
+  behavior appears tentatively improved; keep collecting real-use evidence.
 
 Shared contract update, 2026-06-29:
 
@@ -115,7 +131,7 @@ Shared contract update, 2026-06-29:
 ### Epic 2: Link Opening
 
 **Priority:** P0  
-**Status:** In progress - desktop bridge hardening first slice implemented
+**Status:** Failed smoke on macOS and Linux - next execution target
 **Success criteria:** Every user-visible external link from rich text, message content, Hermes cards, and related surfaces opens through the system browser via `desktop_open_external_url` on desktop, with safe fallback behavior outside Tauri.
 
 Initial task backlog:
@@ -124,13 +140,22 @@ Initial task backlog:
 2. Centralize link activation through platform link helpers. **Status:** Desktop helper now routes normal external opens through `desktop_open_external_url`; non-desktop fallback remains browser-native.
 3. Cover rich text, Matrix HTML, Hermes cards, room topics, and attachment/link previews. **Status:** Global anchor interceptor remains active for rendered anchors; Hermes cards, profile/server actions, OIDC account-management actions, registration terms, and feature-check anchors were wired explicitly.
 4. Add tests for desktop bridge invocation and fallback. **Status:** Added regression tests for desktop bridge use, unsafe desktop no-fallback behavior, modified-click preservation, relative-link preservation, and agent-action no-fallback behavior.
-5. Smoke check external URL opening on macOS/Linux. **Status:** Queued in `MACOS_IOS_VALIDATION_QUEUE.md`.
+5. Smoke check external URL opening on macOS/Linux. **Status:** Failed by human report on 2026-06-30; clicking links does not open the system browser on either desktop platform.
+6. Perform an end-to-end bridge/runtime diagnosis:
+   - Confirm `window.__SYNARA_DESKTOP__` is present in packaged/dev runtime.
+   - Confirm click interception calls `desktop_open_external_url`.
+   - Confirm the Tauri command reaches Rust.
+   - Confirm `tauri_plugin_opener` succeeds or captures a useful platform error.
+   - Add a runtime diagnostic or smokeable test surface if needed.
 
 Desktop first-slice finding, 2026-06-29:
 
 - Root cause: most anchors were protected by the global desktop click interceptor, but several programmatic link opens and confirmation flows still called `window.open` directly. Hermes confirmed URL/artifact opens were the main P0 gap because they bypassed `desktop_open_external_url` entirely.
 - Implemented mitigation: introduced a shared `openExternalUrl(...)` helper for normal external opens. Desktop calls use `openPlatformExternalUrl`/`desktop_open_external_url` with no browser fallback if the bridge rejects the URL; non-desktop keeps `window.open(..., 'noopener,noreferrer')`. Explicit link handlers now preserve modifier-click and app-relative native behavior.
-- Remaining gap: live desktop smoke on macOS/Linux is still required for rich text, message links, Hermes cards, settings/about links, profile/server links, OIDC account-management links, and location links.
+- Current blocker: human smoke on 2026-06-30 reports that links do not open in
+  the browser on macOS or Linux. Because both desktop platforms fail, prioritize
+  the shared frontend-to-Tauri bridge and command path before platform-specific
+  opener debugging.
 
 ### Epic 3: Composer Desktop Parity
 
@@ -195,6 +220,8 @@ Any cross-platform feature must follow this checklist before acceptance:
 | Timeline performance regression | Run `npm --prefix synara run test:timeline-performance` after timeline changes. |
 | Linux DE variance | Smoke on CachyOS/KDE Wayland before release signoff. |
 | iOS SDK API changes | Pin SDK versions and audit `matrix-rust-components-swift` changes before iOS release work. |
+| Native shell plugin/config drift | After Tauri plugin or config changes, verify the committed disabled/local config launches and the release-time materialized config still passes strict checks. |
+| Extracted frontend helper drift | After moving or reusing TypeScript helpers, run `npm run typecheck:modernization` and a runtime build before accepting the change. |
 
 #### 7.5 Prioritized Next Steps
 
@@ -202,7 +229,7 @@ Any cross-platform feature must follow this checklist before acceptance:
 2. Connect agent backend services to existing bridge.
 3. Decompose `RoomTimeline.tsx`.
 4. Modularize `desktop.rs`.
-5. Enable auto-updater with signed metadata channel.
+5. Enable auto-updater with signed metadata channel. **Status:** Deferred; plan preserved in `GITHUB_RELEASE_UPDATER_PLAN.md`.
 6. Deploy iOS push gateway.
 7. Implement iOS production E2EE.
 10. Archive stale `maturity_improvement_plan1` branch.
@@ -249,10 +276,48 @@ Any cross-platform feature must follow this checklist before acceptance:
 |---|---|---|---|
 | Phase 0: Initializer | Committed and pushed | Current `HEAD` includes harness, validation evidence, changelog, and mechanical Prettier drift fix | Continue Phase 1 source reconciliation |
 | Phase 1: Validation & Reconciliation | In progress; externally blocked for full reconciliation | KB §7 read fully; Grok/composer-2.5-fast second opinion completed from pasted excerpts; original prompt, Grok Executive Report, and prior Section 7 not found locally | Commit KB Section 7 reconciliation edits, then continue repo/source validation |
-| Phase 2: Timeline Resurrection | In progress | Desktop viewport restore policy first slice implemented; shared open-focus contract added; iOS policy tests expanded; macOS/iOS validation handoff is tracked in `MACOS_IOS_VALIDATION_QUEUE.md` and `MACOS_WORKSTATION_HANDOFF.md` | Run iOS tests on macOS/Xcode, then execute smoke checklist |
-| Phase 3: Link Opening | In progress | Desktop bridge hardening first slice implemented; Grok reviewed the diff and its findings were incorporated; local gates pass at 281/281 | Run macOS/Linux interactive link-opening smoke checklist |
+| Phase 2: Timeline Resurrection | In progress | Desktop viewport restore policy first slice implemented; shared open-focus contract added; iOS policy tests expanded; 2026-06-30 human daily-use feedback is tentatively positive; macOS/iOS validation handoff is tracked in `MACOS_IOS_VALIDATION_QUEUE.md` and `MACOS_WORKSTATION_HANDOFF.md` | Continue daily-use confirmation and run targeted iOS/macOS smoke checklist |
+| Phase 3: Link Opening | P0 failed smoke | Desktop bridge hardening first slice implemented, but 2026-06-30 human smoke reports link clicks do not open the system browser on macOS or Linux | Diagnose and fix the shared desktop link-opening bridge/runtime path before other implementation work |
 | Phase 4: Composer Parity | In progress | Clipboard image paste first slice and drag/drop detection hardening implemented; Grok reviewed both diffs and findings were incorporated/accepted; local gates pass at 283/283 | Run macOS/Linux interactive composer smoke checklist |
-| Phase 5: Release Readiness | In progress | Added release-updater readiness checker; wired published desktop release workflow to fail until signed updater channel prerequisites are configured; added desktop updater plugin/package/check-only permission scaffolding; aligned release CI with updater signing secrets, release-time updater config materialization, strict-inspector compatibility coverage for the materialized config, artifact generation, signature uploads, and generated `latest.json` upload; deferred the remaining signed GitHub-release updater proof to `GITHUB_RELEASE_UPDATER_PLAN.md`; completed `_JOIN_PATH` route stub; removed legacy commented session atom; continued `RoomTimeline.tsx` decomposition; continued `desktop.rs` modularization with URL policy, sanitization, file-transfer command/session, session-envelope, secret-store classification/probe/cache, keyring session-store, global shortcut, tray/menu, agent-action, notification, and integration-status extractions; consolidated production smoke evidence requirements in `docs/production-smoke-checklist.md` | Execute macOS/iOS smoke handoff first, then resume updater plan when real variables/secrets are configured |
+| Phase 5: Release Readiness | In progress, updater deferred | Added release-updater readiness checker; wired published desktop release workflow to fail until signed updater channel prerequisites are configured; added desktop updater plugin/package/check-only permission scaffolding; aligned release CI with updater signing secrets, release-time updater config materialization, strict-inspector compatibility coverage for the materialized config, artifact generation, signature uploads, and generated `latest.json` upload; deferred the remaining signed GitHub-release updater proof to `GITHUB_RELEASE_UPDATER_PLAN.md`; completed `_JOIN_PATH` route stub; removed legacy commented session atom; continued `RoomTimeline.tsx` decomposition; continued `desktop.rs` modularization with URL policy, sanitization, file-transfer command/session, session-envelope, secret-store classification/probe/cache, keyring session-store, global shortcut, tray/menu, agent-action, notification, and integration-status extractions; consolidated production smoke evidence requirements in `docs/production-smoke-checklist.md` | Fix desktop link opening first; resume updater only after P0 smoke passes or signing keys are intentionally provided |
+
+## Postmortem: macOS Desktop Non-Launch, 2026-06-29
+
+Late-night commits `f938246` and `3e0bd8e` corrected two release-readiness
+regressions introduced during the prior automation pass:
+
+1. `f938246 fix: tolerate disabled desktop updater config`
+   - Failure mode: the desktop shell registered `tauri_plugin_updater` even when
+     the committed `tauri.conf.json` intentionally omitted `plugins.updater`.
+     The production plan expected updater config to be materialized only inside
+     release jobs, but the local/macOS app still loaded the plugin against the
+     disabled config and became non-functional.
+   - Root process gap: `cargo check` and `npm run check:release-updater` proved
+     compile/readiness logic, not actual native-shell startup with committed
+     local config. The decision log overtrusted "commands fail closed" without a
+     macOS launch smoke.
+   - Current invariant: the updater plugin is registered only when
+     `plugins.updater` exists; disabled local config must continue to launch.
+
+2. `3e0bd8e fix: import timeline link helper`
+   - Failure mode: `RoomTimeline.tsx` used the extracted
+     `getFirstLinkedTimeline(...)` helper without importing it, breaking the
+     frontend bundle used by the desktop client.
+   - Root process gap: after accumulated docs/version/updater changes, the final
+     local pass did not rerun the frontend typecheck/build that would catch
+     missing TypeScript imports.
+   - Current invariant: any Timeline/helper extraction or version commit that
+     touches frontend source must include `npm run typecheck:modernization`
+     before acceptance, and a runtime build/smoke before release signoff.
+
+Plan impact:
+
+- Do not continue updater work until after P0 user-facing smoke evidence is
+  collected and until local-disabled updater launch is part of the Mac handoff.
+- Treat macOS desktop launch as the next release-readiness gate, not an optional
+  final polish check.
+- Prefer evidence collection over further broad refactors. Future refactors must
+  include the full gate for the affected surface, not only local utility tests.
 
 ## Decision Log
 

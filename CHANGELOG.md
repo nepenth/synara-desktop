@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Updated production-readiness plans with 2026-06-30 smoke feedback: desktop launch works, link opening fails on macOS/Linux, Timeline behavior is tentatively improved, and updater work remains deferred.
+- Documented the 2026-06-29 macOS desktop non-launch postmortem and updated validation guardrails for updater config and Timeline helper changes.
 - Bumped shared Synara app version metadata to `1.2.20`.
 - Tightened the release-updater gate so signed metadata evidence must come from the generated updater metadata workflow.
 - Added root-level macOS workstation handoff and deferred GitHub Release updater project plan documents.
