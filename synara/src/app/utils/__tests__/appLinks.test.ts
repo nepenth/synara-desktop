@@ -2,12 +2,17 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import type { MouseEvent as ReactMouseEvent } from 'react';
 import {
+  DESKTOP_EXTERNAL_LINK_CLICK_OPTIONS,
   openDesktopExternalAnchorFromClick,
   openExternalUrl,
   openExternalUrlFromClick,
 } from '../appLinks';
 
 const waitForAsyncOpen = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+test('desktop link interceptor uses capture phase', () => {
+  assert.equal(DESKTOP_EXTERNAL_LINK_CLICK_OPTIONS.capture, true);
+});
 
 test('desktop anchor click opens external links through the native bridge', async () => {
   const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];

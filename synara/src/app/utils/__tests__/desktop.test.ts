@@ -537,6 +537,42 @@ test('desktop external link opener invokes the desktop bridge only on desktop', 
   ]);
 });
 
+test('desktop external link opener records native bridge failures', async () => {
+  const originalWindow = globalThis.window;
+  clearDesktopDiagnostics();
+
+  try {
+    (globalThis as any).window = {
+      __SYNARA_DESKTOP__: {
+        platform: 'tauri',
+      },
+    };
+    assert.equal(await openDesktopExternalUrl('https://example.org/path'), false);
+    assert.deepEqual(getDesktopDiagnosticEntries(), [
+      'desktop_open_external_url bridge unavailable',
+    ]);
+
+    clearDesktopDiagnostics();
+    (globalThis as any).window = {
+      __SYNARA_DESKTOP__: {
+        platform: 'tauri',
+        invoke: async () => false,
+      },
+    };
+    assert.equal(await openDesktopExternalUrl('https://example.org/path'), false);
+    assert.deepEqual(getDesktopDiagnosticEntries(), ['desktop_open_external_url returned false']);
+
+    clearDesktopDiagnostics();
+    assert.equal(await openDesktopExternalUrl('file:///Users/example/.ssh/id_rsa'), false);
+    assert.deepEqual(getDesktopDiagnosticEntries(), [
+      'desktop_open_external_url rejected unsafe URL',
+    ]);
+  } finally {
+    clearDesktopDiagnostics();
+    (globalThis as any).window = originalWindow;
+  }
+});
+
 test('desktop notifications trim text and reject external routes', async () => {
   const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
   const originalWindow = globalThis.window;
