@@ -87,6 +87,9 @@ Latest human smoke feedback, 2026-06-30:
   signing key material is now configured in GitHub; keep implementation parked
   in `GITHUB_RELEASE_UPDATER_PLAN.md` until P0 user-facing desktop behavior is
   proven or release workflow validation is explicitly resumed.
+- Release branch and client-visible update CI planning is captured in
+  `RELEASE_BRANCH_CI_PLAN.md`; do not implement workflow changes before the P0
+  desktop link-opening blocker unless explicitly approved.
 
 ### Epic 1: Timeline Resurrection
 
@@ -246,8 +249,9 @@ Any cross-platform feature must follow this checklist before acceptance:
 2. Validate signing/notarization path for macOS.
 3. Validate Linux packaging and CachyOS/KDE Wayland smoke.
 4. Complete updater signing and release-channel documentation. **Status:** Release guard, check-only updater plugin scaffolding, CI signing-secret exposure, release-time updater config materialization from repository variables, strict-inspector compatibility coverage for the materialized config, artifact-generation handoff, signature upload patterns, and generated `latest.json` upload are added. GitHub updater secrets/variables are configured as of 2026-06-30; production updater enablement is parked in `GITHUB_RELEASE_UPDATER_PLAN.md` until signed release workflow and hosted metadata evidence are available.
-5. Refresh `README.md`, release checklist, and user-facing installation docs.
-6. Confirm license, privacy, and security docs are current.
+5. Implement release branch CI and controlled production publish flow. **Status:** Planned in `RELEASE_BRANCH_CI_PLAN.md`; not implemented.
+6. Refresh `README.md`, release checklist, and user-facing installation docs.
+7. Confirm license, privacy, and security docs are current.
 
 ## Validation Gates
 
@@ -280,7 +284,7 @@ Any cross-platform feature must follow this checklist before acceptance:
 | Phase 2: Timeline Resurrection | In progress | Desktop viewport restore policy first slice implemented; shared open-focus contract added; iOS policy tests expanded; 2026-06-30 human daily-use feedback is tentatively positive; macOS/iOS validation handoff is tracked in `MACOS_IOS_VALIDATION_QUEUE.md` and `MACOS_WORKSTATION_HANDOFF.md` | Continue daily-use confirmation and run targeted iOS/macOS smoke checklist |
 | Phase 3: Link Opening | P0 failed smoke | Desktop bridge hardening first slice implemented, but 2026-06-30 human smoke reports link clicks do not open the system browser on macOS or Linux | Diagnose and fix the shared desktop link-opening bridge/runtime path before other implementation work |
 | Phase 4: Composer Parity | In progress | Clipboard image paste first slice and drag/drop detection hardening implemented; Grok reviewed both diffs and findings were incorporated/accepted; local gates pass at 283/283 | Run macOS/Linux interactive composer smoke checklist |
-| Phase 5: Release Readiness | In progress, updater workflow proof deferred | Added release-updater readiness checker; wired published desktop release workflow to fail until signed updater channel prerequisites are configured; added desktop updater plugin/package/check-only permission scaffolding; aligned release CI with updater signing secrets, release-time updater config materialization, strict-inspector compatibility coverage for the materialized config, artifact generation, signature uploads, and generated `latest.json` upload; configured GitHub updater key material on 2026-06-30; deferred the remaining signed GitHub-release workflow proof to `GITHUB_RELEASE_UPDATER_PLAN.md`; completed `_JOIN_PATH` route stub; removed legacy commented session atom; continued `RoomTimeline.tsx` decomposition; continued `desktop.rs` modularization with URL policy, sanitization, file-transfer command/session, session-envelope, secret-store classification/probe/cache, keyring session-store, global shortcut, tray/menu, agent-action, notification, and integration-status extractions; consolidated production smoke evidence requirements in `docs/production-smoke-checklist.md` | Fix desktop link opening first; then resume updater at signed release workflow proof if desired |
+| Phase 5: Release Readiness | In progress, updater workflow proof and release-branch CI deferred | Added release-updater readiness checker; wired published desktop release workflow to fail until signed updater channel prerequisites are configured; added desktop updater plugin/package/check-only permission scaffolding; aligned release CI with updater signing secrets, release-time updater config materialization, strict-inspector compatibility coverage for the materialized config, artifact generation, signature uploads, and generated `latest.json` upload; configured GitHub updater key material on 2026-06-30; deferred the remaining signed GitHub-release workflow proof to `GITHUB_RELEASE_UPDATER_PLAN.md`; documented release branch/client-update CI strategy in `RELEASE_BRANCH_CI_PLAN.md`; completed `_JOIN_PATH` route stub; removed legacy commented session atom; continued `RoomTimeline.tsx` decomposition; continued `desktop.rs` modularization with URL policy, sanitization, file-transfer command/session, session-envelope, secret-store classification/probe/cache, keyring session-store, global shortcut, tray/menu, agent-action, notification, and integration-status extractions; consolidated production smoke evidence requirements in `docs/production-smoke-checklist.md` | Fix desktop link opening first; then add release branch validation if approved |
 
 ## Postmortem: macOS Desktop Non-Launch, 2026-06-29
 
