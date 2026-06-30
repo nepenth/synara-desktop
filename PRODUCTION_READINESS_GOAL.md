@@ -83,6 +83,10 @@ Latest human smoke feedback, 2026-06-30:
   execution target.
 - Timeline/session-history behavior appears tentatively improved, but requires
   continued daily-use confirmation and targeted smoke evidence before signoff.
+- Follow-up Linux desktop smoke, 2026-06-30: a build from roughly 08:30 still
+  restored `Project - Tech` backward in history after switching rooms, even
+  after pressing Jump to Latest and waiting 5-10 seconds. Treat this as an
+  active Timeline Resurrection regression until a newer build is smoked.
 - Tauri/GitHub Release updater remains desirable but non-urgent. Updater
   signing key material is now configured in GitHub; keep implementation parked
   in `GITHUB_RELEASE_UPDATER_PLAN.md` until P0 user-facing desktop behavior is
@@ -95,7 +99,7 @@ Latest human smoke feedback, 2026-06-30:
 ### Epic 1: Timeline Resurrection
 
 **Priority:** P0  
-**Status:** In progress - desktop first slice implemented; human use tentatively improved
+**Status:** In progress - stale unread/live-bottom re-entry fix implemented; human re-smoke pending
 **Success criteria:** Fully-read rooms and rooms with one new message open near the expected live/read position without multi-second traversal through old history on desktop and iOS.
 
 Initial task backlog:
@@ -113,6 +117,10 @@ Initial task backlog:
 5. Implement narrowly scoped desktop fix with tests and timeline performance harness. **Status:** First slice shipped.
 6. Mirror contract and behavior in iOS with tests. **Status:** Added iOS policy tests for normal-room read-marker initial focus and jump-latest live-stream override; simulator/unit execution pending macOS/Xcode host.
 7. Add smoke checklist evidence for large, encrypted, and unread room cases.
+8. Verify Linux desktop re-entry case: open `Project - Tech`, press Jump to
+   Latest, wait 5-10 seconds, switch rooms, return, and confirm the room stays
+   at the live end unless a newer message arrived while away. **Status:** Code
+   fix added on 2026-06-30; live re-smoke pending.
 
 Mac/Xcode handoff: `MACOS_WORKSTATION_HANDOFF.md` contains the prompt, command
 preflight, evidence requirements, and priority queue for the external macOS
@@ -126,6 +134,14 @@ Desktop first-slice finding, 2026-06-29:
   shared contract and live smoke matrix still need to be formalized and verified
   across desktop/iOS. 2026-06-30 human feedback says desktop session-history
   behavior appears tentatively improved; keep collecting real-use evidence.
+- Follow-up root cause, 2026-06-30: saved bottom snapshots were ignored whenever
+  local unread/read-marker state still looked unread. After Jump to Latest,
+  Matrix read receipt/account-data echo can lag long enough that returning to
+  the room reopens at the old read marker instead of honoring the user's
+  explicit live-end position. Desktop now persists the live-tail event id with
+  bottom snapshots and restores that bottom snapshot through stale unread state
+  only when the current live tail still matches; if a newer event arrived while
+  away, unread placement still wins.
 
 Shared contract update, 2026-06-29:
 

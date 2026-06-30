@@ -159,7 +159,10 @@ import {
   type TimelinePaginationDirection,
   type TimelinePaginationErrors,
 } from '../../utils/timelinePagination';
-import { shouldRestoreRoomTimelineViewport } from '../../utils/timelineLifecycle';
+import {
+  getLoadedLiveTailEventId,
+  shouldRestoreRoomTimelineViewport,
+} from '../../utils/timelineLifecycle';
 import {
   getEventIdAbsoluteIndex,
   getEventTimeline,
@@ -266,6 +269,7 @@ const isElementBottomInScrollView = (
 type RoomTimelineViewport = {
   atBottom: boolean;
   anchor?: TimelineVirtualAnchor;
+  liveTailEventId?: string;
   updatedAtMs: number;
 };
 
@@ -570,10 +574,12 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
   const savedViewport = savedViewportRef.current;
   const hasInitialUnread =
     hasUnreadForInitialScroll(unread, unreadAnchorEventId) || roomHaveUnread(mx, room);
+  const currentLiveTailEventId = getLoadedLiveTailEventId(room);
   const shouldRestoreSavedViewport =
     !eventId &&
     shouldRestoreRoomTimelineViewport(savedViewport, {
       hasUnread: hasInitialUnread,
+      currentLiveTailEventId,
       nowMs: roomOpenedAtMsRef.current,
     });
   const suppressInitialUnreadScrollRef = useRef(shouldRestoreSavedViewport);
@@ -995,6 +1001,12 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
     if (isActuallyAtLiveBottomRef.current()) return true;
     return atLiveEndRef.current && (atBottomRef.current || liveEndPinRef.current);
   }, []);
+  const persistLiveBottomViewport = useCallback(() => {
+    setRoomTimelineViewport(room.roomId, {
+      atBottom: true,
+      liveTailEventId: getLoadedLiveTailEventId(room),
+    });
+  }, [room]);
 
   useEffect(
     () => () => {
@@ -1007,9 +1019,17 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
       setRoomTimelineViewport(room.roomId, {
         atBottom: atLiveBottom,
         anchor,
+        liveTailEventId: atLiveBottom ? getLoadedLiveTailEventId(room) : undefined,
       });
     },
-    [eventId, getPersistableAtLiveBottom, getPersistableVirtualAnchor, room.roomId, savedViewport]
+    [
+      eventId,
+      getPersistableAtLiveBottom,
+      getPersistableVirtualAnchor,
+      room,
+      room.roomId,
+      savedViewport,
+    ]
   );
 
   const paginateVirtualTimeline = useCallback(
@@ -1665,10 +1685,12 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
     restoringSavedViewportRef.current = false;
     lastKnownVirtualAnchorRef.current = undefined;
     setAtBottomState(true);
+    persistLiveBottomViewport();
 
     const scrollLatestToBottom = () => {
       scrollToBottomRef.current.count += 1;
       scrollToBottomRef.current.smooth = false;
+      persistLiveBottomViewport();
     };
 
     try {
