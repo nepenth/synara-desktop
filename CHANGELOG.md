@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Added a release-branch CI and controlled client-update publication plan.
 - Configured GitHub Actions updater signing secrets and updater public endpoint variables for future signed release workflow validation.
 - Updated production-readiness plans with 2026-06-30 smoke feedback: desktop launch works, link opening fails on macOS/Linux, Timeline behavior is tentatively improved, and updater work remains deferred.
 - Documented the 2026-06-29 macOS desktop non-launch postmortem and updated validation guardrails for updater config and Timeline helper changes.

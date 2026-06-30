@@ -6,6 +6,9 @@ Purpose: park the auto-update work behind a clear plan so the team can resume it
 later without blocking Timeline, link-opening, composer, macOS smoke, or iOS
 validation work.
 
+Release branch and client-visible publication strategy lives in
+`RELEASE_BRANCH_CI_PLAN.md`.
+
 ## Executive Summary
 
 Synara can use the Tauri v2 updater plugin with GitHub Releases as the update
@@ -222,6 +225,10 @@ Park this work until after:
 
 After those P0 user-facing checks are evidence-backed, resume this plan at
 Milestone 2 because GitHub updater variables/secrets are already configured.
+
+When release automation resumes, pair this updater plan with
+`RELEASE_BRANCH_CI_PLAN.md` so clients only see updates after release branch CI,
+signed artifacts, updater metadata, and publish approval all succeed.
 
 Before making more updater changes, rerun the postmortem guardrail from
 `PRODUCTION_READINESS_GOAL.md`: prove both committed disabled-config desktop
