@@ -163,6 +163,7 @@ import { shouldRestoreRoomTimelineViewport } from '../../utils/timelineLifecycle
 import {
   getEventIdAbsoluteIndex,
   getEventTimeline,
+  getFirstLinkedTimeline,
   getLinkedTimelines,
   getLiveTimeline,
   getTimelinesEventsCount,
