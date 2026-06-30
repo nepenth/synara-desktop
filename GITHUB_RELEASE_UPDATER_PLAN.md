@@ -118,6 +118,54 @@ GitHub repository secrets:
 | `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | If key is password-protected | Required by Tauri signing if configured. |
 | macOS Developer ID / notarization secrets | Yes for macOS releases | Already tracked by the release workflow and Mac validation queue. |
 
+### Rotate Updater Signing Key Material
+
+Use this when the release workflow fails with:
+
+```text
+failed to decode secret key: incorrect updater private key password
+```
+
+That error means `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` does not match
+`TAURI_SIGNING_PRIVATE_KEY`. Rotate the updater keypair as a pair; do not try to
+guess or partially update one secret.
+
+Run from the repository root on a trusted machine with GitHub CLI access:
+
+```sh
+mkdir -p .secrets/updater
+chmod 700 .secrets .secrets/updater
+
+UPDATER_PASSWORD="$(openssl rand -base64 32)"
+
+npm run tauri -- signer generate \
+  --ci \
+  --password "$UPDATER_PASSWORD" \
+  --write-keys .secrets/updater/tauri-updater.key \
+  --force
+
+printf 'synara updater signing probe\n' >/tmp/synara-updater-signing-probe.txt
+npm run tauri -- signer sign \
+  -k "$(cat .secrets/updater/tauri-updater.key)" \
+  -p "$UPDATER_PASSWORD" \
+  /tmp/synara-updater-signing-probe.txt >/dev/null
+
+gh auth refresh -h github.com -s repo -s workflow
+gh secret set TAURI_SIGNING_PRIVATE_KEY < .secrets/updater/tauri-updater.key
+gh secret set TAURI_SIGNING_PRIVATE_KEY_PASSWORD --body "$UPDATER_PASSWORD"
+gh variable set SYNARA_UPDATER_PUBKEY --body "$(cat .secrets/updater/tauri-updater.key.pub)"
+```
+
+After the secrets and variable are updated, rerun the release workflow from the
+GitHub Actions UI with **Re-run all jobs**, or run:
+
+```sh
+gh run rerun <release-workflow-run-id>
+```
+
+Delete `.secrets/updater/` after the GitHub secrets have been verified unless
+the key is being moved into an approved password manager.
+
 ## Proposed Architecture
 
 1. Build release jobs materialize updater config at runtime.
