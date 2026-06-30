@@ -241,9 +241,9 @@ Status labels: **Full** · **Partial** · **Stub** · **Planned**
 | Global shortcuts | Full | `tauri_plugin_global_shortcut` |
 | Native file save to Downloads | Full | Streaming IPC (≤8 MiB inline, chunked above) |
 | Drag-and-drop file upload | Full | Allowlist-gated native read |
-| External link handling | Full | `desktop_open_external_url` |
+| External link handling | Regressed / P0 fix needed | `desktop_open_external_url`; 2026-06-30 human smoke reports macOS/Linux clicks do not open the browser |
 | Linux integration status probe | Full | `desktop_integration.rs` `desktop_get_integration_status` |
-| Auto-updater | Disabled locally / release-time configured | `createUpdaterArtifacts: false` in committed config; release CI materializes signed updater config from `SYNARA_UPDATER_PUBKEY` and optional `SYNARA_UPDATER_ENDPOINT`, generates `latest.json`, and uploads signature artifacts |
+| Auto-updater | Disabled locally / release-time configured | `createUpdaterArtifacts: false` in committed config; updater plugin registration is conditional on active `plugins.updater` so local/macOS builds launch; release CI materializes signed updater config from `SYNARA_UPDATER_PUBKEY` and optional `SYNARA_UPDATER_ENDPOINT`, generates `latest.json`, and uploads signature artifacts |
 | Windows packaging | Not supported | README excludes from release matrix |
 
 ### 3.9 iOS App (Parallel Product)
@@ -303,6 +303,32 @@ From iOS docs:
 | Interactive macOS/Linux smoke | **Pending** — `docs/desktop-validation-status.md` |
 | Auto-updater | **Intentionally disabled in committed config** until stable signed release channel; published release CI materializes updater config from repository variables before the strict gate, then uploads signed artifacts and `latest.json` |
 | Windows session persistence | **Explicitly unsupported** |
+
+2026-06-30 smoke update:
+
+- macOS desktop build/launch is reported working after the disabled-updater fix.
+- External link opening is reported broken on both macOS and Linux desktop
+  clients. Treat `desktop_open_external_url`, frontend click interception, and
+  Tauri opener wiring as the next P0 investigation surface despite the feature
+  table's implementation status.
+- Timeline/session-history behavior is tentatively improved, but formal smoke
+  evidence is still pending.
+
+### 4.4.1 Postmortem: macOS Desktop Non-Launch, 2026-06-29
+
+Two late-night fixes corrected validation gaps from the production-readiness
+automation pass:
+
+- `f938246` made Tauri updater plugin registration conditional on
+  `plugins.updater`. The committed config intentionally disables updater
+  artifacts/config, but the app must still launch locally and on macOS before
+  release-time updater variables are materialized.
+- `3e0bd8e` restored a missing `getFirstLinkedTimeline` import after Timeline
+  helper extraction. Frontend typecheck/build must be part of any future
+  Timeline/helper or accumulated versioning change.
+
+Takeaway: compile/readiness scripts are not a substitute for launch smoke when
+native plugins/config or the bundled frontend are touched.
 
 ### 4.5 iOS Code TODOs
 
