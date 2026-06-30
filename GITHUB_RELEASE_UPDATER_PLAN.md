@@ -24,12 +24,13 @@ It is not the highest-priority local task right now because the remaining proof
 requires real signing secrets, repository variables, release artifacts, and a
 signed release workflow run.
 
-2026-06-30 planning update: keep this feature parked. The current Codex session
-has GitHub CLI authentication with repository/workflow scope, so it can likely
-help set repository variables/secrets if provided with intentional signing key
-material. It should not generate/store production updater secrets or run release
-automation until the desktop P0 link-opening blocker is fixed and the maintainer
-explicitly resumes this plan.
+2026-06-30 key-material update: this trusted machine generated a
+password-protected Tauri updater signing keypair and configured the GitHub
+repository without committing key material. The private key and password are
+stored as GitHub Actions secrets; the public key and endpoint are stored as
+GitHub repository variables. The temporary local key files were removed. Keep
+the feature parked until the desktop P0 link-opening blocker is fixed and the
+maintainer explicitly resumes release workflow validation.
 
 ## Current Repository State
 
@@ -51,10 +52,18 @@ Implemented:
 - `scripts/generate-release-updater-metadata.mjs` can generate static metadata
   for Linux and macOS updater artifacts.
 
+Configured:
+
+- `TAURI_SIGNING_PRIVATE_KEY` GitHub Actions secret.
+- `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` GitHub Actions secret.
+- `SYNARA_UPDATER_PUBKEY` GitHub repository variable.
+- `SYNARA_UPDATER_ENDPOINT` GitHub repository variable pointing at the latest
+  GitHub release `latest.json`.
+- Local dry-run inspection of release-time updater config passes with the
+  configured public GitHub variables.
+
 Deferred:
 
-- Real updater public key repository variable.
-- Real Tauri updater signing private key GitHub secret.
 - Signed release workflow run.
 - Hosted `latest.json` verification.
 - Installed-app update check/install smoke.
@@ -126,9 +135,14 @@ GitHub repository secrets:
 
 Acceptance evidence:
 
-- Repository variable names and presence confirmed without exposing values.
-- `npm run check:release-updater -- --require-enabled` passes in a release job
-  after config materialization.
+- **Status:** Complete as of 2026-06-30.
+- Repository variable/secret names and presence confirmed without exposing
+  private values.
+- Release-time updater config dry-run inspection passed using the configured
+  GitHub public variables.
+- Full `npm run check:release-updater -- --require-enabled` still belongs in a
+  release job after config materialization, because committed local config
+  remains intentionally disabled.
 
 ### Milestone 2: Release Workflow Proof
 
@@ -207,8 +221,7 @@ Park this work until after:
 4. iOS Timeline/Xcode validation has a pass/fail result.
 
 After those P0 user-facing checks are evidence-backed, resume this plan at
-Milestone 1 or Milestone 2 depending on whether GitHub variables/secrets are
-already configured.
+Milestone 2 because GitHub updater variables/secrets are already configured.
 
 Before making more updater changes, rerun the postmortem guardrail from
 `PRODUCTION_READINESS_GOAL.md`: prove both committed disabled-config desktop

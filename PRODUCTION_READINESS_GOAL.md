@@ -83,9 +83,10 @@ Latest human smoke feedback, 2026-06-30:
   execution target.
 - Timeline/session-history behavior appears tentatively improved, but requires
   continued daily-use confirmation and targeted smoke evidence before signoff.
-- Tauri/GitHub Release updater remains desirable but non-urgent. Keep it parked
+- Tauri/GitHub Release updater remains desirable but non-urgent. Updater
+  signing key material is now configured in GitHub; keep implementation parked
   in `GITHUB_RELEASE_UPDATER_PLAN.md` until P0 user-facing desktop behavior is
-  proven or real updater signing material is intentionally provided.
+  proven or release workflow validation is explicitly resumed.
 
 ### Epic 1: Timeline Resurrection
 
@@ -229,7 +230,7 @@ Any cross-platform feature must follow this checklist before acceptance:
 2. Connect agent backend services to existing bridge.
 3. Decompose `RoomTimeline.tsx`.
 4. Modularize `desktop.rs`.
-5. Enable auto-updater with signed metadata channel. **Status:** Deferred; plan preserved in `GITHUB_RELEASE_UPDATER_PLAN.md`.
+5. Enable auto-updater with signed metadata channel. **Status:** Key material configured; signed release workflow proof deferred in `GITHUB_RELEASE_UPDATER_PLAN.md`.
 6. Deploy iOS push gateway.
 7. Implement iOS production E2EE.
 10. Archive stale `maturity_improvement_plan1` branch.
@@ -244,7 +245,7 @@ Any cross-platform feature must follow this checklist before acceptance:
 1. Verify version consistency and release metadata.
 2. Validate signing/notarization path for macOS.
 3. Validate Linux packaging and CachyOS/KDE Wayland smoke.
-4. Complete updater signing and release-channel documentation. **Status:** Release guard, check-only updater plugin scaffolding, CI signing-secret exposure, release-time updater config materialization from repository variables, strict-inspector compatibility coverage for the materialized config, artifact-generation handoff, signature upload patterns, and generated `latest.json` upload are added. Production updater enablement is parked in `GITHUB_RELEASE_UPDATER_PLAN.md` until real updater variables/secrets and signed release workflow evidence are available.
+4. Complete updater signing and release-channel documentation. **Status:** Release guard, check-only updater plugin scaffolding, CI signing-secret exposure, release-time updater config materialization from repository variables, strict-inspector compatibility coverage for the materialized config, artifact-generation handoff, signature upload patterns, and generated `latest.json` upload are added. GitHub updater secrets/variables are configured as of 2026-06-30; production updater enablement is parked in `GITHUB_RELEASE_UPDATER_PLAN.md` until signed release workflow and hosted metadata evidence are available.
 5. Refresh `README.md`, release checklist, and user-facing installation docs.
 6. Confirm license, privacy, and security docs are current.
 
@@ -263,7 +264,7 @@ Any cross-platform feature must follow this checklist before acceptance:
 | `npm --prefix synara run check:eslint` | Yes | Pass, 2026-06-29 | Frontend lint clean |
 | `npm --prefix synara run check:prettier` | Yes | Pass after mechanical format fix, 2026-06-29 | Four pre-existing formatting drifts corrected |
 | `npm run check:release-updater` | Yes | Advisory pass with 4 expected warnings, 2026-06-29 | Plugin/package/check-only capability wiring, release CI config materialization, strict-inspector compatibility coverage for materialized config, signing/artifact handoff, and generated `latest.json` upload are present; committed updater config remains disabled until release-time variables are applied |
-| `npm run check:release-updater -- --require-enabled` | Required for published releases | Expected fail locally with 4 errors, 2026-06-29 | Release workflow materializes updater config from `SYNARA_UPDATER_PUBKEY`/optional `SYNARA_UPDATER_ENDPOINT` before this strict gate; local static config remains disabled |
+| `npm run check:release-updater -- --require-enabled` | Required for published releases | Release-time dry-run passed with GitHub variables, 2026-06-30 | GitHub updater secrets/variables are configured; release workflow materializes updater config from `SYNARA_UPDATER_PUBKEY`/`SYNARA_UPDATER_ENDPOINT` before this strict gate; local static config remains disabled |
 | `cargo fmt --manifest-path src-tauri/Cargo.toml --check` | Yes | Pass, 2026-06-29 | Rust formatting gate clean after normalizing `build.rs` |
 | `cargo check` in `src-tauri` | Yes | Pass, 2026-06-29 | Rust compile gate clean after localhost-port test hardening |
 | `cargo test` in `src-tauri` | Yes | Pass, 2026-06-29 | 93/93 Rust tests passed serially after file-transfer command/session extraction |
@@ -279,7 +280,7 @@ Any cross-platform feature must follow this checklist before acceptance:
 | Phase 2: Timeline Resurrection | In progress | Desktop viewport restore policy first slice implemented; shared open-focus contract added; iOS policy tests expanded; 2026-06-30 human daily-use feedback is tentatively positive; macOS/iOS validation handoff is tracked in `MACOS_IOS_VALIDATION_QUEUE.md` and `MACOS_WORKSTATION_HANDOFF.md` | Continue daily-use confirmation and run targeted iOS/macOS smoke checklist |
 | Phase 3: Link Opening | P0 failed smoke | Desktop bridge hardening first slice implemented, but 2026-06-30 human smoke reports link clicks do not open the system browser on macOS or Linux | Diagnose and fix the shared desktop link-opening bridge/runtime path before other implementation work |
 | Phase 4: Composer Parity | In progress | Clipboard image paste first slice and drag/drop detection hardening implemented; Grok reviewed both diffs and findings were incorporated/accepted; local gates pass at 283/283 | Run macOS/Linux interactive composer smoke checklist |
-| Phase 5: Release Readiness | In progress, updater deferred | Added release-updater readiness checker; wired published desktop release workflow to fail until signed updater channel prerequisites are configured; added desktop updater plugin/package/check-only permission scaffolding; aligned release CI with updater signing secrets, release-time updater config materialization, strict-inspector compatibility coverage for the materialized config, artifact generation, signature uploads, and generated `latest.json` upload; deferred the remaining signed GitHub-release updater proof to `GITHUB_RELEASE_UPDATER_PLAN.md`; completed `_JOIN_PATH` route stub; removed legacy commented session atom; continued `RoomTimeline.tsx` decomposition; continued `desktop.rs` modularization with URL policy, sanitization, file-transfer command/session, session-envelope, secret-store classification/probe/cache, keyring session-store, global shortcut, tray/menu, agent-action, notification, and integration-status extractions; consolidated production smoke evidence requirements in `docs/production-smoke-checklist.md` | Fix desktop link opening first; resume updater only after P0 smoke passes or signing keys are intentionally provided |
+| Phase 5: Release Readiness | In progress, updater workflow proof deferred | Added release-updater readiness checker; wired published desktop release workflow to fail until signed updater channel prerequisites are configured; added desktop updater plugin/package/check-only permission scaffolding; aligned release CI with updater signing secrets, release-time updater config materialization, strict-inspector compatibility coverage for the materialized config, artifact generation, signature uploads, and generated `latest.json` upload; configured GitHub updater key material on 2026-06-30; deferred the remaining signed GitHub-release workflow proof to `GITHUB_RELEASE_UPDATER_PLAN.md`; completed `_JOIN_PATH` route stub; removed legacy commented session atom; continued `RoomTimeline.tsx` decomposition; continued `desktop.rs` modularization with URL policy, sanitization, file-transfer command/session, session-envelope, secret-store classification/probe/cache, keyring session-store, global shortcut, tray/menu, agent-action, notification, and integration-status extractions; consolidated production smoke evidence requirements in `docs/production-smoke-checklist.md` | Fix desktop link opening first; then resume updater at signed release workflow proof if desired |
 
 ## Postmortem: macOS Desktop Non-Launch, 2026-06-29
 
