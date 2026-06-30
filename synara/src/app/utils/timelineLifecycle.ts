@@ -5,12 +5,14 @@ export const ROOM_TIMELINE_VIEWPORT_RESTORE_TTL_MS = 10 * 60 * 1000;
 
 type RoomTimelineViewportSnapshot = {
   atBottom: boolean;
+  liveTailEventId?: string;
   updatedAtMs?: number;
 };
 
 type RoomTimelineViewportRestoreOptions = {
   hasUnread: boolean;
   nowMs: number;
+  currentLiveTailEventId?: string;
   maxAgeMs?: number;
 };
 
@@ -19,11 +21,19 @@ export const shouldRestoreRoomTimelineViewport = (
   {
     hasUnread,
     nowMs,
+    currentLiveTailEventId,
     maxAgeMs = ROOM_TIMELINE_VIEWPORT_RESTORE_TTL_MS,
   }: RoomTimelineViewportRestoreOptions
 ): boolean => {
   if (!viewport) return false;
-  if (hasUnread) return false;
+  if (hasUnread) {
+    return Boolean(
+      viewport.atBottom &&
+        viewport.liveTailEventId &&
+        currentLiveTailEventId &&
+        viewport.liveTailEventId === currentLiveTailEventId
+    );
+  }
   if (viewport.atBottom) return true;
   if (maxAgeMs < 0) return false;
 
@@ -38,6 +48,15 @@ export const getRoomCurrentState = (room: Room): RoomState | undefined =>
 
 export const getLoadedLiveTimelineEvents = (room: Room): MatrixEvent[] =>
   room.getLiveTimeline().getEvents() as MatrixEvent[];
+
+export const getLoadedLiveTailEventId = (room: Room): string | undefined => {
+  const events = getLoadedLiveTimelineEvents(room);
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const eventId = events[index]?.getId();
+    if (eventId) return eventId;
+  }
+  return undefined;
+};
 
 export const getLatestReceiptEventFromEvents = (
   events: MatrixEvent[],
