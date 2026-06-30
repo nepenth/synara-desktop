@@ -72,12 +72,19 @@ Deferred:
 - Installed-app update check/install smoke.
 - Final product UX decision: silent check, manual "Check for Updates", or
   prompted download/install.
+- Frontend updater invocation UX. The Tauri plugin/package scaffolding is
+  present, but the runtime does not yet expose a user-facing check/install
+  control. A signed build alone cannot prove installed-app updater behavior.
 
 Current blocking precondition:
 
 - Desktop link opening is failing on both macOS and Linux by human smoke report
   on 2026-06-30. Do not spend additional implementation time on updater UX or
   release-channel proof until that P0 behavior is fixed and smoke-tested.
+- The manual `.github/workflows/macos-signed-build.yml` workflow is useful for
+  signed/notarized DMG smoke, but it is not an updater-channel proof because it
+  builds with `createUpdaterArtifacts:false` and does not materialize
+  `plugins.updater`.
 
 Latest local gate hardening:
 
@@ -161,10 +168,23 @@ Acceptance evidence:
 - Artifact names.
 - Redacted `latest.json` content or validation output.
 
+Scope note:
+
+- The current release workflow targets both macOS and Linux updater metadata:
+  `darwin-x86_64`, `darwin-aarch64`, and `linux-x86_64`.
+- Local workstation builds and the manual macOS signed-build workflow are not
+  updater-enabled unless they run the release updater config step.
+- Linux updater coverage is for the Tauri AppImage updater archive path emitted
+  by the release workflow. `.deb` package installation/update should still be
+  treated as a separate package-management path.
+
 ### Milestone 3: Installed-App Smoke
 
-1. Install version N from a signed release artifact.
-2. Publish version N+1 as a test release.
+0. Implement a minimal updater invocation surface, preferably a manual "Check
+   for Updates" control in Settings/About with no silent install behavior.
+1. Install version N from a signed release artifact built by the release
+   workflow, not the manual macOS signed-build workflow.
+2. Publish version N+1 as a test release through the release workflow.
 3. Run app update check against the GitHub latest endpoint.
 4. Verify no placeholder/local endpoints are contacted.
 5. Verify update download/install behavior matches the chosen UX.
