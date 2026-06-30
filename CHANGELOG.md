@@ -8,6 +8,8 @@
 - Hardened pacman repository release publication by using the GitHub release
   event tag explicitly, setting `GH_REPO` for no-checkout `gh` commands, and
   verifying downloaded repository assets before upload.
+- Added a macOS release preflight that validates the Tauri updater private key
+  password before the expensive signed/notarized package build.
 - Fixed the macOS release workflow bundle set so updater-enabled `.app`
   artifacts remain available for signature verification and updater metadata.
 - Revised production release automation so macOS remains Tauri-updater managed

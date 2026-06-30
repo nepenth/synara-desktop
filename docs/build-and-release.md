@@ -142,6 +142,10 @@ Updater-enabled releases require:
 Never commit updater private keys, Apple certificates, passwords, or notarization
 credentials.
 
+If a release job fails with `incorrect updater private key password`, rotate the
+Tauri updater keypair and GitHub secrets together. The full command sequence is
+tracked in [../GITHUB_RELEASE_UPDATER_PLAN.md](../GITHUB_RELEASE_UPDATER_PLAN.md#rotate-updater-signing-key-material).
+
 ## Linux Pacman Repo
 
 The production pacman repo is a public GitHub Release-backed repository:
