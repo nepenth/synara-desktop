@@ -91,6 +91,10 @@ Latest human smoke feedback, 2026-06-30:
   signing key material is now configured in GitHub; keep implementation parked
   in `GITHUB_RELEASE_UPDATER_PLAN.md` until P0 user-facing desktop behavior is
   proven or release workflow validation is explicitly resumed.
+- Updater test planning update: the manual macOS signed-build workflow is not an
+  updater-channel proof because it disables updater artifacts. A real updater
+  smoke needs a small frontend updater check/install surface, then version N and
+  N+1 builds from the release workflow.
 - Release branch and client-visible update CI planning is captured in
   `RELEASE_BRANCH_CI_PLAN.md`. Milestone 1 trigger coverage has been
   implemented after explicit approval; first release-branch push evidence is
@@ -273,7 +277,7 @@ Any cross-platform feature must follow this checklist before acceptance:
 1. Verify version consistency and release metadata.
 2. Validate signing/notarization path for macOS.
 3. Validate Linux packaging and CachyOS/KDE Wayland smoke.
-4. Complete updater signing and release-channel documentation. **Status:** Release guard, check-only updater plugin scaffolding, CI signing-secret exposure, release-time updater config materialization from repository variables, strict-inspector compatibility coverage for the materialized config, artifact-generation handoff, signature upload patterns, and generated `latest.json` upload are added. GitHub updater secrets/variables are configured as of 2026-06-30; production updater enablement is parked in `GITHUB_RELEASE_UPDATER_PLAN.md` until signed release workflow and hosted metadata evidence are available.
+4. Complete updater signing and release-channel documentation. **Status:** Release guard, check-only updater plugin scaffolding, CI signing-secret exposure, release-time updater config materialization from repository variables, strict-inspector compatibility coverage for the materialized config, artifact-generation handoff, signature upload patterns, and generated `latest.json` upload are added. GitHub updater secrets/variables are configured as of 2026-06-30; production updater enablement is parked in `GITHUB_RELEASE_UPDATER_PLAN.md` until signed release workflow, hosted metadata evidence, and a minimal frontend updater invocation surface are available.
 5. Implement release branch CI and controlled production publish flow. **Status:** Milestone 1 release-branch validation triggers implemented for `ci.yml`, `desktop-package-smoke.yml`, and `ios-skeleton.yml`; controlled production publish flow remains deferred.
 6. Refresh `README.md`, release checklist, and user-facing installation docs. **Status:** Added `docs/build-and-release.md` as the repo entry point and linked it from `README.md`.
 7. Confirm license, privacy, and security docs are current.
