@@ -5,6 +5,11 @@
 - Added production release automation for a GitHub Release-backed `synara`
   pacman repository so Arch-family Linux updates are package-manager-owned via
   `paru -Syu` / `pacman -Syu` after one-time repo setup.
+- Hardened pacman repository release publication by using the GitHub release
+  event tag explicitly, setting `GH_REPO` for no-checkout `gh` commands, and
+  verifying downloaded repository assets before upload.
+- Fixed the macOS release workflow bundle set so updater-enabled `.app`
+  artifacts remain available for signature verification and updater metadata.
 - Revised production release automation so macOS remains Tauri-updater managed
   while Linux no longer publishes AppImage self-update metadata for the current
   release goal.
