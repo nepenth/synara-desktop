@@ -5,6 +5,8 @@
 - Added production release automation for a GitHub Release-backed `synara`
   pacman repository so Arch-family Linux updates are package-manager-owned via
   `paru -Syu` / `pacman -Syu` after one-time repo setup.
+- Fixed production macOS release validation by notarizing and stapling the DMG
+  after Tauri signs and bundles it.
 - Hardened pacman repository release publication by using the GitHub release
   event tag explicitly, setting `GH_REPO` for no-checkout `gh` commands, and
   verifying downloaded repository assets before upload.
