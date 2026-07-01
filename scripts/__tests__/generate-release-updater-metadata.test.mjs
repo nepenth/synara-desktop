@@ -59,6 +59,57 @@ test("generates static updater metadata for discovered release assets", () =>
     );
   }));
 
+test("recognizes macos updater artifact download directories", () =>
+  withTempDir((dir) => {
+    writeArtifact(
+      dir,
+      "macos-updater-artifacts/Synara.app.tar.gz",
+      "macos-universal-signature"
+    );
+
+    const metadata = generateReleaseUpdaterMetadata({
+      artifactsDir: dir,
+      repo: "nepenth/synara-desktop",
+      tag: "v1.2.21",
+      version: "1.2.21",
+      pubDate: "2026-07-01T00:56:28.000Z",
+    });
+
+    assert.deepEqual(Object.keys(metadata.platforms).sort(), [
+      "darwin-aarch64",
+      "darwin-x86_64",
+    ]);
+    assert.equal(
+      metadata.platforms["darwin-aarch64"].signature,
+      "macos-universal-signature"
+    );
+    assert.equal(
+      metadata.platforms["darwin-x86_64"].url,
+      "https://github.com/nepenth/synara-desktop/releases/download/v1.2.21/Synara.app.tar.gz"
+    );
+  }));
+
+test("recognizes flattened macos app updater archives", () =>
+  withTempDir((dir) => {
+    writeArtifact(dir, "Synara.app.tar.gz", "macos-flattened-signature");
+
+    const metadata = generateReleaseUpdaterMetadata({
+      artifactsDir: dir,
+      repo: "nepenth/synara-desktop",
+      tag: "v1.2.21",
+      version: "1.2.21",
+    });
+
+    assert.equal(
+      metadata.platforms["darwin-aarch64"].signature,
+      "macos-flattened-signature"
+    );
+    assert.equal(
+      metadata.platforms["darwin-x86_64"].signature,
+      "macos-flattened-signature"
+    );
+  }));
+
 test("rejects updater archives without signature sidecars", () =>
   withTempDir((dir) => {
     const artifactPath = path.join(
