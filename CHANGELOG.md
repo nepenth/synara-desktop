@@ -5,6 +5,7 @@
 - Added production release automation for a GitHub Release-backed `synara`
   pacman repository so Arch-family Linux updates are package-manager-owned via
   `paru -Syu` / `pacman -Syu` after one-time repo setup.
+- Bumped shared Synara app version metadata to `1.2.21`.
 - Fixed production macOS release validation by notarizing and stapling the DMG
   after Tauri signs and bundles it.
 - Hardened pacman repository release publication by using the GitHub release
