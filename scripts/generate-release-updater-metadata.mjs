@@ -46,7 +46,11 @@ const classifyArtifact = (artifactPath) => {
   if (normalized.includes("/appimage/") || normalized.includes("linux")) {
     return [LINUX_PLATFORM];
   }
-  if (normalized.includes("/macos/") || normalized.includes("darwin")) {
+  if (
+    normalized.includes("macos") ||
+    normalized.includes("darwin") ||
+    normalized.endsWith(".app.tar.gz")
+  ) {
     return MACOS_PLATFORMS;
   }
   return [];
