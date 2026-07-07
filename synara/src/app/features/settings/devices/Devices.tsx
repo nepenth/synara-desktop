@@ -130,9 +130,9 @@ export function Devices({ requestClose }: DevicesProps) {
                     </DeviceTile>
                     {crossSigningActive &&
                       verificationStatus === VerificationStatus.Unverified &&
-                      defaultSecretStorageKeyId &&
-                      defaultSecretStorageKeyContent && (
+                      crypto && (
                         <VerifyCurrentDeviceTile
+                          crypto={crypto}
                           secretStorageKeyId={defaultSecretStorageKeyId}
                           secretStorageKeyContent={defaultSecretStorageKeyContent}
                         />
