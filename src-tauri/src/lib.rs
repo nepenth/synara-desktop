@@ -196,6 +196,10 @@ pub fn run() {
         }
     };
     let context = tauri::generate_context!();
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    let updater_configured = updater_plugin_configured(&context);
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    let updater_configured = false;
     let mut builder = tauri::Builder::default()
         .plugin(tauri_plugin_localhost::Builder::new(port).build())
         .plugin(tauri_plugin_window_state::Builder::default().build())
@@ -293,8 +297,9 @@ pub fn run() {
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     {
         builder = builder.plugin(desktop_shortcuts::global_shortcut_plugin());
+        builder = builder.plugin(tauri_plugin_process::init());
 
-        if updater_plugin_configured(&context) {
+        if updater_configured {
             builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
         } else {
             eprintln!(
@@ -306,7 +311,10 @@ pub fn run() {
     builder
         .setup(move |app| {
             #[cfg(target_os = "macos")]
-            app.set_menu(menu::menu(app.handle())?)?;
+            {
+                app.set_menu(menu::menu(app.handle())?)?;
+                app.on_menu_event(menu::handle_menu_event);
+            }
 
             desktop_tray::create_tray(app.handle())?;
 
@@ -326,8 +334,9 @@ pub fn run() {
 
             let app_handle = app.handle().clone();
             let bridge_script = format!(
-                "{}\nif (window.__SYNARA_DESKTOP__) {{ window.__SYNARA_DESKTOP__.supportsSecureSecretStore = {}; }}",
+                "{}\nif (window.__SYNARA_DESKTOP__) {{ window.__SYNARA_DESKTOP__.supportsUpdater = {}; window.__SYNARA_DESKTOP__.supportsSecureSecretStore = {}; }}",
                 include_str!("desktop_bridge.js"),
+                updater_configured,
                 desktop::desktop_bridge_supports_secure_secret_store()
             );
             let window = WebviewWindowBuilder::new(app, "main".to_string(), window_url)

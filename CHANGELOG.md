@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- Allowed the packaged Tauri localhost webview origin to use the main desktop
+  capability set, restoring the native IPC path used by system-browser link
+  opening, clipboard image reads, native file drops, desktop events, and update
+  checks in release builds.
+- Added a release-readiness regression check that fails if the packaged
+  localhost webview origin loses native desktop capability access.
+- Added native spellcheck language, autocorrect, and capitalization hints to the
+  shared Slate editor while preserving the existing composer spellcheck toggle.
+- Bumped shared Synara app version metadata to `1.2.22` for packaged
+  macOS/Linux update validation.
+- Added the user-facing desktop updater layer: Settings/About update checks,
+  macOS background prompts with install/relaunch, a macOS app menu update
+  command, and Linux package-manager guidance for GitHub-release version checks.
+- Tightened release-updater readiness checks to require install-capable updater
+  permissions and process relaunch support.
 - Added production release automation for a GitHub Release-backed `synara`
   pacman repository so Arch-family Linux updates are package-manager-owned via
   `paru -Syu` / `pacman -Syu` after one-time repo setup.

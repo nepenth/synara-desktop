@@ -13,6 +13,7 @@ import {
   SYNARA_SOURCE_CODE_URL,
   openExternalUrlFromClick,
 } from '../../../utils/appLinks';
+import { UpdateSettingsTile } from '../../desktop-updater/DesktopUpdaterProvider';
 
 type AboutProps = {
   requestClose: () => void;
@@ -97,6 +98,7 @@ export function About({ requestClose }: AboutProps) {
                   direction="Column"
                   gap="400"
                 >
+                  <UpdateSettingsTile />
                   <SettingTile
                     title="Clear Cache & Reload"
                     description="Clear all your locally stored data and reload from server."

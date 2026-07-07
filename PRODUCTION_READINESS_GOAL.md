@@ -87,14 +87,16 @@ Latest human smoke feedback, 2026-06-30:
   restored `Project - Tech` backward in history after switching rooms, even
   after pressing Jump to Latest and waiting 5-10 seconds. Treat this as an
   active Timeline Resurrection regression until a newer build is smoked.
-- Tauri/GitHub Release updater remains desirable but non-urgent. Updater
-  signing key material is now configured in GitHub; keep implementation parked
-  in `GITHUB_RELEASE_UPDATER_PLAN.md` until P0 user-facing desktop behavior is
-  proven or release workflow validation is explicitly resumed.
+- Tauri/GitHub Release updater user-facing implementation is now in progress
+  again. Updater signing key material is configured in GitHub, and the app now
+  has Settings/About, macOS menu, background-check, macOS install/relaunch, and
+  Linux package-manager guidance surfaces. Proof still requires a signed
+  updater-capable release N followed by a newer release N+1.
 - Updater test planning update: the manual macOS signed-build workflow is not an
   updater-channel proof because it disables updater artifacts. A real updater
-  smoke needs a small frontend updater check/install surface, then version N and
-  N+1 builds from the release workflow.
+  smoke now needs version N and N+1 builds from the release workflow so an
+  installed updater-capable app can detect, install, and relaunch into the newer
+  macOS version.
 - Linux update policy update: do not support AppImage self-update for the
   current goal. Linux updates should be package-manager-owned through a fixed
   GitHub Release-backed pacman repo, with app-side notification/instructions
@@ -103,6 +105,27 @@ Latest human smoke feedback, 2026-06-30:
   `RELEASE_BRANCH_CI_PLAN.md`. Milestone 1 trigger coverage has been
   implemented after explicit approval; first release-branch push evidence is
   still pending.
+
+Latest human smoke feedback, 2026-07-07:
+
+- macOS and Linux desktop link opening still fails in the latest smoke build.
+  Diagnosis found the release webview is served from Tauri localhost but
+  `src-tauri/capabilities/main.json` did not grant capability access to that
+  remote origin. The capability now allows `http://localhost:*/*`; macOS/Linux
+  release re-smoke is required.
+- Clipboard image paste and attachment drag/drop still fail on both desktop
+  platforms. Treat these as likely sharing the same packaged-localhost native
+  IPC capability root cause until re-smoke proves otherwise.
+- Desktop composer spellcheck still fails on both platforms. The editor now
+  sends native language/autocorrect/capitalization hints, but live verification
+  and Linux dictionary/environment evidence remain required.
+- Timeline Resurrection is far better, but room-open history still visibly
+  repositions while initial history loads. Do not make a broad timeline change
+  without focused scroll-anchor diagnostics because this area has already been
+  fragile.
+- macOS updater finalization remains open. Linux package-manager updating works;
+  current policy remains app-side notification/instructions only, with actual
+  Linux installation owned by `paru`/`pacman`.
 
 ### Epic 1: Timeline Resurrection
 
@@ -150,6 +173,12 @@ Desktop first-slice finding, 2026-06-29:
   bottom snapshots and restores that bottom snapshot through stale unread state
   only when the current live tail still matches; if a newer event arrived while
   away, unread placement still wins.
+- Follow-up, 2026-07-07: human smoke says Timeline Resurrection is far better,
+  but the room history view can still visibly move during initial load as more
+  history arrives and the eventual read/live focus settles. Treat this as a
+  diagnostic target, not an immediate broad rewrite: capture initial anchor,
+  loaded-window changes, read-marker target, saved bottom snapshot, and
+  jump-to-latest state before attempting another behavior change.
 
 Shared contract update, 2026-06-29:
 
@@ -160,7 +189,7 @@ Shared contract update, 2026-06-29:
 ### Epic 2: Link Opening
 
 **Priority:** P0  
-**Status:** Hardened in code after failed smoke - pending macOS/Linux re-smoke
+**Status:** Packaged-localhost capability fix implemented after failed smoke - pending macOS/Linux re-smoke
 **Success criteria:** Every user-visible external link from rich text, message content, Hermes cards, and related surfaces opens through the system browser via `desktop_open_external_url` on desktop, with safe fallback behavior outside Tauri.
 
 Initial task backlog:
@@ -193,11 +222,18 @@ Desktop first-slice finding, 2026-06-29:
   diagnostics, and the injected desktop bridge throws a clear IPC-unavailable
   error instead of returning `undefined`. Frontend modernization tests and
   typecheck pass; live macOS/Linux smoke remains the release gate.
+- Follow-up root cause, 2026-07-07: packaged release windows load the bundled UI
+  from `http://localhost:{port}`, but the main capability applied only to local
+  app URLs. That remote-origin gap can block every native IPC command and event
+  listener used by link opening, clipboard image paste, native file drop,
+  updater checks, and desktop diagnostics. `main.json` now grants
+  `remote.urls: ["http://localhost:*/*"]`, and the release-updater readiness
+  check fails if that packaged-localhost allowance disappears.
 
 ### Epic 3: Composer Desktop Parity
 
 **Priority:** P0  
-**Status:** In progress - desktop clipboard image first slice implemented
+**Status:** In progress - packaged-localhost capability and spellcheck hints implemented
 **Success criteria:** Slate composer supports native spell checking, drag-and-drop files, and clipboard image paste identically on desktop.
 
 Initial task backlog:
@@ -213,7 +249,14 @@ Desktop first-slice finding, 2026-06-29:
 - Root cause: RoomInput already supported pasted `DataTransfer` files and Tauri clipboard image reads, but focused editor paste tried rich-text insertion before native clipboard image probing. A clipboard advertising both `text/html` and `image/*` could insert HTML instead of uploading the native image.
 - Implemented mitigation: exported a tested `shouldProbeNativeClipboardImage(...)` helper and made desktop focused composer paste try native image upload before Matrix rich-text insertion for image-like payloads. If the native image read returns no file, the handler falls back to the original rich/plain insertion path.
 - Drag/drop hardening: `useFileDropZone` now uses a tested `dataTransferHasFiles(...)` helper instead of requiring the `Files` type marker, so desktop/WebView drops that expose `files` or file items still activate the upload flow while text-only drags remain ignored.
-- Remaining gap: live desktop smoke is still required for native spellcheck, drag/drop files, clipboard screenshot paste, and mixed image+HTML clipboard sources.
+- Follow-up, 2026-07-07: both drag/drop and clipboard image paste still fail on
+  macOS and Linux smoke builds, matching the shared packaged-localhost native
+  IPC capability gap described under Epic 2. The shared Slate editor now also
+  passes `lang`, `autoCorrect`, and `autoCapitalize` hints when spellcheck is
+  enabled. Remaining gap: live desktop smoke is still required for native
+  spellcheck, drag/drop files, clipboard screenshot paste, and mixed image+HTML
+  clipboard sources; Linux spellcheck failures may still require dictionary or
+  WebKitGTK environment evidence after the bridge fix.
 
 ### Epic 4: KB Section 7 Expansion Items
 
@@ -266,7 +309,7 @@ Any cross-platform feature must follow this checklist before acceptance:
 2. Connect agent backend services to existing bridge.
 3. Decompose `RoomTimeline.tsx`.
 4. Modularize `desktop.rs`.
-5. Enable auto-updater with signed metadata channel. **Status:** Key material configured; macOS signed release workflow proof remains in `GITHUB_RELEASE_UPDATER_PLAN.md`, while Linux publication is now package-manager-owned through a fixed GitHub Release-backed pacman repo.
+5. Enable auto-updater with signed metadata channel. **Status:** Key material configured; user-facing updater layer implemented locally with Settings/About, macOS menu, background checks, macOS install/relaunch, Linux package-manager guidance, install-capable permissions, and stricter readiness checks. macOS signed release workflow proof remains in `GITHUB_RELEASE_UPDATER_PLAN.md`, while Linux publication is package-manager-owned through a fixed GitHub Release-backed pacman repo.
 6. Deploy iOS push gateway.
 7. Implement iOS production E2EE.
 10. Archive stale `maturity_improvement_plan1` branch.
@@ -281,7 +324,7 @@ Any cross-platform feature must follow this checklist before acceptance:
 1. Verify version consistency and release metadata.
 2. Validate signing/notarization path for macOS.
 3. Validate Linux packaging and CachyOS/KDE Wayland smoke.
-4. Complete updater signing and release-channel documentation. **Status:** Release guard, check-only updater plugin scaffolding, CI signing-secret exposure, release-time updater config materialization from repository variables, strict-inspector compatibility coverage for the materialized config, artifact-generation handoff, macOS signature upload patterns, generated macOS `latest.json` upload, and Linux pacman repo automation are added. GitHub updater secrets/variables are configured as of 2026-06-30 but the `v1.2.20` release proved `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` does not match `TAURI_SIGNING_PRIVATE_KEY`; fixed `pacman-repo` assets are hosted and pacman-smoked locally; production updater proof still requires rotating the updater signing keypair/password, rerunning the release workflow, and adding a minimal frontend updater invocation surface for macOS.
+4. Complete updater signing and release-channel documentation. **Status:** Release guard, install-capable updater plugin/process scaffolding, CI signing-secret exposure, release-time updater config materialization from repository variables, strict-inspector compatibility coverage for the materialized config, artifact-generation handoff, macOS signature upload patterns, generated macOS `latest.json` upload, Linux pacman repo automation, and user-facing updater UI are added. GitHub updater secrets/variables are configured as of 2026-06-30 but the `v1.2.20` release proved `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` does not match `TAURI_SIGNING_PRIVATE_KEY`; fixed `pacman-repo` assets are hosted and pacman-smoked locally; production updater proof still requires rotating the updater signing keypair/password if not already fixed, rerunning the release workflow, installing updater-capable version N manually, publishing N+1, and proving macOS install/relaunch from the app.
 5. Implement release branch CI and controlled production publish flow. **Status:** Milestone 1 release-branch validation triggers implemented for `ci.yml`, `desktop-package-smoke.yml`, and `ios-skeleton.yml`; production workflow now includes an automated GitHub Release-backed `synara` pacman repo for Linux and macOS Tauri updater metadata. Remaining proof is a real release workflow run plus hosted artifact verification.
    - Release-branch package smoke now builds Linux `.deb`, Linux Arch/CachyOS
      `synara-desktop-bin-*.pkg.tar.zst`, and macOS `.app` artifacts.
@@ -292,20 +335,21 @@ Any cross-platform feature must follow this checklist before acceptance:
 
 | Gate | Required Before Release | Latest Phase 0 Result | Notes |
 |---|---:|---|---|
-| `npm run check:versions` | Yes | Pass, 2026-06-29 | Version metadata consistent at 1.2.20; Tauri aligned at 2.11; iOS build number and marketing version are 1.2.20 |
-| `npm run check:repo-layout` | Yes | Pass, 2026-06-29 | Repository layout canonical |
-| `npm run check:matrix-boundaries` | Yes | Pass, 2026-06-29 | Passed with 2 active iOS and 2 active desktop exceptions |
+| `npm run check:versions` | Yes | Pass, 2026-07-07 | Version metadata consistent at 1.2.22 with Arch pkgrel 1; Tauri aligned at 2.11; iOS App Store build number remains 1.2.20 while marketing version matches 1.2.22 |
+| `npm run check:repo-layout` | Yes | Pass, 2026-07-07 | Repository layout canonical |
+| `npm run check:matrix-boundaries` | Yes | Pass, 2026-07-07 | Passed with 2 active iOS and 2 active desktop exceptions |
 | `npm run check:mip1-evidence` | Yes | Pass, 2026-06-29 | 46/46 mapped; warning about bundled history retained |
-| `npm run check:production-smoke` | Yes | Pass, 2026-06-29 | Verifies the smoke checklist keeps required evidence sections, case IDs, signoff rows, preflight commands, and macOS/iOS queue linkage |
-| `npm run check:runtime-assets` | Yes | Pass, 2026-06-29 | Runtime assets match `synara/dist` |
-| `npm run typecheck:modernization` | Yes | Pass, 2026-06-29 | TypeScript modernization surface compiles |
-| `npm run test:modernization` | Yes | Pass, 2026-06-29 | Latest root build/test passed 294/294 after timeline opening helper coverage |
-| `npm --prefix synara run check:eslint` | Yes | Pass, 2026-06-29 | Frontend lint clean |
-| `npm --prefix synara run check:prettier` | Yes | Pass after mechanical format fix, 2026-06-29 | Four pre-existing formatting drifts corrected |
-| `npm run check:release-updater` | Yes | Advisory pass with 4 expected warnings, 2026-06-29 | Plugin/package/check-only capability wiring, release CI config materialization, strict-inspector compatibility coverage for materialized config, signing/artifact handoff, and generated `latest.json` upload are present; committed updater config remains disabled until release-time variables are applied |
+| `npm run check:production-smoke` | Yes | Pass, 2026-07-07 | Verifies the smoke checklist keeps required evidence sections, case IDs, signoff rows, preflight commands, and macOS/iOS queue linkage |
+| `npm run check:runtime-assets` | Yes | Pass, 2026-07-07 | Runtime assets match `synara/dist` after the 1.2.22 modernization rebuild |
+| `node --test scripts/__tests__/*.test.mjs` | Yes | Pass, 2026-07-07 | Root release/readiness script tests passed 23/23, including packaged-localhost capability regression coverage |
+| `npm run typecheck:modernization` | Yes | Pass, 2026-07-07 | TypeScript modernization surface compiles with editor spellcheck hints |
+| `npm run test:modernization` | Yes | Pass, 2026-07-07 | Latest root build/test passed 306/306 after packaged-localhost capability, editor hint, updater, and 1.2.22 version changes |
+| `npm --prefix synara run check:eslint` | Yes | Pass, 2026-07-07 | Frontend lint clean |
+| `npm --prefix synara run check:prettier` | Yes | Pass, 2026-07-07 | Frontend formatting clean |
+| `npm run check:release-updater` | Yes | Advisory pass with committed config disabled, 2026-07-07 | Plugin/package install-capable updater wiring, process relaunch wiring, packaged-localhost capability access, release CI config materialization, strict-inspector compatibility coverage for materialized config, signing/artifact handoff, and generated `latest.json` upload are present for 1.2.22; committed updater config remains disabled until release-time variables are applied |
 | `npm run check:release-updater -- --require-enabled` | Required for published releases | Release-time dry-run passed with GitHub variables, 2026-06-30 | GitHub updater secrets/variables are configured; release workflow materializes updater config from `SYNARA_UPDATER_PUBKEY`/`SYNARA_UPDATER_ENDPOINT` before this strict gate; local static config remains disabled |
 | `cargo fmt --manifest-path src-tauri/Cargo.toml --check` | Yes | Pass, 2026-06-29 | Rust formatting gate clean after normalizing `build.rs` |
-| `cargo check` in `src-tauri` | Yes | Pass, 2026-06-29 | Rust compile gate clean after localhost-port test hardening |
+| `cargo check` in `src-tauri` | Yes | Pass, 2026-07-07 | Rust compile gate clean at 1.2.22 with packaged-localhost capability config and updater/process plugin wiring |
 | `cargo test` in `src-tauri` | Yes | Pass, 2026-06-29 | 93/93 Rust tests passed serially after file-transfer command/session extraction |
 | `npm --prefix synara run test:timeline-performance` | Required for timeline changes | Pass, 2026-06-29 | Latest rerun: 10k events 8.51 ms; 50k events 20.69 ms |
 | iOS tests | Required for iOS release | Queued for macOS workstation | `xcodebuild` and `swift` unavailable on this Linux host; see `MACOS_IOS_VALIDATION_QUEUE.md` |
@@ -319,7 +363,7 @@ Any cross-platform feature must follow this checklist before acceptance:
 | Phase 2: Timeline Resurrection | In progress | Desktop viewport restore policy first slice implemented; shared open-focus contract added; iOS policy tests expanded; 2026-06-30 human daily-use feedback is tentatively positive; macOS/iOS validation handoff is tracked in `MACOS_IOS_VALIDATION_QUEUE.md` and `MACOS_WORKSTATION_HANDOFF.md` | Continue daily-use confirmation and run targeted iOS/macOS smoke checklist |
 | Phase 3: Link Opening | P0 failed smoke | Desktop bridge hardening first slice implemented, but 2026-06-30 human smoke reports link clicks do not open the system browser on macOS or Linux | Diagnose and fix the shared desktop link-opening bridge/runtime path before other implementation work |
 | Phase 4: Composer Parity | In progress | Clipboard image paste first slice and drag/drop detection hardening implemented; Grok reviewed both diffs and findings were incorporated/accepted; local gates pass at 283/283 | Run macOS/Linux interactive composer smoke checklist |
-| Phase 5: Release Readiness | In progress, release workflow proof partially complete | Added release-updater readiness checker; wired published desktop release workflow to fail until signed updater channel prerequisites are configured; added desktop updater plugin/package/check-only permission scaffolding; aligned release CI with updater signing secrets, release-time updater config materialization, strict-inspector compatibility coverage for the materialized config, macOS artifact generation, signature uploads, generated macOS `latest.json` upload, and automated Linux `synara` pacman repo publication; configured GitHub updater key material on 2026-06-30; `v1.2.20` release published Linux `.deb` and pacman package assets and refreshed `pacman-repo`; macOS build produced signed/notarized/stapled app, DMG, and updater archive internally but failed before upload because the updater private key password secret is wrong; added a release preflight and secret-rotation runbook; fixed `pacman-repo` release hosts `synara.db`, `synara.files`, and `synara-desktop-bin-1.2.20-1-x86_64.pkg.tar.zst`; local non-root smoke synced the repo and downloaded/integrity-checked the package; privileged CachyOS install succeeded from `synara/synara-desktop-bin 1.2.20-1`; latest main CI after workflow fix passed; documented release branch/client-update CI strategy in `RELEASE_BRANCH_CI_PLAN.md`; completed `_JOIN_PATH` route stub; removed legacy commented session atom; continued `RoomTimeline.tsx` decomposition; continued `desktop.rs` modularization with URL policy, sanitization, file-transfer command/session, session-envelope, secret-store classification/probe/cache, keyring session-store, global shortcut, tray/menu, agent-action, notification, and integration-status extractions; consolidated production smoke evidence requirements in `docs/production-smoke-checklist.md` | Rotate updater signing keypair/password in GitHub secrets, rerun/recreate the desktop release for macOS DMG/updater metadata, then return to P0 desktop link-opening smoke/fix |
+| Phase 5: Release Readiness | In progress, updater implementation complete pending release proof | Added release-updater readiness checker; wired published desktop release workflow to fail until signed updater channel prerequisites are configured; added desktop updater plugin/package/process dependencies, install-capable updater permission, process restart permission, Settings/About updates tile, macOS menu update command, background update checks, macOS install/relaunch prompt, Linux package-manager guidance, and updater service tests; aligned release CI with updater signing secrets, release-time updater config materialization, strict-inspector compatibility coverage for the materialized config, macOS artifact generation, signature uploads, generated macOS `latest.json` upload, and automated Linux `synara` pacman repo publication; configured GitHub updater key material on 2026-06-30; `v1.2.20` release published Linux `.deb` and pacman package assets and refreshed `pacman-repo`; macOS build produced signed/notarized/stapled app, DMG, and updater archive internally but failed before upload because the updater private key password secret is wrong; added a release preflight and secret-rotation runbook; fixed `pacman-repo` release hosts `synara.db`, `synara.files`, and `synara-desktop-bin-1.2.20-1-x86_64.pkg.tar.zst`; local non-root smoke synced the repo and downloaded/integrity-checked the package; privileged CachyOS install succeeded from `synara/synara-desktop-bin 1.2.20-1`; latest main CI after workflow fix passed; documented release branch/client-update CI strategy in `RELEASE_BRANCH_CI_PLAN.md`; completed `_JOIN_PATH` route stub; removed legacy commented session atom; continued `RoomTimeline.tsx` decomposition; continued `desktop.rs` modularization with URL policy, sanitization, file-transfer command/session, session-envelope, secret-store classification/probe/cache, keyring session-store, global shortcut, tray/menu, agent-action, notification, and integration-status extractions; consolidated production smoke evidence requirements in `docs/production-smoke-checklist.md` | Run release workflow for updater-capable version N, install manually, publish N+1, and prove macOS in-app install/relaunch plus Linux package-manager guidance/update path |
 
 ## Postmortem: macOS Desktop Non-Launch, 2026-06-29
 
@@ -352,8 +396,9 @@ regressions introduced during the prior automation pass:
 
 Plan impact:
 
-- Do not continue updater work until after P0 user-facing smoke evidence is
-  collected and until local-disabled updater launch is part of the Mac handoff.
+- Updater implementation can continue only with release-proof work now; local
+  disabled-updater launch remains part of the Mac handoff, and the next decisive
+  updater evidence is a signed N to N+1 installed-app smoke.
 - Treat macOS desktop launch as the next release-readiness gate, not an optional
   final polish check.
 - Prefer evidence collection over further broad refactors. Future refactors must
@@ -377,6 +422,7 @@ Plan impact:
 | 2026-06-29T10:05:21-04:00 | Accepted desktop composer drag/drop detection hardening. | File-drop detection now accepts desktop/WebView payloads that expose `files` or file items without a `Files` type marker while text-only drags remain ignored. Grok/composer-2.5-fast reviewed the diff and found no blocking issue; malformed file-like payload suppression is an accepted safety tradeoff. |
 | 2026-06-29T10:11:36-04:00 | Added release-only updater readiness enforcement instead of enabling placeholder updater config. | Real production updater enablement requires signed metadata endpoint/key material and runtime plugin wiring. The release workflow now blocks artifact builds until those prerequisites are present, while local advisory checks keep the current disabled state visible. |
 | 2026-06-29T10:20:36-04:00 | Accepted check-only desktop updater plugin scaffolding. | Added the Tauri updater Rust plugin, npm updater binding, generated ACL schemas, and `updater:allow-check` only. Advisory release checker now reports only production channel/signing/artifact blockers; Grok found registration safe without config because commands fail closed when endpoints are empty. |
+| 2026-07-02T00:00:00-04:00 | Implemented user-facing desktop updater layer. | Added frontend updater service/provider, Settings/About update tile, macOS app menu update command, background checks, macOS install/relaunch through updater/process plugins, Linux package-manager guidance, install-capable updater/process permissions, stricter release-readiness checks, and updater service tests. Real self-update proof still requires a signed updater-capable release N and newer N+1. |
 | 2026-06-29T10:31:32-04:00 | Accepted `_JOIN_PATH` route completion. | Replaced the `/home/join/` placeholder with the shared join-address prompt route, centralized room path generation with `viaServers`, routed the Home sidebar join action through the canonical route, and added modernization coverage for encoded room/event/via URL construction. |
 | 2026-06-29T10:38:00-04:00 | Accepted session layer dead-code cleanup. | Removed the commented legacy Jotai `sessionsAtom` implementation from `sessions.ts`; active session ownership remains with `sessionBootstrap.ts`, `sessionPersistence.ts`, native secret storage, and the tested localStorage fallback path. |
 | 2026-06-29T10:45:53-04:00 | Accepted first `RoomTimeline.tsx` decomposition slice. | Extracted linked-timeline navigation/count/index helpers into `utils/timelineLinks.ts`, added direct tests for linked chains, isolated timelines, index boundaries, wrapper behavior, and kept the component wired to the same helper behavior. Grok review found no blocking or high-impact issues. |

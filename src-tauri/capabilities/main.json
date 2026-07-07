@@ -3,6 +3,9 @@
   "identifier": "main",
   "description": "Synara desktop runtime permissions for the main webview. Global shortcuts are validated in Rust before registration; external URLs are filtered in desktop.rs and the Synara desktop URL policy.",
   "windows": ["main"],
+  "remote": {
+    "urls": ["http://localhost:*/*"]
+  },
   "permissions": [
     "core:default",
     "clipboard-manager:allow-read-image",
@@ -14,6 +17,8 @@
     "global-shortcut:allow-unregister-all",
     "opener:allow-open-url",
     "updater:allow-check",
+    "updater:allow-download-and-install",
+    "process:allow-restart",
     "window-state:default"
   ]
 }

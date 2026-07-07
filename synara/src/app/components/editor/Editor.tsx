@@ -120,6 +120,9 @@ export const CustomEditor = forwardRef<HTMLDivElement, CustomEditorProps>(
       []
     );
 
+    const spellCheckLanguage =
+      typeof navigator === 'undefined' || !navigator.language ? undefined : navigator.language;
+
     return (
       <div className={css.Editor} ref={ref}>
         <Slate editor={editor} initialValue={initialValue} onChange={onChange}>
@@ -148,6 +151,9 @@ export const CustomEditor = forwardRef<HTMLDivElement, CustomEditorProps>(
                   renderPlaceholder={renderPlaceholder}
                   renderElement={renderElement}
                   renderLeaf={renderLeaf}
+                  lang={spellCheck ? spellCheckLanguage : undefined}
+                  autoCorrect={spellCheck ? 'on' : 'off'}
+                  autoCapitalize={spellCheck ? 'sentences' : 'none'}
                   spellCheck={spellCheck}
                   onKeyDown={handleKeydown}
                   onKeyUp={onKeyUp}

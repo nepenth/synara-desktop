@@ -34,6 +34,7 @@ test('platform capabilities describe local development runtime by default', () =
       supportsNativeFileSave: false,
       supportsNativeFileDrop: false,
       supportsAgentActions: false,
+      supportsUpdater: false,
       supportsSecureSecretStore: false,
       supportsIntegrationStatus: false,
       supportsTrayState: false,
@@ -97,6 +98,7 @@ test('platform capabilities describe Tauri desktop runtime when bridge is presen
     __SYNARA_DESKTOP__: {
       platform: 'tauri',
       supportsIntegrationStatus: true,
+      supportsUpdater: true,
       supportsTrayState: true,
       invoke: async (command: string, args?: Record<string, unknown>) => {
         calls.push({ command, args });
@@ -111,6 +113,7 @@ test('platform capabilities describe Tauri desktop runtime when bridge is presen
     assert.equal(capabilities.supportsSystemNotifications, true);
     assert.equal(capabilities.supportsAppBadge, true);
     assert.equal(capabilities.supportsGlobalShortcuts, true);
+    assert.equal(capabilities.supportsUpdater, true);
     assert.equal(capabilities.supportsSecureSecretStore, false);
     assert.equal(capabilities.supportsIntegrationStatus, true);
     assert.equal(capabilities.supportsTrayState, true);

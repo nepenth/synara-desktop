@@ -31,6 +31,7 @@ export type PlatformCapabilities = {
   supportsNativeFileSave: boolean;
   supportsNativeFileDrop: boolean;
   supportsAgentActions: boolean;
+  supportsUpdater: boolean;
   supportsSecureSecretStore: boolean;
   supportsIntegrationStatus: boolean;
   supportsTrayState: boolean;
@@ -49,6 +50,7 @@ export const getPlatformCapabilities = (): PlatformCapabilities => {
     supportsNativeFileSave: desktop,
     supportsNativeFileDrop: desktop,
     supportsAgentActions: desktop,
+    supportsUpdater: desktop && desktopBridge?.supportsUpdater === true,
     supportsSecureSecretStore: desktop && desktopBridge?.supportsSecureSecretStore === true,
     supportsIntegrationStatus: desktop && desktopBridge?.supportsIntegrationStatus === true,
     supportsTrayState: desktop && desktopBridge?.supportsTrayState === true,
@@ -71,3 +73,5 @@ export const supportsPlatformGlobalShortcuts = (): boolean =>
   getPlatformCapabilities().supportsGlobalShortcuts;
 
 export const supportsPlatformTrayState = (): boolean => getPlatformCapabilities().supportsTrayState;
+
+export const supportsPlatformUpdater = (): boolean => getPlatformCapabilities().supportsUpdater;

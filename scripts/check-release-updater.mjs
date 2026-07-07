@@ -39,6 +39,11 @@ const workflowPublishesGeneratedUpdaterMetadata = (workflow) =>
   hasWorkflowPattern(workflow, /softprops\/action-gh-release/) &&
   hasWorkflowPattern(workflow, /files:\s*(?:\|\s*\n\s*)?latest\.json/);
 
+const hasPackagedLocalhostRemoteCapability = (capabilities) =>
+  (capabilities?.remote?.urls ?? []).some(
+    (url) => url === "http://localhost:*" || url === "http://localhost:*/*"
+  );
+
 export function inspectReleaseUpdaterReadiness({
   tauriConfig,
   cargoToml,
@@ -134,9 +139,54 @@ export function inspectReleaseUpdaterReadiness({
     );
   }
 
+  if (
+    !permissions.some(
+      (permission) =>
+        permission === "updater:default" ||
+        permission === "updater:allow-download-and-install"
+    )
+  ) {
+    report(
+      "src-tauri/capabilities/main.json must grant updater:allow-download-and-install or updater:default for macOS install prompts."
+    );
+  }
+
+  if (
+    !permissions.some(
+      (permission) =>
+        permission === "process:default" || permission === "process:allow-restart"
+    )
+  ) {
+    report(
+      "src-tauri/capabilities/main.json must grant process:allow-restart or process:default for post-update relaunch."
+    );
+  }
+
   if (!packageDependencies["@tauri-apps/plugin-updater"]) {
     report(
       "package.json must depend on @tauri-apps/plugin-updater for frontend update checks."
+    );
+  }
+
+  if (!packageDependencies["@tauri-apps/plugin-process"]) {
+    report(
+      "package.json must depend on @tauri-apps/plugin-process for post-update relaunch."
+    );
+  }
+
+  if (!/^\s*tauri-plugin-process\s*=.+$/m.test(cargoToml)) {
+    report(
+      "src-tauri/Cargo.toml must depend on tauri-plugin-process for post-update relaunch."
+    );
+  }
+
+  if (!/tauri_plugin_process::init|plugin\s*\(\s*tauri_plugin_process/m.test(rustLib)) {
+    report("src-tauri/src/lib.rs must register the Tauri process plugin.");
+  }
+
+  if (!hasPackagedLocalhostRemoteCapability(capabilities)) {
+    errors.push(
+      "src-tauri/capabilities/main.json must allow the packaged localhost webview origin with remote.urls containing http://localhost:*/*."
     );
   }
 

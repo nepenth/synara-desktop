@@ -1,6 +1,6 @@
 # GitHub Release Updater Project Plan
 
-Reviewed: 2026-06-30
+Reviewed: 2026-07-02
 
 Purpose: park the auto-update work behind a clear plan so the team can resume it
 later without blocking Timeline, link-opening, composer, macOS smoke, or iOS
@@ -23,9 +23,9 @@ https://github.com/nepenth/synara-desktop/releases/latest/download/latest.json
 ```
 
 This is feasible and aligned with Tauri's supported static JSON updater model.
-It is not the highest-priority local task right now because the remaining proof
-requires real signing secrets, repository variables, release artifacts, and a
-signed release workflow run.
+The repository now has the user-facing updater layer needed to prove the
+installed-app path; the remaining proof requires release artifacts and a signed
+release workflow run.
 
 2026-06-30 key-material update: this trusted machine generated a
 password-protected Tauri updater signing keypair and configured the GitHub
@@ -40,10 +40,24 @@ maintainer explicitly resumes release workflow validation.
 Implemented:
 
 - Tauri updater plugin dependency and frontend package are present.
+- Tauri process plugin dependency and frontend package are present for
+  post-install relaunch.
 - Desktop runtime registers the Tauri updater plugin only when `plugins.updater`
   is present in the active config, so the committed disabled local config can
   still launch.
-- Check-only updater permission scaffolding exists.
+- Desktop runtime registers the process plugin for restart support.
+- Install-capable updater permissions and process restart permission exist in
+  `src-tauri/capabilities/main.json`.
+- Settings/About exposes an `Updates` tile with current version, last check
+  state, and a manual `Check for Updates` action.
+- A desktop updater provider runs a startup/background check cadence and shows
+  non-blocking prompts for available updates.
+- macOS available-update prompts can download, install, and relaunch through
+  the Tauri updater/process plugins.
+- Linux checks the GitHub latest-release metadata and shows `paru -Syu` /
+  `pacman -Syu` guidance without self-installing.
+- The macOS app menu includes `Check for Updates...` and emits the same
+  frontend manual-check event used by Settings/About.
 - `scripts/check-release-updater.mjs` provides advisory and strict readiness
   modes.
 - `scripts/configure-release-updater.mjs` materializes release-time updater
@@ -73,20 +87,15 @@ Deferred:
 - Signed release workflow run.
 - Hosted `latest.json` verification.
 - Installed-app update check/install smoke.
-- Final product UX decision: silent check, manual "Check for Updates", or
-  prompted download/install.
-- Frontend updater invocation UX. The Tauri plugin/package scaffolding is
-  present, but the runtime does not yet expose a user-facing check/install
-  control. A signed build alone cannot prove installed-app updater behavior.
 - Linux AppImage self-update. Product decision on 2026-06-30 is to use a
   package-manager-owned Linux update path through a GitHub Release-backed
   pacman repo instead.
 
-Current blocking precondition:
+Current release-proof precondition:
 
-- Desktop link opening is failing on both macOS and Linux by human smoke report
-  on 2026-06-30. Do not spend additional implementation time on updater UX or
-  release-channel proof until that P0 behavior is fixed and smoke-tested.
+- The first updater-capable build still must be installed manually. A real
+  self-update proof requires publishing one updater-capable version, installing
+  it, then publishing a newer version for it to detect and install.
 - The manual `.github/workflows/macos-signed-build.yml` workflow is useful for
   signed/notarized DMG smoke, but it is not an updater-channel proof because it
   builds with `createUpdaterArtifacts:false` and does not materialize
@@ -100,6 +109,9 @@ Latest local gate hardening:
   updater artifacts, run `scripts/generate-release-updater-metadata.mjs`, and
   upload generated `latest.json` instead of accepting a broad `latest.json`
   string match as signed metadata evidence.
+- `scripts/check-release-updater.mjs` now also requires install-capable updater
+  permissions, Tauri process plugin dependencies, process plugin registration,
+  and `process:allow-restart` for macOS install/relaunch support.
 
 ## Required Secrets And Variables
 
@@ -189,9 +201,9 @@ the key is being moved into an approved password manager.
    - Uploads `latest.json` to the GitHub release.
 
 4. App-side update UX checks the endpoint.
-   - Initial safe mode: expose a manual check in Settings/About.
-   - Later mode: periodic background check with a clear prompt.
-   - Do not silently install without explicit product decision.
+   - Expose a manual check in Settings/About and the macOS app menu.
+   - Run startup/background checks with a clear prompt.
+   - Do not silently install without explicit user confirmation.
 
 ## Linux Distribution Policy
 
@@ -269,8 +281,8 @@ Scope note:
 
 ### Milestone 3: Installed-App Smoke
 
-0. Implement a minimal updater invocation surface, preferably a manual "Check
-   for Updates" control in Settings/About with no silent install behavior.
+0. Implement a minimal updater invocation surface with no silent install
+   behavior.
 1. Install macOS version N from a signed release artifact built by the release
    workflow, not the manual macOS signed-build workflow.
 2. Publish macOS version N+1 as a test release through the release workflow.
@@ -284,24 +296,31 @@ Scope note:
 
 Acceptance evidence:
 
+- **Implementation status:** Local frontend/native implementation complete as
+  of 2026-07-02; release smoke still pending.
 - App version before/after.
 - Logs showing update check result.
 - Pass/fail notes for macOS and Linux.
 
 ### Milestone 4: Product UX
 
-Decide and implement one of:
+Implemented UX:
 
 - Manual "Check for Updates" in Settings/About.
-- Startup check that prompts when an update is available.
-- Background periodic check with non-intrusive prompt.
+- macOS app menu "Check for Updates...".
+- Startup and 12-hour background check that prompts when an update is available.
+- macOS `Install and Restart` and `Later` prompt actions.
+- Linux `Open Release Page` and `Later` prompt actions with package-manager
+  guidance.
 
 Acceptance evidence:
 
-- UX copy reviewed.
-- Updater permissions match the chosen behavior.
-- Frontend tests cover no-update, update-available, error, and install failure
-  states.
+- **Implementation status:** Complete locally as of 2026-07-02.
+- Frontend tests cover no-update, update-available, missing plugin/config,
+  Linux comparison/guidance, dismissed-version suppression, and download
+  progress.
+- Release smoke must still prove the macOS install/relaunch path with real
+  signed artifacts.
 
 ## Risks And Controls
 
@@ -311,7 +330,7 @@ Acceptance evidence:
 | Bad `latest.json` metadata | Generate from actual artifacts and `.sig` sidecars, then validate hosted output. |
 | macOS update artifact not notarized/signed correctly | Keep macOS signing/notarization gates separate and release-blocking. |
 | Accidental placeholder endpoint/key | Strict release checker must fail on placeholders and non-HTTPS endpoints. |
-| Disabled local config breaks desktop launch | Keep updater plugin registration conditional on active `plugins.updater`; run macOS desktop launch smoke before resuming updater implementation. |
+| Disabled local config breaks desktop launch | Keep updater plugin registration conditional on active `plugins.updater`; run macOS desktop launch smoke before release signoff. |
 | Silent disruptive updates | Start with manual or prompted UX until product policy is explicit. |
 | GitHub latest endpoint ambiguity | Use semver release discipline and avoid publishing broken latest releases. |
 
@@ -324,20 +343,15 @@ You are resuming the GitHub Release Updater project for nepenth/synara-desktop. 
 
 First inspect the current git status. Preserve unrelated user changes. Determine whether any local draft updater-checker edits should be kept, discarded, or folded into the next commit.
 
-Do not expose secrets. Implement only the next smallest milestone toward signed GitHub-release updates. Prefer proving release workflow behavior and hosted metadata over adding UX. Run targeted script tests plus npm run check:release-updater, update CHANGELOG.md and PRODUCTION_READINESS_GOAL.md, then commit with a descriptive message.
+Do not expose secrets. Implement only the next smallest milestone toward signed GitHub-release updates. Prefer proving release workflow behavior, hosted metadata, and installed-app update behavior now that the user-facing updater layer exists. Run targeted script tests plus npm run check:release-updater, update CHANGELOG.md and PRODUCTION_READINESS_GOAL.md, then commit with a descriptive message.
 ```
 
 ## Current Recommendation
 
-Park this work until after:
-
-1. macOS and Linux link-opening smoke passes.
-2. Timeline Resurrection smoke evidence is collected or daily use remains stable.
-3. macOS composer parity smoke passes.
-4. iOS Timeline/Xcode validation has a pass/fail result.
-
-After those P0 user-facing checks are evidence-backed, resume this plan at
-Milestone 2 because GitHub updater variables/secrets are already configured.
+Resume this plan at Milestone 2 because GitHub updater variables/secrets are
+already configured and the user-facing updater layer exists. The decisive proof
+is now a signed release workflow run followed by an installed-app N to N+1
+macOS smoke.
 
 When release automation resumes, pair this updater plan with
 `RELEASE_BRANCH_CI_PLAN.md` so clients only see updates after release branch CI,

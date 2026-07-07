@@ -52,6 +52,7 @@ import {
   unreadNotificationCache,
 } from '../../notifications/notificationCaches';
 import { getLoadedLiveTimelineEvents } from '../../utils/timelineLifecycle';
+import { DesktopUpdaterProvider } from '../../features/desktop-updater/DesktopUpdaterProvider';
 
 const RECENT_AGENT_APPROVAL_MS = 10 * 60 * 1000;
 
@@ -632,7 +633,7 @@ type ClientNonUIFeaturesProps = {
 
 export function ClientNonUIFeatures({ children }: ClientNonUIFeaturesProps) {
   return (
-    <>
+    <DesktopUpdaterProvider>
       <SystemEmojiFeature />
       <PageZoomFeature />
       <FaviconUpdater />
@@ -646,6 +647,6 @@ export function ClientNonUIFeatures({ children }: ClientNonUIFeaturesProps) {
       <LaterReminderNotifications />
       <PerformanceDebugOverlay />
       {children}
-    </>
+    </DesktopUpdaterProvider>
   );
 }
