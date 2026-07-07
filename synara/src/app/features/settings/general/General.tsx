@@ -78,6 +78,7 @@ import {
   getSessionBootstrapResult,
   shouldSurfaceNativeStoreErrorWarning,
 } from '../../../state/sessionBootstrap';
+import { UpdateSettingsTile } from '../../desktop-updater/DesktopUpdaterProvider';
 
 type ThemeSelectorProps = {
   themeNames: Record<string, string>;
@@ -1199,6 +1200,19 @@ function DesktopIntegrationSection() {
   );
 }
 
+function SoftwareUpdatesSection() {
+  if (!isDesktopPlatform()) return null;
+
+  return (
+    <Box direction="Column" gap="100">
+      <Text size="L400">Software Updates</Text>
+      <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
+        <UpdateSettingsTile />
+      </SequenceCard>
+    </Box>
+  );
+}
+
 function DateAndTime() {
   const [hour24Clock, setHour24Clock] = useSetting(settingsAtom, 'hour24Clock');
 
@@ -1533,6 +1547,7 @@ export function General({ requestClose }: GeneralProps) {
               <Editor />
               <Messages />
               <SecretStoreSection />
+              <SoftwareUpdatesSection />
               <DesktopShortcutsSection />
               <DesktopIntegrationSection />
             </Box>

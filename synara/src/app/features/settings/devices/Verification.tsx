@@ -74,34 +74,39 @@ export function VerificationStatusBadge({
   );
 }
 
-function LearnStartVerificationFromOtherDevice() {
+function LearnStartVerificationFromOtherDevice({
+  manualVerificationAvailable,
+}: {
+  manualVerificationAvailable: boolean;
+}) {
   return (
     <Box direction="Column">
-      <Text size="T200">Steps to verify from other device.</Text>
+      <Text size="T200">Steps to verify from another device.</Text>
       <Text as="div" size="T200">
         <ul style={{ margin: `${config.space.S100} 0` }}>
+          <li>Press Verify from Another Device.</li>
           <li>Open your other verified device.</li>
-          <li>
-            Open <i>Settings</i>.
-          </li>
-          <li>
-            Find this device in <i>Devices/Sessions</i> section.
-          </li>
-          <li>Initiate verification.</li>
+          <li>Accept the verification request.</li>
+          <li>Compare the emoji shown on both devices.</li>
         </ul>
       </Text>
-      <Text size="T200">
-        If you do not have any verified device press the <i>&quot;Verify Manually&quot;</i> button.
-      </Text>
+      {manualVerificationAvailable && (
+        <Text size="T200">
+          If you do not have any verified device press the <i>&quot;Verify Manually&quot;</i>{' '}
+          button.
+        </Text>
+      )}
     </Box>
   );
 }
 
 type VerifyCurrentDeviceTileProps = {
-  secretStorageKeyId: string;
-  secretStorageKeyContent: SecretStorageKeyContent;
+  crypto: CryptoApi;
+  secretStorageKeyId?: string;
+  secretStorageKeyContent?: SecretStorageKeyContent;
 };
 export function VerifyCurrentDeviceTile({
+  crypto,
   secretStorageKeyId,
   secretStorageKeyContent,
 }: VerifyCurrentDeviceTileProps) {
@@ -109,6 +114,25 @@ export function VerifyCurrentDeviceTile({
 
   const [manualVerification, setManualVerification] = useState(false);
   const handleCancelVerification = () => setManualVerification(false);
+  const manualVerificationAvailable = Boolean(secretStorageKeyId && secretStorageKeyContent);
+
+  const [requestState, setRequestState] = useState<AsyncState<VerificationRequest, Error>>({
+    status: AsyncStatus.Idle,
+  });
+
+  const requestVerification = useAsync<VerificationRequest, Error, []>(
+    useCallback(() => crypto.requestOwnUserVerification(), [crypto]),
+    setRequestState
+  );
+
+  const handleExit = useCallback(() => {
+    setRequestState({
+      status: AsyncStatus.Idle,
+    });
+  }, []);
+
+  const requesting = requestState.status === AsyncStatus.Loading;
+  const verificationOpen = requestState.status === AsyncStatus.Success;
 
   return (
     <>
@@ -117,32 +141,60 @@ export function VerifyCurrentDeviceTile({
         title="Unverified"
         description={
           <>
-            Start verification from other device or verify manually.{' '}
+            Use another verified device to compare emoji
+            {manualVerificationAvailable ? ' or verify manually with your recovery key' : ''}.{' '}
             <Text as="a" size="T200" onClick={() => setLearnMore(!learnMore)}>
               <b>{learnMore ? 'View Less' : 'Learn More'}</b>
             </Text>
           </>
         }
         after={
-          !manualVerification && (
-            <Button
-              size="300"
-              variant="Critical"
-              fill="Soft"
-              radii="300"
-              outlined
-              onClick={() => setManualVerification(true)}
-            >
-              <Text as="span" size="B300">
-                Verify Manually
-              </Text>
-            </Button>
+          !manualVerification &&
+          !verificationOpen && (
+            <Box gap="200" wrap="Wrap" justifyContent="End">
+              <Button
+                size="300"
+                variant="Critical"
+                radii="300"
+                onClick={requestVerification}
+                before={requesting && <Spinner size="100" variant="Critical" fill="Solid" />}
+                disabled={requesting}
+              >
+                <Text as="span" size="B300">
+                  Verify from Another Device
+                </Text>
+              </Button>
+              {manualVerificationAvailable && (
+                <Button
+                  size="300"
+                  variant="Critical"
+                  fill="Soft"
+                  radii="300"
+                  outlined
+                  onClick={() => setManualVerification(true)}
+                >
+                  <Text as="span" size="B300">
+                    Verify Manually
+                  </Text>
+                </Button>
+              )}
+            </Box>
           )
         }
       >
-        {learnMore && <LearnStartVerificationFromOtherDevice />}
+        {learnMore && (
+          <LearnStartVerificationFromOtherDevice
+            manualVerificationAvailable={manualVerificationAvailable}
+          />
+        )}
+        {requestState.status === AsyncStatus.Error && (
+          <Text size="T200">{requestState.error.message}</Text>
+        )}
+        {requestState.status === AsyncStatus.Success && (
+          <DeviceVerification request={requestState.data} onExit={handleExit} />
+        )}
       </InfoCard>
-      {manualVerification && (
+      {manualVerification && secretStorageKeyId && secretStorageKeyContent && (
         <ManualVerificationTile
           secretStorageKeyId={secretStorageKeyId}
           secretStorageKeyContent={secretStorageKeyContent}
