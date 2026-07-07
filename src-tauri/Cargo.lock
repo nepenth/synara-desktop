@@ -4022,7 +4022,7 @@ dependencies = [
 
 [[package]]
 name = "synara"
-version = "1.2.21"
+version = "1.2.22"
 dependencies = [
  "getrandom 0.3.4",
  "keyring",
@@ -4038,6 +4038,7 @@ dependencies = [
  "tauri-plugin-localhost",
  "tauri-plugin-notification",
  "tauri-plugin-opener",
+ "tauri-plugin-process",
  "tauri-plugin-updater",
  "tauri-plugin-window-state",
  "url",
@@ -4359,6 +4360,16 @@ dependencies = [
  "url",
  "windows",
  "zbus 5.16.0",
+]
+
+[[package]]
+name = "tauri-plugin-process"
+version = "2.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d55511a7bf6cd70c8767b02c97bf8134fa434daf3926cfc1be0a0f94132d165a"
+dependencies = [
+ "tauri",
+ "tauri-plugin",
 ]
 
 [[package]]

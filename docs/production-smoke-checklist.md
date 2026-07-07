@@ -19,6 +19,26 @@ desktop, macOS, and iOS validation gates. Automated gates stay tracked in
 - Timeline/session-history behavior appears tentatively improved during use, but
   the Timeline Resurrection cases still need formal evidence before signoff.
 
+2026-07-07 human smoke feedback:
+
+- macOS and Linux link opening still fails. A shared release-runtime fix now
+  allows the packaged `http://localhost:*/*` Tauri webview origin to use native
+  desktop capabilities; `MAC-DESK-003` and `LINUX-DESK-006` remain blocked until
+  re-smoked on packaged builds with this change.
+- macOS and Linux clipboard image paste plus attachment drag/drop still fail.
+  Treat `MAC-DESK-005`, `MAC-DESK-006`, and `LINUX-DESK-005` as likely affected
+  by the same packaged-localhost native IPC capability gap until re-smoke proves
+  otherwise.
+- macOS and Linux spellcheck still fails. The editor now passes native
+  spellcheck language/autocorrect/capitalization hints; re-smoke must record
+  locale and, on Linux, dictionary/WebKitGTK environment notes if it still fails.
+- Timeline Resurrection is much better but still visibly repositions during
+  initial room-history load. Collect anchor/read-marker/saved-bottom evidence
+  before attempting another Timeline behavior change.
+- macOS updater signoff remains open. Linux updates are package-manager-owned;
+  the app may notify and instruct, but install should still happen through
+  `paru -Syu` or `pacman -Syu` after repo setup.
+
 ## Evidence Rules
 
 Every smoke pass must record:
@@ -169,8 +189,8 @@ Cases:
 | Section | Required Before Release | Status | Evidence Link |
 |---|---:|---|---|
 | Common preflight | Yes | Pending |  |
-| macOS desktop smoke | Yes | Failed link-opening smoke | 2026-06-30 human report |
-| Linux desktop smoke | Yes | Failed link-opening smoke | 2026-06-30 human report |
-| Timeline Resurrection smoke | Yes | Tentatively improved; formal evidence pending | 2026-06-30 human report |
+| macOS desktop smoke | Yes | Failed link/open, paste/drop, and spellcheck smoke; packaged-localhost capability fix pending re-smoke | 2026-07-07 human report |
+| Linux desktop smoke | Yes | Failed link/open, paste/drop, and spellcheck smoke; packaged-localhost capability fix pending re-smoke | 2026-07-07 human report |
+| Timeline Resurrection smoke | Yes | Much improved, but visible initial-load repositioning remains; diagnostics/formal evidence pending | 2026-07-07 human report |
 | iOS tool-bound smoke | Yes for iOS release and shared Timeline signoff | Pending |  |
 | Updater release smoke | Yes | Pending |  |
