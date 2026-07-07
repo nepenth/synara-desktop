@@ -35,6 +35,7 @@ const tests = [
   'src/app/pages/__tests__/pathUtils.test.ts',
   'src/app/utils/__tests__/timelineVirtualization.test.ts',
   'src/app/utils/__tests__/desktop.test.ts',
+  'src/app/utils/__tests__/desktopUpdater.test.ts',
   'src/app/platform/__tests__/platform.test.ts',
   'src/app/platform/__tests__/agentActions.test.ts',
   'src/app/matrix/__tests__/media.test.ts',

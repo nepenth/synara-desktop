@@ -1,6 +1,6 @@
 {
   "name": "synara-desktop",
-  "version": "1.2.21",
+  "version": "1.2.22",
   "description": "Synara Desktop, a high-performance Matrix client for secure conversations and agent workflows.",
   "main": "index.js",
   "engines": {
@@ -36,6 +36,7 @@
   "license": "AGPL-3.0-only",
   "dependencies": {
     "@tauri-apps/api": "2.11.0",
+    "@tauri-apps/plugin-process": "2.3.1",
     "@tauri-apps/plugin-updater": "2.10.1"
   },
   "devDependencies": {

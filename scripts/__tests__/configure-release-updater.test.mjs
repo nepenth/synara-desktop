@@ -50,14 +50,24 @@ test("release updater config satisfies strict release readiness inspection", () 
 
   const result = inspectReleaseUpdaterReadiness({
     tauriConfig,
-    cargoToml: 'tauri-plugin-updater = "2"\n',
-    rustLib: "tauri_plugin_updater::Builder::new().build()",
+    cargoToml: 'tauri-plugin-updater = "2"\ntauri-plugin-process = "2"\n',
+    rustLib:
+      "tauri_plugin_updater::Builder::new().build(); tauri_plugin_process::init()",
     capabilities: {
-      permissions: ["core:default", "updater:allow-check"],
+      remote: {
+        urls: ["http://localhost:*/*"],
+      },
+      permissions: [
+        "core:default",
+        "updater:allow-check",
+        "updater:allow-download-and-install",
+        "process:allow-restart",
+      ],
     },
     desktopPackage: {
       dependencies: {
         "@tauri-apps/plugin-updater": "2.10.1",
+        "@tauri-apps/plugin-process": "2.3.1",
       },
     },
     releaseWorkflow: `

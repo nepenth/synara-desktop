@@ -16,14 +16,24 @@ const readyInputs = {
       },
     },
   },
-  cargoToml: 'tauri-plugin-updater = "2"\n',
-  rustLib: "tauri_plugin_updater::Builder::new().build()",
+  cargoToml: 'tauri-plugin-updater = "2"\ntauri-plugin-process = "2"\n',
+  rustLib:
+    "tauri_plugin_updater::Builder::new().build(); tauri_plugin_process::init()",
   capabilities: {
-    permissions: ["core:default", "updater:allow-check"],
+    remote: {
+      urls: ["http://localhost:*/*"],
+    },
+    permissions: [
+      "core:default",
+      "updater:allow-check",
+      "updater:allow-download-and-install",
+      "process:allow-restart",
+    ],
   },
   desktopPackage: {
     dependencies: {
       "@tauri-apps/plugin-updater": "2.11.0",
+      "@tauri-apps/plugin-process": "2.3.1",
     },
   },
   releaseWorkflow: `
@@ -63,6 +73,19 @@ test("release updater gate accepts complete production updater wiring", () => {
 
   assert.equal(result.ok, true);
   assert.deepEqual(result.errors, []);
+});
+
+test("release updater gate requires packaged localhost remote capability", () => {
+  const result = inspectReleaseUpdaterReadiness({
+    ...readyInputs,
+    capabilities: {
+      permissions: readyInputs.capabilities.permissions,
+    },
+    requireEnabled: true,
+  });
+
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join("\n"), /packaged localhost webview origin/);
 });
 
 test("release updater gate fails when release config forces updater artifacts off", () => {
@@ -145,6 +168,9 @@ test("non-release check warns instead of failing while updater is intentionally 
     cargoToml: "",
     rustLib: "",
     capabilities: {
+      remote: {
+        urls: ["http://localhost:*/*"],
+      },
       permissions: ["core:default"],
     },
     desktopPackage: {
