@@ -48,6 +48,12 @@ const readyInputs = {
     files: |
       src-tauri/target/universal-apple-darwin/release/bundle/macos/*.sig
       latest.json
+    - name: Verify macOS distributable contents
+      run: |
+        hdiutil attach "$dmg_path" -readonly -nobrowse -mountpoint "$mount_dir"
+        codesign --verify --all-architectures --deep --strict --verbose=2 "$mount_dir/Synara.app"
+        tar -xzf "$updater_archive" -C "$extract_dir"
+        codesign --verify --all-architectures --deep --strict --verbose=2 "$extract_dir/Synara.app"
     updater-metadata:
       needs: [macos]
       steps:
@@ -155,6 +161,20 @@ test("release updater gate requires updater signature sidecars", () => {
 
   assert.equal(result.ok, false);
   assert.match(result.errors.join("\n"), /signature sidecars/);
+});
+
+test("release updater gate requires packaged macOS artifact verification", () => {
+  const result = inspectReleaseUpdaterReadiness({
+    ...readyInputs,
+    releaseWorkflow: readyInputs.releaseWorkflow.replace(
+      /- name: Verify macOS distributable contents[\s\S]*?updater-metadata:/,
+      "updater-metadata:"
+    ),
+    requireEnabled: true,
+  });
+
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join("\n"), /mounted macOS DMG app/);
 });
 
 test("non-release check warns instead of failing while updater is intentionally disabled", () => {
