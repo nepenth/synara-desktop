@@ -145,8 +145,27 @@ export const reduceDownloadProgress = (
   };
 };
 
-export const updateErrorMessage = (error: unknown): string =>
-  error instanceof Error ? error.message : 'Unknown updater error.';
+export const updateErrorMessage = (error: unknown): string => {
+  if (error instanceof Error) return error.message;
+  if (typeof error === 'string') return error;
+  if (
+    error &&
+    typeof error === 'object' &&
+    'message' in error &&
+    typeof error.message === 'string'
+  ) {
+    return error.message;
+  }
+
+  try {
+    const serialized = JSON.stringify(error);
+    if (serialized && serialized !== '{}') return serialized;
+  } catch {
+    // Ignore serialization failures and fall through to the generic message.
+  }
+
+  return 'Unknown updater error.';
+};
 
 export const isUpdaterUnavailableError = (error: unknown): boolean => {
   const message = updateErrorMessage(error).toLowerCase();
