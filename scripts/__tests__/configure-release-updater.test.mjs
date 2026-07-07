@@ -82,6 +82,12 @@ test("release updater config satisfies strict release readiness inspection", () 
       files: |
         src-tauri/target/universal-apple-darwin/release/bundle/macos/*.sig
         latest.json
+      - name: Verify macOS distributable contents
+        run: |
+          hdiutil attach "$dmg_path" -readonly -nobrowse -mountpoint "$mount_dir"
+          codesign --verify --all-architectures --deep --strict --verbose=2 "$mount_dir/Synara.app"
+          tar -xzf "$updater_archive" -C "$extract_dir"
+          codesign --verify --all-architectures --deep --strict --verbose=2 "$extract_dir/Synara.app"
       updater-metadata:
         needs: [macos]
         steps:

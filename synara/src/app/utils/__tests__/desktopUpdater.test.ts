@@ -6,6 +6,7 @@ import {
   isUpdaterUnavailableError,
   reduceDownloadProgress,
   shouldPromptForUpdate,
+  updateErrorMessage,
   type MacosUpdateHandle,
 } from '../desktopUpdater';
 
@@ -77,7 +78,21 @@ test('desktop updater gracefully reports missing signed updater config', async (
 
 test('desktop updater detects unavailable updater plugin errors', () => {
   assert.equal(isUpdaterUnavailableError(new Error('unknown command plugin:updater|check')), true);
+  assert.equal(isUpdaterUnavailableError('permission denied for plugin:updater|check'), true);
   assert.equal(isUpdaterUnavailableError(new Error('network request failed')), false);
+});
+
+test('desktop updater preserves non-Error updater failure messages', () => {
+  assert.equal(
+    updateErrorMessage('the platform `darwin-aarch64` was not found'),
+    'the platform `darwin-aarch64` was not found'
+  );
+  assert.equal(
+    updateErrorMessage({ message: 'signature verification failed' }),
+    'signature verification failed'
+  );
+  assert.equal(updateErrorMessage({ code: 'updater-failed' }), '{"code":"updater-failed"}');
+  assert.equal(updateErrorMessage(undefined), 'Unknown updater error.');
 });
 
 test('desktop updater reports linux release availability without self-install', async () => {

@@ -39,6 +39,13 @@ const workflowPublishesGeneratedUpdaterMetadata = (workflow) =>
   hasWorkflowPattern(workflow, /softprops\/action-gh-release/) &&
   hasWorkflowPattern(workflow, /files:\s*(?:\|\s*\n\s*)?latest\.json/);
 
+const workflowVerifiesMacosDistributableContents = (workflow) =>
+  hasWorkflowPattern(workflow, /Verify macOS distributable contents/) &&
+  hasWorkflowPattern(workflow, /hdiutil\s+attach/) &&
+  hasWorkflowPattern(workflow, /tar\s+-xzf/) &&
+  hasWorkflowPattern(workflow, /codesign\s+--verify[\s\S]*mount_dir\/Synara\.app/) &&
+  hasWorkflowPattern(workflow, /codesign\s+--verify[\s\S]*extract_dir\/Synara\.app/);
+
 const hasPackagedLocalhostRemoteCapability = (capabilities) =>
   (capabilities?.remote?.urls ?? []).some(
     (url) => url === "http://localhost:*" || url === "http://localhost:*/*"
@@ -233,6 +240,12 @@ export function inspectReleaseUpdaterReadiness({
   if (!workflowPublishesGeneratedUpdaterMetadata(releaseWorkflow)) {
     report(
       ".github/workflows/release-desktop.yml must generate and upload signed updater metadata from macOS updater artifacts."
+    );
+  }
+
+  if (!workflowVerifiesMacosDistributableContents(releaseWorkflow)) {
+    report(
+      ".github/workflows/release-desktop.yml must verify the mounted macOS DMG app and extracted updater archive before publishing."
     );
   }
 
