@@ -101,6 +101,20 @@ export const getRoomUnreadInfo = (
   };
 };
 
+export const getRoomUnreadInfoInTimelineWindow = (
+  room: Room,
+  timelineWindow: TimelineWindow,
+  anchorEventId?: string,
+  scrollTo = false
+): RoomUnreadInfo | undefined => {
+  const unreadInfo = getRoomUnreadInfo(room, anchorEventId, scrollTo);
+  if (!unreadInfo?.inLiveTimeline) return undefined;
+  if (!timelineWindowContainsEventId(timelineWindow, unreadInfo.readUptoEventId)) {
+    return undefined;
+  }
+  return unreadInfo;
+};
+
 export const hasUnreadForInitialScroll = (
   unread: Unread | undefined,
   unreadAnchorEventId?: string

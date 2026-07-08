@@ -3,13 +3,12 @@ import XCTest
 @testable import Synara
 
 final class TimelineServiceTests: XCTestCase {
-    func testRoomTimelineFocusPolicyUsesReadMarkerForInitialLoadOnly() {
-        XCTAssertEqual(
+    func testRoomTimelineFocusPolicyOpensNormalRoomsAtLiveTail() {
+        XCTAssertNil(
             RoomTimelineFocusPolicy.initialLoadFocus(
                 focusedEventID: nil,
                 initialReadMarkerEventID: "$read-marker"
-            ),
-            "$read-marker"
+            )
         )
         XCTAssertNil(
             RoomTimelineFocusPolicy.updateStreamFocus(
@@ -19,7 +18,7 @@ final class TimelineServiceTests: XCTestCase {
         )
     }
 
-    func testRoomTimelineFocusPolicyKeepsNormalRoomUpdatesLiveAfterReadMarkerInitialLoad() {
+    func testRoomTimelineFocusPolicyIgnoresReadMarkerForNormalInitialAndStreamLoads() {
         let initialFocus = RoomTimelineFocusPolicy.initialLoadFocus(
             focusedEventID: nil,
             initialReadMarkerEventID: "$read-marker"
@@ -29,7 +28,7 @@ final class TimelineServiceTests: XCTestCase {
             override: nil
         )
 
-        XCTAssertEqual(initialFocus, "$read-marker")
+        XCTAssertNil(initialFocus)
         XCTAssertNil(updateFocus)
     }
 
