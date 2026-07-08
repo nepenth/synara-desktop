@@ -108,6 +108,19 @@ final class AppRouter: ObservableObject {
         sheetDestination = nil
     }
 
+    func popSelectedTabToRoot() {
+        switch selectedTab {
+        case .rooms:
+            roomsPath = []
+        case .notifications:
+            notificationsPath = []
+        case .later:
+            laterPath = []
+        case .settings:
+            settingsPath = []
+        }
+    }
+
     func resetNavigationPathsForAccountChange() {
         selectedTab = .rooms
         authPath = []

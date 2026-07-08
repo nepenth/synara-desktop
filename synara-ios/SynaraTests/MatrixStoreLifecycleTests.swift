@@ -60,7 +60,11 @@ final class MatrixStoreLifecycleTests: XCTestCase {
             kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
             kSecValueData as String: legacyData
         ]
-        XCTAssertEqual(SecItemAdd(addQuery as CFDictionary, nil), errSecSuccess)
+        let addStatus = SecItemAdd(addQuery as CFDictionary, nil)
+        if addStatus == errSecMissingEntitlement {
+            throw XCTSkip("Unsigned simulator test target cannot access Keychain entitlements.")
+        }
+        XCTAssertEqual(addStatus, errSecSuccess)
 
         XCTAssertEqual(try store.migrateIfNeeded(), .migrated)
         XCTAssertEqual(try store.load(), session)

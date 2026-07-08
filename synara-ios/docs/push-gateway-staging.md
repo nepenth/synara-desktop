@@ -2,6 +2,9 @@
 
 Purpose: prepare the Matrix-to-APNs delivery path for iOS push validation.
 
+Detailed proxy requirements and the implementation handoff template live in
+[`../../docs/agent-approval-notification-proxy-spec.md`](../../docs/agent-approval-notification-proxy-spec.md).
+
 ## Current Implementation State
 
 - Client-side Matrix pusher registration now includes `app_id`, `pushkey`, and
@@ -11,10 +14,19 @@ Purpose: prepare the Matrix-to-APNs delivery path for iOS push validation.
 - Local/debug runs can still override the bundled value with
   `SYNARA_PUSH_GATEWAY_URL`.
 - Push routing and badge handling are fully implemented in app runtime.
+- Agent approval notifications register the `synara.agent-approval` APNs
+  category and handle `agent-approval.approve-once`,
+  `agent-approval.approve-always`, and `agent-approval.deny` actions by sending
+  Matrix reactions (`✅`, `♾️`, `❌`) to the approval prompt event.
+- Synara iOS registers pushers with `format: event_id_only`, so the push
+  gateway cannot infer approval prompts from encrypted Matrix event content. The
+  gateway needs a trusted approval metadata path keyed by `room_id` and
+  `event_id` before it can attach approval actions to APNs notifications.
 - `https://push.whyland.com/_matrix/push/v1/notify` is the configured
   production/TestFlight pusher endpoint.
 - The deployed gateway is expected to stay in mocked APNs mode until the Apple
-  APNs auth key is installed and `SYNARA_APNS_MODE=real` is enabled.
+  APNs auth key is installed and `SYNARA_APNS_MODE=production` is enabled for
+  TestFlight.
 
 In addition, unit coverage now verifies gateway registration payload shape and endpoint path for both set/delete operations:
 
@@ -50,6 +62,32 @@ Gateway URL is currently resolved from:
 
 - `SYNARA_PUSH_GATEWAY_URL`
 - `SynaraPushGatewayURL` in `Synara/App/Info.plist`
+
+## Agent Approval Actions
+
+For approval prompts, the push gateway must include the native category and room
+event metadata in the APNs payload only after matching trusted approval metadata
+for the same `room_id` and `event_id`:
+
+```json
+{
+  "aps": {
+    "alert": {
+      "title": "Approval Required: Dangerous Command",
+      "body": "Room: security scan requires approval"
+    },
+    "category": "synara.agent-approval"
+  },
+  "room_id": "!room:matrix.org",
+  "event_id": "$approval:matrix.org"
+}
+```
+
+The app maps APNs action identifiers to Matrix reactions:
+
+- `agent-approval.approve-once` -> `✅`
+- `agent-approval.approve-always` -> `♾️`
+- `agent-approval.deny` -> `❌`
 
 ## Local Smoke Checklist
 

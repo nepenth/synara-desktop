@@ -54,6 +54,38 @@ You can also click the reaction to approve:
   );
 });
 
+test('detectAgentApprovalPrompt recognizes bang-command reaction prompts', () => {
+  const prompt = detectAgentApprovalPrompt({
+    body: `⚠️ Dangerous command requires approval
+
+Code
+
+Copy
+set -euo pipefail
+curl -fsS http://camofox-browser.whyland.com:9377/openapi.json -o /tmp/camofox_openapi.json
+python3 - <<'PY'
+import json
+with open('/tmp/camofox_openapi.json') as f: d=json.load(f)
+for p, methods in d.get('paths',{}).items():
+    if any(x in p for x in ['/tabs','snapshot','navigate','sessions']):
+        print(p, ','.join(methods.keys()))
+PY
+Reason: Security scan — [HIGH] Plain HTTP URL in execution context: URL 'http://camofox-browser.whyland.com:9377/openapi.json' uses unencrypted HTTP and is being passed to a command that downloads or executes content. An attacker on the network could modify the content.
+
+Reply !approve to execute, !approve session to approve this pattern for the session, !approve always to approve permanently, or !deny to cancel.
+
+You can also react to this prompt:
+✅ = approve once
+♾️ = approve always
+❌ = deny`,
+  });
+
+  assert.match(prompt?.body ?? '', /Plain HTTP URL/);
+  assert.equal(prompt?.commandPreview, 'set -euo pipefail');
+  assert.match(prompt?.command ?? '', /camofox-browser\.whyland\.com/);
+  assert.doesNotMatch(prompt?.command ?? '', /Reason:/);
+});
+
 test('detectAgentApprovalPrompt recognizes markdown-bold approval headings', () => {
   const prompt = detectAgentApprovalPrompt({
     body: `⚠️ **Dangerous command requires approval**

@@ -62,6 +62,7 @@ final class SynaraAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificati
     private var session: AppSessionStore?
     private var router: AppRouter?
     private var logger: LoggingServicing?
+    private var agentApprovalReactions: AgentApprovalReactionServicing?
     private var pendingRoute: AppRoute?
     private var pendingNotificationPayload: [AnyHashable: Any]?
 
@@ -71,6 +72,7 @@ final class SynaraAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificati
         session = environment.session
         router = environment.router
         logger = environment.logger
+        agentApprovalReactions = environment.agentApprovalReactions
         UNUserNotificationCenter.current().delegate = self
 
         if let pendingRoute {
@@ -91,6 +93,8 @@ final class SynaraAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificati
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
+        SynaraNotificationActionContract.registerCategories()
+
         if let remotePayload = launchOptions?[.remoteNotification] as? [AnyHashable: Any] {
             if let route = NotificationPushRouteParser.route(from: remotePayload) {
                 routeToDestination(route)
@@ -137,9 +141,18 @@ final class SynaraAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificati
             return
         }
 
-        if let route = await push.resolveRoute(from: response.notification.request.content.userInfo) {
+        let userInfo = response.notification.request.content.userInfo
+        if let request = SynaraNotificationActionContract.agentApprovalReactionRequest(
+            actionIdentifier: response.actionIdentifier,
+            userInfo: userInfo
+        ) {
+            await handleAgentApprovalNotificationAction(request, userInfo: userInfo)
+            return
+        }
+
+        if let route = await push.resolveRoute(from: userInfo) {
             routeToDestination(route)
-            push.applyIncomingBadge(from: response.notification.request.content.userInfo)
+            push.applyIncomingBadge(from: userInfo)
         } else {
             routeToFallback()
         }
@@ -189,6 +202,26 @@ final class SynaraAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificati
             routeToDestination(route)
         } else {
             routeToFallback()
+        }
+    }
+
+    private func handleAgentApprovalNotificationAction(
+        _ request: SynaraAgentApprovalReactionRequest,
+        userInfo: [AnyHashable: Any]
+    ) async {
+        guard let agentApprovalReactions else {
+            routeToFallback()
+            return
+        }
+
+        do {
+            try await agentApprovalReactions.submitReaction(request)
+            await MainActor.run {
+                push?.applyIncomingBadge(from: userInfo)
+            }
+        } catch {
+            logger?.error("Agent approval notification action failed: \(error.localizedDescription)", category: .push)
+            await resolveNotificationRoute(from: userInfo)
         }
     }
 
@@ -268,6 +301,8 @@ private extension AppEnvironment {
         let timeline: TimelineServicing
         if processEnvironment["SYNARA_UI_TEST_AGENT_CARD"] == "1" {
             timeline = MockTimelineService(events: uiTestAgentCardEvents())
+        } else if processEnvironment["SYNARA_UI_TEST_AGENT_APPROVAL_PROMPT"] == "1" {
+            timeline = MockTimelineService(events: uiTestAgentApprovalPromptEvents())
         } else if processEnvironment["SYNARA_UI_TEST_ENCRYPTED_TIMELINE"] == "1" {
             timeline = MockTimelineService(items: uiTestEncryptedTimelineItems())
         } else if processEnvironment["SYNARA_UI_TEST_LARGE_TIMELINE"] == "1" {
@@ -288,6 +323,8 @@ private extension AppEnvironment {
             ? .failed
             : nil
         let agentApprovals = MockAgentApprovalService(error: approvalError)
+        let agentApprovalReactions = MockAgentApprovalReactionService(error: approvalError)
+        let readMarkers = MockRoomReadMarkerService(eventID: processEnvironment["SYNARA_UI_TEST_READ_MARKER_EVENT_ID"])
         let crypto = processEnvironment["SYNARA_UI_TEST_ENCRYPTED_TIMELINE"] == "1"
             ? MockCryptoStatusService(
                 roomCryptoStatus: RoomCryptoStatus(
@@ -317,6 +354,8 @@ private extension AppEnvironment {
                 timeline: timeline,
                 later: later,
                 agentApprovals: agentApprovals,
+                agentApprovalReactions: agentApprovalReactions,
+                readMarkers: readMarkers,
                 crypto: crypto
             )
         }
@@ -328,6 +367,8 @@ private extension AppEnvironment {
             timeline: timeline,
             later: later,
             agentApprovals: agentApprovals,
+            agentApprovalReactions: agentApprovalReactions,
+            readMarkers: readMarkers,
             crypto: crypto
         )
     }
@@ -408,6 +449,42 @@ private extension AppEnvironment {
                 agentCard: try? uiTestAgentCard()
             )
         ]
+    }
+
+    static func uiTestAgentApprovalPromptEvents() -> [RawTimelineEvent] {
+        [
+            RawTimelineEvent(
+                eventID: "$agent-approval-prompt",
+                senderID: "@forge:matrix.whyland.com",
+                timestamp: Date(timeIntervalSince1970: 1_770_000_120),
+                type: "m.room.message",
+                body: uiTestAgentApprovalPromptBody(),
+                replyToEventID: nil,
+                isEdited: false,
+                mediaURL: nil
+            )
+        ]
+    }
+
+    static func uiTestAgentApprovalPromptBody() -> String {
+        """
+        ⚠️ Dangerous command requires approval
+
+        Code
+
+        Copy
+        set -euo pipefail
+        curl -fsS http://camofox-browser.whyland.com:9377/openapi.json -o /tmp/camofox_openapi.json
+
+        Reason: Security scan - [HIGH] Plain HTTP URL in execution context.
+
+        Reply !approve to execute, !approve session to approve this pattern for the session, !approve always to approve permanently, or !deny to cancel.
+
+        You can also react to this prompt:
+        ✅ = approve once
+        ♾️ = approve always
+        ❌ = deny
+        """
     }
 
     static func uiTestAgentCard() throws -> SynaraAgentCard {

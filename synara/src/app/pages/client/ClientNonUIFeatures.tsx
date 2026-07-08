@@ -17,13 +17,14 @@ import { usePreviousValue } from '../../hooks/usePreviousValue';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { getInboxInvitesPath } from '../pathUtils';
 import {
+  getReactionContent,
   getMemberDisplayName,
   getNotificationType,
   getThreadRootEventId,
   getUnreadInfo,
   isNotificationEvent,
 } from '../../utils/room';
-import { NotificationType } from '../../../types/matrix/room';
+import { MessageEvent, NotificationType } from '../../../types/matrix/room';
 import { getMxIdLocalPart } from '../../utils/matrix';
 import { useSelectedRoom } from '../../hooks/router/useSelectedRoom';
 import { useInboxNotificationsSelected } from '../../hooks/router/useInbox';
@@ -38,6 +39,7 @@ import {
   isDesktopPlatform,
   readPlatformClipboardText,
   registerPlatformAgentActionListener,
+  registerPlatformNotificationActionListener,
   setPlatformBadgeCount,
   setPlatformShortcuts,
   setPlatformTrayState,
@@ -47,7 +49,11 @@ import {
   supportsPlatformSystemNotifications,
   supportsPlatformTrayState,
 } from '../../platform';
-import { detectAgentApprovalPrompt } from '../../utils/agentApprovals';
+import {
+  AGENT_APPROVAL_NOTIFICATION_ACTIONS,
+  detectAgentApprovalPrompt,
+  getAgentApprovalReactionForNotificationAction,
+} from '../../utils/agentApprovals';
 import { resolveMatrixThumbnailUrl } from '../../matrix/media';
 import { buildDesktopNotificationRoomRoute } from '../../utils/desktop';
 import {
@@ -440,6 +446,7 @@ function MessageNotifications() {
 
 function AgentApprovalNotifications() {
   const audioRef = useRef<HTMLAudioElement>(null);
+  const nativeApprovalActionKeysRef = useRef<Set<string>>(new Set());
 
   const mx = useMatrixClient();
   const { navigateRoom } = useRoomNavigate();
@@ -449,6 +456,7 @@ function AgentApprovalNotifications() {
     ({
       roomId,
       eventId,
+      approvalEventId,
       roomName,
       title,
       body,
@@ -456,6 +464,7 @@ function AgentApprovalNotifications() {
     }: {
       roomId: string;
       eventId: string;
+      approvalEventId: string;
       roomName: string;
       title: string;
       body: string;
@@ -468,6 +477,12 @@ function AgentApprovalNotifications() {
           title,
           body: `${roomName}: ${notificationBody}`,
           route: buildDesktopNotificationRoomRoute(roomId, eventId),
+          actions: AGENT_APPROVAL_NOTIFICATION_ACTIONS,
+          actionContext: {
+            kind: 'agent-approval',
+            roomId,
+            eventId: approvalEventId,
+          },
         }).catch(() => undefined);
         return;
       }
@@ -486,6 +501,55 @@ function AgentApprovalNotifications() {
     },
     [navigateRoom]
   );
+
+  const handleNativeNotificationAction = useCallback(
+    async (payload: {
+      actionId: string;
+      context?: { kind: string; roomId?: string; eventId?: string };
+    }) => {
+      const { actionId, context } = payload;
+      if (context?.kind !== 'agent-approval') return;
+      if (!context.roomId || !context.eventId) return;
+
+      const reaction = getAgentApprovalReactionForNotificationAction(actionId);
+      if (!reaction) return;
+
+      const dedupeKey = `${context.roomId}\u0000${context.eventId}\u0000${actionId}`;
+      if (nativeApprovalActionKeysRef.current.has(dedupeKey)) return;
+      nativeApprovalActionKeysRef.current.add(dedupeKey);
+
+      try {
+        await mx.sendEvent(
+          context.roomId,
+          MessageEvent.Reaction as any,
+          getReactionContent(context.eventId, reaction) as any
+        );
+      } catch {
+        nativeApprovalActionKeysRef.current.delete(dedupeKey);
+      }
+    },
+    [mx]
+  );
+
+  useEffect(() => {
+    let disposed = false;
+    let unlisten: (() => void | Promise<void>) | undefined;
+
+    registerPlatformNotificationActionListener((payload) => {
+      void handleNativeNotificationAction(payload);
+    }).then((nextUnlisten) => {
+      if (disposed) {
+        void nextUnlisten?.();
+        return;
+      }
+      unlisten = nextUnlisten;
+    });
+
+    return () => {
+      disposed = true;
+      void unlisten?.();
+    };
+  }, [handleNativeNotificationAction]);
 
   const playSound = useCallback(() => {
     audioRef.current?.play();
@@ -512,6 +576,7 @@ function AgentApprovalNotifications() {
         notify({
           roomId: room.roomId,
           eventId: openEventId,
+          approvalEventId: eventId,
           roomName: room.name ?? 'Unknown',
           title: prompt.title,
           body: prompt.body,
