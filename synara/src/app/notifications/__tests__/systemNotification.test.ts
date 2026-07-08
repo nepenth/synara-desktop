@@ -84,3 +84,37 @@ test('normalizeSystemNotificationRequest preserves explicit privacy and sound po
     }
   );
 });
+
+test('normalizeSystemNotificationRequest preserves safe notification actions', () => {
+  assert.deepEqual(
+    normalizeSystemNotificationRequest({
+      title: 'Approval',
+      actions: [
+        { id: ' agent-approval.approve-once ', label: ' Approve once ' },
+        { id: 'agent-approval.deny', label: 'Deny' },
+        { id: 'bad action id', label: 'Bad' },
+      ],
+      actionContext: {
+        kind: ' agent-approval ',
+        roomId: ' !room:matrix.org ',
+        eventId: ' $event:matrix.org ',
+      },
+    }),
+    {
+      title: 'Approval',
+      body: undefined,
+      route: undefined,
+      actions: [
+        { id: 'agent-approval.approve-once', label: 'Approve once' },
+        { id: 'agent-approval.deny', label: 'Deny' },
+      ],
+      actionContext: {
+        kind: 'agent-approval',
+        roomId: '!room:matrix.org',
+        eventId: '$event:matrix.org',
+      },
+      privacy: 'standard',
+      sound: 'default',
+    }
+  );
+});

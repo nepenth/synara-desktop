@@ -35,6 +35,191 @@ enum SynaraAgentApprovalError: LocalizedError, Equatable {
     }
 }
 
+enum SynaraAgentApprovalNotificationActionID: String, Equatable {
+    case approveOnce = "agent-approval.approve-once"
+    case approveAlways = "agent-approval.approve-always"
+    case deny = "agent-approval.deny"
+
+    var reactionKey: String {
+        switch self {
+        case .approveOnce:
+            return "✅"
+        case .approveAlways:
+            return "♾️"
+        case .deny:
+            return "❌"
+        }
+    }
+}
+
+enum SynaraAgentApprovalPromptReaction: String, CaseIterable, Equatable, Identifiable {
+    case approveOnce
+    case approveAlways
+    case deny
+
+    var id: String { rawValue }
+
+    var reactionKey: String {
+        switch self {
+        case .approveOnce:
+            return "✅"
+        case .approveAlways:
+            return "♾️"
+        case .deny:
+            return "❌"
+        }
+    }
+
+    var title: String {
+        switch self {
+        case .approveOnce:
+            return "Approve once"
+        case .approveAlways:
+            return "Always"
+        case .deny:
+            return "Deny"
+        }
+    }
+
+    var accessibilityIdentifierSuffix: String {
+        switch self {
+        case .approveOnce:
+            return "approveOnce"
+        case .approveAlways:
+            return "approveAlways"
+        case .deny:
+            return "deny"
+        }
+    }
+}
+
+struct SynaraAgentApprovalPrompt: Equatable {
+    let title: String
+    let body: String
+    let command: String?
+    let commandPreview: String?
+}
+
+enum SynaraAgentApprovalPromptDetector {
+    private static let maxBodyCharacters = 100_000
+    private static let maxCommandPreviewCharacters = 180
+    private static let maxCommandCharacters = 8_000
+    private static let commandFencePattern = #"```(?:[a-z0-9_-]+)?\s*\n([\s\S]*?)```"#
+    private static let codeBlockLabelPattern = #"\bCode\s+(?:Copy\s*)?([\s\S]*?)(?=\n+Reason:|\n+Reply\s+[!/](?:approve|deny)\b|$)"#
+    private static let approvalHeadings = [
+        "approval required: dangerous command",
+        "dangerous command requires approval"
+    ]
+
+    static func detect(in item: TimelineItem) -> SynaraAgentApprovalPrompt? {
+        switch item.kind {
+        case .text(let body):
+            return detect(body: body)
+        case .formattedText(let body, let html):
+            let markdown = MatrixHTMLRenderer.sanitizedMarkdown(body: body, html: html)
+            return [body, markdown]
+                .removingAdjacentDuplicates()
+                .compactMap(detect(body:))
+                .first
+        default:
+            return nil
+        }
+    }
+
+    static func detect(body: String) -> SynaraAgentApprovalPrompt? {
+        guard body.count <= maxBodyCharacters else {
+            return nil
+        }
+
+        let normalized = normalizeWhitespace(body).lowercased()
+        guard approvalHeadings.contains(where: { normalized.contains($0) }) else {
+            return nil
+        }
+
+        let command = extractCommand(from: body)
+        let reason = firstCapture(in: body, pattern: #"\bReason:\s*([^\n]+)"#)
+            .map(normalizeWhitespace)
+            .map { truncate($0, maxCharacters: 220) }
+
+        return SynaraAgentApprovalPrompt(
+            title: "Approval Required: Dangerous Command",
+            body: reason ?? "A Hermes Agent command is waiting for approval.",
+            command: command,
+            commandPreview: command.flatMap { commandPreview(for: $0) }
+        )
+    }
+
+    private static func extractCommand(from body: String) -> String? {
+        let rawCommand = firstCapture(in: body, pattern: commandFencePattern)
+            ?? firstCapture(in: body, pattern: codeBlockLabelPattern)
+        guard let rawCommand else {
+            return nil
+        }
+
+        let lines = rawCommand
+            .components(separatedBy: .newlines)
+            .enumerated()
+            .compactMap { index, line -> String? in
+                let isCopyLabel = index == 0
+                    && line.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "copy"
+                return isCopyLabel ? nil : trimmingTrailingWhitespace(from: line)
+            }
+        let command = lines
+            .joined(separator: "\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        return command.isEmpty ? nil : truncate(command, maxCharacters: maxCommandCharacters)
+    }
+
+    private static func commandPreview(for command: String) -> String? {
+        let firstUsefulLine = command
+            .components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .first(where: { $0.isEmpty == false })
+        guard let firstUsefulLine else {
+            return nil
+        }
+        return truncate(normalizeWhitespace(firstUsefulLine), maxCharacters: maxCommandPreviewCharacters)
+    }
+
+    private static func normalizeWhitespace(_ value: String) -> String {
+        value
+            .components(separatedBy: .whitespacesAndNewlines)
+            .filter { $0.isEmpty == false }
+            .joined(separator: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func truncate(_ value: String, maxCharacters: Int) -> String {
+        guard value.count > maxCharacters else {
+            return value
+        }
+        let prefixCount = max(0, maxCharacters - 3)
+        return "\(value.prefix(prefixCount))..."
+    }
+
+    private static func trimmingTrailingWhitespace(from value: String) -> String {
+        var output = value
+        while output.last?.isWhitespace == true {
+            output.removeLast()
+        }
+        return output
+    }
+
+    private static func firstCapture(in value: String, pattern: String) -> String? {
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
+            return nil
+        }
+        let range = NSRange(value.startIndex..<value.endIndex, in: value)
+        guard let match = regex.firstMatch(in: value, range: range),
+              match.numberOfRanges > 1,
+              let captureRange = Range(match.range(at: 1), in: value) else {
+            return nil
+        }
+        return String(value[captureRange])
+    }
+}
+
 struct SynaraAgentApprovalRequest: Equatable {
     let roomID: String
     let sourceEventID: String?
@@ -42,10 +227,20 @@ struct SynaraAgentApprovalRequest: Equatable {
     let decision: SynaraAgentApprovalDecision
 }
 
+struct SynaraAgentApprovalReactionRequest: Equatable {
+    let roomID: String
+    let sourceEventID: String
+    let reactionKey: String
+}
+
 protocol AgentApprovalServicing {
     var supportsPendingApprovalInbox: Bool { get }
     func submit(_ request: SynaraAgentApprovalRequest) async throws
     func pendingApprovalCount() async -> Int
+}
+
+protocol AgentApprovalReactionServicing {
+    func submitReaction(_ request: SynaraAgentApprovalReactionRequest) async throws
 }
 
 extension AgentApprovalServicing {
@@ -60,6 +255,18 @@ func encodeAgentApprovalMatrixEvent(
     jsonEncoder: JSONEncoder = JSONEncoder()
 ) throws -> Data {
     try jsonEncoder.encode(makeAgentApprovalMatrixEvent(request, createdAt: createdAt))
+}
+
+func encodeAgentApprovalReactionMatrixEvent(
+    _ request: SynaraAgentApprovalReactionRequest,
+    jsonEncoder: JSONEncoder = JSONEncoder()
+) throws -> Data {
+    try jsonEncoder.encode(SynaraMatrixReactionEvent(
+        relatesTo: SynaraMatrixReactionRelation(
+            eventID: request.sourceEventID,
+            key: request.reactionKey
+        )
+    ))
 }
 
 private func makeAgentApprovalMatrixEvent(
@@ -208,6 +415,51 @@ final class MatrixRustSDKAgentApprovalService: AgentApprovalServicing {
     }
 }
 
+final class MatrixRustSDKAgentApprovalReactionService: AgentApprovalReactionServicing {
+    private let sessionStore: AppSessionStore
+    private let clientStore: MatrixRustSDKClientStore
+    private let jsonEncoder: JSONEncoder
+
+    init(
+        sessionStore: AppSessionStore,
+        clientStore: MatrixRustSDKClientStore,
+        jsonEncoder: JSONEncoder = JSONEncoder()
+    ) {
+        self.sessionStore = sessionStore
+        self.clientStore = clientStore
+        self.jsonEncoder = jsonEncoder
+    }
+
+    func submitReaction(_ request: SynaraAgentApprovalReactionRequest) async throws {
+        guard case .signedIn(let session) = sessionStore.currentState else {
+            throw SynaraAgentApprovalError.signedOut
+        }
+
+        guard request.roomID.isEmpty == false,
+              request.sourceEventID.isEmpty == false,
+              request.reactionKey.isEmpty == false else {
+            throw SynaraAgentApprovalError.unsupportedAction
+        }
+
+        do {
+            let data = try encodeAgentApprovalReactionMatrixEvent(request, jsonEncoder: jsonEncoder)
+            guard let content = String(data: data, encoding: .utf8) else {
+                throw SynaraAgentApprovalError.failed
+            }
+            try await clientStore.sendRawRoomEvent(
+                roomID: request.roomID,
+                eventType: "m.reaction",
+                content: content,
+                session: session
+            )
+        } catch let error as SynaraAgentApprovalError {
+            throw error
+        } catch {
+            throw SynaraAgentApprovalError.failed
+        }
+    }
+}
+
 final class MockAgentApprovalService: AgentApprovalServicing {
     private(set) var submitted: [SynaraAgentApprovalRequest] = []
     var error: SynaraAgentApprovalError?
@@ -229,6 +481,22 @@ final class MockAgentApprovalService: AgentApprovalServicing {
     }
 
     func submit(_ request: SynaraAgentApprovalRequest) async throws {
+        if let error {
+            throw error
+        }
+        submitted.append(request)
+    }
+}
+
+final class MockAgentApprovalReactionService: AgentApprovalReactionServicing {
+    private(set) var submitted: [SynaraAgentApprovalReactionRequest] = []
+    var error: SynaraAgentApprovalError?
+
+    init(error: SynaraAgentApprovalError? = nil) {
+        self.error = error
+    }
+
+    func submitReaction(_ request: SynaraAgentApprovalReactionRequest) async throws {
         if let error {
             throw error
         }
@@ -266,6 +534,26 @@ private struct SynaraAgentApprovalContent: Encodable {
     }
 }
 
+private struct SynaraMatrixReactionEvent: Encodable {
+    let relatesTo: SynaraMatrixReactionRelation
+
+    enum CodingKeys: String, CodingKey {
+        case relatesTo = "m.relates_to"
+    }
+}
+
+private struct SynaraMatrixReactionRelation: Encodable {
+    let relType = "m.annotation"
+    let eventID: String
+    let key: String
+
+    enum CodingKeys: String, CodingKey {
+        case relType = "rel_type"
+        case eventID = "event_id"
+        case key
+    }
+}
+
 private extension SynaraAgentApprovalDecision {
     var displayName: String {
         switch self {
@@ -273,6 +561,16 @@ private extension SynaraAgentApprovalDecision {
             return "Approved"
         case .reject:
             return "Rejected"
+        }
+    }
+}
+
+private extension Array where Element: Equatable {
+    func removingAdjacentDuplicates() -> [Element] {
+        reduce(into: []) { result, element in
+            if result.last != element {
+                result.append(element)
+            }
         }
     }
 }

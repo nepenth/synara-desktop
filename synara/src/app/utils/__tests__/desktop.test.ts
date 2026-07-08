@@ -713,6 +713,61 @@ test('desktop notification payloads include routes for message, later, and agent
   ]);
 });
 
+test('desktop notification payloads include approval actions and context', async () => {
+  const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
+  const originalWindow = globalThis.window;
+  (globalThis as any).window = {
+    __SYNARA_DESKTOP__: {
+      platform: 'tauri',
+      invoke: async (command: string, args?: Record<string, unknown>) => {
+        calls.push({ command, args });
+        return true;
+      },
+    },
+  };
+
+  try {
+    await showDesktopNotification({
+      title: 'Approval',
+      body: 'Room: approval required',
+      route: '/home/!room/%24thread',
+      actions: [
+        { id: ' agent-approval.approve-once ', label: ' Approve once ' },
+        { id: 'agent-approval.deny', label: 'Deny' },
+      ],
+      actionContext: {
+        kind: ' agent-approval ',
+        roomId: ' !room:matrix.org ',
+        eventId: ' $event:matrix.org ',
+      },
+    });
+  } finally {
+    (globalThis as any).window = originalWindow;
+  }
+
+  assert.deepEqual(calls, [
+    {
+      command: 'desktop_notify',
+      args: {
+        notification: {
+          title: 'Approval',
+          body: 'Room: approval required',
+          route: '/home/!room/%24thread',
+          actions: [
+            { id: 'agent-approval.approve-once', label: 'Approve once' },
+            { id: 'agent-approval.deny', label: 'Deny' },
+          ],
+          actionContext: {
+            kind: 'agent-approval',
+            roomId: '!room:matrix.org',
+            eventId: '$event:matrix.org',
+          },
+        },
+      },
+    },
+  ]);
+});
+
 test('desktop file streaming threshold uses eight mebibytes', () => {
   assert.equal(DESKTOP_FILE_IPC_INLINE_THRESHOLD, 8 * 1024 * 1024);
   assert.equal(DESKTOP_FILE_IPC_CHUNK_SIZE, 1024 * 1024);

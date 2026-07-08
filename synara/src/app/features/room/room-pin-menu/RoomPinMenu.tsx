@@ -257,6 +257,7 @@ export const RoomPinMenu = forwardRef<HTMLDivElement, RoomPinMenuProps>(
 
     const permissions = useRoomPermissions(creators, powerLevels);
     const canPinEvent = permissions.stateEvent(StateEvent.RoomPinnedEvents, userId);
+    const canSendReaction = permissions.event(MessageEvent.Reaction, userId);
 
     const creatorsTag = useRoomCreatorsTag();
     const powerLevelTags = usePowerLevelTags(room, powerLevels);
@@ -333,6 +334,11 @@ export const RoomPinMenu = forwardRef<HTMLDivElement, RoomPinMenuProps>(
               htmlReactParserOptions={htmlReactParserOptions}
               linkifyOpts={linkifyOpts}
               outlineAttachment
+              agentApprovalTarget={{
+                roomId: room.roomId,
+                eventId: event.getId()!,
+                canSendReaction,
+              }}
             />
           );
         },
@@ -387,6 +393,11 @@ export const RoomPinMenu = forwardRef<HTMLDivElement, RoomPinMenuProps>(
                       mediaAutoLoad={mediaAutoLoad}
                       htmlReactParserOptions={htmlReactParserOptions}
                       linkifyOpts={linkifyOpts}
+                      agentApprovalTarget={{
+                        roomId: room.roomId,
+                        eventId,
+                        canSendReaction,
+                      }}
                     />
                   );
                 }

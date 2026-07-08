@@ -32,6 +32,8 @@ import { TextViewer } from './text-viewer';
 import { IImageContent } from '../../types/matrix/common';
 import { parseHermesAgentPayload } from '../utils/hermes';
 import { useClientConfig } from '../hooks/useClientConfig';
+import { detectAgentApprovalPrompt } from '../utils/agentApprovals';
+import { AgentApprovalCard, type AgentApprovalTarget } from './agent-approval/AgentApprovalCard';
 
 const HermesAgentCard = lazy(() =>
   import('./hermes/HermesAgentCard').then((module) => ({ default: module.HermesAgentCard }))
@@ -48,6 +50,7 @@ type RenderMessageContentProps = {
   htmlReactParserOptions: HTMLReactParserOptions;
   linkifyOpts: Opts;
   outlineAttachment?: boolean;
+  agentApprovalTarget?: AgentApprovalTarget;
 };
 export function RenderMessageContent({
   displayName,
@@ -59,9 +62,15 @@ export function RenderMessageContent({
   htmlReactParserOptions,
   linkifyOpts,
   outlineAttachment,
+  agentApprovalTarget,
 }: RenderMessageContentProps) {
   const clientConfig = useClientConfig();
   const content = getContent<Record<string, unknown>>();
+  const approvalPrompt = detectAgentApprovalPrompt(content);
+  if (approvalPrompt) {
+    return <AgentApprovalCard prompt={approvalPrompt} target={agentApprovalTarget} />;
+  }
+
   const hermesPayload = parseHermesAgentPayload(content, clientConfig.agentCards?.contentKeys);
   if (hermesPayload) {
     return (

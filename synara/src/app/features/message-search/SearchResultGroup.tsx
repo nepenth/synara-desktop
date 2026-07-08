@@ -137,6 +137,10 @@ export function SearchResultGroup({
             linkifyOpts={linkifyOpts}
             highlightRegex={highlightRegex}
             outlineAttachment
+            agentApprovalTarget={{
+              roomId: event.room_id,
+              eventId: event.event_id,
+            }}
           />
         );
       },

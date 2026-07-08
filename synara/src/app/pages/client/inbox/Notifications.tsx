@@ -286,6 +286,10 @@ function RoomNotificationsGroupComp({
             htmlReactParserOptions={htmlReactParserOptions}
             linkifyOpts={linkifyOpts}
             outlineAttachment
+            agentApprovalTarget={{
+              roomId: room.roomId,
+              eventId: event.event_id,
+            }}
           />
         );
       },
@@ -343,6 +347,10 @@ function RoomNotificationsGroupComp({
                     mediaAutoLoad={mediaAutoLoad}
                     htmlReactParserOptions={htmlReactParserOptions}
                     linkifyOpts={linkifyOpts}
+                    agentApprovalTarget={{
+                      roomId: room.roomId,
+                      eventId: evt.event_id,
+                    }}
                   />
                 );
               }

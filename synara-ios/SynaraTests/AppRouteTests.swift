@@ -115,6 +115,18 @@ final class AppRouteTests: XCTestCase {
         XCTAssertTrue(router.roomsPath.isEmpty)
     }
 
+    func testRouterPopsSelectedTabToRoot() {
+        let router = AppRouter()
+        router.selectedTab = .notifications
+        router.route(to: .room(id: "!roomid:example.org", title: "Alerts"))
+        router.roomsPath = [.room(id: "!other:example.org", title: "Other")]
+
+        router.popSelectedTabToRoot()
+
+        XCTAssertTrue(router.notificationsPath.isEmpty)
+        XCTAssertEqual(router.roomsPath, [.room(id: "!other:example.org", title: "Other")])
+    }
+
     func testRouterCanRouteToThreadSurface() {
         let router = AppRouter()
 

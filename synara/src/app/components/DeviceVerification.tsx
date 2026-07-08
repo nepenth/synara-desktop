@@ -30,6 +30,11 @@ import {
 } from '../hooks/useVerificationRequest';
 import { AsyncStatus, useAsyncCallback } from '../hooks/useAsyncCallback';
 import { ContainerColor } from '../styles/ContainerColor.css';
+import {
+  phaseFromVerifierCancellation,
+  shouldCancelActiveVerificationRequest,
+  verificationErrorMessage,
+} from '../utils/verification';
 
 const DialogHeaderStyles: CSSProperties = {
   padding: `0 ${config.space.S200} 0 ${config.space.S400}`,
@@ -119,8 +124,12 @@ function AutoVerificationStart({ onStart }: VerificationStartProps) {
 function CompareEmoji({ sasData }: { sasData: ShowSasCallbacks }) {
   const [confirmState, confirm] = useAsyncCallback(useCallback(() => sasData.confirm(), [sasData]));
 
-  const confirming =
-    confirmState.status === AsyncStatus.Loading || confirmState.status === AsyncStatus.Success;
+  const confirming = confirmState.status === AsyncStatus.Loading;
+  const confirmed = confirmState.status === AsyncStatus.Success;
+  const confirmError =
+    confirmState.status === AsyncStatus.Error
+      ? verificationErrorMessage(confirmState.error)
+      : undefined;
 
   return (
     <Box direction="Column" gap="400">
@@ -149,42 +158,55 @@ function CompareEmoji({ sasData }: { sasData: ShowSasCallbacks }) {
           </Box>
         ))}
       </Box>
+      {confirmed && <WaitingMessage message="Waiting for the other device to finish..." />}
       <Box direction="Column" gap="200">
         <Button
+          type="button"
           variant="Primary"
           fill="Soft"
           onClick={confirm}
-          disabled={confirming}
+          disabled={confirming || confirmed}
           before={confirming && <Spinner size="100" variant="Primary" />}
         >
           <Text size="B400">They Match</Text>
         </Button>
         <Button
-          variant="Primary"
+          type="button"
+          variant="Critical"
           fill="Soft"
           onClick={() => sasData.mismatch()}
-          disabled={confirming}
+          disabled={confirming || confirmed}
         >
           <Text size="B400">Do not Match</Text>
         </Button>
       </Box>
+      {confirmError && <Text size="T200">{confirmError}</Text>}
     </Box>
   );
 }
 
 type SasVerificationProps = {
   verifier: Verifier;
-  onCancel: () => void;
+  onVerifierCancel: () => void;
 };
-function SasVerification({ verifier, onCancel }: SasVerificationProps) {
+function SasVerification({ verifier, onVerifierCancel }: SasVerificationProps) {
   const [sasData, setSasData] = useState<ShowSasCallbacks>();
 
   useVerifierShowSas(verifier, setSasData);
-  useVerifierCancel(verifier, onCancel);
+  useVerifierCancel(verifier, onVerifierCancel);
 
   useEffect(() => {
-    verifier.verify();
-  }, [verifier]);
+    let disposed = false;
+    verifier.verify().catch(() => {
+      if (!disposed && verifier.hasBeenCancelled) {
+        onVerifierCancel();
+      }
+    });
+
+    return () => {
+      disposed = true;
+    };
+  }, [verifier, onVerifierCancel]);
 
   if (sasData) {
     return <CompareEmoji sasData={sasData} />;
@@ -232,14 +254,24 @@ type DeviceVerificationProps = {
   onExit: () => void;
 };
 export function DeviceVerification({ request, onExit }: DeviceVerificationProps) {
-  const phase = useVerificationRequestPhase(request);
+  const requestPhase = useVerificationRequestPhase(request);
+  const [verifierCancelled, setVerifierCancelled] = useState(false);
+  const phase = phaseFromVerifierCancellation(requestPhase, verifierCancelled);
+
+  useEffect(() => {
+    setVerifierCancelled(false);
+  }, [request]);
 
   const handleCancel = useCallback(() => {
-    if (request.phase !== VerificationPhase.Done && request.phase !== VerificationPhase.Cancelled) {
+    if (shouldCancelActiveVerificationRequest(request.phase)) {
       request.cancel();
     }
     onExit();
   }, [request, onExit]);
+
+  const handleVerifierCancel = useCallback(() => {
+    setVerifierCancelled(true);
+  }, []);
 
   const handleAccept = useCallback(() => request.accept(), [request]);
   const handleStart = useCallback(async () => {
@@ -280,7 +312,10 @@ export function DeviceVerification({ request, onExit }: DeviceVerificationProps)
                 ))}
               {phase === VerificationPhase.Started &&
                 (request.verifier ? (
-                  <SasVerification verifier={request.verifier} onCancel={handleCancel} />
+                  <SasVerification
+                    verifier={request.verifier}
+                    onVerifierCancel={handleVerifierCancel}
+                  />
                 ) : (
                   <VerificationUnexpected
                     message="Unexpected Error! Verification is started but verifier is missing."
@@ -288,9 +323,7 @@ export function DeviceVerification({ request, onExit }: DeviceVerificationProps)
                   />
                 ))}
               {phase === VerificationPhase.Done && <VerificationDone onExit={onExit} />}
-              {phase === VerificationPhase.Cancelled && (
-                <VerificationCanceled onClose={handleCancel} />
-              )}
+              {phase === VerificationPhase.Cancelled && <VerificationCanceled onClose={onExit} />}
             </Box>
           </Dialog>
         </FocusTrap>

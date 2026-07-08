@@ -221,10 +221,28 @@ export type DesktopNotificationPermission =
   | 'prompt'
   | 'prompt-with-rationale';
 
+export type DesktopNotificationAction = {
+  id: string;
+  label: string;
+};
+
+export type DesktopNotificationActionContext = {
+  kind: string;
+  roomId?: string;
+  eventId?: string;
+};
+
 export type DesktopNotificationPayload = {
   title: string;
   body?: string;
   route?: string;
+  actions?: DesktopNotificationAction[];
+  actionContext?: DesktopNotificationActionContext;
+};
+
+export type DesktopNotificationActionEventPayload = {
+  actionId: string;
+  context?: DesktopNotificationActionContext;
 };
 
 export type DesktopNativeFileDropPayload = {
@@ -931,12 +949,33 @@ export const requestDesktopNotificationPermission =
 export const showDesktopNotification = async (
   notification: DesktopNotificationPayload
 ): Promise<boolean> => {
+  const payload: DesktopNotificationPayload = {
+    title: normalizeValue(notification.title),
+    body: notification.body === undefined ? undefined : normalizeValue(notification.body),
+    route: sanitizeDesktopNotificationRoute(notification.route),
+  };
+  if (notification.actions) {
+    payload.actions = notification.actions.map((action) => ({
+      id: normalizeValue(action.id),
+      label: normalizeValue(action.label),
+    }));
+    payload.actionContext = notification.actionContext
+      ? {
+          kind: normalizeValue(notification.actionContext.kind),
+          roomId:
+            notification.actionContext.roomId === undefined
+              ? undefined
+              : normalizeValue(notification.actionContext.roomId),
+          eventId:
+            notification.actionContext.eventId === undefined
+              ? undefined
+              : normalizeValue(notification.actionContext.eventId),
+        }
+      : undefined;
+  }
+
   const result = await invokeDesktop<boolean>('desktop_notify', {
-    notification: {
-      title: normalizeValue(notification.title),
-      body: notification.body === undefined ? undefined : normalizeValue(notification.body),
-      route: sanitizeDesktopNotificationRoute(notification.route),
-    },
+    notification: payload,
   });
   return result === true;
 };

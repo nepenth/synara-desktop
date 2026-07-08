@@ -52,6 +52,98 @@ final class AgentApprovalServiceTests: XCTestCase {
         }
     }
 
+    func testAgentApprovalReactionMatrixEventUsesMatrixReactionRelation() throws {
+        let data = try encodeAgentApprovalReactionMatrixEvent(
+            SynaraAgentApprovalReactionRequest(
+                roomID: "!room:matrix.org",
+                sourceEventID: "$approval:matrix.org",
+                reactionKey: "✅"
+            )
+        )
+        let payload = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let relation = try XCTUnwrap(payload["m.relates_to"] as? [String: Any])
+
+        XCTAssertEqual(relation["rel_type"] as? String, "m.annotation")
+        XCTAssertEqual(relation["event_id"] as? String, "$approval:matrix.org")
+        XCTAssertEqual(relation["key"] as? String, "✅")
+    }
+
+    func testMockAgentApprovalReactionServiceRecordsReactionRequests() async throws {
+        let service = MockAgentApprovalReactionService()
+        let request = SynaraAgentApprovalReactionRequest(
+            roomID: "!room:matrix.org",
+            sourceEventID: "$approval:matrix.org",
+            reactionKey: "❌"
+        )
+
+        try await service.submitReaction(request)
+
+        XCTAssertEqual(service.submitted, [request])
+    }
+
+    func testAgentApprovalPromptDetectorExtractsAutomationPrompt() throws {
+        let prompt = try XCTUnwrap(
+            SynaraAgentApprovalPromptDetector.detect(
+                body: """
+                ⚠️ Dangerous command requires approval
+
+                Code
+
+                Copy
+                set -euo pipefail
+                curl -fsS http://browser-control.example.com:9377/openapi.json -o /tmp/camofox_openapi.json
+
+                Reason: Security scan - [HIGH] Plain HTTP URL in execution context.
+
+                Reply !approve to execute, !approve always to approve permanently, or !deny to cancel.
+
+                You can also react to this prompt:
+                ✅ = approve once
+                ♾️ = approve always
+                ❌ = deny
+                """
+            )
+        )
+
+        XCTAssertEqual(prompt.title, "Approval Required: Dangerous Command")
+        XCTAssertEqual(prompt.body, "Security scan - [HIGH] Plain HTTP URL in execution context.")
+        XCTAssertEqual(prompt.commandPreview, "set -euo pipefail")
+        XCTAssertTrue(try XCTUnwrap(prompt.command).contains("curl -fsS http://browser-control.example.com:9377/openapi.json"))
+    }
+
+    func testAgentApprovalPromptDetectorUsesFormattedHTMLCandidate() throws {
+        let item = TimelineItem(
+            id: "$approval-html",
+            eventID: "$approval-html",
+            senderID: "@automation:matrix.org",
+            timestamp: Date(timeIntervalSince1970: 1_770_000_000),
+            kind: .formattedText(
+                body: "",
+                html: #"""
+                <p><strong>Dangerous command requires approval</strong></p>
+                <pre><code>printf 'ship it'</code></pre>
+                <p>Reason: operator approval required.</p>
+                """#
+            ),
+            replyToEventID: nil,
+            isEdited: false,
+            reactions: [:]
+        )
+
+        let prompt = try XCTUnwrap(SynaraAgentApprovalPromptDetector.detect(in: item))
+
+        XCTAssertEqual(prompt.commandPreview, "printf 'ship it'")
+        XCTAssertEqual(prompt.body, "operator approval required.")
+    }
+
+    func testAgentApprovalPromptDetectorIgnoresNonApprovalMessages() {
+        XCTAssertNil(
+            SynaraAgentApprovalPromptDetector.detect(
+                body: "Security scan completed for the dangerous command run."
+            )
+        )
+    }
+
     private func loadSharedAgentApprovalFixture(name: String) throws -> [String: Any] {
         let testFile = URL(fileURLWithPath: #filePath)
         let repositoryRoot = testFile
