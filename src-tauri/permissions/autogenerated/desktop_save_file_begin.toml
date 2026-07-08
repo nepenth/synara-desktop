@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-desktop-save-file-begin"
+description = "Enables the desktop_save_file_begin command without any pre-configured scope."
+commands.allow = ["desktop_save_file_begin"]
+
+[[permission]]
+identifier = "deny-desktop-save-file-begin"
+description = "Denies the desktop_save_file_begin command without any pre-configured scope."
+commands.deny = ["desktop_save_file_begin"]

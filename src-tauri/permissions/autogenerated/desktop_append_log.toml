@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-desktop-append-log"
+description = "Enables the desktop_append_log command without any pre-configured scope."
+commands.allow = ["desktop_append_log"]
+
+[[permission]]
+identifier = "deny-desktop-append-log"
+description = "Denies the desktop_append_log command without any pre-configured scope."
+commands.deny = ["desktop_append_log"]

@@ -345,6 +345,330 @@
       "description": "Permission identifier",
       "oneOf": [
         {
+          "description": "Enables the desktop_agent_action command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-desktop-agent-action",
+          "markdownDescription": "Enables the desktop_agent_action command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the desktop_append_log command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-desktop-append-log",
+          "markdownDescription": "Enables the desktop_append_log command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the desktop_get_integration_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-desktop-get-integration-status",
+          "markdownDescription": "Enables the desktop_get_integration_status command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the desktop_get_notification_permission command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-desktop-get-notification-permission",
+          "markdownDescription": "Enables the desktop_get_notification_permission command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the desktop_get_performance_capabilities command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-desktop-get-performance-capabilities",
+          "markdownDescription": "Enables the desktop_get_performance_capabilities command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the desktop_get_session command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-desktop-get-session",
+          "markdownDescription": "Enables the desktop_get_session command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the desktop_hide command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-desktop-hide",
+          "markdownDescription": "Enables the desktop_hide command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the desktop_log_path command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-desktop-log-path",
+          "markdownDescription": "Enables the desktop_log_path command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the desktop_navigate command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-desktop-navigate",
+          "markdownDescription": "Enables the desktop_navigate command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the desktop_notify command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-desktop-notify",
+          "markdownDescription": "Enables the desktop_notify command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the desktop_open_external_url command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-desktop-open-external-url",
+          "markdownDescription": "Enables the desktop_open_external_url command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the desktop_read_dropped_file_chunk command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-desktop-read-dropped-file-chunk",
+          "markdownDescription": "Enables the desktop_read_dropped_file_chunk command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the desktop_read_dropped_file_end command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-desktop-read-dropped-file-end",
+          "markdownDescription": "Enables the desktop_read_dropped_file_end command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the desktop_read_dropped_files command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-desktop-read-dropped-files",
+          "markdownDescription": "Enables the desktop_read_dropped_files command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the desktop_remove_session command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-desktop-remove-session",
+          "markdownDescription": "Enables the desktop_remove_session command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the desktop_request_notification_permission command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-desktop-request-notification-permission",
+          "markdownDescription": "Enables the desktop_request_notification_permission command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the desktop_save_file command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-desktop-save-file",
+          "markdownDescription": "Enables the desktop_save_file command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the desktop_save_file_abort command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-desktop-save-file-abort",
+          "markdownDescription": "Enables the desktop_save_file_abort command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the desktop_save_file_begin command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-desktop-save-file-begin",
+          "markdownDescription": "Enables the desktop_save_file_begin command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the desktop_save_file_chunk command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-desktop-save-file-chunk",
+          "markdownDescription": "Enables the desktop_save_file_chunk command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the desktop_save_file_end command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-desktop-save-file-end",
+          "markdownDescription": "Enables the desktop_save_file_end command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the desktop_secret_store_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-desktop-secret-store-status",
+          "markdownDescription": "Enables the desktop_secret_store_status command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the desktop_set_badge_count command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-desktop-set-badge-count",
+          "markdownDescription": "Enables the desktop_set_badge_count command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the desktop_set_session command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-desktop-set-session",
+          "markdownDescription": "Enables the desktop_set_session command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the desktop_set_shortcuts command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-desktop-set-shortcuts",
+          "markdownDescription": "Enables the desktop_set_shortcuts command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the desktop_show command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-desktop-show",
+          "markdownDescription": "Enables the desktop_show command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the desktop_update_tray_state command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-desktop-update-tray-state",
+          "markdownDescription": "Enables the desktop_update_tray_state command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the desktop_agent_action command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-desktop-agent-action",
+          "markdownDescription": "Denies the desktop_agent_action command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the desktop_append_log command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-desktop-append-log",
+          "markdownDescription": "Denies the desktop_append_log command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the desktop_get_integration_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-desktop-get-integration-status",
+          "markdownDescription": "Denies the desktop_get_integration_status command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the desktop_get_notification_permission command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-desktop-get-notification-permission",
+          "markdownDescription": "Denies the desktop_get_notification_permission command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the desktop_get_performance_capabilities command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-desktop-get-performance-capabilities",
+          "markdownDescription": "Denies the desktop_get_performance_capabilities command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the desktop_get_session command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-desktop-get-session",
+          "markdownDescription": "Denies the desktop_get_session command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the desktop_hide command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-desktop-hide",
+          "markdownDescription": "Denies the desktop_hide command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the desktop_log_path command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-desktop-log-path",
+          "markdownDescription": "Denies the desktop_log_path command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the desktop_navigate command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-desktop-navigate",
+          "markdownDescription": "Denies the desktop_navigate command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the desktop_notify command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-desktop-notify",
+          "markdownDescription": "Denies the desktop_notify command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the desktop_open_external_url command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-desktop-open-external-url",
+          "markdownDescription": "Denies the desktop_open_external_url command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the desktop_read_dropped_file_chunk command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-desktop-read-dropped-file-chunk",
+          "markdownDescription": "Denies the desktop_read_dropped_file_chunk command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the desktop_read_dropped_file_end command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-desktop-read-dropped-file-end",
+          "markdownDescription": "Denies the desktop_read_dropped_file_end command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the desktop_read_dropped_files command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-desktop-read-dropped-files",
+          "markdownDescription": "Denies the desktop_read_dropped_files command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the desktop_remove_session command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-desktop-remove-session",
+          "markdownDescription": "Denies the desktop_remove_session command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the desktop_request_notification_permission command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-desktop-request-notification-permission",
+          "markdownDescription": "Denies the desktop_request_notification_permission command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the desktop_save_file command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-desktop-save-file",
+          "markdownDescription": "Denies the desktop_save_file command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the desktop_save_file_abort command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-desktop-save-file-abort",
+          "markdownDescription": "Denies the desktop_save_file_abort command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the desktop_save_file_begin command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-desktop-save-file-begin",
+          "markdownDescription": "Denies the desktop_save_file_begin command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the desktop_save_file_chunk command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-desktop-save-file-chunk",
+          "markdownDescription": "Denies the desktop_save_file_chunk command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the desktop_save_file_end command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-desktop-save-file-end",
+          "markdownDescription": "Denies the desktop_save_file_end command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the desktop_secret_store_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-desktop-secret-store-status",
+          "markdownDescription": "Denies the desktop_secret_store_status command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the desktop_set_badge_count command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-desktop-set-badge-count",
+          "markdownDescription": "Denies the desktop_set_badge_count command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the desktop_set_session command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-desktop-set-session",
+          "markdownDescription": "Denies the desktop_set_session command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the desktop_set_shortcuts command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-desktop-set-shortcuts",
+          "markdownDescription": "Denies the desktop_set_shortcuts command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the desktop_show command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-desktop-show",
+          "markdownDescription": "Denies the desktop_show command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the desktop_update_tray_state command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-desktop-update-tray-state",
+          "markdownDescription": "Denies the desktop_update_tray_state command without any pre-configured scope."
+        },
+        {
           "description": "No features are enabled by default, as we believe\nthe clipboard can be inherently dangerous and it is \napplication specific if read and/or write access is needed.\n\nClipboard interaction needs to be explicitly enabled.\n",
           "type": "string",
           "const": "clipboard-manager:default",
