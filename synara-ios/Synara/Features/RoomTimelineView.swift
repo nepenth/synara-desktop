@@ -6,8 +6,8 @@ import UIKit
 #endif
 
 enum RoomTimelineFocusPolicy {
-    static func initialLoadFocus(focusedEventID: String?, initialReadMarkerEventID: String?) -> String? {
-        focusedEventID ?? initialReadMarkerEventID
+    static func initialLoadFocus(focusedEventID: String?, initialReadMarkerEventID _: String?) -> String? {
+        focusedEventID
     }
 
     static func updateStreamFocus(focusedEventID: String?, override: String?? = nil) -> String? {
@@ -743,14 +743,8 @@ struct RoomTimelineView: View {
         defer {
             PerformanceTrace.end("TimelineInitialLoad", id: signpostID)
         }
-        let readMarkerEventID: String?
-        if let focusedEventID {
-            readMarkerEventID = focusedEventID
-        } else {
-            readMarkerEventID = await loadReadMarkerEventID()
-        }
         await MainActor.run {
-            initialReadMarkerEventID = focusedEventID == nil ? readMarkerEventID : nil
+            initialReadMarkerEventID = nil
         }
     }
 
@@ -794,10 +788,6 @@ struct RoomTimelineView: View {
                 }
             }
         }
-    }
-
-    private func loadReadMarkerEventID() async -> String? {
-        await environment.readMarkers.fullyReadEventID(roomID: roomID)
     }
 
     private func loadCryptoStatus() async -> RoomCryptoStatus {

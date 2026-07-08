@@ -176,6 +176,7 @@ import {
   getEmptyTimeline,
   getInitialTimeline,
   getRoomUnreadInfo,
+  getRoomUnreadInfoInTimelineWindow,
   getTimelineEndWindow,
   hasUnreadForInitialScroll,
   timelineHasEvents,
@@ -577,24 +578,29 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
     () => (eventId ? getEmptyTimeline() : getInitialTimeline(room, PAGINATION_LIMIT)),
     [eventId, room]
   );
-  const hasInitialUnread =
+  const hasUnreadSignal =
     hasUnreadForInitialScroll(unread, unreadAnchorEventId) || roomHaveUnread(mx, room);
+  const initialUnreadPlacementInfo =
+    !eventId && hasUnreadSignal
+      ? getRoomUnreadInfoInTimelineWindow(room, initialTimelineWindow, unreadAnchorEventId, true)
+      : undefined;
   const currentLiveTailEventId = getLoadedLiveTailEventId(room);
   const shouldRestoreSavedViewport =
     !eventId &&
     canRestoreViewportFromInitialTimeline(savedViewport, initialTimelineWindow) &&
     shouldRestoreRoomTimelineViewport(savedViewport, {
-      hasUnread: hasInitialUnread,
+      hasUnread: Boolean(initialUnreadPlacementInfo),
       currentLiveTailEventId,
       nowMs: roomOpenedAtMsRef.current,
     });
   const suppressInitialUnreadScrollRef = useRef(shouldRestoreSavedViewport);
 
-  // Only use the read-receipt marker for initial placement when the room is actually unread.
-  // Otherwise a stale receipt can reopen a recently read room several messages above the live end.
-  const shouldOpenAtUnread = !shouldRestoreSavedViewport && hasInitialUnread;
+  // Only use unread/read-receipt anchors for initial placement when the target is already
+  // in the live-end window. Stale markers outside this window can make large rooms walk
+  // backwards through history before the live timeline settles.
+  const shouldOpenAtUnread = !shouldRestoreSavedViewport && Boolean(initialUnreadPlacementInfo);
   const [unreadInfo, setUnreadInfo] = useState(() =>
-    shouldOpenAtUnread ? getRoomUnreadInfo(room, unreadAnchorEventId, true) : undefined
+    shouldOpenAtUnread ? initialUnreadPlacementInfo : undefined
   );
   const readUptoEventIdRef = useRef<string | undefined>(undefined);
   readUptoEventIdRef.current = unreadInfo?.readUptoEventId;
@@ -665,7 +671,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
       setUnreadInfo(undefined);
       return;
     }
-    if (hasInitialUnread) {
+    if (hasUnreadSignal) {
       setUnreadInfo((currentUnreadInfo) => {
         if (currentUnreadInfo?.scrollTo) return currentUnreadInfo;
         return getRoomUnreadInfo(room, unreadAnchorEventId, false);
@@ -673,7 +679,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
       return;
     }
     setUnreadInfo(undefined);
-  }, [room, unreadAnchorEventId, unread, hasInitialUnread]);
+  }, [room, unreadAnchorEventId, unread, hasUnreadSignal]);
   const htmlReactParserOptions = useMemo<HTMLReactParserOptions>(
     () =>
       getReactCustomHtmlParser(mx, room.roomId, {

@@ -144,11 +144,11 @@ final class SynaraUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Here's the latest spec for the new permissions model."].waitForExistence(timeout: 5))
     }
 
-    func testRoomRouteAnchorsToSeededReadMarker() {
+    func testRoomRouteIgnoresSeededReadMarkerOnInitialOpen() {
         let app = launchRoomApp(readMarkerEventID: "$security:!project:matrix.org")
 
         XCTAssertTrue(app.scrollViews["TimelineList"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["We should also update the role matrix while we're at it."].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Here's the latest spec for the new permissions model."].waitForExistence(timeout: 5))
     }
 
     func testRoomDetailsInviteAndLeaveMockFlow() {
