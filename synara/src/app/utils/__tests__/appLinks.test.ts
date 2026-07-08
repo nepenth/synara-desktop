@@ -161,12 +161,15 @@ test('openExternalUrl uses the desktop external-url bridge without window.open f
     (globalThis as any).window = originalWindow;
   }
 
-  assert.deepEqual(calls, [
-    {
-      command: 'desktop_open_external_url',
-      args: { url: 'https://example.org/docs' },
-    },
-  ]);
+  assert.deepEqual(
+    calls.filter((call) => call.command !== 'desktop_append_log'),
+    [
+      {
+        command: 'desktop_open_external_url',
+        args: { url: 'https://example.org/docs' },
+      },
+    ]
+  );
   assert.deepEqual(openedUrls, []);
 });
 

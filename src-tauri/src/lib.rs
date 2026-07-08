@@ -8,6 +8,7 @@ mod desktop;
 mod desktop_agent_actions;
 mod desktop_file_transfer;
 mod desktop_integration;
+mod desktop_logging;
 mod desktop_notifications;
 mod desktop_sanitize;
 mod desktop_secret_store;
@@ -47,7 +48,15 @@ fn emit_native_file_drop(window: &tauri::Window, payload: NativeFileDropPayload)
     let Some(webview) = window.get_webview_window(desktop::MAIN_WINDOW_LABEL) else {
         return;
     };
-    let _ = webview.emit("synara-native-file-drop", payload);
+    let _ = webview.emit("synara-native-file-drop", payload.clone());
+    let Ok(payload_json) = serde_json::to_string(&payload) else {
+        return;
+    };
+    let script = format!(
+        "window.dispatchEvent(new CustomEvent('synara-native-file-drop', {{ detail: {} }}));",
+        payload_json
+    );
+    let _ = webview.eval(script);
 }
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
@@ -231,6 +240,8 @@ pub fn run() {
             desktop_file_transfer::desktop_read_dropped_file_chunk,
             desktop_file_transfer::desktop_read_dropped_file_end,
             desktop::desktop_get_performance_capabilities,
+            desktop_logging::desktop_append_log,
+            desktop_logging::desktop_log_path,
             desktop_agent_actions::desktop_agent_action
         ])
         .on_window_event(|window, event| {

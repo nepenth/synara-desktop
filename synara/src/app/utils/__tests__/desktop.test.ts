@@ -15,6 +15,7 @@ import {
   isDesktopBridgeAvailable,
   openDesktopExternalUrl,
   readDesktopClipboardImage,
+  readDesktopClipboardText,
   readDesktopDroppedFiles,
   saveDesktopFile,
   sendDesktopAgentAction,
@@ -517,24 +518,28 @@ test('desktop external link opener invokes the desktop bridge only on desktop', 
     (globalThis as any).window = originalWindow;
   }
 
-  assert.deepEqual(calls, [
-    {
-      command: 'desktop_open_external_url',
-      args: { url: 'https://example.org/path' },
-    },
-    {
-      command: 'desktop_open_external_url',
-      args: { url: 'http://example.org/path' },
-    },
-    {
-      command: 'desktop_open_external_url',
-      args: { url: 'https://192.168.1.1/admin' },
-    },
-    {
-      command: 'desktop_open_external_url',
-      args: { url: 'https://169.254.169.254/latest/meta-data/' },
-    },
-  ]);
+  assert.deepEqual(
+    calls.filter((call) => call.command !== 'desktop_append_log'),
+    [
+      {
+        command: 'desktop_open_external_url',
+        args: { url: 'https://example.org/path' },
+      },
+      {
+        command: 'desktop_open_external_url',
+        args: { url: 'http://example.org/path' },
+      },
+      {
+        command: 'desktop_open_external_url',
+        args: { url: 'https://192.168.1.1/admin' },
+      },
+      {
+        command: 'desktop_open_external_url',
+        args: { url: 'https://169.254.169.254/latest/meta-data/' },
+      },
+    ]
+  );
+  assert.equal(calls.filter((call) => call.command === 'desktop_append_log').length, 2);
 });
 
 test('desktop external link opener records native bridge failures', async () => {
@@ -972,7 +977,39 @@ test('desktop clipboard image read ignores clipboards without an image', async (
     (globalThis as any).window = originalWindow;
   }
 
-  assert.deepEqual(calls, [{ command: 'plugin:clipboard-manager|read_image', args: undefined }]);
+  assert.deepEqual(calls, [
+    { command: 'plugin:clipboard-manager|read_image', args: undefined },
+    {
+      command: 'desktop_append_log',
+      args: {
+        source: 'frontend',
+        message: 'desktop clipboard image import failed: clipboard does not contain an image',
+      },
+    },
+  ]);
+});
+
+test('desktop clipboard text read uses the native clipboard plugin', async () => {
+  const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
+  const originalWindow = globalThis.window;
+
+  (globalThis as any).window = {
+    __SYNARA_DESKTOP__: {
+      platform: 'tauri',
+      invoke: async (command: string, args?: Record<string, unknown>) => {
+        calls.push({ command, args });
+        return 'hello from pasteboard';
+      },
+    },
+  };
+
+  try {
+    assert.equal(await readDesktopClipboardText(), 'hello from pasteboard');
+  } finally {
+    (globalThis as any).window = originalWindow;
+  }
+
+  assert.deepEqual(calls, [{ command: 'plugin:clipboard-manager|read_text', args: undefined }]);
 });
 
 const createWindowEventTarget = () => {
