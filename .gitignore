@@ -1,6 +1,7 @@
 experiment
 dist
 node_modules
+artifacts/
 devAssets/*
 !devAssets/
 !devAssets/index.html

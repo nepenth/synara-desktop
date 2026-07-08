@@ -919,6 +919,7 @@ private struct SpaceFilterStrip: View {
                 SynaraFilterChip(title: "All spaces", isSelected: selectedSpaceID == nil) {
                     selectedSpaceID = nil
                 }
+                .accessibilityIdentifier("SpaceFilter-all")
 
                 ForEach(spaces) { space in
                     SynaraFilterChip(

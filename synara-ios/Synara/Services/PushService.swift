@@ -9,6 +9,76 @@ protocol SparsePushRouteResolving {
     func resolveRoute(eventID: String) async -> AppRoute?
 }
 
+enum SynaraNotificationActionContract {
+    static let agentApprovalCategoryIdentifier = "synara.agent-approval"
+    static let approveOnceIdentifier = SynaraAgentApprovalNotificationActionID.approveOnce.rawValue
+    static let approveAlwaysIdentifier = SynaraAgentApprovalNotificationActionID.approveAlways.rawValue
+    static let denyIdentifier = SynaraAgentApprovalNotificationActionID.deny.rawValue
+
+    static func registerCategories(
+        center: UNUserNotificationCenter = UNUserNotificationCenter.current()
+    ) {
+        let actions = [
+            UNNotificationAction(
+                identifier: approveOnceIdentifier,
+                title: "Approve once",
+                options: [.authenticationRequired]
+            ),
+            UNNotificationAction(
+                identifier: approveAlwaysIdentifier,
+                title: "Approve always",
+                options: [.authenticationRequired]
+            ),
+            UNNotificationAction(
+                identifier: denyIdentifier,
+                title: "Deny",
+                options: [.authenticationRequired, .destructive]
+            )
+        ]
+
+        let category = UNNotificationCategory(
+            identifier: agentApprovalCategoryIdentifier,
+            actions: actions,
+            intentIdentifiers: [],
+            options: []
+        )
+        center.setNotificationCategories([category])
+    }
+
+    static func agentApprovalReactionRequest(
+        actionIdentifier: String,
+        userInfo: [AnyHashable: Any]
+    ) -> SynaraAgentApprovalReactionRequest? {
+        guard let action = SynaraAgentApprovalNotificationActionID(rawValue: actionIdentifier) else {
+            return nil
+        }
+
+        let candidates = NotificationPushRouteParser.flattenPayload(userInfo)
+        guard let roomID = firstString(candidates, keys: ["room_id", "roomId"]),
+              let eventID = firstString(candidates, keys: ["event_id", "eventId"]) else {
+            return nil
+        }
+
+        return SynaraAgentApprovalReactionRequest(
+            roomID: roomID,
+            sourceEventID: eventID,
+            reactionKey: action.reactionKey
+        )
+    }
+
+    private static func firstString(_ values: [String: Any], keys: [String]) -> String? {
+        for key in keys {
+            if let value = values[key] as? String {
+                let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+                if trimmed.isEmpty == false {
+                    return trimmed
+                }
+            }
+        }
+        return nil
+    }
+}
+
 struct MatrixSparsePushRouteResolver: SparsePushRouteResolving {
     let sessionStore: AppSessionStore
     let clientStore: MatrixRustSDKClientStore

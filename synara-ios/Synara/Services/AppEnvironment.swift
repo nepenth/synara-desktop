@@ -19,6 +19,7 @@ struct AppEnvironment {
     let drafts: DraftStore
     let eventActions: EventActionServicing
     let agentApprovals: AgentApprovalServicing
+    let agentApprovalReactions: AgentApprovalReactionServicing
     let readMarkers: RoomReadMarkerServicing
     let mediaLoader: MediaLoading
     let mediaUploader: MediaUploading
@@ -104,6 +105,7 @@ struct AppEnvironment {
             drafts: drafts,
             eventActions: MatrixRustSDKEventActionService(sessionStore: session, clientStore: matrixSDKClientStore),
             agentApprovals: MatrixRustSDKAgentApprovalService(sessionStore: session, clientStore: matrixSDKClientStore),
+            agentApprovalReactions: MatrixRustSDKAgentApprovalReactionService(sessionStore: session, clientStore: matrixSDKClientStore),
             readMarkers: MatrixRoomReadMarkerService(sessionStore: session, clientStore: matrixSDKClientStore),
             mediaLoader: MatrixMediaLoader(sessionStore: session, clientStore: matrixSDKClientStore),
             mediaUploader: MatrixMediaUploadService(sessionStore: session, clientStore: matrixSDKClientStore),
@@ -130,6 +132,7 @@ struct AppEnvironment {
         drafts: DraftStore = DraftStore(),
         eventActions: EventActionServicing = MockEventActionService(),
         agentApprovals: AgentApprovalServicing = MockAgentApprovalService(),
+        agentApprovalReactions: AgentApprovalReactionServicing = MockAgentApprovalReactionService(),
         readMarkers: RoomReadMarkerServicing = MockRoomReadMarkerService(),
         mediaLoader: MediaLoading = MockMediaLoader(),
         mediaUploader: MediaUploading = MockMediaUploadService(),
@@ -165,6 +168,7 @@ struct AppEnvironment {
             drafts: drafts,
             eventActions: eventActions,
             agentApprovals: agentApprovals,
+            agentApprovalReactions: agentApprovalReactions,
             readMarkers: readMarkers,
             mediaLoader: mediaLoader,
             mediaUploader: mediaUploader,

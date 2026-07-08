@@ -537,3 +537,57 @@ test('platform notifications normalize shared requests before desktop delivery',
     (globalThis as any).window = originalWindow;
   }
 });
+
+test('platform notifications forward approval actions after shared normalization', async () => {
+  const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
+  const originalWindow = globalThis.window;
+  (globalThis as any).window = {
+    __SYNARA_DESKTOP__: {
+      platform: 'tauri',
+      invoke: async (command: string, args?: Record<string, unknown>) => {
+        calls.push({ command, args });
+        return true;
+      },
+    },
+  };
+
+  try {
+    const result = await showPlatformNotification({
+      title: 'Approval',
+      actions: [
+        { id: 'agent-approval.approve-once', label: 'Approve once' },
+        { id: 'agent-approval.deny', label: 'Deny' },
+      ],
+      actionContext: {
+        kind: 'agent-approval',
+        roomId: '!room:matrix.org',
+        eventId: '$event:matrix.org',
+      },
+    });
+
+    assert.equal(result, true);
+    assert.deepEqual(calls, [
+      {
+        command: 'desktop_notify',
+        args: {
+          notification: {
+            title: 'Approval',
+            body: undefined,
+            route: undefined,
+            actions: [
+              { id: 'agent-approval.approve-once', label: 'Approve once' },
+              { id: 'agent-approval.deny', label: 'Deny' },
+            ],
+            actionContext: {
+              kind: 'agent-approval',
+              roomId: '!room:matrix.org',
+              eventId: '$event:matrix.org',
+            },
+          },
+        },
+      },
+    ]);
+  } finally {
+    (globalThis as any).window = originalWindow;
+  }
+});

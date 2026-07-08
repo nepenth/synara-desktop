@@ -40,12 +40,15 @@ struct RoomTimelineView: View {
     @State private var cryptoActionMessage: String?
     @State private var isCryptoBannerDismissed = false
     @State private var isRoomDetailsPresented = false
+    @State private var shouldReturnToListAfterDetailsDismiss = false
     @State private var isTimelineSearchPresented = false
     @State private var timelineSearchQuery = ""
     @State private var lastRenderedTimelineCount = 0
     @State private var showJumpToLatest = false
     @State private var hasPositionedInitialTimeline = false
     @State private var initialReadMarkerEventID: String?
+    @State private var pendingInitialReadMarkerRestoreEventID: String?
+    @State private var initialReadMarkerRestoreBaselineItemIDs: Set<String> = []
     @State private var hasReachedOldestMessages = false
     @State private var lastOlderPaginationAt = Date.distantPast
     @State private var paginationScrollAnchorID: String?
@@ -60,6 +63,7 @@ struct RoomTimelineView: View {
     @State private var sendAnimationItemIDs: Set<String> = []
     @Environment(\.openURL) private var openURL
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     init(roomID: String, roomTitle: String?, focusedEventID: String? = nil) {
         self.roomID = roomID
@@ -113,7 +117,14 @@ struct RoomTimelineView: View {
             MediaViewer(resource: resource)
         }
         .sheet(isPresented: $isRoomDetailsPresented) {
-            RoomDetailsView(roomID: roomID, fallbackTitle: roomTitle ?? "Room")
+            RoomDetailsView(
+                roomID: roomID,
+                fallbackTitle: roomTitle ?? "Room",
+                onLeaveRoom: {
+                    shouldReturnToListAfterDetailsDismiss = true
+                    isRoomDetailsPresented = false
+                }
+            )
         }
         .sheet(isPresented: $isTimelineSearchPresented) {
             TimelineSearchSheet(
@@ -165,6 +176,13 @@ struct RoomTimelineView: View {
         }
         .onChange(of: draft) { value in
             environment.drafts.setDraft(value, roomID: roomID)
+        }
+        .onChange(of: isRoomDetailsPresented) { isPresented in
+            guard isPresented == false, shouldReturnToListAfterDetailsDismiss else {
+                return
+            }
+            shouldReturnToListAfterDetailsDismiss = false
+            environment.router.popSelectedTabToRoot()
         }
         .onChange(of: selectedPhoto) { item in
             guard let item else {
@@ -255,6 +273,9 @@ struct RoomTimelineView: View {
                                 onAgentAction: { action in
                                     executeAgentAction(action, sourceEventID: item.eventID)
                                 },
+                                onAgentApprovalReaction: { reactionKey in
+                                    submitAgentApprovalReaction(reactionKey: reactionKey, sourceEventID: item.eventID)
+                                },
                                 onRetryFailedSend: {
                                     retryFailedMessage(item)
                                 }
@@ -290,7 +311,7 @@ struct RoomTimelineView: View {
                                 }
                             }
                     }
-                    .padding(.horizontal, SynaraSpacing.medium)
+                    .padding(.horizontal, timelineHorizontalPadding)
                     .padding(.top, isAgentRoom ? SynaraSpacing.medium : SynaraSpacing.small)
                     .padding(.bottom, SynaraSpacing.small)
                 }
@@ -301,6 +322,7 @@ struct RoomTimelineView: View {
                     DragGesture(minimumDistance: 8).onChanged { _ in
                         if items.count > 8 {
                             cancelTimelineScroll()
+                            cancelInitialReadMarkerRestore()
                         }
                     }
                 )
@@ -330,8 +352,13 @@ struct RoomTimelineView: View {
                                 proxy.scrollTo(anchorID, anchor: .top)
                             }
                         }
+                        lastRenderedTimelineCount = updatedItems.count
+                        return
                     }
-                    scrollToInitialPosition(items: updatedItems, proxy: proxy)
+                    let didPositionInitialTimeline = scrollToInitialPosition(items: updatedItems, proxy: proxy)
+                    if didPositionInitialTimeline == false {
+                        restoreInitialReadMarkerPositionIfNeeded(items: updatedItems, proxy: proxy)
+                    }
                     scrollToLatestMessageIfNeeded(items: updatedItems, proxy: proxy)
                     scrollToAnchoredEvent(items: updatedItems, proxy: proxy)
                     scrollToPendingLatestIfNeeded(items: updatedItems, proxy: proxy)
@@ -340,11 +367,12 @@ struct RoomTimelineView: View {
         }
     }
 
-    private func scrollToInitialPosition(items: [TimelineItem], proxy: ScrollViewProxy) {
+    @discardableResult
+    private func scrollToInitialPosition(items: [TimelineItem], proxy: ScrollViewProxy) -> Bool {
         guard hasPositionedInitialTimeline == false,
               focusedEventID == nil,
               let latest = items.last else {
-            return
+            return false
         }
 
         let target = initialReadMarkerEventID.flatMap { eventID in
@@ -353,24 +381,67 @@ struct RoomTimelineView: View {
             }
         } ?? latest
         let isLatestTarget = target.eventID == latest.eventID || target.id == latest.id
+        let shouldOpenAtLatest = isLatestTarget && initialReadMarkerEventID == nil
 
         hasPositionedInitialTimeline = true
-        Task {
-            await MainActor.run {
-                if isLatestTarget {
-                    scrollToTimelineBottom(
-                        proxy: proxy,
-                        eventID: target.eventID,
-                        animated: false,
-                        ignoreComposerFocus: true
-                    )
-                    showJumpToLatest = false
-                } else {
-                    proxy.scrollTo(target.eventID, anchor: .center)
-                    showJumpToLatest = initialReadMarkerEventID != nil || isLatestTarget == false
-                }
-            }
+        if shouldOpenAtLatest {
+            cancelInitialReadMarkerRestore()
+            placeInitialTimelineAtBottom(proxy: proxy)
+        } else {
+            pendingInitialReadMarkerRestoreEventID = target.eventID
+            initialReadMarkerRestoreBaselineItemIDs = Set(items.map(\.id))
+            showJumpToLatest = true
+            placeInitialTimelineAtEvent(proxy: proxy, eventID: target.eventID, anchor: .center)
         }
+        return true
+    }
+
+    private func placeInitialTimelineAtEvent(proxy: ScrollViewProxy, eventID: String, anchor: UnitPoint) {
+        cancelTimelineScroll()
+        timelineScrollTask = Task { @MainActor in
+            await Task.yield()
+            guard Task.isCancelled == false else {
+                return
+            }
+            proxy.scrollTo(eventID, anchor: anchor)
+            showJumpToLatest = true
+        }
+    }
+
+    private func placeInitialTimelineAtBottom(proxy: ScrollViewProxy) {
+        cancelTimelineScroll()
+        timelineScrollTask = Task { @MainActor in
+            let delays: [UInt64] = [0, 50, 150, 300]
+            for delayMilliseconds in delays {
+                if delayMilliseconds > 0 {
+                    try? await Task.sleep(nanoseconds: delayMilliseconds * 1_000_000)
+                } else {
+                    await Task.yield()
+                }
+                guard Task.isCancelled == false else {
+                    return
+                }
+                proxy.scrollTo(Self.timelineBottomAnchorID, anchor: .bottom)
+            }
+            showJumpToLatest = false
+        }
+    }
+
+    private func restoreInitialReadMarkerPositionIfNeeded(items: [TimelineItem], proxy: ScrollViewProxy) {
+        guard focusedEventID == nil,
+              let markerEventID = pendingInitialReadMarkerRestoreEventID,
+              showJumpToLatest,
+              items.contains(where: { $0.eventID == markerEventID || $0.id == markerEventID }) else {
+            return
+        }
+
+        let currentItemIDs = Set(items.map(\.id))
+        guard currentItemIDs != initialReadMarkerRestoreBaselineItemIDs else {
+            return
+        }
+
+        cancelInitialReadMarkerRestore()
+        placeInitialTimelineAtEvent(proxy: proxy, eventID: markerEventID, anchor: .center)
     }
 
     private func scrollToAnchoredEvent(items: [TimelineItem], proxy: ScrollViewProxy) {
@@ -493,6 +564,11 @@ struct RoomTimelineView: View {
         timelineScrollTask = nil
     }
 
+    private func cancelInitialReadMarkerRestore() {
+        pendingInitialReadMarkerRestoreEventID = nil
+        initialReadMarkerRestoreBaselineItemIDs = []
+    }
+
     private func scrollToLatestMessageTarget(proxy: ScrollViewProxy, eventID: String?) {
         if let eventID {
             proxy.scrollTo(eventID, anchor: UnitPoint(x: 0.5, y: 0.86))
@@ -530,6 +606,10 @@ struct RoomTimelineView: View {
         environment.roomList.isAgentRoom(roomID: roomID)
     }
 
+    private var timelineHorizontalPadding: CGFloat {
+        horizontalSizeClass == .compact ? SynaraSpacing.small : SynaraSpacing.medium
+    }
+
     private func isGroupedWithPrevious(index: Int, items: [TimelineItem]) -> Bool {
         guard index > 0 else {
             return false
@@ -563,10 +643,13 @@ struct RoomTimelineView: View {
         cryptoActionMessage = nil
         isCryptoBannerDismissed = false
         isRoomDetailsPresented = false
+        shouldReturnToListAfterDetailsDismiss = false
         lastRenderedTimelineCount = 0
         showJumpToLatest = false
         hasPositionedInitialTimeline = false
         initialReadMarkerEventID = nil
+        pendingInitialReadMarkerRestoreEventID = nil
+        initialReadMarkerRestoreBaselineItemIDs = []
         hasReachedOldestMessages = false
         lastOlderPaginationAt = .distantPast
         paginationScrollAnchorID = nil
@@ -1153,6 +1236,7 @@ struct RoomTimelineView: View {
         dismissKeyboard()
         isComposerFocused = false
         cancelTimelineScroll()
+        cancelInitialReadMarkerRestore()
         cancelMarkFullyRead()
         paginationScrollAnchorID = nil
         hasReachedOldestMessages = false
@@ -1349,6 +1433,36 @@ struct RoomTimelineView: View {
             } catch {
                 await MainActor.run {
                     agentActionMessage = "Agent action could not be submitted"
+                }
+            }
+        }
+    }
+
+    private func submitAgentApprovalReaction(reactionKey: String, sourceEventID: String) {
+        Task {
+            do {
+                try await environment.agentApprovalReactions.submitReaction(
+                    SynaraAgentApprovalReactionRequest(
+                        roomID: roomID,
+                        sourceEventID: sourceEventID,
+                        reactionKey: reactionKey
+                    )
+                )
+                await MainActor.run {
+                    if reactionKey == SynaraAgentApprovalPromptReaction.deny.reactionKey {
+                        SynaraHaptics.trigger(.lightImpact)
+                    } else {
+                        SynaraHaptics.trigger(.success)
+                    }
+                    agentActionMessage = "Approval reaction sent."
+                }
+            } catch let error as SynaraAgentApprovalError {
+                await MainActor.run {
+                    agentActionMessage = error.errorDescription ?? "Approval reaction could not be submitted."
+                }
+            } catch {
+                await MainActor.run {
+                    agentActionMessage = "Approval reaction could not be submitted."
                 }
             }
         }
@@ -2310,6 +2424,7 @@ private struct TimelineAvatar: View {
 private struct RoomDetailsView: View {
     let roomID: String
     let fallbackTitle: String
+    let onLeaveRoom: () -> Void
     @Environment(\.appEnvironment) private var environment
     @Environment(\.dismiss) private var dismiss
     @State private var details: RoomDetails?
@@ -2434,6 +2549,7 @@ private struct RoomDetailsView: View {
                 Button("Leave Room", role: .destructive) {
                     leaveRoom()
                 }
+                .accessibilityIdentifier("ConfirmLeaveRoomButton")
                 Button("Cancel", role: .cancel) {}
             } message: {
                 Text("The room will be removed from your joined room list.")
@@ -2655,8 +2771,7 @@ private struct RoomDetailsView: View {
             do {
                 try await environment.roomManagement.leaveRoom(roomID: roomID)
                 await MainActor.run {
-                    environment.router.roomsPath = []
-                    dismiss()
+                    onLeaveRoom()
                 }
             } catch {
                 await MainActor.run {
@@ -2756,6 +2871,7 @@ private struct CryptoRecoveryBanner: View {
         }
         .padding(SynaraSpacing.medium)
         .synaraCard(fill: SynaraColor.warning.opacity(0.10), stroke: SynaraColor.warning.opacity(0.30))
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("EncryptedRecoveryBanner")
     }
 
@@ -2792,15 +2908,19 @@ private struct TimelineRow: View {
     let onReact: () -> Void
     let onOpenMedia: (MediaResource) -> Void
     let onAgentAction: (SynaraAgentCardAction) -> Void
+    let onAgentApprovalReaction: (String) -> Void
     let onRetryFailedSend: () -> Void
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     var body: some View {
-        let row = HStack(alignment: .top, spacing: SynaraSpacing.small) {
+        let row = HStack(alignment: .top, spacing: rowHorizontalSpacing) {
             if isGroupedWithPrevious {
-                Color.clear
-                    .frame(width: 30, height: 1)
+                if groupedLeadingGutter > 0 {
+                    Color.clear
+                        .frame(width: groupedLeadingGutter, height: 1)
+                }
             } else {
-                TimelineAvatar(senderID: item.senderID, avatarURL: item.senderAvatarURL, size: 30)
+                TimelineAvatar(senderID: item.senderID, avatarURL: item.senderAvatarURL, size: avatarSize)
             }
 
             VStack(alignment: .leading, spacing: 5) {
@@ -2907,44 +3027,7 @@ private struct TimelineRow: View {
 
     @ViewBuilder
     private var bubbleWrappedBodyContent: some View {
-        switch item.kind {
-        case .text(let body):
-            SynaraMessageBubble(
-                text: body,
-                alignment: bubbleAlignment,
-                isGrouped: isGroupedWithPrevious,
-                deliveryStatus: item.deliveryStatus
-            )
-        case .formattedText(let body, let html):
-            SynaraMessageBubble(
-                alignment: bubbleAlignment,
-                variant: .standard,
-                isGrouped: isGroupedWithPrevious,
-                showsBackground: false,
-                deliveryStatus: item.deliveryStatus
-            ) {
-                MatrixFormattedMessageView(
-                    fallbackBody: body,
-                    html: html,
-                    font: SynaraTypography.messageBody
-                )
-            }
-        case .encryptedPlaceholder:
-            SynaraMessageBubble(
-                alignment: bubbleAlignment,
-                variant: .encrypted,
-                isGrouped: isGroupedWithPrevious,
-                showsBackground: true,
-                deliveryStatus: nil
-            ) {
-                Label(
-                    "Encrypted content unavailable. Actions and media downloads are blocked until keys are available.",
-                    systemImage: "lock"
-                )
-                .font(SynaraTypography.messageBody)
-                .foregroundStyle(SynaraColor.secondaryText)
-            }
-        case .agentCard(let card):
+        if let approvalPrompt {
             SynaraMessageBubble(
                 alignment: bubbleAlignment,
                 variant: .agent,
@@ -2952,10 +3035,63 @@ private struct TimelineRow: View {
                 showsBackground: true,
                 deliveryStatus: nil
             ) {
-                AgentCardTimelineRow(card: card, onAction: onAgentAction)
+                AgentApprovalPromptTimelineCard(
+                    prompt: approvalPrompt,
+                    eventID: item.eventID,
+                    onReaction: onAgentApprovalReaction
+                )
             }
-        default:
-            bodyContent
+        } else {
+            switch item.kind {
+            case .text(let body):
+                SynaraMessageBubble(
+                    text: body,
+                    alignment: bubbleAlignment,
+                    isGrouped: isGroupedWithPrevious,
+                    deliveryStatus: item.deliveryStatus
+                )
+            case .formattedText(let body, let html):
+                SynaraMessageBubble(
+                    alignment: bubbleAlignment,
+                    variant: .standard,
+                    isGrouped: isGroupedWithPrevious,
+                    showsBackground: false,
+                    deliveryStatus: item.deliveryStatus
+                ) {
+                    MatrixFormattedMessageView(
+                        fallbackBody: body,
+                        html: html,
+                        font: SynaraTypography.messageBody
+                    )
+                }
+            case .encryptedPlaceholder:
+                SynaraMessageBubble(
+                    alignment: bubbleAlignment,
+                    variant: .encrypted,
+                    isGrouped: isGroupedWithPrevious,
+                    showsBackground: true,
+                    deliveryStatus: nil
+                ) {
+                    Label(
+                        "Encrypted content unavailable. Actions and media downloads are blocked until keys are available.",
+                        systemImage: "lock"
+                    )
+                    .font(SynaraTypography.messageBody)
+                    .foregroundStyle(SynaraColor.secondaryText)
+                }
+            case .agentCard(let card):
+                SynaraMessageBubble(
+                    alignment: bubbleAlignment,
+                    variant: .agent,
+                    isGrouped: isGroupedWithPrevious,
+                    showsBackground: true,
+                    deliveryStatus: nil
+                ) {
+                    AgentCardTimelineRow(card: card, onAction: onAgentAction)
+                }
+            default:
+                bodyContent
+            }
         }
     }
 
@@ -3034,6 +3170,10 @@ private struct TimelineRow: View {
     }
 
     private var accessibilityChildBehavior: AccessibilityChildBehavior {
+        if approvalPrompt != nil {
+            return .contain
+        }
+
         if case .agentCard = item.kind {
             return .contain
         }
@@ -3046,6 +3186,10 @@ private struct TimelineRow: View {
     }
 
     private var accessibilityHint: String {
+        if approvalPrompt != nil {
+            return "Review available approval reactions"
+        }
+
         switch item.kind {
         case .agentCard:
             return "Review available agent actions"
@@ -3056,6 +3200,26 @@ private struct TimelineRow: View {
 
     private var isOutgoing: Bool {
         item.senderID == currentUserID
+    }
+
+    private var approvalPrompt: SynaraAgentApprovalPrompt? {
+        SynaraAgentApprovalPromptDetector.detect(in: item)
+    }
+
+    private var isCompactWidth: Bool {
+        horizontalSizeClass == .compact
+    }
+
+    private var avatarSize: CGFloat {
+        isCompactWidth ? 28 : 30
+    }
+
+    private var groupedLeadingGutter: CGFloat {
+        isCompactWidth ? 0 : avatarSize
+    }
+
+    private var rowHorizontalSpacing: CGFloat {
+        isGroupedWithPrevious && isCompactWidth ? 0 : SynaraSpacing.small
     }
 
     @ViewBuilder
@@ -3296,6 +3460,97 @@ private struct ReactionPill: View {
     }
 }
 
+private struct AgentApprovalPromptTimelineCard: View {
+    let prompt: SynaraAgentApprovalPrompt
+    let eventID: String
+    let onReaction: (String) -> Void
+    @State private var isCommandExpanded = false
+
+    private var actionColumns: [GridItem] {
+        Array(
+            repeating: GridItem(.flexible(minimum: 68), spacing: SynaraSpacing.small),
+            count: SynaraAgentApprovalPromptReaction.allCases.count
+        )
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: SynaraSpacing.medium) {
+            HStack(alignment: .top, spacing: SynaraSpacing.small) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 19, weight: .semibold))
+                    .foregroundStyle(SynaraColor.critical)
+                    .accessibilityHidden(true)
+
+                VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
+                    Text(prompt.title)
+                        .font(SynaraTypography.emphasis)
+                        .foregroundStyle(SynaraColor.primaryText)
+                        .lineLimit(2)
+                        .accessibilityIdentifier("AgentApprovalPromptTitle-\(eventID)")
+                    Text(prompt.body)
+                        .font(SynaraTypography.messageMeta)
+                        .foregroundStyle(SynaraColor.secondaryText)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            if let command = prompt.command {
+                DisclosureGroup(isExpanded: $isCommandExpanded) {
+                    ScrollView(.horizontal, showsIndicators: true) {
+                        Text(command)
+                            .font(.system(.caption, design: .monospaced))
+                            .foregroundStyle(SynaraColor.primaryText)
+                            .textSelection(.enabled)
+                            .padding(.top, SynaraSpacing.xSmall)
+                    }
+                    .frame(maxHeight: 140)
+                } label: {
+                    Text(prompt.commandPreview ?? "Review command")
+                        .font(SynaraTypography.messageMeta.weight(.medium))
+                        .foregroundStyle(SynaraColor.primaryText)
+                        .lineLimit(1)
+                }
+                .padding(SynaraSpacing.small)
+                .background(SynaraColor.surface.opacity(0.72))
+                .overlay(
+                    RoundedRectangle(cornerRadius: SynaraRadius.control, style: .continuous)
+                        .stroke(SynaraColor.critical.opacity(0.22), lineWidth: 1)
+                )
+                .clipShape(RoundedRectangle(cornerRadius: SynaraRadius.control, style: .continuous))
+            }
+
+            LazyVGrid(columns: actionColumns, spacing: SynaraSpacing.small) {
+                ForEach(SynaraAgentApprovalPromptReaction.allCases) { action in
+                    Button {
+                        onReaction(action.reactionKey)
+                    } label: {
+                        VStack(spacing: SynaraSpacing.xSmall) {
+                            Text(action.reactionKey)
+                                .font(.system(size: 21, weight: .semibold))
+                            Text(action.title)
+                                .font(SynaraTypography.chipLabel.weight(.semibold))
+                                .multilineTextAlignment(.center)
+                                .lineLimit(2)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .frame(minHeight: 58)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(action.tint)
+                    .background(action.tint.opacity(action == .deny ? 0.08 : 0.10))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: SynaraRadius.control, style: .continuous)
+                            .stroke(action.tint.opacity(0.68), lineWidth: 1)
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: SynaraRadius.control, style: .continuous))
+                    .accessibilityLabel("\(action.title) \(action.reactionKey)")
+                    .accessibilityIdentifier("AgentApprovalPromptReaction-\(action.accessibilityIdentifierSuffix)-\(eventID)")
+                }
+            }
+        }
+    }
+}
+
 private struct AgentApprovalButtonStyle: ViewModifier {
     let action: SynaraAgentCardAction
 
@@ -3529,6 +3784,17 @@ private extension SynaraAgentCardAction {
             return SynaraColor.success
         default:
             return SynaraColor.agent
+        }
+    }
+}
+
+private extension SynaraAgentApprovalPromptReaction {
+    var tint: Color {
+        switch self {
+        case .approveOnce, .approveAlways:
+            return SynaraColor.success
+        case .deny:
+            return SynaraColor.critical
         }
     }
 }

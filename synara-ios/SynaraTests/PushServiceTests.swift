@@ -80,6 +80,47 @@ final class PushServiceTests: XCTestCase {
         XCTAssertEqual(later, .later)
     }
 
+    func testAgentApprovalNotificationActionParsesReactionRequest() throws {
+        let request = try XCTUnwrap(
+            SynaraNotificationActionContract.agentApprovalReactionRequest(
+                actionIdentifier: SynaraNotificationActionContract.approveOnceIdentifier,
+                userInfo: [
+                    "synara": [
+                        "room_id": " !room:matrix.org ",
+                        "event_id": " $approval:matrix.org "
+                    ]
+                ]
+            )
+        )
+
+        XCTAssertEqual(
+            request,
+            SynaraAgentApprovalReactionRequest(
+                roomID: "!room:matrix.org",
+                sourceEventID: "$approval:matrix.org",
+                reactionKey: "✅"
+            )
+        )
+    }
+
+    func testAgentApprovalNotificationActionRejectsUnknownOrIncompletePayloads() {
+        XCTAssertNil(
+            SynaraNotificationActionContract.agentApprovalReactionRequest(
+                actionIdentifier: "unknown",
+                userInfo: [
+                    "room_id": "!room:matrix.org",
+                    "event_id": "$approval:matrix.org"
+                ]
+            )
+        )
+        XCTAssertNil(
+            SynaraNotificationActionContract.agentApprovalReactionRequest(
+                actionIdentifier: SynaraNotificationActionContract.denyIdentifier,
+                userInfo: ["room_id": "!room:matrix.org"]
+            )
+        )
+    }
+
     func testBadgeCountParsesApsBadgeAndSummaryFormats() {
         let service = SynaraPushService(
             logger: MockLoggingService(),

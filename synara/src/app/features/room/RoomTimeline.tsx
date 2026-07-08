@@ -2009,6 +2009,11 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
                 htmlReactParserOptions={htmlReactParserOptions}
                 linkifyOpts={linkifyOpts}
                 outlineAttachment={messageLayout === MessageLayout.Bubble}
+                agentApprovalTarget={{
+                  roomId: room.roomId,
+                  eventId: mEventId,
+                  canSendReaction,
+                }}
               />
             )}
           </Message>
@@ -2124,6 +2129,11 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
                       htmlReactParserOptions={htmlReactParserOptions}
                       linkifyOpts={linkifyOpts}
                       outlineAttachment={messageLayout === MessageLayout.Bubble}
+                      agentApprovalTarget={{
+                        roomId: room.roomId,
+                        eventId: mEventId,
+                        canSendReaction,
+                      }}
                     />
                   );
                 }

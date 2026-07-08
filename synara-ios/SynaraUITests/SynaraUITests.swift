@@ -119,9 +119,9 @@ final class SynaraUITests: XCTestCase {
         login(app: app)
 
         XCTAssertTrue(app.scrollViews["SpaceFilterStrip"].waitForExistence(timeout: 5))
-        tap(app.buttons["Workspace"])
+        tap(app.buttons["SpaceFilter-!workspace:matrix.org"])
         XCTAssertTrue(app.buttons["RoomRow-!project:matrix.org"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.buttons["All spaces"].exists)
+        XCTAssertTrue(app.buttons["SpaceFilter-all"].exists)
     }
 
     func testRoomManagementPublicDirectorySearchMockFlow() {
@@ -142,6 +142,13 @@ final class SynaraUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Project"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.scrollViews["TimelineList"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["Here's the latest spec for the new permissions model."].waitForExistence(timeout: 5))
+    }
+
+    func testRoomRouteAnchorsToSeededReadMarker() {
+        let app = launchRoomApp(readMarkerEventID: "$security:!project:matrix.org")
+
+        XCTAssertTrue(app.scrollViews["TimelineList"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["We should also update the role matrix while we're at it."].waitForExistence(timeout: 5))
     }
 
     func testRoomDetailsInviteAndLeaveMockFlow() {
@@ -166,8 +173,18 @@ final class SynaraUITests: XCTestCase {
 
         XCTAssertTrue(revealRoomDetailsElement(app.buttons["LeaveRoomButton"], app: app, timeout: 8))
         tap(app.buttons["LeaveRoomButton"])
-        tap(app.buttons["Leave Room"].firstMatch)
-        XCTAssertTrue(app.collectionViews["RoomList"].waitForExistence(timeout: 5))
+        tap(app.buttons["ConfirmLeaveRoomButton"].firstMatch, timeout: 5)
+        XCTAssertTrue(
+            waitForAnyElement(
+                [
+                    app.collectionViews["RoomList"],
+                    app.collectionViews["RoomListLoading"],
+                    app.buttons["RoomRow-!project:matrix.org"],
+                    app.staticTexts["No Rooms"]
+                ],
+                timeout: 10
+            )
+        )
     }
 
     func testRoomDetailsProfileEditMockFlow() {
@@ -270,12 +287,22 @@ final class SynaraUITests: XCTestCase {
         let app = launchEncryptedRoomApp()
 
         XCTAssertTrue(app.scrollViews["TimelineList"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["Recovery Needed"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["Encrypted history needs attention"].waitForExistence(timeout: 5))
-        XCTAssertTrue(waitForTimelineElement(app.buttons["Retry Decryption"], app: app, timeout: 5))
-        XCTAssertTrue(waitForTimelineElement(app.buttons["Review Security"], app: app, timeout: 5))
-        XCTAssertTrue(app.staticTexts["Decrypted encrypted-room message"].exists)
-        XCTAssertTrue(app.staticTexts["Encrypted content unavailable. Actions and media downloads are blocked until keys are available."].exists)
+        XCTAssertTrue(
+            waitForTimelineElement(app.otherElements["EncryptedRecoveryBanner"], app: app, timeout: 5, preferredSwipe: .down)
+        )
+        XCTAssertTrue(
+            waitForTimelineElement(app.staticTexts["Encrypted history needs attention"], app: app, timeout: 5, preferredSwipe: .down)
+        )
+        XCTAssertTrue(waitForTimelineElement(app.buttons["Retry Decryption"], app: app, timeout: 5, preferredSwipe: .down))
+        XCTAssertTrue(waitForTimelineElement(app.buttons["Review Security"], app: app, timeout: 5, preferredSwipe: .down))
+        XCTAssertTrue(waitForTimelineElement(app.staticTexts["Decrypted encrypted-room message"], app: app, timeout: 5))
+        XCTAssertTrue(
+            waitForTimelineElement(
+                app.staticTexts["Encrypted content unavailable. Actions and media downloads are blocked until keys are available."],
+                app: app,
+                timeout: 5
+            )
+        )
     }
 
     func testNotificationsInboxShowsUnreadRooms() {
@@ -408,6 +435,21 @@ final class SynaraUITests: XCTestCase {
         let alert = app.alerts["Agent Action"]
         XCTAssertTrue(alert.waitForExistence(timeout: 5))
         XCTAssertTrue(alert.staticTexts["Agent action could not be submitted. Try again."].exists)
+    }
+
+    func testAgentApprovalPromptShowsEmojiReactionActions() {
+        let app = launchAgentApprovalPromptRoomApp()
+
+        XCTAssertTrue(app.staticTexts["Approval Required: Dangerous Command"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["AgentApprovalPromptReaction-approveOnce-$agent-approval-prompt"].exists)
+        XCTAssertTrue(app.buttons["AgentApprovalPromptReaction-approveAlways-$agent-approval-prompt"].exists)
+        XCTAssertTrue(app.buttons["AgentApprovalPromptReaction-deny-$agent-approval-prompt"].exists)
+
+        tap(app.buttons["AgentApprovalPromptReaction-approveOnce-$agent-approval-prompt"])
+
+        let alert = app.alerts["Agent Action"]
+        XCTAssertTrue(alert.waitForExistence(timeout: 5))
+        XCTAssertTrue(alert.staticTexts["Approval reaction sent."].exists)
     }
 
     func testLiveStaleCacheSmokeWhenConfigured() throws {
@@ -669,8 +711,17 @@ final class SynaraUITests: XCTestCase {
 
         XCTAssertTrue(revealRoomDetailsElement(app.buttons["LeaveRoomButton"], app: app, timeout: 10))
         tap(app.buttons["LeaveRoomButton"], timeout: 1)
-        tap(app.buttons["Leave Room"].firstMatch, timeout: 10)
-        XCTAssertTrue(app.collectionViews["RoomList"].waitForExistence(timeout: 60))
+        tap(app.buttons["ConfirmLeaveRoomButton"].firstMatch, timeout: 10)
+        XCTAssertTrue(
+            waitForAnyElement(
+                [
+                    app.collectionViews["RoomList"],
+                    app.collectionViews["RoomListLoading"],
+                    app.staticTexts["No Rooms"]
+                ],
+                timeout: 60
+            )
+        )
         XCTAssertFalse(app.staticTexts[roomName].exists)
     }
 
@@ -796,11 +847,14 @@ final class SynaraUITests: XCTestCase {
         return app
     }
 
-    private func launchRoomApp() -> XCUIApplication {
+    private func launchRoomApp(readMarkerEventID: String? = nil) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchEnvironment["SYNARA_UI_TESTS"] = "1"
         app.launchEnvironment["SYNARA_UI_TEST_ROOM_ID"] = "!project:matrix.org"
         app.launchEnvironment["SYNARA_UI_TEST_ROOM_TITLE"] = "Project"
+        if let readMarkerEventID {
+            app.launchEnvironment["SYNARA_UI_TEST_READ_MARKER_EVENT_ID"] = readMarkerEventID
+        }
         launch(app)
         return app
     }
@@ -917,6 +971,16 @@ final class SynaraUITests: XCTestCase {
         if let approvalError {
             app.launchEnvironment["SYNARA_UI_TEST_AGENT_APPROVAL_ERROR"] = approvalError
         }
+        launch(app)
+        return app
+    }
+
+    private func launchAgentApprovalPromptRoomApp() -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchEnvironment["SYNARA_UI_TESTS"] = "1"
+        app.launchEnvironment["SYNARA_UI_TEST_ROOM_ID"] = "!agent:matrix.org"
+        app.launchEnvironment["SYNARA_UI_TEST_ROOM_TITLE"] = "Agent"
+        app.launchEnvironment["SYNARA_UI_TEST_AGENT_APPROVAL_PROMPT"] = "1"
         launch(app)
         return app
     }
@@ -1141,21 +1205,52 @@ final class SynaraUITests: XCTestCase {
         return app.staticTexts["Create Room"].exists
     }
 
-    private func waitForTimelineElement(_ element: XCUIElement, app: XCUIApplication, timeout: TimeInterval) -> Bool {
+    private enum TimelineSwipeDirection {
+        case up
+        case down
+    }
+
+    private func waitForTimelineElement(
+        _ element: XCUIElement,
+        app: XCUIApplication,
+        timeout: TimeInterval,
+        preferredSwipe: TimelineSwipeDirection = .up
+    ) -> Bool {
         let deadline = Date().addingTimeInterval(timeout)
         let timeline = app.scrollViews["TimelineList"]
+        var nextSwipe = preferredSwipe
 
         while Date() < deadline {
             if element.exists {
                 return true
             }
             if timeline.exists {
-                timeline.swipeUp()
+                switch nextSwipe {
+                case .up:
+                    timeline.swipeUp()
+                    nextSwipe = .down
+                case .down:
+                    timeline.swipeDown()
+                    nextSwipe = .up
+                }
             }
             RunLoop.current.run(until: Date().addingTimeInterval(0.5))
         }
 
         return element.exists
+    }
+
+    private func waitForAnyElement(_ elements: [XCUIElement], timeout: TimeInterval) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+
+        while Date() < deadline {
+            if elements.contains(where: \.exists) {
+                return true
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.25))
+        }
+
+        return elements.contains(where: \.exists)
     }
 
     private func waitForAnyStaticText(_ values: [String], app: XCUIApplication, timeout: TimeInterval) -> Bool {
