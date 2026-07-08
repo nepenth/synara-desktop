@@ -1081,3 +1081,29 @@ test('desktop performance capabilities fall back on the web', async () => {
     (globalThis as any).window = originalWindow;
   }
 });
+
+test('desktop performance capabilities fall back when desktop ACL denies the command', async () => {
+  const originalWindow = globalThis.window;
+  (globalThis as any).window = {
+    __SYNARA_DESKTOP__: {
+      platform: 'tauri',
+      invoke: async (command: string) => {
+        if (command === 'desktop_append_log') return undefined;
+        throw new Error('Command desktop_get_performance_capabilities not allowed by ACL');
+      },
+    },
+  };
+
+  try {
+    clearDesktopDiagnostics();
+    assert.deepEqual(await getDesktopPerformanceCapabilities(), {
+      platform: 'web',
+    });
+    assert.match(
+      getDesktopDiagnosticEntries().join('\n'),
+      /desktop_get_performance_capabilities failed: Command desktop_get_performance_capabilities not allowed by ACL/
+    );
+  } finally {
+    (globalThis as any).window = originalWindow;
+  }
+});

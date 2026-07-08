@@ -1,6 +1,36 @@
 use std::path::Path;
 use std::process::Command;
 
+const DESKTOP_COMMANDS: &[&str] = &[
+    "desktop_show",
+    "desktop_hide",
+    "desktop_navigate",
+    "desktop_set_badge_count",
+    "desktop_set_shortcuts",
+    "desktop_secret_store_status",
+    "desktop_get_session",
+    "desktop_set_session",
+    "desktop_remove_session",
+    "desktop_get_integration_status",
+    "desktop_update_tray_state",
+    "desktop_get_notification_permission",
+    "desktop_request_notification_permission",
+    "desktop_notify",
+    "desktop_open_external_url",
+    "desktop_save_file",
+    "desktop_save_file_begin",
+    "desktop_save_file_chunk",
+    "desktop_save_file_end",
+    "desktop_save_file_abort",
+    "desktop_read_dropped_files",
+    "desktop_read_dropped_file_chunk",
+    "desktop_read_dropped_file_end",
+    "desktop_get_performance_capabilities",
+    "desktop_append_log",
+    "desktop_log_path",
+    "desktop_agent_action",
+];
+
 fn git_output(repo: &Path, args: &[&str]) -> Option<String> {
     let output = Command::new("git")
         .arg("-C")
@@ -67,5 +97,9 @@ fn main() {
     println!("cargo:rustc-env=SYNARA_DESKTOP_BUILD_REVISION={revision}");
     println!("cargo:rustc-env=SYNARA_DESKTOP_BUILD_BRANCH={branch}");
 
-    tauri_build::build()
+    tauri_build::try_build(
+        tauri_build::Attributes::new()
+            .app_manifest(tauri_build::AppManifest::new().commands(DESKTOP_COMMANDS)),
+    )
+    .expect("failed to run Tauri build script")
 }
