@@ -7,6 +7,8 @@ import {
   getRoomUnreadInfo,
   getTimelineEndWindow,
   hasUnreadForInitialScroll,
+  canRestoreViewportFromInitialTimeline,
+  timelineWindowContainsEventId,
   timelineHasEvents,
 } from '../timelineOpening';
 
@@ -91,6 +93,24 @@ test('timeline opening helpers represent empty and non-empty timelines', () => {
   assert.deepEqual(emptyTimeline, { range: { start: 0, end: 0 }, linkedTimelines: [] });
   assert.equal(timelineHasEvents(emptyTimeline), false);
   assert.equal(timelineHasEvents(nonEmptyTimeline), true);
+});
+
+test('timeline opening restore gate only accepts anchors inside the initial window', () => {
+  const [older, live] = link(timeline('older', ['$1', '$2']), timeline('live', ['$3', '$4', '$5']));
+  const window = getTimelineEndWindow([older, live], 3);
+
+  assert.equal(timelineWindowContainsEventId(window, '$1'), false);
+  assert.equal(timelineWindowContainsEventId(window, '$3'), true);
+  assert.equal(canRestoreViewportFromInitialTimeline(undefined, window), true);
+  assert.equal(canRestoreViewportFromInitialTimeline({ atBottom: true }, window), true);
+  assert.equal(
+    canRestoreViewportFromInitialTimeline({ atBottom: false, anchor: { eventId: '$1' } }, window),
+    false
+  );
+  assert.equal(
+    canRestoreViewportFromInitialTimeline({ atBottom: false, anchor: { eventId: '$3' } }, window),
+    true
+  );
 });
 
 test('room unread info resolves explicit anchors and read receipts', () => {

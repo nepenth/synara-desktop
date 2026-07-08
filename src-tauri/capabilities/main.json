@@ -9,6 +9,7 @@
   "permissions": [
     "core:default",
     "clipboard-manager:allow-read-image",
+    "clipboard-manager:allow-read-text",
     "clipboard-manager:allow-write-text",
     "notification:allow-permission-state",
     "notification:allow-request-permission",

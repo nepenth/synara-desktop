@@ -780,13 +780,11 @@ export const readDesktopClipboardImage = async (): Promise<File | undefined> => 
 
     return new File([blob], 'clipboard-image.png', { type: 'image/png' });
   } catch (error) {
-    if (rid !== undefined) {
-      recordDesktopDiagnostic(
-        `desktop clipboard image import failed: ${
-          error instanceof Error ? error.message : 'unknown error'
-        }`
-      );
-    }
+    recordDesktopDiagnostic(
+      `desktop clipboard image import failed: ${
+        error instanceof Error ? error.message : 'unknown error'
+      }`
+    );
     return undefined;
   } finally {
     if (rid !== undefined) {
@@ -796,6 +794,25 @@ export const readDesktopClipboardImage = async (): Promise<File | undefined> => 
         // Resource cleanup is best-effort; a failed close should not block paste.
       }
     }
+  }
+};
+
+export const readDesktopClipboardText = async (): Promise<string | undefined> => {
+  if (!isSynaraDesktop()) return undefined;
+  const invoke = getDesktopInvoke();
+  if (!invoke) return undefined;
+
+  try {
+    const text = await invoke<unknown>('plugin:clipboard-manager|read_text');
+    if (typeof text !== 'string' || text.length === 0) return undefined;
+    return text;
+  } catch (error) {
+    recordDesktopDiagnostic(
+      `desktop clipboard text import failed: ${
+        error instanceof Error ? error.message : 'unknown error'
+      }`
+    );
+    return undefined;
   }
 };
 
