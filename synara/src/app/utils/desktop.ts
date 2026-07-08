@@ -894,10 +894,14 @@ export const getDesktopIntegrationStatus = async (): Promise<DesktopIntegrationS
 
 export const getDesktopPerformanceCapabilities =
   async (): Promise<DesktopPerformanceCapabilities> => {
-    const result = await invokeDesktop<DesktopPerformanceCapabilities>(
-      'desktop_get_performance_capabilities'
-    );
-    return result ?? { platform: 'web' };
+    try {
+      const result = await invokeDesktop<DesktopPerformanceCapabilities>(
+        'desktop_get_performance_capabilities'
+      );
+      return result ?? { platform: 'web' };
+    } catch {
+      return { platform: 'web' };
+    }
   };
 
 const normalizeDesktopPermission = (permission: unknown): DesktopNotificationPermission => {
