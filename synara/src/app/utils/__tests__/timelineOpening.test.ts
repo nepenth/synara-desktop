@@ -5,6 +5,7 @@ import {
   getEmptyTimeline,
   getInitialTimeline,
   getRoomUnreadInfo,
+  getRoomUnreadInfoInTimelineWindow,
   getTimelineEndWindow,
   hasUnreadForInitialScroll,
   canRestoreViewportFromInitialTimeline,
@@ -151,6 +152,27 @@ test('room unread info tolerates missing read markers and detached timeline look
     readUptoEventId: '$1',
     inLiveTimeline: false,
     scrollTo: false,
+  });
+});
+
+test('room unread info only becomes an initial placement anchor inside the live-end window', () => {
+  const [older, live] = link(timeline('older', ['$1', '$2']), timeline('live', ['$3', '$4', '$5']));
+  const window = getTimelineEndWindow([older, live], 3);
+  const room = roomWithTimelines({
+    live,
+    readUpTo: '$2',
+    eventTimelines: {
+      $2: older,
+      $3: live,
+      $4: live,
+    },
+  });
+
+  assert.equal(getRoomUnreadInfoInTimelineWindow(room, window), undefined);
+  assert.deepEqual(getRoomUnreadInfoInTimelineWindow(room, window, '$4', true), {
+    readUptoEventId: '$4',
+    inLiveTimeline: true,
+    scrollTo: true,
   });
 });
 
