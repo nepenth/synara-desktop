@@ -271,7 +271,9 @@ private extension AppEnvironment {
         } else if processEnvironment["SYNARA_UI_TEST_ENCRYPTED_TIMELINE"] == "1" {
             timeline = MockTimelineService(items: uiTestEncryptedTimelineItems())
         } else if processEnvironment["SYNARA_UI_TEST_LARGE_TIMELINE"] == "1" {
-            timeline = MockTimelineService(items: TimelineFixtures.largeTimeline())
+            let count = processEnvironment["SYNARA_UI_TEST_LARGE_TIMELINE_COUNT"]
+                .flatMap(Int.init) ?? 10_000
+            timeline = MockTimelineService(items: TimelineFixtures.largeTimeline(count: count))
         } else {
             timeline = MockTimelineService()
         }
@@ -335,7 +337,7 @@ private extension AppEnvironment {
             SynaraLaterListItem(
                 id: "saved-active",
                 roomID: "!project:matrix.org",
-                eventID: "$hello",
+                eventID: "$text:!project:matrix.org",
                 kind: .saved,
                 dueTs: nil,
                 completedAt: nil,

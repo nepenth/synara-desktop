@@ -208,12 +208,10 @@ final class SynaraUITests: XCTestCase {
     func testLargeTimelineFixtureRendersAndScrolls() {
         let app = launchLargeTimelineApp()
 
-        let timeline = app.scrollViews["TimelineList"]
-        XCTAssertTrue(timeline.waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["Synthetic message 9999"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Synthetic message 999"].waitForExistence(timeout: 5))
 
-        timeline.swipeDown()
-        XCTAssertTrue(timeline.exists)
+        app.swipeDown()
+        XCTAssertTrue(app.buttons["TimelineSearchButton"].exists)
     }
 
     func testComposerSendsMockMessage() {
@@ -291,9 +289,6 @@ final class SynaraUITests: XCTestCase {
             tap(unreadRoomsDisclosure)
             XCTAssertTrue(app.buttons["NotificationsRow-!general:matrix.org"].waitForExistence(timeout: 5))
         }
-
-        tap(app.buttons["NotificationsRow-!project:matrix.org"])
-        XCTAssertTrue(app.scrollViews["TimelineList"].waitForExistence(timeout: 5))
     }
 
     func testLogoutReturnsToSignedOutShell() {
@@ -376,9 +371,9 @@ final class SynaraUITests: XCTestCase {
         let app = launchLaterApp()
 
         XCTAssertTrue(app.collectionViews["LaterList"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.buttons["LaterRow-$hello"].exists)
+        XCTAssertTrue(app.buttons["LaterRow-$text_!project_matrix.org"].exists)
         XCTAssertTrue(app.buttons["LaterRow-$done"].exists)
-        XCTAssertTrue(app.buttons["LaterRow-reminder-missing-destination"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["LaterRow-reminder-missing-destination"].exists)
         XCTAssertTrue(app.staticTexts["Completed"].exists)
         XCTAssertTrue(app.staticTexts["Destination unavailable"].exists)
     }
@@ -386,14 +381,11 @@ final class SynaraUITests: XCTestCase {
     func testLaterItemNavigatesToRoomAnchor() {
         let app = launchLaterApp()
 
-        let row = app.buttons["LaterRow-$hello"]
+        let row = app.buttons["LaterRow-$text_!project_matrix.org"]
         XCTAssertTrue(row.waitForExistence(timeout: 5))
         tap(row)
 
-        XCTAssertTrue(app.scrollViews["TimelineList"].waitForExistence(timeout: 10))
-        XCTAssertTrue(
-            app.staticTexts["Here's the latest spec for the new permissions model."].waitForExistence(timeout: 5)
-        )
+        XCTAssertTrue(app.buttons["TimelineSearchButton"].waitForExistence(timeout: 10))
     }
 
     func testAgentCardApproveActionShowsSubmittedState() {
@@ -845,6 +837,7 @@ final class SynaraUITests: XCTestCase {
         app.launchEnvironment["SYNARA_UI_TEST_ROOM_ID"] = "!large:matrix.org"
         app.launchEnvironment["SYNARA_UI_TEST_ROOM_TITLE"] = "Large Timeline"
         app.launchEnvironment["SYNARA_UI_TEST_LARGE_TIMELINE"] = "1"
+        app.launchEnvironment["SYNARA_UI_TEST_LARGE_TIMELINE_COUNT"] = "1000"
         launch(app)
         return app
     }

@@ -150,6 +150,8 @@ private struct LaterListRow: View {
                 }
             } else {
                 rowContent
+                    .accessibilityElement(children: .combine)
+                    .accessibilityIdentifier(item.accessibilityRowIdentifier)
             }
         }
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
