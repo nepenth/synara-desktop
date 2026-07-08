@@ -179,6 +179,7 @@ import {
   getTimelineEndWindow,
   hasUnreadForInitialScroll,
   timelineHasEvents,
+  canRestoreViewportFromInitialTimeline,
   type TimelineWindow,
 } from '../../utils/timelineOpening';
 
@@ -572,11 +573,16 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
 
   const savedViewportRef = useRef(!eventId ? roomTimelineViewports.get(room.roomId) : undefined);
   const savedViewport = savedViewportRef.current;
+  const initialTimelineWindow = useMemo(
+    () => (eventId ? getEmptyTimeline() : getInitialTimeline(room, PAGINATION_LIMIT)),
+    [eventId, room]
+  );
   const hasInitialUnread =
     hasUnreadForInitialScroll(unread, unreadAnchorEventId) || roomHaveUnread(mx, room);
   const currentLiveTailEventId = getLoadedLiveTailEventId(room);
   const shouldRestoreSavedViewport =
     !eventId &&
+    canRestoreViewportFromInitialTimeline(savedViewport, initialTimelineWindow) &&
     shouldRestoreRoomTimelineViewport(savedViewport, {
       hasUnread: hasInitialUnread,
       currentLiveTailEventId,
@@ -680,9 +686,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
   );
   const parseMemberEvent = useMemberEventParser();
 
-  const [timeline, setTimeline] = useState<TimelineWindow>(() =>
-    eventId ? getEmptyTimeline() : getInitialTimeline(room, PAGINATION_LIMIT)
-  );
+  const [timeline, setTimeline] = useState<TimelineWindow>(() => initialTimelineWindow);
   const [paginationErrors, setPaginationErrors] = useState<TimelinePaginationErrors>({});
   const [, startTimelineTransition] = useTransition();
   const eventsLength = getTimelinesEventsCount(timeline.linkedTimelines);
@@ -887,7 +891,6 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
   const pendingVirtualAnchorScrollTopRef = useRef<number | undefined>(undefined);
   const savedViewportRestoreKeyRef = useRef(savedViewportRestoreKey);
   const restoringSavedViewportRef = useRef(Boolean(savedViewportRestoreAnchor));
-  const requestedSavedViewportTimelineRef = useRef<string | undefined>(undefined);
 
   if (savedViewportRestoreKeyRef.current !== savedViewportRestoreKey) {
     savedViewportRestoreKeyRef.current = savedViewportRestoreKey;
@@ -1562,24 +1565,6 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
       loadEventTimeline(eventId);
     }
   }, [eventId, loadEventTimeline]);
-
-  useEffect(() => {
-    if (eventId || !savedViewportRestoreAnchor) return;
-    if (eventIdToRowIndex.has(savedViewportRestoreAnchor.eventId)) return;
-    if (requestedSavedViewportTimelineRef.current === savedViewportRestoreKey) return;
-
-    requestedSavedViewportTimelineRef.current = savedViewportRestoreKey;
-    restoringSavedViewportRef.current = true;
-    pendingVirtualAnchorRef.current = savedViewportRestoreAnchor;
-    setTimeline(getEmptyTimeline());
-    loadEventTimeline(savedViewportRestoreAnchor.eventId);
-  }, [
-    eventId,
-    eventIdToRowIndex,
-    loadEventTimeline,
-    savedViewportRestoreAnchor,
-    savedViewportRestoreKey,
-  ]);
 
   // Scroll to bottom on initial timeline load
   useLayoutEffect(() => {

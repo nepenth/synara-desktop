@@ -18,6 +18,15 @@ export type TimelineWindow = {
   range: TimelineRange;
 };
 
+type TimelineViewportAnchorSnapshot = {
+  eventId?: string;
+};
+
+type TimelineViewportSnapshot = {
+  atBottom: boolean;
+  anchor?: TimelineViewportAnchorSnapshot;
+};
+
 export type RoomUnreadInfo = {
   readUptoEventId: string;
   inLiveTimeline: boolean;
@@ -47,6 +56,34 @@ export const getEmptyTimeline = (): TimelineWindow => ({
   range: { start: 0, end: 0 },
   linkedTimelines: [],
 });
+
+export const timelineWindowContainsEventId = (
+  timelineWindow: TimelineWindow,
+  eventId: string
+): boolean => {
+  let absoluteIndex = 0;
+  for (const timeline of timelineWindow.linkedTimelines) {
+    for (const event of timeline.getEvents()) {
+      if (event.getId() === eventId) {
+        return (
+          absoluteIndex >= timelineWindow.range.start && absoluteIndex < timelineWindow.range.end
+        );
+      }
+      absoluteIndex += 1;
+    }
+  }
+  return false;
+};
+
+export const canRestoreViewportFromInitialTimeline = (
+  viewport: TimelineViewportSnapshot | undefined,
+  timelineWindow: TimelineWindow
+): boolean => {
+  if (!viewport || viewport.atBottom) return true;
+  const eventId = viewport.anchor?.eventId;
+  if (!eventId) return false;
+  return timelineWindowContainsEventId(timelineWindow, eventId);
+};
 
 export const getRoomUnreadInfo = (
   room: Room,
