@@ -16,6 +16,53 @@ final class PushServiceTests: XCTestCase {
         )
     }
 
+    func testAlertShapeReportsPreviewAndRoutingPresenceWithoutContents() {
+        let shape = NotificationPushRouteParser.alertShape(from: [
+            "aps": [
+                "alert": [
+                    "title": "Synara",
+                    "body": "New activity"
+                ],
+                "category": "synara.agent-approval",
+                "mutable-content": 1
+            ],
+            "room_id": "!room:matrix.org",
+            "event_id": "$event:matrix.org",
+            "synara": [
+                "kind": "agent-approval"
+            ]
+        ])
+
+        XCTAssertEqual(shape.alertKind, "dictionary")
+        XCTAssertTrue(shape.hasTitle)
+        XCTAssertEqual(shape.titleLength, 6)
+        XCTAssertTrue(shape.hasBody)
+        XCTAssertEqual(shape.bodyLength, 12)
+        XCTAssertEqual(shape.category, "synara.agent-approval")
+        XCTAssertTrue(shape.hasRoomID)
+        XCTAssertTrue(shape.hasEventID)
+        XCTAssertEqual(shape.synaraKind, "agent-approval")
+        XCTAssertFalse(shape.contentAvailable)
+        XCTAssertTrue(shape.mutableContent)
+        XCTAssertFalse(shape.logSummary.contains("New activity"))
+    }
+
+    func testAlertShapeReportsMissingPreviewForSilentPayload() {
+        let shape = NotificationPushRouteParser.alertShape(from: [
+            "aps": [
+                "content-available": 1
+            ],
+            "event_id": "$event:matrix.org"
+        ])
+
+        XCTAssertEqual(shape.alertKind, "missing")
+        XCTAssertFalse(shape.hasTitle)
+        XCTAssertFalse(shape.hasBody)
+        XCTAssertFalse(shape.hasRoomID)
+        XCTAssertTrue(shape.hasEventID)
+        XCTAssertTrue(shape.contentAvailable)
+    }
+
     func testRouteFromPayloadUsesRoomIdAndEventId() {
         let service = SynaraPushService(
             logger: MockLoggingService(),

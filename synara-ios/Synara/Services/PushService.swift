@@ -575,6 +575,34 @@ enum IntValueParser {
     }
 }
 
+struct NotificationPayloadAlertShape: Equatable {
+    let alertKind: String
+    let hasTitle: Bool
+    let titleLength: Int
+    let hasBody: Bool
+    let bodyLength: Int
+    let category: String?
+    let hasRoomID: Bool
+    let hasEventID: Bool
+    let synaraKind: String?
+    let contentAvailable: Bool
+    let mutableContent: Bool
+
+    var logSummary: String {
+        [
+            "alert=\(alertKind)",
+            "title=\(hasTitle ? "present:\(titleLength)" : "missing")",
+            "body=\(hasBody ? "present:\(bodyLength)" : "missing")",
+            "category=\(category ?? "none")",
+            "room_id=\(hasRoomID ? "present" : "missing")",
+            "event_id=\(hasEventID ? "present" : "missing")",
+            "synara_kind=\(synaraKind ?? "none")",
+            "content_available=\(contentAvailable)",
+            "mutable_content=\(mutableContent)"
+        ].joined(separator: " ")
+    }
+}
+
 private struct DisabledMatrixPusherService: MatrixPusherServicing {
     var isGatewayConfigured: Bool { false }
     var configuredGatewayURL: URL? { nil }
@@ -584,6 +612,51 @@ private struct DisabledMatrixPusherService: MatrixPusherServicing {
 }
 
 enum NotificationPushRouteParser {
+    static func alertShape(from payload: [AnyHashable: Any]) -> NotificationPayloadAlertShape {
+        let aps = payload["aps"] as? [AnyHashable: Any]
+        let alertValue = aps?["alert"]
+        let alertKind: String
+        let title: String?
+        let body: String?
+
+        if let alert = alertValue as? String {
+            alertKind = "string"
+            title = nil
+            body = alert
+        } else if let alert = alertValue as? [AnyHashable: Any] {
+            alertKind = "dictionary"
+            title = alert["title"] as? String
+            body = alert["body"] as? String
+        } else if alertValue == nil {
+            alertKind = "missing"
+            title = nil
+            body = nil
+        } else {
+            alertKind = "other"
+            title = nil
+            body = nil
+        }
+
+        let normalizedTitle = title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let normalizedBody = body?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let candidates = flattenPayload(payload)
+        let synara = payload["synara"] as? [AnyHashable: Any]
+
+        return NotificationPayloadAlertShape(
+            alertKind: alertKind,
+            hasTitle: normalizedTitle.isEmpty == false,
+            titleLength: normalizedTitle.count,
+            hasBody: normalizedBody.isEmpty == false,
+            bodyLength: normalizedBody.count,
+            category: aps?["category"] as? String,
+            hasRoomID: (candidates["room_id"] as? String)?.isEmpty == false || (candidates["roomId"] as? String)?.isEmpty == false,
+            hasEventID: (candidates["event_id"] as? String)?.isEmpty == false || (candidates["eventId"] as? String)?.isEmpty == false,
+            synaraKind: synara?["kind"] as? String,
+            contentAvailable: IntValueParser.parse(aps?["content-available"]) == 1,
+            mutableContent: IntValueParser.parse(aps?["mutable-content"]) == 1
+        )
+    }
+
     static func route(from payload: [AnyHashable: Any]) -> AppRoute? {
         let candidates = flattenPayload(payload)
 

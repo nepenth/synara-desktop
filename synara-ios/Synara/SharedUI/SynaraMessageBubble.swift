@@ -72,6 +72,10 @@ struct SynaraMessageBubble<Content: View>: View {
     }
 
     private var frameAlignment: Alignment {
+        guard showsBackground else {
+            return .leading
+        }
+
         switch alignment {
         case .own:
             return .trailing
@@ -221,7 +225,7 @@ extension SynaraMessageBubble where Content == AnyView {
                     .font(SynaraTypography.messageBody)
                     .foregroundStyle(synaraMessageBubbleTextColor(for: variant))
                     .lineLimit(nil)
-                    .frame(maxWidth: .infinity, alignment: alignment == .own ? .trailing : .leading)
+                    .frame(maxWidth: .infinity, alignment: showsBackground && alignment == .own ? .trailing : .leading)
                     .fixedSize(horizontal: false, vertical: true)
             )
         }
