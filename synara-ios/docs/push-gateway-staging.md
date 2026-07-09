@@ -16,8 +16,9 @@ Detailed proxy requirements and the implementation handoff template live in
 - Push routing and badge handling are fully implemented in app runtime.
 - Agent approval notifications register the `synara.agent-approval` APNs
   category and handle `agent-approval.approve-once`,
-  `agent-approval.approve-always`, and `agent-approval.deny` actions by sending
-  Matrix reactions (`✅`, `♾️`, `❌`) to the approval prompt event.
+  `agent-approval.deny` actions by sending Matrix reactions (`✅`, `❌`) after
+  revalidating the focused Matrix event. `agent-approval.approve-always` is not
+  offered natively and requires in-app confirmation for `♾️`.
 - Synara iOS registers pushers with `format: event_id_only`, so the push
   gateway cannot infer approval prompts from encrypted Matrix event content. The
   gateway needs a trusted approval metadata path keyed by `room_id` and
@@ -83,11 +84,14 @@ for the same `room_id` and `event_id`:
 }
 ```
 
-The app maps APNs action identifiers to Matrix reactions:
+The app maps native APNs action identifiers to Matrix reactions after timeline
+revalidation of the focused approval event:
 
 - `agent-approval.approve-once` -> `✅`
-- `agent-approval.approve-always` -> `♾️`
 - `agent-approval.deny` -> `❌`
+
+`agent-approval.approve-always` (`♾️`) is in-app only and requires an explicit
+confirmation step on the approval card.
 
 ## Local Smoke Checklist
 

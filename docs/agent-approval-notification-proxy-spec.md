@@ -41,13 +41,19 @@ only if a future remote-push path is designed.
 - Client-side safety for native/push approval actions (desktop + iOS):
   - require valid kind/action/room/event identifiers;
   - revalidate the Matrix event and approval detector before sending a reaction
-    when the client can resolve the event;
-  - enforce a short TTL so stale notifications cannot approve old prompts;
+    (desktop resolves the event; iOS loads the focused timeline item and
+    requires `SynaraAgentApprovalPromptDetector.detect`);
+  - enforce a short TTL so stale notifications cannot approve old prompts
+    (prefer resolved event timestamp; fail closed when the event cannot be
+    resolved as an approval prompt);
   - dedupe successful actions so the same native action is not double-sent.
-- In-app UI still maps the three reactions on the approval prompt event:
-  - `agent-approval.approve-once` -> `✅`
-  - `agent-approval.approve-always` -> `♾️` (in-app only)
-  - `agent-approval.deny` -> `❌`
+- In-app approval cards show bounded full prompt context (reason, multi-line
+  command including heredocs, and reply/reaction instructions).
+- In-app UI maps the three reactions on the approval prompt event:
+  - `agent-approval.approve-once` -> `✅` (one click)
+  - `agent-approval.approve-always` -> `♾️` (in-app only; requires explicit
+    confirmation before send on web/desktop and iOS room cards)
+  - `agent-approval.deny` -> `❌` (one click)
 
 ### External / not complete in this repo
 

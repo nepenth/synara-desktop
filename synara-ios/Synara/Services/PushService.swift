@@ -107,6 +107,20 @@ enum SynaraNotificationActionContract {
         return nil
     }
 
+    /// Best-effort event/notification creation timestamp from a push payload.
+    static func payloadEventDate(from userInfo: [AnyHashable: Any]) -> Date? {
+        let candidates = NotificationPushRouteParser.flattenPayload(userInfo)
+        return dateValue(
+            candidates,
+            keys: [
+                "origin_server_ts",
+                "originServerTs",
+                "created_at",
+                "createdAt"
+            ]
+        )
+    }
+
     private static func isExpired(candidates: [String: Any], now: Date) -> Bool {
         if let expiresAt = dateValue(candidates, keys: ["expires_at", "expiresAt"]),
            expiresAt < now {
@@ -119,6 +133,8 @@ enum SynaraNotificationActionContract {
             }
         }
 
+        // No payload timestamp: defer TTL to revalidation against the resolved
+        // Matrix event. Unresolved events fail closed before reactions are sent.
         return false
     }
 
