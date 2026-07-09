@@ -91,7 +91,7 @@ final class AgentApprovalServiceTests: XCTestCase {
 
                 Copy
                 set -euo pipefail
-                curl -fsS http://browser-control.example.com:9377/openapi.json -o /tmp/camofox_openapi.json
+                curl -fsS http://browser-control.example.com:9377/openapi.json -o /tmp/browser_openapi.json
 
                 Reason: Security scan - [HIGH] Plain HTTP URL in execution context.
 

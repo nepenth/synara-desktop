@@ -45,7 +45,11 @@ Status: draft release gate checklist.
 
 - LLC Apple Developer Program enrollment complete.
 - `com.whylandcreative.synara` App ID created.
+- Notification service extension App ID/profile created if rich push previews
+  are enabled.
 - Required capabilities enabled and documented.
+- App Groups and Keychain Sharing enabled for the app and notification service
+  extension.
 - App Store Connect app record created.
 - CI signing secret storage approved.
 - APNs sandbox and production key handling approved.

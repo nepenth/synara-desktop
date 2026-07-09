@@ -21,16 +21,16 @@ Phase 1 work.
 Preflight:
 
 ```sh
-PATH=/Users/example/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin:$PATH npx tauri --version
+PATH=<node-runtime-bin>:$PATH npx tauri --version
 rustup target list --installed
 xcodebuild -version
-PATH=/Users/example/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin:$PATH npx tauri ios --help
+PATH=<node-runtime-bin>:$PATH npx tauri ios --help
 ```
 
 Init:
 
 ```sh
-PATH=/Users/example/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin:$PATH npx tauri ios init --ci --skip-targets-install
+PATH=<node-runtime-bin>:$PATH npx tauri ios init --ci --skip-targets-install
 ```
 
 Simulator target setup:
@@ -42,7 +42,7 @@ rustup target add aarch64-apple-ios-sim
 Simulator build attempt:
 
 ```sh
-PATH=/Users/example/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin:$PATH npx tauri ios build --debug --target aarch64-sim --ci
+PATH=<node-runtime-bin>:$PATH npx tauri ios build --debug --target aarch64-sim --ci
 ```
 
 ## Environment Findings

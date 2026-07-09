@@ -9,5 +9,5 @@ Suggested assignment:
 - `alex-avatar.png`: assign to a test account named/displayed as Alex.
 - `ravi-avatar.png`: assign to a test account named/displayed as Ravi.
 
-For the current `matrix.example.com` smoke setup, use any two of these on
-`testuser` and `testuser2` until additional disposable test accounts exist.
+For a disposable smoke-test homeserver, use any two of these on temporary test
+accounts until additional disposable test accounts exist.

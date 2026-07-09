@@ -937,6 +937,7 @@ final class UserDefaultsSettingsStore: SettingsStoring {
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
+        defaults.register(defaults: SynaraSharedConstants.registeredUserDefaults)
     }
 
     func bool(for key: String) -> Bool {

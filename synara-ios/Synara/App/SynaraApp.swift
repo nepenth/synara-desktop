@@ -549,7 +549,7 @@ private extension AppEnvironment {
         [
             RawTimelineEvent(
                 eventID: "$agent-approval-prompt",
-                senderID: "@automation:matrix.example.com",
+                senderID: "@agent:matrix.example.com",
                 timestamp: Date(timeIntervalSince1970: 1_770_000_120),
                 type: "m.room.message",
                 body: uiTestAgentApprovalPromptBody(),
@@ -568,7 +568,7 @@ private extension AppEnvironment {
 
         Copy
         set -euo pipefail
-        curl -fsS http://browser-control.example.com:9377/openapi.json -o /tmp/camofox_openapi.json
+        curl -fsS http://browser-control.example.com:9377/openapi.json -o /tmp/browser_openapi.json
 
         Reason: Security scan - [HIGH] Plain HTTP URL in execution context.
 

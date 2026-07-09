@@ -18,7 +18,7 @@ synara-desktop/
 The initial iOS project home is:
 
 ```text
-/Users/example/git_repos/synara_project/synara-desktop/synara-ios
+synara-desktop/synara-ios
 ```
 
 This keeps macOS, Linux, and iOS planning, contracts, CI, and release gates in
@@ -55,7 +55,7 @@ path or from a generated test-resource copy. Do not fork contract files into
 Desktop package smoke:
 
 ```sh
-cd /Users/example/git_repos/synara_project/synara-desktop
+cd synara-desktop
 npm run check:repo-layout
 npm run check:versions
 npm run tauri build -- --bundles app
@@ -64,7 +64,7 @@ npm run tauri build -- --bundles app
 Runtime validation:
 
 ```sh
-cd /Users/example/git_repos/synara_project/synara-desktop/synara
+cd synara-desktop/synara
 npm run typecheck:modernization
 npm run test:modernization
 npm run check:eslint
@@ -74,7 +74,7 @@ npm run check:prettier
 iOS Phase 1 commands, once the Xcode project exists:
 
 ```sh
-cd /Users/example/git_repos/synara_project/synara-desktop/synara-ios
+cd synara-desktop/synara-ios
 xcodebuild -list -project Synara.xcodeproj
 xcodebuild -project Synara.xcodeproj -scheme Synara -destination 'platform=iOS Simulator,name=iPhone 17' build
 xcodebuild -project Synara.xcodeproj -scheme Synara -destination 'platform=iOS Simulator,name=iPhone 17' test
