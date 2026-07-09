@@ -130,6 +130,7 @@ final class SynaraAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificati
         didReceiveRemoteNotification userInfo: [AnyHashable: Any],
         fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void
     ) {
+        logNotificationPayloadShape(userInfo, context: "background")
         Task {
             let result = await handleBackgroundRemoteNotification(userInfo)
             completionHandler(result)
@@ -145,6 +146,7 @@ final class SynaraAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificati
         }
 
         let userInfo = response.notification.request.content.userInfo
+        logNotificationPayloadShape(userInfo, context: "response")
         if SynaraAgentApprovalNotificationActionID(rawValue: response.actionIdentifier) != nil {
             await handleAgentApprovalNotificationAction(
                 actionIdentifier: response.actionIdentifier,
@@ -171,6 +173,7 @@ final class SynaraAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificati
         _ center: UNUserNotificationCenter,
         willPresent notification: UNNotification
     ) async -> UNNotificationPresentationOptions {
+        logNotificationPayloadShape(notification.request.content.userInfo, context: "foreground")
         await MainActor.run {
             push?.applyIncomingBadge(from: notification.request.content.userInfo)
         }
@@ -197,6 +200,11 @@ final class SynaraAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificati
         }
 
         return push?.parseBadgeCount(from: userInfo) == nil ? .noData : .newData
+    }
+
+    private func logNotificationPayloadShape(_ userInfo: [AnyHashable: Any], context: String) {
+        let shape = NotificationPushRouteParser.alertShape(from: userInfo)
+        logger?.info("Remote notification payload shape (\(context)): \(shape.logSummary)", category: .push)
     }
 
     private func resolveNotificationRoute(from payload: [AnyHashable: Any]) async {

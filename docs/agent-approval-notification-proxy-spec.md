@@ -29,6 +29,10 @@ only if a future remote-push path is designed.
 - The pusher `pushkey` is the APNs device token.
 - Sparse push payloads must contain enough information for app routing:
   `room_id` and `event_id` when available, or at minimum `event_id`.
+- iOS notification preview text is taken directly from the APNs
+  `aps.alert.title` and `aps.alert.body` values sent by the proxy. The current
+  app does not include a Notification Service Extension that can fetch, decrypt,
+  or rewrite previews after delivery.
 - Agent approval APNs category identifier:
   `synara.agent-approval`.
 - Registered iOS notification action identifiers exposed on the native category:
@@ -170,6 +174,13 @@ Generic Matrix notification:
 }
 ```
 
+The proxy should always send a non-empty `aps.alert` for user-visible pushes.
+If decrypted/safe event content is unavailable because the pusher uses
+`event_id_only` or the room is encrypted, use a generic but explicit fallback
+such as title `Synara` and body `New activity`. An APNs payload with no
+`aps.alert.body`, an empty string body, or only `content-available` can deliver
+without useful preview text in Notification Center.
+
 Agent approval notification:
 
 ```json
@@ -256,6 +267,8 @@ full Matrix event body or APNs token.
 The implementation should include automated tests for:
 
 - Matrix `event_id_only` payload without metadata sends a generic APNs payload.
+- Generic APNs payloads include non-empty `aps.alert.title` and
+  `aps.alert.body` preview fields.
 - Approval metadata followed by a matching Matrix push sends
   `aps.category = synara.agent-approval`.
 - Matrix push before metadata either sends generic notification or waits only for
@@ -335,6 +348,8 @@ Important:
 - Do not attach approve/deny buttons unless approval metadata matches the
   Matrix event.
 - Do not include command text, access tokens, or APNs tokens in APNs payloads.
+- Do include safe, bounded preview text in `aps.alert`; otherwise iOS has no
+  client-side opportunity to synthesize a preview.
 
 Acceptance:
 - Generic event_id_only Matrix push sends a generic APNs payload.

@@ -3,6 +3,89 @@ import XCTest
 @testable import Synara
 
 final class TimelineServiceTests: XCTestCase {
+    func testRoomTimelinePaginationPolicyRequiresUserInteraction() {
+        XCTAssertFalse(
+            RoomTimelinePaginationPolicy.shouldLoadOlderHistory(
+                rowIndex: 0,
+                topThreshold: 3,
+                hasUserInteractedWithTimeline: false,
+                hasPositionedInitialTimeline: true,
+                isJumpingToLatest: false,
+                isPaginating: false,
+                hasReachedOldestMessages: false
+            )
+        )
+    }
+
+    func testRoomTimelinePaginationPolicyAllowsUserRequestedTopRowsOnlyWhenStable() {
+        XCTAssertTrue(
+            RoomTimelinePaginationPolicy.shouldLoadOlderHistory(
+                rowIndex: 0,
+                topThreshold: 3,
+                hasUserInteractedWithTimeline: true,
+                hasPositionedInitialTimeline: true,
+                isJumpingToLatest: false,
+                isPaginating: false,
+                hasReachedOldestMessages: false
+            )
+        )
+        XCTAssertFalse(
+            RoomTimelinePaginationPolicy.shouldLoadOlderHistory(
+                rowIndex: 4,
+                topThreshold: 3,
+                hasUserInteractedWithTimeline: true,
+                hasPositionedInitialTimeline: true,
+                isJumpingToLatest: false,
+                isPaginating: false,
+                hasReachedOldestMessages: false
+            )
+        )
+        XCTAssertFalse(
+            RoomTimelinePaginationPolicy.shouldLoadOlderHistory(
+                rowIndex: 0,
+                topThreshold: 3,
+                hasUserInteractedWithTimeline: true,
+                hasPositionedInitialTimeline: false,
+                isJumpingToLatest: false,
+                isPaginating: false,
+                hasReachedOldestMessages: false
+            )
+        )
+        XCTAssertFalse(
+            RoomTimelinePaginationPolicy.shouldLoadOlderHistory(
+                rowIndex: 0,
+                topThreshold: 3,
+                hasUserInteractedWithTimeline: true,
+                hasPositionedInitialTimeline: true,
+                isJumpingToLatest: true,
+                isPaginating: false,
+                hasReachedOldestMessages: false
+            )
+        )
+        XCTAssertFalse(
+            RoomTimelinePaginationPolicy.shouldLoadOlderHistory(
+                rowIndex: 0,
+                topThreshold: 3,
+                hasUserInteractedWithTimeline: true,
+                hasPositionedInitialTimeline: true,
+                isJumpingToLatest: false,
+                isPaginating: true,
+                hasReachedOldestMessages: false
+            )
+        )
+        XCTAssertFalse(
+            RoomTimelinePaginationPolicy.shouldLoadOlderHistory(
+                rowIndex: 0,
+                topThreshold: 3,
+                hasUserInteractedWithTimeline: true,
+                hasPositionedInitialTimeline: true,
+                isJumpingToLatest: false,
+                isPaginating: false,
+                hasReachedOldestMessages: true
+            )
+        )
+    }
+
     func testRoomTimelineFocusPolicyOpensNormalRoomsAtLiveTail() {
         XCTAssertNil(
             RoomTimelineFocusPolicy.initialLoadFocus(
@@ -111,6 +194,45 @@ final class TimelineServiceTests: XCTestCase {
             html: #"<ul><li><strong>Ship it</strong></li><li>Review fallback</li></ul>"#
         )
         XCTAssertEqual(String(attributed.characters), "- Ship it\n- Review fallback")
+    }
+
+    func testMatrixDisplayMarkdownCompactsLooseListsForMobileTimeline() {
+        let markdown = """
+        Specifically:
+
+        - **Service:** synara-push-gateway
+
+        - **Code:** /home/nepenthe/synara-push-gateway-src
+
+        - **Binary:** /usr/local/bin/synara-push-gateway
+        """
+
+        XCTAssertEqual(
+            MatrixDisplayMarkdown.normalize(markdown),
+            """
+            Specifically:
+            - **Service:** synara-push-gateway
+            - **Code:** /home/nepenthe/synara-push-gateway-src
+            - **Binary:** /usr/local/bin/synara-push-gateway
+            """
+        )
+    }
+
+    func testMatrixDisplayMarkdownPreservesParagraphBreaks() {
+        let markdown = """
+        First paragraph.
+
+        Second paragraph.
+        """
+
+        XCTAssertEqual(
+            MatrixDisplayMarkdown.normalize(markdown),
+            """
+            First paragraph.
+
+            Second paragraph.
+            """
+        )
     }
 
     func testMatrixHTMLRendererExtractsDetailsCodeBlocks() throws {
