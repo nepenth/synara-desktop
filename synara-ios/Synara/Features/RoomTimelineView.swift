@@ -15,6 +15,30 @@ enum RoomTimelineFocusPolicy {
     }
 }
 
+enum RoomTimelinePaginationPolicy {
+    static func shouldLoadOlderHistory(
+        rowIndex: Int,
+        topThreshold: Int,
+        hasUserInteractedWithTimeline: Bool,
+        hasPositionedInitialTimeline: Bool,
+        isJumpingToLatest: Bool,
+        isPaginating: Bool,
+        hasReachedOldestMessages: Bool
+    ) -> Bool {
+        guard rowIndex < topThreshold else {
+            return false
+        }
+        guard hasUserInteractedWithTimeline,
+              hasPositionedInitialTimeline,
+              isJumpingToLatest == false,
+              isPaginating == false,
+              hasReachedOldestMessages == false else {
+            return false
+        }
+        return true
+    }
+}
+
 struct RoomTimelineView: View {
     private static let olderPaginationTopThreshold = 3
     private static let olderPaginationDebounceInterval: TimeInterval = 0.5
@@ -61,6 +85,7 @@ struct RoomTimelineView: View {
     @State private var timelineUpdatesTask: Task<Void, Never>?
     @State private var timelineScrollTask: Task<Void, Never>?
     @State private var sendAnimationItemIDs: Set<String> = []
+    @State private var hasUserInteractedWithTimeline = false
     @Environment(\.openURL) private var openURL
     @Environment(\.dismiss) private var dismiss
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
@@ -320,6 +345,7 @@ struct RoomTimelineView: View {
                 .accessibilityIdentifier("TimelineList")
                 .simultaneousGesture(
                     DragGesture(minimumDistance: 8).onChanged { _ in
+                        hasUserInteractedWithTimeline = true
                         if items.count > 8 {
                             cancelTimelineScroll()
                         }
@@ -595,6 +621,7 @@ struct RoomTimelineView: View {
         isComposerFocused = false
         isTimelineBottomVisible = false
         lastMarkedFullyReadEventID = nil
+        hasUserInteractedWithTimeline = false
         cancelMarkFullyRead()
     }
 
@@ -622,13 +649,22 @@ struct RoomTimelineView: View {
     }
 
     private func applyTimelineOutcome(_ outcome: TimelineLoadOutcome, isPaginating: Bool = false) {
+        let shouldRemainPaginating = isPaginating || currentTimelineIsPaginating
         switch outcome {
         case .loaded(let items):
-            let merged = mergeTimelineItems(items, isPaginating: isPaginating)
-            state = .loaded(merged, isPaginating: isPaginating)
+            guard items.isEmpty == false else {
+                if case .loaded = state {
+                    state = .loaded(loadedTimelineItems, isPaginating: shouldRemainPaginating)
+                } else {
+                    state = .empty
+                }
+                return
+            }
+            let merged = mergeTimelineItems(items, isPaginating: shouldRemainPaginating)
+            state = .loaded(merged, isPaginating: shouldRemainPaginating)
         case .empty:
             if let pendingItems = localPendingItems, pendingItems.isEmpty == false {
-                state = .loaded(pendingItems, isPaginating: isPaginating)
+                state = .loaded(pendingItems, isPaginating: shouldRemainPaginating)
             } else {
                 state = .empty
             }
@@ -643,6 +679,13 @@ struct RoomTimelineView: View {
         }
         let pendingItems = TimelinePendingReconciler.pendingItems(from: items)
         return pendingItems.isEmpty ? nil : pendingItems
+    }
+
+    private var currentTimelineIsPaginating: Bool {
+        guard case .loaded(_, let isPaginating) = state else {
+            return false
+        }
+        return isPaginating
     }
 
     private func mergeTimelineItems(_ streamItems: [TimelineItem], isPaginating: Bool) -> [TimelineItem] {
@@ -1069,7 +1112,22 @@ struct RoomTimelineView: View {
     }
 
     private func loadOlderTimelineIfNeeded(anchorItem: TimelineItem, index: Int, items: [TimelineItem]) {
-        guard index < Self.olderPaginationTopThreshold,
+        let isPaginating: Bool
+        if case .loaded(_, let currentIsPaginating) = state {
+            isPaginating = currentIsPaginating
+        } else {
+            isPaginating = false
+        }
+
+        guard RoomTimelinePaginationPolicy.shouldLoadOlderHistory(
+            rowIndex: index,
+            topThreshold: Self.olderPaginationTopThreshold,
+            hasUserInteractedWithTimeline: hasUserInteractedWithTimeline,
+            hasPositionedInitialTimeline: hasPositionedInitialTimeline,
+            isJumpingToLatest: isJumpingToLatest,
+            isPaginating: isPaginating,
+            hasReachedOldestMessages: hasReachedOldestMessages
+        ),
               let oldestEventID = items.first?.eventID else {
             return
         }
@@ -1080,6 +1138,18 @@ struct RoomTimelineView: View {
         guard let eventID,
               hasReachedOldestMessages == false,
               case .loaded(let items, false) = state else {
+            return
+        }
+
+        guard RoomTimelinePaginationPolicy.shouldLoadOlderHistory(
+            rowIndex: 0,
+            topThreshold: Self.olderPaginationTopThreshold,
+            hasUserInteractedWithTimeline: hasUserInteractedWithTimeline,
+            hasPositionedInitialTimeline: hasPositionedInitialTimeline,
+            isJumpingToLatest: isJumpingToLatest,
+            isPaginating: false,
+            hasReachedOldestMessages: hasReachedOldestMessages
+        ) else {
             return
         }
 
@@ -1101,11 +1171,12 @@ struct RoomTimelineView: View {
             }
             let outcome = await environment.timeline.loadOlderTimeline(roomID: roomID, before: eventID)
             await MainActor.run {
+                let currentItems = loadedTimelineItems.isEmpty ? items : loadedTimelineItems
                 switch outcome {
                 case .loaded(let older):
-                    let existingIDs = Set(items.map(\.id))
+                    let existingIDs = Set(currentItems.map(\.id))
                     let uniqueOlder = older.filter { existingIDs.contains($0.id) == false }
-                    state = .loaded(uniqueOlder + items, isPaginating: false)
+                    state = .loaded(uniqueOlder + currentItems, isPaginating: false)
                     if uniqueOlder.isEmpty == false {
                         showJumpToLatest = true
                     } else {
@@ -1114,10 +1185,11 @@ struct RoomTimelineView: View {
                 case .empty:
                     hasReachedOldestMessages = true
                     paginationScrollAnchorID = nil
-                    state = .loaded(items, isPaginating: false)
+                    state = .loaded(currentItems, isPaginating: false)
                 case .failed(let message):
                     paginationScrollAnchorID = nil
-                    state = .failed(message)
+                    state = .loaded(currentItems, isPaginating: false)
+                    sendError = message
                 }
             }
         }
@@ -1166,6 +1238,7 @@ struct RoomTimelineView: View {
         cancelMarkFullyRead()
         paginationScrollAnchorID = nil
         hasReachedOldestMessages = false
+        hasUserInteractedWithTimeline = false
 
         let baselineItems: [TimelineItem]
         if case .loaded(let items, _) = state {
@@ -2098,7 +2171,7 @@ private struct MatrixFormattedMessageView: View {
         if segments.count == 1, case .markdown(let markdown) = segments[0] {
             markdownText(markdown)
         } else {
-            VStack(alignment: .leading, spacing: SynaraSpacing.small) {
+            VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
                 ForEach(Array(segments.enumerated()), id: \.offset) { _, segment in
                     segmentView(segment)
                 }
@@ -2122,7 +2195,8 @@ private struct MatrixFormattedMessageView: View {
     }
 
     private func markdownText(_ markdown: String) -> some View {
-        Text(attributedMarkdown(markdown.isEmpty ? fallbackBody : markdown))
+        let displayMarkdown = MatrixDisplayMarkdown.normalize(markdown.isEmpty ? fallbackBody : markdown)
+        return Text(attributedMarkdown(displayMarkdown))
             .font(font)
             .foregroundStyle(SynaraColor.primaryText)
             .lineLimit(nil)
@@ -2143,7 +2217,7 @@ private struct MatrixQuoteBlockView: View {
     let font: Font
 
     var body: some View {
-        Text(attributedMarkdown(markdown))
+        Text(attributedMarkdown(MatrixDisplayMarkdown.normalize(markdown)))
             .font(font)
             .foregroundStyle(SynaraColor.secondaryText)
             .lineLimit(nil)
@@ -3141,11 +3215,11 @@ private struct TimelineRow: View {
     }
 
     private var groupedLeadingGutter: CGFloat {
-        isCompactWidth ? 0 : avatarSize
+        avatarSize
     }
 
     private var rowHorizontalSpacing: CGFloat {
-        isGroupedWithPrevious && isCompactWidth ? 0 : SynaraSpacing.small
+        SynaraSpacing.small
     }
 
     @ViewBuilder

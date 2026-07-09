@@ -1141,6 +1141,68 @@ enum MatrixHTMLRenderer {
     }
 }
 
+enum MatrixDisplayMarkdown {
+    static func normalize(_ markdown: String) -> String {
+        let normalizedNewlines = markdown
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\r", with: "\n")
+
+        var lines = normalizedNewlines
+            .components(separatedBy: "\n")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+
+        while lines.first?.isEmpty == true {
+            lines.removeFirst()
+        }
+        while lines.last?.isEmpty == true {
+            lines.removeLast()
+        }
+
+        var output: [String] = []
+        var sawBlankLine = false
+
+        for line in lines {
+            if line.isEmpty {
+                sawBlankLine = output.isEmpty == false
+                continue
+            }
+
+            if sawBlankLine,
+               let previous = output.last,
+               isListLine(line) == false,
+               isListLine(previous) == false,
+               isDivider(line) == false,
+               isDivider(previous) == false {
+                output.append("")
+            }
+
+            output.append(line)
+            sawBlankLine = false
+        }
+
+        return output.joined(separator: "\n")
+    }
+
+    private static func isListLine(_ line: String) -> Bool {
+        if line.hasPrefix("- ") || line.hasPrefix("* ") || line.hasPrefix("+ ") {
+            return true
+        }
+
+        guard let dotIndex = line.firstIndex(of: ".") else {
+            return false
+        }
+        let prefix = line[..<dotIndex]
+        let suffix = line[line.index(after: dotIndex)...]
+        return prefix.isEmpty == false
+            && prefix.allSatisfy(\.isNumber)
+            && suffix.first == " "
+    }
+
+    private static func isDivider(_ line: String) -> Bool {
+        line == "---" || line == "***" || line == "___"
+    }
+}
+
 private extension String {
     func removingHTMLBlocks(named tagName: String) -> String {
         replacingHTMLPattern(#"<\#(tagName)(?:\s+[^>]*)?>[\s\S]*?</\#(tagName)\s*>"#, with: "")
