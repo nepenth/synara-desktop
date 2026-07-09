@@ -213,3 +213,9 @@ confirmation step on the approval card.
 - Physical device or TestFlight build for real APNs tokens.
 - App Store entitlement/profile with Push Notifications.
 - Optional later: agent-approval metadata ingest endpoint on the gateway.
+
+## iOS preview path (NSE)
+
+See [ios-push-preview-nse-handoff.md](./ios-push-preview-nse-handoff.md) for the
+Notification Service Extension + lock-screen preview settings work owned by the
+iOS app agent. Keep `event_id_only`; do not put message bodies on the APNs path.
