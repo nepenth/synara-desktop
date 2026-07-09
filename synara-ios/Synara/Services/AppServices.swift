@@ -274,6 +274,29 @@ enum CryptoVerificationState: Equatable, Identifiable {
             return false
         }
     }
+
+    var logLabel: String {
+        switch self {
+        case .requestReceived:
+            return "request_received"
+        case .requestSent:
+            return "request_sent"
+        case .accepted:
+            return "accepted"
+        case .sasStarted:
+            return "sas_started"
+        case .emojis(let emojis):
+            return "emojis:\(emojis.count)"
+        case .decimals(let values):
+            return "decimals:\(values.count)"
+        case .finished:
+            return "finished"
+        case .cancelled:
+            return "cancelled"
+        case .failed:
+            return "failed"
+        }
+    }
 }
 
 enum CryptoActionResult: Equatable {

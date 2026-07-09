@@ -69,6 +69,27 @@ final class AppEnvironmentTests: XCTestCase {
         XCTAssertEqual(result, .failed("Enter a recovery key before recovering keys."))
     }
 
+    func testCryptoVerificationLogLabelsOmitVerificationPayloadValues() {
+        let request = CryptoVerificationRequest(
+            userID: "@alice:example.org",
+            displayName: "Alice",
+            deviceID: "DEVICE123",
+            deviceDisplayName: "Alice Phone",
+            flowID: "flow-123"
+        )
+        let emojiState = CryptoVerificationState.emojis([
+            CryptoVerificationEmoji(symbol: "key-symbol", description: "Key")
+        ])
+        let decimalState = CryptoVerificationState.decimals([1234, 5678, 9012])
+
+        XCTAssertEqual(CryptoVerificationState.requestReceived(request).logLabel, "request_received")
+        XCTAssertEqual(emojiState.logLabel, "emojis:1")
+        XCTAssertEqual(decimalState.logLabel, "decimals:3")
+        XCTAssertFalse(emojiState.logLabel.contains("key-symbol"))
+        XCTAssertFalse(decimalState.logLabel.contains("1234"))
+        XCTAssertFalse(CryptoVerificationState.requestReceived(request).logLabel.contains("@alice"))
+    }
+
     func testMockRoomManagementCreatesEncryptedPrivateRoom() async throws {
         let service = MockRoomManagementService()
 

@@ -1374,6 +1374,7 @@ actor MatrixRustSDKClientStore {
     }
 
     private func broadcastVerificationState(_ state: CryptoVerificationState) {
+        logger.info("Matrix session verification state: \(state.logLabel)", category: .auth)
         lastVerificationState = state.isTerminal ? nil : state
         for continuation in verificationContinuations.values {
             continuation.yield(state)
