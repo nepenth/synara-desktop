@@ -98,6 +98,7 @@ Cases:
 | MAC-DESK-005 | Composer file drop | Drag/drop one file and multiple files into a room; upload board shows correct attachments and encrypted-room upload path still succeeds. | File types/sizes and pass/fail. |
 | MAC-DESK-006 | Composer clipboard image | Paste a screenshot/native clipboard image and an image copied from a browser that also advertises HTML/text; both upload as files instead of inserting unwanted rich HTML. | Source app, upload board evidence, pass/fail. |
 | MAC-DESK-007 | Notifications | In-session notification appears; click routes to the sanitized internal room/inbox route. | Notification permission state and route result. |
+| MAC-DESK-007a | Agent approval native actions | Approve once / Deny from a fresh agent-approval OS notification revalidates the event and sends the reaction; approve-always is not offered (or only opens the room); a stale/expired notification does not send a reaction; double-tapping does not double-send. | Action ids used, event age, pass/fail. |
 | MAC-DESK-008 | Tray/status | Show Synara, Later, Notifications, Do Not Disturb, build label, and Quit behave as documented for macOS. | Menu screenshot or per-item pass/fail. |
 | MAC-DESK-009 | Shortcuts | Register global shortcuts, trigger navigation, and confirm permission-denied messaging if registration fails. | Shortcut config and pass/fail. |
 | MAC-DESK-010 | Release hardening | Release build denies DevTools shortcut and still exposes build identity in the tray/About surfaces. | Build type and pass/fail. |
@@ -143,6 +144,8 @@ Run on desktop and iOS. These cases mirror
 | TL-008 | Live append while scrolled up | Preserves visible anchor. | Anchor event and pass/fail. |
 | TL-009 | Timeline reset/gap while pinned | Reattaches to live tail without blank viewport. | Reset trigger notes and pass/fail. |
 | TL-010 | Timeline reset/gap while scrolled up | Preserves anchor or keeps clear jump-latest affordance. | Reset trigger notes and pass/fail. |
+| TL-011 | Live-chain unread outside initial window | Desktop opens at live end (no auto deep open) and still shows Jump to Unread. | Room size class, marker position notes, pass/fail. |
+| TL-012 | iOS ignores stale read-marker restore | Normal open stays at live end and does not later snap to an old `m.fully_read` marker; explicit event deep links still work. | Pass/fail. |
 
 ## iOS Tool-Bound Smoke
 
@@ -165,6 +168,18 @@ Required cases:
 | IOS-002 | Timeline focus smoke | Timeline Resurrection cases `TL-001` through `TL-010` pass where supported by current iOS functionality. | Per-case pass/fail and unsupported-case rationale. |
 | IOS-003 | Session/keychain | Login/session persistence behaves correctly on simulator or physical device. | Device target and pass/fail. |
 | IOS-004 | Push/E2EE release gaps | Push gateway and production E2EE remain explicitly marked pending until implemented and tested. | Current status and linked blocker. |
+| IOS-005 | Agent approval notification actions | Approve once / Deny from a valid agent-approval notification are planned safely; approve-always opens the room (or is absent) and does not send ♾️; expired/malformed payloads do not approve. Production APNs/TestFlight remains external until proxy + APNs evidence exists. | Payload used, action plan/result, pass/fail. |
+
+## External Dependencies Still Open
+
+Do not mark the following complete from in-repo client changes alone:
+
+| Area | Why external | Tracking |
+|---|---|---|
+| Notification proxy trusted approval metadata | Lives outside this repo; requires gateway + metadata cache + APNs category attach. | `docs/agent-approval-notification-proxy-spec.md` |
+| Production APNs / TestFlight approval actions | Needs physical device, production APNs certs/keys, and deployed proxy. | `synara-ios/docs/push-gateway-staging.md`, TestFlight checklist |
+| Installed-app updater smoke | Requires signed release artifacts and update channel config. | `docs/production-smoke-checklist.md` updater section, `MACOS_IOS_VALIDATION_QUEUE.md` |
+| Large-history timeline perf | Needs room fixtures and performance-debug traces; authoritative virtualization rewrite deferred. | `docs/timeline-open-focus-contract.md` remaining-risk note |
 
 ## Updater Release Smoke
 

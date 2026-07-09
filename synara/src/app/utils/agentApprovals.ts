@@ -8,6 +8,19 @@ export const AGENT_APPROVAL_REACTION_DENY = '❌';
 export const AGENT_APPROVAL_NOTIFICATION_ACTION_APPROVE_ONCE = 'agent-approval.approve-once';
 export const AGENT_APPROVAL_NOTIFICATION_ACTION_APPROVE_ALWAYS = 'agent-approval.approve-always';
 export const AGENT_APPROVAL_NOTIFICATION_ACTION_DENY = 'agent-approval.deny';
+export const AGENT_APPROVAL_NOTIFICATION_KIND = 'agent-approval';
+
+/** Max age of an approval prompt event (or native action) that can be acted on from OS notifications. */
+export const AGENT_APPROVAL_NATIVE_ACTION_TTL_MS = 10 * 60 * 1000;
+
+export const AGENT_APPROVAL_NATIVE_ACTION_DEDUP_STORAGE_KEY =
+  'synara.agent-approval.native-action-dedupe';
+
+export const AGENT_APPROVAL_REACTION_KEYS = [
+  AGENT_APPROVAL_REACTION_APPROVE_ONCE,
+  AGENT_APPROVAL_REACTION_APPROVE_ALWAYS,
+  AGENT_APPROVAL_REACTION_DENY,
+] as const;
 
 export type AgentApprovalNotificationActionId =
   | typeof AGENT_APPROVAL_NOTIFICATION_ACTION_APPROVE_ONCE
@@ -32,6 +45,17 @@ export const AGENT_APPROVAL_NOTIFICATION_ACTIONS: {
   },
 ];
 
+/**
+ * Actions exposed on native OS notifications. Approve-always is intentionally excluded:
+ * permanent approval requires an explicit in-app confirmation path.
+ */
+export const AGENT_APPROVAL_NATIVE_NOTIFICATION_ACTIONS: {
+  id: AgentApprovalNotificationActionId;
+  label: string;
+}[] = AGENT_APPROVAL_NOTIFICATION_ACTIONS.filter(
+  (action) => action.id !== AGENT_APPROVAL_NOTIFICATION_ACTION_APPROVE_ALWAYS
+);
+
 export const getAgentApprovalReactionForNotificationAction = (
   actionId: string
 ): string | undefined => {
@@ -45,6 +69,238 @@ export const getAgentApprovalReactionForNotificationAction = (
     return AGENT_APPROVAL_REACTION_DENY;
   }
   return undefined;
+};
+
+export const isKnownAgentApprovalNotificationActionId = (
+  actionId: string
+): actionId is AgentApprovalNotificationActionId =>
+  actionId === AGENT_APPROVAL_NOTIFICATION_ACTION_APPROVE_ONCE ||
+  actionId === AGENT_APPROVAL_NOTIFICATION_ACTION_APPROVE_ALWAYS ||
+  actionId === AGENT_APPROVAL_NOTIFICATION_ACTION_DENY;
+
+export type AgentApprovalNativeActionPlan =
+  | {
+      type: 'send-reaction';
+      roomId: string;
+      eventId: string;
+      actionId: AgentApprovalNotificationActionId;
+      reaction: string;
+      dedupeKey: string;
+    }
+  | {
+      type: 'open-room';
+      roomId: string;
+      eventId: string;
+      reason: string;
+    }
+  | {
+      type: 'reject';
+      reason: string;
+    };
+
+export type AgentApprovalNativeActionContext = {
+  kind?: string;
+  roomId?: string;
+  eventId?: string;
+};
+
+export type PlanAgentApprovalNativeActionInput = {
+  actionId: string;
+  context?: AgentApprovalNativeActionContext;
+  nowMs?: number;
+  /** Origin event timestamp in ms, if known. */
+  eventTsMs?: number;
+  /** When the local notification was created, if tracked. */
+  notificationCreatedAtMs?: number;
+  ttlMs?: number;
+  /** True when this client already recorded a successful native action for this target. */
+  alreadyActed?: boolean;
+  /** True when the current user already has a local approval reaction on the event. */
+  alreadyReactedLocally?: boolean;
+  /** Result of running the approval detector against resolved event content. */
+  isApprovalPrompt?: boolean;
+  /** When true, the event was resolved (timeline or fetch). Required before send-reaction. */
+  eventResolved?: boolean;
+};
+
+export const buildAgentApprovalNativeActionDedupeKey = (
+  roomId: string,
+  eventId: string,
+  actionId: string
+): string => `${roomId}\u0000${eventId}\u0000${actionId}`;
+
+const isNonEmptyId = (value: string | undefined): value is string =>
+  typeof value === 'string' && value.trim().length > 0;
+
+export const isAgentApprovalNativeActionExpired = ({
+  nowMs,
+  eventTsMs,
+  notificationCreatedAtMs,
+  ttlMs = AGENT_APPROVAL_NATIVE_ACTION_TTL_MS,
+}: {
+  nowMs: number;
+  eventTsMs?: number;
+  notificationCreatedAtMs?: number;
+  ttlMs?: number;
+}): boolean => {
+  if (ttlMs < 0) return false;
+  if (typeof eventTsMs === 'number' && Number.isFinite(eventTsMs)) {
+    if (Math.max(0, nowMs - eventTsMs) > ttlMs) return true;
+  }
+  if (typeof notificationCreatedAtMs === 'number' && Number.isFinite(notificationCreatedAtMs)) {
+    if (Math.max(0, nowMs - notificationCreatedAtMs) > ttlMs) return true;
+  }
+  return false;
+};
+
+/**
+ * Pure decision planner for native OS notification approval actions.
+ * Callers must revalidate the Matrix event (resolve + detector) before allowing send-reaction.
+ */
+export const planAgentApprovalNativeNotificationAction = (
+  input: PlanAgentApprovalNativeActionInput
+): AgentApprovalNativeActionPlan => {
+  const actionId = input.actionId?.trim() ?? '';
+  const kind = input.context?.kind?.trim().toLowerCase() ?? '';
+  const roomId = input.context?.roomId?.trim() ?? '';
+  const eventId = input.context?.eventId?.trim() ?? '';
+  const nowMs = input.nowMs ?? Date.now();
+
+  if (kind !== AGENT_APPROVAL_NOTIFICATION_KIND) {
+    return { type: 'reject', reason: 'invalid-kind' };
+  }
+  if (!isNonEmptyId(roomId) || !isNonEmptyId(eventId)) {
+    return { type: 'reject', reason: 'missing-room-or-event-id' };
+  }
+  if (!isKnownAgentApprovalNotificationActionId(actionId)) {
+    return { type: 'reject', reason: 'unknown-action-id' };
+  }
+
+  if (
+    isAgentApprovalNativeActionExpired({
+      nowMs,
+      eventTsMs: input.eventTsMs,
+      notificationCreatedAtMs: input.notificationCreatedAtMs,
+      ttlMs: input.ttlMs,
+    })
+  ) {
+    return { type: 'reject', reason: 'expired-ttl' };
+  }
+
+  if (input.alreadyActed) {
+    return { type: 'reject', reason: 'already-acted' };
+  }
+  if (input.alreadyReactedLocally) {
+    return { type: 'reject', reason: 'already-reacted' };
+  }
+
+  // Permanent approval must not fire from a background OS notification action.
+  if (actionId === AGENT_APPROVAL_NOTIFICATION_ACTION_APPROVE_ALWAYS) {
+    return {
+      type: 'open-room',
+      roomId,
+      eventId,
+      reason: 'approve-always-requires-in-app-confirmation',
+    };
+  }
+
+  if (input.eventResolved === false) {
+    return { type: 'reject', reason: 'event-unresolved' };
+  }
+  if (input.isApprovalPrompt === false) {
+    return { type: 'reject', reason: 'not-approval-prompt' };
+  }
+
+  const reaction = getAgentApprovalReactionForNotificationAction(actionId);
+  if (!reaction) {
+    return { type: 'reject', reason: 'unknown-action-id' };
+  }
+
+  // Before event validation completes, callers should not send. When validation fields are
+  // omitted (unit tests of early gates), still return a provisional send plan only if the
+  // caller explicitly marked the event resolved and prompt-valid, or left them undefined
+  // after passing the early gates for a non-always action that still requires validation.
+  if (input.eventResolved !== true || input.isApprovalPrompt !== true) {
+    return { type: 'reject', reason: 'event-not-validated' };
+  }
+
+  return {
+    type: 'send-reaction',
+    roomId,
+    eventId,
+    actionId,
+    reaction,
+    dedupeKey: buildAgentApprovalNativeActionDedupeKey(roomId, eventId, actionId),
+  };
+};
+
+export type AgentApprovalNativeActionDedupeStore = {
+  has: (key: string) => boolean;
+  add: (key: string) => void;
+  remove: (key: string) => void;
+};
+
+const readDedupeKeysFromStorage = (storage: Storage): Set<string> => {
+  try {
+    const raw = storage.getItem(AGENT_APPROVAL_NATIVE_ACTION_DEDUP_STORAGE_KEY);
+    if (!raw) return new Set();
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return new Set();
+    return new Set(parsed.filter((value): value is string => typeof value === 'string'));
+  } catch {
+    return new Set();
+  }
+};
+
+const writeDedupeKeysToStorage = (storage: Storage, keys: Set<string>): void => {
+  try {
+    // Bound growth: keep the most recently recorded actions only.
+    const values = Array.from(keys).slice(-200);
+    storage.setItem(AGENT_APPROVAL_NATIVE_ACTION_DEDUP_STORAGE_KEY, JSON.stringify(values));
+  } catch {
+    // Storage may be unavailable (private mode, quota); in-memory set still helps in-session.
+  }
+};
+
+/**
+ * Session-backed dedupe store so native approval actions are not double-sent across restarts
+ * of the renderer within the same browser/webview session.
+ */
+export const createAgentApprovalNativeActionDedupeStore = (
+  storage?: Storage | null,
+  memory: Set<string> = new Set()
+): AgentApprovalNativeActionDedupeStore => {
+  if (storage) {
+    for (const key of readDedupeKeysFromStorage(storage)) {
+      memory.add(key);
+    }
+  }
+
+  return {
+    has: (key) => memory.has(key),
+    add: (key) => {
+      memory.add(key);
+      if (storage) writeDedupeKeysToStorage(storage, memory);
+    },
+    remove: (key) => {
+      memory.delete(key);
+      if (storage) writeDedupeKeysToStorage(storage, memory);
+    },
+  };
+};
+
+export const hasLocalAgentApprovalReactionFromSenders = (
+  reactionSendersByKey: Iterable<[string, Iterable<string>]> | undefined,
+  userId: string | undefined
+): boolean => {
+  if (!reactionSendersByKey || !userId) return false;
+  for (const [key, senders] of reactionSendersByKey) {
+    if (!(AGENT_APPROVAL_REACTION_KEYS as readonly string[]).includes(key)) continue;
+    for (const sender of senders) {
+      if (sender === userId) return true;
+    }
+  }
+  return false;
 };
 
 export type AgentApprovalPrompt = {

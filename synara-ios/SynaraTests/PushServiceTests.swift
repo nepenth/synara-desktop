@@ -121,6 +121,103 @@ final class PushServiceTests: XCTestCase {
         )
     }
 
+    func testAgentApprovalNotificationActionBlocksApproveAlwaysFromNativePath() {
+        let plan = SynaraNotificationActionContract.planAgentApprovalNotificationAction(
+            actionIdentifier: SynaraNotificationActionContract.approveAlwaysIdentifier,
+            userInfo: [
+                "room_id": "!room:matrix.org",
+                "event_id": "$approval:matrix.org"
+            ]
+        )
+
+        XCTAssertEqual(
+            plan,
+            .openRoom(
+                roomID: "!room:matrix.org",
+                eventID: "$approval:matrix.org",
+                reason: "approve-always-requires-in-app-confirmation"
+            )
+        )
+        XCTAssertNil(
+            SynaraNotificationActionContract.agentApprovalReactionRequest(
+                actionIdentifier: SynaraNotificationActionContract.approveAlwaysIdentifier,
+                userInfo: [
+                    "room_id": "!room:matrix.org",
+                    "event_id": "$approval:matrix.org"
+                ]
+            )
+        )
+    }
+
+    func testAgentApprovalNotificationActionRejectsExpiredAndAlreadyActedPayloads() {
+        let staleCreatedAt = Date().addingTimeInterval(-(SynaraNotificationActionContract.nativeActionTTL + 60))
+        let expiredPlan = SynaraNotificationActionContract.planAgentApprovalNotificationAction(
+            actionIdentifier: SynaraNotificationActionContract.approveOnceIdentifier,
+            userInfo: [
+                "room_id": "!room:matrix.org",
+                "event_id": "$approval:matrix.org",
+                "created_at": staleCreatedAt.timeIntervalSince1970 * 1000
+            ]
+        )
+        XCTAssertEqual(expiredPlan, .ignore(reason: "expired-ttl"))
+
+        let alreadyActed = SynaraNotificationActionContract.planAgentApprovalNotificationAction(
+            actionIdentifier: SynaraNotificationActionContract.denyIdentifier,
+            userInfo: [
+                "room_id": "!room:matrix.org",
+                "event_id": "$approval:matrix.org"
+            ],
+            alreadyActed: true
+        )
+        XCTAssertEqual(alreadyActed, .ignore(reason: "already-acted"))
+    }
+
+    func testAgentApprovalNotificationActionPlansDenyReaction() throws {
+        let plan = SynaraNotificationActionContract.planAgentApprovalNotificationAction(
+            actionIdentifier: SynaraNotificationActionContract.denyIdentifier,
+            userInfo: [
+                "room_id": "!room:matrix.org",
+                "event_id": "$approval:matrix.org"
+            ]
+        )
+        guard case .submitReaction(let request) = plan else {
+            return XCTFail("Expected submitReaction plan, got \(plan)")
+        }
+        XCTAssertEqual(request.reactionKey, "❌")
+        XCTAssertEqual(request.roomID, "!room:matrix.org")
+        XCTAssertEqual(request.sourceEventID, "$approval:matrix.org")
+    }
+
+    func testAgentApprovalNotificationActionDedupeStorePersistsKeys() {
+        let suiteName = "SynaraAgentApprovalNotificationActionDedupeStoreTests-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer {
+            defaults.removePersistentDomain(forName: suiteName)
+        }
+
+        let storageKey = "test.agent-approval.native-action-dedupe"
+        let key = SynaraAgentApprovalNotificationActionDedupeStore.key(
+            roomID: "!room:matrix.org",
+            eventID: "$approval:matrix.org",
+            actionIdentifier: SynaraNotificationActionContract.approveOnceIdentifier
+        )
+        let first = SynaraAgentApprovalNotificationActionDedupeStore(
+            defaults: defaults,
+            storageKey: storageKey
+        )
+        XCTAssertFalse(first.contains(key))
+        first.insert(key)
+        XCTAssertTrue(first.contains(key))
+
+        let second = SynaraAgentApprovalNotificationActionDedupeStore(
+            defaults: defaults,
+            storageKey: storageKey
+        )
+        XCTAssertTrue(second.contains(key))
+        second.remove(key)
+        XCTAssertFalse(first.contains(key))
+    }
+
     func testBadgeCountParsesApsBadgeAndSummaryFormats() {
         let service = SynaraPushService(
             logger: MockLoggingService(),

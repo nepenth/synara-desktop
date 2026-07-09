@@ -64,6 +64,31 @@ final class TimelineServiceTests: XCTestCase {
         )
     }
 
+    func testRoomTimelineFocusPolicyNormalOpenNeverUsesStaleReadMarkerForFocus() {
+        // v1.2.28 policy: normal open ignores m.fully_read for initial load focus.
+        // Post-load restore of old markers is also removed from RoomTimelineView.
+        let normalOpenFocus = RoomTimelineFocusPolicy.initialLoadFocus(
+            focusedEventID: nil,
+            initialReadMarkerEventID: "$stale-read-marker"
+        )
+        let streamFocus = RoomTimelineFocusPolicy.updateStreamFocus(
+            focusedEventID: nil,
+            override: nil
+        )
+
+        XCTAssertNil(normalOpenFocus)
+        XCTAssertNil(streamFocus)
+
+        // Explicit deep links remain focused.
+        XCTAssertEqual(
+            RoomTimelineFocusPolicy.initialLoadFocus(
+                focusedEventID: "$deep-link",
+                initialReadMarkerEventID: "$stale-read-marker"
+            ),
+            "$deep-link"
+        )
+    }
+
     func testMatrixHTMLSanitizerDropsUnsafeLinksAndKeepsFallback() {
         let markdown = MatrixHTMLRenderer.sanitizedMarkdown(
             body: "fallback",
