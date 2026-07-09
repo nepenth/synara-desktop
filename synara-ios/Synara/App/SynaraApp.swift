@@ -65,6 +65,7 @@ final class SynaraAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificati
     private var agentApprovalReactions: AgentApprovalReactionServicing?
     private var pendingRoute: AppRoute?
     private var pendingNotificationPayload: [AnyHashable: Any]?
+    private let agentApprovalActionDedupe = SynaraAgentApprovalNotificationActionDedupeStore()
 
     func bind(to environment: AppEnvironment) {
         push = environment.push
@@ -142,11 +143,11 @@ final class SynaraAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificati
         }
 
         let userInfo = response.notification.request.content.userInfo
-        if let request = SynaraNotificationActionContract.agentApprovalReactionRequest(
-            actionIdentifier: response.actionIdentifier,
-            userInfo: userInfo
-        ) {
-            await handleAgentApprovalNotificationAction(request, userInfo: userInfo)
+        if SynaraAgentApprovalNotificationActionID(rawValue: response.actionIdentifier) != nil {
+            await handleAgentApprovalNotificationAction(
+                actionIdentifier: response.actionIdentifier,
+                userInfo: userInfo
+            )
             return
         }
 
@@ -206,22 +207,53 @@ final class SynaraAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificati
     }
 
     private func handleAgentApprovalNotificationAction(
-        _ request: SynaraAgentApprovalReactionRequest,
+        actionIdentifier: String,
         userInfo: [AnyHashable: Any]
     ) async {
-        guard let agentApprovalReactions else {
-            routeToFallback()
-            return
-        }
+        let plan = SynaraNotificationActionContract.planAgentApprovalNotificationAction(
+            actionIdentifier: actionIdentifier,
+            userInfo: userInfo
+        )
 
-        do {
-            try await agentApprovalReactions.submitReaction(request)
+        switch plan {
+        case .ignore(let reason):
+            logger?.info("Agent approval notification action ignored: \(reason)", category: .push)
+            await resolveNotificationRoute(from: userInfo)
+        case .openRoom(let roomID, let eventID, let reason):
+            // Approve-always (and other open-only dispositions) require in-app confirmation.
+            logger?.info("Agent approval notification action opening room: \(reason)", category: .push)
+            routeToDestination(.room(id: roomID, eventID: eventID))
             await MainActor.run {
                 push?.applyIncomingBadge(from: userInfo)
             }
-        } catch {
-            logger?.error("Agent approval notification action failed: \(error.localizedDescription)", category: .push)
-            await resolveNotificationRoute(from: userInfo)
+        case .submitReaction(let request):
+            let dedupeKey = SynaraAgentApprovalNotificationActionDedupeStore.key(
+                roomID: request.roomID,
+                eventID: request.sourceEventID,
+                actionIdentifier: actionIdentifier
+            )
+            guard agentApprovalActionDedupe.contains(dedupeKey) == false else {
+                logger?.info("Agent approval notification action ignored: already-acted", category: .push)
+                routeToDestination(.room(id: request.roomID, eventID: request.sourceEventID))
+                return
+            }
+
+            guard let agentApprovalReactions else {
+                routeToDestination(.room(id: request.roomID, eventID: request.sourceEventID))
+                return
+            }
+
+            agentApprovalActionDedupe.insert(dedupeKey)
+            do {
+                try await agentApprovalReactions.submitReaction(request)
+                await MainActor.run {
+                    push?.applyIncomingBadge(from: userInfo)
+                }
+            } catch {
+                agentApprovalActionDedupe.remove(dedupeKey)
+                logger?.error("Agent approval notification action failed: \(error.localizedDescription)", category: .push)
+                await resolveNotificationRoute(from: userInfo)
+            }
         }
     }
 

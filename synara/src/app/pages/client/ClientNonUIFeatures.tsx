@@ -17,6 +17,7 @@ import { usePreviousValue } from '../../hooks/usePreviousValue';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { getInboxInvitesPath } from '../pathUtils';
 import {
+  getEventReactions,
   getReactionContent,
   getMemberDisplayName,
   getNotificationType,
@@ -50,9 +51,14 @@ import {
   supportsPlatformTrayState,
 } from '../../platform';
 import {
-  AGENT_APPROVAL_NOTIFICATION_ACTIONS,
+  AGENT_APPROVAL_NATIVE_ACTION_TTL_MS,
+  AGENT_APPROVAL_NATIVE_NOTIFICATION_ACTIONS,
+  AGENT_APPROVAL_NOTIFICATION_KIND,
+  buildAgentApprovalNativeActionDedupeKey,
+  createAgentApprovalNativeActionDedupeStore,
   detectAgentApprovalPrompt,
-  getAgentApprovalReactionForNotificationAction,
+  hasLocalAgentApprovalReactionFromSenders,
+  planAgentApprovalNativeNotificationAction,
 } from '../../utils/agentApprovals';
 import { resolveMatrixThumbnailUrl } from '../../matrix/media';
 import { buildDesktopNotificationRoomRoute } from '../../utils/desktop';
@@ -63,7 +69,52 @@ import {
 import { getLoadedLiveTimelineEvents } from '../../utils/timelineLifecycle';
 import { DesktopUpdaterProvider } from '../../features/desktop-updater/DesktopUpdaterProvider';
 
-const RECENT_AGENT_APPROVAL_MS = 10 * 60 * 1000;
+const RECENT_AGENT_APPROVAL_MS = AGENT_APPROVAL_NATIVE_ACTION_TTL_MS;
+
+const getSessionStorage = (): Storage | null => {
+  try {
+    return typeof sessionStorage === 'undefined' ? null : sessionStorage;
+  } catch {
+    return null;
+  }
+};
+
+const resolveAgentApprovalTargetEvent = async (
+  mx: ReturnType<typeof useMatrixClient>,
+  roomId: string,
+  eventId: string
+): Promise<MatrixEvent | undefined> => {
+  const room = mx.getRoom(roomId);
+  const local = room?.findEventById(eventId);
+  if (local) return local;
+
+  try {
+    const raw = await mx.fetchRoomEvent(roomId, eventId);
+    return new MatrixEvent(raw);
+  } catch {
+    return undefined;
+  }
+};
+
+const userHasLocalApprovalReaction = (
+  room: Room | null,
+  eventId: string,
+  userId: string | null | undefined
+): boolean => {
+  if (!room || !userId) return false;
+  const reactions = getEventReactions(room.getUnfilteredTimelineSet(), eventId);
+  const sorted = reactions?.getSortedAnnotationsByKey();
+  if (!sorted) return false;
+  return hasLocalAgentApprovalReactionFromSenders(
+    sorted.map(([key, events]) => [
+      key,
+      [...events]
+        .map((event) => event.getSender())
+        .filter((sender): sender is string => Boolean(sender)),
+    ]),
+    userId
+  );
+};
 const NATIVE_PASTE_EVENT = 'synara://native-paste';
 const TEXT_INPUT_TYPES = new Set(['', 'email', 'password', 'search', 'tel', 'text', 'url']);
 
@@ -446,7 +497,9 @@ function MessageNotifications() {
 
 function AgentApprovalNotifications() {
   const audioRef = useRef<HTMLAudioElement>(null);
-  const nativeApprovalActionKeysRef = useRef<Set<string>>(new Set());
+  const nativeActionDedupeRef = useRef(
+    createAgentApprovalNativeActionDedupeStore(getSessionStorage())
+  );
 
   const mx = useMatrixClient();
   const { navigateRoom } = useRoomNavigate();
@@ -477,9 +530,10 @@ function AgentApprovalNotifications() {
           title,
           body: `${roomName}: ${notificationBody}`,
           route: buildDesktopNotificationRoomRoute(roomId, eventId),
-          actions: AGENT_APPROVAL_NOTIFICATION_ACTIONS,
+          // Approve-always is not offered on native OS notifications.
+          actions: AGENT_APPROVAL_NATIVE_NOTIFICATION_ACTIONS,
           actionContext: {
-            kind: 'agent-approval',
+            kind: AGENT_APPROVAL_NOTIFICATION_KIND,
             roomId,
             eventId: approvalEventId,
           },
@@ -508,27 +562,98 @@ function AgentApprovalNotifications() {
       context?: { kind: string; roomId?: string; eventId?: string };
     }) => {
       const { actionId, context } = payload;
-      if (context?.kind !== 'agent-approval') return;
-      if (!context.roomId || !context.eventId) return;
+      const earlyPlan = planAgentApprovalNativeNotificationAction({
+        actionId,
+        context,
+        nowMs: Date.now(),
+        // Require full event validation before send; early plan without eventResolved rejects.
+      });
 
-      const reaction = getAgentApprovalReactionForNotificationAction(actionId);
-      if (!reaction) return;
+      // Fast-reject malformed payloads without I/O.
+      if (earlyPlan.type === 'reject' && earlyPlan.reason !== 'event-not-validated') {
+        if (import.meta.env?.DEV) {
+          // eslint-disable-next-line no-console
+          console.debug(
+            '[synara:agent-approval] native action rejected',
+            earlyPlan.reason,
+            payload
+          );
+        }
+        return;
+      }
 
-      const dedupeKey = `${context.roomId}\u0000${context.eventId}\u0000${actionId}`;
-      if (nativeApprovalActionKeysRef.current.has(dedupeKey)) return;
-      nativeApprovalActionKeysRef.current.add(dedupeKey);
+      const roomId = context?.roomId?.trim();
+      const eventId = context?.eventId?.trim();
+      if (!roomId || !eventId) return;
 
+      // Approve-always: never send ♾️ from a native notification; open the room instead.
+      if (earlyPlan.type === 'open-room') {
+        if (import.meta.env?.DEV) {
+          // eslint-disable-next-line no-console
+          console.debug('[synara:agent-approval] approve-always routed to room', earlyPlan.reason);
+        }
+        navigateRoom(earlyPlan.roomId, earlyPlan.eventId);
+        return;
+      }
+
+      const dedupe = nativeActionDedupeRef.current;
+      const provisionalDedupeKey = buildAgentApprovalNativeActionDedupeKey(
+        roomId,
+        eventId,
+        actionId
+      );
+      if (dedupe.has(provisionalDedupeKey)) {
+        return;
+      }
+
+      const targetEvent = await resolveAgentApprovalTargetEvent(mx, roomId, eventId);
+      const room = mx.getRoom(roomId);
+      const userId = mx.getUserId();
+      const alreadyReactedLocally = userHasLocalApprovalReaction(room, eventId, userId);
+      const isApprovalPrompt = targetEvent
+        ? Boolean(detectAgentApprovalPrompt(targetEvent.getContent<Record<string, unknown>>()))
+        : false;
+
+      const plan = planAgentApprovalNativeNotificationAction({
+        actionId,
+        context: { kind: context?.kind, roomId, eventId },
+        nowMs: Date.now(),
+        eventTsMs: targetEvent?.getTs(),
+        alreadyActed: dedupe.has(provisionalDedupeKey),
+        alreadyReactedLocally,
+        eventResolved: Boolean(targetEvent),
+        isApprovalPrompt,
+      });
+
+      if (plan.type === 'open-room') {
+        if (import.meta.env?.DEV) {
+          // eslint-disable-next-line no-console
+          console.debug('[synara:agent-approval] native action open-room', plan.reason);
+        }
+        navigateRoom(plan.roomId, plan.eventId);
+        return;
+      }
+
+      if (plan.type === 'reject') {
+        if (import.meta.env?.DEV) {
+          // eslint-disable-next-line no-console
+          console.debug('[synara:agent-approval] native action rejected', plan.reason);
+        }
+        return;
+      }
+
+      dedupe.add(plan.dedupeKey);
       try {
         await mx.sendEvent(
-          context.roomId,
+          plan.roomId,
           MessageEvent.Reaction as any,
-          getReactionContent(context.eventId, reaction) as any
+          getReactionContent(plan.eventId, plan.reaction) as any
         );
       } catch {
-        nativeApprovalActionKeysRef.current.delete(dedupeKey);
+        dedupe.remove(plan.dedupeKey);
       }
     },
-    [mx]
+    [mx, navigateRoom]
   );
 
   useEffect(() => {

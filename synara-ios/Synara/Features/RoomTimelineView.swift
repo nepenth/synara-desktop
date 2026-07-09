@@ -46,9 +46,9 @@ struct RoomTimelineView: View {
     @State private var lastRenderedTimelineCount = 0
     @State private var showJumpToLatest = false
     @State private var hasPositionedInitialTimeline = false
+    /// Used only for unread-divider presentation after the user has reached a live event.
+    /// Must never drive post-load scroll restore (v1.2.28 open-at-live-end policy).
     @State private var initialReadMarkerEventID: String?
-    @State private var pendingInitialReadMarkerRestoreEventID: String?
-    @State private var initialReadMarkerRestoreBaselineItemIDs: Set<String> = []
     @State private var hasReachedOldestMessages = false
     @State private var lastOlderPaginationAt = Date.distantPast
     @State private var paginationScrollAnchorID: String?
@@ -322,7 +322,6 @@ struct RoomTimelineView: View {
                     DragGesture(minimumDistance: 8).onChanged { _ in
                         if items.count > 8 {
                             cancelTimelineScroll()
-                            cancelInitialReadMarkerRestore()
                         }
                     }
                 )
@@ -355,11 +354,9 @@ struct RoomTimelineView: View {
                         lastRenderedTimelineCount = updatedItems.count
                         return
                     }
-                    let didPositionInitialTimeline = scrollToInitialPosition(items: updatedItems, proxy: proxy)
-                    if didPositionInitialTimeline == false {
-                        restoreInitialReadMarkerPositionIfNeeded(items: updatedItems, proxy: proxy)
-                    }
+                    _ = scrollToInitialPosition(items: updatedItems, proxy: proxy)
                     scrollToLatestMessageIfNeeded(items: updatedItems, proxy: proxy)
+                    // Explicit focused-event deep links only; never restore old read markers.
                     scrollToAnchoredEvent(items: updatedItems, proxy: proxy)
                     scrollToPendingLatestIfNeeded(items: updatedItems, proxy: proxy)
                 }
@@ -371,41 +368,15 @@ struct RoomTimelineView: View {
     private func scrollToInitialPosition(items: [TimelineItem], proxy: ScrollViewProxy) -> Bool {
         guard hasPositionedInitialTimeline == false,
               focusedEventID == nil,
-              let latest = items.last else {
+              items.last != nil else {
             return false
         }
 
-        let target = initialReadMarkerEventID.flatMap { eventID in
-            items.first { item in
-                item.eventID == eventID || item.id == eventID
-            }
-        } ?? latest
-        let isLatestTarget = target.eventID == latest.eventID || target.id == latest.id
-        let shouldOpenAtLatest = isLatestTarget && initialReadMarkerEventID == nil
-
+        // Normal room open always pins the live end. Explicit focused-event routes use
+        // scrollToAnchoredEvent instead. Old m.fully_read markers must not scroll after load.
         hasPositionedInitialTimeline = true
-        if shouldOpenAtLatest {
-            cancelInitialReadMarkerRestore()
-            placeInitialTimelineAtBottom(proxy: proxy)
-        } else {
-            pendingInitialReadMarkerRestoreEventID = target.eventID
-            initialReadMarkerRestoreBaselineItemIDs = Set(items.map(\.id))
-            showJumpToLatest = true
-            placeInitialTimelineAtEvent(proxy: proxy, eventID: target.eventID, anchor: .center)
-        }
+        placeInitialTimelineAtBottom(proxy: proxy)
         return true
-    }
-
-    private func placeInitialTimelineAtEvent(proxy: ScrollViewProxy, eventID: String, anchor: UnitPoint) {
-        cancelTimelineScroll()
-        timelineScrollTask = Task { @MainActor in
-            await Task.yield()
-            guard Task.isCancelled == false else {
-                return
-            }
-            proxy.scrollTo(eventID, anchor: anchor)
-            showJumpToLatest = true
-        }
     }
 
     private func placeInitialTimelineAtBottom(proxy: ScrollViewProxy) {
@@ -425,23 +396,6 @@ struct RoomTimelineView: View {
             }
             showJumpToLatest = false
         }
-    }
-
-    private func restoreInitialReadMarkerPositionIfNeeded(items: [TimelineItem], proxy: ScrollViewProxy) {
-        guard focusedEventID == nil,
-              let markerEventID = pendingInitialReadMarkerRestoreEventID,
-              showJumpToLatest,
-              items.contains(where: { $0.eventID == markerEventID || $0.id == markerEventID }) else {
-            return
-        }
-
-        let currentItemIDs = Set(items.map(\.id))
-        guard currentItemIDs != initialReadMarkerRestoreBaselineItemIDs else {
-            return
-        }
-
-        cancelInitialReadMarkerRestore()
-        placeInitialTimelineAtEvent(proxy: proxy, eventID: markerEventID, anchor: .center)
     }
 
     private func scrollToAnchoredEvent(items: [TimelineItem], proxy: ScrollViewProxy) {
@@ -475,7 +429,6 @@ struct RoomTimelineView: View {
         }
 
         guard focusedEventID == nil,
-              isReadingFromEarlierPosition == false,
               lastRenderedTimelineCount > 0,
               items.count > lastRenderedTimelineCount,
               showJumpToLatest == false,
@@ -550,23 +503,9 @@ struct RoomTimelineView: View {
         }
     }
 
-    private var isReadingFromEarlierPosition: Bool {
-        guard focusedEventID == nil,
-              initialReadMarkerEventID != nil,
-              hasPositionedInitialTimeline else {
-            return false
-        }
-        return showJumpToLatest
-    }
-
     private func cancelTimelineScroll() {
         timelineScrollTask?.cancel()
         timelineScrollTask = nil
-    }
-
-    private func cancelInitialReadMarkerRestore() {
-        pendingInitialReadMarkerRestoreEventID = nil
-        initialReadMarkerRestoreBaselineItemIDs = []
     }
 
     private func scrollToLatestMessageTarget(proxy: ScrollViewProxy, eventID: String?) {
@@ -648,8 +587,6 @@ struct RoomTimelineView: View {
         showJumpToLatest = false
         hasPositionedInitialTimeline = false
         initialReadMarkerEventID = nil
-        pendingInitialReadMarkerRestoreEventID = nil
-        initialReadMarkerRestoreBaselineItemIDs = []
         hasReachedOldestMessages = false
         lastOlderPaginationAt = .distantPast
         paginationScrollAnchorID = nil
@@ -1226,7 +1163,6 @@ struct RoomTimelineView: View {
         dismissKeyboard()
         isComposerFocused = false
         cancelTimelineScroll()
-        cancelInitialReadMarkerRestore()
         cancelMarkFullyRead()
         paginationScrollAnchorID = nil
         hasReachedOldestMessages = false

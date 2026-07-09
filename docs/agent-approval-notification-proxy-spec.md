@@ -31,14 +31,35 @@ only if a future remote-push path is designed.
   `room_id` and `event_id` when available, or at minimum `event_id`.
 - Agent approval APNs category identifier:
   `synara.agent-approval`.
-- Registered iOS notification action identifiers:
+- Registered iOS notification action identifiers exposed on the native category:
   - `agent-approval.approve-once`
-  - `agent-approval.approve-always`
   - `agent-approval.deny`
-- iOS maps those actions to Matrix reactions on the approval prompt event:
+- `agent-approval.approve-always` is intentionally **not** offered on native OS
+  notification actions. Permanent approval requires an explicit in-app
+  confirmation path; if the action id is still received, the app opens the
+  room/event and does **not** send `♾️`.
+- Client-side safety for native/push approval actions (desktop + iOS):
+  - require valid kind/action/room/event identifiers;
+  - revalidate the Matrix event and approval detector before sending a reaction
+    when the client can resolve the event;
+  - enforce a short TTL so stale notifications cannot approve old prompts;
+  - dedupe successful actions so the same native action is not double-sent.
+- In-app UI still maps the three reactions on the approval prompt event:
   - `agent-approval.approve-once` -> `✅`
-  - `agent-approval.approve-always` -> `♾️`
+  - `agent-approval.approve-always` -> `♾️` (in-app only)
   - `agent-approval.deny` -> `❌`
+
+### External / not complete in this repo
+
+The following remain **outside** this repository and must not be treated as done
+by client-only remediations:
+
+- Notification proxy trusted approval metadata ingest and category attachment
+  (`POST /v1/agent-approval-events` + matching Matrix push).
+- Production APNs / TestFlight end-to-end validation of approval categories.
+- Installed-app updater smoke for desktop release channels.
+- Large-history timeline performance instrumentation beyond in-app `perfLog`
+  diagnostics.
 
 ## Required Architecture
 
@@ -289,11 +310,11 @@ Context:
 - TestFlight uses production APNs.
 - Synara registers Matrix pushers with format event_id_only.
 - The Matrix pusher pushkey is the APNs device token.
-- The iOS app registers category synara.agent-approval with actions:
-  agent-approval.approve-once, agent-approval.approve-always,
-  agent-approval.deny.
-- iOS maps those actions to Matrix reactions on the prompt event:
-  ✅, ♾️, ❌.
+- The iOS app registers category synara.agent-approval with native actions:
+  agent-approval.approve-once, agent-approval.deny.
+- Approve-always is in-app only; do not expect native ♾️ from notification actions.
+- iOS maps approve-once/deny notification actions to Matrix reactions ✅ / ❌
+  after client-side payload and TTL checks.
 
 Build:
 1. POST /_matrix/push/v1/notify for Matrix push gateway delivery.
