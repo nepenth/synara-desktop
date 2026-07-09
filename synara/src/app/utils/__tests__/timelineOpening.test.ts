@@ -11,6 +11,7 @@ import {
   getTimelineEndWindow,
   hasUnreadForInitialScroll,
   canRestoreViewportFromInitialTimeline,
+  shouldGateViewportRestoreOnUnread,
   shouldShowJumpToUnread,
   timelineWindowContainsEventId,
   timelineHasEvents,
@@ -185,6 +186,12 @@ test('initial unread detection accepts unread counts and explicit anchors', () =
   assert.equal(hasUnreadForInitialScroll({ total: 1, highlight: 0, from: null }), true);
   assert.equal(hasUnreadForInitialScroll({ total: 0, highlight: 1, from: null }), true);
   assert.equal(hasUnreadForInitialScroll(undefined, '$anchor'), true);
+});
+
+test('viewport restore gate uses the actual unread signal, not live-window placement', () => {
+  // Deep unread still gates historical restore even when auto-open is suppressed.
+  assert.equal(shouldGateViewportRestoreOnUnread(true), true);
+  assert.equal(shouldGateViewportRestoreOnUnread(false), false);
 });
 
 test('jump to unread shows for live-chain markers outside the current window', () => {

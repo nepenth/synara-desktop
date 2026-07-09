@@ -43,6 +43,9 @@ test('detectAgentApprovalPrompt recognizes Hermes dangerous command prompts', ()
   assert.equal(prompt?.title, 'Approval Required: Dangerous Command');
   assert.match(prompt?.body ?? '', /Security scan/);
   assert.equal(prompt?.commandPreview, 'set -euo pipefail');
+  assert.match(prompt?.command ?? '', /vaultwarden\.sh/);
+  assert.match(prompt?.sourceContext ?? '', /Dangerous command requires approval/);
+  assert.match(prompt?.replyInstructions ?? '', /Reply \/approve/);
 });
 
 test('detectAgentApprovalPrompt recognizes compact approval command bodies', () => {
@@ -99,7 +102,55 @@ You can also react to this prompt:
   assert.match(prompt?.body ?? '', /Plain HTTP URL/);
   assert.equal(prompt?.commandPreview, 'set -euo pipefail');
   assert.match(prompt?.command ?? '', /camofox-browser\.whyland\.com/);
+  assert.match(prompt?.command ?? '', /python3 - <<'PY'/);
+  assert.match(prompt?.command ?? '', /json\.load/);
   assert.doesNotMatch(prompt?.command ?? '', /Reason:/);
+  assert.match(prompt?.replyInstructions ?? '', /Reply !approve/);
+  assert.match(prompt?.replyInstructions ?? '', /approve always/);
+  assert.match(prompt?.sourceContext ?? '', /You can also react/);
+});
+
+test('detectAgentApprovalPrompt keeps heredoc commands and invalid-hostname context', () => {
+  const body = `⚠️ Dangerous command requires approval
+
+Code
+
+Copy
+python3 - <<'PY'
+import socket
+hostname = socket.gethostname()
+if hostname not in {"worker-a", "worker-b"}:
+    raise SystemExit(f"invalid hostname: {hostname}")
+print("ok", hostname)
+PY
+
+Reason: Security scan — [HIGH] Invalid hostname: target host is not in the allowlist for remote execution.
+
+Reply !approve to execute, !approve session to approve this pattern for the session, !approve always to approve permanently, or !deny to cancel.
+
+You can also react to this prompt:
+✅ = approve once
+♾️ = approve always
+❌ = deny`;
+
+  const prompt = detectAgentApprovalPrompt({ body });
+
+  assert.equal(prompt?.title, 'Approval Required: Dangerous Command');
+  assert.match(prompt?.body ?? '', /Invalid hostname/);
+  assert.equal(prompt?.commandPreview, "python3 - <<'PY'");
+  assert.match(prompt?.command ?? '', /python3 - <<'PY'/);
+  assert.match(prompt?.command ?? '', /socket\.gethostname/);
+  assert.match(prompt?.command ?? '', /raise SystemExit/);
+  assert.match(prompt?.command ?? '', /^PY$/m);
+  assert.doesNotMatch(prompt?.command ?? '', /Reason:/);
+  assert.doesNotMatch(prompt?.command ?? '', /Reply !approve/);
+  assert.match(prompt?.replyInstructions ?? '', /Reply !approve/);
+  assert.match(prompt?.replyInstructions ?? '', /♾️ = approve always/);
+  assert.match(prompt?.replyInstructions ?? '', /❌ = deny/);
+  assert.match(prompt?.sourceContext ?? '', /Code/);
+  assert.match(prompt?.sourceContext ?? '', /Copy/);
+  assert.match(prompt?.sourceContext ?? '', /Invalid hostname/);
+  assert.match(prompt?.sourceContext ?? '', /You can also react/);
 });
 
 test('detectAgentApprovalPrompt recognizes markdown-bold approval headings', () => {

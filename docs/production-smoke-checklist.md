@@ -98,7 +98,7 @@ Cases:
 | MAC-DESK-005 | Composer file drop | Drag/drop one file and multiple files into a room; upload board shows correct attachments and encrypted-room upload path still succeeds. | File types/sizes and pass/fail. |
 | MAC-DESK-006 | Composer clipboard image | Paste a screenshot/native clipboard image and an image copied from a browser that also advertises HTML/text; both upload as files instead of inserting unwanted rich HTML. | Source app, upload board evidence, pass/fail. |
 | MAC-DESK-007 | Notifications | In-session notification appears; click routes to the sanitized internal room/inbox route. | Notification permission state and route result. |
-| MAC-DESK-007a | Agent approval native actions | Approve once / Deny from a fresh agent-approval OS notification revalidates the event and sends the reaction; approve-always is not offered (or only opens the room); a stale/expired notification does not send a reaction; double-tapping does not double-send. | Action ids used, event age, pass/fail. |
+| MAC-DESK-007a | Agent approval native actions | Approve once / Deny from a fresh agent-approval OS notification revalidates the event and sends the reaction; approve-always is not offered (or only opens the room); in-app approval cards show bounded full prompt context (reason, command, reply instructions) and require confirmation for approve-always; a stale/expired notification does not send a reaction; double-tapping does not double-send. | Action ids used, event age, pass/fail. |
 | MAC-DESK-008 | Tray/status | Show Synara, Later, Notifications, Do Not Disturb, build label, and Quit behave as documented for macOS. | Menu screenshot or per-item pass/fail. |
 | MAC-DESK-009 | Shortcuts | Register global shortcuts, trigger navigation, and confirm permission-denied messaging if registration fails. | Shortcut config and pass/fail. |
 | MAC-DESK-010 | Release hardening | Release build denies DevTools shortcut and still exposes build identity in the tray/About surfaces. | Build type and pass/fail. |
@@ -168,7 +168,7 @@ Required cases:
 | IOS-002 | Timeline focus smoke | Timeline Resurrection cases `TL-001` through `TL-010` pass where supported by current iOS functionality. | Per-case pass/fail and unsupported-case rationale. |
 | IOS-003 | Session/keychain | Login/session persistence behaves correctly on simulator or physical device. | Device target and pass/fail. |
 | IOS-004 | Push/E2EE release gaps | Push gateway and production E2EE remain explicitly marked pending until implemented and tested. | Current status and linked blocker. |
-| IOS-005 | Agent approval notification actions | Approve once / Deny from a valid agent-approval notification are planned safely; approve-always opens the room (or is absent) and does not send ♾️; expired/malformed payloads do not approve. Production APNs/TestFlight remains external until proxy + APNs evidence exists. | Payload used, action plan/result, pass/fail. |
+| IOS-005 | Agent approval notification actions | Approve once / Deny from a valid agent-approval notification revalidate the focused Matrix event (timeline load + approval detector) before reacting; approve-always opens the room (or is absent) and does not send ♾️; in-app approve-always requires an explicit confirmation step; expired/malformed/unresolved payloads do not approve. Production APNs/TestFlight remains external until proxy + APNs evidence exists. | Payload used, action plan/result, pass/fail. |
 
 ## External Dependencies Still Open
 

@@ -1,6 +1,9 @@
 const MAX_AGENT_APPROVAL_BODY_CHARS = 100_000;
 const MAX_AGENT_APPROVAL_COMMAND_CHARS = 180;
 const MAX_AGENT_APPROVAL_COMMAND_BODY_CHARS = 8_000;
+/** Bounded original prompt body shown in approval cards for operator context. */
+const MAX_AGENT_APPROVAL_SOURCE_CONTEXT_CHARS = 4_000;
+const MAX_AGENT_APPROVAL_REPLY_INSTRUCTIONS_CHARS = 600;
 
 export const AGENT_APPROVAL_REACTION_APPROVE_ONCE = '✅';
 export const AGENT_APPROVAL_REACTION_APPROVE_ALWAYS = '♾️';
@@ -305,14 +308,27 @@ export const hasLocalAgentApprovalReactionFromSenders = (
 
 export type AgentApprovalPrompt = {
   title: string;
+  /** Prominent short reason summary (from `Reason:` when present). */
   body: string;
   command?: string;
   commandPreview?: string;
+  /**
+   * Bounded normalized original source body so operators can review the full
+   * approval prompt (heading, command, reason, reply/reaction instructions).
+   */
+  sourceContext?: string;
+  /** Reply / reaction instruction section when present in the source body. */
+  replyInstructions?: string;
 };
 
 const COMMAND_FENCE_RE = /```(?:[a-z0-9_-]+)?\s*\n([\s\S]*?)```/i;
+/**
+ * Hermes-style Code/Copy labeled blocks. Capture runs until Reason/Reply so
+ * multi-line commands (including heredocs) are preserved intact.
+ */
 const CODE_BLOCK_LABEL_RE =
-  /\bCode\s+(?:Copy\s*)?([\s\S]*?)(?=\n+Reason:|\n+Reply\s+[!/](?:approve|deny)\b|$)/i;
+  /\bCode\b(?:\s|\n)+(?:Copy\b(?:\s|\n)+)?([\s\S]*?)(?=\n+Reason:|\n+Reply\s+[!/](?:approve|deny)\b|$)/i;
+const REPLY_INSTRUCTIONS_RE = /(Reply\s+[!/](?:approve|deny)\b[\s\S]*?)(?=\n{3,}|$)/i;
 const HTML_TAG_RE = /<[^>]+>/g;
 const APPROVAL_HEADINGS = [
   'approval required: dangerous command',
@@ -324,26 +340,85 @@ const normalizeWhitespace = (value: string): string => value.replace(/\s+/g, ' '
 const truncate = (value: string, maxChars: number): string =>
   value.length > maxChars ? `${value.slice(0, maxChars - 1)}...` : value;
 
-const cleanCommand = (value: string): string | undefined => {
-  const command = value
+const normalizeSourceBody = (value: string): string =>
+  value
+    .replace(/\r\n/g, '\n')
     .split('\n')
     .map((line) => line.trimEnd())
-    .filter((line, index) => index > 0 || line.trim().toLowerCase() !== 'copy')
     .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
     .trim();
 
+const cleanCommand = (value: string): string | undefined => {
+  const lines = value
+    .replace(/\r\n/g, '\n')
+    .split('\n')
+    .map((line) => line.trimEnd());
+
+  // Drop leading chrome labels that sometimes land inside the capture group.
+  while (lines.length > 0) {
+    const head = lines[0]?.trim().toLowerCase() ?? '';
+    if (head === '' || head === 'copy' || head === 'code') {
+      lines.shift();
+      continue;
+    }
+    break;
+  }
+
+  const command = lines.join('\n').trim();
   return command ? truncate(command, MAX_AGENT_APPROVAL_COMMAND_BODY_CHARS) : undefined;
 };
 
+/**
+ * Extract the full multi-line command body. Prefer fenced blocks, then
+ * Code/Copy labeled sections, then a fallback that takes lines between the
+ * heading chrome and Reason/Reply markers so heredocs are not truncated to the
+ * first line.
+ */
 const extractCommand = (body: string): string | undefined => {
   const fenced = body.match(COMMAND_FENCE_RE)?.[1];
-  const rawCommand = fenced ?? body.match(CODE_BLOCK_LABEL_RE)?.[1];
-  if (!rawCommand) return undefined;
-  return cleanCommand(rawCommand);
+  if (fenced) {
+    const cleaned = cleanCommand(fenced);
+    if (cleaned) return cleaned;
+  }
+
+  const labeled = body.match(CODE_BLOCK_LABEL_RE)?.[1];
+  if (labeled) {
+    const cleaned = cleanCommand(labeled);
+    if (cleaned) return cleaned;
+  }
+
+  // Fallback: lines after Code/Copy chrome until Reason/Reply, without requiring
+  // the capture group to stop early on blank lines inside heredocs.
+  const lines = body.replace(/\r\n/g, '\n').split('\n');
+  let start = -1;
+  for (let index = 0; index < lines.length; index += 1) {
+    const trimmed = lines[index]?.trim().toLowerCase() ?? '';
+    if (trimmed === 'code' || trimmed === 'copy') {
+      start = index + 1;
+      continue;
+    }
+    if (start >= 0 && trimmed && trimmed !== 'code' && trimmed !== 'copy') {
+      start = index;
+      break;
+    }
+  }
+  if (start < 0) return undefined;
+
+  const commandLines: string[] = [];
+  for (let index = start; index < lines.length; index += 1) {
+    const line = lines[index] ?? '';
+    const trimmed = line.trim();
+    if (/^Reason:/i.test(trimmed) || /^Reply\s+[!/](?:approve|deny)\b/i.test(trimmed)) {
+      break;
+    }
+    commandLines.push(line.trimEnd());
+  }
+
+  return cleanCommand(commandLines.join('\n'));
 };
 
-const extractCommandPreview = (body: string): string | undefined => {
-  const command = extractCommand(body);
+const extractCommandPreview = (command: string | undefined): string | undefined => {
   if (!command) return undefined;
 
   const firstUsefulLine = command
@@ -354,6 +429,23 @@ const extractCommandPreview = (body: string): string | undefined => {
   return firstUsefulLine
     ? truncate(normalizeWhitespace(firstUsefulLine), MAX_AGENT_APPROVAL_COMMAND_CHARS)
     : undefined;
+};
+
+const extractReplyInstructions = (body: string): string | undefined => {
+  const section = body.match(REPLY_INSTRUCTIONS_RE)?.[1];
+  if (!section) return undefined;
+  const normalized = normalizeSourceBody(section);
+  return normalized ? truncate(normalized, MAX_AGENT_APPROVAL_REPLY_INSTRUCTIONS_CHARS) : undefined;
+};
+
+const scoreApprovalPrompt = (prompt: AgentApprovalPrompt): number => {
+  let score = 0;
+  if (prompt.command) score += Math.min(prompt.command.length, 2_000);
+  if (prompt.sourceContext) score += Math.min(prompt.sourceContext.length, 1_000);
+  if (prompt.replyInstructions) score += 80;
+  if (prompt.body && !/waiting for approval/i.test(prompt.body)) score += 40;
+  if (prompt.commandPreview) score += 10;
+  return score;
 };
 
 const decodeHtmlEntities = (value: string): string =>
@@ -389,21 +481,37 @@ const detectAgentApprovalPromptBody = (body: string): AgentApprovalPrompt | unde
   const normalized = normalizeWhitespace(body).toLowerCase();
   if (!APPROVAL_HEADINGS.some((heading) => normalized.includes(heading))) return undefined;
 
-  const commandPreview = extractCommandPreview(body);
   const command = extractCommand(body);
+  const commandPreview = extractCommandPreview(command);
   const reason = body.match(/\bReason:\s*([^\n]+)/i)?.[1];
   const reasonBody = reason ? truncate(normalizeWhitespace(reason), 220) : undefined;
+  const sourceContext = truncate(
+    normalizeSourceBody(body),
+    MAX_AGENT_APPROVAL_SOURCE_CONTEXT_CHARS
+  );
+  const replyInstructions = extractReplyInstructions(body);
 
   return {
     title: 'Approval Required: Dangerous Command',
     body: reasonBody ?? 'A Hermes Agent command is waiting for approval.',
     command,
     commandPreview,
+    sourceContext: sourceContext || undefined,
+    replyInstructions,
   };
 };
 
 export const detectAgentApprovalPrompt = (
   content: Record<string, unknown>
 ): AgentApprovalPrompt | undefined => {
-  return getApprovalBodyCandidates(content).map(detectAgentApprovalPromptBody).find(Boolean);
+  // Prefer the richest matching candidate when both plain body and formatted_body
+  // are present (formatted HTML sometimes strips or truncates command lines).
+  const prompts = getApprovalBodyCandidates(content)
+    .map(detectAgentApprovalPromptBody)
+    .filter((prompt): prompt is AgentApprovalPrompt => Boolean(prompt));
+
+  if (prompts.length === 0) return undefined;
+  return prompts.reduce((best, candidate) =>
+    scoreApprovalPrompt(candidate) > scoreApprovalPrompt(best) ? candidate : best
+  );
 };

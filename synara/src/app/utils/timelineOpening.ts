@@ -121,6 +121,16 @@ export const hasUnreadForInitialScroll = (
 ): boolean =>
   Boolean(unreadAnchorEventId || (unread && (unread.total > 0 || unread.highlight > 0)));
 
+/**
+ * Whether saved historical viewport restore should be gated by unread state.
+ *
+ * Distinct from auto-open-at-unread: deep unread outside the initial live-end
+ * window still blocks historical restore (`hasUnreadSignal`), but does not force
+ * unread placement unless the marker is already in that window (v1.2.28).
+ */
+export const shouldGateViewportRestoreOnUnread = (hasUnreadSignal: boolean): boolean =>
+  Boolean(hasUnreadSignal);
+
 export const timelineHasEvents = (timeline: TimelineWindow): boolean =>
   getTimelinesEventsCount(timeline.linkedTimelines) > 0;
 

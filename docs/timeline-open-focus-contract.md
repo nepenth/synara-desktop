@@ -55,14 +55,16 @@ over scroll position.
 
 - `RoomTimeline` stores process-local viewport snapshots with `updatedAtMs`.
 - `shouldRestoreRoomTimelineViewport(...)` rejects non-bottom snapshots when:
-  - the room has unread state;
+  - the room has unread state (`hasUnreadSignal` via
+    `shouldGateViewportRestoreOnUnread`);
   - the snapshot has no finite timestamp;
   - the snapshot is older than `ROOM_TIMELINE_VIEWPORT_RESTORE_TTL_MS`.
 - `roomHaveUnread(...)` is consulted synchronously so a loaded live slice can
   block stale historical restore before Jotai unread state settles.
 - Initial unread auto-placement only uses markers already inside the initial
   live-end window (`getRoomUnreadInfoInTimelineWindow`). Deep unread markers
-  outside that window do **not** auto-open (v1.2.28 mitigation).
+  outside that window do **not** auto-open (v1.2.28 mitigation), but they still
+  gate historical viewport restore through the full unread signal.
 - Jump to Unread remains available when an unread target exists and is either
   outside the live chain or outside the currently rendered timeline window
   (`shouldShowJumpToUnread`), even if the marker is still in the live timeline

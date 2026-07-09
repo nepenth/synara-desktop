@@ -98,14 +98,38 @@ struct SynaraAgentApprovalPrompt: Equatable {
     let body: String
     let command: String?
     let commandPreview: String?
+    /// Bounded original source body for operator context.
+    let sourceContext: String?
+    let replyInstructions: String?
+
+    init(
+        title: String,
+        body: String,
+        command: String?,
+        commandPreview: String?,
+        sourceContext: String? = nil,
+        replyInstructions: String? = nil
+    ) {
+        self.title = title
+        self.body = body
+        self.command = command
+        self.commandPreview = commandPreview
+        self.sourceContext = sourceContext
+        self.replyInstructions = replyInstructions
+    }
 }
 
 enum SynaraAgentApprovalPromptDetector {
     private static let maxBodyCharacters = 100_000
     private static let maxCommandPreviewCharacters = 180
     private static let maxCommandCharacters = 8_000
+    private static let maxSourceContextCharacters = 4_000
+    private static let maxReplyInstructionsCharacters = 600
     private static let commandFencePattern = #"```(?:[a-z0-9_-]+)?\s*\n([\s\S]*?)```"#
-    private static let codeBlockLabelPattern = #"\bCode\s+(?:Copy\s*)?([\s\S]*?)(?=\n+Reason:|\n+Reply\s+[!/](?:approve|deny)\b|$)"#
+    private static let codeBlockLabelPattern =
+        #"\bCode\b(?:\s|\n)+(?:Copy\b(?:\s|\n)+)?([\s\S]*?)(?=\n+Reason:|\n+Reply\s+[!/](?:approve|deny)\b|$)"#
+    private static let replyInstructionsPattern =
+        #"(Reply\s+[!/](?:approve|deny)\b[\s\S]*?)(?=\n{3,}|$)"#
     private static let approvalHeadings = [
         "approval required: dangerous command",
         "dangerous command requires approval"
@@ -117,10 +141,10 @@ enum SynaraAgentApprovalPromptDetector {
             return detect(body: body)
         case .formattedText(let body, let html):
             let markdown = MatrixHTMLRenderer.sanitizedMarkdown(body: body, html: html)
-            return [body, markdown]
+            let prompts = [body, markdown]
                 .removingAdjacentDuplicates()
                 .compactMap(detect(body:))
-                .first
+            return prompts.max(by: { score($0) < score($1) })
         default:
             return nil
         }
@@ -140,34 +164,88 @@ enum SynaraAgentApprovalPromptDetector {
         let reason = firstCapture(in: body, pattern: #"\bReason:\s*([^\n]+)"#)
             .map(normalizeWhitespace)
             .map { truncate($0, maxCharacters: 220) }
+        let sourceContext = truncate(normalizeSourceBody(body), maxCharacters: maxSourceContextCharacters)
+        let replyInstructions = extractReplyInstructions(from: body)
 
         return SynaraAgentApprovalPrompt(
             title: "Approval Required: Dangerous Command",
             body: reason ?? "A Hermes Agent command is waiting for approval.",
             command: command,
-            commandPreview: command.flatMap { commandPreview(for: $0) }
+            commandPreview: command.flatMap { commandPreview(for: $0) },
+            sourceContext: sourceContext.isEmpty ? nil : sourceContext,
+            replyInstructions: replyInstructions
         )
     }
 
+    private static func score(_ prompt: SynaraAgentApprovalPrompt) -> Int {
+        var value = 0
+        if let command = prompt.command { value += min(command.count, 2_000) }
+        if let sourceContext = prompt.sourceContext { value += min(sourceContext.count, 1_000) }
+        if prompt.replyInstructions != nil { value += 80 }
+        if prompt.body.localizedCaseInsensitiveContains("waiting for approval") == false {
+            value += 40
+        }
+        return value
+    }
+
     private static func extractCommand(from body: String) -> String? {
-        let rawCommand = firstCapture(in: body, pattern: commandFencePattern)
-            ?? firstCapture(in: body, pattern: codeBlockLabelPattern)
-        guard let rawCommand else {
+        if let fenced = firstCapture(in: body, pattern: commandFencePattern),
+           let cleaned = cleanCommand(fenced) {
+            return cleaned
+        }
+        if let labeled = firstCapture(in: body, pattern: codeBlockLabelPattern),
+           let cleaned = cleanCommand(labeled) {
+            return cleaned
+        }
+
+        // Fallback: preserve multi-line / heredoc bodies between Code/Copy chrome and Reason/Reply.
+        let lines = body.replacingOccurrences(of: "\r\n", with: "\n").components(separatedBy: "\n")
+        var start = -1
+        for (index, line) in lines.enumerated() {
+            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            if trimmed == "code" || trimmed == "copy" {
+                start = index + 1
+                continue
+            }
+            if start >= 0, trimmed.isEmpty == false, trimmed != "code", trimmed != "copy" {
+                start = index
+                break
+            }
+        }
+        guard start >= 0 else {
             return nil
         }
 
-        let lines = rawCommand
-            .components(separatedBy: .newlines)
-            .enumerated()
-            .compactMap { index, line -> String? in
-                let isCopyLabel = index == 0
-                    && line.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "copy"
-                return isCopyLabel ? nil : trimmingTrailingWhitespace(from: line)
+        var commandLines: [String] = []
+        for index in start..<lines.count {
+            let line = lines[index]
+            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed.range(of: #"^Reason:"#, options: [.regularExpression, .caseInsensitive]) != nil
+                || trimmed.range(
+                    of: #"^Reply\s+[!/](?:approve|deny)\b"#,
+                    options: [.regularExpression, .caseInsensitive]
+                ) != nil {
+                break
             }
+            commandLines.append(trimmingTrailingWhitespace(from: line))
+        }
+        return cleanCommand(commandLines.joined(separator: "\n"))
+    }
+
+    private static func cleanCommand(_ value: String) -> String? {
+        var lines = value
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .components(separatedBy: "\n")
+            .map(trimmingTrailingWhitespace(from:))
+
+        while let head = lines.first?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
+              head.isEmpty || head == "copy" || head == "code" {
+            lines.removeFirst()
+        }
+
         let command = lines
             .joined(separator: "\n")
             .trimmingCharacters(in: .whitespacesAndNewlines)
-
         return command.isEmpty ? nil : truncate(command, maxCharacters: maxCommandCharacters)
     }
 
@@ -180,6 +258,39 @@ enum SynaraAgentApprovalPromptDetector {
             return nil
         }
         return truncate(normalizeWhitespace(firstUsefulLine), maxCharacters: maxCommandPreviewCharacters)
+    }
+
+    private static func extractReplyInstructions(from body: String) -> String? {
+        guard let section = firstCapture(in: body, pattern: replyInstructionsPattern) else {
+            return nil
+        }
+        let normalized = normalizeSourceBody(section)
+        return normalized.isEmpty
+            ? nil
+            : truncate(normalized, maxCharacters: maxReplyInstructionsCharacters)
+    }
+
+    private static func normalizeSourceBody(_ value: String) -> String {
+        let lines = value
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .components(separatedBy: "\n")
+            .map(trimmingTrailingWhitespace(from:))
+        var collapsed: [String] = []
+        var blankRun = 0
+        for line in lines {
+            if line.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                blankRun += 1
+                if blankRun <= 1 {
+                    collapsed.append("")
+                }
+            } else {
+                blankRun = 0
+                collapsed.append(line)
+            }
+        }
+        return collapsed
+            .joined(separator: "\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private static func normalizeWhitespace(_ value: String) -> String {
@@ -217,6 +328,81 @@ enum SynaraAgentApprovalPromptDetector {
             return nil
         }
         return String(value[captureRange])
+    }
+}
+
+/// Pure helper for native/push approval action revalidation before reactions are sent.
+enum SynaraAgentApprovalNativeActionValidator {
+    struct Result: Equatable {
+        let eventResolved: Bool
+        let isApprovalPrompt: Bool
+        let eventTimestamp: Date?
+        let shouldSubmitReaction: Bool
+        let reason: String
+    }
+
+    static func findTargetItem(in items: [TimelineItem], eventID: String) -> TimelineItem? {
+        items.first { $0.eventID == eventID || $0.id == eventID }
+    }
+
+    /// Validates a resolved timeline window for a native approval action target.
+    /// Fails closed when the event cannot be resolved or is not an approval prompt.
+    static func validate(
+        items: [TimelineItem],
+        eventID: String,
+        now: Date = Date(),
+        ttl: TimeInterval = SynaraNotificationActionContract.nativeActionTTL,
+        payloadEventDate: Date? = nil
+    ) -> Result {
+        guard let item = findTargetItem(in: items, eventID: eventID) else {
+            return Result(
+                eventResolved: false,
+                isApprovalPrompt: false,
+                eventTimestamp: nil,
+                shouldSubmitReaction: false,
+                reason: "event-unresolved"
+            )
+        }
+
+        let isApprovalPrompt = SynaraAgentApprovalPromptDetector.detect(in: item) != nil
+        guard isApprovalPrompt else {
+            return Result(
+                eventResolved: true,
+                isApprovalPrompt: false,
+                eventTimestamp: item.timestamp,
+                shouldSubmitReaction: false,
+                reason: "not-approval-prompt"
+            )
+        }
+
+        let eventTimestamp = item.timestamp
+        if now.timeIntervalSince(eventTimestamp) > ttl {
+            return Result(
+                eventResolved: true,
+                isApprovalPrompt: true,
+                eventTimestamp: eventTimestamp,
+                shouldSubmitReaction: false,
+                reason: "expired-ttl"
+            )
+        }
+
+        if let payloadEventDate, now.timeIntervalSince(payloadEventDate) > ttl {
+            return Result(
+                eventResolved: true,
+                isApprovalPrompt: true,
+                eventTimestamp: eventTimestamp,
+                shouldSubmitReaction: false,
+                reason: "expired-ttl"
+            )
+        }
+
+        return Result(
+            eventResolved: true,
+            isApprovalPrompt: true,
+            eventTimestamp: eventTimestamp,
+            shouldSubmitReaction: true,
+            reason: "validated"
+        )
     }
 }
 
