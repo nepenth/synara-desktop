@@ -123,3 +123,73 @@ export const hasUnreadForInitialScroll = (
 
 export const timelineHasEvents = (timeline: TimelineWindow): boolean =>
   getTimelinesEventsCount(timeline.linkedTimelines) > 0;
+
+/**
+ * Jump-to-Unread visibility.
+ *
+ * v1.2.28 only auto-opens at unread when the marker is inside the initial live-end
+ * window. Markers that sit in the live chain but outside that window must still
+ * expose Jump to Unread so the user can recover without walking history on open.
+ *
+ * TODO(timeline-virtualization): authoritative range rendering (true SDK window
+ * without separate jump loaders) is intentionally out of scope; large-history
+ * rooms still rely on Jump to Unread / Jump to Latest plus perfLog diagnostics.
+ * See docs/timeline-open-focus-contract.md.
+ */
+export const shouldShowJumpToUnread = (
+  unreadInfo: RoomUnreadInfo | undefined,
+  timelineWindow: TimelineWindow
+): boolean => {
+  if (!unreadInfo?.readUptoEventId) return false;
+  if (!unreadInfo.inLiveTimeline) return true;
+  return !timelineWindowContainsEventId(timelineWindow, unreadInfo.readUptoEventId);
+};
+
+export type RoomTimelineOpenMode =
+  | 'focused-event'
+  | 'unread-window'
+  | 'saved-viewport'
+  | 'live-end';
+
+export type RoomTimelineOpenDiagnostics = {
+  openMode: RoomTimelineOpenMode;
+  hasUnreadTarget: boolean;
+  unreadInInitialWindow: boolean;
+  linkedEventCount: number;
+  loadedAtEnd: boolean;
+};
+
+export const getRoomTimelineOpenMode = ({
+  focusedEventId,
+  shouldOpenAtUnread,
+  shouldRestoreSavedViewport,
+}: {
+  focusedEventId?: string;
+  shouldOpenAtUnread: boolean;
+  shouldRestoreSavedViewport: boolean;
+}): RoomTimelineOpenMode => {
+  if (focusedEventId) return 'focused-event';
+  if (shouldOpenAtUnread) return 'unread-window';
+  if (shouldRestoreSavedViewport) return 'saved-viewport';
+  return 'live-end';
+};
+
+export const buildRoomTimelineOpenDiagnostics = ({
+  openMode,
+  unreadTargetEventId,
+  unreadInInitialWindow,
+  linkedEventCount,
+  loadedAtEnd,
+}: {
+  openMode: RoomTimelineOpenMode;
+  unreadTargetEventId?: string;
+  unreadInInitialWindow: boolean;
+  linkedEventCount: number;
+  loadedAtEnd: boolean;
+}): RoomTimelineOpenDiagnostics => ({
+  openMode,
+  hasUnreadTarget: Boolean(unreadTargetEventId),
+  unreadInInitialWindow,
+  linkedEventCount,
+  loadedAtEnd,
+});

@@ -1,6 +1,22 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { detectAgentApprovalPrompt } from '../agentApprovals';
+import {
+  AGENT_APPROVAL_NATIVE_ACTION_TTL_MS,
+  AGENT_APPROVAL_NATIVE_NOTIFICATION_ACTIONS,
+  AGENT_APPROVAL_NOTIFICATION_ACTION_APPROVE_ALWAYS,
+  AGENT_APPROVAL_NOTIFICATION_ACTION_APPROVE_ONCE,
+  AGENT_APPROVAL_NOTIFICATION_ACTION_DENY,
+  AGENT_APPROVAL_NOTIFICATION_ACTIONS,
+  AGENT_APPROVAL_NOTIFICATION_KIND,
+  AGENT_APPROVAL_REACTION_APPROVE_ONCE,
+  AGENT_APPROVAL_REACTION_DENY,
+  buildAgentApprovalNativeActionDedupeKey,
+  createAgentApprovalNativeActionDedupeStore,
+  detectAgentApprovalPrompt,
+  hasLocalAgentApprovalReactionFromSenders,
+  isAgentApprovalNativeActionExpired,
+  planAgentApprovalNativeNotificationAction,
+} from '../agentApprovals';
 
 const exampleApprovalBody = `⚠️ Dangerous command requires approval
 
@@ -147,5 +163,245 @@ test('detectAgentApprovalPrompt ignores huge bodies', () => {
       )} Reply /approve /approve always /deny`,
     }),
     undefined
+  );
+});
+
+test('native notification actions exclude approve-always', () => {
+  assert.ok(
+    AGENT_APPROVAL_NOTIFICATION_ACTIONS.some(
+      (action) => action.id === AGENT_APPROVAL_NOTIFICATION_ACTION_APPROVE_ALWAYS
+    )
+  );
+  assert.equal(
+    AGENT_APPROVAL_NATIVE_NOTIFICATION_ACTIONS.some(
+      (action) => action.id === AGENT_APPROVAL_NOTIFICATION_ACTION_APPROVE_ALWAYS
+    ),
+    false
+  );
+  assert.deepEqual(
+    AGENT_APPROVAL_NATIVE_NOTIFICATION_ACTIONS.map((action) => action.id),
+    [AGENT_APPROVAL_NOTIFICATION_ACTION_APPROVE_ONCE, AGENT_APPROVAL_NOTIFICATION_ACTION_DENY]
+  );
+});
+
+test('planAgentApprovalNativeNotificationAction rejects malformed payloads', () => {
+  assert.equal(
+    planAgentApprovalNativeNotificationAction({
+      actionId: AGENT_APPROVAL_NOTIFICATION_ACTION_APPROVE_ONCE,
+      context: { kind: 'message', roomId: '!r', eventId: '$e' },
+    }).type,
+    'reject'
+  );
+  assert.equal(
+    planAgentApprovalNativeNotificationAction({
+      actionId: AGENT_APPROVAL_NOTIFICATION_ACTION_APPROVE_ONCE,
+      context: { kind: AGENT_APPROVAL_NOTIFICATION_KIND, roomId: '', eventId: '$e' },
+    }).type,
+    'reject'
+  );
+  assert.equal(
+    planAgentApprovalNativeNotificationAction({
+      actionId: 'agent-approval.unknown',
+      context: {
+        kind: AGENT_APPROVAL_NOTIFICATION_KIND,
+        roomId: '!room:matrix.org',
+        eventId: '$event:matrix.org',
+      },
+    }).type,
+    'reject'
+  );
+});
+
+test('planAgentApprovalNativeNotificationAction blocks approve-always from native path', () => {
+  const plan = planAgentApprovalNativeNotificationAction({
+    actionId: AGENT_APPROVAL_NOTIFICATION_ACTION_APPROVE_ALWAYS,
+    context: {
+      kind: AGENT_APPROVAL_NOTIFICATION_KIND,
+      roomId: '!room:matrix.org',
+      eventId: '$event:matrix.org',
+    },
+    eventResolved: true,
+    isApprovalPrompt: true,
+  });
+
+  assert.deepEqual(plan, {
+    type: 'open-room',
+    roomId: '!room:matrix.org',
+    eventId: '$event:matrix.org',
+    reason: 'approve-always-requires-in-app-confirmation',
+  });
+});
+
+test('planAgentApprovalNativeNotificationAction requires validated approval prompt before send', () => {
+  const base = {
+    actionId: AGENT_APPROVAL_NOTIFICATION_ACTION_APPROVE_ONCE,
+    context: {
+      kind: AGENT_APPROVAL_NOTIFICATION_KIND,
+      roomId: '!room:matrix.org',
+      eventId: '$event:matrix.org',
+    },
+  };
+
+  assert.equal(
+    planAgentApprovalNativeNotificationAction({ ...base, eventResolved: false }).type,
+    'reject'
+  );
+  assert.equal(
+    planAgentApprovalNativeNotificationAction({
+      ...base,
+      eventResolved: true,
+      isApprovalPrompt: false,
+    }).type,
+    'reject'
+  );
+
+  assert.deepEqual(
+    planAgentApprovalNativeNotificationAction({
+      ...base,
+      eventResolved: true,
+      isApprovalPrompt: true,
+    }),
+    {
+      type: 'send-reaction',
+      roomId: '!room:matrix.org',
+      eventId: '$event:matrix.org',
+      actionId: AGENT_APPROVAL_NOTIFICATION_ACTION_APPROVE_ONCE,
+      reaction: AGENT_APPROVAL_REACTION_APPROVE_ONCE,
+      dedupeKey: buildAgentApprovalNativeActionDedupeKey(
+        '!room:matrix.org',
+        '$event:matrix.org',
+        AGENT_APPROVAL_NOTIFICATION_ACTION_APPROVE_ONCE
+      ),
+    }
+  );
+
+  const denyPlan = planAgentApprovalNativeNotificationAction({
+    actionId: AGENT_APPROVAL_NOTIFICATION_ACTION_DENY,
+    context: base.context,
+    eventResolved: true,
+    isApprovalPrompt: true,
+  });
+  assert.equal(denyPlan.type, 'send-reaction');
+  if (denyPlan.type === 'send-reaction') {
+    assert.equal(denyPlan.reaction, AGENT_APPROVAL_REACTION_DENY);
+  }
+});
+
+test('planAgentApprovalNativeNotificationAction enforces TTL and local dedupe gates', () => {
+  const nowMs = 1_000_000;
+  const expired = planAgentApprovalNativeNotificationAction({
+    actionId: AGENT_APPROVAL_NOTIFICATION_ACTION_APPROVE_ONCE,
+    context: {
+      kind: AGENT_APPROVAL_NOTIFICATION_KIND,
+      roomId: '!room:matrix.org',
+      eventId: '$event:matrix.org',
+    },
+    nowMs,
+    eventTsMs: nowMs - AGENT_APPROVAL_NATIVE_ACTION_TTL_MS - 1,
+    eventResolved: true,
+    isApprovalPrompt: true,
+  });
+  assert.equal(expired.type, 'reject');
+  if (expired.type === 'reject') assert.equal(expired.reason, 'expired-ttl');
+
+  assert.equal(
+    planAgentApprovalNativeNotificationAction({
+      actionId: AGENT_APPROVAL_NOTIFICATION_ACTION_APPROVE_ONCE,
+      context: {
+        kind: AGENT_APPROVAL_NOTIFICATION_KIND,
+        roomId: '!room:matrix.org',
+        eventId: '$event:matrix.org',
+      },
+      alreadyActed: true,
+      eventResolved: true,
+      isApprovalPrompt: true,
+    }).type,
+    'reject'
+  );
+  assert.equal(
+    planAgentApprovalNativeNotificationAction({
+      actionId: AGENT_APPROVAL_NOTIFICATION_ACTION_APPROVE_ONCE,
+      context: {
+        kind: AGENT_APPROVAL_NOTIFICATION_KIND,
+        roomId: '!room:matrix.org',
+        eventId: '$event:matrix.org',
+      },
+      alreadyReactedLocally: true,
+      eventResolved: true,
+      isApprovalPrompt: true,
+    }).type,
+    'reject'
+  );
+});
+
+test('isAgentApprovalNativeActionExpired uses event and notification timestamps', () => {
+  const nowMs = 10_000;
+  assert.equal(
+    isAgentApprovalNativeActionExpired({
+      nowMs,
+      eventTsMs: nowMs - AGENT_APPROVAL_NATIVE_ACTION_TTL_MS + 1,
+    }),
+    false
+  );
+  assert.equal(
+    isAgentApprovalNativeActionExpired({
+      nowMs,
+      eventTsMs: nowMs - AGENT_APPROVAL_NATIVE_ACTION_TTL_MS - 1,
+    }),
+    true
+  );
+  assert.equal(
+    isAgentApprovalNativeActionExpired({
+      nowMs,
+      notificationCreatedAtMs: nowMs - AGENT_APPROVAL_NATIVE_ACTION_TTL_MS - 1,
+    }),
+    true
+  );
+});
+
+test('native action dedupe store persists across store instances sharing storage', () => {
+  const memory = new Map<string, string>();
+  const storage = {
+    getItem: (key: string) => memory.get(key) ?? null,
+    setItem: (key: string, value: string) => {
+      memory.set(key, value);
+    },
+    removeItem: (key: string) => {
+      memory.delete(key);
+    },
+    clear: () => memory.clear(),
+    key: () => null,
+    length: 0,
+  } as Storage;
+
+  const first = createAgentApprovalNativeActionDedupeStore(storage);
+  const key = buildAgentApprovalNativeActionDedupeKey('!r', '$e', 'agent-approval.approve-once');
+  assert.equal(first.has(key), false);
+  first.add(key);
+  assert.equal(first.has(key), true);
+
+  const second = createAgentApprovalNativeActionDedupeStore(storage);
+  assert.equal(second.has(key), true);
+  second.remove(key);
+  assert.equal(second.has(key), false);
+});
+
+test('hasLocalAgentApprovalReactionFromSenders detects current user approval reactions', () => {
+  assert.equal(
+    hasLocalAgentApprovalReactionFromSenders(
+      [
+        ['👍', ['@alice:matrix.org']],
+        [AGENT_APPROVAL_REACTION_APPROVE_ONCE, ['@bob:matrix.org']],
+      ],
+      '@alice:matrix.org'
+    ),
+    false
+  );
+  assert.equal(
+    hasLocalAgentApprovalReactionFromSenders(
+      [[AGENT_APPROVAL_REACTION_DENY, ['@alice:matrix.org']]],
+      '@alice:matrix.org'
+    ),
+    true
   );
 });

@@ -2,13 +2,16 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { Direction, type EventTimeline, type MatrixEvent, type Room } from 'matrix-js-sdk';
 import {
+  buildRoomTimelineOpenDiagnostics,
   getEmptyTimeline,
   getInitialTimeline,
+  getRoomTimelineOpenMode,
   getRoomUnreadInfo,
   getRoomUnreadInfoInTimelineWindow,
   getTimelineEndWindow,
   hasUnreadForInitialScroll,
   canRestoreViewportFromInitialTimeline,
+  shouldShowJumpToUnread,
   timelineWindowContainsEventId,
   timelineHasEvents,
 } from '../timelineOpening';
@@ -182,4 +185,89 @@ test('initial unread detection accepts unread counts and explicit anchors', () =
   assert.equal(hasUnreadForInitialScroll({ total: 1, highlight: 0, from: null }), true);
   assert.equal(hasUnreadForInitialScroll({ total: 0, highlight: 1, from: null }), true);
   assert.equal(hasUnreadForInitialScroll(undefined, '$anchor'), true);
+});
+
+test('jump to unread shows for live-chain markers outside the current window', () => {
+  const [older, live] = link(timeline('older', ['$1', '$2']), timeline('live', ['$3', '$4', '$5']));
+  const window = getTimelineEndWindow([older, live], 3);
+
+  // Outside live chain entirely.
+  assert.equal(
+    shouldShowJumpToUnread(
+      { readUptoEventId: '$detached', inLiveTimeline: false, scrollTo: false },
+      window
+    ),
+    true
+  );
+
+  // In live chain but outside the initial live-end window (v1.2.28 gap).
+  assert.equal(
+    shouldShowJumpToUnread(
+      { readUptoEventId: '$2', inLiveTimeline: true, scrollTo: false },
+      window
+    ),
+    true
+  );
+
+  // Already inside the rendered live-end window: no jump affordance needed.
+  assert.equal(
+    shouldShowJumpToUnread(
+      { readUptoEventId: '$4', inLiveTimeline: true, scrollTo: false },
+      window
+    ),
+    false
+  );
+
+  assert.equal(shouldShowJumpToUnread(undefined, window), false);
+});
+
+test('room timeline open mode prefers focused, unread window, then viewport, then live end', () => {
+  assert.equal(
+    getRoomTimelineOpenMode({
+      focusedEventId: '$focus',
+      shouldOpenAtUnread: true,
+      shouldRestoreSavedViewport: true,
+    }),
+    'focused-event'
+  );
+  assert.equal(
+    getRoomTimelineOpenMode({
+      shouldOpenAtUnread: true,
+      shouldRestoreSavedViewport: true,
+    }),
+    'unread-window'
+  );
+  assert.equal(
+    getRoomTimelineOpenMode({
+      shouldOpenAtUnread: false,
+      shouldRestoreSavedViewport: true,
+    }),
+    'saved-viewport'
+  );
+  assert.equal(
+    getRoomTimelineOpenMode({
+      shouldOpenAtUnread: false,
+      shouldRestoreSavedViewport: false,
+    }),
+    'live-end'
+  );
+});
+
+test('room timeline open diagnostics capture unread window presence', () => {
+  assert.deepEqual(
+    buildRoomTimelineOpenDiagnostics({
+      openMode: 'live-end',
+      unreadTargetEventId: '$2',
+      unreadInInitialWindow: false,
+      linkedEventCount: 40,
+      loadedAtEnd: true,
+    }),
+    {
+      openMode: 'live-end',
+      hasUnreadTarget: true,
+      unreadInInitialWindow: false,
+      linkedEventCount: 40,
+      loadedAtEnd: true,
+    }
+  );
 });

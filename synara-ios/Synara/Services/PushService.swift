@@ -14,19 +14,18 @@ enum SynaraNotificationActionContract {
     static let approveOnceIdentifier = SynaraAgentApprovalNotificationActionID.approveOnce.rawValue
     static let approveAlwaysIdentifier = SynaraAgentApprovalNotificationActionID.approveAlways.rawValue
     static let denyIdentifier = SynaraAgentApprovalNotificationActionID.deny.rawValue
+    /// Max age for acting on a native/push approval notification without in-app confirmation.
+    static let nativeActionTTL: TimeInterval = 10 * 60
 
     static func registerCategories(
         center: UNUserNotificationCenter = UNUserNotificationCenter.current()
     ) {
+        // Approve-always is intentionally omitted from the native category: permanent
+        // approval requires an explicit in-app confirmation path.
         let actions = [
             UNNotificationAction(
                 identifier: approveOnceIdentifier,
                 title: "Approve once",
-                options: [.authenticationRequired]
-            ),
-            UNNotificationAction(
-                identifier: approveAlwaysIdentifier,
-                title: "Approve always",
                 options: [.authenticationRequired]
             ),
             UNNotificationAction(
@@ -45,25 +44,108 @@ enum SynaraNotificationActionContract {
         center.setNotificationCategories([category])
     }
 
-    static func agentApprovalReactionRequest(
+    /// Plans how a native/push notification action should be handled.
+    /// Does not send Matrix traffic; callers must still revalidate prompt content when possible.
+    static func planAgentApprovalNotificationAction(
         actionIdentifier: String,
-        userInfo: [AnyHashable: Any]
-    ) -> SynaraAgentApprovalReactionRequest? {
+        userInfo: [AnyHashable: Any],
+        now: Date = Date(),
+        alreadyActed: Bool = false
+    ) -> SynaraAgentApprovalNotificationActionPlan {
         guard let action = SynaraAgentApprovalNotificationActionID(rawValue: actionIdentifier) else {
-            return nil
+            return .ignore(reason: "unknown-action-id")
         }
 
         let candidates = NotificationPushRouteParser.flattenPayload(userInfo)
         guard let roomID = firstString(candidates, keys: ["room_id", "roomId"]),
               let eventID = firstString(candidates, keys: ["event_id", "eventId"]) else {
-            return nil
+            return .ignore(reason: "missing-room-or-event-id")
         }
 
-        return SynaraAgentApprovalReactionRequest(
-            roomID: roomID,
-            sourceEventID: eventID,
-            reactionKey: action.reactionKey
+        if alreadyActed {
+            return .ignore(reason: "already-acted")
+        }
+
+        if isExpired(candidates: candidates, now: now) {
+            return .ignore(reason: "expired-ttl")
+        }
+
+        // Permanent approval must not fire from a background notification action.
+        if action == .approveAlways {
+            return .openRoom(
+                roomID: roomID,
+                eventID: eventID,
+                reason: "approve-always-requires-in-app-confirmation"
+            )
+        }
+
+        return .submitReaction(
+            SynaraAgentApprovalReactionRequest(
+                roomID: roomID,
+                sourceEventID: eventID,
+                reactionKey: action.reactionKey
+            )
         )
+    }
+
+    /// Backward-compatible parser used by unit tests and callers that only need reaction payloads.
+    /// Returns nil for approve-always and malformed/expired payloads.
+    static func agentApprovalReactionRequest(
+        actionIdentifier: String,
+        userInfo: [AnyHashable: Any],
+        now: Date = Date(),
+        alreadyActed: Bool = false
+    ) -> SynaraAgentApprovalReactionRequest? {
+        if case .submitReaction(let request) = planAgentApprovalNotificationAction(
+            actionIdentifier: actionIdentifier,
+            userInfo: userInfo,
+            now: now,
+            alreadyActed: alreadyActed
+        ) {
+            return request
+        }
+        return nil
+    }
+
+    private static func isExpired(candidates: [String: Any], now: Date) -> Bool {
+        if let expiresAt = dateValue(candidates, keys: ["expires_at", "expiresAt"]),
+           expiresAt < now {
+            return true
+        }
+
+        if let createdAt = dateValue(candidates, keys: ["created_at", "createdAt", "origin_server_ts", "originServerTs"]) {
+            if now.timeIntervalSince(createdAt) > nativeActionTTL {
+                return true
+            }
+        }
+
+        return false
+    }
+
+    private static func dateValue(_ values: [String: Any], keys: [String]) -> Date? {
+        for key in keys {
+            guard let raw = values[key] else { continue }
+            if let date = raw as? Date {
+                return date
+            }
+            if let number = raw as? NSNumber {
+                let value = number.doubleValue
+                // Matrix origin_server_ts is milliseconds.
+                let seconds = value > 1_000_000_000_000 ? value / 1000 : value
+                return Date(timeIntervalSince1970: seconds)
+            }
+            if let string = raw as? String {
+                let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines)
+                if let asDouble = Double(trimmed) {
+                    let seconds = asDouble > 1_000_000_000_000 ? asDouble / 1000 : asDouble
+                    return Date(timeIntervalSince1970: seconds)
+                }
+                if let iso = ISO8601DateFormatter().date(from: trimmed) {
+                    return iso
+                }
+            }
+        }
+        return nil
     }
 
     private static func firstString(_ values: [String: Any], keys: [String]) -> String? {
@@ -76,6 +158,51 @@ enum SynaraNotificationActionContract {
             }
         }
         return nil
+    }
+}
+
+enum SynaraAgentApprovalNotificationActionPlan: Equatable {
+    case submitReaction(SynaraAgentApprovalReactionRequest)
+    case openRoom(roomID: String, eventID: String, reason: String)
+    case ignore(reason: String)
+}
+
+final class SynaraAgentApprovalNotificationActionDedupeStore {
+    private let defaults: UserDefaults
+    private let storageKey: String
+    private let maxStoredKeys = 200
+
+    init(
+        defaults: UserDefaults = .standard,
+        storageKey: String = "synara.agent-approval.native-action-dedupe"
+    ) {
+        self.defaults = defaults
+        self.storageKey = storageKey
+    }
+
+    func contains(_ key: String) -> Bool {
+        Set(storedKeys()).contains(key)
+    }
+
+    func insert(_ key: String) {
+        var keys = storedKeys().filter { $0 != key }
+        keys.append(key)
+        if keys.count > maxStoredKeys {
+            keys = Array(keys.suffix(maxStoredKeys))
+        }
+        defaults.set(keys, forKey: storageKey)
+    }
+
+    func remove(_ key: String) {
+        defaults.set(storedKeys().filter { $0 != key }, forKey: storageKey)
+    }
+
+    static func key(roomID: String, eventID: String, actionIdentifier: String) -> String {
+        "\(roomID)\u{0}\(eventID)\u{0}\(actionIdentifier)"
+    }
+
+    private func storedKeys() -> [String] {
+        defaults.stringArray(forKey: storageKey) ?? []
     }
 }
 

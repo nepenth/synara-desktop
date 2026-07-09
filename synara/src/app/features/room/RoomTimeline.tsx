@@ -160,6 +160,7 @@ import {
   type TimelinePaginationErrors,
 } from '../../utils/timelinePagination';
 import {
+  getLatestRoomTimeline,
   getLoadedLiveTailEventId,
   shouldRestoreRoomTimelineViewport,
 } from '../../utils/timelineLifecycle';
@@ -173,12 +174,15 @@ import {
   timelineToEventsCount,
 } from '../../utils/timelineLinks';
 import {
+  buildRoomTimelineOpenDiagnostics,
   getEmptyTimeline,
   getInitialTimeline,
+  getRoomTimelineOpenMode,
   getRoomUnreadInfo,
   getRoomUnreadInfoInTimelineWindow,
   getTimelineEndWindow,
   hasUnreadForInitialScroll,
+  shouldShowJumpToUnread,
   timelineHasEvents,
   canRestoreViewportFromInitialTimeline,
   type TimelineWindow,
@@ -597,8 +601,13 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
 
   // Only use unread/read-receipt anchors for initial placement when the target is already
   // in the live-end window. Stale markers outside this window can make large rooms walk
-  // backwards through history before the live timeline settles.
+  // backwards through history before the live timeline settles (v1.2.28).
   const shouldOpenAtUnread = !shouldRestoreSavedViewport && Boolean(initialUnreadPlacementInfo);
+  const roomOpenMode = getRoomTimelineOpenMode({
+    focusedEventId: eventId,
+    shouldOpenAtUnread,
+    shouldRestoreSavedViewport,
+  });
   const [unreadInfo, setUnreadInfo] = useState(() =>
     shouldOpenAtUnread ? initialUnreadPlacementInfo : undefined
   );
@@ -708,6 +717,94 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
   const loadedAtEnd = liveTimelineLinked && !canPaginateForward;
   const atLiveEndRef = useRef(loadedAtEnd);
   atLiveEndRef.current = loadedAtEnd;
+  const showJumpToUnread = shouldShowJumpToUnread(unreadInfo, timeline);
+  const roomOpenDiagnosticsLoggedRef = useRef(false);
+  const liveTailRefreshRequestRef = useRef(0);
+  const firstStableBottomLoggedRef = useRef(false);
+
+  useEffect(() => {
+    roomOpenDiagnosticsLoggedRef.current = false;
+    firstStableBottomLoggedRef.current = false;
+  }, [room.roomId, eventId]);
+
+  // Lightweight open diagnostics (performance-debug gated via perfLog).
+  useEffect(() => {
+    if (roomOpenDiagnosticsLoggedRef.current) return;
+    roomOpenDiagnosticsLoggedRef.current = true;
+    const unreadTarget =
+      initialUnreadPlacementInfo?.readUptoEventId ??
+      getRoomUnreadInfo(room, unreadAnchorEventId)?.readUptoEventId;
+    perfLog(
+      'room-timeline.open',
+      buildRoomTimelineOpenDiagnostics({
+        openMode: roomOpenMode,
+        unreadTargetEventId: unreadTarget,
+        unreadInInitialWindow: Boolean(initialUnreadPlacementInfo),
+        linkedEventCount: getTimelinesEventsCount(initialTimelineWindow.linkedTimelines),
+        loadedAtEnd,
+      })
+    );
+  }, [
+    eventId,
+    initialTimelineWindow,
+    initialUnreadPlacementInfo,
+    loadedAtEnd,
+    room,
+    roomOpenMode,
+    unreadAnchorEventId,
+  ]);
+
+  // On normal live-end open (not focused event / not unread placement), refresh the
+  // latest timeline attachment the same way jump-to-latest does. Avoids a stale live
+  // chain without walking history or thrashing scroll when already fresh.
+  useEffect(() => {
+    if (eventId || shouldOpenAtUnread || shouldRestoreSavedViewport) return undefined;
+    if (!liveEndPinRef.current) return undefined;
+
+    const requestId = liveTailRefreshRequestRef.current + 1;
+    liveTailRefreshRequestRef.current = requestId;
+    let cancelled = false;
+
+    void (async () => {
+      const latestTimeline = await getLatestRoomTimeline(mx, room);
+      if (cancelled || !alive() || liveTailRefreshRequestRef.current !== requestId) return;
+      if (!latestTimeline) return;
+
+      const nextTimeline = getTimelineEndWindow(
+        getLinkedTimelines(latestTimeline),
+        PAGINATION_LIMIT
+      );
+      if (!timelineHasEvents(nextTimeline)) return;
+
+      setTimeline((current) => {
+        const currentTail =
+          current.linkedTimelines[current.linkedTimelines.length - 1] === getLiveTimeline(room);
+        const nextTail =
+          nextTimeline.linkedTimelines[nextTimeline.linkedTimelines.length - 1] ===
+          getLiveTimeline(room);
+        // Only replace when the attachment actually improved or length changed.
+        if (
+          currentTail &&
+          nextTail &&
+          getTimelinesEventsCount(current.linkedTimelines) ===
+            getTimelinesEventsCount(nextTimeline.linkedTimelines) &&
+          current.range.start === nextTimeline.range.start &&
+          current.range.end === nextTimeline.range.end
+        ) {
+          return current;
+        }
+        return nextTimeline;
+      });
+      perfLog('room-timeline.live-tail-refresh', {
+        roomId: room.roomId,
+        eventCount: getTimelinesEventsCount(nextTimeline.linkedTimelines),
+      });
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [alive, eventId, mx, room, shouldOpenAtUnread, shouldRestoreSavedViewport]);
 
   const handlePaginationError = useCallback(
     (direction: TimelinePaginationDirection, err: unknown | null) => {
@@ -1442,6 +1539,18 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
         (elapsed >= LIVE_END_PIN_MIN_MS && state.stableFrames >= LIVE_END_PIN_STABLE_FRAMES) ||
         elapsed >= LIVE_END_PIN_MAX_MS
       ) {
+        if (!firstStableBottomLoggedRef.current) {
+          firstStableBottomLoggedRef.current = true;
+          perfLog('room-timeline.first-stable-bottom', {
+            roomId: room.roomId,
+            openMode: roomOpenMode,
+            elapsedMs: Math.round(elapsed),
+            renderedRowCount: timelineRows.length,
+            linkedEventCount: eventsLength,
+            loadedAtEnd,
+            timedOut: elapsed >= LIVE_END_PIN_MAX_MS,
+          });
+        }
         cancelLiveEndPin();
         setAtBottomState(true);
         return;
@@ -1457,7 +1566,10 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
     };
   }, [
     cancelLiveEndPin,
+    eventsLength,
     loadedAtEnd,
+    room.roomId,
+    roomOpenMode,
     setAtBottomState,
     timelineRows.length,
     virtualItems,
@@ -2793,7 +2905,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
           </Chip>
         </TimelineFloat>
       )}
-      {unreadInfo?.readUptoEventId && !unreadInfo?.inLiveTimeline && (
+      {showJumpToUnread && (
         <TimelineFloat position="Top">
           <Chip
             variant="Primary"
