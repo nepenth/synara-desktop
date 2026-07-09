@@ -10,7 +10,7 @@ this repository.
 | Purpose                        | Bundle ID                            | Phase                      | Notes                                                          |
 | ------------------------------ | ------------------------------------ | -------------------------- | -------------------------------------------------------------- |
 | iOS app                        | `com.whylandcreative.synara`                     | Phase 1                    | Primary native app target.                                     |
-| Notification service extension | `com.whylandcreative.synara.NotificationService` | Post-MVP or push hardening | Add only if rich or mutable notification handling is required. |
+| Notification service extension | `com.whylandcreative.synara.NotificationService` | Push preview support | Required for mutable notification previews. |
 | Share extension                | `com.whylandcreative.synara.ShareExtension`      | Deferred                   | Add after core messaging and push are stable.                  |
 | Existing desktop app           | `com.whylandcreative.synara.desktop`             | Existing                   | Already used by the macOS/Linux Tauri app.                     |
 

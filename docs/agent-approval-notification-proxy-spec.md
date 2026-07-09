@@ -20,19 +20,19 @@ only if a future remote-push path is designed.
 
 ## Current Client Contract
 
-- iOS bundle identifier / APNs topic: `com.whylandcreative.synara`.
-- Apple development team currently configured in Xcode: `NK6CM9YJC6`.
+- iOS bundle identifier / APNs topic: configured by the signed app target.
+- Apple development team: provide through private signing environment.
 - TestFlight uses production APNs, not sandbox APNs.
-- Release gateway URL currently configured in the app:
-  `https://push.whyland.com/_matrix/push/v1/notify`.
+- Release gateway URL is provided at archive time through
+  `SYNARA_PUSH_GATEWAY_URL`.
 - Synara iOS registers Matrix pushers with `format: event_id_only`.
 - The pusher `pushkey` is the APNs device token.
 - Sparse push payloads must contain enough information for app routing:
   `room_id` and `event_id` when available, or at minimum `event_id`.
-- iOS notification preview text is taken directly from the APNs
-  `aps.alert.title` and `aps.alert.body` values sent by the proxy. The current
-  app does not include a Notification Service Extension that can fetch, decrypt,
-  or rewrite previews after delivery.
+- iOS notification preview text starts with the APNs `aps.alert.title` and
+  `aps.alert.body` values sent by the proxy. The app Notification Service
+  Extension may enrich sparse cleartext event notifications on device when the
+  lock-screen preview setting is enabled.
 - Agent approval APNs category identifier:
   `synara.agent-approval`.
 - Registered iOS notification action identifiers exposed on the native category:
@@ -106,10 +106,10 @@ Suggested request:
 
 ```json
 {
-  "homeserver": "matrix.whyland.com",
-  "room_id": "!room:matrix.whyland.com",
-  "event_id": "$approval:matrix.whyland.com",
-  "sender": "@forge:matrix.whyland.com",
+  "homeserver": "matrix.example.com",
+  "room_id": "!room:matrix.example.com",
+  "event_id": "$approval:matrix.example.com",
+  "sender": "@agent:matrix.example.com",
   "title": "Approval Required: Dangerous Command",
   "body": "Security scan requires approval.",
   "expires_at": "2026-07-08T16:30:00Z"
@@ -134,7 +134,7 @@ For `POST /_matrix/push/v1/notify`:
 
 - Accept the Matrix Push Gateway API request shape used by Synara pushers.
 - For each device, treat the Matrix pusher `pushkey` as an APNs device token.
-- Validate `app_id == com.whylandcreative.synara` before sending APNs.
+- Validate `app_id` against the configured APNs topic before sending APNs.
 - Extract `room_id`, `event_id`, badge counts, and any safe route fields.
 - Look up approval metadata by homeserver, room_id, and event_id.
 - Send one APNs request per target device.
@@ -166,8 +166,8 @@ Generic Matrix notification:
     "badge": 3,
     "sound": "default"
   },
-  "room_id": "!room:matrix.whyland.com",
-  "event_id": "$event:matrix.whyland.com",
+  "room_id": "!room:matrix.example.com",
+  "event_id": "$event:matrix.example.com",
   "synara": {
     "kind": "matrix-event"
   }
@@ -194,12 +194,12 @@ Agent approval notification:
     "badge": 3,
     "sound": "default"
   },
-  "room_id": "!room:matrix.whyland.com",
-  "event_id": "$approval:matrix.whyland.com",
+  "room_id": "!room:matrix.example.com",
+  "event_id": "$approval:matrix.example.com",
   "synara": {
     "kind": "agent-approval",
-    "room_id": "!room:matrix.whyland.com",
-    "event_id": "$approval:matrix.whyland.com"
+    "room_id": "!room:matrix.example.com",
+    "event_id": "$approval:matrix.example.com"
   }
 }
 ```
@@ -213,14 +213,14 @@ Minimum environment variables:
 
 ```text
 SYNARA_PUSH_BIND=127.0.0.1:8080
-SYNARA_PUBLIC_BASE_URL=https://push.whyland.com
-SYNARA_ALLOWED_HOMESERVERS=matrix.whyland.com
+SYNARA_PUBLIC_BASE_URL=https://push.example.com
+SYNARA_ALLOWED_HOMESERVERS=matrix.example.com
 SYNARA_AGENT_APPROVAL_WEBHOOK_TOKEN=<redacted>
 SYNARA_APNS_MODE=mock|sandbox|production
-SYNARA_APNS_TEAM_ID=NK6CM9YJC6
+SYNARA_APNS_TEAM_ID=<apple-team-id>
 SYNARA_APNS_KEY_ID=<apple-key-id>
 SYNARA_APNS_KEY_PATH=/run/secrets/synara-apns-auth-key.p8
-SYNARA_APNS_TOPIC=com.whylandcreative.synara
+SYNARA_APNS_TOPIC=<apns-topic>
 SYNARA_LOG_LEVEL=info
 ```
 
@@ -242,7 +242,7 @@ device needs `sandbox`; TestFlight and App Store builds need `production`.
 - Cap request bodies and reject malformed JSON.
 - Deduplicate by `pushkey + room_id + event_id + notification kind` for a short
   TTL to avoid repeated APNs sends during homeserver retries.
-- Use APNs `apns-topic: com.whylandcreative.synara`.
+- Use APNs `apns-topic` from `SYNARA_APNS_TOPIC`.
 - Use APNs `apns-push-type: alert`.
 - Use an APNs collapse id derived from the Matrix event, for example a bounded
   hash of `synara:<room_id>:<event_id>`.
@@ -325,7 +325,7 @@ Use this prompt when handing the proxy work to another implementation agent:
 You are implementing the Synara notification proxy for Matrix-to-APNs delivery.
 
 Context:
-- Synara iOS bundle id / APNs topic is com.whylandcreative.synara.
+- Synara iOS bundle id / APNs topic is supplied by the signed app target.
 - TestFlight uses production APNs.
 - Synara registers Matrix pushers with format event_id_only.
 - The Matrix pusher pushkey is the APNs device token.
@@ -348,8 +348,9 @@ Important:
 - Do not attach approve/deny buttons unless approval metadata matches the
   Matrix event.
 - Do not include command text, access tokens, or APNs tokens in APNs payloads.
-- Do include safe, bounded preview text in `aps.alert`; otherwise iOS has no
-  client-side opportunity to synthesize a preview.
+- Do include safe, bounded fallback preview text in `aps.alert`; the iOS
+  extension can enrich cleartext events only when the device has a session,
+  previews are enabled, and the lookup completes within the extension budget.
 
 Acceptance:
 - Generic event_id_only Matrix push sends a generic APNs payload.

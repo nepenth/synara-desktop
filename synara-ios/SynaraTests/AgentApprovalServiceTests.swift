@@ -91,7 +91,7 @@ final class AgentApprovalServiceTests: XCTestCase {
 
                 Copy
                 set -euo pipefail
-                curl -fsS http://camofox-browser.whyland.com:9377/openapi.json -o /tmp/camofox_openapi.json
+                curl -fsS http://browser-control.example.com:9377/openapi.json -o /tmp/browser_openapi.json
 
                 Reason: Security scan - [HIGH] Plain HTTP URL in execution context.
 
@@ -108,7 +108,7 @@ final class AgentApprovalServiceTests: XCTestCase {
         XCTAssertEqual(prompt.title, "Approval Required: Dangerous Command")
         XCTAssertEqual(prompt.body, "Security scan - [HIGH] Plain HTTP URL in execution context.")
         XCTAssertEqual(prompt.commandPreview, "set -euo pipefail")
-        XCTAssertTrue(try XCTUnwrap(prompt.command).contains("curl -fsS http://camofox-browser.whyland.com:9377/openapi.json"))
+        XCTAssertTrue(try XCTUnwrap(prompt.command).contains("curl -fsS http://browser-control.example.com:9377/openapi.json"))
         XCTAssertTrue(try XCTUnwrap(prompt.replyInstructions).contains("Reply !approve"))
         XCTAssertTrue(try XCTUnwrap(prompt.sourceContext).contains("You can also react"))
     }

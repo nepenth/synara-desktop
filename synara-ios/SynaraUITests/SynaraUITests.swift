@@ -473,7 +473,7 @@ final class SynaraUITests: XCTestCase {
                 username: username,
                 password: password
             )
-            let alias = liveEnvironmentValue("SYNARA_LIVE_ROOM_ALIAS", in: environment) ?? "#test-e2e-room:matrix.whyland.com"
+            let alias = liveEnvironmentValue("SYNARA_LIVE_ROOM_ALIAS", in: environment) ?? "#test-e2e-room:matrix.example.com"
             roomID = try liveClient.resolveRoomAlias(alias)
         }
 
@@ -1051,7 +1051,7 @@ final class SynaraUITests: XCTestCase {
 
         let alias = liveEnvironmentValue("SYNARA_LIVE_AGENT_ROOM_ALIAS", in: environment)
             ?? liveEnvironmentValue("SYNARA_LIVE_ROOM_ALIAS", in: environment)
-            ?? "#test-e2e-room:whyland.com"
+            ?? "#test-e2e-room:matrix.example.com"
         return try client.resolveRoomAlias(alias)
     }
 
@@ -1067,7 +1067,7 @@ final class SynaraUITests: XCTestCase {
             password: password
         )
         let alias = liveEnvironmentValue("SYNARA_LIVE_E2EE_ROOM_ALIAS", in: environment)
-            ?? "#test-e2e-room:matrix.whyland.com"
+            ?? "#test-e2e-room:matrix.example.com"
         return try liveClient.resolveRoomAlias(alias)
     }
 

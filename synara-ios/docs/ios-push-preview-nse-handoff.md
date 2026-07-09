@@ -1,7 +1,7 @@
 # iOS Handoff: Push Previews via NSE + Settings Toggle
 
 Audience: iOS implementation agent for `nepenth/synara-desktop` / `synara-ios`.  
-Author: Forge (infra).  
+Owner: Synara iOS implementation.  
 Date: 2026-07-09  
 Status: ready for implementation
 
@@ -13,21 +13,22 @@ Implement **privacy-preserving lock-screen previews** for Synara iOS:
 2. Add a **Notification Service Extension (NSE)** that enriches sparse APNs payloads on-device.
 3. Add Settings: **“Show message previews on lock screen”**.
 
-Push gateway (LXC116 / `push.whyland.com`) already:
+The push gateway must:
 
 - Sends non-blank generic alerts.
 - Includes `room_id`, `event_id`, badge, `synara.kind`.
 - Sets **`aps.mutable-content = 1`** so NSE can run.
 - Supports agent-approval category when approval metadata is present.
 
-This handoff is **iOS-only**. Do not change the push gateway contract unless coordinated with Forge.
+This handoff is **iOS-only**. Do not change the push gateway contract without
+coordinating the proxy implementation.
 
 ---
 
 ## Architecture (source of truth)
 
 ```text
-Homeserver  --event_id_only-->  push.whyland.com
+Homeserver  --event_id_only-->  push gateway
 Gateway     --APNs alert (generic or approval) + room_id/event_id + mutable-content-->  device
 NSE         --Keychain session + bounded Matrix resolve-->  rewrite title/body (if allowed)
 User        sees rich banner when possible; generic fallback otherwise
@@ -91,13 +92,13 @@ Expect `userInfo` roughly like:
     "content-available": 1,
     "mutable-content": 1
   },
-  "room_id": "!room:matrix.whyland.com",
-  "event_id": "$event:matrix.whyland.com",
+  "room_id": "!room:matrix.example.com",
+  "event_id": "$event:matrix.example.com",
   "notification_summary": { "appBadgeCount": 3 },
   "synara": {
     "kind": "matrix-event",
-    "room_id": "!room:matrix.whyland.com",
-    "event_id": "$event:matrix.whyland.com"
+    "room_id": "!room:matrix.example.com",
+    "event_id": "$event:matrix.example.com"
   }
 }
 ```
@@ -242,8 +243,8 @@ Approval actions remain governed by existing revalidation/TTL in `SynaraNotifica
 ### Manual smoke (device / TestFlight)
 
 1. Release/TestFlight build (production APNs).
-2. Register push; confirm pusher URL  
-   `https://push.whyland.com/_matrix/push/v1/notify` and `event_id_only`.
+2. Register push; confirm pusher URL from `SYNARA_PUSH_GATEWAY_URL` and
+   `event_id_only`.
 3. Previews ON → send cleartext room message → lock screen shows preview (or best-effort).
 4. Previews OFF → same path shows generic non-blank text.
 5. Tap notification routes to room/event.
@@ -271,13 +272,12 @@ synara-ios/docs/security-review.md
 
 ## Coordination notes for iOS agent
 
-- Gateway base: `https://push.whyland.com`
+- Gateway base: private operator configuration.
 - Notify path: `/_matrix/push/v1/notify` (public Matrix path)
-- Approval ingest (infra): `/v1/agent-approval-events` (trusted bearer; not for the iOS app)
-- App id / topic: `com.whylandcreative.synara`
-- Team: `NK6CM9YJC6`
-- Keep Git authorship as Chris when committing:
-  `Chris <16943149+nepenth@users.noreply.github.com>`
+- Approval ingest: `/v1/agent-approval-events` (trusted bearer; not for the iOS app)
+- App id / topic: configured by the signed app target.
+- Apple team id: private signing environment.
+- Use the repository's normal commit authorship configuration.
 
 When done, report:
 

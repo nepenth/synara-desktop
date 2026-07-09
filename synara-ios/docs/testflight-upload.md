@@ -11,18 +11,24 @@ Defaults:
 
 - Scheme: `Synara`
 - Configuration: `Release`
-- Team ID: `NK6CM9YJC6`
 - Bundle ID: `com.whylandcreative.synara`
-- Provisioning profile: `Synara Matrix App Store`
 - Distribution method: `app-store-connect`
 - Destination: `upload`
 - TestFlight scope: internal testing only
 
-Override defaults with environment variables:
+Required environment variables:
 
 ```sh
 SYNARA_IOS_TEAM_ID=... \
 SYNARA_IOS_PROVISIONING_PROFILE="..." \
+SYNARA_PUSH_GATEWAY_URL="https://push.example.com/_matrix/push/v1/notify" \
+synara-ios/scripts/upload-testflight-internal.sh
+```
+
+Optional environment variables:
+
+```sh
+SYNARA_IOS_NOTIFICATION_SERVICE_PROVISIONING_PROFILE="..." \
 SYNARA_IOS_ARCHIVE_ROOT=/tmp \
 synara-ios/scripts/upload-testflight-internal.sh
 ```

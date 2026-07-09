@@ -138,7 +138,7 @@ The repeatable live-smoke checklist is
 - The gated `testLiveAgentApprovalSmokeWhenConfigured` simulator test seeds a
   real Matrix agent card, approves it through the app UI, and verifies the
   resulting `in.synara.agent.action` event in the room. This passed locally
-  against the disposable `test-e2e-room` on `matrix.whyland.com`.
+  against the disposable `test-e2e-room` on `matrix.example.com`.
 - The gated `testLiveRoomManagementSmokeWhenConfigured` simulator test covers
   live private encrypted room creation, room-details read, optional invite, and
   leave-room recovery. The create/details/invite/leave leg passed locally

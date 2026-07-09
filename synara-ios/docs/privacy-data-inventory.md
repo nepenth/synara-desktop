@@ -12,7 +12,7 @@ Status: draft App Store privacy input for internal TestFlight preparation. Exter
 | Credentials and tokens | Matrix access token, APNs device token | Keychain/APNs registration state | Push token only when push is configured | Access tokens are never logged; APNs token logging is redacted. |
 | Messages and rooms | Room IDs, event IDs, room metadata, timeline content, media references | SDK/app cache as needed | No | Data originates from the selected Matrix homeserver. |
 | Media and files | Picked image bytes, Matrix media URLs | Transient upload path/cache as needed | No | Uploaded to the selected Matrix homeserver. |
-| Notifications | Matrix pusher registration, generic notification route, badge count | Push service state | Push gateway only when configured | Payloads must avoid decrypted message bodies. |
+| Notifications | Matrix pusher registration, generic notification route, badge count, optional on-device preview lookup | Push service state, app-group preview preference | Push gateway only when configured | APNs payloads must avoid decrypted message bodies. The Notification Service Extension may fetch cleartext event content from the user's homeserver on device when previews are enabled. |
 | Diagnostics | Local redacted logs | Device local logs | No | No analytics or crash SDK is enabled. |
 | Contacts | None | No | No | The app does not request Contacts access. |
 | Analytics/tracking | None | No | No | No tracking SDK or tracking domains are configured. |
@@ -26,3 +26,6 @@ Status: draft App Store privacy input for internal TestFlight preparation. Exter
 - Publish and approve a privacy policy URL before external TestFlight.
 - Draft App Privacy labels from this inventory before App Store review.
 - Require explicit approval before adding analytics, crash reporting, attribution, advertising, or any third-party SDK with separate data collection.
+- Reconfirm App Privacy labels after enabling lock-screen previews, because the
+  extension performs user-visible message lookup on device but does not send
+  message bodies through the push gateway.

@@ -6,10 +6,26 @@ PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 SCHEME="${SYNARA_IOS_SCHEME:-Synara}"
 CONFIGURATION="${SYNARA_IOS_CONFIGURATION:-Release}"
-TEAM_ID="${SYNARA_IOS_TEAM_ID:-NK6CM9YJC6}"
+TEAM_ID="${SYNARA_IOS_TEAM_ID:-}"
 BUNDLE_ID="${SYNARA_IOS_BUNDLE_ID:-com.whylandcreative.synara}"
-PROVISIONING_PROFILE="${SYNARA_IOS_PROVISIONING_PROFILE:-Synara Matrix App Store}"
+PROVISIONING_PROFILE="${SYNARA_IOS_PROVISIONING_PROFILE:-}"
+NOTIFICATION_SERVICE_BUNDLE_ID="${SYNARA_IOS_NOTIFICATION_SERVICE_BUNDLE_ID:-${BUNDLE_ID}.NotificationService}"
+NOTIFICATION_SERVICE_PROVISIONING_PROFILE="${SYNARA_IOS_NOTIFICATION_SERVICE_PROVISIONING_PROFILE:-}"
+PUSH_GATEWAY_URL="${SYNARA_PUSH_GATEWAY_URL:-}"
 ARCHIVE_ROOT="${SYNARA_IOS_ARCHIVE_ROOT:-/tmp}"
+
+require_env() {
+  local name="$1"
+  local value="$2"
+  if [[ -z "$value" ]]; then
+    echo "Set ${name} before running the TestFlight upload script." >&2
+    exit 1
+  fi
+}
+
+require_env "SYNARA_IOS_TEAM_ID" "$TEAM_ID"
+require_env "SYNARA_IOS_PROVISIONING_PROFILE" "$PROVISIONING_PROFILE"
+require_env "SYNARA_PUSH_GATEWAY_URL" "$PUSH_GATEWAY_URL"
 
 xcode_auth_args=()
 has_xcode_auth_args=0
@@ -45,6 +61,9 @@ build_settings="$(
     -scheme "$SCHEME" \
     -configuration "$CONFIGURATION" \
     -destination "generic/platform=iOS" \
+    DEVELOPMENT_TEAM="$TEAM_ID" \
+    SYNARA_IOS_PROVISIONING_PROFILE="$PROVISIONING_PROFILE" \
+    SYNARA_PUSH_GATEWAY_URL="$PUSH_GATEWAY_URL" \
     -showBuildSettings
 )"
 
@@ -59,6 +78,13 @@ fi
 archive_path="$ARCHIVE_ROOT/Synara-${marketing_version}-${build_number}.xcarchive"
 export_path="$ARCHIVE_ROOT/Synara-${marketing_version}-${build_number}-export"
 export_options="$(mktemp "${TMPDIR:-/tmp}/synara-export-options.XXXXXX.plist")"
+notification_service_profile_entry=""
+
+if [[ -n "$NOTIFICATION_SERVICE_PROVISIONING_PROFILE" ]]; then
+  notification_service_profile_entry="
+		<key>${NOTIFICATION_SERVICE_BUNDLE_ID}</key>
+		<string>${NOTIFICATION_SERVICE_PROVISIONING_PROFILE}</string>"
+fi
 
 cleanup() {
   rm -f "$export_options"
@@ -79,7 +105,7 @@ cat > "$export_options" <<PLIST
 	<key>provisioningProfiles</key>
 	<dict>
 		<key>${BUNDLE_ID}</key>
-		<string>${PROVISIONING_PROFILE}</string>
+		<string>${PROVISIONING_PROFILE}</string>${notification_service_profile_entry}
 	</dict>
 	<key>signingStyle</key>
 	<string>manual</string>
@@ -100,6 +126,9 @@ run_xcodebuild \
   -configuration "$CONFIGURATION" \
   -destination "generic/platform=iOS" \
   -archivePath "$archive_path" \
+  DEVELOPMENT_TEAM="$TEAM_ID" \
+  SYNARA_IOS_PROVISIONING_PROFILE="$PROVISIONING_PROFILE" \
+  SYNARA_PUSH_GATEWAY_URL="$PUSH_GATEWAY_URL" \
   archive \
   -allowProvisioningUpdates
 

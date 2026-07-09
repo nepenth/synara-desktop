@@ -11,6 +11,7 @@ struct SettingsView: View {
     @State private var recoveryKey = ""
     @State private var cryptoActionMessage: String?
     @State private var isRunningCryptoAction = false
+    @State private var showLockScreenMessagePreviews = SynaraSharedConstants.defaultLockScreenMessagePreviews
 
     var body: some View {
         Form {
@@ -83,6 +84,20 @@ struct SettingsView: View {
                     .accessibilityIdentifier("PushRegistrationButton")
                 }
                 .font(SynaraTypography.body)
+
+                Toggle("Show message previews on lock screen", isOn: $showLockScreenMessagePreviews)
+                    .accessibilityIdentifier("LockScreenMessagePreviewsToggle")
+                    .onChange(of: showLockScreenMessagePreviews) { value in
+                        environment.settings.set(
+                            value,
+                            for: SynaraSharedConstants.lockScreenMessagePreviewsKey
+                        )
+                    }
+
+                Text("Message content is looked up on this device and is not sent through the push gateway.")
+                    .font(SynaraTypography.supporting)
+                    .foregroundStyle(SynaraColor.secondaryText)
+                    .accessibilityIdentifier("LockScreenMessagePreviewsHelp")
             }
 
             Section("Appearance") {
@@ -212,6 +227,9 @@ struct SettingsView: View {
         .navigationTitle("Settings")
         .accessibilityIdentifier("SettingsScreen")
         .task {
+            showLockScreenMessagePreviews = environment.settings.bool(
+                for: SynaraSharedConstants.lockScreenMessagePreviewsKey
+            )
             await refreshNotificationStatus()
             await refreshCryptoStatus()
         }

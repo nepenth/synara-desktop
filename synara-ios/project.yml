@@ -21,9 +21,12 @@ targets:
     platform: iOS
     sources:
       - path: Synara
+      - path: SynaraShared
     dependencies:
       - package: MatrixRustComponentsSwift
         product: MatrixRustSDK
+      - target: SynaraNotificationService
+        embed: true
     info:
       path: Synara/App/Info.plist
       properties:
@@ -51,10 +54,10 @@ targets:
           - remote-notification
         NSCameraUsageDescription: Synara needs camera access to capture photos and videos for messages.
         SynaraPushGatewayURL: "$(SYNARA_PUSH_GATEWAY_URL)"
+        SynaraKeychainAccessGroup: "$(AppIdentifierPrefix)com.whylandcreative.synara.shared"
     settings:
       base:
         CODE_SIGN_ENTITLEMENTS: Synara/Resources/Synara.entitlements
-        DEVELOPMENT_TEAM: NK6CM9YJC6
         PRODUCT_BUNDLE_IDENTIFIER: com.whylandcreative.synara
         PRODUCT_NAME: Synara
         SYNARA_PUSH_GATEWAY_URL: ""
@@ -65,8 +68,37 @@ targets:
           APS_ENVIRONMENT: production
           CODE_SIGN_IDENTITY: Apple Distribution
           CODE_SIGN_STYLE: Manual
-          PROVISIONING_PROFILE_SPECIFIER: Synara Matrix App Store
-          SYNARA_PUSH_GATEWAY_URL: "https://push.whyland.com/_matrix/push/v1/notify"
+          PROVISIONING_PROFILE_SPECIFIER: "$(SYNARA_IOS_PROVISIONING_PROFILE)"
+  SynaraNotificationService:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: SynaraNotificationService
+      - path: SynaraShared
+    info:
+      path: SynaraNotificationService/Info.plist
+      properties:
+        CFBundleDisplayName: SynaraNotificationService
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        ITSAppUsesNonExemptEncryption: false
+        SynaraKeychainAccessGroup: "$(AppIdentifierPrefix)com.whylandcreative.synara.shared"
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.usernotifications.service
+          NSExtensionPrincipalClass: "$(PRODUCT_MODULE_NAME).NotificationService"
+    settings:
+      base:
+        APPLICATION_EXTENSION_API_ONLY: YES
+        CODE_SIGN_ENTITLEMENTS: SynaraNotificationService/Resources/SynaraNotificationService.entitlements
+        PRODUCT_BUNDLE_IDENTIFIER: com.whylandcreative.synara.NotificationService
+        PRODUCT_NAME: SynaraNotificationService
+        SKIP_INSTALL: YES
+      configs:
+        Debug:
+          CODE_SIGN_STYLE: Automatic
+        Release:
+          CODE_SIGN_IDENTITY: Apple Distribution
+          CODE_SIGN_STYLE: Automatic
   SynaraTests:
     type: bundle.unit-test
     platform: iOS

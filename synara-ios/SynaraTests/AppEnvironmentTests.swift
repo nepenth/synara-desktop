@@ -241,7 +241,7 @@ final class AppEnvironmentTests: XCTestCase {
     func testPushGatewayConfigurationPrefersEnvironmentValue() {
         let url = AppEnvironment.configuredPushGatewayURL(
             environmentValue: "https://push.example.internal/_matrix/push/v1/notify",
-            bundleValue: "https://push.whyland.com/_matrix/push/v1/notify"
+            bundleValue: "https://push.example.com/_matrix/push/v1/notify"
         )
 
         XCTAssertEqual(url?.absoluteString, "https://push.example.internal/_matrix/push/v1/notify")
@@ -250,16 +250,16 @@ final class AppEnvironmentTests: XCTestCase {
     func testPushGatewayConfigurationFallsBackToBundleValue() {
         let url = AppEnvironment.configuredPushGatewayURL(
             environmentValue: nil,
-            bundleValue: "https://push.whyland.com/_matrix/push/v1/notify"
+            bundleValue: "https://push.example.com/_matrix/push/v1/notify"
         )
 
-        XCTAssertEqual(url?.absoluteString, "https://push.whyland.com/_matrix/push/v1/notify")
+        XCTAssertEqual(url?.absoluteString, "https://push.example.com/_matrix/push/v1/notify")
     }
 
     func testPushGatewayConfigurationRejectsInvalidValues() {
         let url = AppEnvironment.configuredPushGatewayURL(
             environmentValue: "not a url",
-            bundleValue: "http://push.whyland.com/_matrix/push/v1/notify"
+            bundleValue: "http://push.example.com/_matrix/push/v1/notify"
         )
 
         XCTAssertNil(url)

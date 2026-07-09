@@ -44,14 +44,98 @@ private struct SecureSessionEnvelope: Codable {
 final class KeychainSecureSessionStore: SecureSessionStoring {
     private let service = "com.whylandcreative.synara.session"
     private let account = "current"
+    private let sharedAccessGroup: String?
+
+    init(sharedAccessGroup: String? = KeychainSecureSessionStore.defaultSharedAccessGroup()) {
+        self.sharedAccessGroup = sharedAccessGroup
+    }
 
     func save(_ session: AuthenticatedSession) throws {
         let data = try JSONEncoder().encode(SecureSessionEnvelope(version: 1, session: session))
-        let matchQuery: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: account
-        ]
+
+        if let sharedAccessGroup {
+            do {
+                try save(data, accessGroup: sharedAccessGroup)
+                try? deleteItem(accessGroup: nil)
+                return
+            } catch SecureSessionStoreError.keychainFailure(let status)
+                where Self.shouldIgnoreAccessGroupFailure(status: status, accessGroup: sharedAccessGroup) {
+                try save(data, accessGroup: nil)
+                return
+            }
+        }
+
+        try save(data, accessGroup: nil)
+    }
+
+    func load() throws -> AuthenticatedSession? {
+        for accessGroup in loadAccessGroups {
+            do {
+                if let data = try loadData(accessGroup: accessGroup) {
+                    let session = try decode(data)
+                    if accessGroup == nil, sharedAccessGroup != nil {
+                        try? save(session)
+                    }
+                    return session
+                }
+            } catch SecureSessionStoreError.keychainFailure(let status)
+                where Self.shouldIgnoreAccessGroupFailure(status: status, accessGroup: accessGroup) {
+                continue
+            }
+        }
+
+        return nil
+    }
+
+    func delete() throws {
+        var firstFailure: Int32?
+        for accessGroup in loadAccessGroups {
+            do {
+                try deleteItem(accessGroup: accessGroup)
+                continue
+            } catch SecureSessionStoreError.keychainFailure(let status) {
+                if Self.shouldIgnoreAccessGroupFailure(status: status, accessGroup: accessGroup) {
+                    continue
+                }
+                firstFailure = firstFailure ?? status
+            } catch {
+                firstFailure = firstFailure ?? errSecInternalError
+            }
+        }
+
+        if let firstFailure {
+            throw SecureSessionStoreError.keychainFailure(status: firstFailure)
+        }
+    }
+
+    func migrateIfNeeded() throws -> SessionMigrationResult {
+        guard let stored = try loadStoredData() else {
+            return .notNeeded
+        }
+
+        if let session = try? JSONDecoder().decode(AuthenticatedSession.self, from: stored.data) {
+            try save(session)
+            return .migrated
+        }
+
+        let session = try decode(stored.data)
+        if stored.accessGroup == nil, sharedAccessGroup != nil {
+            try save(session)
+            return .migrated
+        }
+
+        return .notNeeded
+    }
+
+    private var loadAccessGroups: [String?] {
+        if let sharedAccessGroup {
+            return [sharedAccessGroup, nil]
+        }
+        return [nil]
+    }
+
+    private func save(_ data: Data, accessGroup: String?) throws {
+        let matchQuery = baseQuery(accessGroup: accessGroup)
         let updateAttributes: [String: Any] = [
             kSecValueData as String: data,
             kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
@@ -76,14 +160,17 @@ final class KeychainSecureSessionStore: SecureSessionStoring {
         }
     }
 
-    func load() throws -> AuthenticatedSession? {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: account,
-            kSecReturnData as String: true,
-            kSecMatchLimit as String: kSecMatchLimitOne
-        ]
+    private func deleteItem(accessGroup: String?) throws {
+        let status = SecItemDelete(baseQuery(accessGroup: accessGroup) as CFDictionary)
+        guard status == errSecSuccess || status == errSecItemNotFound else {
+            throw SecureSessionStoreError.keychainFailure(status: status)
+        }
+    }
+
+    private func loadData(accessGroup: String?) throws -> Data? {
+        var query = baseQuery(accessGroup: accessGroup)
+        query[kSecReturnData as String] = true
+        query[kSecMatchLimit as String] = kSecMatchLimitOne
 
         var item: CFTypeRef?
         let status = SecItemCopyMatching(query as CFDictionary, &item)
@@ -100,52 +187,53 @@ final class KeychainSecureSessionStore: SecureSessionStoring {
             throw SecureSessionStoreError.corruptEntry
         }
 
-        return try decode(data)
+        return data
     }
 
-    func delete() throws {
-        let query: [String: Any] = [
+    private func loadStoredData() throws -> (data: Data, accessGroup: String?)? {
+        for accessGroup in loadAccessGroups {
+            do {
+                if let data = try loadData(accessGroup: accessGroup) {
+                    return (data, accessGroup)
+                }
+            } catch SecureSessionStoreError.keychainFailure(let status)
+                where Self.shouldIgnoreAccessGroupFailure(status: status, accessGroup: accessGroup) {
+                continue
+            }
+        }
+        return nil
+    }
+
+    private func baseQuery(accessGroup: String?) -> [String: Any] {
+        var query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: account
         ]
 
-        let status = SecItemDelete(query as CFDictionary)
-        guard status == errSecSuccess || status == errSecItemNotFound else {
-            throw SecureSessionStoreError.keychainFailure(status: status)
+        if let accessGroup {
+            query[kSecAttrAccessGroup as String] = accessGroup
         }
+
+        return query
     }
 
-    func migrateIfNeeded() throws -> SessionMigrationResult {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: account,
-            kSecReturnData as String: true,
-            kSecMatchLimit as String: kSecMatchLimitOne
-        ]
-
-        var item: CFTypeRef?
-        let status = SecItemCopyMatching(query as CFDictionary, &item)
-
-        if status == errSecItemNotFound {
-            return .notNeeded
+    static func defaultSharedAccessGroup(bundle: Bundle = .main) -> String? {
+        guard let value = bundle.object(forInfoDictionaryKey: SynaraSharedConstants.keychainAccessGroupInfoKey) as? String else {
+            return nil
         }
 
-        guard status == errSecSuccess, let data = item as? Data else {
-            if status == errSecSuccess {
-                throw SecureSessionStoreError.corruptEntry
-            }
-            throw SecureSessionStoreError.keychainFailure(status: status)
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.isEmpty == false,
+              trimmed.contains("$(") == false else {
+            return nil
         }
 
-        if let session = try? JSONDecoder().decode(AuthenticatedSession.self, from: data) {
-            try save(session)
-            return .migrated
-        }
+        return trimmed
+    }
 
-        _ = try decode(data)
-        return .notNeeded
+    private static func shouldIgnoreAccessGroupFailure(status: Int32, accessGroup: String?) -> Bool {
+        accessGroup != nil && status == errSecMissingEntitlement
     }
 
     private func decode(_ data: Data) throws -> AuthenticatedSession {

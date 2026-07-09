@@ -202,7 +202,7 @@ final class TimelineServiceTests: XCTestCase {
 
         - **Service:** synara-push-gateway
 
-        - **Code:** /home/nepenthe/synara-push-gateway-src
+        - **Code:** /srv/synara-push-gateway-src
 
         - **Binary:** /usr/local/bin/synara-push-gateway
         """
@@ -212,7 +212,7 @@ final class TimelineServiceTests: XCTestCase {
             """
             Specifically:
             - **Service:** synara-push-gateway
-            - **Code:** /home/nepenthe/synara-push-gateway-src
+            - **Code:** /srv/synara-push-gateway-src
             - **Binary:** /usr/local/bin/synara-push-gateway
             """
         )
