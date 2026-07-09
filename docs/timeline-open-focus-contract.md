@@ -60,19 +60,43 @@ over scroll position.
   - the snapshot is older than `ROOM_TIMELINE_VIEWPORT_RESTORE_TTL_MS`.
 - `roomHaveUnread(...)` is consulted synchronously so a loaded live slice can
   block stale historical restore before Jotai unread state settles.
+- Initial unread auto-placement only uses markers already inside the initial
+  live-end window (`getRoomUnreadInfoInTimelineWindow`). Deep unread markers
+  outside that window do **not** auto-open (v1.2.28 mitigation).
+- Jump to Unread remains available when an unread target exists and is either
+  outside the live chain or outside the currently rendered timeline window
+  (`shouldShowJumpToUnread`), even if the marker is still in the live timeline
+  chain.
 - Mounted auto-read paths use loaded-tail receipts only after the UI has proven
   live-bottom visibility.
 - Explicit jump-latest uses `getLatestTimeline(...)`.
+- Normal live-end open also refreshes via `getLatestRoomTimeline(...)` when the
+  room is pinned to live, without forcing a history walk.
+- Open diagnostics (`room-timeline.open`, `room-timeline.first-stable-bottom`,
+  `room-timeline.live-tail-refresh`) emit through `perfLog` when performance
+  debug is enabled.
+
+### Remaining timeline risk (explicit TODO)
+
+Authoritative virtualization range rendering (always rendering the true SDK
+timeline range rather than a sliced window with separate jump loaders) is **not**
+part of the current remediation. Large-history rooms can still require explicit
+Jump to Unread / Jump to Latest. Track large-history perf with performance-debug
+logs and the smoke cases below; do not treat in-repo hardening as complete
+virtualization correctness.
 
 ## iOS Enforcement
 
-- `RoomTimelineFocusPolicy.initialLoadFocus(...)` allows `m.fully_read` to seed
-  the first load only when there is no explicit focused route.
+- `RoomTimelineFocusPolicy.initialLoadFocus(...)` ignores `m.fully_read` for
+  normal open and only honors an explicit focused-event route.
 - `RoomTimelineFocusPolicy.updateStreamFocus(...)` ignores read-marker focus for
   mounted room updates; normal rooms stream live.
 - Explicit focused routes keep event focus until jump-latest passes an override
   of `nil`, which returns the stream to live.
-- `RoomTimelineView.jumpToLatest(...)` clears `initialReadMarkerEventID`, restarts
+- `RoomTimelineView` normal open always places at live bottom. Post-load
+  scroll restore from old read markers is removed; only explicit focused-event
+  deep links may re-anchor after load.
+- `RoomTimelineView.jumpToLatest(...)` clears marker presentation state, restarts
   live stream focus, and calls `loadLatestTimeline(...)`.
 
 ## Smoke Checklist
@@ -95,4 +119,8 @@ Before marking Timeline Resurrection complete, run these against desktop and iOS
 8. Live append while scrolled up preserves the current visible anchor.
 9. SDK timeline reset/sync gap while pinned reattaches to live tail.
 10. SDK timeline reset/sync gap while scrolled up preserves the visible anchor or
-   keeps a clear jump-to-latest affordance.
+    keeps a clear jump-to-latest affordance.
+11. Desktop: unread marker in the live chain but outside the initial live-end
+    window opens at live end (no auto deep open) and still shows Jump to Unread.
+12. iOS: normal open never later snaps back to an old `m.fully_read` marker after
+    the first live-end placement; explicit event deep links still highlight.
