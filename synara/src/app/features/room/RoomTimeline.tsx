@@ -182,6 +182,7 @@ import {
   getRoomUnreadInfoInTimelineWindow,
   getTimelineEndWindow,
   hasUnreadForInitialScroll,
+  shouldGateViewportRestoreOnUnread,
   shouldShowJumpToUnread,
   timelineHasEvents,
   canRestoreViewportFromInitialTimeline,
@@ -593,7 +594,9 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
     !eventId &&
     canRestoreViewportFromInitialTimeline(savedViewport, initialTimelineWindow) &&
     shouldRestoreRoomTimelineViewport(savedViewport, {
-      hasUnread: Boolean(initialUnreadPlacementInfo),
+      // Deep unread must still block historical restore even when v1.2.28 does
+      // not auto-open at a marker outside the initial live-end window.
+      hasUnread: shouldGateViewportRestoreOnUnread(hasUnreadSignal),
       currentLiveTailEventId,
       nowMs: roomOpenedAtMsRef.current,
     });

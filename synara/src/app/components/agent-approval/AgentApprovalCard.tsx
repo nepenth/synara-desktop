@@ -45,15 +45,31 @@ const APPROVAL_ACTIONS: ApprovalAction[] = [
   },
 ];
 
+const monospacedBlockStyle: React.CSSProperties = {
+  maxWidth: toRem(720),
+  maxHeight: toRem(220),
+  overflow: 'auto',
+  whiteSpace: 'pre-wrap',
+  wordBreak: 'break-word',
+  margin: 0,
+  padding: config.space.S300,
+  borderRadius: config.radii.R300,
+  backgroundColor: color.SurfaceVariant.Container,
+  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+  fontSize: toRem(12),
+  lineHeight: 1.45,
+};
+
 export function AgentApprovalCard({ prompt, target }: AgentApprovalCardProps) {
   const mx = useMatrixClient();
   const [busyKey, setBusyKey] = useState<string>();
   const [sentKey, setSentKey] = useState<string>();
   const [error, setError] = useState<string>();
+  const [confirmApproveAlways, setConfirmApproveAlways] = useState(false);
   const canReact = Boolean(target && target.canSendReaction !== false);
   const disabled = !canReact || Boolean(busyKey || sentKey);
 
-  const handleReact = useCallback(
+  const sendReaction = useCallback(
     async (reactionKey: string) => {
       if (!target || target.canSendReaction === false || busyKey || sentKey) return;
 
@@ -66,6 +82,7 @@ export function AgentApprovalCard({ prompt, target }: AgentApprovalCardProps) {
           getReactionContent(target.eventId, reactionKey) as any
         );
         setSentKey(reactionKey);
+        setConfirmApproveAlways(false);
       } catch {
         setError('Failed to send approval reaction.');
       } finally {
@@ -74,6 +91,32 @@ export function AgentApprovalCard({ prompt, target }: AgentApprovalCardProps) {
     },
     [mx, target, busyKey, sentKey]
   );
+
+  const handleReact = useCallback(
+    async (reactionKey: string) => {
+      if (!target || target.canSendReaction === false || busyKey || sentKey) return;
+
+      // Permanent approval requires an explicit second confirmation step.
+      if (reactionKey === AGENT_APPROVAL_REACTION_APPROVE_ALWAYS && !confirmApproveAlways) {
+        setConfirmApproveAlways(true);
+        setError(undefined);
+        return;
+      }
+
+      if (reactionKey !== AGENT_APPROVAL_REACTION_APPROVE_ALWAYS && confirmApproveAlways) {
+        setConfirmApproveAlways(false);
+      }
+
+      await sendReaction(reactionKey);
+    },
+    [target, busyKey, sentKey, confirmApproveAlways, sendReaction]
+  );
+
+  const sourceDetails =
+    prompt.replyInstructions ||
+    (prompt.sourceContext && prompt.sourceContext !== prompt.body
+      ? prompt.sourceContext
+      : undefined);
 
   return (
     <Box
@@ -99,7 +142,6 @@ export function AgentApprovalCard({ prompt, target }: AgentApprovalCardProps) {
 
       {prompt.command && (
         <Box
-          as="details"
           direction="Column"
           gap="200"
           style={{
@@ -108,46 +150,128 @@ export function AgentApprovalCard({ prompt, target }: AgentApprovalCardProps) {
             padding: config.space.S300,
           }}
         >
-          <Box as="summary" alignItems="Center" gap="200" style={{ cursor: 'pointer' }}>
-            <Text as="span" size="T300" truncate>
-              {prompt.commandPreview ?? 'Review command'}
-            </Text>
-          </Box>
-          <pre
-            style={{
-              maxWidth: toRem(720),
-              overflow: 'auto',
-              whiteSpace: 'pre-wrap',
-              wordBreak: 'break-word',
-              margin: 0,
-              padding: config.space.S300,
-              borderRadius: config.radii.R300,
-              backgroundColor: color.SurfaceVariant.Container,
-            }}
-          >
+          <Text size="L400" priority="300">
+            Command{prompt.commandPreview ? `: ${prompt.commandPreview}` : ''}
+          </Text>
+          <pre style={monospacedBlockStyle}>
             <code>{prompt.command}</code>
           </pre>
         </Box>
       )}
 
+      {sourceDetails && (
+        <Box
+          as="details"
+          direction="Column"
+          gap="200"
+          style={{
+            border: `${config.borderWidth.B300} solid ${color.SurfaceVariant.ContainerLine}`,
+            borderRadius: config.radii.R300,
+            padding: config.space.S300,
+          }}
+          open
+        >
+          <Box as="summary" alignItems="Center" gap="200" style={{ cursor: 'pointer' }}>
+            <Text as="span" size="T300">
+              Full approval prompt
+            </Text>
+          </Box>
+          {prompt.replyInstructions && (
+            <Box direction="Column" gap="100">
+              <Text size="L400" priority="300">
+                Reply / reaction options
+              </Text>
+              <pre style={{ ...monospacedBlockStyle, maxHeight: toRem(140) }}>
+                <code>{prompt.replyInstructions}</code>
+              </pre>
+            </Box>
+          )}
+          {prompt.sourceContext && (
+            <Box direction="Column" gap="100">
+              <Text size="L400" priority="300">
+                Source context
+              </Text>
+              <pre style={monospacedBlockStyle}>
+                <code>{prompt.sourceContext}</code>
+              </pre>
+            </Box>
+          )}
+        </Box>
+      )}
+
       <Box direction="Column" gap="200">
+        {confirmApproveAlways && (
+          <Box
+            direction="Column"
+            gap="200"
+            style={{
+              border: `${config.borderWidth.B300} solid ${color.Critical.Main}`,
+              borderRadius: config.radii.R300,
+              padding: config.space.S300,
+              backgroundColor: color.Critical.Container,
+            }}
+          >
+            <Text size="T300" priority="400">
+              Approve always permanently trusts this command pattern. Confirm only if you intend to
+              allow it without future prompts.
+            </Text>
+            <Box gap="200" wrap="Wrap">
+              <Button
+                type="button"
+                size="300"
+                variant="Critical"
+                fill="Solid"
+                disabled={disabled}
+                before={
+                  busyKey === AGENT_APPROVAL_REACTION_APPROVE_ALWAYS ? (
+                    <Spinner size="100" variant="Critical" />
+                  ) : undefined
+                }
+                onClick={() => handleReact(AGENT_APPROVAL_REACTION_APPROVE_ALWAYS)}
+              >
+                <Text size="B300">
+                  {AGENT_APPROVAL_REACTION_APPROVE_ALWAYS} Confirm approve always
+                </Text>
+              </Button>
+              <Button
+                type="button"
+                size="300"
+                variant="Secondary"
+                fill="Soft"
+                disabled={Boolean(busyKey || sentKey)}
+                onClick={() => setConfirmApproveAlways(false)}
+              >
+                <Text size="B300">Cancel</Text>
+              </Button>
+            </Box>
+          </Box>
+        )}
+
         <Box gap="200" wrap="Wrap">
-          {APPROVAL_ACTIONS.map((action) => (
-            <Button
-              key={action.key}
-              type="button"
-              size="300"
-              variant={action.variant}
-              fill={action.variant === 'Critical' ? 'Solid' : 'Soft'}
-              disabled={disabled}
-              before={
-                busyKey === action.key ? <Spinner size="100" variant={action.variant} /> : undefined
-              }
-              onClick={() => handleReact(action.key)}
-            >
-              <Text size="B300">{`${action.key} ${action.label}`}</Text>
-            </Button>
-          ))}
+          {APPROVAL_ACTIONS.map((action) => {
+            const isAlways = action.key === AGENT_APPROVAL_REACTION_APPROVE_ALWAYS;
+            const hideWhileConfirmingAlways = confirmApproveAlways && isAlways;
+            if (hideWhileConfirmingAlways) return null;
+
+            return (
+              <Button
+                key={action.key}
+                type="button"
+                size="300"
+                variant={action.variant}
+                fill={action.variant === 'Critical' ? 'Solid' : 'Soft'}
+                disabled={disabled}
+                before={
+                  busyKey === action.key ? (
+                    <Spinner size="100" variant={action.variant} />
+                  ) : undefined
+                }
+                onClick={() => handleReact(action.key)}
+              >
+                <Text size="B300">{`${action.key} ${action.label}`}</Text>
+              </Button>
+            );
+          })}
         </Box>
         {!target && (
           <Text size="T200" priority="300">
