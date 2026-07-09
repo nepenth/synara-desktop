@@ -83,7 +83,9 @@ struct AppEnvironment {
             matrix: matrix,
             push: push,
             logger: logger,
-            settings: UserDefaultsSettingsStore(),
+            settings: UserDefaultsSettingsStore(
+                defaults: SynaraSharedConstants.appGroupDefaults() ?? .standard
+            ),
             router: router,
             homeserverDiscovery: PlaceholderHomeserverDiscoveryService(),
             auth: MatrixRustSDKAuthService(clientStore: matrixSDKClientStore),

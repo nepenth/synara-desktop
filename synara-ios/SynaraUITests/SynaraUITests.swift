@@ -1051,7 +1051,7 @@ final class SynaraUITests: XCTestCase {
 
         let alias = liveEnvironmentValue("SYNARA_LIVE_AGENT_ROOM_ALIAS", in: environment)
             ?? liveEnvironmentValue("SYNARA_LIVE_ROOM_ALIAS", in: environment)
-            ?? "#test-e2e-room:example.com"
+            ?? "#test-e2e-room:matrix.example.com"
         return try client.resolveRoomAlias(alias)
     }
 

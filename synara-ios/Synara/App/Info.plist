@@ -18,8 +18,6 @@
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
 	<string>$(MARKETING_VERSION)</string>
-	<key>ITSAppUsesNonExemptEncryption</key>
-	<false/>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
@@ -33,11 +31,23 @@
 	</array>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+	<key>NSCameraUsageDescription</key>
+	<string>Synara needs camera access to capture photos and videos for messages.</string>
+	<key>SynaraKeychainAccessGroup</key>
+	<string>$(AppIdentifierPrefix)com.whylandcreative.synara.shared</string>
+	<key>SynaraPushGatewayURL</key>
+	<string>$(SYNARA_PUSH_GATEWAY_URL)</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
 		<true/>
 	</dict>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+	</array>
 	<key>UILaunchScreen</key>
 	<dict/>
 	<key>UISupportedInterfaceOrientations</key>
@@ -53,13 +63,5 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
-	<key>UIBackgroundModes</key>
-	<array>
-		<string>remote-notification</string>
-	</array>
-	<key>NSCameraUsageDescription</key>
-	<string>Synara needs camera access to capture photos and videos for messages.</string>
-	<key>SynaraPushGatewayURL</key>
-	<string>$(SYNARA_PUSH_GATEWAY_URL)</string>
 </dict>
 </plist>

@@ -5,7 +5,7 @@ Reviewed: 2026-05-26
 The canonical local workspace for desktop client work is:
 
 ```text
-/Users/example/git_repos/synara_project/synara-desktop
+synara-desktop
 ```
 
 This repository owns both:
@@ -18,10 +18,10 @@ of `synara-desktop` do not need `--recursive` or any `git submodule` commands.
 The former standalone GitHub repository `nepenth/synara` was archived on
 2026-05-26 after `synara-desktop` package CI passed without it.
 
-Do not use a sibling checkout at:
+Do not use a sibling checkout beside the canonical repository, for example:
 
 ```text
-/Users/example/git_repos/synara_project/synara
+../synara
 ```
 
 That path is not the canonical workspace for this desktop project. If a
@@ -42,6 +42,6 @@ Repository layout acceptance criteria:
 - `synara/` is tracked directly by the parent repository.
 - `synara/` does not contain nested Git metadata.
 - `synara/` does not contain nested GitHub workflow automation.
-- No active sibling checkout exists at `/Users/example/git_repos/synara_project/synara`.
+- No active sibling checkout exists beside the canonical repository.
 - `nepenth/synara` is not required for fresh clones, local builds, or package
   smoke workflows.
