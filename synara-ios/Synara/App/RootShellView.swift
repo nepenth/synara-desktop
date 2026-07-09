@@ -67,16 +67,18 @@ struct RootShellView: View {
             startTabBadgeUpdates()
             startCryptoVerificationUpdates()
         }
-        .sheet(item: $cryptoVerificationState) { state in
-            CryptoVerificationSheet(
-                state: state,
-                onAccept: { runCryptoVerificationAction { await environment.crypto.acceptVerificationRequest() } },
-                onStartSas: { runCryptoVerificationAction { await environment.crypto.startSasVerification() } },
-                onApprove: { runCryptoVerificationAction { await environment.crypto.approveVerification() } },
-                onDecline: { runCryptoVerificationAction { await environment.crypto.declineVerification() } },
-                onCancel: { runCryptoVerificationAction { await environment.crypto.cancelVerification() } },
-                onDismissTerminal: { cryptoVerificationState = nil }
-            )
+        .sheet(isPresented: cryptoVerificationSheetBinding) {
+            if let cryptoVerificationState {
+                CryptoVerificationSheet(
+                    state: cryptoVerificationState,
+                    onAccept: { runCryptoVerificationAction { await environment.crypto.acceptVerificationRequest() } },
+                    onStartSas: { runCryptoVerificationAction { await environment.crypto.startSasVerification() } },
+                    onApprove: { runCryptoVerificationAction { await environment.crypto.approveVerification() } },
+                    onDecline: { runCryptoVerificationAction { await environment.crypto.declineVerification() } },
+                    onCancel: { runCryptoVerificationAction { await environment.crypto.cancelVerification() } },
+                    onDismissTerminal: { self.cryptoVerificationState = nil }
+                )
+            }
         }
         .onDisappear {
             tabBadgeUpdatesTask?.cancel()
@@ -84,6 +86,17 @@ struct RootShellView: View {
             cryptoVerificationUpdatesTask?.cancel()
             cryptoVerificationUpdatesTask = nil
         }
+    }
+
+    private var cryptoVerificationSheetBinding: Binding<Bool> {
+        Binding(
+            get: { cryptoVerificationState != nil },
+            set: { isPresented in
+                if isPresented == false {
+                    cryptoVerificationState = nil
+                }
+            }
+        )
     }
 
     private func tab(_ tab: AppTab) -> some View {
