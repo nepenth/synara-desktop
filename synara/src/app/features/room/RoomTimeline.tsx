@@ -139,6 +139,7 @@ import { AccountDataEvent, SynaraUnreadAnchorContent } from '../../../types/matr
 import { parsePollStartContent } from '../../utils/polls';
 import { addRoomNoteItemAccountData, createMessageRoomNoteItem } from '../../utils/roomNotes';
 import { isPerformanceDebugEnabled, perfLog } from '../../utils/performance';
+import { recordDesktopDiagnostic } from '../../utils/desktopDiagnostics';
 import {
   buildTimelineRowsWithState,
   estimateTimelineRowSize,
@@ -147,6 +148,7 @@ import {
   getVirtualAnchorOffset,
   isVirtualRangeAtEnd,
   shouldPaginateVirtualRange,
+  TIMELINE_MAX_EXPECTED_RENDERED_ROWS,
   TIMELINE_VIRTUAL_OVERSCAN,
   TimelineRowsBuildState,
   TimelineVirtualAnchor,
@@ -181,6 +183,8 @@ import {
   getRoomUnreadInfo,
   getRoomUnreadInfoInTimelineWindow,
   getTimelineEndWindow,
+  getTimelineFocusRange,
+  getTimelineRangeAfterPagination,
   hasUnreadForInitialScroll,
   shouldGateViewportRestoreOnUnread,
   shouldShowJumpToUnread,
@@ -231,7 +235,6 @@ const LIVE_END_PIN_MAX_MS = 5000;
 const LIVE_END_PIN_STABLE_FRAMES = 10;
 const LIVE_END_BOTTOM_TOLERANCE = 24;
 const COMPOSER_RESIZE_BOTTOM_TOLERANCE = 160;
-const VIRTUAL_ANCHOR_RESTORE_SCROLL_TOLERANCE = 4;
 
 type ScrollToOptions = {
   offset?: number;
@@ -282,6 +285,14 @@ type RoomTimelineViewport = {
 
 const ROOM_TIMELINE_VIEWPORT_LIMIT = 100;
 const roomTimelineViewports = new Map<string, RoomTimelineViewport>();
+
+const createTimelineTraceId = (): string => {
+  try {
+    return window.crypto.randomUUID().slice(0, 8);
+  } catch {
+    return Math.random().toString(36).slice(2, 10);
+  }
+};
 
 const setRoomTimelineViewport = (
   roomId: string,
@@ -395,16 +406,18 @@ const useTimelinePagination = (
       const topTmAddedEvt =
         timelineToEventsCount(newLTimelines[topTmIndex]) - timelinesEventsCount[0];
       const offsetRange = getTimelinesEventsCount(topAddedTm) + (backwards ? topTmAddedEvt : 0);
+      const totalEvents = getTimelinesEventsCount(newLTimelines);
 
       setTimeline((currentTimeline) => ({
         linkedTimelines: newLTimelines,
-        range:
-          offsetRange > 0
-            ? {
-                start: currentTimeline.range.start + offsetRange,
-                end: currentTimeline.range.end + offsetRange,
-              }
-            : { ...currentTimeline.range },
+        range: getTimelineRangeAfterPagination({
+          currentRange: currentTimeline.range,
+          totalEvents,
+          offsetRange,
+          backwards,
+          limit,
+          maxRows: TIMELINE_MAX_EXPECTED_RENDERED_ROWS,
+        }),
       }));
     };
 
@@ -629,6 +642,10 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
   }, []);
 
   const scrollRef = useRef<HTMLDivElement>(null);
+  const userScrollGenerationRef = useRef(0);
+  const recordUserScrollIntent = useCallback(() => {
+    userScrollGenerationRef.current += 1;
+  }, []);
   const scrollToBottomRef = useRef({
     count: 0,
     smooth: true,
@@ -644,6 +661,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
     lastTotalSize: 0,
     stableFrames: 0,
     startedAt: 0,
+    fallbackStartedAt: 0,
   });
   const liveTimelineResetPendingRef = useRef(false);
   const latestTimelineRequestRef = useRef(0);
@@ -654,6 +672,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
       lastTotalSize: 0,
       stableFrames: 0,
       startedAt: 0,
+      fallbackStartedAt: 0,
     };
   }, []);
 
@@ -722,22 +741,53 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
   atLiveEndRef.current = loadedAtEnd;
   const showJumpToUnread = shouldShowJumpToUnread(unreadInfo, timeline);
   const roomOpenDiagnosticsLoggedRef = useRef(false);
+  const renderWindowDiagnosticsFingerprintRef = useRef<string | undefined>(undefined);
+  const liveEndPaginationSuppressedLoggedRef = useRef(false);
   const liveTailRefreshRequestRef = useRef(0);
   const firstStableBottomLoggedRef = useRef(false);
+  const timelineDiagnosticsKey = `${room.roomId}\u0000${eventId ?? ''}`;
+  const timelineDiagnosticsRef = useRef({
+    key: timelineDiagnosticsKey,
+    traceId: createTimelineTraceId(),
+    startedAtMs: performance.now(),
+    sequence: 0,
+  });
+  if (timelineDiagnosticsRef.current.key !== timelineDiagnosticsKey) {
+    timelineDiagnosticsRef.current = {
+      key: timelineDiagnosticsKey,
+      traceId: createTimelineTraceId(),
+      startedAtMs: performance.now(),
+      sequence: 0,
+    };
+  }
+  const traceTimeline = useCallback((label: string, data: Record<string, unknown>) => {
+    const diagnostics = timelineDiagnosticsRef.current;
+    diagnostics.sequence += 1;
+    const payload = {
+      ...data,
+      traceId: diagnostics.traceId,
+      sequence: diagnostics.sequence,
+      elapsedMs: Math.round(performance.now() - diagnostics.startedAtMs),
+    };
+    recordDesktopDiagnostic(`[synara:timeline] ${label} ${JSON.stringify(payload)}`);
+    perfLog(label, payload);
+  }, []);
 
   useEffect(() => {
     roomOpenDiagnosticsLoggedRef.current = false;
+    renderWindowDiagnosticsFingerprintRef.current = undefined;
+    liveEndPaginationSuppressedLoggedRef.current = false;
     firstStableBottomLoggedRef.current = false;
   }, [room.roomId, eventId]);
 
-  // Lightweight open diagnostics (performance-debug gated via perfLog).
+  // Privacy-safe native diagnostics, mirrored to the console when performance debug is enabled.
   useEffect(() => {
     if (roomOpenDiagnosticsLoggedRef.current) return;
     roomOpenDiagnosticsLoggedRef.current = true;
     const unreadTarget =
       initialUnreadPlacementInfo?.readUptoEventId ??
       getRoomUnreadInfo(room, unreadAnchorEventId)?.readUptoEventId;
-    perfLog(
+    traceTimeline(
       'room-timeline.open',
       buildRoomTimelineOpenDiagnostics({
         openMode: roomOpenMode,
@@ -755,6 +805,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
     room,
     roomOpenMode,
     unreadAnchorEventId,
+    traceTimeline,
   ]);
 
   // On normal live-end open (not focused event / not unread placement), refresh the
@@ -798,8 +849,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
         }
         return nextTimeline;
       });
-      perfLog('room-timeline.live-tail-refresh', {
-        roomId: room.roomId,
+      traceTimeline('room-timeline.live-tail-refresh', {
         eventCount: getTimelinesEventsCount(nextTimeline.linkedTimelines),
       });
     })();
@@ -807,17 +857,23 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
     return () => {
       cancelled = true;
     };
-  }, [alive, eventId, mx, room, shouldOpenAtUnread, shouldRestoreSavedViewport]);
+  }, [alive, eventId, mx, room, shouldOpenAtUnread, shouldRestoreSavedViewport, traceTimeline]);
 
   const handlePaginationError = useCallback(
     (direction: TimelinePaginationDirection, err: unknown | null) => {
+      if (err) {
+        traceTimeline('room-timeline.pagination-error', {
+          direction,
+          errorType: err instanceof Error ? err.name : typeof err,
+        });
+      }
       setPaginationErrors((current) =>
         err
           ? setTimelinePaginationError(current, direction, err)
           : clearTimelinePaginationError(current, direction)
       );
     },
-    []
+    [traceTimeline]
   );
 
   const handleTimelinePagination = useTimelinePagination(
@@ -859,10 +915,10 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
     if (!scrollEl) return undefined;
 
     const cancelForUserScroll = () => {
+      recordUserScrollIntent();
       if (liveEndPinRef.current) cancelLiveEndPin();
     };
     const cancelForScrollKey = (evt: KeyboardEvent) => {
-      if (!liveEndPinRef.current) return;
       if (
         evt.key === 'ArrowUp' ||
         evt.key === 'ArrowDown' ||
@@ -872,7 +928,8 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
         evt.key === 'End' ||
         evt.key === ' '
       ) {
-        cancelLiveEndPin();
+        recordUserScrollIntent();
+        if (liveEndPinRef.current) cancelLiveEndPin();
       }
     };
 
@@ -886,7 +943,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
       scrollEl.removeEventListener('pointerdown', cancelForUserScroll);
       window.removeEventListener('keydown', cancelForScrollKey);
     };
-  }, [cancelLiveEndPin]);
+  }, [cancelLiveEndPin, recordUserScrollIntent]);
 
   useEffect(() => {
     timelineRowsBuildStateRef.current = undefined;
@@ -917,6 +974,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
         readUptoEventId: currentReadUptoEventId,
         unreadAnchorEventId,
         currentUserId: mx.getUserId(),
+        eventRange: timeline.range,
       },
       {
         getTimelinesEventsCount,
@@ -938,6 +996,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
     return rows;
   }, [
     timeline.linkedTimelines,
+    timeline.range,
     loadedAtStart,
     eventsLength,
     canPaginateBack,
@@ -950,6 +1009,22 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
     unreadAnchorEventId,
     mx,
   ]);
+  useEffect(() => {
+    const fingerprint = `${timeline.range.start}:${timeline.range.end}:${eventsLength}:${
+      timelineRows.length
+    }:${loadedAtEnd ? 1 : 0}`;
+    if (renderWindowDiagnosticsFingerprintRef.current === fingerprint) return;
+    renderWindowDiagnosticsFingerprintRef.current = fingerprint;
+    traceTimeline('room-timeline.render-window', {
+      openMode: roomOpenMode,
+      linkedEventCount: eventsLength,
+      renderedRowCount: timelineRows.length,
+      range: timeline.range,
+      loadedAtEnd,
+      liveEndPinned: liveEndPinRef.current,
+    });
+  }, [eventsLength, loadedAtEnd, roomOpenMode, timeline.range, timelineRows.length, traceTimeline]);
+
   const eventIndexToRowIndex = useMemo(() => {
     const eventMap = new Map<number, number>();
     timelineRows.forEach((row, rowIndex) => {
@@ -994,7 +1069,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
   const pendingVirtualAnchorRef = useRef<TimelineVirtualAnchor | undefined>(
     savedViewportRestoreAnchor
   );
-  const pendingVirtualAnchorScrollTopRef = useRef<number | undefined>(undefined);
+  const pendingVirtualAnchorGenerationRef = useRef<number | undefined>(undefined);
   const savedViewportRestoreKeyRef = useRef(savedViewportRestoreKey);
   const restoringSavedViewportRef = useRef(Boolean(savedViewportRestoreAnchor));
 
@@ -1057,7 +1132,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
     const anchor = getCurrentVirtualAnchor();
     if (anchor) lastKnownVirtualAnchorRef.current = anchor;
     pendingVirtualAnchorRef.current = anchor;
-    pendingVirtualAnchorScrollTopRef.current = scrollRef.current?.scrollTop;
+    pendingVirtualAnchorGenerationRef.current = userScrollGenerationRef.current;
   }, [getCurrentVirtualAnchor]);
 
   const getPersistableVirtualAnchor = useCallback((): TimelineVirtualAnchor | undefined => {
@@ -1143,10 +1218,19 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
 
   const paginateVirtualTimeline = useCallback(
     (backwards: boolean) => {
-      if (backwards) captureVirtualAnchor();
-      handleTimelinePagination(backwards);
+      captureVirtualAnchor();
+      traceTimeline('room-timeline.pagination-start', {
+        direction: backwards ? 'backward' : 'forward',
+        range: timeline.range,
+        linkedEventCount: eventsLength,
+      });
+      void handleTimelinePagination(backwards).then(() => {
+        traceTimeline('room-timeline.pagination-complete', {
+          direction: backwards ? 'backward' : 'forward',
+        });
+      });
     },
-    [captureVirtualAnchor, handleTimelinePagination]
+    [captureVirtualAnchor, eventsLength, handleTimelinePagination, timeline.range, traceTimeline]
   );
 
   useLayoutEffect(() => {
@@ -1157,16 +1241,14 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
       return undefined;
     }
 
-    const scrollEl = scrollRef.current;
-    const capturedScrollTop = pendingVirtualAnchorScrollTopRef.current;
     if (
       !restoringSavedViewportRef.current &&
-      scrollEl &&
-      typeof capturedScrollTop === 'number' &&
-      Math.abs(scrollEl.scrollTop - capturedScrollTop) > VIRTUAL_ANCHOR_RESTORE_SCROLL_TOLERANCE
+      typeof pendingVirtualAnchorGenerationRef.current === 'number' &&
+      pendingVirtualAnchorGenerationRef.current !== userScrollGenerationRef.current
     ) {
       pendingVirtualAnchorRef.current = undefined;
-      pendingVirtualAnchorScrollTopRef.current = undefined;
+      pendingVirtualAnchorGenerationRef.current = undefined;
+      traceTimeline('room-timeline.anchor-restore-cancelled', { reason: 'user-input' });
       return undefined;
     }
 
@@ -1185,9 +1267,13 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
       );
       restoreScrollEl.scrollTo({ top: nextScrollTop, behavior: 'instant' });
       pendingVirtualAnchorRef.current = undefined;
-      pendingVirtualAnchorScrollTopRef.current = undefined;
+      pendingVirtualAnchorGenerationRef.current = undefined;
       restoringSavedViewportRef.current = false;
       initialScrollPlacedRef.current = true;
+      traceTimeline('room-timeline.anchor-restored', {
+        rowIndex,
+        offsetTop: Math.round(anchor.offsetTop),
+      });
     });
     return () => window.cancelAnimationFrame(raf);
   }, [
@@ -1197,10 +1283,24 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
     virtualItems,
     virtualizer,
     virtualizer.range,
+    traceTimeline,
   ]);
 
   useEffect(() => {
     if (restoringSavedViewportRef.current) return;
+    if (liveEndPinRef.current) {
+      if (!liveEndPaginationSuppressedLoggedRef.current) {
+        liveEndPaginationSuppressedLoggedRef.current = true;
+        traceTimeline('room-timeline.pagination-suppressed', {
+          reason: 'live-end-pin',
+          range: timeline.range,
+          renderedRowCount: timelineRows.length,
+          linkedEventCount: eventsLength,
+          virtualRange: virtualizer.range,
+        });
+      }
+      return;
+    }
     const range = virtualizer.range ?? undefined;
     const pagination = shouldPaginateVirtualRange(range, timelineRows, eventsLength);
     if (pagination.backward && canPaginateBack) {
@@ -1215,10 +1315,12 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
     virtualizer.range,
     timelineRows,
     eventsLength,
+    timeline.range,
     canPaginateBack,
     canPaginateForward,
     loadedAtEnd,
     paginateVirtualTimeline,
+    traceTimeline,
   ]);
 
   const isRowInView = useCallback((element: HTMLElement): boolean => {
@@ -1296,10 +1398,12 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
         });
         setTimeline({
           linkedTimelines: lTimelines,
-          range: {
-            start: Math.max(evtAbsIndex - PAGINATION_LIMIT, 0),
-            end: Math.min(evtAbsIndex + PAGINATION_LIMIT, evLength),
-          },
+          range: getTimelineFocusRange({
+            targetIndex: evtAbsIndex,
+            totalEvents: evLength,
+            contextLimit: PAGINATION_LIMIT,
+            maxRows: TIMELINE_MAX_EXPECTED_RENDERED_ROWS,
+          }),
         });
       },
       [alive]
@@ -1366,7 +1470,10 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
           scrollToBottomRef.current.count += 1;
           scrollToBottomRef.current.smooth = true;
 
-          setTimeline((ct) => ({ ...ct }));
+          setTimeline((ct) => ({
+            ...ct,
+            range: getTimelineEndWindow(ct.linkedTimelines, PAGINATION_LIMIT).range,
+          }));
           return;
         }
         captureVirtualAnchor();
@@ -1429,7 +1536,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
       const nextTimeline = getInitialTimeline(room, PAGINATION_LIMIT);
       if (!timelineHasEvents(nextTimeline)) {
         liveTimelineResetPendingRef.current = true;
-        perfLog('room-timeline.defer-empty-refresh', { roomId: room.roomId });
+        traceTimeline('room-timeline.defer-empty-refresh', {});
         return;
       }
 
@@ -1439,15 +1546,14 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
         }
         setTimeline(nextTimeline);
       }
-    }, [captureVirtualAnchor, isActuallyAtLiveBottom, room, liveTimelineLinked])
+    }, [captureVirtualAnchor, isActuallyAtLiveBottom, room, liveTimelineLinked, traceTimeline])
   );
 
   useLiveTimelineReset(
     room,
     useCallback(() => {
       liveTimelineResetPendingRef.current = true;
-      perfLog('room-timeline.live-reset', {
-        roomId: room.roomId,
+      traceTimeline('room-timeline.live-reset', {
         atBottom: atBottomRef.current,
         liveEndPinned: liveEndPinRef.current,
       });
@@ -1456,7 +1562,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
       } else {
         captureVirtualAnchor();
       }
-    }, [captureVirtualAnchor, room.roomId, startLiveEndPin])
+    }, [captureVirtualAnchor, startLiveEndPin, traceTimeline])
   );
 
   // Stay at bottom when room editor resize
@@ -1529,8 +1635,9 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
       const unchangedHeight =
         state.lastScrollHeight === scrollEl.scrollHeight && state.lastTotalSize === totalSize;
       const elapsed = performance.now() - state.startedAt;
+      const bottomConfirmed = bottomRendered && bottomGap <= 2;
 
-      if (bottomRendered && bottomGap <= 2 && unchangedHeight) {
+      if (bottomConfirmed && unchangedHeight) {
         state.stableFrames += 1;
       } else {
         state.stableFrames = 0;
@@ -1538,25 +1645,35 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
         state.lastTotalSize = totalSize;
       }
 
-      if (
-        (elapsed >= LIVE_END_PIN_MIN_MS && state.stableFrames >= LIVE_END_PIN_STABLE_FRAMES) ||
-        elapsed >= LIVE_END_PIN_MAX_MS
-      ) {
+      const stablePlacement =
+        elapsed >= LIVE_END_PIN_MIN_MS && state.stableFrames >= LIVE_END_PIN_STABLE_FRAMES;
+      const fallbackElapsed =
+        state.fallbackStartedAt > 0 ? performance.now() - state.fallbackStartedAt : 0;
+
+      if (stablePlacement || (state.fallbackStartedAt > 0 && fallbackElapsed >= 500)) {
         if (!firstStableBottomLoggedRef.current) {
           firstStableBottomLoggedRef.current = true;
-          perfLog('room-timeline.first-stable-bottom', {
-            roomId: room.roomId,
+          traceTimeline('room-timeline.first-stable-bottom', {
             openMode: roomOpenMode,
             elapsedMs: Math.round(elapsed),
             renderedRowCount: timelineRows.length,
             linkedEventCount: eventsLength,
             loadedAtEnd,
-            timedOut: elapsed >= LIVE_END_PIN_MAX_MS,
+            timedOut: state.fallbackStartedAt > 0,
+            confirmed: bottomConfirmed,
           });
         }
         cancelLiveEndPin();
-        setAtBottomState(true);
+        setAtBottomState(bottomConfirmed);
         return;
+      }
+
+      if (elapsed >= LIVE_END_PIN_MAX_MS && state.fallbackStartedAt === 0) {
+        state.fallbackStartedAt = performance.now();
+        virtualizer.scrollToIndex(Math.max(0, timelineRows.length - 1), {
+          align: 'end',
+          behavior: 'auto',
+        });
       }
 
       animationFrame = window.requestAnimationFrame(pinLiveEnd);
@@ -1571,13 +1688,13 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
     cancelLiveEndPin,
     eventsLength,
     loadedAtEnd,
-    room.roomId,
     roomOpenMode,
     setAtBottomState,
     timelineRows.length,
     virtualItems,
     virtualizer,
     virtualizer.range,
+    traceTimeline,
   ]);
 
   useEffect(() => {
@@ -1691,6 +1808,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
   useLayoutEffect(() => {
     const scrollEl = scrollRef.current;
     if (!scrollEl || eventId) return;
+    if (shouldOpenAtUnread) return;
     if (shouldRestoreSavedViewport && savedViewport && !savedViewport.atBottom) {
       return;
     }
@@ -1700,7 +1818,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
       scrollToBottom(scrollEl);
       return;
     }
-  }, [eventId, savedViewport, shouldRestoreSavedViewport]);
+  }, [eventId, savedViewport, shouldOpenAtUnread, shouldRestoreSavedViewport]);
 
   // if live timeline is linked and unreadInfo change
   // Scroll to last read message
@@ -1717,6 +1835,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
           align: 'start',
           stopInView: true,
         });
+        initialScrollPlacedRef.current = true;
       }
     }
   }, [room, unreadInfo, scrollToItem]);
@@ -1787,7 +1906,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
     latestTimelineRequestRef.current = requestId;
     startLiveEndPin();
     pendingVirtualAnchorRef.current = undefined;
-    pendingVirtualAnchorScrollTopRef.current = undefined;
+    pendingVirtualAnchorGenerationRef.current = undefined;
     restoringSavedViewportRef.current = false;
     lastKnownVirtualAnchorRef.current = undefined;
     setAtBottomState(true);
@@ -1809,17 +1928,15 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
         timelineHasEvents(nextTimeline) ? nextTimeline : getInitialTimeline(room, PAGINATION_LIMIT)
       );
       liveTimelineResetPendingRef.current = false;
-      perfLog('room-timeline.jump-latest', {
-        roomId: room.roomId,
+      traceTimeline('room-timeline.jump-latest', {
         eventCount: getTimelinesEventsCount(nextTimeline.linkedTimelines),
         fromLiveTimeline: nextTimeline.linkedTimelines.includes(getLiveTimeline(room)),
       });
     } catch (err) {
       if (!alive() || latestTimelineRequestRef.current !== requestId) return;
       setTimeline(getInitialTimeline(room, PAGINATION_LIMIT));
-      perfLog('room-timeline.jump-latest-failed', {
-        roomId: room.roomId,
-        error: err instanceof Error ? err.message : String(err),
+      traceTimeline('room-timeline.jump-latest-failed', {
+        errorType: err instanceof Error ? err.name : typeof err,
       });
     } finally {
       if (alive() && latestTimelineRequestRef.current === requestId) {
@@ -2799,9 +2916,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
     if (perfStart) {
       const duration = performance.now() - perfStart;
       if (duration > 8) {
-        perfLog('room-timeline.slow-event-render', {
-          roomId: room.roomId,
-          eventId: mEventId,
+        traceTimeline('room-timeline.slow-event-render', {
           eventType: mEvent.getType(),
           msgtype: mEvent.getContent().msgtype,
           item,

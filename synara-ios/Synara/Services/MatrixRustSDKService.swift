@@ -2371,7 +2371,14 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
     }
 
     func loadInitialTimeline(roomID: String, focusedEventID: String?) async -> TimelineLoadOutcome {
-        await loadTimeline(roomID: roomID, focusedEventID: focusedEventID, pageSize: 20, enrichProfiles: false)
+        if let focusedEventID, focusedEventID.isEmpty == false {
+            invalidateTimelineCache(roomID: roomID, focus: .event(focusedEventID))
+        } else {
+            // A cached live Timeline retains every page previously loaded into it. Reusing
+            // it on each room open makes the initial snapshot grow without bound.
+            invalidateTimelineCache(roomID: roomID, focus: .live)
+        }
+        return await loadTimeline(roomID: roomID, focusedEventID: focusedEventID, pageSize: 20, enrichProfiles: false)
     }
 
     func loadLatestTimeline(roomID: String) async -> TimelineLoadOutcome {
@@ -2498,7 +2505,6 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
                         }
                     }
 
-                    _ = try? await timeline.paginateBackwards(numEvents: 20)
                     if focusedEventID != nil || focus != .live {
                         await Self.paginateFocusedTimelineForwardToLiveEnd(timeline)
                     }

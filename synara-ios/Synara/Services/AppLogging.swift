@@ -9,6 +9,7 @@ enum LogCategory: String, CaseIterable {
     case routing
     case settings
     case sync
+    case timeline
 }
 
 protocol LoggingServicing: Sendable {
