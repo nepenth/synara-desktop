@@ -5,7 +5,8 @@ import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
-const readText = (relativePath) => readFileSync(path.join(root, relativePath), "utf8");
+const readText = (relativePath) =>
+  readFileSync(path.join(root, relativePath), "utf8");
 const writeText = (relativePath, contents) =>
   writeFileSync(path.join(root, relativePath), contents, "utf8");
 
@@ -25,13 +26,17 @@ Marketing version bumps reset pkgrel to 1 unless --pkgrel is supplied.
 const args = process.argv.slice(2);
 const version = args.find((arg) => !arg.startsWith("--"));
 const iosBuildFlagIndex = args.indexOf("--ios-build");
-const iosBuild = iosBuildFlagIndex >= 0 ? args[iosBuildFlagIndex + 1] : undefined;
+const iosBuild =
+  iosBuildFlagIndex >= 0 ? args[iosBuildFlagIndex + 1] : undefined;
 const pkgrelFlagIndex = args.indexOf("--pkgrel");
 const pkgrelExplicitValue =
-  pkgrelFlagIndex >= 0 && args[pkgrelFlagIndex + 1] && !args[pkgrelFlagIndex + 1].startsWith("--")
+  pkgrelFlagIndex >= 0 &&
+  args[pkgrelFlagIndex + 1] &&
+  !args[pkgrelFlagIndex + 1].startsWith("--")
     ? args[pkgrelFlagIndex + 1]
     : undefined;
-const pkgrelAutoIncrement = pkgrelFlagIndex >= 0 && pkgrelExplicitValue === undefined;
+const pkgrelAutoIncrement =
+  pkgrelFlagIndex >= 0 && pkgrelExplicitValue === undefined;
 
 if (!version || !/^\d+\.\d+\.\d+/.test(version)) {
   console.error(usage);
@@ -99,7 +104,13 @@ writeText(
   )
 );
 
-execSync(`npm version ${version} --no-git-tag-version`, { cwd: root, stdio: "inherit" });
+const rootPackageVersion = JSON.parse(readText("package.json")).version;
+if (rootPackageVersion !== version) {
+  execSync(`npm version ${version} --no-git-tag-version`, {
+    cwd: root,
+    stdio: "inherit",
+  });
+}
 execSync(`node scripts/update-version.js ${version}`, {
   cwd: path.join(root, "synara"),
   stdio: "inherit",
@@ -125,7 +136,10 @@ writeText(iosProjectPath, iosProject);
 
 const iosPbxprojPath = "synara-ios/Synara.xcodeproj/project.pbxproj";
 let iosPbxproj = readText(iosPbxprojPath);
-iosPbxproj = iosPbxproj.replaceAll(/MARKETING_VERSION = [^;]+;/g, `MARKETING_VERSION = ${version};`);
+iosPbxproj = iosPbxproj.replaceAll(
+  /MARKETING_VERSION = [^;]+;/g,
+  `MARKETING_VERSION = ${version};`
+);
 if (iosBuild) {
   iosPbxproj = iosPbxproj.replaceAll(
     /CURRENT_PROJECT_VERSION = [^;]+;/g,
@@ -144,6 +158,12 @@ writeText(
     `pkgrel=${nextPkgrel}`
   )
 );
+
+// Refresh the root package entry in Cargo.lock before consistency validation.
+execFileSync("cargo", ["check", "--quiet"], {
+  cwd: path.join(root, "src-tauri"),
+  stdio: "inherit",
+});
 
 execFileSync("node", ["scripts/check-version-consistency.mjs"], {
   cwd: root,
