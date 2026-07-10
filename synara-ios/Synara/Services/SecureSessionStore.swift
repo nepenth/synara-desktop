@@ -57,11 +57,22 @@ final class KeychainSecureSessionStore: SecureSessionStoring {
             do {
                 try save(data, accessGroup: sharedAccessGroup)
                 try? deleteItem(accessGroup: nil)
+                // Some Keychain implementations let the unscoped cleanup query
+                // match the shared item too. Verify and restore it without putting
+                // the existing fallback at risk before the preferred write succeeds.
+                if try loadData(accessGroup: sharedAccessGroup) == nil {
+                    try save(data, accessGroup: sharedAccessGroup)
+                }
                 return
             } catch SecureSessionStoreError.keychainFailure(let status)
                 where Self.shouldIgnoreAccessGroupFailure(status: status, accessGroup: sharedAccessGroup) {
                 try save(data, accessGroup: nil)
                 return
+            } catch {
+                // Preserve a usable fallback if the preferred store fails for a
+                // reason other than an unavailable entitlement.
+                try? save(data, accessGroup: nil)
+                throw error
             }
         }
 

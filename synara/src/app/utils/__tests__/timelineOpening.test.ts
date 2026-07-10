@@ -9,6 +9,8 @@ import {
   getRoomUnreadInfo,
   getRoomUnreadInfoInTimelineWindow,
   getTimelineEndWindow,
+  getTimelineFocusRange,
+  getTimelineRangeAfterPagination,
   hasUnreadForInitialScroll,
   canRestoreViewportFromInitialTimeline,
   shouldGateViewportRestoreOnUnread,
@@ -19,7 +21,7 @@ import {
 
 type TimelineStub = EventTimeline & {
   id: string;
-  events: MatrixEvent[];
+  stubEvents: MatrixEvent[];
   backward?: TimelineStub;
   forward?: TimelineStub;
 };
@@ -32,15 +34,17 @@ const event = (id: string): MatrixEvent =>
 const timeline = (id: string, eventIds: string[]): TimelineStub => {
   const stub = {
     id,
-    events: eventIds.map(event),
-    getEvents() {
-      return this.events;
+    stubEvents: eventIds.map(event),
+    backward: undefined as TimelineStub | undefined,
+    forward: undefined as TimelineStub | undefined,
+    getEvents(): MatrixEvent[] {
+      return stub.stubEvents;
     },
-    getNeighbouringTimeline(direction: Direction) {
-      return direction === Direction.Backward ? this.backward ?? null : this.forward ?? null;
+    getNeighbouringTimeline(direction: Direction): EventTimeline | null {
+      return direction === Direction.Backward ? stub.backward ?? null : stub.forward ?? null;
     },
   };
-  return stub as TimelineStub;
+  return stub as unknown as TimelineStub;
 };
 
 const link = (...timelines: TimelineStub[]): TimelineStub[] => {
@@ -72,7 +76,7 @@ const roomWithTimelines = ({
       getLiveTimeline: () => live,
       getTimelineForEvent: (eventId: string) => eventTimelines[eventId] ?? null,
     }),
-  } as Room);
+  } as unknown as Room);
 
 test('timeline opening helpers create bounded live-end windows', () => {
   const [older, live] = link(timeline('older', ['$1', '$2']), timeline('live', ['$3', '$4']));
@@ -89,6 +93,63 @@ test('timeline opening helpers create bounded live-end windows', () => {
     linkedTimelines: [older, live],
     range: { start: 1, end: 4 },
   });
+});
+
+test('backward pagination keeps the newly exposed history edge when the range is capped', () => {
+  assert.deepEqual(
+    getTimelineRangeAfterPagination({
+      currentRange: { start: 4_850, end: 5_050 },
+      totalEvents: 5_100,
+      offsetRange: 50,
+      backwards: true,
+      limit: 80,
+      maxRows: 200,
+    }),
+    { start: 4_820, end: 5_020 }
+  );
+});
+
+test('forward pagination advances a capped range toward newer history', () => {
+  assert.deepEqual(
+    getTimelineRangeAfterPagination({
+      currentRange: { start: 4_820, end: 5_020 },
+      totalEvents: 5_100,
+      offsetRange: 0,
+      backwards: false,
+      limit: 80,
+      maxRows: 200,
+    }),
+    { start: 4_900, end: 5_100 }
+  );
+});
+
+test('pagination offsets preserve existing event coordinates after a prepend', () => {
+  const range = getTimelineRangeAfterPagination({
+    currentRange: { start: 4_920, end: 5_000 },
+    totalEvents: 5_050,
+    offsetRange: 50,
+    backwards: true,
+    limit: 80,
+    maxRows: 200,
+  });
+
+  assert.deepEqual(range, { start: 4_890, end: 5_050 });
+  assert.ok(4_950 >= range.start && 4_950 < range.end, 'shifted visible anchor stays rendered');
+});
+
+test('focused timeline ranges keep targets rendered and clamp at both ends', () => {
+  assert.deepEqual(
+    getTimelineFocusRange({ targetIndex: 500, totalEvents: 1_000, contextLimit: 80, maxRows: 200 }),
+    { start: 420, end: 581 }
+  );
+  assert.deepEqual(
+    getTimelineFocusRange({ targetIndex: 2, totalEvents: 1_000, contextLimit: 80, maxRows: 100 }),
+    { start: 0, end: 83 }
+  );
+  assert.deepEqual(
+    getTimelineFocusRange({ targetIndex: 999, totalEvents: 1_000, contextLimit: 80, maxRows: 100 }),
+    { start: 919, end: 1_000 }
+  );
 });
 
 test('timeline opening helpers represent empty and non-empty timelines', () => {

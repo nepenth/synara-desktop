@@ -8,11 +8,11 @@ release workflow behavior.
 
 ## Release Lanes
 
-| Lane | Purpose | Client-visible update? |
-|---|---|---:|
-| `main` | Integration branch. Runs normal CI on push and PR. | No |
-| `release/vX.Y.Z` | Release candidate branch. Runs CI and desktop package smoke on push. | No |
-| Published GitHub Release `vX.Y.Z` | Production artifact publication and updater metadata. | Yes, after assets and `latest.json` are uploaded |
+| Lane                              | Purpose                                                              |                           Client-visible update? |
+| --------------------------------- | -------------------------------------------------------------------- | -----------------------------------------------: |
+| `main`                            | Integration branch. Runs normal CI on push and PR.                   |                                               No |
+| `release/vX.Y.Z`                  | Release candidate branch. Runs CI and desktop package smoke on push. |                                               No |
+| Published GitHub Release `vX.Y.Z` | Production artifact publication and updater metadata.                | Yes, after assets and `latest.json` are uploaded |
 
 Do not publish a GitHub Release until the release branch gates, desktop package
 smoke, and human smoke checklist have passed.
@@ -171,8 +171,9 @@ publication. Manual commands are acceptable only for local smoke packages.
 ## Current Release Constraints
 
 - Desktop external-link opening is a P0 smoke gate for macOS and Linux.
-- Timeline/session-history behavior has a shipped mitigation but still needs
-  daily-use and checklist evidence.
+- Timeline/session-history uses bounded rendering and single-owner placement but
+  still needs daily-use evidence from `docs/timeline-diagnostics.md` before the
+  release candidate is promoted.
 - GitHub-release updater key material is configured. Production workflow proof
   now splits by platform: macOS uses Tauri updater metadata, while Linux uses
   the GitHub Release-backed pacman repo.
