@@ -3,6 +3,65 @@ import XCTest
 @testable import Synara
 
 final class TimelineServiceTests: XCTestCase {
+    func testRoomTimelineScrollPolicyOnlyFollowsAnEstablishedLiveEnd() {
+        XCTAssertTrue(
+            RoomTimelineScrollPolicy.shouldFollowLiveAppend(
+                position: .placingInitial,
+                isBottomVisible: false,
+                focusedEventID: nil
+            )
+        )
+        XCTAssertTrue(
+            RoomTimelineScrollPolicy.shouldFollowLiveAppend(
+                position: .followingLive,
+                isBottomVisible: false,
+                focusedEventID: nil
+            )
+        )
+        XCTAssertTrue(
+            RoomTimelineScrollPolicy.shouldFollowLiveAppend(
+                position: .readingHistory,
+                isBottomVisible: true,
+                focusedEventID: nil
+            )
+        )
+        XCTAssertFalse(
+            RoomTimelineScrollPolicy.shouldFollowLiveAppend(
+                position: .readingHistory,
+                isBottomVisible: false,
+                focusedEventID: nil
+            )
+        )
+        XCTAssertFalse(
+            RoomTimelineScrollPolicy.shouldFollowLiveAppend(
+                position: .focusedEvent,
+                isBottomVisible: true,
+                focusedEventID: "$focused"
+            )
+        )
+    }
+
+    func testRoomTimelineSnapshotPolicyPreservesLastGoodRowsAcrossTransientEmptyUpdates() {
+        XCTAssertTrue(
+            RoomTimelineSnapshotPolicy.shouldPreserveCurrentSnapshot(
+                currentItemCount: 40,
+                incomingItemCount: 0
+            )
+        )
+        XCTAssertFalse(
+            RoomTimelineSnapshotPolicy.shouldPreserveCurrentSnapshot(
+                currentItemCount: 0,
+                incomingItemCount: 0
+            )
+        )
+        XCTAssertFalse(
+            RoomTimelineSnapshotPolicy.shouldPreserveCurrentSnapshot(
+                currentItemCount: 40,
+                incomingItemCount: 1
+            )
+        )
+    }
+
     func testRoomTimelinePaginationPolicyRequiresUserInteraction() {
         XCTAssertFalse(
             RoomTimelinePaginationPolicy.shouldLoadOlderHistory(

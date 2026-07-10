@@ -18,6 +18,89 @@ export type TimelineWindow = {
   range: TimelineRange;
 };
 
+export const getTimelineRangeAfterPagination = ({
+  currentRange,
+  totalEvents,
+  offsetRange,
+  backwards,
+  limit,
+  maxRows,
+}: {
+  currentRange: TimelineRange;
+  totalEvents: number;
+  offsetRange: number;
+  backwards: boolean;
+  limit: number;
+  maxRows: number;
+}): TimelineRange => {
+  const boundedTotal = Math.max(0, totalEvents);
+  const shiftedStart = currentRange.start + Math.max(0, offsetRange);
+  const shiftedEnd = currentRange.end + Math.max(0, offsetRange);
+  const expanded = backwards
+    ? {
+        start: shiftedStart - Math.max(0, limit),
+        end: shiftedEnd,
+      }
+    : {
+        start: shiftedStart,
+        end: shiftedEnd + Math.max(0, limit),
+      };
+  const normalized = {
+    start: Math.max(0, Math.min(expanded.start, boundedTotal)),
+    end: Math.max(0, Math.min(expanded.end, boundedTotal)),
+  };
+  if (normalized.end < normalized.start) {
+    normalized.start = normalized.end;
+  }
+
+  const boundedMaxRows = Math.max(1, maxRows);
+  if (normalized.end - normalized.start <= boundedMaxRows) {
+    return normalized;
+  }
+
+  // Keep the edge the user is moving toward. The visible event anchor is
+  // restored separately after rows are inserted or removed.
+  if (backwards) {
+    return {
+      start: normalized.start,
+      end: Math.min(boundedTotal, normalized.start + boundedMaxRows),
+    };
+  }
+  return {
+    start: Math.max(0, normalized.end - boundedMaxRows),
+    end: normalized.end,
+  };
+};
+
+export const getTimelineFocusRange = ({
+  targetIndex,
+  totalEvents,
+  contextLimit,
+  maxRows,
+}: {
+  targetIndex: number;
+  totalEvents: number;
+  contextLimit: number;
+  maxRows: number;
+}): TimelineRange => {
+  const boundedTotal = Math.max(0, totalEvents);
+  const boundedTarget = Math.max(0, Math.min(targetIndex, Math.max(0, boundedTotal - 1)));
+  const boundedContext = Math.max(0, contextLimit);
+  const start = Math.max(0, boundedTarget - boundedContext);
+  const end = Math.min(boundedTotal, boundedTarget + boundedContext + 1);
+  if (end - start <= Math.max(1, maxRows)) {
+    return { start, end };
+  }
+
+  const halfWindow = Math.floor(Math.max(1, maxRows) / 2);
+  const centeredStart = Math.max(0, boundedTarget - halfWindow);
+  const centeredEnd = Math.min(boundedTotal, centeredStart + Math.max(1, maxRows));
+  return {
+    start: Math.max(0, centeredEnd - Math.max(1, maxRows)),
+    end: centeredEnd,
+  };
+};
+
 type TimelineViewportAnchorSnapshot = {
   eventId?: string;
 };
@@ -141,10 +224,9 @@ export const timelineHasEvents = (timeline: TimelineWindow): boolean =>
  * window. Markers that sit in the live chain but outside that window must still
  * expose Jump to Unread so the user can recover without walking history on open.
  *
- * TODO(timeline-virtualization): authoritative range rendering (true SDK window
- * without separate jump loaders) is intentionally out of scope; large-history
- * rooms still rely on Jump to Unread / Jump to Latest plus perfLog diagnostics.
- * See docs/timeline-open-focus-contract.md.
+ * Bounded row rendering uses this range as the authoritative visible SDK window.
+ * Markers outside the window remain explicit navigation targets rather than
+ * triggering an unbounded history walk during room open.
  */
 export const shouldShowJumpToUnread = (
   unreadInfo: RoomUnreadInfo | undefined,
