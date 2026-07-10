@@ -16,11 +16,17 @@ if (!version) {
 const root = path.resolve(__dirname, '..');
 const newVersionTag = `v${version}`;
 
-// Update package.json + package-lock.json safely
-execSync(`npm version ${version} --no-git-tag-version`, {
-  cwd: root,
-  stdio: 'inherit',
-});
+// Update package.json + package-lock.json safely. Re-running a release bump to
+// adjust iOS build metadata must remain idempotent.
+const currentPackageVersion = JSON.parse(
+  fs.readFileSync(path.join(root, 'package.json'), 'utf8')
+).version;
+if (currentPackageVersion !== version) {
+  execSync(`npm version ${version} --no-git-tag-version`, {
+    cwd: root,
+    stdio: 'inherit',
+  });
+}
 
 console.log(`Updated package.json and package-lock.json → ${version}`);
 
