@@ -144,6 +144,10 @@ export type TimelineBuildOptions = {
   readUptoEventId?: string;
   unreadAnchorEventId?: string;
   currentUserId?: string | null;
+  eventRange?: {
+    start: number;
+    end: number;
+  };
 };
 
 export type TimelineRowBuildContext<TEvt extends TimelineRowBuildEvent> = {
@@ -227,18 +231,28 @@ const getTimelineRevisionToken = <
   TTimeline extends TimelineRowBuildTimeline<TimelineRowBuildEvent>
 >(
   linkedTimelines: TTimeline[],
-  startAbsoluteIndex = 0
+  startAbsoluteIndex = 0,
+  endAbsoluteIndex?: number
 ): string => {
   let currentIndex = 0;
   const timelineTokens: string[] = [];
+  const boundedEnd =
+    typeof endAbsoluteIndex === 'number'
+      ? Math.max(startAbsoluteIndex, endAbsoluteIndex)
+      : undefined;
 
   for (const timeline of linkedTimelines) {
     const events = timeline.getEvents();
     const timelineStart = currentIndex;
     const timelineEnd = currentIndex + events.length;
-    if (startAbsoluteIndex < timelineEnd) {
+    if (
+      startAbsoluteIndex < timelineEnd &&
+      (boundedEnd === undefined || timelineStart < boundedEnd)
+    ) {
       const localStart = Math.max(0, startAbsoluteIndex - timelineStart);
-      const scannedEvents = events.slice(localStart);
+      const localEnd =
+        boundedEnd === undefined ? events.length : Math.max(localStart, boundedEnd - timelineStart);
+      const scannedEvents = events.slice(localStart, localEnd);
       timelineRowBuildInstrumentation.revisionTokenEventsScanned += scannedEvents.length;
       timelineTokens.push(scannedEvents.map(getEventRevisionToken).join(','));
     }
@@ -298,8 +312,19 @@ const getTimelineBuildOptionsKey = (options: TimelineBuildOptions): string =>
     options.readUptoEventId ?? '',
     options.unreadAnchorEventId ?? '',
     options.currentUserId ?? '',
+    options.eventRange ? `${options.eventRange.start}:${options.eventRange.end}` : '',
     [...options.ignoredUsersSet].sort().join(','),
   ].join('|');
+
+const getNormalizedEventRange = (
+  options: TimelineBuildOptions,
+  eventsLength: number
+): { start: number; end: number } => {
+  const start = Math.max(0, Math.min(options.eventRange?.start ?? 0, eventsLength));
+  const requestedEnd = options.eventRange?.end ?? eventsLength;
+  const end = Math.max(start, Math.min(requestedEnd, eventsLength));
+  return { start, end };
+};
 
 export const createTimelineBuildFingerprint = <
   TTimeline extends TimelineRowBuildTimeline<TimelineRowBuildEvent>
@@ -307,12 +332,16 @@ export const createTimelineBuildFingerprint = <
   linkedTimelines: TTimeline[],
   options: TimelineBuildOptions,
   getTimelinesEventsCount: (timelines: TTimeline[]) => number
-): TimelineBuildFingerprint => ({
-  timelineToken: getTimelineToken(linkedTimelines),
-  revisionToken: getTimelineRevisionToken(linkedTimelines),
-  eventsLength: getTimelinesEventsCount(linkedTimelines),
-  optionsKey: getTimelineBuildOptionsKey(options),
-});
+): TimelineBuildFingerprint => {
+  const eventsLength = getTimelinesEventsCount(linkedTimelines);
+  const range = getNormalizedEventRange(options, eventsLength);
+  return {
+    timelineToken: getTimelineToken(linkedTimelines),
+    revisionToken: getTimelineRevisionToken(linkedTimelines, range.start, range.end),
+    eventsLength,
+    optionsKey: getTimelineBuildOptionsKey(options),
+  };
+};
 
 const isLiveEndAppendToken = (previousToken: string, nextToken: string): boolean => {
   const previousCounts = previousToken.split(':').map((value) => Number(value));
@@ -483,17 +512,21 @@ const appendTimelineRowsFromIndex = <
   rows: TRow[];
   context: TimelineRowBuildContext<TEvt>;
   startAbsoluteIndex: number;
+  endAbsoluteIndex?: number;
   deps: TimelineRowBuildDeps<TEvt, TTimeline, TRow>;
 }): TimelineRowBuildContext<TEvt> => {
-  const { linkedTimelines, options, rows, deps, startAbsoluteIndex } = args;
+  const { linkedTimelines, options, rows, deps, startAbsoluteIndex, endAbsoluteIndex } = args;
   let context = args.context;
   let absoluteIndex = 0;
 
-  linkedTimelines.forEach((eventTimeline) => {
-    eventTimeline.getEvents().forEach((mEvent) => {
+  for (const eventTimeline of linkedTimelines) {
+    for (const mEvent of eventTimeline.getEvents()) {
+      if (typeof endAbsoluteIndex === 'number' && absoluteIndex >= endAbsoluteIndex) {
+        return context;
+      }
       if (absoluteIndex < startAbsoluteIndex) {
         absoluteIndex += 1;
-        return;
+        continue;
       }
 
       recordTimelineEventVisit();
@@ -507,8 +540,8 @@ const appendTimelineRowsFromIndex = <
         deps,
       });
       absoluteIndex = context.absoluteIndex;
-    });
-  });
+    }
+  }
 
   return context;
 };
@@ -526,6 +559,8 @@ export const buildTimelineRows = <
 
   const rows: TRow[] = [];
   const { showIntro, showBackLoader, showFrontLoader, compact } = options;
+  const eventsLength = deps.getTimelinesEventsCount(linkedTimelines);
+  const range = getNormalizedEventRange(options, eventsLength);
 
   if (showIntro) {
     rows.push({ kind: 'intro', key: 'intro' } as TRow);
@@ -545,11 +580,16 @@ export const buildTimelineRows = <
     options,
     rows,
     context: {
+      prevEvent:
+        range.start > 0
+          ? getEventAtAbsoluteIndex<TEvt, TTimeline>(linkedTimelines, range.start - 1)
+          : undefined,
       isPrevRendered: false,
       pendingNewDivider: false,
-      absoluteIndex: 0,
+      absoluteIndex: range.start,
     },
-    startAbsoluteIndex: 0,
+    startAbsoluteIndex: range.start,
+    endAbsoluteIndex: range.end,
     deps,
   });
 
@@ -621,6 +661,8 @@ export const buildTimelineRowsWithState = <
   const eventsLength = deps.getTimelinesEventsCount(linkedTimelines);
   const timelineToken = getTimelineToken(linkedTimelines);
   const optionsKey = getTimelineBuildOptionsKey(options);
+  const range = getNormalizedEventRange(options, eventsLength);
+  const hasBoundedEventRange = Boolean(options.eventRange);
   const cheapFingerprint = {
     timelineToken,
     eventsLength,
@@ -635,7 +677,7 @@ export const buildTimelineRowsWithState = <
       previousFingerprint.eventsLength === eventsLength &&
       previousFingerprint.timelineToken === timelineToken
     ) {
-      const revisionToken = getTimelineRevisionToken(linkedTimelines);
+      const revisionToken = getTimelineRevisionToken(linkedTimelines, range.start, range.end);
       const fingerprint: TimelineBuildFingerprint = {
         ...cheapFingerprint,
         revisionToken,
@@ -657,6 +699,7 @@ export const buildTimelineRowsWithState = <
     };
 
     if (
+      !hasBoundedEventRange &&
       canIncrementallyAppendRows(previous, candidateFingerprint) &&
       eventsLength > previousFingerprint.eventsLength &&
       verifyIncrementalAnchor(linkedTimelines, previous)
@@ -707,7 +750,7 @@ export const buildTimelineRowsWithState = <
     }
   }
 
-  const revisionToken = getTimelineRevisionToken(linkedTimelines);
+  const revisionToken = getTimelineRevisionToken(linkedTimelines, range.start, range.end);
   const fingerprint: TimelineBuildFingerprint = {
     ...cheapFingerprint,
     revisionToken,

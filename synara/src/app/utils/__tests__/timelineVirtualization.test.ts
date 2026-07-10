@@ -13,6 +13,7 @@ import {
   shouldPaginateVirtualRange,
   TimelineBuildOptions,
   TimelineBuildRow,
+  TimelineDividerRow,
   TimelineRowBuildEvent,
   TimelineRowBuildTimeline,
   TimelineVirtualRow,
@@ -210,6 +211,128 @@ test('incremental timeline row build visits at most 10% of events on live append
     }`
   );
   assert.equal(appended.rows.filter((row) => row.kind === 'event').length, eventCount + 1);
+});
+
+test('timeline row build respects bounded event ranges for large rooms', () => {
+  const eventCount = 5_000;
+  const timeline = createHarnessTimeline(eventCount);
+
+  resetTimelineRowBuildInstrumentation();
+  const built = buildTimelineRowsWithState(
+    [timeline],
+    {
+      ...harnessBuildOptions,
+      eventRange: { start: 4_920, end: 5_000 },
+    },
+    harnessBuildDeps
+  );
+  const instrumentation = getTimelineRowBuildInstrumentation();
+  const eventRows = built.rows.filter((row) => row.kind === 'event');
+
+  assert.equal(built.strategy, 'full');
+  assert.equal(instrumentation.eventsVisited, 80);
+  assert.equal(instrumentation.revisionTokenEventsScanned, 80);
+  assert.equal(eventRows.length, 80);
+  assert.equal(eventRows[0]?.eventIndex, 4_920);
+  assert.equal(eventRows[eventRows.length - 1]?.eventIndex, 4_999);
+});
+
+test('bounded timeline row build does not incrementally append outside the rendered range', () => {
+  const timeline = createHarnessTimeline(120);
+  const options: TimelineBuildOptions = {
+    ...harnessBuildOptions,
+    eventRange: { start: 40, end: 80 },
+  };
+  const initial = buildTimelineRowsWithState([timeline], options, harnessBuildDeps);
+
+  timeline.events.push(createHarnessEvent(120));
+
+  resetTimelineRowBuildInstrumentation();
+  const rebuilt = buildTimelineRowsWithState([timeline], options, harnessBuildDeps, initial.state);
+  const instrumentation = getTimelineRowBuildInstrumentation();
+  const eventRows = rebuilt.rows.filter((row) => row.kind === 'event');
+
+  assert.equal(rebuilt.strategy, 'full');
+  assert.equal(instrumentation.eventsVisited, 40);
+  assert.equal(eventRows.length, 40);
+  assert.equal(eventRows[0]?.eventIndex, 40);
+  assert.equal(eventRows[eventRows.length - 1]?.eventIndex, 79);
+});
+
+test('bounded timeline rows preserve unread and day-divider context at the range boundary', () => {
+  const timeline = createHarnessTimeline(4);
+  timeline.events[1] = createHarnessEvent(1, {
+    id: '$read-marker',
+    sender: '@bob:example.org',
+    ts: 1_700_000_000_000,
+  });
+  timeline.events[2] = createHarnessEvent(2, {
+    sender: '@alice:example.org',
+    ts: 1_700_086_400_000,
+  });
+  timeline.events[3] = createHarnessEvent(3, {
+    sender: '@alice:example.org',
+    ts: 1_700_086_460_000,
+  });
+
+  const { rows } = buildTimelineRows(
+    [timeline],
+    {
+      ...harnessBuildOptions,
+      eventRange: { start: 2, end: 4 },
+      readUptoEventId: '$read-marker',
+      unreadAnchorEventId: '$read-marker',
+      currentUserId: '@bob:example.org',
+    },
+    harnessBuildDeps
+  );
+  const buildRows = rows as TimelineBuildRow[];
+
+  assert.deepEqual(
+    buildRows
+      .filter((row): row is TimelineDividerRow => row.kind === 'divider')
+      .map((row) => row.divider),
+    ['client-unread', 'day']
+  );
+});
+
+test('bounded timeline rows skip relation events without changing absolute message indexes', () => {
+  const timeline = createHarnessTimeline(6);
+  timeline.events[3] = createHarnessEvent(3, { type: 'm.reaction' });
+  timeline.events[4] = createHarnessEvent(4, { type: 'm.room.message.edit' });
+  const deps = {
+    ...harnessBuildDeps,
+    isReactionOrEditEvent: (item: HarnessEvent) =>
+      item.type === 'm.reaction' || item.type === 'm.room.message.edit',
+  };
+
+  const { rows } = buildTimelineRows(
+    [timeline],
+    { ...harnessBuildOptions, eventRange: { start: 3, end: 6 } },
+    deps
+  );
+  const eventRows = rows.filter((row) => row.kind === 'event');
+
+  assert.deepEqual(
+    eventRows.map((row) => row.eventIndex),
+    [5]
+  );
+  assert.deepEqual(
+    eventRows.map((row) => row.eventId),
+    ['$event-5']
+  );
+});
+
+test('first message in a bounded range never collapses into an unrendered predecessor', () => {
+  const timeline = createHarnessTimeline(3);
+  const { rows } = buildTimelineRows(
+    [timeline],
+    { ...harnessBuildOptions, eventRange: { start: 1, end: 3 } },
+    harnessBuildDeps
+  );
+  const eventRows = rows.filter((row) => row.kind === 'event');
+
+  assert.equal(eventRows[0]?.collapse, false);
 });
 
 test('incremental timeline row build preserves row order for appended events', () => {

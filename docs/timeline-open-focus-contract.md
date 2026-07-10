@@ -37,19 +37,19 @@ over scroll position.
 
 ## Initial Open Matrix
 
-| Scenario | Desktop Behavior | iOS Behavior | Required Outcome |
-|---|---|---|---|
-| Fully read room, no saved viewport | Open latest live window and pin bottom. | Open live timeline and scroll bottom. | User sees the live end without history traversal. |
-| Fully read room, saved bottom viewport | Restore bottom/live-end state. | Open live timeline and scroll bottom. | User sees the live end. |
-| Fully read room, fresh saved historical viewport | Restore visible event anchor without treating it as unread. | N/A until iOS persists room viewport anchors. | Desktop returns to recent local reading position; iOS stays live until persisted viewport exists. |
-| Fully read room, stale saved historical viewport | Ignore historical anchor and open live end. | Open live timeline and scroll bottom. | Old history cannot hijack room open. |
-| Room with unread notification count or unread anchor | Ignore saved historical viewport; open around unread/read-marker context when available. | Use `m.fully_read` for initial focused load only. | User lands near unread context and sees jump-to-latest when not at live end. |
-| Room with one new event after old local history visit | Ignore old local history anchor. | Use read marker for initial context only, then live updates stream live. | Client does not scroll through days-old history before showing the relevant new/live area. |
-| Read marker or notification state lags the newest server event | Do not restore unrelated old history; expose jump-latest when not confidently at live end. | Keep read-marker focus initial-only and stream live updates after mount. | Stale sync state cannot make old local viewport memory look current. |
-| Explicit event route | Open event-focused context and highlight target. | Open event-focused context and highlight target. | Route target wins over unread, read marker, and saved viewport. |
-| Jump latest from historical/focused window | Fetch/rebind latest timeline window, then pin bottom. | Load latest timeline and restart live stream focus. | User reaches true current live end. |
-| Timeline reset or sync gap while pinned | Reattach to new live tail and continue following bottom. | Live timeline stream remains live-focused unless route is explicit event/thread. | No blank viewport or stale focused stream. |
-| Timeline reset or sync gap while reading history | Preserve current visible anchor if possible. | Preserve current loaded list position where SwiftUI can; show jump-to-latest if no longer at live end. | SDK lifecycle changes do not surprise-scroll the user. |
+| Scenario                                                       | Desktop Behavior                                                                           | iOS Behavior                                                                                           | Required Outcome                                                                                  |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
+| Fully read room, no saved viewport                             | Open latest live window and pin bottom.                                                    | Open live timeline and scroll bottom.                                                                  | User sees the live end without history traversal.                                                 |
+| Fully read room, saved bottom viewport                         | Restore bottom/live-end state.                                                             | Open live timeline and scroll bottom.                                                                  | User sees the live end.                                                                           |
+| Fully read room, fresh saved historical viewport               | Restore visible event anchor without treating it as unread.                                | N/A until iOS persists room viewport anchors.                                                          | Desktop returns to recent local reading position; iOS stays live until persisted viewport exists. |
+| Fully read room, stale saved historical viewport               | Ignore historical anchor and open live end.                                                | Open live timeline and scroll bottom.                                                                  | Old history cannot hijack room open.                                                              |
+| Room with unread notification count or unread anchor           | Ignore saved historical viewport; open around unread/read-marker context when available.   | Use `m.fully_read` for initial focused load only.                                                      | User lands near unread context and sees jump-to-latest when not at live end.                      |
+| Room with one new event after old local history visit          | Ignore old local history anchor.                                                           | Use read marker for initial context only, then live updates stream live.                               | Client does not scroll through days-old history before showing the relevant new/live area.        |
+| Read marker or notification state lags the newest server event | Do not restore unrelated old history; expose jump-latest when not confidently at live end. | Keep read-marker focus initial-only and stream live updates after mount.                               | Stale sync state cannot make old local viewport memory look current.                              |
+| Explicit event route                                           | Open event-focused context and highlight target.                                           | Open event-focused context and highlight target.                                                       | Route target wins over unread, read marker, and saved viewport.                                   |
+| Jump latest from historical/focused window                     | Fetch/rebind latest timeline window, then pin bottom.                                      | Load latest timeline and restart live stream focus.                                                    | User reaches true current live end.                                                               |
+| Timeline reset or sync gap while pinned                        | Reattach to new live tail and continue following bottom.                                   | Live timeline stream remains live-focused unless route is explicit event/thread.                       | No blank viewport or stale focused stream.                                                        |
+| Timeline reset or sync gap while reading history               | Preserve current visible anchor if possible.                                               | Preserve current loaded list position where SwiftUI can; show jump-to-latest if no longer at live end. | SDK lifecycle changes do not surprise-scroll the user.                                            |
 
 ## Desktop Enforcement
 
@@ -74,18 +74,24 @@ over scroll position.
 - Explicit jump-latest uses `getLatestTimeline(...)`.
 - Normal live-end open also refreshes via `getLatestRoomTimeline(...)` when the
   room is pinned to live, without forcing a history walk.
-- Open diagnostics (`room-timeline.open`, `room-timeline.first-stable-bottom`,
-  `room-timeline.live-tail-refresh`) emit through `perfLog` when performance
-  debug is enabled.
+- `TimelineWindow.range` is authoritative for row construction. Linked SDK
+  history may be large, but no more than the configured 200-row window is built.
+- Backward and forward pagination move the bounded range toward the requested
+  edge and restore an event-ID/offset anchor after layout.
+- Live-end pinning only records bottom state after virtualized geometry confirms
+  the bottom. A timeout force-renders the bottom once and records failure if it
+  still cannot be confirmed.
+- Correlated diagnostics always emit to the native desktop log and mirror through
+  `perfLog` when performance debug is enabled. Payloads contain a random room-open
+  trace ID, counts, ranges, and state only.
 
-### Remaining timeline risk (explicit TODO)
+### Remaining timeline risk
 
-Authoritative virtualization range rendering (always rendering the true SDK
-timeline range rather than a sliced window with separate jump loaders) is **not**
-part of the current remediation. Large-history rooms can still require explicit
-Jump to Unread / Jump to Latest. Track large-history perf with performance-debug
-logs and the smoke cases below; do not treat in-repo hardening as complete
-virtualization correctness.
+Bounded rendering and deterministic range movement are implemented. Remaining
+risk is runtime geometry under unusually tall or late-loading message content,
+plus SDK timeline replacement while the user is reading history. Treat the
+large-room smoke cases and correlated traces as release gates until repeated
+daily-use evidence is clean.
 
 ## iOS Enforcement
 
@@ -100,6 +106,16 @@ virtualization correctness.
   deep links may re-anchor after load.
 - `RoomTimelineView.jumpToLatest(...)` clears marker presentation state, restarts
   live stream focus, and calls `loadLatestTimeline(...)`.
+- All programmatic room scrolls pass through one cancellable coordinator. State
+  updates select one action in priority order: pagination anchor, initial live
+  end, focused event, pending jump-latest, or live append.
+- Live append follows only an established live-end state. Bottom-sentinel layout
+  churn cannot independently move the user into or out of history mode.
+- Normal room open invalidates the cached live Matrix Rust SDK timeline before
+  loading its bounded page; stream attachment does not paginate it again.
+- Empty or failed refresh snapshots preserve the last rendered non-empty list.
+- Release diagnostics use the `timeline` OSLog category with a random room-open
+  trace ID and no room IDs, event IDs, message text, or server addresses.
 
 ## Smoke Checklist
 
@@ -126,3 +142,11 @@ Before marking Timeline Resurrection complete, run these against desktop and iOS
     window opens at live end (no auto deep open) and still shows Jump to Unread.
 12. iOS: normal open never later snaps back to an old `m.fully_read` marker after
     the first live-end placement; explicit event deep links still highlight.
+13. Desktop: paginate backward and then forward through more than 200 linked
+    events; each direction advances and the visible event retains its offset.
+14. iOS: receive at least ten live messages while pinned; each update uses one
+    scroll request and the timeline never becomes blank.
+15. iOS: scroll into history while live messages arrive; the visible rows remain
+    stable and Jump to Latest remains available.
+
+See [timeline-diagnostics.md](timeline-diagnostics.md) for capture instructions.

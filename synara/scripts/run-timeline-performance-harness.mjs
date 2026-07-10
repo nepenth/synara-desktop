@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
 import { performance } from 'node:perf_hooks';
 
-const makeRows = (eventCount) => {
+const MAX_RENDERED_EVENTS = 200;
+
+const makeRows = (start, end) => {
   const rows = [{ kind: 'loader', key: 'loader:backward' }];
-  for (let i = 0; i < eventCount; i += 1) {
+  for (let i = start; i < end; i += 1) {
     if (i > 0 && i % 250 === 0) {
       rows.push({ kind: 'divider', key: `divider:day:${i}` });
     }
@@ -19,8 +21,10 @@ const makeRows = (eventCount) => {
 };
 
 const measureScenario = (eventCount) => {
+  const rangeStart = Math.max(0, eventCount - MAX_RENDERED_EVENTS);
+  const rangeEnd = eventCount;
   const startedAt = performance.now();
-  const rows = makeRows(eventCount);
+  const rows = makeRows(rangeStart, rangeEnd);
   const eventIdToRowIndex = new Map();
   const eventIndexToRowIndex = new Map();
   rows.forEach((row, rowIndex) => {
@@ -33,7 +37,8 @@ const measureScenario = (eventCount) => {
     eventCount,
     rows: rows.length,
     durationMs,
-    firstEventRow: eventIndexToRowIndex.get(0),
+    renderedEvents: rangeEnd - rangeStart,
+    firstEventRow: eventIndexToRowIndex.get(rangeStart),
     lastEventRow: eventIdToRowIndex.get(`$synthetic-${eventCount - 1}`),
   };
 };
@@ -43,9 +48,10 @@ const scenarios = [10_000, 50_000].map(measureScenario);
 for (const scenario of scenarios) {
   assert.equal(typeof scenario.firstEventRow, 'number');
   assert.equal(typeof scenario.lastEventRow, 'number');
-  assert.ok(scenario.rows <= scenario.eventCount + Math.ceil(scenario.eventCount / 250) + 2);
+  assert.equal(scenario.renderedEvents, MAX_RENDERED_EVENTS);
+  assert.ok(scenario.rows <= MAX_RENDERED_EVENTS + 3);
   assert.ok(
-    scenario.durationMs < (scenario.eventCount === 10_000 ? 75 : 300),
+    scenario.durationMs < 25,
     `timeline harness too slow for ${scenario.eventCount}: ${scenario.durationMs.toFixed(2)}ms`
   );
 }
@@ -53,6 +59,7 @@ for (const scenario of scenarios) {
 console.table(
   scenarios.map((scenario) => ({
     events: scenario.eventCount,
+    rendered_events: scenario.renderedEvents,
     rows: scenario.rows,
     duration_ms: Number(scenario.durationMs.toFixed(2)),
   }))
