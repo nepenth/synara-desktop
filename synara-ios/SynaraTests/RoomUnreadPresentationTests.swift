@@ -9,15 +9,14 @@ final class RoomUnreadPresentationTests: XCTestCase {
         XCTAssertTrue(unread.hasHighlight)
     }
 
-    func testUnreadCountPrefersMessageCountOverNotificationOnlyFields() {
+    func testUnreadCountUsesCanonicalSDKCounters() {
         let unread = RoomUnreadPresentation.make(
             membership: .joined,
             numUnreadMessages: 4,
-            numUnreadNotifications: 0,
-            notificationCount: 0
+            numUnreadNotifications: 6
         )
 
-        XCTAssertEqual(unread.unreadCount, 4)
+        XCTAssertEqual(unread.unreadCount, 6)
         XCTAssertFalse(unread.hasHighlight)
     }
 
@@ -31,17 +30,12 @@ final class RoomUnreadPresentationTests: XCTestCase {
         XCTAssertFalse(unread.hasHighlight)
     }
 
-    func testMentionsAndHighlightsSetHighlightState() {
+    func testCanonicalMentionCountSetsHighlightState() {
         let mentionUnread = RoomUnreadPresentation.make(
             membership: .joined,
             numUnreadMentions: 1
         )
-        let highlightUnread = RoomUnreadPresentation.make(
-            membership: .joined,
-            highlightCount: 2
-        )
 
         XCTAssertTrue(mentionUnread.hasHighlight)
-        XCTAssertTrue(highlightUnread.hasHighlight)
     }
 }
