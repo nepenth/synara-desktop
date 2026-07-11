@@ -66,6 +66,11 @@ final class RoomReadMarkerServiceTests: XCTestCase {
         let didMark = await service.markFullyRead(roomID: "!room:matrix.example", eventID: "$event:matrix.example")
 
         XCTAssertTrue(didMark)
+        XCTAssertEqual(http.requests.count, 2)
+        let receiptRequest = try XCTUnwrap(http.requests.first)
+        XCTAssertEqual(receiptRequest.httpMethod, "POST")
+        XCTAssertTrue(try XCTUnwrap(receiptRequest.url?.absoluteString).contains("/receipt/m.read/"))
+        XCTAssertEqual(receiptRequest.httpBody, Data("{}".utf8))
         let request = try XCTUnwrap(http.lastRequest)
         XCTAssertEqual(request.httpMethod, "PUT")
         XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer token")
@@ -107,6 +112,7 @@ private final class RecordingReadMarkerHTTPClient: RoomReadMarkerHTTPClient {
     private let statusCode: Int
     private let body: String
     private(set) var lastRequest: URLRequest?
+    private(set) var requests: [URLRequest] = []
 
     init(statusCode: Int, body: String) {
         self.statusCode = statusCode
@@ -115,6 +121,7 @@ private final class RecordingReadMarkerHTTPClient: RoomReadMarkerHTTPClient {
 
     func data(for request: URLRequest) async throws -> (Data, URLResponse) {
         lastRequest = request
+        requests.append(request)
         let url = request.url ?? URL(string: "https://matrix.example")!
         let response = HTTPURLResponse(
             url: url,

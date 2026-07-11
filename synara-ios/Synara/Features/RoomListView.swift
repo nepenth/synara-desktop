@@ -17,6 +17,8 @@ struct RoomListView: View {
     @State private var roomUpdatesTask: Task<Void, Never>?
     @State private var isSearchPresented = ProcessInfo.processInfo.environment["SYNARA_UI_TEST_ROOM_SEARCH"] != nil
     @State private var roomPendingLeave: RoomSummary?
+    @State private var isResettingSession = false
+    @State private var sessionRecoveryError: String?
     @FocusState private var isSearchFocused: Bool
 
     var body: some View {
@@ -61,8 +63,24 @@ struct RoomListView: View {
                     message: environment.matrix.syncStatusDescription
                 )
             case .failed(let message):
-                SynaraErrorState(title: "Could Not Load Rooms", message: message) {
-                    loadRooms()
+                VStack(spacing: SynaraSpacing.medium) {
+                    SynaraErrorState(title: "Could Not Load Rooms", message: message) {
+                        loadRooms(startUpdatesAfterLoad: true)
+                    }
+                    Button("Sign In Again") {
+                        signInAgain()
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(isResettingSession)
+                    .accessibilityIdentifier("RoomListSignInAgainButton")
+
+                    if let sessionRecoveryError {
+                        Text(sessionRecoveryError)
+                            .font(SynaraTypography.supporting)
+                            .foregroundStyle(.red)
+                            .multilineTextAlignment(.center)
+                            .accessibilityIdentifier("RoomListSessionRecoveryError")
+                    }
                 }
             case .loaded(let rooms):
                 let filteredRooms = filteredRooms(from: rooms)
@@ -303,6 +321,25 @@ struct RoomListView: View {
                 autoOpenRoomIfRequested(from: loadedState)
                 if startUpdatesAfterLoad {
                     startRoomUpdatesIfReady(for: loadedState)
+                }
+            }
+        }
+    }
+
+    private func signInAgain() {
+        guard isResettingSession == false else {
+            return
+        }
+
+        isResettingSession = true
+        sessionRecoveryError = nil
+        Task {
+            do {
+                try await environment.wipe.logoutAndWipe()
+            } catch {
+                await MainActor.run {
+                    isResettingSession = false
+                    sessionRecoveryError = LocalWipeError.sessionDeleteFailed.localizedDescription
                 }
             }
         }
