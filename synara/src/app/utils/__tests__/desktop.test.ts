@@ -7,6 +7,7 @@ import {
   DESKTOP_FILE_IPC_INLINE_THRESHOLD,
   DESKTOP_TRAY_DND_TOGGLE_EVENT,
   DESKTOP_TRAY_STATE_DEBOUNCE_MS,
+  enableDesktopSpellcheck,
   flushPendingDesktopTrayStateUpdate,
   getDesktopIntegrationStatus,
   getDesktopNotificationCount,
@@ -75,6 +76,49 @@ test('setDesktopBadgeCount invokes the desktop bridge with a clamped count', asy
     { command: 'desktop_set_badge_count', args: { count: 3 } },
     { command: 'desktop_set_badge_count', args: { count: 0 } },
   ]);
+});
+
+test('enableDesktopSpellcheck invokes the native command when the bridge supports it', async () => {
+  const calls: string[] = [];
+  const originalWindow = globalThis.window;
+  (globalThis as any).window = {
+    __SYNARA_DESKTOP__: {
+      platform: 'tauri',
+      supportsSpellcheck: true,
+      invoke: async (command: string) => {
+        calls.push(command);
+      },
+    },
+  };
+
+  try {
+    assert.equal(await enableDesktopSpellcheck(), true);
+  } finally {
+    (globalThis as any).window = originalWindow;
+  }
+
+  assert.deepEqual(calls, ['desktop_enable_spellcheck']);
+});
+
+test('enableDesktopSpellcheck remains inactive without explicit bridge support', async () => {
+  const calls: string[] = [];
+  const originalWindow = globalThis.window;
+  (globalThis as any).window = {
+    __SYNARA_DESKTOP__: {
+      platform: 'tauri',
+      invoke: async (command: string) => {
+        calls.push(command);
+      },
+    },
+  };
+
+  try {
+    assert.equal(await enableDesktopSpellcheck(), false);
+  } finally {
+    (globalThis as any).window = originalWindow;
+  }
+
+  assert.deepEqual(calls, []);
 });
 
 test('desktop actions use explicit IPC command names', async () => {

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Bumped coordinated macOS, Linux, and iOS release metadata to `1.2.34`.
+- Activated native desktop spell checking when the shared composer receives
+  focus: macOS now enables AppKit continuous spell checking on the active
+  webview text responder, while Arch and Debian packages declare the English
+  dictionary support required by WebKitGTK.
 - Allowed the packaged Tauri localhost webview origin to use the main desktop
   capability set, restoring the native IPC path used by system-browser link
   opening, clipboard image reads, native file drops, desktop events, and update

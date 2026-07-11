@@ -5,8 +5,10 @@ import { clearUnreadAnchor, markAsRead } from '../notifications';
 import { getThreadRootEventId, roomHaveUnread } from '../room';
 import {
   ROOM_TIMELINE_VIEWPORT_RESTORE_TTL_MS,
+  TIMELINE_BOTTOM_TOLERANCE_PX,
   getLatestReceiptEventFromEvents,
   getRoomCurrentState,
+  isTimelineViewportAtBottom,
   shouldRestoreRoomTimelineViewport,
 } from '../timelineLifecycle';
 
@@ -298,6 +300,14 @@ test('timeline viewport restore policy always allows bottom snapshots without un
     ),
     true
   );
+});
+
+test('timeline live follow requires the viewport to be at the exact bottom', () => {
+  assert.equal(isTimelineViewportAtBottom(1_000, 400, 600), true);
+  assert.equal(isTimelineViewportAtBottom(1_000, 399, 600), true);
+  assert.equal(TIMELINE_BOTTOM_TOLERANCE_PX, 1);
+  assert.equal(isTimelineViewportAtBottom(1_000, 398, 600), false);
+  assert.equal(isTimelineViewportAtBottom(1_000, 380, 600), false);
 });
 
 test('getThreadRootEventId returns thread root ids when available', () => {
