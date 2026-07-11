@@ -17,17 +17,20 @@ final class MatrixRoomReadMarkerService: RoomReadMarkerServicing {
     private let clientStore: MatrixRustSDKClientStore?
     private let httpClient: RoomReadMarkerHTTPClient
     private let jsonDecoder: JSONDecoder
+    private let logger: LoggingServicing
 
     init(
         sessionStore: AppSessionStore,
         clientStore: MatrixRustSDKClientStore? = nil,
         httpClient: RoomReadMarkerHTTPClient = URLSession.shared,
-        jsonDecoder: JSONDecoder = JSONDecoder()
+        jsonDecoder: JSONDecoder = JSONDecoder(),
+        logger: LoggingServicing = AppLogger()
     ) {
         self.sessionStore = sessionStore
         self.clientStore = clientStore
         self.httpClient = httpClient
         self.jsonDecoder = jsonDecoder
+        self.logger = logger
     }
 
     func fullyReadEventID(roomID: String) async -> String? {
@@ -60,13 +63,55 @@ final class MatrixRoomReadMarkerService: RoomReadMarkerServicing {
 
         if let clientStore {
             do {
-                try await clientStore.markRoomReadUpTo(roomID: roomID, eventID: eventID, session: session)
+                try await clientStore.markRoomRead(roomID: roomID, session: session)
                 return true
             } catch {
-                // Fall back to the direct account-data write when SDK read APIs fail.
+                logger.info("Matrix SDK read update failed; using Client-Server API fallback", category: .sync)
             }
         }
 
+        let didSendReadReceipt = await sendReadReceipt(
+            session: session,
+            roomID: roomID,
+            eventID: eventID
+        )
+        let didSetFullyRead = await setFullyRead(
+            session: session,
+            roomID: roomID,
+            eventID: eventID
+        )
+        return didSendReadReceipt && didSetFullyRead
+    }
+
+    private func sendReadReceipt(
+        session: AuthenticatedSession,
+        roomID: String,
+        eventID: String
+    ) async -> Bool {
+        do {
+            var request = URLRequest(url: readReceiptURL(session: session, roomID: roomID, eventID: eventID))
+            request.httpMethod = "POST"
+            request.timeoutInterval = 2
+            request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.httpBody = Data("{}".utf8)
+
+            let (_, response) = try await httpClient.data(for: request)
+            guard let http = response as? HTTPURLResponse,
+                  (200...299).contains(http.statusCode) else {
+                return false
+            }
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    private func setFullyRead(
+        session: AuthenticatedSession,
+        roomID: String,
+        eventID: String
+    ) async -> Bool {
         do {
             var request = URLRequest(url: fullyReadURL(session: session, roomID: roomID))
             request.httpMethod = "PUT"
@@ -117,6 +162,19 @@ final class MatrixRoomReadMarkerService: RoomReadMarkerServicing {
         url.appendPathComponent(roomID)
         url.appendPathComponent("account_data")
         url.appendPathComponent("m.fully_read")
+        return url
+    }
+
+    private func readReceiptURL(session: AuthenticatedSession, roomID: String, eventID: String) -> URL {
+        var url = session.homeserverURL
+        url.appendPathComponent("_matrix")
+        url.appendPathComponent("client")
+        url.appendPathComponent("v3")
+        url.appendPathComponent("rooms")
+        url.appendPathComponent(roomID)
+        url.appendPathComponent("receipt")
+        url.appendPathComponent("m.read")
+        url.appendPathComponent(eventID)
         return url
     }
 }

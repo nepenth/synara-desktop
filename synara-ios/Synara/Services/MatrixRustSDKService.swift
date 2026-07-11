@@ -184,6 +184,7 @@ actor MatrixRustSDKClientStore {
     private var isMutatingClient = false
     private var clientMutationWaiters: [CheckedContinuation<Void, Never>] = []
     private var isClientPaused = false
+    private var roomListSyncGeneration: UInt64 = 0
 
     init(logger: LoggingServicing = AppLogger()) {
         self.logger = logger
@@ -289,6 +290,7 @@ actor MatrixRustSDKClientStore {
             _ = try await ensureClient(for: session)
             syncStatus = .syncing
         } catch {
+            logger.error("Matrix session start failed: \(String(describing: error))", category: .sync)
             syncStatus = .failed("Could not start sync.")
         }
     }
@@ -516,6 +518,10 @@ actor MatrixRustSDKClientStore {
                 fallbackCache: fallbackCache
             )
         } catch {
+            logger.error(
+                "Room list client restore failed repair_available=\(allowsStoreRepair): \(String(describing: error))",
+                category: .sync
+            )
             if fallbackCache.isEmpty == false {
                 return .loaded(fallbackCache)
             }
@@ -525,7 +531,7 @@ actor MatrixRustSDKClientStore {
                     fallbackCache: fallbackCache
                 )
             }
-            return .failed("Could not load rooms. Try again.")
+            return .failed("The local Matrix session could not be restored. Retry, or sign in again to rebuild local data.")
         }
     }
 
@@ -604,8 +610,17 @@ actor MatrixRustSDKClientStore {
         let builtService = try await client.syncService().finish()
         syncService = builtService
         roomListService = builtService.roomListService()
+        roomListSyncGeneration &+= 1
         syncStatus = .syncing
         return builtService
+    }
+
+    func currentRoomListSyncGeneration() -> UInt64 {
+        roomListSyncGeneration
+    }
+
+    func isPausedForBackground() -> Bool {
+        isClientPaused
     }
 
     func streamingRoomListService(session: AuthenticatedSession) async throws -> RoomListService {
@@ -1060,15 +1075,37 @@ actor MatrixRustSDKClientStore {
         return await timeline.latestEventId()
     }
 
-    func markRoomReadUpTo(roomID: String, eventID: String, session: AuthenticatedSession) async throws {
+    func markRoomRead(roomID: String, session: AuthenticatedSession) async throws {
         guard let room = try await room(roomID: roomID, session: session) else {
             throw MessageSendError.failed
         }
 
-        try await room.markAsFullyReadUnchecked(eventId: eventID)
         let timeline = try await room.timeline()
-        try await timeline.sendReadReceipt(receiptType: .read, eventId: eventID)
-        try await timeline.markAsRead(receiptType: .read)
+        var firstMarkerError: Error?
+
+        do {
+            try await timeline.markAsRead(receiptType: .read)
+        } catch {
+            firstMarkerError = error
+            logger.error("Could not send Matrix read receipt", category: .sync)
+        }
+
+        do {
+            try await timeline.markAsRead(receiptType: .fullyRead)
+        } catch {
+            firstMarkerError = firstMarkerError ?? error
+            logger.error("Could not update Matrix fully-read marker", category: .sync)
+        }
+
+        do {
+            try await room.setUnreadFlag(newValue: false)
+        } catch {
+            logger.info("Could not clear the explicit Matrix unread flag", category: .sync)
+        }
+
+        if let firstMarkerError {
+            throw firstMarkerError
+        }
     }
 
     func resolvePushRoute(eventID: String, session: AuthenticatedSession) async -> AppRoute? {
@@ -1140,11 +1177,15 @@ actor MatrixRustSDKClientStore {
     }
 
     private func detachSyncServices() async {
+        let invalidatesRoomList = syncService != nil || roomListService != nil
         if let syncService {
             await syncService.stop()
         }
         syncService = nil
         roomListService = nil
+        if invalidatesRoomList {
+            roomListSyncGeneration &+= 1
+        }
         verificationController?.setDelegate(delegate: nil)
         verificationController = nil
         verificationDelegate = nil
@@ -1238,6 +1279,10 @@ actor MatrixRustSDKClientStore {
                 self.activeSession = session
                 return newClient
             } catch {
+                logger.error(
+                    "Matrix session restore failed repair_available=\(allowRepair): \(String(describing: error))",
+                    category: .auth
+                )
                 retainClientHandle(newClient)
                 if allowRepair {
                     await detachSyncServices()
@@ -1793,9 +1838,7 @@ enum RoomUnreadPresentation {
         membership: RoomSummary.Membership,
         numUnreadMessages: UInt64 = 0,
         numUnreadNotifications: UInt64 = 0,
-        notificationCount: UInt64 = 0,
         numUnreadMentions: UInt64 = 0,
-        highlightCount: UInt64 = 0,
         isMarkedUnread: Bool = false
     ) -> (unreadCount: Int, hasHighlight: Bool) {
         if membership == .invited {
@@ -1804,16 +1847,14 @@ enum RoomUnreadPresentation {
 
         let messages = Int(numUnreadMessages)
         let notifications = Int(numUnreadNotifications)
-        let notifyTotal = Int(notificationCount)
         let mentions = Int(numUnreadMentions)
-        let highlights = Int(highlightCount)
 
-        var unreadCount = max(messages, notifications, notifyTotal)
+        var unreadCount = max(messages, notifications)
         if isMarkedUnread, unreadCount == 0 {
             unreadCount = 1
         }
 
-        let hasHighlight = mentions > 0 || highlights > 0
+        let hasHighlight = mentions > 0
         return (unreadCount, hasHighlight)
     }
 }
@@ -1891,92 +1932,47 @@ final class MatrixRustSDKRoomListService: RoomListServicing {
 
         return AsyncStream(bufferingPolicy: .bufferingNewest(1)) { continuation in
             let task = Task {
-                var mappingTask: Task<Void, Never>?
-                var roomUpdatesContinuation: AsyncStream<[Room]>.Continuation?
-
-                defer {
-                    roomUpdatesContinuation?.finish()
-                    mappingTask?.cancel()
-                }
-
-                do {
-                    let client = try await clientStore.ensureClient(for: session)
-                    let roomListService = try await clientStore.streamingRoomListService(session: session)
-                    let allRooms = try await roomListService.allRooms()
-                    let spaceService = await client.spaceService()
-                    let roomUpdates = AsyncStream<[Room]>.makeStream(bufferingPolicy: .bufferingNewest(1))
-                    roomUpdatesContinuation = roomUpdates.continuation
-
-                    let listener = MatrixRustSDKRoomListEntriesCollector { rooms in
-                        roomUpdates.continuation.yield(rooms)
-                    }
-                    let result = allRooms.entriesWithDynamicAdapters(pageSize: 100, listener: listener)
-                    _ = result.controller().setFilter(kind: .all(filters: []))
-                    let handle = result.entriesStream()
-                    let subscription = MatrixRustSDKRoomListSubscription(
-                        listener: listener,
-                        result: result,
-                        streamHandle: handle
-                    )
-
-                    let cachedSnapshot = cachedRoomsSnapshot()
-                    if cachedSnapshot.isEmpty == false, isCurrentSignedInUser(session) {
-                        continuation.yield(.loaded(cachedSnapshot))
+                while Task.isCancelled == false, isCurrentSignedInUser(session) {
+                    if await clientStore.isPausedForBackground() {
+                        do {
+                            try await Task.sleep(nanoseconds: 500_000_000)
+                        } catch {
+                            break
+                        }
+                        continue
                     }
 
-                    mappingTask = Task { [weak self] in
-                        guard let self else {
-                            return
+                    do {
+                        try await streamNativeRoomListUpdates(
+                            session: session,
+                            continuation: continuation
+                        )
+                        if Task.isCancelled == false, isCurrentSignedInUser(session) {
+                            logger.info("Room list sync service changed; reconnecting stream", category: .sync)
+                        }
+                    } catch {
+                        guard isCurrentSignedInUser(session) else {
+                            break
                         }
 
-                        for await rooms in roomUpdates.stream {
-                            guard Task.isCancelled == false else {
-                                return
-                            }
-                            guard self.isCurrentSignedInUser(session) else {
-                                return
-                            }
-
-                            await self.clientStore.retainRoomHandles(rooms)
-                            let summaries = await MatrixRoomListStateBuilder.roomSummaries(
-                                from: rooms,
-                                spaceService: spaceService,
-                                previous: self.cachedRoomsSnapshot()
+                        let cachedSnapshot = cachedRoomsSnapshot()
+                        if cachedSnapshot.isEmpty == false {
+                            logger.info(
+                                "Room list stream failed; using cached rooms count=\(cachedSnapshot.count): \(String(describing: error))",
+                                category: .sync
                             )
-                            if summaries.isEmpty == false {
-                                self.setCachedRooms(summaries)
-                                self.logger.info(
-                                    "Room list stream mapped rooms count=\(summaries.count)",
-                                    category: .sync
-                                )
-                            }
-                            let state: RoomListState = summaries.isEmpty ? .empty : .loaded(summaries)
-                            continuation.yield(state)
+                            continuation.yield(.loaded(cachedSnapshot))
+                        } else {
+                            logger.info(
+                                "Room list stream failed with no cached rooms: \(String(describing: error))",
+                                category: .sync
+                            )
                         }
+                        await runClassicRoomListUpdates(session: session, continuation: continuation)
                     }
-
-                    await subscription.waitUntilCancelled()
-                } catch {
-                    guard isCurrentSignedInUser(session) else {
-                        continuation.finish()
-                        return
-                    }
-
-                    let cachedSnapshot = cachedRoomsSnapshot()
-                    if cachedSnapshot.isEmpty == false {
-                        logger.info(
-                            "Room list stream failed; using cached rooms count=\(cachedSnapshot.count): \(String(describing: error))",
-                            category: .sync
-                        )
-                        continuation.yield(.loaded(cachedSnapshot))
-                    } else {
-                        logger.info(
-                            "Room list stream failed with no cached rooms: \(String(describing: error))",
-                            category: .sync
-                        )
-                    }
-                    await runClassicRoomListUpdates(session: session, continuation: continuation)
                 }
+
+                continuation.finish()
             }
 
             continuation.onTermination = { _ in
@@ -1985,14 +1981,89 @@ final class MatrixRustSDKRoomListService: RoomListServicing {
         }
     }
 
+    private func streamNativeRoomListUpdates(
+        session: AuthenticatedSession,
+        continuation: AsyncStream<RoomListState>.Continuation
+    ) async throws {
+        let client = try await clientStore.ensureClient(for: session)
+        let roomListService = try await clientStore.streamingRoomListService(session: session)
+        let generation = await clientStore.currentRoomListSyncGeneration()
+        let allRooms = try await roomListService.allRooms()
+        let spaceService = await client.spaceService()
+        let roomUpdates = AsyncStream<[Room]>.makeStream(bufferingPolicy: .bufferingNewest(1))
+
+        let listener = MatrixRustSDKRoomListEntriesCollector { rooms in
+            roomUpdates.continuation.yield(rooms)
+        }
+        let result = allRooms.entriesWithDynamicAdapters(pageSize: 100, listener: listener)
+        _ = result.controller().setFilter(kind: .all(filters: []))
+        let handle = result.entriesStream()
+        let subscription = MatrixRustSDKRoomListSubscription(
+            listener: listener,
+            result: result,
+            streamHandle: handle
+        )
+
+        let cachedSnapshot = cachedRoomsSnapshot()
+        if cachedSnapshot.isEmpty == false, isCurrentSignedInUser(session) {
+            continuation.yield(.loaded(cachedSnapshot))
+        }
+
+        let mappingTask = Task { [weak self] in
+            guard let self else {
+                return
+            }
+
+            for await rooms in roomUpdates.stream {
+                guard Task.isCancelled == false else {
+                    return
+                }
+                guard self.isCurrentSignedInUser(session) else {
+                    return
+                }
+
+                await self.clientStore.retainRoomHandles(rooms)
+                let summaries = await MatrixRoomListStateBuilder.roomSummaries(
+                    from: rooms,
+                    spaceService: spaceService,
+                    previous: self.cachedRoomsSnapshot()
+                )
+                if summaries.isEmpty == false {
+                    self.setCachedRooms(summaries)
+                    self.logger.info(
+                        "Room list stream mapped rooms count=\(summaries.count)",
+                        category: .sync
+                    )
+                }
+                let state: RoomListState = summaries.isEmpty ? .empty : .loaded(summaries)
+                continuation.yield(state)
+            }
+        }
+
+        await subscription.waitUntilInvalidated(
+            clientStore: clientStore,
+            generation: generation
+        )
+        roomUpdates.continuation.finish()
+        mappingTask.cancel()
+        _ = await mappingTask.result
+    }
+
     private func runClassicRoomListUpdates(
         session: AuthenticatedSession,
         continuation: AsyncStream<RoomListState>.Continuation
     ) async {
         logger.info("Starting classic room-list sync fallback", category: .sync)
         var didYieldEmptyState = false
+        let generation = await clientStore.currentRoomListSyncGeneration()
 
         while Task.isCancelled == false, isCurrentSignedInUser(session) {
+            let isPaused = await clientStore.isPausedForBackground()
+            let currentGeneration = await clientStore.currentRoomListSyncGeneration()
+            if isPaused || currentGeneration != generation {
+                return
+            }
+
             do {
                 try await clientStore.syncOnce(session: session, fullState: false)
             } catch {
@@ -2120,9 +2191,7 @@ final class MatrixRustSDKRoomListService: RoomListServicing {
             membership: membership,
             numUnreadMessages: roomInfo?.numUnreadMessages ?? 0,
             numUnreadNotifications: roomInfo?.numUnreadNotifications ?? 0,
-            notificationCount: roomInfo?.notificationCount ?? 0,
             numUnreadMentions: roomInfo?.numUnreadMentions ?? 0,
-            highlightCount: roomInfo?.highlightCount ?? 0,
             isMarkedUnread: roomInfo?.isMarkedUnread ?? false
         )
         let latestPreview = await latestPreview(for: room)
@@ -3306,9 +3375,19 @@ private final class MatrixRustSDKRoomListSubscription: @unchecked Sendable {
         self.streamHandle = streamHandle
     }
 
-    func waitUntilCancelled() async {
+    func waitUntilInvalidated(
+        clientStore: MatrixRustSDKClientStore,
+        generation: UInt64
+    ) async {
         while Task.isCancelled == false {
-            try? await Task.sleep(nanoseconds: 1_000_000_000)
+            if await clientStore.currentRoomListSyncGeneration() != generation {
+                break
+            }
+            do {
+                try await Task.sleep(nanoseconds: 250_000_000)
+            } catch {
+                break
+            }
         }
         streamHandle.cancel()
         _ = listener
