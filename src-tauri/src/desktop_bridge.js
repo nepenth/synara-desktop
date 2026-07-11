@@ -15,6 +15,7 @@
     supportsUpdater: false,
     supportsMediaPermissions: true,
     supportsSecureSecretStore: false,
+    supportsSpellcheck: true,
     desktopEnvironment: "unknown",
     sessionType: "unknown",
     routes: Object.freeze({

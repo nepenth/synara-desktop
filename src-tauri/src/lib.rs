@@ -15,6 +15,7 @@ mod desktop_secret_store;
 mod desktop_session;
 mod desktop_session_store;
 mod desktop_shortcuts;
+mod desktop_spellcheck;
 mod desktop_tray;
 mod desktop_url;
 #[cfg(target_os = "macos")]
@@ -69,81 +70,6 @@ fn updater_plugin_configured<R: tauri::Runtime>(context: &tauri::Context<R>) -> 
         .is_some_and(|config| !config.is_null())
 }
 
-#[cfg(target_os = "linux")]
-fn normalized_spellcheck_language(value: &str) -> Option<String> {
-    let language = value
-        .trim()
-        .split('.')
-        .next()
-        .unwrap_or_default()
-        .split('@')
-        .next()
-        .unwrap_or_default()
-        .replace('-', "_");
-
-    if language.is_empty()
-        || language.eq_ignore_ascii_case("C")
-        || language.eq_ignore_ascii_case("POSIX")
-    {
-        return None;
-    }
-
-    Some(language)
-}
-
-#[cfg(target_os = "linux")]
-fn linux_spellcheck_languages() -> Vec<String> {
-    let mut languages = Vec::new();
-    for key in ["LC_ALL", "LC_MESSAGES", "LANG", "LANGUAGE"] {
-        let Some(value) = std::env::var_os(key).and_then(|value| value.into_string().ok()) else {
-            continue;
-        };
-
-        for candidate in value.split(':').filter_map(normalized_spellcheck_language) {
-            if !languages.contains(&candidate) {
-                languages.push(candidate);
-            }
-        }
-    }
-
-    if languages.is_empty() {
-        languages.push("en_US".to_owned());
-    }
-
-    languages
-}
-
-#[cfg(target_os = "linux")]
-fn configure_webview_spellcheck<R: tauri::Runtime>(window: &tauri::WebviewWindow<R>) {
-    use std::sync::atomic::{AtomicBool, Ordering};
-
-    let languages = linux_spellcheck_languages();
-    let spellcheck_configured = std::sync::Arc::new(AtomicBool::new(false));
-    let configured_flag = spellcheck_configured.clone();
-    let configure_result = window.with_webview(move |webview| {
-        use webkit2gtk::{WebContextExt, WebViewExt};
-
-        let Some(context) = webview.inner().context() else {
-            return;
-        };
-
-        let language_refs = languages.iter().map(String::as_str).collect::<Vec<_>>();
-        context.set_spell_checking_languages(&language_refs);
-        context.set_spell_checking_enabled(true);
-        configured_flag.store(true, Ordering::Relaxed);
-    });
-
-    if configure_result.is_err() || !spellcheck_configured.load(Ordering::Relaxed) {
-        eprintln!(
-            "WebKit spellcheck WebContext unavailable; continuing without spellcheck for window {}",
-            window.label()
-        );
-    }
-}
-
-#[cfg(not(target_os = "linux"))]
-fn configure_webview_spellcheck<R: tauri::Runtime>(_window: &tauri::WebviewWindow<R>) {}
-
 const PREFERRED_LOCALHOST_PORT: u16 = 44548;
 const LOCALHOST_PORT_FALLBACK_COUNT: u16 = 10;
 
@@ -151,10 +77,10 @@ fn is_localhost_port_available(port: u16) -> bool {
     std::net::TcpListener::bind(("127.0.0.1", port)).is_ok()
 }
 
-fn select_localhost_port() -> Result<u16, String> {
+fn select_localhost_port_with(mut is_available: impl FnMut(u16) -> bool) -> Result<u16, String> {
     for offset in 0..LOCALHOST_PORT_FALLBACK_COUNT {
         let port = PREFERRED_LOCALHOST_PORT.saturating_add(offset);
-        if is_localhost_port_available(port) {
+        if is_available(port) {
             if offset == 0 {
                 eprintln!("[synara] Serving bundled UI on localhost:{port}");
             } else {
@@ -172,27 +98,26 @@ fn select_localhost_port() -> Result<u16, String> {
     ))
 }
 
+fn select_localhost_port() -> Result<u16, String> {
+    select_localhost_port_with(is_localhost_port_available)
+}
+
 #[cfg(test)]
 mod localhost_port_tests {
-    use super::{select_localhost_port, PREFERRED_LOCALHOST_PORT};
+    use super::{select_localhost_port_with, PREFERRED_LOCALHOST_PORT};
 
     #[test]
     fn select_localhost_port_returns_first_available_port() {
-        let port = select_localhost_port().expect("localhost port should be available");
-        assert!((PREFERRED_LOCALHOST_PORT..PREFERRED_LOCALHOST_PORT + 10).contains(&port));
+        let port =
+            select_localhost_port_with(|_| true).expect("localhost port should be available");
+        assert_eq!(port, PREFERRED_LOCALHOST_PORT);
     }
 
     #[test]
     fn select_localhost_port_skips_busy_preferred_port() {
-        let listener = match std::net::TcpListener::bind(("127.0.0.1", PREFERRED_LOCALHOST_PORT)) {
-            Ok(listener) => Some(listener),
-            Err(error) if error.kind() == std::io::ErrorKind::AddrInUse => None,
-            Err(error) => panic!("test listener should bind or find an occupied port: {error}"),
-        };
-        let port = select_localhost_port().expect("fallback localhost port should be available");
-        assert_ne!(port, PREFERRED_LOCALHOST_PORT);
-        assert!((PREFERRED_LOCALHOST_PORT + 1..PREFERRED_LOCALHOST_PORT + 10).contains(&port));
-        drop(listener);
+        let port = select_localhost_port_with(|port| port != PREFERRED_LOCALHOST_PORT)
+            .expect("fallback localhost port should be available");
+        assert_eq!(port, PREFERRED_LOCALHOST_PORT + 1);
     }
 }
 
@@ -242,6 +167,7 @@ pub fn run() {
             desktop::desktop_get_performance_capabilities,
             desktop_logging::desktop_append_log,
             desktop_logging::desktop_log_path,
+            desktop_spellcheck::desktop_enable_spellcheck,
             desktop_agent_actions::desktop_agent_action
         ])
         .on_window_event(|window, event| {
@@ -366,7 +292,9 @@ pub fn run() {
                 })
                 .build()?;
 
-            configure_webview_spellcheck(&window);
+            if let Err(error) = desktop_spellcheck::configure_webview_spellcheck(&window) {
+                eprintln!("[synara] {error}");
+            }
 
             if let Ok(size) = window.inner_size() {
                 if size.width < 960 || size.height < 720 {

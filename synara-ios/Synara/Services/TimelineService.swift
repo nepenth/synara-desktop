@@ -639,6 +639,7 @@ protocol TimelineServicing: AnyObject {
     func loadThreadTimeline(roomID: String, rootEventID: String) async -> TimelineLoadOutcome
     func loadOlderTimeline(roomID: String, before eventID: String) async -> TimelineLoadOutcome
     func timelineUpdates(roomID: String, focusedEventID: String?) -> AsyncStream<TimelineLoadOutcome>
+    func typingUsers(roomID: String) -> AsyncStream<[String]>
     func threadTimelineUpdates(roomID: String, rootEventID: String) -> AsyncStream<TimelineLoadOutcome>
     func clearSessionCaches()
 }
@@ -660,6 +661,13 @@ extension TimelineServicing {
 
     func threadTimelineUpdates(roomID: String, rootEventID: String) -> AsyncStream<TimelineLoadOutcome> {
         timelineUpdates(roomID: roomID, focusedEventID: rootEventID)
+    }
+
+    func typingUsers(roomID _: String) -> AsyncStream<[String]> {
+        AsyncStream { continuation in
+            continuation.yield([])
+            continuation.finish()
+        }
     }
 }
 
@@ -840,6 +848,7 @@ final class MockTimelineService: TimelineServicing {
     var events: [RawTimelineEvent]
     var itemFixture: [TimelineItem]?
     var updateOutcomes: [TimelineLoadOutcome] = []
+    var typingUserUpdates: [[String]] = []
     private(set) var clearSessionCachesCallCount = 0
 
     init(events: [RawTimelineEvent] = TimelineFixtures.commonEvents()) {
@@ -923,6 +932,16 @@ final class MockTimelineService: TimelineServicing {
             continuation.onTermination = { _ in
                 task.cancel()
             }
+        }
+    }
+
+    func typingUsers(roomID _: String) -> AsyncStream<[String]> {
+        AsyncStream { continuation in
+            let updates = typingUserUpdates
+            for userIDs in updates {
+                continuation.yield(userIDs)
+            }
+            continuation.finish()
         }
     }
 }

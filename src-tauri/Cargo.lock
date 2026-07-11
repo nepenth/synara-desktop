@@ -4022,12 +4022,14 @@ dependencies = [
 
 [[package]]
 name = "synara"
-version = "1.2.33"
+version = "1.2.34"
 dependencies = [
  "getrandom 0.3.4",
  "keyring",
  "mac-notification-sys",
  "notify-rust",
+ "objc2",
+ "objc2-app-kit",
  "security-framework 3.7.0",
  "serde",
  "serde_json",

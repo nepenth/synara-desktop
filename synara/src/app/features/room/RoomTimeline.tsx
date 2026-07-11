@@ -101,7 +101,6 @@ import {
   useIntersectionObserver,
 } from '../../hooks/useIntersectionObserver';
 import { markAsRead, markAsUnread, markEventAsUnread } from '../../utils/notifications';
-import { useDebounce } from '../../hooks/useDebounce';
 import { getResizeObserverEntry, useResizeObserver } from '../../hooks/useResizeObserver';
 import * as css from './RoomTimeline.css';
 import { timeDayMonthYear, today, yesterday } from '../../utils/time';
@@ -164,7 +163,10 @@ import {
 import {
   getLatestRoomTimeline,
   getLoadedLiveTailEventId,
+  getTimelineBottomGap,
+  isTimelineViewportAtBottom,
   shouldRestoreRoomTimelineViewport,
+  TIMELINE_BOTTOM_TOLERANCE_PX,
 } from '../../utils/timelineLifecycle';
 import {
   getEventIdAbsoluteIndex,
@@ -233,7 +235,6 @@ const PAGINATION_LIMIT = 80;
 const LIVE_END_PIN_MIN_MS = 700;
 const LIVE_END_PIN_MAX_MS = 5000;
 const LIVE_END_PIN_STABLE_FRAMES = 10;
-const LIVE_END_BOTTOM_TOLERANCE = 24;
 const COMPOSER_RESIZE_BOTTOM_TOLERANCE = 160;
 
 type ScrollToOptions = {
@@ -246,13 +247,16 @@ type ScrollToOptions = {
 type ScrollToElement = (element: HTMLElement, opts?: ScrollToOptions) => boolean;
 type ScrollToItem = (index: number, opts?: ScrollToOptions) => boolean;
 
-const getScrollBottomGap = (scrollEl: HTMLElement): number =>
-  scrollEl.scrollHeight - scrollEl.scrollTop - scrollEl.offsetHeight;
-
 const isScrollNearBottom = (
   scrollEl: HTMLElement,
-  tolerance = LIVE_END_BOTTOM_TOLERANCE
-): boolean => getScrollBottomGap(scrollEl) <= tolerance;
+  tolerance = TIMELINE_BOTTOM_TOLERANCE_PX
+): boolean =>
+  isTimelineViewportAtBottom(
+    scrollEl.scrollHeight,
+    scrollEl.scrollTop,
+    scrollEl.offsetHeight,
+    tolerance
+  );
 
 const isNearVirtualRangeEnd = (
   range: { endIndex: number } | undefined,
@@ -267,7 +271,7 @@ const isNearVirtualRangeEnd = (
 const isElementBottomInScrollView = (
   scrollEl: HTMLElement,
   element: HTMLElement,
-  tolerance = LIVE_END_BOTTOM_TOLERANCE
+  tolerance = TIMELINE_BOTTOM_TOLERANCE_PX
 ): boolean => {
   const scrollRect = scrollEl.getBoundingClientRect();
   const elementRect = element.getBoundingClientRect();
@@ -1626,7 +1630,11 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
 
       scrollToBottom(scrollEl, 'instant');
 
-      const bottomGap = getScrollBottomGap(scrollEl);
+      const bottomGap = getTimelineBottomGap(
+        scrollEl.scrollHeight,
+        scrollEl.scrollTop,
+        scrollEl.offsetHeight
+      );
       const totalSize = virtualizer.getTotalSize();
       const bottomRendered = isVirtualRangeAtEnd(
         virtualizer.range ?? undefined,
@@ -1721,22 +1729,12 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
     virtualItems,
   ]);
 
-  const debounceSetAtBottom = useDebounce(
-    useCallback(
-      (entry: IntersectionObserverEntry) => {
-        if (!entry.isIntersecting && !liveEndPinRef.current) setAtBottomState(false);
-      },
-      [setAtBottomState]
-    ),
-    { wait: 1000 }
-  );
   useIntersectionObserver(
     useCallback(
       (entries) => {
         const target = atBottomAnchorRef.current;
         if (!target) return;
         const targetEntry = getIntersectionObserverEntry(target, entries);
-        if (targetEntry) debounceSetAtBottom(targetEntry);
         if (targetEntry?.isIntersecting && atLiveEndRef.current) {
           setAtBottomState(true);
           if (document.hasFocus()) {
@@ -1744,12 +1742,12 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
           }
         }
       },
-      [debounceSetAtBottom, setAtBottomState, tryAutoMarkAsRead]
+      [setAtBottomState, tryAutoMarkAsRead]
     ),
     useCallback(
       () => ({
         root: getScrollElement(),
-        rootMargin: '100px',
+        rootMargin: '0px',
       }),
       [getScrollElement]
     ),

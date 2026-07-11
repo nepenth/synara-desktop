@@ -15,7 +15,9 @@ url='https://github.com/nepenth/synara-desktop'
 license=('AGPL-3.0-only')
 depends=(
   'dbus'
+  'enchant'
   'gtk3'
+  'hunspell-en_us'
   'libsecret'
   'webkit2gtk-4.1'
   'xdg-desktop-portal'

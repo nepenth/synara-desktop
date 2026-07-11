@@ -41,6 +41,64 @@ final class TimelineServiceTests: XCTestCase {
         )
     }
 
+    func testRoomTimelineScrollPolicyStopsFollowingWhenUserDragsTowardHistory() {
+        XCTAssertEqual(
+            RoomTimelineScrollPolicy.positionDuringUserDrag(
+                current: .followingLive,
+                translationHeight: 1,
+                focusedEventID: nil
+            ),
+            .readingHistory
+        )
+        XCTAssertEqual(
+            RoomTimelineScrollPolicy.positionAfterUserDrag(
+                isBottomVisible: false,
+                focusedEventID: nil
+            ),
+            .readingHistory
+        )
+    }
+
+    func testRoomTimelineScrollPolicyResumesOnlyAtVisibleBottom() {
+        XCTAssertEqual(
+            RoomTimelineScrollPolicy.positionAfterUserDrag(
+                isBottomVisible: true,
+                focusedEventID: nil
+            ),
+            .followingLive
+        )
+        XCTAssertEqual(
+            RoomTimelineScrollPolicy.positionDuringUserDrag(
+                current: .followingLive,
+                translationHeight: -20,
+                focusedEventID: nil
+            ),
+            .followingLive
+        )
+        XCTAssertEqual(
+            RoomTimelineScrollPolicy.positionAfterUserDrag(
+                isBottomVisible: true,
+                focusedEventID: "$focused"
+            ),
+            .focusedEvent
+        )
+    }
+
+    func testRoomTypingPresentationUsesCompactMatrixNames() {
+        XCTAssertEqual(RoomTypingPresentation.text(for: ["@forge:matrix.org"]), "forge is typing...")
+        XCTAssertEqual(
+            RoomTypingPresentation.text(for: ["@forge:matrix.org", "@alice:matrix.org"]),
+            "alice and forge are typing..."
+        )
+        XCTAssertEqual(
+            RoomTypingPresentation.text(
+                for: ["@forge:matrix.org", "@alice:matrix.org", "@bob:matrix.org"]
+            ),
+            "alice, bob, and 1 more are typing..."
+        )
+        XCTAssertNil(RoomTypingPresentation.text(for: []))
+    }
+
     func testRoomTimelineSnapshotPolicyPreservesLastGoodRowsAcrossTransientEmptyUpdates() {
         XCTAssertTrue(
             RoomTimelineSnapshotPolicy.shouldPreserveCurrentSnapshot(
@@ -630,6 +688,21 @@ final class TimelineServiceTests: XCTestCase {
         }
         XCTAssertEqual(firstBatch.count, 1)
         XCTAssertEqual(secondBatch.count, 2)
+    }
+
+    func testMockTypingStreamYieldsLiveUpdates() async {
+        let service = MockTimelineService()
+        service.typingUserUpdates = [
+            ["@forge:matrix.org"],
+            []
+        ]
+
+        var updates: [[String]] = []
+        for await userIDs in service.typingUsers(roomID: "!room:matrix.org") {
+            updates.append(userIDs)
+        }
+
+        XCTAssertEqual(updates, [["@forge:matrix.org"], []])
     }
 
     func testLargeTimelineFixtureHasStableIdentity() {
