@@ -116,9 +116,10 @@ Latest human smoke feedback, 2026-07-07:
 - Clipboard image paste and attachment drag/drop still fail on both desktop
   platforms. Treat these as likely sharing the same packaged-localhost native
   IPC capability root cause until re-smoke proves otherwise.
-- Desktop composer spellcheck still fails on both platforms. The editor now
-  sends native language/autocorrect/capitalization hints, but live verification
-  and Linux dictionary/environment evidence remain required.
+- Desktop composer spellcheck has a native remediation pending packaged smoke.
+  The editor activates AppKit continuous spell checking on focus on macOS;
+  Linux reapplies the WebKitGTK spell-check context and packaged Arch/Debian
+  installs now include an English dictionary. Live verification remains required.
 - Timeline Resurrection is far better, but room-open history still visibly
   repositions while initial history loads. Do not make a broad timeline change
   without focused scroll-anchor diagnostics because this area has already been

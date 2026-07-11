@@ -58,11 +58,54 @@ enum RoomTimelineScrollPolicy {
         }
         return isBottomVisible || position == .placingInitial || position == .followingLive
     }
+
+    static func positionDuringUserDrag(
+        current: RoomTimelinePositionState,
+        translationHeight: CGFloat,
+        focusedEventID: String?
+    ) -> RoomTimelinePositionState {
+        guard focusedEventID == nil, translationHeight > 0 else {
+            return current
+        }
+        return .readingHistory
+    }
+
+    static func positionAfterUserDrag(
+        isBottomVisible: Bool,
+        focusedEventID: String?
+    ) -> RoomTimelinePositionState {
+        guard focusedEventID == nil else {
+            return .focusedEvent
+        }
+        return isBottomVisible ? .followingLive : .readingHistory
+    }
 }
 
 enum RoomTimelineSnapshotPolicy {
     static func shouldPreserveCurrentSnapshot(currentItemCount: Int, incomingItemCount: Int) -> Bool {
         currentItemCount > 0 && incomingItemCount == 0
+    }
+}
+
+enum RoomTypingPresentation {
+    static func displayName(for userID: String) -> String {
+        let localPart = userID.split(separator: ":", maxSplits: 1).first.map(String.init) ?? userID
+        let withoutSigil = localPart.hasPrefix("@") ? String(localPart.dropFirst()) : localPart
+        return withoutSigil.isEmpty ? userID : withoutSigil
+    }
+
+    static func text(for userIDs: [String]) -> String? {
+        let names = Array(Set(userIDs.map(displayName))).sorted()
+        switch names.count {
+        case 0:
+            return nil
+        case 1:
+            return "\(names[0]) is typing..."
+        case 2:
+            return "\(names[0]) and \(names[1]) are typing..."
+        default:
+            return "\(names[0]), \(names[1]), and \(names.count - 2) more are typing..."
+        }
     }
 }
 
@@ -115,9 +158,12 @@ struct RoomTimelineView: View {
     @State private var lastMarkedFullyReadEventID: String?
     @State private var markFullyReadTask: Task<Void, Never>?
     @State private var timelineUpdatesTask: Task<Void, Never>?
+    @State private var typingUpdatesTask: Task<Void, Never>?
+    @State private var typingUserIDs: [String] = []
     @State private var timelineScrollTask: Task<Void, Never>?
     @State private var sendAnimationItemIDs: Set<String> = []
     @State private var hasUserInteractedWithTimeline = false
+    @State private var isUserDraggingTimeline = false
     @State private var timelinePosition: RoomTimelinePositionState = .preparing
     @State private var timelineTraceID = String(UUID().uuidString.prefix(8))
     @State private var timelineTraceStartedAt = Date()
@@ -145,6 +191,9 @@ struct RoomTimelineView: View {
                 }
             )
             timelineContent
+            if let typingText = RoomTypingPresentation.text(for: typingUserIDs) {
+                RoomTypingIndicator(text: typingText)
+            }
             Divider()
             ComposerView(
                 text: $draft,
@@ -226,12 +275,14 @@ struct RoomTimelineView: View {
             Task {
                 _ = await loadCryptoStatus()
             }
+            startTypingUpdates()
             await loadTimeline()
             startTimelineUpdates(streamFocusEventID: focusedEventID == nil ? .some(nil) : nil)
         }
         .onDisappear {
             dismissKeyboard()
             stopTimelineUpdates(reason: "view-disappeared")
+            stopTypingUpdates()
             cancelTimelineScroll()
             cancelMarkFullyRead()
         }
@@ -371,6 +422,9 @@ struct RoomTimelineView: View {
                             }
                             .onDisappear {
                                 isTimelineBottomVisible = false
+                                if isUserDraggingTimeline, focusedEventID == nil {
+                                    timelinePosition = .readingHistory
+                                }
                                 if items.count > 1 && timelinePosition == .readingHistory {
                                     showJumpToLatest = true
                                 }
@@ -392,10 +446,16 @@ struct RoomTimelineView: View {
                 .accessibilityIdentifier("TimelineList")
                 .simultaneousGesture(
                     DragGesture(minimumDistance: 8)
-                        .onChanged { _ in
+                        .onChanged { value in
                             hasUserInteractedWithTimeline = true
-                            if isTimelineBottomVisible == false {
-                                timelinePosition = .readingHistory
+                            isUserDraggingTimeline = true
+                            timelinePosition = RoomTimelineScrollPolicy.positionDuringUserDrag(
+                                current: timelinePosition,
+                                translationHeight: value.translation.height,
+                                focusedEventID: focusedEventID
+                            )
+                            if timelinePosition == .readingHistory,
+                               isTimelineBottomVisible == false {
                                 showJumpToLatest = true
                             }
                             if items.count > 8 {
@@ -403,10 +463,7 @@ struct RoomTimelineView: View {
                             }
                         }
                         .onEnded { _ in
-                            if isTimelineBottomVisible == false {
-                                timelinePosition = .readingHistory
-                                showJumpToLatest = true
-                            }
+                            finishTimelineUserDrag()
                         }
                 )
                 .overlay(alignment: .bottomTrailing) {
@@ -629,6 +686,23 @@ struct RoomTimelineView: View {
         timelineScrollTask = nil
     }
 
+    private func finishTimelineUserDrag() {
+        Task { @MainActor in
+            await Task.yield()
+            try? await Task.sleep(nanoseconds: Self.timelineBottomLayoutDelayNanoseconds)
+            isUserDraggingTimeline = false
+            timelinePosition = RoomTimelineScrollPolicy.positionAfterUserDrag(
+                isBottomVisible: isTimelineBottomVisible,
+                focusedEventID: focusedEventID
+            )
+            if timelinePosition == .readingHistory {
+                showJumpToLatest = true
+            } else if timelinePosition == .followingLive {
+                showJumpToLatest = false
+            }
+        }
+    }
+
     private func logTimelineEvent(_ name: String, fields: [String: String] = [:]) {
         let elapsedMilliseconds = max(0, Int(Date().timeIntervalSince(timelineTraceStartedAt) * 1_000))
         let details = fields.keys.sorted().compactMap { key in
@@ -689,6 +763,7 @@ struct RoomTimelineView: View {
 
     private func resetTimelineState() {
         stopTimelineUpdates(reason: "room-reset")
+        stopTypingUpdates()
         cancelTimelineScroll()
         state = .idle
         draft = environment.drafts.draft(roomID: roomID)
@@ -718,6 +793,8 @@ struct RoomTimelineView: View {
         isTimelineBottomVisible = false
         lastMarkedFullyReadEventID = nil
         hasUserInteractedWithTimeline = false
+        isUserDraggingTimeline = false
+        typingUserIDs = []
         timelinePosition = focusedEventID == nil ? .preparing : .focusedEvent
         timelineTraceID = String(UUID().uuidString.prefix(8))
         timelineTraceStartedAt = Date()
@@ -765,12 +842,23 @@ struct RoomTimelineView: View {
                 }
                 return
             }
+            let currentEventIDs = Set(loadedTimelineItems.map(\.eventID))
+            let newlyObservedCount = items.reduce(into: 0) { count, item in
+                if currentEventIDs.contains(item.eventID) == false {
+                    count += 1
+                }
+            }
+            let newestEventAgeMilliseconds = items.last.map { item in
+                max(0, Int(Date().timeIntervalSince(item.timestamp) * 1_000))
+            } ?? 0
             let merged = mergeTimelineItems(items, isPaginating: shouldRemainPaginating)
             state = .loaded(merged, isPaginating: shouldRemainPaginating)
             logTimelineEvent(
                 "snapshot-applied",
                 fields: [
                     "incoming": "\(items.count)",
+                    "newEvents": "\(newlyObservedCount)",
+                    "newestAgeMs": "\(newestEventAgeMilliseconds)",
                     "rendered": "\(merged.count)",
                     "paginating": "\(shouldRemainPaginating)"
                 ]
@@ -915,6 +1003,11 @@ struct RoomTimelineView: View {
                     }
                 }
             }
+            if Task.isCancelled == false {
+                await MainActor.run {
+                    logTimelineEvent("stream-ended")
+                }
+            }
         }
     }
 
@@ -924,6 +1017,27 @@ struct RoomTimelineView: View {
         }
         timelineUpdatesTask?.cancel()
         timelineUpdatesTask = nil
+    }
+
+    private func startTypingUpdates() {
+        stopTypingUpdates()
+        typingUpdatesTask = Task {
+            for await userIDs in environment.timeline.typingUsers(roomID: roomID) {
+                guard Task.isCancelled == false else {
+                    return
+                }
+                let visibleUserIDs = Array(Set(userIDs.filter { $0 != currentUserID })).sorted()
+                await MainActor.run {
+                    typingUserIDs = visibleUserIDs
+                }
+            }
+        }
+    }
+
+    private func stopTypingUpdates() {
+        typingUpdatesTask?.cancel()
+        typingUpdatesTask = nil
+        typingUserIDs = []
     }
 
     private func loadCryptoStatus() async -> RoomCryptoStatus {
@@ -1656,6 +1770,26 @@ private enum TimelineViewState: Equatable {
     case empty
     case failed(String)
     case loaded([TimelineItem], isPaginating: Bool)
+}
+
+private struct RoomTypingIndicator: View {
+    let text: String
+
+    var body: some View {
+        HStack(spacing: SynaraSpacing.xSmall) {
+            ProgressView()
+                .controlSize(.mini)
+            Text(text)
+                .font(SynaraTypography.messageMeta)
+                .foregroundStyle(SynaraColor.secondaryText)
+                .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, SynaraSpacing.medium)
+        .padding(.vertical, SynaraSpacing.xSmall)
+        .background(SynaraColor.surface)
+        .accessibilityIdentifier("RoomTypingIndicator")
+    }
 }
 
 private struct JumpToLatestButton: View {
