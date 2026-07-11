@@ -69,6 +69,8 @@ jobs:
           pacman -Syu --noconfirm
           pacman -S --needed --noconfirm \
             dbus \
+            enchant \
+            hunspell-en_us \
             libsecret \
             webkit2gtk-4.1 \
             xdg-desktop-portal \
