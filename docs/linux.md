@@ -109,7 +109,7 @@ npm run tauri build -- --bundles deb
 npm run tauri build -- --bundles appimage
 ```
 
-The Tauri `.deb` bundler supplies stock WebKitGTK, GTK, and tray runtime dependencies for Debian-family packages. Keep `bundle.linux.deb.depends` unset unless Synara gains an extra native runtime dependency.
+The Tauri `.deb` bundler supplies stock WebKitGTK, GTK, and tray runtime dependencies for Debian-family packages. Synara additionally declares `hunspell-en-us` so WebKitGTK has a default English spell-check dictionary. The Arch package declares `enchant` and `hunspell-en_us` for the same reason. Users who select another composer language must install the matching Hunspell dictionary through their distribution.
 
 The desktop build runs `scripts/build-runtime.mjs`, which copies the repository
 root `config.json` into `synara/config.json`, builds the `synara/` app runtime,

@@ -47,6 +47,7 @@
     "allow-desktop-get-performance-capabilities",
     "allow-desktop-append-log",
     "allow-desktop-log-path",
+    "allow-desktop-enable-spellcheck",
     "allow-desktop-agent-action"
   ]
 }

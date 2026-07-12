@@ -357,6 +357,12 @@
           "markdownDescription": "Enables the desktop_append_log command without any pre-configured scope."
         },
         {
+          "description": "Enables the desktop_enable_spellcheck command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-desktop-enable-spellcheck",
+          "markdownDescription": "Enables the desktop_enable_spellcheck command without any pre-configured scope."
+        },
+        {
           "description": "Enables the desktop_get_integration_status command without any pre-configured scope.",
           "type": "string",
           "const": "allow-desktop-get-integration-status",
@@ -517,6 +523,12 @@
           "type": "string",
           "const": "deny-desktop-append-log",
           "markdownDescription": "Denies the desktop_append_log command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the desktop_enable_spellcheck command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-desktop-enable-spellcheck",
+          "markdownDescription": "Denies the desktop_enable_spellcheck command without any pre-configured scope."
         },
         {
           "description": "Denies the desktop_get_integration_status command without any pre-configured scope.",

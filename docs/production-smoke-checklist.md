@@ -29,9 +29,10 @@ desktop, macOS, and iOS validation gates. Automated gates stay tracked in
   Treat `MAC-DESK-005`, `MAC-DESK-006`, and `LINUX-DESK-005` as likely affected
   by the same packaged-localhost native IPC capability gap until re-smoke proves
   otherwise.
-- macOS and Linux spellcheck still fails. The editor now passes native
-  spellcheck language/autocorrect/capitalization hints; re-smoke must record
-  locale and, on Linux, dictionary/WebKitGTK environment notes if it still fails.
+- macOS and Linux spellcheck has a native remediation pending packaged smoke.
+  macOS activates continuous checking on the focused AppKit responder; Linux
+  enables the WebKitGTK context and packages an English dictionary. Re-smoke
+  must record the locale, a misspelled test word, and visible correction menu.
 - Timeline Resurrection is much better but still visibly repositions during
   initial room-history load. Collect anchor/read-marker/saved-bottom evidence
   before attempting another Timeline behavior change.
