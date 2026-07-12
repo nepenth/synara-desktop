@@ -49,6 +49,33 @@ final class MatrixLifecycleTests: XCTestCase {
         XCTAssertEqual(matrix.backgroundSyncCallCount, 1)
     }
 
+    func testTimelineStreamInvalidatesWhenSyncGenerationChanges() {
+        XCTAssertFalse(
+            MatrixTimelineStreamLifecycle.shouldInvalidate(
+                expectedGeneration: 4,
+                currentGeneration: 4,
+                isPaused: false
+            )
+        )
+        XCTAssertTrue(
+            MatrixTimelineStreamLifecycle.shouldInvalidate(
+                expectedGeneration: 4,
+                currentGeneration: 5,
+                isPaused: false
+            )
+        )
+    }
+
+    func testTimelineStreamInvalidatesImmediatelyInBackground() {
+        XCTAssertTrue(
+            MatrixTimelineStreamLifecycle.shouldInvalidate(
+                expectedGeneration: 4,
+                currentGeneration: 4,
+                isPaused: true
+            )
+        )
+    }
+
     private func makeSession() throws -> AuthenticatedSession {
         AuthenticatedSession(
             userID: "@alice:matrix.org",

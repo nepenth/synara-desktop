@@ -27,6 +27,7 @@ type SynaraDesktopBridge = {
   supportsUpdater?: boolean;
   supportsMediaPermissions?: boolean;
   supportsSecureSecretStore?: boolean;
+  supportsSpellcheck?: boolean;
   invoke?: <T = unknown>(command: string, args?: Record<string, unknown>) => Promise<T>;
   routes?: {
     later?: string;
@@ -501,6 +502,19 @@ export const invokeDesktop = async <T = unknown>(
   const result = await invokeDesktopWithAvailability<T>(command, args);
   if (!result.available) return undefined;
   return result.value;
+};
+
+export const enableDesktopSpellcheck = async (): Promise<boolean> => {
+  if (!isDesktopBridgeAvailable() || getBridge()?.supportsSpellcheck !== true) {
+    return false;
+  }
+
+  try {
+    const result = await invokeDesktopWithAvailability<void>('desktop_enable_spellcheck');
+    return result.available;
+  } catch {
+    return false;
+  }
 };
 
 const recordDesktopInvokeFailure = (command: string, detail: string): void => {

@@ -24,6 +24,13 @@
     "category": "SocialNetworking",
     "shortDescription": "Elegant Matrix client for AI Agents",
     "longDescription": "Synara Desktop — High-performance Matrix client optimized for interfacing with AI Agents, featuring smooth virtualization, agent cards, and native desktop integrations.",
+    "linux": {
+      "deb": {
+        "depends": [
+          "hunspell-en-us"
+        ]
+      }
+    },
     "macOS": {
       "frameworks": [],
       "minimumSystemVersion": "13.0",
@@ -42,7 +49,7 @@
   },
   "productName": "Synara",
   "mainBinaryName": "synara",
-  "version": "1.2.33",
+  "version": "1.2.34",
   "identifier": "com.whylandcreative.synara.desktop",
   "app": {
     "security": {

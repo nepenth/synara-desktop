@@ -2423,16 +2423,19 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
 
     private let sessionStore: AppSessionStore
     private let clientStore: MatrixRustSDKClientStore
+    private let logger: LoggingServicing
     private var profileAvatarCacheByUserID: [String: URL?] = [:]
     private let timelineCacheLock = NSLock()
     private var cachedTimelines: [String: Timeline] = [:]
 
     init(
         sessionStore: AppSessionStore,
-        clientStore: MatrixRustSDKClientStore
+        clientStore: MatrixRustSDKClientStore,
+        logger: LoggingServicing = AppLogger()
     ) {
         self.sessionStore = sessionStore
         self.clientStore = clientStore
+        self.logger = logger
     }
 
     func loadInitialTimeline(roomID: String) async -> TimelineLoadOutcome {
@@ -2495,6 +2498,80 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
         return timelineUpdates(roomID: roomID, focusedEventID: focusedEventID, focus: focus)
     }
 
+    func typingUsers(roomID: String) -> AsyncStream<[String]> {
+        guard case .signedIn(let session) = sessionStore.currentState else {
+            return AsyncStream { continuation in
+                continuation.yield([])
+                continuation.finish()
+            }
+        }
+
+        return AsyncStream(bufferingPolicy: .bufferingNewest(1)) { continuation in
+            let task = Task { [weak self] in
+                guard let self else {
+                    continuation.finish()
+                    return
+                }
+
+                while Task.isCancelled == false, self.isCurrentSignedInUser(session) {
+                    if await clientStore.isPausedForBackground() {
+                        try? await Task.sleep(nanoseconds: 250_000_000)
+                        continue
+                    }
+
+                    do {
+                        guard let room = try await self.resolveRoom(roomID: roomID, session: session) else {
+                            try? await Task.sleep(nanoseconds: 500_000_000)
+                            continue
+                        }
+
+                        let listener = MatrixRustSDKTypingNotificationsCollector { userIDs in
+                            continuation.yield(userIDs)
+                        }
+                        let handle = room.subscribeToTypingNotifications(listener: listener)
+                        let subscription = MatrixRustSDKTypingSubscription(
+                            room: room,
+                            listener: listener,
+                            handle: handle
+                        )
+
+                        do {
+                            _ = try await clientStore.startSyncService(session: session)
+                        } catch {
+                            self.logger.info(
+                                "Typing stream relying on classic timeline sync: \(String(describing: error))",
+                                category: .timeline
+                            )
+                        }
+
+                        let generation = await clientStore.currentRoomListSyncGeneration()
+                        await subscription.waitUntilInvalidated(
+                            clientStore: clientStore,
+                            generation: generation
+                        )
+                    } catch {
+                        if self.isCurrentSignedInUser(session), Task.isCancelled == false {
+                            self.logger.info(
+                                "Typing stream reconnecting: \(String(describing: error))",
+                                category: .timeline
+                            )
+                        }
+                    }
+
+                    if Task.isCancelled == false, self.isCurrentSignedInUser(session) {
+                        try? await Task.sleep(nanoseconds: 250_000_000)
+                    }
+                }
+
+                continuation.finish()
+            }
+
+            continuation.onTermination = { _ in
+                task.cancel()
+            }
+        }
+    }
+
     private func timelineUpdates(
         roomID: String,
         focusedEventID: String?,
@@ -2514,83 +2591,144 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
                     return
                 }
 
-                var mappingTask: Task<Void, Never>?
-                var eventUpdatesContinuation: AsyncStream<[EventTimelineItem]>.Continuation?
+                var reconnectCount = 0
+                while Task.isCancelled == false, self.isCurrentSignedInUser(session) {
+                    if await clientStore.isPausedForBackground() {
+                        try? await Task.sleep(nanoseconds: 250_000_000)
+                        continue
+                    }
 
-                defer {
+                    if reconnectCount > 0 {
+                        self.invalidateTimelineCache(roomID: roomID, focus: focus)
+                    }
+
+                    var mappingTask: Task<Void, Never>?
+                    var eventUpdatesContinuation: AsyncStream<[EventTimelineItem]>.Continuation?
+
+                    do {
+                        let room = try await self.resolveRoom(roomID: roomID, session: session)
+                        guard let room else {
+                            self.logger.info(
+                                "Timeline stream waiting for room",
+                                category: .timeline
+                            )
+                            try? await Task.sleep(nanoseconds: 500_000_000)
+                            reconnectCount += 1
+                            continue
+                        }
+
+                        let timeline = try await self.resolveCachedTimeline(
+                            room: room,
+                            focus: focus,
+                            pageSize: 20
+                        )
+                        let eventUpdates = AsyncStream<[EventTimelineItem]>.makeStream(
+                            bufferingPolicy: .bufferingNewest(1)
+                        )
+                        eventUpdatesContinuation = eventUpdates.continuation
+
+                        let listener = MatrixRustSDKStreamingTimelineCollector { events in
+                            eventUpdates.continuation.yield(events)
+                        }
+                        let handle = await timeline.addListener(listener: listener)
+                        let subscription = MatrixRustSDKTimelineSubscription(
+                            timeline: timeline,
+                            listener: listener,
+                            handle: handle
+                        )
+
+                        mappingTask = Task { [weak self] in
+                            guard let self else {
+                                return
+                            }
+
+                            for await events in eventUpdates.stream {
+                                guard Task.isCancelled == false,
+                                      self.isCurrentSignedInUser(session) else {
+                                    return
+                                }
+
+                                let sdkItems = events.compactMap(Self.mapTimelineItem)
+                                    .sorted { $0.timestamp < $1.timestamp }
+                                guard sdkItems.isEmpty == false else {
+                                    continue
+                                }
+                                continuation.yield(.loaded(sdkItems))
+                            }
+                        }
+
+                        if focusedEventID != nil || focus != .live {
+                            await Self.paginateFocusedTimelineForwardToLiveEnd(timeline)
+                        }
+
+                        do {
+                            _ = try await clientStore.startSyncService(session: session)
+                            let generation = await clientStore.currentRoomListSyncGeneration()
+                            await subscription.waitUntilInvalidated(
+                                clientStore: clientStore,
+                                generation: generation
+                            )
+                        } catch {
+                            self.logger.info(
+                                "Timeline stream using classic sync fallback: \(String(describing: error))",
+                                category: .timeline
+                            )
+                            await self.runClassicTimelineSync(
+                                session: session,
+                                subscription: subscription
+                            )
+                        }
+                    } catch {
+                        if self.isCurrentSignedInUser(session), Task.isCancelled == false {
+                            self.logger.info(
+                                "Timeline stream reconnecting: \(String(describing: error))",
+                                category: .timeline
+                            )
+                        }
+                    }
+
                     eventUpdatesContinuation?.finish()
                     mappingTask?.cancel()
+                    if let mappingTask {
+                        _ = await mappingTask.result
+                    }
+                    reconnectCount += 1
+
+                    if Task.isCancelled == false, self.isCurrentSignedInUser(session) {
+                        try? await Task.sleep(nanoseconds: 250_000_000)
+                    }
                 }
 
-                do {
-                    _ = try await clientStore.startSyncService(session: session)
-                    let room = try await self.resolveRoom(roomID: roomID, session: session)
-                    guard let room else {
-                        if self.isCurrentSignedInUser(session) {
-                            continuation.yield(.empty)
-                        }
-                        continuation.finish()
-                        return
-                    }
-
-                    let timeline = try await self.resolveCachedTimeline(
-                        room: room,
-                        focus: focus,
-                        pageSize: 20
-                    )
-
-                    let eventUpdates = AsyncStream<[EventTimelineItem]>.makeStream(bufferingPolicy: .bufferingNewest(1))
-                    eventUpdatesContinuation = eventUpdates.continuation
-
-                    let listener = MatrixRustSDKStreamingTimelineCollector { events in
-                        eventUpdates.continuation.yield(events)
-                    }
-                    let handle = await timeline.addListener(listener: listener)
-                    let subscription = MatrixRustSDKTimelineSubscription(
-                        timeline: timeline,
-                        listener: listener,
-                        handle: handle
-                    )
-
-                    mappingTask = Task { [weak self] in
-                        guard let self else {
-                            return
-                        }
-
-                        for await events in eventUpdates.stream {
-                            guard Task.isCancelled == false else {
-                                return
-                            }
-                            guard self.isCurrentSignedInUser(session) else {
-                                return
-                            }
-
-                            let sdkItems = events.compactMap(Self.mapTimelineItem)
-                                .sorted { $0.timestamp < $1.timestamp }
-                            guard sdkItems.isEmpty == false else {
-                                continue
-                            }
-                            continuation.yield(.loaded(sdkItems))
-                        }
-                    }
-
-                    if focusedEventID != nil || focus != .live {
-                        await Self.paginateFocusedTimelineForwardToLiveEnd(timeline)
-                    }
-
-                    await subscription.waitUntilCancelled()
-                } catch {
-                    if self.isCurrentSignedInUser(session) {
-                        continuation.yield(.failed("Could not load messages. Try again."))
-                    }
-                    continuation.finish()
-                }
+                continuation.finish()
             }
 
             continuation.onTermination = { _ in
                 task.cancel()
             }
         }
+    }
+
+    private func runClassicTimelineSync(
+        session: AuthenticatedSession,
+        subscription: MatrixRustSDKTimelineSubscription
+    ) async {
+        var attempts = 0
+        while attempts < 3,
+              Task.isCancelled == false,
+              isCurrentSignedInUser(session),
+              await clientStore.isPausedForBackground() == false {
+            do {
+                try await clientStore.syncOnce(session: session, fullState: false)
+            } catch {
+                logger.info(
+                    "Classic timeline sync attempt failed: \(String(describing: error))",
+                    category: .timeline
+                )
+                try? await Task.sleep(nanoseconds: 500_000_000)
+            }
+            attempts += 1
+        }
+        subscription.cancel()
     }
 
     private func isCurrentSignedInUser(_ session: AuthenticatedSession) -> Bool {
@@ -3522,6 +3660,16 @@ private final class MatrixRustSDKTimelineCollector: TimelineListener, @unchecked
     }
 }
 
+enum MatrixTimelineStreamLifecycle {
+    static func shouldInvalidate(
+        expectedGeneration: UInt64,
+        currentGeneration: UInt64,
+        isPaused: Bool
+    ) -> Bool {
+        isPaused || currentGeneration != expectedGeneration
+    }
+}
+
 private final class MatrixRustSDKTimelineSubscription: @unchecked Sendable {
     private let timeline: Timeline
     private let listener: MatrixRustSDKStreamingTimelineCollector
@@ -3533,12 +3681,77 @@ private final class MatrixRustSDKTimelineSubscription: @unchecked Sendable {
         self.handle = handle
     }
 
-    func waitUntilCancelled() async {
+    func waitUntilInvalidated(
+        clientStore: MatrixRustSDKClientStore,
+        generation: UInt64
+    ) async {
         while Task.isCancelled == false {
-            try? await Task.sleep(nanoseconds: 1_000_000_000)
+            let currentGeneration = await clientStore.currentRoomListSyncGeneration()
+            let isPaused = await clientStore.isPausedForBackground()
+            if MatrixTimelineStreamLifecycle.shouldInvalidate(
+                expectedGeneration: generation,
+                currentGeneration: currentGeneration,
+                isPaused: isPaused
+            ) {
+                break
+            }
+            try? await Task.sleep(nanoseconds: 250_000_000)
         }
+        cancel()
+    }
+
+    func cancel() {
         handle.cancel()
         _ = timeline
+        _ = listener
+    }
+
+    deinit {
+        handle.cancel()
+    }
+}
+
+private final class MatrixRustSDKTypingNotificationsCollector: TypingNotificationsListener, @unchecked Sendable {
+    private let onUpdate: @Sendable ([String]) -> Void
+
+    init(onUpdate: @escaping @Sendable ([String]) -> Void) {
+        self.onUpdate = onUpdate
+    }
+
+    func call(typingUserIds: [String]) {
+        onUpdate(typingUserIds)
+    }
+}
+
+private final class MatrixRustSDKTypingSubscription: @unchecked Sendable {
+    private let room: Room
+    private let listener: MatrixRustSDKTypingNotificationsCollector
+    private let handle: TaskHandle
+
+    init(room: Room, listener: MatrixRustSDKTypingNotificationsCollector, handle: TaskHandle) {
+        self.room = room
+        self.listener = listener
+        self.handle = handle
+    }
+
+    func waitUntilInvalidated(
+        clientStore: MatrixRustSDKClientStore,
+        generation: UInt64
+    ) async {
+        while Task.isCancelled == false {
+            let currentGeneration = await clientStore.currentRoomListSyncGeneration()
+            let isPaused = await clientStore.isPausedForBackground()
+            if MatrixTimelineStreamLifecycle.shouldInvalidate(
+                expectedGeneration: generation,
+                currentGeneration: currentGeneration,
+                isPaused: isPaused
+            ) {
+                break
+            }
+            try? await Task.sleep(nanoseconds: 250_000_000)
+        }
+        handle.cancel()
+        _ = room
         _ = listener
     }
 

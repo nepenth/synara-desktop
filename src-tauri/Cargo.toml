@@ -2,7 +2,7 @@
 
 [package]
 name = "synara"
-version = "1.2.33"
+version = "1.2.34"
 description = "A modern Matrix client"
 authors = ["Synara contributors"]
 license = "AGPL-3.0-only"
@@ -51,6 +51,8 @@ webkit2gtk = "2.0.2"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 mac-notification-sys = "0.6.12"
+objc2 = "0.6"
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSResponder", "NSWindow"] }
 security-framework = "3.7"
 
 [lib]
