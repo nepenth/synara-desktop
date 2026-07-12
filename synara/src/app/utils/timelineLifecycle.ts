@@ -2,6 +2,20 @@ import { Direction, MatrixClient, MatrixEvent, Room, RoomState } from 'matrix-js
 import type { EventTimeline } from 'matrix-js-sdk/lib/models/event-timeline';
 
 export const ROOM_TIMELINE_VIEWPORT_RESTORE_TTL_MS = 10 * 60 * 1000;
+export const TIMELINE_BOTTOM_TOLERANCE_PX = 1;
+
+export const getTimelineBottomGap = (
+  scrollHeight: number,
+  scrollTop: number,
+  viewportHeight: number
+): number => scrollHeight - scrollTop - viewportHeight;
+
+export const isTimelineViewportAtBottom = (
+  scrollHeight: number,
+  scrollTop: number,
+  viewportHeight: number,
+  tolerance = TIMELINE_BOTTOM_TOLERANCE_PX
+): boolean => getTimelineBottomGap(scrollHeight, scrollTop, viewportHeight) <= tolerance;
 
 type RoomTimelineViewportSnapshot = {
   atBottom: boolean;

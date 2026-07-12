@@ -23,6 +23,7 @@ import { RenderElement, RenderLeaf } from './Elements';
 import { CustomElement } from './slate';
 import * as css from './Editor.css';
 import { toggleKeyboardShortcut } from './keyboard';
+import { enableDesktopSpellcheck } from '../../utils/desktop';
 
 const initialValue: CustomElement[] = [
   {
@@ -155,6 +156,9 @@ export const CustomEditor = forwardRef<HTMLDivElement, CustomEditorProps>(
                   autoCorrect={spellCheck ? 'on' : 'off'}
                   autoCapitalize={spellCheck ? 'sentences' : 'none'}
                   spellCheck={spellCheck}
+                  onFocus={() => {
+                    if (spellCheck) void enableDesktopSpellcheck();
+                  }}
                   onKeyDown={handleKeydown}
                   onKeyUp={onKeyUp}
                   onPaste={onPaste}

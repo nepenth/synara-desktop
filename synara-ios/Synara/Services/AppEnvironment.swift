@@ -68,7 +68,11 @@ struct AppEnvironment {
         )
         let router = AppRouter()
         let drafts = DraftStore()
-        let timeline = MatrixRustSDKTimelineService(sessionStore: session, clientStore: matrixSDKClientStore)
+        let timeline = MatrixRustSDKTimelineService(
+            sessionStore: session,
+            clientStore: matrixSDKClientStore,
+            logger: logger
+        )
         let roomList = MatrixRustSDKRoomListService(
             sessionStore: session,
             clientStore: matrixSDKClientStore,
