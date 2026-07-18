@@ -84,6 +84,22 @@ struct SpaceSummary: Identifiable, Equatable, Hashable {
     let name: String
 }
 
+enum RoomListRecentActivity {
+    static let window: TimeInterval = 86400
+
+    static func recent(from rooms: [RoomSummary], referenceDate: Date = Date()) -> [RoomSummary] {
+        let cutoff = referenceDate.addingTimeInterval(-window)
+        return rooms
+            .filter { $0.lastActivityAt > cutoff }
+            .sorted {
+                if $0.lastActivityAt != $1.lastActivityAt {
+                    return $0.lastActivityAt > $1.lastActivityAt
+                }
+                return $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+            }
+    }
+}
+
 enum RoomListState: Equatable {
     case idle
     case loading

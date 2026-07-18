@@ -84,8 +84,13 @@ struct RoomListView: View {
                 }
             case .loaded(let rooms):
                 let filteredRooms = filteredRooms(from: rooms)
-                let channelRooms = filteredRooms.filter { $0.kind == .room }
-                let directRooms = filteredRooms.filter { $0.kind == .directMessage }
+                let isUITest = ProcessInfo.processInfo.environment["SYNARA_UI_TESTS"] == "1"
+                let referenceDate = isUITest ? RoomListFixtures.now : Date()
+                let recentRooms = RoomListRecentActivity.recent(from: filteredRooms, referenceDate: referenceDate)
+                let showRecentSection = searchQuery.isEmpty && selectedSpaceID == nil && !recentRooms.isEmpty
+                let recentIDs = showRecentSection ? Set(recentRooms.map { $0.id }) : Set<String>()
+                let channelRooms = filteredRooms.filter { $0.kind == .room && !recentIDs.contains($0.id) }
+                let directRooms = filteredRooms.filter { $0.kind == .directMessage && !recentIDs.contains($0.id) }
                 let spaces = spaces(from: rooms)
                 let spaceUnreadCounts = RoomListSpaceGrouping.unreadCountsBySpaceID(from: rooms)
                 let selectedSpaceTitle = RoomListSpaceGrouping.selectedSpaceName(
@@ -133,6 +138,16 @@ struct RoomListView: View {
                                 message: "Try another room name or message preview."
                             )
                             .listRowInsets(EdgeInsets())
+                        }
+
+                        if showRecentSection {
+                            Section {
+                                ForEach(recentRooms, id: \.id) { room in
+                                    roomRow(room)
+                                }
+                            } header: {
+                                RoomSectionHeader(title: "Recent activity (24h)", count: recentRooms.count)
+                            }
                         }
 
                         if let selectedSpaceTitle {

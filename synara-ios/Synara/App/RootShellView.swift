@@ -73,7 +73,7 @@ struct RootShellView: View {
                     state: cryptoVerificationState,
                     onAccept: { runCryptoVerificationAction { await environment.crypto.acceptVerificationRequest() } },
                     onStartSas: { runCryptoVerificationAction { await environment.crypto.startSasVerification() } },
-                    onApprove: { runCryptoVerificationAction { await environment.crypto.approveVerification() } },
+                    onApprove: { runCryptoVerificationAction({ await environment.crypto.approveVerification() }, isMatchStep: true) },
                     onDecline: { runCryptoVerificationAction { await environment.crypto.declineVerification() } },
                     onCancel: { runCryptoVerificationAction { await environment.crypto.cancelVerification() } },
                     onDismissTerminal: { self.cryptoVerificationState = nil }
@@ -140,6 +140,14 @@ struct RootShellView: View {
                     cryptoVerificationState = update
                 }
                 if update.isTerminal {
+                    if case .finished = update {
+                        // Verification succeeded — kick a crypto status refresh.
+                        // Any open timeline that is showing the "Encrypted history" / "Retry Decryption"
+                        // banner will re-compute on its next status poll and should clear or become actionable.
+                        Task {
+                            _ = await environment.crypto.sessionStatus()
+                        }
+                    }
                     try? await Task.sleep(nanoseconds: 1_500_000_000)
                     await MainActor.run {
                         if cryptoVerificationState == update {
@@ -151,12 +159,30 @@ struct RootShellView: View {
         }
     }
 
-    private func runCryptoVerificationAction(_ action: @escaping () async -> CryptoActionResult) {
+    private func runCryptoVerificationAction(_ action: @escaping () async -> CryptoActionResult, isMatchStep: Bool = false) {
         Task {
             let result = await action()
-            if case .failed = result {
-                await MainActor.run {
-                    cryptoVerificationState = .failed
+            await MainActor.run {
+                if case .failed(let msg) = result {
+                    if isMatchStep {
+                        // For "They Match", do not immediately force .failed — the verification stream/delegate
+                        // (didFinish / didFail) is the source of truth for SAS. Many flows surface transient
+                        // errors from the approve call while the delegate later delivers the real terminal state.
+                        // Let the listener in startCryptoVerificationUpdates drive .finished / .failed.
+                        // Only force if the stream hasn't moved us to a terminal state after a short grace.
+                        Task { @MainActor in
+                            try? await Task.sleep(nanoseconds: 250_000_000)
+                            if let s = cryptoVerificationState, !s.isTerminal {
+                                cryptoVerificationState = .failed
+                            }
+                        }
+                    } else {
+                        cryptoVerificationState = .failed
+                    }
+                } else if case .completed = result {
+                    // Success path for approve — stream should deliver .finished shortly.
+                    // Kick a status refresh so banners (unverified / UTD) re-evaluate quickly.
+                    // The caller for match step passes isMatchStep: true.
                 }
             }
         }

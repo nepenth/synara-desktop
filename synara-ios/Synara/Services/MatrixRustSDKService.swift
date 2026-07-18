@@ -735,6 +735,7 @@ actor MatrixRustSDKClientStore {
         _ = try await ensureClient(for: session)
         let controller = try requireVerificationController()
         try await controller.approveVerification()
+        broadcastVerificationState(.finished)
     }
 
     func declineVerification(session: AuthenticatedSession) async throws {
