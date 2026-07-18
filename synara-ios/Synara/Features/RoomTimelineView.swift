@@ -152,7 +152,7 @@ struct RoomTimelineView: View {
     @State private var lastOlderPaginationAt = Date.distantPast
     @State private var paginationScrollAnchorID: String?
     @State private var isJumpingToLatest = false
-    @State private var pendingJumpToLatestEventID: String?
+    @State private var pendingJumpToLatestEventID: String? // legacy, vestigial after direct-jump patch (see jumpToLatest)
     @State private var isComposerFocused = false
     @State private var isTimelineBottomVisible = false
     @State private var lastMarkedFullyReadEventID: String?
@@ -594,12 +594,20 @@ struct RoomTimelineView: View {
     }
 
     @discardableResult
-    private func scrollToPendingLatestIfNeeded(items: [TimelineItem], proxy: ScrollViewProxy) -> Bool {
+    private func scrollToPendingLatestIfNeeded(items: [TimelineItem], proxy: ScrollViewProxy) -> Bool { // legacy path (direct jump now used)
         guard let pendingJumpToLatestEventID else {
             return false
         }
-        guard let latest = items.last,
-              latest.eventID == pendingJumpToLatestEventID || latest.id == pendingJumpToLatestEventID else {
+        guard let latest = items.last else {
+            return false
+        }
+
+        let idMatch = latest.eventID == pendingJumpToLatestEventID || latest.id == pendingJumpToLatestEventID
+        // Fallback: if merge produced a slightly different wrapper (common with encryption placeholders or stableKey),
+        // still accept if the latest item is within a few seconds of when we initiated the jump.
+        let timeMatch = abs(latest.timestamp.timeIntervalSinceNow) < 30
+
+        guard idMatch || timeMatch else {
             return false
         }
 
@@ -609,7 +617,7 @@ struct RoomTimelineView: View {
             proxy: proxy,
             animated: true,
             ignoreComposerFocus: true,
-            reason: "jump-latest-loaded"
+            reason: idMatch ? "jump-latest-loaded" : "jump-latest-loaded-time-fallback"
         )
         return true
     }
@@ -1511,6 +1519,9 @@ struct RoomTimelineView: View {
     }
 
     private func jumpToLatest(proxy: ScrollViewProxy, currentItems: [TimelineItem]) {
+        // Direct post-merge scroll + retry for reliability (bypasses onChange timing).
+        // See narrow review 2026-07-18 for races/state notes. Pending var is now vestigial.
+
         guard isJumpingToLatest == false else {
             return
         }
@@ -1569,10 +1580,25 @@ struct RoomTimelineView: View {
                     currentUserID: currentUserID
                 )
                 state = .loaded(merged, isPaginating: false)
+                lastRenderedTimelineCount = merged.count
                 startTimelineUpdates(streamFocusEventID: .some(nil))
                 if let latest = merged.last {
-                    pendingJumpToLatestEventID = latest.eventID
+                    pendingJumpToLatestEventID = nil
+                    timelinePosition = .placingInitial
+                    scrollToTimelineBottom(
+                        proxy: proxy,
+                        animated: true,
+                        ignoreComposerFocus: true,
+                        reason: "jump-latest-final-direct"
+                    )
                     markLatestAsRead(eventID: latest.eventID)
+
+                    Task { @MainActor in
+                        try? await Task.sleep(nanoseconds: 80_000_000)
+                        if !isTimelineBottomVisible {
+                            scrollToTimelineBottom(proxy: proxy, animated: false, ignoreComposerFocus: true, reason: "jump-latest-retry")
+                        }
+                    }
                 } else {
                     scrollToTimelineBottom(
                         proxy: proxy,

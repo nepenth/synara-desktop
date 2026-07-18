@@ -191,6 +191,8 @@ function HomeEmpty() {
 }
 
 const DEFAULT_CATEGORY_ID = makeNavCategoryId('home', 'room');
+const RECENT_WINDOW_MS = 24 * 60 * 60 * 1000;
+
 export function Home() {
   const mx = useMatrixClient();
   useNavToActivePathMapper('home');
@@ -207,8 +209,23 @@ export function Home() {
   const noRoomToDisplay = rooms.length === 0;
   const [closedCategories, setClosedCategories] = useAtom(useClosedNavCategoriesAtom());
 
-  const sortedRooms = useMemo(() => {
-    const items = Array.from(rooms).sort(
+  const recentRoomIds = useMemo(() => {
+    const cutoff = Date.now() - RECENT_WINDOW_MS;
+    return Array.from(rooms)
+      .filter((rId) => {
+        const ts = mx.getRoom(rId)?.getLastActiveTimestamp() ?? 0;
+        return ts > cutoff;
+      })
+      .sort(factoryRoomIdByAtoZ(mx));
+  }, [mx, rooms]);
+
+  const mainRoomIds = useMemo(() => {
+    const cutoff = Date.now() - RECENT_WINDOW_MS;
+    const nonRecent = Array.from(rooms).filter((rId) => {
+      const ts = mx.getRoom(rId)?.getLastActiveTimestamp() ?? 0;
+      return ts <= cutoff;
+    });
+    const items = nonRecent.sort(
       closedCategories.has(DEFAULT_CATEGORY_ID)
         ? factoryRoomIdByActivity(mx)
         : factoryRoomIdByAtoZ(mx)
@@ -220,7 +237,7 @@ export function Home() {
   }, [mx, rooms, closedCategories, roomToUnread, selectedRoomId]);
 
   const virtualizer = useVirtualizer({
-    count: sortedRooms.length,
+    count: mainRoomIds.length,
     getScrollElement: () => scrollRef.current,
     estimateSize: () => 38,
     overscan: 10,
@@ -288,6 +305,32 @@ export function Home() {
                 </NavLink>
               </NavItem>
             </NavCategory>
+
+            {recentRoomIds.length > 0 && (
+              <NavCategory>
+                <NavCategoryHeader>
+                  <Text size="B300">Recent (24h)</Text>
+                </NavCategoryHeader>
+                {recentRoomIds.map((roomId) => {
+                  const room = mx.getRoom(roomId);
+                  if (!room) return null;
+                  const selected = selectedRoomId === roomId;
+                  return (
+                    <RoomNavItem
+                      key={roomId}
+                      room={room}
+                      selected={selected}
+                      linkPath={getHomeRoomPath(getCanonicalAliasOrRoomId(mx, roomId))}
+                      notificationMode={getRoomNotificationMode(
+                        notificationPreferences,
+                        room.roomId
+                      )}
+                    />
+                  );
+                })}
+              </NavCategory>
+            )}
+
             <NavCategory>
               <NavCategoryHeader>
                 <RoomNavCategoryButton
@@ -305,7 +348,7 @@ export function Home() {
                 }}
               >
                 {virtualizer.getVirtualItems().map((vItem) => {
-                  const roomId = sortedRooms[vItem.index];
+                  const roomId = mainRoomIds[vItem.index];
                   const room = mx.getRoom(roomId);
                   if (!room) return null;
                   const selected = selectedRoomId === roomId;
