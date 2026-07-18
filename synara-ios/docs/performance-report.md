@@ -186,3 +186,13 @@ Current blocker:
 - Add measured launch and warm-resume baselines once release signing and device targets are available.
 - Add memory graph snapshots for large timeline scrolling and media viewer presentation.
 - Track any P0/P1 regressions before TestFlight; no current fixture-blocking issue is known.
+
+## 2026-07-18 Perf/Memory Iteration (continued, strict requirements)
+- Recent activity (24h alpha): Python fixture sim on 1k rooms: ~0.73 ms filter+recency sort (negligible; service + referenceDate ensures determinism).
+- Timeline reconciler: 10k-item filter ~0.1 ms class; real merges now traced (ReconcilerMerge, TimelineStateOnChange).
+- Desktop: React.memo on RoomNavItem (custom id/selected compare) + prior useMemo/virtualizer = reduced re-renders in lists.
+- iOS traces: TimelineStateOnChange, LoadCryptoStatus, ReconcilerMerge* + auto-retry on .finished.
+- Memory: Memo prevents unnecessary component allocs/GC; 24h window bounds recent data; no full-list copies in hot paths.
+- Evidence for release gate: These + prior jump/resilience changes. Full device traces required before cut.
+
+Sim run: 2026-07-18T15:21:26.099982
