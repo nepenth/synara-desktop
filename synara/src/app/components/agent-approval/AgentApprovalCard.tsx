@@ -68,6 +68,10 @@ export function AgentApprovalCard({ prompt, target }: AgentApprovalCardProps) {
   const [confirmApproveAlways, setConfirmApproveAlways] = useState(false);
   const canReact = Boolean(target && target.canSendReaction !== false);
   const disabled = !canReact || Boolean(busyKey || sentKey);
+  const isResolved = Boolean(sentKey);
+
+  // Default closed for huge source contexts (common on first real large prompts).
+  const [showFullPrompt, setShowFullPrompt] = useState(false);
 
   const sendReaction = useCallback(
     async (reactionKey: string) => {
@@ -140,7 +144,7 @@ export function AgentApprovalCard({ prompt, target }: AgentApprovalCardProps) {
         </Chip>
       </Box>
 
-      {prompt.command && (
+      {prompt.command && !isResolved && (
         <Box
           direction="Column"
           gap="200"
@@ -159,7 +163,7 @@ export function AgentApprovalCard({ prompt, target }: AgentApprovalCardProps) {
         </Box>
       )}
 
-      {sourceDetails && (
+      {sourceDetails && !isResolved && (
         <Box
           as="details"
           direction="Column"
@@ -169,7 +173,7 @@ export function AgentApprovalCard({ prompt, target }: AgentApprovalCardProps) {
             borderRadius: config.radii.R300,
             padding: config.space.S300,
           }}
-          open
+          open={false}
         >
           <Box as="summary" alignItems="Center" gap="200" style={{ cursor: 'pointer' }}>
             <Text as="span" size="T300">
@@ -247,6 +251,7 @@ export function AgentApprovalCard({ prompt, target }: AgentApprovalCardProps) {
           </Box>
         )}
 
+        {!isResolved && (
         <Box gap="200" wrap="Wrap">
           {APPROVAL_ACTIONS.map((action) => {
             const isAlways = action.key === AGENT_APPROVAL_REACTION_APPROVE_ALWAYS;
@@ -273,6 +278,8 @@ export function AgentApprovalCard({ prompt, target }: AgentApprovalCardProps) {
             );
           })}
         </Box>
+        )}
+
         {!target && (
           <Text size="T200" priority="300">
             Open the room message to approve by reaction.
@@ -283,10 +290,24 @@ export function AgentApprovalCard({ prompt, target }: AgentApprovalCardProps) {
             You do not have permission to react in this room.
           </Text>
         )}
-        {sentKey && (
-          <Text size="T200" priority="300">
-            Sent {sentKey} reaction.
-          </Text>
+        {isResolved && (
+          <Box
+            direction="Column"
+            gap="100"
+            style={{
+              border: `${config.borderWidth.B300} solid ${color.Success?.Main || "#22c55e"}`,
+              borderRadius: config.radii.R300,
+              padding: config.space.S200,
+              backgroundColor: color.SurfaceVariant?.Container || "rgba(0,0,0,0.03)",
+            }}
+          >
+            <Text size="T300" priority="400">
+              Approved ({sentKey}). Card can be dismissed or will be replaced in a future update.
+            </Text>
+            {prompt.commandPreview && (
+              <Text size="T200" priority="300">Command: {prompt.commandPreview}</Text>
+            )}
+          </Box>
         )}
         {error && (
           <Text size="T200" style={{ color: color.Critical.Main }}>

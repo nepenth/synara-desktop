@@ -502,4 +502,68 @@ final class RoomListServiceTests: XCTestCase {
         XCTAssertEqual(secondBatch.first?.id, "!new:matrix.org")
     }
 
+
+    func testRecentActivityWithReferenceDateFiltersCorrectlyAndSortsRecencyFirst() {
+        let now = RoomListFixtures.now
+        // Use small fixture and force some recent timestamps relative to now
+        var rooms = RoomListFixtures.small()
+        // Make two "recent" (within 24h of now) with different activity times
+        if var r1 = rooms.first(where: { $0.id == "!general:matrix.org" }) {
+            r1 = RoomSummary(
+                id: r1.id, name: r1.name, lastMessagePreview: r1.lastMessagePreview,
+                unreadCount: r1.unreadCount, hasHighlight: r1.hasHighlight, kind: r1.kind,
+                membership: r1.membership, lastActivityAt: now.addingTimeInterval(-300),
+                parentSpaces: r1.parentSpaces, hasAgentActivity: r1.hasAgentActivity,
+                latestAgentCard: r1.latestAgentCard, latestAgentCardEventID: r1.latestAgentCardEventID
+            )
+            rooms = rooms.map { $0.id == r1.id ? r1 : $0 }
+        }
+        if var r2 = rooms.first(where: { $0.id == "!project:matrix.org" }) {
+            r2 = RoomSummary(
+                id: r2.id, name: r2.name, lastMessagePreview: r2.lastMessagePreview,
+                unreadCount: r2.unreadCount, hasHighlight: r2.hasHighlight, kind: r2.kind,
+                membership: r2.membership, lastActivityAt: now.addingTimeInterval(-60),
+                parentSpaces: r2.parentSpaces, hasAgentActivity: r2.hasAgentActivity,
+                latestAgentCard: r2.latestAgentCard, latestAgentCardEventID: r2.latestAgentCardEventID
+            )
+            rooms = rooms.map { $0.id == r2.id ? r2 : $0 }
+        }
+        // Force one old
+        if var old = rooms.first(where: { $0.id == "!design:matrix.org" }) {
+            old = RoomSummary(
+                id: old.id, name: old.name, lastMessagePreview: old.lastMessagePreview,
+                unreadCount: old.unreadCount, hasHighlight: old.hasHighlight, kind: old.kind,
+                membership: old.membership, lastActivityAt: now.addingTimeInterval(-100_000),
+                parentSpaces: old.parentSpaces, hasAgentActivity: old.hasAgentActivity,
+                latestAgentCard: old.latestAgentCard, latestAgentCardEventID: old.latestAgentCardEventID
+            )
+            rooms = rooms.map { $0.id == old.id ? old : $0 }
+        }
+
+        let rec = RoomListRecentActivity.recent(from: rooms, referenceDate: now)
+        XCTAssertTrue(rec.count >= 1, "Should find at least the recent ones")
+        // Recency first: most recent activity should be first
+        if rec.count >= 2 {
+            XCTAssertGreaterThanOrEqual(rec[0].lastActivityAt, rec[1].lastActivityAt, "Should be recency descending")
+        }
+        // Old one should be excluded
+        XCTAssertFalse(rec.contains { $0.id == "!design:matrix.org" })
+    }
+
+    func testRecentActivityEmptyWhenAllOld() {
+        let now = RoomListFixtures.now
+        var rooms = RoomListFixtures.small()
+        rooms = rooms.map { r in
+            var copy = r
+            copy = RoomSummary(id: r.id, name: r.name, lastMessagePreview: r.lastMessagePreview,
+                unreadCount: r.unreadCount, hasHighlight: r.hasHighlight, kind: r.kind,
+                membership: r.membership, lastActivityAt: now.addingTimeInterval(-200_000),
+                parentSpaces: r.parentSpaces, hasAgentActivity: r.hasAgentActivity,
+                latestAgentCard: r.latestAgentCard, latestAgentCardEventID: r.latestAgentCardEventID)
+            return copy
+        }
+        let rec = RoomListRecentActivity.recent(from: rooms, referenceDate: now)
+        XCTAssertTrue(rec.isEmpty)
+    }
+
 }
