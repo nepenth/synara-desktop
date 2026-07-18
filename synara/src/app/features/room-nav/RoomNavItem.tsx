@@ -240,19 +240,6 @@ function CallChatToggle() {
   );
 }
 
-function areRoomNavItemPropsEqual(prev: RoomNavItemProps, next: RoomNavItemProps): boolean {
-  // Stable key comparison to prevent re-renders on identity changes in large lists (perf + memory)
-  if (prev.room.roomId !== next.room.roomId) return false;
-  if (prev.selected !== next.selected) return false;
-  if (prev.linkPath !== next.linkPath) return false;
-  if (prev.notificationMode !== next.notificationMode) return false;
-  if (prev.showAvatar !== next.showAvatar) return false;
-  if (prev.direct !== next.direct) return false;
-  return true;
-}
-
-export { RoomNavItem as RoomNavItem }; // re-export for compatibility if needed
-
 type RoomNavItemProps = {
   room: Room;
   selected: boolean;
@@ -261,14 +248,7 @@ type RoomNavItemProps = {
   showAvatar?: boolean;
   direct?: boolean;
 };
-export const RoomNavItem = React.memo(function RoomNavItem({
-  room,
-  selected,
-  showAvatar,
-  direct,
-  notificationMode,
-  linkPath,
-}: RoomNavItemProps) {
+function RoomNavItemImpl({
   room,
   selected,
   showAvatar,
@@ -462,4 +442,18 @@ export const RoomNavItem = React.memo(function RoomNavItem({
       )}
     </NavItem>
   );
-}, areRoomNavItemPropsEqual);
+}
+
+
+function areRoomNavItemPropsEqual(prev: RoomNavItemProps, next: RoomNavItemProps): boolean {
+  // Stable key comparison to prevent re-renders on identity changes in large lists (perf + memory)
+  if (prev.room.roomId !== next.room.roomId) return false;
+  if (prev.selected !== next.selected) return false;
+  if (prev.linkPath !== next.linkPath) return false;
+  if (prev.notificationMode !== next.notificationMode) return false;
+  if (prev.showAvatar !== next.showAvatar) return false;
+  if (prev.direct !== next.direct) return false;
+  return true;
+}
+
+export const RoomNavItem = React.memo(RoomNavItemImpl, areRoomNavItemPropsEqual);
