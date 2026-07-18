@@ -276,6 +276,7 @@ struct RoomTimelineView: View {
                 _ = await loadCryptoStatus()
             }
             startTypingUpdates()
+            startVerificationAutoRetry()
             await loadTimeline()
             startTimelineUpdates(streamFocusEventID: focusedEventID == nil ? .some(nil) : nil)
         }
@@ -483,6 +484,8 @@ struct RoomTimelineView: View {
                     }
                 }
                 .onChange(of: state) { currentState in
+                    let traceID = PerformanceTrace.begin("TimelineStateOnChange")
+                    defer { PerformanceTrace.end("TimelineStateOnChange", id: traceID) }
                     guard case .loaded(let updatedItems, let isPaginating) = currentState else {
                         return
                     }
@@ -1049,11 +1052,28 @@ struct RoomTimelineView: View {
     }
 
     private func loadCryptoStatus() async -> RoomCryptoStatus {
+        let traceID = PerformanceTrace.begin("LoadCryptoStatus")
+        defer { PerformanceTrace.end("LoadCryptoStatus", id: traceID) }
         let status = await environment.crypto.roomStatus(roomID: roomID)
         await MainActor.run {
             cryptoStatus = status
         }
         return status
+    }
+
+
+    private func startVerificationAutoRetry() {
+        Task {
+            for await update in environment.crypto.verificationUpdates() {
+                if case .finished = update, cryptoStatus.unableToDecryptCount > 0 {
+                    // Post-verification success: auto-retry decryption to clear "Retry Decryption" / UTD banners
+                    // in this room. This is the strict requirement for the flow after successful SAS.
+                    _ = await environment.crypto.retryDecryption(roomID: roomID)
+                    _ = await loadCryptoStatus()
+                    logTimelineEvent("post-verification-retry", fields: ["utdBefore": "\(cryptoStatus.unableToDecryptCount)"])
+                }
+            }
+        }
     }
 
     private func retryDecryption() {
@@ -1574,7 +1594,9 @@ struct RoomTimelineView: View {
                 case .failed:
                     nextItems = baselineItems
                 }
-                let merged = TimelinePendingReconciler.mergeStableWindow(
+                let traceID = PerformanceTrace.begin("TimelineReconcilerMerge")
+                    defer { PerformanceTrace.end("TimelineReconcilerMerge", id: traceID) }
+                    let merged = TimelinePendingReconciler.mergeStableWindow(
                     streamItems: nextItems,
                     localItems: baselineItems,
                     currentUserID: currentUserID

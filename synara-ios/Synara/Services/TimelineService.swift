@@ -178,6 +178,8 @@ enum TimelinePendingReconciler {
         localItems: [TimelineItem],
         currentUserID: String
     ) -> [TimelineItem] {
+        let traceID = PerformanceTrace.begin("ReconcilerMerge")
+        defer { PerformanceTrace.end("ReconcilerMerge", id: traceID) }
         let pendingItems = pendingItems(from: localItems)
         guard pendingItems.isEmpty == false else {
             return streamItems
@@ -202,6 +204,8 @@ enum TimelinePendingReconciler {
         localItems: [TimelineItem],
         currentUserID: String
     ) -> [TimelineItem] {
+        let traceID = PerformanceTrace.begin("ReconcilerMergeStable")
+        defer { PerformanceTrace.end("ReconcilerMergeStable", id: traceID) }
         var mergedByID: [String: TimelineItem] = [:]
 
         for item in localItems where item.isLocalPending == false {
