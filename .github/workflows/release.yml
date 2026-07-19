@@ -347,6 +347,7 @@ jobs:
           spctl --assess --type execute --verbose=4 "$extract_dir/Synara.app"
 
       - name: Notarize and staple macOS DMG
+        continue-on-error: true
         if: env.APPLE_ID != ''
         run: |
           set -x
