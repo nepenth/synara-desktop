@@ -40,50 +40,22 @@ jobs:
       - name: Validate desktop release secrets
         shell: bash
         run: |
-          missing=()
-          for name in \
-            APPLE_CERTIFICATE_BASE64 \
-            APPLE_CERTIFICATE_PASSWORD \
-            APPLE_SIGNING_IDENTITY \
-            APPLE_ID \
-            APPLE_APP_SPECIFIC_PASSWORD \
-            APPLE_TEAM_ID \
-            TAURI_SIGNING_PRIVATE_KEY \
-            TAURI_SIGNING_PRIVATE_KEY_PASSWORD; do
-            if [[ -z "${!name}" ]]; then
-              missing+=("$name")
+          for name in APPLE_CERTIFICATE_BASE64 APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID TAURI_SIGNING_PRIVATE_KEY TAURI_SIGNING_PRIVATE_KEY_PASSWORD; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "WARNING: missing $name (will use job-level secrets or vars if available)"
             fi
           done
-          if (( ${#missing[@]} > 0 )); then
-            printf 'Missing required desktop/macOS release signing secrets:\n' >&2
-            printf ' - %s\n' "${missing[@]}" >&2
-            echo "WARNING: continuing anyway for workflow test (secrets may be set at job level or via vars)."
-            # exit 1 softened to allow downstream jobs to attempt execution
-          fi
-          echo "Desktop secrets present."
+          echo "Desktop secret check complete (non-fatal)."
 
       - name: Validate iOS release secrets
         shell: bash
         run: |
-          missing=()
-          for name in \
-            IOS_DISTRIBUTION_CERT_BASE64 \
-            IOS_CERT_PASSWORD \
-            IOS_APP_PROVISIONING_PROFILE_BASE64 \
-            SYNARA_IOS_TEAM_ID \
-            SYNARA_IOS_PROVISIONING_PROFILE \
-            SYNARA_PUSH_GATEWAY_URL; do
-            if [[ -z "${!name}" ]]; then
-              missing+=("$name")
+          for name in IOS_DISTRIBUTION_CERT_BASE64 IOS_CERT_PASSWORD IOS_APP_PROVISIONING_PROFILE_BASE64 SYNARA_IOS_TEAM_ID SYNARA_IOS_PROVISIONING_PROFILE SYNARA_PUSH_GATEWAY_URL; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "WARNING: missing $name (will use job-level secrets or vars if available)"
             fi
           done
-          if (( ${#missing[@]} > 0 )); then
-            printf 'Missing required iOS/TestFlight secrets:\n' >&2
-            printf ' - %s\n' "${missing[@]}" >&2
-            echo "WARNING: continuing anyway for workflow test (some secrets optional or set in repo vars)."
-            # exit 1 softened to allow downstream jobs to attempt execution
-          fi
-          echo "iOS secrets present (ASC keys optional)."
+          echo "iOS secret check complete (non-fatal)."
 
   linux-deb:
     name: Linux .deb release artifact
