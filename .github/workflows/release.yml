@@ -662,9 +662,9 @@ jobs:
         run: |
           find release-artifacts -type f | sort
           compgen -G 'release-artifacts/gh-release-linux-deb/Synara_*.deb' >/dev/null
-          compgen -G 'release-artifacts/gh-release-macos/Synara_*.dmg' >/dev/null
-          test -f release-artifacts/gh-release-macos/Synara.app.tar.gz
-          test -f release-artifacts/gh-release-macos/Synara.app.tar.gz.sig
+          compgen -G 'release-artifacts/gh-release-macos/dmg/Synara_*.dmg' >/dev/null
+          test -f release-artifacts/gh-release-macos/macos/Synara.app.tar.gz
+          test -f release-artifacts/gh-release-macos/macos/Synara.app.tar.gz.sig
           test -f release-artifacts/gh-release-updater/latest.json
           compgen -G 'release-artifacts/synara-pacman-repo-assets/synara-desktop-bin-*.pkg.tar.zst' >/dev/null
 
@@ -680,9 +680,9 @@ jobs:
           fail_on_unmatched_files: true
           files: |
             release-artifacts/gh-release-linux-deb/Synara_*.deb
-            release-artifacts/gh-release-macos/Synara_*.dmg
-            release-artifacts/gh-release-macos/Synara.app.tar.gz
-            release-artifacts/gh-release-macos/Synara.app.tar.gz.sig
+            release-artifacts/gh-release-macos/dmg/Synara_*.dmg
+            release-artifacts/gh-release-macos/macos/Synara.app.tar.gz
+            release-artifacts/gh-release-macos/macos/Synara.app.tar.gz.sig
             release-artifacts/gh-release-updater/latest.json
             release-artifacts/synara-pacman-repo-assets/synara-desktop-bin-*.pkg.tar.zst
 
