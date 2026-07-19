@@ -62,7 +62,7 @@ Implemented:
   modes.
 - `scripts/configure-release-updater.mjs` materializes release-time updater
   config from repository variables.
-- `.github/workflows/release-desktop.yml` runs release-time updater config before
+- `.github/workflows/release.yml` runs release-time updater config before
   strict validation and packaging.
 - The release workflow is prepared to upload macOS updater archives, `.sig`
   sidecars, and generated `latest.json`.
@@ -117,18 +117,18 @@ Latest local gate hardening:
 
 GitHub repository variables:
 
-| Name | Required | Notes |
-|---|---:|---|
-| `SYNARA_UPDATER_PUBKEY` | Yes | Public Tauri updater key. Safe to expose in app config. |
+| Name                      | Required | Notes                                                                                 |
+| ------------------------- | -------: | ------------------------------------------------------------------------------------- |
+| `SYNARA_UPDATER_PUBKEY`   |      Yes | Public Tauri updater key. Safe to expose in app config.                               |
 | `SYNARA_UPDATER_ENDPOINT` | Optional | Defaults to GitHub latest-release `latest.json` URL if omitted. Must be HTTPS if set. |
 
 GitHub repository secrets:
 
-| Name | Required | Notes |
-|---|---:|---|
-| `TAURI_SIGNING_PRIVATE_KEY` | Yes | Private updater signing key. Never commit. |
-| `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | If key is password-protected | Required by Tauri signing if configured. |
-| macOS Developer ID / notarization secrets | Yes for macOS releases | Already tracked by the release workflow and Mac validation queue. |
+| Name                                      |                     Required | Notes                                                             |
+| ----------------------------------------- | ---------------------------: | ----------------------------------------------------------------- |
+| `TAURI_SIGNING_PRIVATE_KEY`               |                          Yes | Private updater signing key. Never commit.                        |
+| `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`      | If key is password-protected | Required by Tauri signing if configured.                          |
+| macOS Developer ID / notarization secrets |       Yes for macOS releases | Already tracked by the release workflow and Mac validation queue. |
 
 ### Rotate Updater Signing Key Material
 
@@ -324,22 +324,22 @@ Acceptance evidence:
 
 ## Risks And Controls
 
-| Risk | Control |
-|---|---|
-| Private signing key exposure | Store only in GitHub secrets; never print in logs. |
-| Bad `latest.json` metadata | Generate from actual artifacts and `.sig` sidecars, then validate hosted output. |
-| macOS update artifact not notarized/signed correctly | Keep macOS signing/notarization gates separate and release-blocking. |
-| Accidental placeholder endpoint/key | Strict release checker must fail on placeholders and non-HTTPS endpoints. |
-| Disabled local config breaks desktop launch | Keep updater plugin registration conditional on active `plugins.updater`; run macOS desktop launch smoke before release signoff. |
-| Silent disruptive updates | Start with manual or prompted UX until product policy is explicit. |
-| GitHub latest endpoint ambiguity | Use semver release discipline and avoid publishing broken latest releases. |
+| Risk                                                 | Control                                                                                                                          |
+| ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| Private signing key exposure                         | Store only in GitHub secrets; never print in logs.                                                                               |
+| Bad `latest.json` metadata                           | Generate from actual artifacts and `.sig` sidecars, then validate hosted output.                                                 |
+| macOS update artifact not notarized/signed correctly | Keep macOS signing/notarization gates separate and release-blocking.                                                             |
+| Accidental placeholder endpoint/key                  | Strict release checker must fail on placeholders and non-HTTPS endpoints.                                                        |
+| Disabled local config breaks desktop launch          | Keep updater plugin registration conditional on active `plugins.updater`; run macOS desktop launch smoke before release signoff. |
+| Silent disruptive updates                            | Start with manual or prompted UX until product policy is explicit.                                                               |
+| GitHub latest endpoint ambiguity                     | Use semver release discipline and avoid publishing broken latest releases.                                                       |
 
 ## Resume Prompt
 
 Use this prompt when picking updater work back up:
 
 ```text
-You are resuming the GitHub Release Updater project for nepenth/synara-desktop. Read GITHUB_RELEASE_UPDATER_PLAN.md, PRODUCTION_READINESS_GOAL.md, .github/workflows/release-desktop.yml, scripts/check-release-updater.mjs, scripts/configure-release-updater.mjs, scripts/generate-release-updater-metadata.mjs, and docs/production-smoke-checklist.md.
+You are resuming the GitHub Release Updater project for nepenth/synara-desktop. Read GITHUB_RELEASE_UPDATER_PLAN.md, PRODUCTION_READINESS_GOAL.md, .github/workflows/release.yml, scripts/check-release-updater.mjs, scripts/configure-release-updater.mjs, scripts/generate-release-updater-metadata.mjs, and docs/production-smoke-checklist.md.
 
 First inspect the current git status. Preserve unrelated user changes. Determine whether any local draft updater-checker edits should be kept, discarded, or folded into the next commit.
 

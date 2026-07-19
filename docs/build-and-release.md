@@ -1,21 +1,21 @@
 # Build And Release Runbook
 
-Reviewed: 2026-06-30
+Reviewed: 2026-07-19
 
-This is the entry point for agents and maintainers preparing Synara Desktop
-builds or releases. Read this before changing packaging, signing, updater, or
+This is the entry point for agents and maintainers preparing Synara builds or
+releases. Read this before changing packaging, signing, updater, TestFlight, or
 release workflow behavior.
 
 ## Release Lanes
 
-| Lane                              | Purpose                                                              |                           Client-visible update? |
-| --------------------------------- | -------------------------------------------------------------------- | -----------------------------------------------: |
-| `main`                            | Integration branch. Runs normal CI on push and PR.                   |                                               No |
-| `release/vX.Y.Z`                  | Release candidate branch. Runs CI and desktop package smoke on push. |                                               No |
-| Published GitHub Release `vX.Y.Z` | Production artifact publication and updater metadata.                | Yes, after assets and `latest.json` are uploaded |
+| Lane                | Purpose                                                              |         Client-visible update? |
+| ------------------- | -------------------------------------------------------------------- | -----------------------------: |
+| `main`              | Integration branch. Runs normal CI on push and PR.                   |                             No |
+| `release/vX.Y.Z`    | Release candidate branch. Runs CI and desktop package smoke on push. |                             No |
+| Pushed tag `vX.Y.Z` | Coordinated macOS, Linux, and internal TestFlight release.           | Yes, after every client passes |
 
-Do not publish a GitHub Release until the release branch gates, desktop package
-smoke, and human smoke checklist have passed.
+Do not push a release tag until the release branch gates, desktop package smoke,
+iOS skeleton build, and human smoke checklist have passed.
 
 ## Local Prerequisites
 
@@ -100,25 +100,36 @@ publish a production updater channel.
 
 ## Production Publish Flow
 
-Production release publication is intentionally separate from release branch
-validation.
+Production publication is owned by the singular `Release` workflow.
 
-1. Create or update a GitHub Release for tag `vX.Y.Z`.
-2. Publish only after the release branch and smoke evidence are approved.
-3. The `Release Desktop` workflow builds:
+1. Bump every client and the iOS build number together:
+
+```bash
+npm run bump:version -- X.Y.Z --ios-build X.Y.Z
+```
+
+2. Commit and push the version metadata to `main`.
+3. Wait for normal `CI` and `iOS Skeleton` checks to pass.
+4. Create and push `vX.Y.Z` at that exact `main` commit.
+5. The `Release` workflow validates that the tag matches the committed shared
+   version and is reachable from `main`, then builds:
    - macOS signed/notarized DMG, macOS updater archive, signatures, and
      `latest.json`.
    - Linux `.deb`.
    - Arch-family `synara-desktop-bin` package plus fixed `pacman-repo` release
      assets (`synara.db`, `synara.files`, and package file).
-4. Verify hosted macOS `latest.json` before advertising in-app macOS updates.
-5. Verify the fixed pacman repo URL before advertising Arch-family updates:
+   - iOS signed archive uploaded to internal TestFlight.
+6. Only after every build and verification passes, the workflow creates the
+   versioned GitHub Release and updates the fixed pacman repository.
+7. Verify the processed TestFlight build and hosted macOS `latest.json`.
+8. Verify the fixed pacman repo URL:
 
 ```text
 https://github.com/nepenth/synara-desktop/releases/download/pacman-repo/synara.db
 ```
 
-6. Confirm installed-app update behavior:
+9. Confirm installed-app update behavior:
+   - iOS updates through TestFlight.
    - macOS updates through the Tauri updater flow.
    - Linux updates through `paru -Syu` or `sudo pacman -Syu`; the app may only
      notify/instruct.

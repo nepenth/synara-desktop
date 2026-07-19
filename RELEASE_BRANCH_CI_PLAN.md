@@ -7,13 +7,13 @@ changing GitHub Actions behavior.
 
 ## Current CI And Release Shape
 
-| Workflow | Current Trigger | Current Role |
-|---|---|---|
-| `.github/workflows/ci.yml` | Push to `main`, PR to `main`, manual | Linux validation, Rust check/test, frontend typecheck/tests/lint/format. |
-| `.github/workflows/desktop-package-smoke.yml` | PR to `main` for package/runtime paths, manual | Linux `.deb` package and macOS `.app` package smoke with updater artifacts disabled. |
-| `.github/workflows/ios-skeleton.yml` | Push/PR to `main` for iOS paths, manual | Unsigned iOS simulator build/test bundle compile. |
-| `.github/workflows/macos-signed-build.yml` | Manual only | Signed/notarized macOS DMG artifact, updater artifacts disabled. |
-| `.github/workflows/release-desktop.yml` | GitHub Release `published` event | macOS updater artifacts/signatures/`latest.json`, Linux `.deb`, and GitHub Release-backed pacman repo assets. |
+| Workflow                                      | Current Trigger                                | Current Role                                                                                            |
+| --------------------------------------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `.github/workflows/ci.yml`                    | Push to `main`, PR to `main`, manual           | Linux validation, Rust check/test, frontend typecheck/tests/lint/format.                                |
+| `.github/workflows/desktop-package-smoke.yml` | PR to `main` for package/runtime paths, manual | Linux `.deb` package and macOS `.app` package smoke with updater artifacts disabled.                    |
+| `.github/workflows/ios-skeleton.yml`          | Push/PR to `main` for iOS paths, manual        | Unsigned iOS simulator build/test bundle compile.                                                       |
+| `.github/workflows/macos-signed-build.yml`    | Manual only                                    | Signed/notarized macOS DMG artifact, updater artifacts disabled.                                        |
+| `.github/workflows/release.yml`               | Pushed `v*` tag                                | Coordinated macOS/Linux artifacts, TestFlight upload, updater metadata, and GitHub Release publication. |
 
 ## Problem Statement
 
