@@ -25,12 +25,16 @@ require_env() {
 
 require_env "SYNARA_IOS_TEAM_ID" "$TEAM_ID"
 require_env "SYNARA_IOS_PROVISIONING_PROFILE" "$PROVISIONING_PROFILE"
+require_env \
+  "SYNARA_IOS_NOTIFICATION_SERVICE_PROVISIONING_PROFILE" \
+  "$NOTIFICATION_SERVICE_PROVISIONING_PROFILE"
 require_env "SYNARA_PUSH_GATEWAY_URL" "$PUSH_GATEWAY_URL"
 
-# Support internal TestFlight only (default true for safety) or false to allow external/promotion
 TESTFLIGHT_INTERNAL_ONLY="${SYNARA_TESTFLIGHT_INTERNAL_ONLY:-true}"
-
-
+if [[ "$TESTFLIGHT_INTERNAL_ONLY" != "true" && "$TESTFLIGHT_INTERNAL_ONLY" != "false" ]]; then
+  echo "SYNARA_TESTFLIGHT_INTERNAL_ONLY must be 'true' or 'false'." >&2
+  exit 1
+fi
 xcode_auth_args=()
 has_xcode_auth_args=0
 if [[ -n "${SYNARA_ASC_KEY_PATH:-}" || -n "${SYNARA_ASC_KEY_ID:-}" || -n "${SYNARA_ASC_ISSUER_ID:-}" ]]; then
@@ -67,6 +71,7 @@ build_settings="$(
     -destination "generic/platform=iOS" \
     DEVELOPMENT_TEAM="$TEAM_ID" \
     SYNARA_IOS_PROVISIONING_PROFILE="$PROVISIONING_PROFILE" \
+    SYNARA_IOS_NOTIFICATION_SERVICE_PROVISIONING_PROFILE="$NOTIFICATION_SERVICE_PROVISIONING_PROFILE" \
     SYNARA_PUSH_GATEWAY_URL="$PUSH_GATEWAY_URL" \
     -showBuildSettings
 )"
@@ -132,6 +137,7 @@ run_xcodebuild \
   -archivePath "$archive_path" \
   DEVELOPMENT_TEAM="$TEAM_ID" \
   SYNARA_IOS_PROVISIONING_PROFILE="$PROVISIONING_PROFILE" \
+  SYNARA_IOS_NOTIFICATION_SERVICE_PROVISIONING_PROFILE="$NOTIFICATION_SERVICE_PROVISIONING_PROFILE" \
   SYNARA_PUSH_GATEWAY_URL="$PUSH_GATEWAY_URL" \
   archive \
   -allowProvisioningUpdates

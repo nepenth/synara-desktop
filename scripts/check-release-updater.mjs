@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const releaseWorkflowPath = ".github/workflows/release.yml";
 
 const readJson = (relativePath) =>
   JSON.parse(readFileSync(path.join(root, relativePath), "utf8"));
@@ -11,7 +12,7 @@ const readText = (relativePath) =>
 
 const hasPlaceholder = (value) =>
   /CHANGE_ME|TODO|example\.(com|org|net)|localhost|127\.0\.0\.1|<[^>]+>|__[^_]+__/i.test(
-    value
+    value,
   );
 
 const isHttpsEndpoint = (endpoint) => {
@@ -36,19 +37,30 @@ const workflowPublishesGeneratedUpdaterMetadata = (workflow) =>
   hasWorkflowPattern(workflow, /generate-release-updater-metadata\.mjs/) &&
   hasWorkflowPattern(workflow, /--repo\s+["']?\$GITHUB_REPOSITORY["']?/) &&
   hasWorkflowPattern(workflow, /--tag\s+["']?\$GITHUB_REF_NAME["']?/) &&
+  hasWorkflowPattern(workflow, /name:\s*gh-release-updater/) &&
+  hasWorkflowPattern(workflow, /path:\s*latest\.json/) &&
   hasWorkflowPattern(workflow, /softprops\/action-gh-release/) &&
-  hasWorkflowPattern(workflow, /files:\s*(?:\|\s*\n\s*)?latest\.json/);
+  hasWorkflowPattern(
+    workflow,
+    /files:\s*\|[\s\S]*release-artifacts\/gh-release-updater\/latest\.json/,
+  );
 
 const workflowVerifiesMacosDistributableContents = (workflow) =>
   hasWorkflowPattern(workflow, /Verify macOS distributable contents/) &&
   hasWorkflowPattern(workflow, /hdiutil\s+attach/) &&
   hasWorkflowPattern(workflow, /tar\s+-xzf/) &&
-  hasWorkflowPattern(workflow, /codesign\s+--verify[\s\S]*mount_dir\/Synara\.app/) &&
-  hasWorkflowPattern(workflow, /codesign\s+--verify[\s\S]*extract_dir\/Synara\.app/);
+  hasWorkflowPattern(
+    workflow,
+    /codesign\s+--verify[\s\S]*mount_dir\/Synara\.app/,
+  ) &&
+  hasWorkflowPattern(
+    workflow,
+    /codesign\s+--verify[\s\S]*extract_dir\/Synara\.app/,
+  );
 
 const hasPackagedLocalhostRemoteCapability = (capabilities) =>
   (capabilities?.remote?.urls ?? []).some(
-    (url) => url === "http://localhost:*" || url === "http://localhost:*/*"
+    (url) => url === "http://localhost:*" || url === "http://localhost:*/*",
   );
 
 export function inspectReleaseUpdaterReadiness({
@@ -81,7 +93,7 @@ export function inspectReleaseUpdaterReadiness({
 
   if (updaterArtifacts !== true) {
     report(
-      "src-tauri/tauri.conf.json must set bundle.createUpdaterArtifacts to true."
+      "src-tauri/tauri.conf.json must set bundle.createUpdaterArtifacts to true.",
     );
   }
 
@@ -94,7 +106,7 @@ export function inspectReleaseUpdaterReadiness({
     updaterConfig.pubkey.trim().length < 40
   ) {
     report(
-      "plugins.updater.pubkey must contain the production Tauri updater public key."
+      "plugins.updater.pubkey must contain the production Tauri updater public key.",
     );
   } else if (hasPlaceholder(updaterConfig.pubkey)) {
     report("plugins.updater.pubkey still looks like placeholder material.");
@@ -102,13 +114,13 @@ export function inspectReleaseUpdaterReadiness({
 
   if (!Array.isArray(endpoints) || endpoints.length === 0) {
     report(
-      "plugins.updater.endpoints must contain at least one production HTTPS endpoint."
+      "plugins.updater.endpoints must contain at least one production HTTPS endpoint.",
     );
   } else {
     for (const endpoint of endpoints) {
       if (typeof endpoint !== "string" || endpoint.trim() === "") {
         report(
-          "plugins.updater.endpoints must contain only non-empty strings."
+          "plugins.updater.endpoints must contain only non-empty strings.",
         );
         continue;
       }
@@ -123,13 +135,13 @@ export function inspectReleaseUpdaterReadiness({
 
   if (!/^\s*tauri-plugin-updater\s*=.+$/m.test(cargoToml)) {
     report(
-      "src-tauri/Cargo.toml must depend on tauri-plugin-updater for desktop targets."
+      "src-tauri/Cargo.toml must depend on tauri-plugin-updater for desktop targets.",
     );
   }
 
   if (
     !/tauri_plugin_updater::Builder|tauri_plugin_updater::init|plugin\s*\(\s*tauri_plugin_updater/m.test(
-      rustLib
+      rustLib,
     )
   ) {
     report("src-tauri/src/lib.rs must register the Tauri updater plugin.");
@@ -138,11 +150,12 @@ export function inspectReleaseUpdaterReadiness({
   if (
     !permissions.some(
       (permission) =>
-        permission === "updater:default" || permission === "updater:allow-check"
+        permission === "updater:default" ||
+        permission === "updater:allow-check",
     )
   ) {
     report(
-      "src-tauri/capabilities/main.json must grant updater:allow-check or updater:default when the frontend owns update checks."
+      "src-tauri/capabilities/main.json must grant updater:allow-check or updater:default when the frontend owns update checks.",
     );
   }
 
@@ -150,61 +163,66 @@ export function inspectReleaseUpdaterReadiness({
     !permissions.some(
       (permission) =>
         permission === "updater:default" ||
-        permission === "updater:allow-download-and-install"
+        permission === "updater:allow-download-and-install",
     )
   ) {
     report(
-      "src-tauri/capabilities/main.json must grant updater:allow-download-and-install or updater:default for macOS install prompts."
+      "src-tauri/capabilities/main.json must grant updater:allow-download-and-install or updater:default for macOS install prompts.",
     );
   }
 
   if (
     !permissions.some(
       (permission) =>
-        permission === "process:default" || permission === "process:allow-restart"
+        permission === "process:default" ||
+        permission === "process:allow-restart",
     )
   ) {
     report(
-      "src-tauri/capabilities/main.json must grant process:allow-restart or process:default for post-update relaunch."
+      "src-tauri/capabilities/main.json must grant process:allow-restart or process:default for post-update relaunch.",
     );
   }
 
   if (!packageDependencies["@tauri-apps/plugin-updater"]) {
     report(
-      "package.json must depend on @tauri-apps/plugin-updater for frontend update checks."
+      "package.json must depend on @tauri-apps/plugin-updater for frontend update checks.",
     );
   }
 
   if (!packageDependencies["@tauri-apps/plugin-process"]) {
     report(
-      "package.json must depend on @tauri-apps/plugin-process for post-update relaunch."
+      "package.json must depend on @tauri-apps/plugin-process for post-update relaunch.",
     );
   }
 
   if (!/^\s*tauri-plugin-process\s*=.+$/m.test(cargoToml)) {
     report(
-      "src-tauri/Cargo.toml must depend on tauri-plugin-process for post-update relaunch."
+      "src-tauri/Cargo.toml must depend on tauri-plugin-process for post-update relaunch.",
     );
   }
 
-  if (!/tauri_plugin_process::init|plugin\s*\(\s*tauri_plugin_process/m.test(rustLib)) {
+  if (
+    !/tauri_plugin_process::init|plugin\s*\(\s*tauri_plugin_process/m.test(
+      rustLib,
+    )
+  ) {
     report("src-tauri/src/lib.rs must register the Tauri process plugin.");
   }
 
   if (!hasPackagedLocalhostRemoteCapability(capabilities)) {
     errors.push(
-      "src-tauri/capabilities/main.json must allow the packaged localhost webview origin with remote.urls containing http://localhost:*/*."
+      "src-tauri/capabilities/main.json must allow the packaged localhost webview origin with remote.urls containing http://localhost:*/*.",
     );
   }
 
   if (
     hasWorkflowPattern(
       releaseWorkflow,
-      /createUpdaterArtifacts["']?\s*:\s*false/
+      /createUpdaterArtifacts["']?\s*:\s*false/,
     )
   ) {
     report(
-      ".github/workflows/release-desktop.yml still overrides bundle.createUpdaterArtifacts to false."
+      `${releaseWorkflowPath} still overrides bundle.createUpdaterArtifacts to false.`,
     );
   }
 
@@ -213,13 +231,13 @@ export function inspectReleaseUpdaterReadiness({
     !workflowConfiguresUpdaterChannel(releaseWorkflow)
   ) {
     report(
-      ".github/workflows/release-desktop.yml must configure the release updater channel before strict validation."
+      `${releaseWorkflowPath} must configure the release updater channel before strict validation.`,
     );
   }
 
   if (!hasWorkflowPattern(releaseWorkflow, /TAURI_SIGNING_PRIVATE_KEY/)) {
     report(
-      ".github/workflows/release-desktop.yml must expose TAURI_SIGNING_PRIVATE_KEY to release builds."
+      `${releaseWorkflowPath} must expose TAURI_SIGNING_PRIVATE_KEY to release builds.`,
     );
   }
 
@@ -227,25 +245,23 @@ export function inspectReleaseUpdaterReadiness({
     !hasWorkflowPattern(releaseWorkflow, /TAURI_SIGNING_PRIVATE_KEY_PASSWORD/)
   ) {
     report(
-      ".github/workflows/release-desktop.yml must expose TAURI_SIGNING_PRIVATE_KEY_PASSWORD to release builds."
+      `${releaseWorkflowPath} must expose TAURI_SIGNING_PRIVATE_KEY_PASSWORD to release builds.`,
     );
   }
 
   if (!hasWorkflowPattern(releaseWorkflow, /\.sig/)) {
-    report(
-      ".github/workflows/release-desktop.yml must upload updater signature sidecars."
-    );
+    report(`${releaseWorkflowPath} must upload updater signature sidecars.`);
   }
 
   if (!workflowPublishesGeneratedUpdaterMetadata(releaseWorkflow)) {
     report(
-      ".github/workflows/release-desktop.yml must generate and upload signed updater metadata from macOS updater artifacts."
+      `${releaseWorkflowPath} must generate and upload signed updater metadata from macOS updater artifacts.`,
     );
   }
 
   if (!workflowVerifiesMacosDistributableContents(releaseWorkflow)) {
     report(
-      ".github/workflows/release-desktop.yml must verify the mounted macOS DMG app and extracted updater archive before publishing."
+      `${releaseWorkflowPath} must verify the mounted macOS DMG app and extracted updater archive before publishing.`,
     );
   }
 
@@ -265,7 +281,7 @@ function main() {
     rustLib: readText("src-tauri/src/lib.rs"),
     capabilities: readJson("src-tauri/capabilities/main.json"),
     desktopPackage: readJson("package.json"),
-    releaseWorkflow: readText(".github/workflows/release-desktop.yml"),
+    releaseWorkflow: readText(releaseWorkflowPath),
     requireEnabled,
   });
 
@@ -283,11 +299,11 @@ function main() {
 
   if (result.updaterArtifactsEnabled) {
     console.log(
-      "[release-updater] updater release prerequisites are configured."
+      "[release-updater] updater release prerequisites are configured.",
     );
   } else {
     console.log(
-      "[release-updater] updater is disabled; run with --require-enabled to enforce release readiness."
+      "[release-updater] updater is disabled; run with --require-enabled to enforce release readiness.",
     );
   }
 }

@@ -512,9 +512,6 @@
 						ProvisioningStyle = Automatic;
 						TestTargetID = 27BCF2E7659C77D3DD3882F0;
 					};
-					69A5432C18DD0E3F309DD795 = {
-						ProvisioningStyle = Automatic;
-					};
 					791D9AB64B4DDAF50B6FEC96 = {
 						ProvisioningStyle = Automatic;
 					};
@@ -941,7 +938,7 @@
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CODE_SIGN_ENTITLEMENTS = SynaraNotificationService/Resources/SynaraNotificationService.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Distribution";
-				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGN_STYLE = Manual;
 				INFOPLIST_FILE = SynaraNotificationService/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -950,6 +947,7 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.whylandcreative.synara.NotificationService;
 				PRODUCT_NAME = SynaraNotificationService;
+				PROVISIONING_PROFILE_SPECIFIER = "$(SYNARA_IOS_NOTIFICATION_SERVICE_PROVISIONING_PROFILE)";
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
 				TARGETED_DEVICE_FAMILY = "1,2";

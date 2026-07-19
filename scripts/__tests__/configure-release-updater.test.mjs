@@ -99,9 +99,14 @@ test("release updater config satisfies strict release readiness inspection", () 
                 --tag "$GITHUB_REF_NAME" \
                 --version "1.2.20" \
                 --output latest.json
+          - uses: actions/upload-artifact@v4
+            with:
+              name: gh-release-updater
+              path: latest.json
           - uses: softprops/action-gh-release@v3
             with:
-              files: latest.json
+              files: |
+                release-artifacts/gh-release-updater/latest.json
     `,
     requireEnabled: true,
   });
@@ -118,7 +123,7 @@ test("release updater config rejects missing or placeholder public keys", () => 
         pubkey: "CHANGE_ME",
         endpoint: "https://updates.synara.chat/latest.json",
       }),
-    /production Tauri updater public key/
+    /production Tauri updater public key/,
   );
 });
 
@@ -130,6 +135,6 @@ test("release updater config rejects non-production endpoints", () => {
         pubkey,
         endpoint: "http://localhost:8080/latest.json",
       }),
-    /Invalid production updater endpoint/
+    /Invalid production updater endpoint/,
   );
 });
