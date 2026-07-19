@@ -43,6 +43,7 @@ const readyInputs = {
         SYNARA_UPDATER_PUBKEY: \${{ vars.SYNARA_UPDATER_PUBKEY }}
         SYNARA_UPDATER_ENDPOINT: \${{ vars.SYNARA_UPDATER_ENDPOINT }}
     env:
+      APPLE_PASSWORD: \${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
       TAURI_SIGNING_PRIVATE_KEY: \${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
       TAURI_SIGNING_PRIVATE_KEY_PASSWORD: \${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
     files: |
@@ -97,6 +98,20 @@ test("release updater gate requires packaged localhost remote capability", () =>
 
   assert.equal(result.ok, false);
   assert.match(result.errors.join("\n"), /packaged localhost webview origin/);
+});
+
+test("release updater gate requires Tauri app notarization credentials", () => {
+  const result = inspectReleaseUpdaterReadiness({
+    ...readyInputs,
+    releaseWorkflow: readyInputs.releaseWorkflow.replace(
+      /\s*APPLE_PASSWORD:.*\n/,
+      "\n",
+    ),
+    requireEnabled: true,
+  });
+
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join("\n"), /APPLE_PASSWORD/);
 });
 
 test("release updater gate fails when release config forces updater artifacts off", () => {

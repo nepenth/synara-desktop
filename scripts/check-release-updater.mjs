@@ -30,6 +30,12 @@ const workflowConfiguresUpdaterChannel = (workflow) =>
   hasWorkflowPattern(workflow, /SYNARA_UPDATER_PUBKEY/) &&
   hasWorkflowPattern(workflow, /SYNARA_UPDATER_ENDPOINT/);
 
+const workflowConfiguresTauriNotarization = (workflow) =>
+  hasWorkflowPattern(
+    workflow,
+    /APPLE_PASSWORD:\s*\$\{\{\s*secrets\.APPLE_APP_SPECIFIC_PASSWORD\s*\}\}/,
+  );
+
 const workflowPublishesGeneratedUpdaterMetadata = (workflow) =>
   hasWorkflowPattern(workflow, /updater-metadata:/) &&
   hasWorkflowPattern(workflow, /needs:\s*\[\s*macos\s*\]/) &&
@@ -238,6 +244,12 @@ export function inspectReleaseUpdaterReadiness({
   if (!hasWorkflowPattern(releaseWorkflow, /TAURI_SIGNING_PRIVATE_KEY/)) {
     report(
       `${releaseWorkflowPath} must expose TAURI_SIGNING_PRIVATE_KEY to release builds.`,
+    );
+  }
+
+  if (!workflowConfiguresTauriNotarization(releaseWorkflow)) {
+    report(
+      `${releaseWorkflowPath} must expose APPLE_APP_SPECIFIC_PASSWORD as APPLE_PASSWORD so Tauri notarizes the app bundle.`,
     );
   }
 
