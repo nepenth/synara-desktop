@@ -229,6 +229,15 @@ jobs:
     name: macOS release artifacts
     if: startsWith(github.ref_name, 'v')
     runs-on: macos-latest
+    env:
+      APPLE_CERTIFICATE_BASE64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
+      APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+      APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
     needs: [validate]
     env:
       APPLE_CERTIFICATE_BASE64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
@@ -369,21 +378,29 @@ jobs:
           spctl --assess --type execute --verbose=4 "$extract_dir/Synara.app"
 
       - name: Notarize and staple macOS DMG
+        if: env.APPLE_ID != ''
         run: |
+          set -x
           dmg_path="$(find src-tauri/target/universal-apple-darwin/release/bundle/dmg -name 'Synara_*.dmg' -print -quit)"
           if [[ -z "$dmg_path" ]]; then
             echo "No Synara DMG found" >&2
             exit 1
           fi
 
+          echo "Submitting for notarization..."
           xcrun notarytool submit "$dmg_path" \
             --apple-id "$APPLE_ID" \
             --password "$APPLE_APP_SPECIFIC_PASSWORD" \
             --team-id "$APPLE_TEAM_ID" \
-            --wait
+            --wait 2>&1 | tee /tmp/notary.log || {
+              echo "Notarization submit failed or timed; check log"
+              cat /tmp/notary.log || true
+              exit 1
+            }
           xcrun stapler staple "$dmg_path"
 
       - name: Verify macOS notarization staple
+        if: env.APPLE_ID != ''
         run: |
           xcrun stapler validate src-tauri/target/universal-apple-darwin/release/bundle/macos/Synara.app
           xcrun stapler validate src-tauri/target/universal-apple-darwin/release/bundle/dmg/Synara_*.dmg
@@ -474,7 +491,7 @@ jobs:
       - name: Setup Xcode (pinned for reproducibility)
         uses: maxim-lobanov/setup-xcode@v1
         with:
-          xcode-version: '16'  # flexible major version; use 'latest' if needed for macos-latest runner  # Adjust to stable Xcode supporting your deployment target
+          xcode-version: 'latest'
 
       - name: Install XcodeGen
         run: brew install xcodegen
