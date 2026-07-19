@@ -408,7 +408,7 @@ jobs:
 
   updater-metadata:
     name: Signed macOS updater metadata
-    if: startsWith(github.ref_name, 'v')
+    if: always() && startsWith(github.ref_name, 'v')
     runs-on: ubuntu-22.04
     needs: [macos]
     steps:
@@ -559,21 +559,23 @@ jobs:
     name: Publish GitHub Release (all clients)
     if: always() && startsWith(github.ref_name, 'v')
     runs-on: ubuntu-22.04
-    needs: [linux-deb, macos, updater-metadata]
+    needs: [linux-deb, updater-metadata]
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - name: Download all release artifacts
+      - name: Download Linux and other release artifacts
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           path: release-artifacts
+          if-no-files-found: warn
 
-      - name: Download pacman assets for main release
+      - name: Download pacman assets for main release (if present)
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: synara-pacman-repo-assets
           path: release-artifacts/pacman-pkg
+          if-no-files-found: warn
 
       - name: Prepare artifact list for release
         run: |
