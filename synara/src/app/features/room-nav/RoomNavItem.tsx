@@ -444,7 +444,6 @@ function RoomNavItemImpl({
   );
 }
 
-
 function areRoomNavItemPropsEqual(prev: RoomNavItemProps, next: RoomNavItemProps): boolean {
   // Stable key comparison to prevent re-renders on identity changes in large lists (perf + memory)
   if (prev.room.roomId !== next.room.roomId) return false;
