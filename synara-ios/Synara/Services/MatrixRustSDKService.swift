@@ -2638,6 +2638,33 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
                             handle: handle
                         )
 
+                        // Bootstrap the streaming collector's internal timelineItems list with the current
+                        // SDK timeline state. This is required for reliable live updates.
+                        //
+                        // Why this fixes the issue:
+                        // - Initial load (loadTimelinePage) populates the SDK's Timeline via paginateBackwards
+                        //   using a *temporary* one-shot collector.
+                        // - The live stream attaches a *separate* StreamingTimelineCollector *after* the fact.
+                        // - addListener + onUpdate delivers *diffs* (not necessarily a full .reset snapshot)
+                        //   for changes *after* attachment (per matrix-rust-sdk TimelineListener contract and
+                        //   examples in matrix-rust-components-swift).
+                        // - Without base state, .set diffs (reactions/seen emojis, edits, read receipts via
+                        //   trackReadReceipts) do nothing (see apply: if !indices.contains), .append may
+                        //   produce partial lists, and merge in view may not surface updates.
+                        // - User must exit/re-enter to force invalidate + full snapshot reload.
+                        //
+                        // Fix: after attach, trigger small paginates. This causes the SDK to deliver the
+                        // current items (via append/reset/push diffs) to *this* listener, populating the
+                        // collector so future live diffs (including agent reactions/responses) apply
+                        // correctly. Matches Element X / other Rust SDK clients (attach listener then
+                        // populate via paginate/sync to end). Also ensures live focus catches up.
+                        //
+                        // References: matrix-rust-sdk Timeline + TimelineDiff (append/set/reset/pushBack);
+                        // probe in synara-ios/spikes; SDK sliding-sync / syncService live event delivery.
+                        _ = try? await timeline.paginateForwards(numEvents: 0)
+                        _ = try? await timeline.paginateBackwards(numEvents: 5)
+                        await Self.paginateFocusedTimelineForwardToLiveEnd(timeline)
+
                         mappingTask = Task { [weak self] in
                             guard let self else {
                                 return
@@ -2656,10 +2683,6 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
                                 }
                                 continuation.yield(.loaded(sdkItems))
                             }
-                        }
-
-                        if focusedEventID != nil || focus != .live {
-                            await Self.paginateFocusedTimelineForwardToLiveEnd(timeline)
                         }
 
                         do {
