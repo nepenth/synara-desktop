@@ -65,9 +65,14 @@ const readyInputs = {
               --tag "$GITHUB_REF_NAME" \
               --version "1.2.20" \
               --output latest.json
+        - uses: actions/upload-artifact@v4
+          with:
+            name: gh-release-updater
+            path: latest.json
         - uses: softprops/action-gh-release@v3
           with:
-            files: latest.json
+            files: |
+              release-artifacts/gh-release-updater/latest.json
   `,
 };
 
@@ -125,7 +130,10 @@ test("release updater gate requires workflow updater channel materialization whe
   });
 
   assert.equal(result.ok, true);
-  assert.match(result.warnings.join("\n"), /configure the release updater channel/);
+  assert.match(
+    result.warnings.join("\n"),
+    /configure the release updater channel/,
+  );
 });
 
 test("release updater gate requires signed update metadata upload", () => {
@@ -143,7 +151,10 @@ test("release updater gate requires signed update metadata upload", () => {
   });
 
   assert.equal(result.ok, false);
-  assert.match(result.errors.join("\n"), /generate and upload signed updater metadata/);
+  assert.match(
+    result.errors.join("\n"),
+    /generate and upload signed updater metadata/,
+  );
 });
 
 test("release updater gate requires updater signature sidecars", () => {
@@ -168,7 +179,7 @@ test("release updater gate requires packaged macOS artifact verification", () =>
     ...readyInputs,
     releaseWorkflow: readyInputs.releaseWorkflow.replace(
       /- name: Verify macOS distributable contents[\s\S]*?updater-metadata:/,
-      "updater-metadata:"
+      "updater-metadata:",
     ),
     requireEnabled: true,
   });

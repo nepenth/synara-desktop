@@ -21,6 +21,7 @@ Required environment variables:
 ```sh
 SYNARA_IOS_TEAM_ID=... \
 SYNARA_IOS_PROVISIONING_PROFILE="..." \
+SYNARA_IOS_NOTIFICATION_SERVICE_PROVISIONING_PROFILE="..." \
 SYNARA_PUSH_GATEWAY_URL="https://push.example.com/_matrix/push/v1/notify" \
 synara-ios/scripts/upload-testflight-internal.sh
 ```
@@ -28,7 +29,6 @@ synara-ios/scripts/upload-testflight-internal.sh
 Optional environment variables:
 
 ```sh
-SYNARA_IOS_NOTIFICATION_SERVICE_PROVISIONING_PROFILE="..." \
 SYNARA_IOS_ARCHIVE_ROOT=/tmp \
 synara-ios/scripts/upload-testflight-internal.sh
 ```
@@ -79,27 +79,27 @@ processed build available to internal testers through the configured internal
 distribution settings. Do not run `promote-testflight-internal.rb` as part of the
 normal upload path.
 
+## GitHub Release Integration
 
-## GitHub Workflow Integration (Release)
+Pushing a `v<shared-version>` tag starts the singular
+`.github/workflows/release.yml` workflow. Its protected `testflight` deployment
+job runs on `macos-26`, validates the distribution identity and both provisioning
+profiles, and uploads only after the common release gate passes.
 
-The iOS TestFlight upload is now wired into the release workflow (`.github/workflows/release-desktop.yml`).
+Required `testflight` environment secrets:
 
-When a GitHub Release for a `v*` tag is published:
-- The `ios-testflight` job runs on `macos-latest`.
-- It generates the Xcode project, imports certs/profiles from secrets, and runs the upload script.
-- By default uploads with `testFlightInternalTestingOnly: true` (internal testers).
+- `IOS_DISTRIBUTION_CERTIFICATE_BASE64`
+- `IOS_DISTRIBUTION_CERTIFICATE_PASSWORD`
+- `IOS_APP_PROVISIONING_PROFILE_BASE64`
+- `IOS_NOTIFICATION_PROVISIONING_PROFILE_BASE64`
+- `SYNARA_ASC_KEY_BASE64`
+- `SYNARA_ASC_KEY_ID`
+- `SYNARA_ASC_ISSUER_ID`
 
-**Required GitHub Secrets** (set in repo Settings > Secrets and variables > Actions):
-- `SYNARA_IOS_TEAM_ID`
-- `SYNARA_IOS_PROVISIONING_PROFILE` (profile name)
-- `SYNARA_PUSH_GATEWAY_URL` (production)
-- `IOS_DISTRIBUTION_CERT_BASE64` (p12 for Apple Distribution)
-- `IOS_CERT_PASSWORD`
-- `IOS_APP_PROVISIONING_PROFILE_BASE64` (and optional `IOS_NSE_...`)
-- `SYNARA_ASC_KEY_BASE64`, `SYNARA_ASC_KEY_ID`, `SYNARA_ASC_ISSUER_ID` (for auth)
+The job also consumes the repository secret `APPLE_TEAM_ID` and repository
+variable `SYNARA_PUSH_GATEWAY_URL`. Internal-only upload remains the default;
+external TestFlight still requires an explicit release decision and configured
+external tester groups.
 
-To push for external / promote:
-- The job hardcodes internal. To change, edit the job env `SYNARA_TESTFLIGHT_INTERNAL_ONLY: "false"` (requires external groups configured in App Store Connect).
-- Or promote the processed build manually in App Store Connect.
-
-Pre-release validation: Use the `iOS Skeleton` workflow (unsigned simulator) or local `scripts/ci-build.sh`.
+The final GitHub Release is not created unless iOS, macOS, both Linux builds,
+notarization, updater metadata, and artifact verification all succeed.

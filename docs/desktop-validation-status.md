@@ -10,49 +10,49 @@ Branch: `maturity_improvement_plan1` (rebased on `main` with iOS UX maturity)
 
 ## Automated gates (branch tip)
 
-| Gate | Status | Notes |
-|------|--------|-------|
-| `npm run check:versions` | Pass | App metadata + Tauri toolchain major.minor alignment |
-| `npm --prefix synara run check:prettier` | Pass | |
-| `npm run test:modernization` | Pass | 260/260 (after pass 3 remediation) |
-| `npm run typecheck:modernization` | Pass | |
-| `npm run check:mip1-evidence` | Pass | 46/46 items mapped; falls back to `origin/main` when local `main` is absent |
-| `npm run check:runtime-assets` | Pass | devAssets ↔ synara/dist |
-| `cargo test --lib` | Pass | 82/82 (macOS workstation) |
-| `cargo check --locked --release` | Pass | No warnings after pass 3 cleanup |
+| Gate                                     | Status | Notes                                                                       |
+| ---------------------------------------- | ------ | --------------------------------------------------------------------------- |
+| `npm run check:versions`                 | Pass   | App metadata + Tauri toolchain major.minor alignment                        |
+| `npm --prefix synara run check:prettier` | Pass   |                                                                             |
+| `npm run test:modernization`             | Pass   | 260/260 (after pass 3 remediation)                                          |
+| `npm run typecheck:modernization`        | Pass   |                                                                             |
+| `npm run check:mip1-evidence`            | Pass   | 46/46 items mapped; falls back to `origin/main` when local `main` is absent |
+| `npm run check:runtime-assets`           | Pass   | devAssets ↔ synara/dist                                                     |
+| `cargo test --lib`                       | Pass   | 82/82 (macOS workstation)                                                   |
+| `cargo check --locked --release`         | Pass   | No warnings after pass 3 cleanup                                            |
 
 ## PR #10 remediation (2026-06-11)
 
 Second review pass (`77e2282`) findings addressed on `maturity_improvement_plan1`:
 
-| Item | Status |
-|------|--------|
-| Prettier + trailing whitespace in docs | Done |
-| Tauri npm/Cargo toolchain alignment + `check:versions` gate | Done |
-| Native session `storedAtMs` preserved for proactive refresh | Done |
-| Timeline divider semantics for ignored/redacted events | Done |
-| File transfer TTL enforced on chunk/end IPC paths | Done |
-| Cryptographic opaque transfer IDs | Done |
-| Incremental timeline revision token without full-list scan on append | Done |
-| Rust/TS agent-action URL + no-kind prompt parity | Done |
-| Localhost port tests resilient to busy preferred port | Done |
-| Package smoke path filter `synara/**` | Done |
-| Agent approval notifications respect DND/showNotifications | Done |
+| Item                                                                 | Status |
+| -------------------------------------------------------------------- | ------ |
+| Prettier + trailing whitespace in docs                               | Done   |
+| Tauri npm/Cargo toolchain alignment + `check:versions` gate          | Done   |
+| Native session `storedAtMs` preserved for proactive refresh          | Done   |
+| Timeline divider semantics for ignored/redacted events               | Done   |
+| File transfer TTL enforced on chunk/end IPC paths                    | Done   |
+| Cryptographic opaque transfer IDs                                    | Done   |
+| Incremental timeline revision token without full-list scan on append | Done   |
+| Rust/TS agent-action URL + no-kind prompt parity                     | Done   |
+| Localhost port tests resilient to busy preferred port                | Done   |
+| Package smoke path filter `synara/**`                                | Done   |
+| Agent approval notifications respect DND/showNotifications           | Done   |
 
 ## PR #10 remediation pass 3 (2026-06-11)
 
 Third review (`f1a3d00`) findings addressed:
 
-| Item | Status |
-|------|--------|
-| Timeline test TS2367/TS2339 type error | Done |
-| `config.json` Prettier drift after `build-runtime` copy | Done |
-| Live Matrix client credentials after proactive refresh | Done |
-| Recurring proactive refresh scheduling after rotation | Done |
-| `check:mip1-evidence` clone-safe base ref resolution | Done |
-| `desktop_save_file_begin` temp file leak on transfer cap | Done |
-| Truncated streamed dropped-file reads rejected | Done |
-| Release `cargo check` warning cleanup (`AtomicU64`, `is_gnome_session`) | Done |
+| Item                                                                    | Status |
+| ----------------------------------------------------------------------- | ------ |
+| Timeline test TS2367/TS2339 type error                                  | Done   |
+| `config.json` Prettier drift after `build-runtime` copy                 | Done   |
+| Live Matrix client credentials after proactive refresh                  | Done   |
+| Recurring proactive refresh scheduling after rotation                   | Done   |
+| `check:mip1-evidence` clone-safe base ref resolution                    | Done   |
+| `desktop_save_file_begin` temp file leak on transfer cap                | Done   |
+| Truncated streamed dropped-file reads rejected                          | Done   |
+| Release `cargo check` warning cleanup (`AtomicU64`, `is_gnome_session`) | Done   |
 
 ## Pre-iOS Prep
 
@@ -84,7 +84,7 @@ Record pass/fail and build revision in this file when complete.
 ### macOS signing and notarization
 
 Local macOS smoke builds remain ad-hoc signed. Published macOS releases are
-gated by `.github/workflows/release-desktop.yml`: CI imports the configured
+gated by `.github/workflows/release.yml`: CI imports the configured
 Developer ID Application certificate, builds with that signing identity,
 submits notarization through Tauri's Apple credentials, verifies the resulting
 signature, and validates stapling on the app bundle and DMG. The release job
