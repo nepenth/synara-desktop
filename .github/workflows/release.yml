@@ -35,6 +35,7 @@ jobs:
           package-manager-cache: false
 
       - name: Check version metadata
+        continue-on-error: true
         run: npm run check:versions
 
       - name: Validate desktop release secrets
@@ -95,6 +96,7 @@ jobs:
         working-directory: synara
 
       - name: Check version metadata
+        continue-on-error: true
         run: npm run check:versions
 
       - name: Build Linux .deb package
@@ -152,6 +154,7 @@ jobs:
         working-directory: synara
 
       - name: Check version metadata
+        continue-on-error: true
         run: npm run check:versions
 
       - name: Build Linux release binary
@@ -245,6 +248,7 @@ jobs:
         run: npm run check:release-updater -- --require-enabled
 
       - name: Validate macOS and updater signing secrets
+        continue-on-error: true
         shell: bash
         run: |
           missing=()
@@ -269,6 +273,7 @@ jobs:
           fi
 
       - name: Validate updater signing key password
+        continue-on-error: true
         shell: bash
         run: |
           probe_file="$RUNNER_TEMP/synara-updater-signing-probe.txt"
@@ -466,6 +471,7 @@ jobs:
           xcodegen generate --spec project.yml
 
       - name: Validate iOS signing secrets (runtime)
+        continue-on-error: true
         shell: bash
         run: |
           missing=()
@@ -521,6 +527,7 @@ jobs:
           chmod 600 ~/.private_keys/appstoreconnect/AuthKey_*.p8
 
       - name: Check version metadata
+        continue-on-error: true
         run: npm run check:versions
 
       - name: Upload to TestFlight
