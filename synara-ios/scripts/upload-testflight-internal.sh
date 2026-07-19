@@ -27,6 +27,10 @@ require_env "SYNARA_IOS_TEAM_ID" "$TEAM_ID"
 require_env "SYNARA_IOS_PROVISIONING_PROFILE" "$PROVISIONING_PROFILE"
 require_env "SYNARA_PUSH_GATEWAY_URL" "$PUSH_GATEWAY_URL"
 
+# Support internal TestFlight only (default true for safety) or false to allow external/promotion
+TESTFLIGHT_INTERNAL_ONLY="${SYNARA_TESTFLIGHT_INTERNAL_ONLY:-true}"
+
+
 xcode_auth_args=()
 has_xcode_auth_args=0
 if [[ -n "${SYNARA_ASC_KEY_PATH:-}" || -n "${SYNARA_ASC_KEY_ID:-}" || -n "${SYNARA_ASC_ISSUER_ID:-}" ]]; then
@@ -112,7 +116,7 @@ cat > "$export_options" <<PLIST
 	<key>teamID</key>
 	<string>${TEAM_ID}</string>
 	<key>testFlightInternalTestingOnly</key>
-	<true/>
+	<${TESTFLIGHT_INTERNAL_ONLY}/>
 	<key>uploadSymbols</key>
 	<true/>
 </dict>
