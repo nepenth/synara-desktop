@@ -77,6 +77,7 @@ test("release updater config satisfies strict release readiness inspection", () 
           SYNARA_UPDATER_PUBKEY: \${{ vars.SYNARA_UPDATER_PUBKEY }}
           SYNARA_UPDATER_ENDPOINT: \${{ vars.SYNARA_UPDATER_ENDPOINT }}
       env:
+        APPLE_PASSWORD: \${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
         TAURI_SIGNING_PRIVATE_KEY: \${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
         TAURI_SIGNING_PRIVATE_KEY_PASSWORD: \${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
       files: |
