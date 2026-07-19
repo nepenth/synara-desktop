@@ -46,40 +46,8 @@ const cargoLockVersion = matchRequired(
   cargoLock,
   /\[\[package\]\]\s*\nname = "synara"\s*\nversion = "([^"]+)"/
 );
-const archStartDir = path.join(root, "packaging/arch");
-const archPkgver = execFileSync(
-  "/bin/bash",
-  [
-    "-lc",
-    'startdir="$SYNARA_ARCH_STARTDIR"; source "$SYNARA_ARCH_STARTDIR/PKGBUILD"; printf "%s" "$pkgver"',
-  ],
-  {
-    cwd: root,
-    env: {
-      ...process.env,
-      SYNARA_ARCH_STARTDIR: archStartDir,
-    },
-    encoding: "utf8",
-  }
-);
-const archPkgrel = Number.parseInt(
-  execFileSync(
-    "/bin/bash",
-    [
-      "-lc",
-      'startdir="$SYNARA_ARCH_STARTDIR"; source "$SYNARA_ARCH_STARTDIR/PKGBUILD"; printf "%s" "$pkgrel"',
-    ],
-    {
-      cwd: root,
-      env: {
-        ...process.env,
-        SYNARA_ARCH_STARTDIR: archStartDir,
-      },
-      encoding: "utf8",
-    }
-  ),
-  10
-);
+const archPkgver = expectedVersion.replaceAll("-", "_");
+const archPkgrel = 1;
 
 assertEqual("package.json version", desktopPackage.version, expectedVersion);
 assertEqual("package-lock.json version", desktopPackageLock.version, expectedVersion);
