@@ -70,9 +70,6 @@ export function AgentApprovalCard({ prompt, target }: AgentApprovalCardProps) {
   const disabled = !canReact || Boolean(busyKey || sentKey);
   const isResolved = Boolean(sentKey);
 
-  // Default closed for huge source contexts (common on first real large prompts).
-  const [showFullPrompt, setShowFullPrompt] = useState(false);
-
   const sendReaction = useCallback(
     async (reactionKey: string) => {
       if (!target || target.canSendReaction === false || busyKey || sentKey) return;
@@ -252,32 +249,32 @@ export function AgentApprovalCard({ prompt, target }: AgentApprovalCardProps) {
         )}
 
         {!isResolved && (
-        <Box gap="200" wrap="Wrap">
-          {APPROVAL_ACTIONS.map((action) => {
-            const isAlways = action.key === AGENT_APPROVAL_REACTION_APPROVE_ALWAYS;
-            const hideWhileConfirmingAlways = confirmApproveAlways && isAlways;
-            if (hideWhileConfirmingAlways) return null;
+          <Box gap="200" wrap="Wrap">
+            {APPROVAL_ACTIONS.map((action) => {
+              const isAlways = action.key === AGENT_APPROVAL_REACTION_APPROVE_ALWAYS;
+              const hideWhileConfirmingAlways = confirmApproveAlways && isAlways;
+              if (hideWhileConfirmingAlways) return null;
 
-            return (
-              <Button
-                key={action.key}
-                type="button"
-                size="300"
-                variant={action.variant}
-                fill={action.variant === 'Critical' ? 'Solid' : 'Soft'}
-                disabled={disabled}
-                before={
-                  busyKey === action.key ? (
-                    <Spinner size="100" variant={action.variant} />
-                  ) : undefined
-                }
-                onClick={() => handleReact(action.key)}
-              >
-                <Text size="B300">{`${action.key} ${action.label}`}</Text>
-              </Button>
-            );
-          })}
-        </Box>
+              return (
+                <Button
+                  key={action.key}
+                  type="button"
+                  size="300"
+                  variant={action.variant}
+                  fill={action.variant === 'Critical' ? 'Solid' : 'Soft'}
+                  disabled={disabled}
+                  before={
+                    busyKey === action.key ? (
+                      <Spinner size="100" variant={action.variant} />
+                    ) : undefined
+                  }
+                  onClick={() => handleReact(action.key)}
+                >
+                  <Text size="B300">{`${action.key} ${action.label}`}</Text>
+                </Button>
+              );
+            })}
+          </Box>
         )}
 
         {!target && (
@@ -295,17 +292,19 @@ export function AgentApprovalCard({ prompt, target }: AgentApprovalCardProps) {
             direction="Column"
             gap="100"
             style={{
-              border: `${config.borderWidth.B300} solid ${color.Success?.Main || "#22c55e"}`,
+              border: `${config.borderWidth.B300} solid ${color.Success?.Main || '#22c55e'}`,
               borderRadius: config.radii.R300,
               padding: config.space.S200,
-              backgroundColor: color.SurfaceVariant?.Container || "rgba(0,0,0,0.03)",
+              backgroundColor: color.SurfaceVariant?.Container || 'rgba(0,0,0,0.03)',
             }}
           >
             <Text size="T300" priority="400">
               Approved ({sentKey}). Card can be dismissed or will be replaced in a future update.
             </Text>
             {prompt.commandPreview && (
-              <Text size="T200" priority="300">Command: {prompt.commandPreview}</Text>
+              <Text size="T200" priority="300">
+                Command: {prompt.commandPreview}
+              </Text>
             )}
           </Box>
         )}
