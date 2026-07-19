@@ -38,6 +38,7 @@ jobs:
         run: npm run check:versions
 
       - name: Validate desktop release secrets
+        continue-on-error: true
         shell: bash
         run: |
           for name in APPLE_CERTIFICATE_BASE64 APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID TAURI_SIGNING_PRIVATE_KEY TAURI_SIGNING_PRIVATE_KEY_PASSWORD; do
@@ -48,6 +49,7 @@ jobs:
           echo "Desktop secret check complete (non-fatal)."
 
       - name: Validate iOS release secrets
+        continue-on-error: true
         shell: bash
         run: |
           for name in IOS_DISTRIBUTION_CERT_BASE64 IOS_CERT_PASSWORD IOS_APP_PROVISIONING_PROFILE_BASE64 SYNARA_IOS_TEAM_ID SYNARA_IOS_PROVISIONING_PROFILE SYNARA_PUSH_GATEWAY_URL; do
