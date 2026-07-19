@@ -78,3 +78,28 @@ The upload uses `testFlightInternalTestingOnly`, and App Store Connect makes the
 processed build available to internal testers through the configured internal
 distribution settings. Do not run `promote-testflight-internal.rb` as part of the
 normal upload path.
+
+
+## GitHub Workflow Integration (Release)
+
+The iOS TestFlight upload is now wired into the release workflow (`.github/workflows/release-desktop.yml`).
+
+When a GitHub Release for a `v*` tag is published:
+- The `ios-testflight` job runs on `macos-latest`.
+- It generates the Xcode project, imports certs/profiles from secrets, and runs the upload script.
+- By default uploads with `testFlightInternalTestingOnly: true` (internal testers).
+
+**Required GitHub Secrets** (set in repo Settings > Secrets and variables > Actions):
+- `SYNARA_IOS_TEAM_ID`
+- `SYNARA_IOS_PROVISIONING_PROFILE` (profile name)
+- `SYNARA_PUSH_GATEWAY_URL` (production)
+- `IOS_DISTRIBUTION_CERT_BASE64` (p12 for Apple Distribution)
+- `IOS_CERT_PASSWORD`
+- `IOS_APP_PROVISIONING_PROFILE_BASE64` (and optional `IOS_NSE_...`)
+- `SYNARA_ASC_KEY_BASE64`, `SYNARA_ASC_KEY_ID`, `SYNARA_ASC_ISSUER_ID` (for auth)
+
+To push for external / promote:
+- The job hardcodes internal. To change, edit the job env `SYNARA_TESTFLIGHT_INTERNAL_ONLY: "false"` (requires external groups configured in App Store Connect).
+- Or promote the processed build manually in App Store Connect.
+
+Pre-release validation: Use the `iOS Skeleton` workflow (unsigned simulator) or local `scripts/ci-build.sh`.
