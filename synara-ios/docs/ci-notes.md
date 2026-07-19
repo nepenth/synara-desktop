@@ -93,7 +93,13 @@ The release gate is therefore:
    `/private/tmp/synara-ios-results` for handoff if either command fails.
 
 Signed simulator builds do not require App Store distribution credentials on a
-local Mac, but they do need normal simulator code signing. Signed device builds,
-TestFlight archives, and App Store uploads are future release-lane work. They
-will require Apple Developer Program membership, a registered bundle identifier,
-signing assets, and App Store Connect API credentials stored as CI secrets.
+local Mac, but they do need normal simulator code signing. Internal TestFlight
+archives are produced by the protected `testflight` environment in the
+`Release Synara` workflow whenever a matching `v<shared-version>` GitHub Release
+is published. The release job uses environment secrets for the iOS Apple
+Distribution identity, provisioning profiles, and App Store Connect API key;
+these credentials are never exposed to pull-request or ordinary branch builds.
+
+External TestFlight and App Store submission remain separate release gates. The
+internal upload explicitly uses `testFlightInternalTestingOnly` and does not
+submit a build for external review.

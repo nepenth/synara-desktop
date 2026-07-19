@@ -1,18 +1,18 @@
 # Build And Release Runbook
 
-Reviewed: 2026-06-30
+Reviewed: 2026-07-19
 
-This is the entry point for agents and maintainers preparing Synara Desktop
-builds or releases. Read this before changing packaging, signing, updater, or
+This is the entry point for agents and maintainers preparing Synara builds or
+releases. Read this before changing packaging, signing, updater, TestFlight, or
 release workflow behavior.
 
 ## Release Lanes
 
-| Lane                              | Purpose                                                              |                           Client-visible update? |
-| --------------------------------- | -------------------------------------------------------------------- | -----------------------------------------------: |
-| `main`                            | Integration branch. Runs normal CI on push and PR.                   |                                               No |
-| `release/vX.Y.Z`                  | Release candidate branch. Runs CI and desktop package smoke on push. |                                               No |
-| Published GitHub Release `vX.Y.Z` | Production artifact publication and updater metadata.                | Yes, after assets and `latest.json` are uploaded |
+| Lane                              | Purpose                                                              |             Client-visible update? |
+| --------------------------------- | -------------------------------------------------------------------- | ---------------------------------: |
+| `main`                            | Integration branch. Runs normal CI on push and PR.                   |                                 No |
+| `release/vX.Y.Z`                  | Release candidate branch. Runs CI and desktop package smoke on push. |                                 No |
+| Published GitHub Release `vX.Y.Z` | Coordinated desktop publication and internal TestFlight upload.      | Yes, after each platform processes |
 
 Do not publish a GitHub Release until the release branch gates, desktop package
 smoke, and human smoke checklist have passed.
@@ -105,20 +105,25 @@ validation.
 
 1. Create or update a GitHub Release for tag `vX.Y.Z`.
 2. Publish only after the release branch and smoke evidence are approved.
-3. The `Release Desktop` workflow builds:
+3. The `Release Synara` workflow first requires the tag to equal the shared
+   repository version, then builds every client from that tag:
    - macOS signed/notarized DMG, macOS updater archive, signatures, and
      `latest.json`.
    - Linux `.deb`.
    - Arch-family `synara-desktop-bin` package plus fixed `pacman-repo` release
      assets (`synara.db`, `synara.files`, and package file).
-4. Verify hosted macOS `latest.json` before advertising in-app macOS updates.
-5. Verify the fixed pacman repo URL before advertising Arch-family updates:
+   - iOS signed App Store archive uploaded for internal TestFlight testing.
+4. Verify the iOS build finishes App Store Connect processing and appears in
+   the configured internal TestFlight group.
+5. Verify hosted macOS `latest.json` before advertising in-app macOS updates.
+6. Verify the fixed pacman repo URL before advertising Arch-family updates:
 
 ```text
 https://github.com/nepenth/synara-desktop/releases/download/pacman-repo/synara.db
 ```
 
-6. Confirm installed-app update behavior:
+7. Confirm installed-app update behavior:
+   - iOS updates through TestFlight.
    - macOS updates through the Tauri updater flow.
    - Linux updates through `paru -Syu` or `sudo pacman -Syu`; the app may only
      notify/instruct.
@@ -138,6 +143,12 @@ Updater-enabled releases require:
 - `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`
 - `SYNARA_UPDATER_PUBKEY`
 - `SYNARA_UPDATER_ENDPOINT`
+
+Internal TestFlight releases require the tag-restricted `testflight` GitHub
+environment and its Apple Distribution certificate, app and notification
+service provisioning profiles, and App Store Connect API key secrets. The
+complete variable list and rotation notes live in
+[../synara-ios/docs/testflight-upload.md](../synara-ios/docs/testflight-upload.md#coordinated-github-release).
 
 Never commit updater private keys, Apple certificates, passwords, or notarization
 credentials.

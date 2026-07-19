@@ -21,6 +21,7 @@ Required environment variables:
 ```sh
 SYNARA_IOS_TEAM_ID=... \
 SYNARA_IOS_PROVISIONING_PROFILE="..." \
+SYNARA_IOS_NOTIFICATION_SERVICE_PROVISIONING_PROFILE="..." \
 SYNARA_PUSH_GATEWAY_URL="https://push.example.com/_matrix/push/v1/notify" \
 synara-ios/scripts/upload-testflight-internal.sh
 ```
@@ -28,7 +29,6 @@ synara-ios/scripts/upload-testflight-internal.sh
 Optional environment variables:
 
 ```sh
-SYNARA_IOS_NOTIFICATION_SERVICE_PROVISIONING_PROFILE="..." \
 SYNARA_IOS_ARCHIVE_ROOT=/tmp \
 synara-ios/scripts/upload-testflight-internal.sh
 ```
@@ -78,3 +78,35 @@ The upload uses `testFlightInternalTestingOnly`, and App Store Connect makes the
 processed build available to internal testers through the configured internal
 distribution settings. Do not run `promote-testflight-internal.rb` as part of the
 normal upload path.
+
+## Coordinated GitHub Release
+
+Publishing a GitHub Release whose tag is `v<shared-version>` starts the
+`Release Synara` workflow. A common release gate runs
+`npm run check:versions` and rejects a tag that does not exactly match the
+version committed across the desktop packages, Cargo, Linux packaging, and iOS
+project metadata. Linux, macOS, and iOS are then built from that same tag.
+
+The iOS job deploys through the protected `testflight` GitHub environment and
+uses `macos-26`. It imports all signing material into an ephemeral runner,
+validates that both provisioning profiles belong to the expected Apple team and
+bundle identifiers, uploads through the same local script documented above, and
+removes the temporary signing material even when the job fails.
+
+Required `testflight` environment secrets:
+
+- `IOS_DISTRIBUTION_CERTIFICATE_BASE64`
+- `IOS_DISTRIBUTION_CERTIFICATE_PASSWORD`
+- `IOS_APP_PROVISIONING_PROFILE_BASE64`
+- `IOS_NOTIFICATION_PROVISIONING_PROFILE_BASE64`
+- `SYNARA_ASC_KEY_BASE64`
+- `SYNARA_ASC_KEY_ID`
+- `SYNARA_ASC_ISSUER_ID`
+
+The job also consumes the existing repository secret `APPLE_TEAM_ID` and
+repository variable `SYNARA_PUSH_GATEWAY_URL`. Keep the iOS Apple Distribution
+certificate separate from the Developer ID Application certificate used to sign
+the direct-download macOS build.
+
+The environment only permits deployment from tags matching `v*`. The workflow
+does not expose signing secrets to pull-request or ordinary branch builds.

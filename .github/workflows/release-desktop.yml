@@ -1,4 +1,4 @@
-name: Release Desktop
+name: Release Synara
 
 on:
   release:
@@ -6,11 +6,45 @@ on:
 
 permissions:
   contents: write
+  deployments: write
+
+concurrency:
+  group: release-${{ github.event.release.tag_name }}
+  cancel-in-progress: false
 
 jobs:
+  release-gate:
+    name: Validate shared release version
+    if: startsWith(github.ref_name, 'v')
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+
+      - name: Check version metadata
+        run: npm run check:versions
+
+      - name: Require release tag to match the shared version
+        shell: bash
+        run: |
+          expected_tag="v$(node -p "require('./package.json').version")"
+          if [[ "$GITHUB_REF_NAME" != "$expected_tag" ]]; then
+            echo "Release tag $GITHUB_REF_NAME does not match shared version $expected_tag" >&2
+            exit 1
+          fi
+
   linux-deb:
     name: Linux .deb release artifact
     if: startsWith(github.ref_name, 'v')
+    needs: [release-gate]
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout repository
@@ -58,6 +92,7 @@ jobs:
   linux-arch:
     name: Linux pacman repo artifact
     if: startsWith(github.ref_name, 'v')
+    needs: [release-gate]
     runs-on: ubuntu-22.04
     container: archlinux:base-devel
     steps:
@@ -176,6 +211,7 @@ jobs:
   macos:
     name: macOS release artifacts
     if: startsWith(github.ref_name, 'v')
+    needs: [release-gate]
     runs-on: macos-latest
     env:
       APPLE_CERTIFICATE_BASE64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
@@ -353,6 +389,228 @@ jobs:
             src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.sig
             src-tauri/target/universal-apple-darwin/release/bundle/macos/*.tar.gz
             src-tauri/target/universal-apple-darwin/release/bundle/macos/*.tar.gz.sig
+
+  ios-testflight:
+    name: iOS internal TestFlight release
+    if: startsWith(github.ref_name, 'v')
+    needs: [release-gate]
+    runs-on: macos-26
+    environment:
+      name: testflight
+      url: https://appstoreconnect.apple.com/apps
+    permissions:
+      contents: read
+      deployments: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+
+      - name: Check shared version metadata
+        run: npm run check:versions
+
+      - name: Validate TestFlight release configuration
+        shell: bash
+        env:
+          IOS_DISTRIBUTION_CERTIFICATE_BASE64: ${{ secrets.IOS_DISTRIBUTION_CERTIFICATE_BASE64 }}
+          IOS_DISTRIBUTION_CERTIFICATE_PASSWORD: ${{ secrets.IOS_DISTRIBUTION_CERTIFICATE_PASSWORD }}
+          IOS_APP_PROVISIONING_PROFILE_BASE64: ${{ secrets.IOS_APP_PROVISIONING_PROFILE_BASE64 }}
+          IOS_NOTIFICATION_PROVISIONING_PROFILE_BASE64: ${{ secrets.IOS_NOTIFICATION_PROVISIONING_PROFILE_BASE64 }}
+          SYNARA_ASC_KEY_BASE64: ${{ secrets.SYNARA_ASC_KEY_BASE64 }}
+          SYNARA_ASC_KEY_ID: ${{ secrets.SYNARA_ASC_KEY_ID }}
+          SYNARA_ASC_ISSUER_ID: ${{ secrets.SYNARA_ASC_ISSUER_ID }}
+          SYNARA_IOS_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          SYNARA_PUSH_GATEWAY_URL: ${{ vars.SYNARA_PUSH_GATEWAY_URL }}
+        run: |
+          missing=()
+          for name in \
+            IOS_DISTRIBUTION_CERTIFICATE_BASE64 \
+            IOS_DISTRIBUTION_CERTIFICATE_PASSWORD \
+            IOS_APP_PROVISIONING_PROFILE_BASE64 \
+            IOS_NOTIFICATION_PROVISIONING_PROFILE_BASE64 \
+            SYNARA_ASC_KEY_BASE64 \
+            SYNARA_ASC_KEY_ID \
+            SYNARA_ASC_ISSUER_ID \
+            SYNARA_IOS_TEAM_ID \
+            SYNARA_PUSH_GATEWAY_URL; do
+            if [[ -z "${!name}" ]]; then
+              missing+=("$name")
+            fi
+          done
+
+          if (( ${#missing[@]} > 0 )); then
+            printf 'Missing required TestFlight release configuration:\n' >&2
+            printf ' - %s\n' "${missing[@]}" >&2
+            exit 1
+          fi
+
+          if [[ "$SYNARA_PUSH_GATEWAY_URL" != https://* ]]; then
+            echo "SYNARA_PUSH_GATEWAY_URL must use HTTPS for a TestFlight release." >&2
+            exit 1
+          fi
+
+      - name: Import Apple Distribution identity
+        shell: bash
+        env:
+          IOS_DISTRIBUTION_CERTIFICATE_BASE64: ${{ secrets.IOS_DISTRIBUTION_CERTIFICATE_BASE64 }}
+          IOS_DISTRIBUTION_CERTIFICATE_PASSWORD: ${{ secrets.IOS_DISTRIBUTION_CERTIFICATE_PASSWORD }}
+          SYNARA_IOS_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          certificate_path="$RUNNER_TEMP/synara-ios-distribution.p12"
+          keychain_path="$RUNNER_TEMP/synara-ios-signing.keychain-db"
+          keychain_password="$(uuidgen)$(uuidgen)"
+
+          printf '%s' "$IOS_DISTRIBUTION_CERTIFICATE_BASE64" | /usr/bin/base64 -D > "$certificate_path"
+          chmod 600 "$certificate_path"
+
+          security create-keychain -p "$keychain_password" "$keychain_path"
+          security set-keychain-settings -lut 21600 "$keychain_path"
+          security unlock-keychain -p "$keychain_password" "$keychain_path"
+          security import "$certificate_path" \
+            -k "$keychain_path" \
+            -P "$IOS_DISTRIBUTION_CERTIFICATE_PASSWORD" \
+            -T /usr/bin/codesign \
+            -T /usr/bin/security
+          security set-key-partition-list \
+            -S apple-tool:,apple:,codesign: \
+            -s \
+            -k "$keychain_password" \
+            "$keychain_path"
+          security list-keychains -d user -s "$keychain_path"
+
+          identity_output="$(security find-identity -v -p codesigning "$keychain_path")"
+          printf '%s\n' "$identity_output"
+          if ! grep -F "Apple Distribution:" <<<"$identity_output" | grep -F "($SYNARA_IOS_TEAM_ID)" >/dev/null; then
+            echo "The imported certificate is not an Apple Distribution identity for team $SYNARA_IOS_TEAM_ID." >&2
+            exit 1
+          fi
+
+          echo "SYNARA_CI_KEYCHAIN_PATH=$keychain_path" >> "$GITHUB_ENV"
+          echo "SYNARA_CI_CERTIFICATE_PATH=$certificate_path" >> "$GITHUB_ENV"
+
+      - name: Install App Store provisioning profiles
+        shell: bash
+        env:
+          IOS_APP_PROVISIONING_PROFILE_BASE64: ${{ secrets.IOS_APP_PROVISIONING_PROFILE_BASE64 }}
+          IOS_NOTIFICATION_PROVISIONING_PROFILE_BASE64: ${{ secrets.IOS_NOTIFICATION_PROVISIONING_PROFILE_BASE64 }}
+          SYNARA_IOS_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          profiles_dir="$HOME/Library/MobileDevice/Provisioning Profiles"
+          expected_app_group="group.com.whylandcreative.synara"
+          mkdir -p "$profiles_dir"
+
+          install_profile() {
+            local encoded_profile="$1"
+            local expected_bundle_id="$2"
+            local output_variable="$3"
+            local file_stem="$4"
+            local requires_push="$5"
+            local cleanup_label="$6"
+            local source_path="$RUNNER_TEMP/$file_stem.mobileprovision"
+            local plist_path="$RUNNER_TEMP/$file_stem.plist"
+
+            printf '%s' "$encoded_profile" | /usr/bin/base64 -D > "$source_path"
+            security cms -D -i "$source_path" > "$plist_path"
+
+            local profile_uuid
+            local profile_app_id
+            local profile_team_id
+            local profile_app_group
+            local aps_environment
+            local get_task_allow
+            profile_uuid="$(/usr/libexec/PlistBuddy -c 'Print :UUID' "$plist_path")"
+            profile_app_id="$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:application-identifier' "$plist_path")"
+            profile_team_id="$(/usr/libexec/PlistBuddy -c 'Print :TeamIdentifier:0' "$plist_path")"
+            profile_app_group="$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:com.apple.security.application-groups:0' "$plist_path" 2>/dev/null || true)"
+            aps_environment="$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:aps-environment' "$plist_path" 2>/dev/null || true)"
+            get_task_allow="$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:get-task-allow' "$plist_path" 2>/dev/null || printf 'false')"
+
+            if [[ "$profile_team_id" != "$SYNARA_IOS_TEAM_ID" ]]; then
+              echo "$file_stem profile belongs to team $profile_team_id, expected $SYNARA_IOS_TEAM_ID." >&2
+              exit 1
+            fi
+            if [[ "$profile_app_id" != "$SYNARA_IOS_TEAM_ID.$expected_bundle_id" ]]; then
+              echo "$file_stem profile targets $profile_app_id, expected $SYNARA_IOS_TEAM_ID.$expected_bundle_id." >&2
+              exit 1
+            fi
+            if [[ "$get_task_allow" == "true" ]]; then
+              echo "$file_stem is a development profile, not an App Store distribution profile." >&2
+              exit 1
+            fi
+            if [[ "$profile_app_group" != "$expected_app_group" ]]; then
+              echo "$file_stem profile App Group is '$profile_app_group', expected '$expected_app_group'." >&2
+              exit 1
+            fi
+            if [[ "$requires_push" == "true" && "$aps_environment" != "production" ]]; then
+              echo "$file_stem profile APNs environment is '$aps_environment', expected 'production'." >&2
+              exit 1
+            fi
+
+            local installed_path="$profiles_dir/$profile_uuid.mobileprovision"
+            cp "$source_path" "$installed_path"
+            chmod 600 "$installed_path"
+            echo "$output_variable=$profile_uuid" >> "$GITHUB_ENV"
+            echo "${output_variable}_PATH=$installed_path" >> "$GITHUB_ENV"
+            echo "SYNARA_CI_${cleanup_label}_SOURCE=$source_path" >> "$GITHUB_ENV"
+            echo "SYNARA_CI_${cleanup_label}_PLIST=$plist_path" >> "$GITHUB_ENV"
+          }
+
+          install_profile \
+            "$IOS_APP_PROVISIONING_PROFILE_BASE64" \
+            "com.whylandcreative.synara" \
+            "SYNARA_IOS_PROVISIONING_PROFILE" \
+            "app_profile" \
+            "true" \
+            "APP_PROFILE"
+          install_profile \
+            "$IOS_NOTIFICATION_PROVISIONING_PROFILE_BASE64" \
+            "com.whylandcreative.synara.NotificationService" \
+            "SYNARA_IOS_NOTIFICATION_SERVICE_PROVISIONING_PROFILE" \
+            "notification_profile" \
+            "false" \
+            "NOTIFICATION_PROFILE"
+
+      - name: Prepare App Store Connect API key
+        shell: bash
+        env:
+          SYNARA_ASC_KEY_BASE64: ${{ secrets.SYNARA_ASC_KEY_BASE64 }}
+          SYNARA_ASC_KEY_ID: ${{ secrets.SYNARA_ASC_KEY_ID }}
+        run: |
+          api_key_path="$RUNNER_TEMP/AuthKey_${SYNARA_ASC_KEY_ID}.p8"
+          printf '%s' "$SYNARA_ASC_KEY_BASE64" | /usr/bin/base64 -D > "$api_key_path"
+          chmod 600 "$api_key_path"
+          echo "SYNARA_ASC_KEY_PATH=$api_key_path" >> "$GITHUB_ENV"
+          echo "SYNARA_CI_ASC_KEY_PATH=$api_key_path" >> "$GITHUB_ENV"
+
+      - name: Archive and upload internal TestFlight build
+        env:
+          SYNARA_ASC_KEY_ID: ${{ secrets.SYNARA_ASC_KEY_ID }}
+          SYNARA_ASC_ISSUER_ID: ${{ secrets.SYNARA_ASC_ISSUER_ID }}
+          SYNARA_IOS_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          SYNARA_PUSH_GATEWAY_URL: ${{ vars.SYNARA_PUSH_GATEWAY_URL }}
+        run: synara-ios/scripts/upload-testflight-internal.sh
+
+      - name: Clean signing material
+        if: always()
+        shell: bash
+        run: |
+          if [[ -n "${SYNARA_CI_KEYCHAIN_PATH:-}" ]]; then
+            security delete-keychain "$SYNARA_CI_KEYCHAIN_PATH" >/dev/null 2>&1 || true
+          fi
+          rm -f \
+            "${SYNARA_CI_CERTIFICATE_PATH:-}" \
+            "${SYNARA_CI_ASC_KEY_PATH:-}" \
+            "${SYNARA_IOS_PROVISIONING_PROFILE_PATH:-}" \
+            "${SYNARA_IOS_NOTIFICATION_SERVICE_PROVISIONING_PROFILE_PATH:-}" \
+            "${SYNARA_CI_APP_PROFILE_SOURCE:-}" \
+            "${SYNARA_CI_APP_PROFILE_PLIST:-}" \
+            "${SYNARA_CI_NOTIFICATION_PROFILE_SOURCE:-}" \
+            "${SYNARA_CI_NOTIFICATION_PROFILE_PLIST:-}"
 
   updater-metadata:
     name: Signed macOS updater metadata
