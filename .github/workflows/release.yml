@@ -555,10 +555,9 @@ jobs:
 
   publish-gh-release:
     name: Publish GitHub Release (all clients)
-    if: startsWith(github.ref_name, 'v')
+    if: always() && startsWith(github.ref_name, 'v')
     runs-on: ubuntu-22.04
     needs: [linux-deb, macos, updater-metadata]
-    if: always()
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
