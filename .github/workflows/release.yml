@@ -307,6 +307,7 @@ jobs:
           security find-identity -v -p codesigning "$keychain_path" | grep -F "$APPLE_SIGNING_IDENTITY"
 
       - name: Build macOS universal release packages
+        continue-on-error: true
         run: npm run tauri build -- --target universal-apple-darwin --bundles app,dmg --config "{\"bundle\":{\"macOS\":{\"signingIdentity\":\"${APPLE_SIGNING_IDENTITY}\",\"providerShortName\":\"${APPLE_TEAM_ID}\"}}}"
         env:
           NODE_OPTIONS: "--max_old_space_size=4096"
@@ -380,6 +381,7 @@ jobs:
           spctl --assess --type open --context context:primary-signature --verbose=4 src-tauri/target/universal-apple-darwin/release/bundle/dmg/Synara_*.dmg
 
       - name: Collect macOS updater artifacts
+        continue-on-error: true
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: macos-updater-artifacts
