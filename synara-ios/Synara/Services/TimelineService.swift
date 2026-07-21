@@ -199,39 +199,39 @@ enum TimelinePendingReconciler {
         return (streamItems + unmatchedPending).sorted { $0.timestamp < $1.timestamp }
     }
 
-    static func mergeStableWindow(
-        streamItems: [TimelineItem],
-        localItems: [TimelineItem],
-        currentUserID: String
+}
+
+enum TimelineWindowPolicy {
+    static let stableEventLimit = 300
+
+    static func replacingServerWindow(
+        _ items: [TimelineItem],
+        limit: Int = stableEventLimit
     ) -> [TimelineItem] {
-        let traceID = PerformanceTrace.begin("ReconcilerMergeStable")
-        defer { PerformanceTrace.end("ReconcilerMergeStable", id: traceID) }
-        var mergedByID: [String: TimelineItem] = [:]
-
-        for item in localItems where item.isLocalPending == false {
-            mergedByID[stableKey(for: item)] = item
+        guard limit > 0 else {
+            return []
         }
-
-        for item in streamItems where item.isLocalPending == false {
-            mergedByID[stableKey(for: item)] = item
-        }
-
-        let stableItems = mergedByID.values.sorted { lhs, rhs in
-            if lhs.timestamp == rhs.timestamp {
-                return stableKey(for: lhs) < stableKey(for: rhs)
-            }
-            return lhs.timestamp < rhs.timestamp
-        }
-
-        return merge(
-            streamItems: stableItems,
-            localItems: localItems,
-            currentUserID: currentUserID
-        )
+        let stableItems = deduplicated(items.filter { $0.isLocalPending == false })
+        return Array(stableItems.suffix(limit))
     }
 
-    private static func stableKey(for item: TimelineItem) -> String {
-        item.eventID.isEmpty ? item.id : item.eventID
+    static func prependingHistory(
+        _ olderItems: [TimelineItem],
+        to currentItems: [TimelineItem],
+        limit: Int = stableEventLimit
+    ) -> [TimelineItem] {
+        guard limit > 0 else {
+            return []
+        }
+        return Array(deduplicated(olderItems + currentItems).prefix(limit))
+    }
+
+    private static func deduplicated(_ items: [TimelineItem]) -> [TimelineItem] {
+        var seen = Set<String>()
+        return items.filter { item in
+            let key = item.eventID.isEmpty ? item.id : item.eventID
+            return seen.insert(key).inserted
+        }
     }
 }
 
@@ -691,6 +691,205 @@ extension TimelineServicing {
     }
 }
 
+enum RoomTimelineMode: Equatable {
+    case live
+    case unread(markerEventID: String)
+    case focused(eventID: String)
+
+    var focusedEventID: String? {
+        switch self {
+        case .live:
+            return nil
+        case .unread(let markerEventID):
+            return markerEventID
+        case .focused(let eventID):
+            return eventID
+        }
+    }
+
+    var isLive: Bool {
+        if case .live = self {
+            return true
+        }
+        return false
+    }
+}
+
+struct RoomTimelineSessionFeed {
+    let generation: UInt64
+    let mode: RoomTimelineMode
+    let initialOutcome: TimelineLoadOutcome
+    let updates: AsyncStream<TimelineLoadOutcome>
+}
+
+enum RoomTimelineLiveTransition {
+    case succeeded(RoomTimelineSessionFeed)
+    case empty
+    case failed(String)
+    case superseded
+}
+
+actor RoomTimelineSession {
+    private let roomID: String
+    private let service: TimelineServicing
+    private var generation: UInt64 = 0
+    private var mode: RoomTimelineMode = .live
+    private var serverItems: [TimelineItem] = []
+
+    init(roomID: String, service: TimelineServicing) {
+        self.roomID = roomID
+        self.service = service
+    }
+
+    func open(mode: RoomTimelineMode) async -> RoomTimelineSessionFeed? {
+        generation &+= 1
+        let requestedGeneration = generation
+        self.mode = mode
+        serverItems = []
+
+        let outcome = await service.loadInitialTimeline(
+            roomID: roomID,
+            focusedEventID: mode.focusedEventID
+        )
+        guard requestedGeneration == generation else {
+            return nil
+        }
+
+        let accepted = accept(outcome, generation: requestedGeneration)
+        return RoomTimelineSessionFeed(
+            generation: requestedGeneration,
+            mode: mode,
+            initialOutcome: accepted,
+            updates: makeUpdateStream(mode: mode, generation: requestedGeneration)
+        )
+    }
+
+    func transitionToLive() async -> RoomTimelineLiveTransition {
+        let originGeneration = generation
+        let outcome = await service.loadLatestTimeline(roomID: roomID)
+        guard originGeneration == generation else {
+            return .superseded
+        }
+
+        switch outcome {
+        case .loaded(let items) where items.isEmpty == false:
+            generation &+= 1
+            mode = .live
+            serverItems = TimelineWindowPolicy.replacingServerWindow(items)
+            let nextGeneration = generation
+            return .succeeded(
+                RoomTimelineSessionFeed(
+                    generation: nextGeneration,
+                    mode: .live,
+                    initialOutcome: .loaded(serverItems),
+                    updates: makeUpdateStream(mode: .live, generation: nextGeneration)
+                )
+            )
+        case .loaded, .empty:
+            return .empty
+        case .failed(let message):
+            return .failed(message)
+        }
+    }
+
+    func loadOlder(before eventID: String) async -> TimelineLoadOutcome? {
+        let originGeneration = generation
+        let outcome = await service.loadOlderTimeline(roomID: roomID, before: eventID)
+        guard originGeneration == generation else {
+            return nil
+        }
+
+        switch outcome {
+        case .loaded(let olderItems) where olderItems.isEmpty == false:
+            let existingIDs = Set(serverItems.map { $0.eventID.isEmpty ? $0.id : $0.eventID })
+            let hasNewStableItem = olderItems.contains { item in
+                let key = item.eventID.isEmpty ? item.id : item.eventID
+                return item.isLocalPending == false && existingIDs.contains(key) == false
+            }
+            guard hasNewStableItem else {
+                return .empty
+            }
+            generation &+= 1
+            mode = .focused(eventID: eventID)
+            serverItems = TimelineWindowPolicy.prependingHistory(olderItems, to: serverItems)
+            return .loaded(serverItems)
+        case .loaded, .empty:
+            return .empty
+        case .failed(let message):
+            return .failed(message)
+        }
+    }
+
+    func invalidate() {
+        generation &+= 1
+        serverItems = []
+    }
+
+    func currentGeneration() -> UInt64 {
+        generation
+    }
+
+    private func accept(_ outcome: TimelineLoadOutcome, generation requestedGeneration: UInt64) -> TimelineLoadOutcome {
+        guard requestedGeneration == generation else {
+            return .empty
+        }
+        switch outcome {
+        case .loaded(let items):
+            serverItems = TimelineWindowPolicy.replacingServerWindow(items)
+            return serverItems.isEmpty ? .empty : .loaded(serverItems)
+        case .empty:
+            return .empty
+        case .failed(let message):
+            return .failed(message)
+        }
+    }
+
+    private func acceptedUpdate(
+        _ outcome: TimelineLoadOutcome,
+        generation requestedGeneration: UInt64
+    ) -> TimelineLoadOutcome? {
+        guard requestedGeneration == generation else {
+            return nil
+        }
+        return accept(outcome, generation: requestedGeneration)
+    }
+
+    private func makeUpdateStream(
+        mode: RoomTimelineMode,
+        generation requestedGeneration: UInt64
+    ) -> AsyncStream<TimelineLoadOutcome> {
+        let service = self.service
+        let roomID = self.roomID
+        return AsyncStream(bufferingPolicy: .bufferingNewest(1)) { continuation in
+            let task = Task { [weak self] in
+                guard let self else {
+                    continuation.finish()
+                    return
+                }
+                for await outcome in service.timelineUpdates(
+                    roomID: roomID,
+                    focusedEventID: mode.focusedEventID
+                ) {
+                    guard Task.isCancelled == false else {
+                        break
+                    }
+                    guard let accepted = await self.acceptedUpdate(
+                        outcome,
+                        generation: requestedGeneration
+                    ) else {
+                        break
+                    }
+                    continuation.yield(accepted)
+                }
+                continuation.finish()
+            }
+            continuation.onTermination = { _ in
+                task.cancel()
+            }
+        }
+    }
+}
+
 enum TimelineMapper {
     static func map(_ event: RawTimelineEvent) -> TimelineItem {
         let kind: TimelineItem.Kind
@@ -853,6 +1052,10 @@ final class MockTimelineService: TimelineServicing {
     var itemFixture: [TimelineItem]?
     var updateOutcomes: [TimelineLoadOutcome] = []
     var typingUserUpdates: [[String]] = []
+    var latestOutcome: TimelineLoadOutcome?
+    var olderOutcome: TimelineLoadOutcome?
+    var loadDelayNanoseconds: UInt64 = 0
+    var updateDelayNanoseconds: UInt64 = 0
     private(set) var clearSessionCachesCallCount = 0
 
     init(events: [RawTimelineEvent] = TimelineFixtures.commonEvents()) {
@@ -874,6 +1077,9 @@ final class MockTimelineService: TimelineServicing {
     }
 
     func loadInitialTimeline(roomID: String, focusedEventID: String?) async -> TimelineLoadOutcome {
+        if loadDelayNanoseconds > 0 {
+            try? await Task.sleep(nanoseconds: loadDelayNanoseconds)
+        }
         if let focusedEventID,
            let item = (itemFixture ?? events.map(TimelineMapper.map)).first(where: { $0.eventID == focusedEventID || $0.id == focusedEventID }) {
             return .loaded([item])
@@ -886,12 +1092,22 @@ final class MockTimelineService: TimelineServicing {
     }
 
     func loadOlderTimeline(roomID: String, before eventID: String) async -> TimelineLoadOutcome {
+        if let olderOutcome {
+            return olderOutcome
+        }
         if let itemFixture {
             let older = Array(itemFixture.prefix(50))
             return older.isEmpty ? .empty : .loaded(older)
         }
         let older = events.filter { $0.eventID != eventID }.map(TimelineMapper.map)
         return older.isEmpty ? .empty : .loaded(older)
+    }
+
+    func loadLatestTimeline(roomID: String) async -> TimelineLoadOutcome {
+        if let latestOutcome {
+            return latestOutcome
+        }
+        return await loadInitialTimeline(roomID: roomID, focusedEventID: nil)
     }
 
     func loadThreadTimeline(roomID: String, rootEventID: String) async -> TimelineLoadOutcome {
@@ -927,6 +1143,9 @@ final class MockTimelineService: TimelineServicing {
                     outcomes = updateOutcomes
                 }
 
+                if updateDelayNanoseconds > 0 {
+                    try? await Task.sleep(nanoseconds: updateDelayNanoseconds)
+                }
                 for outcome in outcomes {
                     continuation.yield(outcome)
                 }

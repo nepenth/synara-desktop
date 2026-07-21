@@ -144,6 +144,7 @@ protocol RoomListServicing: AnyObject {
     func roomUpdates() -> AsyncStream<RoomListState>
     func roomDisplayName(roomID: String) -> String?
     func isAgentRoom(roomID: String) -> Bool
+    func hasUnreadMessages(roomID: String) -> Bool
     func clearCache()
 }
 
@@ -159,6 +160,10 @@ extension RoomListServicing {
     }
 
     func isAgentRoom(roomID: String) -> Bool {
+        false
+    }
+
+    func hasUnreadMessages(roomID: String) -> Bool {
         false
     }
 }
@@ -732,6 +737,10 @@ final class PlaceholderRoomListService: RoomListServicing {
         cachedRooms.first { $0.id == roomID }?.isAgentRoom ?? false
     }
 
+    func hasUnreadMessages(roomID: String) -> Bool {
+        cachedRooms.first { $0.id == roomID }?.unreadCount ?? 0 > 0
+    }
+
     func clearCache() {
         cachedRooms = []
     }
@@ -782,6 +791,13 @@ final class MockRoomListService: RoomListServicing {
         }
 
         return rooms.first { $0.id == roomID }?.isAgentRoom ?? false
+    }
+
+    func hasUnreadMessages(roomID: String) -> Bool {
+        guard case .loaded(let rooms) = state else {
+            return false
+        }
+        return rooms.first { $0.id == roomID }?.unreadCount ?? 0 > 0
     }
 
     func roomUpdates() -> AsyncStream<RoomListState> {
