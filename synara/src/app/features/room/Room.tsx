@@ -11,7 +11,7 @@ import { settingsAtom } from '../../state/settings';
 import { PowerLevelsContextProvider, usePowerLevels } from '../../hooks/usePowerLevels';
 import { useRoom } from '../../hooks/useRoom';
 import { useKeyDown } from '../../hooks/useKeyDown';
-import { markAsRead } from '../../utils/notifications';
+import { markAsReadInBackground } from '../../utils/notifications';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { useRoomMembers } from '../../hooks/useRoomMembers';
 import { CallView } from '../call/CallView';
@@ -38,7 +38,7 @@ export function Room() {
     useCallback(
       (evt) => {
         if (isKeyHotkey('escape', evt)) {
-          markAsRead(mx, room.roomId, hideActivity);
+          markAsReadInBackground(mx, room.roomId, hideActivity);
         }
       },
       [mx, room.roomId, hideActivity]

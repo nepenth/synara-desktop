@@ -12,10 +12,6 @@ type TauriInternals = {
   transformCallback?: <T>(callback: (response: T) => void, once?: boolean) => number;
 };
 
-type TauriEventPluginInternals = {
-  unregisterListener?: (event: string, eventId: number) => void;
-};
-
 type SynaraDesktopBridge = {
   platform: 'tauri';
   supportsTray?: boolean;
@@ -279,7 +275,9 @@ declare global {
   interface Window {
     __SYNARA_DESKTOP__?: SynaraDesktopBridge;
     __TAURI_INTERNALS__?: TauriInternals;
-    __TAURI_EVENT_PLUGIN_INTERNALS__?: TauriEventPluginInternals;
+    __TAURI_EVENT_PLUGIN_INTERNALS__: {
+      unregisterListener: (event: string, eventId: number) => void;
+    };
   }
 }
 

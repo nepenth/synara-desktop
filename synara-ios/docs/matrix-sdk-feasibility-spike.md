@@ -1,8 +1,8 @@
 # Matrix Rust SDK Swift Feasibility Spike
 
-Reviewed: 2026-05-26
+Reviewed: 2026-07-21
 
-Status: package probe complete; live E2EE probe complete.
+Status: package probe upgraded; live E2EE probe previously completed.
 
 Related task: IOS-0006 in
 [Synara iOS Project Spec](../../synara/docs/synara-ios-project-spec.md).
@@ -37,7 +37,7 @@ and the binary artifact:
 MatrixSDKFFI.xcframework.zip
 ```
 
-at release `26.05.13`.
+at release `26.06.06`.
 
 ## Probe Location
 
@@ -93,11 +93,11 @@ SYNARA_E2EE_SEND=1 \
 ## Results
 
 - SwiftPM resolved `matrix-rust-components-swift` at normalized version
-  `26.5.13`, revision `02133b466cddbd5c911881acbb29cf14e5563344`.
+  `26.6.6`, revision `ec3b2161ba371a13609e7181077d2f3baef188f5`.
 - SwiftPM downloaded:
 
 ```text
-https://github.com/matrix-org/matrix-rust-components-swift/releases/download/26.05.13/MatrixSDKFFI.xcframework.zip
+https://github.com/matrix-org/matrix-rust-components-swift/releases/download/26.06.06/MatrixSDKFFI.xcframework.zip
 ```
 
 - The build compiled Matrix Rust SDK Swift wrapper files including:
@@ -114,7 +114,8 @@ https://github.com/matrix-org/matrix-rust-components-swift/releases/download/26.
 ```text
 MatrixRustSDK import succeeded.
 ```
-- Live E2EE validation succeeded with:
+- The earlier gated live E2EE validation (performed before the 26.06.06 package
+  refresh) succeeded with:
   - SDK password login.
   - SDK E2EE initialization.
   - Encrypted joined-room discovery.
@@ -125,16 +126,9 @@ MatrixRustSDK import succeeded.
 
 ## Build Caveat
 
-`swift build` exited non-zero after link during SwiftPM's apply/signing step:
-
-```text
-internal error in Code Signing subsystem
-```
-
-The binary was still produced, code-sign verification passed, and the executable
-ran successfully. Treat this as a local SwiftPM/macOS signing quirk to resolve
-before adding this probe to CI. It did not prevent module import, wrapper
-compilation, or executable runtime validation.
+With 26.06.06, `swift build` completed successfully, `codesign --verify` passed,
+and the executable ran successfully. The earlier local SwiftPM apply/signing
+failure did not recur during this refresh.
 
 The link step also emitted many warnings that bundled objects were built for a
 newer macOS version than the package's declared macOS 12 floor. This matters for
@@ -142,8 +136,9 @@ future macOS reuse, but the iOS app target is the main concern for this spike.
 
 ## SDK Coverage Assessment
 
-This spike verified package resolution and module import only. The following
-coverage still needs a real test homeserver spike:
+The 26.06.06 refresh verified package resolution, wrapper compilation, module
+import, and probe runtime compatibility. The earlier live probe exercised the
+homeserver paths below; remaining app-integration depth is noted separately:
 
 | Area            | Status                                                        | Next proof                                                                        |
 | --------------- | ------------------------------------------------------------- | --------------------------------------------------------------------------------- |

@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const tests = [
+  'src/app/config/__tests__/foundationFeatures.test.ts',
   'src/app/utils/__tests__/remoteContent.test.ts',
   'src/app/contracts/__tests__/contractSchemas.test.ts',
   'src/app/hooks/__tests__/useVirtualPaginator.test.ts',
@@ -12,6 +13,7 @@ const tests = [
   'src/app/utils/__tests__/later.test.ts',
   'src/app/utils/__tests__/roomNotes.test.ts',
   'src/app/utils/__tests__/notifications.test.ts',
+  'src/app/utils/__tests__/foundationDiagnostics.test.ts',
   'src/app/utils/__tests__/boundedLru.test.ts',
   'src/app/notifications/__tests__/badgeSummary.test.ts',
   'src/app/notifications/__tests__/systemNotification.test.ts',
@@ -25,11 +27,13 @@ const tests = [
   'src/app/utils/__tests__/dom.test.ts',
   'src/app/utils/__tests__/appLinks.test.ts',
   'src/app/utils/__tests__/messageSearchFilters.test.ts',
+  'src/app/utils/__tests__/matrix.test.ts',
   'src/app/utils/__tests__/themeAccent.test.ts',
   'src/app/utils/__tests__/syncLifecycle.test.ts',
   'src/app/utils/__tests__/syncSplashRecovery.test.ts',
   'src/app/utils/__tests__/timelinePagination.test.ts',
   'src/app/utils/__tests__/timelineLinks.test.ts',
+  'src/app/utils/__tests__/timelineNavigation.test.ts',
   'src/app/utils/__tests__/timelineOpening.test.ts',
   'src/app/pages/client/__tests__/syncStatusCopy.test.ts',
   'src/app/pages/__tests__/pathUtils.test.ts',
@@ -50,6 +54,7 @@ const tests = [
   'src/app/state/__tests__/clearLoginData.test.ts',
   'src/app/state/__tests__/performLogout.test.ts',
   'src/app/state/__tests__/settings.test.ts',
+  'src/app/state/room-list/__tests__/roomActivity.test.ts',
   'src/app/components/editor/__tests__/richText.test.ts',
   'src/app/pages/auth/login/__tests__/loginUtil.test.ts',
   'src/app/state/__tests__/sw-session.test.ts',

@@ -14,7 +14,7 @@ settings:
 packages:
   MatrixRustComponentsSwift:
     url: https://github.com/matrix-org/matrix-rust-components-swift.git
-    exactVersion: 26.05.13
+    exactVersion: 26.06.06
 targets:
   Synara:
     type: application

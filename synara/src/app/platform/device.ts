@@ -5,7 +5,7 @@ export type PlatformDeviceRecord = {
 };
 
 export type PlatformDeviceNameClient = {
-  getDeviceId: () => string | undefined;
+  getDeviceId: () => string | null | undefined;
   getDevice: (deviceId: string) => Promise<PlatformDeviceRecord | undefined>;
   setDeviceDetails: (deviceId: string, details: { display_name: string }) => Promise<unknown>;
 };

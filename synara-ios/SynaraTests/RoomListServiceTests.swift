@@ -1,5 +1,5 @@
-import XCTest
 @testable import Synara
+import XCTest
 
 final class RoomListServiceTests: XCTestCase {
     func testRoomsSortByHighlightUnreadThenActivity() {
@@ -13,8 +13,8 @@ final class RoomListServiceTests: XCTestCase {
     func testLargeFixtureHasStableIdentifiers() {
         let rooms = RoomListFixtures.large()
 
-        XCTAssertEqual(rooms.count, 1_000)
-        XCTAssertEqual(Set(rooms.map(\.id)).count, 1_000)
+        XCTAssertEqual(rooms.count, 1000)
+        XCTAssertEqual(Set(rooms.map(\.id)).count, 1000)
     }
 
     func testMockRoomListReturnsSortedLoadedState() async {
@@ -61,7 +61,7 @@ final class RoomListServiceTests: XCTestCase {
         try await service.acceptInvite(roomID: "!alerts:matrix.org")
         let state = await service.loadRooms()
 
-        guard case .loaded(let rooms) = state else {
+        guard case let .loaded(rooms) = state else {
             XCTFail("Expected loaded rooms")
             return
         }
@@ -336,7 +336,7 @@ final class RoomListServiceTests: XCTestCase {
             NotificationSummaryInput(
                 unreadCounts: [
                     BadgeUnreadSource(total: 4, highlight: 2),
-                    BadgeUnreadSource(total: 3)
+                    BadgeUnreadSource(total: 3),
                 ],
                 laterActiveCount: 5,
                 inviteCount: 2,
@@ -358,7 +358,7 @@ final class RoomListServiceTests: XCTestCase {
             NotificationSummaryInput(
                 unreadCounts: [
                     BadgeUnreadSource(total: -1, highlight: -2),
-                    BadgeUnreadSource(total: 3)
+                    BadgeUnreadSource(total: 3),
                 ],
                 laterActiveCount: 2,
                 inviteCount: -1,
@@ -413,7 +413,7 @@ final class RoomListServiceTests: XCTestCase {
                 kind: .room,
                 membership: .joined,
                 lastActivityAt: RoomListFixtures.now
-            )
+            ),
         ]
 
         let sections = NotificationsInboxSections.make(from: rooms)
@@ -459,8 +459,8 @@ final class RoomListServiceTests: XCTestCase {
             status: "pending",
             summary: "Needs your review",
             actions: [
-                try SynaraAgentCardAction(id: "approve", title: "Approve", kind: "approve", prompt: "ok"),
-                try SynaraAgentCardAction(id: "reject", title: "Reject", kind: "reject", prompt: "no")
+                SynaraAgentCardAction(id: "approve", title: "Approve", kind: "approve", prompt: "ok"),
+                SynaraAgentCardAction(id: "reject", title: "Reject", kind: "reject", prompt: "no"),
             ]
         )
 
@@ -479,12 +479,12 @@ final class RoomListServiceTests: XCTestCase {
                 kind: .room,
                 membership: .joined,
                 lastActivityAt: RoomListFixtures.now
-            )
+            ),
         ] + initialRooms
         let service = MockRoomListService(state: .loaded(initialRooms))
         service.updateStates = [
             .loaded(initialRooms),
-            .loaded(updatedRooms)
+            .loaded(updatedRooms),
         ]
 
         var states: [RoomListState] = []
@@ -493,8 +493,9 @@ final class RoomListServiceTests: XCTestCase {
         }
 
         XCTAssertEqual(states.count, 2)
-        guard case .loaded(let firstBatch) = states[0],
-              case .loaded(let secondBatch) = states[1] else {
+        guard case let .loaded(firstBatch) = states[0],
+              case let .loaded(secondBatch) = states[1]
+        else {
             XCTFail("Expected loaded room list states")
             return
         }
@@ -502,6 +503,114 @@ final class RoomListServiceTests: XCTestCase {
         XCTAssertEqual(secondBatch.first?.id, "!new:matrix.org")
     }
 
+    func testLatestSnapshotAccumulatorCoalescesRapidDiffsDuringSlowMapping() {
+        let accumulator = RoomListLatestSnapshotAccumulator<String>()
+        accumulator.yield(
+            RoomListCoalescingSnapshot(
+                rooms: ["!one", "!two"],
+                changedRoomIDs: ["!one"],
+                requiresFullRemap: false
+            )
+        )
+        let mappingInProgress = accumulator.takePendingSnapshot()
+
+        accumulator.yield(
+            RoomListCoalescingSnapshot(
+                rooms: ["!one", "!two", "!three"],
+                changedRoomIDs: ["!two"],
+                requiresFullRemap: false
+            )
+        )
+        accumulator.yield(
+            RoomListCoalescingSnapshot(
+                rooms: ["!two", "!three"],
+                changedRoomIDs: ["!three"],
+                requiresFullRemap: false
+            )
+        )
+        let coalesced = accumulator.takePendingSnapshot()
+        accumulator.finish()
+
+        XCTAssertEqual(mappingInProgress?.rooms, ["!one", "!two"])
+        XCTAssertEqual(coalesced?.rooms, ["!two", "!three"])
+        XCTAssertEqual(coalesced?.changedRoomIDs, Set(["!two", "!three"]))
+        XCTAssertEqual(coalesced?.requiresFullRemap, false)
+        XCTAssertNil(accumulator.takePendingSnapshot())
+    }
+
+    func testLatestSnapshotAccumulatorRetainsRemovalInLatestRoomArray() {
+        let accumulator = RoomListLatestSnapshotAccumulator<String>()
+        accumulator.yield(
+            RoomListCoalescingSnapshot(
+                rooms: ["!one", "!two", "!three"],
+                changedRoomIDs: [],
+                requiresFullRemap: false
+            )
+        )
+        _ = accumulator.takePendingSnapshot()
+
+        accumulator.yield(
+            RoomListCoalescingSnapshot(
+                rooms: ["!one", "!three"],
+                changedRoomIDs: [],
+                requiresFullRemap: false
+            )
+        )
+        let removal = accumulator.takePendingSnapshot()
+        accumulator.finish()
+
+        XCTAssertEqual(removal?.rooms, ["!one", "!three"])
+        XCTAssertEqual(removal?.changedRoomIDs, [])
+        XCTAssertEqual(removal?.requiresFullRemap, false)
+    }
+
+    func testLatestSnapshotAccumulatorCarriesResetAcrossLaterDiffs() {
+        let accumulator = RoomListLatestSnapshotAccumulator<String>()
+        accumulator.yield(
+            RoomListCoalescingSnapshot(
+                rooms: ["!reset"],
+                changedRoomIDs: ["!reset"],
+                requiresFullRemap: true
+            )
+        )
+        accumulator.yield(
+            RoomListCoalescingSnapshot(
+                rooms: ["!reset", "!after-reset"],
+                changedRoomIDs: ["!after-reset"],
+                requiresFullRemap: false
+            )
+        )
+        let coalesced = accumulator.takePendingSnapshot()
+        accumulator.finish()
+
+        XCTAssertEqual(coalesced?.rooms, ["!reset", "!after-reset"])
+        XCTAssertEqual(coalesced?.changedRoomIDs, Set(["!reset", "!after-reset"]))
+        XCTAssertEqual(coalesced?.requiresFullRemap, true)
+    }
+
+    func testLatestSnapshotAccumulatorPreservesEmptyResetAsAuthoritative() {
+        let accumulator = RoomListLatestSnapshotAccumulator<String>()
+        accumulator.yield(
+            RoomListCoalescingSnapshot(
+                rooms: ["!stale"],
+                changedRoomIDs: ["!stale"],
+                requiresFullRemap: false
+            )
+        )
+        accumulator.yield(
+            RoomListCoalescingSnapshot(
+                rooms: [],
+                changedRoomIDs: [],
+                requiresFullRemap: true
+            )
+        )
+        let reset = accumulator.takePendingSnapshot()
+        accumulator.finish()
+
+        XCTAssertEqual(reset?.rooms, [])
+        XCTAssertEqual(reset?.changedRoomIDs, ["!stale"])
+        XCTAssertEqual(reset?.requiresFullRemap, true)
+    }
 
     func testRecentActivityWithReferenceDateFiltersCorrectlyAndSortsRecencyFirst() {
         let now = RoomListFixtures.now
@@ -556,14 +665,332 @@ final class RoomListServiceTests: XCTestCase {
         rooms = rooms.map { r in
             var copy = r
             copy = RoomSummary(id: r.id, name: r.name, lastMessagePreview: r.lastMessagePreview,
-                unreadCount: r.unreadCount, hasHighlight: r.hasHighlight, kind: r.kind,
-                membership: r.membership, lastActivityAt: now.addingTimeInterval(-200_000),
-                parentSpaces: r.parentSpaces, hasAgentActivity: r.hasAgentActivity,
-                latestAgentCard: r.latestAgentCard, latestAgentCardEventID: r.latestAgentCardEventID)
+                               unreadCount: r.unreadCount, hasHighlight: r.hasHighlight, kind: r.kind,
+                               membership: r.membership, lastActivityAt: now.addingTimeInterval(-200_000),
+                               parentSpaces: r.parentSpaces, hasAgentActivity: r.hasAgentActivity,
+                               latestAgentCard: r.latestAgentCard, latestAgentCardEventID: r.latestAgentCardEventID)
             return copy
         }
         let rec = RoomListRecentActivity.recent(from: rooms, referenceDate: now)
         XCTAssertTrue(rec.isEmpty)
     }
 
+    func testRecentActivityPartitionIsAtomicAndSchedulesFirstExpiry() throws {
+        let now = RoomListFixtures.now
+        let rooms = [
+            makeActivityRoom(id: "!newest:matrix.org", name: "Newest", activity: now.addingTimeInterval(-60)),
+            makeActivityRoom(id: "!older:matrix.org", name: "Older", activity: now.addingTimeInterval(-600)),
+            makeActivityRoom(id: "!expired:matrix.org", name: "Expired", activity: now.addingTimeInterval(-86400)),
+        ]
+
+        let partition = RoomListRecentActivity.partition(from: rooms, referenceDate: now)
+
+        XCTAssertEqual(partition.recent.map(\.id), ["!newest:matrix.org", "!older:matrix.org"])
+        XCTAssertEqual(partition.remaining.map(\.id), ["!expired:matrix.org"])
+        XCTAssertTrue(Set(partition.recent.map(\.id)).intersection(partition.remaining.map(\.id)).isEmpty)
+        XCTAssertEqual(
+            try XCTUnwrap(RoomListRecentActivity.nextExpirationDate(from: rooms, referenceDate: now)),
+            now.addingTimeInterval(85800)
+        )
+    }
+
+    func testRoomActivityTimestampPreservesPreviousWhenLatestPreviewIsUnavailable() {
+        let previous = RoomListFixtures.now.addingTimeInterval(-120)
+
+        XCTAssertEqual(RoomActivityTimestamp.resolve(latest: nil, previous: previous), previous)
+        XCTAssertEqual(
+            RoomActivityTimestamp.resolve(latest: RoomListFixtures.now, previous: previous),
+            RoomListFixtures.now
+        )
+        XCTAssertEqual(RoomActivityTimestamp.resolve(latest: nil, previous: nil), .distantPast)
+    }
+
+    func testDynamicRoomListRequestsEveryPageBeyondOneHundredRooms() {
+        XCTAssertEqual(
+            RoomListDynamicPagingPolicy.nextRequestedPageCount(
+                snapshotCount: 100,
+                requestedPageCount: 1,
+                pageSize: 100
+            ),
+            2
+        )
+        XCTAssertEqual(
+            RoomListDynamicPagingPolicy.nextRequestedPageCount(
+                snapshotCount: 200,
+                requestedPageCount: 2,
+                pageSize: 100
+            ),
+            3
+        )
+        XCTAssertNil(
+            RoomListDynamicPagingPolicy.nextRequestedPageCount(
+                snapshotCount: 250,
+                requestedPageCount: 3,
+                pageSize: 100
+            )
+        )
+    }
+
+    func testDynamicHeadRetainsOffPageRoomsAndOnlyAppliesExplicitRemoval() {
+        let previousIDs = Set((0 ..< 150).map { "!room-\($0):matrix.org" })
+        let dynamicHeadIDs = Set((0 ..< 100).map { "!room-\($0):matrix.org" })
+        let removedID = "!room-149:matrix.org"
+
+        let retained = RoomListCacheRetentionPolicy.retainedPreviousIDs(
+            previousIDs: previousIDs,
+            explicitlyRemovedIDs: [removedID]
+        )
+
+        XCTAssertEqual(retained.count, 149)
+        XCTAssertTrue(dynamicHeadIDs.isSubset(of: retained))
+        XCTAssertTrue(retained.contains("!room-120:matrix.org"))
+        XCTAssertFalse(retained.contains(removedID))
+    }
+
+    func testOffPageLeaveIsPrunedFromRetainedRoomsUsingAuthoritativeMembership() {
+        let previousIDs = Set((0 ..< 150).map { "!room-\($0):matrix.org" })
+        let offPageLeftID = "!room-149:matrix.org"
+        let authoritativeKnownIDs = previousIDs
+        let authoritativeActiveIDs = previousIDs.subtracting([offPageLeftID])
+
+        let provenRemovedIDs = RoomListAuthoritativePruningPolicy.provenRemovedIDs(
+            knownRoomIDs: authoritativeKnownIDs,
+            joinedOrInvitedRoomIDs: authoritativeActiveIDs
+        )
+        let retained = RoomListCacheRetentionPolicy.retainedPreviousIDs(
+            previousIDs: previousIDs,
+            explicitlyRemovedIDs: provenRemovedIDs
+        )
+
+        XCTAssertEqual(provenRemovedIDs, [offPageLeftID])
+        XCTAssertEqual(retained.count, 149)
+        XCTAssertTrue(retained.contains("!room-120:matrix.org"))
+        XCTAssertFalse(retained.contains(offPageLeftID))
+        XCTAssertTrue(RoomListAuthoritativePruningPolicy.shouldReconcile(
+            cachedRoomIDs: previousIDs,
+            dynamicSnapshotRoomIDs: Set((0 ..< 100).map { "!room-\($0):matrix.org" }),
+            requiresFullRemap: false
+        ))
+        XCTAssertFalse(RoomListAuthoritativePruningPolicy.shouldReconcile(
+            cachedRoomIDs: previousIDs,
+            dynamicSnapshotRoomIDs: Set((0 ..< 100).map { "!room-\($0):matrix.org" }),
+            requiresFullRemap: false,
+            currentCatchUpPageCount: 1,
+            lastAttemptedCatchUpPageCount: 1,
+            lastAttemptedAt: Date(timeIntervalSince1970: 100),
+            now: Date(timeIntervalSince1970: 120),
+            minimumInterval: 30
+        ))
+        XCTAssertTrue(RoomListAuthoritativePruningPolicy.shouldReconcile(
+            cachedRoomIDs: previousIDs,
+            dynamicSnapshotRoomIDs: Set((0 ..< 100).map { "!room-\($0):matrix.org" }),
+            requiresFullRemap: false,
+            currentCatchUpPageCount: 1,
+            lastAttemptedCatchUpPageCount: 1,
+            lastAttemptedAt: Date(timeIntervalSince1970: 100),
+            now: Date(timeIntervalSince1970: 130),
+            minimumInterval: 30
+        ))
+        XCTAssertTrue(RoomListAuthoritativePruningPolicy.shouldReconcile(
+            cachedRoomIDs: previousIDs,
+            dynamicSnapshotRoomIDs: Set((0 ..< 100).map { "!room-\($0):matrix.org" }),
+            requiresFullRemap: false,
+            currentCatchUpPageCount: 2,
+            lastAttemptedCatchUpPageCount: 1,
+            lastAttemptedAt: Date(timeIntervalSince1970: 100),
+            now: Date(timeIntervalSince1970: 101),
+            minimumInterval: 30
+        ))
+        XCTAssertTrue(RoomListAuthoritativePruningPolicy.shouldReconcile(
+            cachedRoomIDs: previousIDs,
+            dynamicSnapshotRoomIDs: Set((0 ..< 100).map { "!room-\($0):matrix.org" }),
+            requiresFullRemap: true,
+            currentCatchUpPageCount: 1,
+            lastAttemptedCatchUpPageCount: 1,
+            lastAttemptedAt: Date(timeIntervalSince1970: 100),
+            now: Date(timeIntervalSince1970: 101),
+            minimumInterval: 30
+        ))
+    }
+
+    func testClearReconnectPreservesKnownActiveRoomsAndPrunesOnlyProvenLeftRooms() {
+        let cachedIDs: Set<String> = ["!joined-off-page", "!invited-off-page", "!left-off-page"]
+        let provenRemovedIDs = RoomListAuthoritativePruningPolicy.provenRemovedIDs(
+            knownRoomIDs: cachedIDs,
+            joinedOrInvitedRoomIDs: ["!joined-off-page", "!invited-off-page"]
+        )
+
+        let retainedAfterClear = RoomListCacheRetentionPolicy.retainedPreviousIDs(
+            previousIDs: cachedIDs,
+            explicitlyRemovedIDs: provenRemovedIDs
+        )
+
+        XCTAssertEqual(retainedAfterClear, ["!joined-off-page", "!invited-off-page"])
+        XCTAssertFalse(retainedAfterClear.contains("!left-off-page"))
+        XCTAssertTrue(RoomListAuthoritativePruningPolicy.shouldReconcile(
+            cachedRoomIDs: cachedIDs,
+            dynamicSnapshotRoomIDs: [],
+            requiresFullRemap: true
+        ))
+        XCTAssertFalse(RoomListAuthoritativePruningPolicy.shouldReconcile(
+            cachedRoomIDs: cachedIDs,
+            dynamicSnapshotRoomIDs: cachedIDs,
+            requiresFullRemap: false
+        ))
+        let ambiguousMissingID = "!missing-from-authoritative-snapshot"
+        let knownAuthoritativeIDs: Set<String> = ["!joined-off-page", "!left-off-page"]
+        let activeAuthoritativeIDs: Set<String> = ["!joined-off-page"]
+        let provenRemoved = RoomListAuthoritativePruningPolicy.provenRemovedIDs(
+            knownRoomIDs: knownAuthoritativeIDs,
+            joinedOrInvitedRoomIDs: activeAuthoritativeIDs
+        )
+        XCTAssertFalse(provenRemoved.contains(ambiguousMissingID))
+        XCTAssertTrue(RoomListCacheRetentionPolicy.retainedPreviousIDs(
+            previousIDs: cachedIDs.union([ambiguousMissingID]),
+            explicitlyRemovedIDs: provenRemoved
+        ).contains(ambiguousMissingID))
+    }
+
+    func testAuthoritativeNonemptyRoomArrayNeverFallsBackToGhostCache() {
+        XCTAssertTrue(RoomListAuthoritativeFallbackPolicy.shouldUseCachedFallback(
+            authoritativeRoomCount: 0,
+            cachedRoomCount: 1
+        ))
+        XCTAssertFalse(RoomListAuthoritativeFallbackPolicy.shouldUseCachedFallback(
+            authoritativeRoomCount: 1,
+            cachedRoomCount: 1
+        ))
+        XCTAssertFalse(RoomListAuthoritativeFallbackPolicy.shouldUseCachedFallback(
+            authoritativeRoomCount: 0,
+            cachedRoomCount: 0
+        ))
+        XCTAssertTrue(RoomListReconciliationHeartbeatPolicy.shouldContinue(
+            isCancelled: false,
+            isCurrentSession: true,
+            currentGeneration: 7,
+            expectedGeneration: 7
+        ))
+        XCTAssertFalse(RoomListReconciliationHeartbeatPolicy.shouldContinue(
+            isCancelled: true,
+            isCurrentSession: true,
+            currentGeneration: 7,
+            expectedGeneration: 7
+        ))
+        XCTAssertFalse(RoomListReconciliationHeartbeatPolicy.shouldContinue(
+            isCancelled: false,
+            isCurrentSession: false,
+            currentGeneration: 7,
+            expectedGeneration: 7
+        ))
+        XCTAssertFalse(RoomListReconciliationHeartbeatPolicy.shouldContinue(
+            isCancelled: false,
+            isCurrentSession: true,
+            currentGeneration: 8,
+            expectedGeneration: 7
+        ))
+        XCTAssertTrue(RoomListReconciliationHeartbeatPolicy.shouldEmit(
+            cachedRoomIDs: ["!visible", "!off-page"],
+            dynamicSnapshotRoomIDs: ["!visible"]
+        ))
+        XCTAssertFalse(RoomListReconciliationHeartbeatPolicy.shouldEmit(
+            cachedRoomIDs: ["!visible"],
+            dynamicSnapshotRoomIDs: ["!visible"]
+        ))
+        XCTAssertFalse(RoomListReconciliationHeartbeatPolicy.shouldEmit(
+            cachedRoomIDs: [],
+            dynamicSnapshotRoomIDs: []
+        ))
+    }
+
+    func testLatestSnapshotAccumulatorCarriesExplicitRemovalAcrossCoalescing() {
+        let accumulator = RoomListLatestSnapshotAccumulator<String>()
+        accumulator.yield(RoomListCoalescingSnapshot(
+            rooms: ["!one"],
+            changedRoomIDs: [],
+            requiresFullRemap: false,
+            explicitlyRemovedRoomIDs: ["!removed"]
+        ))
+        accumulator.yield(RoomListCoalescingSnapshot(
+            rooms: ["!one", "!two"],
+            changedRoomIDs: ["!two"],
+            requiresFullRemap: false
+        ))
+
+        let snapshot = accumulator.takePendingSnapshot()
+        accumulator.finish()
+
+        XCTAssertEqual(snapshot?.rooms, ["!one", "!two"])
+        XCTAssertEqual(snapshot?.explicitlyRemovedRoomIDs, ["!removed"])
+        XCTAssertFalse(snapshot?.isReconciliationHeartbeat ?? true)
+
+        let heartbeatOnlyAccumulator = RoomListLatestSnapshotAccumulator<String>()
+        heartbeatOnlyAccumulator.yield(RoomListCoalescingSnapshot(
+            rooms: ["!one"],
+            changedRoomIDs: [],
+            requiresFullRemap: false,
+            isReconciliationHeartbeat: true
+        ))
+        heartbeatOnlyAccumulator.yield(RoomListCoalescingSnapshot(
+            rooms: ["!one"],
+            changedRoomIDs: [],
+            requiresFullRemap: false,
+            isReconciliationHeartbeat: true
+        ))
+        XCTAssertTrue(heartbeatOnlyAccumulator.takePendingSnapshot()?.isReconciliationHeartbeat ?? false)
+        heartbeatOnlyAccumulator.finish()
+
+        let heartbeatThenReal = RoomListLatestSnapshotAccumulator<String>()
+        heartbeatThenReal.yield(RoomListCoalescingSnapshot(
+            rooms: ["!one"],
+            changedRoomIDs: [],
+            requiresFullRemap: false,
+            isReconciliationHeartbeat: true
+        ))
+        heartbeatThenReal.yield(RoomListCoalescingSnapshot(
+            rooms: ["!one", "!two"],
+            changedRoomIDs: ["!two"],
+            requiresFullRemap: true,
+            explicitlyRemovedRoomIDs: ["!removed"]
+        ))
+        let heartbeatThenRealSnapshot = heartbeatThenReal.takePendingSnapshot()
+        XCTAssertFalse(heartbeatThenRealSnapshot?.isReconciliationHeartbeat ?? true)
+        XCTAssertEqual(heartbeatThenRealSnapshot?.changedRoomIDs, ["!two"])
+        XCTAssertEqual(heartbeatThenRealSnapshot?.explicitlyRemovedRoomIDs, ["!removed"])
+        XCTAssertTrue(heartbeatThenRealSnapshot?.requiresFullRemap ?? false)
+        heartbeatThenReal.finish()
+
+        let realThenHeartbeat = RoomListLatestSnapshotAccumulator<String>()
+        realThenHeartbeat.yield(RoomListCoalescingSnapshot(
+            rooms: ["!one"],
+            changedRoomIDs: ["!one"],
+            requiresFullRemap: true,
+            explicitlyRemovedRoomIDs: ["!removed"]
+        ))
+        realThenHeartbeat.yield(RoomListCoalescingSnapshot(
+            rooms: ["!one", "!two"],
+            changedRoomIDs: [],
+            requiresFullRemap: false,
+            isReconciliationHeartbeat: true
+        ))
+        let realThenHeartbeatSnapshot = realThenHeartbeat.takePendingSnapshot()
+        XCTAssertFalse(realThenHeartbeatSnapshot?.isReconciliationHeartbeat ?? true)
+        XCTAssertEqual(realThenHeartbeatSnapshot?.rooms, ["!one", "!two"])
+        XCTAssertEqual(realThenHeartbeatSnapshot?.changedRoomIDs, ["!one"])
+        XCTAssertEqual(realThenHeartbeatSnapshot?.explicitlyRemovedRoomIDs, ["!removed"])
+        XCTAssertTrue(realThenHeartbeatSnapshot?.requiresFullRemap ?? false)
+        realThenHeartbeat.finish()
+    }
+
+    private func makeActivityRoom(id: String, name: String, activity: Date) -> RoomSummary {
+        RoomSummary(
+            id: id,
+            name: name,
+            lastMessagePreview: "Activity",
+            unreadCount: 0,
+            hasHighlight: false,
+            kind: .room,
+            membership: .joined,
+            lastActivityAt: activity
+        )
+    }
 }

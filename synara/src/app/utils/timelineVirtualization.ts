@@ -47,12 +47,19 @@ export const getVirtualAnchorOffset = (
   eventElementTop: number
 ): number => eventElementTop - scrollViewportTop;
 
+export const getVirtualAnchorCorrection = (
+  anchor: TimelineVirtualAnchor,
+  scrollViewportTop: number,
+  eventElementTop: number
+): number => eventElementTop - scrollViewportTop - anchor.offsetTop;
+
 export const getRestoredVirtualScrollTop = (
   currentScrollTop: number,
   anchor: TimelineVirtualAnchor,
   scrollViewportTop: number,
   eventElementTop: number
-): number => currentScrollTop + eventElementTop - scrollViewportTop - anchor.offsetTop;
+): number =>
+  currentScrollTop + getVirtualAnchorCorrection(anchor, scrollViewportTop, eventElementTop);
 
 export const shouldPaginateVirtualRange = (
   range: TimelineVirtualRange | undefined,

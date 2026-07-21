@@ -1,5 +1,5 @@
-import XCTest
 import Foundation
+import XCTest
 
 final class SynaraUITests: XCTestCase {
     override func setUpWithError() throws {
@@ -98,7 +98,7 @@ final class SynaraUITests: XCTestCase {
         tap(app.buttons["RoomManagementSubmitButton"])
 
         XCTAssertTrue(app.staticTexts["Incident Room"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.scrollViews["TimelineList"].waitForExistence(timeout: 5))
+        XCTAssertTrue(timelineViewport(in: app).waitForExistence(timeout: 5))
     }
 
     func testRoomSearchFiltersByName() {
@@ -140,15 +140,16 @@ final class SynaraUITests: XCTestCase {
         let app = launchRoomApp()
 
         XCTAssertTrue(app.staticTexts["Project"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.scrollViews["TimelineList"].waitForExistence(timeout: 5))
+        XCTAssertTrue(timelineViewport(in: app).waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["Here's the latest spec for the new permissions model."].waitForExistence(timeout: 5))
     }
 
-    func testRoomRouteIgnoresSeededReadMarkerOnInitialOpen() {
+    func testUnreadRoomRoutePositionsAfterSharedReadMarker() {
         let app = launchRoomApp(readMarkerEventID: "$security:!project:matrix.org")
 
-        XCTAssertTrue(app.scrollViews["TimelineList"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["Here's the latest spec for the new permissions model."].waitForExistence(timeout: 5))
+        XCTAssertTrue(timelineViewport(in: app).waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["+1 — I'll update the doc and share a draft."].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["JumpToLatestButton"].waitForExistence(timeout: 5))
     }
 
     func testRoomDetailsInviteAndLeaveMockFlow() {
@@ -180,7 +181,7 @@ final class SynaraUITests: XCTestCase {
                     app.collectionViews["RoomList"],
                     app.collectionViews["RoomListLoading"],
                     app.buttons["RoomRow-!project:matrix.org"],
-                    app.staticTexts["No Rooms"]
+                    app.staticTexts["No Rooms"],
                 ],
                 timeout: 10
             )
@@ -229,6 +230,87 @@ final class SynaraUITests: XCTestCase {
 
         app.swipeDown()
         XCTAssertTrue(app.buttons["TimelineSearchButton"].exists)
+    }
+
+    func testStableViewportThreeMessageScrollJumpLatestAndFiveThousandEventBoundedness() {
+        let app = launchLargeTimelineApp(count: 5000)
+        let viewport = timelineViewport(in: app)
+
+        XCTAssertTrue(viewport.waitForExistence(timeout: 8))
+        XCTAssertTrue(app.staticTexts["Synthetic message 4999"].waitForExistence(timeout: 8))
+        XCTAssertTrue(waitForViewportDiagnostics(viewport, containing: "renderedEvents=300", timeout: 5))
+
+        let start = viewport.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.42))
+        let end = viewport.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.68))
+        start.press(forDuration: 0.05, thenDragTo: end)
+
+        XCTAssertTrue(app.buttons["JumpToLatestButton"].waitForExistence(timeout: 5))
+        tap(app.buttons["JumpToLatestButton"])
+        XCTAssertTrue(app.staticTexts["Synthetic message 4999"].waitForExistence(timeout: 8))
+        XCTAssertTrue(waitForViewportDiagnostics(viewport, containing: "pinned=true", timeout: 5))
+
+        let diagnostics = viewportDiagnostics(viewport)
+        let visibleCells = Int(diagnostics["visibleCells"] ?? "")
+        XCTAssertNotNil(visibleCells)
+        XCTAssertLessThan(visibleCells ?? .max, 40)
+    }
+
+    func testStableViewportPreservesAnchorAcrossVariableHeightReplacement() {
+        let app = launchLargeTimelineApp(count: 40, scenario: "height-change")
+        let viewport = timelineViewport(in: app)
+
+        XCTAssertTrue(viewport.waitForExistence(timeout: 8))
+        viewport.swipeDown(velocity: .slow)
+        let anchorBefore = viewportDiagnostics(viewport)["topEvent"]
+        XCTAssertNotNil(anchorBefore)
+
+        let expanded = app.staticTexts.matching(
+            NSPredicate(format: "label BEGINSWITH %@", "Expanded variable-height message 137")
+        ).firstMatch
+        XCTAssertTrue(expanded.waitForExistence(timeout: 12))
+        XCTAssertEqual(viewportDiagnostics(viewport)["topEvent"], anchorBefore)
+    }
+
+    func testStableViewportPreservesAnchorAcrossPrependSnapshot() {
+        let app = launchLargeTimelineApp(count: 40, scenario: "prepend")
+        let viewport = timelineViewport(in: app)
+
+        XCTAssertTrue(viewport.waitForExistence(timeout: 8))
+        viewport.swipeDown(velocity: .slow)
+        let anchorBefore = viewportDiagnostics(viewport)["topEvent"]
+        XCTAssertNotNil(anchorBefore)
+
+        XCTAssertTrue(waitForViewportDiagnostics(viewport, containing: "renderedEvents=90", timeout: 12))
+        XCTAssertEqual(viewportDiagnostics(viewport)["topEvent"], anchorBefore)
+    }
+
+    func testStableViewportRapidRoomSwitchingRejectsStaleRouteUpdates() {
+        let app = launchSignedInRoomsApp()
+
+        tap(app.buttons["RoomRow-!project:matrix.org"], timeout: 5)
+        let initialProjectViewport = timelineViewport(in: app)
+        XCTAssertTrue(waitForViewportDiagnostics(initialProjectViewport, containing: "routeID=!project:matrix.org", timeout: 5))
+        XCTAssertTrue(waitForViewportDiagnostics(initialProjectViewport, containing: "newestEvent=$alex-thread:!project:matrix.org", timeout: 5))
+        let initialGeneration = Int(viewportDiagnostics(initialProjectViewport)["generation"] ?? "")
+        XCTAssertNotNil(initialGeneration)
+        tap(app.buttons["Back"], timeout: 5)
+        tap(app.buttons["RoomRow-!general:matrix.org"], timeout: 5)
+        let generalViewport = timelineViewport(in: app)
+        XCTAssertTrue(waitForViewportDiagnostics(generalViewport, containing: "routeID=!general:matrix.org", timeout: 5))
+        XCTAssertTrue(waitForViewportDiagnostics(generalViewport, containing: "newestEvent=$alex-thread:!general:matrix.org", timeout: 5))
+        tap(app.buttons["Back"], timeout: 5)
+        tap(app.buttons["RoomRow-!project:matrix.org"], timeout: 5)
+
+        let finalViewport = timelineViewport(in: app)
+        XCTAssertTrue(waitForViewportDiagnostics(finalViewport, containing: "routeID=!project:matrix.org", timeout: 8))
+        XCTAssertTrue(waitForViewportDiagnostics(finalViewport, containing: "newestEvent=$alex-thread:!project:matrix.org", timeout: 5))
+        XCTAssertTrue(waitForViewportDiagnostics(finalViewport, containing: "pinned=true", timeout: 5))
+        let diagnostics = viewportDiagnostics(finalViewport)
+        let finalGeneration = Int(diagnostics["generation"] ?? "")
+        XCTAssertNotNil(finalGeneration)
+        XCTAssertGreaterThan(finalGeneration ?? 0, initialGeneration ?? .max)
+        XCTAssertEqual(diagnostics["newestEvent"], "$alex-thread:!project:matrix.org")
+        XCTAssertFalse(finalViewport.value.debugDescription.contains("!general:matrix.org"))
     }
 
     func testComposerSendsMockMessage() {
@@ -286,7 +368,7 @@ final class SynaraUITests: XCTestCase {
     func testEncryptedTimelineShowsCryptoStatusRecoveryBannerAndSafePlaceholder() {
         let app = launchEncryptedRoomApp()
 
-        XCTAssertTrue(app.scrollViews["TimelineList"].waitForExistence(timeout: 5))
+        XCTAssertTrue(timelineViewport(in: app).waitForExistence(timeout: 5))
         XCTAssertTrue(
             waitForTimelineElement(app.otherElements["EncryptedRecoveryBanner"], app: app, timeout: 5, preferredSwipe: .down)
         )
@@ -460,7 +542,8 @@ final class SynaraUITests: XCTestCase {
 
         guard let homeserver = liveEnvironmentValue("SYNARA_LIVE_HOMESERVER", in: environment),
               let username = liveEnvironmentValue("SYNARA_LIVE_USERNAME", in: environment),
-              let password = liveEnvironmentValue("SYNARA_LIVE_PASSWORD", in: environment) else {
+              let password = liveEnvironmentValue("SYNARA_LIVE_PASSWORD", in: environment)
+        else {
             throw XCTSkip("Stale-cache live smoke needs homeserver, username, and password environment variables.")
         }
 
@@ -520,7 +603,8 @@ final class SynaraUITests: XCTestCase {
         if app.textFields["HomeserverAddressField"].waitForExistence(timeout: 5) {
             guard let homeserver = liveEnvironmentValue("SYNARA_LIVE_HOMESERVER", in: environment),
                   let username = liveEnvironmentValue("SYNARA_LIVE_USERNAME", in: environment),
-                  let password = liveEnvironmentValue("SYNARA_LIVE_PASSWORD", in: environment) else {
+                  let password = liveEnvironmentValue("SYNARA_LIVE_PASSWORD", in: environment)
+            else {
                 throw XCTSkip("Live smoke needs an existing session or live credentials in environment variables.")
             }
             loginLive(app: app, homeserver: homeserver, username: username, password: password)
@@ -552,7 +636,8 @@ final class SynaraUITests: XCTestCase {
 
         guard let homeserver = liveEnvironmentValue("SYNARA_LIVE_HOMESERVER", in: environment),
               let username = liveEnvironmentValue("SYNARA_LIVE_USERNAME", in: environment),
-              let password = liveEnvironmentValue("SYNARA_LIVE_PASSWORD", in: environment) else {
+              let password = liveEnvironmentValue("SYNARA_LIVE_PASSWORD", in: environment)
+        else {
             throw XCTSkip("Live agent smoke needs homeserver, username, and password environment variables.")
         }
 
@@ -607,7 +692,8 @@ final class SynaraUITests: XCTestCase {
 
         guard let homeserver = liveEnvironmentValue("SYNARA_LIVE_HOMESERVER", in: environment),
               let username = liveEnvironmentValue("SYNARA_LIVE_USERNAME", in: environment),
-              let password = liveEnvironmentValue("SYNARA_LIVE_PASSWORD", in: environment) else {
+              let password = liveEnvironmentValue("SYNARA_LIVE_PASSWORD", in: environment)
+        else {
             throw XCTSkip("Live encrypted smoke needs homeserver, username, and password environment variables.")
         }
 
@@ -664,7 +750,8 @@ final class SynaraUITests: XCTestCase {
 
         guard let homeserver = liveEnvironmentValue("SYNARA_LIVE_HOMESERVER", in: environment),
               let username = liveEnvironmentValue("SYNARA_LIVE_USERNAME", in: environment),
-              let password = liveEnvironmentValue("SYNARA_LIVE_PASSWORD", in: environment) else {
+              let password = liveEnvironmentValue("SYNARA_LIVE_PASSWORD", in: environment)
+        else {
             throw XCTSkip("Live room-management smoke needs homeserver, username, and password environment variables.")
         }
 
@@ -717,7 +804,7 @@ final class SynaraUITests: XCTestCase {
                 [
                     app.collectionViews["RoomList"],
                     app.collectionViews["RoomListLoading"],
-                    app.staticTexts["No Rooms"]
+                    app.staticTexts["No Rooms"],
                 ],
                 timeout: 60
             )
@@ -734,7 +821,8 @@ final class SynaraUITests: XCTestCase {
         guard let homeserver = liveEnvironmentValue("SYNARA_LIVE_HOMESERVER", in: environment),
               let username = liveEnvironmentValue("SYNARA_LIVE_USERNAME", in: environment),
               let password = liveEnvironmentValue("SYNARA_LIVE_PASSWORD", in: environment),
-              let screenshotDirectory = liveEnvironmentValue("SYNARA_SCREENSHOT_DIR", in: environment) else {
+              let screenshotDirectory = liveEnvironmentValue("SYNARA_SCREENSHOT_DIR", in: environment)
+        else {
             throw XCTSkip("Live visual smoke needs homeserver, username, password, and screenshot directory.")
         }
 
@@ -759,7 +847,7 @@ final class SynaraUITests: XCTestCase {
         }
 
         XCTAssertTrue(composerField(in: app).waitForExistence(timeout: 60))
-        XCTAssertTrue(app.scrollViews["TimelineList"].waitForExistence(timeout: 60))
+        XCTAssertTrue(timelineViewport(in: app).waitForExistence(timeout: 60))
         try saveScreenshot(app: app, directory: screenshotDirectory, name: "02-live-room-timeline")
 
         let composer = composerField(in: app)
@@ -826,7 +914,7 @@ final class SynaraUITests: XCTestCase {
         try saveScreenshot(app: app, directory: screenshotDirectory, name: "01-mock-room-list")
 
         tap(app.buttons["RoomRow-!project:matrix.org"], timeout: 5)
-        XCTAssertTrue(app.scrollViews["TimelineList"].waitForExistence(timeout: 5))
+        XCTAssertTrue(timelineViewport(in: app).waitForExistence(timeout: 5))
         XCTAssertTrue(composerField(in: app).waitForExistence(timeout: 5))
         try saveScreenshot(app: app, directory: screenshotDirectory, name: "02-mock-room-timeline")
 
@@ -885,13 +973,16 @@ final class SynaraUITests: XCTestCase {
         return app
     }
 
-    private func launchLargeTimelineApp() -> XCUIApplication {
+    private func launchLargeTimelineApp(count: Int = 1000, scenario: String? = nil) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchEnvironment["SYNARA_UI_TESTS"] = "1"
         app.launchEnvironment["SYNARA_UI_TEST_ROOM_ID"] = "!large:matrix.org"
         app.launchEnvironment["SYNARA_UI_TEST_ROOM_TITLE"] = "Large Timeline"
         app.launchEnvironment["SYNARA_UI_TEST_LARGE_TIMELINE"] = "1"
-        app.launchEnvironment["SYNARA_UI_TEST_LARGE_TIMELINE_COUNT"] = "1000"
+        app.launchEnvironment["SYNARA_UI_TEST_LARGE_TIMELINE_COUNT"] = "\(count)"
+        if let scenario {
+            app.launchEnvironment["SYNARA_UI_TEST_VIEWPORT_SCENARIO"] = scenario
+        }
         launch(app)
         return app
     }
@@ -991,9 +1082,9 @@ final class SynaraUITests: XCTestCase {
             "-ApplePersistenceIgnoreState",
             "YES",
             "-UIPreferredContentSizeCategoryName",
-            "UICTContentSizeCategoryM"
+            "UICTContentSizeCategoryM",
         ]
-        stableArguments.forEach { argument in
+        for argument in stableArguments {
             if app.launchArguments.contains(argument) == false {
                 app.launchArguments.append(argument)
             }
@@ -1045,7 +1136,8 @@ final class SynaraUITests: XCTestCase {
 
     private func liveAgentRoomID(environment: [String: String], client: MatrixLiveTestClient) throws -> String {
         if let roomID = liveEnvironmentValue("SYNARA_LIVE_AGENT_ROOM_ID", in: environment)
-            ?? liveEnvironmentValue("SYNARA_LIVE_ROOM_ID", in: environment) {
+            ?? liveEnvironmentValue("SYNARA_LIVE_ROOM_ID", in: environment)
+        {
             return roomID
         }
 
@@ -1057,7 +1149,8 @@ final class SynaraUITests: XCTestCase {
 
     private func liveEncryptedRoomID(environment: [String: String], homeserver: String, username: String, password: String) throws -> String {
         if let roomID = liveEnvironmentValue("SYNARA_LIVE_E2EE_ROOM_ID", in: environment)
-            ?? liveEnvironmentValue("SYNARA_LIVE_ROOM_ID", in: environment) {
+            ?? liveEnvironmentValue("SYNARA_LIVE_ROOM_ID", in: environment)
+        {
             return roomID
         }
 
@@ -1190,6 +1283,38 @@ final class SynaraUITests: XCTestCase {
         return element.exists && element.isEnabled
     }
 
+    private func timelineViewport(in app: XCUIApplication) -> XCUIElement {
+        app.descendants(matching: .any).matching(identifier: "TimelineList").firstMatch
+    }
+
+    private func viewportDiagnostics(_ viewport: XCUIElement) -> [String: String] {
+        guard let value = viewport.value as? String else {
+            return [:]
+        }
+        return Dictionary(uniqueKeysWithValues: value.split(separator: ";").compactMap { field in
+            let parts = field.split(separator: "=", maxSplits: 1).map(String.init)
+            guard parts.count == 2 else {
+                return nil
+            }
+            return (parts[0], parts[1])
+        })
+    }
+
+    private func waitForViewportDiagnostics(
+        _ viewport: XCUIElement,
+        containing expectedValue: String,
+        timeout: TimeInterval
+    ) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if (viewport.value as? String)?.contains(expectedValue) == true {
+                return true
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+        }
+        return (viewport.value as? String)?.contains(expectedValue) == true
+    }
+
     private func openRoomManagementSheet(app: XCUIApplication, timeout: TimeInterval) -> Bool {
         let deadline = Date().addingTimeInterval(timeout)
         while Date() < deadline {
@@ -1217,7 +1342,7 @@ final class SynaraUITests: XCTestCase {
         preferredSwipe: TimelineSwipeDirection = .up
     ) -> Bool {
         let deadline = Date().addingTimeInterval(timeout)
-        let timeline = app.scrollViews["TimelineList"]
+        let timeline = timelineViewport(in: app)
         var nextSwipe = preferredSwipe
 
         while Date() < deadline {
@@ -1268,7 +1393,8 @@ final class SynaraUITests: XCTestCase {
         let deadline = Date().addingTimeInterval(timeout)
         while Date() < deadline {
             if let value = element.value as? String,
-               value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
+               value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+            {
                 return true
             }
             RunLoop.current.run(until: Date().addingTimeInterval(0.25))
@@ -1281,7 +1407,6 @@ final class SynaraUITests: XCTestCase {
         try FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
         try app.screenshot().pngRepresentation.write(to: directoryURL.appendingPathComponent("\(name).png"))
     }
-
 }
 
 private final class MatrixLiveTestClient {
@@ -1302,10 +1427,10 @@ private final class MatrixLiveTestClient {
             "type": "m.login.password",
             "identifier": [
                 "type": "m.id.user",
-                "user": username
+                "user": username,
             ],
             "password": password,
-            "initial_device_display_name": "Synara iOS UI smoke"
+            "initial_device_display_name": "Synara iOS UI smoke",
         ]
 
         var request = URLRequest(url: homeserverURL.appendingMatrixPath(["client", "v3", "login"]))
@@ -1315,7 +1440,8 @@ private final class MatrixLiveTestClient {
 
         let data = try perform(request).data
         guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let token = object["access_token"] as? String else {
+              let token = object["access_token"] as? String
+        else {
             throw LiveMatrixError.invalidResponse
         }
 
@@ -1329,7 +1455,8 @@ private final class MatrixLiveTestClient {
             body: nil
         )
         guard let object = try JSONSerialization.jsonObject(with: response.data) as? [String: Any],
-              let roomID = object["room_id"] as? String else {
+              let roomID = object["room_id"] as? String
+        else {
             throw LiveMatrixError.invalidResponse
         }
         return roomID
@@ -1338,7 +1465,7 @@ private final class MatrixLiveTestClient {
     func sendRoomMessage(roomID: String, body: String) throws -> String {
         let content: [String: Any] = [
             "msgtype": "m.text",
-            "body": body
+            "body": body,
         ]
 
         let response = try authenticatedRequest(
@@ -1347,7 +1474,8 @@ private final class MatrixLiveTestClient {
             body: content
         )
         guard let object = try JSONSerialization.jsonObject(with: response.data) as? [String: Any],
-              let eventID = object["event_id"] as? String else {
+              let eventID = object["event_id"] as? String
+        else {
             throw LiveMatrixError.invalidResponse
         }
         return eventID
@@ -1363,20 +1491,20 @@ private final class MatrixLiveTestClient {
                     "id": actionID,
                     "title": "Approve",
                     "kind": "approve",
-                    "prompt": "approve live smoke"
-                ]
-            ]
+                    "prompt": "approve live smoke",
+                ],
+            ],
         ]
         let bodyData = try JSONSerialization.data(withJSONObject: [
             "hermes": true,
-            "payload": agentPayload
+            "payload": agentPayload,
         ])
         let body = String(data: bodyData, encoding: .utf8) ?? title
 
         let content: [String: Any] = [
             "msgtype": "m.notice",
             "body": body,
-            "in.synara.agent": agentPayload
+            "in.synara.agent": agentPayload,
         ]
 
         let response = try authenticatedRequest(
@@ -1385,7 +1513,8 @@ private final class MatrixLiveTestClient {
             body: content
         )
         guard let object = try JSONSerialization.jsonObject(with: response.data) as? [String: Any],
-              let eventID = object["event_id"] as? String else {
+              let eventID = object["event_id"] as? String
+        else {
             throw LiveMatrixError.invalidResponse
         }
         return eventID
@@ -1425,18 +1554,20 @@ private final class MatrixLiveTestClient {
             path: ["client", "v3", "rooms", roomID, "messages"],
             queryItems: [
                 URLQueryItem(name: "dir", value: "b"),
-                URLQueryItem(name: "limit", value: "40")
+                URLQueryItem(name: "limit", value: "40"),
             ],
             body: nil
         )
         guard let object = try JSONSerialization.jsonObject(with: response.data) as? [String: Any],
-              let chunk = object["chunk"] as? [[String: Any]] else {
+              let chunk = object["chunk"] as? [[String: Any]]
+        else {
             throw LiveMatrixError.invalidResponse
         }
 
         return chunk.contains { event in
             guard let content = event["content"] as? [String: Any],
-                  let action = content["in.synara.agent.action"] as? [String: Any] else {
+                  let action = content["in.synara.agent.action"] as? [String: Any]
+            else {
                 return false
             }
             return action["source_event_id"] as? String == sourceEventID
@@ -1482,11 +1613,12 @@ private final class MatrixLiveTestClient {
                 return
             }
             guard let http = response as? HTTPURLResponse,
-                  let data else {
+                  let data
+            else {
                 result = .failure(LiveMatrixError.invalidResponse)
                 return
             }
-            guard (200...299).contains(http.statusCode) else {
+            guard (200 ... 299).contains(http.statusCode) else {
                 result = .failure(LiveMatrixError.httpStatus(http.statusCode))
                 return
             }
@@ -1498,9 +1630,9 @@ private final class MatrixLiveTestClient {
         }
 
         switch result {
-        case .success(let value):
+        case let .success(value):
             return value
-        case .failure(let error):
+        case let .failure(error):
             throw error
         case nil:
             throw LiveMatrixError.invalidResponse

@@ -13,7 +13,13 @@ export default [
     linterOptions: {
       reportUnusedDisableDirectives: false,
     },
-    ignores: ['dist/**', 'experiment/**', 'node_modules/**'],
+    ignores: [
+      'dist/**',
+      'experiment/**',
+      'node_modules/**',
+      'playwright-report/**',
+      'test-results/**',
+    ],
   },
   js.configs.recommended,
   {
@@ -96,6 +102,53 @@ export default [
       '@typescript-eslint/no-explicit-any': 'off',
       '@typescript-eslint/no-unused-vars': 'error',
       '@typescript-eslint/no-shadow': 'error',
+    },
+  },
+  {
+    files: ['e2e/**/*.mjs'],
+    languageOptions: {
+      ecmaVersion: 'latest',
+      sourceType: 'module',
+      globals: globals.node,
+    },
+  },
+  {
+    files: ['e2e/timeline-harness/**/*.js'],
+    languageOptions: {
+      ecmaVersion: 'latest',
+      sourceType: 'module',
+      globals: globals.browser,
+    },
+  },
+  {
+    files: ['e2e/**/*.ts', 'playwright.config.ts'],
+    languageOptions: {
+      parser: tsParser,
+      ecmaVersion: 'latest',
+      sourceType: 'module',
+      globals: {
+        ...globals.browser,
+        ...globals.node,
+      },
+    },
+    plugins: {
+      '@typescript-eslint': tsPlugin,
+      import: importPlugin,
+    },
+    rules: {
+      ...tsPlugin.configs['eslint-recommended'].overrides[0].rules,
+      ...tsPlugin.configs.recommended.rules,
+      ...importPlugin.configs.recommended.rules,
+      'no-undef': 'off',
+      'import/named': 'off',
+      'import/default': 'off',
+      'import/no-named-as-default': 'off',
+      'import/no-named-as-default-member': 'off',
+      'import/extensions': 'off',
+      'import/no-unresolved': 'off',
+      'import/no-extraneous-dependencies': ['error', { devDependencies: true }],
+      '@typescript-eslint/no-explicit-any': 'off',
+      '@typescript-eslint/no-unused-vars': 'error',
     },
   },
   prettierConfig,
