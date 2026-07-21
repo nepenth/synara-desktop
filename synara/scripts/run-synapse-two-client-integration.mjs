@@ -1,5 +1,6 @@
-import { randomBytes } from 'node:crypto';
-import { pathToFileURL } from 'node:url';
+import { createHmac, randomBytes } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const DEFAULT_HOMESERVER = 'http://127.0.0.1:8008';
 const EVENT_COUNT = 64;
@@ -88,12 +89,13 @@ function silentLogger() {
   return logger;
 }
 
-function clientOptions(baseUrl, credentials = {}) {
+export function clientOptions(baseUrl, credentials = {}) {
   return {
     baseUrl,
     localTimeoutMs: REQUEST_TIMEOUT_MS,
     logger: silentLogger(),
     disableVoip: true,
+    timelineSupport: true,
     ...credentials,
   };
 }
@@ -117,46 +119,84 @@ async function phase(name, operation) {
   }
 }
 
-export function selectLocalRegistrationAuth(errorData) {
-  const session = typeof errorData?.session === 'string' ? errorData.session : undefined;
-  const flows = Array.isArray(errorData?.flows) ? errorData.flows : [];
-  const stages = flows
-    .map((flow) => (Array.isArray(flow?.stages) ? flow.stages : undefined))
-    .filter(Boolean);
-
-  if (stages.some((flowStages) => flowStages.length === 0)) {
-    return session ? { session } : {};
+export function parseGeneratedRegistrationSecret(configText) {
+  const matches = [...configText.matchAll(/^registration_shared_secret:\s*"([a-f0-9]{64})"\s*$/gm)];
+  if (matches.length !== 1) {
+    throw new SafeIntegrationError(
+      'Disposable Synapse configuration must contain one generated registration secret.'
+    );
   }
-  if (stages.some((flowStages) => flowStages.length === 1 && flowStages[0] === 'm.login.dummy')) {
-    // Synapse's verification-free registration contract accepts the dummy
-    // stage directly. Do not bind this disposable request to the discovery
-    // session: current Synapse validates the complete request without one,
-    // which also avoids carrying server-side UIAA state between retries.
-    return { type: 'm.login.dummy' };
-  }
-  throw new SafeIntegrationError('Registration requires an unsupported local UIAA flow.');
+  return matches[0][1];
 }
 
-async function registerAccount(sdk, baseUrl, localpart, password, deviceName) {
-  const registrationClient = sdk.createClient(clientOptions(baseUrl));
-  const request = {
-    username: localpart,
-    password,
-    initial_device_display_name: deviceName,
-  };
-
-  let auth;
-  try {
-    return await registrationClient.registerRequest(request);
-  } catch (error) {
-    if (error?.errcode !== 'M_UNAUTHORIZED') throw error;
-    auth = selectLocalRegistrationAuth(error?.data);
+export function computeSharedSecretRegistrationMac(secret, nonce, localpart, password) {
+  if (!/^[a-f0-9]{64}$/.test(secret)) {
+    throw new SafeIntegrationError('Disposable Synapse registration secret is malformed.');
   }
+  if (typeof nonce !== 'string' || nonce.length < 16 || nonce.length > 512) {
+    throw new SafeIntegrationError('Synapse returned a malformed registration nonce.');
+  }
+  return createHmac('sha1', secret)
+    .update(nonce)
+    .update('\0')
+    .update(localpart)
+    .update('\0')
+    .update(password)
+    .update('\0')
+    .update('notadmin')
+    .digest('hex');
+}
 
-  return registrationClient.registerRequest({
-    ...request,
-    auth,
+function loadGeneratedRegistrationSecret() {
+  const configPath = fileURLToPath(
+    new URL('../../integration/synapse/runtime/homeserver.yaml', import.meta.url)
+  );
+  try {
+    return parseGeneratedRegistrationSecret(readFileSync(configPath, 'utf8'));
+  } catch (error) {
+    if (error instanceof SafeIntegrationError) throw error;
+    throw new SafeIntegrationError('Disposable Synapse registration secret is unavailable.');
+  }
+}
+
+async function requireJsonResponse(response, operation) {
+  if (!response.ok) {
+    throw new SafeIntegrationError(`${operation} failed (HTTP ${response.status}).`);
+  }
+  let data;
+  try {
+    data = await response.json();
+  } catch {
+    throw new SafeIntegrationError(`${operation} returned invalid JSON.`);
+  }
+  return data;
+}
+
+export async function registerDisposableAccount(
+  baseUrl,
+  localpart,
+  password,
+  { fetchFn = globalThis.fetch, sharedSecret = loadGeneratedRegistrationSecret() } = {}
+) {
+  const localBaseUrl = validateLocalHomeserverUrl(baseUrl);
+  const endpoint = `${localBaseUrl}/_synapse/admin/v1/register`;
+  const nonceResponse = await fetchFn(endpoint, {
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    redirect: 'error',
+    headers: { Accept: 'application/json' },
   });
+  const nonceData = await requireJsonResponse(nonceResponse, 'Registration nonce request');
+  const nonce = requireValue(nonceData?.nonce, 'Registration nonce response omitted nonce.');
+  const mac = computeSharedSecretRegistrationMac(sharedSecret, nonce, localpart, password);
+
+  const registrationResponse = await fetchFn(endpoint, {
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    redirect: 'error',
+    method: 'POST',
+    headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+    body: JSON.stringify({ nonce, username: localpart, password, admin: false, mac }),
+  });
+  return requireJsonResponse(registrationResponse, 'Shared-secret registration');
 }
 
 function authenticatedClient(sdk, baseUrl, response) {
@@ -216,7 +256,7 @@ async function runReceiptScenario(sdk, baseUrl, receiptMode) {
     const senderPassword = randomPassword();
 
     const deviceARegistration = await phase('Reader registration', () =>
-      registerAccount(sdk, baseUrl, userLocalpart, userPassword, 'Synara integration device A')
+      registerDisposableAccount(baseUrl, userLocalpart, userPassword)
     );
     const loginClient = sdk.createClient(clientOptions(baseUrl));
     const deviceBLogin = await phase('Second-device login', () =>
@@ -228,7 +268,7 @@ async function runReceiptScenario(sdk, baseUrl, receiptMode) {
       })
     );
     const senderRegistration = await phase('Sender registration', () =>
-      registerAccount(sdk, baseUrl, senderLocalpart, senderPassword, 'Synara integration sender')
+      registerDisposableAccount(baseUrl, senderLocalpart, senderPassword)
     );
 
     const deviceA = authenticatedClient(sdk, baseUrl, deviceARegistration);
