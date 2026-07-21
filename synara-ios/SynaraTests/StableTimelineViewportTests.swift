@@ -262,6 +262,50 @@ final class StableTimelineViewportTests: XCTestCase {
         ))
     }
 
+    func testUserDragAbandonsOnlyCurrentNonAnimatedCommandRetry() {
+        XCTAssertTrue(StableTimelineViewportPolicy.shouldAbandonPendingNonAnimatedCommandRetry(
+            hasScheduledRetry: true,
+            scheduledCommandID: 41,
+            currentCommandID: 41,
+            currentCommandIsAnimated: false
+        ))
+        XCTAssertFalse(StableTimelineViewportPolicy.shouldAbandonPendingNonAnimatedCommandRetry(
+            hasScheduledRetry: false,
+            scheduledCommandID: nil,
+            currentCommandID: 41,
+            currentCommandIsAnimated: false
+        ))
+        XCTAssertFalse(StableTimelineViewportPolicy.shouldAbandonPendingNonAnimatedCommandRetry(
+            hasScheduledRetry: true,
+            scheduledCommandID: 40,
+            currentCommandID: 41,
+            currentCommandIsAnimated: false
+        ))
+        XCTAssertFalse(StableTimelineViewportPolicy.shouldAbandonPendingNonAnimatedCommandRetry(
+            hasScheduledRetry: true,
+            scheduledCommandID: 41,
+            currentCommandID: 41,
+            currentCommandIsAnimated: true
+        ))
+    }
+
+    func testAbandonedRetryIdentityCannotExecuteOrRescroll() {
+        let abandonedRetryID = UUID()
+
+        XCTAssertTrue(StableTimelineViewportPolicy.commandRetryMayExecute(
+            retryID: abandonedRetryID,
+            installedRetryID: abandonedRetryID
+        ))
+        XCTAssertFalse(StableTimelineViewportPolicy.commandRetryMayExecute(
+            retryID: abandonedRetryID,
+            installedRetryID: nil
+        ))
+        XCTAssertFalse(StableTimelineViewportPolicy.commandRetryMayExecute(
+            retryID: abandonedRetryID,
+            installedRetryID: UUID()
+        ))
+    }
+
     func testFocusedPlacementCompletionAllowsPaginationPolicy() {
         XCTAssertTrue(
             RoomTimelinePaginationPolicy.shouldLoadOlderHistory(
