@@ -36,17 +36,17 @@ import SwiftUI
             isLive && wasConfirmedPinned
         }
 
-    static func shouldRestoreAnchor(isDragging: Bool, isDecelerating: Bool, hasAnchor: Bool) -> Bool {
-        hasAnchor && shouldDeferSnapshot(isDragging: isDragging, isDecelerating: isDecelerating) == false
-    }
+        static func shouldRestoreAnchor(isDragging: Bool, isDecelerating: Bool, hasAnchor: Bool) -> Bool {
+            hasAnchor && shouldDeferSnapshot(isDragging: isDragging, isDecelerating: isDecelerating) == false
+        }
 
-    static func restoredContentOffset(
-        currentContentOffset: CGFloat,
-        previousAnchorMinY: CGFloat,
-        updatedAnchorMinY: CGFloat
-    ) -> CGFloat {
-        currentContentOffset - (updatedAnchorMinY - previousAnchorMinY)
-    }
+        static func restoredContentOffset(
+            currentContentOffset: CGFloat,
+            previousAnchorMinY: CGFloat,
+            updatedAnchorMinY: CGFloat
+        ) -> CGFloat {
+            currentContentOffset - (updatedAnchorMinY - previousAnchorMinY)
+        }
 
         static func shouldRequestPagination(
             contentOffset: CGFloat,
@@ -563,13 +563,13 @@ import SwiftUI
             guard let newFrame = frame(for: anchor.id) else {
                 return
             }
-        let restoredOffset = StableTimelineViewportPolicy.restoredContentOffset(
-            currentContentOffset: tableView.contentOffset.y,
-            previousAnchorMinY: anchor.frame.minY,
-            updatedAnchorMinY: newFrame.minY
-        )
-        if abs(restoredOffset - tableView.contentOffset.y) > .ulpOfOne {
-            tableView.contentOffset.y = restoredOffset
+            let restoredOffset = StableTimelineViewportPolicy.restoredContentOffset(
+                currentContentOffset: tableView.contentOffset.y,
+                previousAnchorMinY: anchor.frame.minY,
+                updatedAnchorMinY: newFrame.minY
+            )
+            if abs(restoredOffset - tableView.contentOffset.y) > .ulpOfOne {
+                tableView.contentOffset.y = restoredOffset
                 tableView.layoutIfNeeded()
             }
         }

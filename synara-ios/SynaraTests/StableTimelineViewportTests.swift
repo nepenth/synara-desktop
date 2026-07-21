@@ -1,5 +1,5 @@
-import XCTest
 @testable import Synara
+import XCTest
 
 final class StableTimelineViewportTests: XCTestCase {
     func testFeatureFlagDefaultsEnabledAndHonorsExplicitOverrides() {
@@ -50,9 +50,9 @@ final class StableTimelineViewportTests: XCTestCase {
     func testPaginationThresholdHonorsInteractionAndOneInFlightRequest() {
         XCTAssertTrue(
             StableTimelineViewportPolicy.shouldRequestPagination(
-                contentOffset: 8_000,
-                contentHeight: 10_000,
-                viewportHeight: 1_000,
+                contentOffset: 8000,
+                contentHeight: 10000,
+                viewportHeight: 1000,
                 hasUserInteracted: true,
                 isPaginating: false,
                 requestInFlight: false
@@ -60,9 +60,9 @@ final class StableTimelineViewportTests: XCTestCase {
         )
         XCTAssertFalse(
             StableTimelineViewportPolicy.shouldRequestPagination(
-                contentOffset: 8_000,
-                contentHeight: 10_000,
-                viewportHeight: 1_000,
+                contentOffset: 8000,
+                contentHeight: 10000,
+                viewportHeight: 1000,
                 hasUserInteracted: true,
                 isPaginating: false,
                 requestInFlight: true
@@ -70,9 +70,9 @@ final class StableTimelineViewportTests: XCTestCase {
         )
         XCTAssertFalse(
             StableTimelineViewportPolicy.shouldRequestPagination(
-                contentOffset: 8_000,
-                contentHeight: 10_000,
-                viewportHeight: 1_000,
+                contentOffset: 8000,
+                contentHeight: 10000,
+                viewportHeight: 1000,
                 hasUserInteracted: false,
                 isPaginating: false,
                 requestInFlight: false
@@ -133,12 +133,12 @@ final class StableTimelineViewportTests: XCTestCase {
     }
 
     func testFiveThousandEventInputAndVisibleCellsRemainBounded() {
-        let bounded = TimelineWindowPolicy.replacingServerWindow(TimelineFixtures.largeTimeline(count: 5_000))
+        let bounded = TimelineWindowPolicy.replacingServerWindow(TimelineFixtures.largeTimeline(count: 5000))
         XCTAssertEqual(bounded.count, TimelineWindowPolicy.stableEventLimit)
         XCTAssertEqual(bounded.first?.eventID, "$synthetic-4700:matrix.org")
         XCTAssertEqual(
             StableTimelineViewportPolicy.boundedVisibleCellUpperBound(
-                viewportHeight: 1_000,
+                viewportHeight: 1000,
                 minimumEstimatedRowHeight: 44
             ),
             31
@@ -147,7 +147,7 @@ final class StableTimelineViewportTests: XCTestCase {
 
     func testBoundedLRUEvictsLeastRecentlyUsedAcrossManyRooms() {
         var cache = BoundedLRUCache<String, Int>(capacity: 8)
-        for index in 0..<100 {
+        for index in 0 ..< 100 {
             cache.insert(index, forKey: "!room-\(index):matrix.org|live")
         }
 
