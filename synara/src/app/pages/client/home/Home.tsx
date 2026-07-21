@@ -62,6 +62,7 @@ import {
   getRoomNotificationMode,
   useRoomsNotificationPreferencesContext,
 } from '../../../hooks/useRoomsNotificationPreferences';
+import { useRecentRoomPartition } from '../../../hooks/useRoomActivity';
 
 type HomeMenuProps = {
   requestClose: () => void;
@@ -191,7 +192,6 @@ function HomeEmpty() {
 }
 
 const DEFAULT_CATEGORY_ID = makeNavCategoryId('home', 'room');
-const RECENT_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 export function Home() {
   const mx = useMatrixClient();
@@ -209,23 +209,10 @@ export function Home() {
   const noRoomToDisplay = rooms.length === 0;
   const [closedCategories, setClosedCategories] = useAtom(useClosedNavCategoriesAtom());
 
-  const recentRoomIds = useMemo(() => {
-    const cutoff = Date.now() - RECENT_WINDOW_MS;
-    return Array.from(rooms)
-      .filter((rId) => {
-        const ts = mx.getRoom(rId)?.getLastActiveTimestamp() ?? 0;
-        return ts > cutoff;
-      })
-      .sort(factoryRoomIdByAtoZ(mx));
-  }, [mx, rooms]);
+  const { recentRoomIds, nonRecentRoomIds } = useRecentRoomPartition(mx, rooms);
 
   const mainRoomIds = useMemo(() => {
-    const cutoff = Date.now() - RECENT_WINDOW_MS;
-    const nonRecent = Array.from(rooms).filter((rId) => {
-      const ts = mx.getRoom(rId)?.getLastActiveTimestamp() ?? 0;
-      return ts <= cutoff;
-    });
-    const items = nonRecent.sort(
+    const items = Array.from(nonRecentRoomIds).sort(
       closedCategories.has(DEFAULT_CATEGORY_ID)
         ? factoryRoomIdByActivity(mx)
         : factoryRoomIdByAtoZ(mx)
@@ -234,7 +221,7 @@ export function Home() {
       return items.filter((rId) => roomToUnread.has(rId) || rId === selectedRoomId);
     }
     return items;
-  }, [mx, rooms, closedCategories, roomToUnread, selectedRoomId]);
+  }, [mx, nonRecentRoomIds, closedCategories, roomToUnread, selectedRoomId]);
 
   const virtualizer = useVirtualizer({
     count: mainRoomIds.length,

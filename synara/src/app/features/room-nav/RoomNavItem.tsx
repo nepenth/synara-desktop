@@ -445,8 +445,9 @@ function RoomNavItemImpl({
 }
 
 function areRoomNavItemPropsEqual(prev: RoomNavItemProps, next: RoomNavItemProps): boolean {
-  // Stable key comparison to prevent re-renders on identity changes in large lists (perf + memory)
-  if (prev.room.roomId !== next.room.roomId) return false;
+  // Room objects are normally stable and internal hooks subscribe to mutable room state. If the
+  // SDK replaces an object, render against the new instance so those subscriptions move with it.
+  if (prev.room !== next.room) return false;
   if (prev.selected !== next.selected) return false;
   if (prev.linkPath !== next.linkPath) return false;
   if (prev.notificationMode !== next.notificationMode) return false;
