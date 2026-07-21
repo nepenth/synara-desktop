@@ -9,9 +9,9 @@ changing GitHub Actions behavior.
 
 | Workflow                                      | Current Trigger                                | Current Role                                                                                            |
 | --------------------------------------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| `.github/workflows/ci.yml`                    | Push to `main`, PR to `main`, manual           | Linux validation, Rust check/test, frontend typecheck/tests/lint/format.                                |
+| `.github/workflows/ci.yml`                    | Push/PR to `main` and `release/**`, manual     | Desktop/runtime validation, actual iOS simulator tests, and one always-present aggregate quality gate.  |
 | `.github/workflows/desktop-package-smoke.yml` | PR to `main` for package/runtime paths, manual | Linux `.deb` package and macOS `.app` package smoke with updater artifacts disabled.                    |
-| `.github/workflows/ios-skeleton.yml`          | Push/PR to `main` for iOS paths, manual        | Unsigned iOS simulator build/test bundle compile.                                                       |
+| `.github/workflows/ios-skeleton.yml`          | Manual                                         | On-demand unsigned iOS simulator build/test diagnostics with result bundles.                            |
 | `.github/workflows/macos-signed-build.yml`    | Manual only                                    | Signed/notarized macOS DMG artifact, updater artifacts disabled.                                        |
 | `.github/workflows/release.yml`               | Pushed `v*` tag                                | Coordinated macOS/Linux artifacts, TestFlight upload, updater metadata, and GitHub Release publication. |
 
@@ -35,10 +35,12 @@ workflow trigger model is not ideal for a controlled client-visible update:
 Use three lanes:
 
 1. `main`: integration branch.
+
    - Continue running normal CI on every push and PR.
    - No client-visible update is published directly from `main`.
 
 2. `release/vX.Y.Z`: release candidate branch.
+
    - Created from `main` when the release candidate is cut.
    - CI and package smoke should run on every push to the branch.
    - Signed package/release-candidate builds may run here, but should upload
@@ -62,8 +64,9 @@ Update CI triggers:
   - Add push and PR coverage for `release/**`.
 - `desktop-package-smoke.yml`
   - Add push and PR coverage for `release/**`.
-- `ios-skeleton.yml`
-  - Add release branch coverage for iOS path changes.
+- `ci.yml`
+  - Run actual iOS simulator tests on every covered branch and aggregate them
+    with desktop/runtime validation under the stable `Quality gate` job.
 
 Acceptance:
 
@@ -73,8 +76,8 @@ Acceptance:
 
 Status:
 
-- Implemented on 2026-06-30 for `ci.yml`, `desktop-package-smoke.yml`, and
-  `ios-skeleton.yml`.
+- Implemented for `ci.yml` and `desktop-package-smoke.yml`; iOS execution is now
+  part of the main CI gate instead of a path-filtered skeleton workflow.
 - `desktop-package-smoke.yml` now includes Linux `.deb`, Linux Arch pacman
   package, and macOS `.app` artifacts for release-branch candidate smoke.
 - Waiting for first `release/vX.Y.Z` branch push to provide live Actions
@@ -165,4 +168,6 @@ Clients should only see a new update after:
 5. macOS updater `.sig` files and `latest.json` are generated and verified.
 6. The fixed `pacman-repo` release assets are replaced by CI, not by manual
    `repo-add` commands.
-7. The GitHub Release is intentionally published.
+7. Full desktop/runtime and iOS validation reruns successfully at the exact tag
+   SHA before any release artifact job starts.
+8. The GitHub Release is intentionally published.
