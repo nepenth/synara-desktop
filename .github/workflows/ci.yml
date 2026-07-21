@@ -54,6 +54,18 @@ jobs:
       - name: Check Matrix integration boundaries
         run: npm run check:matrix-boundaries
 
+      - name: Check reliability delivery gates
+        run: npm run check:quality-gates
+
+      - name: Check disposable Synapse harness
+        run: npm run check:synapse-harness
+
+      - name: Check production smoke contract
+        run: npm run check:production-smoke
+
+      - name: Test repository delivery scripts
+        run: node --test scripts/__tests__/*.test.mjs
+
       - name: Check Rust desktop shell
         run: cargo check --locked
         working-directory: src-tauri
@@ -77,3 +89,46 @@ jobs:
       - name: Check runtime formatting
         run: npm run check:prettier
         working-directory: synara
+
+  ios-tests:
+    name: iOS simulator tests
+    runs-on: macos-26
+    timeout-minutes: 45
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Build and run unsigned simulator tests
+        run: scripts/ci-build.sh
+        working-directory: synara-ios
+        env:
+          RUN_IOS_TESTS: "1"
+
+      - name: Upload iOS result bundles
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ios-test-results
+          path: /private/tmp/synara-ios-results/*.xcresult
+          if-no-files-found: warn
+          retention-days: 14
+
+  quality-gate:
+    name: Quality gate
+    if: always()
+    needs: [validate, ios-tests]
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Require every client validation job
+        env:
+          DESKTOP_RESULT: ${{ needs.validate.result }}
+          IOS_RESULT: ${{ needs.ios-tests.result }}
+        run: |
+          if [[ "$DESKTOP_RESULT" != "success" || "$IOS_RESULT" != "success" ]]; then
+            echo "Desktop/runtime validation: $DESKTOP_RESULT" >&2
+            echo "iOS simulator tests: $IOS_RESULT" >&2
+            exit 1
+          fi

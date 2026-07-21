@@ -11,6 +11,8 @@
     "build:macos:local": "scripts/build-macos-local-release.sh",
     "build:pacman-repo": "scripts/build-pacman-repo.sh",
     "check:matrix-boundaries": "node scripts/check-matrix-boundaries.mjs",
+    "check:quality-gates": "node scripts/check-quality-gates.mjs",
+    "check:synapse-harness": "node scripts/check-synapse-integration-harness.mjs",
     "check:mip1-evidence": "node scripts/check-mip1-commit-evidence.mjs --base main",
     "check:production-smoke": "node scripts/check-production-smoke-checklist.mjs",
     "check:release-updater": "node scripts/check-release-updater.mjs",
