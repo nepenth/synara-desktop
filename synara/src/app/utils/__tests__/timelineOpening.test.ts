@@ -11,10 +11,13 @@ import {
   getTimelineEndWindow,
   getTimelineFocusRange,
   getTimelineRangeAfterPagination,
+  getTimelineWindowTailEventId,
   hasUnreadForInitialScroll,
   canRestoreViewportFromInitialTimeline,
+  shouldCancelTimelineNavigationForRouteChange,
   shouldGateViewportRestoreOnUnread,
   shouldShowJumpToUnread,
+  timelineWindowEndsAtEventId,
   timelineWindowContainsEventId,
   timelineHasEvents,
 } from '../timelineOpening';
@@ -159,6 +162,37 @@ test('timeline opening helpers represent empty and non-empty timelines', () => {
   assert.deepEqual(emptyTimeline, { range: { start: 0, end: 0 }, linkedTimelines: [] });
   assert.equal(timelineHasEvents(emptyTimeline), false);
   assert.equal(timelineHasEvents(nonEmptyTimeline), true);
+});
+
+test('server-latest detached context windows remain authoritative at their fetched tail', () => {
+  const detachedContext = timeline('detached-context', ['$before', '$latest']);
+  const latestWindow = getTimelineEndWindow([detachedContext], 80);
+
+  assert.equal(getTimelineWindowTailEventId(latestWindow), '$latest');
+  assert.equal(timelineWindowEndsAtEventId(latestWindow, '$latest'), true);
+  assert.equal(timelineWindowEndsAtEventId(latestWindow, '$before'), false);
+  assert.equal(getTimelineWindowTailEventId(getEmptyTimeline()), undefined);
+});
+
+test('route navigation cancellation skips mount and the intentional post-jump route clear', () => {
+  const focusedRoute = '!room:example.org\u0000$focus';
+  const liveRoute = '!room:example.org\u0000';
+
+  assert.equal(
+    shouldCancelTimelineNavigationForRouteChange(focusedRoute, focusedRoute),
+    false,
+    'initial mount is not a route transition'
+  );
+  assert.equal(
+    shouldCancelTimelineNavigationForRouteChange(focusedRoute, liveRoute, liveRoute),
+    false,
+    'the post-jump permalink clear is intentional'
+  );
+  assert.equal(
+    shouldCancelTimelineNavigationForRouteChange(focusedRoute, liveRoute),
+    true,
+    'an unrelated route change invalidates in-flight navigation'
+  );
 });
 
 test('timeline opening restore gate only accepts anchors inside the initial window', () => {
