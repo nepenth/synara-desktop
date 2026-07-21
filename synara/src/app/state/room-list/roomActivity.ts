@@ -34,6 +34,16 @@ export type RoomActivityPartition = {
 
 type RoomActivityListener = () => void;
 
+type RoomActivitySubscription = {
+  roomIds: ReadonlySet<string>;
+  listener: RoomActivityListener;
+};
+
+export type RoomActivitySnapshotSource = {
+  subscribe: (listener: RoomActivityListener) => () => void;
+  getSnapshot: () => RoomActivitySnapshot;
+};
+
 export const isRoomActivityEvent = (event: MatrixEvent): boolean =>
   event.status !== EventStatus.CANCELLED &&
   event.status !== EventStatus.NOT_SENT &&
@@ -152,6 +162,8 @@ export class RoomActivityStore {
 
   private readonly listeners = new Set<RoomActivityListener>();
 
+  private readonly roomSubscriptions = new Set<RoomActivitySubscription>();
+
   private started = false;
 
   public constructor(private readonly mx: MatrixClient) {
@@ -165,22 +177,61 @@ export class RoomActivityStore {
     if (!this.started) this.start();
     return () => {
       this.listeners.delete(listener);
-      if (this.listeners.size === 0) this.stop();
+      this.stopIfUnused();
     };
   };
 
-  private emit(entries: Map<string, RoomActivity>): void {
-    this.snapshot = { revision: this.snapshot.revision + 1, entries };
-    this.listeners.forEach((listener) => listener());
+  public createSnapshotSource(roomIds: readonly string[]): RoomActivitySnapshotSource {
+    const subscribedRoomIds = new Set(roomIds);
+    let selectedSnapshot = this.snapshot;
+
+    return {
+      getSnapshot: () => selectedSnapshot,
+      subscribe: (listener) => {
+        // Close the render-to-subscribe race before React checks the snapshot.
+        selectedSnapshot = this.snapshot;
+        const subscription = {
+          roomIds: subscribedRoomIds,
+          listener: () => {
+            selectedSnapshot = this.snapshot;
+            listener();
+          },
+        };
+        this.roomSubscriptions.add(subscription);
+        if (!this.started) this.start();
+        return () => {
+          this.roomSubscriptions.delete(subscription);
+          this.stopIfUnused();
+        };
+      },
+    };
   }
 
-  private updateRoom(room: Room, event?: MatrixEvent, preserveMissing = true): void {
+  private publish(changedRoomIds: ReadonlySet<string>, entries = this.snapshot.entries): void {
+    this.snapshot = { revision: this.snapshot.revision + 1, entries };
+    this.listeners.forEach((listener) => listener());
+    this.roomSubscriptions.forEach((subscription) => {
+      for (const roomId of changedRoomIds) {
+        if (subscription.roomIds.has(roomId)) {
+          subscription.listener();
+          break;
+        }
+      }
+    });
+  }
+
+  private updateRoom(
+    room: Room,
+    event?: MatrixEvent,
+    missingPolicy: 'preserve' | 'summary' = 'preserve'
+  ): void {
     const previous = this.snapshot.entries.get(room.roomId);
     const latestEvent = event && isRoomActivityEvent(event) ? event : getLatestActivityEvent(room);
     const latestTimestamp = latestEvent ? eventActivityTimestamp(latestEvent) : 0;
-    const fallbackTimestamp = preserveMissing
-      ? previous?.activityTs ?? room.getLastActiveTimestamp()
-      : 0;
+    const fallbackTimestamp =
+      missingPolicy === 'preserve'
+        ? previous?.activityTs ?? room.getLastActiveTimestamp()
+        : room.getLastActiveTimestamp();
     const candidateTimestamp = latestTimestamp || fallbackTimestamp;
     const activityTs =
       previous && event && candidateTimestamp < previous.activityTs
@@ -199,7 +250,7 @@ export class RoomActivityStore {
     };
     if (snapshotsEqual(previous, next)) return;
 
-    const entries = new Map(this.snapshot.entries);
+    const entries = this.snapshot.entries as Map<string, RoomActivity>;
     entries.set(room.roomId, next);
     recordFoundationDiagnostic('activity', 'room-activity.updated', {
       roomId: room.roomId,
@@ -207,19 +258,19 @@ export class RoomActivityStore {
       fields: {
         revision: this.snapshot.revision + 1,
         hasConcreteHead: Boolean(latestEvent),
-        preservedSummary: !latestEvent && preserveMissing && Boolean(previous?.activityTs),
+        preservedSummary: !latestEvent && Boolean(fallbackTimestamp),
         activityChanged: previous?.activityTs !== activityTs,
         latestChanged: previous?.latestEventId !== latestEventId,
       },
     });
-    this.emit(entries);
+    this.publish(new Set([room.roomId]));
   }
 
   private deleteRoom(roomId: string): void {
     if (!this.snapshot.entries.has(roomId)) return;
-    const entries = new Map(this.snapshot.entries);
+    const entries = this.snapshot.entries as Map<string, RoomActivity>;
     entries.delete(roomId);
-    this.emit(entries);
+    this.publish(new Set([roomId]));
   }
 
   private refreshAll(notify = true): void {
@@ -245,8 +296,16 @@ export class RoomActivityStore {
       entries.size !== previousEntries.size ||
       Array.from(entries).some(([roomId, entry]) => previousEntries.get(roomId) !== entry);
     if (!changed) return;
-    if (notify) this.emit(entries);
-    else this.snapshot = { revision: this.snapshot.revision, entries };
+    if (notify) {
+      const changedRoomIds = new Set<string>();
+      entries.forEach((entry, roomId) => {
+        if (previousEntries.get(roomId) !== entry) changedRoomIds.add(roomId);
+      });
+      previousEntries.forEach((_entry, roomId) => {
+        if (!entries.has(roomId)) changedRoomIds.add(roomId);
+      });
+      this.publish(changedRoomIds, entries);
+    } else this.snapshot = { revision: this.snapshot.revision, entries };
   }
 
   private readonly handleTimeline = (
@@ -263,8 +322,8 @@ export class RoomActivityStore {
   };
 
   private readonly handleLocalEcho = (event: MatrixEvent, room: Room): void => {
-    if (event.status === EventStatus.CANCELLED) {
-      this.updateRoom(room, undefined, false);
+    if (event.status === EventStatus.CANCELLED || event.status === EventStatus.NOT_SENT) {
+      this.updateRoom(room, undefined, 'summary');
       return;
     }
     if (isRoomActivityEvent(event)) this.updateRoom(room, event);
@@ -329,6 +388,10 @@ export class RoomActivityStore {
     this.mx.removeListener(RoomEvent.Redaction, this.handleRedaction);
     this.mx.removeListener(RoomEvent.RedactionCancelled, this.handleRedactionCancelled);
     this.mx.removeListener(MatrixEventEvent.Decrypted, this.handleDecrypted);
+  }
+
+  private stopIfUnused(): void {
+    if (this.listeners.size === 0 && this.roomSubscriptions.size === 0) this.stop();
   }
 }
 
