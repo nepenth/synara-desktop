@@ -188,8 +188,10 @@ import {
   getTimelineFocusRange,
   getTimelineRangeAfterPagination,
   getTimelineWindowTailEventId,
+  getPersistedLiveTailEventId,
   hasUnreadForInitialScroll,
   shouldCancelTimelineNavigationForRouteChange,
+  shouldApplyLiveTailRefresh,
   shouldGateViewportRestoreOnUnread,
   shouldShowJumpToUnread,
   timelineWindowEndsAtEventId,
@@ -872,7 +874,17 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
 
     void (async () => {
       const latestTimeline = await getLatestRoomTimeline(mx, room);
-      if (cancelled || !alive() || liveTailRefreshRequestRef.current !== requestId) return;
+      if (
+        cancelled ||
+        !alive() ||
+        !shouldApplyLiveTailRefresh(
+          requestId,
+          liveTailRefreshRequestRef.current,
+          jumpLatestPhaseRef.current
+        )
+      ) {
+        return;
+      }
       if (!latestTimeline) return;
 
       const nextTimeline = getTimelineEndWindow(
@@ -1334,7 +1346,10 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
   const persistLiveBottomViewport = useCallback(() => {
     setRoomTimelineViewport(room.roomId, {
       atBottom: true,
-      liveTailEventId: getLoadedLiveTailEventId(room),
+      liveTailEventId: getPersistedLiveTailEventId(
+        jumpLatestAuthoritativeTailEventIdRef.current,
+        getLoadedLiveTailEventId(room)
+      ),
     });
   }, [room]);
 
@@ -1349,7 +1364,12 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
       setRoomTimelineViewport(room.roomId, {
         atBottom: atLiveBottom,
         anchor,
-        liveTailEventId: atLiveBottom ? getLoadedLiveTailEventId(room) : undefined,
+        liveTailEventId: atLiveBottom
+          ? getPersistedLiveTailEventId(
+              jumpLatestAuthoritativeTailEventIdRef.current,
+              getLoadedLiveTailEventId(room)
+            )
+          : undefined,
       });
     },
     [
@@ -2130,6 +2150,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
 
   const handleJumpToLatest = async () => {
     if (jumpLatestPhase === 'loading' || jumpLatestPhase === 'settling') return;
+    liveTailRefreshRequestRef.current += 1;
     const requestId = latestTimelineRequestRef.current + 1;
     latestTimelineRequestRef.current = requestId;
     jumpLatestPreviousTimelineRef.current = timeline;

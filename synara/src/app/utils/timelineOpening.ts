@@ -250,6 +250,17 @@ export const shouldCancelTimelineNavigationForRouteChange = (
   expectedRouteKey?: string
 ): boolean => previousRouteKey !== currentRouteKey && currentRouteKey !== expectedRouteKey;
 
+export const getPersistedLiveTailEventId = (
+  authoritativeTailEventId: string | undefined,
+  loadedLiveTailEventId: string | undefined
+): string | undefined => authoritativeTailEventId ?? loadedLiveTailEventId;
+
+export const shouldApplyLiveTailRefresh = (
+  requestId: number,
+  currentRequestId: number,
+  jumpPhase: 'idle' | 'loading' | 'settling' | 'error'
+): boolean => requestId === currentRequestId && jumpPhase !== 'loading' && jumpPhase !== 'settling';
+
 /**
  * Jump-to-Unread visibility.
  *
