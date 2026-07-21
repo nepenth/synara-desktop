@@ -184,6 +184,24 @@ final class StableTimelineViewportTests: XCTestCase {
         ))
     }
 
+    func testNonAnimatedLatestRetriesUntilConfirmedPinnedAndFailureShowsRecovery() {
+        XCTAssertFalse(StableTimelineViewportPolicy.commandSucceeded(
+            targetsLatest: true,
+            isTargetVisible: true,
+            isConfirmedPinned: false
+        ))
+        XCTAssertTrue(StableTimelineViewportPolicy.commandSucceeded(
+            targetsLatest: true,
+            isTargetVisible: true,
+            isConfirmedPinned: true
+        ))
+        XCTAssertTrue(StableTimelineViewportPolicy.shouldRetryMissingTarget(attempt: 1))
+        XCTAssertTrue(StableTimelineViewportPolicy.shouldRetryMissingTarget(attempt: 2))
+        XCTAssertFalse(StableTimelineViewportPolicy.shouldRetryMissingTarget(attempt: 3))
+        XCTAssertTrue(RoomTimelineLatestCommandCompletionPolicy.shouldShowRecovery(success: false))
+        XCTAssertFalse(RoomTimelineLatestCommandCompletionPolicy.shouldShowRecovery(success: true))
+    }
+
     func testFocusedPlacementCompletionAllowsPaginationPolicy() {
         XCTAssertTrue(
             RoomTimelinePaginationPolicy.shouldLoadOlderHistory(
