@@ -195,3 +195,43 @@ test('live reattachment invalidates an in-flight refresh before clearing detache
   assert.equal(controller.applyLiveTailRefresh(refresh, '$detached'), false);
   assert.equal(controller.authoritativeTailEventId, undefined);
 });
+
+test('dispose idempotently clears an active jump and all of its owned state', () => {
+  const { controller, fire, timers, timeouts } = createHarness();
+  const requestId = controller.beginJump('focused-window', '$focus')!;
+  assert.equal(controller.resolveJump(requestId, '$detached-latest'), true);
+  const settlingTimer = timers[1];
+
+  controller.dispose();
+  controller.dispose();
+
+  assert.equal(controller.phase, 'idle');
+  assert.equal(controller.authoritativeTailEventId, undefined);
+  assert.equal(settlingTimer.cancelled, true);
+  assert.equal(controller.resolveJump(requestId, '$late-tail'), false);
+  fire(settlingTimer);
+  assert.deepEqual(timeouts, []);
+
+  const nextRequest = controller.beginJump('new-window')!;
+  controller.resolveJump(nextRequest, '$new-tail');
+  assert.deepEqual(controller.completeSettlement(true, '!alpha:example.org\u0000'), {
+    accepted: true,
+    focusedEventId: undefined,
+  });
+});
+
+test('dispose clears an intentional route transition and detached-tail ownership', () => {
+  const { controller } = createHarness();
+  const requestId = controller.beginJump('focused-window', '$focus')!;
+  controller.resolveJump(requestId, '$detached-latest');
+  controller.completeSettlement(true, '!alpha:example.org\u0000');
+
+  controller.dispose();
+
+  assert.equal(controller.authoritativeTailEventId, undefined);
+  assert.equal(
+    controller.handleRouteChange('!alpha:example.org\u0000'),
+    true,
+    'the route is no longer owned as an expected post-jump transition'
+  );
+});
