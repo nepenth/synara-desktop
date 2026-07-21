@@ -28,6 +28,15 @@ import SwiftUI
     }
 
     enum StableTimelineViewportPolicy {
+        enum AnimatedCommandSettlement {
+            case noOp
+            case animationEnded
+            case userInterrupted
+            case timeout
+        }
+
+        static let maximumMissingTargetAttempts = 3
+
         static func shouldDeferSnapshot(isDragging: Bool, isDecelerating: Bool) -> Bool {
             isDragging || isDecelerating
         }
@@ -78,6 +87,22 @@ import SwiftUI
             }
             return Int(ceil(viewportHeight / minimumEstimatedRowHeight)) + reuseOverscan
         }
+
+        static func shouldRetryMissingTarget(
+            attempt: Int,
+            maximumAttempts: Int = maximumMissingTargetAttempts
+        ) -> Bool {
+            attempt < maximumAttempts
+        }
+
+        static func animatedCommandSucceeded(
+            settlement _: AnimatedCommandSettlement,
+            targetsLatest: Bool,
+            isTargetVisible: Bool,
+            isConfirmedPinned: Bool
+        ) -> Bool {
+            targetsLatest ? isConfirmedPinned : isTargetVisible
+        }
     }
 
     enum StableTimelineViewportItemID: Hashable {
@@ -112,6 +137,13 @@ import SwiftUI
                 return nil
             }
             return eventRow.item.eventID
+        }
+
+        var serverEventID: String? {
+            guard case let .event(eventRow) = content else {
+                return nil
+            }
+            return eventRow.item.serverEventID
         }
     }
 
@@ -226,6 +258,13 @@ import SwiftUI
             let frame: CGRect
         }
 
+        private struct PendingAnimatedCommand {
+            let command: StableTimelineViewportCommand
+            let targetID: StableTimelineViewportItemID
+            let targetEventID: String?
+            let timeout: DispatchWorkItem
+        }
+
         private final class Cell: UITableViewCell {
             var stableID: StableTimelineViewportItemID?
 
@@ -245,7 +284,9 @@ import SwiftUI
         private var pendingConfiguration: Configuration?
         private var updateSerial: UInt64 = 0
         private var lastExecutedCommandID: UInt64?
-        private var pendingAnimatedCommand: (StableTimelineViewportCommand, String?)?
+        private var pendingAnimatedCommand: PendingAnimatedCommand?
+        private var pendingCommandRetry: DispatchWorkItem?
+        private var missingTargetAttempts: [UInt64: Int] = [:]
         private var isDragging = false
         private var isDecelerating = false
         private var hasUserInteracted = false
@@ -290,7 +331,10 @@ import SwiftUI
             let isNewGeneration = isNewRoute || configuration?.sessionGeneration != newConfiguration.sessionGeneration
             if isNewGeneration {
                 pendingConfiguration = nil
-                pendingAnimatedCommand = nil
+                cancelPendingAnimatedCommand()
+                pendingCommandRetry?.cancel()
+                pendingCommandRetry = nil
+                missingTargetAttempts.removeAll()
                 lastExecutedCommandID = nil
                 paginationRequestInFlight = false
                 hasUserInteracted = false
@@ -456,20 +500,125 @@ import SwiftUI
             guard let target,
                   let indexPath = dataSource.indexPath(for: target.0)
             else {
-                notifyCommandCompleted(command, success: false, targetEventID: nil)
-                return false
+                let attempt = (missingTargetAttempts[command.id] ?? 0) + 1
+                missingTargetAttempts[command.id] = attempt
+                if StableTimelineViewportPolicy.shouldRetryMissingTarget(attempt: attempt) {
+                    scheduleMissingTargetRetry(command)
+                } else {
+                    pendingCommandRetry?.cancel()
+                    pendingCommandRetry = nil
+                    missingTargetAttempts.removeValue(forKey: command.id)
+                    lastExecutedCommandID = command.id
+                    notifyCommandCompleted(command, success: false, targetEventID: nil)
+                }
+                return true
             }
 
+            pendingCommandRetry?.cancel()
+            pendingCommandRetry = nil
+            missingTargetAttempts.removeValue(forKey: command.id)
             lastExecutedCommandID = command.id
-            tableView.scrollToRow(at: indexPath, at: target.2, animated: target.3)
             if target.3 {
-                pendingAnimatedCommand = (command, target.1)
+                beginAnimatedCommand(command, targetID: target.0, targetEventID: target.1)
+                tableView.scrollToRow(at: indexPath, at: target.2, animated: true)
+                DispatchQueue.main.async { [weak self] in
+                    guard let self,
+                          let pending = pendingAnimatedCommand,
+                          pending.command.id == command.id
+                    else {
+                        return
+                    }
+                    let success = animatedCommandSucceeded(pending, settlement: .noOp)
+                    if success {
+                        finishPendingAnimatedCommand(success: true)
+                    }
+                }
             } else {
+                tableView.scrollToRow(at: indexPath, at: target.2, animated: false)
                 tableView.layoutIfNeeded()
                 notifyCommandCompleted(command, success: isRowVisible(target.0), targetEventID: target.1)
                 reportBottomPinnedIfChanged(force: true)
             }
             return true
+        }
+
+        private func scheduleMissingTargetRetry(_ command: StableTimelineViewportCommand) {
+            pendingCommandRetry?.cancel()
+            let retry = DispatchWorkItem { [weak self] in
+                guard let self,
+                      configuration?.command?.id == command.id,
+                      configuration?.routeID == command.routeID,
+                      configuration?.sessionGeneration == command.sessionGeneration
+                else {
+                    return
+                }
+                _ = executeCommandIfNeeded(command)
+            }
+            pendingCommandRetry = retry
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25, execute: retry)
+        }
+
+        private func beginAnimatedCommand(
+            _ command: StableTimelineViewportCommand,
+            targetID: StableTimelineViewportItemID,
+            targetEventID: String?
+        ) {
+            cancelPendingAnimatedCommand()
+            let timeout = DispatchWorkItem { [weak self] in
+                guard let self,
+                      let pending = pendingAnimatedCommand,
+                      pending.command.id == command.id
+                else {
+                    return
+                }
+                finishPendingAnimatedCommand(success: animatedCommandSucceeded(
+                    pending,
+                    settlement: .timeout
+                ))
+            }
+            pendingAnimatedCommand = PendingAnimatedCommand(
+                command: command,
+                targetID: targetID,
+                targetEventID: targetEventID,
+                timeout: timeout
+            )
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.25, execute: timeout)
+        }
+
+        private func finishPendingAnimatedCommand(success: Bool) {
+            guard let pendingAnimatedCommand else {
+                return
+            }
+            self.pendingAnimatedCommand = nil
+            pendingAnimatedCommand.timeout.cancel()
+            notifyCommandCompleted(
+                pendingAnimatedCommand.command,
+                success: success,
+                targetEventID: pendingAnimatedCommand.targetEventID
+            )
+        }
+
+        private func animatedCommandSucceeded(
+            _ pending: PendingAnimatedCommand,
+            settlement: StableTimelineViewportPolicy.AnimatedCommandSettlement
+        ) -> Bool {
+            let targetsLatest: Bool
+            if case .latest = pending.command.kind {
+                targetsLatest = true
+            } else {
+                targetsLatest = false
+            }
+            return StableTimelineViewportPolicy.animatedCommandSucceeded(
+                settlement: settlement,
+                targetsLatest: targetsLatest,
+                isTargetVisible: isRowVisible(pending.targetID),
+                isConfirmedPinned: isConfirmedPinned()
+            )
+        }
+
+        private func cancelPendingAnimatedCommand() {
+            pendingAnimatedCommand?.timeout.cancel()
+            pendingAnimatedCommand = nil
         }
 
         private func notifyCommandCompleted(
@@ -613,7 +762,7 @@ import SwiftUI
                 routeID: configuration.routeID,
                 generation: configuration.sessionGeneration,
                 isPinned: isPinned,
-                newestEventID: newestEventRow()?.eventID
+                newestEventID: visualRows.reversed().compactMap(\.serverEventID).first
             )
         }
 
@@ -652,12 +801,14 @@ import SwiftUI
         }
 
         private func updateDiagnostics() {
-            guard ProcessInfo.processInfo.environment["SYNARA_UI_TESTS"] == "1" else {
+            guard ProcessInfo.processInfo.environment["SYNARA_UI_TESTS"] == "1",
+                  let configuration
+            else {
                 return
             }
             let renderedEvents = visualRows.filter { $0.eventID != nil }.count
             let topEventID = visuallyTopmostVisibleEventID() ?? "none"
-            tableView.accessibilityValue = "renderedEvents=\(renderedEvents);visibleCells=\(tableView.visibleCells.count);topEvent=\(topEventID);newestEvent=\(newestEventRow()?.eventID ?? "none");pinned=\(isConfirmedPinned())"
+            tableView.accessibilityValue = "routeID=\(configuration.routeID);generation=\(configuration.sessionGeneration);renderedEvents=\(renderedEvents);visibleCells=\(tableView.visibleCells.count);topEvent=\(topEventID);newestEvent=\(newestEventRow()?.eventID ?? "none");pinned=\(isConfirmedPinned())"
         }
 
         func scrollViewDidScroll(_: UIScrollView) {
@@ -667,6 +818,12 @@ import SwiftUI
         }
 
         func scrollViewWillBeginDragging(_: UIScrollView) {
+            if let pendingAnimatedCommand {
+                finishPendingAnimatedCommand(success: animatedCommandSucceeded(
+                    pendingAnimatedCommand,
+                    settlement: .userInterrupted
+                ))
+            }
             isDragging = true
             isDecelerating = false
             hasUserInteracted = true
@@ -694,14 +851,10 @@ import SwiftUI
 
         func scrollViewDidEndScrollingAnimation(_: UIScrollView) {
             if let pendingAnimatedCommand {
-                self.pendingAnimatedCommand = nil
-                notifyCommandCompleted(
-                    pendingAnimatedCommand.0,
-                    success: pendingAnimatedCommand.1.map { eventID in
-                        eventRow(eventID: eventID).map { isRowVisible($0.id) } ?? false
-                    } ?? false,
-                    targetEventID: pendingAnimatedCommand.1
-                )
+                finishPendingAnimatedCommand(success: animatedCommandSucceeded(
+                    pendingAnimatedCommand,
+                    settlement: .animationEnded
+                ))
             }
             reportBottomPinnedIfChanged(force: true)
             updateDiagnostics()

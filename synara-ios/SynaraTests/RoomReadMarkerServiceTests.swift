@@ -1,6 +1,6 @@
 import Foundation
-import XCTest
 @testable import Synara
+import XCTest
 
 final class RoomReadMarkerServiceTests: XCTestCase {
     func testReadMarkerReturnsNilWhenSignedOut() async {
@@ -16,7 +16,11 @@ final class RoomReadMarkerServiceTests: XCTestCase {
     func testReadMarkerReadsFullyReadAccountData() async throws {
         let http = RecordingReadMarkerHTTPClient(statusCode: 200, body: #"{"event_id":"$event:matrix.example"}"#)
         let sessionStore = AppSessionStore(currentState: .signedIn(makeSession()))
-        let service = MatrixRoomReadMarkerService(sessionStore: sessionStore, httpClient: http)
+        let service = MatrixRoomReadMarkerService(
+            sessionStore: sessionStore,
+            httpClient: http,
+            writeRetryDelaysNanoseconds: [0]
+        )
 
         let eventID = await service.fullyReadEventID(roomID: "!room:matrix.example")
 
@@ -58,6 +62,25 @@ final class RoomReadMarkerServiceTests: XCTestCase {
         XCTAssertNil(http.lastRequest)
     }
 
+    func testLocalAndTransactionIdentifiersNeverReachReadMarkerWriter() async {
+        let http = RecordingReadMarkerHTTPClient(statusCode: 200, body: "{}")
+        let sessionStore = AppSessionStore(currentState: .signedIn(makeSession()))
+        let service = MatrixRoomReadMarkerService(sessionStore: sessionStore, httpClient: http)
+
+        let pendingResult = await service.markFullyRead(
+            roomID: "!room:matrix.example",
+            eventID: "$pending-local"
+        )
+        let transactionResult = await service.markFullyRead(
+            roomID: "!room:matrix.example",
+            eventID: "transaction-123"
+        )
+
+        XCTAssertFalse(pendingResult)
+        XCTAssertFalse(transactionResult)
+        XCTAssertTrue(http.requests.isEmpty)
+    }
+
     func testMarkFullyReadUsesExactEventReadMarkersEndpoint() async throws {
         let http = RecordingReadMarkerHTTPClient(statusCode: 200, body: #"{"event_id":"$event:matrix.example"}"#)
         let sessionStore = AppSessionStore(currentState: .signedIn(makeSession()))
@@ -95,7 +118,11 @@ final class RoomReadMarkerServiceTests: XCTestCase {
     func testConcurrentDifferentMarkersRemainSerialAndSettleExactWaiters() async throws {
         let http = GatedReadMarkerHTTPClient()
         let sessionStore = AppSessionStore(currentState: .signedIn(makeSession()))
-        let service = MatrixRoomReadMarkerService(sessionStore: sessionStore, httpClient: http)
+        let service = MatrixRoomReadMarkerService(
+            sessionStore: sessionStore,
+            httpClient: http,
+            writeRetryDelaysNanoseconds: [0]
+        )
 
         let first = Task { await service.markFullyRead(roomID: "!room:matrix.example", eventID: "$first") }
         await http.waitUntilRequestCount(1)
@@ -145,10 +172,44 @@ final class RoomReadMarkerServiceTests: XCTestCase {
         XCTAssertEqual(submittedEventIDs, ["$same"])
     }
 
+    func testActiveExactMarkerDeduplicatesAcrossDifferentPendingMarker() async throws {
+        let http = GatedReadMarkerHTTPClient()
+        let sessionStore = AppSessionStore(currentState: .signedIn(makeSession()))
+        let service = MatrixRoomReadMarkerService(
+            sessionStore: sessionStore,
+            httpClient: http,
+            writeRetryDelaysNanoseconds: [0]
+        )
+
+        let active = Task { await service.markFullyRead(roomID: "!room:matrix.example", eventID: "$older") }
+        await http.waitUntilRequestCount(1)
+        let pending = Task { await service.markFullyRead(roomID: "!room:matrix.example", eventID: "$newer") }
+        await Task.yield()
+        let repeatedActive = Task {
+            await service.markFullyRead(roomID: "!room:matrix.example", eventID: "$older")
+        }
+        try? await Task.sleep(nanoseconds: 10_000_000)
+
+        await http.completeNext(statusCode: 200)
+        let repeatedResult = await repeatedActive.value
+        await http.waitUntilRequestCount(2)
+        await http.completeNext(statusCode: 200)
+
+        let results = await [active.value, pending.value]
+        let submittedEventIDs = try await http.submittedEventIDs()
+        XCTAssertTrue(repeatedResult)
+        XCTAssertEqual(results, [true, true])
+        XCTAssertEqual(submittedEventIDs, ["$older", "$newer"])
+    }
+
     func testCoalescedWaitersShareFailureAndLaterRetryStillWrites() async throws {
         let http = GatedReadMarkerHTTPClient()
         let sessionStore = AppSessionStore(currentState: .signedIn(makeSession()))
-        let service = MatrixRoomReadMarkerService(sessionStore: sessionStore, httpClient: http)
+        let service = MatrixRoomReadMarkerService(
+            sessionStore: sessionStore,
+            httpClient: http,
+            writeRetryDelaysNanoseconds: [0]
+        )
 
         let first = Task { await service.markFullyRead(roomID: "!room:matrix.example", eventID: "$same") }
         await http.waitUntilRequestCount(1)
@@ -196,7 +257,11 @@ final class RoomReadMarkerServiceTests: XCTestCase {
     func testFailedMarkerCanRetryTheSameExactEvent() async throws {
         let http = GatedReadMarkerHTTPClient()
         let sessionStore = AppSessionStore(currentState: .signedIn(makeSession()))
-        let service = MatrixRoomReadMarkerService(sessionStore: sessionStore, httpClient: http)
+        let service = MatrixRoomReadMarkerService(
+            sessionStore: sessionStore,
+            httpClient: http,
+            writeRetryDelaysNanoseconds: [0]
+        )
 
         let first = Task { await service.markFullyRead(roomID: "!room:matrix.example", eventID: "$retry") }
         await http.waitUntilRequestCount(1)
@@ -211,6 +276,25 @@ final class RoomReadMarkerServiceTests: XCTestCase {
         XCTAssertFalse(firstResult)
         XCTAssertTrue(retryResult)
         XCTAssertEqual(submittedEventIDs, ["$retry", "$retry"])
+    }
+
+    func testMarkerWriteRetriesTransientFailureWithinBoundedAttemptBudget() async {
+        let http = SequencedReadMarkerHTTPClient(statusCodes: [503, 200])
+        let sessionStore = AppSessionStore(currentState: .signedIn(makeSession()))
+        let service = MatrixRoomReadMarkerService(
+            sessionStore: sessionStore,
+            httpClient: http,
+            writeRetryDelaysNanoseconds: [0, 0]
+        )
+
+        let didMark = await service.markFullyRead(
+            roomID: "!room:matrix.example",
+            eventID: "$retry-once"
+        )
+
+        let requestCount = await http.requestCount()
+        XCTAssertTrue(didMark)
+        XCTAssertEqual(requestCount, 2)
     }
 
     func testLogoutAndLoginResendsSameMarkerWithNewSession() async throws {
@@ -263,7 +347,11 @@ final class RoomReadMarkerServiceTests: XCTestCase {
     func testMarkFullyReadReturnsFalseForNonSuccessStatus() async {
         let http = RecordingReadMarkerHTTPClient(statusCode: 500, body: #"{"errcode":"M_UNKNOWN"}"#)
         let sessionStore = AppSessionStore(currentState: .signedIn(makeSession()))
-        let service = MatrixRoomReadMarkerService(sessionStore: sessionStore, httpClient: http)
+        let service = MatrixRoomReadMarkerService(
+            sessionStore: sessionStore,
+            httpClient: http,
+            writeRetryDelaysNanoseconds: [0]
+        )
 
         let didMark = await service.markFullyRead(roomID: "!room:matrix.example", eventID: "$event:matrix.example")
 
@@ -277,7 +365,8 @@ final class RoomReadMarkerServiceTests: XCTestCase {
         let service = MatrixRoomReadMarkerService(
             sessionStore: sessionStore,
             clientStore: clientStore,
-            httpClient: http
+            httpClient: http,
+            writeRetryDelaysNanoseconds: [0]
         )
 
         let didMark = await service.markRoomAsRead(roomID: "!room:matrix.example")
@@ -294,7 +383,8 @@ final class RoomReadMarkerServiceTests: XCTestCase {
         let service = MatrixRoomReadMarkerService(
             sessionStore: sessionStore,
             clientStore: clientStore,
-            httpClient: http
+            httpClient: http,
+            writeRetryDelaysNanoseconds: [0]
         )
 
         let didMark = await service.markFullyRead(roomID: "!room:matrix.example", eventID: "$middle")
@@ -311,7 +401,8 @@ final class RoomReadMarkerServiceTests: XCTestCase {
         let service = MatrixRoomReadMarkerService(
             sessionStore: sessionStore,
             clientStore: clientStore,
-            httpClient: http
+            httpClient: http,
+            writeRetryDelaysNanoseconds: [0]
         )
 
         let didMark = await service.markRoomAsRead(roomID: "!room:matrix.example")
@@ -386,11 +477,11 @@ private actor RecordingReadMarkerClientStore: RoomReadMarkerClientStoring {
         self.failsClear = failsClear
     }
 
-    func latestEventID(roomID: String, session: AuthenticatedSession) async throws -> String? {
+    func latestEventID(roomID _: String, session _: AuthenticatedSession) async throws -> String? {
         latestEventIDValue
     }
 
-    func clearMarkedUnread(roomID: String, session: AuthenticatedSession) async throws {
+    func clearMarkedUnread(roomID: String, session _: AuthenticatedSession) async throws {
         clearAttempts += 1
         if failsClear {
             throw URLError(.cannotWriteToFile)
@@ -479,6 +570,32 @@ private actor GatedReadMarkerHTTPClient: RoomReadMarkerHTTPClient {
             }
         }
         countWaiters = unsettled
+    }
+}
+
+private actor SequencedReadMarkerHTTPClient: RoomReadMarkerHTTPClient {
+    private var statusCodes: [Int]
+    private var requests: [URLRequest] = []
+
+    init(statusCodes: [Int]) {
+        self.statusCodes = statusCodes
+    }
+
+    func data(for request: URLRequest) async throws -> (Data, URLResponse) {
+        requests.append(request)
+        let statusCode = statusCodes.isEmpty ? 500 : statusCodes.removeFirst()
+        let url = request.url ?? URL(string: "https://matrix.example")!
+        let response = HTTPURLResponse(
+            url: url,
+            statusCode: statusCode,
+            httpVersion: nil,
+            headerFields: nil
+        )!
+        return (Data("{}".utf8), response)
+    }
+
+    func requestCount() -> Int {
+        requests.count
     }
 }
 

@@ -113,6 +113,83 @@ final class StableTimelineViewportTests: XCTestCase {
         )
     }
 
+    func testReadMarkerQueueHasMaximumLatencyAndFlushesOnRoomSwitch() {
+        let firstQueuedAt = Date(timeIntervalSince1970: 100)
+
+        XCTAssertEqual(
+            RoomTimelineReadMarkerQueuePolicy.delayNanoseconds(
+                firstQueuedAt: firstQueuedAt,
+                now: firstQueuedAt.addingTimeInterval(1.75),
+                debounceNanoseconds: 1_000_000_000,
+                maximumLatencyNanoseconds: 2_000_000_000
+            ),
+            250_000_000
+        )
+        XCTAssertEqual(
+            RoomTimelineReadMarkerQueuePolicy.flushCandidate(
+                pendingEventID: "$new-server-event",
+                lastCandidateEventID: "$older-server-event",
+                lastMarkedEventID: nil
+            ),
+            "$new-server-event"
+        )
+        XCTAssertNil(
+            RoomTimelineReadMarkerQueuePolicy.flushCandidate(
+                pendingEventID: nil,
+                lastCandidateEventID: "$already-marked",
+                lastMarkedEventID: "$already-marked"
+            )
+        )
+    }
+
+    func testMissingFocusRetriesAreBounded() {
+        XCTAssertTrue(StableTimelineViewportPolicy.shouldRetryMissingTarget(attempt: 1))
+        XCTAssertTrue(StableTimelineViewportPolicy.shouldRetryMissingTarget(attempt: 2))
+        XCTAssertFalse(StableTimelineViewportPolicy.shouldRetryMissingTarget(attempt: 3))
+        XCTAssertFalse(StableTimelineViewportPolicy.shouldRetryMissingTarget(attempt: 4))
+    }
+
+    func testAnimatedCommandSettlesForNoOpInterruptionTimeoutAndDelegate() {
+        XCTAssertTrue(StableTimelineViewportPolicy.animatedCommandSucceeded(
+            settlement: .noOp,
+            targetsLatest: false,
+            isTargetVisible: true,
+            isConfirmedPinned: false
+        ))
+        XCTAssertTrue(StableTimelineViewportPolicy.animatedCommandSucceeded(
+            settlement: .animationEnded,
+            targetsLatest: true,
+            isTargetVisible: true,
+            isConfirmedPinned: true
+        ))
+        XCTAssertFalse(StableTimelineViewportPolicy.animatedCommandSucceeded(
+            settlement: .userInterrupted,
+            targetsLatest: true,
+            isTargetVisible: true,
+            isConfirmedPinned: false
+        ))
+        XCTAssertFalse(StableTimelineViewportPolicy.animatedCommandSucceeded(
+            settlement: .timeout,
+            targetsLatest: true,
+            isTargetVisible: true,
+            isConfirmedPinned: false
+        ))
+    }
+
+    func testFocusedPlacementCompletionAllowsPaginationPolicy() {
+        XCTAssertTrue(
+            RoomTimelinePaginationPolicy.shouldLoadOlderHistory(
+                rowIndex: 0,
+                topThreshold: 3,
+                hasUserInteractedWithTimeline: true,
+                hasPositionedInitialTimeline: true,
+                isJumpingToLatest: false,
+                isPaginating: false,
+                hasReachedOldestMessages: false
+            )
+        )
+    }
+
     func testNonLiveTimelineAlwaysOffersJumpLatestEvenAtListBottom() {
         XCTAssertTrue(
             RoomTimelineJumpLatestPolicy.shouldShow(
