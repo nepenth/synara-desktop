@@ -19,6 +19,14 @@ protocol RoomReadMarkerClientStoring: AnyObject {
 
 extension MatrixRustSDKClientStore: RoomReadMarkerClientStoring {}
 
+enum MatrixServerEventIDPolicy {
+    static func canAcknowledge(_ eventID: String) -> Bool {
+        eventID.hasPrefix("$")
+            && eventID.hasPrefix("$pending-") == false
+            && eventID.hasPrefix("$local-") == false
+    }
+}
+
 final class MatrixRoomReadMarkerService: RoomReadMarkerServicing {
     private let sessionStore: AppSessionStore
     private let clientStore: RoomReadMarkerClientStoring?
@@ -26,46 +34,58 @@ final class MatrixRoomReadMarkerService: RoomReadMarkerServicing {
     private let jsonDecoder: JSONDecoder
     private let logger: LoggingServicing
     private let writeCoordinator = RoomReadMarkerWriteCoordinator()
+    private let markerCacheLock = NSLock()
+    private var markerCache: [String: String] = [:]
+    private let writeRetryDelaysNanoseconds: [UInt64]
 
     init(
         sessionStore: AppSessionStore,
         clientStore: RoomReadMarkerClientStoring? = nil,
         httpClient: RoomReadMarkerHTTPClient = URLSession.shared,
         jsonDecoder: JSONDecoder = JSONDecoder(),
-        logger: LoggingServicing = AppLogger()
+        logger: LoggingServicing = AppLogger(),
+        writeRetryDelaysNanoseconds: [UInt64] = [0, 250_000_000, 750_000_000]
     ) {
         self.sessionStore = sessionStore
         self.clientStore = clientStore
         self.httpClient = httpClient
         self.jsonDecoder = jsonDecoder
         self.logger = logger
+        self.writeRetryDelaysNanoseconds = writeRetryDelaysNanoseconds.isEmpty ? [0] : writeRetryDelaysNanoseconds
     }
 
     func fullyReadEventID(roomID: String) async -> String? {
-        guard case .signedIn(let session) = sessionStore.currentState else {
+        guard case let .signedIn(session) = sessionStore.currentState else {
             return nil
         }
 
         do {
             var request = URLRequest(url: fullyReadURL(session: session, roomID: roomID))
             request.httpMethod = "GET"
-            request.timeoutInterval = 0.75
+            request.timeoutInterval = 5
             request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
 
             let (data, response) = try await httpClient.data(for: request)
             guard let http = response as? HTTPURLResponse,
-                  http.statusCode == 200 else {
-                return nil
+                  http.statusCode == 200
+            else {
+                return cachedEventID(roomID: roomID, userID: session.userID)
             }
 
-            return try jsonDecoder.decode(RoomReadMarkerResponse.self, from: data).eventID
+            let eventID = try jsonDecoder.decode(RoomReadMarkerResponse.self, from: data).eventID
+            cache(eventID: eventID, roomID: roomID, userID: session.userID)
+            return eventID
         } catch {
-            return nil
+            return cachedEventID(roomID: roomID, userID: session.userID)
         }
     }
 
     func markFullyRead(roomID: String, eventID: String) async -> Bool {
-        guard case .signedIn(let session) = sessionStore.currentState else {
+        guard case let .signedIn(session) = sessionStore.currentState else {
+            return false
+        }
+        guard MatrixServerEventIDPolicy.canAcknowledge(eventID) else {
+            logger.info("Ignoring non-server read marker room=redacted", category: .sync)
             return false
         }
         return await submitReadMarkers(
@@ -103,20 +123,43 @@ final class MatrixRoomReadMarkerService: RoomReadMarkerServicing {
             return false
         }
 
+        for delay in writeRetryDelaysNanoseconds {
+            if delay > 0 {
+                try? await Task.sleep(nanoseconds: delay)
+            }
+            guard Task.isCancelled == false,
+                  sessionStore.currentState == .signedIn(session)
+            else {
+                return false
+            }
+            if await writeReadMarkersOnce(roomID: roomID, eventID: eventID, session: session) {
+                cache(eventID: eventID, roomID: roomID, userID: session.userID)
+                return true
+            }
+        }
+        return false
+    }
+
+    private func writeReadMarkersOnce(
+        roomID: String,
+        eventID: String,
+        session: AuthenticatedSession
+    ) async -> Bool {
         do {
             var request = URLRequest(url: readMarkersURL(session: session, roomID: roomID))
             request.httpMethod = "POST"
-            request.timeoutInterval = 2
+            request.timeoutInterval = 5
             request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             request.httpBody = try JSONSerialization.data(withJSONObject: [
                 "m.read": eventID,
-                "m.fully_read": eventID
+                "m.fully_read": eventID,
             ])
 
             let (_, response) = try await httpClient.data(for: request)
             guard let http = response as? HTTPURLResponse,
-                  (200...299).contains(http.statusCode) else {
+                  (200 ... 299).contains(http.statusCode)
+            else {
                 logger.info("Matrix read marker update failed room=redacted status=\((response as? HTTPURLResponse)?.statusCode ?? -1)", category: .sync)
                 return false
             }
@@ -127,8 +170,20 @@ final class MatrixRoomReadMarkerService: RoomReadMarkerServicing {
         }
     }
 
+    private func cache(eventID: String, roomID: String, userID: String) {
+        markerCacheLock.lock()
+        markerCache["\(userID)|\(roomID)"] = eventID
+        markerCacheLock.unlock()
+    }
+
+    private func cachedEventID(roomID: String, userID: String) -> String? {
+        markerCacheLock.lock()
+        defer { markerCacheLock.unlock() }
+        return markerCache["\(userID)|\(roomID)"]
+    }
+
     func markRoomAsRead(roomID: String) async -> Bool {
-        guard case .signedIn(let session) = sessionStore.currentState else {
+        guard case let .signedIn(session) = sessionStore.currentState else {
             return false
         }
         let sessionEpoch = sessionStore.sessionEpoch
@@ -141,9 +196,13 @@ final class MatrixRoomReadMarkerService: RoomReadMarkerServicing {
             guard let eventID = try await clientStore.latestEventID(roomID: roomID, session: session) else {
                 return false
             }
+            guard MatrixServerEventIDPolicy.canAcknowledge(eventID) else {
+                return false
+            }
 
             guard sessionStore.currentState == .signedIn(session),
-                  sessionStore.sessionEpoch == sessionEpoch else {
+                  sessionStore.sessionEpoch == sessionEpoch
+            else {
                 return false
             }
             guard await submitReadMarkers(
@@ -155,7 +214,8 @@ final class MatrixRoomReadMarkerService: RoomReadMarkerServicing {
                 return false
             }
             guard sessionStore.currentState == .signedIn(session),
-                  sessionStore.sessionEpoch == sessionEpoch else {
+                  sessionStore.sessionEpoch == sessionEpoch
+            else {
                 return false
             }
             try await clientStore.clearMarkedUnread(roomID: roomID, session: session)
@@ -218,17 +278,16 @@ private actor RoomReadMarkerWriteCoordinator {
         await withCheckedContinuation { continuation in
             var state = roomStates[roomID] ?? RoomState()
 
-            if var lastPending = state.pending.last,
-               lastPending.sessionEpoch == sessionEpoch,
-               lastPending.eventID == eventID {
-                lastPending.waiters.append(continuation)
-                state.pending[state.pending.count - 1] = lastPending
-            } else if state.pending.isEmpty,
-                      var active = state.active,
-                      active.sessionEpoch == sessionEpoch,
-                      active.eventID == eventID {
+            if var active = state.active,
+               active.sessionEpoch == sessionEpoch,
+               active.eventID == eventID
+            {
                 active.waiters.append(continuation)
                 state.active = active
+            } else if let matchingIndex = state.pending.firstIndex(where: {
+                $0.sessionEpoch == sessionEpoch && $0.eventID == eventID
+            }) {
+                state.pending[matchingIndex].waiters.append(continuation)
             } else {
                 state.pending.append(PendingWrite(
                     sessionEpoch: sessionEpoch,
@@ -295,11 +354,11 @@ final class MockRoomReadMarkerService: RoomReadMarkerServicing {
         self.eventID = eventID
     }
 
-    func fullyReadEventID(roomID: String) async -> String? {
+    func fullyReadEventID(roomID _: String) async -> String? {
         eventID
     }
 
-    func markFullyRead(roomID: String, eventID: String) async -> Bool {
+    func markFullyRead(roomID _: String, eventID: String) async -> Bool {
         self.eventID = eventID
         return true
     }
