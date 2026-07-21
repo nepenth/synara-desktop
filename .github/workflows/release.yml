@@ -112,6 +112,7 @@ jobs:
           npm run test:browser:timeline
           npm run check:eslint
           npm run check:prettier
+          npm run check:security
         working-directory: synara
 
   exact-tag-ios-quality:

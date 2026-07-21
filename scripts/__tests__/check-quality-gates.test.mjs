@@ -21,6 +21,8 @@ jobs:
         working-directory: synara
       - run: npm run test:browser:timeline
         working-directory: synara
+      - run: npm run check:security
+        working-directory: synara
   ios-tests:
     runs-on: macos-latest
 ${iosBuildStep}
@@ -91,6 +93,7 @@ jobs:
           npm run test:browser:timeline
           npm run check:eslint
           npm run check:prettier
+          npm run check:security
         working-directory: synara
   exact-tag-ios-quality:
     needs: [validate]
@@ -165,6 +168,7 @@ test("rejects missing real-layout timeline execution", () => {
     for (const command of [
       "npx playwright install --with-deps chromium",
       "npm run test:browser:timeline",
+      "npm run check:security",
     ]) {
       const result = inspect({
         [override]: workflow.replace(command, `echo ${command}`),
