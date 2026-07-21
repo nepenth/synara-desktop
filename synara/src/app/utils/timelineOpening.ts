@@ -237,34 +237,6 @@ export const getTimelineWindowTailEventId = (timelineWindow: TimelineWindow): st
   getTimelineWindowTailEvent(timelineWindow)?.getId();
 
 /**
- * `MatrixClient.getLatestTimeline` may return a detached `/context` timeline
- * around the latest event rather than the room's current live timeline object.
- * The fetched tail event is therefore the authority for a jump until `/sync`
- * links that event into a replacement live timeline.
- */
-export const timelineWindowEndsAtEventId = (
-  timelineWindow: TimelineWindow,
-  eventId: string | undefined
-): boolean => Boolean(eventId && getTimelineWindowTailEventId(timelineWindow) === eventId);
-
-export const shouldCancelTimelineNavigationForRouteChange = (
-  previousRouteKey: string,
-  currentRouteKey: string,
-  expectedRouteKey?: string
-): boolean => previousRouteKey !== currentRouteKey && currentRouteKey !== expectedRouteKey;
-
-export const getPersistedLiveTailEventId = (
-  authoritativeTailEventId: string | undefined,
-  loadedLiveTailEventId: string | undefined
-): string | undefined => authoritativeTailEventId ?? loadedLiveTailEventId;
-
-export const shouldApplyLiveTailRefresh = (
-  requestId: number,
-  currentRequestId: number,
-  jumpPhase: 'idle' | 'loading' | 'settling' | 'error'
-): boolean => requestId === currentRequestId && jumpPhase !== 'loading' && jumpPhase !== 'settling';
-
-/**
  * Jump-to-Unread visibility.
  *
  * v1.2.28 only auto-opens at unread when the marker is inside the initial live-end

@@ -13,14 +13,10 @@ import {
   getTimelineRangeAfterPagination,
   getTimelineWindowTailEvent,
   getTimelineWindowTailEventId,
-  getPersistedLiveTailEventId,
   hasUnreadForInitialScroll,
   canRestoreViewportFromInitialTimeline,
-  shouldCancelTimelineNavigationForRouteChange,
-  shouldApplyLiveTailRefresh,
   shouldGateViewportRestoreOnUnread,
   shouldShowJumpToUnread,
-  timelineWindowEndsAtEventId,
   timelineWindowContainsEventId,
   timelineHasEvents,
 } from '../timelineOpening';
@@ -173,43 +169,8 @@ test('server-latest detached context windows remain authoritative at their fetch
 
   assert.equal(getTimelineWindowTailEvent(latestWindow)?.getId(), '$latest');
   assert.equal(getTimelineWindowTailEventId(latestWindow), '$latest');
-  assert.equal(timelineWindowEndsAtEventId(latestWindow, '$latest'), true);
-  assert.equal(timelineWindowEndsAtEventId(latestWindow, '$before'), false);
   assert.equal(getTimelineWindowTailEventId(getEmptyTimeline()), undefined);
   assert.equal(getTimelineWindowTailEvent(getEmptyTimeline()), undefined);
-});
-
-test('route navigation cancellation skips mount and the intentional post-jump route clear', () => {
-  const focusedRoute = '!room:example.org\u0000$focus';
-  const liveRoute = '!room:example.org\u0000';
-
-  assert.equal(
-    shouldCancelTimelineNavigationForRouteChange(focusedRoute, focusedRoute),
-    false,
-    'initial mount is not a route transition'
-  );
-  assert.equal(
-    shouldCancelTimelineNavigationForRouteChange(focusedRoute, liveRoute, liveRoute),
-    false,
-    'the post-jump permalink clear is intentional'
-  );
-  assert.equal(
-    shouldCancelTimelineNavigationForRouteChange(focusedRoute, liveRoute),
-    true,
-    'an unrelated route change invalidates in-flight navigation'
-  );
-});
-
-test('authoritative latest tails drive persistence until the live timeline catches up', () => {
-  assert.equal(getPersistedLiveTailEventId('$latest', '$older'), '$latest');
-  assert.equal(getPersistedLiveTailEventId(undefined, '$live'), '$live');
-});
-
-test('live-tail refresh cannot overwrite a newer jump request', () => {
-  assert.equal(shouldApplyLiveTailRefresh(3, 3, 'idle'), true);
-  assert.equal(shouldApplyLiveTailRefresh(3, 4, 'idle'), false);
-  assert.equal(shouldApplyLiveTailRefresh(3, 3, 'loading'), false);
-  assert.equal(shouldApplyLiveTailRefresh(3, 3, 'settling'), false);
 });
 
 test('timeline opening restore gate only accepts anchors inside the initial window', () => {
