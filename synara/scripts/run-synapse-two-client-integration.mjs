@@ -29,7 +29,7 @@ export function validateLocalHomeserverUrl(value) {
     url.hash
   ) {
     throw new SafeIntegrationError(
-      'SYNARA_SYNAPSE_URL must be an HTTP loopback origin with no credentials, path, query, or fragment.'
+      'SYNARA_SYNAPSE_URL must be an HTTP loopback origin with no credentials, path, query, or fragment.',
     );
   }
 
@@ -46,7 +46,7 @@ export function parseReceiptModes(value = 'both') {
 export async function pollUntil(
   description,
   predicate,
-  { timeoutMs = POLL_TIMEOUT_MS, intervalMs = 100 } = {}
+  { timeoutMs = POLL_TIMEOUT_MS, intervalMs = 100 } = {},
 ) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
@@ -128,7 +128,11 @@ export function selectLocalRegistrationAuth(errorData) {
     return session ? { session } : {};
   }
   if (stages.some((flowStages) => flowStages.length === 1 && flowStages[0] === 'm.login.dummy')) {
-    return { type: 'm.login.dummy', ...(session ? { session } : {}) };
+    // Synapse's verification-free registration contract accepts the dummy
+    // stage directly. Do not bind this disposable request to the discovery
+    // session: current Synapse validates the complete request without one,
+    // which also avoids carrying server-side UIAA state between retries.
+    return { type: 'm.login.dummy' };
   }
   throw new SafeIntegrationError('Registration requires an unsupported local UIAA flow.');
 }
@@ -161,7 +165,7 @@ function authenticatedClient(sdk, baseUrl, response) {
       userId: requireValue(response.user_id, 'Authentication omitted user_id.'),
       deviceId: requireValue(response.device_id, 'Authentication omitted device_id.'),
       accessToken: requireValue(response.access_token, 'Authentication omitted access_token.'),
-    })
+    }),
   );
 }
 
@@ -193,7 +197,7 @@ function assertSentOrder(events, sentIndex, description) {
   for (let index = 1; index < indexes.length; index += 1) {
     assertCondition(
       indexes[index] > indexes[index - 1],
-      `${description} did not preserve event order.`
+      `${description} did not preserve event order.`,
     );
   }
 }
@@ -212,7 +216,7 @@ async function runReceiptScenario(sdk, baseUrl, receiptMode) {
     const senderPassword = randomPassword();
 
     const deviceARegistration = await phase('Reader registration', () =>
-      registerAccount(sdk, baseUrl, userLocalpart, userPassword, 'Synara integration device A')
+      registerAccount(sdk, baseUrl, userLocalpart, userPassword, 'Synara integration device A'),
     );
     const loginClient = sdk.createClient(clientOptions(baseUrl));
     const deviceBLogin = await phase('Second-device login', () =>
@@ -221,10 +225,10 @@ async function runReceiptScenario(sdk, baseUrl, receiptMode) {
         identifier: { type: 'm.id.user', user: userLocalpart },
         password: userPassword,
         initial_device_display_name: 'Synara integration device B',
-      })
+      }),
     );
     const senderRegistration = await phase('Sender registration', () =>
-      registerAccount(sdk, baseUrl, senderLocalpart, senderPassword, 'Synara integration sender')
+      registerAccount(sdk, baseUrl, senderLocalpart, senderPassword, 'Synara integration sender'),
     );
 
     const deviceA = authenticatedClient(sdk, baseUrl, deviceARegistration);
@@ -255,7 +259,7 @@ async function runReceiptScenario(sdk, baseUrl, receiptMode) {
         sender.sendEvent(roomId, sdk.EventType.RoomMessage, {
           msgtype: sdk.MsgType.Text,
           body: `synara-integration-${receiptMode}-${index}`,
-        })
+        }),
       );
       sentIds.push(requireValue(response.event_id, 'A sent event omitted event_id.'));
     }
@@ -264,11 +268,11 @@ async function runReceiptScenario(sdk, baseUrl, receiptMode) {
     const markerEventId = sentIds[Math.floor(EVENT_COUNT / 2)];
 
     await pollUntil('device A receiving the marker event', () =>
-      deviceA.getRoom(roomId)?.findEventById(markerEventId)
+      deviceA.getRoom(roomId)?.findEventById(markerEventId),
     );
 
     console.log(
-      `[synapse-integration] ${receiptMode}: validating limited sync, context, and pagination.`
+      `[synapse-integration] ${receiptMode}: validating limited sync, context, and pagination.`,
     );
     await phase('Device B initial sync', () => startAndWait(deviceB, INITIAL_SYNC_LIMIT, sdk));
     const deviceBRoom = await pollUntil('device B joined-room state', () => {
@@ -280,35 +284,35 @@ async function runReceiptScenario(sdk, baseUrl, receiptMode) {
     assertSentOrder(initialMessages, sentIndex, 'Limited initial timeline');
     assertCondition(
       initialMessages.at(-1)?.getId() === lastEventId,
-      'Limited initial timeline did not end at the actual last event.'
+      'Limited initial timeline did not end at the actual last event.',
     );
     assertCondition(
       !initialMessages.some((event) => event.getId() === sentIds[0]),
-      'Initial sync was not limited, so pagination coverage is invalid.'
+      'Initial sync was not limited, so pagination coverage is invalid.',
     );
 
     const timelineSet = deviceBRoom.getUnfilteredTimelineSet();
     const contextTimeline = await phase('Context timeline load', () =>
-      deviceB.getEventTimeline(timelineSet, markerEventId)
+      deviceB.getEventTimeline(timelineSet, markerEventId),
     );
     requireValue(contextTimeline, 'Context endpoint did not return a timeline.');
     assertCondition(
       contextTimeline.getEvents().some((event) => event.getId() === markerEventId),
-      'Context timeline omitted the requested event.'
+      'Context timeline omitted the requested event.',
     );
     const beforePagination = messageEvents(contextTimeline, sdk);
     assertSentOrder(beforePagination, sentIndex, 'Context timeline');
     const earliestBefore = sentIndex.get(beforePagination[0]?.getId());
     assertCondition(
       Number.isInteger(earliestBefore) && earliestBefore > 0,
-      'Context timeline cannot exercise backwards pagination.'
+      'Context timeline cannot exercise backwards pagination.',
     );
 
     await phase('Backwards timeline pagination', () =>
       deviceB.paginateEventTimeline(contextTimeline, {
         backwards: true,
         limit: PAGE_SIZE,
-      })
+      }),
     );
     const afterPagination = messageEvents(contextTimeline, sdk);
     assertSentOrder(afterPagination, sentIndex, 'Paginated context timeline');
@@ -317,18 +321,18 @@ async function runReceiptScenario(sdk, baseUrl, receiptMode) {
       afterPagination.length > beforePagination.length &&
         Number.isInteger(earliestAfter) &&
         earliestAfter < earliestBefore,
-      'Backwards pagination did not add an earlier page.'
+      'Backwards pagination did not add an earlier page.',
     );
 
     const latestTimeline = await phase('Latest timeline load', () =>
-      deviceB.getLatestTimeline(timelineSet)
+      deviceB.getLatestTimeline(timelineSet),
     );
     requireValue(latestTimeline, 'Latest endpoint did not return a timeline.');
     const latestMessages = messageEvents(latestTimeline, sdk);
     assertSentOrder(latestMessages, sentIndex, 'Latest SDK timeline');
     assertCondition(
       latestMessages.at(-1)?.getId() === lastEventId,
-      'Latest SDK timeline did not end at the actual last event.'
+      'Latest SDK timeline did not end at the actual last event.',
     );
 
     console.log(`[synapse-integration] ${receiptMode}: validating cross-device read state.`);
@@ -345,15 +349,15 @@ async function runReceiptScenario(sdk, baseUrl, receiptMode) {
 
     const markerEvent = requireValue(
       deviceA.getRoom(roomId)?.findEventById(markerEventId),
-      'Device A lost the read-marker event.'
+      'Device A lost the read-marker event.',
     );
     await phase('Read-marker update', () =>
       deviceA.setRoomReadMarkers(
         roomId,
         markerEventId,
         receiptMode === 'public' ? markerEvent : undefined,
-        receiptMode === 'private' ? markerEvent : undefined
-      )
+        receiptMode === 'private' ? markerEvent : undefined,
+      ),
     );
 
     await pollUntil('device B read-state convergence', () => {

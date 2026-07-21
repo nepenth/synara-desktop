@@ -12,15 +12,15 @@ import {
 test("accepts only credential-free HTTP loopback homeserver origins", () => {
   assert.equal(
     validateLocalHomeserverUrl("http://127.0.0.1:8008"),
-    "http://127.0.0.1:8008"
+    "http://127.0.0.1:8008",
   );
   assert.equal(
     validateLocalHomeserverUrl("http://localhost:9008/"),
-    "http://localhost:9008"
+    "http://localhost:9008",
   );
   assert.equal(
     validateLocalHomeserverUrl("http://[::1]:8008"),
-    "http://[::1]:8008"
+    "http://[::1]:8008",
   );
 });
 
@@ -37,7 +37,7 @@ test("rejects production-capable or ambiguous homeserver URLs", () => {
     assert.throws(
       () => validateLocalHomeserverUrl(value),
       SafeIntegrationError,
-      value
+      value,
     );
   }
 });
@@ -52,14 +52,14 @@ test("expands the configured receipt mode deterministically", () => {
 test("selects only no-stage or dummy local registration UIAA flows", () => {
   assert.deepEqual(
     selectLocalRegistrationAuth({ session: "opaque", flows: [{ stages: [] }] }),
-    { session: "opaque" }
+    { session: "opaque" },
   );
   assert.deepEqual(
     selectLocalRegistrationAuth({
       session: "opaque",
       flows: [{ stages: ["m.login.dummy"] }],
     }),
-    { type: "m.login.dummy", session: "opaque" }
+    { type: "m.login.dummy" },
   );
   assert.throws(
     () =>
@@ -67,7 +67,7 @@ test("selects only no-stage or dummy local registration UIAA flows", () => {
         session: "opaque",
         flows: [{ stages: ["m.login.registration_token"] }],
       }),
-    /unsupported local UIAA flow/
+    /unsupported local UIAA flow/,
   );
 });
 
@@ -80,9 +80,9 @@ test("bounded polling returns a value and fails closed on timeout", async () => 
         attempts += 1;
         return attempts === 2 ? "ready" : undefined;
       },
-      { timeoutMs: 100, intervalMs: 1 }
+      { timeoutMs: 100, intervalMs: 1 },
     ),
-    "ready"
+    "ready",
   );
 
   await assert.rejects(
@@ -90,6 +90,6 @@ test("bounded polling returns a value and fails closed on timeout", async () => 
       timeoutMs: 5,
       intervalMs: 1,
     }),
-    /Timed out waiting for a bounded fixture/
+    /Timed out waiting for a bounded fixture/,
   );
 });
