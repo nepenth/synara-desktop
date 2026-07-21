@@ -2204,6 +2204,10 @@ final class MatrixRustSDKRoomListService: RoomListServicing {
         cachedRoomsSnapshot().first { $0.id == roomID }?.isAgentRoom ?? false
     }
 
+    func hasUnreadMessages(roomID: String) -> Bool {
+        cachedRoomsSnapshot().first { $0.id == roomID }?.unreadCount ?? 0 > 0
+    }
+
     func clearCache() {
         cacheLock.lock()
         defer { cacheLock.unlock() }
@@ -2507,7 +2511,7 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
             focus: .live,
             pageSize: 50,
             enrichProfiles: false,
-            paginateForwardWhenFocused: false
+            includeForwardContext: false
         )
     }
 
@@ -2697,14 +2701,13 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
                         // Fix: after attach, trigger small paginates. This causes the SDK to deliver the
                         // current items (via append/reset/push diffs) to *this* listener, populating the
                         // collector so future live diffs (including agent reactions/responses) apply
-                        // correctly. Matches Element X / other Rust SDK clients (attach listener then
-                        // populate via paginate/sync to end). Also ensures live focus catches up.
+                        // correctly. The active provider already determines live versus focused context;
+                        // never walk a focused provider forward through arbitrary room history.
                         //
                         // References: matrix-rust-sdk Timeline + TimelineDiff (append/set/reset/pushBack);
                         // probe in synara-ios/spikes; SDK sliding-sync / syncService live event delivery.
                         _ = try? await timeline.paginateForwards(numEvents: 0)
                         _ = try? await timeline.paginateBackwards(numEvents: 5)
-                        await Self.paginateFocusedTimelineForwardToLiveEnd(timeline)
 
                         mappingTask = Task { [weak self] in
                             guard let self else {
@@ -2813,7 +2816,7 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
             focus: .thread(rootEventID),
             pageSize: pageSize,
             enrichProfiles: false,
-            paginateForwardWhenFocused: true
+            includeForwardContext: true
         )
     }
 
@@ -2835,7 +2838,7 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
             focus: focus,
             pageSize: pageSize,
             enrichProfiles: enrichProfiles,
-            paginateForwardWhenFocused: focusedEventID != nil
+            includeForwardContext: focusedEventID != nil
         )
     }
 
@@ -2844,7 +2847,7 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
         focus: TimelineCacheFocus,
         pageSize: UInt16,
         enrichProfiles: Bool,
-        paginateForwardWhenFocused: Bool
+        includeForwardContext: Bool
     ) async -> TimelineLoadOutcome {
         guard case .signedIn(let session) = sessionStore.currentState else {
             return .empty
@@ -2866,8 +2869,8 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
             defer { handle.cancel() }
 
             var reachedTimelineStart = try await timeline.paginateBackwards(numEvents: pageSize)
-            if paginateForwardWhenFocused {
-                await Self.paginateFocusedTimelineForwardToLiveEnd(timeline)
+            if includeForwardContext {
+                _ = try? await timeline.paginateForwards(numEvents: pageSize)
             }
             var sdkItems = await Self.waitForMappedTimelineItems(
                 collector: collector,
@@ -3043,23 +3046,6 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
         return collector.items()
             .compactMap(Self.mapTimelineItem)
             .sorted { $0.timestamp < $1.timestamp }
-    }
-
-    private static func paginateFocusedTimelineForwardToLiveEnd(_ timeline: Timeline) async {
-        var iterations = 0
-        let maxIterations = 200
-
-        while iterations < maxIterations {
-            iterations += 1
-            do {
-                let hitEnd = try await timeline.paginateForwards(numEvents: 50)
-                if hitEnd {
-                    return
-                }
-            } catch {
-                return
-            }
-        }
     }
 
     private func loadOlderTimeline(roomID: String, beforeEventID: String, pageSize: UInt16) async -> TimelineLoadOutcome {
