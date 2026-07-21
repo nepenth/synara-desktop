@@ -314,6 +314,20 @@ export function inspectQualityGates({
     );
   }
 
+  for (const [jobLines, label] of [
+    [ciJobs.get("validate"), "CI desktop validation"],
+    [releaseJobs.get("exact-tag-desktop-quality"), "Exact-tag desktop validation"],
+  ]) {
+    for (const command of [
+      "npx playwright install --with-deps chromium",
+      "npm run test:browser:timeline",
+    ]) {
+      if (!hasRequiredCommandStep(jobLines, command, "synara")) {
+        errors.push(`${label} must execute ${command} in synara.`);
+      }
+    }
+  }
+
   const synapseError = synapseIntegrationJobError(
     ciJobs.get("synapse-integration")
   );
@@ -347,6 +361,7 @@ export function inspectQualityGates({
     ["cargo test --locked", "src-tauri"],
     ["npm run typecheck:modernization", "synara"],
     ["npm run test:modernization", "synara"],
+    ["npm run test:browser:timeline", "synara"],
     ["npm run check:eslint", "synara"],
     ["npm run check:prettier", "synara"],
   ]) {

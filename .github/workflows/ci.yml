@@ -45,6 +45,10 @@ jobs:
         run: npm ci
         working-directory: synara
 
+      - name: Install Chromium for timeline layout tests
+        run: npx playwright install --with-deps chromium
+        working-directory: synara
+
       - name: Check repository layout
         run: npm run check:repo-layout
 
@@ -80,6 +84,10 @@ jobs:
 
       - name: Test runtime modernization surface
         run: npm run test:modernization
+        working-directory: synara
+
+      - name: Test real-layout timeline scrolling
+        run: npm run test:browser:timeline
         working-directory: synara
 
       - name: Check runtime lint

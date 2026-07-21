@@ -16,6 +16,11 @@ const ciWorkflow = `
 jobs:
   validate:
     runs-on: ubuntu-latest
+    steps:
+      - run: npx playwright install --with-deps chromium
+        working-directory: synara
+      - run: npm run test:browser:timeline
+        working-directory: synara
   ios-tests:
     runs-on: macos-latest
 ${iosBuildStep}
@@ -66,6 +71,8 @@ jobs:
     needs: [validate]
     runs-on: ubuntu-latest
     steps:
+      - run: npx playwright install --with-deps chromium
+        working-directory: synara
       - run: |
           npm run check:repo-layout
           npm run check:versions
@@ -81,6 +88,7 @@ jobs:
       - run: |
           npm run typecheck:modernization
           npm run test:modernization
+          npm run test:browser:timeline
           npm run check:eslint
           npm run check:prettier
         working-directory: synara
@@ -147,6 +155,24 @@ const inspect = (overrides = {}) =>
 
 test("accepts complete CI and exact-tag release gates", () => {
   assert.deepEqual(inspect(), { ok: true, errors: [] });
+});
+
+test("rejects missing real-layout timeline execution", () => {
+  for (const [override, workflow] of [
+    ["ciWorkflow", ciWorkflow],
+    ["releaseWorkflow", releaseWorkflow],
+  ]) {
+    for (const command of [
+      "npx playwright install --with-deps chromium",
+      "npm run test:browser:timeline",
+    ]) {
+      const result = inspect({
+        [override]: workflow.replace(command, `echo ${command}`),
+      });
+      assert.equal(result.ok, false, `${override}: ${command}`);
+      assert.match(result.errors.join("\n"), /desktop validation.*must execute/i);
+    }
+  }
 });
 
 test("rejects an iOS build step with only a decoy script reference", () => {
