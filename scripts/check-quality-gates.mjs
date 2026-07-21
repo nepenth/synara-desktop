@@ -157,11 +157,18 @@ const executableLines = (run) =>
     .map((line) => line.trim())
     .filter((line) => line && !line.startsWith("#"));
 
+const SHELL_CONTROL_FLOW =
+  /(?:^|\s)(?:if|then|elif|else|fi|for|while|until|case|esac|do|done|select|function|exit|return|true|false)(?:\s|;|$)|&&|\|\||[;|<>(){}]|`|\$\(|\\$/;
+
+const hasUnconditionalCommand = (runLines, command) =>
+  runLines.includes(command) &&
+  runLines.every((line) => !SHELL_CONTROL_FLOW.test(line));
+
 function hasIosTestBuildStep(jobLines) {
   return parseSteps(jobLines).some((step) => {
     const runLines = executableLines(getStepRun(step));
     return (
-      runLines.includes("scripts/ci-build.sh") &&
+      hasUnconditionalCommand(runLines, "scripts/ci-build.sh") &&
       getScalar(step, "working-directory", 8) === "synara-ios" &&
       getStepEnvironment(step).get("RUN_IOS_TESTS") === "1"
     );
@@ -172,7 +179,7 @@ function hasRequiredCommandStep(jobLines, command, workingDirectory) {
   return parseSteps(jobLines ?? []).some((step) => {
     const runLines = executableLines(getStepRun(step));
     return (
-      runLines.includes(command) &&
+      hasUnconditionalCommand(runLines, command) &&
       getScalar(step, "working-directory", 8) === workingDirectory &&
       getScalar(step, "if", 8) === undefined &&
       getScalar(step, "continue-on-error", 8) === undefined
