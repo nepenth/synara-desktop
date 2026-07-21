@@ -150,13 +150,6 @@ final class StableTimelineViewportTests: XCTestCase {
         ))
     }
 
-    func testMissingFocusRetriesAreBounded() {
-        XCTAssertTrue(StableTimelineViewportPolicy.shouldRetryMissingTarget(attempt: 1))
-        XCTAssertTrue(StableTimelineViewportPolicy.shouldRetryMissingTarget(attempt: 2))
-        XCTAssertFalse(StableTimelineViewportPolicy.shouldRetryMissingTarget(attempt: 3))
-        XCTAssertFalse(StableTimelineViewportPolicy.shouldRetryMissingTarget(attempt: 4))
-    }
-
     func testAnimatedCommandSettlesForNoOpInterruptionTimeoutAndDelegate() {
         XCTAssertTrue(StableTimelineViewportPolicy.animatedCommandSucceeded(
             settlement: .noOp,
@@ -195,9 +188,14 @@ final class StableTimelineViewportTests: XCTestCase {
             isTargetVisible: true,
             isConfirmedPinned: true
         ))
-        XCTAssertTrue(StableTimelineViewportPolicy.shouldRetryMissingTarget(attempt: 1))
-        XCTAssertTrue(StableTimelineViewportPolicy.shouldRetryMissingTarget(attempt: 2))
-        XCTAssertFalse(StableTimelineViewportPolicy.shouldRetryMissingTarget(attempt: 3))
+        XCTAssertTrue(StableTimelineViewportPolicy.shouldScheduleCommandRetry(
+            firedRetryCount: 2,
+            hasScheduledRetry: false
+        ))
+        XCTAssertFalse(StableTimelineViewportPolicy.shouldScheduleCommandRetry(
+            firedRetryCount: 3,
+            hasScheduledRetry: false
+        ))
         XCTAssertTrue(RoomTimelineLatestCommandCompletionPolicy.shouldShowRecovery(success: false))
         XCTAssertFalse(RoomTimelineLatestCommandCompletionPolicy.shouldShowRecovery(success: true))
     }

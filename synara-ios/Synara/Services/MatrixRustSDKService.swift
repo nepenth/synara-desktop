@@ -1958,8 +1958,9 @@ enum RoomListAuthoritativePruningPolicy {
         cachedRoomIDs: Set<String>,
         dynamicSnapshotRoomIDs: Set<String>,
         requiresFullRemap: Bool,
-        hasReconciledCurrentCatchUpPage: Bool = false,
-        lastSuccessfulReconciliationAt: Date? = nil,
+        currentCatchUpPageCount: Int = 1,
+        lastAttemptedCatchUpPageCount: Int? = nil,
+        lastAttemptedAt: Date? = nil,
         now: Date = Date(),
         minimumInterval: TimeInterval = reconciliationInterval
     ) -> Bool {
@@ -1972,13 +1973,13 @@ enum RoomListAuthoritativePruningPolicy {
         guard cachedRoomIDs.isSubset(of: dynamicSnapshotRoomIDs) == false else {
             return false
         }
-        if hasReconciledCurrentCatchUpPage == false {
+        if lastAttemptedCatchUpPageCount != currentCatchUpPageCount {
             return true
         }
-        guard let lastSuccessfulReconciliationAt else {
+        guard let lastAttemptedAt else {
             return true
         }
-        return now.timeIntervalSince(lastSuccessfulReconciliationAt) >= minimumInterval
+        return now.timeIntervalSince(lastAttemptedAt) >= minimumInterval
     }
 }
 
@@ -2213,8 +2214,8 @@ final class MatrixRustSDKRoomListService: RoomListServicing {
             }
 
             var requestedPageCount = 1
-            var lastReconciledCatchUpPageCount: Int?
-            var lastSuccessfulReconciliationAt: Date?
+            var lastAttemptedCatchUpPageCount: Int?
+            var lastAuthoritativeReconciliationAttemptAt: Date?
             for await _ in roomUpdates.signals {
                 guard Task.isCancelled == false else {
                     return
@@ -2248,8 +2249,9 @@ final class MatrixRustSDKRoomListService: RoomListServicing {
                         cachedRoomIDs: Set(previousRooms.map(\.id)),
                         dynamicSnapshotRoomIDs: Set(snapshot.rooms.map { $0.id() }),
                         requiresFullRemap: snapshot.requiresFullRemap,
-                        hasReconciledCurrentCatchUpPage: lastReconciledCatchUpPageCount == requestedPageCount,
-                        lastSuccessfulReconciliationAt: lastSuccessfulReconciliationAt,
+                        currentCatchUpPageCount: requestedPageCount,
+                        lastAttemptedCatchUpPageCount: lastAttemptedCatchUpPageCount,
+                        lastAttemptedAt: lastAuthoritativeReconciliationAttemptAt,
                         now: Date()
                     )
                     if snapshot.isReconciliationHeartbeat,
@@ -2258,6 +2260,8 @@ final class MatrixRustSDKRoomListService: RoomListServicing {
                         continue
                     }
                     if shouldReconcileAuthoritativeMembership {
+                        lastAttemptedCatchUpPageCount = requestedPageCount
+                        lastAuthoritativeReconciliationAttemptAt = Date()
                         if let authoritativeRooms = try? await self.clientStore.rooms(session: session) {
                             let knownAuthoritativeRoomIDs = Set(authoritativeRooms.map { $0.id() })
                             let joinedOrInvitedRoomIDs = Set(authoritativeRooms.compactMap { room -> String? in
@@ -2274,8 +2278,6 @@ final class MatrixRustSDKRoomListService: RoomListServicing {
                                     joinedOrInvitedRoomIDs: joinedOrInvitedRoomIDs
                                 )
                             )
-                            lastReconciledCatchUpPageCount = requestedPageCount
-                            lastSuccessfulReconciliationAt = Date()
                         }
                     }
                     let summaries = await MatrixRoomListStateBuilder.incrementalRoomSummaries(
