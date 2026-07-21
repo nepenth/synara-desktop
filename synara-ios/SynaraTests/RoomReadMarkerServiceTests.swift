@@ -52,6 +52,105 @@ final class RoomReadMarkerServiceTests: XCTestCase {
         XCTAssertNil(eventID)
     }
 
+    func testReadMarkerFallsBackToLastSuccessfulValueAfterTransportFailure() async {
+        let http = SequencedReadMarkerHTTPClient(
+            statusCodes: [200, 503],
+            bodies: [#"{"event_id":"$cached:matrix.example"}"#, "{}"]
+        )
+        let sessionStore = AppSessionStore(currentState: .signedIn(makeSession()))
+        let service = MatrixRoomReadMarkerService(sessionStore: sessionStore, httpClient: http)
+
+        let fetched = await service.fullyReadEventID(roomID: "!room:matrix.example")
+        let fallback = await service.fullyReadEventID(roomID: "!room:matrix.example")
+
+        XCTAssertEqual(fetched, "$cached:matrix.example")
+        XCTAssertEqual(fallback, fetched)
+    }
+
+    func testStaleFetchCannotOverwriteMarkerWrittenWhileRequestWasInFlight() {
+        let cache = RoomReadMarkerCache()
+        let token = cache.beginFetch(roomID: "!room:matrix.example", userID: "@alice:matrix.example")
+        cache.publishWritten(
+            eventID: "$written",
+            roomID: "!room:matrix.example",
+            userID: "@alice:matrix.example"
+        )
+
+        let effectiveEventID = cache.publishFetched(
+            eventID: "$stale-fetch",
+            roomID: "!room:matrix.example",
+            userID: "@alice:matrix.example",
+            token: token
+        )
+
+        XCTAssertEqual(effectiveEventID, "$written")
+        XCTAssertEqual(
+            cache.snapshot(roomID: "!room:matrix.example", userID: "@alice:matrix.example").eventID,
+            "$written"
+        )
+    }
+
+    func testLatestIssuedFetchWinsRegardlessOfCompletionOrder() {
+        let olderCompletesFirst = RoomReadMarkerCache()
+        let olderToken = olderCompletesFirst.beginFetch(roomID: "!room", userID: "@alice")
+        let newerToken = olderCompletesFirst.beginFetch(roomID: "!room", userID: "@alice")
+        _ = olderCompletesFirst.publishFetched(
+            eventID: "$older",
+            roomID: "!room",
+            userID: "@alice",
+            token: olderToken
+        )
+        _ = olderCompletesFirst.publishFetched(
+            eventID: "$newer",
+            roomID: "!room",
+            userID: "@alice",
+            token: newerToken
+        )
+        XCTAssertEqual(olderCompletesFirst.snapshot(roomID: "!room", userID: "@alice").eventID, "$newer")
+
+        let newerCompletesFirst = RoomReadMarkerCache()
+        let delayedOlderToken = newerCompletesFirst.beginFetch(roomID: "!room", userID: "@alice")
+        let fastNewerToken = newerCompletesFirst.beginFetch(roomID: "!room", userID: "@alice")
+        _ = newerCompletesFirst.publishFetched(
+            eventID: "$newer",
+            roomID: "!room",
+            userID: "@alice",
+            token: fastNewerToken
+        )
+        let delayedResult = newerCompletesFirst.publishFetched(
+            eventID: "$older",
+            roomID: "!room",
+            userID: "@alice",
+            token: delayedOlderToken
+        )
+        XCTAssertEqual(delayedResult, "$newer")
+        XCTAssertEqual(newerCompletesFirst.snapshot(roomID: "!room", userID: "@alice").eventID, "$newer")
+
+        let newerFetchFails = RoomReadMarkerCache()
+        let viableOlderToken = newerFetchFails.beginFetch(roomID: "!room", userID: "@alice")
+        _ = newerFetchFails.beginFetch(roomID: "!room", userID: "@alice")
+        let viableResult = newerFetchFails.publishFetched(
+            eventID: "$older-but-successful",
+            roomID: "!room",
+            userID: "@alice",
+            token: viableOlderToken
+        )
+        XCTAssertEqual(viableResult, "$older-but-successful")
+        XCTAssertEqual(
+            newerFetchFails.snapshot(roomID: "!room", userID: "@alice").eventID,
+            "$older-but-successful"
+        )
+    }
+
+    func testCacheUsesStructuredUserAndRoomIdentity() {
+        let cache = RoomReadMarkerCache()
+        cache.publishWritten(eventID: "$first", roomID: "c", userID: "a|b")
+        cache.publishWritten(eventID: "$second", roomID: "b|c", userID: "a")
+
+        XCTAssertEqual(cache.snapshot(roomID: "c", userID: "a|b").eventID, "$first")
+        XCTAssertEqual(cache.snapshot(roomID: "b|c", userID: "a").eventID, "$second")
+    }
+
     func testMarkFullyReadReturnsFalseWhenSignedOut() async {
         let http = RecordingReadMarkerHTTPClient(statusCode: 200, body: #"{"event_id":"$event"}"#)
         let service = MatrixRoomReadMarkerService(sessionStore: AppSessionStore(), httpClient: http)
@@ -575,10 +674,12 @@ private actor GatedReadMarkerHTTPClient: RoomReadMarkerHTTPClient {
 
 private actor SequencedReadMarkerHTTPClient: RoomReadMarkerHTTPClient {
     private var statusCodes: [Int]
+    private var bodies: [String]
     private var requests: [URLRequest] = []
 
-    init(statusCodes: [Int]) {
+    init(statusCodes: [Int], bodies: [String] = []) {
         self.statusCodes = statusCodes
+        self.bodies = bodies
     }
 
     func data(for request: URLRequest) async throws -> (Data, URLResponse) {
@@ -591,7 +692,8 @@ private actor SequencedReadMarkerHTTPClient: RoomReadMarkerHTTPClient {
             httpVersion: nil,
             headerFields: nil
         )!
-        return (Data("{}".utf8), response)
+        let body = bodies.isEmpty ? "{}" : bodies.removeFirst()
+        return (Data(body.utf8), response)
     }
 
     func requestCount() -> Int {

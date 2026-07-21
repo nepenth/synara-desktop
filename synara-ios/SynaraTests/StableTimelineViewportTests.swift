@@ -140,6 +140,14 @@ final class StableTimelineViewportTests: XCTestCase {
                 lastMarkedEventID: "$already-marked"
             )
         )
+        XCTAssertTrue(RoomTimelineReadMarkerTaskPolicy.ownsInstalledTask(
+            installedGeneration: 8,
+            currentGeneration: 8
+        ))
+        XCTAssertFalse(RoomTimelineReadMarkerTaskPolicy.ownsInstalledTask(
+            installedGeneration: 8,
+            currentGeneration: 9
+        ))
     }
 
     func testMissingFocusRetriesAreBounded() {
