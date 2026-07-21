@@ -43,6 +43,7 @@ const SAFE_BOOLEAN_FIELDS = new Set([
   'confirmed',
   'fromLiveTimeline',
   'privateReceipt',
+  'publicReceipt',
   'hasConcreteHead',
   'preservedSummary',
   'activityChanged',
