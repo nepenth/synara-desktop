@@ -69,13 +69,20 @@ const getScalar = (lines, property, indent) => {
 function getList(lines, property, indent) {
   const block = getPropertyBlock(lines, property, indent);
   if (!block) return undefined;
+  const flowList = [block.inline, ...block.children.map((line) => line.trim())]
+    .join(" ")
+    .trim();
+  if (flowList.startsWith("[") && flowList.endsWith("]")) {
+    const body = flowList.slice(1, -1).trim();
+    return body
+      ? body
+          .split(",")
+          .map((item) => unquote(item))
+          .filter(Boolean)
+      : [];
+  }
   if (block.inline) {
-    const inline = block.inline.trim();
-    if (inline.startsWith("[") && inline.endsWith("]")) {
-      const body = inline.slice(1, -1).trim();
-      return body ? body.split(",").map((item) => unquote(item)) : [];
-    }
-    return [unquote(inline)];
+    return [unquote(block.inline)];
   }
 
   const values = [];
@@ -173,10 +180,13 @@ function hasRequiredCommandStep(jobLines, command, workingDirectory) {
   });
 }
 
-function synapseIntegrationJobError(jobLines) {
+function synapseIntegrationJobError(
+  jobLines,
+  expectedName = "Synapse two-client integration"
+) {
   if (!jobLines) return "job is missing";
-  if (getScalar(jobLines, "name", 4) !== "Synapse two-client integration") {
-    return "job name must be Synapse two-client integration";
+  if (getScalar(jobLines, "name", 4) !== expectedName) {
+    return `job name must be ${expectedName}`;
   }
 
   const timeout = Number(getScalar(jobLines, "timeout-minutes", 4));
@@ -316,7 +326,10 @@ export function inspectQualityGates({
 
   for (const [jobLines, label] of [
     [ciJobs.get("validate"), "CI desktop validation"],
-    [releaseJobs.get("exact-tag-desktop-quality"), "Exact-tag desktop validation"],
+    [
+      releaseJobs.get("exact-tag-desktop-quality"),
+      "Exact-tag desktop validation",
+    ],
   ]) {
     for (const command of [
       "npx playwright install --with-deps chromium",
@@ -333,6 +346,28 @@ export function inspectQualityGates({
     ciJobs.get("synapse-integration")
   );
   if (synapseError) errors.push(`CI Synapse integration ${synapseError}.`);
+
+  const releaseSynapseError = synapseIntegrationJobError(
+    releaseJobs.get("exact-tag-synapse-integration"),
+    "Exact-tag Synapse two-client integration"
+  );
+  if (releaseSynapseError) {
+    errors.push(`Exact-tag Synapse integration ${releaseSynapseError}.`);
+  }
+  if (
+    !sameList(
+      getList(
+        releaseJobs.get("exact-tag-synapse-integration") ?? [],
+        "needs",
+        4
+      ),
+      ["validate"]
+    )
+  ) {
+    errors.push(
+      "Release workflow exact-tag-synapse-integration needs must be exactly [validate]."
+    );
+  }
 
   const ciAggregateError = aggregateGateError(
     ciJobs.get("quality-gate"),
@@ -379,7 +414,12 @@ export function inspectQualityGates({
   const releaseAggregateError = aggregateGateError(
     releaseJobs.get("quality-gate"),
     "Exact-tag quality gate",
-    ["validate", "exact-tag-desktop-quality", "exact-tag-ios-quality"]
+    [
+      "validate",
+      "exact-tag-desktop-quality",
+      "exact-tag-ios-quality",
+      "exact-tag-synapse-integration",
+    ]
   );
   if (releaseAggregateError) {
     errors.push(`Release aggregate ${releaseAggregateError}.`);
