@@ -217,6 +217,39 @@ export const shouldGateViewportRestoreOnUnread = (hasUnreadSignal: boolean): boo
 export const timelineHasEvents = (timeline: TimelineWindow): boolean =>
   getTimelinesEventsCount(timeline.linkedTimelines) > 0;
 
+export const getTimelineWindowTailEventId = (
+  timelineWindow: TimelineWindow
+): string | undefined => {
+  if (timelineWindow.range.end <= timelineWindow.range.start) return undefined;
+
+  const targetIndex = timelineWindow.range.end - 1;
+  let absoluteIndex = 0;
+  for (const timeline of timelineWindow.linkedTimelines) {
+    for (const event of timeline.getEvents()) {
+      if (absoluteIndex === targetIndex) return event.getId();
+      absoluteIndex += 1;
+    }
+  }
+  return undefined;
+};
+
+/**
+ * `MatrixClient.getLatestTimeline` may return a detached `/context` timeline
+ * around the latest event rather than the room's current live timeline object.
+ * The fetched tail event is therefore the authority for a jump until `/sync`
+ * links that event into a replacement live timeline.
+ */
+export const timelineWindowEndsAtEventId = (
+  timelineWindow: TimelineWindow,
+  eventId: string | undefined
+): boolean => Boolean(eventId && getTimelineWindowTailEventId(timelineWindow) === eventId);
+
+export const shouldCancelTimelineNavigationForRouteChange = (
+  previousRouteKey: string,
+  currentRouteKey: string,
+  expectedRouteKey?: string
+): boolean => previousRouteKey !== currentRouteKey && currentRouteKey !== expectedRouteKey;
+
 /**
  * Jump-to-Unread visibility.
  *
