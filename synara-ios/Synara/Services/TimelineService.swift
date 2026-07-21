@@ -1012,16 +1012,31 @@ enum TimelineFixtures {
     }
 
     static func largeTimeline(count: Int = 10_000) -> [TimelineItem] {
-        var items: [TimelineItem] = []
-        items.reserveCapacity(count)
+        largeTimeline(indices: 0..<count)
+    }
 
-        for index in 0..<count {
+    static func largeTimeline(
+        indices: Range<Int>,
+        expandedMessageIndex: Int? = nil,
+        expandedLineCount: Int = 180
+    ) -> [TimelineItem] {
+        var items: [TimelineItem] = []
+        items.reserveCapacity(indices.count)
+
+        for index in indices {
+            let body: String
+            if index == expandedMessageIndex {
+                let lines = (1...max(1, expandedLineCount)).map { "Variable height line \($0)" }
+                body = (["Expanded variable-height message \(index)"] + lines).joined(separator: "\n")
+            } else {
+                body = "Synthetic message \(index)"
+            }
             let item = TimelineItem(
                 id: "$synthetic-\(index):matrix.org",
                 eventID: "$synthetic-\(index):matrix.org",
                 senderID: index % 2 == 0 ? "@alice:matrix.org" : "@bob:matrix.org",
                 timestamp: baseDate.addingTimeInterval(TimeInterval(index)),
-                kind: .text("Synthetic message \(index)"),
+                kind: .text(body),
                 replyToEventID: nil,
                 isEdited: false,
                 reactions: [:]
