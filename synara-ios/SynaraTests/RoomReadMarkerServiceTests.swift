@@ -79,7 +79,7 @@ final class RoomReadMarkerServiceTests: XCTestCase {
         XCTAssertNil(payload["event_id"])
     }
 
-    func testMarkFullyReadDoesNotResendAlreadySuccessfulEvent() async {
+    func testMarkFullyReadResendsSuccessfulEventWithoutCrossSessionMemoization() async {
         let http = RecordingReadMarkerHTTPClient(statusCode: 200, body: "{}")
         let sessionStore = AppSessionStore(currentState: .signedIn(makeSession()))
         let service = MatrixRoomReadMarkerService(sessionStore: sessionStore, httpClient: http)
@@ -89,7 +89,175 @@ final class RoomReadMarkerServiceTests: XCTestCase {
 
         XCTAssertTrue(firstResult)
         XCTAssertTrue(duplicateResult)
-        XCTAssertEqual(http.requests.count, 1)
+        XCTAssertEqual(http.requests.count, 2)
+    }
+
+    func testConcurrentDifferentMarkersRemainSerialAndSettleExactWaiters() async throws {
+        let http = GatedReadMarkerHTTPClient()
+        let sessionStore = AppSessionStore(currentState: .signedIn(makeSession()))
+        let service = MatrixRoomReadMarkerService(sessionStore: sessionStore, httpClient: http)
+
+        let first = Task { await service.markFullyRead(roomID: "!room:matrix.example", eventID: "$first") }
+        await http.waitUntilRequestCount(1)
+        let second = Task { await service.markFullyRead(roomID: "!room:matrix.example", eventID: "$second") }
+        await Task.yield()
+        let third = Task { await service.markFullyRead(roomID: "!room:matrix.example", eventID: "$third") }
+        await Task.yield()
+
+        let activeRequestCount = await http.requestCount()
+        XCTAssertEqual(activeRequestCount, 1)
+        await http.completeNext(statusCode: 200)
+        await http.waitUntilRequestCount(2)
+        let secondNetworkEventID = try await http.nextPendingEventID()
+        await http.completeNext(statusCode: secondNetworkEventID == "$second" ? 500 : 200)
+        await http.waitUntilRequestCount(3)
+        let thirdNetworkEventID = try await http.nextPendingEventID()
+        await http.completeNext(statusCode: thirdNetworkEventID == "$second" ? 500 : 200)
+
+        let firstResult = await first.value
+        let secondResult = await second.value
+        let thirdResult = await third.value
+        let submittedEventIDs = try await http.submittedEventIDs()
+        XCTAssertTrue(firstResult)
+        XCTAssertFalse(secondResult)
+        XCTAssertTrue(thirdResult)
+        XCTAssertEqual(submittedEventIDs.first, "$first")
+        XCTAssertEqual(Set(submittedEventIDs.dropFirst()), Set(["$second", "$third"]))
+        XCTAssertEqual(submittedEventIDs.count, 3)
+    }
+
+    func testIdenticalMarkerRequestsCoalesceOnlyWhileAdjacentAndInFlight() async throws {
+        let http = GatedReadMarkerHTTPClient()
+        let sessionStore = AppSessionStore(currentState: .signedIn(makeSession()))
+        let service = MatrixRoomReadMarkerService(sessionStore: sessionStore, httpClient: http)
+
+        let first = Task { await service.markFullyRead(roomID: "!room:matrix.example", eventID: "$same") }
+        await http.waitUntilRequestCount(1)
+        let duplicate = Task { await service.markFullyRead(roomID: "!room:matrix.example", eventID: "$same") }
+        await Task.yield()
+        await http.completeNext(statusCode: 200)
+
+        let firstResult = await first.value
+        let duplicateResult = await duplicate.value
+        let submittedEventIDs = try await http.submittedEventIDs()
+        XCTAssertTrue(firstResult)
+        XCTAssertTrue(duplicateResult)
+        XCTAssertEqual(submittedEventIDs, ["$same"])
+    }
+
+    func testCoalescedWaitersShareFailureAndLaterRetryStillWrites() async throws {
+        let http = GatedReadMarkerHTTPClient()
+        let sessionStore = AppSessionStore(currentState: .signedIn(makeSession()))
+        let service = MatrixRoomReadMarkerService(sessionStore: sessionStore, httpClient: http)
+
+        let first = Task { await service.markFullyRead(roomID: "!room:matrix.example", eventID: "$same") }
+        await http.waitUntilRequestCount(1)
+        let duplicate = Task { await service.markFullyRead(roomID: "!room:matrix.example", eventID: "$same") }
+        await Task.yield()
+        await http.completeNext(statusCode: 500)
+        let firstResult = await first.value
+        let duplicateResult = await duplicate.value
+
+        let retry = Task { await service.markFullyRead(roomID: "!room:matrix.example", eventID: "$same") }
+        await http.waitUntilRequestCount(2)
+        await http.completeNext(statusCode: 200)
+        let retryResult = await retry.value
+
+        let submittedEventIDs = try await http.submittedEventIDs()
+        XCTAssertFalse(firstResult)
+        XCTAssertFalse(duplicateResult)
+        XCTAssertTrue(retryResult)
+        XCTAssertEqual(submittedEventIDs, ["$same", "$same"])
+    }
+
+    func testRegressionMarkerAfterNewerRequestIsNotFoldedIntoEarlierWrite() async throws {
+        let http = GatedReadMarkerHTTPClient()
+        let sessionStore = AppSessionStore(currentState: .signedIn(makeSession()))
+        let service = MatrixRoomReadMarkerService(sessionStore: sessionStore, httpClient: http)
+
+        let first = Task { await service.markFullyRead(roomID: "!room:matrix.example", eventID: "$older") }
+        await http.waitUntilRequestCount(1)
+        let newer = Task { await service.markFullyRead(roomID: "!room:matrix.example", eventID: "$newer") }
+        await Task.yield()
+        await http.completeNext(statusCode: 200)
+        await http.waitUntilRequestCount(2)
+        let regression = Task { await service.markFullyRead(roomID: "!room:matrix.example", eventID: "$older") }
+        await Task.yield()
+        await http.completeNext(statusCode: 200)
+        await http.waitUntilRequestCount(3)
+        await http.completeNext(statusCode: 200)
+
+        let results = await [first.value, newer.value, regression.value]
+        let submittedEventIDs = try await http.submittedEventIDs()
+        XCTAssertEqual(results, [true, true, true])
+        XCTAssertEqual(submittedEventIDs, ["$older", "$newer", "$older"])
+    }
+
+    func testFailedMarkerCanRetryTheSameExactEvent() async throws {
+        let http = GatedReadMarkerHTTPClient()
+        let sessionStore = AppSessionStore(currentState: .signedIn(makeSession()))
+        let service = MatrixRoomReadMarkerService(sessionStore: sessionStore, httpClient: http)
+
+        let first = Task { await service.markFullyRead(roomID: "!room:matrix.example", eventID: "$retry") }
+        await http.waitUntilRequestCount(1)
+        await http.completeNext(statusCode: 503)
+        let firstResult = await first.value
+        let retry = Task { await service.markFullyRead(roomID: "!room:matrix.example", eventID: "$retry") }
+        await http.waitUntilRequestCount(2)
+        await http.completeNext(statusCode: 200)
+        let retryResult = await retry.value
+
+        let submittedEventIDs = try await http.submittedEventIDs()
+        XCTAssertFalse(firstResult)
+        XCTAssertTrue(retryResult)
+        XCTAssertEqual(submittedEventIDs, ["$retry", "$retry"])
+    }
+
+    func testLogoutAndLoginResendsSameMarkerWithNewSession() async throws {
+        let http = RecordingReadMarkerHTTPClient(statusCode: 200, body: "{}")
+        let sessionStore = AppSessionStore(currentState: .signedIn(makeSession(accessToken: "first-token")))
+        let service = MatrixRoomReadMarkerService(sessionStore: sessionStore, httpClient: http)
+
+        let firstResult = await service.markFullyRead(roomID: "!room:matrix.example", eventID: "$event")
+        try sessionStore.signOut()
+        try sessionStore.completeLogin(makeSession(accessToken: "second-token"))
+        let secondResult = await service.markFullyRead(roomID: "!room:matrix.example", eventID: "$event")
+
+        XCTAssertTrue(firstResult)
+        XCTAssertTrue(secondResult)
+        XCTAssertEqual(http.requests.count, 2)
+        XCTAssertEqual(http.requests[0].value(forHTTPHeaderField: "Authorization"), "Bearer first-token")
+        XCTAssertEqual(http.requests[1].value(forHTTPHeaderField: "Authorization"), "Bearer second-token")
+    }
+
+    func testNewSessionMarkerDoesNotCoalesceWithSameEventInFlightFromOldSession() async throws {
+        let http = GatedReadMarkerHTTPClient()
+        let sessionStore = AppSessionStore(currentState: .signedIn(makeSession(accessToken: "first-token")))
+        let service = MatrixRoomReadMarkerService(sessionStore: sessionStore, httpClient: http)
+
+        let oldSessionWrite = Task {
+            await service.markFullyRead(roomID: "!room:matrix.example", eventID: "$same-event")
+        }
+        await http.waitUntilRequestCount(1)
+        try sessionStore.signOut()
+        try sessionStore.completeLogin(makeSession(accessToken: "second-token"))
+        let newSessionWrite = Task {
+            await service.markFullyRead(roomID: "!room:matrix.example", eventID: "$same-event")
+        }
+        await Task.yield()
+
+        let requestCountWhileOldWriteIsActive = await http.requestCount()
+        XCTAssertEqual(requestCountWhileOldWriteIsActive, 1)
+        await http.completeNext(statusCode: 200)
+        await http.waitUntilRequestCount(2)
+        await http.completeNext(statusCode: 200)
+
+        let oldResult = await oldSessionWrite.value
+        let newResult = await newSessionWrite.value
+        let authorizationHeaders = await http.authorizationHeaders()
+        XCTAssertTrue(oldResult)
+        XCTAssertTrue(newResult)
+        XCTAssertEqual(authorizationHeaders, ["Bearer first-token", "Bearer second-token"])
     }
 
     func testMarkFullyReadReturnsFalseForNonSuccessStatus() async {
@@ -102,6 +270,92 @@ final class RoomReadMarkerServiceTests: XCTestCase {
         XCTAssertFalse(didMark)
     }
 
+    func testMarkRoomAsReadClearsExplicitUnreadOnlyAfterMarkersSucceed() async {
+        let http = RecordingReadMarkerHTTPClient(statusCode: 200, body: "{}")
+        let sessionStore = AppSessionStore(currentState: .signedIn(makeSession()))
+        let clientStore = RecordingReadMarkerClientStore(latestEventID: "$latest")
+        let service = MatrixRoomReadMarkerService(
+            sessionStore: sessionStore,
+            clientStore: clientStore,
+            httpClient: http
+        )
+
+        let didMark = await service.markRoomAsRead(roomID: "!room:matrix.example")
+
+        let clearedRoomIDs = await clientStore.clearedRoomIDs
+        XCTAssertTrue(didMark)
+        XCTAssertEqual(clearedRoomIDs, ["!room:matrix.example"])
+    }
+
+    func testMidTimelineMarkNeverClearsExplicitUnread() async {
+        let http = RecordingReadMarkerHTTPClient(statusCode: 200, body: "{}")
+        let sessionStore = AppSessionStore(currentState: .signedIn(makeSession()))
+        let clientStore = RecordingReadMarkerClientStore(latestEventID: "$latest")
+        let service = MatrixRoomReadMarkerService(
+            sessionStore: sessionStore,
+            clientStore: clientStore,
+            httpClient: http
+        )
+
+        let didMark = await service.markFullyRead(roomID: "!room:matrix.example", eventID: "$middle")
+
+        let clearedRoomIDs = await clientStore.clearedRoomIDs
+        XCTAssertTrue(didMark)
+        XCTAssertTrue(clearedRoomIDs.isEmpty)
+    }
+
+    func testMarkRoomAsReadDoesNotClearExplicitUnreadWhenMarkerFails() async {
+        let http = RecordingReadMarkerHTTPClient(statusCode: 500, body: "{}")
+        let sessionStore = AppSessionStore(currentState: .signedIn(makeSession()))
+        let clientStore = RecordingReadMarkerClientStore(latestEventID: "$latest")
+        let service = MatrixRoomReadMarkerService(
+            sessionStore: sessionStore,
+            clientStore: clientStore,
+            httpClient: http
+        )
+
+        let didMark = await service.markRoomAsRead(roomID: "!room:matrix.example")
+
+        let clearedRoomIDs = await clientStore.clearedRoomIDs
+        XCTAssertFalse(didMark)
+        XCTAssertTrue(clearedRoomIDs.isEmpty)
+    }
+
+    func testMarkRoomAsReadDoesNotClearExplicitUnreadWithoutLatestEvent() async {
+        let http = RecordingReadMarkerHTTPClient(statusCode: 200, body: "{}")
+        let sessionStore = AppSessionStore(currentState: .signedIn(makeSession()))
+        let clientStore = RecordingReadMarkerClientStore(latestEventID: nil)
+        let service = MatrixRoomReadMarkerService(
+            sessionStore: sessionStore,
+            clientStore: clientStore,
+            httpClient: http
+        )
+
+        let didMark = await service.markRoomAsRead(roomID: "!room:matrix.example")
+
+        let clearedRoomIDs = await clientStore.clearedRoomIDs
+        XCTAssertFalse(didMark)
+        XCTAssertTrue(clearedRoomIDs.isEmpty)
+        XCTAssertTrue(http.requests.isEmpty)
+    }
+
+    func testMarkRoomAsReadReportsFailureWhenExplicitUnreadCannotBeCleared() async {
+        let http = RecordingReadMarkerHTTPClient(statusCode: 200, body: "{}")
+        let sessionStore = AppSessionStore(currentState: .signedIn(makeSession()))
+        let clientStore = RecordingReadMarkerClientStore(latestEventID: "$latest", failsClear: true)
+        let service = MatrixRoomReadMarkerService(
+            sessionStore: sessionStore,
+            clientStore: clientStore,
+            httpClient: http
+        )
+
+        let didMark = await service.markRoomAsRead(roomID: "!room:matrix.example")
+
+        let clearAttempts = await clientStore.clearAttempts
+        XCTAssertFalse(didMark)
+        XCTAssertEqual(clearAttempts, 1)
+    }
+
     func testMockMarkRoomAsReadUsesLatestEventMarker() async {
         let service = MockRoomReadMarkerService()
 
@@ -111,13 +365,120 @@ final class RoomReadMarkerServiceTests: XCTestCase {
         XCTAssertEqual(service.eventID, "$latest:!room:matrix.example")
     }
 
-    private func makeSession() -> AuthenticatedSession {
+    private func makeSession(accessToken: String = "token") -> AuthenticatedSession {
         AuthenticatedSession(
             userID: "@test:matrix.example",
             deviceID: "DEVICE",
             homeserverURL: URL(string: "https://matrix.example")!,
-            accessToken: "token"
+            accessToken: accessToken
         )
+    }
+}
+
+private actor RecordingReadMarkerClientStore: RoomReadMarkerClientStoring {
+    let latestEventIDValue: String?
+    let failsClear: Bool
+    private(set) var clearedRoomIDs: [String] = []
+    private(set) var clearAttempts = 0
+
+    init(latestEventID: String?, failsClear: Bool = false) {
+        latestEventIDValue = latestEventID
+        self.failsClear = failsClear
+    }
+
+    func latestEventID(roomID: String, session: AuthenticatedSession) async throws -> String? {
+        latestEventIDValue
+    }
+
+    func clearMarkedUnread(roomID: String, session: AuthenticatedSession) async throws {
+        clearAttempts += 1
+        if failsClear {
+            throw URLError(.cannotWriteToFile)
+        }
+        clearedRoomIDs.append(roomID)
+    }
+}
+
+private actor GatedReadMarkerHTTPClient: RoomReadMarkerHTTPClient {
+    private struct PendingRequest {
+        let request: URLRequest
+        let continuation: CheckedContinuation<(Data, URLResponse), Error>
+    }
+
+    private struct CountWaiter {
+        let count: Int
+        let continuation: CheckedContinuation<Void, Never>
+    }
+
+    private var requests: [URLRequest] = []
+    private var pendingRequests: [PendingRequest] = []
+    private var countWaiters: [CountWaiter] = []
+
+    func data(for request: URLRequest) async throws -> (Data, URLResponse) {
+        try await withCheckedThrowingContinuation { continuation in
+            requests.append(request)
+            pendingRequests.append(PendingRequest(request: request, continuation: continuation))
+            settleCountWaiters()
+        }
+    }
+
+    func waitUntilRequestCount(_ count: Int) async {
+        guard requests.count < count else {
+            return
+        }
+        await withCheckedContinuation { continuation in
+            countWaiters.append(CountWaiter(count: count, continuation: continuation))
+        }
+    }
+
+    func requestCount() -> Int {
+        requests.count
+    }
+
+    func completeNext(statusCode: Int, body: String = "{}") {
+        guard pendingRequests.isEmpty == false else {
+            return
+        }
+        let pending = pendingRequests.removeFirst()
+        let url = pending.request.url ?? URL(string: "https://matrix.example")!
+        let response = HTTPURLResponse(
+            url: url,
+            statusCode: statusCode,
+            httpVersion: nil,
+            headerFields: nil
+        )!
+        pending.continuation.resume(returning: (Data(body.utf8), response))
+    }
+
+    func nextPendingEventID() throws -> String {
+        let request = try XCTUnwrap(pendingRequests.first?.request)
+        let body = try XCTUnwrap(request.httpBody)
+        let payload = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: String])
+        return try XCTUnwrap(payload["m.fully_read"])
+    }
+
+    func submittedEventIDs() throws -> [String] {
+        try requests.map { request in
+            let body = try XCTUnwrap(request.httpBody)
+            let payload = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: String])
+            return try XCTUnwrap(payload["m.fully_read"])
+        }
+    }
+
+    func authorizationHeaders() -> [String] {
+        requests.compactMap { $0.value(forHTTPHeaderField: "Authorization") }
+    }
+
+    private func settleCountWaiters() {
+        var unsettled: [CountWaiter] = []
+        for waiter in countWaiters {
+            if requests.count >= waiter.count {
+                waiter.continuation.resume()
+            } else {
+                unsettled.append(waiter)
+            }
+        }
+        countWaiters = unsettled
     }
 }
 
