@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Synara deterministic timeline harness</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family: Inter, system-ui, sans-serif;
+        background: #11151c;
+        color: #e9eef8;
+      }
+
+      body {
+        box-sizing: border-box;
+        display: grid;
+        height: 100vh;
+        margin: 0;
+        padding: 24px;
+        place-items: center;
+      }
+
+      #app {
+        display: grid;
+        gap: 12px;
+        grid-template-rows: auto minmax(0, 1fr);
+        height: min(820px, calc(100vh - 48px));
+        width: min(920px, calc(100vw - 48px));
+      }
+
+      #status-bar {
+        align-items: center;
+        display: flex;
+        justify-content: space-between;
+        min-height: 36px;
+      }
+
+      #jump-latest {
+        background: #356df3;
+        border: 0;
+        border-radius: 999px;
+        color: white;
+        cursor: pointer;
+        padding: 8px 14px;
+      }
+
+      #jump-latest[hidden] {
+        display: none;
+      }
+
+      #timeline {
+        border: 1px solid #384357;
+        border-radius: 12px;
+        overflow-anchor: none;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        position: relative;
+        scrollbar-gutter: stable;
+      }
+
+      #rows {
+        display: flex;
+        flex-direction: column;
+      }
+
+      .event-row {
+        background: #171d27;
+        border-bottom: 1px solid #2c3545;
+        box-sizing: border-box;
+        padding: 8px 12px;
+      }
+
+      .event-id {
+        color: #8fa3c5;
+        font: 11px/16px ui-monospace, monospace;
+        margin-bottom: 4px;
+      }
+
+      .event-body {
+        font-family: Inter, system-ui, sans-serif;
+        margin: 0;
+        overflow-wrap: anywhere;
+        white-space: pre-wrap;
+      }
+
+      .event-extra {
+        background: #273349;
+        border-radius: 6px;
+        margin-top: 6px;
+      }
+    </style>
+  </head>
+  <body>
+    <main id="app" data-phase="idle">
+      <header id="status-bar">
+        <span id="room-label">No room</span>
+        <button id="jump-latest" type="button" hidden>Jump to latest</button>
+      </header>
+      <section id="timeline" aria-label="Timeline test viewport" tabindex="0">
+        <div id="rows"></div>
+      </section>
+    </main>
+    <script type="module" src="/timeline-harness/harness.js"></script>
+  </body>
+</html>
