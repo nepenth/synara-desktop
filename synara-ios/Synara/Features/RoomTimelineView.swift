@@ -157,6 +157,12 @@ enum RoomTimelineJumpLatestPolicy {
     }
 }
 
+enum RoomTimelineLatestCommandCompletionPolicy {
+    static func shouldShowRecovery(success: Bool) -> Bool {
+        success == false
+    }
+}
+
 enum RoomTypingPresentation {
     static func displayName(for userID: String) -> String {
         let localPart = userID.split(separator: ":", maxSplits: 1).first.map(String.init) ?? userID
@@ -2155,6 +2161,10 @@ struct RoomTimelineView: View {
             if success {
                 timelinePosition = .followingLive
                 showJumpToLatest = false
+            } else {
+                showJumpToLatest = RoomTimelineLatestCommandCompletionPolicy.shouldShowRecovery(
+                    success: success
+                )
             }
         case .readMarker:
             hasPositionedInitialTimeline = true

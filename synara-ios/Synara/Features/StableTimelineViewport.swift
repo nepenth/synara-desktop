@@ -101,6 +101,18 @@ import SwiftUI
             isTargetVisible: Bool,
             isConfirmedPinned: Bool
         ) -> Bool {
+            commandSucceeded(
+                targetsLatest: targetsLatest,
+                isTargetVisible: isTargetVisible,
+                isConfirmedPinned: isConfirmedPinned
+            )
+        }
+
+        static func commandSucceeded(
+            targetsLatest: Bool,
+            isTargetVisible: Bool,
+            isConfirmedPinned: Bool
+        ) -> Bool {
             targetsLatest ? isConfirmedPinned : isTargetVisible
         }
     }
@@ -500,25 +512,15 @@ import SwiftUI
             guard let target,
                   let indexPath = dataSource.indexPath(for: target.0)
             else {
-                let attempt = (missingTargetAttempts[command.id] ?? 0) + 1
-                missingTargetAttempts[command.id] = attempt
-                if StableTimelineViewportPolicy.shouldRetryMissingTarget(attempt: attempt) {
-                    scheduleMissingTargetRetry(command)
-                } else {
-                    pendingCommandRetry?.cancel()
-                    pendingCommandRetry = nil
-                    missingTargetAttempts.removeValue(forKey: command.id)
-                    lastExecutedCommandID = command.id
-                    notifyCommandCompleted(command, success: false, targetEventID: nil)
-                }
+                retryOrCompleteCommand(command, targetEventID: nil)
                 return true
             }
 
             pendingCommandRetry?.cancel()
             pendingCommandRetry = nil
-            missingTargetAttempts.removeValue(forKey: command.id)
-            lastExecutedCommandID = command.id
             if target.3 {
+                missingTargetAttempts.removeValue(forKey: command.id)
+                lastExecutedCommandID = command.id
                 beginAnimatedCommand(command, targetID: target.0, targetEventID: target.1)
                 tableView.scrollToRow(at: indexPath, at: target.2, animated: true)
                 DispatchQueue.main.async { [weak self] in
@@ -536,10 +538,50 @@ import SwiftUI
             } else {
                 tableView.scrollToRow(at: indexPath, at: target.2, animated: false)
                 tableView.layoutIfNeeded()
-                notifyCommandCompleted(command, success: isRowVisible(target.0), targetEventID: target.1)
+                let targetsLatest: Bool
+                if case .latest = command.kind {
+                    targetsLatest = true
+                } else {
+                    targetsLatest = false
+                }
+                let succeeded = StableTimelineViewportPolicy.commandSucceeded(
+                    targetsLatest: targetsLatest,
+                    isTargetVisible: isRowVisible(target.0),
+                    isConfirmedPinned: isConfirmedPinned()
+                )
+                if succeeded {
+                    completeCommand(command, success: true, targetEventID: target.1)
+                } else {
+                    retryOrCompleteCommand(command, targetEventID: target.1)
+                }
                 reportBottomPinnedIfChanged(force: true)
             }
             return true
+        }
+
+        private func retryOrCompleteCommand(
+            _ command: StableTimelineViewportCommand,
+            targetEventID: String?
+        ) {
+            let attempt = (missingTargetAttempts[command.id] ?? 0) + 1
+            missingTargetAttempts[command.id] = attempt
+            if StableTimelineViewportPolicy.shouldRetryMissingTarget(attempt: attempt) {
+                scheduleMissingTargetRetry(command)
+            } else {
+                completeCommand(command, success: false, targetEventID: targetEventID)
+            }
+        }
+
+        private func completeCommand(
+            _ command: StableTimelineViewportCommand,
+            success: Bool,
+            targetEventID: String?
+        ) {
+            pendingCommandRetry?.cancel()
+            pendingCommandRetry = nil
+            missingTargetAttempts.removeValue(forKey: command.id)
+            lastExecutedCommandID = command.id
+            notifyCommandCompleted(command, success: success, targetEventID: targetEventID)
         }
 
         private func scheduleMissingTargetRetry(_ command: StableTimelineViewportCommand) {
