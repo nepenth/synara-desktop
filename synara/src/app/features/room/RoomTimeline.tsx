@@ -1647,6 +1647,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
           const shouldReplaceVisibleTimeline = shouldFollowLiveEnd || timelineRows.length === 0;
           if (shouldReplaceVisibleTimeline && timelineHasEvents(nextTimeline)) {
             liveTimelineResetPendingRef.current = false;
+            jumpLatestAuthoritativeTailEventIdRef.current = undefined;
             setTimeline(nextTimeline);
           }
 
@@ -1768,6 +1769,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
         if (!isActuallyAtLiveBottom() && !atBottomRef.current && !liveEndPinRef.current) {
           captureVirtualAnchor();
         }
+        jumpLatestAuthoritativeTailEventIdRef.current = undefined;
         setTimeline(nextTimeline);
       }
     }, [captureVirtualAnchor, isActuallyAtLiveBottom, room, liveTimelineLinked, traceTimeline])
