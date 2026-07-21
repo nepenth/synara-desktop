@@ -1945,6 +1945,8 @@ enum RoomListCacheRetentionPolicy {
 }
 
 enum RoomListAuthoritativePruningPolicy {
+    static let reconciliationInterval: TimeInterval = 30
+
     static func provenRemovedIDs(
         knownRoomIDs: Set<String>,
         joinedOrInvitedRoomIDs: Set<String>
@@ -1956,15 +1958,27 @@ enum RoomListAuthoritativePruningPolicy {
         cachedRoomIDs: Set<String>,
         dynamicSnapshotRoomIDs: Set<String>,
         requiresFullRemap: Bool,
-        hasReconciledCurrentCatchUpPage: Bool = false
+        hasReconciledCurrentCatchUpPage: Bool = false,
+        lastSuccessfulReconciliationAt: Date? = nil,
+        now: Date = Date(),
+        minimumInterval: TimeInterval = reconciliationInterval
     ) -> Bool {
         guard cachedRoomIDs.isEmpty == false else {
             return false
         }
-        return requiresFullRemap || (
-            cachedRoomIDs.isSubset(of: dynamicSnapshotRoomIDs) == false
-                && hasReconciledCurrentCatchUpPage == false
-        )
+        if requiresFullRemap {
+            return true
+        }
+        guard cachedRoomIDs.isSubset(of: dynamicSnapshotRoomIDs) == false else {
+            return false
+        }
+        if hasReconciledCurrentCatchUpPage == false {
+            return true
+        }
+        guard let lastSuccessfulReconciliationAt else {
+            return true
+        }
+        return now.timeIntervalSince(lastSuccessfulReconciliationAt) >= minimumInterval
     }
 }
 
@@ -1974,6 +1988,27 @@ enum RoomListAuthoritativeFallbackPolicy {
         cachedRoomCount: Int
     ) -> Bool {
         authoritativeRoomCount == 0 && cachedRoomCount > 0
+    }
+}
+
+enum RoomListReconciliationHeartbeatPolicy {
+    static func shouldContinue(
+        isCancelled: Bool,
+        isCurrentSession: Bool,
+        currentGeneration: UInt64,
+        expectedGeneration: UInt64
+    ) -> Bool {
+        isCancelled == false
+            && isCurrentSession
+            && currentGeneration == expectedGeneration
+    }
+
+    static func shouldEmit(
+        cachedRoomIDs: Set<String>,
+        dynamicSnapshotRoomIDs: Set<String>
+    ) -> Bool {
+        cachedRoomIDs.isEmpty == false
+            && cachedRoomIDs.isSubset(of: dynamicSnapshotRoomIDs) == false
     }
 }
 
@@ -2179,6 +2214,7 @@ final class MatrixRustSDKRoomListService: RoomListServicing {
 
             var requestedPageCount = 1
             var lastReconciledCatchUpPageCount: Int?
+            var lastSuccessfulReconciliationAt: Date?
             for await _ in roomUpdates.signals {
                 guard Task.isCancelled == false else {
                     return
@@ -2186,9 +2222,15 @@ final class MatrixRustSDKRoomListService: RoomListServicing {
                 guard self.isCurrentSignedInUser(session) else {
                     return
                 }
+                guard await self.clientStore.currentRoomListSyncGeneration() == generation else {
+                    return
+                }
 
                 while let snapshot = roomUpdates.takePendingSnapshot() {
-                    guard Task.isCancelled == false, self.isCurrentSignedInUser(session) else {
+                    guard Task.isCancelled == false,
+                          self.isCurrentSignedInUser(session),
+                          await self.clientStore.currentRoomListSyncGeneration() == generation
+                    else {
                         return
                     }
                     if let nextPageCount = RoomListDynamicPagingPolicy.nextRequestedPageCount(
@@ -2202,12 +2244,20 @@ final class MatrixRustSDKRoomListService: RoomListServicing {
                     await self.clientStore.retainRoomHandles(snapshot.rooms)
                     let previousRooms = self.cachedRoomsSnapshot()
                     var explicitlyRemovedRoomIDs = snapshot.explicitlyRemovedRoomIDs
-                    if RoomListAuthoritativePruningPolicy.shouldReconcile(
+                    let shouldReconcileAuthoritativeMembership = RoomListAuthoritativePruningPolicy.shouldReconcile(
                         cachedRoomIDs: Set(previousRooms.map(\.id)),
                         dynamicSnapshotRoomIDs: Set(snapshot.rooms.map { $0.id() }),
                         requiresFullRemap: snapshot.requiresFullRemap,
-                        hasReconciledCurrentCatchUpPage: lastReconciledCatchUpPageCount == requestedPageCount
-                    ) {
+                        hasReconciledCurrentCatchUpPage: lastReconciledCatchUpPageCount == requestedPageCount,
+                        lastSuccessfulReconciliationAt: lastSuccessfulReconciliationAt,
+                        now: Date()
+                    )
+                    if snapshot.isReconciliationHeartbeat,
+                       shouldReconcileAuthoritativeMembership == false
+                    {
+                        continue
+                    }
+                    if shouldReconcileAuthoritativeMembership {
                         if let authoritativeRooms = try? await self.clientStore.rooms(session: session) {
                             let knownAuthoritativeRoomIDs = Set(authoritativeRooms.map { $0.id() })
                             let joinedOrInvitedRoomIDs = Set(authoritativeRooms.compactMap { room -> String? in
@@ -2225,6 +2275,7 @@ final class MatrixRustSDKRoomListService: RoomListServicing {
                                 )
                             )
                             lastReconciledCatchUpPageCount = requestedPageCount
+                            lastSuccessfulReconciliationAt = Date()
                         }
                     }
                     let summaries = await MatrixRoomListStateBuilder.incrementalRoomSummaries(
@@ -2235,6 +2286,9 @@ final class MatrixRustSDKRoomListService: RoomListServicing {
                         spaceService: spaceService,
                         previous: previousRooms
                     )
+                    if snapshot.isReconciliationHeartbeat, summaries == previousRooms {
+                        continue
+                    }
                     self.setCachedRooms(summaries)
                     self.logger.info(
                         "Room list stream mapped rooms count=\(summaries.count)",
@@ -2246,10 +2300,48 @@ final class MatrixRustSDKRoomListService: RoomListServicing {
             }
         }
 
+        let reconciliationHeartbeatTask = Task { [weak self] in
+            guard let self else {
+                return
+            }
+            let intervalNanoseconds = UInt64(
+                RoomListAuthoritativePruningPolicy.reconciliationInterval * 1_000_000_000
+            )
+            while Task.isCancelled == false {
+                do {
+                    try await Task.sleep(nanoseconds: intervalNanoseconds)
+                } catch {
+                    return
+                }
+                let currentGeneration = await self.clientStore.currentRoomListSyncGeneration()
+                guard RoomListReconciliationHeartbeatPolicy.shouldContinue(
+                    isCancelled: Task.isCancelled,
+                    isCurrentSession: self.isCurrentSignedInUser(session),
+                    currentGeneration: currentGeneration,
+                    expectedGeneration: generation
+                ) else {
+                    return
+                }
+                if await self.clientStore.isPausedForBackground() {
+                    continue
+                }
+                let heartbeatSnapshot = listener.reconciliationSnapshot()
+                guard RoomListReconciliationHeartbeatPolicy.shouldEmit(
+                    cachedRoomIDs: Set(self.cachedRoomsSnapshot().map(\.id)),
+                    dynamicSnapshotRoomIDs: Set(heartbeatSnapshot.rooms.map { $0.id() })
+                ) else {
+                    continue
+                }
+                roomUpdates.yield(heartbeatSnapshot)
+            }
+        }
+
         await subscription.waitUntilInvalidated(
             clientStore: clientStore,
             generation: generation
         )
+        reconciliationHeartbeatTask.cancel()
+        _ = await reconciliationHeartbeatTask.result
         roomUpdates.finish()
         mappingTask.cancel()
         _ = await mappingTask.result
@@ -3767,17 +3859,20 @@ struct RoomListCoalescingSnapshot<RoomValue>: @unchecked Sendable {
     let changedRoomIDs: Set<String>
     let requiresFullRemap: Bool
     let explicitlyRemovedRoomIDs: Set<String>
+    let isReconciliationHeartbeat: Bool
 
     init(
         rooms: [RoomValue],
         changedRoomIDs: Set<String>,
         requiresFullRemap: Bool,
-        explicitlyRemovedRoomIDs: Set<String> = []
+        explicitlyRemovedRoomIDs: Set<String> = [],
+        isReconciliationHeartbeat: Bool = false
     ) {
         self.rooms = rooms
         self.changedRoomIDs = changedRoomIDs
         self.requiresFullRemap = requiresFullRemap
         self.explicitlyRemovedRoomIDs = explicitlyRemovedRoomIDs
+        self.isReconciliationHeartbeat = isReconciliationHeartbeat
     }
 }
 
@@ -3801,7 +3896,9 @@ final class RoomListLatestSnapshotAccumulator<RoomValue>: @unchecked Sendable {
                 changedRoomIDs: pendingSnapshot.changedRoomIDs.union(snapshot.changedRoomIDs),
                 requiresFullRemap: pendingSnapshot.requiresFullRemap || snapshot.requiresFullRemap,
                 explicitlyRemovedRoomIDs: pendingSnapshot.explicitlyRemovedRoomIDs
-                    .union(snapshot.explicitlyRemovedRoomIDs)
+                    .union(snapshot.explicitlyRemovedRoomIDs),
+                isReconciliationHeartbeat: pendingSnapshot.isReconciliationHeartbeat
+                    && snapshot.isReconciliationHeartbeat
             )
         } else {
             pendingSnapshot = snapshot
@@ -3832,6 +3929,17 @@ private final class MatrixRustSDKRoomListEntriesCollector: RoomListEntriesListen
 
     init(onSnapshot: @escaping @Sendable (MatrixRoomListEntriesSnapshot) -> Void) {
         self.onSnapshot = onSnapshot
+    }
+
+    func reconciliationSnapshot() -> MatrixRoomListEntriesSnapshot {
+        lock.lock()
+        defer { lock.unlock() }
+        return MatrixRoomListEntriesSnapshot(
+            rooms: rooms,
+            changedRoomIDs: [],
+            requiresFullRemap: false,
+            isReconciliationHeartbeat: true
+        )
     }
 
     func onUpdate(roomEntriesUpdate: [RoomListEntriesUpdate]) {

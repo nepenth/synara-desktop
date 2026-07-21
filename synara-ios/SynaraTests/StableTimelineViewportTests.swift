@@ -202,6 +202,68 @@ final class StableTimelineViewportTests: XCTestCase {
         XCTAssertFalse(RoomTimelineLatestCommandCompletionPolicy.shouldShowRecovery(success: true))
     }
 
+    func testOpportunisticSnapshotEntriesDoNotConsumeOrPostponeTimedRetryBudget() {
+        var firedRetryCount = 0
+        var hasScheduledRetry = false
+
+        for _ in 0 ..< 20 {
+            if StableTimelineViewportPolicy.shouldScheduleCommandRetry(
+                firedRetryCount: firedRetryCount,
+                hasScheduledRetry: hasScheduledRetry
+            ) {
+                hasScheduledRetry = true
+            }
+        }
+        XCTAssertEqual(firedRetryCount, 0)
+        XCTAssertTrue(hasScheduledRetry)
+
+        for expectedFiredCount in 1 ... StableTimelineViewportPolicy.maximumMissingTargetAttempts {
+            hasScheduledRetry = false
+            firedRetryCount = StableTimelineViewportPolicy.nextFiredCommandRetryCount(firedRetryCount)
+            XCTAssertEqual(firedRetryCount, expectedFiredCount)
+            if StableTimelineViewportPolicy.shouldScheduleCommandRetry(
+                firedRetryCount: firedRetryCount,
+                hasScheduledRetry: hasScheduledRetry
+            ) {
+                hasScheduledRetry = true
+            }
+        }
+        XCTAssertEqual(firedRetryCount, StableTimelineViewportPolicy.maximumMissingTargetAttempts)
+        XCTAssertFalse(hasScheduledRetry)
+
+        var successPathFiredCount = 0
+        var successPathHasScheduledRetry = StableTimelineViewportPolicy.shouldScheduleCommandRetry(
+            firedRetryCount: successPathFiredCount,
+            hasScheduledRetry: false
+        )
+        XCTAssertTrue(successPathHasScheduledRetry)
+        successPathHasScheduledRetry = false
+        successPathFiredCount = StableTimelineViewportPolicy.nextFiredCommandRetryCount(successPathFiredCount)
+        XCTAssertTrue(StableTimelineViewportPolicy.commandSucceeded(
+            targetsLatest: true,
+            isTargetVisible: true,
+            isConfirmedPinned: true
+        ))
+        XCTAssertEqual(successPathFiredCount, 1)
+        XCTAssertFalse(successPathHasScheduledRetry)
+        let supersededCommandID: UInt64? = 10
+        let replacementCommandID: UInt64 = 11
+        XCTAssertTrue(StableTimelineViewportPolicy.shouldReplaceScheduledCommandRetry(
+            scheduledCommandID: supersededCommandID,
+            currentCommandID: replacementCommandID
+        ))
+        let replacementAlreadyHasScheduledRetry = supersededCommandID == replacementCommandID
+        XCTAssertFalse(replacementAlreadyHasScheduledRetry)
+        XCTAssertTrue(StableTimelineViewportPolicy.shouldScheduleCommandRetry(
+            firedRetryCount: 0,
+            hasScheduledRetry: replacementAlreadyHasScheduledRetry
+        ))
+        XCTAssertFalse(StableTimelineViewportPolicy.shouldReplaceScheduledCommandRetry(
+            scheduledCommandID: 11,
+            currentCommandID: 11
+        ))
+    }
+
     func testFocusedPlacementCompletionAllowsPaginationPolicy() {
         XCTAssertTrue(
             RoomTimelinePaginationPolicy.shouldLoadOlderHistory(

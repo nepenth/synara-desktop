@@ -2162,6 +2162,7 @@ struct RoomTimelineView: View {
                 timelinePosition = .followingLive
                 showJumpToLatest = false
             } else {
+                timelinePosition = .readingHistory
                 showJumpToLatest = RoomTimelineLatestCommandCompletionPolicy.shouldShowRecovery(
                     success: success
                 )
