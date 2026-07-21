@@ -321,6 +321,7 @@ export function inspectQualityGates({
     for (const command of [
       "npx playwright install --with-deps chromium",
       "npm run test:browser:timeline",
+      "npm run check:security",
     ]) {
       if (!hasRequiredCommandStep(jobLines, command, "synara")) {
         errors.push(`${label} must execute ${command} in synara.`);
@@ -364,6 +365,7 @@ export function inspectQualityGates({
     ["npm run test:browser:timeline", "synara"],
     ["npm run check:eslint", "synara"],
     ["npm run check:prettier", "synara"],
+    ["npm run check:security", "synara"],
   ]) {
     if (!hasRequiredCommandStep(exactDesktop, command, workingDirectory)) {
       errors.push(
