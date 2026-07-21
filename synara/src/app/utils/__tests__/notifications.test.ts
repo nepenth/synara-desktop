@@ -496,6 +496,144 @@ test('markAsRead serializes writes and coalesces pending markers to the newest e
   assert.deepEqual(writes, ['$first', '$third']);
 });
 
+test('equal-timestamp detached targets keep distinct writes and waiters', async () => {
+  const first = createTimelineEvent('$equal-first', { ts: 1 });
+  const second = createTimelineEvent('$equal-second', { ts: 10 });
+  const third = createTimelineEvent('$equal-third', { ts: 10 });
+  let notifyFirstStarted: (() => void) | undefined;
+  const firstWriteStarted = new Promise<void>((resolve) => {
+    notifyFirstStarted = resolve;
+  });
+  let releaseFirst: (() => void) | undefined;
+  const firstWriteBlocked = new Promise<void>((resolve) => {
+    releaseFirst = resolve;
+  });
+  let notifySecondStarted: (() => void) | undefined;
+  const secondWriteStarted = new Promise<void>((resolve) => {
+    notifySecondStarted = resolve;
+  });
+  let releaseSecond: (() => void) | undefined;
+  const secondWriteBlocked = new Promise<void>((resolve) => {
+    releaseSecond = resolve;
+  });
+  let notifyThirdStarted: (() => void) | undefined;
+  const thirdWriteStarted = new Promise<void>((resolve) => {
+    notifyThirdStarted = resolve;
+  });
+  let releaseThird: (() => void) | undefined;
+  const thirdWriteBlocked = new Promise<void>((resolve) => {
+    releaseThird = resolve;
+  });
+  const writes: Array<[string, string, any, any]> = [];
+  const room = {
+    roomId: '!equal-detached:example.org',
+    accountData: { get: () => undefined },
+    compareEventOrdering: () => null,
+  } as any;
+  const mx = {
+    getRoom: () => room,
+    getUserId: () => '@alice:example.org',
+    getAccountData: () => undefined,
+    setRoomReadMarkers: async (...args: [string, string, any, any]) => {
+      writes.push(args);
+      if (writes.length === 1) {
+        notifyFirstStarted?.();
+        await firstWriteBlocked;
+      } else if (writes.length === 2) {
+        notifySecondStarted?.();
+        await secondWriteBlocked;
+      } else if (writes.length === 3) {
+        notifyThirdStarted?.();
+        await thirdWriteBlocked;
+      }
+    },
+  } as any;
+
+  const firstRequest = markAsReadAtEvent(mx, room.roomId, false, first);
+  await firstWriteStarted;
+  let secondResolved = false;
+  const secondRequest = markAsReadAtEvent(mx, room.roomId, false, second).then(() => {
+    secondResolved = true;
+  });
+  let thirdResolved = false;
+  const thirdRequest = markAsReadAtEvent(mx, room.roomId, false, third).then(() => {
+    thirdResolved = true;
+  });
+
+  releaseFirst?.();
+  await secondWriteStarted;
+  assert.equal(secondResolved, false);
+  assert.equal(thirdResolved, false);
+
+  releaseSecond?.();
+  await secondRequest;
+  await thirdWriteStarted;
+  assert.equal(secondResolved, true);
+  assert.equal(thirdResolved, false);
+
+  releaseThird?.();
+  await Promise.all([firstRequest, secondRequest, thirdRequest]);
+  assert.deepEqual(
+    writes.map(([, fullyReadId, publicEvent]) => [fullyReadId, publicEvent?.getId()]),
+    [
+      ['$equal-first', '$equal-first'],
+      ['$equal-second', '$equal-second'],
+      ['$equal-second', '$equal-third'],
+    ]
+  );
+});
+
+test('invalid-timestamp detached targets fail and resolve only their own waiters', async () => {
+  const first = createTimelineEvent('$invalid-first', { ts: 1 });
+  const invalidFailure = createTimelineEvent('$invalid-failure', { ts: Number.NaN });
+  const invalidSuccess = createTimelineEvent('$invalid-success', { ts: Number.POSITIVE_INFINITY });
+  let notifyFirstStarted: (() => void) | undefined;
+  const firstWriteStarted = new Promise<void>((resolve) => {
+    notifyFirstStarted = resolve;
+  });
+  let releaseFirst: (() => void) | undefined;
+  const firstWriteBlocked = new Promise<void>((resolve) => {
+    releaseFirst = resolve;
+  });
+  const writes: Array<[string, string, any, any]> = [];
+  const room = {
+    roomId: '!invalid-detached:example.org',
+    accountData: { get: () => undefined },
+    compareEventOrdering: () => null,
+  } as any;
+  const mx = {
+    getRoom: () => room,
+    getUserId: () => '@alice:example.org',
+    getAccountData: () => undefined,
+    setRoomReadMarkers: async (...args: [string, string, any, any]) => {
+      writes.push(args);
+      if (writes.length === 1) {
+        notifyFirstStarted?.();
+        await firstWriteBlocked;
+      } else if (args[2]?.getId() === '$invalid-failure') {
+        throw new Error('invalid target failed');
+      }
+    },
+  } as any;
+
+  const firstRequest = markAsReadAtEvent(mx, room.roomId, false, first);
+  await firstWriteStarted;
+  const failingRequest = markAsReadAtEvent(mx, room.roomId, false, invalidFailure);
+  const successfulRequest = markAsReadAtEvent(mx, room.roomId, false, invalidSuccess);
+  const failingOutcome = assert.rejects(failingRequest, /invalid target failed/);
+  releaseFirst?.();
+
+  await Promise.all([firstRequest, failingOutcome, successfulRequest]);
+  assert.deepEqual(
+    writes.map(([, fullyReadId, publicEvent]) => [fullyReadId, publicEvent?.getId()]),
+    [
+      ['$invalid-first', '$invalid-first'],
+      ['$invalid-first', '$invalid-failure'],
+      ['$invalid-first', '$invalid-success'],
+    ]
+  );
+});
+
 test('an active public receipt never satisfies an older private receipt request', async () => {
   const older = createTimelineEvent('$older-private', { ts: 10 });
   const newer = createTimelineEvent('$newer-public', { ts: 20 });
