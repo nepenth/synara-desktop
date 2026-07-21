@@ -4,12 +4,6 @@ on:
   push:
     tags:
       - "v*"
-  workflow_dispatch:
-    inputs:
-      force_internal_testflight:
-        description: "Force TestFlight internal-only (true/false, overrides var)"
-        required: false
-        default: ""
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -716,7 +710,7 @@ jobs:
           SYNARA_ASC_ISSUER_ID: ${{ secrets.SYNARA_ASC_ISSUER_ID }}
           SYNARA_IOS_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           SYNARA_PUSH_GATEWAY_URL: ${{ vars.SYNARA_PUSH_GATEWAY_URL }}
-          SYNARA_TESTFLIGHT_INTERNAL_ONLY: ${{ inputs.force_internal_testflight || vars.SYNARA_TESTFLIGHT_INTERNAL_ONLY || 'true' }}
+          SYNARA_TESTFLIGHT_INTERNAL_ONLY: ${{ vars.SYNARA_TESTFLIGHT_INTERNAL_ONLY || 'true' }}
         run: synara-ios/scripts/upload-testflight-internal.sh
 
       - name: Clean signing material
