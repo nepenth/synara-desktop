@@ -99,10 +99,24 @@ jobs:
     needs: [validate]
     runs-on: macos-latest
 ${iosBuildStep}
+  exact-tag-synapse-integration:
+    name: Exact-tag Synapse two-client integration
+    needs: [validate]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - run: npm ci
+        working-directory: synara
+      - run: scripts/synapse-integration.sh up
+      - run: npm run test:synapse-integration
+        env:
+          SYNARA_RECEIPT_MODE: both
+      - if: always()
+        run: scripts/synapse-integration.sh reset
   quality-gate:
     name: Exact-tag quality gate
     if: always()
-    needs: [validate, exact-tag-desktop-quality, exact-tag-ios-quality]
+    needs: [validate, exact-tag-desktop-quality, exact-tag-ios-quality, exact-tag-synapse-integration]
     runs-on: ubuntu-latest
     steps:
       - name: Require full validation at the tagged SHA
@@ -110,8 +124,9 @@ ${iosBuildStep}
           TAG_RESULT: \${{ needs.validate.result }}
           DESKTOP_RESULT: \${{ needs.exact-tag-desktop-quality.result }}
           IOS_RESULT: \${{ needs.exact-tag-ios-quality.result }}
+          SYNAPSE_RESULT: \${{ needs.exact-tag-synapse-integration.result }}
         run: |
-          if [[ "$TAG_RESULT" != "success" || "$DESKTOP_RESULT" != "success" || "$IOS_RESULT" != "success" ]]; then
+          if [[ "$TAG_RESULT" != "success" || "$DESKTOP_RESULT" != "success" || "$IOS_RESULT" != "success" || "$SYNAPSE_RESULT" != "success" ]]; then
             exit 1
           fi
   linux-deb:
@@ -174,7 +189,10 @@ test("rejects missing real-layout timeline execution", () => {
         [override]: workflow.replace(command, `echo ${command}`),
       });
       assert.equal(result.ok, false, `${override}: ${command}`);
-      assert.match(result.errors.join("\n"), /desktop validation.*must execute/i);
+      assert.match(
+        result.errors.join("\n"),
+        /desktop validation.*must execute/i
+      );
     }
   }
 });
@@ -277,6 +295,21 @@ test("rejects missing and no-op Synapse integration execution", () => {
   });
   assert.equal(noOpPackage.ok, false);
   assert.match(noOpPackage.errors.join("\n"), /pinned two-client runner/i);
+
+  for (const workflow of [
+    releaseWorkflow.replace(
+      "  exact-tag-synapse-integration:",
+      "  removed-exact-tag-synapse-integration:"
+    ),
+    releaseWorkflow.replace(
+      "      - run: npm run test:synapse-integration\n        env:",
+      "      - run: echo npm run test:synapse-integration\n        env:"
+    ),
+  ]) {
+    const result = inspect({ releaseWorkflow: workflow });
+    assert.equal(result.ok, false);
+    assert.match(result.errors.join("\n"), /Exact-tag Synapse integration/i);
+  }
 });
 
 test("rejects a no-op exact-tag release aggregate", () => {
@@ -304,7 +337,7 @@ test("rejects an aggregate without if always", () => {
 test("rejects aggregate needs that are not exact", () => {
   const result = inspect({
     releaseWorkflow: releaseWorkflow.replace(
-      "needs: [validate, exact-tag-desktop-quality, exact-tag-ios-quality]",
+      "needs: [validate, exact-tag-desktop-quality, exact-tag-ios-quality, exact-tag-synapse-integration]",
       "needs: [validate, exact-tag-desktop-quality]"
     ),
   });

@@ -142,10 +142,47 @@ jobs:
           if-no-files-found: warn
           retention-days: 30
 
+  exact-tag-synapse-integration:
+    name: Exact-tag Synapse two-client integration
+    needs: [validate]
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout tagged commit
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+
+      - name: Install runtime dependencies
+        run: npm ci
+        working-directory: synara
+
+      - name: Start disposable Synapse
+        run: scripts/synapse-integration.sh up
+
+      - name: Run public and private two-client scenarios
+        run: npm run test:synapse-integration
+        env:
+          SYNARA_RECEIPT_MODE: both
+
+      - name: Tear down disposable Synapse
+        if: always()
+        run: scripts/synapse-integration.sh reset
+
   quality-gate:
     name: Exact-tag quality gate
     if: always()
-    needs: [validate, exact-tag-desktop-quality, exact-tag-ios-quality]
+    needs:
+      [
+        validate,
+        exact-tag-desktop-quality,
+        exact-tag-ios-quality,
+        exact-tag-synapse-integration,
+      ]
     runs-on: ubuntu-22.04
     steps:
       - name: Require full validation at the tagged SHA
@@ -153,11 +190,13 @@ jobs:
           TAG_RESULT: ${{ needs.validate.result }}
           DESKTOP_RESULT: ${{ needs.exact-tag-desktop-quality.result }}
           IOS_RESULT: ${{ needs.exact-tag-ios-quality.result }}
+          SYNAPSE_RESULT: ${{ needs.exact-tag-synapse-integration.result }}
         run: |
-          if [[ "$TAG_RESULT" != "success" || "$DESKTOP_RESULT" != "success" || "$IOS_RESULT" != "success" ]]; then
+          if [[ "$TAG_RESULT" != "success" || "$DESKTOP_RESULT" != "success" || "$IOS_RESULT" != "success" || "$SYNAPSE_RESULT" != "success" ]]; then
             echo "Tag/version validation: $TAG_RESULT" >&2
             echo "Desktop/runtime validation: $DESKTOP_RESULT" >&2
             echo "iOS simulator tests: $IOS_RESULT" >&2
+            echo "Synapse two-client integration: $SYNAPSE_RESULT" >&2
             exit 1
           fi
 
