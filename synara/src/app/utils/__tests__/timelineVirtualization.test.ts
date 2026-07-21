@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { Virtualizer } from '@tanstack/react-virtual';
 import {
   buildTimelineRows,
   buildTimelineRowsWithState,
@@ -48,6 +49,45 @@ test('timeline anchor offset restores viewport after prepending rows', () => {
     getRestoredVirtualScrollTop(500, { eventId: '$a', offsetTop: anchorOffset }, 100, 280),
     600
   );
+});
+
+test('variable-height measurements above the viewport preserve the visible anchor', () => {
+  const scrollCalls: Array<{ offset: number; adjustments?: number }> = [];
+  const virtualizer = new Virtualizer<Element, HTMLElement>({
+    count: 10,
+    getScrollElement: () => null,
+    getItemKey: (index) => `event:$${index}`,
+    estimateSize: () => 100,
+    initialRect: { width: 800, height: 300 },
+    initialOffset: 350,
+    overscan: 0,
+    observeElementRect: () => undefined,
+    observeElementOffset: () => undefined,
+    scrollToFn: (offset, options) => {
+      scrollCalls.push({ offset, adjustments: options.adjustments });
+    },
+  });
+
+  const initialAnchor = virtualizer.getVirtualItemForOffset(350);
+  assert.equal(initialAnchor?.key, 'event:$3');
+  assert.equal(initialAnchor && 350 - initialAnchor.start, 50);
+
+  virtualizer.resizeItem(0, 180);
+  virtualizer.resizeItem(1, 40);
+
+  const restoredOffset = virtualizer.scrollOffset;
+  assert.equal(restoredOffset, 370);
+  const restoredAnchor = virtualizer.getVirtualItemForOffset(restoredOffset ?? 0);
+  assert.equal(restoredAnchor?.key, initialAnchor?.key);
+  assert.equal(restoredAnchor && (restoredOffset ?? 0) - restoredAnchor.start, 50);
+  assert.deepEqual(
+    scrollCalls.map((call) => call.adjustments),
+    [80, -60]
+  );
+
+  virtualizer.resizeItem(8, 240);
+  assert.equal(virtualizer.scrollOffset, restoredOffset);
+  assert.equal(scrollCalls.length, 2);
 });
 
 test('virtual range pagination thresholds use visible event indexes', () => {

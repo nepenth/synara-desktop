@@ -1206,7 +1206,8 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
       [timelineRows, messageLayout]
     ),
     overscan: TIMELINE_VIRTUAL_OVERSCAN,
-    scrollingDelay: 120,
+    anchorTo: 'start',
+    isScrollingResetDelay: 120,
   });
   const virtualItems = virtualizer.getVirtualItems();
   const savedViewportRestoreAnchor =
