@@ -1,12 +1,10 @@
 import { useEffect, useMemo, useReducer, useRef, useSyncExternalStore } from 'react';
 import { MatrixClient } from 'matrix-js-sdk';
 import {
-  getNextRecentRoomExpiry,
+  getRecentRoomExpiryDelay,
   getRoomActivityStore,
   partitionRoomIdsByActivity,
 } from '../state/room-list/roomActivity';
-
-const MAX_TIMEOUT_MS = 2_147_483_647;
 
 export const useRecentRoomPartition = (mx: MatrixClient, roomIds: readonly string[]) => {
   const store = getRoomActivityStore(mx);
@@ -23,12 +21,11 @@ export const useRecentRoomPartition = (mx: MatrixClient, roomIds: readonly strin
   const { nowMs } = clockRef.current;
 
   useEffect(() => {
-    const nextExpiry = getNextRecentRoomExpiry(roomIds, snapshot, Date.now());
-    if (nextExpiry === undefined) return undefined;
-    const delay = Math.min(MAX_TIMEOUT_MS, Math.max(1, nextExpiry - Date.now() + 1));
+    const delay = getRecentRoomExpiryDelay(roomIds, snapshot, Date.now());
+    if (delay === undefined) return undefined;
     const timeout = window.setTimeout(refreshClock, delay);
     return () => window.clearTimeout(timeout);
-  }, [roomIds, snapshot]);
+  }, [clockRevision, roomIds, snapshot]);
 
   useEffect(() => {
     const refreshWhenVisible = () => {

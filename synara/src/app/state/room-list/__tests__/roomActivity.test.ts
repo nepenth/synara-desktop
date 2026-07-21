@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import test from 'node:test';
-import { EventStatus, RoomEvent } from 'matrix-js-sdk';
+import { EventStatus, MatrixEventEvent, RoomEvent } from 'matrix-js-sdk';
 import {
   RECENT_ROOM_WINDOW_MS,
   RoomActivityStore,
   getNextRecentRoomExpiry,
+  getRecentRoomExpiryDelay,
   partitionRoomIdsByActivity,
 } from '../roomActivity';
 
@@ -139,11 +140,106 @@ test('cancelled local echoes fall back to the previous relevant event', () => {
   mx.emit(RoomEvent.LocalEchoUpdated, localMessage, room);
   assert.equal(store.getSnapshot().entries.get(room.roomId)?.activityTs, 200);
 
-  events.pop();
-  const cancelled = createEvent('~local', 200, { status: EventStatus.CANCELLED });
-  mx.emit(RoomEvent.LocalEchoUpdated, cancelled, room);
+  localMessage.status = EventStatus.CANCELLED;
+  mx.emit(RoomEvent.LocalEchoUpdated, localMessage, room);
   assert.equal(store.getSnapshot().entries.get(room.roomId)?.activityTs, 100);
   assert.equal(store.getSnapshot().entries.get(room.roomId)?.latestEventId, '$old');
+
+  localMessage.status = EventStatus.NOT_SENT;
+  mx.emit(RoomEvent.LocalEchoUpdated, localMessage, room);
+  assert.equal(store.getSnapshot().entries.get(room.roomId)?.activityTs, 100);
+  assert.equal(store.getSnapshot().entries.get(room.roomId)?.latestEventId, '$old');
+  unsubscribe();
+});
+
+test('decryption rescans only an ineligible live activity head', () => {
+  const events = Array.from({ length: 100 }, (_, index) => createEvent(`$event-${index}`, index));
+  const head = events.at(-1)!;
+  let scans = 0;
+  const room = {
+    ...createRoom('!room:example.org', events),
+    getLiveTimeline: () => ({
+      getEvents: () => {
+        scans += 1;
+        return events;
+      },
+    }),
+  } as any;
+  const mx = new MockMatrixClient([room]);
+  const store = new RoomActivityStore(mx as any);
+  const unsubscribe = store.subscribe(() => undefined);
+  const baselineScans = scans;
+
+  events.slice(0, -1).forEach((event) => mx.emit(MatrixEventEvent.Decrypted, event));
+  assert.equal(scans, baselineScans);
+
+  mx.emit(MatrixEventEvent.Decrypted, head);
+  assert.equal(scans, baselineScans);
+
+  head.getRelation = () => ({ rel_type: 'm.replace' });
+  mx.emit(MatrixEventEvent.Decrypted, head);
+  assert.equal(scans, baselineScans + 1);
+  assert.equal(store.getSnapshot().entries.get(room.roomId)?.latestEventId, '$event-98');
+
+  mx.emit(MatrixEventEvent.Decrypted, head);
+  assert.equal(scans, baselineScans + 1);
+  unsubscribe();
+});
+
+test('an ineligible decrypted head preserves prior activity when no concrete fallback is loaded', () => {
+  const head = createEvent('$encrypted-head', 200, { type: 'm.room.encrypted' });
+  const events = [head];
+  const room = createRoom('!room:example.org', events);
+  const mx = new MockMatrixClient([room]);
+  const store = new RoomActivityStore(mx as any);
+  const unsubscribe = store.subscribe(() => undefined);
+
+  head.getType = () => 'm.room.message';
+  head.getRelation = () => ({ rel_type: 'm.replace' });
+  mx.emit(MatrixEventEvent.Decrypted, head);
+
+  assert.equal(store.getSnapshot().entries.get(room.roomId)?.activityTs, 200);
+  assert.equal(store.getSnapshot().entries.get(room.roomId)?.latestEventId, undefined);
+  unsubscribe();
+});
+
+test('redacting the only concrete activity head preserves the prior summary timestamp', () => {
+  const head = createEvent('$head', 200);
+  const events = [head];
+  const room = createRoom('!room:example.org', events);
+  const mx = new MockMatrixClient([room]);
+  const store = new RoomActivityStore(mx as any);
+  const unsubscribe = store.subscribe(() => undefined);
+  const redaction = createEvent('$redaction', 300, { type: 'm.room.redaction' });
+  redaction.getAssociatedId = () => '$head';
+  head.isRedacted = () => true;
+
+  mx.emit(RoomEvent.Redaction, redaction, room);
+
+  assert.equal(store.getSnapshot().entries.get(room.roomId)?.activityTs, 200);
+  assert.equal(store.getSnapshot().entries.get(room.roomId)?.latestEventId, undefined);
+  unsubscribe();
+});
+
+test('cancelling a redaction restores the formerly eligible activity head', () => {
+  const head = createEvent('$head', 200);
+  const events = [head];
+  const room = createRoom('!room:example.org', events);
+  const mx = new MockMatrixClient([room]);
+  const store = new RoomActivityStore(mx as any);
+  const unsubscribe = store.subscribe(() => undefined);
+  const redaction = createEvent('$redaction', 300, { type: 'm.room.redaction' });
+  redaction.getAssociatedId = () => '$head';
+  let redacted = true;
+  head.isRedacted = () => redacted;
+
+  mx.emit(RoomEvent.Redaction, redaction, room);
+  assert.equal(store.getSnapshot().entries.get(room.roomId)?.latestEventId, undefined);
+
+  redacted = false;
+  mx.emit(RoomEvent.RedactionCancelled, redaction, room);
+  assert.equal(store.getSnapshot().entries.get(room.roomId)?.activityTs, 200);
+  assert.equal(store.getSnapshot().entries.get(room.roomId)?.latestEventId, '$head');
   unsubscribe();
 });
 
@@ -161,4 +257,24 @@ test('next Recent expiry selects the earliest active room boundary', () => {
     getNextRecentRoomExpiry(['!second:example.org', '!first:example.org'], snapshot, now),
     100 + RECENT_ROOM_WINDOW_MS
   );
+});
+
+test('Recent expiry scheduling advances through staggered room boundaries', () => {
+  const now = 1_000;
+  const windowMs = 100;
+  const roomIds = ['!first:example.org', '!second:example.org'];
+  const snapshot = {
+    revision: 1,
+    entries: new Map([
+      ['!first:example.org', { roomId: '!first:example.org', activityTs: 910, revision: 1 }],
+      ['!second:example.org', { roomId: '!second:example.org', activityTs: 930, revision: 1 }],
+    ]),
+  };
+
+  assert.equal(getRecentRoomExpiryDelay(roomIds, snapshot, now, windowMs), 11);
+  assert.equal(getRecentRoomExpiryDelay(roomIds, snapshot, now + 11, windowMs), 20);
+  assert.deepEqual(partitionRoomIdsByActivity(roomIds, snapshot, now + 11, undefined, windowMs), {
+    recentRoomIds: ['!second:example.org'],
+    nonRecentRoomIds: ['!first:example.org'],
+  });
 });
