@@ -107,6 +107,25 @@ import SwiftUI
             scheduledCommandID.map { $0 != currentCommandID } ?? false
         }
 
+        static func shouldAbandonPendingNonAnimatedCommandRetry(
+            hasScheduledRetry: Bool,
+            scheduledCommandID: UInt64?,
+            currentCommandID: UInt64?,
+            currentCommandIsAnimated: Bool
+        ) -> Bool {
+            guard hasScheduledRetry,
+                  currentCommandIsAnimated == false,
+                  let currentCommandID
+            else {
+                return false
+            }
+            return scheduledCommandID == currentCommandID
+        }
+
+        static func commandRetryMayExecute(retryID: UUID, installedRetryID: UUID?) -> Bool {
+            retryID == installedRetryID
+        }
+
         static func animatedCommandSucceeded(
             settlement _: AnimatedCommandSettlement,
             targetsLatest: Bool,
@@ -176,6 +195,15 @@ import SwiftUI
             case latest(animated: Bool)
             case readMarker(eventID: String)
             case focused(eventID: String, animated: Bool)
+
+            var isAnimated: Bool {
+                switch self {
+                case let .latest(animated), let .focused(_, animated):
+                    return animated
+                case .readMarker:
+                    return false
+                }
+            }
         }
 
         let id: UInt64
@@ -614,7 +642,10 @@ import SwiftUI
             let retryID = UUID()
             let retry = DispatchWorkItem { [weak self] in
                 guard let self,
-                      pendingCommandRetryID == retryID
+                      StableTimelineViewportPolicy.commandRetryMayExecute(
+                          retryID: retryID,
+                          installedRetryID: pendingCommandRetryID
+                      )
                 else {
                     return
                 }
@@ -648,6 +679,24 @@ import SwiftUI
             if let abandonedCommandID {
                 missingTargetAttempts.removeValue(forKey: abandonedCommandID)
             }
+        }
+
+        private func abandonPendingNonAnimatedCommandRetryForUserDrag() {
+            guard let command = configuration?.command,
+                  StableTimelineViewportPolicy.shouldAbandonPendingNonAnimatedCommandRetry(
+                      hasScheduledRetry: pendingCommandRetry != nil,
+                      scheduledCommandID: pendingCommandRetryCommandID,
+                      currentCommandID: command.id,
+                      currentCommandIsAnimated: command.kind.isAnimated
+                  )
+            else {
+                return
+            }
+
+            cancelPendingCommandRetry()
+            missingTargetAttempts.removeValue(forKey: command.id)
+            lastExecutedCommandID = command.id
+            notifyCommandCompleted(command, success: false, targetEventID: nil)
         }
 
         private func beginAnimatedCommand(
@@ -910,6 +959,7 @@ import SwiftUI
         }
 
         func scrollViewWillBeginDragging(_: UIScrollView) {
+            abandonPendingNonAnimatedCommandRetryForUserDrag()
             if let pendingAnimatedCommand {
                 finishPendingAnimatedCommand(success: animatedCommandSucceeded(
                     pendingAnimatedCommand,
