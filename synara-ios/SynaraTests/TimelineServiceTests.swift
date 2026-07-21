@@ -1,6 +1,6 @@
-import XCTest
 @preconcurrency import MatrixRustSDK
 @testable import Synara
+import XCTest
 
 final class TimelineServiceTests: XCTestCase {
     func testRoomTimelineScrollPolicyOnlyFollowsAnEstablishedLiveEnd() {
@@ -312,7 +312,7 @@ final class TimelineServiceTests: XCTestCase {
 
         let transition = await session.transitionToLive()
 
-        guard case .failed(let message) = transition else {
+        guard case let .failed(message) = transition else {
             XCTFail("Expected failed live transition")
             return
         }
@@ -332,7 +332,7 @@ final class TimelineServiceTests: XCTestCase {
 
         let transition = await session.transitionToLive()
 
-        guard case .succeeded(let feed) = transition else {
+        guard case let .succeeded(feed) = transition else {
             XCTFail("Expected successful live transition")
             return
         }
@@ -450,7 +450,7 @@ final class TimelineServiceTests: XCTestCase {
             MatrixHTMLRenderer.segments(body: "", html: html),
             [
                 .details(block),
-                .markdown("**Practical decision:**\n\n- Do not use it for active/default bounty pipelines.")
+                .markdown("**Practical decision:**\n\n- Do not use it for active/default bounty pipelines."),
             ]
         )
     }
@@ -467,7 +467,7 @@ final class TimelineServiceTests: XCTestCase {
             [
                 .markdown("Plan:"),
                 .code("let value = 1\nprint(value)"),
-                .markdown("- **Ship**\n- Verify")
+                .markdown("- **Ship**\n- Verify"),
             ]
         )
     }
@@ -483,7 +483,7 @@ final class TimelineServiceTests: XCTestCase {
             MatrixHTMLRenderer.segments(body: "fallback", html: html),
             [
                 .markdown("**App-agent handoff**\n\nI wrote a copyable handoff file here:"),
-                .quote("TestFlight **MUST** use production APNs.")
+                .quote("TestFlight **MUST** use production APNs."),
             ]
         )
     }
@@ -551,7 +551,7 @@ final class TimelineServiceTests: XCTestCase {
             isEncrypted: false
         )
 
-        if case .formattedText(let body, let html) = kind {
+        if case let .formattedText(body, html) = kind {
             XCTAssertEqual(body, "- **Ship it**\n- Review fallback")
             XCTAssertEqual(html, #"<ul><li><strong>Ship it</strong></li><li>Review fallback</li></ul>"#)
         } else {
@@ -597,7 +597,7 @@ final class TimelineServiceTests: XCTestCase {
                     id: "continue",
                     title: "Continue",
                     prompt: "continue"
-                )
+                ),
             ]
         )
         let event = RawTimelineEvent(
@@ -612,7 +612,7 @@ final class TimelineServiceTests: XCTestCase {
             agentCard: card
         )
 
-        if case .agentCard(let mapped) = TimelineMapper.map(event).kind {
+        if case let .agentCard(mapped) = TimelineMapper.map(event).kind {
             XCTAssertEqual(mapped, card)
         } else {
             XCTFail("Expected agent card mapped kind")
@@ -689,7 +689,7 @@ final class TimelineServiceTests: XCTestCase {
 
         let item = TimelineMapper.map(event)
 
-        guard case .mediaPlaceholder(let resource) = item.kind else {
+        guard case let .mediaPlaceholder(resource) = item.kind else {
             XCTFail("Expected media placeholder")
             return
         }
@@ -702,13 +702,13 @@ final class TimelineServiceTests: XCTestCase {
         let service = MockTimelineService()
 
         let initialOutcome = await service.loadInitialTimeline(roomID: "!room:matrix.org")
-        guard case .loaded(let initial) = initialOutcome else {
+        guard case let .loaded(initial) = initialOutcome else {
             XCTFail("Expected loaded initial timeline")
             return
         }
 
         let olderOutcome = await service.loadOlderTimeline(roomID: "!room:matrix.org", before: initial[0].eventID)
-        guard case .loaded(let older) = olderOutcome else {
+        guard case let .loaded(older) = olderOutcome else {
             XCTFail("Expected loaded older timeline")
             return
         }
@@ -717,7 +717,27 @@ final class TimelineServiceTests: XCTestCase {
         XCTAssertEqual(older.count, 5)
         XCTAssertEqual(initial[0].senderID, "@mina:matrix.org")
         XCTAssertEqual(initial[0].reactions["👍"], 3)
-        XCTAssertEqual(initial[4].replyToEventID, "$security:!project:matrix.org")
+        XCTAssertEqual(initial[4].replyToEventID, "$security:!room:matrix.org")
+    }
+
+    func testMockFocusedTimelineReturnsRoomSpecificMarkerContextAndSuccessor() async {
+        let service = MockTimelineService()
+        let roomID = "!context:matrix.org"
+
+        let outcome = await service.loadInitialTimeline(
+            roomID: roomID,
+            focusedEventID: "$security:\(roomID)"
+        )
+
+        guard case let .loaded(items) = outcome else {
+            XCTFail("Expected focused context")
+            return
+        }
+        let markerIndex = items.firstIndex { $0.eventID == "$security:\(roomID)" }
+        let successorIndex = items.firstIndex { $0.eventID == "$thread-reply:\(roomID)" }
+        XCTAssertNotNil(markerIndex)
+        XCTAssertEqual(successorIndex, markerIndex.map { $0 + 1 })
+        XCTAssertFalse(items.contains { $0.eventID.contains("!project:matrix.org") })
     }
 
     func testMockTimelineStreamYieldsMultipleOutcomes() async {
@@ -744,7 +764,7 @@ final class TimelineServiceTests: XCTestCase {
         let service = MockTimelineService()
         service.updateOutcomes = [
             .loaded([firstItem]),
-            .loaded([firstItem, secondItem])
+            .loaded([firstItem, secondItem]),
         ]
 
         var outcomes: [TimelineLoadOutcome] = []
@@ -753,8 +773,9 @@ final class TimelineServiceTests: XCTestCase {
         }
 
         XCTAssertEqual(outcomes.count, 2)
-        guard case .loaded(let firstBatch) = outcomes[0],
-              case .loaded(let secondBatch) = outcomes[1] else {
+        guard case let .loaded(firstBatch) = outcomes[0],
+              case let .loaded(secondBatch) = outcomes[1]
+        else {
             XCTFail("Expected loaded timeline outcomes")
             return
         }
@@ -766,7 +787,7 @@ final class TimelineServiceTests: XCTestCase {
         let service = MockTimelineService()
         service.typingUserUpdates = [
             ["@automation:matrix.org"],
-            []
+            [],
         ]
 
         var updates: [[String]] = []
@@ -780,8 +801,8 @@ final class TimelineServiceTests: XCTestCase {
     func testLargeTimelineFixtureHasStableIdentity() {
         let items = TimelineFixtures.largeTimeline()
 
-        XCTAssertEqual(items.count, 10_000)
-        XCTAssertEqual(Set(items.map(\.id)).count, 10_000)
+        XCTAssertEqual(items.count, 10000)
+        XCTAssertEqual(Set(items.map(\.id)).count, 10000)
     }
 
     func testPendingMessageFactoryMarksLocalDeliveryState() {
@@ -794,8 +815,109 @@ final class TimelineServiceTests: XCTestCase {
 
         XCTAssertTrue(pending.isLocalPending)
         XCTAssertEqual(pending.deliveryStatus, .sending)
+        XCTAssertNil(pending.serverEventID)
         XCTAssertEqual(pending.kind, .text("Hello world"))
         XCTAssertEqual(pending.replyToEventID, "$parent:matrix.org")
+    }
+
+    func testServerAndTransactionTimelineIdentitiesRemainDistinct() {
+        let server = TimelineItem(
+            id: "$server:matrix.org",
+            eventID: "$server:matrix.org",
+            senderID: "@alice:matrix.org",
+            timestamp: TimelineFixtures.baseDate,
+            kind: .text("Confirmed"),
+            replyToEventID: nil,
+            isEdited: false,
+            reactions: [:]
+        )
+        let transaction = TimelineItem(
+            id: "transaction-123",
+            eventID: "transaction-123",
+            serverEventID: nil,
+            senderID: "@alice:matrix.org",
+            timestamp: TimelineFixtures.baseDate,
+            kind: .text("Local echo"),
+            replyToEventID: nil,
+            isEdited: false,
+            reactions: [:],
+            deliveryStatus: .sent
+        )
+
+        XCTAssertEqual(server.serverEventID, "$server:matrix.org")
+        XCTAssertNil(transaction.serverEventID)
+        XCTAssertTrue(transaction.isLocalPending)
+    }
+
+    func testPendingReconcilerPreservesAuthoritativeServerVectorOrder() {
+        func item(_ id: String, offset: TimeInterval) -> Synara.TimelineItem {
+            Synara.TimelineItem(
+                id: id,
+                eventID: id,
+                senderID: "@server:matrix.org",
+                timestamp: TimelineFixtures.baseDate.addingTimeInterval(offset),
+                kind: .text(id),
+                replyToEventID: nil,
+                isEdited: false,
+                reactions: [:]
+            )
+        }
+        let serverItems = [item("$one", offset: 100), item("$two", offset: 0), item("$three", offset: 50)]
+        let pending = TimelineItem.pendingMessage(
+            localID: "$pending-order",
+            body: "Pending",
+            senderID: "@alice:matrix.org",
+            replyToEventID: nil,
+            timestamp: TimelineFixtures.baseDate.addingTimeInterval(25)
+        )
+
+        let merged = TimelinePendingReconciler.merge(
+            streamItems: serverItems,
+            localItems: [pending],
+            currentUserID: "@alice:matrix.org"
+        )
+
+        XCTAssertEqual(merged.filter { !$0.isLocalPending }.map(\.eventID), ["$one", "$two", "$three"])
+    }
+
+    func testTimelineCollectorAndInteractiveFreshnessPoliciesAreBounded() {
+        XCTAssertEqual(MatrixTimelineCollectorPolicy.retainedSuffixCount(itemCount: 5000, limit: 1200), 1200)
+        XCTAssertEqual(MatrixTimelineCollectorPolicy.droppedPrefixCount(itemCount: 5000, limit: 1200), 3800)
+        XCTAssertEqual(
+            MatrixTimelineCollectorPolicy.droppedPrefixCountAfterPopBack(
+                retainedCount: 0,
+                droppedPrefixCount: 25
+            ),
+            24
+        )
+
+        let now = Date()
+        XCTAssertFalse(MatrixInteractiveFreshnessPolicy.shouldPerformSync(
+            hasActiveSyncService: true,
+            lastSuccessfulSyncAt: nil,
+            now: now,
+            maximumAge: 2
+        ))
+        XCTAssertFalse(MatrixInteractiveFreshnessPolicy.shouldPerformSync(
+            hasActiveSyncService: false,
+            lastSuccessfulSyncAt: now.addingTimeInterval(-1),
+            now: now,
+            maximumAge: 2
+        ))
+        XCTAssertTrue(MatrixInteractiveFreshnessPolicy.shouldPerformSync(
+            hasActiveSyncService: false,
+            lastSuccessfulSyncAt: now.addingTimeInterval(-3),
+            now: now,
+            maximumAge: 2
+        ))
+        XCTAssertTrue(MatrixInteractiveFreshnessPolicy.ownsInstalledOperation(
+            installedGeneration: 4,
+            currentGeneration: 4
+        ))
+        XCTAssertFalse(MatrixInteractiveFreshnessPolicy.ownsInstalledOperation(
+            installedGeneration: 4,
+            currentGeneration: 5
+        ))
     }
 
     func testPendingReconcilerDropsMatchedLocalEchoes() {
@@ -999,7 +1121,7 @@ final class TimelineServiceTests: XCTestCase {
 
     private func loadedItems(from outcome: TimelineLoadOutcome) throws -> [Synara.TimelineItem] {
         let items: [Synara.TimelineItem]?
-        if case .loaded(let loadedItems) = outcome {
+        if case let .loaded(loadedItems) = outcome {
             items = loadedItems
         } else {
             items = nil
@@ -1055,8 +1177,8 @@ final class TimelineServiceTests: XCTestCase {
                         roomId: "!room:example.org",
                         eventId: "$one",
                         createdAt: 5,
-                        dueTs: now + 3600_000,
-                        completedAt: 9_000
+                        dueTs: now + 3_600_000,
+                        completedAt: 9000
                     ),
                     "b": .init(
                         id: "b",
@@ -1064,7 +1186,7 @@ final class TimelineServiceTests: XCTestCase {
                         roomId: "!room:example.org",
                         eventId: "$two",
                         createdAt: 6,
-                        dueTs: now - 10_000,
+                        dueTs: now - 10000,
                         completedAt: nil
                     ),
                     "c": .init(
@@ -1075,7 +1197,7 @@ final class TimelineServiceTests: XCTestCase {
                         createdAt: 7,
                         dueTs: now + 1000,
                         completedAt: nil
-                    )
+                    ),
                 ]
             )
         } catch {
@@ -1100,7 +1222,7 @@ final class TimelineServiceTests: XCTestCase {
             .dueSoon
         )
         XCTAssertEqual(
-            LaterDueUrgency.classify(dueTs: now + (25 * 60 * 60 * 1_000), isCompleted: false, now: now),
+            LaterDueUrgency.classify(dueTs: now + (25 * 60 * 60 * 1000), isCompleted: false, now: now),
             .future
         )
         XCTAssertEqual(
@@ -1119,13 +1241,13 @@ final class TimelineServiceTests: XCTestCase {
                     roomId: "!room:example.org",
                     eventId: "$one",
                     createdAt: 1
-                )
+                ),
             ]
         )
 
-        let completed = try content.completingItem(id: "saved", at: 9_999)
+        let completed = try content.completingItem(id: "saved", at: 9999)
 
-        XCTAssertEqual(completed.items["saved"]?.completedAt, 9_999)
+        XCTAssertEqual(completed.items["saved"]?.completedAt, 9999)
     }
 
     func testMockLaterServiceCompletesActiveItem() async {
@@ -1140,20 +1262,20 @@ final class TimelineServiceTests: XCTestCase {
                     completedAt: nil,
                     createdAt: 1,
                     isCompleted: false
-                )
+                ),
             ],
-            now: { 9_999 }
+            now: { 9999 }
         )
 
         let result = await service.completeItem(id: "saved")
         let loaded = await service.loadItems()
 
         XCTAssertEqual(result, .success(true))
-        guard case .success((let items, _)) = loaded else {
+        guard case let .success((items, _)) = loaded else {
             XCTFail("Expected loaded items")
             return
         }
-        XCTAssertEqual(items.first?.completedAt, 9_999)
+        XCTAssertEqual(items.first?.completedAt, 9999)
         XCTAssertTrue(items.first?.isCompleted == true)
     }
 
@@ -1178,7 +1300,7 @@ final class TimelineServiceTests: XCTestCase {
                 replyToEventID: nil,
                 isEdited: false,
                 reactions: [:]
-            )
+            ),
         ]
 
         let filtered = TimelineSearchFilter.applySearchQuery("release", to: items)
@@ -1197,7 +1319,7 @@ final class TimelineServiceTests: XCTestCase {
                 replyToEventID: nil,
                 isEdited: false,
                 reactions: [:]
-            )
+            ),
         ]
 
         let filtered = TimelineSearchFilter.applySearchQuery("mina", to: items)
@@ -1212,5 +1334,4 @@ final class TimelineServiceTests: XCTestCase {
 
         XCTAssertEqual(filtered, items)
     }
-
 }
