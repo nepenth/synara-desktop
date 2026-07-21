@@ -95,6 +95,25 @@ import SwiftUI
             attempt < maximumAttempts
         }
 
+        static func shouldScheduleCommandRetry(
+            firedRetryCount: Int,
+            hasScheduledRetry: Bool,
+            maximumAttempts: Int = maximumMissingTargetAttempts
+        ) -> Bool {
+            hasScheduledRetry == false && firedRetryCount < maximumAttempts
+        }
+
+        static func nextFiredCommandRetryCount(_ firedRetryCount: Int) -> Int {
+            firedRetryCount + 1
+        }
+
+        static func shouldReplaceScheduledCommandRetry(
+            scheduledCommandID: UInt64?,
+            currentCommandID: UInt64
+        ) -> Bool {
+            scheduledCommandID.map { $0 != currentCommandID } ?? false
+        }
+
         static func animatedCommandSucceeded(
             settlement _: AnimatedCommandSettlement,
             targetsLatest: Bool,
@@ -298,6 +317,8 @@ import SwiftUI
         private var lastExecutedCommandID: UInt64?
         private var pendingAnimatedCommand: PendingAnimatedCommand?
         private var pendingCommandRetry: DispatchWorkItem?
+        private var pendingCommandRetryID: UUID?
+        private var pendingCommandRetryCommandID: UInt64?
         private var missingTargetAttempts: [UInt64: Int] = [:]
         private var isDragging = false
         private var isDecelerating = false
@@ -346,6 +367,8 @@ import SwiftUI
                 cancelPendingAnimatedCommand()
                 pendingCommandRetry?.cancel()
                 pendingCommandRetry = nil
+                pendingCommandRetryID = nil
+                pendingCommandRetryCommandID = nil
                 missingTargetAttempts.removeAll()
                 lastExecutedCommandID = nil
                 paginationRequestInFlight = false
@@ -498,6 +521,12 @@ import SwiftUI
             else {
                 return false
             }
+            if StableTimelineViewportPolicy.shouldReplaceScheduledCommandRetry(
+                scheduledCommandID: pendingCommandRetryCommandID,
+                currentCommandID: command.id
+            ) {
+                cancelPendingCommandRetry()
+            }
 
             let target: (StableTimelineViewportItemID, String?, UITableView.ScrollPosition, Bool)?
             switch command.kind {
@@ -516,9 +545,8 @@ import SwiftUI
                 return true
             }
 
-            pendingCommandRetry?.cancel()
-            pendingCommandRetry = nil
             if target.3 {
+                cancelPendingCommandRetry()
                 missingTargetAttempts.removeValue(forKey: command.id)
                 lastExecutedCommandID = command.id
                 beginAnimatedCommand(command, targetID: target.0, targetEventID: target.1)
@@ -563,11 +591,14 @@ import SwiftUI
             _ command: StableTimelineViewportCommand,
             targetEventID: String?
         ) {
-            let attempt = (missingTargetAttempts[command.id] ?? 0) + 1
-            missingTargetAttempts[command.id] = attempt
-            if StableTimelineViewportPolicy.shouldRetryMissingTarget(attempt: attempt) {
+            let firedRetryCount = missingTargetAttempts[command.id] ?? 0
+            if StableTimelineViewportPolicy.shouldScheduleCommandRetry(
+                firedRetryCount: firedRetryCount,
+                hasScheduledRetry: pendingCommandRetry != nil
+                    && pendingCommandRetryCommandID == command.id
+            ) {
                 scheduleMissingTargetRetry(command)
-            } else {
+            } else if firedRetryCount >= StableTimelineViewportPolicy.maximumMissingTargetAttempts {
                 completeCommand(command, success: false, targetEventID: targetEventID)
             }
         }
@@ -577,27 +608,53 @@ import SwiftUI
             success: Bool,
             targetEventID: String?
         ) {
-            pendingCommandRetry?.cancel()
-            pendingCommandRetry = nil
+            cancelPendingCommandRetry()
             missingTargetAttempts.removeValue(forKey: command.id)
             lastExecutedCommandID = command.id
             notifyCommandCompleted(command, success: success, targetEventID: targetEventID)
         }
 
         private func scheduleMissingTargetRetry(_ command: StableTimelineViewportCommand) {
-            pendingCommandRetry?.cancel()
+            guard pendingCommandRetry == nil else {
+                return
+            }
+            let retryID = UUID()
             let retry = DispatchWorkItem { [weak self] in
                 guard let self,
-                      configuration?.command?.id == command.id,
-                      configuration?.routeID == command.routeID,
-                      configuration?.sessionGeneration == command.sessionGeneration
+                      pendingCommandRetryID == retryID
                 else {
                     return
                 }
+                pendingCommandRetry = nil
+                pendingCommandRetryID = nil
+                pendingCommandRetryCommandID = nil
+                guard configuration?.command?.id == command.id,
+                      configuration?.routeID == command.routeID,
+                      configuration?.sessionGeneration == command.sessionGeneration
+                else {
+                    missingTargetAttempts.removeValue(forKey: command.id)
+                    return
+                }
+                missingTargetAttempts[command.id] = StableTimelineViewportPolicy.nextFiredCommandRetryCount(
+                    missingTargetAttempts[command.id] ?? 0
+                )
                 _ = executeCommandIfNeeded(command)
             }
             pendingCommandRetry = retry
+            pendingCommandRetryID = retryID
+            pendingCommandRetryCommandID = command.id
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.25, execute: retry)
+        }
+
+        private func cancelPendingCommandRetry() {
+            let abandonedCommandID = pendingCommandRetryCommandID
+            pendingCommandRetryID = nil
+            pendingCommandRetryCommandID = nil
+            pendingCommandRetry?.cancel()
+            pendingCommandRetry = nil
+            if let abandonedCommandID {
+                missingTargetAttempts.removeValue(forKey: abandonedCommandID)
+            }
         }
 
         private func beginAnimatedCommand(
