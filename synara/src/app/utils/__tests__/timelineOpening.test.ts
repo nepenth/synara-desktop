@@ -11,6 +11,7 @@ import {
   getTimelineEndWindow,
   getTimelineFocusRange,
   getTimelineRangeAfterPagination,
+  getTimelineWindowTailEvent,
   getTimelineWindowTailEventId,
   getPersistedLiveTailEventId,
   hasUnreadForInitialScroll,
@@ -170,10 +171,12 @@ test('server-latest detached context windows remain authoritative at their fetch
   const detachedContext = timeline('detached-context', ['$before', '$latest']);
   const latestWindow = getTimelineEndWindow([detachedContext], 80);
 
+  assert.equal(getTimelineWindowTailEvent(latestWindow)?.getId(), '$latest');
   assert.equal(getTimelineWindowTailEventId(latestWindow), '$latest');
   assert.equal(timelineWindowEndsAtEventId(latestWindow, '$latest'), true);
   assert.equal(timelineWindowEndsAtEventId(latestWindow, '$before'), false);
   assert.equal(getTimelineWindowTailEventId(getEmptyTimeline()), undefined);
+  assert.equal(getTimelineWindowTailEvent(getEmptyTimeline()), undefined);
 });
 
 test('route navigation cancellation skips mount and the intentional post-jump route clear', () => {
