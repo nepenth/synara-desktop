@@ -223,7 +223,7 @@ type DesktopUpdaterProviderProps = {
 };
 
 export function DesktopUpdaterProvider({ children }: DesktopUpdaterProviderProps) {
-  const macosUpdateRef = useRef<MacosUpdateHandle | undefined>();
+  const macosUpdateRef = useRef<MacosUpdateHandle | undefined>(undefined);
   const [state, setState] = useState<DesktopUpdaterState>({
     checking: false,
     installing: false,

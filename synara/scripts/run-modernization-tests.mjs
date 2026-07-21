@@ -27,6 +27,7 @@ const tests = [
   'src/app/utils/__tests__/dom.test.ts',
   'src/app/utils/__tests__/appLinks.test.ts',
   'src/app/utils/__tests__/messageSearchFilters.test.ts',
+  'src/app/utils/__tests__/matrix.test.ts',
   'src/app/utils/__tests__/themeAccent.test.ts',
   'src/app/utils/__tests__/syncLifecycle.test.ts',
   'src/app/utils/__tests__/syncSplashRecovery.test.ts',

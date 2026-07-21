@@ -365,7 +365,9 @@ export class RoomActivityStore {
     const roomId = event.getRoomId();
     const room = roomId ? this.mx.getRoom(roomId) : null;
     const eventId = event.getId();
-    if (!room || !eventId || this.snapshot.entries.get(roomId)?.latestEventId !== eventId) return;
+    if (!room || !eventId || this.snapshot.entries.get(room.roomId)?.latestEventId !== eventId) {
+      return;
+    }
     if (isRoomActivityEvent(event)) return;
     this.updateRoom(room);
   };

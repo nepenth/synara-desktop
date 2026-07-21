@@ -19,6 +19,8 @@ jobs:
     steps:
       - run: npx playwright install --with-deps chromium
         working-directory: synara
+      - run: npm run typecheck
+        working-directory: synara
       - run: npm run test:browser:timeline
         working-directory: synara
       - run: npm run check:security
@@ -88,6 +90,7 @@ jobs:
           cargo test --locked
         working-directory: src-tauri
       - run: |
+          npm run typecheck
           npm run typecheck:modernization
           npm run test:modernization
           npm run test:browser:timeline
@@ -194,6 +197,26 @@ test("rejects missing real-layout timeline execution", () => {
         /desktop validation.*must execute/i
       );
     }
+  }
+});
+
+test("rejects modernization typecheck as a substitute for the full runtime typecheck", () => {
+  for (const [override, workflow] of [
+    ["ciWorkflow", ciWorkflow],
+    ["releaseWorkflow", releaseWorkflow],
+  ]) {
+    const result = inspect({
+      [override]: workflow.replace(
+        "npm run typecheck\n",
+        "npm run typecheck:modernization\n"
+      ),
+    });
+
+    assert.equal(result.ok, false, override);
+    assert.match(
+      result.errors.join("\n"),
+      /desktop validation must execute npm run typecheck in synara/i
+    );
   }
 });
 
