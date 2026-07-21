@@ -26,7 +26,7 @@ export const useRecentRoomPartition = (mx: MatrixClient, roomIds: readonly strin
       };
     }
     const store = getRoomActivityStore(mx);
-    return { subscribe: store.subscribe, getSnapshot: store.getSnapshot };
+    return store.createSnapshotSource(roomIds);
   }, [legacySnapshot, mx, reactiveEnabled, roomIds]);
   const snapshot = useSyncExternalStore(
     snapshotSource.subscribe,

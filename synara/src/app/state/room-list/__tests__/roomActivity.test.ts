@@ -175,13 +175,46 @@ test('cancelled local echoes fall back to the previous relevant event', () => {
   mx.emit(RoomEvent.LocalEchoUpdated, localMessage, room);
   assert.equal(store.getSnapshot().entries.get(room.roomId)?.activityTs, 100);
   assert.equal(store.getSnapshot().entries.get(room.roomId)?.latestEventId, '$old');
+  unsubscribe();
+});
+
+test('directly failed local echoes fall back to the previous relevant event', () => {
+  const oldMessage = createEvent('$old', 100);
+  const localMessage = createEvent('~local', 200);
+  const events = [oldMessage, localMessage];
+  const room = createRoom('!room:example.org', events);
+  const mx = new MockMatrixClient([room]);
+  const store = new RoomActivityStore(mx as any);
+  const unsubscribe = store.subscribe(() => undefined);
 
   localMessage.status = EventStatus.NOT_SENT;
   mx.emit(RoomEvent.LocalEchoUpdated, localMessage, room);
+
   assert.equal(store.getSnapshot().entries.get(room.roomId)?.activityTs, 100);
   assert.equal(store.getSnapshot().entries.get(room.roomId)?.latestEventId, '$old');
   unsubscribe();
 });
+
+for (const terminalStatus of [EventStatus.CANCELLED, EventStatus.NOT_SENT]) {
+  test(`${terminalStatus} summary-only local echoes retain the room summary timestamp`, () => {
+    const localMessage = createEvent('~local', 200);
+    const events = [localMessage];
+    const room = {
+      ...createRoom('!summary-only:example.org', events),
+      getLastActiveTimestamp: () => 123,
+    } as any;
+    const mx = new MockMatrixClient([room]);
+    const store = new RoomActivityStore(mx as any);
+    const unsubscribe = store.subscribe(() => undefined);
+
+    localMessage.status = terminalStatus;
+    mx.emit(RoomEvent.LocalEchoUpdated, localMessage, room);
+
+    assert.equal(store.getSnapshot().entries.get(room.roomId)?.activityTs, 123);
+    assert.equal(store.getSnapshot().entries.get(room.roomId)?.latestEventId, undefined);
+    unsubscribe();
+  });
+}
 
 test('decryption rescans only an ineligible live activity head', () => {
   const events = Array.from({ length: 100 }, (_, index) => createEvent(`$event-${index}`, index));
@@ -308,4 +341,37 @@ test('Recent expiry scheduling advances through staggered room boundaries', () =
     recentRoomIds: ['!second:example.org'],
     nonRecentRoomIds: ['!first:example.org'],
   });
+});
+
+test('5k-room snapshot sources ignore unrelated updates without copying the activity map', () => {
+  const rooms = Array.from({ length: 5_000 }, (_, index) =>
+    createRoom(`!room-${index}:example.org`, [createEvent(`$event-${index}`, index)])
+  );
+  const subscribedRoom = rooms[0];
+  const unrelatedRoom = rooms.at(-1)!;
+  const mx = new MockMatrixClient(rooms);
+  const store = new RoomActivityStore(mx as any);
+  const source = store.createSnapshotSource([subscribedRoom.roomId]);
+  let notifications = 0;
+  const unsubscribe = source.subscribe(() => {
+    notifications += 1;
+  });
+  const initialSnapshot = source.getSnapshot();
+  const initialEntries = initialSnapshot.entries;
+
+  const unrelatedMessage = createEvent('$unrelated-live', 10_000);
+  mx.emit(RoomEvent.Timeline, unrelatedMessage, unrelatedRoom, false, false, { liveEvent: true });
+
+  assert.equal(notifications, 0);
+  assert.equal(source.getSnapshot(), initialSnapshot);
+  assert.equal(source.getSnapshot().entries, initialEntries);
+
+  const subscribedMessage = createEvent('$subscribed-live', 20_000);
+  mx.emit(RoomEvent.Timeline, subscribedMessage, subscribedRoom, false, false, { liveEvent: true });
+
+  assert.equal(notifications, 1);
+  assert.notEqual(source.getSnapshot(), initialSnapshot);
+  assert.equal(source.getSnapshot().entries, initialEntries);
+  assert.equal(source.getSnapshot().entries.get(subscribedRoom.roomId)?.activityTs, 20_000);
+  unsubscribe();
 });
