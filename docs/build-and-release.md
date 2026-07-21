@@ -51,6 +51,15 @@ cargo test --manifest-path src-tauri/Cargo.toml --locked
 npm run check:production-smoke
 ```
 
+When Docker is available, run the real cross-device Synapse regression gate as
+well. The final reset is destructive only to the generated loopback harness:
+
+```bash
+scripts/synapse-integration.sh up
+npm run test:synapse-integration
+scripts/synapse-integration.sh reset
+```
+
 For timeline work, also run:
 
 ```bash
@@ -102,6 +111,9 @@ publish a production updater channel.
 ## Production Publish Flow
 
 Production publication is owned by the singular `Release` workflow.
+It is deliberately tag-push-only: do not add `workflow_dispatch` unless it
+requires an explicit tag and checks out that exact tag SHA. GitHub's normal
+manual workflow branch selector is not a safe release-source selector.
 
 1. Bump every client and the iOS build number together:
 
@@ -159,6 +171,10 @@ credentials.
 Configure the GitHub `production-release` Environment with at least one required
 human reviewer. The workflow declares the environment, but repository-level
 review protection must be enabled in GitHub settings.
+
+Set the repository variable `SYNARA_TESTFLIGHT_INTERNAL_ONLY` to `true` or
+`false` to control internal-only TestFlight distribution for subsequent tag
+pushes. It defaults to `true`; there is no manual-dispatch override.
 
 Do not configure the `production-release` environment with required status checks
 from ordinary CI workflows that do not run on tag refs: those checks cannot

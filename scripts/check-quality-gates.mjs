@@ -161,6 +161,75 @@ function hasIosTestBuildStep(jobLines) {
   });
 }
 
+function hasRequiredCommandStep(jobLines, command, workingDirectory) {
+  return parseSteps(jobLines ?? []).some((step) => {
+    const runLines = executableLines(getStepRun(step));
+    return (
+      runLines.includes(command) &&
+      getScalar(step, "working-directory", 8) === workingDirectory &&
+      getScalar(step, "if", 8) === undefined &&
+      getScalar(step, "continue-on-error", 8) === undefined
+    );
+  });
+}
+
+function synapseIntegrationJobError(jobLines) {
+  if (!jobLines) return "job is missing";
+  if (getScalar(jobLines, "name", 4) !== "Synapse two-client integration") {
+    return "job name must be Synapse two-client integration";
+  }
+
+  const timeout = Number(getScalar(jobLines, "timeout-minutes", 4));
+  if (!Number.isInteger(timeout) || timeout < 1 || timeout > 20) {
+    return "job timeout-minutes must be between 1 and 20";
+  }
+
+  const steps = parseSteps(jobLines);
+  const singleCommandIndex = (command) =>
+    steps.findIndex((step) => {
+      const lines = executableLines(getStepRun(step));
+      return lines.length === 1 && lines[0] === command;
+    });
+  const installIndex = steps.findIndex(
+    (step) =>
+      executableLines(getStepRun(step)).length === 1 &&
+      executableLines(getStepRun(step))[0] === "npm ci" &&
+      getScalar(step, "working-directory", 8) === "synara"
+  );
+  const startIndex = singleCommandIndex("scripts/synapse-integration.sh up");
+  const testIndex = singleCommandIndex("npm run test:synapse-integration");
+  const resetIndex = singleCommandIndex("scripts/synapse-integration.sh reset");
+
+  if (installIndex < 0)
+    return "job must install the locked runtime dependencies";
+  if (startIndex < 0)
+    return "job must execute the disposable harness up command";
+  if (testIndex < 0)
+    return "job must execute the two-client integration runner";
+  if (
+    getStepEnvironment(steps[testIndex] ?? []).get("SYNARA_RECEIPT_MODE") !==
+    "both"
+  ) {
+    return "integration runner must execute both public and private receipts";
+  }
+  if (resetIndex < 0)
+    return "job must execute the disposable harness reset command";
+  if (getScalar(steps[resetIndex], "if", 8) !== "always()") {
+    return "harness reset step must use if: always()";
+  }
+  if (
+    !(
+      installIndex < startIndex &&
+      startIndex < testIndex &&
+      testIndex < resetIndex
+    )
+  ) {
+    return "install, up, integration test, and reset steps must remain ordered";
+  }
+
+  return undefined;
+}
+
 function aggregateGateError(jobLines, expectedName, expectedNeeds) {
   if (!jobLines) return "job is missing";
   if (getScalar(jobLines, "name", 4) !== expectedName) {
@@ -183,18 +252,20 @@ function aggregateGateError(jobLines, expectedName, expectedNeeds) {
     });
     if (variables.some((variable) => !variable)) continue;
 
-    const run = executableLines(getStepRun(step))
-      .join(" ")
-      .replace(/\s+/g, " ");
+    const runLines = executableLines(getStepRun(step));
     const condition = variables
       .map((variable) => `"$${variable}" != "success"`)
       .join(" || ");
-    const conditionStart = run.indexOf(`if [[ ${condition} ]]; then`);
-    if (conditionStart < 0) continue;
-    const conditionEnd = run.indexOf(" fi", conditionStart);
-    const failureBody =
-      conditionEnd < 0 ? "" : run.slice(conditionStart, conditionEnd);
-    if (/\bexit\s+1\b/.test(failureBody)) return undefined;
+    const conditionStart = runLines.indexOf(`if [[ ${condition} ]]; then`);
+    if (conditionStart !== 0) continue;
+    const conditionEnd = runLines.indexOf("fi", conditionStart + 1);
+    if (conditionEnd !== runLines.length - 1) continue;
+    const failureBody = runLines.slice(conditionStart + 1, conditionEnd);
+    if (failureBody.at(-1) !== "exit 1") continue;
+    const diagnostics = failureBody.slice(0, -1);
+    if (diagnostics.every((line) => /^echo\s+"[^"]*"\s+>&2$/.test(line))) {
+      return undefined;
+    }
   }
 
   return "job must explicitly exit 1 unless every required job result is success";
@@ -205,11 +276,27 @@ export function inspectQualityGates({
   iosWorkflow,
   releaseWorkflow,
   releaseDocs = "",
+  rootPackage = "",
 }) {
   const errors = [];
   const ciJobs = parseJobs(ciWorkflow);
   const iosJobs = parseJobs(iosWorkflow);
   const releaseJobs = parseJobs(releaseWorkflow);
+
+  let packageScripts = {};
+  try {
+    packageScripts = JSON.parse(rootPackage).scripts ?? {};
+  } catch {
+    errors.push("Root package metadata must be valid JSON.");
+  }
+  if (
+    packageScripts["test:synapse-integration"] !==
+    "SYNARA_RUN_SYNAPSE_INTEGRATION=1 npm --prefix synara exec -- vite-node --config synara/scripts/vite-node.integration.config.mjs synara/scripts/run-synapse-two-client-integration.mjs"
+  ) {
+    errors.push(
+      "Root test:synapse-integration must execute the pinned two-client runner."
+    );
+  }
 
   if (!hasIosTestBuildStep(ciJobs.get("ios-tests"))) {
     errors.push(
@@ -227,10 +314,15 @@ export function inspectQualityGates({
     );
   }
 
+  const synapseError = synapseIntegrationJobError(
+    ciJobs.get("synapse-integration")
+  );
+  if (synapseError) errors.push(`CI Synapse integration ${synapseError}.`);
+
   const ciAggregateError = aggregateGateError(
     ciJobs.get("quality-gate"),
     "Quality gate",
-    ["validate", "ios-tests"]
+    ["validate", "ios-tests", "synapse-integration"]
   );
   if (ciAggregateError) errors.push(`CI aggregate ${ciAggregateError}.`);
 
@@ -239,6 +331,31 @@ export function inspectQualityGates({
       !sameList(getList(releaseJobs.get(job) ?? [], "needs", 4), ["validate"])
     ) {
       errors.push(`Release workflow ${job} needs must be exactly [validate].`);
+    }
+  }
+
+  const exactDesktop = releaseJobs.get("exact-tag-desktop-quality") ?? [];
+  for (const [command, workingDirectory] of [
+    ["npm run check:repo-layout", undefined],
+    ["npm run check:versions", undefined],
+    ["npm run check:matrix-boundaries", undefined],
+    ["npm run check:quality-gates", undefined],
+    ["npm run check:synapse-harness", undefined],
+    ["npm run check:production-smoke", undefined],
+    ["node --test scripts/__tests__/*.test.mjs", undefined],
+    ["cargo check --locked", "src-tauri"],
+    ["cargo test --locked", "src-tauri"],
+    ["npm run typecheck:modernization", "synara"],
+    ["npm run test:modernization", "synara"],
+    ["npm run check:eslint", "synara"],
+    ["npm run check:prettier", "synara"],
+  ]) {
+    if (!hasRequiredCommandStep(exactDesktop, command, workingDirectory)) {
+      errors.push(
+        `Exact-tag desktop validation must execute ${command}${
+          workingDirectory ? ` in ${workingDirectory}` : " at repository root"
+        }.`
+      );
     }
   }
 
@@ -263,13 +380,60 @@ export function inspectQualityGates({
     }
   }
 
+  if (
+    !sameList(getList(releaseJobs.get("updater-metadata") ?? [], "needs", 4), [
+      "macos",
+    ])
+  ) {
+    errors.push(
+      "Release workflow updater-metadata needs must be exactly [macos]."
+    );
+  }
+
   const publishJob = releaseJobs.get("publish-gh-release") ?? [];
+  if (
+    !sameList(getList(publishJob, "needs", 4), [
+      "linux-deb",
+      "linux-arch",
+      "macos",
+      "updater-metadata",
+      "ios-testflight",
+    ])
+  ) {
+    errors.push(
+      "Release publication needs must include exactly every client artifact and updater metadata job."
+    );
+  }
   if (
     getNestedScalar(publishJob, "environment", "name", 4) !==
     "production-release"
   ) {
     errors.push(
       "Release publication must use the protected production-release environment."
+    );
+  }
+
+  if (/^\s{2}workflow_dispatch:/m.test(releaseWorkflow)) {
+    errors.push(
+      "Release workflow must be tag-only; workflow_dispatch cannot safely select an explicit release tag."
+    );
+  }
+  if (/inputs\.force_internal_testflight/.test(releaseWorkflow)) {
+    errors.push(
+      "TestFlight internal-only control must use the repository variable, not a workflow-dispatch input."
+    );
+  }
+  const testflight = releaseJobs.get("ios-testflight") ?? [];
+  const internalOnlyValues = parseSteps(testflight).flatMap((step) => [
+    getStepEnvironment(step).get("SYNARA_TESTFLIGHT_INTERNAL_ONLY"),
+  ]);
+  if (
+    !internalOnlyValues.includes(
+      "${{ vars.SYNARA_TESTFLIGHT_INTERNAL_ONLY || 'true' }}"
+    )
+  ) {
+    errors.push(
+      "TestFlight internal-only control must default the SYNARA_TESTFLIGHT_INTERNAL_ONLY repository variable to true."
     );
   }
 
@@ -307,6 +471,7 @@ function main() {
       path.join(root, "docs/build-and-release.md"),
       "utf8"
     ),
+    rootPackage: readFileSync(path.join(root, "package.json"), "utf8"),
   });
 
   for (const error of result.errors) console.error(`[quality-gates] ${error}`);

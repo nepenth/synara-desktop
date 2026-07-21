@@ -166,11 +166,6 @@ export function inspectSynapseHarness({ compose, template, launcher, ignore }) {
   );
   requireText(
     launcher,
-    "down --volumes",
-    "Harness must provide disposable-volume cleanup."
-  );
-  requireText(
-    launcher,
     'find "$runtime_dir" -mindepth 1 -maxdepth 1 ! -name .gitkeep -exec rm -rf -- {} +',
     "Harness reset must remove all generated runtime children while preserving .gitkeep."
   );
@@ -208,6 +203,15 @@ export function inspectSynapseHarness({ compose, template, launcher, ignore }) {
   const resetCase = getCommandCase(launcher, "reset");
   if (!resetCase?.includes("clear_runtime")) {
     errors.push("Harness reset must clear all generated runtime state.");
+  }
+  const resetCommands = (resetCase ?? "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith("#"));
+  if (!resetCommands.includes("compose down --volumes --remove-orphans")) {
+    errors.push(
+      "Harness reset must delete Compose volumes and orphans inside the reset command."
+    );
   }
 
   return { ok: errors.length === 0, errors };

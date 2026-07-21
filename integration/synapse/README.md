@@ -49,3 +49,32 @@ run `up` first. If port 8008 is occupied, set `SYNARA_PORT` before the first
 
 Run `npm run check:synapse-harness` without Docker to validate image pins,
 loopback binding, runtime secret generation, and ignored state.
+
+## Automated two-client gate
+
+The noninteractive gate creates a reader on two independent device sessions and
+a separate sender, then creates and joins a private room. For both public and
+private receipts it sends 64 ordered events and proves all of the following:
+
+- a limited initial sync ends at the actual latest event;
+- SDK `/context` loading finds an older exact event and backwards pagination
+  adds a preceding page without changing order;
+- an explicit SDK latest-timeline load ends at the actual last event; and
+- an exact `m.fully_read` marker plus the configured receipt converges from
+  device A to device B.
+
+Run it only against this disposable harness:
+
+```bash
+scripts/synapse-integration.sh up
+npm run test:synapse-integration
+scripts/synapse-integration.sh reset
+```
+
+`SYNARA_RECEIPT_MODE` accepts `public`, `private`, or `both` (the default).
+`SYNARA_SYNAPSE_URL` can select another HTTP loopback port, but the runner
+rejects non-loopback hosts, HTTPS, URL credentials, paths, queries, and
+fragments before loading the SDK. Generated passwords and access tokens remain
+in memory and the runner emits only phase/count diagnostics, never credentials
+or message bodies. Every request, poll, CI job, and teardown is bounded; CI
+always resets the database volume and generated runtime state.

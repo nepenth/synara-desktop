@@ -208,6 +208,26 @@ test("rejects reset implementations that leave generated media and PID state", (
   );
 });
 
+test("rejects volume cleanup that appears only outside reset or in a comment", () => {
+  for (const replacement of [
+    "    compose down",
+    "    compose down\n    # compose down --volumes --remove-orphans",
+  ]) {
+    const result = inspectSynapseHarness({
+      ...valid,
+      launcher: valid.launcher.replace(
+        "    compose down --volumes --remove-orphans",
+        replacement
+      ),
+    });
+    assert.equal(result.ok, false);
+    assert.match(
+      result.errors.join("\n"),
+      /volumes and orphans inside the reset/i
+    );
+  }
+});
+
 test("rejects reset cleanup that removes the tracked runtime sentinel", () => {
   const result = inspectSynapseHarness({
     ...valid,
