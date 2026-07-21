@@ -58,7 +58,7 @@ final class RoomReadMarkerServiceTests: XCTestCase {
         XCTAssertNil(http.lastRequest)
     }
 
-    func testMarkFullyReadWritesAccountData() async throws {
+    func testMarkFullyReadUsesExactEventReadMarkersEndpoint() async throws {
         let http = RecordingReadMarkerHTTPClient(statusCode: 200, body: #"{"event_id":"$event:matrix.example"}"#)
         let sessionStore = AppSessionStore(currentState: .signedIn(makeSession()))
         let service = MatrixRoomReadMarkerService(sessionStore: sessionStore, httpClient: http)
@@ -66,17 +66,30 @@ final class RoomReadMarkerServiceTests: XCTestCase {
         let didMark = await service.markFullyRead(roomID: "!room:matrix.example", eventID: "$event:matrix.example")
 
         XCTAssertTrue(didMark)
-        XCTAssertEqual(http.requests.count, 2)
-        let receiptRequest = try XCTUnwrap(http.requests.first)
-        XCTAssertEqual(receiptRequest.httpMethod, "POST")
-        XCTAssertTrue(try XCTUnwrap(receiptRequest.url?.absoluteString).contains("/receipt/m.read/"))
-        XCTAssertEqual(receiptRequest.httpBody, Data("{}".utf8))
+        XCTAssertEqual(http.requests.count, 1)
         let request = try XCTUnwrap(http.lastRequest)
-        XCTAssertEqual(request.httpMethod, "PUT")
+        XCTAssertEqual(request.httpMethod, "POST")
         XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer token")
         XCTAssertEqual(request.value(forHTTPHeaderField: "Content-Type"), "application/json")
+        XCTAssertTrue(try XCTUnwrap(request.url?.absoluteString).contains("/rooms/!room:matrix.example/read_markers"))
         let body = try XCTUnwrap(request.httpBody)
-        XCTAssertEqual(String(data: body, encoding: .utf8), #"{"event_id":"$event:matrix.example"}"#)
+        let payload = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: String])
+        XCTAssertEqual(payload["m.read"], "$event:matrix.example")
+        XCTAssertEqual(payload["m.fully_read"], "$event:matrix.example")
+        XCTAssertNil(payload["event_id"])
+    }
+
+    func testMarkFullyReadDoesNotResendAlreadySuccessfulEvent() async {
+        let http = RecordingReadMarkerHTTPClient(statusCode: 200, body: "{}")
+        let sessionStore = AppSessionStore(currentState: .signedIn(makeSession()))
+        let service = MatrixRoomReadMarkerService(sessionStore: sessionStore, httpClient: http)
+
+        let firstResult = await service.markFullyRead(roomID: "!room:matrix.example", eventID: "$event:matrix.example")
+        let duplicateResult = await service.markFullyRead(roomID: "!room:matrix.example", eventID: "$event:matrix.example")
+
+        XCTAssertTrue(firstResult)
+        XCTAssertTrue(duplicateResult)
+        XCTAssertEqual(http.requests.count, 1)
     }
 
     func testMarkFullyReadReturnsFalseForNonSuccessStatus() async {
