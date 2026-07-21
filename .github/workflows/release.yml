@@ -107,6 +107,7 @@ jobs:
 
       - name: Validate desktop runtime
         run: |
+          npm run typecheck
           npm run typecheck:modernization
           npm run test:modernization
           npm run test:browser:timeline

@@ -16,7 +16,7 @@ import {
 
 type TimelineStub = EventTimeline & {
   id: string;
-  events: MatrixEvent[];
+  stubEvents: MatrixEvent[];
   backward?: TimelineStub;
   forward?: TimelineStub;
 };
@@ -29,15 +29,17 @@ const event = (id: string): MatrixEvent =>
 const timeline = (id: string, eventIds: string[]): TimelineStub => {
   const stub = {
     id,
-    events: eventIds.map(event),
-    getEvents() {
-      return this.events;
+    stubEvents: eventIds.map(event),
+    backward: undefined as TimelineStub | undefined,
+    forward: undefined as TimelineStub | undefined,
+    getEvents(): MatrixEvent[] {
+      return stub.stubEvents;
     },
-    getNeighbouringTimeline(direction: Direction) {
-      return direction === Direction.Backward ? this.backward ?? null : this.forward ?? null;
+    getNeighbouringTimeline(direction: Direction): EventTimeline | null {
+      return direction === Direction.Backward ? stub.backward ?? null : stub.forward ?? null;
     },
   };
-  return stub as TimelineStub;
+  return stub as unknown as TimelineStub;
 };
 
 const link = (...timelines: TimelineStub[]): TimelineStub[] => {
@@ -99,7 +101,7 @@ test('timeline link helpers use the unfiltered room timeline set wrappers', () =
       getLiveTimeline: () => live,
       getTimelineForEvent: (eventId: string) => (eventId === '$0' ? historic : null),
     }),
-  } as Room;
+  } as unknown as Room;
 
   assert.equal(getLiveTimeline(room), live);
   assert.equal(getEventTimeline(room, '$0'), historic);

@@ -4,6 +4,7 @@ import {
   IndexedDBStore,
   IndexedDBCryptoStore,
   MatrixError,
+  type ICreateClientOpts,
   type IRefreshTokenResponse,
 } from 'matrix-js-sdk';
 import type { AccessTokens, TokenRefreshFunction } from 'matrix-js-sdk/lib/http-api/interface';
@@ -150,7 +151,7 @@ const createMatrixClient = (
   );
 
   const mxHolder: { client?: MatrixClient } = {};
-  const clientOptions = {
+  const clientOptions: ICreateClientOpts = {
     baseUrl: session.baseUrl,
     accessToken: session.accessToken,
     userId: session.userId,
@@ -159,7 +160,7 @@ const createMatrixClient = (
     deviceId: session.deviceId,
     timelineSupport: true,
     cryptoCallbacks: cryptoCallbacks as any,
-    verificationMethods: ['m.sas.v1'] as const,
+    verificationMethods: ['m.sas.v1'],
   };
 
   if (session.refreshToken && refreshDeps) {
@@ -304,8 +305,10 @@ export const performLogout = async (
 export const logoutClient = async (mx: MatrixClient) => performLogout(mx);
 
 export const clearLoginData = async (
-  storage = typeof window === 'undefined' ? undefined : window.localStorage
-) => performLogout(undefined, { storage: storage as SessionLocalStorage });
+  storage: SessionLocalStorage | undefined = typeof window === 'undefined'
+    ? undefined
+    : window.localStorage
+) => performLogout(undefined, { storage });
 
 const canScheduleProactiveTokenRefresh = (session: MatrixClientSession): boolean =>
   Boolean(session.refreshToken) &&
