@@ -42,7 +42,7 @@ import { _SearchPathSearchParams } from '../../pages/paths';
 import * as css from './RoomViewHeader.css';
 import { useRoomUnread } from '../../state/hooks/unread';
 import { usePowerLevelsContext } from '../../hooks/usePowerLevels';
-import { markAsRead, markAsUnread } from '../../utils/notifications';
+import { markAsReadInBackground, markAsUnread } from '../../utils/notifications';
 import { roomToUnreadAtom } from '../../state/room/roomToUnread';
 import { copyToClipboard } from '../../utils/dom';
 import { LeaveRoomPrompt } from '../../components/leave-room-prompt';
@@ -95,7 +95,7 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose
   const [invitePrompt, setInvitePrompt] = useState(false);
 
   const handleMarkAsRead = () => {
-    markAsRead(mx, room.roomId, hideActivity);
+    markAsReadInBackground(mx, room.roomId, hideActivity);
     requestClose();
   };
 

@@ -87,16 +87,47 @@ struct SpaceSummary: Identifiable, Equatable, Hashable {
 enum RoomListRecentActivity {
     static let window: TimeInterval = 86400
 
+    struct Partition: Equatable {
+        let recent: [RoomSummary]
+        let remaining: [RoomSummary]
+    }
+
     static func recent(from rooms: [RoomSummary], referenceDate: Date = Date()) -> [RoomSummary] {
+        partition(from: rooms, referenceDate: referenceDate).recent
+    }
+
+    static func partition(from rooms: [RoomSummary], referenceDate: Date = Date()) -> Partition {
         let cutoff = referenceDate.addingTimeInterval(-window)
-        return rooms
+        let recent = rooms
             .filter { $0.lastActivityAt > cutoff }
             .sorted {
                 if $0.lastActivityAt != $1.lastActivityAt {
                     return $0.lastActivityAt > $1.lastActivityAt
                 }
-                return $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+                let nameOrder = $0.name.localizedCaseInsensitiveCompare($1.name)
+                if nameOrder != .orderedSame {
+                    return nameOrder == .orderedAscending
+                }
+                return $0.id < $1.id
             }
+        let recentIDs = Set(recent.map(\.id))
+        return Partition(
+            recent: recent,
+            remaining: rooms.filter { recentIDs.contains($0.id) == false }
+        )
+    }
+
+    static func nextExpirationDate(from rooms: [RoomSummary], referenceDate: Date = Date()) -> Date? {
+        rooms
+            .map { $0.lastActivityAt.addingTimeInterval(window) }
+            .filter { $0 > referenceDate }
+            .min()
+    }
+}
+
+enum RoomActivityTimestamp {
+    static func resolve(latest: Date?, previous: Date?) -> Date {
+        latest ?? previous ?? .distantPast
     }
 }
 
@@ -113,6 +144,7 @@ protocol RoomListServicing: AnyObject {
     func roomUpdates() -> AsyncStream<RoomListState>
     func roomDisplayName(roomID: String) -> String?
     func isAgentRoom(roomID: String) -> Bool
+    func hasUnreadMessages(roomID: String) -> Bool
     func clearCache()
 }
 
@@ -128,6 +160,10 @@ extension RoomListServicing {
     }
 
     func isAgentRoom(roomID: String) -> Bool {
+        false
+    }
+
+    func hasUnreadMessages(roomID: String) -> Bool {
         false
     }
 }
@@ -701,6 +737,10 @@ final class PlaceholderRoomListService: RoomListServicing {
         cachedRooms.first { $0.id == roomID }?.isAgentRoom ?? false
     }
 
+    func hasUnreadMessages(roomID: String) -> Bool {
+        cachedRooms.first { $0.id == roomID }?.unreadCount ?? 0 > 0
+    }
+
     func clearCache() {
         cachedRooms = []
     }
@@ -751,6 +791,13 @@ final class MockRoomListService: RoomListServicing {
         }
 
         return rooms.first { $0.id == roomID }?.isAgentRoom ?? false
+    }
+
+    func hasUnreadMessages(roomID: String) -> Bool {
+        guard case .loaded(let rooms) = state else {
+            return false
+        }
+        return rooms.first { $0.id == roomID }?.unreadCount ?? 0 > 0
     }
 
     func roomUpdates() -> AsyncStream<RoomListState> {

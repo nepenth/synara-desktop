@@ -14,8 +14,8 @@ release workflow behavior.
 | `release/vX.Y.Z`    | Release candidate branch. Runs CI and desktop package smoke on push. |                             No |
 | Pushed tag `vX.Y.Z` | Coordinated macOS, Linux, and internal TestFlight release.           | Yes, after every client passes |
 
-Do not push a release tag until the release branch gates, desktop package smoke,
-iOS skeleton build, and human smoke checklist have passed.
+Do not push a release tag until the branch `Quality gate`, desktop package smoke,
+and human smoke checklist have passed.
 
 ## Local Prerequisites
 
@@ -40,6 +40,8 @@ Run these before accepting desktop/runtime changes:
 npm run check:repo-layout
 npm run check:versions
 npm run check:matrix-boundaries
+npm run check:quality-gates
+npm run check:synapse-harness
 npm --prefix synara run typecheck:modernization
 npm --prefix synara run test:modernization
 npm --prefix synara run check:eslint
@@ -47,6 +49,15 @@ npm --prefix synara run check:prettier
 cargo check --manifest-path src-tauri/Cargo.toml --locked
 cargo test --manifest-path src-tauri/Cargo.toml --locked
 npm run check:production-smoke
+```
+
+When Docker is available, run the real cross-device Synapse regression gate as
+well. The final reset is destructive only to the generated loopback harness:
+
+```bash
+scripts/synapse-integration.sh up
+npm run test:synapse-integration
+scripts/synapse-integration.sh reset
 ```
 
 For timeline work, also run:
@@ -85,9 +96,8 @@ full app launch smoke are tracked in [../MACOS_WORKSTATION_HANDOFF.md](../MACOS_
 3. Create `release/vX.Y.Z` from `main`.
 4. Push the release branch.
 5. Confirm GitHub Actions:
-   - `CI`
+   - `CI / Quality gate`, including real iOS simulator tests
    - `Desktop Package Smoke`
-   - `iOS Skeleton` when iOS paths changed
 6. Install and smoke the generated package artifacts:
    - `synara-macos-app`: unsigned/ad-hoc macOS `.app` release-candidate smoke artifact.
    - `synara-linux-arch-pkg`: Arch/CachyOS pacman package artifact for
@@ -101,6 +111,9 @@ publish a production updater channel.
 ## Production Publish Flow
 
 Production publication is owned by the singular `Release` workflow.
+It is deliberately tag-push-only: do not add `workflow_dispatch` unless it
+requires an explicit tag and checks out that exact tag SHA. GitHub's normal
+manual workflow branch selector is not a safe release-source selector.
 
 1. Bump every client and the iOS build number together:
 
@@ -109,10 +122,11 @@ npm run bump:version -- X.Y.Z --ios-build X.Y.Z
 ```
 
 2. Commit and push the version metadata to `main`.
-3. Wait for normal `CI` and `iOS Skeleton` checks to pass.
+3. Wait for the normal `CI / Quality gate` check to pass.
 4. Create and push `vX.Y.Z` at that exact `main` commit.
 5. The `Release` workflow validates that the tag matches the committed shared
-   version and is reachable from `main`, then builds:
+   version and is reachable from `main`, reruns full desktop/runtime and iOS
+   simulator tests at that exact tag SHA, then builds:
    - macOS signed/notarized DMG, macOS updater archive, signatures, and
      `latest.json`.
    - Linux `.deb`.
@@ -120,7 +134,8 @@ npm run bump:version -- X.Y.Z --ios-build X.Y.Z
      assets (`synara.db`, `synara.files`, and package file).
    - iOS signed archive uploaded to internal TestFlight.
 6. Only after every build and verification passes, the workflow creates the
-   versioned GitHub Release and updates the fixed pacman repository.
+   versioned GitHub Release and updates the fixed pacman repository through the
+   `production-release` environment approval.
 7. Verify the processed TestFlight build and hosted macOS `latest.json`.
 8. Verify the fixed pacman repo URL:
 
@@ -152,6 +167,22 @@ Updater-enabled releases require:
 
 Never commit updater private keys, Apple certificates, passwords, or notarization
 credentials.
+
+Configure the GitHub `production-release` Environment with at least one required
+human reviewer. The workflow declares the environment, but repository-level
+review protection must be enabled in GitHub settings.
+
+Set the repository variable `SYNARA_TESTFLIGHT_INTERNAL_ONLY` to `true` or
+`false` to control internal-only TestFlight distribution for subsequent tag
+pushes. It defaults to `true`; there is no manual-dispatch override.
+
+Do not configure the `production-release` environment with required status checks
+from ordinary CI workflows that do not run on tag refs: those checks cannot
+report against a release-tag deployment and will leave approval permanently
+blocked. Use required human reviewers for the environment and the Release
+workflow's exact-tag validation jobs for automated publication protection.
+Branch-protection status checks remain appropriate for `main` and release
+branches where their workflows actually run.
 
 If a release job fails with `incorrect updater private key password`, rotate the
 Tauri updater keypair and GitHub secrets together. The full command sequence is

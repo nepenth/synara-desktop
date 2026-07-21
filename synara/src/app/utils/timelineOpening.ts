@@ -1,4 +1,4 @@
-import { Direction, type EventTimeline, type Room } from 'matrix-js-sdk';
+import { Direction, type EventTimeline, type MatrixEvent, type Room } from 'matrix-js-sdk';
 import { type Unread } from '../../types/matrix/room';
 import {
   getEventTimeline,
@@ -216,6 +216,25 @@ export const shouldGateViewportRestoreOnUnread = (hasUnreadSignal: boolean): boo
 
 export const timelineHasEvents = (timeline: TimelineWindow): boolean =>
   getTimelinesEventsCount(timeline.linkedTimelines) > 0;
+
+export const getTimelineWindowTailEvent = (
+  timelineWindow: TimelineWindow
+): MatrixEvent | undefined => {
+  if (timelineWindow.range.end <= timelineWindow.range.start) return undefined;
+
+  const targetIndex = timelineWindow.range.end - 1;
+  let absoluteIndex = 0;
+  for (const timeline of timelineWindow.linkedTimelines) {
+    for (const event of timeline.getEvents()) {
+      if (absoluteIndex === targetIndex) return event;
+      absoluteIndex += 1;
+    }
+  }
+  return undefined;
+};
+
+export const getTimelineWindowTailEventId = (timelineWindow: TimelineWindow): string | undefined =>
+  getTimelineWindowTailEvent(timelineWindow)?.getId();
 
 /**
  * Jump-to-Unread visibility.

@@ -125,7 +125,10 @@ export const selectFile = <M extends boolean | undefined = undefined>(
     input.click();
   });
 
-export const getDataTransferFiles = (dataTransfer: DataTransfer): File[] | undefined => {
+export const getDataTransferFiles = (
+  dataTransfer: DataTransfer | undefined | null
+): File[] | undefined => {
+  if (!dataTransfer) return undefined;
   const files: File[] = getFilesFromFileList(dataTransfer.files);
   if (files.length === 0 && dataTransfer.items) {
     const itemFiles = getFilesFromDataTransferItems(dataTransfer.items);

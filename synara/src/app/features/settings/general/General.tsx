@@ -1147,13 +1147,13 @@ function DesktopIntegrationSection() {
           </Text>
         </Box>
         <Box direction="Column" gap="100">
-          <Text size="T300" priority="600">
+          <Text size="T300" priority="500">
             {`Tray: ${formatCheckLabel(status.tray.ready, status.tray.supported)}`}
           </Text>
           <Text size="T200" priority="300">
             {status.tray.message}
           </Text>
-          <Text size="T300" priority="600">
+          <Text size="T300" priority="500">
             {`Notifications: ${formatCheckLabel(
               status.notifications.ready,
               status.notifications.supported
@@ -1162,7 +1162,7 @@ function DesktopIntegrationSection() {
           <Text size="T200" priority="300">
             {status.notifications.message}
           </Text>
-          <Text size="T300" priority="600">
+          <Text size="T300" priority="500">
             {`Global Shortcuts: ${formatCheckLabel(
               status.globalShortcuts.ready,
               status.globalShortcuts.supported
@@ -1171,7 +1171,7 @@ function DesktopIntegrationSection() {
           <Text size="T200" priority="300">
             {status.globalShortcuts.message}
           </Text>
-          <Text size="T300" priority="600">
+          <Text size="T300" priority="500">
             {`File Portal: ${formatCheckLabel(
               status.filePortal.ready,
               status.filePortal.supported
@@ -1180,7 +1180,7 @@ function DesktopIntegrationSection() {
           <Text size="T200" priority="300">
             {status.filePortal.message}
           </Text>
-          <Text size="T300" priority="600">
+          <Text size="T300" priority="500">
             {`Media Portal: ${formatCheckLabel(
               status.mediaPortal.ready,
               status.mediaPortal.supported

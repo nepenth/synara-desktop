@@ -4,12 +4,6 @@ on:
   push:
     tags:
       - "v*"
-  workflow_dispatch:
-    inputs:
-      force_internal_testflight:
-        description: "Force TestFlight internal-only (true/false, overrides var)"
-        required: false
-        default: ""
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -56,12 +50,163 @@ jobs:
             exit 1
           fi
 
+  exact-tag-desktop-quality:
+    name: Exact-tag desktop and runtime validation
+    needs: [validate]
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout tagged commit
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Linux Tauri dependencies
+        run: |
+          sudo rm -f /etc/apt/sources.list.d/azure-cli.list /etc/apt/sources.list.d/microsoft-prod.list
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf
+
+      - name: Install desktop dependencies
+        run: npm ci
+
+      - name: Install runtime dependencies
+        run: npm ci
+        working-directory: synara
+
+      - name: Install Chromium for timeline layout tests
+        run: npx playwright install --with-deps chromium
+        working-directory: synara
+
+      - name: Check repository and release contracts
+        run: |
+          npm run check:repo-layout
+          npm run check:versions
+          npm run check:matrix-boundaries
+          npm run check:quality-gates
+          npm run check:synapse-harness
+          npm run check:production-smoke
+          node --test scripts/__tests__/*.test.mjs
+
+      - name: Check and test Rust desktop shell
+        run: |
+          cargo check --locked
+          cargo test --locked
+        working-directory: src-tauri
+
+      - name: Validate desktop runtime
+        run: |
+          npm run typecheck
+          npm run typecheck:modernization
+          npm run test:modernization
+          npm run test:browser:timeline
+          npm run check:eslint
+          npm run check:prettier
+          npm run check:security
+        working-directory: synara
+
+  exact-tag-ios-quality:
+    name: Exact-tag iOS simulator tests
+    needs: [validate]
+    runs-on: macos-26
+    timeout-minutes: 45
+    steps:
+      - name: Checkout tagged commit
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Build and run unsigned simulator tests
+        run: scripts/ci-build.sh
+        working-directory: synara-ios
+        env:
+          RUN_IOS_TESTS: "1"
+
+      - name: Upload exact-tag iOS result bundles
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: exact-tag-ios-test-results
+          path: /private/tmp/synara-ios-results/*.xcresult
+          if-no-files-found: warn
+          retention-days: 30
+
+  exact-tag-synapse-integration:
+    name: Exact-tag Synapse two-client integration
+    needs: [validate]
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout tagged commit
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+
+      - name: Install runtime dependencies
+        run: npm ci
+        working-directory: synara
+
+      - name: Start disposable Synapse
+        run: scripts/synapse-integration.sh up
+
+      - name: Run public and private two-client scenarios
+        run: npm run test:synapse-integration
+        env:
+          SYNARA_RECEIPT_MODE: both
+
+      - name: Tear down disposable Synapse
+        if: always()
+        run: scripts/synapse-integration.sh reset
+
+  quality-gate:
+    name: Exact-tag quality gate
+    if: always()
+    needs:
+      [
+        validate,
+        exact-tag-desktop-quality,
+        exact-tag-ios-quality,
+        exact-tag-synapse-integration,
+      ]
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Require full validation at the tagged SHA
+        env:
+          TAG_RESULT: ${{ needs.validate.result }}
+          DESKTOP_RESULT: ${{ needs.exact-tag-desktop-quality.result }}
+          IOS_RESULT: ${{ needs.exact-tag-ios-quality.result }}
+          SYNAPSE_RESULT: ${{ needs.exact-tag-synapse-integration.result }}
+        run: |
+          if [[ "$TAG_RESULT" != "success" || "$DESKTOP_RESULT" != "success" || "$IOS_RESULT" != "success" || "$SYNAPSE_RESULT" != "success" ]]; then
+            echo "Tag/version validation: $TAG_RESULT" >&2
+            echo "Desktop/runtime validation: $DESKTOP_RESULT" >&2
+            echo "iOS simulator tests: $IOS_RESULT" >&2
+            echo "Synapse two-client integration: $SYNAPSE_RESULT" >&2
+            exit 1
+          fi
+
   linux-deb:
     name: Linux .deb release artifact
     if: startsWith(github.ref_name, 'v')
     runs-on: ubuntu-22.04
     timeout-minutes: 60
-    needs: [validate]
+    needs: [quality-gate]
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -113,7 +258,7 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 60
     container: archlinux:base-devel
-    needs: [validate]
+    needs: [quality-gate]
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -189,7 +334,7 @@ jobs:
       APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
       TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
       TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-    needs: [validate]
+    needs: [quality-gate]
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -410,7 +555,7 @@ jobs:
   ios-testflight:
     name: iOS internal TestFlight release
     if: startsWith(github.ref_name, 'v')
-    needs: [validate]
+    needs: [quality-gate]
     runs-on: macos-26
     timeout-minutes: 45
     environment:
@@ -611,7 +756,7 @@ jobs:
           SYNARA_ASC_ISSUER_ID: ${{ secrets.SYNARA_ASC_ISSUER_ID }}
           SYNARA_IOS_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           SYNARA_PUSH_GATEWAY_URL: ${{ vars.SYNARA_PUSH_GATEWAY_URL }}
-          SYNARA_TESTFLIGHT_INTERNAL_ONLY: ${{ inputs.force_internal_testflight || vars.SYNARA_TESTFLIGHT_INTERNAL_ONLY || 'true' }}
+          SYNARA_TESTFLIGHT_INTERNAL_ONLY: ${{ vars.SYNARA_TESTFLIGHT_INTERNAL_ONLY || 'true' }}
         run: synara-ios/scripts/upload-testflight-internal.sh
 
       - name: Clean signing material
@@ -644,6 +789,10 @@ jobs:
       - ios-testflight
     permissions:
       contents: write
+      deployments: write
+    environment:
+      name: production-release
+      url: ${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ github.ref_name }}
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}

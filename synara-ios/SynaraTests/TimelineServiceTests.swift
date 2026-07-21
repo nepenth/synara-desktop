@@ -1,6 +1,6 @@
-import XCTest
 @preconcurrency import MatrixRustSDK
 @testable import Synara
+import XCTest
 
 final class TimelineServiceTests: XCTestCase {
     func testRoomTimelineScrollPolicyOnlyFollowsAnEstablishedLiveEnd() {
@@ -203,90 +203,162 @@ final class TimelineServiceTests: XCTestCase {
         )
     }
 
-    func testRoomTimelineFocusPolicyOpensNormalRoomsAtLiveTail() {
-        XCTAssertNil(
-            RoomTimelineFocusPolicy.initialLoadFocus(
+    func testRoomTimelineFocusPolicyOpensCaughtUpRoomsLive() {
+        XCTAssertEqual(
+            RoomTimelineFocusPolicy.initialMode(
                 focusedEventID: nil,
-                initialReadMarkerEventID: "$read-marker"
-            )
+                hasUnreadMessages: false,
+                readMarkerEventID: "$read-marker"
+            ),
+            .live
         )
-        XCTAssertNil(
-            RoomTimelineFocusPolicy.updateStreamFocus(
+    }
+
+    func testRoomTimelineFocusPolicyOpensUnreadRoomsAroundSharedMarker() {
+        XCTAssertEqual(
+            RoomTimelineFocusPolicy.initialMode(
                 focusedEventID: nil,
-                override: nil
-            )
-        )
-    }
-
-    func testRoomTimelineFocusPolicyIgnoresReadMarkerForNormalInitialAndStreamLoads() {
-        let initialFocus = RoomTimelineFocusPolicy.initialLoadFocus(
-            focusedEventID: nil,
-            initialReadMarkerEventID: "$read-marker"
-        )
-        let updateFocus = RoomTimelineFocusPolicy.updateStreamFocus(
-            focusedEventID: nil,
-            override: nil
-        )
-
-        XCTAssertNil(initialFocus)
-        XCTAssertNil(updateFocus)
-    }
-
-    func testRoomTimelineFocusPolicyKeepsExplicitFocusedRoutesFocused() {
-        XCTAssertEqual(
-            RoomTimelineFocusPolicy.initialLoadFocus(
-                focusedEventID: "$focused",
-                initialReadMarkerEventID: "$read-marker"
+                hasUnreadMessages: true,
+                readMarkerEventID: "$read-marker"
             ),
-            "$focused"
+            .unread(markerEventID: "$read-marker")
         )
+    }
+
+    func testRoomTimelineFocusPolicyFallsBackLiveWhenUnreadMarkerIsUnavailable() {
         XCTAssertEqual(
-            RoomTimelineFocusPolicy.updateStreamFocus(
-                focusedEventID: "$focused",
-                override: nil
+            RoomTimelineFocusPolicy.initialMode(
+                focusedEventID: nil,
+                hasUnreadMessages: true,
+                readMarkerEventID: nil
             ),
-            "$focused"
-        )
-        XCTAssertNil(
-            RoomTimelineFocusPolicy.updateStreamFocus(
-                focusedEventID: "$focused",
-                override: .some(nil)
-            )
+            .live
         )
     }
 
-    func testRoomTimelineFocusPolicyJumpLatestOverrideReturnsFocusedRouteToLiveStream() {
-        XCTAssertNil(
-            RoomTimelineFocusPolicy.updateStreamFocus(
-                focusedEventID: "$focused-event",
-                override: .some(nil)
-            )
-        )
-    }
-
-    func testRoomTimelineFocusPolicyNormalOpenNeverUsesStaleReadMarkerForFocus() {
-        // v1.2.28 policy: normal open ignores m.fully_read for initial load focus.
-        // Post-load restore of old markers is also removed from RoomTimelineView.
-        let normalOpenFocus = RoomTimelineFocusPolicy.initialLoadFocus(
-            focusedEventID: nil,
-            initialReadMarkerEventID: "$stale-read-marker"
-        )
-        let streamFocus = RoomTimelineFocusPolicy.updateStreamFocus(
-            focusedEventID: nil,
-            override: nil
-        )
-
-        XCTAssertNil(normalOpenFocus)
-        XCTAssertNil(streamFocus)
-
-        // Explicit deep links remain focused.
+    func testRoomTimelineFocusPolicyExplicitEventWinsOverUnreadState() {
         XCTAssertEqual(
-            RoomTimelineFocusPolicy.initialLoadFocus(
+            RoomTimelineFocusPolicy.initialMode(
                 focusedEventID: "$deep-link",
-                initialReadMarkerEventID: "$stale-read-marker"
+                hasUnreadMessages: true,
+                readMarkerEventID: "$read-marker"
             ),
-            "$deep-link"
+            .focused(eventID: "$deep-link")
         )
+    }
+
+    func testTimelineWindowCapsInitialAndStreamingSnapshotsAtThreeHundredEvents() async throws {
+        let initial = TimelineFixtures.largeTimeline(count: 400)
+        let streamed = TimelineFixtures.largeTimeline(count: 500)
+        let service = MockTimelineService(items: initial)
+        service.updateOutcomes = [.loaded(streamed)]
+        let session = RoomTimelineSession(roomID: "!room:matrix.org", service: service)
+
+        let openedFeed = await session.open(mode: .live)
+        let feed = try XCTUnwrap(openedFeed)
+        let initialItems = try loadedItems(from: feed.initialOutcome)
+        var iterator = feed.updates.makeAsyncIterator()
+        let nextStreamedOutcome = await iterator.next()
+        let streamedOutcome = try XCTUnwrap(nextStreamedOutcome)
+        let streamedItems = try loadedItems(from: streamedOutcome)
+
+        XCTAssertEqual(initialItems.count, TimelineWindowPolicy.stableEventLimit)
+        XCTAssertEqual(initialItems.first?.eventID, "$synthetic-100:matrix.org")
+        XCTAssertEqual(streamedItems.count, TimelineWindowPolicy.stableEventLimit)
+        XCTAssertEqual(streamedItems.first?.eventID, "$synthetic-200:matrix.org")
+        XCTAssertEqual(streamedItems.last?.eventID, "$synthetic-499:matrix.org")
+    }
+
+    func testTimelineSessionRejectsInitialLoadFromInvalidatedGeneration() async {
+        let service = MockTimelineService(items: TimelineFixtures.largeTimeline(count: 20))
+        service.loadDelayNanoseconds = 100_000_000
+        let session = RoomTimelineSession(roomID: "!room:matrix.org", service: service)
+
+        let opening = Task {
+            await session.open(mode: .focused(eventID: "$synthetic-10:matrix.org"))
+        }
+        try? await Task.sleep(nanoseconds: 10_000_000)
+        await session.invalidate()
+
+        let staleFeed = await opening.value
+        XCTAssertNil(staleFeed)
+    }
+
+    func testTimelineSessionRejectsLateUpdateFromInvalidatedGeneration() async throws {
+        let service = MockTimelineService(items: TimelineFixtures.largeTimeline(count: 20))
+        service.updateOutcomes = [.loaded(TimelineFixtures.largeTimeline(count: 40))]
+        service.updateDelayNanoseconds = 100_000_000
+        let session = RoomTimelineSession(roomID: "!room:matrix.org", service: service)
+        let openedFeed = await session.open(mode: .live)
+        let feed = try XCTUnwrap(openedFeed)
+
+        let lateUpdate = Task {
+            var iterator = feed.updates.makeAsyncIterator()
+            return await iterator.next()
+        }
+        await session.invalidate()
+
+        let rejectedOutcome = await lateUpdate.value
+        XCTAssertNil(rejectedOutcome)
+    }
+
+    func testTimelineSessionPreservesHistoricalGenerationWhenJumpFails() async throws {
+        let service = MockTimelineService(items: TimelineFixtures.largeTimeline(count: 30))
+        service.latestOutcome = .failed("Latest unavailable")
+        let session = RoomTimelineSession(roomID: "!room:matrix.org", service: service)
+        let openedFeed = await session.open(mode: .focused(eventID: "$synthetic-10:matrix.org"))
+        _ = try XCTUnwrap(openedFeed)
+        let historicalGeneration = await session.currentGeneration()
+
+        let transition = await session.transitionToLive()
+
+        guard case let .failed(message) = transition else {
+            XCTFail("Expected failed live transition")
+            return
+        }
+        XCTAssertEqual(message, "Latest unavailable")
+        let generationAfterFailure = await session.currentGeneration()
+        XCTAssertEqual(generationAfterFailure, historicalGeneration)
+    }
+
+    func testTimelineSessionJumpReplacesHistoryWithCleanLiveProvider() async throws {
+        let history = Array(TimelineFixtures.largeTimeline(count: 200).prefix(100))
+        let live = Array(TimelineFixtures.largeTimeline(count: 500).suffix(75))
+        let service = MockTimelineService(items: history)
+        service.latestOutcome = .loaded(live)
+        let session = RoomTimelineSession(roomID: "!room:matrix.org", service: service)
+        let openedFeed = await session.open(mode: .focused(eventID: history[50].eventID))
+        _ = try XCTUnwrap(openedFeed)
+
+        let transition = await session.transitionToLive()
+
+        guard case let .succeeded(feed) = transition else {
+            XCTFail("Expected successful live transition")
+            return
+        }
+        let items = try loadedItems(from: feed.initialOutcome)
+        XCTAssertEqual(feed.mode, .live)
+        XCTAssertEqual(items, live)
+        XCTAssertFalse(items.contains(where: { $0.eventID == history.first?.eventID }))
+    }
+
+    func testTimelineSessionPaginationRetainsBoundedHistoricalWindow() async throws {
+        let allItems = TimelineFixtures.largeTimeline(count: 400)
+        let current = Array(allItems.suffix(300))
+        let older = Array(allItems.prefix(100))
+        let service = MockTimelineService(items: current)
+        service.olderOutcome = .loaded(older)
+        let session = RoomTimelineSession(roomID: "!room:matrix.org", service: service)
+        let openedFeed = await session.open(mode: .live)
+        _ = try XCTUnwrap(openedFeed)
+
+        let loadedOutcome = await session.loadOlder(before: current[0].eventID)
+        let outcome = try XCTUnwrap(loadedOutcome)
+        let items = try loadedItems(from: outcome)
+
+        XCTAssertEqual(items.count, TimelineWindowPolicy.stableEventLimit)
+        XCTAssertEqual(items.first?.eventID, "$synthetic-0:matrix.org")
+        XCTAssertEqual(items.last?.eventID, "$synthetic-299:matrix.org")
     }
 
     func testMatrixHTMLSanitizerDropsUnsafeLinksAndKeepsFallback() {
@@ -378,7 +450,7 @@ final class TimelineServiceTests: XCTestCase {
             MatrixHTMLRenderer.segments(body: "", html: html),
             [
                 .details(block),
-                .markdown("**Practical decision:**\n\n- Do not use it for active/default bounty pipelines.")
+                .markdown("**Practical decision:**\n\n- Do not use it for active/default bounty pipelines."),
             ]
         )
     }
@@ -395,7 +467,7 @@ final class TimelineServiceTests: XCTestCase {
             [
                 .markdown("Plan:"),
                 .code("let value = 1\nprint(value)"),
-                .markdown("- **Ship**\n- Verify")
+                .markdown("- **Ship**\n- Verify"),
             ]
         )
     }
@@ -411,7 +483,7 @@ final class TimelineServiceTests: XCTestCase {
             MatrixHTMLRenderer.segments(body: "fallback", html: html),
             [
                 .markdown("**App-agent handoff**\n\nI wrote a copyable handoff file here:"),
-                .quote("TestFlight **MUST** use production APNs.")
+                .quote("TestFlight **MUST** use production APNs."),
             ]
         )
     }
@@ -479,7 +551,7 @@ final class TimelineServiceTests: XCTestCase {
             isEncrypted: false
         )
 
-        if case .formattedText(let body, let html) = kind {
+        if case let .formattedText(body, html) = kind {
             XCTAssertEqual(body, "- **Ship it**\n- Review fallback")
             XCTAssertEqual(html, #"<ul><li><strong>Ship it</strong></li><li>Review fallback</li></ul>"#)
         } else {
@@ -525,7 +597,7 @@ final class TimelineServiceTests: XCTestCase {
                     id: "continue",
                     title: "Continue",
                     prompt: "continue"
-                )
+                ),
             ]
         )
         let event = RawTimelineEvent(
@@ -540,7 +612,7 @@ final class TimelineServiceTests: XCTestCase {
             agentCard: card
         )
 
-        if case .agentCard(let mapped) = TimelineMapper.map(event).kind {
+        if case let .agentCard(mapped) = TimelineMapper.map(event).kind {
             XCTAssertEqual(mapped, card)
         } else {
             XCTFail("Expected agent card mapped kind")
@@ -617,7 +689,7 @@ final class TimelineServiceTests: XCTestCase {
 
         let item = TimelineMapper.map(event)
 
-        guard case .mediaPlaceholder(let resource) = item.kind else {
+        guard case let .mediaPlaceholder(resource) = item.kind else {
             XCTFail("Expected media placeholder")
             return
         }
@@ -630,13 +702,13 @@ final class TimelineServiceTests: XCTestCase {
         let service = MockTimelineService()
 
         let initialOutcome = await service.loadInitialTimeline(roomID: "!room:matrix.org")
-        guard case .loaded(let initial) = initialOutcome else {
+        guard case let .loaded(initial) = initialOutcome else {
             XCTFail("Expected loaded initial timeline")
             return
         }
 
         let olderOutcome = await service.loadOlderTimeline(roomID: "!room:matrix.org", before: initial[0].eventID)
-        guard case .loaded(let older) = olderOutcome else {
+        guard case let .loaded(older) = olderOutcome else {
             XCTFail("Expected loaded older timeline")
             return
         }
@@ -645,7 +717,27 @@ final class TimelineServiceTests: XCTestCase {
         XCTAssertEqual(older.count, 5)
         XCTAssertEqual(initial[0].senderID, "@mina:matrix.org")
         XCTAssertEqual(initial[0].reactions["👍"], 3)
-        XCTAssertEqual(initial[4].replyToEventID, "$security:!project:matrix.org")
+        XCTAssertEqual(initial[4].replyToEventID, "$security:!room:matrix.org")
+    }
+
+    func testMockFocusedTimelineReturnsRoomSpecificMarkerContextAndSuccessor() async {
+        let service = MockTimelineService()
+        let roomID = "!context:matrix.org"
+
+        let outcome = await service.loadInitialTimeline(
+            roomID: roomID,
+            focusedEventID: "$security:\(roomID)"
+        )
+
+        guard case let .loaded(items) = outcome else {
+            XCTFail("Expected focused context")
+            return
+        }
+        let markerIndex = items.firstIndex { $0.eventID == "$security:\(roomID)" }
+        let successorIndex = items.firstIndex { $0.eventID == "$thread-reply:\(roomID)" }
+        XCTAssertNotNil(markerIndex)
+        XCTAssertEqual(successorIndex, markerIndex.map { $0 + 1 })
+        XCTAssertFalse(items.contains { $0.eventID.contains("!project:matrix.org") })
     }
 
     func testMockTimelineStreamYieldsMultipleOutcomes() async {
@@ -672,7 +764,7 @@ final class TimelineServiceTests: XCTestCase {
         let service = MockTimelineService()
         service.updateOutcomes = [
             .loaded([firstItem]),
-            .loaded([firstItem, secondItem])
+            .loaded([firstItem, secondItem]),
         ]
 
         var outcomes: [TimelineLoadOutcome] = []
@@ -681,8 +773,9 @@ final class TimelineServiceTests: XCTestCase {
         }
 
         XCTAssertEqual(outcomes.count, 2)
-        guard case .loaded(let firstBatch) = outcomes[0],
-              case .loaded(let secondBatch) = outcomes[1] else {
+        guard case let .loaded(firstBatch) = outcomes[0],
+              case let .loaded(secondBatch) = outcomes[1]
+        else {
             XCTFail("Expected loaded timeline outcomes")
             return
         }
@@ -694,7 +787,7 @@ final class TimelineServiceTests: XCTestCase {
         let service = MockTimelineService()
         service.typingUserUpdates = [
             ["@forge:matrix.org"],
-            []
+            [],
         ]
 
         var updates: [[String]] = []
@@ -708,8 +801,8 @@ final class TimelineServiceTests: XCTestCase {
     func testLargeTimelineFixtureHasStableIdentity() {
         let items = TimelineFixtures.largeTimeline()
 
-        XCTAssertEqual(items.count, 10_000)
-        XCTAssertEqual(Set(items.map(\.id)).count, 10_000)
+        XCTAssertEqual(items.count, 10000)
+        XCTAssertEqual(Set(items.map(\.id)).count, 10000)
     }
 
     func testPendingMessageFactoryMarksLocalDeliveryState() {
@@ -722,8 +815,132 @@ final class TimelineServiceTests: XCTestCase {
 
         XCTAssertTrue(pending.isLocalPending)
         XCTAssertEqual(pending.deliveryStatus, .sending)
+        XCTAssertNil(pending.serverEventID)
         XCTAssertEqual(pending.kind, .text("Hello world"))
         XCTAssertEqual(pending.replyToEventID, "$parent:matrix.org")
+    }
+
+    func testServerAndTransactionTimelineIdentitiesRemainDistinct() {
+        let server = TimelineItem(
+            id: "$server:matrix.org",
+            eventID: "$server:matrix.org",
+            senderID: "@alice:matrix.org",
+            timestamp: TimelineFixtures.baseDate,
+            kind: .text("Confirmed"),
+            replyToEventID: nil,
+            isEdited: false,
+            reactions: [:]
+        )
+        let transaction = TimelineItem(
+            id: "transaction-123",
+            eventID: "transaction-123",
+            serverEventID: nil,
+            senderID: "@alice:matrix.org",
+            timestamp: TimelineFixtures.baseDate,
+            kind: .text("Local echo"),
+            replyToEventID: nil,
+            isEdited: false,
+            reactions: [:],
+            deliveryStatus: .sent
+        )
+
+        XCTAssertEqual(server.serverEventID, "$server:matrix.org")
+        XCTAssertNil(transaction.serverEventID)
+        XCTAssertTrue(transaction.isLocalPending)
+    }
+
+    func testAvatarEnrichmentPreservesTransactionIdentityAndDeliveryState() throws {
+        let transactionItem = TimelineItem(
+            id: "txn-local-echo",
+            eventID: "txn-local-echo",
+            serverEventID: nil,
+            senderID: "@alice:matrix.org",
+            timestamp: TimelineFixtures.baseDate,
+            kind: .text("Sending"),
+            replyToEventID: nil,
+            isEdited: false,
+            reactions: [:],
+            deliveryStatus: .sent
+        )
+        let avatarURL = try XCTUnwrap(URL(string: "mxc://matrix.org/alice"))
+
+        let enrichedItem = transactionItem.withSenderAvatarURL(avatarURL)
+
+        XCTAssertEqual(enrichedItem.senderAvatarURL, avatarURL)
+        XCTAssertNil(enrichedItem.serverEventID)
+        XCTAssertEqual(enrichedItem.deliveryStatus, .sent)
+        XCTAssertTrue(enrichedItem.isLocalPending)
+    }
+
+    func testPendingReconcilerPreservesAuthoritativeServerVectorOrder() {
+        func item(_ id: String, offset: TimeInterval) -> Synara.TimelineItem {
+            Synara.TimelineItem(
+                id: id,
+                eventID: id,
+                senderID: "@server:matrix.org",
+                timestamp: TimelineFixtures.baseDate.addingTimeInterval(offset),
+                kind: .text(id),
+                replyToEventID: nil,
+                isEdited: false,
+                reactions: [:]
+            )
+        }
+        let serverItems = [item("$one", offset: 100), item("$two", offset: 0), item("$three", offset: 50)]
+        let pending = TimelineItem.pendingMessage(
+            localID: "$pending-order",
+            body: "Pending",
+            senderID: "@alice:matrix.org",
+            replyToEventID: nil,
+            timestamp: TimelineFixtures.baseDate.addingTimeInterval(25)
+        )
+
+        let merged = TimelinePendingReconciler.merge(
+            streamItems: serverItems,
+            localItems: [pending],
+            currentUserID: "@alice:matrix.org"
+        )
+
+        XCTAssertEqual(merged.filter { !$0.isLocalPending }.map(\.eventID), ["$one", "$two", "$three"])
+    }
+
+    func testTimelineCollectorAndInteractiveFreshnessPoliciesAreBounded() {
+        XCTAssertEqual(MatrixTimelineCollectorPolicy.retainedSuffixCount(itemCount: 5000, limit: 1200), 1200)
+        XCTAssertEqual(MatrixTimelineCollectorPolicy.droppedPrefixCount(itemCount: 5000, limit: 1200), 3800)
+        XCTAssertEqual(
+            MatrixTimelineCollectorPolicy.droppedPrefixCountAfterPopBack(
+                retainedCount: 0,
+                droppedPrefixCount: 25
+            ),
+            24
+        )
+
+        let now = Date()
+        XCTAssertFalse(MatrixInteractiveFreshnessPolicy.shouldPerformSync(
+            hasActiveSyncService: true,
+            lastSuccessfulSyncAt: nil,
+            now: now,
+            maximumAge: 2
+        ))
+        XCTAssertFalse(MatrixInteractiveFreshnessPolicy.shouldPerformSync(
+            hasActiveSyncService: false,
+            lastSuccessfulSyncAt: now.addingTimeInterval(-1),
+            now: now,
+            maximumAge: 2
+        ))
+        XCTAssertTrue(MatrixInteractiveFreshnessPolicy.shouldPerformSync(
+            hasActiveSyncService: false,
+            lastSuccessfulSyncAt: now.addingTimeInterval(-3),
+            now: now,
+            maximumAge: 2
+        ))
+        XCTAssertTrue(MatrixInteractiveFreshnessPolicy.ownsInstalledOperation(
+            installedGeneration: 4,
+            currentGeneration: 4
+        ))
+        XCTAssertFalse(MatrixInteractiveFreshnessPolicy.ownsInstalledOperation(
+            installedGeneration: 4,
+            currentGeneration: 5
+        ))
     }
 
     func testPendingReconcilerDropsMatchedLocalEchoes() {
@@ -825,7 +1042,7 @@ final class TimelineServiceTests: XCTestCase {
         XCTAssertTrue(merged.contains(where: { $0.id == stillSending.id && $0.deliveryStatus == .sending }))
     }
 
-    func testStableWindowMergePreservesRenderedItemsWhenStreamWindowIsPartial() {
+    func testServerWindowReplacementDropsHistoricalContext() {
         let older = TimelineItem(
             id: "$older:matrix.org",
             eventID: "$older:matrix.org",
@@ -857,16 +1074,14 @@ final class TimelineServiceTests: XCTestCase {
             reactions: [:]
         )
 
-        let merged = TimelinePendingReconciler.mergeStableWindow(
-            streamItems: [latest],
-            localItems: [older, readMarkerContext],
-            currentUserID: "@alice:matrix.org"
-        )
+        let merged = TimelineWindowPolicy.replacingServerWindow([latest])
 
-        XCTAssertEqual(merged.map(\.eventID), ["$older:matrix.org", "$read-marker:matrix.org", "$latest:matrix.org"])
+        XCTAssertEqual(merged.map(\.eventID), ["$latest:matrix.org"])
+        XCTAssertFalse(merged.contains(older))
+        XCTAssertFalse(merged.contains(readMarkerContext))
     }
 
-    func testStableWindowMergeUpdatesExistingEventsFromIncomingStream() {
+    func testServerWindowReplacementUsesIncomingEventRevision() {
         let original = TimelineItem(
             id: "$event:matrix.org",
             eventID: "$event:matrix.org",
@@ -888,19 +1103,16 @@ final class TimelineServiceTests: XCTestCase {
             reactions: ["👍": 1]
         )
 
-        let merged = TimelinePendingReconciler.mergeStableWindow(
-            streamItems: [updated],
-            localItems: [original],
-            currentUserID: "@alice:matrix.org"
-        )
+        let merged = TimelineWindowPolicy.replacingServerWindow([updated])
 
         XCTAssertEqual(merged.count, 1)
+        XCTAssertNotEqual(merged.first, original)
         XCTAssertEqual(merged.first?.kind, .text("Edited"))
         XCTAssertEqual(merged.first?.isEdited, true)
         XCTAssertEqual(merged.first?.reactions["👍"], 1)
     }
 
-    func testStableWindowMergeKeepsPendingReconciliation() {
+    func testBoundedServerWindowKeepsOnlyUnmatchedLocalEchoes() {
         let pending = TimelineItem.pendingMessage(
             localID: "$pending-local",
             body: "Ship it",
@@ -919,8 +1131,8 @@ final class TimelineServiceTests: XCTestCase {
             reactions: [:]
         )
 
-        let merged = TimelinePendingReconciler.mergeStableWindow(
-            streamItems: [confirmed],
+        let merged = TimelinePendingReconciler.merge(
+            streamItems: TimelineWindowPolicy.replacingServerWindow([confirmed]),
             localItems: [pending],
             currentUserID: "@alice:matrix.org"
         )
@@ -928,6 +1140,16 @@ final class TimelineServiceTests: XCTestCase {
         XCTAssertEqual(merged.count, 1)
         XCTAssertEqual(merged.first?.eventID, "$server:matrix.org")
         XCTAssertNil(merged.first?.deliveryStatus)
+    }
+
+    private func loadedItems(from outcome: TimelineLoadOutcome) throws -> [Synara.TimelineItem] {
+        let items: [Synara.TimelineItem]?
+        if case let .loaded(loadedItems) = outcome {
+            items = loadedItems
+        } else {
+            items = nil
+        }
+        return try XCTUnwrap(items)
     }
 
     func testTimelineReplyCounterCountsRepliesByRootEvent() {
@@ -978,8 +1200,8 @@ final class TimelineServiceTests: XCTestCase {
                         roomId: "!room:example.org",
                         eventId: "$one",
                         createdAt: 5,
-                        dueTs: now + 3600_000,
-                        completedAt: 9_000
+                        dueTs: now + 3_600_000,
+                        completedAt: 9000
                     ),
                     "b": .init(
                         id: "b",
@@ -987,7 +1209,7 @@ final class TimelineServiceTests: XCTestCase {
                         roomId: "!room:example.org",
                         eventId: "$two",
                         createdAt: 6,
-                        dueTs: now - 10_000,
+                        dueTs: now - 10000,
                         completedAt: nil
                     ),
                     "c": .init(
@@ -998,7 +1220,7 @@ final class TimelineServiceTests: XCTestCase {
                         createdAt: 7,
                         dueTs: now + 1000,
                         completedAt: nil
-                    )
+                    ),
                 ]
             )
         } catch {
@@ -1023,7 +1245,7 @@ final class TimelineServiceTests: XCTestCase {
             .dueSoon
         )
         XCTAssertEqual(
-            LaterDueUrgency.classify(dueTs: now + (25 * 60 * 60 * 1_000), isCompleted: false, now: now),
+            LaterDueUrgency.classify(dueTs: now + (25 * 60 * 60 * 1000), isCompleted: false, now: now),
             .future
         )
         XCTAssertEqual(
@@ -1042,13 +1264,13 @@ final class TimelineServiceTests: XCTestCase {
                     roomId: "!room:example.org",
                     eventId: "$one",
                     createdAt: 1
-                )
+                ),
             ]
         )
 
-        let completed = try content.completingItem(id: "saved", at: 9_999)
+        let completed = try content.completingItem(id: "saved", at: 9999)
 
-        XCTAssertEqual(completed.items["saved"]?.completedAt, 9_999)
+        XCTAssertEqual(completed.items["saved"]?.completedAt, 9999)
     }
 
     func testMockLaterServiceCompletesActiveItem() async {
@@ -1063,20 +1285,20 @@ final class TimelineServiceTests: XCTestCase {
                     completedAt: nil,
                     createdAt: 1,
                     isCompleted: false
-                )
+                ),
             ],
-            now: { 9_999 }
+            now: { 9999 }
         )
 
         let result = await service.completeItem(id: "saved")
         let loaded = await service.loadItems()
 
         XCTAssertEqual(result, .success(true))
-        guard case .success((let items, _)) = loaded else {
+        guard case let .success((items, _)) = loaded else {
             XCTFail("Expected loaded items")
             return
         }
-        XCTAssertEqual(items.first?.completedAt, 9_999)
+        XCTAssertEqual(items.first?.completedAt, 9999)
         XCTAssertTrue(items.first?.isCompleted == true)
     }
 
@@ -1101,7 +1323,7 @@ final class TimelineServiceTests: XCTestCase {
                 replyToEventID: nil,
                 isEdited: false,
                 reactions: [:]
-            )
+            ),
         ]
 
         let filtered = TimelineSearchFilter.applySearchQuery("release", to: items)
@@ -1120,7 +1342,7 @@ final class TimelineServiceTests: XCTestCase {
                 replyToEventID: nil,
                 isEdited: false,
                 reactions: [:]
-            )
+            ),
         ]
 
         let filtered = TimelineSearchFilter.applySearchQuery("mina", to: items)
@@ -1135,5 +1357,4 @@ final class TimelineServiceTests: XCTestCase {
 
         XCTAssertEqual(filtered, items)
     }
-
 }

@@ -3,19 +3,19 @@ import Foundation
 enum TimelineSearchFilter {
     static func searchableText(for item: TimelineItem) -> String {
         switch item.kind {
-        case .text(let body):
+        case let .text(body):
             return body
-        case .formattedText(let body, _):
+        case let .formattedText(body, _):
             return body
-        case .mediaPlaceholder(let resource):
+        case let .mediaPlaceholder(resource):
             return resource.safeDescription
-        case .agentCard(let card):
+        case let .agentCard(card):
             return card.title
         case .redacted:
             return "Deleted message"
         case .encryptedPlaceholder:
             return "Encrypted message"
-        case .unknown(let type):
+        case let .unknown(type):
             return type
         }
     }
@@ -59,6 +59,10 @@ struct TimelineItem: Identifiable, Equatable {
 
     let id: String
     let eventID: String
+    /// The homeserver event identifier that may safely be used for receipts and
+    /// read markers. Local echoes and transaction identifiers intentionally leave
+    /// this nil while continuing to use `eventID` as their stable presentation ID.
+    let serverEventID: String?
     let senderID: String
     let senderAvatarURL: URL?
     let timestamp: Date
@@ -72,6 +76,7 @@ struct TimelineItem: Identifiable, Equatable {
     init(
         id: String,
         eventID: String,
+        serverEventID: String? = nil,
         senderID: String,
         senderAvatarURL: URL? = nil,
         timestamp: Date,
@@ -84,6 +89,7 @@ struct TimelineItem: Identifiable, Equatable {
     ) {
         self.id = id
         self.eventID = eventID
+        self.serverEventID = deliveryStatus == nil ? (serverEventID ?? eventID) : serverEventID
         self.senderID = senderID
         self.senderAvatarURL = senderAvatarURL
         self.timestamp = timestamp
@@ -103,6 +109,24 @@ struct TimelineItem: Identifiable, Equatable {
         TimelineItem(
             id: id,
             eventID: eventID,
+            serverEventID: serverEventID,
+            senderID: senderID,
+            senderAvatarURL: senderAvatarURL,
+            timestamp: timestamp,
+            kind: kind,
+            replyToEventID: replyToEventID,
+            isEdited: isEdited,
+            reactions: reactions,
+            isEncrypted: isEncrypted,
+            deliveryStatus: deliveryStatus
+        )
+    }
+
+    func withSenderAvatarURL(_ senderAvatarURL: URL?) -> TimelineItem {
+        TimelineItem(
+            id: id,
+            eventID: eventID,
+            serverEventID: serverEventID,
             senderID: senderID,
             senderAvatarURL: senderAvatarURL,
             timestamp: timestamp,
@@ -127,6 +151,7 @@ struct TimelineItem: Identifiable, Equatable {
         TimelineItem(
             id: localID,
             eventID: localID,
+            serverEventID: nil,
             senderID: senderID,
             senderAvatarURL: senderAvatarURL,
             timestamp: timestamp,
@@ -142,9 +167,9 @@ struct TimelineItem: Identifiable, Equatable {
 enum TimelinePendingReconciler {
     static func messageBody(for item: TimelineItem) -> String? {
         switch item.kind {
-        case .text(let body):
+        case let .text(body):
             return body
-        case .formattedText(let body, _):
+        case let .formattedText(body, _):
             return body
         default:
             return nil
@@ -167,7 +192,8 @@ enum TimelinePendingReconciler {
         }
         guard let pendingBody = messageBody(for: pending),
               let serverBody = messageBody(for: serverItem),
-              pendingBody == serverBody else {
+              pendingBody == serverBody
+        else {
             return false
         }
         return abs(serverItem.timestamp.timeIntervalSince(pending.timestamp)) < 5 * 60
@@ -196,42 +222,50 @@ enum TimelinePendingReconciler {
             return streamItems
         }
 
-        return (streamItems + unmatchedPending).sorted { $0.timestamp < $1.timestamp }
+        // The SDK vector is authoritative. Insert local echoes by timestamp without
+        // ever reordering server events relative to one another.
+        var merged = streamItems
+        for pending in unmatchedPending.sorted(by: { $0.timestamp < $1.timestamp }) {
+            let insertionIndex = merged.firstIndex { item in
+                item.isLocalPending == false && item.timestamp > pending.timestamp
+            } ?? merged.endIndex
+            merged.insert(pending, at: insertionIndex)
+        }
+        return merged
     }
+}
 
-    static func mergeStableWindow(
-        streamItems: [TimelineItem],
-        localItems: [TimelineItem],
-        currentUserID: String
+enum TimelineWindowPolicy {
+    static let stableEventLimit = 300
+
+    static func replacingServerWindow(
+        _ items: [TimelineItem],
+        limit: Int = stableEventLimit
     ) -> [TimelineItem] {
-        let traceID = PerformanceTrace.begin("ReconcilerMergeStable")
-        defer { PerformanceTrace.end("ReconcilerMergeStable", id: traceID) }
-        var mergedByID: [String: TimelineItem] = [:]
-
-        for item in localItems where item.isLocalPending == false {
-            mergedByID[stableKey(for: item)] = item
+        guard limit > 0 else {
+            return []
         }
-
-        for item in streamItems where item.isLocalPending == false {
-            mergedByID[stableKey(for: item)] = item
-        }
-
-        let stableItems = mergedByID.values.sorted { lhs, rhs in
-            if lhs.timestamp == rhs.timestamp {
-                return stableKey(for: lhs) < stableKey(for: rhs)
-            }
-            return lhs.timestamp < rhs.timestamp
-        }
-
-        return merge(
-            streamItems: stableItems,
-            localItems: localItems,
-            currentUserID: currentUserID
-        )
+        let stableItems = deduplicated(items.filter { $0.isLocalPending == false })
+        return Array(stableItems.suffix(limit))
     }
 
-    private static func stableKey(for item: TimelineItem) -> String {
-        item.eventID.isEmpty ? item.id : item.eventID
+    static func prependingHistory(
+        _ olderItems: [TimelineItem],
+        to currentItems: [TimelineItem],
+        limit: Int = stableEventLimit
+    ) -> [TimelineItem] {
+        guard limit > 0 else {
+            return []
+        }
+        return Array(deduplicated(olderItems + currentItems).prefix(limit))
+    }
+
+    private static func deduplicated(_ items: [TimelineItem]) -> [TimelineItem] {
+        var seen = Set<String>()
+        return items.filter { item in
+            let key = item.eventID.isEmpty ? item.id : item.eventID
+            return seen.insert(key).inserted
+        }
     }
 }
 
@@ -370,7 +404,7 @@ final class MatrixRustSDKLaterService: LaterServicing {
     }
 
     func loadItems() async -> Result<([SynaraLaterListItem], LaterInboxError?), Never> {
-        guard case .signedIn(let session) = sessionStore.currentState else {
+        guard case let .signedIn(session) = sessionStore.currentState else {
             return .success(([], .noSession))
         }
 
@@ -386,7 +420,7 @@ final class MatrixRustSDKLaterService: LaterServicing {
     }
 
     func completeItem(id: String) async -> Result<Bool, LaterInboxError> {
-        guard case .signedIn(let session) = sessionStore.currentState else {
+        guard case let .signedIn(session) = sessionStore.currentState else {
             return .failure(.noSession)
         }
 
@@ -462,11 +496,11 @@ extension SynaraLaterListItem {
                 )
             }
             .sorted { left, right in
-                if left.completedAt != nil && right.completedAt == nil {
+                if left.completedAt != nil, right.completedAt == nil {
                     return false
                 }
 
-                if left.completedAt == nil && right.completedAt != nil {
+                if left.completedAt == nil, right.completedAt != nil {
                     return true
                 }
 
@@ -549,7 +583,8 @@ enum SynaraAgentCardPayloadParser {
         guard let body,
               body.count <= 200_000,
               let bodyData = body.data(using: .utf8),
-              let parsedBody = try? JSONSerialization.jsonObject(with: bodyData) as? [String: Any] else {
+              let parsedBody = try? JSONSerialization.jsonObject(with: bodyData) as? [String: Any]
+        else {
             return nil
         }
 
@@ -691,6 +726,205 @@ extension TimelineServicing {
     }
 }
 
+enum RoomTimelineMode: Equatable {
+    case live
+    case unread(markerEventID: String)
+    case focused(eventID: String)
+
+    var focusedEventID: String? {
+        switch self {
+        case .live:
+            return nil
+        case let .unread(markerEventID):
+            return markerEventID
+        case let .focused(eventID):
+            return eventID
+        }
+    }
+
+    var isLive: Bool {
+        if case .live = self {
+            return true
+        }
+        return false
+    }
+}
+
+struct RoomTimelineSessionFeed {
+    let generation: UInt64
+    let mode: RoomTimelineMode
+    let initialOutcome: TimelineLoadOutcome
+    let updates: AsyncStream<TimelineLoadOutcome>
+}
+
+enum RoomTimelineLiveTransition {
+    case succeeded(RoomTimelineSessionFeed)
+    case empty
+    case failed(String)
+    case superseded
+}
+
+actor RoomTimelineSession {
+    private let roomID: String
+    private let service: TimelineServicing
+    private var generation: UInt64 = 0
+    private var mode: RoomTimelineMode = .live
+    private var serverItems: [TimelineItem] = []
+
+    init(roomID: String, service: TimelineServicing) {
+        self.roomID = roomID
+        self.service = service
+    }
+
+    func open(mode: RoomTimelineMode) async -> RoomTimelineSessionFeed? {
+        generation &+= 1
+        let requestedGeneration = generation
+        self.mode = mode
+        serverItems = []
+
+        let outcome = await service.loadInitialTimeline(
+            roomID: roomID,
+            focusedEventID: mode.focusedEventID
+        )
+        guard requestedGeneration == generation else {
+            return nil
+        }
+
+        let accepted = accept(outcome, generation: requestedGeneration)
+        return RoomTimelineSessionFeed(
+            generation: requestedGeneration,
+            mode: mode,
+            initialOutcome: accepted,
+            updates: makeUpdateStream(mode: mode, generation: requestedGeneration)
+        )
+    }
+
+    func transitionToLive() async -> RoomTimelineLiveTransition {
+        let originGeneration = generation
+        let outcome = await service.loadLatestTimeline(roomID: roomID)
+        guard originGeneration == generation else {
+            return .superseded
+        }
+
+        switch outcome {
+        case let .loaded(items) where items.isEmpty == false:
+            generation &+= 1
+            mode = .live
+            serverItems = TimelineWindowPolicy.replacingServerWindow(items)
+            let nextGeneration = generation
+            return .succeeded(
+                RoomTimelineSessionFeed(
+                    generation: nextGeneration,
+                    mode: .live,
+                    initialOutcome: .loaded(serverItems),
+                    updates: makeUpdateStream(mode: .live, generation: nextGeneration)
+                )
+            )
+        case .loaded, .empty:
+            return .empty
+        case let .failed(message):
+            return .failed(message)
+        }
+    }
+
+    func loadOlder(before eventID: String) async -> TimelineLoadOutcome? {
+        let originGeneration = generation
+        let outcome = await service.loadOlderTimeline(roomID: roomID, before: eventID)
+        guard originGeneration == generation else {
+            return nil
+        }
+
+        switch outcome {
+        case let .loaded(olderItems) where olderItems.isEmpty == false:
+            let existingIDs = Set(serverItems.map { $0.eventID.isEmpty ? $0.id : $0.eventID })
+            let hasNewStableItem = olderItems.contains { item in
+                let key = item.eventID.isEmpty ? item.id : item.eventID
+                return item.isLocalPending == false && existingIDs.contains(key) == false
+            }
+            guard hasNewStableItem else {
+                return .empty
+            }
+            generation &+= 1
+            mode = .focused(eventID: eventID)
+            serverItems = TimelineWindowPolicy.prependingHistory(olderItems, to: serverItems)
+            return .loaded(serverItems)
+        case .loaded, .empty:
+            return .empty
+        case let .failed(message):
+            return .failed(message)
+        }
+    }
+
+    func invalidate() {
+        generation &+= 1
+        serverItems = []
+    }
+
+    func currentGeneration() -> UInt64 {
+        generation
+    }
+
+    private func accept(_ outcome: TimelineLoadOutcome, generation requestedGeneration: UInt64) -> TimelineLoadOutcome {
+        guard requestedGeneration == generation else {
+            return .empty
+        }
+        switch outcome {
+        case let .loaded(items):
+            serverItems = TimelineWindowPolicy.replacingServerWindow(items)
+            return serverItems.isEmpty ? .empty : .loaded(serverItems)
+        case .empty:
+            return .empty
+        case let .failed(message):
+            return .failed(message)
+        }
+    }
+
+    private func acceptedUpdate(
+        _ outcome: TimelineLoadOutcome,
+        generation requestedGeneration: UInt64
+    ) -> TimelineLoadOutcome? {
+        guard requestedGeneration == generation else {
+            return nil
+        }
+        return accept(outcome, generation: requestedGeneration)
+    }
+
+    private func makeUpdateStream(
+        mode: RoomTimelineMode,
+        generation requestedGeneration: UInt64
+    ) -> AsyncStream<TimelineLoadOutcome> {
+        let service = self.service
+        let roomID = self.roomID
+        return AsyncStream(bufferingPolicy: .bufferingNewest(1)) { continuation in
+            let task = Task { [weak self] in
+                guard let self else {
+                    continuation.finish()
+                    return
+                }
+                for await outcome in service.timelineUpdates(
+                    roomID: roomID,
+                    focusedEventID: mode.focusedEventID
+                ) {
+                    guard Task.isCancelled == false else {
+                        break
+                    }
+                    guard let accepted = await self.acceptedUpdate(
+                        outcome,
+                        generation: requestedGeneration
+                    ) else {
+                        break
+                    }
+                    continuation.yield(accepted)
+                }
+                continuation.finish()
+            }
+            continuation.onTermination = { _ in
+                task.cancel()
+            }
+        }
+    }
+}
+
 enum TimelineMapper {
     static func map(_ event: RawTimelineEvent) -> TimelineItem {
         let kind: TimelineItem.Kind
@@ -699,31 +933,31 @@ enum TimelineMapper {
             kind = .agentCard(agentCard)
         } else {
             switch event.type {
-        case "m.room.message":
-            if let formattedBody = event.formattedBody, formattedBody.isEmpty == false {
-                kind = .formattedText(body: event.body ?? "", html: formattedBody)
-            } else {
-                kind = .text(event.body ?? "")
-            }
-        case "m.room.encrypted":
-            kind = .encryptedPlaceholder
-        case "m.room.redaction":
-            kind = .redacted
-        case "m.room.media":
-            kind = .mediaPlaceholder(
-                MediaResource(
-                    id: event.eventID,
-                    filename: event.body ?? "Attachment",
-                    authenticatedURL: event.mediaURL,
-                    requiresAuthentication: true,
-                    isEncrypted: event.isEncrypted,
-                    mimeType: event.mediaMimeType,
-                    byteSize: event.mediaByteSize
+            case "m.room.message":
+                if let formattedBody = event.formattedBody, formattedBody.isEmpty == false {
+                    kind = .formattedText(body: event.body ?? "", html: formattedBody)
+                } else {
+                    kind = .text(event.body ?? "")
+                }
+            case "m.room.encrypted":
+                kind = .encryptedPlaceholder
+            case "m.room.redaction":
+                kind = .redacted
+            case "m.room.media":
+                kind = .mediaPlaceholder(
+                    MediaResource(
+                        id: event.eventID,
+                        filename: event.body ?? "Attachment",
+                        authenticatedURL: event.mediaURL,
+                        requiresAuthentication: true,
+                        isEncrypted: event.isEncrypted,
+                        mimeType: event.mediaMimeType,
+                        byteSize: event.mediaByteSize
+                    )
                 )
-            )
-        default:
-            kind = .unknown(type: event.type)
-        }
+            default:
+                kind = .unknown(type: event.type)
+            }
         }
 
         return TimelineItem(
@@ -808,21 +1042,36 @@ enum TimelineFixtures {
                 replyToEventID: "$security:\(roomID)",
                 isEdited: false,
                 mediaURL: nil
-            )
+            ),
         ]
     }
 
-    static func largeTimeline(count: Int = 10_000) -> [TimelineItem] {
-        var items: [TimelineItem] = []
-        items.reserveCapacity(count)
+    static func largeTimeline(count: Int = 10000) -> [TimelineItem] {
+        largeTimeline(indices: 0 ..< count)
+    }
 
-        for index in 0..<count {
+    static func largeTimeline(
+        indices: Range<Int>,
+        expandedMessageIndex: Int? = nil,
+        expandedLineCount: Int = 180
+    ) -> [TimelineItem] {
+        var items: [TimelineItem] = []
+        items.reserveCapacity(indices.count)
+
+        for index in indices {
+            let body: String
+            if index == expandedMessageIndex {
+                let lines = (1 ... max(1, expandedLineCount)).map { "Variable height line \($0)" }
+                body = (["Expanded variable-height message \(index)"] + lines).joined(separator: "\n")
+            } else {
+                body = "Synthetic message \(index)"
+            }
             let item = TimelineItem(
                 id: "$synthetic-\(index):matrix.org",
                 eventID: "$synthetic-\(index):matrix.org",
                 senderID: index % 2 == 0 ? "@alice:matrix.org" : "@bob:matrix.org",
                 timestamp: baseDate.addingTimeInterval(TimeInterval(index)),
-                kind: .text("Synthetic message \(index)"),
+                kind: .text(body),
                 replyToEventID: nil,
                 isEdited: false,
                 reactions: [:]
@@ -853,16 +1102,29 @@ final class MockTimelineService: TimelineServicing {
     var itemFixture: [TimelineItem]?
     var updateOutcomes: [TimelineLoadOutcome] = []
     var typingUserUpdates: [[String]] = []
+    var latestOutcome: TimelineLoadOutcome?
+    var olderOutcome: TimelineLoadOutcome?
+    var loadDelayNanoseconds: UInt64 = 0
+    var updateDelayNanoseconds: UInt64 = 0
     private(set) var clearSessionCachesCallCount = 0
+    private let usesRoomSpecificCommonEvents: Bool
 
-    init(events: [RawTimelineEvent] = TimelineFixtures.commonEvents()) {
+    init() {
+        events = TimelineFixtures.commonEvents()
+        itemFixture = nil
+        usesRoomSpecificCommonEvents = true
+    }
+
+    init(events: [RawTimelineEvent]) {
         self.events = events
-        self.itemFixture = nil
+        itemFixture = nil
+        usesRoomSpecificCommonEvents = false
     }
 
     init(items: [TimelineItem]) {
-        self.events = []
-        self.itemFixture = items
+        events = []
+        itemFixture = items
+        usesRoomSpecificCommonEvents = false
     }
 
     func clearSessionCaches() {
@@ -874,28 +1136,43 @@ final class MockTimelineService: TimelineServicing {
     }
 
     func loadInitialTimeline(roomID: String, focusedEventID: String?) async -> TimelineLoadOutcome {
+        if loadDelayNanoseconds > 0 {
+            try? await Task.sleep(nanoseconds: loadDelayNanoseconds)
+        }
+        let items = timelineItems(roomID: roomID)
         if let focusedEventID,
-           let item = (itemFixture ?? events.map(TimelineMapper.map)).first(where: { $0.eventID == focusedEventID || $0.id == focusedEventID }) {
-            return .loaded([item])
+           let focusedIndex = items.firstIndex(where: {
+               $0.eventID == focusedEventID || $0.id == focusedEventID
+           })
+        {
+            let lowerBound = max(items.startIndex, focusedIndex - 50)
+            let upperBound = min(items.endIndex, focusedIndex + 51)
+            return .loaded(Array(items[lowerBound ..< upperBound]))
         }
-        if let itemFixture {
-            return itemFixture.isEmpty ? .empty : .loaded(itemFixture)
-        }
-        let items = events.map(TimelineMapper.map)
         return items.isEmpty ? .empty : .loaded(items)
     }
 
     func loadOlderTimeline(roomID: String, before eventID: String) async -> TimelineLoadOutcome {
+        if let olderOutcome {
+            return olderOutcome
+        }
         if let itemFixture {
             let older = Array(itemFixture.prefix(50))
             return older.isEmpty ? .empty : .loaded(older)
         }
-        let older = events.filter { $0.eventID != eventID }.map(TimelineMapper.map)
+        let older = timelineItems(roomID: roomID).filter { $0.eventID != eventID }
         return older.isEmpty ? .empty : .loaded(older)
     }
 
+    func loadLatestTimeline(roomID: String) async -> TimelineLoadOutcome {
+        if let latestOutcome {
+            return latestOutcome
+        }
+        return await loadInitialTimeline(roomID: roomID, focusedEventID: nil)
+    }
+
     func loadThreadTimeline(roomID: String, rootEventID: String) async -> TimelineLoadOutcome {
-        let items = (itemFixture ?? events.map(TimelineMapper.map))
+        let items = timelineItems(roomID: roomID)
         let threadItems = threadTimelineItems(from: items, rootEventID: rootEventID)
         return threadItems.isEmpty ? .empty : .loaded(threadItems)
     }
@@ -917,6 +1194,16 @@ final class MockTimelineService: TimelineServicing {
         return replies
     }
 
+    private func timelineItems(roomID: String) -> [TimelineItem] {
+        if let itemFixture {
+            return itemFixture
+        }
+        let sourceEvents = usesRoomSpecificCommonEvents
+            ? TimelineFixtures.commonEvents(roomID: roomID)
+            : events
+        return sourceEvents.map(TimelineMapper.map)
+    }
+
     func timelineUpdates(roomID: String, focusedEventID: String?) -> AsyncStream<TimelineLoadOutcome> {
         AsyncStream { continuation in
             let task = Task {
@@ -927,6 +1214,9 @@ final class MockTimelineService: TimelineServicing {
                     outcomes = updateOutcomes
                 }
 
+                if updateDelayNanoseconds > 0 {
+                    try? await Task.sleep(nanoseconds: updateDelayNanoseconds)
+                }
                 for outcome in outcomes {
                     continuation.yield(outcome)
                 }
@@ -986,7 +1276,7 @@ enum MatrixHTMLRenderer {
             return markdown.isEmpty ? [] : [.markdown(markdown)]
         }
 
-        let nsRange = NSRange(sanitized.startIndex..<sanitized.endIndex, in: sanitized)
+        let nsRange = NSRange(sanitized.startIndex ..< sanitized.endIndex, in: sanitized)
         let matches = regex.matches(in: sanitized, range: nsRange)
         guard matches.isEmpty == false else {
             let markdown = sanitizedMarkdown(body: body, html: html)
@@ -1001,7 +1291,7 @@ enum MatrixHTMLRenderer {
                 continue
             }
 
-            appendMarkdownSegment(from: String(sanitized[cursor..<range.lowerBound]), to: &segments)
+            appendMarkdownSegment(from: String(sanitized[cursor ..< range.lowerBound]), to: &segments)
 
             let blockHTML = String(sanitized[range])
             if blockHTML.range(of: #"^\s*<details"#, options: [.regularExpression, .caseInsensitive]) != nil {
@@ -1009,7 +1299,8 @@ enum MatrixHTMLRenderer {
                     segments.append(.details(block))
                 }
             } else if blockHTML.range(of: #"^\s*<blockquote"#, options: [.regularExpression, .caseInsensitive]) != nil,
-                      let quote = quoteBlock(html: blockHTML) {
+                      let quote = quoteBlock(html: blockHTML)
+            {
                 segments.append(.quote(quote))
             } else if let code = codeBlock(html: blockHTML) {
                 segments.append(.code(code))
@@ -1037,7 +1328,7 @@ enum MatrixHTMLRenderer {
         }
 
         let source = sanitized as NSString
-        let nsRange = NSRange(sanitized.startIndex..<sanitized.endIndex, in: sanitized)
+        let nsRange = NSRange(sanitized.startIndex ..< sanitized.endIndex, in: sanitized)
         return regex.matches(in: sanitized, range: nsRange).compactMap { match in
             guard match.numberOfRanges == 2 else {
                 return nil
@@ -1048,7 +1339,8 @@ enum MatrixHTMLRenderer {
                 in: content,
                 pattern: #"<summary(?:\s+[^>]*)?>([\s\S]*?)</summary\s*>"#
             )?.strippingHTMLTagsAndDecoding(),
-                summary.isEmpty == false else {
+                summary.isEmpty == false
+            else {
                 return nil
             }
 
@@ -1153,10 +1445,11 @@ enum MatrixHTMLRenderer {
             return nil
         }
 
-        let nsRange = NSRange(html.startIndex..<html.endIndex, in: html)
+        let nsRange = NSRange(html.startIndex ..< html.endIndex, in: html)
         guard let match = regex.firstMatch(in: html, range: nsRange),
               match.numberOfRanges == 2,
-              let range = Range(match.range(at: 1), in: html) else {
+              let range = Range(match.range(at: 1), in: html)
+        else {
             return nil
         }
 
@@ -1195,7 +1488,8 @@ enum MatrixDisplayMarkdown {
                isListLine(line) == false,
                isListLine(previous) == false,
                isDivider(line) == false,
-               isDivider(previous) == false {
+               isDivider(previous) == false
+            {
                 output.append("")
             }
 
@@ -1238,7 +1532,7 @@ private extension String {
 
     func replacingHeadingTags() -> String {
         var output = self
-        for level in 1...6 {
+        for level in 1 ... 6 {
             output = output
                 .replacingHTMLPattern(#"<h\#(level)(?:\s+[^>]*)?>"#, with: "\n\n**")
                 .replacingHTMLPattern(#"</h\#(level)\s*>"#, with: "**\n\n")
@@ -1252,7 +1546,7 @@ private extension String {
             return self
         }
 
-        let nsRange = NSRange(startIndex..<endIndex, in: self)
+        let nsRange = NSRange(startIndex ..< endIndex, in: self)
         let matches = regex.matches(in: self, range: nsRange).reversed()
         let source = self as NSString
         let output = NSMutableString(string: self)
@@ -1294,7 +1588,7 @@ private extension String {
             return self
         }
 
-        let nsRange = NSRange(startIndex..<endIndex, in: self)
+        let nsRange = NSRange(startIndex ..< endIndex, in: self)
         let matches = regex.matches(in: self, range: nsRange).reversed()
         let source = self as NSString
         let output = NSMutableString(string: self)
@@ -1330,7 +1624,7 @@ private extension String {
             return self
         }
 
-        let nsRange = NSRange(startIndex..<endIndex, in: self)
+        let nsRange = NSRange(startIndex ..< endIndex, in: self)
         let matches = regex.matches(in: self, range: nsRange).reversed()
         let source = self as NSString
         let output = NSMutableString(string: self)
@@ -1361,7 +1655,7 @@ private extension String {
             return self
         }
 
-        let nsRange = NSRange(startIndex..<endIndex, in: self)
+        let nsRange = NSRange(startIndex ..< endIndex, in: self)
         let matches = regex.matches(in: self, range: nsRange).reversed()
         let source = self as NSString
         let output = NSMutableString(string: self)
@@ -1403,7 +1697,7 @@ private extension String {
             return []
         }
 
-        let nsRange = NSRange(startIndex..<endIndex, in: self)
+        let nsRange = NSRange(startIndex ..< endIndex, in: self)
         let source = self as NSString
         return regex.matches(in: self, range: nsRange).compactMap { match in
             guard match.numberOfRanges == 2 else {
@@ -1417,7 +1711,7 @@ private extension String {
         guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
             return self
         }
-        let nsRange = NSRange(startIndex..<endIndex, in: self)
+        let nsRange = NSRange(startIndex ..< endIndex, in: self)
         return regex.stringByReplacingMatches(in: self, range: nsRange, withTemplate: replacement)
     }
 
@@ -1443,7 +1737,7 @@ private extension String {
             return self
         }
 
-        let nsRange = NSRange(startIndex..<endIndex, in: self)
+        let nsRange = NSRange(startIndex ..< endIndex, in: self)
         let matches = regex.matches(in: self, range: nsRange).reversed()
         let source = self as NSString
         let output = NSMutableString(string: self)
@@ -1457,7 +1751,8 @@ private extension String {
             let radix = rawValue.hasPrefix("x") || rawValue.hasPrefix("X") ? 16 : 10
             let digits = radix == 16 ? String(rawValue.dropFirst()) : rawValue
             guard let scalarValue = UInt32(digits, radix: radix),
-                  let scalar = UnicodeScalar(scalarValue) else {
+                  let scalar = UnicodeScalar(scalarValue)
+            else {
                 continue
             }
 
@@ -1469,7 +1764,8 @@ private extension String {
 
     var isSafeMatrixHTMLLink: Bool {
         guard let components = URLComponents(string: self),
-              let scheme = components.scheme?.lowercased() else {
+              let scheme = components.scheme?.lowercased()
+        else {
             return false
         }
 

@@ -1,16 +1,6 @@
-name: iOS Skeleton
+name: iOS Diagnostics
 
 on:
-  push:
-    branches: [main, "release/**"]
-    paths:
-      - ".github/workflows/ios-skeleton.yml"
-      - "synara-ios/**"
-  pull_request:
-    branches: [main, "release/**"]
-    paths:
-      - ".github/workflows/ios-skeleton.yml"
-      - "synara-ios/**"
   workflow_dispatch:
 
 concurrency:
@@ -18,8 +8,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build:
-    name: Unsigned simulator build
+  test:
+    name: Unsigned simulator build and tests
     runs-on: macos-latest
     steps:
       - name: Checkout repository
@@ -28,6 +18,17 @@ jobs:
       - name: Install XcodeGen
         run: brew install xcodegen
 
-      - name: Build unsigned simulator app and test bundles
+      - name: Build and run unsigned simulator tests
         run: scripts/ci-build.sh
         working-directory: synara-ios
+        env:
+          RUN_IOS_TESTS: "1"
+
+      - name: Upload iOS result bundles
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ios-diagnostic-results
+          path: /private/tmp/synara-ios-results/*.xcresult
+          if-no-files-found: warn
+          retention-days: 14

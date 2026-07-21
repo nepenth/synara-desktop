@@ -45,6 +45,10 @@ jobs:
         run: npm ci
         working-directory: synara
 
+      - name: Install Chromium for timeline layout tests
+        run: npx playwright install --with-deps chromium
+        working-directory: synara
+
       - name: Check repository layout
         run: npm run check:repo-layout
 
@@ -54,6 +58,18 @@ jobs:
       - name: Check Matrix integration boundaries
         run: npm run check:matrix-boundaries
 
+      - name: Check reliability delivery gates
+        run: npm run check:quality-gates
+
+      - name: Check disposable Synapse harness
+        run: npm run check:synapse-harness
+
+      - name: Check production smoke contract
+        run: npm run check:production-smoke
+
+      - name: Test repository delivery scripts
+        run: node --test scripts/__tests__/*.test.mjs
+
       - name: Check Rust desktop shell
         run: cargo check --locked
         working-directory: src-tauri
@@ -61,6 +77,10 @@ jobs:
       - name: Test Rust desktop shell
         run: cargo test --locked
         working-directory: src-tauri
+
+      - name: Typecheck desktop runtime
+        run: npm run typecheck
+        working-directory: synara
 
       - name: Typecheck runtime modernization surface
         run: npm run typecheck:modernization
@@ -70,6 +90,10 @@ jobs:
         run: npm run test:modernization
         working-directory: synara
 
+      - name: Test real-layout timeline scrolling
+        run: npm run test:browser:timeline
+        working-directory: synara
+
       - name: Check runtime lint
         run: npm run check:eslint
         working-directory: synara
@@ -77,3 +101,82 @@ jobs:
       - name: Check runtime formatting
         run: npm run check:prettier
         working-directory: synara
+
+      - name: Check production dependency advisories
+        run: npm run check:security
+        working-directory: synara
+
+  ios-tests:
+    name: iOS simulator tests
+    runs-on: macos-26
+    timeout-minutes: 45
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Build and run unsigned simulator tests
+        run: scripts/ci-build.sh
+        working-directory: synara-ios
+        env:
+          RUN_IOS_TESTS: "1"
+
+      - name: Upload iOS result bundles
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ios-test-results
+          path: /private/tmp/synara-ios-results/*.xcresult
+          if-no-files-found: warn
+          retention-days: 14
+
+  synapse-integration:
+    name: Synapse two-client integration
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+
+      - name: Install runtime dependencies
+        run: npm ci
+        working-directory: synara
+
+      - name: Start disposable Synapse
+        run: scripts/synapse-integration.sh up
+
+      - name: Run public and private two-client scenarios
+        run: npm run test:synapse-integration
+        env:
+          SYNARA_RECEIPT_MODE: both
+
+      - name: Tear down disposable Synapse
+        if: always()
+        run: scripts/synapse-integration.sh reset
+
+  quality-gate:
+    name: Quality gate
+    if: always()
+    needs: [validate, ios-tests, synapse-integration]
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Require every client validation job
+        env:
+          DESKTOP_RESULT: ${{ needs.validate.result }}
+          IOS_RESULT: ${{ needs.ios-tests.result }}
+          SYNAPSE_RESULT: ${{ needs.synapse-integration.result }}
+        run: |
+          if [[ "$DESKTOP_RESULT" != "success" || "$IOS_RESULT" != "success" || "$SYNAPSE_RESULT" != "success" ]]; then
+            echo "Desktop/runtime validation: $DESKTOP_RESULT" >&2
+            echo "iOS simulator tests: $IOS_RESULT" >&2
+            echo "Synapse two-client integration: $SYNAPSE_RESULT" >&2
+            exit 1
+          fi
