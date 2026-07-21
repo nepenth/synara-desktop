@@ -35,7 +35,8 @@ The iOS client must feel immediate without presenting stale Matrix SDK cache dat
 - Room list renders cached rows first, then subscribes to Matrix Rust SDK `SyncService` / `RoomListService` room-entry diffs.
 - Room timeline load performs a bounded interactive sync before creating the initial timeline window.
 - Open timelines subscribe to Matrix Rust SDK timeline diffs after initial load so incoming events update the visible room without leaving and re-entering.
-- Read-marker focused timelines paginate forward more aggressively and always expose jump-to-latest.
+- Read-marker focused timelines remain bounded and always expose Jump to Latest;
+  they never walk all intervening history to reach the live end.
 - Jump-to-latest reloads the latest timeline window instead of only scrolling within the existing focused slice.
 
 ## SDK Streaming Architecture
