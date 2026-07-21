@@ -1,5 +1,5 @@
-import XCTest
 @testable import Synara
+import XCTest
 
 final class RoomListServiceTests: XCTestCase {
     func testRoomsSortByHighlightUnreadThenActivity() {
@@ -13,8 +13,8 @@ final class RoomListServiceTests: XCTestCase {
     func testLargeFixtureHasStableIdentifiers() {
         let rooms = RoomListFixtures.large()
 
-        XCTAssertEqual(rooms.count, 1_000)
-        XCTAssertEqual(Set(rooms.map(\.id)).count, 1_000)
+        XCTAssertEqual(rooms.count, 1000)
+        XCTAssertEqual(Set(rooms.map(\.id)).count, 1000)
     }
 
     func testMockRoomListReturnsSortedLoadedState() async {
@@ -61,7 +61,7 @@ final class RoomListServiceTests: XCTestCase {
         try await service.acceptInvite(roomID: "!alerts:matrix.org")
         let state = await service.loadRooms()
 
-        guard case .loaded(let rooms) = state else {
+        guard case let .loaded(rooms) = state else {
             XCTFail("Expected loaded rooms")
             return
         }
@@ -336,7 +336,7 @@ final class RoomListServiceTests: XCTestCase {
             NotificationSummaryInput(
                 unreadCounts: [
                     BadgeUnreadSource(total: 4, highlight: 2),
-                    BadgeUnreadSource(total: 3)
+                    BadgeUnreadSource(total: 3),
                 ],
                 laterActiveCount: 5,
                 inviteCount: 2,
@@ -358,7 +358,7 @@ final class RoomListServiceTests: XCTestCase {
             NotificationSummaryInput(
                 unreadCounts: [
                     BadgeUnreadSource(total: -1, highlight: -2),
-                    BadgeUnreadSource(total: 3)
+                    BadgeUnreadSource(total: 3),
                 ],
                 laterActiveCount: 2,
                 inviteCount: -1,
@@ -413,7 +413,7 @@ final class RoomListServiceTests: XCTestCase {
                 kind: .room,
                 membership: .joined,
                 lastActivityAt: RoomListFixtures.now
-            )
+            ),
         ]
 
         let sections = NotificationsInboxSections.make(from: rooms)
@@ -459,8 +459,8 @@ final class RoomListServiceTests: XCTestCase {
             status: "pending",
             summary: "Needs your review",
             actions: [
-                try SynaraAgentCardAction(id: "approve", title: "Approve", kind: "approve", prompt: "ok"),
-                try SynaraAgentCardAction(id: "reject", title: "Reject", kind: "reject", prompt: "no")
+                SynaraAgentCardAction(id: "approve", title: "Approve", kind: "approve", prompt: "ok"),
+                SynaraAgentCardAction(id: "reject", title: "Reject", kind: "reject", prompt: "no"),
             ]
         )
 
@@ -479,12 +479,12 @@ final class RoomListServiceTests: XCTestCase {
                 kind: .room,
                 membership: .joined,
                 lastActivityAt: RoomListFixtures.now
-            )
+            ),
         ] + initialRooms
         let service = MockRoomListService(state: .loaded(initialRooms))
         service.updateStates = [
             .loaded(initialRooms),
-            .loaded(updatedRooms)
+            .loaded(updatedRooms),
         ]
 
         var states: [RoomListState] = []
@@ -493,8 +493,9 @@ final class RoomListServiceTests: XCTestCase {
         }
 
         XCTAssertEqual(states.count, 2)
-        guard case .loaded(let firstBatch) = states[0],
-              case .loaded(let secondBatch) = states[1] else {
+        guard case let .loaded(firstBatch) = states[0],
+              case let .loaded(secondBatch) = states[1]
+        else {
             XCTFail("Expected loaded room list states")
             return
         }
@@ -611,7 +612,6 @@ final class RoomListServiceTests: XCTestCase {
         XCTAssertEqual(reset?.requiresFullRemap, true)
     }
 
-
     func testRecentActivityWithReferenceDateFiltersCorrectlyAndSortsRecencyFirst() {
         let now = RoomListFixtures.now
         // Use small fixture and force some recent timestamps relative to now
@@ -665,10 +665,10 @@ final class RoomListServiceTests: XCTestCase {
         rooms = rooms.map { r in
             var copy = r
             copy = RoomSummary(id: r.id, name: r.name, lastMessagePreview: r.lastMessagePreview,
-                unreadCount: r.unreadCount, hasHighlight: r.hasHighlight, kind: r.kind,
-                membership: r.membership, lastActivityAt: now.addingTimeInterval(-200_000),
-                parentSpaces: r.parentSpaces, hasAgentActivity: r.hasAgentActivity,
-                latestAgentCard: r.latestAgentCard, latestAgentCardEventID: r.latestAgentCardEventID)
+                               unreadCount: r.unreadCount, hasHighlight: r.hasHighlight, kind: r.kind,
+                               membership: r.membership, lastActivityAt: now.addingTimeInterval(-200_000),
+                               parentSpaces: r.parentSpaces, hasAgentActivity: r.hasAgentActivity,
+                               latestAgentCard: r.latestAgentCard, latestAgentCardEventID: r.latestAgentCardEventID)
             return copy
         }
         let rec = RoomListRecentActivity.recent(from: rooms, referenceDate: now)
@@ -680,7 +680,7 @@ final class RoomListServiceTests: XCTestCase {
         let rooms = [
             makeActivityRoom(id: "!newest:matrix.org", name: "Newest", activity: now.addingTimeInterval(-60)),
             makeActivityRoom(id: "!older:matrix.org", name: "Older", activity: now.addingTimeInterval(-600)),
-            makeActivityRoom(id: "!expired:matrix.org", name: "Expired", activity: now.addingTimeInterval(-86_400))
+            makeActivityRoom(id: "!expired:matrix.org", name: "Expired", activity: now.addingTimeInterval(-86400)),
         ]
 
         let partition = RoomListRecentActivity.partition(from: rooms, referenceDate: now)
@@ -690,7 +690,7 @@ final class RoomListServiceTests: XCTestCase {
         XCTAssertTrue(Set(partition.recent.map(\.id)).intersection(partition.remaining.map(\.id)).isEmpty)
         XCTAssertEqual(
             try XCTUnwrap(RoomListRecentActivity.nextExpirationDate(from: rooms, referenceDate: now)),
-            now.addingTimeInterval(85_800)
+            now.addingTimeInterval(85800)
         )
     }
 
@@ -705,6 +705,69 @@ final class RoomListServiceTests: XCTestCase {
         XCTAssertEqual(RoomActivityTimestamp.resolve(latest: nil, previous: nil), .distantPast)
     }
 
+    func testDynamicRoomListRequestsEveryPageBeyondOneHundredRooms() {
+        XCTAssertEqual(
+            RoomListDynamicPagingPolicy.nextRequestedPageCount(
+                snapshotCount: 100,
+                requestedPageCount: 1,
+                pageSize: 100
+            ),
+            2
+        )
+        XCTAssertEqual(
+            RoomListDynamicPagingPolicy.nextRequestedPageCount(
+                snapshotCount: 200,
+                requestedPageCount: 2,
+                pageSize: 100
+            ),
+            3
+        )
+        XCTAssertNil(
+            RoomListDynamicPagingPolicy.nextRequestedPageCount(
+                snapshotCount: 250,
+                requestedPageCount: 3,
+                pageSize: 100
+            )
+        )
+    }
+
+    func testDynamicHeadRetainsOffPageRoomsAndOnlyAppliesExplicitRemoval() {
+        let previousIDs = Set((0 ..< 150).map { "!room-\($0):matrix.org" })
+        let dynamicHeadIDs = Set((0 ..< 100).map { "!room-\($0):matrix.org" })
+        let removedID = "!room-149:matrix.org"
+
+        let retained = RoomListCacheRetentionPolicy.retainedPreviousIDs(
+            previousIDs: previousIDs,
+            explicitlyRemovedIDs: [removedID]
+        )
+
+        XCTAssertEqual(retained.count, 149)
+        XCTAssertTrue(dynamicHeadIDs.isSubset(of: retained))
+        XCTAssertTrue(retained.contains("!room-120:matrix.org"))
+        XCTAssertFalse(retained.contains(removedID))
+    }
+
+    func testLatestSnapshotAccumulatorCarriesExplicitRemovalAcrossCoalescing() {
+        let accumulator = RoomListLatestSnapshotAccumulator<String>()
+        accumulator.yield(RoomListCoalescingSnapshot(
+            rooms: ["!one"],
+            changedRoomIDs: [],
+            requiresFullRemap: false,
+            explicitlyRemovedRoomIDs: ["!removed"]
+        ))
+        accumulator.yield(RoomListCoalescingSnapshot(
+            rooms: ["!one", "!two"],
+            changedRoomIDs: ["!two"],
+            requiresFullRemap: false
+        ))
+
+        let snapshot = accumulator.takePendingSnapshot()
+        accumulator.finish()
+
+        XCTAssertEqual(snapshot?.rooms, ["!one", "!two"])
+        XCTAssertEqual(snapshot?.explicitlyRemovedRoomIDs, ["!removed"])
+    }
+
     private func makeActivityRoom(id: String, name: String, activity: Date) -> RoomSummary {
         RoomSummary(
             id: id,
@@ -717,5 +780,4 @@ final class RoomListServiceTests: XCTestCase {
             lastActivityAt: activity
         )
     }
-
 }
