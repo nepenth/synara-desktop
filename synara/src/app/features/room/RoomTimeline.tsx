@@ -100,7 +100,12 @@ import {
   getIntersectionObserverEntry,
   useIntersectionObserver,
 } from '../../hooks/useIntersectionObserver';
-import { markAsRead, markAsUnread, markEventAsUnread } from '../../utils/notifications';
+import {
+  markAsRead,
+  markAsReadAtEvent,
+  markAsUnread,
+  markEventAsUnread,
+} from '../../utils/notifications';
 import { getResizeObserverEntry, useResizeObserver } from '../../hooks/useResizeObserver';
 import * as css from './RoomTimeline.css';
 import { timeDayMonthYear, today, yesterday } from '../../utils/time';
@@ -188,6 +193,7 @@ import {
   getTimelineEndWindow,
   getTimelineFocusRange,
   getTimelineRangeAfterPagination,
+  getTimelineWindowTailEvent,
   getTimelineWindowTailEventId,
   getPersistedLiveTailEventId,
   hasUnreadForInitialScroll,
@@ -1848,17 +1854,34 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
     ) {
       return;
     }
+    const authoritativeTailEventId = jumpLatestAuthoritativeTailEventIdRef.current;
+    const timelineTailEvent = authoritativeTailEventId
+      ? getTimelineWindowTailEvent(timeline)
+      : undefined;
+    const authoritativeTailEvent =
+      timelineTailEvent?.getId() === authoritativeTailEventId ? timelineTailEvent : undefined;
+    const markConfirmedBottomAsRead = () => {
+      const request = authoritativeTailEvent
+        ? markAsReadAtEvent(mx, room.roomId, hideActivity, authoritativeTailEvent)
+        : markAsRead(mx, room.roomId, hideActivity, 'loaded-live-tail');
+      void request.catch((error) => {
+        traceTimeline('room-timeline.mark-read-failed', {
+          errorType: error instanceof Error ? error.name : typeof error,
+          authoritativeTarget: Boolean(authoritativeTailEvent),
+        });
+      });
+    };
     const readUptoEventId = readUptoEventIdRef.current;
     if (!readUptoEventId) {
-      requestAnimationFrame(() => markAsRead(mx, room.roomId, hideActivity, 'loaded-live-tail'));
+      requestAnimationFrame(markConfirmedBottomAsRead);
       return;
     }
     const evtTimeline = getEventTimeline(room, readUptoEventId);
     const latestTimeline = evtTimeline && getFirstLinkedTimeline(evtTimeline, Direction.Forward);
-    if (latestTimeline === room.getLiveTimeline()) {
-      requestAnimationFrame(() => markAsRead(mx, room.roomId, hideActivity, 'loaded-live-tail'));
+    if (authoritativeTailEvent || latestTimeline === room.getLiveTimeline()) {
+      requestAnimationFrame(markConfirmedBottomAsRead);
     }
-  }, [mx, room, hideActivity]);
+  }, [hideActivity, mx, room, timeline, traceTimeline]);
 
   useLayoutEffect(() => {
     if (!liveEndPinRef.current || !loadedAtEnd || timelineRows.length === 0) {
