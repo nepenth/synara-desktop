@@ -3223,19 +3223,7 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
                 return item
             }
 
-            return TimelineItem(
-                id: item.id,
-                eventID: item.eventID,
-                serverEventID: item.serverEventID,
-                senderID: item.senderID,
-                senderAvatarURL: avatarURL,
-                timestamp: item.timestamp,
-                kind: item.kind,
-                replyToEventID: item.replyToEventID,
-                isEdited: item.isEdited,
-                reactions: item.reactions,
-                isEncrypted: item.isEncrypted
-            )
+            return item.withSenderAvatarURL(avatarURL)
         }
     }
 

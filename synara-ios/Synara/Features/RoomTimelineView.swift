@@ -145,6 +145,12 @@ enum RoomTimelineReadMarkerQueuePolicy {
     }
 }
 
+enum RoomTimelineReadMarkerTaskPolicy {
+    static func ownsInstalledTask(installedGeneration: UInt64, currentGeneration: UInt64) -> Bool {
+        installedGeneration == currentGeneration
+    }
+}
+
 enum RoomTimelineJumpLatestPolicy {
     static func shouldShow(isLive: Bool, isConfirmedPinned: Bool, hasItems: Bool, requested: Bool) -> Bool {
         hasItems && (isLive == false || (requested && isConfirmedPinned == false))
@@ -222,6 +228,7 @@ struct RoomTimelineView: View {
     @State private var timelineBottomAnchorGeneration: UInt64 = 0
     @State private var lastMarkedFullyReadEventID: String?
     @State private var markFullyReadTask: Task<Void, Never>?
+    @State private var markFullyReadTaskGeneration: UInt64 = 0
     @State private var pendingMarkFullyReadEventID: String?
     @State private var firstPendingMarkFullyReadAt: Date?
     @State private var lastAcknowledgementCandidateEventID: String?
@@ -520,6 +527,9 @@ struct RoomTimelineView: View {
                         DragGesture(minimumDistance: 8)
                             .onChanged { value in
                                 hasUserInteractedWithTimeline = true
+                                if isUserDraggingTimeline == false {
+                                    cancelMarkFullyRead()
+                                }
                                 isUserDraggingTimeline = true
                                 timelinePosition = RoomTimelineScrollPolicy.positionDuringUserDrag(
                                     current: timelinePosition,
@@ -945,6 +955,9 @@ struct RoomTimelineView: View {
                 showJumpToLatest = true
             } else if timelinePosition == .followingLive {
                 showJumpToLatest = false
+                if let latestEventID = loadedTimelineItems.reversed().compactMap(\.serverEventID).first {
+                    scheduleMarkFullyRead(eventID: latestEventID)
+                }
             }
         }
     }
@@ -1859,6 +1872,8 @@ struct RoomTimelineView: View {
             debounceNanoseconds: Self.markFullyReadDelayNanoseconds,
             maximumLatencyNanoseconds: Self.markFullyReadMaximumLatencyNanoseconds
         )
+        markFullyReadTaskGeneration &+= 1
+        let installedGeneration = markFullyReadTaskGeneration
 
         markFullyReadTask = Task {
             try? await Task.sleep(nanoseconds: delay)
@@ -1869,6 +1884,9 @@ struct RoomTimelineView: View {
                   isUserDraggingTimeline == false,
                   let queuedEventID = pendingMarkFullyReadEventID
             else {
+                await MainActor.run {
+                    clearMarkFullyReadTask(ifGenerationMatches: installedGeneration)
+                }
                 return
             }
 
@@ -1880,6 +1898,12 @@ struct RoomTimelineView: View {
             }
 
             await MainActor.run {
+                guard RoomTimelineReadMarkerTaskPolicy.ownsInstalledTask(
+                    installedGeneration: installedGeneration,
+                    currentGeneration: markFullyReadTaskGeneration
+                ) else {
+                    return
+                }
                 markFullyReadTask = nil
                 if didMark {
                     lastMarkedFullyReadEventID = queuedEventID
@@ -1896,10 +1920,21 @@ struct RoomTimelineView: View {
     }
 
     private func cancelMarkFullyRead() {
+        markFullyReadTaskGeneration &+= 1
         markFullyReadTask?.cancel()
         markFullyReadTask = nil
         pendingMarkFullyReadEventID = nil
         firstPendingMarkFullyReadAt = nil
+    }
+
+    private func clearMarkFullyReadTask(ifGenerationMatches installedGeneration: UInt64) {
+        guard RoomTimelineReadMarkerTaskPolicy.ownsInstalledTask(
+            installedGeneration: installedGeneration,
+            currentGeneration: markFullyReadTaskGeneration
+        ) else {
+            return
+        }
+        markFullyReadTask = nil
     }
 
     private func flushMarkFullyRead() {
