@@ -12,9 +12,11 @@ import {
   getTimelineFocusRange,
   getTimelineRangeAfterPagination,
   getTimelineWindowTailEventId,
+  getPersistedLiveTailEventId,
   hasUnreadForInitialScroll,
   canRestoreViewportFromInitialTimeline,
   shouldCancelTimelineNavigationForRouteChange,
+  shouldApplyLiveTailRefresh,
   shouldGateViewportRestoreOnUnread,
   shouldShowJumpToUnread,
   timelineWindowEndsAtEventId,
@@ -193,6 +195,18 @@ test('route navigation cancellation skips mount and the intentional post-jump ro
     true,
     'an unrelated route change invalidates in-flight navigation'
   );
+});
+
+test('authoritative latest tails drive persistence until the live timeline catches up', () => {
+  assert.equal(getPersistedLiveTailEventId('$latest', '$older'), '$latest');
+  assert.equal(getPersistedLiveTailEventId(undefined, '$live'), '$live');
+});
+
+test('live-tail refresh cannot overwrite a newer jump request', () => {
+  assert.equal(shouldApplyLiveTailRefresh(3, 3, 'idle'), true);
+  assert.equal(shouldApplyLiveTailRefresh(3, 4, 'idle'), false);
+  assert.equal(shouldApplyLiveTailRefresh(3, 3, 'loading'), false);
+  assert.equal(shouldApplyLiveTailRefresh(3, 3, 'settling'), false);
 });
 
 test('timeline opening restore gate only accepts anchors inside the initial window', () => {
