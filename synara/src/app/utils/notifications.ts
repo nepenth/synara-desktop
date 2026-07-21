@@ -37,6 +37,8 @@ type ReadMarkerChannelTarget = {
 
 type ReadMarkerChannels = Partial<Record<ReadReceiptChannel, ReadMarkerChannelTarget>>;
 
+type PendingReadMarkerChannels = Partial<Record<ReadReceiptChannel, ReadMarkerChannelTarget[]>>;
+
 type ReadMarkerBatch = {
   fullyReadEvent: MatrixEvent;
   channels: ReadMarkerChannels;
@@ -44,7 +46,7 @@ type ReadMarkerBatch = {
 
 type RoomReadMarkerQueue = {
   active?: ReadMarkerBatch;
-  pending: ReadMarkerChannels;
+  pending: PendingReadMarkerChannels;
   completed: Partial<Record<ReadReceiptChannel, MatrixEvent>>;
   fullyReadCompleted?: MatrixEvent;
   furthestKnown?: MatrixEvent;
@@ -231,11 +233,16 @@ const rejectReadMarkerBatch = (batch: ReadMarkerBatch, error: unknown): void => 
 };
 
 const hasPendingReadMarker = (queue: RoomReadMarkerQueue): boolean =>
-  Boolean(queue.pending.public || queue.pending.private);
+  Boolean(queue.pending.public?.length || queue.pending.private?.length);
 
 const createReadMarkerBatch = (room: Room, queue: RoomReadMarkerQueue): ReadMarkerBatch => {
-  const channels = queue.pending;
-  queue.pending = {};
+  const channels: ReadMarkerChannels = {};
+  (['public', 'private'] as const).forEach((channel) => {
+    const targets = queue.pending[channel];
+    const target = targets?.shift();
+    if (target) channels[channel] = target;
+    if (targets?.length === 0) delete queue.pending[channel];
+  });
 
   const pendingEvents = Object.values(channels)
     .map((target) => target?.event)
@@ -334,19 +341,26 @@ const enqueueReadMarker = (
     return result;
   }
 
-  const pending = queue.pending[channel];
-  if (pending) {
-    if (eventSatisfiesTarget(room, pending.event, request.event)) {
-      pending.waiters.add(waiter);
-      return result;
-    }
-    queue.pending[channel] = {
-      event: request.event,
-      waiters: new Set([...pending.waiters, waiter]),
-    };
-  } else {
-    queue.pending[channel] = { event: request.event, waiters: new Set([waiter]) };
+  const pending = queue.pending[channel] ?? [];
+  const satisfyingTarget = pending.find((target) =>
+    eventSatisfiesTarget(room, target.event, request.event)
+  );
+  if (satisfyingTarget) {
+    satisfyingTarget.waiters.add(waiter);
+    return result;
   }
+
+  const supersededTargets = pending.filter((target) =>
+    eventSatisfiesTarget(room, request.event, target.event)
+  );
+  const retainedTargets = pending.filter((target) => !supersededTargets.includes(target));
+  queue.pending[channel] = [
+    ...retainedTargets,
+    {
+      event: request.event,
+      waiters: new Set([...supersededTargets.flatMap((target) => [...target.waiters]), waiter]),
+    },
+  ];
 
   startReadMarkerQueue(mx, room, queue);
   return result;
