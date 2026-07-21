@@ -11,7 +11,7 @@ private final class SynaraUnableToDecryptRecorder: UnableToDecryptDelegate, @unc
         return count
     }
 
-    func onUtd(info: UnableToDecryptInfo) {
+    func onUtd(info _: UnableToDecryptInfo) {
         lock.lock()
         defer { lock.unlock() }
         count += 1
@@ -74,6 +74,27 @@ private final class SynaraSessionVerificationDelegate: SessionVerificationContro
     }
 }
 
+enum MatrixInteractiveFreshnessPolicy {
+    static func shouldPerformSync(
+        hasActiveSyncService: Bool,
+        lastSuccessfulSyncAt: Date?,
+        now: Date,
+        maximumAge: TimeInterval
+    ) -> Bool {
+        guard hasActiveSyncService == false else {
+            return false
+        }
+        guard let lastSuccessfulSyncAt else {
+            return true
+        }
+        return now.timeIntervalSince(lastSuccessfulSyncAt) >= maximumAge
+    }
+
+    static func ownsInstalledOperation(installedGeneration: UInt64, currentGeneration: UInt64) -> Bool {
+        installedGeneration == currentGeneration
+    }
+}
+
 enum MatrixRustSDKTimelineMessageMapper {
     static func mapMessageLike(
         _ content: MsgLikeContent,
@@ -82,20 +103,20 @@ enum MatrixRustSDKTimelineMessageMapper {
         isEncrypted: Bool
     ) -> TimelineItem.Kind {
         switch content.kind {
-        case .message(let message):
+        case let .message(message):
             if let agentCard = SynaraAgentCardPayloadParser.parse(body: message.body) {
                 return .agentCard(agentCard)
             }
             switch message.msgType {
-            case .text(let content):
+            case let .text(content):
                 return mapTextMessage(body: content.body, formatted: content.formatted)
-            case .notice(let content):
+            case let .notice(content):
                 return mapTextMessage(body: content.body, formatted: content.formatted)
-            case .emote(let content):
+            case let .emote(content):
                 return mapTextMessage(body: content.body, formatted: content.formatted)
-            case .other(_, let body):
+            case let .other(_, body):
                 return .text(body)
-            case .image(let content):
+            case let .image(content):
                 return mapMediaPlaceholder(
                     eventID: eventID,
                     filename: content.filename,
@@ -104,7 +125,7 @@ enum MatrixRustSDKTimelineMessageMapper {
                     byteSize: content.info?.size,
                     isEncrypted: isEncrypted
                 )
-            case .file(let content):
+            case let .file(content):
                 return mapMediaPlaceholder(
                     eventID: eventID,
                     filename: content.filename,
@@ -120,9 +141,9 @@ enum MatrixRustSDKTimelineMessageMapper {
             return .encryptedPlaceholder
         case .redacted:
             return .redacted
-        case .sticker(let body, _, _):
+        case let .sticker(body, _, _):
             return .text(body)
-        case .other(let eventType):
+        case let .other(eventType):
             return eventTypeRaw == "m.room.encrypted" ? .encryptedPlaceholder : .unknown(type: "\(eventType)")
         case .poll, .liveLocation:
             return .unknown(type: eventTypeRaw ?? "m.room.message")
@@ -132,7 +153,8 @@ enum MatrixRustSDKTimelineMessageMapper {
     private static func mapTextMessage(body: String, formatted: FormattedBody?) -> TimelineItem.Kind {
         guard let formatted,
               case .html = formatted.format,
-              formatted.body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else {
+              formatted.body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+        else {
             return .text(body)
         }
 
@@ -185,6 +207,9 @@ actor MatrixRustSDKClientStore {
     private var clientMutationWaiters: [CheckedContinuation<Void, Never>] = []
     private var isClientPaused = false
     private var roomListSyncGeneration: UInt64 = 0
+    private var lastSuccessfulSyncAt: Date?
+    private var interactiveFreshnessTask: Task<Void, Error>?
+    private var interactiveFreshnessGeneration: UInt64 = 0
 
     init(logger: LoggingServicing = AppLogger()) {
         self.logger = logger
@@ -252,11 +277,13 @@ actor MatrixRustSDKClientStore {
                 sdkStoreID: storeID
             )
             self.client = client
-            self.activeSession = session
-            self.syncService = nil
-            self.roomListService = nil
+            activeSession = session
+            syncService = nil
+            roomListService = nil
+            lastSuccessfulSyncAt = nil
+            invalidateInteractiveFreshness()
             await ensurePlatformDeviceDisplayName(session: session)
-            self.syncStatus = .syncing
+            syncStatus = .syncing
             return session
         } catch let error as ClientError {
             retainClientHandle(client)
@@ -265,7 +292,7 @@ actor MatrixRustSDKClientStore {
             throw Self.mapLoginError(error)
         } catch {
             retainClientHandle(client)
-            self.syncStatus = .failed("Could not sign in.")
+            syncStatus = .failed("Could not sign in.")
             logger.error("Password login SDK error: \(String(describing: error))", category: .auth)
             // TODO: Map additional non-ClientError login failures when the SDK exposes stable types.
             throw LoginError.networkFailure
@@ -301,6 +328,7 @@ actor MatrixRustSDKClientStore {
         }
         syncService = nil
         roomListService = nil
+        invalidateInteractiveFreshness()
         syncStatus = .stopped
     }
 
@@ -323,6 +351,7 @@ actor MatrixRustSDKClientStore {
         }
 
         isClientPaused = true
+        invalidateInteractiveFreshness()
         syncStatus = .stopped
     }
 
@@ -389,7 +418,8 @@ actor MatrixRustSDKClientStore {
         releaseClientMutationLock()
 
         do {
-            _ = try await client.syncOnceV2(settings: SyncSettingsV2(timeoutMs: 5_000, fullState: false))
+            _ = try await client.syncOnceV2(settings: SyncSettingsV2(timeoutMs: 5000, fullState: false))
+            lastSuccessfulSyncAt = Date()
             syncStatus = .syncing
         } catch {
             if wasPaused {
@@ -431,6 +461,8 @@ actor MatrixRustSDKClientStore {
         activeSession = nil
         syncService = nil
         roomListService = nil
+        invalidateInteractiveFreshness()
+        lastSuccessfulSyncAt = nil
         isClientPaused = false
         syncStatus = .stopped
         unableToDecryptRecorder.reset()
@@ -452,6 +484,8 @@ actor MatrixRustSDKClientStore {
             activeSession = nil
         }
         syncStatus = .stopped
+        invalidateInteractiveFreshness()
+        lastSuccessfulSyncAt = nil
         unableToDecryptRecorder.reset()
         try? Self.deletePersistedStore(for: session)
     }
@@ -467,7 +501,7 @@ actor MatrixRustSDKClientStore {
                 from: activeClient,
                 fallbackCache: fallbackCache
             )
-            if case .loaded(let rooms) = cachedState, rooms.isEmpty == false {
+            if case let .loaded(rooms) = cachedState, rooms.isEmpty == false {
                 do {
                     try await syncOnceForInteractiveOpen(session: session)
                 } catch {
@@ -498,7 +532,7 @@ actor MatrixRustSDKClientStore {
                     from: activeClient,
                     fallbackCache: fallbackCache
                 )
-                if case .loaded(let rooms) = localState, rooms.isEmpty == false {
+                if case let .loaded(rooms) = localState, rooms.isEmpty == false {
                     logger.info(
                         "Room list initial sync failed; using local SDK rooms count=\(rooms.count): \(String(describing: error))",
                         category: .sync
@@ -549,20 +583,68 @@ actor MatrixRustSDKClientStore {
 
     func syncOnce(session: AuthenticatedSession, fullState: Bool = false) async throws {
         let client = try await ensureClient(for: session)
-        _ = try await client.syncOnceV2(settings: SyncSettingsV2(timeoutMs: 5_000, fullState: fullState))
+        _ = try await client.syncOnceV2(settings: SyncSettingsV2(timeoutMs: 5000, fullState: fullState))
+        lastSuccessfulSyncAt = Date()
         syncStatus = .syncing
     }
 
     func syncOnceForInitialRoomList(session: AuthenticatedSession) async throws {
         let client = try await ensureClient(for: session)
-        _ = try await client.syncOnceV2(settings: SyncSettingsV2(timeoutMs: 8_000, fullState: false))
+        _ = try await client.syncOnceV2(settings: SyncSettingsV2(timeoutMs: 8000, fullState: false))
+        lastSuccessfulSyncAt = Date()
         syncStatus = .syncing
     }
 
     func syncOnceForInteractiveOpen(session: AuthenticatedSession) async throws {
+        let now = Date()
+        guard MatrixInteractiveFreshnessPolicy.shouldPerformSync(
+            hasActiveSyncService: syncService != nil,
+            lastSuccessfulSyncAt: lastSuccessfulSyncAt,
+            now: now,
+            maximumAge: 2
+        ) else {
+            return
+        }
+
+        if let interactiveFreshnessTask {
+            return try await interactiveFreshnessTask.value
+        }
+
         let client = try await ensureClient(for: session)
-        _ = try await client.syncOnceV2(settings: SyncSettingsV2(timeoutMs: 1_500, fullState: false))
-        syncStatus = .syncing
+        let task = Task {
+            _ = try await client.syncOnceV2(settings: SyncSettingsV2(timeoutMs: 1500, fullState: false))
+        }
+        interactiveFreshnessGeneration &+= 1
+        let operationGeneration = interactiveFreshnessGeneration
+        interactiveFreshnessTask = task
+        do {
+            try await task.value
+            guard MatrixInteractiveFreshnessPolicy.ownsInstalledOperation(
+                installedGeneration: operationGeneration,
+                currentGeneration: interactiveFreshnessGeneration
+            ),
+                activeSession == session
+            else {
+                throw CancellationError()
+            }
+            interactiveFreshnessTask = nil
+            lastSuccessfulSyncAt = Date()
+            syncStatus = .syncing
+        } catch {
+            if MatrixInteractiveFreshnessPolicy.ownsInstalledOperation(
+                installedGeneration: operationGeneration,
+                currentGeneration: interactiveFreshnessGeneration
+            ) {
+                interactiveFreshnessTask = nil
+            }
+            throw error
+        }
+    }
+
+    private func invalidateInteractiveFreshness() {
+        interactiveFreshnessGeneration &+= 1
+        interactiveFreshnessTask?.cancel()
+        interactiveFreshnessTask = nil
     }
 
     @discardableResult
@@ -579,6 +661,7 @@ actor MatrixRustSDKClientStore {
 
         let service = try await prepareSyncService(session: session)
         await service.start()
+        lastSuccessfulSyncAt = Date()
         return service
     }
 
@@ -698,7 +781,7 @@ actor MatrixRustSDKClientStore {
     func retryDecryption(roomID: String, session: AuthenticatedSession) async throws {
         let client = try await ensureClient(for: session)
         await client.encryption().waitForE2eeInitializationTasks()
-        _ = try await client.syncOnceV2(settings: SyncSettingsV2(timeoutMs: 5_000, fullState: false))
+        _ = try await client.syncOnceV2(settings: SyncSettingsV2(timeoutMs: 5000, fullState: false))
         if let room = try client.getRoom(roomId: roomID) ?? client.rooms().first(where: { $0.id() == roomID }) {
             let timeline = try await room.timeline()
             _ = try? await timeline.paginateBackwards(numEvents: 20)
@@ -778,7 +861,7 @@ actor MatrixRustSDKClientStore {
                 preset: request.visibility == .public ? .publicChat : .privateChat
             )
         )
-        _ = try await client.syncOnceV2(settings: SyncSettingsV2(timeoutMs: 5_000, fullState: true))
+        _ = try await client.syncOnceV2(settings: SyncSettingsV2(timeoutMs: 5000, fullState: true))
         return RoomOperationResult(roomID: roomID, name: name)
     }
 
@@ -800,7 +883,7 @@ actor MatrixRustSDKClientStore {
                 invite: [userID]
             )
         )
-        _ = try await client.syncOnceV2(settings: SyncSettingsV2(timeoutMs: 5_000, fullState: true))
+        _ = try await client.syncOnceV2(settings: SyncSettingsV2(timeoutMs: 5000, fullState: true))
         return RoomOperationResult(roomID: roomID, name: userID)
     }
 
@@ -814,7 +897,7 @@ actor MatrixRustSDKClientStore {
         let room = reference.hasPrefix("!")
             ? try await client.joinRoomById(roomId: reference)
             : try await client.joinRoomByIdOrAlias(roomIdOrAlias: reference, serverNames: [])
-        _ = try await client.syncOnceV2(settings: SyncSettingsV2(timeoutMs: 5_000, fullState: true))
+        _ = try await client.syncOnceV2(settings: SyncSettingsV2(timeoutMs: 5000, fullState: true))
         return RoomOperationResult(roomID: room.id(), name: room.displayName() ?? room.canonicalAlias())
     }
 
@@ -923,7 +1006,7 @@ actor MatrixRustSDKClientStore {
                 throw RoomManagementError.failed
             }
             switch avatar {
-            case .upload(let data, let mimeType):
+            case let .upload(data, mimeType):
                 try await room.uploadAvatar(mimeType: mimeType, data: data, mediaInfo: nil)
             case .remove:
                 try await room.removeAvatar()
@@ -1056,7 +1139,8 @@ actor MatrixRustSDKClientStore {
             appDisplayName: appDisplayName,
             deviceDisplayName: deviceDisplayName,
             profileTag: nil,
-            lang: lang
+            lang: lang,
+            append: false
         )
     }
 
@@ -1076,37 +1160,11 @@ actor MatrixRustSDKClientStore {
         return await timeline.latestEventId()
     }
 
-    func markRoomRead(roomID: String, session: AuthenticatedSession) async throws {
+    func clearMarkedUnread(roomID: String, session: AuthenticatedSession) async throws {
         guard let room = try await room(roomID: roomID, session: session) else {
             throw MessageSendError.failed
         }
-
-        let timeline = try await room.timeline()
-        var firstMarkerError: Error?
-
-        do {
-            try await timeline.markAsRead(receiptType: .read)
-        } catch {
-            firstMarkerError = error
-            logger.error("Could not send Matrix read receipt", category: .sync)
-        }
-
-        do {
-            try await timeline.markAsRead(receiptType: .fullyRead)
-        } catch {
-            firstMarkerError = firstMarkerError ?? error
-            logger.error("Could not update Matrix fully-read marker", category: .sync)
-        }
-
-        do {
-            try await room.setUnreadFlag(newValue: false)
-        } catch {
-            logger.info("Could not clear the explicit Matrix unread flag", category: .sync)
-        }
-
-        if let firstMarkerError {
-            throw firstMarkerError
-        }
+        try await room.setUnreadFlag(newValue: false)
     }
 
     func resolvePushRoute(eventID: String, session: AuthenticatedSession) async -> AppRoute? {
@@ -1160,7 +1218,7 @@ actor MatrixRustSDKClientStore {
 
         while offset < rooms.count {
             let end = min(offset + batchSize, rooms.count)
-            let slice = rooms[offset..<end]
+            let slice = rooms[offset ..< end]
             let requests = slice.map { NotificationItemsRequest(roomId: $0.id(), eventIds: [eventID]) }
             let results = try await notificationClient.getNotifications(requests: requests)
 
@@ -1276,8 +1334,8 @@ actor MatrixRustSDKClientStore {
                 try await installSessionVerificationDelegate(on: newClient)
                 await ensurePlatformDeviceDisplayName(session: session)
 
-                self.client = newClient
-                self.activeSession = session
+                client = newClient
+                activeSession = session
                 return newClient
             } catch {
                 logger.error(
@@ -1288,7 +1346,7 @@ actor MatrixRustSDKClientStore {
                 if allowRepair {
                     await detachSyncServices()
                     retainClientHandle(client)
-                    self.client = nil
+                    client = nil
                     activeSession = nil
                     syncService = nil
                     roomListService = nil
@@ -1330,7 +1388,7 @@ actor MatrixRustSDKClientStore {
 
     private static func mapLoginError(_ error: ClientError) -> LoginError {
         switch error {
-        case .MatrixApi(let kind, let code, _, _):
+        case let .MatrixApi(kind, code, _, _):
             if kind == .forbidden || kind == .unauthorized || code == "M_FORBIDDEN" || code == "M_UNAUTHORIZED" {
                 return .invalidCredentials
             }
@@ -1344,7 +1402,8 @@ actor MatrixRustSDKClientStore {
 
     private func ensurePlatformDeviceDisplayName(session: AuthenticatedSession) async {
         guard session.accessToken.isEmpty == false,
-              session.deviceID.isEmpty == false else {
+              session.deviceID.isEmpty == false
+        else {
             return
         }
 
@@ -1361,7 +1420,7 @@ actor MatrixRustSDKClientStore {
             request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             request.httpBody = try JSONSerialization.data(withJSONObject: [
-                "display_name": Self.platformDeviceDisplayName
+                "display_name": Self.platformDeviceDisplayName,
             ])
             _ = try await URLSession.shared.data(for: request)
         } catch {
@@ -1457,11 +1516,11 @@ actor MatrixRustSDKClientStore {
 
     func handleVerificationData(_ data: SessionVerificationData) {
         switch data {
-        case .emojis(let emojis, _):
+        case let .emojis(emojis, _):
             broadcastVerificationState(.emojis(emojis.map {
                 CryptoVerificationEmoji(symbol: $0.symbol(), description: $0.description())
             }))
-        case .decimals(let values):
+        case let .decimals(values):
             broadcastVerificationState(.decimals(values))
         }
     }
@@ -1643,8 +1702,8 @@ actor MatrixRustSDKClientStore {
     }
 
     private static func deletePersistedStore(storeID: String) throws {
-        try deleteStoreDirectoryIfPresent(at: try versionedStoreRoot(storeID: storeID, create: false))
-        try deleteStoreDirectoryIfPresent(at: try legacyStoreRoot(storeID: storeID, create: false))
+        try deleteStoreDirectoryIfPresent(at: versionedStoreRoot(storeID: storeID, create: false))
+        try deleteStoreDirectoryIfPresent(at: legacyStoreRoot(storeID: storeID, create: false))
     }
 
     static func persistedStoreExists(for session: AuthenticatedSession) -> Bool {
@@ -1860,17 +1919,118 @@ enum RoomUnreadPresentation {
     }
 }
 
+enum RoomListDynamicPagingPolicy {
+    static func nextRequestedPageCount(
+        snapshotCount: Int,
+        requestedPageCount: Int,
+        pageSize: Int
+    ) -> Int? {
+        guard pageSize > 0,
+              requestedPageCount > 0,
+              snapshotCount >= requestedPageCount * pageSize
+        else {
+            return nil
+        }
+        return requestedPageCount + 1
+    }
+}
+
+enum RoomListCacheRetentionPolicy {
+    static func retainedPreviousIDs(
+        previousIDs: Set<String>,
+        explicitlyRemovedIDs: Set<String>
+    ) -> Set<String> {
+        previousIDs.subtracting(explicitlyRemovedIDs)
+    }
+}
+
+enum RoomListAuthoritativePruningPolicy {
+    static let reconciliationInterval: TimeInterval = 30
+
+    static func provenRemovedIDs(
+        knownRoomIDs: Set<String>,
+        joinedOrInvitedRoomIDs: Set<String>
+    ) -> Set<String> {
+        knownRoomIDs.subtracting(joinedOrInvitedRoomIDs)
+    }
+
+    static func shouldReconcile(
+        cachedRoomIDs: Set<String>,
+        dynamicSnapshotRoomIDs: Set<String>,
+        requiresFullRemap: Bool,
+        currentCatchUpPageCount: Int = 1,
+        lastAttemptedCatchUpPageCount: Int? = nil,
+        lastAttemptedAt: Date? = nil,
+        now: Date = Date(),
+        minimumInterval: TimeInterval = reconciliationInterval
+    ) -> Bool {
+        guard cachedRoomIDs.isEmpty == false else {
+            return false
+        }
+        if requiresFullRemap {
+            return true
+        }
+        guard cachedRoomIDs.isSubset(of: dynamicSnapshotRoomIDs) == false else {
+            return false
+        }
+        if lastAttemptedCatchUpPageCount != currentCatchUpPageCount {
+            return true
+        }
+        guard let lastAttemptedAt else {
+            return true
+        }
+        return now.timeIntervalSince(lastAttemptedAt) >= minimumInterval
+    }
+}
+
+enum RoomListAuthoritativeFallbackPolicy {
+    static func shouldUseCachedFallback(
+        authoritativeRoomCount: Int,
+        cachedRoomCount: Int
+    ) -> Bool {
+        authoritativeRoomCount == 0 && cachedRoomCount > 0
+    }
+}
+
+enum RoomListReconciliationHeartbeatPolicy {
+    static func shouldContinue(
+        isCancelled: Bool,
+        isCurrentSession: Bool,
+        currentGeneration: UInt64,
+        expectedGeneration: UInt64
+    ) -> Bool {
+        isCancelled == false
+            && isCurrentSession
+            && currentGeneration == expectedGeneration
+    }
+
+    static func shouldEmit(
+        cachedRoomIDs: Set<String>,
+        dynamicSnapshotRoomIDs: Set<String>
+    ) -> Bool {
+        cachedRoomIDs.isEmpty == false
+            && cachedRoomIDs.isSubset(of: dynamicSnapshotRoomIDs) == false
+    }
+}
+
 private enum MatrixRoomListStateBuilder {
     static func build(
         from sdkRooms: [Room],
         spaceService: SpaceService?,
         fallbackCache: [RoomSummary]
     ) async -> RoomListState {
-        let sorted = await roomSummaries(from: sdkRooms, spaceService: spaceService)
+        let sorted = await roomSummaries(
+            from: sdkRooms,
+            spaceService: spaceService,
+            previous: fallbackCache
+        )
         if sorted.isEmpty == false {
             return .loaded(sorted)
         }
-        if fallbackCache.isEmpty == false {
+        if RoomListAuthoritativeFallbackPolicy.shouldUseCachedFallback(
+            authoritativeRoomCount: sdkRooms.count,
+            cachedRoomCount: fallbackCache.count
+        ) {
             return .loaded(fallbackCache)
         }
         return .empty
@@ -1896,6 +2056,40 @@ private enum MatrixRoomListStateBuilder {
         }
         return RoomListFixtures.sorted(summaries)
     }
+
+    static func incrementalRoomSummaries(
+        from rooms: [Room],
+        changedRoomIDs: Set<String>,
+        requiresFullRemap: Bool,
+        explicitlyRemovedRoomIDs: Set<String> = [],
+        spaceService: SpaceService?,
+        previous: [RoomSummary]
+    ) async -> [RoomSummary] {
+        let retainedPreviousIDs = RoomListCacheRetentionPolicy.retainedPreviousIDs(
+            previousIDs: Set(previous.map(\.id)),
+            explicitlyRemovedIDs: explicitlyRemovedRoomIDs
+        )
+        var summariesByID = Dictionary(
+            uniqueKeysWithValues: previous
+                .filter { retainedPreviousIDs.contains($0.id) }
+                .map { ($0.id, $0) }
+        )
+        let shouldMapSpaces = rooms.count <= 80
+
+        for room in rooms where requiresFullRemap || changedRoomIDs.contains(room.id()) || summariesByID[room.id()] == nil {
+            if let summary = await MatrixRustSDKRoomListService.mapRoom(
+                room,
+                spaceService: shouldMapSpaces ? spaceService : nil,
+                previous: summariesByID[room.id()]
+            ) {
+                summariesByID[room.id()] = summary
+            } else {
+                summariesByID.removeValue(forKey: room.id())
+            }
+        }
+
+        return RoomListFixtures.sorted(Array(summariesByID.values))
+    }
 }
 
 final class MatrixRustSDKRoomListService: RoomListServicing {
@@ -1916,7 +2110,7 @@ final class MatrixRustSDKRoomListService: RoomListServicing {
     }
 
     func loadRooms() async -> RoomListState {
-        guard case .signedIn(let session) = sessionStore.currentState else {
+        guard case let .signedIn(session) = sessionStore.currentState else {
             return .empty
         }
 
@@ -1924,7 +2118,7 @@ final class MatrixRustSDKRoomListService: RoomListServicing {
     }
 
     func roomUpdates() -> AsyncStream<RoomListState> {
-        guard case .signedIn(let session) = sessionStore.currentState else {
+        guard case let .signedIn(session) = sessionStore.currentState else {
             return AsyncStream { continuation in
                 continuation.yield(.empty)
                 continuation.finish()
@@ -1991,13 +2185,17 @@ final class MatrixRustSDKRoomListService: RoomListServicing {
         let generation = await clientStore.currentRoomListSyncGeneration()
         let allRooms = try await roomListService.allRooms()
         let spaceService = await client.spaceService()
-        let roomUpdates = AsyncStream<[Room]>.makeStream(bufferingPolicy: .bufferingNewest(1))
+        // Mapping may be substantially slower than native room-list diffs in large
+        // accounts. Retain one latest room array while carrying forward all invalidation
+        // metadata needed to map it correctly.
+        let roomUpdates = RoomListLatestSnapshotAccumulator<Room>()
 
-        let listener = MatrixRustSDKRoomListEntriesCollector { rooms in
-            roomUpdates.continuation.yield(rooms)
+        let listener = MatrixRustSDKRoomListEntriesCollector { snapshot in
+            roomUpdates.yield(snapshot)
         }
         let result = allRooms.entriesWithDynamicAdapters(pageSize: 100, listener: listener)
-        _ = result.controller().setFilter(kind: .all(filters: []))
+        let controller = result.controller()
+        _ = controller.setFilter(kind: .all(filters: []))
         let handle = result.entriesStream()
         let subscription = MatrixRustSDKRoomListSubscription(
             listener: listener,
@@ -2015,29 +2213,128 @@ final class MatrixRustSDKRoomListService: RoomListServicing {
                 return
             }
 
-            for await rooms in roomUpdates.stream {
+            var requestedPageCount = 1
+            var lastAttemptedCatchUpPageCount: Int?
+            var lastAuthoritativeReconciliationAttemptAt: Date?
+            for await _ in roomUpdates.signals {
                 guard Task.isCancelled == false else {
                     return
                 }
                 guard self.isCurrentSignedInUser(session) else {
                     return
                 }
+                guard await self.clientStore.currentRoomListSyncGeneration() == generation else {
+                    return
+                }
 
-                await self.clientStore.retainRoomHandles(rooms)
-                let summaries = await MatrixRoomListStateBuilder.roomSummaries(
-                    from: rooms,
-                    spaceService: spaceService,
-                    previous: self.cachedRoomsSnapshot()
-                )
-                if summaries.isEmpty == false {
+                while let snapshot = roomUpdates.takePendingSnapshot() {
+                    guard Task.isCancelled == false,
+                          self.isCurrentSignedInUser(session),
+                          await self.clientStore.currentRoomListSyncGeneration() == generation
+                    else {
+                        return
+                    }
+                    if let nextPageCount = RoomListDynamicPagingPolicy.nextRequestedPageCount(
+                        snapshotCount: snapshot.rooms.count,
+                        requestedPageCount: requestedPageCount,
+                        pageSize: 100
+                    ) {
+                        requestedPageCount = nextPageCount
+                        controller.addOnePage()
+                    }
+                    await self.clientStore.retainRoomHandles(snapshot.rooms)
+                    let previousRooms = self.cachedRoomsSnapshot()
+                    var explicitlyRemovedRoomIDs = snapshot.explicitlyRemovedRoomIDs
+                    let shouldReconcileAuthoritativeMembership = RoomListAuthoritativePruningPolicy.shouldReconcile(
+                        cachedRoomIDs: Set(previousRooms.map(\.id)),
+                        dynamicSnapshotRoomIDs: Set(snapshot.rooms.map { $0.id() }),
+                        requiresFullRemap: snapshot.requiresFullRemap,
+                        currentCatchUpPageCount: requestedPageCount,
+                        lastAttemptedCatchUpPageCount: lastAttemptedCatchUpPageCount,
+                        lastAttemptedAt: lastAuthoritativeReconciliationAttemptAt,
+                        now: Date()
+                    )
+                    if snapshot.isReconciliationHeartbeat,
+                       shouldReconcileAuthoritativeMembership == false
+                    {
+                        continue
+                    }
+                    if shouldReconcileAuthoritativeMembership {
+                        lastAttemptedCatchUpPageCount = requestedPageCount
+                        lastAuthoritativeReconciliationAttemptAt = Date()
+                        if let authoritativeRooms = try? await self.clientStore.rooms(session: session) {
+                            let knownAuthoritativeRoomIDs = Set(authoritativeRooms.map { $0.id() })
+                            let joinedOrInvitedRoomIDs = Set(authoritativeRooms.compactMap { room -> String? in
+                                switch room.membership() {
+                                case .joined, .invited:
+                                    return room.id()
+                                default:
+                                    return nil
+                                }
+                            })
+                            explicitlyRemovedRoomIDs.formUnion(
+                                RoomListAuthoritativePruningPolicy.provenRemovedIDs(
+                                    knownRoomIDs: knownAuthoritativeRoomIDs,
+                                    joinedOrInvitedRoomIDs: joinedOrInvitedRoomIDs
+                                )
+                            )
+                        }
+                    }
+                    let summaries = await MatrixRoomListStateBuilder.incrementalRoomSummaries(
+                        from: snapshot.rooms,
+                        changedRoomIDs: snapshot.changedRoomIDs,
+                        requiresFullRemap: snapshot.requiresFullRemap,
+                        explicitlyRemovedRoomIDs: explicitlyRemovedRoomIDs,
+                        spaceService: spaceService,
+                        previous: previousRooms
+                    )
+                    if snapshot.isReconciliationHeartbeat, summaries == previousRooms {
+                        continue
+                    }
                     self.setCachedRooms(summaries)
                     self.logger.info(
                         "Room list stream mapped rooms count=\(summaries.count)",
                         category: .sync
                     )
+                    let state: RoomListState = summaries.isEmpty ? .empty : .loaded(summaries)
+                    continuation.yield(state)
                 }
-                let state: RoomListState = summaries.isEmpty ? .empty : .loaded(summaries)
-                continuation.yield(state)
+            }
+        }
+
+        let reconciliationHeartbeatTask = Task { [weak self] in
+            guard let self else {
+                return
+            }
+            let intervalNanoseconds = UInt64(
+                RoomListAuthoritativePruningPolicy.reconciliationInterval * 1_000_000_000
+            )
+            while Task.isCancelled == false {
+                do {
+                    try await Task.sleep(nanoseconds: intervalNanoseconds)
+                } catch {
+                    return
+                }
+                let currentGeneration = await self.clientStore.currentRoomListSyncGeneration()
+                guard RoomListReconciliationHeartbeatPolicy.shouldContinue(
+                    isCancelled: Task.isCancelled,
+                    isCurrentSession: self.isCurrentSignedInUser(session),
+                    currentGeneration: currentGeneration,
+                    expectedGeneration: generation
+                ) else {
+                    return
+                }
+                if await self.clientStore.isPausedForBackground() {
+                    continue
+                }
+                let heartbeatSnapshot = listener.reconciliationSnapshot()
+                guard RoomListReconciliationHeartbeatPolicy.shouldEmit(
+                    cachedRoomIDs: Set(self.cachedRoomsSnapshot().map(\.id)),
+                    dynamicSnapshotRoomIDs: Set(heartbeatSnapshot.rooms.map { $0.id() })
+                ) else {
+                    continue
+                }
+                roomUpdates.yield(heartbeatSnapshot)
             }
         }
 
@@ -2045,7 +2342,9 @@ final class MatrixRustSDKRoomListService: RoomListServicing {
             clientStore: clientStore,
             generation: generation
         )
-        roomUpdates.continuation.finish()
+        reconciliationHeartbeatTask.cancel()
+        _ = await reconciliationHeartbeatTask.result
+        roomUpdates.finish()
         mappingTask.cancel()
         _ = await mappingTask.result
     }
@@ -2086,21 +2385,31 @@ final class MatrixRustSDKRoomListService: RoomListServicing {
 
                 if summaries.isEmpty == false {
                     setCachedRooms(summaries)
+                    didYieldEmptyState = false
                     logger.info(
                         "Classic room-list fallback mapped rooms count=\(summaries.count)",
                         category: .sync
                     )
                     continuation.yield(.loaded(summaries))
-                } else if cachedRoomsSnapshot().isEmpty == false {
+                } else if RoomListAuthoritativeFallbackPolicy.shouldUseCachedFallback(
+                    authoritativeRoomCount: rooms.count,
+                    cachedRoomCount: cachedRoomsSnapshot().count
+                ) {
                     let cachedSnapshot = cachedRoomsSnapshot()
+                    didYieldEmptyState = false
                     logger.info(
                         "Classic room-list fallback using cached rooms count=\(cachedSnapshot.count)",
                         category: .sync
                     )
                     continuation.yield(.loaded(cachedSnapshot))
-                } else if didYieldEmptyState == false {
-                    didYieldEmptyState = true
-                    continuation.yield(.empty)
+                } else {
+                    if rooms.isEmpty == false {
+                        setCachedRooms([])
+                    }
+                    if didYieldEmptyState == false {
+                        didYieldEmptyState = true
+                        continuation.yield(.empty)
+                    }
                 }
             } catch {
                 let cachedSnapshot = cachedRoomsSnapshot()
@@ -2123,7 +2432,7 @@ final class MatrixRustSDKRoomListService: RoomListServicing {
     }
 
     private func isCurrentSignedInUser(_ session: AuthenticatedSession) -> Bool {
-        guard case .signedIn(let currentSession) = sessionStore.currentState else {
+        guard case let .signedIn(currentSession) = sessionStore.currentState else {
             return false
         }
         return currentSession.userID == session.userID
@@ -2147,12 +2456,12 @@ final class MatrixRustSDKRoomListService: RoomListServicing {
             fallbackCache: cachedRoomsSnapshot(),
             allowsStoreRepair: allowsStoreRepair
         )
-        if case .loaded(let rooms) = state, rooms.isEmpty == false {
+        if case let .loaded(rooms) = state, rooms.isEmpty == false {
             setCachedRooms(rooms)
             logger.info("Room list initial load mapped rooms count=\(rooms.count)", category: .sync)
         } else if case .empty = state {
             logger.info("Room list initial load returned empty; waiting for stream", category: .sync)
-        } else if case .failed(let message) = state {
+        } else if case let .failed(message) = state {
             logger.error("Room list initial load failed: \(message)", category: .sync)
         }
         return state
@@ -2164,6 +2473,10 @@ final class MatrixRustSDKRoomListService: RoomListServicing {
 
     func isAgentRoom(roomID: String) -> Bool {
         cachedRoomsSnapshot().first { $0.id == roomID }?.isAgentRoom ?? false
+    }
+
+    func hasUnreadMessages(roomID: String) -> Bool {
+        cachedRoomsSnapshot().first { $0.id == roomID }?.unreadCount ?? 0 > 0
     }
 
     func clearCache() {
@@ -2219,7 +2532,10 @@ final class MatrixRustSDKRoomListService: RoomListServicing {
             hasHighlight: unread.hasHighlight,
             kind: (await room.isDirect()) ? .directMessage : .room,
             membership: membership,
-            lastActivityAt: latestPreview.timestamp ?? .distantPast,
+            lastActivityAt: RoomActivityTimestamp.resolve(
+                latest: latestPreview.timestamp,
+                previous: previous?.lastActivityAt
+            ),
             parentSpaces: parentSpaces,
             avatarURL: room.avatarUrl().flatMap(URL.init(string:)),
             hasAgentActivity: hasAgentActivity,
@@ -2250,27 +2566,27 @@ final class MatrixRustSDKRoomListService: RoomListServicing {
         switch await room.latestEvent() {
         case .none:
             return LatestRoomEventPreview(text: nil, timestamp: nil, hasAgentActivity: false, agentCard: nil)
-        case .remote(let timestamp, let sender, let isOwn, _, let content):
+        case let .remote(timestamp, sender, isOwn, _, content):
             let preview = previewDetails(content: content, sender: sender, isOwn: isOwn)
             return LatestRoomEventPreview(
                 text: preview.text,
-                timestamp: Date(timeIntervalSince1970: TimeInterval(timestamp) / 1_000),
+                timestamp: Date(timeIntervalSince1970: TimeInterval(timestamp) / 1000),
                 hasAgentActivity: preview.hasAgentActivity,
                 agentCard: preview.agentCard
             )
-        case .local(let timestamp, let sender, _, let content, _):
+        case let .local(timestamp, sender, _, content, _):
             let preview = previewDetails(content: content, sender: sender, isOwn: true)
             return LatestRoomEventPreview(
                 text: preview.text,
-                timestamp: Date(timeIntervalSince1970: TimeInterval(timestamp) / 1_000),
+                timestamp: Date(timeIntervalSince1970: TimeInterval(timestamp) / 1000),
                 hasAgentActivity: preview.hasAgentActivity,
                 agentCard: preview.agentCard
             )
-        case .remoteInvite(let timestamp, let inviter, _):
+        case let .remoteInvite(timestamp, inviter, _):
             let inviterName = inviter.map { senderDisplayName($0, isOwn: false) } ?? "Someone"
             return LatestRoomEventPreview(
                 text: "\(inviterName) invited you",
-                timestamp: Date(timeIntervalSince1970: TimeInterval(timestamp) / 1_000),
+                timestamp: Date(timeIntervalSince1970: TimeInterval(timestamp) / 1000),
                 hasAgentActivity: false,
                 agentCard: nil
             )
@@ -2294,9 +2610,9 @@ final class MatrixRustSDKRoomListService: RoomListServicing {
 
     private static func agentCard(from content: TimelineItemContent) -> SynaraAgentCard? {
         switch content {
-        case .msgLike(let content):
+        case let .msgLike(content):
             switch content.kind {
-            case .message(let message):
+            case let .message(message):
                 return SynaraAgentCardPayloadParser.parse(body: message.body)
             default:
                 return nil
@@ -2309,13 +2625,13 @@ final class MatrixRustSDKRoomListService: RoomListServicing {
     private static func previewText(content: TimelineItemContent, sender: String, isOwn: Bool) -> String? {
         let prefix = senderDisplayName(sender, isOwn: isOwn)
         switch content {
-        case .msgLike(let content):
+        case let .msgLike(content):
             switch content.kind {
-            case .message(let message):
+            case let .message(message):
                 return "\(prefix): \(message.body)"
-            case .sticker(let body, _, _):
+            case let .sticker(body, _, _):
                 return "\(prefix): Sticker: \(body)"
-            case .poll(let question, _, _, _, _, _, _):
+            case let .poll(question, _, _, _, _, _, _):
                 return "\(prefix): Poll: \(question)"
             case .redacted:
                 return "\(prefix): Message deleted"
@@ -2326,7 +2642,7 @@ final class MatrixRustSDKRoomListService: RoomListServicing {
             case .liveLocation:
                 return "\(prefix): Live location"
             }
-        case .roomMembership(let userID, let displayName, let change, _):
+        case let .roomMembership(userID, displayName, change, _):
             return membershipPreview(userID: userID, displayName: displayName, change: change)
         case .profileChange:
             return nil
@@ -2336,7 +2652,7 @@ final class MatrixRustSDKRoomListService: RoomListServicing {
             return "\(prefix): Call started"
         case .rtcNotification:
             return nil
-        case .failedToParseMessageLike(let eventType, _):
+        case let .failedToParseMessageLike(eventType, _):
             return eventType == "m.room.encrypted" ? "\(prefix): Encrypted message" : nil
         case .failedToParseState:
             return nil
@@ -2393,7 +2709,7 @@ final class MatrixRustSDKRoomMembershipService: RoomMembershipServicing {
     }
 
     func acceptInvite(roomID: String) async throws {
-        guard case .signedIn(let session) = sessionStore.currentState else {
+        guard case let .signedIn(session) = sessionStore.currentState else {
             throw RoomMembershipError.signedOut
         }
         guard let room = try await clientStore.room(roomID: roomID, session: session) else {
@@ -2404,7 +2720,7 @@ final class MatrixRustSDKRoomMembershipService: RoomMembershipServicing {
     }
 
     func rejectInvite(roomID: String) async throws {
-        guard case .signedIn(let session) = sessionStore.currentState else {
+        guard case let .signedIn(session) = sessionStore.currentState else {
             throw RoomMembershipError.signedOut
         }
         guard let room = try await clientStore.room(roomID: roomID, session: session) else {
@@ -2416,6 +2732,9 @@ final class MatrixRustSDKRoomMembershipService: RoomMembershipServicing {
 }
 
 final class MatrixRustSDKTimelineService: TimelineServicing {
+    static let timelineCacheCapacity = 8
+    static let streamingCollectorEventLimit = 1200
+
     private enum TimelineCacheFocus: Hashable {
         case live
         case event(String)
@@ -2427,7 +2746,7 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
     private let logger: LoggingServicing
     private var profileAvatarCacheByUserID: [String: URL?] = [:]
     private let timelineCacheLock = NSLock()
-    private var cachedTimelines: [String: Timeline] = [:]
+    private var cachedTimelines = BoundedLRUCache<String, Timeline>(capacity: timelineCacheCapacity)
 
     init(
         sessionStore: AppSessionStore,
@@ -2455,23 +2774,25 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
     }
 
     func loadLatestTimeline(roomID: String) async -> TimelineLoadOutcome {
-        guard case .signedIn(let session) = sessionStore.currentState else {
+        guard case let .signedIn(session) = sessionStore.currentState else {
             return .empty
         }
 
-        try? await clientStore.syncOnce(session: session, fullState: false)
         invalidateTimelineCache(roomID: roomID, focus: .live)
         return await loadTimelinePage(
             roomID: roomID,
             focus: .live,
             pageSize: 50,
             enrichProfiles: false,
-            paginateForwardWhenFocused: false
+            includeForwardContext: false
         )
     }
 
     func loadThreadTimeline(roomID: String, rootEventID: String) async -> TimelineLoadOutcome {
-        await loadThreadTimeline(roomID: roomID, rootEventID: rootEventID, pageSize: 20)
+        // Thread providers retain every page loaded into them. A thread open starts
+        // a fresh bounded session; the immediately-following update stream reuses it.
+        invalidateTimelineCache(roomID: roomID, focus: .thread(rootEventID))
+        return await loadThreadTimeline(roomID: roomID, rootEventID: rootEventID, pageSize: 20)
     }
 
     func loadOlderTimeline(roomID: String, before eventID: String) async -> TimelineLoadOutcome {
@@ -2500,7 +2821,7 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
     }
 
     func typingUsers(roomID: String) -> AsyncStream<[String]> {
-        guard case .signedIn(let session) = sessionStore.currentState else {
+        guard case let .signedIn(session) = sessionStore.currentState else {
             return AsyncStream { continuation in
                 continuation.yield([])
                 continuation.finish()
@@ -2575,10 +2896,10 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
 
     private func timelineUpdates(
         roomID: String,
-        focusedEventID: String?,
+        focusedEventID _: String?,
         focus: TimelineCacheFocus
     ) -> AsyncStream<TimelineLoadOutcome> {
-        guard case .signedIn(let session) = sessionStore.currentState else {
+        guard case let .signedIn(session) = sessionStore.currentState else {
             return AsyncStream { continuation in
                 continuation.yield(.empty)
                 continuation.finish()
@@ -2656,14 +2977,13 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
                         // Fix: after attach, trigger small paginates. This causes the SDK to deliver the
                         // current items (via append/reset/push diffs) to *this* listener, populating the
                         // collector so future live diffs (including agent reactions/responses) apply
-                        // correctly. Matches Element X / other Rust SDK clients (attach listener then
-                        // populate via paginate/sync to end). Also ensures live focus catches up.
+                        // correctly. The active provider already determines live versus focused context;
+                        // never walk a focused provider forward through arbitrary room history.
                         //
                         // References: matrix-rust-sdk Timeline + TimelineDiff (append/set/reset/pushBack);
                         // probe in synara-ios/spikes; SDK sliding-sync / syncService live event delivery.
                         _ = try? await timeline.paginateForwards(numEvents: 0)
                         _ = try? await timeline.paginateBackwards(numEvents: 5)
-                        await Self.paginateFocusedTimelineForwardToLiveEnd(timeline)
 
                         mappingTask = Task { [weak self] in
                             guard let self else {
@@ -2672,12 +2992,12 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
 
                             for await events in eventUpdates.stream {
                                 guard Task.isCancelled == false,
-                                      self.isCurrentSignedInUser(session) else {
+                                      self.isCurrentSignedInUser(session)
+                                else {
                                     return
                                 }
 
                                 let sdkItems = events.compactMap(Self.mapTimelineItem)
-                                    .sorted { $0.timestamp < $1.timestamp }
                                 guard sdkItems.isEmpty == false else {
                                     continue
                                 }
@@ -2740,7 +3060,8 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
         while attempts < 3,
               Task.isCancelled == false,
               isCurrentSignedInUser(session),
-              await clientStore.isPausedForBackground() == false {
+              await clientStore.isPausedForBackground() == false
+        {
             do {
                 try await clientStore.syncOnce(session: session, fullState: false)
             } catch {
@@ -2756,7 +3077,7 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
     }
 
     private func isCurrentSignedInUser(_ session: AuthenticatedSession) -> Bool {
-        guard case .signedIn(let currentSession) = sessionStore.currentState else {
+        guard case let .signedIn(currentSession) = sessionStore.currentState else {
             return false
         }
         return currentSession.userID == session.userID
@@ -2772,7 +3093,7 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
             focus: .thread(rootEventID),
             pageSize: pageSize,
             enrichProfiles: false,
-            paginateForwardWhenFocused: true
+            includeForwardContext: true
         )
     }
 
@@ -2794,7 +3115,7 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
             focus: focus,
             pageSize: pageSize,
             enrichProfiles: enrichProfiles,
-            paginateForwardWhenFocused: focusedEventID != nil
+            includeForwardContext: focusedEventID != nil
         )
     }
 
@@ -2803,9 +3124,9 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
         focus: TimelineCacheFocus,
         pageSize: UInt16,
         enrichProfiles: Bool,
-        paginateForwardWhenFocused: Bool
+        includeForwardContext: Bool
     ) async -> TimelineLoadOutcome {
-        guard case .signedIn(let session) = sessionStore.currentState else {
+        guard case let .signedIn(session) = sessionStore.currentState else {
             return .empty
         }
 
@@ -2825,8 +3146,8 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
             defer { handle.cancel() }
 
             var reachedTimelineStart = try await timeline.paginateBackwards(numEvents: pageSize)
-            if paginateForwardWhenFocused {
-                await Self.paginateFocusedTimelineForwardToLiveEnd(timeline)
+            if includeForwardContext {
+                _ = try? await timeline.paginateForwards(numEvents: pageSize)
             }
             var sdkItems = await Self.waitForMappedTimelineItems(
                 collector: collector,
@@ -2881,9 +3202,9 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
         switch focus {
         case .live:
             return "\(roomID)|live"
-        case .event(let eventID):
+        case let .event(eventID):
             return "\(roomID)|event|\(eventID)"
-        case .thread(let rootEventID):
+        case let .thread(rootEventID):
             return "\(roomID)|thread|\(rootEventID)"
         }
     }
@@ -2895,7 +3216,7 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
     ) async throws -> Timeline {
         let cacheKey = timelineCacheKey(roomID: room.id(), focus: focus)
 
-        if let cachedTimeline = withTimelineCacheLock({ cachedTimelines[cacheKey] }) {
+        if let cachedTimeline = withTimelineCacheLock({ cachedTimelines.value(forKey: cacheKey) }) {
             return cachedTimeline
         }
 
@@ -2903,7 +3224,7 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
         switch focus {
         case .live:
             timeline = try await room.timeline()
-        case .event(let eventID):
+        case let .event(eventID):
             timeline = try await room.timelineWithConfiguration(
                 configuration: Self.timelineConfiguration(
                     focus: .event(
@@ -2913,14 +3234,14 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
                     )
                 )
             )
-        case .thread(let rootEventID):
+        case let .thread(rootEventID):
             timeline = try await room.timelineWithConfiguration(
                 configuration: Self.timelineConfiguration(focus: .thread(rootEventId: rootEventID))
             )
         }
 
-        withTimelineCacheLock {
-            cachedTimelines[cacheKey] = timeline
+        _ = withTimelineCacheLock {
+            cachedTimelines.insert(timeline, forKey: cacheKey)
         }
         return timeline
     }
@@ -2960,7 +3281,7 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
         var refs: [PendingAgentCardRef] = []
         refs.reserveCapacity(items.count)
         for item in items {
-            guard case .agentCard(let card) = item.kind else {
+            guard case let .agentCard(card) = item.kind else {
                 continue
             }
             refs.append(
@@ -2992,7 +3313,6 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
         while DispatchTime.now().uptimeNanoseconds < deadline {
             let mappedItems = collector.items()
                 .compactMap(Self.mapTimelineItem)
-                .sorted { $0.timestamp < $1.timestamp }
             if mappedItems.isEmpty == false {
                 return mappedItems
             }
@@ -3001,28 +3321,10 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
 
         return collector.items()
             .compactMap(Self.mapTimelineItem)
-            .sorted { $0.timestamp < $1.timestamp }
-    }
-
-    private static func paginateFocusedTimelineForwardToLiveEnd(_ timeline: Timeline) async {
-        var iterations = 0
-        let maxIterations = 200
-
-        while iterations < maxIterations {
-            iterations += 1
-            do {
-                let hitEnd = try await timeline.paginateForwards(numEvents: 50)
-                if hitEnd {
-                    return
-                }
-            } catch {
-                return
-            }
-        }
     }
 
     private func loadOlderTimeline(roomID: String, beforeEventID: String, pageSize: UInt16) async -> TimelineLoadOutcome {
-        guard case .signedIn(let session) = sessionStore.currentState else {
+        guard case let .signedIn(session) = sessionStore.currentState else {
             return .empty
         }
 
@@ -3089,18 +3391,7 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
                 return item
             }
 
-            return TimelineItem(
-                id: item.id,
-                eventID: item.eventID,
-                senderID: item.senderID,
-                senderAvatarURL: avatarURL,
-                timestamp: item.timestamp,
-                kind: item.kind,
-                replyToEventID: item.replyToEventID,
-                isEdited: item.isEdited,
-                reactions: item.reactions,
-                isEncrypted: item.isEncrypted
-            )
+            return item.withSenderAvatarURL(avatarURL)
         }
     }
 
@@ -3121,11 +3412,12 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
     }
 
     private static func mapTimelineItem(_ item: EventTimelineItem) -> TimelineItem? {
-        let eventID = item.eventOrTransactionId.synaraID
+        let identity = item.eventOrTransactionId.synaraIdentity
+        let eventID = identity.presentationID
         let kind: TimelineItem.Kind
 
         switch item.content {
-        case .msgLike(let content):
+        case let .msgLike(content):
             kind = MatrixRustSDKTimelineMessageMapper.mapMessageLike(
                 content,
                 eventID: eventID,
@@ -3134,7 +3426,7 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
             )
         case .state:
             return nil
-        case .failedToParseMessageLike(let eventType, _):
+        case let .failedToParseMessageLike(eventType, _):
             kind = eventType == "m.room.encrypted" ? .encryptedPlaceholder : .unknown(type: eventType)
         case .failedToParseState:
             return nil
@@ -3145,26 +3437,27 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
         return TimelineItem(
             id: eventID,
             eventID: eventID,
+            serverEventID: identity.serverEventID,
             senderID: item.sender,
             senderAvatarURL: avatarURL(from: item.senderProfile),
-            timestamp: Date(timeIntervalSince1970: TimeInterval(item.timestamp) / 1_000),
+            timestamp: Date(timeIntervalSince1970: TimeInterval(item.timestamp) / 1000),
             kind: kind,
             replyToEventID: nil,
             isEdited: false,
             reactions: Dictionary(uniqueKeysWithValues: item.content.synaraReactions.map { ($0.key, $0.senders.count) }),
-            isEncrypted: item.eventTypeRaw == "m.room.encrypted" || kind == .encryptedPlaceholder
+            isEncrypted: item.eventTypeRaw == "m.room.encrypted" || kind == .encryptedPlaceholder,
+            deliveryStatus: identity.serverEventID == nil ? .sent : nil
         )
     }
 
     private static func avatarURL(from profile: ProfileDetails) -> URL? {
         switch profile {
-        case .ready(_, _, let avatarUrl):
+        case let .ready(_, _, avatarUrl):
             return avatarUrl.flatMap(URL.init(string:))
         case .unavailable, .pending, .error:
             return nil
         }
     }
-
 }
 
 final class MatrixRustSDKMessageSendService: MessageSending {
@@ -3184,7 +3477,7 @@ final class MatrixRustSDKMessageSendService: MessageSending {
         guard body.isEmpty == false else {
             throw MessageSendError.emptyMessage
         }
-        guard case .signedIn(let session) = sessionStore.currentState else {
+        guard case let .signedIn(session) = sessionStore.currentState else {
             throw MessageSendError.failed
         }
 
@@ -3212,6 +3505,7 @@ final class MatrixRustSDKMessageSendService: MessageSending {
             return TimelineItem(
                 id: eventID,
                 eventID: eventID,
+                serverEventID: request.editEventID,
                 senderID: session.userID,
                 senderAvatarURL: senderAvatarURL,
                 timestamp: Date(),
@@ -3219,7 +3513,8 @@ final class MatrixRustSDKMessageSendService: MessageSending {
                 replyToEventID: request.editEventID == nil ? request.replyToEventID : nil,
                 isEdited: request.editEventID != nil,
                 reactions: [:],
-                isEncrypted: await room.isEncrypted()
+                isEncrypted: await room.isEncrypted(),
+                deliveryStatus: request.editEventID == nil ? .sent : nil
             )
         } catch let error as MessageSendError {
             throw error
@@ -3244,7 +3539,7 @@ final class MatrixRustSDKCryptoStatusService: CryptoStatusServicing {
     }
 
     func roomStatus(roomID: String) async -> RoomCryptoStatus {
-        guard case .signedIn(let session) = sessionStore.currentState else {
+        guard case let .signedIn(session) = sessionStore.currentState else {
             return .unknown
         }
 
@@ -3256,7 +3551,7 @@ final class MatrixRustSDKCryptoStatusService: CryptoStatusServicing {
     }
 
     func sessionStatus() async -> SessionCryptoStatus {
-        guard case .signedIn(let session) = sessionStore.currentState else {
+        guard case let .signedIn(session) = sessionStore.currentState else {
             return .unknown
         }
 
@@ -3268,7 +3563,7 @@ final class MatrixRustSDKCryptoStatusService: CryptoStatusServicing {
     }
 
     func verificationUpdates() -> AsyncStream<CryptoVerificationState> {
-        guard case .signedIn(let session) = sessionStore.currentState else {
+        guard case let .signedIn(session) = sessionStore.currentState else {
             return AsyncStream { continuation in
                 continuation.finish()
             }
@@ -3277,7 +3572,7 @@ final class MatrixRustSDKCryptoStatusService: CryptoStatusServicing {
     }
 
     func retryDecryption(roomID: String) async -> CryptoActionResult {
-        guard case .signedIn(let session) = sessionStore.currentState else {
+        guard case let .signedIn(session) = sessionStore.currentState else {
             return .unavailable("Sign in before retrying encrypted message decryption.")
         }
 
@@ -3290,7 +3585,7 @@ final class MatrixRustSDKCryptoStatusService: CryptoStatusServicing {
     }
 
     func requestDeviceVerification() async -> CryptoActionResult {
-        guard case .signedIn(let session) = sessionStore.currentState else {
+        guard case let .signedIn(session) = sessionStore.currentState else {
             return .unavailable("Sign in before requesting device verification.")
         }
 
@@ -3303,7 +3598,7 @@ final class MatrixRustSDKCryptoStatusService: CryptoStatusServicing {
     }
 
     func acceptVerificationRequest() async -> CryptoActionResult {
-        guard case .signedIn(let session) = sessionStore.currentState else {
+        guard case let .signedIn(session) = sessionStore.currentState else {
             return .unavailable("Sign in before accepting verification.")
         }
 
@@ -3316,7 +3611,7 @@ final class MatrixRustSDKCryptoStatusService: CryptoStatusServicing {
     }
 
     func startSasVerification() async -> CryptoActionResult {
-        guard case .signedIn(let session) = sessionStore.currentState else {
+        guard case let .signedIn(session) = sessionStore.currentState else {
             return .unavailable("Sign in before starting verification.")
         }
 
@@ -3329,7 +3624,7 @@ final class MatrixRustSDKCryptoStatusService: CryptoStatusServicing {
     }
 
     func approveVerification() async -> CryptoActionResult {
-        guard case .signedIn(let session) = sessionStore.currentState else {
+        guard case let .signedIn(session) = sessionStore.currentState else {
             return .unavailable("Sign in before approving verification.")
         }
 
@@ -3342,7 +3637,7 @@ final class MatrixRustSDKCryptoStatusService: CryptoStatusServicing {
     }
 
     func declineVerification() async -> CryptoActionResult {
-        guard case .signedIn(let session) = sessionStore.currentState else {
+        guard case let .signedIn(session) = sessionStore.currentState else {
             return .unavailable("Sign in before declining verification.")
         }
 
@@ -3355,7 +3650,7 @@ final class MatrixRustSDKCryptoStatusService: CryptoStatusServicing {
     }
 
     func cancelVerification() async -> CryptoActionResult {
-        guard case .signedIn(let session) = sessionStore.currentState else {
+        guard case let .signedIn(session) = sessionStore.currentState else {
             return .unavailable("Sign in before cancelling verification.")
         }
 
@@ -3372,7 +3667,7 @@ final class MatrixRustSDKCryptoStatusService: CryptoStatusServicing {
         guard trimmed.isEmpty == false else {
             return .failed("Enter a recovery key before recovering keys.")
         }
-        guard case .signedIn(let session) = sessionStore.currentState else {
+        guard case let .signedIn(session) = sessionStore.currentState else {
             return .unavailable("Sign in before recovering keys.")
         }
 
@@ -3395,63 +3690,63 @@ final class MatrixRustSDKRoomManagementService: RoomManagementServicing {
     }
 
     func createRoom(_ request: RoomCreateRequest) async throws -> RoomOperationResult {
-        guard case .signedIn(let session) = sessionStore.currentState else {
+        guard case let .signedIn(session) = sessionStore.currentState else {
             throw RoomManagementError.signedOut
         }
         return try await clientStore.createRoom(request, session: session)
     }
 
     func createDirectMessage(_ request: DirectMessageCreateRequest) async throws -> RoomOperationResult {
-        guard case .signedIn(let session) = sessionStore.currentState else {
+        guard case let .signedIn(session) = sessionStore.currentState else {
             throw RoomManagementError.signedOut
         }
         return try await clientStore.createDirectMessage(request, session: session)
     }
 
     func joinRoom(_ request: RoomJoinRequest) async throws -> RoomOperationResult {
-        guard case .signedIn(let session) = sessionStore.currentState else {
+        guard case let .signedIn(session) = sessionStore.currentState else {
             throw RoomManagementError.signedOut
         }
         return try await clientStore.joinRoom(request, session: session)
     }
 
     func leaveRoom(roomID: String) async throws {
-        guard case .signedIn(let session) = sessionStore.currentState else {
+        guard case let .signedIn(session) = sessionStore.currentState else {
             throw RoomManagementError.signedOut
         }
         try await clientStore.leaveRoom(roomID: roomID, session: session)
     }
 
     func inviteUser(roomID: String, userID: String) async throws {
-        guard case .signedIn(let session) = sessionStore.currentState else {
+        guard case let .signedIn(session) = sessionStore.currentState else {
             throw RoomManagementError.signedOut
         }
         try await clientStore.inviteUser(roomID: roomID, userID: userID, session: session)
     }
 
     func searchPublicRooms(query: String) async throws -> [PublicRoomSummary] {
-        guard case .signedIn(let session) = sessionStore.currentState else {
+        guard case let .signedIn(session) = sessionStore.currentState else {
             throw RoomManagementError.signedOut
         }
         return try await clientStore.searchPublicRooms(query: query, session: session)
     }
 
     func roomDetails(roomID: String) async -> RoomDetails? {
-        guard case .signedIn(let session) = sessionStore.currentState else {
+        guard case let .signedIn(session) = sessionStore.currentState else {
             return nil
         }
         return try? await clientStore.roomDetails(roomID: roomID, session: session)
     }
 
     func updateRoomProfile(_ request: RoomProfileUpdateRequest) async throws {
-        guard case .signedIn(let session) = sessionStore.currentState else {
+        guard case let .signedIn(session) = sessionStore.currentState else {
             throw RoomManagementError.signedOut
         }
         try await clientStore.updateRoomProfile(request, session: session)
     }
 
     func setNotificationMode(_ mode: SynaraRoomNotificationMode, roomID: String) async throws {
-        guard case .signedIn(let session) = sessionStore.currentState else {
+        guard case let .signedIn(session) = sessionStore.currentState else {
             throw RoomManagementError.signedOut
         }
         try await clientStore.setNotificationMode(mode, roomID: roomID, session: session)
@@ -3468,13 +3763,13 @@ private final class MatrixRustSDKRoomDirectoryCollector: RoomDirectorySearchEntr
 
         for update in roomEntriesUpdate {
             switch update {
-            case .append(let values), .reset(let values):
+            case let .append(values), let .reset(values):
                 rooms = values
             case .clear:
                 rooms = []
-            case .pushFront(let value):
+            case let .pushFront(value):
                 rooms.insert(value, at: 0)
-            case .pushBack(let value):
+            case let .pushBack(value):
                 rooms.append(value)
             case .popFront:
                 if rooms.isEmpty == false {
@@ -3482,20 +3777,20 @@ private final class MatrixRustSDKRoomDirectoryCollector: RoomDirectorySearchEntr
                 }
             case .popBack:
                 _ = rooms.popLast()
-            case .insert(let index, let value):
+            case let .insert(index, value):
                 let boundedIndex = min(Int(index), rooms.count)
                 rooms.insert(value, at: boundedIndex)
-            case .set(let index, let value):
+            case let .set(index, value):
                 let intIndex = Int(index)
                 if rooms.indices.contains(intIndex) {
                     rooms[intIndex] = value
                 }
-            case .remove(let index):
+            case let .remove(index):
                 let intIndex = Int(index)
                 if rooms.indices.contains(intIndex) {
                     rooms.remove(at: intIndex)
                 }
-            case .truncate(let length):
+            case let .truncate(length):
                 rooms = Array(rooms.prefix(Int(length)))
             }
         }
@@ -3561,58 +3856,191 @@ private final class MatrixRustSDKRoomListSubscription: @unchecked Sendable {
     }
 }
 
+struct RoomListCoalescingSnapshot<RoomValue>: @unchecked Sendable {
+    let rooms: [RoomValue]
+    let changedRoomIDs: Set<String>
+    let requiresFullRemap: Bool
+    let explicitlyRemovedRoomIDs: Set<String>
+    let isReconciliationHeartbeat: Bool
+
+    init(
+        rooms: [RoomValue],
+        changedRoomIDs: Set<String>,
+        requiresFullRemap: Bool,
+        explicitlyRemovedRoomIDs: Set<String> = [],
+        isReconciliationHeartbeat: Bool = false
+    ) {
+        self.rooms = rooms
+        self.changedRoomIDs = changedRoomIDs
+        self.requiresFullRemap = requiresFullRemap
+        self.explicitlyRemovedRoomIDs = explicitlyRemovedRoomIDs
+        self.isReconciliationHeartbeat = isReconciliationHeartbeat
+    }
+}
+
+final class RoomListLatestSnapshotAccumulator<RoomValue>: @unchecked Sendable {
+    private let lock = NSLock()
+    private var pendingSnapshot: RoomListCoalescingSnapshot<RoomValue>?
+    private let signalContinuation: AsyncStream<Void>.Continuation
+    let signals: AsyncStream<Void>
+
+    init() {
+        let stream = AsyncStream<Void>.makeStream(bufferingPolicy: .bufferingNewest(1))
+        signals = stream.stream
+        signalContinuation = stream.continuation
+    }
+
+    func yield(_ snapshot: RoomListCoalescingSnapshot<RoomValue>) {
+        lock.lock()
+        if let pendingSnapshot {
+            self.pendingSnapshot = RoomListCoalescingSnapshot(
+                rooms: snapshot.rooms,
+                changedRoomIDs: pendingSnapshot.changedRoomIDs.union(snapshot.changedRoomIDs),
+                requiresFullRemap: pendingSnapshot.requiresFullRemap || snapshot.requiresFullRemap,
+                explicitlyRemovedRoomIDs: pendingSnapshot.explicitlyRemovedRoomIDs
+                    .union(snapshot.explicitlyRemovedRoomIDs),
+                isReconciliationHeartbeat: pendingSnapshot.isReconciliationHeartbeat
+                    && snapshot.isReconciliationHeartbeat
+            )
+        } else {
+            pendingSnapshot = snapshot
+        }
+        lock.unlock()
+        signalContinuation.yield(())
+    }
+
+    func takePendingSnapshot() -> RoomListCoalescingSnapshot<RoomValue>? {
+        lock.lock()
+        defer { lock.unlock() }
+        let snapshot = pendingSnapshot
+        pendingSnapshot = nil
+        return snapshot
+    }
+
+    func finish() {
+        signalContinuation.finish()
+    }
+}
+
+private typealias MatrixRoomListEntriesSnapshot = RoomListCoalescingSnapshot<Room>
+
 private final class MatrixRustSDKRoomListEntriesCollector: RoomListEntriesListener, @unchecked Sendable {
     private let lock = NSLock()
     private var rooms: [Room] = []
-    private let onRooms: @Sendable ([Room]) -> Void
+    private let onSnapshot: @Sendable (MatrixRoomListEntriesSnapshot) -> Void
 
-    init(onRooms: @escaping @Sendable ([Room]) -> Void) {
-        self.onRooms = onRooms
+    init(onSnapshot: @escaping @Sendable (MatrixRoomListEntriesSnapshot) -> Void) {
+        self.onSnapshot = onSnapshot
+    }
+
+    func reconciliationSnapshot() -> MatrixRoomListEntriesSnapshot {
+        lock.lock()
+        defer { lock.unlock() }
+        return MatrixRoomListEntriesSnapshot(
+            rooms: rooms,
+            changedRoomIDs: [],
+            requiresFullRemap: false,
+            isReconciliationHeartbeat: true
+        )
     }
 
     func onUpdate(roomEntriesUpdate: [RoomListEntriesUpdate]) {
         lock.lock()
+        var changedRoomIDs = Set<String>()
+        var explicitlyRemovedRoomIDs = Set<String>()
+        var requiresFullRemap = false
         for update in roomEntriesUpdate {
-            apply(update)
+            apply(
+                update,
+                changedRoomIDs: &changedRoomIDs,
+                explicitlyRemovedRoomIDs: &explicitlyRemovedRoomIDs,
+                requiresFullRemap: &requiresFullRemap
+            )
         }
         let snapshot = rooms
         lock.unlock()
-        onRooms(snapshot)
+        onSnapshot(
+            MatrixRoomListEntriesSnapshot(
+                rooms: snapshot,
+                changedRoomIDs: changedRoomIDs,
+                requiresFullRemap: requiresFullRemap,
+                explicitlyRemovedRoomIDs: explicitlyRemovedRoomIDs
+            )
+        )
     }
 
-    private func apply(_ update: RoomListEntriesUpdate) {
+    private func apply(
+        _ update: RoomListEntriesUpdate,
+        changedRoomIDs: inout Set<String>,
+        explicitlyRemovedRoomIDs: inout Set<String>,
+        requiresFullRemap: inout Bool
+    ) {
         switch update {
-        case .append(let values):
+        case let .append(values):
             rooms.append(contentsOf: values)
+            changedRoomIDs.formUnion(values.map { $0.id() })
         case .clear:
+            for room in rooms {
+                recordExplicitRemovalIfNeeded(room, into: &explicitlyRemovedRoomIDs)
+            }
             rooms.removeAll()
-        case .pushFront(let room):
+            requiresFullRemap = true
+        case let .pushFront(room):
             rooms.insert(room, at: 0)
-        case .pushBack(let room):
+            changedRoomIDs.insert(room.id())
+        case let .pushBack(room):
             rooms.append(room)
+            changedRoomIDs.insert(room.id())
         case .popFront:
             if rooms.isEmpty == false {
-                rooms.removeFirst()
+                recordExplicitRemovalIfNeeded(rooms.removeFirst(), into: &explicitlyRemovedRoomIDs)
             }
         case .popBack:
-            _ = rooms.popLast()
-        case .insert(let index, let room):
+            if let room = rooms.popLast() {
+                recordExplicitRemovalIfNeeded(room, into: &explicitlyRemovedRoomIDs)
+            }
+        case let .insert(index, room):
             let boundedIndex = min(Int(index), rooms.count)
             rooms.insert(room, at: boundedIndex)
-        case .set(let index, let room):
+            changedRoomIDs.insert(room.id())
+        case let .set(index, room):
             let intIndex = Int(index)
             if rooms.indices.contains(intIndex) {
+                let previousRoom = rooms[intIndex]
                 rooms[intIndex] = room
+                if previousRoom.id() != room.id() {
+                    recordExplicitRemovalIfNeeded(previousRoom, into: &explicitlyRemovedRoomIDs)
+                }
+                changedRoomIDs.insert(room.id())
             }
-        case .remove(let index):
+        case let .remove(index):
             let intIndex = Int(index)
             if rooms.indices.contains(intIndex) {
-                rooms.remove(at: intIndex)
+                recordExplicitRemovalIfNeeded(rooms.remove(at: intIndex), into: &explicitlyRemovedRoomIDs)
             }
-        case .truncate(let length):
-            rooms = Array(rooms.prefix(Int(length)))
-        case .reset(let values):
+        case let .truncate(length):
+            let retainedCount = min(Int(length), rooms.count)
+            for room in rooms.dropFirst(retainedCount) {
+                recordExplicitRemovalIfNeeded(room, into: &explicitlyRemovedRoomIDs)
+            }
+            rooms = Array(rooms.prefix(retainedCount))
+        case let .reset(values):
+            let newRoomIDs = Set(values.map { $0.id() })
+            for room in rooms where newRoomIDs.contains(room.id()) == false {
+                recordExplicitRemovalIfNeeded(room, into: &explicitlyRemovedRoomIDs)
+            }
             rooms = values
+            changedRoomIDs.formUnion(values.map { $0.id() })
+            requiresFullRemap = true
+        }
+    }
+
+    private func recordExplicitRemovalIfNeeded(_ room: Room, into removedRoomIDs: inout Set<String>) {
+        switch room.membership() {
+        case .joined, .invited:
+            break
+        default:
+            removedRoomIDs.insert(room.id())
         }
     }
 }
@@ -3649,13 +4077,13 @@ private final class MatrixRustSDKTimelineCollector: TimelineListener, @unchecked
 
     private func apply(_ update: TimelineDiff) {
         switch update {
-        case .append(let values):
+        case let .append(values):
             timelineItems.append(contentsOf: values)
         case .clear:
             timelineItems.removeAll()
-        case .pushFront(let item):
+        case let .pushFront(item):
             timelineItems.insert(item, at: 0)
-        case .pushBack(let item):
+        case let .pushBack(item):
             timelineItems.append(item)
         case .popFront:
             if timelineItems.isEmpty == false {
@@ -3663,22 +4091,22 @@ private final class MatrixRustSDKTimelineCollector: TimelineListener, @unchecked
             }
         case .popBack:
             _ = timelineItems.popLast()
-        case .insert(let index, let item):
+        case let .insert(index, item):
             let boundedIndex = min(Int(index), timelineItems.count)
             timelineItems.insert(item, at: boundedIndex)
-        case .set(let index, let item):
+        case let .set(index, item):
             let intIndex = Int(index)
             if timelineItems.indices.contains(intIndex) {
                 timelineItems[intIndex] = item
             }
-        case .remove(let index):
+        case let .remove(index):
             let intIndex = Int(index)
             if timelineItems.indices.contains(intIndex) {
                 timelineItems.remove(at: intIndex)
             }
-        case .truncate(let length):
+        case let .truncate(length):
             timelineItems = Array(timelineItems.prefix(Int(length)))
-        case .reset(let values):
+        case let .reset(values):
             timelineItems = values
         }
     }
@@ -3691,6 +4119,23 @@ enum MatrixTimelineStreamLifecycle {
         isPaused: Bool
     ) -> Bool {
         isPaused || currentGeneration != expectedGeneration
+    }
+}
+
+enum MatrixTimelineCollectorPolicy {
+    static func retainedSuffixCount(itemCount: Int, limit: Int) -> Int {
+        max(0, min(itemCount, limit))
+    }
+
+    static func droppedPrefixCount(itemCount: Int, limit: Int) -> Int {
+        max(0, itemCount - max(0, limit))
+    }
+
+    static func droppedPrefixCountAfterPopBack(retainedCount: Int, droppedPrefixCount: Int) -> Int {
+        guard retainedCount == 0, droppedPrefixCount > 0 else {
+            return droppedPrefixCount
+        }
+        return droppedPrefixCount - 1
     }
 }
 
@@ -3787,6 +4232,7 @@ private final class MatrixRustSDKTypingSubscription: @unchecked Sendable {
 private final class MatrixRustSDKStreamingTimelineCollector: TimelineListener, @unchecked Sendable {
     private let lock = NSLock()
     private var timelineItems: [MatrixRustSDK.TimelineItem] = []
+    private var droppedPrefixCount = 0
     private let onItems: @Sendable ([EventTimelineItem]) -> Void
 
     init(onItems: @escaping @Sendable ([EventTimelineItem]) -> Void) {
@@ -3805,38 +4251,88 @@ private final class MatrixRustSDKStreamingTimelineCollector: TimelineListener, @
 
     private func apply(_ update: TimelineDiff) {
         switch update {
-        case .append(let values):
+        case let .append(values):
             timelineItems.append(contentsOf: values)
+            trimToBound()
         case .clear:
             timelineItems.removeAll()
-        case .pushFront(let item):
-            timelineItems.insert(item, at: 0)
-        case .pushBack(let item):
+            droppedPrefixCount = 0
+        case let .pushFront(item):
+            if droppedPrefixCount > 0 {
+                droppedPrefixCount += 1
+            } else {
+                timelineItems.insert(item, at: 0)
+                trimToBound()
+            }
+        case let .pushBack(item):
             timelineItems.append(item)
+            trimToBound()
         case .popFront:
-            if timelineItems.isEmpty == false {
+            if droppedPrefixCount > 0 {
+                droppedPrefixCount -= 1
+            } else if timelineItems.isEmpty == false {
                 timelineItems.removeFirst()
             }
         case .popBack:
-            _ = timelineItems.popLast()
-        case .insert(let index, let item):
-            let boundedIndex = min(Int(index), timelineItems.count)
-            timelineItems.insert(item, at: boundedIndex)
-        case .set(let index, let item):
-            let intIndex = Int(index)
-            if timelineItems.indices.contains(intIndex) {
-                timelineItems[intIndex] = item
+            if timelineItems.popLast() == nil {
+                droppedPrefixCount = MatrixTimelineCollectorPolicy.droppedPrefixCountAfterPopBack(
+                    retainedCount: timelineItems.count,
+                    droppedPrefixCount: droppedPrefixCount
+                )
             }
-        case .remove(let index):
-            let intIndex = Int(index)
-            if timelineItems.indices.contains(intIndex) {
-                timelineItems.remove(at: intIndex)
+        case let .insert(index, item):
+            let sourceIndex = Int(index)
+            if sourceIndex < droppedPrefixCount {
+                droppedPrefixCount += 1
+            } else {
+                let retainedIndex = min(sourceIndex - droppedPrefixCount, timelineItems.count)
+                timelineItems.insert(item, at: retainedIndex)
+                trimToBound()
             }
-        case .truncate(let length):
-            timelineItems = Array(timelineItems.prefix(Int(length)))
-        case .reset(let values):
-            timelineItems = values
+        case let .set(index, item):
+            let retainedIndex = Int(index) - droppedPrefixCount
+            if timelineItems.indices.contains(retainedIndex) {
+                timelineItems[retainedIndex] = item
+            }
+        case let .remove(index):
+            let sourceIndex = Int(index)
+            if sourceIndex < droppedPrefixCount {
+                droppedPrefixCount -= 1
+            } else {
+                let retainedIndex = sourceIndex - droppedPrefixCount
+                if timelineItems.indices.contains(retainedIndex) {
+                    timelineItems.remove(at: retainedIndex)
+                }
+            }
+        case let .truncate(length):
+            let sourceLength = Int(length)
+            if sourceLength <= droppedPrefixCount {
+                timelineItems.removeAll()
+                droppedPrefixCount = sourceLength
+            } else {
+                timelineItems = Array(timelineItems.prefix(sourceLength - droppedPrefixCount))
+            }
+        case let .reset(values):
+            let limit = MatrixRustSDKTimelineService.streamingCollectorEventLimit
+            let retained = values.suffix(MatrixTimelineCollectorPolicy.retainedSuffixCount(
+                itemCount: values.count,
+                limit: limit
+            ))
+            timelineItems = Array(retained)
+            droppedPrefixCount = MatrixTimelineCollectorPolicy.droppedPrefixCount(
+                itemCount: values.count,
+                limit: limit
+            )
         }
+    }
+
+    private func trimToBound() {
+        let overflow = timelineItems.count - MatrixRustSDKTimelineService.streamingCollectorEventLimit
+        guard overflow > 0 else {
+            return
+        }
+        timelineItems.removeFirst(overflow)
+        droppedPrefixCount += overflow
     }
 }
 
@@ -3888,19 +4384,28 @@ private extension SlidingSyncVersion {
 }
 
 private extension EventOrTransactionId {
-    var synaraID: String {
+    struct SynaraIdentity {
+        let presentationID: String
+        let serverEventID: String?
+    }
+
+    var synaraIdentity: SynaraIdentity {
         switch self {
-        case .eventId(let eventId):
-            return eventId
-        case .transactionId(let transactionId):
-            return transactionId
+        case let .eventId(eventId):
+            return SynaraIdentity(presentationID: eventId, serverEventID: eventId)
+        case let .transactionId(transactionId):
+            return SynaraIdentity(presentationID: transactionId, serverEventID: nil)
         }
+    }
+
+    var synaraID: String {
+        synaraIdentity.presentationID
     }
 }
 
 private extension TimelineItemContent {
     var synaraReactions: [Reaction] {
-        guard case .msgLike(let content) = self else {
+        guard case let .msgLike(content) = self else {
             return []
         }
         return content.reactions

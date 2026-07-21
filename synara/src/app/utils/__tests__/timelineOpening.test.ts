@@ -11,6 +11,8 @@ import {
   getTimelineEndWindow,
   getTimelineFocusRange,
   getTimelineRangeAfterPagination,
+  getTimelineWindowTailEvent,
+  getTimelineWindowTailEventId,
   hasUnreadForInitialScroll,
   canRestoreViewportFromInitialTimeline,
   shouldGateViewportRestoreOnUnread,
@@ -159,6 +161,16 @@ test('timeline opening helpers represent empty and non-empty timelines', () => {
   assert.deepEqual(emptyTimeline, { range: { start: 0, end: 0 }, linkedTimelines: [] });
   assert.equal(timelineHasEvents(emptyTimeline), false);
   assert.equal(timelineHasEvents(nonEmptyTimeline), true);
+});
+
+test('server-latest detached context windows remain authoritative at their fetched tail', () => {
+  const detachedContext = timeline('detached-context', ['$before', '$latest']);
+  const latestWindow = getTimelineEndWindow([detachedContext], 80);
+
+  assert.equal(getTimelineWindowTailEvent(latestWindow)?.getId(), '$latest');
+  assert.equal(getTimelineWindowTailEventId(latestWindow), '$latest');
+  assert.equal(getTimelineWindowTailEventId(getEmptyTimeline()), undefined);
+  assert.equal(getTimelineWindowTailEvent(getEmptyTimeline()), undefined);
 });
 
 test('timeline opening restore gate only accepts anchors inside the initial window', () => {

@@ -21,6 +21,8 @@ const REQUIRED_COMMANDS = [
   "npm run check:versions",
   "npm run check:repo-layout",
   "npm run check:matrix-boundaries",
+  "npm run check:quality-gates",
+  "npm run check:synapse-harness",
   "npm run check:release-updater",
   "npm run check:release-updater -- --require-enabled",
 ];
@@ -54,6 +56,8 @@ const REQUIRED_CASE_IDS = [
   "TL-008",
   "TL-009",
   "TL-010",
+  "TL-011",
+  "TL-012",
   "IOS-001",
   "IOS-002",
   "IOS-003",

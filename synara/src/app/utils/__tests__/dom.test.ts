@@ -59,7 +59,7 @@ test('data transfer file detection tolerates desktop payloads without Files type
     dataTransferHasFiles({
       files: { length: 1, 0: image } as unknown as FileList,
       items: { length: 0 } as unknown as DataTransferItemList,
-      types: [] as unknown as DOMStringList,
+      types: [],
     }),
     true
   );
@@ -73,7 +73,7 @@ test('data transfer file detection tolerates desktop payloads without Files type
           getAsFile: () => image,
         },
       } as unknown as DataTransferItemList,
-      types: ['text/plain'] as unknown as DOMStringList,
+      types: ['text/plain'],
     }),
     true
   );
@@ -87,30 +87,21 @@ test('data transfer file detection tolerates desktop payloads without Files type
           getAsFile: () => null,
         },
       } as unknown as DataTransferItemList,
-      types: ['text/plain'] as unknown as DOMStringList,
+      types: ['text/plain'],
     }),
     false
   );
 });
 
 test('native clipboard image probing wins for image-like clipboard payloads', () => {
-  assert.equal(shouldProbeNativeClipboardImage({ types: [] as unknown as DOMStringList }), true);
-  assert.equal(
-    shouldProbeNativeClipboardImage({ types: ['Files'] as unknown as DOMStringList }),
-    true
-  );
+  assert.equal(shouldProbeNativeClipboardImage({ types: [] }), true);
+  assert.equal(shouldProbeNativeClipboardImage({ types: ['Files'] }), true);
   assert.equal(
     shouldProbeNativeClipboardImage({
-      types: ['text/html', 'image/png'] as unknown as DOMStringList,
+      types: ['text/html', 'image/png'],
     }),
     true
   );
-  assert.equal(
-    shouldProbeNativeClipboardImage({ types: ['text/html'] as unknown as DOMStringList }),
-    false
-  );
-  assert.equal(
-    shouldProbeNativeClipboardImage({ types: ['text/plain'] as unknown as DOMStringList }),
-    false
-  );
+  assert.equal(shouldProbeNativeClipboardImage({ types: ['text/html'] }), false);
+  assert.equal(shouldProbeNativeClipboardImage({ types: ['text/plain'] }), false);
 });

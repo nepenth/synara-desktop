@@ -3,7 +3,8 @@
 Status: IOS-0006 local package probe plus gated live E2EE probe.
 
 This package verifies that Synara can resolve and import the official
-`matrix-org/matrix-rust-components-swift` Swift package. Its default mode does
+`matrix-org/matrix-rust-components-swift` Swift package, pinned to release
+`26.06.06`. Its default mode does
 not contact a homeserver. Its gated live mode validates disposable Matrix login
 and encrypted-room behavior before those SDK calls are moved into the app
 service layer.

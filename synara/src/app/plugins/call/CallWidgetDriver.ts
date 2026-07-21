@@ -14,6 +14,7 @@ import {
   IOpenIDUpdate,
 } from 'matrix-widget-api';
 import {
+  Direction,
   EventType,
   type IContent,
   MatrixError,
@@ -264,7 +265,8 @@ export class CallWidgetDriver extends WidgetDriver {
     direction?: 'f' | 'b'
   ): Promise<IReadEventRelationsResult> {
     const client = this.mx;
-    const dir = direction as Direction;
+    const dir =
+      direction === 'f' ? Direction.Forward : direction === 'b' ? Direction.Backward : undefined;
     const targetRoomId = roomId ?? this.inRoomId ?? undefined;
 
     if (typeof targetRoomId !== 'string') {

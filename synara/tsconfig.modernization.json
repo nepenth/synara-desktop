@@ -8,6 +8,7 @@
     "src/app/components/hermes/HermesAgentCard.tsx",
     "src/app/utils/__tests__/agentApprovals.test.ts",
     "src/app/utils/__tests__/desktop.test.ts",
+    "src/app/utils/__tests__/matrix.test.ts",
     "src/app/utils/__tests__/hermes.test.ts",
     "src/app/utils/__tests__/polls.test.ts",
     "src/app/utils/desktop.ts",
@@ -16,6 +17,8 @@
     "src/app/utils/polls.ts",
     "src/app/components/message/content/PollContent.tsx",
     "src/app/utils/__tests__/timelineVirtualization.test.ts",
+    "src/app/utils/__tests__/timelineNavigation.test.ts",
+    "src/app/utils/timelineNavigation.ts",
     "src/app/components/editor/__tests__/richText.test.ts"
   ]
 }

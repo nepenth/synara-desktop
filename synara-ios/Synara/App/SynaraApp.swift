@@ -402,7 +402,28 @@ private extension AppEnvironment {
         } else if processEnvironment["SYNARA_UI_TEST_LARGE_TIMELINE"] == "1" {
             let count = processEnvironment["SYNARA_UI_TEST_LARGE_TIMELINE_COUNT"]
                 .flatMap(Int.init) ?? 10_000
-            timeline = MockTimelineService(items: TimelineFixtures.largeTimeline(count: count))
+            switch processEnvironment["SYNARA_UI_TEST_VIEWPORT_SCENARIO"] {
+            case "height-change":
+                let service = MockTimelineService(items: TimelineFixtures.largeTimeline(indices: 100..<140))
+                service.updateDelayNanoseconds = 5_000_000_000
+                service.updateOutcomes = [
+                    .loaded(
+                        TimelineFixtures.largeTimeline(
+                            indices: 100..<140,
+                            expandedMessageIndex: 137,
+                            expandedLineCount: 180
+                        )
+                    )
+                ]
+                timeline = service
+            case "prepend":
+                let service = MockTimelineService(items: TimelineFixtures.largeTimeline(indices: 100..<140))
+                service.updateDelayNanoseconds = 5_000_000_000
+                service.updateOutcomes = [.loaded(TimelineFixtures.largeTimeline(indices: 50..<140))]
+                timeline = service
+            default:
+                timeline = MockTimelineService(items: TimelineFixtures.largeTimeline(count: count))
+            }
         } else {
             timeline = MockTimelineService()
         }

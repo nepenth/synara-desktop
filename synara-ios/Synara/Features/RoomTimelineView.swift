@@ -1,17 +1,26 @@
-import SwiftUI
 import PhotosUI
+import SwiftUI
 import UniformTypeIdentifiers
 #if canImport(UIKit)
-import UIKit
+    import UIKit
 #endif
 
 enum RoomTimelineFocusPolicy {
-    static func initialLoadFocus(focusedEventID: String?, initialReadMarkerEventID _: String?) -> String? {
-        focusedEventID
-    }
-
-    static func updateStreamFocus(focusedEventID: String?, override: String?? = nil) -> String? {
-        override ?? focusedEventID
+    static func initialMode(
+        focusedEventID: String?,
+        hasUnreadMessages: Bool,
+        readMarkerEventID: String?
+    ) -> RoomTimelineMode {
+        if let focusedEventID, focusedEventID.isEmpty == false {
+            return .focused(eventID: focusedEventID)
+        }
+        if hasUnreadMessages,
+           let readMarkerEventID,
+           readMarkerEventID.isEmpty == false
+        {
+            return .unread(markerEventID: readMarkerEventID)
+        }
+        return .live
     }
 }
 
@@ -32,7 +41,8 @@ enum RoomTimelinePaginationPolicy {
               hasPositionedInitialTimeline,
               isJumpingToLatest == false,
               isPaginating == false,
-              hasReachedOldestMessages == false else {
+              hasReachedOldestMessages == false
+        else {
             return false
         }
         return true
@@ -87,6 +97,72 @@ enum RoomTimelineSnapshotPolicy {
     }
 }
 
+enum RoomTimelineReadAcknowledgementPolicy {
+    static func shouldSchedule(
+        isLive: Bool,
+        isConfirmedPinned: Bool,
+        isJumpingToLatest: Bool,
+        isUserInteracting: Bool,
+        eventID: String,
+        lastMarkedEventID: String?
+    ) -> Bool {
+        isLive
+            && isConfirmedPinned
+            && isJumpingToLatest == false
+            && isUserInteracting == false
+            && eventID != lastMarkedEventID
+    }
+}
+
+enum RoomTimelineReadMarkerQueuePolicy {
+    static func delayNanoseconds(
+        firstQueuedAt: Date,
+        now: Date,
+        debounceNanoseconds: UInt64,
+        maximumLatencyNanoseconds: UInt64
+    ) -> UInt64 {
+        let elapsed = max(0, now.timeIntervalSince(firstQueuedAt))
+        let elapsedNanoseconds = UInt64(elapsed * 1_000_000_000)
+        let remainingMaximum = maximumLatencyNanoseconds > elapsedNanoseconds
+            ? maximumLatencyNanoseconds - elapsedNanoseconds
+            : 0
+        return min(debounceNanoseconds, remainingMaximum)
+    }
+
+    static func flushCandidate(
+        pendingEventID: String?,
+        lastCandidateEventID: String?,
+        lastMarkedEventID: String?
+    ) -> String? {
+        let candidate = pendingEventID ?? lastCandidateEventID
+        guard let candidate,
+              candidate != lastMarkedEventID,
+              MatrixServerEventIDPolicy.canAcknowledge(candidate)
+        else {
+            return nil
+        }
+        return candidate
+    }
+}
+
+enum RoomTimelineReadMarkerTaskPolicy {
+    static func ownsInstalledTask(installedGeneration: UInt64, currentGeneration: UInt64) -> Bool {
+        installedGeneration == currentGeneration
+    }
+}
+
+enum RoomTimelineJumpLatestPolicy {
+    static func shouldShow(isLive: Bool, isConfirmedPinned: Bool, hasItems: Bool, requested: Bool) -> Bool {
+        hasItems && (isLive == false || (requested && isConfirmedPinned == false))
+    }
+}
+
+enum RoomTimelineLatestCommandCompletionPolicy {
+    static func shouldShowRecovery(success: Bool) -> Bool {
+        success == false
+    }
+}
+
 enum RoomTypingPresentation {
     static func displayName(for userID: String) -> String {
         let localPart = userID.split(separator: ":", maxSplits: 1).first.map(String.init) ?? userID
@@ -118,6 +194,7 @@ struct RoomTimelineView: View {
     private static let olderPaginationTopThreshold = 3
     private static let olderPaginationDebounceInterval: TimeInterval = 0.5
     private static let markFullyReadDelayNanoseconds: UInt64 = 1_000_000_000
+    private static let markFullyReadMaximumLatencyNanoseconds: UInt64 = 2_000_000_000
     private static let timelineBottomLayoutDelayNanoseconds: UInt64 = 16_000_000
     private static let timelineBottomAnchorID = "timeline-bottom-anchor"
 
@@ -152,12 +229,18 @@ struct RoomTimelineView: View {
     @State private var lastOlderPaginationAt = Date.distantPast
     @State private var paginationScrollAnchorID: String?
     @State private var isJumpingToLatest = false
-    @State private var pendingJumpToLatestEventID: String? // legacy, vestigial after direct-jump patch (see jumpToLatest)
     @State private var isComposerFocused = false
     @State private var isTimelineBottomVisible = false
+    @State private var timelineBottomAnchorGeneration: UInt64 = 0
     @State private var lastMarkedFullyReadEventID: String?
     @State private var markFullyReadTask: Task<Void, Never>?
+    @State private var markFullyReadTaskGeneration: UInt64 = 0
+    @State private var pendingMarkFullyReadEventID: String?
+    @State private var firstPendingMarkFullyReadAt: Date?
+    @State private var lastAcknowledgementCandidateEventID: String?
     @State private var timelineUpdatesTask: Task<Void, Never>?
+    @State private var timelineSession: RoomTimelineSession?
+    @State private var activeTimelineMode: RoomTimelineMode = .live
     @State private var typingUpdatesTask: Task<Void, Never>?
     @State private var typingUserIDs: [String] = []
     @State private var timelineScrollTask: Task<Void, Never>?
@@ -167,6 +250,8 @@ struct RoomTimelineView: View {
     @State private var timelinePosition: RoomTimelinePositionState = .preparing
     @State private var timelineTraceID = String(UUID().uuidString.prefix(8))
     @State private var timelineTraceStartedAt = Date()
+    @State private var stableViewportCommand: StableTimelineViewportCommand?
+    @State private var stableViewportCommandID: UInt64 = 0
     private let timelineLogger = AppLogger()
     @Environment(\.openURL) private var openURL
     @Environment(\.dismiss) private var dismiss
@@ -278,14 +363,13 @@ struct RoomTimelineView: View {
             startTypingUpdates()
             startVerificationAutoRetry()
             await loadTimeline()
-            startTimelineUpdates(streamFocusEventID: focusedEventID == nil ? .some(nil) : nil)
         }
         .onDisappear {
             dismissKeyboard()
             stopTimelineUpdates(reason: "view-disappeared")
             stopTypingUpdates()
             cancelTimelineScroll()
-            cancelMarkFullyRead()
+            flushMarkFullyRead()
         }
         .onChange(of: draft) { value in
             environment.drafts.setDraft(value, roomID: roomID)
@@ -324,213 +408,406 @@ struct RoomTimelineView: View {
             .accessibilityIdentifier("TimelineLoading")
         case .empty:
             SynaraEmptyState(title: "No Messages", systemImage: "text.bubble", message: "Messages will appear here.")
-        case .failed(let message):
+        case let .failed(message):
             SynaraErrorState(title: "Could Not Load Timeline", message: message) {
                 Task {
                     await loadTimeline()
-                    startTimelineUpdates(streamFocusEventID: focusedEventID == nil ? .some(nil) : nil)
                 }
             }
-        case .loaded(let items, let isPaginating):
-            ScrollViewReader { proxy in
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
-                        if isPaginating {
-                            ProgressView()
-                                .controlSize(.small)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, SynaraSpacing.xSmall)
-                                .accessibilityIdentifier("TimelinePaginationIndicator")
-                        }
-
-                        if shouldShowCryptoBanner(items: items) {
-                            CryptoRecoveryBanner(
-                                status: cryptoStatus,
-                                onRetry: retryDecryption,
-                                onReviewSecurity: { environment.router.route(to: .settings) },
-                                onDismiss: { isCryptoBannerDismissed = true }
-                            )
-                        }
-
-                        let threadReplyCounts = TimelineReplyCounter.replyCounts(for: items)
-                        let replyPreviewsByEventID = TimelineReplyPreview.previewsByEventID(
-                            in: items,
-                            currentUserID: currentUserID
-                        )
-
-                        ForEach(Array(items.enumerated()), id: \.element.eventID) { index, item in
-                            if shouldShowUnreadDivider(before: item, at: index, in: items) {
-                                UnreadMessagesDivider()
-                                    .padding(.vertical, SynaraSpacing.small)
+        case let .loaded(items, isPaginating):
+            if StableScrollAnchoringFeatureFlag.isEnabled {
+                stableTimelineContent(items: items, isPaginating: isPaginating)
+            } else {
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
+                            if isPaginating {
+                                ProgressView()
+                                    .controlSize(.small)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, SynaraSpacing.xSmall)
+                                    .accessibilityIdentifier("TimelinePaginationIndicator")
                             }
-                            TimelineRow(
-                                item: item,
-                                currentUserID: currentUserID,
-                                isGroupedWithPrevious: isGroupedWithPrevious(index: index, items: items),
-                                animateSend: sendAnimationItemIDs.contains(item.id),
-                                replyPreviewsByEventID: replyPreviewsByEventID,
-                                replyCount: threadReplyCounts[item.eventID] ?? 0,
-                                availability: environment.eventActions.availability(for: item, currentUserID: currentUserID),
-                                onReply: {
-                                    replyTarget = ComposerRelationTarget(
-                                        item: item,
-                                        kind: .reply,
-                                        currentUserID: currentUserID
-                                    )
-                                },
-                                onOpenThread: { openThread(root: item) },
-                                onEdit: { beginEdit(item) },
-                                onRedact: { applyAction(.redact, to: item) },
-                                onReact: { applyAction(.react("👍"), to: item) },
-                                onOpenMedia: { resource in viewerResource = resource },
-                                onAgentAction: { action in
-                                    executeAgentAction(action, sourceEventID: item.eventID)
-                                },
-                                onAgentApprovalReaction: { reactionKey in
-                                    submitAgentApprovalReaction(reactionKey: reactionKey, sourceEventID: item.eventID)
-                                },
-                                onRetryFailedSend: {
-                                    retryFailedMessage(item)
-                                }
-                            )
-                            .id(item.eventID)
-                            .onAppear {
-                                if item.eventID == items.last?.eventID {
-                                    scheduleMarkFullyRead(eventID: item.eventID)
-                                }
-                                if isAgentRoom == false, index < Self.olderPaginationTopThreshold {
-                                    loadOlderTimelineIfNeeded(anchorItem: item, index: index, items: items)
-                                }
-                            }
-                            .onDisappear {
-                                if item.eventID == items.last?.eventID {
-                                    cancelMarkFullyRead()
-                                }
-                            }
-                        }
 
-                        Color.clear
-                            .frame(height: 1)
-                            .id(Self.timelineBottomAnchorID)
-                            .accessibilityHidden(true)
-                            .onAppear {
-                                isTimelineBottomVisible = true
-                                if focusedEventID == nil {
-                                    timelinePosition = .followingLive
-                                }
-                                showJumpToLatest = false
-                                logTimelineEvent("bottom-visible", fields: ["items": "\(items.count)"])
-                            }
-                            .onDisappear {
-                                isTimelineBottomVisible = false
-                                if isUserDraggingTimeline, focusedEventID == nil {
-                                    timelinePosition = .readingHistory
-                                }
-                                if items.count > 1 && timelinePosition == .readingHistory {
-                                    showJumpToLatest = true
-                                }
-                                logTimelineEvent(
-                                    "bottom-hidden",
-                                    fields: [
-                                        "items": "\(items.count)",
-                                        "userInteracted": "\(hasUserInteractedWithTimeline)"
-                                    ]
+                            if shouldShowCryptoBanner(items: items) {
+                                CryptoRecoveryBanner(
+                                    status: cryptoStatus,
+                                    onRetry: retryDecryption,
+                                    onReviewSecurity: { environment.router.route(to: .settings) },
+                                    onDismiss: { isCryptoBannerDismissed = true }
                                 )
                             }
-                    }
-                    .padding(.horizontal, timelineHorizontalPadding)
-                    .padding(.top, isAgentRoom ? SynaraSpacing.medium : SynaraSpacing.small)
-                    .padding(.bottom, SynaraSpacing.small)
-                }
-                .scrollDismissesKeyboard(.interactively)
-                .background(isAgentRoom ? SynaraColor.agentReviewBackground : SynaraColor.surface)
-                .accessibilityIdentifier("TimelineList")
-                .simultaneousGesture(
-                    DragGesture(minimumDistance: 8)
-                        .onChanged { value in
-                            hasUserInteractedWithTimeline = true
-                            isUserDraggingTimeline = true
-                            timelinePosition = RoomTimelineScrollPolicy.positionDuringUserDrag(
-                                current: timelinePosition,
-                                translationHeight: value.translation.height,
-                                focusedEventID: focusedEventID
+
+                            let threadReplyCounts = TimelineReplyCounter.replyCounts(for: items)
+                            let replyPreviewsByEventID = TimelineReplyPreview.previewsByEventID(
+                                in: items,
+                                currentUserID: currentUserID
                             )
-                            if timelinePosition == .readingHistory,
-                               isTimelineBottomVisible == false {
-                                showJumpToLatest = true
+
+                            ForEach(Array(items.enumerated()), id: \.element.eventID) { index, item in
+                                if shouldShowUnreadDivider(before: item, at: index, in: items) {
+                                    UnreadMessagesDivider()
+                                        .padding(.vertical, SynaraSpacing.small)
+                                }
+                                TimelineRow(
+                                    item: item,
+                                    currentUserID: currentUserID,
+                                    isGroupedWithPrevious: isGroupedWithPrevious(index: index, items: items),
+                                    animateSend: sendAnimationItemIDs.contains(item.id),
+                                    replyPreview: item.replyToEventID.flatMap { replyPreviewsByEventID[$0] },
+                                    replyCount: threadReplyCounts[item.eventID] ?? 0,
+                                    availability: environment.eventActions.availability(for: item, currentUserID: currentUserID),
+                                    onReply: {
+                                        replyTarget = ComposerRelationTarget(
+                                            item: item,
+                                            kind: .reply,
+                                            currentUserID: currentUserID
+                                        )
+                                    },
+                                    onOpenThread: { openThread(root: item) },
+                                    onEdit: { beginEdit(item) },
+                                    onRedact: { applyAction(.redact, to: item) },
+                                    onReact: { applyAction(.react("👍"), to: item) },
+                                    onOpenMedia: { resource in viewerResource = resource },
+                                    onAgentAction: { action in
+                                        executeAgentAction(action, sourceEventID: item.eventID)
+                                    },
+                                    onAgentApprovalReaction: { reactionKey in
+                                        submitAgentApprovalReaction(reactionKey: reactionKey, sourceEventID: item.eventID)
+                                    },
+                                    onRetryFailedSend: {
+                                        retryFailedMessage(item)
+                                    }
+                                )
+                                .id(item.eventID)
+                                .onAppear {
+                                    if isAgentRoom == false, index < Self.olderPaginationTopThreshold {
+                                        loadOlderTimelineIfNeeded(anchorItem: item, index: index, items: items)
+                                    }
+                                }
                             }
-                            if items.count > 8 {
-                                cancelTimelineScroll()
+
+                            Color.clear
+                                .frame(height: 1)
+                                .id("\(Self.timelineBottomAnchorID)-\(timelineBottomAnchorGeneration)")
+                                .accessibilityHidden(true)
+                                .onAppear {
+                                    isTimelineBottomVisible = true
+                                    if activeTimelineMode.isLive {
+                                        timelinePosition = .followingLive
+                                        if isJumpingToLatest == false,
+                                           let latestEventID = items.reversed().compactMap(\.serverEventID).first
+                                        {
+                                            scheduleMarkFullyRead(eventID: latestEventID)
+                                        }
+                                        showJumpToLatest = false
+                                    }
+                                    logTimelineEvent("bottom-visible", fields: ["items": "\(items.count)"])
+                                }
+                                .onDisappear {
+                                    isTimelineBottomVisible = false
+                                    cancelMarkFullyRead()
+                                    if isUserDraggingTimeline, activeTimelineMode.isLive {
+                                        timelinePosition = .readingHistory
+                                    }
+                                    if items.count > 1 && timelinePosition == .readingHistory {
+                                        showJumpToLatest = true
+                                    }
+                                    logTimelineEvent(
+                                        "bottom-hidden",
+                                        fields: [
+                                            "items": "\(items.count)",
+                                            "userInteracted": "\(hasUserInteractedWithTimeline)",
+                                        ]
+                                    )
+                                }
+                        }
+                        .padding(.horizontal, timelineHorizontalPadding)
+                        .padding(.top, isAgentRoom ? SynaraSpacing.medium : SynaraSpacing.small)
+                        .padding(.bottom, SynaraSpacing.small)
+                    }
+                    .scrollDismissesKeyboard(.interactively)
+                    .background(isAgentRoom ? SynaraColor.agentReviewBackground : SynaraColor.surface)
+                    .accessibilityIdentifier("TimelineList")
+                    .simultaneousGesture(
+                        DragGesture(minimumDistance: 8)
+                            .onChanged { value in
+                                hasUserInteractedWithTimeline = true
+                                if isUserDraggingTimeline == false {
+                                    cancelMarkFullyRead()
+                                }
+                                isUserDraggingTimeline = true
+                                timelinePosition = RoomTimelineScrollPolicy.positionDuringUserDrag(
+                                    current: timelinePosition,
+                                    translationHeight: value.translation.height,
+                                    focusedEventID: activeTimelineMode.focusedEventID
+                                )
+                                if timelinePosition == .readingHistory,
+                                   isTimelineBottomVisible == false
+                                {
+                                    showJumpToLatest = true
+                                }
+                                if items.count > 8 {
+                                    cancelTimelineScroll()
+                                }
                             }
+                            .onEnded { _ in
+                                finishTimelineUserDrag()
+                            }
+                    )
+                    .overlay(alignment: .bottomTrailing) {
+                        if RoomTimelineJumpLatestPolicy.shouldShow(
+                            isLive: activeTimelineMode.isLive,
+                            isConfirmedPinned: isTimelineBottomVisible,
+                            hasItems: items.last != nil,
+                            requested: showJumpToLatest
+                        ) {
+                            JumpToLatestButton(isLoading: isJumpingToLatest) {
+                                jumpToLatest(proxy: proxy, currentItems: items)
+                            }
+                            .padding(.trailing, SynaraSpacing.large)
+                            .padding(.bottom, SynaraSpacing.medium)
+                            .transition(.scale.combined(with: .opacity))
                         }
-                        .onEnded { _ in
-                            finishTimelineUserDrag()
+                    }
+                    .onAppear {
+                        lastRenderedTimelineCount = items.count
+                        if scrollToInitialPosition(items: items, proxy: proxy) == false {
+                            _ = scrollToAnchoredEvent(items: items, proxy: proxy)
                         }
-                )
-                .overlay(alignment: .bottomTrailing) {
-                    if showJumpToLatest, isTimelineBottomVisible == false, items.last != nil {
-                        JumpToLatestButton(isLoading: isJumpingToLatest) {
-                            jumpToLatest(proxy: proxy, currentItems: items)
+                    }
+                    .onChange(of: state) { currentState in
+                        let traceID = PerformanceTrace.begin("TimelineStateOnChange")
+                        defer { PerformanceTrace.end("TimelineStateOnChange", id: traceID) }
+                        guard case let .loaded(updatedItems, isPaginating) = currentState else {
+                            return
                         }
-                        .padding(.trailing, SynaraSpacing.large)
-                        .padding(.bottom, SynaraSpacing.medium)
-                        .transition(.scale.combined(with: .opacity))
+                        if let anchorID = paginationScrollAnchorID, isPaginating == false {
+                            paginationScrollAnchorID = nil
+                            timelinePosition = .readingHistory
+                            performTimelineScroll(
+                                proxy: proxy,
+                                target: .event(anchorID, anchor: .top),
+                                animated: false,
+                                reason: "pagination-anchor"
+                            )
+                            lastRenderedTimelineCount = updatedItems.count
+                            return
+                        }
+                        if scrollToInitialPosition(items: updatedItems, proxy: proxy) {
+                            return
+                        }
+                        // Explicit focused-event deep links only; never restore old read markers.
+                        if scrollToAnchoredEvent(items: updatedItems, proxy: proxy) {
+                            return
+                        }
+                        _ = scrollToLatestMessageIfNeeded(items: updatedItems, proxy: proxy)
                     }
-                }
-                .onAppear {
-                    lastRenderedTimelineCount = items.count
-                    if scrollToInitialPosition(items: items, proxy: proxy) == false {
-                        _ = scrollToAnchoredEvent(items: items, proxy: proxy)
-                    }
-                }
-                .onChange(of: state) { currentState in
-                    let traceID = PerformanceTrace.begin("TimelineStateOnChange")
-                    defer { PerformanceTrace.end("TimelineStateOnChange", id: traceID) }
-                    guard case .loaded(let updatedItems, let isPaginating) = currentState else {
-                        return
-                    }
-                    if let anchorID = paginationScrollAnchorID, isPaginating == false {
-                        paginationScrollAnchorID = nil
-                        timelinePosition = .readingHistory
-                        performTimelineScroll(
-                            proxy: proxy,
-                            target: .event(anchorID, anchor: .top),
-                            animated: false,
-                            reason: "pagination-anchor"
-                        )
-                        lastRenderedTimelineCount = updatedItems.count
-                        return
-                    }
-                    if scrollToInitialPosition(items: updatedItems, proxy: proxy) {
-                        return
-                    }
-                    // Explicit focused-event deep links only; never restore old read markers.
-                    if scrollToAnchoredEvent(items: updatedItems, proxy: proxy) {
-                        return
-                    }
-                    if scrollToPendingLatestIfNeeded(items: updatedItems, proxy: proxy) {
-                        return
-                    }
-                    _ = scrollToLatestMessageIfNeeded(items: updatedItems, proxy: proxy)
                 }
             }
         }
     }
 
+    private func stableTimelineContent(items: [TimelineItem], isPaginating: Bool) -> some View {
+        let rows = stableViewportRows(items: items, isPaginating: isPaginating)
+        let routeID = stableViewportRouteID
+        let generation = timelineBottomAnchorGeneration
+
+        return StableTimelineViewport(
+            routeID: routeID,
+            sessionGeneration: generation,
+            rows: rows,
+            command: stableViewportCommand,
+            isLive: activeTimelineMode.isLive,
+            isPaginating: isPaginating,
+            backgroundColor: UIColor(isAgentRoom ? SynaraColor.agentReviewBackground : SynaraColor.surface),
+            rowContent: { row in
+                AnyView(stableViewportRowContent(row))
+            },
+            onBottomPinnedChanged: { callbackRouteID, callbackGeneration, isPinned, newestEventID in
+                guard callbackRouteID == stableViewportRouteID,
+                      callbackGeneration == timelineBottomAnchorGeneration
+                else {
+                    return
+                }
+                handleStableBottomPinnedChanged(isPinned: isPinned, newestEventID: newestEventID)
+            },
+            onUserInteractionChanged: { callbackRouteID, callbackGeneration, isInteracting in
+                guard callbackRouteID == stableViewportRouteID,
+                      callbackGeneration == timelineBottomAnchorGeneration
+                else {
+                    return
+                }
+                handleStableUserInteractionChanged(isInteracting: isInteracting)
+            },
+            onPaginationThresholdReached: { callbackRouteID, callbackGeneration, anchorEventID in
+                guard callbackRouteID == stableViewportRouteID,
+                      callbackGeneration == timelineBottomAnchorGeneration,
+                      let oldestEventID = loadedTimelineItems.first?.eventID
+                else {
+                    return false
+                }
+                return loadOlderTimeline(before: oldestEventID, scrollAnchorID: anchorEventID)
+            },
+            onCommandCompleted: { callbackRouteID, callbackGeneration, command, success, targetEventID in
+                guard callbackRouteID == stableViewportRouteID,
+                      callbackGeneration == timelineBottomAnchorGeneration
+                else {
+                    return
+                }
+                handleStableCommandCompleted(command, success: success, targetEventID: targetEventID)
+            }
+        )
+        .id(routeID)
+        .background(isAgentRoom ? SynaraColor.agentReviewBackground : SynaraColor.surface)
+        .overlay(alignment: .bottomTrailing) {
+            if RoomTimelineJumpLatestPolicy.shouldShow(
+                isLive: activeTimelineMode.isLive,
+                isConfirmedPinned: isTimelineBottomVisible,
+                hasItems: items.isEmpty == false,
+                requested: showJumpToLatest
+            ) {
+                JumpToLatestButton(isLoading: isJumpingToLatest) {
+                    jumpToLatestStable(currentItems: items)
+                }
+                .padding(.trailing, SynaraSpacing.large)
+                .padding(.bottom, SynaraSpacing.medium)
+                .transition(.scale.combined(with: .opacity))
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func stableViewportRowContent(_ row: StableTimelineViewportRow) -> some View {
+        switch row.content {
+        case .pagination:
+            ProgressView()
+                .controlSize(.small)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, SynaraSpacing.xSmall)
+                .accessibilityIdentifier("TimelinePaginationIndicator")
+        case let .cryptoBanner(status):
+            CryptoRecoveryBanner(
+                status: status,
+                onRetry: retryDecryption,
+                onReviewSecurity: { environment.router.route(to: .settings) },
+                onDismiss: { isCryptoBannerDismissed = true }
+            )
+            .padding(.horizontal, timelineHorizontalPadding)
+            .padding(.vertical, SynaraSpacing.xSmall)
+        case .unreadDivider:
+            UnreadMessagesDivider()
+                .padding(.horizontal, timelineHorizontalPadding)
+                .padding(.vertical, SynaraSpacing.small)
+        case let .event(eventRow):
+            TimelineRow(
+                item: eventRow.item,
+                currentUserID: currentUserID,
+                isGroupedWithPrevious: eventRow.isGroupedWithPrevious,
+                animateSend: eventRow.animateSend,
+                replyPreview: eventRow.replyPreview,
+                replyCount: eventRow.replyCount,
+                availability: eventRow.availability,
+                onReply: {
+                    replyTarget = ComposerRelationTarget(
+                        item: eventRow.item,
+                        kind: .reply,
+                        currentUserID: currentUserID
+                    )
+                },
+                onOpenThread: { openThread(root: eventRow.item) },
+                onEdit: { beginEdit(eventRow.item) },
+                onRedact: { applyAction(.redact, to: eventRow.item) },
+                onReact: { applyAction(.react("👍"), to: eventRow.item) },
+                onOpenMedia: { resource in viewerResource = resource },
+                onAgentAction: { action in
+                    executeAgentAction(action, sourceEventID: eventRow.item.eventID)
+                },
+                onAgentApprovalReaction: { reactionKey in
+                    submitAgentApprovalReaction(reactionKey: reactionKey, sourceEventID: eventRow.item.eventID)
+                },
+                onRetryFailedSend: { retryFailedMessage(eventRow.item) }
+            )
+            .padding(.horizontal, timelineHorizontalPadding)
+            .padding(.bottom, SynaraSpacing.xSmall)
+        }
+    }
+
+    private func stableViewportRows(items: [TimelineItem], isPaginating: Bool) -> [StableTimelineViewportRow] {
+        let replyCounts = TimelineReplyCounter.replyCounts(for: items)
+        let previews = TimelineReplyPreview.previewsByEventID(in: items, currentUserID: currentUserID)
+        var rows: [StableTimelineViewportRow] = []
+        rows.reserveCapacity(items.count + 3)
+
+        if isPaginating {
+            rows.append(.init(id: .pagination, content: .pagination))
+        }
+        if shouldShowCryptoBanner(items: items) {
+            rows.append(.init(id: .cryptoBanner, content: .cryptoBanner(cryptoStatus)))
+        }
+
+        for (index, item) in items.enumerated() {
+            let stableEventID = item.eventID.isEmpty ? item.id : item.eventID
+            if shouldShowUnreadDivider(before: item, at: index, in: items) {
+                rows.append(.init(id: .unreadDivider(stableEventID), content: .unreadDivider))
+            }
+            rows.append(
+                .init(
+                    id: .event(stableEventID),
+                    content: .event(
+                        .init(
+                            item: item,
+                            isGroupedWithPrevious: isGroupedWithPrevious(index: index, items: items),
+                            animateSend: sendAnimationItemIDs.contains(item.id),
+                            replyPreview: item.replyToEventID.flatMap { previews[$0] },
+                            replyCount: replyCounts[item.eventID] ?? 0,
+                            availability: environment.eventActions.availability(
+                                for: item,
+                                currentUserID: currentUserID
+                            )
+                        )
+                    )
+                )
+            )
+        }
+        return rows
+    }
+
     @discardableResult
     private func scrollToInitialPosition(items: [TimelineItem], proxy: ScrollViewProxy) -> Bool {
         guard hasPositionedInitialTimeline == false,
-              focusedEventID == nil,
-              items.last != nil else {
+              items.last != nil
+        else {
             return false
         }
 
-        // Normal room open always pins the live end. Explicit focused-event routes use
-        // scrollToAnchoredEvent instead. Old m.fully_read markers must not scroll after load.
-        hasPositionedInitialTimeline = true
-        timelinePosition = .placingInitial
-        placeInitialTimelineAtBottom(proxy: proxy)
-        return true
+        switch activeTimelineMode {
+        case .live:
+            hasPositionedInitialTimeline = true
+            timelinePosition = .placingInitial
+            placeInitialTimelineAtBottom(proxy: proxy)
+            return true
+        case let .unread(markerEventID):
+            guard let markerIndex = items.firstIndex(where: {
+                $0.eventID == markerEventID || $0.id == markerEventID
+            }) else {
+                return false
+            }
+            let targetIndex = min(markerIndex + 1, items.count - 1)
+            hasPositionedInitialTimeline = true
+            timelinePosition = .readingHistory
+            showJumpToLatest = true
+            performTimelineScroll(
+                proxy: proxy,
+                target: .event(items[targetIndex].eventID, anchor: .top),
+                animated: false,
+                reason: "initial-first-unread",
+                ignoreComposerFocus: true
+            )
+            return true
+        case .focused:
+            return false
+        }
     }
 
     private func placeInitialTimelineAtBottom(proxy: ScrollViewProxy) {
@@ -546,7 +823,8 @@ struct RoomTimelineView: View {
     @discardableResult
     private func scrollToAnchoredEvent(items: [TimelineItem], proxy: ScrollViewProxy) -> Bool {
         guard hasAnchoredEvent == false,
-              let focusedEventID else {
+              let focusedEventID
+        else {
             return false
         }
 
@@ -557,6 +835,7 @@ struct RoomTimelineView: View {
         }
 
         hasAnchoredEvent = true
+        hasPositionedInitialTimeline = true
         timelinePosition = .focusedEvent
         performTimelineScroll(
             proxy: proxy,
@@ -576,14 +855,15 @@ struct RoomTimelineView: View {
             lastRenderedTimelineCount = items.count
         }
 
-        guard focusedEventID == nil,
+        guard activeTimelineMode.isLive,
               lastRenderedTimelineCount > 0,
               items.count > lastRenderedTimelineCount,
               RoomTimelineScrollPolicy.shouldFollowLiveAppend(
                   position: timelinePosition,
                   isBottomVisible: isTimelineBottomVisible,
-                  focusedEventID: focusedEventID
-              ) else {
+                  focusedEventID: activeTimelineMode.focusedEventID
+              )
+        else {
             return false
         }
 
@@ -592,35 +872,6 @@ struct RoomTimelineView: View {
             animated: true,
             ignoreComposerFocus: true,
             reason: "live-append"
-        )
-        return true
-    }
-
-    @discardableResult
-    private func scrollToPendingLatestIfNeeded(items: [TimelineItem], proxy: ScrollViewProxy) -> Bool { // legacy path (direct jump now used)
-        guard let pendingJumpToLatestEventID else {
-            return false
-        }
-        guard let latest = items.last else {
-            return false
-        }
-
-        let idMatch = latest.eventID == pendingJumpToLatestEventID || latest.id == pendingJumpToLatestEventID
-        // Fallback: if merge produced a slightly different wrapper (common with encryption placeholders or stableKey),
-        // still accept if the latest item is within a few seconds of when we initiated the jump.
-        let timeMatch = abs(latest.timestamp.timeIntervalSinceNow) < 30
-
-        guard idMatch || timeMatch else {
-            return false
-        }
-
-        self.pendingJumpToLatestEventID = nil
-        timelinePosition = .placingInitial
-        scrollToTimelineBottom(
-            proxy: proxy,
-            animated: true,
-            ignoreComposerFocus: true,
-            reason: idMatch ? "jump-latest-loaded" : "jump-latest-loaded-time-fallback"
         )
         return true
     }
@@ -662,15 +913,18 @@ struct RoomTimelineView: View {
         timelineScrollTask = Task { @MainActor in
             await Task.yield()
             try? await Task.sleep(nanoseconds: Self.timelineBottomLayoutDelayNanoseconds)
-            guard Task.isCancelled == false, (ignoreComposerFocus || isComposerFocused == false) else {
+            guard Task.isCancelled == false, ignoreComposerFocus || isComposerFocused == false else {
                 return
             }
 
             let scroll = {
                 switch target {
                 case .bottom:
-                    proxy.scrollTo(Self.timelineBottomAnchorID, anchor: .bottom)
-                case .event(let eventID, let anchor):
+                    proxy.scrollTo(
+                        "\(Self.timelineBottomAnchorID)-\(timelineBottomAnchorGeneration)",
+                        anchor: .bottom
+                    )
+                case let .event(eventID, anchor):
                     proxy.scrollTo(eventID, anchor: anchor)
                 }
             }
@@ -680,9 +934,6 @@ struct RoomTimelineView: View {
                 }
             } else {
                 scroll()
-            }
-            if case .bottom = target {
-                showJumpToLatest = false
             }
             logTimelineEvent("scroll-executed", fields: ["reason": reason, "target": targetKind])
             timelineScrollTask = nil
@@ -704,18 +955,21 @@ struct RoomTimelineView: View {
             isUserDraggingTimeline = false
             timelinePosition = RoomTimelineScrollPolicy.positionAfterUserDrag(
                 isBottomVisible: isTimelineBottomVisible,
-                focusedEventID: focusedEventID
+                focusedEventID: activeTimelineMode.focusedEventID
             )
             if timelinePosition == .readingHistory {
                 showJumpToLatest = true
             } else if timelinePosition == .followingLive {
                 showJumpToLatest = false
+                if let latestEventID = loadedTimelineItems.reversed().compactMap(\.serverEventID).first {
+                    scheduleMarkFullyRead(eventID: latestEventID)
+                }
             }
         }
     }
 
     private func logTimelineEvent(_ name: String, fields: [String: String] = [:]) {
-        let elapsedMilliseconds = max(0, Int(Date().timeIntervalSince(timelineTraceStartedAt) * 1_000))
+        let elapsedMilliseconds = max(0, Int(Date().timeIntervalSince(timelineTraceStartedAt) * 1000))
         let details = fields.keys.sorted().compactMap { key in
             fields[key].map { "\(key)=\($0)" }
         }.joined(separator: " ")
@@ -727,14 +981,14 @@ struct RoomTimelineView: View {
     }
 
     private var currentUserID: String {
-        if case .signedIn(let session) = environment.session.currentState {
+        if case let .signedIn(session) = environment.session.currentState {
             return session.userID
         }
         return "@local:matrix.org"
     }
 
     private var timelineSubtitle: String {
-        guard case .loaded(let items, _) = state else {
+        guard case let .loaded(items, _) = state else {
             return "Matrix room"
         }
 
@@ -743,7 +997,8 @@ struct RoomTimelineView: View {
             return "Matrix room"
         }
         if ProcessInfo.processInfo.environment["SYNARA_UI_TESTS"] == "1",
-           roomID == "!project:matrix.org" {
+           roomID == "!project:matrix.org"
+        {
             return "21 members"
         }
         return "\(participantCount) members"
@@ -770,6 +1025,10 @@ struct RoomTimelineView: View {
 
     private var timelineTaskID: String {
         roomID + (focusedEventID ?? "")
+    }
+
+    private var stableViewportRouteID: String {
+        "\(roomID)|\(timelineTraceID)"
     }
 
     private func resetTimelineState() {
@@ -799,16 +1058,25 @@ struct RoomTimelineView: View {
         lastOlderPaginationAt = .distantPast
         paginationScrollAnchorID = nil
         isJumpingToLatest = false
-        pendingJumpToLatestEventID = nil
         isComposerFocused = false
         isTimelineBottomVisible = false
+        timelineBottomAnchorGeneration = 0
         lastMarkedFullyReadEventID = nil
+        lastAcknowledgementCandidateEventID = nil
         hasUserInteractedWithTimeline = false
         isUserDraggingTimeline = false
         typingUserIDs = []
+        activeTimelineMode = focusedEventID.map { .focused(eventID: $0) } ?? .live
         timelinePosition = focusedEventID == nil ? .preparing : .focusedEvent
+        if let timelineSession {
+            Task {
+                await timelineSession.invalidate()
+            }
+        }
+        timelineSession = nil
         timelineTraceID = String(UUID().uuidString.prefix(8))
         timelineTraceStartedAt = Date()
+        stableViewportCommand = nil
         cancelMarkFullyRead()
         logTimelineEvent(
             "room-open",
@@ -820,14 +1088,16 @@ struct RoomTimelineView: View {
         if ProcessInfo.processInfo.environment["SYNARA_UI_TESTS"] == "1",
            roomID == "!project:matrix.org",
            index > 0,
-           item.eventID.contains("$security:") {
+           item.eventID.contains("$security:")
+        {
             return true
         }
 
         guard let markerID = initialReadMarkerEventID,
               markerID.isEmpty == false,
               item.eventID != markerID,
-              item.id != markerID else {
+              item.id != markerID
+        else {
             return false
         }
 
@@ -842,7 +1112,7 @@ struct RoomTimelineView: View {
     private func applyTimelineOutcome(_ outcome: TimelineLoadOutcome, isPaginating: Bool = false) {
         let shouldRemainPaginating = isPaginating || currentTimelineIsPaginating
         switch outcome {
-        case .loaded(let items):
+        case let .loaded(items):
             guard items.isEmpty == false else {
                 if case .loaded = state {
                     state = .loaded(loadedTimelineItems, isPaginating: shouldRemainPaginating)
@@ -860,7 +1130,7 @@ struct RoomTimelineView: View {
                 }
             }
             let newestEventAgeMilliseconds = items.last.map { item in
-                max(0, Int(Date().timeIntervalSince(item.timestamp) * 1_000))
+                max(0, Int(Date().timeIntervalSince(item.timestamp) * 1000))
             } ?? 0
             let merged = mergeTimelineItems(items, isPaginating: shouldRemainPaginating)
             state = .loaded(merged, isPaginating: shouldRemainPaginating)
@@ -871,15 +1141,16 @@ struct RoomTimelineView: View {
                     "newEvents": "\(newlyObservedCount)",
                     "newestAgeMs": "\(newestEventAgeMilliseconds)",
                     "rendered": "\(merged.count)",
-                    "paginating": "\(shouldRemainPaginating)"
+                    "paginating": "\(shouldRemainPaginating)",
                 ]
             )
         case .empty:
-            if case .loaded(let currentItems, _) = state,
+            if case let .loaded(currentItems, _) = state,
                RoomTimelineSnapshotPolicy.shouldPreserveCurrentSnapshot(
                    currentItemCount: currentItems.count,
                    incomingItemCount: 0
-               ) {
+               )
+            {
                 state = .loaded(currentItems, isPaginating: shouldRemainPaginating)
                 logTimelineEvent("snapshot-empty-ignored", fields: ["source": "empty"])
             } else if let pendingItems = localPendingItems, pendingItems.isEmpty == false {
@@ -888,8 +1159,8 @@ struct RoomTimelineView: View {
                 state = .empty
                 logTimelineEvent("snapshot-empty", fields: ["source": "empty"])
             }
-        case .failed(let message):
-            if case .loaded(let currentItems, _) = state, currentItems.isEmpty == false {
+        case let .failed(message):
+            if case let .loaded(currentItems, _) = state, currentItems.isEmpty == false {
                 state = .loaded(currentItems, isPaginating: shouldRemainPaginating)
                 sendError = message
                 logTimelineEvent("snapshot-failed-preserved", fields: ["rendered": "\(currentItems.count)"])
@@ -901,7 +1172,7 @@ struct RoomTimelineView: View {
     }
 
     private var localPendingItems: [TimelineItem]? {
-        guard case .loaded(let items, _) = state else {
+        guard case let .loaded(items, _) = state else {
             return nil
         }
         let pendingItems = TimelinePendingReconciler.pendingItems(from: items)
@@ -909,21 +1180,21 @@ struct RoomTimelineView: View {
     }
 
     private var currentTimelineIsPaginating: Bool {
-        guard case .loaded(_, let isPaginating) = state else {
+        guard case let .loaded(_, isPaginating) = state else {
             return false
         }
         return isPaginating
     }
 
-    private func mergeTimelineItems(_ streamItems: [TimelineItem], isPaginating: Bool) -> [TimelineItem] {
+    private func mergeTimelineItems(_ streamItems: [TimelineItem], isPaginating _: Bool) -> [TimelineItem] {
         let localItems: [TimelineItem]
-        if case .loaded(let items, _) = state {
+        if case let .loaded(items, _) = state {
             localItems = items
         } else {
             localItems = []
         }
 
-        return TimelinePendingReconciler.mergeStableWindow(
+        return TimelinePendingReconciler.merge(
             streamItems: streamItems,
             localItems: localItems,
             currentUserID: currentUserID
@@ -968,34 +1239,86 @@ struct RoomTimelineView: View {
 
     private func loadTimeline() async {
         await prepareTimelineUpdates()
-        let readMarkerEventID = RoomTimelineFocusPolicy.initialLoadFocus(
+        stopTimelineUpdates(reason: "session-open")
+
+        let hasUnreadMessages = focusedEventID == nil
+            && environment.roomList.hasUnreadMessages(roomID: roomID)
+        let readMarkerEventID = hasUnreadMessages
+            ? await environment.readMarkers.fullyReadEventID(roomID: roomID)
+            : nil
+        let requestedMode = RoomTimelineFocusPolicy.initialMode(
             focusedEventID: focusedEventID,
-            initialReadMarkerEventID: initialReadMarkerEventID
+            hasUnreadMessages: hasUnreadMessages,
+            readMarkerEventID: readMarkerEventID
         )
-        let outcome = await environment.timeline.loadInitialTimeline(roomID: roomID, focusedEventID: readMarkerEventID)
+
+        let session = RoomTimelineSession(roomID: roomID, service: environment.timeline)
+        let previousSession = timelineSession
         await MainActor.run {
-            applyTimelineOutcome(outcome)
+            timelineSession = session
+        }
+        if let previousSession {
+            await previousSession.invalidate()
+        }
+
+        guard var feed = await session.open(mode: requestedMode) else {
+            return
+        }
+
+        if case let .unread(markerEventID) = requestedMode,
+           timelineOutcome(feed.initialOutcome, contains: markerEventID) == false,
+           case let .succeeded(liveFeed) = await session.transitionToLive()
+        {
+            feed = liveFeed
+        }
+
+        guard Task.isCancelled == false,
+              await MainActor.run(body: { timelineSession === session })
+        else {
+            await session.invalidate()
+            return
+        }
+
+        await MainActor.run {
+            applySessionFeed(feed)
         }
     }
 
-    private func startTimelineUpdates(streamFocusEventID overrideFocus: String?? = nil) {
+    private func timelineOutcome(_ outcome: TimelineLoadOutcome, contains eventID: String) -> Bool {
+        guard case let .loaded(items) = outcome else {
+            return false
+        }
+        return items.contains { $0.eventID == eventID || $0.id == eventID }
+    }
+
+    private func applySessionFeed(_ feed: RoomTimelineSessionFeed) {
         stopTimelineUpdates(reason: "stream-replaced")
-        let streamFocusEventID = RoomTimelineFocusPolicy.updateStreamFocus(
-            focusedEventID: focusedEventID,
-            override: overrideFocus
-        )
+        cancelMarkFullyRead()
+        isTimelineBottomVisible = false
+        timelineBottomAnchorGeneration = feed.generation
+        activeTimelineMode = feed.mode
+        initialReadMarkerEventID = {
+            if case let .unread(markerEventID) = feed.mode {
+                return markerEventID
+            }
+            return nil
+        }()
+        applyTimelineOutcome(feed.initialOutcome)
+        if StableScrollAnchoringFeatureFlag.isEnabled {
+            enqueueStableInitialCommand(for: feed.mode, generation: feed.generation)
+        }
         logTimelineEvent(
             "stream-started",
-            fields: ["mode": streamFocusEventID == nil ? "live" : "focused"]
+            fields: ["mode": feed.mode.isLive ? "live" : "focused", "generation": "\(feed.generation)"]
         )
         timelineUpdatesTask = Task {
-            for await outcome in environment.timeline.timelineUpdates(roomID: roomID, focusedEventID: streamFocusEventID) {
+            for await outcome in feed.updates {
                 guard Task.isCancelled == false else {
                     return
                 }
                 await MainActor.run {
                     switch outcome {
-                    case .loaded(let items):
+                    case let .loaded(items):
                         applyTimelineOutcome(.loaded(items))
                     case .empty:
                         if case .loading = state {
@@ -1004,7 +1327,7 @@ struct RoomTimelineView: View {
                         } else {
                             logTimelineEvent("stream-empty-ignored")
                         }
-                    case .failed(let message):
+                    case let .failed(message):
                         if case .loaded = state {
                             logTimelineEvent("stream-failed-preserved")
                             return
@@ -1061,7 +1384,6 @@ struct RoomTimelineView: View {
         return status
     }
 
-
     private func startVerificationAutoRetry() {
         Task {
             for await update in environment.crypto.verificationUpdates() {
@@ -1085,7 +1407,6 @@ struct RoomTimelineView: View {
             }
             await loadTimeline()
             await MainActor.run {
-                startTimelineUpdates(streamFocusEventID: focusedEventID == nil ? .some(nil) : nil)
                 cryptoActionMessage = result.message
             }
         }
@@ -1118,7 +1439,8 @@ struct RoomTimelineView: View {
 
     private func retryFailedMessage(_ item: TimelineItem) {
         guard item.deliveryStatus == .failed,
-              let body = TimelinePendingReconciler.messageBody(for: item) else {
+              let body = TimelinePendingReconciler.messageBody(for: item)
+        else {
             return
         }
 
@@ -1215,8 +1537,9 @@ struct RoomTimelineView: View {
     }
 
     private func markPendingSendSent(localID: String) {
-        guard case .loaded(let items, _) = state,
-              let item = items.first(where: { $0.id == localID }) else {
+        guard case let .loaded(items, _) = state,
+              let item = items.first(where: { $0.id == localID })
+        else {
             return
         }
 
@@ -1224,8 +1547,9 @@ struct RoomTimelineView: View {
     }
 
     private func markPendingSendFailed(localID: String) {
-        guard case .loaded(let items, _) = state,
-              let item = items.first(where: { $0.id == localID }) else {
+        guard case let .loaded(items, _) = state,
+              let item = items.first(where: { $0.id == localID })
+        else {
             return
         }
 
@@ -1233,7 +1557,7 @@ struct RoomTimelineView: View {
     }
 
     private func reconcilePendingSend(localID: String, confirmed: TimelineItem) {
-        guard case .loaded(let items, let isPaginating) = state else {
+        guard case let .loaded(items, isPaginating) = state else {
             return
         }
 
@@ -1281,7 +1605,7 @@ struct RoomTimelineView: View {
             )
             await MainActor.run {
                 uploadState = result
-                if case .uploaded(let item) = result {
+                if case let .uploaded(item) = result {
                     append(item)
                 }
             }
@@ -1323,7 +1647,7 @@ struct RoomTimelineView: View {
                 )
                 await MainActor.run {
                     uploadState = result
-                    if case .uploaded(let item) = result {
+                    if case let .uploaded(item) = result {
                         append(item)
                     }
                 }
@@ -1336,38 +1660,38 @@ struct RoomTimelineView: View {
     }
 
     #if canImport(UIKit)
-    private func uploadCameraImage(_ image: UIImage) {
-        uploadState = .uploading(progress: 0.25)
-        Task {
-            let signpostID = PerformanceTrace.begin("CameraCaptureUpload")
-            defer {
-                PerformanceTrace.end("CameraCaptureUpload", id: signpostID)
-            }
-
-            guard let data = MediaAttachmentSupport.jpegData(from: image) else {
-                await MainActor.run {
-                    uploadState = .failed("Attachment could not be loaded. Try again.")
+        private func uploadCameraImage(_ image: UIImage) {
+            uploadState = .uploading(progress: 0.25)
+            Task {
+                let signpostID = PerformanceTrace.begin("CameraCaptureUpload")
+                defer {
+                    PerformanceTrace.end("CameraCaptureUpload", id: signpostID)
                 }
-                return
-            }
 
-            let result = await environment.mediaUploader.upload(
-                MediaUploadRequest(
-                    roomID: roomID,
-                    source: .camera,
-                    displayName: "synara-camera.jpg",
-                    data: data,
-                    mimeType: "image/jpeg"
+                guard let data = MediaAttachmentSupport.jpegData(from: image) else {
+                    await MainActor.run {
+                        uploadState = .failed("Attachment could not be loaded. Try again.")
+                    }
+                    return
+                }
+
+                let result = await environment.mediaUploader.upload(
+                    MediaUploadRequest(
+                        roomID: roomID,
+                        source: .camera,
+                        displayName: "synara-camera.jpg",
+                        data: data,
+                        mimeType: "image/jpeg"
+                    )
                 )
-            )
-            await MainActor.run {
-                uploadState = result
-                if case .uploaded(let item) = result {
-                    append(item)
+                await MainActor.run {
+                    uploadState = result
+                    if case let .uploaded(item) = result {
+                        append(item)
+                    }
                 }
             }
         }
-    }
     #endif
 
     private func uploadPickedPhoto(_ item: PhotosPickerItem) {
@@ -1400,7 +1724,7 @@ struct RoomTimelineView: View {
                 await MainActor.run {
                     selectedPhoto = nil
                     uploadState = result
-                    if case .uploaded(let item) = result {
+                    if case let .uploaded(item) = result {
                         append(item)
                     }
                 }
@@ -1415,7 +1739,7 @@ struct RoomTimelineView: View {
 
     private func loadOlderTimelineIfNeeded(anchorItem: TimelineItem, index: Int, items: [TimelineItem]) {
         let isPaginating: Bool
-        if case .loaded(_, let currentIsPaginating) = state {
+        if case let .loaded(_, currentIsPaginating) = state {
             isPaginating = currentIsPaginating
         } else {
             isPaginating = false
@@ -1430,17 +1754,20 @@ struct RoomTimelineView: View {
             isPaginating: isPaginating,
             hasReachedOldestMessages: hasReachedOldestMessages
         ),
-              let oldestEventID = items.first?.eventID else {
+            let oldestEventID = items.first?.eventID
+        else {
             return
         }
         loadOlderTimeline(before: oldestEventID, scrollAnchorID: anchorItem.eventID)
     }
 
-    private func loadOlderTimeline(before eventID: String?, scrollAnchorID: String? = nil) {
+    @discardableResult
+    private func loadOlderTimeline(before eventID: String?, scrollAnchorID: String? = nil) -> Bool {
         guard let eventID,
               hasReachedOldestMessages == false,
-              case .loaded(let items, false) = state else {
-            return
+              case .loaded(let items, false) = state
+        else {
+            return false
         }
 
         guard RoomTimelinePaginationPolicy.shouldLoadOlderHistory(
@@ -1452,12 +1779,12 @@ struct RoomTimelineView: View {
             isPaginating: false,
             hasReachedOldestMessages: hasReachedOldestMessages
         ) else {
-            return
+            return false
         }
 
         let now = Date()
         guard now.timeIntervalSince(lastOlderPaginationAt) >= Self.olderPaginationDebounceInterval else {
-            return
+            return false
         }
         lastOlderPaginationAt = now
 
@@ -1473,30 +1800,42 @@ struct RoomTimelineView: View {
             defer {
                 PerformanceTrace.end("TimelineLoadOlder", id: signpostID)
             }
-            let outcome = await environment.timeline.loadOlderTimeline(roomID: roomID, before: eventID)
+            guard let timelineSession,
+                  let outcome = await timelineSession.loadOlder(before: eventID)
+            else {
+                await MainActor.run {
+                    state = .loaded(items, isPaginating: false)
+                    paginationScrollAnchorID = nil
+                }
+                return
+            }
+            let updatedGeneration = await timelineSession.currentGeneration()
             await MainActor.run {
                 let currentItems = loadedTimelineItems.isEmpty ? items : loadedTimelineItems
                 switch outcome {
-                case .loaded(let older):
-                    let existingIDs = Set(currentItems.map(\.id))
-                    let uniqueOlder = older.filter { existingIDs.contains($0.id) == false }
-                    state = .loaded(uniqueOlder + currentItems, isPaginating: false)
-                    if uniqueOlder.isEmpty == false {
-                        showJumpToLatest = true
-                        logTimelineEvent(
-                            "pagination-completed",
-                            fields: ["added": "\(uniqueOlder.count)", "rendered": "\(uniqueOlder.count + currentItems.count)"]
-                        )
-                    } else {
-                        hasReachedOldestMessages = true
-                        logTimelineEvent("pagination-reached-start")
+                case let .loaded(boundedItems):
+                    let currentServerIDs = Set(currentItems.filter { $0.isLocalPending == false }.map(\.eventID))
+                    let addedCount = boundedItems.reduce(into: 0) { count, item in
+                        if currentServerIDs.contains(item.eventID) == false {
+                            count += 1
+                        }
                     }
+                    stopTimelineUpdates(reason: "history-provider-activated")
+                    timelineBottomAnchorGeneration = updatedGeneration
+                    activeTimelineMode = .focused(eventID: eventID)
+                    let merged = mergeTimelineItems(boundedItems, isPaginating: false)
+                    state = .loaded(merged, isPaginating: false)
+                    showJumpToLatest = true
+                    logTimelineEvent(
+                        "pagination-completed",
+                        fields: ["added": "\(addedCount)", "rendered": "\(merged.count)"]
+                    )
                 case .empty:
                     hasReachedOldestMessages = true
                     paginationScrollAnchorID = nil
                     state = .loaded(currentItems, isPaginating: false)
                     logTimelineEvent("pagination-reached-start")
-                case .failed(let message):
+                case let .failed(message):
                     paginationScrollAnchorID = nil
                     state = .loaded(currentItems, isPaginating: false)
                     sendError = message
@@ -1504,45 +1843,127 @@ struct RoomTimelineView: View {
                 }
             }
         }
+        return true
     }
 
     private func scheduleMarkFullyRead(eventID: String) {
-        markFullyReadTask?.cancel()
-        guard lastMarkedFullyReadEventID != eventID else {
+        guard RoomTimelineReadAcknowledgementPolicy.shouldSchedule(
+            isLive: activeTimelineMode.isLive,
+            isConfirmedPinned: isTimelineBottomVisible,
+            isJumpingToLatest: isJumpingToLatest,
+            isUserInteracting: isUserDraggingTimeline,
+            eventID: eventID,
+            lastMarkedEventID: lastMarkedFullyReadEventID
+        ) else {
             return
         }
 
+        guard MatrixServerEventIDPolicy.canAcknowledge(eventID) else {
+            return
+        }
+
+        pendingMarkFullyReadEventID = eventID
+        lastAcknowledgementCandidateEventID = eventID
+        if firstPendingMarkFullyReadAt == nil {
+            firstPendingMarkFullyReadAt = Date()
+        }
+        guard markFullyReadTask == nil else {
+            return
+        }
+
+        let firstQueuedAt = firstPendingMarkFullyReadAt ?? Date()
+        let delay = RoomTimelineReadMarkerQueuePolicy.delayNanoseconds(
+            firstQueuedAt: firstQueuedAt,
+            now: Date(),
+            debounceNanoseconds: Self.markFullyReadDelayNanoseconds,
+            maximumLatencyNanoseconds: Self.markFullyReadMaximumLatencyNanoseconds
+        )
+        markFullyReadTaskGeneration &+= 1
+        let installedGeneration = markFullyReadTaskGeneration
+
         markFullyReadTask = Task {
-            try? await Task.sleep(nanoseconds: Self.markFullyReadDelayNanoseconds)
-            guard Task.isCancelled == false else {
+            try? await Task.sleep(nanoseconds: delay)
+            guard Task.isCancelled == false,
+                  activeTimelineMode.isLive,
+                  isTimelineBottomVisible,
+                  isJumpingToLatest == false,
+                  isUserDraggingTimeline == false,
+                  let queuedEventID = pendingMarkFullyReadEventID
+            else {
+                await MainActor.run {
+                    clearMarkFullyReadTask(ifGenerationMatches: installedGeneration)
+                }
                 return
             }
 
-            let didMark = await environment.readMarkers.markFullyRead(roomID: roomID, eventID: eventID)
+            pendingMarkFullyReadEventID = nil
+            firstPendingMarkFullyReadAt = nil
+            let didMark = await environment.readMarkers.markFullyRead(roomID: roomID, eventID: queuedEventID)
             guard Task.isCancelled == false else {
                 return
             }
 
             await MainActor.run {
-                if didMark {
-                    lastMarkedFullyReadEventID = eventID
-                    initialReadMarkerEventID = eventID
+                guard RoomTimelineReadMarkerTaskPolicy.ownsInstalledTask(
+                    installedGeneration: installedGeneration,
+                    currentGeneration: markFullyReadTaskGeneration
+                ) else {
+                    return
                 }
-                showJumpToLatest = false
+                markFullyReadTask = nil
+                if didMark {
+                    lastMarkedFullyReadEventID = queuedEventID
+                    initialReadMarkerEventID = queuedEventID
+                    showJumpToLatest = false
+                }
+                if pendingMarkFullyReadEventID != nil,
+                   let nextEventID = pendingMarkFullyReadEventID
+                {
+                    scheduleMarkFullyRead(eventID: nextEventID)
+                }
             }
         }
     }
 
     private func cancelMarkFullyRead() {
+        markFullyReadTaskGeneration &+= 1
         markFullyReadTask?.cancel()
+        markFullyReadTask = nil
+        pendingMarkFullyReadEventID = nil
+        firstPendingMarkFullyReadAt = nil
+    }
+
+    private func clearMarkFullyReadTask(ifGenerationMatches installedGeneration: UInt64) {
+        guard RoomTimelineReadMarkerTaskPolicy.ownsInstalledTask(
+            installedGeneration: installedGeneration,
+            currentGeneration: markFullyReadTaskGeneration
+        ) else {
+            return
+        }
         markFullyReadTask = nil
     }
 
-    private func jumpToLatest(proxy: ScrollViewProxy, currentItems: [TimelineItem]) {
-        // Direct post-merge scroll + retry for reliability (bypasses onChange timing).
-        // See narrow review 2026-07-18 for races/state notes. Pending var is now vestigial.
+    private func flushMarkFullyRead() {
+        let eventID = RoomTimelineReadMarkerQueuePolicy.flushCandidate(
+            pendingEventID: pendingMarkFullyReadEventID,
+            lastCandidateEventID: lastAcknowledgementCandidateEventID,
+            lastMarkedEventID: lastMarkedFullyReadEventID
+        )
+        cancelMarkFullyRead()
+        guard let eventID else {
+            return
+        }
+        let readMarkers = environment.readMarkers
+        let disappearingRoomID = roomID
+        Task {
+            _ = await readMarkers.markFullyRead(roomID: disappearingRoomID, eventID: eventID)
+        }
+    }
 
-        guard isJumpingToLatest == false else {
+    private func jumpToLatest(proxy: ScrollViewProxy, currentItems: [TimelineItem]) {
+        guard isJumpingToLatest == false,
+              let timelineSession
+        else {
             return
         }
 
@@ -1550,103 +1971,231 @@ struct RoomTimelineView: View {
         isComposerFocused = false
         cancelTimelineScroll()
         cancelMarkFullyRead()
-        stopTimelineUpdates(reason: "jump-latest")
         paginationScrollAnchorID = nil
         hasReachedOldestMessages = false
         hasUserInteractedWithTimeline = false
-
-        let baselineItems: [TimelineItem]
-        if case .loaded(let items, _) = state {
-            baselineItems = items
-        } else {
-            baselineItems = currentItems
-        }
-
-        initialReadMarkerEventID = nil
-        hasPositionedInitialTimeline = true
-        showJumpToLatest = false
         isJumpingToLatest = true
-        timelinePosition = .placingInitial
+        showJumpToLatest = true
 
-        let immediateLatest = baselineItems.last
-        scrollToTimelineBottom(
-            proxy: proxy,
-            animated: true,
-            ignoreComposerFocus: true,
-            reason: "jump-latest-immediate"
-        )
-        if let immediateLatest {
-            markLatestAsRead(eventID: immediateLatest.eventID)
-        }
         Task {
             let signpostID = PerformanceTrace.begin("TimelineJumpToLatest")
             defer {
                 PerformanceTrace.end("TimelineJumpToLatest", id: signpostID)
             }
-            let outcome = await environment.timeline.loadLatestTimeline(roomID: roomID)
+            let transition = await timelineSession.transitionToLive()
             await MainActor.run {
-                let nextItems: [TimelineItem]
-                switch outcome {
-                case .loaded(let items):
-                    nextItems = items.isEmpty ? baselineItems : items
-                case .empty:
-                    nextItems = baselineItems
-                case .failed:
-                    nextItems = baselineItems
-                }
-                let traceID = PerformanceTrace.begin("TimelineReconcilerMerge")
-                    defer { PerformanceTrace.end("TimelineReconcilerMerge", id: traceID) }
-                    let merged = TimelinePendingReconciler.mergeStableWindow(
-                    streamItems: nextItems,
-                    localItems: baselineItems,
-                    currentUserID: currentUserID
-                )
-                state = .loaded(merged, isPaginating: false)
-                lastRenderedTimelineCount = merged.count
-                startTimelineUpdates(streamFocusEventID: .some(nil))
-                if let latest = merged.last {
-                    pendingJumpToLatestEventID = nil
+                switch transition {
+                case let .succeeded(feed):
+                    initialReadMarkerEventID = nil
+                    hasPositionedInitialTimeline = true
                     timelinePosition = .placingInitial
-                    scrollToTimelineBottom(
-                        proxy: proxy,
-                        animated: true,
-                        ignoreComposerFocus: true,
-                        reason: "jump-latest-final-direct"
-                    )
-                    markLatestAsRead(eventID: latest.eventID)
-
+                    applySessionFeed(feed)
+                    lastRenderedTimelineCount = loadedTimelineItems.count
+                    showJumpToLatest = true
+                    isJumpingToLatest = false
                     Task { @MainActor in
-                        try? await Task.sleep(nanoseconds: 80_000_000)
-                        if !isTimelineBottomVisible {
-                            scrollToTimelineBottom(proxy: proxy, animated: false, ignoreComposerFocus: true, reason: "jump-latest-retry")
-                        }
+                        await Task.yield()
+                        scrollToTimelineBottom(
+                            proxy: proxy,
+                            animated: true,
+                            ignoreComposerFocus: true,
+                            reason: "jump-latest-live-provider"
+                        )
                     }
-                } else {
-                    scrollToTimelineBottom(
-                        proxy: proxy,
-                        animated: true,
-                        ignoreComposerFocus: true,
-                        reason: "jump-latest-empty-fallback"
-                    )
-                    showJumpToLatest = false
+                case .empty:
+                    isJumpingToLatest = false
+                    showJumpToLatest = true
+                    sendError = "Could not load the latest messages. Try again."
+                    logTimelineEvent("jump-latest-empty-preserved", fields: ["rendered": "\(currentItems.count)"])
+                case let .failed(message):
+                    isJumpingToLatest = false
+                    showJumpToLatest = true
+                    sendError = message
+                    logTimelineEvent("jump-latest-failed-preserved", fields: ["rendered": "\(currentItems.count)"])
+                case .superseded:
+                    isJumpingToLatest = false
+                    showJumpToLatest = activeTimelineMode.isLive == false
+                    logTimelineEvent("jump-latest-superseded")
                 }
-                isJumpingToLatest = false
             }
         }
     }
 
-    private func markLatestAsRead(eventID: String) {
+    private func jumpToLatestStable(currentItems: [TimelineItem]) {
+        guard isJumpingToLatest == false,
+              let timelineSession
+        else {
+            return
+        }
+
+        dismissKeyboard()
+        isComposerFocused = false
+        cancelTimelineScroll()
+        cancelMarkFullyRead()
+        paginationScrollAnchorID = nil
+        hasReachedOldestMessages = false
+        hasUserInteractedWithTimeline = false
+        isJumpingToLatest = true
+        showJumpToLatest = true
+
         Task {
-            _ = await environment.readMarkers.markFullyRead(roomID: roomID, eventID: eventID)
+            let signpostID = PerformanceTrace.begin("TimelineJumpToLatest")
+            defer { PerformanceTrace.end("TimelineJumpToLatest", id: signpostID) }
+            let transition = await timelineSession.transitionToLive()
             await MainActor.run {
-                lastMarkedFullyReadEventID = eventID
+                switch transition {
+                case let .succeeded(feed):
+                    initialReadMarkerEventID = nil
+                    hasPositionedInitialTimeline = false
+                    timelinePosition = .placingInitial
+                    applySessionFeed(feed)
+                    enqueueStableViewportCommand(.latest(animated: true), generation: feed.generation)
+                    lastRenderedTimelineCount = loadedTimelineItems.count
+                    showJumpToLatest = true
+                case .empty:
+                    isJumpingToLatest = false
+                    showJumpToLatest = true
+                    sendError = "Could not load the latest messages. Try again."
+                    logTimelineEvent("jump-latest-empty-preserved", fields: ["rendered": "\(currentItems.count)"])
+                case let .failed(message):
+                    isJumpingToLatest = false
+                    showJumpToLatest = true
+                    sendError = message
+                    logTimelineEvent("jump-latest-failed-preserved", fields: ["rendered": "\(currentItems.count)"])
+                case .superseded:
+                    isJumpingToLatest = false
+                    showJumpToLatest = activeTimelineMode.isLive == false
+                    logTimelineEvent("jump-latest-superseded")
+                }
+            }
+        }
+    }
+
+    private func enqueueStableInitialCommand(for mode: RoomTimelineMode, generation: UInt64) {
+        switch mode {
+        case .live:
+            timelinePosition = .placingInitial
+            enqueueStableViewportCommand(.latest(animated: false), generation: generation)
+        case let .unread(markerEventID):
+            timelinePosition = .readingHistory
+            showJumpToLatest = true
+            enqueueStableViewportCommand(.readMarker(eventID: markerEventID), generation: generation)
+        case let .focused(eventID):
+            timelinePosition = .focusedEvent
+            showJumpToLatest = true
+            enqueueStableViewportCommand(.focused(eventID: eventID, animated: true), generation: generation)
+        }
+    }
+
+    private func enqueueStableViewportCommand(
+        _ kind: StableTimelineViewportCommand.Kind,
+        generation: UInt64
+    ) {
+        stableViewportCommandID &+= 1
+        stableViewportCommand = StableTimelineViewportCommand(
+            id: stableViewportCommandID,
+            routeID: stableViewportRouteID,
+            sessionGeneration: generation,
+            kind: kind
+        )
+    }
+
+    private func handleStableBottomPinnedChanged(isPinned: Bool, newestEventID: String?) {
+        isTimelineBottomVisible = isPinned
+        if isPinned, activeTimelineMode.isLive {
+            timelinePosition = .followingLive
+            showJumpToLatest = false
+            if let newestEventID {
+                scheduleMarkFullyRead(eventID: newestEventID)
+            }
+        } else {
+            cancelMarkFullyRead()
+            if activeTimelineMode.isLive == false || timelinePosition == .readingHistory {
+                showJumpToLatest = loadedTimelineItems.isEmpty == false
+            }
+        }
+    }
+
+    private func handleStableUserInteractionChanged(isInteracting: Bool) {
+        isUserDraggingTimeline = isInteracting
+        if isInteracting {
+            hasUserInteractedWithTimeline = true
+            cancelTimelineScroll()
+            cancelMarkFullyRead()
+            if activeTimelineMode.isLive {
+                timelinePosition = .readingHistory
+            }
+            return
+        }
+
+        timelinePosition = RoomTimelineScrollPolicy.positionAfterUserDrag(
+            isBottomVisible: isTimelineBottomVisible,
+            focusedEventID: activeTimelineMode.focusedEventID
+        )
+        showJumpToLatest = activeTimelineMode.isLive == false || isTimelineBottomVisible == false
+        if isTimelineBottomVisible,
+           activeTimelineMode.isLive,
+           let newestEventID = loadedTimelineItems.reversed().compactMap(\.serverEventID).first
+        {
+            scheduleMarkFullyRead(eventID: newestEventID)
+        }
+    }
+
+    private func handleStableCommandCompleted(
+        _ command: StableTimelineViewportCommand,
+        success: Bool,
+        targetEventID: String?
+    ) {
+        guard stableViewportCommand?.id == command.id else {
+            return
+        }
+        // The viewport only reports failure after its bounded retry budget is
+        // exhausted, so either outcome is terminal for this command ID.
+        stableViewportCommand = nil
+        var shouldRecoverMissingFocus = false
+
+        switch command.kind {
+        case .latest:
+            isJumpingToLatest = false
+            hasPositionedInitialTimeline = true
+            if success {
+                timelinePosition = .followingLive
+                showJumpToLatest = false
+            } else {
+                timelinePosition = .readingHistory
+                showJumpToLatest = RoomTimelineLatestCommandCompletionPolicy.shouldShowRecovery(
+                    success: success
+                )
+            }
+        case .readMarker:
+            hasPositionedInitialTimeline = true
+            timelinePosition = .readingHistory
+            showJumpToLatest = true
+        case .focused:
+            hasAnchoredEvent = success
+            hasPositionedInitialTimeline = true
+            timelinePosition = .focusedEvent
+            showJumpToLatest = targetEventID != loadedTimelineItems.last?.eventID
+            if success == false {
+                sendError = "That message is not available in this timeline. Showing the latest messages instead."
+                shouldRecoverMissingFocus = true
+            }
+        }
+        logTimelineEvent(
+            "stable-command-completed",
+            fields: ["success": "\(success)", "target": targetEventID ?? "none"]
+        )
+        if shouldRecoverMissingFocus {
+            Task { @MainActor in
+                await Task.yield()
+                jumpToLatestStable(currentItems: loadedTimelineItems)
             }
         }
     }
 
     private func dismissKeyboard() {
         #if canImport(UIKit)
-        ComposerTextInputRegistry.dismissKeyboard()
+            ComposerTextInputRegistry.dismissKeyboard()
         #endif
     }
 
@@ -1656,10 +2205,10 @@ struct RoomTimelineView: View {
             kind: .edit,
             currentUserID: currentUserID
         )
-        if case .text(let body) = item.kind {
+        if case let .text(body) = item.kind {
             draft = body
             environment.drafts.setDraft(body, roomID: roomID)
-        } else if case .formattedText(let body, _) = item.kind {
+        } else if case let .formattedText(body, _) = item.kind {
             draft = body
             environment.drafts.setDraft(body, roomID: roomID)
         }
@@ -1687,7 +2236,7 @@ struct RoomTimelineView: View {
 
     private func append(_ item: TimelineItem) {
         switch state {
-        case .loaded(let items, let isPaginating):
+        case let .loaded(items, isPaginating):
             state = .loaded(items + [item], isPaginating: isPaginating)
         default:
             state = .loaded([item], isPaginating: false)
@@ -1706,7 +2255,7 @@ struct RoomTimelineView: View {
     }
 
     private func replace(_ item: TimelineItem) {
-        guard case .loaded(let items, let isPaginating) = state else {
+        guard case let .loaded(items, isPaginating) = state else {
             return
         }
         state = .loaded(items.map { $0.id == item.id ? item : $0 }, isPaginating: isPaginating)
@@ -1714,20 +2263,20 @@ struct RoomTimelineView: View {
 
     private func executeAgentAction(_ action: SynaraAgentCardAction, sourceEventID: String?) {
         switch SynaraAgentCardActionResolver.plan(for: action) {
-        case .success(let plan):
+        case let .success(plan):
             switch plan {
-            case .openURL(let url):
+            case let .openURL(url):
                 openURL(url)
-            case .copyText(let text):
+            case let .copyText(text):
                 #if canImport(UIKit)
-                UIPasteboard.general.string = text
+                    UIPasteboard.general.string = text
                 #endif
-            case .submitApproval(let decision):
+            case let .submitApproval(decision):
                 submitAgentApproval(action, decision: decision, sourceEventID: sourceEventID)
             }
-        case .failure(let error):
+        case let .failure(error):
             switch error {
-            case .unsupportedKind(let unsupported):
+            case let .unsupportedKind(unsupported):
                 agentActionMessage = "Unsupported action: \(unsupported)"
             case .missingPayload:
                 agentActionMessage = "Action payload is missing"
@@ -1805,7 +2354,7 @@ struct RoomTimelineView: View {
     }
 
     private var loadedTimelineItems: [TimelineItem] {
-        guard case .loaded(let items, _) = state else {
+        guard case let .loaded(items, _) = state else {
             return []
         }
         return items
@@ -2102,13 +2651,13 @@ struct ThreadTimelineView: View {
             .accessibilityIdentifier("ThreadLoading")
         case .empty:
             SynaraEmptyState(title: "No Thread Replies", systemImage: "bubble.left.and.bubble.right", message: "Replies will appear here.")
-        case .failed(let message):
+        case let .failed(message):
             SynaraErrorState(title: "Could Not Load Thread", message: message) {
                 Task {
                     await loadThread()
                 }
             }
-        case .loaded(let items, _):
+        case let .loaded(items, _):
             let visibleItems = threadItems(from: items)
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: SynaraSpacing.medium) {
@@ -2148,13 +2697,13 @@ struct ThreadTimelineView: View {
                 }
                 await MainActor.run {
                     switch outcome {
-                    case .loaded(let items):
+                    case let .loaded(items):
                         applyThreadOutcome(.loaded(items))
                     case .empty:
                         if case .loading = state {
                             state = .empty
                         }
-                    case .failed(let message):
+                    case let .failed(message):
                         if case .loaded = state {
                             return
                         }
@@ -2167,11 +2716,11 @@ struct ThreadTimelineView: View {
 
     private func applyThreadOutcome(_ outcome: TimelineLoadOutcome) {
         switch outcome {
-        case .loaded(let items):
+        case let .loaded(items):
             state = items.isEmpty ? .empty : .loaded(items, isPaginating: false)
         case .empty:
             state = .empty
-        case .failed(let message):
+        case let .failed(message):
             state = .failed(message)
         }
     }
@@ -2253,7 +2802,7 @@ struct ThreadTimelineView: View {
             )
             await MainActor.run {
                 uploadState = result
-                if case .uploaded(let item) = result {
+                if case let .uploaded(item) = result {
                     append(item)
                 }
             }
@@ -2290,7 +2839,7 @@ struct ThreadTimelineView: View {
                 await MainActor.run {
                     selectedPhoto = nil
                     uploadState = result
-                    if case .uploaded(let item) = result {
+                    if case let .uploaded(item) = result {
                         append(item)
                     }
                 }
@@ -2338,7 +2887,7 @@ struct ThreadTimelineView: View {
                 )
                 await MainActor.run {
                     uploadState = result
-                    if case .uploaded(let item) = result {
+                    if case let .uploaded(item) = result {
                         append(item)
                     }
                 }
@@ -2351,43 +2900,43 @@ struct ThreadTimelineView: View {
     }
 
     #if canImport(UIKit)
-    private func uploadThreadCameraImage(_ image: UIImage) {
-        uploadState = .uploading(progress: 0.25)
-        Task {
-            let signpostID = PerformanceTrace.begin("ThreadCameraCaptureUpload")
-            defer {
-                PerformanceTrace.end("ThreadCameraCaptureUpload", id: signpostID)
-            }
-
-            guard let data = MediaAttachmentSupport.jpegData(from: image) else {
-                await MainActor.run {
-                    uploadState = .failed("Attachment could not be loaded. Try again.")
+        private func uploadThreadCameraImage(_ image: UIImage) {
+            uploadState = .uploading(progress: 0.25)
+            Task {
+                let signpostID = PerformanceTrace.begin("ThreadCameraCaptureUpload")
+                defer {
+                    PerformanceTrace.end("ThreadCameraCaptureUpload", id: signpostID)
                 }
-                return
-            }
 
-            let result = await environment.mediaUploader.upload(
-                MediaUploadRequest(
-                    roomID: roomID,
-                    source: .camera,
-                    displayName: "thread-camera.jpg",
-                    data: data,
-                    mimeType: "image/jpeg"
+                guard let data = MediaAttachmentSupport.jpegData(from: image) else {
+                    await MainActor.run {
+                        uploadState = .failed("Attachment could not be loaded. Try again.")
+                    }
+                    return
+                }
+
+                let result = await environment.mediaUploader.upload(
+                    MediaUploadRequest(
+                        roomID: roomID,
+                        source: .camera,
+                        displayName: "thread-camera.jpg",
+                        data: data,
+                        mimeType: "image/jpeg"
+                    )
                 )
-            )
-            await MainActor.run {
-                uploadState = result
-                if case .uploaded(let item) = result {
-                    append(item)
+                await MainActor.run {
+                    uploadState = result
+                    if case let .uploaded(item) = result {
+                        append(item)
+                    }
                 }
             }
         }
-    }
     #endif
 
     private func append(_ item: TimelineItem) {
         switch state {
-        case .loaded(let items, let isPaginating):
+        case let .loaded(items, isPaginating):
             state = .loaded(items + [item], isPaginating: isPaginating)
         default:
             state = .loaded([item], isPaginating: false)
@@ -2486,14 +3035,14 @@ private struct ThreadMessageRow: View {
     @ViewBuilder
     private var threadBody: some View {
         switch item.kind {
-        case .text(let body):
+        case let .text(body):
             Text(body)
                 .font(SynaraTypography.messageBody)
                 .foregroundStyle(SynaraColor.primaryText)
                 .fixedSize(horizontal: false, vertical: true)
-        case .formattedText(let body, let html):
+        case let .formattedText(body, html):
             MatrixFormattedMessageView(fallbackBody: body, html: html, font: SynaraTypography.messageBody)
-        case .mediaPlaceholder(let resource):
+        case let .mediaPlaceholder(resource):
             MediaAttachmentCard(resource: resource)
         case .redacted:
             Text("Message deleted")
@@ -2503,9 +3052,9 @@ private struct ThreadMessageRow: View {
             Label("Encrypted content unavailable.", systemImage: "lock")
                 .font(SynaraTypography.messageBody)
                 .foregroundStyle(SynaraColor.secondaryText)
-        case .agentCard(let card):
+        case let .agentCard(card):
             AgentCardTimelineRow(card: card, onAction: { _ in })
-        case .unknown(let type):
+        case let .unknown(type):
             Text("Unsupported event: \(type)")
                 .font(SynaraTypography.messageBody)
                 .foregroundStyle(SynaraColor.secondaryText)
@@ -2521,11 +3070,11 @@ private struct MatrixFormattedMessageView: View {
     init(fallbackBody: String, html: String, font: Font) {
         self.fallbackBody = fallbackBody
         self.font = font
-        self.segments = MatrixHTMLRenderer.segments(body: fallbackBody, html: html)
+        segments = MatrixHTMLRenderer.segments(body: fallbackBody, html: html)
     }
 
     var body: some View {
-        if segments.count == 1, case .markdown(let markdown) = segments[0] {
+        if segments.count == 1, case let .markdown(markdown) = segments[0] {
             markdownText(markdown)
         } else {
             VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
@@ -2540,13 +3089,13 @@ private struct MatrixFormattedMessageView: View {
     @ViewBuilder
     private func segmentView(_ segment: MatrixHTMLRenderer.Segment) -> some View {
         switch segment {
-        case .markdown(let markdown):
+        case let .markdown(markdown):
             markdownText(markdown)
-        case .code(let code):
+        case let .code(code):
             MatrixCodeBlockView(code: code)
-        case .quote(let markdown):
+        case let .quote(markdown):
             MatrixQuoteBlockView(markdown: markdown, font: font)
-        case .details(let block):
+        case let .details(block):
             MatrixDetailsBlockView(block: block)
         }
     }
@@ -2585,7 +3134,7 @@ private struct MatrixQuoteBlockView: View {
                     .fill(SynaraColor.secondaryText.opacity(0.75))
                     .frame(width: 3)
             }
-        .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func attributedMarkdown(_ markdown: String) -> AttributedString {
@@ -2640,7 +3189,7 @@ private struct MatrixCodeBlockView: View {
 
                 Button("Copy") {
                     #if canImport(UIKit)
-                    UIPasteboard.general.string = code
+                        UIPasteboard.general.string = code
                     #endif
                 }
                 .font(SynaraTypography.chipLabel)
@@ -2682,10 +3231,10 @@ private struct TimelineAvatar: View {
     var body: some View {
         avatarContent
             .frame(width: size, height: size)
-        .task(id: avatarTaskID) {
-            await loadAvatar()
-        }
-        .accessibilityHidden(true)
+            .task(id: avatarTaskID) {
+                await loadAvatar()
+            }
+            .accessibilityHidden(true)
     }
 
     @ViewBuilder
@@ -2712,7 +3261,8 @@ private struct TimelineAvatar: View {
         avatarImage = nil
 
         guard let avatarURL,
-              avatarURL.scheme == "mxc" else {
+              avatarURL.scheme == "mxc"
+        else {
             return
         }
 
@@ -2727,7 +3277,8 @@ private struct TimelineAvatar: View {
             width: UInt64(max(1, Int(size * 3))),
             height: UInt64(max(1, Int(size * 3)))
         ),
-           let image = UIImage(data: data) {
+            let image = UIImage(data: data)
+        {
             avatarImage = image
         }
     }
@@ -2805,7 +3356,7 @@ private struct RoomDetailsView: View {
                         .disabled(details?.canEditName != true || isLoading)
                         .accessibilityIdentifier("RoomProfileNameField")
                     TextField("Topic", text: $profileTopic, axis: .vertical)
-                        .lineLimit(1...3)
+                        .lineLimit(1 ... 3)
                         .disabled(details?.canEditTopic != true || isLoading)
                         .accessibilityIdentifier("RoomProfileTopicField")
                     if let message {
@@ -2865,7 +3416,7 @@ private struct RoomDetailsView: View {
                         .disabled(details?.canEditAliases != true || isLoading)
                         .accessibilityIdentifier("RoomCanonicalAliasField")
                     TextField("#alias:server, #other:server", text: $alternativeAliases, axis: .vertical)
-                        .lineLimit(1...3)
+                        .lineLimit(1 ... 3)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .disabled(details?.canEditAliases != true || isLoading)
@@ -2886,7 +3437,6 @@ private struct RoomDetailsView: View {
                     }
                     .accessibilityIdentifier("LeaveRoomButton")
                 }
-
             }
             .navigationTitle("Room Details")
             .accessibilityIdentifier("RoomDetailsScreen")
@@ -3255,7 +3805,7 @@ private struct TimelineRow: View {
     let currentUserID: String
     let isGroupedWithPrevious: Bool
     let animateSend: Bool
-    let replyPreviewsByEventID: [String: TimelineReplyPreview]
+    let replyPreview: TimelineReplyPreview?
     let replyCount: Int
     let availability: EventActionAvailability
     let onReply: () -> Void
@@ -3400,14 +3950,14 @@ private struct TimelineRow: View {
             }
         } else {
             switch item.kind {
-            case .text(let body):
+            case let .text(body):
                 SynaraMessageBubble(
                     text: body,
                     alignment: bubbleAlignment,
                     isGrouped: isGroupedWithPrevious,
                     deliveryStatus: item.deliveryStatus
                 )
-            case .formattedText(let body, let html):
+            case let .formattedText(body, html):
                 SynaraMessageBubble(
                     alignment: bubbleAlignment,
                     variant: .standard,
@@ -3436,7 +3986,7 @@ private struct TimelineRow: View {
                     .font(SynaraTypography.messageBody)
                     .foregroundStyle(SynaraColor.secondaryText)
                 }
-            case .agentCard(let card):
+            case let .agentCard(card):
                 SynaraMessageBubble(
                     alignment: bubbleAlignment,
                     variant: .agent,
@@ -3457,7 +4007,7 @@ private struct TimelineRow: View {
         switch item.kind {
         case .text, .formattedText, .encryptedPlaceholder, .agentCard:
             EmptyView()
-        case .mediaPlaceholder(let resource):
+        case let .mediaPlaceholder(resource):
             if resource.isEncrypted {
                 MediaAttachmentCard(resource: resource)
                     .accessibilityIdentifier("EncryptedMediaPlaceholder-\(resource.filename)")
@@ -3482,7 +4032,7 @@ private struct TimelineRow: View {
                     .font(SynaraTypography.messageBody)
                     .foregroundStyle(SynaraColor.secondaryText)
             }
-        case .unknown(let type):
+        case let .unknown(type):
             SynaraMessageBubble(
                 alignment: bubbleAlignment,
                 variant: .standard,
@@ -3503,11 +4053,11 @@ private struct TimelineRow: View {
 
     private var accessibilitySummary: String {
         switch item.kind {
-        case .text(let body):
+        case let .text(body):
             return "\(item.senderID): \(body)"
-        case .formattedText(let body, _):
+        case let .formattedText(body, _):
             return "\(item.senderID): \(body)"
-        case .mediaPlaceholder(let resource):
+        case let .mediaPlaceholder(resource):
             if resource.isEncrypted {
                 return "\(item.senderID) sent encrypted media that cannot be opened until keys are available"
             }
@@ -3516,9 +4066,9 @@ private struct TimelineRow: View {
             return "\(item.senderID): message deleted"
         case .encryptedPlaceholder:
             return "\(item.senderID): encrypted message unavailable"
-        case .unknown(let type):
+        case let .unknown(type):
             return "\(item.senderID): unsupported event \(type)"
-        case .agentCard(let card):
+        case let .agentCard(card):
             let status = card.status.map { ", status \($0)" } ?? ""
             let primaryAction = card.actions.first(where: SynaraAgentCardActionResolver.shouldRender)
                 .map { ", primary action \($0.title)" } ?? ""
@@ -3580,8 +4130,8 @@ private struct TimelineRow: View {
     }
 
     @ViewBuilder
-    private func replyQuoteLabel(for replyToEventID: String) -> some View {
-        if let preview = replyPreviewsByEventID[replyToEventID] {
+    private func replyQuoteLabel(for _: String) -> some View {
+        if let preview = replyPreview {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Replying to \(preview.senderName)")
                     .font(SynaraTypography.messageMeta.weight(.semibold))
@@ -3613,7 +4163,6 @@ private struct TimelineRow: View {
 
         return item.resolvedSenderDisplayName(currentUserID: currentUserID)
     }
-
 }
 
 private struct MediaAttachmentCard: View {
@@ -3743,7 +4292,8 @@ private struct MediaAttachmentCard: View {
 
         guard resource.isImageMedia,
               resource.isEncrypted == false,
-              resource.authenticatedURL != nil else {
+              resource.authenticatedURL != nil
+        else {
             return
         }
 
@@ -3757,7 +4307,8 @@ private struct MediaAttachmentCard: View {
             width: pixelWidth,
             height: pixelHeight
         ),
-           let image = UIImage(data: data) {
+            let image = UIImage(data: data)
+        {
             thumbnailImage = image
         }
     }
@@ -4090,7 +4641,8 @@ private struct AgentCardTimelineRow: View {
             AgentApprovalDetails(card: card)
 
             if let linkAction = visibleActions.first(where: { $0.url != nil }),
-               let previewURL = linkAction.url {
+               let previewURL = linkAction.url
+            {
                 AgentCardLinkPreview(urlString: previewURL)
             }
 
@@ -4237,7 +4789,7 @@ private struct ComposerView: View {
     let onMockMediaUpload: (MediaUploadSource) -> Void
     let onFileURL: (URL) -> Void
     #if canImport(UIKit)
-    let onCameraImage: (UIImage) -> Void
+        let onCameraImage: (UIImage) -> Void
     #endif
     let onUploadFailed: (String) -> Void
     @Binding var selectedPhoto: PhotosPickerItem?
@@ -4245,17 +4797,18 @@ private struct ComposerView: View {
     @State private var isAttachmentSheetPresented = false
     @State private var isFileImporterPresented = false
     #if canImport(UIKit)
-    @State private var isCameraPresented = false
+        @State private var isCameraPresented = false
     #endif
     @State private var isFormattingBarVisible = false
     @State private var composerSelection = ComposerTextSelection.empty
     @State private var composerFieldHeight: CGFloat = {
         #if canImport(UIKit)
-        ComposerTextMetrics.singleLineHeight(font: UIFont.preferredFont(forTextStyle: .callout))
+            ComposerTextMetrics.singleLineHeight(font: UIFont.preferredFont(forTextStyle: .callout))
         #else
-        34
+            34
         #endif
     }()
+
     @FocusState private var isComposerFocused: Bool
 
     var body: some View {
@@ -4358,10 +4911,10 @@ private struct ComposerView: View {
                 composerPromptMetrics
             }
 
-            if case .uploading(let progress) = uploadState {
+            if case let .uploading(progress) = uploadState {
                 ProgressView(value: progress)
                     .accessibilityIdentifier("MediaUploadProgress")
-            } else if case .failed(let message) = uploadState {
+            } else if case let .failed(message) = uploadState {
                 Text(message)
                     .font(SynaraTypography.supporting)
                     .foregroundStyle(.red)
@@ -4396,11 +4949,11 @@ private struct ComposerView: View {
                 onCamera: {
                     isAttachmentSheetPresented = false
                     #if canImport(UIKit)
-                    if CameraCaptureSupport.isAvailable {
-                        isCameraPresented = true
-                    } else {
-                        onUploadFailed("Camera is not available on this device.")
-                    }
+                        if CameraCaptureSupport.isAvailable {
+                            isCameraPresented = true
+                        } else {
+                            onUploadFailed("Camera is not available on this device.")
+                        }
                     #endif
                 },
                 selectedPhoto: $selectedPhoto
@@ -4414,7 +4967,7 @@ private struct ComposerView: View {
             allowsMultipleSelection: false
         ) { result in
             switch result {
-            case .success(let urls):
+            case let .success(urls):
                 guard let url = urls.first else {
                     return
                 }
@@ -4470,7 +5023,7 @@ private struct ComposerView: View {
             .foregroundStyle(SynaraColor.primaryText)
             .tint(SynaraColor.accent)
             .focused($isComposerFocused)
-            .lineLimit(1...5)
+            .lineLimit(1 ... 5)
             .submitLabel(.send)
             .onSubmit {
                 if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
@@ -4481,33 +5034,33 @@ private struct ComposerView: View {
             .accessibilityLabel("Message")
             .accessibilityHint("Enter a message for this room")
             .accessibilityIdentifier("ComposerTextField")
-        .onChange(of: text) { _ in
-            updateComposerFieldHeight()
-        }
-        .onChange(of: isComposerFocused) { _ in
-            updateComposerFieldHeight()
-        }
+            .onChange(of: text) { _ in
+                updateComposerFieldHeight()
+            }
+            .onChange(of: isComposerFocused) { _ in
+                updateComposerFieldHeight()
+            }
     }
 
     private func updateComposerFieldHeight() {
         #if canImport(UIKit)
-        let singleLineHeight = ComposerTextMetrics.singleLineHeight(
-            font: UIFont.preferredFont(forTextStyle: .callout)
-        )
-        if text.isEmpty, isComposerFocused == false {
-            composerFieldHeight = singleLineHeight
-            return
-        }
+            let singleLineHeight = ComposerTextMetrics.singleLineHeight(
+                font: UIFont.preferredFont(forTextStyle: .callout)
+            )
+            if text.isEmpty, isComposerFocused == false {
+                composerFieldHeight = singleLineHeight
+                return
+            }
 
-        let lineCount = max(1, text.components(separatedBy: .newlines).count)
-        let estimatedLineHeight = UIFont.preferredFont(forTextStyle: .callout).lineHeight
-        let estimatedHeight = ceil(estimatedLineHeight * CGFloat(lineCount))
-            + ComposerTextMetrics.textContainerInset.top
-            + ComposerTextMetrics.textContainerInset.bottom
-        composerFieldHeight = min(
-            max(estimatedHeight, singleLineHeight),
-            ComposerTextMetrics.maxHeight
-        )
+            let lineCount = max(1, text.components(separatedBy: .newlines).count)
+            let estimatedLineHeight = UIFont.preferredFont(forTextStyle: .callout).lineHeight
+            let estimatedHeight = ceil(estimatedLineHeight * CGFloat(lineCount))
+                + ComposerTextMetrics.textContainerInset.top
+                + ComposerTextMetrics.textContainerInset.bottom
+            composerFieldHeight = min(
+                max(estimatedHeight, singleLineHeight),
+                ComposerTextMetrics.maxHeight
+            )
         #endif
     }
 
@@ -4581,7 +5134,7 @@ private struct AttachmentOptionsSheet: View {
     private let options: [AttachmentOption] = [
         AttachmentOption(title: "Photo or Video", systemImage: "photo", tint: SynaraColor.success, kind: .photo),
         AttachmentOption(title: "File", systemImage: "doc", tint: SynaraColor.accent, kind: .file),
-        AttachmentOption(title: "Camera", systemImage: "camera", tint: SynaraColor.warning, kind: .camera)
+        AttachmentOption(title: "Camera", systemImage: "camera", tint: SynaraColor.warning, kind: .camera),
     ]
 
     private var isUITestEnvironment: Bool {
@@ -4708,11 +5261,11 @@ private struct ComposerToolIcon: View {
 
     init(title: String) {
         self.title = title
-        self.systemImage = nil
+        systemImage = nil
     }
 
     init(systemImage: String) {
-        self.title = nil
+        title = nil
         self.systemImage = systemImage
     }
 
@@ -4839,7 +5392,8 @@ private struct MediaViewer: View {
         defer { isLoading = false }
 
         guard let data = await environment.mediaLoader.loadMediaData(for: resource),
-              let loadedImage = UIImage(data: data) else {
+              let loadedImage = UIImage(data: data)
+        else {
             errorMessage = "Media could not be loaded."
             return
         }
@@ -4891,19 +5445,19 @@ private extension Date {
 private extension TimelineItem {
     var threadTitle: String {
         switch kind {
-        case .text(let body):
+        case let .text(body):
             return body
-        case .formattedText(let body, _):
+        case let .formattedText(body, _):
             return body
-        case .mediaPlaceholder(let resource):
+        case let .mediaPlaceholder(resource):
             return resource.safeDescription
-        case .agentCard(let card):
+        case let .agentCard(card):
             return card.title
         case .redacted:
             return "Deleted message"
         case .encryptedPlaceholder:
             return "Encrypted message"
-        case .unknown(let type):
+        case let .unknown(type):
             return type
         }
     }

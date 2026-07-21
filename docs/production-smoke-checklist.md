@@ -67,6 +67,8 @@ git rev-parse --short HEAD
 npm run check:versions
 npm run check:repo-layout
 npm run check:matrix-boundaries
+npm run check:quality-gates
+npm run check:synapse-harness
 npm run check:release-updater
 ```
 
@@ -131,22 +133,23 @@ Cases:
 ## Timeline Resurrection Smoke
 
 Run on desktop and iOS. These cases mirror
-`docs/timeline-open-focus-contract.md`.
+`docs/timeline-room-state-reliability-contract.md`. Evidence uses fixture labels
+and relative positions only; do not record room, event, or user identifiers.
 
-| ID     | Scenario                                 | Pass Criteria                                                                                                                | Evidence                                           |
-| ------ | ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
-| TL-001 | Fully read room, no saved viewport       | Opens at live end without history traversal.                                                                                 | Room size class and pass/fail.                     |
-| TL-002 | Fully read room after old-history visit  | Reopens at live end once saved historical anchor is stale.                                                                   | Anchor age and pass/fail.                          |
-| TL-003 | One new message after old-history visit  | Opens near unread/new context, not old history.                                                                              | Sender account and pass/fail.                      |
-| TL-004 | Read-marker focused open                 | Shows jump-to-latest when latest is outside focused window.                                                                  | Read marker event age and pass/fail.               |
-| TL-005 | Jump latest                              | Reaches true latest event after external sender posts.                                                                       | Event IDs/timestamps and pass/fail.                |
-| TL-006 | Stale notification/read-marker state     | Does not restore unrelated old history; jump-latest path is clear.                                                           | Sync state notes and pass/fail.                    |
-| TL-007 | Live append while pinned                 | Follows bottom and marks read after visible delay.                                                                           | Pass/fail.                                         |
-| TL-008 | Live append while scrolled up            | Preserves visible anchor.                                                                                                    | Anchor event and pass/fail.                        |
-| TL-009 | Timeline reset/gap while pinned          | Reattaches to live tail without blank viewport.                                                                              | Reset trigger notes and pass/fail.                 |
-| TL-010 | Timeline reset/gap while scrolled up     | Preserves anchor or keeps clear jump-latest affordance.                                                                      | Reset trigger notes and pass/fail.                 |
-| TL-011 | Live-chain unread outside initial window | Desktop opens at live end (no auto deep open) and still shows Jump to Unread.                                                | Room size class, marker position notes, pass/fail. |
-| TL-012 | iOS ignores stale read-marker restore    | Normal open stays at live end and does not later snap to an old `m.fully_read` marker; explicit event deep links still work. | Pass/fail.                                         |
+| ID     | Scenario                                | Pass Criteria                                                                                                               | Evidence                                           |
+| ------ | --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| TL-001 | Fully read room, no saved viewport      | Opens at live end without history traversal.                                                                                | Room size class and pass/fail.                     |
+| TL-002 | Fully read room after old-history visit | Reopens at live end once saved historical anchor is stale.                                                                  | Anchor age and pass/fail.                          |
+| TL-003 | One new message after old-history visit | Opens near unread/new context, not old history.                                                                             | Test-client label and pass/fail.                   |
+| TL-004 | Read-marker focused open                | Shows jump-to-latest when latest is outside focused window.                                                                 | Read marker event age and pass/fail.               |
+| TL-005 | Jump latest                             | Reaches true latest event after external sender posts.                                                                      | Relative newest position, latency, and pass/fail.  |
+| TL-006 | Stale notification/read-marker state    | Does not restore unrelated old history; jump-latest path is clear.                                                          | Sync state notes and pass/fail.                    |
+| TL-007 | Live append while pinned                | Follows bottom and marks read after visible delay.                                                                          | Pass/fail.                                         |
+| TL-008 | Live append while scrolled up           | Preserves visible anchor.                                                                                                   | Fixture row/offset delta and pass/fail.            |
+| TL-009 | Timeline reset/gap while pinned         | Reattaches to live tail without blank viewport.                                                                             | Reset trigger notes and pass/fail.                 |
+| TL-010 | Timeline reset/gap while scrolled up    | Preserves anchor or keeps clear jump-latest affordance.                                                                     | Reset trigger notes and pass/fail.                 |
+| TL-011 | Unread outside initial live window      | Desktop opens bounded unread context with the first event after `m.fully_read` at top, without walking intervening history. | Room size class, marker position notes, pass/fail. |
+| TL-012 | iOS shared unread placement             | iOS opens the same bounded unread context, remains stable after placement, and still gives explicit event links priority.   | Marker/event positions and pass/fail.              |
 
 ## iOS Tool-Bound Smoke
 
@@ -166,7 +169,7 @@ Required cases:
 | ID      | Area                                | Pass Criteria                                                                                                                                                                                                                                                                                                                                                                                                                | Evidence                                                   |
 | ------- | ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
 | IOS-001 | TimelineServiceTests                | Unit tests including `TimelineServiceTests` pass on the selected simulator.                                                                                                                                                                                                                                                                                                                                                  | Xcode version, simulator name/iOS version, command output. |
-| IOS-002 | Timeline focus smoke                | Timeline Resurrection cases `TL-001` through `TL-010` pass where supported by current iOS functionality.                                                                                                                                                                                                                                                                                                                     | Per-case pass/fail and unsupported-case rationale.         |
+| IOS-002 | Timeline focus smoke                | Timeline reliability cases `TL-001` through `TL-012` pass where supported by current iOS functionality.                                                                                                                                                                                                                                                                                                                      | Per-case pass/fail and unsupported-case rationale.         |
 | IOS-003 | Session/keychain                    | Login/session persistence behaves correctly on simulator or physical device.                                                                                                                                                                                                                                                                                                                                                 | Device target and pass/fail.                               |
 | IOS-004 | Push/E2EE release gaps              | Push gateway and production E2EE remain explicitly marked pending until implemented and tested.                                                                                                                                                                                                                                                                                                                              | Current status and linked blocker.                         |
 | IOS-005 | Agent approval notification actions | Approve once / Deny from a valid agent-approval notification revalidate the focused Matrix event (timeline load + approval detector) before reacting; approve-always opens the room (or is absent) and does not send ♾️; in-app approve-always requires an explicit confirmation step; expired/malformed/unresolved payloads do not approve. Production APNs/TestFlight remains external until proxy + APNs evidence exists. | Payload used, action plan/result, pass/fail.               |

@@ -1,0 +1,42 @@
+# Rendered into runtime/homeserver.yaml with fresh local-only secrets.
+server_name: "localhost"
+public_baseurl: "http://127.0.0.1:__PUBLIC_PORT__/"
+pid_file: /data/homeserver.pid
+web_client_location: null
+
+listeners:
+  - port: 8008
+    tls: false
+    type: http
+    x_forwarded: false
+    bind_addresses: ["0.0.0.0"]
+    resources:
+      - names: [client, federation]
+        compress: false
+
+database:
+  name: psycopg2
+  args:
+    user: synapse
+    password: "__POSTGRES_PASSWORD__"
+    database: synapse
+    host: postgres
+    port: 5432
+    cp_min: 5
+    cp_max: 10
+
+log_config: /data/log.config
+media_store_path: /data/media_store
+signing_key_path: /data/localhost.signing.key
+trusted_key_servers: []
+report_stats: false
+
+# Registration is reachable only on the loopback-bound disposable harness.
+enable_registration: true
+enable_registration_without_verification: true
+registration_shared_secret: "__REGISTRATION_SECRET__"
+macaroon_secret_key: "__MACAROON_SECRET__"
+form_secret: "__FORM_SECRET__"
+
+url_preview_enabled: false
+max_upload_size: 20M

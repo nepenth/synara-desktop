@@ -53,14 +53,15 @@ test('toAccessTokens includes expiry date from expires_in_ms', () => {
 
 test('refreshAndPersistSession persists refreshed credentials', async () => {
   const persistCalls: MatrixClientSession[] = [];
-  const swCalls: Array<{ baseUrl: string; accessToken: string }> = [];
+  const swCalls: Array<{ baseUrl?: string; accessToken?: string }> = [];
+  let accessToken = baseSession.accessToken;
+  const http = { opts: { refreshToken: baseSession.refreshToken } };
   const mx = {
     refreshToken: async () => refreshResponse,
     setAccessToken: (token: string) => {
-      mx.accessToken = token;
+      accessToken = token;
     },
-    accessToken: baseSession.accessToken,
-    http: { opts: { refreshToken: baseSession.refreshToken } },
+    http,
   } as unknown as MatrixClient;
 
   const { tokens, session } = await refreshAndPersistSession(mx, baseSession, 'refresh-token', {
@@ -68,38 +69,33 @@ test('refreshAndPersistSession persists refreshed credentials', async () => {
       persistCalls.push(persistedSession);
       return { session: persistedSession, source: 'native' };
     },
-    pushSessionToSW: (baseUrl, accessToken) => {
-      swCalls.push({ baseUrl, accessToken });
+    pushSessionToSW: (baseUrl, swAccessToken) => {
+      swCalls.push({ baseUrl, accessToken: swAccessToken });
     },
   });
 
   assert.equal(tokens.accessToken, 'new-access-token');
-  assert.equal((mx as { accessToken: string }).accessToken, 'new-access-token');
-  assert.equal(
-    (mx as { http: { opts: { refreshToken?: string } } }).http.opts.refreshToken,
-    'new-refresh-token'
-  );
+  assert.equal(accessToken, 'new-access-token');
+  assert.equal(http.opts.refreshToken, 'new-refresh-token');
   assert.equal(typeof session.storedAtMs, 'number');
   assert.deepEqual(persistCalls[0], session);
   assert.deepEqual(swCalls, [{ baseUrl: baseSession.baseUrl, accessToken: 'new-access-token' }]);
 });
 
 test('applyRefreshedCredentialsToClient updates live matrix client tokens', () => {
+  let accessToken = 'old-access-token';
+  const http = { opts: { refreshToken: 'old-refresh-token' } };
   const mx = {
     setAccessToken(token: string) {
-      this.accessToken = token;
+      accessToken = token;
     },
-    accessToken: 'old-access-token',
-    http: { opts: { refreshToken: 'old-refresh-token' } },
+    http,
   } as unknown as MatrixClient;
 
   applyRefreshedCredentialsToClient(mx, refreshResponse);
 
-  assert.equal((mx as { accessToken: string }).accessToken, 'new-access-token');
-  assert.equal(
-    (mx as { http: { opts: { refreshToken?: string } } }).http.opts.refreshToken,
-    'new-refresh-token'
-  );
+  assert.equal(accessToken, 'new-access-token');
+  assert.equal(http.opts.refreshToken, 'new-refresh-token');
 });
 
 test('createTokenRefreshFunction rethrows MatrixError refresh failures', async () => {
