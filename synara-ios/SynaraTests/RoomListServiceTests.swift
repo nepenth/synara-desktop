@@ -566,4 +566,47 @@ final class RoomListServiceTests: XCTestCase {
         XCTAssertTrue(rec.isEmpty)
     }
 
+    func testRecentActivityPartitionIsAtomicAndSchedulesFirstExpiry() throws {
+        let now = RoomListFixtures.now
+        let rooms = [
+            makeActivityRoom(id: "!newest:matrix.org", name: "Newest", activity: now.addingTimeInterval(-60)),
+            makeActivityRoom(id: "!older:matrix.org", name: "Older", activity: now.addingTimeInterval(-600)),
+            makeActivityRoom(id: "!expired:matrix.org", name: "Expired", activity: now.addingTimeInterval(-86_400))
+        ]
+
+        let partition = RoomListRecentActivity.partition(from: rooms, referenceDate: now)
+
+        XCTAssertEqual(partition.recent.map(\.id), ["!newest:matrix.org", "!older:matrix.org"])
+        XCTAssertEqual(partition.remaining.map(\.id), ["!expired:matrix.org"])
+        XCTAssertTrue(Set(partition.recent.map(\.id)).intersection(partition.remaining.map(\.id)).isEmpty)
+        XCTAssertEqual(
+            try XCTUnwrap(RoomListRecentActivity.nextExpirationDate(from: rooms, referenceDate: now)),
+            now.addingTimeInterval(85_800)
+        )
+    }
+
+    func testRoomActivityTimestampPreservesPreviousWhenLatestPreviewIsUnavailable() {
+        let previous = RoomListFixtures.now.addingTimeInterval(-120)
+
+        XCTAssertEqual(RoomActivityTimestamp.resolve(latest: nil, previous: previous), previous)
+        XCTAssertEqual(
+            RoomActivityTimestamp.resolve(latest: RoomListFixtures.now, previous: previous),
+            RoomListFixtures.now
+        )
+        XCTAssertEqual(RoomActivityTimestamp.resolve(latest: nil, previous: nil), .distantPast)
+    }
+
+    private func makeActivityRoom(id: String, name: String, activity: Date) -> RoomSummary {
+        RoomSummary(
+            id: id,
+            name: name,
+            lastMessagePreview: "Activity",
+            unreadCount: 0,
+            hasHighlight: false,
+            kind: .room,
+            membership: .joined,
+            lastActivityAt: activity
+        )
+    }
+
 }
