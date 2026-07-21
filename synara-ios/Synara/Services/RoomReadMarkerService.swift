@@ -18,6 +18,7 @@ final class MatrixRoomReadMarkerService: RoomReadMarkerServicing {
     private let httpClient: RoomReadMarkerHTTPClient
     private let jsonDecoder: JSONDecoder
     private let logger: LoggingServicing
+    private let writeCoordinator = RoomReadMarkerWriteCoordinator()
 
     init(
         sessionStore: AppSessionStore,
@@ -57,76 +58,43 @@ final class MatrixRoomReadMarkerService: RoomReadMarkerServicing {
     }
 
     func markFullyRead(roomID: String, eventID: String) async -> Bool {
+        guard case .signedIn = sessionStore.currentState else {
+            return false
+        }
+
+        return await writeCoordinator.submit(roomID: roomID, eventID: eventID) { [weak self] latestEventID in
+            guard let self else {
+                return false
+            }
+            return await self.writeReadMarkers(roomID: roomID, eventID: latestEventID)
+        }
+    }
+
+    private func writeReadMarkers(roomID: String, eventID: String) async -> Bool {
         guard case .signedIn(let session) = sessionStore.currentState else {
             return false
         }
 
-        if let clientStore {
-            do {
-                try await clientStore.markRoomRead(roomID: roomID, session: session)
-                return true
-            } catch {
-                logger.info("Matrix SDK read update failed; using Client-Server API fallback", category: .sync)
-            }
-        }
-
-        let didSendReadReceipt = await sendReadReceipt(
-            session: session,
-            roomID: roomID,
-            eventID: eventID
-        )
-        let didSetFullyRead = await setFullyRead(
-            session: session,
-            roomID: roomID,
-            eventID: eventID
-        )
-        return didSendReadReceipt && didSetFullyRead
-    }
-
-    private func sendReadReceipt(
-        session: AuthenticatedSession,
-        roomID: String,
-        eventID: String
-    ) async -> Bool {
         do {
-            var request = URLRequest(url: readReceiptURL(session: session, roomID: roomID, eventID: eventID))
+            var request = URLRequest(url: readMarkersURL(session: session, roomID: roomID))
             request.httpMethod = "POST"
             request.timeoutInterval = 2
             request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            request.httpBody = Data("{}".utf8)
+            request.httpBody = try JSONSerialization.data(withJSONObject: [
+                "m.read": eventID,
+                "m.fully_read": eventID
+            ])
 
             let (_, response) = try await httpClient.data(for: request)
             guard let http = response as? HTTPURLResponse,
                   (200...299).contains(http.statusCode) else {
+                logger.info("Matrix read marker update failed room=redacted status=\((response as? HTTPURLResponse)?.statusCode ?? -1)", category: .sync)
                 return false
             }
             return true
         } catch {
-            return false
-        }
-    }
-
-    private func setFullyRead(
-        session: AuthenticatedSession,
-        roomID: String,
-        eventID: String
-    ) async -> Bool {
-        do {
-            var request = URLRequest(url: fullyReadURL(session: session, roomID: roomID))
-            request.httpMethod = "PUT"
-            request.timeoutInterval = 2
-            request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
-            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            request.httpBody = try JSONSerialization.data(withJSONObject: ["event_id": eventID])
-
-            let (_, response) = try await httpClient.data(for: request)
-            guard let http = response as? HTTPURLResponse,
-                  (200...299).contains(http.statusCode) else {
-                return false
-            }
-            return true
-        } catch {
+            logger.info("Matrix read marker update failed room=redacted error=\(String(describing: error))", category: .sync)
             return false
         }
     }
@@ -165,17 +133,106 @@ final class MatrixRoomReadMarkerService: RoomReadMarkerServicing {
         return url
     }
 
-    private func readReceiptURL(session: AuthenticatedSession, roomID: String, eventID: String) -> URL {
+    private func readMarkersURL(session: AuthenticatedSession, roomID: String) -> URL {
         var url = session.homeserverURL
         url.appendPathComponent("_matrix")
         url.appendPathComponent("client")
         url.appendPathComponent("v3")
         url.appendPathComponent("rooms")
         url.appendPathComponent(roomID)
-        url.appendPathComponent("receipt")
-        url.appendPathComponent("m.read")
-        url.appendPathComponent(eventID)
+        url.appendPathComponent("read_markers")
         return url
+    }
+}
+
+private actor RoomReadMarkerWriteCoordinator {
+    private struct PendingBatch {
+        var eventID: String
+        var coveredEventIDs: Set<String>
+        var waiters: [CheckedContinuation<Bool, Never>]
+    }
+
+    private struct RoomState {
+        var pending: PendingBatch?
+        var isDraining = false
+        var successfulEventIDs: [String] = []
+        var successfulEventIDSet: Set<String> = []
+    }
+
+    private var roomStates: [String: RoomState] = [:]
+    private let retainedSuccessfulEventLimit = 256
+
+    func submit(
+        roomID: String,
+        eventID: String,
+        operation: @escaping (String) async -> Bool
+    ) async -> Bool {
+        await withCheckedContinuation { continuation in
+            var state = roomStates[roomID] ?? RoomState()
+            if state.successfulEventIDSet.contains(eventID) {
+                continuation.resume(returning: true)
+                return
+            }
+
+            if var pending = state.pending {
+                pending.eventID = eventID
+                pending.coveredEventIDs.insert(eventID)
+                pending.waiters.append(continuation)
+                state.pending = pending
+            } else {
+                state.pending = PendingBatch(
+                    eventID: eventID,
+                    coveredEventIDs: [eventID],
+                    waiters: [continuation]
+                )
+            }
+
+            let shouldStartDrain = state.isDraining == false
+            state.isDraining = true
+            roomStates[roomID] = state
+
+            if shouldStartDrain {
+                Task {
+                    await self.drain(roomID: roomID, operation: operation)
+                }
+            }
+        }
+    }
+
+    private func drain(
+        roomID: String,
+        operation: @escaping (String) async -> Bool
+    ) async {
+        while let batch = takePendingBatch(roomID: roomID) {
+            let succeeded = await operation(batch.eventID)
+            complete(batch: batch, roomID: roomID, succeeded: succeeded)
+        }
+        var state = roomStates[roomID] ?? RoomState()
+        state.isDraining = false
+        roomStates[roomID] = state
+    }
+
+    private func takePendingBatch(roomID: String) -> PendingBatch? {
+        var state = roomStates[roomID] ?? RoomState()
+        let batch = state.pending
+        state.pending = nil
+        roomStates[roomID] = state
+        return batch
+    }
+
+    private func complete(batch: PendingBatch, roomID: String, succeeded: Bool) {
+        var state = roomStates[roomID] ?? RoomState()
+        if succeeded {
+            for eventID in batch.coveredEventIDs where state.successfulEventIDSet.insert(eventID).inserted {
+                state.successfulEventIDs.append(eventID)
+                if state.successfulEventIDs.count > retainedSuccessfulEventLimit {
+                    let expired = state.successfulEventIDs.removeFirst()
+                    state.successfulEventIDSet.remove(expired)
+                }
+            }
+        }
+        roomStates[roomID] = state
+        batch.waiters.forEach { $0.resume(returning: succeeded) }
     }
 }
 
