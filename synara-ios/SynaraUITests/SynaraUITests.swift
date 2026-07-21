@@ -98,7 +98,7 @@ final class SynaraUITests: XCTestCase {
         tap(app.buttons["RoomManagementSubmitButton"])
 
         XCTAssertTrue(app.staticTexts["Incident Room"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.scrollViews["TimelineList"].waitForExistence(timeout: 5))
+        XCTAssertTrue(timelineViewport(in: app).waitForExistence(timeout: 5))
     }
 
     func testRoomSearchFiltersByName() {
@@ -140,14 +140,14 @@ final class SynaraUITests: XCTestCase {
         let app = launchRoomApp()
 
         XCTAssertTrue(app.staticTexts["Project"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.scrollViews["TimelineList"].waitForExistence(timeout: 5))
+        XCTAssertTrue(timelineViewport(in: app).waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["Here's the latest spec for the new permissions model."].waitForExistence(timeout: 5))
     }
 
     func testRoomRouteIgnoresSeededReadMarkerOnInitialOpen() {
         let app = launchRoomApp(readMarkerEventID: "$security:!project:matrix.org")
 
-        XCTAssertTrue(app.scrollViews["TimelineList"].waitForExistence(timeout: 5))
+        XCTAssertTrue(timelineViewport(in: app).waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["Here's the latest spec for the new permissions model."].waitForExistence(timeout: 5))
     }
 
@@ -231,6 +231,73 @@ final class SynaraUITests: XCTestCase {
         XCTAssertTrue(app.buttons["TimelineSearchButton"].exists)
     }
 
+    func testStableViewportThreeMessageScrollJumpLatestAndFiveThousandEventBoundedness() {
+        let app = launchLargeTimelineApp(count: 5_000)
+        let viewport = timelineViewport(in: app)
+
+        XCTAssertTrue(viewport.waitForExistence(timeout: 8))
+        XCTAssertTrue(app.staticTexts["Synthetic message 4999"].waitForExistence(timeout: 8))
+        XCTAssertTrue(waitForViewportDiagnostics(viewport, containing: "renderedEvents=300", timeout: 5))
+
+        let start = viewport.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.42))
+        let end = viewport.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.68))
+        start.press(forDuration: 0.05, thenDragTo: end)
+
+        XCTAssertTrue(app.buttons["JumpToLatestButton"].waitForExistence(timeout: 5))
+        tap(app.buttons["JumpToLatestButton"])
+        XCTAssertTrue(app.staticTexts["Synthetic message 4999"].waitForExistence(timeout: 8))
+        XCTAssertTrue(waitForViewportDiagnostics(viewport, containing: "pinned=true", timeout: 5))
+
+        let diagnostics = viewportDiagnostics(viewport)
+        let visibleCells = Int(diagnostics["visibleCells"] ?? "")
+        XCTAssertNotNil(visibleCells)
+        XCTAssertLessThan(visibleCells ?? .max, 40)
+    }
+
+    func testStableViewportPreservesAnchorAcrossVariableHeightReplacement() {
+        let app = launchLargeTimelineApp(count: 40, scenario: "height-change")
+        let viewport = timelineViewport(in: app)
+
+        XCTAssertTrue(viewport.waitForExistence(timeout: 8))
+        viewport.swipeDown(velocity: .slow)
+        let anchorBefore = viewportDiagnostics(viewport)["topEvent"]
+        XCTAssertNotNil(anchorBefore)
+
+        let expanded = app.staticTexts.matching(
+            NSPredicate(format: "label BEGINSWITH %@", "Expanded variable-height message 137")
+        ).firstMatch
+        XCTAssertTrue(expanded.waitForExistence(timeout: 12))
+        XCTAssertEqual(viewportDiagnostics(viewport)["topEvent"], anchorBefore)
+    }
+
+    func testStableViewportPreservesAnchorAcrossPrependSnapshot() {
+        let app = launchLargeTimelineApp(count: 40, scenario: "prepend")
+        let viewport = timelineViewport(in: app)
+
+        XCTAssertTrue(viewport.waitForExistence(timeout: 8))
+        viewport.swipeDown(velocity: .slow)
+        let anchorBefore = viewportDiagnostics(viewport)["topEvent"]
+        XCTAssertNotNil(anchorBefore)
+
+        XCTAssertTrue(waitForViewportDiagnostics(viewport, containing: "renderedEvents=90", timeout: 12))
+        XCTAssertEqual(viewportDiagnostics(viewport)["topEvent"], anchorBefore)
+    }
+
+    func testStableViewportRapidRoomSwitchingRejectsStaleRouteUpdates() {
+        let app = launchSignedInRoomsApp()
+
+        tap(app.buttons["RoomRow-!project:matrix.org"], timeout: 5)
+        XCTAssertTrue(timelineViewport(in: app).waitForExistence(timeout: 5))
+        tap(app.buttons["Back"], timeout: 5)
+        tap(app.buttons["RoomRow-!general:matrix.org"], timeout: 5)
+        XCTAssertTrue(timelineViewport(in: app).waitForExistence(timeout: 5))
+        tap(app.buttons["Back"], timeout: 5)
+        tap(app.buttons["RoomRow-!project:matrix.org"], timeout: 5)
+
+        XCTAssertTrue(app.staticTexts["Here's the latest spec for the new permissions model."].waitForExistence(timeout: 8))
+        XCTAssertTrue(waitForViewportDiagnostics(timelineViewport(in: app), containing: "pinned=true", timeout: 5))
+    }
+
     func testComposerSendsMockMessage() {
         let app = launchRoomApp()
 
@@ -286,7 +353,7 @@ final class SynaraUITests: XCTestCase {
     func testEncryptedTimelineShowsCryptoStatusRecoveryBannerAndSafePlaceholder() {
         let app = launchEncryptedRoomApp()
 
-        XCTAssertTrue(app.scrollViews["TimelineList"].waitForExistence(timeout: 5))
+        XCTAssertTrue(timelineViewport(in: app).waitForExistence(timeout: 5))
         XCTAssertTrue(
             waitForTimelineElement(app.otherElements["EncryptedRecoveryBanner"], app: app, timeout: 5, preferredSwipe: .down)
         )
@@ -759,7 +826,7 @@ final class SynaraUITests: XCTestCase {
         }
 
         XCTAssertTrue(composerField(in: app).waitForExistence(timeout: 60))
-        XCTAssertTrue(app.scrollViews["TimelineList"].waitForExistence(timeout: 60))
+        XCTAssertTrue(timelineViewport(in: app).waitForExistence(timeout: 60))
         try saveScreenshot(app: app, directory: screenshotDirectory, name: "02-live-room-timeline")
 
         let composer = composerField(in: app)
@@ -826,7 +893,7 @@ final class SynaraUITests: XCTestCase {
         try saveScreenshot(app: app, directory: screenshotDirectory, name: "01-mock-room-list")
 
         tap(app.buttons["RoomRow-!project:matrix.org"], timeout: 5)
-        XCTAssertTrue(app.scrollViews["TimelineList"].waitForExistence(timeout: 5))
+        XCTAssertTrue(timelineViewport(in: app).waitForExistence(timeout: 5))
         XCTAssertTrue(composerField(in: app).waitForExistence(timeout: 5))
         try saveScreenshot(app: app, directory: screenshotDirectory, name: "02-mock-room-timeline")
 
@@ -885,13 +952,16 @@ final class SynaraUITests: XCTestCase {
         return app
     }
 
-    private func launchLargeTimelineApp() -> XCUIApplication {
+    private func launchLargeTimelineApp(count: Int = 1_000, scenario: String? = nil) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchEnvironment["SYNARA_UI_TESTS"] = "1"
         app.launchEnvironment["SYNARA_UI_TEST_ROOM_ID"] = "!large:matrix.org"
         app.launchEnvironment["SYNARA_UI_TEST_ROOM_TITLE"] = "Large Timeline"
         app.launchEnvironment["SYNARA_UI_TEST_LARGE_TIMELINE"] = "1"
-        app.launchEnvironment["SYNARA_UI_TEST_LARGE_TIMELINE_COUNT"] = "1000"
+        app.launchEnvironment["SYNARA_UI_TEST_LARGE_TIMELINE_COUNT"] = "\(count)"
+        if let scenario {
+            app.launchEnvironment["SYNARA_UI_TEST_VIEWPORT_SCENARIO"] = scenario
+        }
         launch(app)
         return app
     }
@@ -1190,6 +1260,38 @@ final class SynaraUITests: XCTestCase {
         return element.exists && element.isEnabled
     }
 
+    private func timelineViewport(in app: XCUIApplication) -> XCUIElement {
+        app.descendants(matching: .any).matching(identifier: "TimelineList").firstMatch
+    }
+
+    private func viewportDiagnostics(_ viewport: XCUIElement) -> [String: String] {
+        guard let value = viewport.value as? String else {
+            return [:]
+        }
+        return Dictionary(uniqueKeysWithValues: value.split(separator: ";").compactMap { field in
+            let parts = field.split(separator: "=", maxSplits: 1).map(String.init)
+            guard parts.count == 2 else {
+                return nil
+            }
+            return (parts[0], parts[1])
+        })
+    }
+
+    private func waitForViewportDiagnostics(
+        _ viewport: XCUIElement,
+        containing expectedValue: String,
+        timeout: TimeInterval
+    ) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if (viewport.value as? String)?.contains(expectedValue) == true {
+                return true
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+        }
+        return (viewport.value as? String)?.contains(expectedValue) == true
+    }
+
     private func openRoomManagementSheet(app: XCUIApplication, timeout: TimeInterval) -> Bool {
         let deadline = Date().addingTimeInterval(timeout)
         while Date() < deadline {
@@ -1217,7 +1319,7 @@ final class SynaraUITests: XCTestCase {
         preferredSwipe: TimelineSwipeDirection = .up
     ) -> Bool {
         let deadline = Date().addingTimeInterval(timeout)
-        let timeline = app.scrollViews["TimelineList"]
+        let timeline = timelineViewport(in: app)
         var nextSwipe = preferredSwipe
 
         while Date() < deadline {
