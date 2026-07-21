@@ -88,13 +88,6 @@ import SwiftUI
             return Int(ceil(viewportHeight / minimumEstimatedRowHeight)) + reuseOverscan
         }
 
-        static func shouldRetryMissingTarget(
-            attempt: Int,
-            maximumAttempts: Int = maximumMissingTargetAttempts
-        ) -> Bool {
-            attempt < maximumAttempts
-        }
-
         static func shouldScheduleCommandRetry(
             firedRetryCount: Int,
             hasScheduledRetry: Bool,
