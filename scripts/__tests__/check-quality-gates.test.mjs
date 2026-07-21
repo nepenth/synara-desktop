@@ -197,6 +197,21 @@ test("rejects missing real-layout timeline execution", () => {
   }
 });
 
+test("rejects required CI commands hidden in dead control flow", () => {
+  const result = inspect({
+    ciWorkflow: ciWorkflow.replace(
+      "      - run: npm run test:browser:timeline",
+      "      - run: |\n          if false; then\n            npm run test:browser:timeline\n          fi"
+    ),
+  });
+
+  assert.equal(result.ok, false);
+  assert.match(
+    result.errors.join("\n"),
+    /CI desktop validation must execute npm run test:browser:timeline/i
+  );
+});
+
 test("rejects an iOS build step with only a decoy script reference", () => {
   const result = inspect({
     ciWorkflow: ciWorkflow.replace(
@@ -379,6 +394,21 @@ test("rejects missing exact-tag desktop validation commands", () => {
   });
   assert.equal(result.ok, false);
   assert.match(result.errors.join("\n"), /must execute cargo test --locked/i);
+});
+
+test("rejects exact-tag commands hidden in dead control flow", () => {
+  const result = inspect({
+    releaseWorkflow: releaseWorkflow.replace(
+      "          npm run test:browser:timeline",
+      "          if false; then\n            npm run test:browser:timeline\n          fi"
+    ),
+  });
+
+  assert.equal(result.ok, false);
+  assert.match(
+    result.errors.join("\n"),
+    /Exact-tag desktop validation must execute npm run test:browser:timeline/i
+  );
 });
 
 test("rejects incomplete publication and updater dependencies", () => {
