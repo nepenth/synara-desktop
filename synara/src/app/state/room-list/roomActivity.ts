@@ -51,12 +51,23 @@ export const isRoomActivityEvent = (event: MatrixEvent): boolean =>
   isNotificationEvent(event);
 
 const getLatestActivityEvent = (room: Room): MatrixEvent | undefined => {
-  const events = getLoadedLiveTimelineEvents(room);
-  for (let index = events.length - 1; index >= 0; index -= 1) {
-    const event = events[index];
-    if (event && isRoomActivityEvent(event)) return event;
+  const timelines = [
+    getLoadedLiveTimelineEvents(room),
+    ...room.getThreads().map((thread) => thread.events),
+  ];
+  let latest: MatrixEvent | undefined;
+
+  for (const events of timelines) {
+    for (let index = events.length - 1; index >= 0; index -= 1) {
+      const event = events[index];
+      if (!event || !isRoomActivityEvent(event)) continue;
+      if (!latest || eventActivityTimestamp(event) >= eventActivityTimestamp(latest)) {
+        latest = event;
+      }
+      break;
+    }
   }
-  return undefined;
+  return latest;
 };
 
 const getRoomBumpStamp = (room: Room): number | undefined => {

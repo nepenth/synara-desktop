@@ -43,6 +43,7 @@ const createRoom = (roomId: string, events: any[], name = roomId) =>
     roomId,
     name,
     getLiveTimeline: () => ({ getEvents: () => events }),
+    getThreads: () => [],
     getLastActiveTimestamp: () => events.at(-1)?.getTs() ?? 0,
     getBumpStamp: () => undefined,
   } as any);
@@ -137,6 +138,22 @@ test('a live message moves an old room directly into Recent without losing it fr
   assert.equal(diagnostic.includes(room.roomId), false);
   assert.equal(diagnostic.includes('$live'), false);
   unsubscribe();
+});
+
+test('loaded thread-only activity keeps a room in Recent after store reconstruction', () => {
+  const now = 3 * RECENT_ROOM_WINDOW_MS;
+  const mainEvents = [createEvent('$old-main', now - RECENT_ROOM_WINDOW_MS - 1)];
+  const threadEvent = createEvent('$thread-live', now - 1);
+  const room = {
+    ...createRoom('!thread-room:example.org', mainEvents),
+    getThreads: () => [{ events: [threadEvent] }],
+  } as any;
+  const mx = new MockMatrixClient([room]);
+  const store = new RoomActivityStore(mx as any);
+
+  const partition = partitionRoomIdsByActivity([room.roomId], store.getSnapshot(), now);
+  assert.deepEqual(partition.recentRoomIds, [room.roomId]);
+  assert.equal(store.getSnapshot().entries.get(room.roomId)?.latestEventId, '$thread-live');
 });
 
 test('back-pagination, reactions, and edits do not change room activity', () => {
