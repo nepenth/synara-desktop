@@ -2440,6 +2440,8 @@ final class MatrixRustSDKRoomMembershipService: RoomMembershipServicing {
 }
 
 final class MatrixRustSDKTimelineService: TimelineServicing {
+    static let timelineCacheCapacity = 8
+
     private enum TimelineCacheFocus: Hashable {
         case live
         case event(String)
@@ -2451,7 +2453,7 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
     private let logger: LoggingServicing
     private var profileAvatarCacheByUserID: [String: URL?] = [:]
     private let timelineCacheLock = NSLock()
-    private var cachedTimelines: [String: Timeline] = [:]
+    private var cachedTimelines = BoundedLRUCache<String, Timeline>(capacity: timelineCacheCapacity)
 
     init(
         sessionStore: AppSessionStore,
@@ -2918,7 +2920,7 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
     ) async throws -> Timeline {
         let cacheKey = timelineCacheKey(roomID: room.id(), focus: focus)
 
-        if let cachedTimeline = withTimelineCacheLock({ cachedTimelines[cacheKey] }) {
+        if let cachedTimeline = withTimelineCacheLock({ cachedTimelines.value(forKey: cacheKey) }) {
             return cachedTimeline
         }
 
@@ -2942,8 +2944,8 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
             )
         }
 
-        withTimelineCacheLock {
-            cachedTimelines[cacheKey] = timeline
+        _ = withTimelineCacheLock {
+            cachedTimelines.insert(timeline, forKey: cacheKey)
         }
         return timeline
     }
