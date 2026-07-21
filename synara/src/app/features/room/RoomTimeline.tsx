@@ -756,6 +756,10 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
 
   const [timeline, setTimeline] = useState<TimelineWindow>(() => initialTimelineWindow);
   const [jumpLatestPhase, setJumpLatestPhase] = useState<JumpLatestPhase>('idle');
+  const jumpLatestPhaseRef = useRef(jumpLatestPhase);
+  jumpLatestPhaseRef.current = jumpLatestPhase;
+  const jumpLatestPreviousTimelineRef = useRef<TimelineWindow | undefined>(undefined);
+  const jumpLatestFocusedEventRef = useRef<string | undefined>(undefined);
   const [paginationErrors, setPaginationErrors] = useState<TimelinePaginationErrors>({});
   const [, startTimelineTransition] = useTransition();
   const eventsLength = getTimelinesEventsCount(timeline.linkedTimelines);
@@ -925,6 +929,30 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
     liveEndPinRef.current = false;
     liveEndPinStateRef.current.stableFrames = 0;
   }, []);
+  const restorePreJumpTimeline = useCallback(() => {
+    const previousTimeline = jumpLatestPreviousTimelineRef.current;
+    jumpLatestPreviousTimelineRef.current = undefined;
+    jumpLatestFocusedEventRef.current = undefined;
+    if (previousTimeline) setTimeline(previousTimeline);
+  }, []);
+  const cancelLiveEndPinForUser = useCallback(() => {
+    cancelLiveEndPin();
+    if (jumpLatestPhaseRef.current === 'settling') {
+      restorePreJumpTimeline();
+      setJumpLatestPhase('error');
+    }
+  }, [cancelLiveEndPin, restorePreJumpTimeline]);
+
+  useEffect(() => {
+    if (jumpLatestPhase !== 'settling') return undefined;
+    const timeout = window.setTimeout(() => {
+      cancelLiveEndPin();
+      restorePreJumpTimeline();
+      setJumpLatestPhase('error');
+      traceTimeline('room-timeline.jump-latest-failed', { errorType: 'settling-timeout' });
+    }, LIVE_END_PIN_MAX_MS + 750);
+    return () => window.clearTimeout(timeout);
+  }, [cancelLiveEndPin, jumpLatestPhase, restorePreJumpTimeline, traceTimeline]);
 
   useEffect(() => {
     const scrollEl = scrollRef.current;
@@ -949,7 +977,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
 
     const cancelForUserScroll = () => {
       beginUserScroll();
-      if (liveEndPinRef.current) cancelLiveEndPin();
+      if (liveEndPinRef.current) cancelLiveEndPinForUser();
     };
     const cancelForScrollKey = (evt: KeyboardEvent) => {
       if (
@@ -962,7 +990,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
         evt.key === ' '
       ) {
         beginUserScroll();
-        if (liveEndPinRef.current) cancelLiveEndPin();
+        if (liveEndPinRef.current) cancelLiveEndPinForUser();
       }
     };
 
@@ -982,7 +1010,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
         userScrollIdleTimerRef.current = undefined;
       }
     };
-  }, [beginUserScroll, cancelLiveEndPin, finishUserScroll]);
+  }, [beginUserScroll, cancelLiveEndPinForUser, finishUserScroll]);
 
   useEffect(() => {
     timelineRowsBuildStateRef.current = undefined;
@@ -1108,13 +1136,18 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
   const pendingVirtualAnchorRef = useRef<TimelineVirtualAnchor | undefined>(
     savedViewportRestoreAnchor
   );
-  const pendingVirtualAnchorGenerationRef = useRef<number | undefined>(undefined);
+  const pendingVirtualAnchorGenerationRef = useRef<number | undefined>(
+    savedViewportRestoreAnchor ? userScrollGenerationRef.current : undefined
+  );
   const savedViewportRestoreKeyRef = useRef(savedViewportRestoreKey);
   const restoringSavedViewportRef = useRef(Boolean(savedViewportRestoreAnchor));
 
   if (savedViewportRestoreKeyRef.current !== savedViewportRestoreKey) {
     savedViewportRestoreKeyRef.current = savedViewportRestoreKey;
     pendingVirtualAnchorRef.current = savedViewportRestoreAnchor;
+    pendingVirtualAnchorGenerationRef.current = savedViewportRestoreAnchor
+      ? userScrollGenerationRef.current
+      : undefined;
     restoringSavedViewportRef.current = Boolean(savedViewportRestoreAnchor);
   }
 
@@ -1221,6 +1254,9 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
   isActuallyAtLiveBottomRef.current = isActuallyAtLiveBottom;
 
   const getPersistableAtLiveBottom = useCallback((): boolean => {
+    if (jumpLatestPhaseRef.current === 'loading' || jumpLatestPhaseRef.current === 'settling') {
+      return false;
+    }
     if (isActuallyAtLiveBottomRef.current()) return true;
     return atLiveEndRef.current && (atBottomRef.current || liveEndPinRef.current);
   }, []);
@@ -1275,19 +1311,20 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
   useLayoutEffect(() => {
     const anchor = pendingVirtualAnchorRef.current;
     if (!anchor) return undefined;
-    if (userScrollingRef.current) return undefined;
     const rowIndex = eventIdToRowIndex.get(anchor.eventId);
     if (typeof rowIndex !== 'number') {
       return undefined;
     }
 
     if (
-      !restoringSavedViewportRef.current &&
-      typeof pendingVirtualAnchorGenerationRef.current === 'number' &&
-      pendingVirtualAnchorGenerationRef.current !== userScrollGenerationRef.current
+      userScrollingRef.current ||
+      (typeof pendingVirtualAnchorGenerationRef.current === 'number' &&
+        pendingVirtualAnchorGenerationRef.current !== userScrollGenerationRef.current)
     ) {
       pendingVirtualAnchorRef.current = undefined;
       pendingVirtualAnchorGenerationRef.current = undefined;
+      restoringSavedViewportRef.current = false;
+      initialScrollPlacedRef.current = true;
       traceTimeline('room-timeline.anchor-restore-cancelled', { reason: 'user-input' });
       return undefined;
     }
@@ -1319,6 +1356,8 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
       if (userScrollingRef.current || userScrollGenerationRef.current !== capturedGeneration) {
         pendingVirtualAnchorRef.current = undefined;
         pendingVirtualAnchorGenerationRef.current = undefined;
+        restoringSavedViewportRef.current = false;
+        initialScrollPlacedRef.current = true;
         traceTimeline('room-timeline.anchor-restore-cancelled', { reason: 'user-input' });
         return;
       }
@@ -1503,6 +1542,8 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
     room,
     useCallback(
       (mEvt: MatrixEvent) => {
+        const canAdvanceReadAtLiveTail = () =>
+          !liveEndPinRef.current && jumpLatestPhase !== 'loading' && jumpLatestPhase !== 'settling';
         const shouldFollowLiveEnd =
           liveEndPinRef.current || isActuallyAtLiveBottom() || atBottomRef.current;
         const shouldReattachLiveTimeline =
@@ -1523,7 +1564,11 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
             setAtBottomState(true);
             scrollToBottomRef.current.count += 1;
             scrollToBottomRef.current.smooth = true;
-            if (document.hasFocus() && (!unreadInfo || mEvt.getSender() === mx.getUserId())) {
+            if (
+              canAdvanceReadAtLiveTail() &&
+              document.hasFocus() &&
+              (!unreadInfo || mEvt.getSender() === mx.getUserId())
+            ) {
               requestAnimationFrame(() =>
                 markAsRead(mx, mEvt.getRoomId()!, hideActivity, 'loaded-live-tail')
               );
@@ -1537,7 +1582,11 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
         // otherwise we update timeline without paginating
         // so timeline can be updated with evt like: edits, reactions etc
         if (shouldFollowLiveEnd) {
-          if (document.hasFocus() && (!unreadInfo || mEvt.getSender() === mx.getUserId())) {
+          if (
+            canAdvanceReadAtLiveTail() &&
+            document.hasFocus() &&
+            (!unreadInfo || mEvt.getSender() === mx.getUserId())
+          ) {
             // Check if the document is in focus (user is actively viewing the app),
             // and either there are no unread messages or the latest message is from the current user.
             // If either condition is met, trigger the markAsRead function to send a read receipt.
@@ -1575,6 +1624,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
         room,
         unreadInfo,
         hideActivity,
+        jumpLatestPhase,
         setAtBottomState,
         startLiveEndPin,
         startTimelineTransition,
@@ -1675,6 +1725,9 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
   );
 
   const tryAutoMarkAsRead = useCallback(() => {
+    if (liveEndPinRef.current || jumpLatestPhase === 'loading' || jumpLatestPhase === 'settling') {
+      return;
+    }
     const readUptoEventId = readUptoEventIdRef.current;
     if (!readUptoEventId) {
       requestAnimationFrame(() => markAsRead(mx, room.roomId, hideActivity, 'loaded-live-tail'));
@@ -1685,7 +1738,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
     if (latestTimeline === room.getLiveTimeline()) {
       requestAnimationFrame(() => markAsRead(mx, room.roomId, hideActivity, 'loaded-live-tail'));
     }
-  }, [mx, room, hideActivity]);
+  }, [mx, room, hideActivity, jumpLatestPhase]);
 
   useLayoutEffect(() => {
     if (!liveEndPinRef.current || !loadedAtEnd || timelineRows.length === 0) {
@@ -1756,9 +1809,16 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
         if (jumpLatestPhase === 'settling') {
           if (bottomConfirmed) {
             persistLiveBottomViewport();
+            const focusedEvent = jumpLatestFocusedEventRef.current;
+            jumpLatestPreviousTimelineRef.current = undefined;
+            jumpLatestFocusedEventRef.current = undefined;
             setJumpLatestPhase('idle');
             tryAutoMarkAsRead();
+            if (focusedEvent) {
+              navigateRoom(room.roomId, undefined, { replace: true });
+            }
           } else {
+            restorePreJumpTimeline();
             setJumpLatestPhase('error');
           }
         }
@@ -1787,6 +1847,9 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
     loadedAtEnd,
     jumpLatestPhase,
     persistLiveBottomViewport,
+    navigateRoom,
+    restorePreJumpTimeline,
+    room.roomId,
     roomOpenMode,
     setAtBottomState,
     timelineRows.length,
@@ -1992,6 +2055,8 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
     if (jumpLatestPhase === 'loading' || jumpLatestPhase === 'settling') return;
     const requestId = latestTimelineRequestRef.current + 1;
     latestTimelineRequestRef.current = requestId;
+    jumpLatestPreviousTimelineRef.current = timeline;
+    jumpLatestFocusedEventRef.current = eventId;
     setJumpLatestPhase('loading');
 
     try {
@@ -2003,13 +2068,18 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
       if (!timelineHasEvents(nextTimeline)) {
         throw new Error('Latest timeline is empty');
       }
+      const nextTailTimeline =
+        nextTimeline.linkedTimelines[nextTimeline.linkedTimelines.length - 1];
+      const nextWindowAtLiveEnd =
+        nextTailTimeline === getLiveTimeline(room) &&
+        typeof nextTailTimeline?.getPaginationToken(Direction.Forward) !== 'string';
+      if (!nextWindowAtLiveEnd) {
+        throw new Error('Latest timeline did not reach the live end');
+      }
       pendingVirtualAnchorRef.current = undefined;
       pendingVirtualAnchorGenerationRef.current = undefined;
       restoringSavedViewportRef.current = false;
       lastKnownVirtualAnchorRef.current = undefined;
-      if (eventId) {
-        navigateRoom(room.roomId, undefined, { replace: true });
-      }
       setTimeline(nextTimeline);
       liveTimelineResetPendingRef.current = false;
       firstStableBottomLoggedRef.current = false;
@@ -2022,6 +2092,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
     } catch (err) {
       if (!alive() || latestTimelineRequestRef.current !== requestId) return;
       cancelLiveEndPin();
+      restorePreJumpTimeline();
       setJumpLatestPhase('error');
       traceTimeline('room-timeline.jump-latest-failed', {
         errorType: err instanceof Error ? err.name : typeof err,
@@ -3186,16 +3257,17 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
             before={<Icon size="50" src={Icons.ArrowBottom} />}
             disabled={jumpLatestPhase === 'loading' || jumpLatestPhase === 'settling'}
             aria-busy={jumpLatestPhase === 'loading' || jumpLatestPhase === 'settling'}
+            aria-live="polite"
             onClick={() => void handleJumpToLatest()}
           >
             <Text size="L400">
               {jumpLatestPhase === 'loading'
                 ? 'Loading Latest…'
                 : jumpLatestPhase === 'settling'
-                  ? 'Positioning…'
-                  : jumpLatestPhase === 'error'
-                    ? 'Retry Jump to Latest'
-                    : 'Jump to Latest'}
+                ? 'Positioning…'
+                : jumpLatestPhase === 'error'
+                ? 'Retry Jump to Latest'
+                : 'Jump to Latest'}
             </Text>
           </Chip>
         </TimelineFloat>

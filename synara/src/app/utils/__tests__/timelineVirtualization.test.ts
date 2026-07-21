@@ -38,10 +38,7 @@ test('timeline anchor offset restores viewport after prepending rows', () => {
   const anchorOffset = getVirtualAnchorOffset(100, 180);
   assert.equal(anchorOffset, 80);
 
-  assert.equal(
-    getVirtualAnchorCorrection({ eventId: '$a', offsetTop: anchorOffset }, 100, 180),
-    0
-  );
+  assert.equal(getVirtualAnchorCorrection({ eventId: '$a', offsetTop: anchorOffset }, 100, 180), 0);
   assert.equal(
     getVirtualAnchorCorrection({ eventId: '$a', offsetTop: anchorOffset }, 100, 280),
     100
