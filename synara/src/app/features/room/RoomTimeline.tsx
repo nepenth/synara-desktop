@@ -138,7 +138,8 @@ import { AccountDataEvent, SynaraUnreadAnchorContent } from '../../../types/matr
 import { parsePollStartContent } from '../../utils/polls';
 import { addRoomNoteItemAccountData, createMessageRoomNoteItem } from '../../utils/roomNotes';
 import { isPerformanceDebugEnabled, perfLog } from '../../utils/performance';
-import { recordDesktopDiagnostic } from '../../utils/desktopDiagnostics';
+import { recordFoundationDiagnostic } from '../../utils/foundationDiagnostics';
+import { isFoundationFeatureEnabled } from '../../config/foundationFeatures';
 import {
   buildTimelineRowsWithState,
   estimateTimelineRowSize,
@@ -237,6 +238,11 @@ type RoomTimelineProps = {
 };
 
 const PAGINATION_LIMIT = 80;
+const BOUNDED_TIMELINE_CONTEXTS_ENABLED = isFoundationFeatureEnabled('boundedTimelineContexts');
+const STABLE_SCROLL_ANCHORING_ENABLED = isFoundationFeatureEnabled('stableScrollAnchoring');
+const TIMELINE_CONTEXT_MAX_ROWS = BOUNDED_TIMELINE_CONTEXTS_ENABLED
+  ? TIMELINE_MAX_EXPECTED_RENDERED_ROWS
+  : Number.MAX_SAFE_INTEGER;
 const LIVE_END_PIN_MIN_MS = 700;
 const LIVE_END_PIN_MAX_MS = 5000;
 const LIVE_END_PIN_STABLE_FRAMES = 10;
@@ -429,7 +435,7 @@ const useTimelinePagination = (
           offsetRange,
           backwards,
           limit,
-          maxRows: TIMELINE_MAX_EXPECTED_RENDERED_ROWS,
+          maxRows: TIMELINE_CONTEXT_MAX_ROWS,
         }),
       }));
     };
@@ -617,6 +623,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
       : undefined;
   const currentLiveTailEventId = getLoadedLiveTailEventId(room);
   const shouldRestoreSavedViewport =
+    STABLE_SCROLL_ANCHORING_ENABLED &&
     !eventId &&
     canRestoreViewportFromInitialTimeline(savedViewport, initialTimelineWindow) &&
     shouldRestoreRoomTimelineViewport(savedViewport, {
@@ -813,18 +820,25 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
       sequence: 0,
     };
   }
-  const traceTimeline = useCallback((label: string, data: Record<string, unknown>) => {
-    const diagnostics = timelineDiagnosticsRef.current;
-    diagnostics.sequence += 1;
-    const payload = {
-      ...data,
-      traceId: diagnostics.traceId,
-      sequence: diagnostics.sequence,
-      elapsedMs: Math.round(performance.now() - diagnostics.startedAtMs),
-    };
-    recordDesktopDiagnostic(`[synara:timeline] ${label} ${JSON.stringify(payload)}`);
-    perfLog(label, payload);
-  }, []);
+  const traceTimeline = useCallback(
+    (label: string, data: Record<string, unknown>) => {
+      const diagnostics = timelineDiagnosticsRef.current;
+      diagnostics.sequence += 1;
+      const payload = {
+        ...data,
+        traceId: diagnostics.traceId,
+        sequence: diagnostics.sequence,
+        elapsedMs: Math.round(performance.now() - diagnostics.startedAtMs),
+      };
+      recordFoundationDiagnostic('timeline', label, {
+        roomId: room.roomId,
+        eventId,
+        fields: payload,
+      });
+      perfLog(label, payload);
+    },
+    [eventId, room.roomId]
+  );
 
   useEffect(() => {
     roomOpenDiagnosticsLoggedRef.current = false;
@@ -840,16 +854,17 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
     const unreadTarget =
       initialUnreadPlacementInfo?.readUptoEventId ??
       getRoomUnreadInfo(room, unreadAnchorEventId)?.readUptoEventId;
-    traceTimeline(
-      'room-timeline.open',
-      buildRoomTimelineOpenDiagnostics({
+    traceTimeline('room-timeline.open', {
+      ...buildRoomTimelineOpenDiagnostics({
         openMode: roomOpenMode,
         unreadTargetEventId: unreadTarget,
         unreadInInitialWindow: Boolean(initialUnreadPlacementInfo),
         linkedEventCount: getTimelinesEventsCount(initialTimelineWindow.linkedTimelines),
         loadedAtEnd,
-      })
-    );
+      }),
+      boundedContextsEnabled: BOUNDED_TIMELINE_CONTEXTS_ENABLED,
+      stableAnchoringEnabled: STABLE_SCROLL_ANCHORING_ENABLED,
+    });
   }, [
     eventId,
     initialTimelineWindow,
@@ -1211,7 +1226,11 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
   });
   const virtualItems = virtualizer.getVirtualItems();
   const savedViewportRestoreAnchor =
-    !eventId && shouldRestoreSavedViewport && savedViewport && !savedViewport.atBottom
+    STABLE_SCROLL_ANCHORING_ENABLED &&
+    !eventId &&
+    shouldRestoreSavedViewport &&
+    savedViewport &&
+    !savedViewport.atBottom
       ? savedViewport.anchor
       : undefined;
   const savedViewportRestoreKey = savedViewportRestoreAnchor
@@ -1244,6 +1263,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
   );
 
   const getCurrentVirtualAnchor = useCallback((): TimelineVirtualAnchor | undefined => {
+    if (!STABLE_SCROLL_ANCHORING_ENABLED) return undefined;
     const scrollEl = scrollRef.current;
     if (!scrollEl) return undefined;
 
@@ -1301,6 +1321,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
   }, []);
 
   useLayoutEffect(() => {
+    if (!STABLE_SCROLL_ANCHORING_ENABLED) return;
     if (eventId) return;
     const anchor = getCurrentVirtualAnchorRef.current();
     if (anchor) lastKnownVirtualAnchorRef.current = anchor;
@@ -1401,6 +1422,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
   );
 
   useLayoutEffect(() => {
+    if (!STABLE_SCROLL_ANCHORING_ENABLED) return undefined;
     const anchor = pendingVirtualAnchorRef.current;
     if (!anchor) return undefined;
     const rowIndex = eventIdToRowIndex.get(anchor.eventId);
@@ -1616,7 +1638,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
             targetIndex: evtAbsIndex,
             totalEvents: evLength,
             contextLimit: PAGINATION_LIMIT,
-            maxRows: TIMELINE_MAX_EXPECTED_RENDERED_ROWS,
+            maxRows: TIMELINE_CONTEXT_MAX_ROWS,
           }),
         });
       },
