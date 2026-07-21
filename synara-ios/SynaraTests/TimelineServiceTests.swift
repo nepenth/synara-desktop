@@ -849,6 +849,29 @@ final class TimelineServiceTests: XCTestCase {
         XCTAssertTrue(transaction.isLocalPending)
     }
 
+    func testAvatarEnrichmentPreservesTransactionIdentityAndDeliveryState() throws {
+        let transactionItem = TimelineItem(
+            id: "txn-local-echo",
+            eventID: "txn-local-echo",
+            serverEventID: nil,
+            senderID: "@alice:matrix.org",
+            timestamp: TimelineFixtures.baseDate,
+            kind: .text("Sending"),
+            replyToEventID: nil,
+            isEdited: false,
+            reactions: [:],
+            deliveryStatus: .sent
+        )
+        let avatarURL = try XCTUnwrap(URL(string: "mxc://matrix.org/alice"))
+
+        let enrichedItem = transactionItem.withSenderAvatarURL(avatarURL)
+
+        XCTAssertEqual(enrichedItem.senderAvatarURL, avatarURL)
+        XCTAssertNil(enrichedItem.serverEventID)
+        XCTAssertEqual(enrichedItem.deliveryStatus, .sent)
+        XCTAssertTrue(enrichedItem.isLocalPending)
+    }
+
     func testPendingReconcilerPreservesAuthoritativeServerVectorOrder() {
         func item(_ id: String, offset: TimeInterval) -> Synara.TimelineItem {
             Synara.TimelineItem(

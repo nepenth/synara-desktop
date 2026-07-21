@@ -27,6 +27,83 @@ enum MatrixServerEventIDPolicy {
     }
 }
 
+final class RoomReadMarkerCache {
+    struct Snapshot: Equatable {
+        let eventID: String?
+    }
+
+    struct FetchToken: Equatable {
+        fileprivate let writeRevision: UInt64
+        fileprivate let fetchGeneration: UInt64
+    }
+
+    private struct Key: Hashable {
+        let userID: String
+        let roomID: String
+    }
+
+    private struct State {
+        var eventID: String?
+        var writeRevision: UInt64 = 0
+        var nextFetchGeneration: UInt64 = 0
+        var latestSuccessfulFetchGeneration: UInt64 = 0
+    }
+
+    private let lock = NSLock()
+    private var states: [Key: State] = [:]
+
+    func snapshot(roomID: String, userID: String) -> Snapshot {
+        lock.lock()
+        defer { lock.unlock() }
+        return Snapshot(eventID: states[Key(userID: userID, roomID: roomID)]?.eventID)
+    }
+
+    func beginFetch(roomID: String, userID: String) -> FetchToken {
+        lock.lock()
+        defer { lock.unlock() }
+        let cacheKey = Key(userID: userID, roomID: roomID)
+        var state = states[cacheKey] ?? State()
+        state.nextFetchGeneration &+= 1
+        states[cacheKey] = state
+        return FetchToken(
+            writeRevision: state.writeRevision,
+            fetchGeneration: state.nextFetchGeneration
+        )
+    }
+
+    @discardableResult
+    func publishFetched(
+        eventID: String,
+        roomID: String,
+        userID: String,
+        token: <SET_IN_CONFIG>
+    ) -> String {
+        lock.lock()
+        defer { lock.unlock() }
+        let cacheKey = Key(userID: userID, roomID: roomID)
+        var state = states[cacheKey] ?? State()
+        guard state.writeRevision == token.writeRevision,
+              token.fetchGeneration > state.latestSuccessfulFetchGeneration
+        else {
+            return state.eventID ?? eventID
+        }
+        state.eventID = eventID
+        state.latestSuccessfulFetchGeneration = token.fetchGeneration
+        states[cacheKey] = state
+        return eventID
+    }
+
+    func publishWritten(eventID: String, roomID: String, userID: String) {
+        lock.lock()
+        defer { lock.unlock() }
+        let cacheKey = Key(userID: userID, roomID: roomID)
+        var state = states[cacheKey] ?? State()
+        state.writeRevision &+= 1
+        state.eventID = eventID
+        states[cacheKey] = state
+    }
+}
+
 final class MatrixRoomReadMarkerService: RoomReadMarkerServicing {
     private let sessionStore: AppSessionStore
     private let clientStore: RoomReadMarkerClientStoring?
@@ -34,8 +111,7 @@ final class MatrixRoomReadMarkerService: RoomReadMarkerServicing {
     private let jsonDecoder: JSONDecoder
     private let logger: LoggingServicing
     private let writeCoordinator = RoomReadMarkerWriteCoordinator()
-    private let markerCacheLock = NSLock()
-    private var markerCache: [String: String] = [:]
+    private let markerCache = RoomReadMarkerCache()
     private let writeRetryDelaysNanoseconds: [UInt64]
 
     init(
@@ -58,6 +134,8 @@ final class MatrixRoomReadMarkerService: RoomReadMarkerServicing {
         guard case let .signedIn(session) = sessionStore.currentState else {
             return nil
         }
+        let sessionEpoch = sessionStore.sessionEpoch
+        let fetchToken = markerCache.beginFetch(roomID: roomID, userID: session.userID)
 
         do {
             var request = URLRequest(url: fullyReadURL(session: session, roomID: roomID))
@@ -66,17 +144,31 @@ final class MatrixRoomReadMarkerService: RoomReadMarkerServicing {
             request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
 
             let (data, response) = try await httpClient.data(for: request)
+            guard sessionStore.currentState == .signedIn(session),
+                  sessionStore.sessionEpoch == sessionEpoch
+            else {
+                return nil
+            }
             guard let http = response as? HTTPURLResponse,
                   http.statusCode == 200
             else {
-                return cachedEventID(roomID: roomID, userID: session.userID)
+                return markerCache.snapshot(roomID: roomID, userID: session.userID).eventID
             }
 
             let eventID = try jsonDecoder.decode(RoomReadMarkerResponse.self, from: data).eventID
-            cache(eventID: eventID, roomID: roomID, userID: session.userID)
-            return eventID
+            return markerCache.publishFetched(
+                eventID: eventID,
+                roomID: roomID,
+                userID: session.userID,
+                token: <SET_IN_CONFIG>
+            )
         } catch {
-            return cachedEventID(roomID: roomID, userID: session.userID)
+            guard sessionStore.currentState == .signedIn(session),
+                  sessionStore.sessionEpoch == sessionEpoch
+            else {
+                return nil
+            }
+            return markerCache.snapshot(roomID: roomID, userID: session.userID).eventID
         }
     }
 
@@ -133,7 +225,7 @@ final class MatrixRoomReadMarkerService: RoomReadMarkerServicing {
                 return false
             }
             if await writeReadMarkersOnce(roomID: roomID, eventID: eventID, session: session) {
-                cache(eventID: eventID, roomID: roomID, userID: session.userID)
+                markerCache.publishWritten(eventID: eventID, roomID: roomID, userID: session.userID)
                 return true
             }
         }
@@ -168,18 +260,6 @@ final class MatrixRoomReadMarkerService: RoomReadMarkerServicing {
             logger.info("Matrix read marker update failed room=redacted error=\(String(describing: error))", category: .sync)
             return false
         }
-    }
-
-    private func cache(eventID: String, roomID: String, userID: String) {
-        markerCacheLock.lock()
-        markerCache["\(userID)|\(roomID)"] = eventID
-        markerCacheLock.unlock()
-    }
-
-    private func cachedEventID(roomID: String, userID: String) -> String? {
-        markerCacheLock.lock()
-        defer { markerCacheLock.unlock() }
-        return markerCache["\(userID)|\(roomID)"]
     }
 
     func markRoomAsRead(roomID: String) async -> Bool {

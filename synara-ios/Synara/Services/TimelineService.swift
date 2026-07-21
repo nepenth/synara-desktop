@@ -122,6 +122,23 @@ struct TimelineItem: Identifiable, Equatable {
         )
     }
 
+    func withSenderAvatarURL(_ senderAvatarURL: URL?) -> TimelineItem {
+        TimelineItem(
+            id: id,
+            eventID: eventID,
+            serverEventID: serverEventID,
+            senderID: senderID,
+            senderAvatarURL: senderAvatarURL,
+            timestamp: timestamp,
+            kind: kind,
+            replyToEventID: replyToEventID,
+            isEdited: isEdited,
+            reactions: reactions,
+            isEncrypted: isEncrypted,
+            deliveryStatus: deliveryStatus
+        )
+    }
+
     static func pendingMessage(
         localID: String = "$pending-\(UUID().uuidString)",
         body: String,
