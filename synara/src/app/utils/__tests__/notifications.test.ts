@@ -2,7 +2,12 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { ReceiptType } from 'matrix-js-sdk';
 import { AccountDataEvent } from '../../../types/matrix/accountData';
-import { clearUnreadAnchor, markAsRead, markAsReadAtEvent } from '../notifications';
+import {
+  clearUnreadAnchor,
+  markAsRead,
+  markAsReadAtEvent,
+  markAsReadInBackground,
+} from '../notifications';
 import { getThreadRootEventId, roomHaveUnread } from '../room';
 import {
   ROOM_TIMELINE_VIEWPORT_RESTORE_TTL_MS,
@@ -489,6 +494,243 @@ test('markAsRead serializes writes and coalesces pending markers to the newest e
 
   await Promise.all([firstRequest, duplicateFirstRequest, secondRequest, thirdRequest]);
   assert.deepEqual(writes, ['$first', '$third']);
+});
+
+test('an active public receipt never satisfies an older private receipt request', async () => {
+  const older = createTimelineEvent('$older-private', { ts: 10 });
+  const newer = createTimelineEvent('$newer-public', { ts: 20 });
+  let liveEvents = [newer];
+  let notifyStarted: (() => void) | undefined;
+  const firstWriteStarted = new Promise<void>((resolve) => {
+    notifyStarted = resolve;
+  });
+  let releaseFirst: (() => void) | undefined;
+  const firstWriteBlocked = new Promise<void>((resolve) => {
+    releaseFirst = resolve;
+  });
+  const writes: Array<[string, string, any, any]> = [];
+  const room = {
+    roomId: '!cross-channel-active:example.org',
+    accountData: { get: () => undefined },
+    getLiveTimeline: () => ({ getEvents: () => liveEvents }),
+    compareEventOrdering: () => null,
+  } as any;
+  const mx = {
+    getRoom: () => room,
+    getUserId: () => '@alice:example.org',
+    getAccountData: () => undefined,
+    setRoomReadMarkers: async (...args: [string, string, any, any]) => {
+      writes.push(args);
+      if (writes.length === 1) {
+        notifyStarted?.();
+        await firstWriteBlocked;
+      }
+    },
+  } as any;
+
+  const publicRequest = markAsRead(mx, room.roomId, false, 'loaded-live-tail');
+  await firstWriteStarted;
+  liveEvents = [older];
+  let privateResolved = false;
+  const privateRequest = markAsRead(mx, room.roomId, true, 'loaded-live-tail').then(() => {
+    privateResolved = true;
+  });
+  await Promise.resolve();
+
+  assert.equal(privateResolved, false);
+  releaseFirst?.();
+  await Promise.all([publicRequest, privateRequest]);
+  assert.deepEqual(
+    writes.map(([, fullyReadId, publicEvent, privateEvent]) => [
+      fullyReadId,
+      publicEvent?.getId(),
+      privateEvent?.getId(),
+    ]),
+    [
+      ['$newer-public', '$newer-public', undefined],
+      ['$newer-public', undefined, '$older-private'],
+    ]
+  );
+});
+
+test('a completed public receipt never satisfies the private receipt channel', async () => {
+  const older = createTimelineEvent('$completed-older-private', { ts: 10 });
+  const newer = createTimelineEvent('$completed-newer-public', { ts: 20 });
+  let liveEvents = [newer];
+  const writes: Array<[string, string, any, any]> = [];
+  const room = {
+    roomId: '!cross-channel-completed:example.org',
+    accountData: { get: () => undefined },
+    getLiveTimeline: () => ({ getEvents: () => liveEvents }),
+    compareEventOrdering: () => null,
+  } as any;
+  const mx = {
+    getRoom: () => room,
+    getUserId: () => '@alice:example.org',
+    getAccountData: () => undefined,
+    setRoomReadMarkers: async (...args: [string, string, any, any]) => {
+      writes.push(args);
+    },
+  } as any;
+
+  await markAsRead(mx, room.roomId, false, 'loaded-live-tail');
+  liveEvents = [older];
+  await markAsRead(mx, room.roomId, true, 'loaded-live-tail');
+
+  assert.deepEqual(
+    writes.map(([, fullyReadId, publicEvent, privateEvent]) => [
+      fullyReadId,
+      publicEvent?.getId(),
+      privateEvent?.getId(),
+    ]),
+    [
+      ['$completed-newer-public', '$completed-newer-public', undefined],
+      ['$completed-newer-public', undefined, '$completed-older-private'],
+    ]
+  );
+});
+
+test('interleaved detached read targets preserve both receipt channels at the furthest event', async () => {
+  const first = createTimelineEvent('$detached-first-public', { ts: 10 });
+  const second = createTimelineEvent('$detached-second-public', { ts: 20 });
+  const third = createTimelineEvent('$detached-third-private', { ts: 30 });
+  let notifyStarted: (() => void) | undefined;
+  const firstWriteStarted = new Promise<void>((resolve) => {
+    notifyStarted = resolve;
+  });
+  let releaseFirst: (() => void) | undefined;
+  const firstWriteBlocked = new Promise<void>((resolve) => {
+    releaseFirst = resolve;
+  });
+  const writes: Array<[string, string, any, any]> = [];
+  const room = {
+    roomId: '!detached-interleaving:example.org',
+    accountData: { get: () => undefined },
+    compareEventOrdering: () => null,
+  } as any;
+  const mx = {
+    getRoom: () => room,
+    getUserId: () => '@alice:example.org',
+    getAccountData: () => undefined,
+    setRoomReadMarkers: async (...args: [string, string, any, any]) => {
+      writes.push(args);
+      if (writes.length === 1) {
+        notifyStarted?.();
+        await firstWriteBlocked;
+      }
+    },
+  } as any;
+
+  const firstRequest = markAsReadAtEvent(mx, room.roomId, false, first);
+  await firstWriteStarted;
+  const privateRequest = markAsReadAtEvent(mx, room.roomId, true, third);
+  const secondPublicRequest = markAsReadAtEvent(mx, room.roomId, false, second);
+  releaseFirst?.();
+
+  await Promise.all([firstRequest, privateRequest, secondPublicRequest]);
+  assert.deepEqual(
+    writes.map(([, fullyReadId, publicEvent, privateEvent]) => [
+      fullyReadId,
+      publicEvent?.getId(),
+      privateEvent?.getId(),
+    ]),
+    [
+      ['$detached-first-public', '$detached-first-public', undefined],
+      ['$detached-third-private', '$detached-second-public', '$detached-third-private'],
+    ]
+  );
+});
+
+test('a failed public write neither poisons nor satisfies the private receipt channel', async () => {
+  const oldest = createTimelineEvent('$failure-oldest-public', { ts: 5 });
+  const first = createTimelineEvent('$failure-first-public', { ts: 10 });
+  const second = createTimelineEvent('$failure-second-private', { ts: 20 });
+  let liveEvents = [first];
+  let notifyStarted: (() => void) | undefined;
+  const firstWriteStarted = new Promise<void>((resolve) => {
+    notifyStarted = resolve;
+  });
+  let releaseFirst: (() => void) | undefined;
+  const firstWriteBlocked = new Promise<void>((resolve) => {
+    releaseFirst = resolve;
+  });
+  const writes: Array<[string, string, any, any]> = [];
+  const room = {
+    roomId: '!cross-channel-failure:example.org',
+    accountData: { get: () => undefined },
+    getLiveTimeline: () => ({ getEvents: () => liveEvents }),
+    compareEventOrdering: () => null,
+  } as any;
+  const mx = {
+    getRoom: () => room,
+    getUserId: () => '@alice:example.org',
+    getAccountData: () => undefined,
+    setRoomReadMarkers: async (...args: [string, string, any, any]) => {
+      writes.push(args);
+      if (writes.length === 1) {
+        notifyStarted?.();
+        await firstWriteBlocked;
+        throw new Error('public receipt failed');
+      }
+    },
+  } as any;
+
+  const publicRequest = markAsRead(mx, room.roomId, false, 'loaded-live-tail');
+  await firstWriteStarted;
+  liveEvents = [second];
+  const privateRequest = markAsRead(mx, room.roomId, true, 'loaded-live-tail');
+  const publicOutcome = assert.rejects(publicRequest, /public receipt failed/);
+  releaseFirst?.();
+
+  await publicOutcome;
+  await privateRequest;
+  liveEvents = [oldest];
+  await markAsRead(mx, room.roomId, false, 'loaded-live-tail');
+
+  assert.deepEqual(
+    writes.map(([, fullyReadId, publicEvent, privateEvent]) => [
+      fullyReadId,
+      publicEvent?.getId(),
+      privateEvent?.getId(),
+    ]),
+    [
+      ['$failure-first-public', '$failure-first-public', undefined],
+      ['$failure-second-private', undefined, '$failure-second-private'],
+      ['$failure-second-private', '$failure-oldest-public', undefined],
+    ]
+  );
+});
+
+test('markAsReadInBackground consumes UI-only failures while markAsRead stays awaitable', async () => {
+  const latest = createTimelineEvent('$background-failure', { ts: 1 });
+  let rejectWrite: ((error: Error) => void) | undefined;
+  const writeAttempt = new Promise<void>((_resolve, reject) => {
+    rejectWrite = reject;
+  });
+  const room = {
+    roomId: '!background-failure:example.org',
+    accountData: { get: () => undefined },
+    getLiveTimeline: () => ({ getEvents: () => [latest] }),
+    compareEventOrdering: () => null,
+  } as any;
+  const mx = {
+    getRoom: () => room,
+    getUserId: () => '@alice:example.org',
+    getAccountData: () => undefined,
+    setRoomReadMarkers: () => writeAttempt,
+  } as any;
+
+  const backgroundResult = markAsReadInBackground(mx, room.roomId, false, 'loaded-live-tail');
+  assert.equal(backgroundResult, undefined);
+  rejectWrite?.(new Error('background write failed'));
+  await new Promise<void>((resolve) => {
+    setImmediate(resolve);
+  });
+
+  await assert.rejects(
+    markAsRead(mx, room.roomId, false, 'loaded-live-tail'),
+    /background write failed/
+  );
 });
 
 test('read-marker waiters preserve a successful request when the following write fails', async () => {

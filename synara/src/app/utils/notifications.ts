@@ -28,17 +28,27 @@ type ReadMarkerWaiter = {
   reject: (error: unknown) => void;
 };
 
-type ReadMarkerBatch = {
-  request: ReadMarkerRequest;
+type ReadReceiptChannel = 'public' | 'private';
+
+type ReadMarkerChannelTarget = {
+  event: MatrixEvent;
   waiters: Set<ReadMarkerWaiter>;
+};
+
+type ReadMarkerChannels = Partial<Record<ReadReceiptChannel, ReadMarkerChannelTarget>>;
+
+type ReadMarkerBatch = {
+  fullyReadEvent: MatrixEvent;
+  channels: ReadMarkerChannels;
 };
 
 type RoomReadMarkerQueue = {
   active?: ReadMarkerBatch;
-  pending?: ReadMarkerBatch;
+  pending: ReadMarkerChannels;
+  completed: Partial<Record<ReadReceiptChannel, MatrixEvent>>;
+  fullyReadCompleted?: MatrixEvent;
+  furthestKnown?: MatrixEvent;
   running: boolean;
-  lastCompleted?: MatrixEvent;
-  lastCompletedPrivateReceipt?: boolean;
 };
 
 const roomReadMarkerQueues = new WeakMap<MatrixClient, Map<string, RoomReadMarkerQueue>>();
@@ -114,7 +124,11 @@ export async function markEventAsUnread(mx: MatrixClient, room: Room, eventId: s
   await markAsUnread(mx, room.roomId);
 }
 
-const compareReadMarkerEvents = (room: Room, left: MatrixEvent, right: MatrixEvent): number => {
+const compareReadMarkerEvents = (
+  room: Room,
+  left: MatrixEvent,
+  right: MatrixEvent
+): number | null => {
   const leftId = left.getId();
   const rightId = right.getId();
   if (leftId && rightId) {
@@ -123,8 +137,36 @@ const compareReadMarkerEvents = (room: Room, left: MatrixEvent, right: MatrixEve
     if (ordering !== null) return ordering;
   }
 
-  return left.getTs() - right.getTs();
+  const leftTimestamp = left.getTs();
+  const rightTimestamp = right.getTs();
+  if (
+    Number.isFinite(leftTimestamp) &&
+    Number.isFinite(rightTimestamp) &&
+    leftTimestamp !== rightTimestamp
+  ) {
+    return leftTimestamp - rightTimestamp;
+  }
+
+  return null;
 };
+
+const advanceKnownEvent = (
+  room: Room,
+  current: MatrixEvent | undefined,
+  candidate: MatrixEvent
+): MatrixEvent => {
+  if (!current) return candidate;
+  const ordering = compareReadMarkerEvents(room, candidate, current);
+  return ordering !== null && ordering > 0 ? candidate : current;
+};
+
+const eventSatisfiesTarget = (room: Room, event: MatrixEvent, target: MatrixEvent): boolean => {
+  const ordering = compareReadMarkerEvents(room, event, target);
+  return ordering !== null && ordering >= 0;
+};
+
+const getReceiptChannel = (privateReceipt: boolean): ReadReceiptChannel =>
+  privateReceipt ? 'private' : 'public';
 
 const getRoomReadMarkerQueue = (mx: MatrixClient, roomId: string): RoomReadMarkerQueue => {
   let clientQueues = roomReadMarkerQueues.get(mx);
@@ -135,7 +177,7 @@ const getRoomReadMarkerQueue = (mx: MatrixClient, roomId: string): RoomReadMarke
 
   let queue = clientQueues.get(roomId);
   if (!queue) {
-    queue = { running: false };
+    queue = { running: false, pending: {}, completed: {} };
     clientQueues.set(roomId, queue);
   }
   return queue;
@@ -144,23 +186,26 @@ const getRoomReadMarkerQueue = (mx: MatrixClient, roomId: string): RoomReadMarke
 const commitReadMarker = async (
   mx: MatrixClient,
   room: Room,
-  request: ReadMarkerRequest
+  batch: ReadMarkerBatch
 ): Promise<void> => {
-  const eventId = request.event.getId();
+  const eventId = batch.fullyReadEvent.getId();
   if (!eventId) throw new Error('Cannot set a read marker without an event ID');
 
   await mx.setRoomReadMarkers(
     room.roomId,
     eventId,
-    request.privateReceipt ? undefined : request.event,
-    request.privateReceipt ? request.event : undefined
+    batch.channels.public?.event,
+    batch.channels.private?.event
   );
 
   await clearCustomUnread(mx, room);
   recordFoundationDiagnostic('read', 'marker.commit-success', {
     roomId: room.roomId,
     eventId,
-    fields: { privateReceipt: request.privateReceipt },
+    fields: {
+      publicReceipt: Boolean(batch.channels.public),
+      privateReceipt: Boolean(batch.channels.private),
+    },
   });
 };
 
@@ -172,14 +217,40 @@ const clearCustomUnread = async (mx: MatrixClient, room: Room): Promise<void> =>
 };
 
 const resolveReadMarkerBatch = (batch: ReadMarkerBatch): void => {
-  batch.waiters.forEach((waiter) => waiter.resolve());
-  batch.waiters.clear();
+  Object.values(batch.channels).forEach((target) => {
+    target?.waiters.forEach((waiter) => waiter.resolve());
+    target?.waiters.clear();
+  });
 };
 
 const rejectReadMarkerBatch = (batch: ReadMarkerBatch, error: unknown): void => {
-  batch.waiters.forEach((waiter) => waiter.reject(error));
-  batch.waiters.clear();
+  Object.values(batch.channels).forEach((target) => {
+    target?.waiters.forEach((waiter) => waiter.reject(error));
+    target?.waiters.clear();
+  });
 };
+
+const hasPendingReadMarker = (queue: RoomReadMarkerQueue): boolean =>
+  Boolean(queue.pending.public || queue.pending.private);
+
+const createReadMarkerBatch = (room: Room, queue: RoomReadMarkerQueue): ReadMarkerBatch => {
+  const channels = queue.pending;
+  queue.pending = {};
+
+  const pendingEvents = Object.values(channels)
+    .map((target) => target?.event)
+    .filter((event): event is MatrixEvent => Boolean(event));
+  const fullyReadEvent = pendingEvents.reduce(
+    (furthest, event) => advanceKnownEvent(room, furthest, event),
+    queue.furthestKnown ?? queue.fullyReadCompleted
+  );
+  if (!fullyReadEvent) throw new Error('Cannot create an empty read-marker batch');
+
+  return { fullyReadEvent, channels };
+};
+
+const readMarkerWaiterCount = (batch: ReadMarkerBatch): number =>
+  Object.values(batch.channels).reduce((count, target) => count + (target?.waiters.size ?? 0), 0);
 
 const drainReadMarkerQueue = async (
   mx: MatrixClient,
@@ -187,28 +258,34 @@ const drainReadMarkerQueue = async (
   queue: RoomReadMarkerQueue
 ): Promise<void> => {
   try {
-    while (queue.pending) {
-      const batch = queue.pending;
-      queue.pending = undefined;
+    while (hasPendingReadMarker(queue)) {
+      const batch = createReadMarkerBatch(room, queue);
       queue.active = batch;
       try {
-        await commitReadMarker(mx, room, batch.request);
-        if (
-          !queue.lastCompleted ||
-          compareReadMarkerEvents(room, batch.request.event, queue.lastCompleted) >= 0
-        ) {
-          queue.lastCompleted = batch.request.event;
-          queue.lastCompletedPrivateReceipt = batch.request.privateReceipt;
-        }
+        await commitReadMarker(mx, room, batch);
+        queue.fullyReadCompleted = advanceKnownEvent(
+          room,
+          queue.fullyReadCompleted,
+          batch.fullyReadEvent
+        );
+        Object.entries(batch.channels).forEach(([channel, target]) => {
+          if (!target) return;
+          queue.completed[channel as ReadReceiptChannel] = advanceKnownEvent(
+            room,
+            queue.completed[channel as ReadReceiptChannel],
+            target.event
+          );
+        });
         resolveReadMarkerBatch(batch);
       } catch (error) {
         recordFoundationDiagnostic('read', 'marker.commit-failed', {
           roomId: room.roomId,
-          eventId: batch.request.event.getId(),
+          eventId: batch.fullyReadEvent.getId(),
           fields: {
-            privateReceipt: batch.request.privateReceipt,
+            publicReceipt: Boolean(batch.channels.public),
+            privateReceipt: Boolean(batch.channels.private),
             errorType: error instanceof Error ? error.name : typeof error,
-            waiterCount: batch.waiters.size,
+            waiterCount: readMarkerWaiterCount(batch),
           },
         });
         rejectReadMarkerBatch(batch, error);
@@ -218,7 +295,7 @@ const drainReadMarkerQueue = async (
     }
   } finally {
     queue.running = false;
-    if (queue.pending) {
+    if (hasPendingReadMarker(queue)) {
       queue.running = true;
       void drainReadMarkerQueue(mx, room, queue);
     }
@@ -237,52 +314,38 @@ const enqueueReadMarker = (
   request: ReadMarkerRequest
 ): Promise<void> => {
   const queue = getRoomReadMarkerQueue(mx, room.roomId);
+  const channel = getReceiptChannel(request.privateReceipt);
   let waiter!: ReadMarkerWaiter;
   const result = new Promise<void>((resolve, reject) => {
     waiter = { resolve, reject };
   });
 
-  if (queue.lastCompleted) {
-    const completedOrdering = compareReadMarkerEvents(room, request.event, queue.lastCompleted);
-    if (
-      completedOrdering < 0 ||
-      (completedOrdering === 0 && request.privateReceipt === queue.lastCompletedPrivateReceipt)
-    ) {
-      void clearCustomUnread(mx, room).then(waiter.resolve, waiter.reject);
-      return result;
-    }
+  queue.furthestKnown = advanceKnownEvent(room, queue.furthestKnown, request.event);
+
+  const completed = queue.completed[channel];
+  if (completed && eventSatisfiesTarget(room, completed, request.event)) {
+    void clearCustomUnread(mx, room).then(waiter.resolve, waiter.reject);
+    return result;
   }
 
-  if (queue.active) {
-    const activeOrdering = compareReadMarkerEvents(room, request.event, queue.active.request.event);
-    if (
-      activeOrdering < 0 ||
-      (activeOrdering === 0 && request.privateReceipt === queue.active.request.privateReceipt)
-    ) {
-      queue.active.waiters.add(waiter);
-      return result;
-    }
+  const active = queue.active?.channels[channel];
+  if (active && eventSatisfiesTarget(room, active.event, request.event)) {
+    active.waiters.add(waiter);
+    return result;
   }
 
-  if (queue.pending) {
-    const pendingOrdering = compareReadMarkerEvents(
-      room,
-      request.event,
-      queue.pending.request.event
-    );
-    if (
-      pendingOrdering < 0 ||
-      (pendingOrdering === 0 && request.privateReceipt === queue.pending.request.privateReceipt)
-    ) {
-      queue.pending.waiters.add(waiter);
+  const pending = queue.pending[channel];
+  if (pending) {
+    if (eventSatisfiesTarget(room, pending.event, request.event)) {
+      pending.waiters.add(waiter);
       return result;
     }
-    queue.pending = {
-      request,
-      waiters: new Set([...queue.pending.waiters, waiter]),
+    queue.pending[channel] = {
+      event: request.event,
+      waiters: new Set([...pending.waiters, waiter]),
     };
   } else {
-    queue.pending = { request, waiters: new Set([waiter]) };
+    queue.pending[channel] = { event: request.event, waiters: new Set([waiter]) };
   }
 
   startReadMarkerQueue(mx, room, queue);
@@ -368,6 +431,19 @@ export async function markAsRead(
   if (!latestEvent) return;
 
   await markResolvedEventAsRead(mx, room, privateReceipt, latestEvent, mode);
+}
+
+/**
+ * Starts a read-marker update from UI code that cannot await it. The core
+ * markAsRead API remains awaitable so workflows and tests can observe failures.
+ */
+export function markAsReadInBackground(
+  mx: MatrixClient,
+  roomId: string,
+  privateReceipt: boolean,
+  mode: MarkAsReadMode = 'latest-room'
+): void {
+  void markAsRead(mx, roomId, privateReceipt, mode).catch(() => undefined);
 }
 
 /**

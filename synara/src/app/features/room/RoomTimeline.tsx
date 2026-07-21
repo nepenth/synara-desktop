@@ -102,6 +102,7 @@ import {
 } from '../../hooks/useIntersectionObserver';
 import {
   markAsRead,
+  markAsReadInBackground,
   markAsReadAtEvent,
   markAsUnread,
   markEventAsUnread,
@@ -1691,7 +1692,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
               (!unreadInfo || mEvt.getSender() === mx.getUserId())
             ) {
               requestAnimationFrame(() =>
-                markAsRead(mx, mEvt.getRoomId()!, hideActivity, 'loaded-live-tail')
+                markAsReadInBackground(mx, mEvt.getRoomId()!, hideActivity, 'loaded-live-tail')
               );
             }
             return;
@@ -1712,7 +1713,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
             // and either there are no unread messages or the latest message is from the current user.
             // If either condition is met, trigger the markAsRead function to send a read receipt.
             requestAnimationFrame(() =>
-              markAsRead(mx, mEvt.getRoomId()!, hideActivity, 'loaded-live-tail')
+              markAsReadInBackground(mx, mEvt.getRoomId()!, hideActivity, 'loaded-live-tail')
             );
           }
 
@@ -2249,7 +2250,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
   };
 
   const handleMarkAsRead = () => {
-    markAsRead(mx, room.roomId, hideActivity);
+    markAsReadInBackground(mx, room.roomId, hideActivity);
   };
 
   const handleMarkEventAsUnread = useCallback(
