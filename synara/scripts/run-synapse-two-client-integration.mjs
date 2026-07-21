@@ -117,6 +117,22 @@ async function phase(name, operation) {
   }
 }
 
+export function selectLocalRegistrationAuth(errorData) {
+  const session = typeof errorData?.session === 'string' ? errorData.session : undefined;
+  const flows = Array.isArray(errorData?.flows) ? errorData.flows : [];
+  const stages = flows
+    .map((flow) => (Array.isArray(flow?.stages) ? flow.stages : undefined))
+    .filter(Boolean);
+
+  if (stages.some((flowStages) => flowStages.length === 0)) {
+    return session ? { session } : {};
+  }
+  if (stages.some((flowStages) => flowStages.length === 1 && flowStages[0] === 'm.login.dummy')) {
+    return { type: 'm.login.dummy', ...(session ? { session } : {}) };
+  }
+  throw new SafeIntegrationError('Registration requires an unsupported local UIAA flow.');
+}
+
 async function registerAccount(sdk, baseUrl, localpart, password, deviceName) {
   const registrationClient = sdk.createClient(clientOptions(baseUrl));
   const request = {
@@ -125,17 +141,17 @@ async function registerAccount(sdk, baseUrl, localpart, password, deviceName) {
     initial_device_display_name: deviceName,
   };
 
-  let session;
+  let auth;
   try {
     return await registrationClient.registerRequest(request);
   } catch (error) {
     if (error?.errcode !== 'M_UNAUTHORIZED') throw error;
-    session = typeof error?.data?.session === 'string' ? error.data.session : undefined;
+    auth = selectLocalRegistrationAuth(error?.data);
   }
 
   return registrationClient.registerRequest({
     ...request,
-    auth: { type: 'm.login.dummy', ...(session ? { session } : {}) },
+    auth,
   });
 }
 

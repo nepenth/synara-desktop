@@ -5,6 +5,7 @@ import {
   SafeIntegrationError,
   parseReceiptModes,
   pollUntil,
+  selectLocalRegistrationAuth,
   validateLocalHomeserverUrl,
 } from "../../synara/scripts/run-synapse-two-client-integration.mjs";
 
@@ -46,6 +47,28 @@ test("expands the configured receipt mode deterministically", () => {
   assert.deepEqual(parseReceiptModes("private"), ["private"]);
   assert.deepEqual(parseReceiptModes("both"), ["public", "private"]);
   assert.throws(() => parseReceiptModes("disabled"), SafeIntegrationError);
+});
+
+test("selects only no-stage or dummy local registration UIAA flows", () => {
+  assert.deepEqual(
+    selectLocalRegistrationAuth({ session: "opaque", flows: [{ stages: [] }] }),
+    { session: "opaque" }
+  );
+  assert.deepEqual(
+    selectLocalRegistrationAuth({
+      session: "opaque",
+      flows: [{ stages: ["m.login.dummy"] }],
+    }),
+    { type: "m.login.dummy", session: "opaque" }
+  );
+  assert.throws(
+    () =>
+      selectLocalRegistrationAuth({
+        session: "opaque",
+        flows: [{ stages: ["m.login.registration_token"] }],
+      }),
+    /unsupported local UIAA flow/
+  );
 });
 
 test("bounded polling returns a value and fails closed on timeout", async () => {
