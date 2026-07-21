@@ -12,9 +12,16 @@ protocol RoomReadMarkerHTTPClient {
 
 extension URLSession: RoomReadMarkerHTTPClient {}
 
+protocol RoomReadMarkerClientStoring: AnyObject {
+    func latestEventID(roomID: String, session: AuthenticatedSession) async throws -> String?
+    func clearMarkedUnread(roomID: String, session: AuthenticatedSession) async throws
+}
+
+extension MatrixRustSDKClientStore: RoomReadMarkerClientStoring {}
+
 final class MatrixRoomReadMarkerService: RoomReadMarkerServicing {
     private let sessionStore: AppSessionStore
-    private let clientStore: MatrixRustSDKClientStore?
+    private let clientStore: RoomReadMarkerClientStoring?
     private let httpClient: RoomReadMarkerHTTPClient
     private let jsonDecoder: JSONDecoder
     private let logger: LoggingServicing
@@ -22,7 +29,7 @@ final class MatrixRoomReadMarkerService: RoomReadMarkerServicing {
 
     init(
         sessionStore: AppSessionStore,
-        clientStore: MatrixRustSDKClientStore? = nil,
+        clientStore: RoomReadMarkerClientStoring? = nil,
         httpClient: RoomReadMarkerHTTPClient = URLSession.shared,
         jsonDecoder: JSONDecoder = JSONDecoder(),
         logger: LoggingServicing = AppLogger()
@@ -58,20 +65,41 @@ final class MatrixRoomReadMarkerService: RoomReadMarkerServicing {
     }
 
     func markFullyRead(roomID: String, eventID: String) async -> Bool {
-        guard case .signedIn = sessionStore.currentState else {
+        guard case .signedIn(let session) = sessionStore.currentState else {
             return false
         }
+        return await submitReadMarkers(
+            roomID: roomID,
+            eventID: eventID,
+            session: session,
+            sessionEpoch: sessionStore.sessionEpoch
+        )
+    }
 
-        return await writeCoordinator.submit(roomID: roomID, eventID: eventID) { [weak self] latestEventID in
+    private func submitReadMarkers(
+        roomID: String,
+        eventID: String,
+        session: AuthenticatedSession,
+        sessionEpoch: Int
+    ) async -> Bool {
+        return await writeCoordinator.submit(
+            roomID: roomID,
+            sessionEpoch: sessionEpoch,
+            eventID: eventID
+        ) { [weak self] latestEventID in
             guard let self else {
                 return false
             }
-            return await self.writeReadMarkers(roomID: roomID, eventID: latestEventID)
+            return await self.writeReadMarkers(roomID: roomID, eventID: latestEventID, session: session)
         }
     }
 
-    private func writeReadMarkers(roomID: String, eventID: String) async -> Bool {
-        guard case .signedIn(let session) = sessionStore.currentState else {
+    private func writeReadMarkers(
+        roomID: String,
+        eventID: String,
+        session: AuthenticatedSession
+    ) async -> Bool {
+        guard sessionStore.currentState == .signedIn(session) else {
             return false
         }
 
@@ -103,6 +131,7 @@ final class MatrixRoomReadMarkerService: RoomReadMarkerServicing {
         guard case .signedIn(let session) = sessionStore.currentState else {
             return false
         }
+        let sessionEpoch = sessionStore.sessionEpoch
 
         guard let clientStore else {
             return false
@@ -113,8 +142,26 @@ final class MatrixRoomReadMarkerService: RoomReadMarkerServicing {
                 return false
             }
 
-            return await markFullyRead(roomID: roomID, eventID: eventID)
+            guard sessionStore.currentState == .signedIn(session),
+                  sessionStore.sessionEpoch == sessionEpoch else {
+                return false
+            }
+            guard await submitReadMarkers(
+                roomID: roomID,
+                eventID: eventID,
+                session: session,
+                sessionEpoch: sessionEpoch
+            ) else {
+                return false
+            }
+            guard sessionStore.currentState == .signedIn(session),
+                  sessionStore.sessionEpoch == sessionEpoch else {
+                return false
+            }
+            try await clientStore.clearMarkedUnread(roomID: roomID, session: session)
+            return true
         } catch {
+            logger.info("Matrix mark-room-read completion failed room=redacted", category: .sync)
             return false
         }
     }
@@ -146,45 +193,49 @@ final class MatrixRoomReadMarkerService: RoomReadMarkerServicing {
 }
 
 private actor RoomReadMarkerWriteCoordinator {
-    private struct PendingBatch {
+    private struct PendingWrite {
+        let id = UUID()
+        let sessionEpoch: Int
         var eventID: String
-        var coveredEventIDs: Set<String>
         var waiters: [CheckedContinuation<Bool, Never>]
+        let operation: (String) async -> Bool
     }
 
     private struct RoomState {
-        var pending: PendingBatch?
+        var active: PendingWrite?
+        var pending: [PendingWrite] = []
         var isDraining = false
-        var successfulEventIDs: [String] = []
-        var successfulEventIDSet: Set<String> = []
     }
 
     private var roomStates: [String: RoomState] = [:]
-    private let retainedSuccessfulEventLimit = 256
 
     func submit(
         roomID: String,
+        sessionEpoch: Int,
         eventID: String,
         operation: @escaping (String) async -> Bool
     ) async -> Bool {
         await withCheckedContinuation { continuation in
             var state = roomStates[roomID] ?? RoomState()
-            if state.successfulEventIDSet.contains(eventID) {
-                continuation.resume(returning: true)
-                return
-            }
 
-            if var pending = state.pending {
-                pending.eventID = eventID
-                pending.coveredEventIDs.insert(eventID)
-                pending.waiters.append(continuation)
-                state.pending = pending
+            if var lastPending = state.pending.last,
+               lastPending.sessionEpoch == sessionEpoch,
+               lastPending.eventID == eventID {
+                lastPending.waiters.append(continuation)
+                state.pending[state.pending.count - 1] = lastPending
+            } else if state.pending.isEmpty,
+                      var active = state.active,
+                      active.sessionEpoch == sessionEpoch,
+                      active.eventID == eventID {
+                active.waiters.append(continuation)
+                state.active = active
             } else {
-                state.pending = PendingBatch(
+                state.pending.append(PendingWrite(
+                    sessionEpoch: sessionEpoch,
                     eventID: eventID,
-                    coveredEventIDs: [eventID],
-                    waiters: [continuation]
-                )
+                    waiters: [continuation],
+                    operation: operation
+                ))
             }
 
             let shouldStartDrain = state.isDraining == false
@@ -193,46 +244,47 @@ private actor RoomReadMarkerWriteCoordinator {
 
             if shouldStartDrain {
                 Task {
-                    await self.drain(roomID: roomID, operation: operation)
+                    await self.drain(roomID: roomID)
                 }
             }
         }
     }
 
     private func drain(
-        roomID: String,
-        operation: @escaping (String) async -> Bool
+        roomID: String
     ) async {
-        while let batch = takePendingBatch(roomID: roomID) {
-            let succeeded = await operation(batch.eventID)
-            complete(batch: batch, roomID: roomID, succeeded: succeeded)
+        while let write = takeNextWrite(roomID: roomID) {
+            let succeeded = await write.operation(write.eventID)
+            complete(writeID: write.id, roomID: roomID, succeeded: succeeded)
         }
         var state = roomStates[roomID] ?? RoomState()
         state.isDraining = false
-        roomStates[roomID] = state
-    }
-
-    private func takePendingBatch(roomID: String) -> PendingBatch? {
-        var state = roomStates[roomID] ?? RoomState()
-        let batch = state.pending
-        state.pending = nil
-        roomStates[roomID] = state
-        return batch
-    }
-
-    private func complete(batch: PendingBatch, roomID: String, succeeded: Bool) {
-        var state = roomStates[roomID] ?? RoomState()
-        if succeeded {
-            for eventID in batch.coveredEventIDs where state.successfulEventIDSet.insert(eventID).inserted {
-                state.successfulEventIDs.append(eventID)
-                if state.successfulEventIDs.count > retainedSuccessfulEventLimit {
-                    let expired = state.successfulEventIDs.removeFirst()
-                    state.successfulEventIDSet.remove(expired)
-                }
-            }
+        if state.active == nil, state.pending.isEmpty {
+            roomStates.removeValue(forKey: roomID)
+        } else {
+            roomStates[roomID] = state
         }
+    }
+
+    private func takeNextWrite(roomID: String) -> PendingWrite? {
+        var state = roomStates[roomID] ?? RoomState()
+        guard state.active == nil, state.pending.isEmpty == false else {
+            return nil
+        }
+        let write = state.pending.removeFirst()
+        state.active = write
         roomStates[roomID] = state
-        batch.waiters.forEach { $0.resume(returning: succeeded) }
+        return write
+    }
+
+    private func complete(writeID: UUID, roomID: String, succeeded: Bool) {
+        var state = roomStates[roomID] ?? RoomState()
+        guard let active = state.active, active.id == writeID else {
+            return
+        }
+        state.active = nil
+        roomStates[roomID] = state
+        active.waiters.forEach { $0.resume(returning: succeeded) }
     }
 }
 

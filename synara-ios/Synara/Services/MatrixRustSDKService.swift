@@ -1076,37 +1076,11 @@ actor MatrixRustSDKClientStore {
         return await timeline.latestEventId()
     }
 
-    func markRoomRead(roomID: String, session: AuthenticatedSession) async throws {
+    func clearMarkedUnread(roomID: String, session: AuthenticatedSession) async throws {
         guard let room = try await room(roomID: roomID, session: session) else {
             throw MessageSendError.failed
         }
-
-        let timeline = try await room.timeline()
-        var firstMarkerError: Error?
-
-        do {
-            try await timeline.markAsRead(receiptType: .read)
-        } catch {
-            firstMarkerError = error
-            logger.error("Could not send Matrix read receipt", category: .sync)
-        }
-
-        do {
-            try await timeline.markAsRead(receiptType: .fullyRead)
-        } catch {
-            firstMarkerError = firstMarkerError ?? error
-            logger.error("Could not update Matrix fully-read marker", category: .sync)
-        }
-
-        do {
-            try await room.setUnreadFlag(newValue: false)
-        } catch {
-            logger.info("Could not clear the explicit Matrix unread flag", category: .sync)
-        }
-
-        if let firstMarkerError {
-            throw firstMarkerError
-        }
+        try await room.setUnreadFlag(newValue: false)
     }
 
     func resolvePushRoute(eventID: String, session: AuthenticatedSession) async -> AppRoute? {
@@ -2025,12 +1999,13 @@ final class MatrixRustSDKRoomListService: RoomListServicing {
         let generation = await clientStore.currentRoomListSyncGeneration()
         let allRooms = try await roomListService.allRooms()
         let spaceService = await client.spaceService()
-        // Every snapshot carries only the IDs changed by its SDK diff. Keep the stream
-        // lossless so a dropped intermediate diff cannot leave a cached summary stale.
-        let roomUpdates = AsyncStream<MatrixRoomListEntriesSnapshot>.makeStream()
+        // Mapping may be substantially slower than native room-list diffs in large
+        // accounts. Retain one latest room array while carrying forward all invalidation
+        // metadata needed to map it correctly.
+        let roomUpdates = RoomListLatestSnapshotAccumulator<Room>()
 
         let listener = MatrixRustSDKRoomListEntriesCollector { snapshot in
-            roomUpdates.continuation.yield(snapshot)
+            roomUpdates.yield(snapshot)
         }
         let result = allRooms.entriesWithDynamicAdapters(pageSize: 100, listener: listener)
         _ = result.controller().setFilter(kind: .all(filters: []))
@@ -2051,7 +2026,7 @@ final class MatrixRustSDKRoomListService: RoomListServicing {
                 return
             }
 
-            for await snapshot in roomUpdates.stream {
+            for await _ in roomUpdates.signals {
                 guard Task.isCancelled == false else {
                     return
                 }
@@ -2059,23 +2034,26 @@ final class MatrixRustSDKRoomListService: RoomListServicing {
                     return
                 }
 
-                await self.clientStore.retainRoomHandles(snapshot.rooms)
-                let summaries = await MatrixRoomListStateBuilder.incrementalRoomSummaries(
-                    from: snapshot.rooms,
-                    changedRoomIDs: snapshot.changedRoomIDs,
-                    requiresFullRemap: snapshot.requiresFullRemap,
-                    spaceService: spaceService,
-                    previous: self.cachedRoomsSnapshot()
-                )
-                if summaries.isEmpty == false {
+                while let snapshot = roomUpdates.takePendingSnapshot() {
+                    guard Task.isCancelled == false, self.isCurrentSignedInUser(session) else {
+                        return
+                    }
+                    await self.clientStore.retainRoomHandles(snapshot.rooms)
+                    let summaries = await MatrixRoomListStateBuilder.incrementalRoomSummaries(
+                        from: snapshot.rooms,
+                        changedRoomIDs: snapshot.changedRoomIDs,
+                        requiresFullRemap: snapshot.requiresFullRemap,
+                        spaceService: spaceService,
+                        previous: self.cachedRoomsSnapshot()
+                    )
                     self.setCachedRooms(summaries)
                     self.logger.info(
                         "Room list stream mapped rooms count=\(summaries.count)",
                         category: .sync
                     )
+                    let state: RoomListState = summaries.isEmpty ? .empty : .loaded(summaries)
+                    continuation.yield(state)
                 }
-                let state: RoomListState = summaries.isEmpty ? .empty : .loaded(summaries)
-                continuation.yield(state)
             }
         }
 
@@ -2083,7 +2061,7 @@ final class MatrixRustSDKRoomListService: RoomListServicing {
             clientStore: clientStore,
             generation: generation
         )
-        roomUpdates.continuation.finish()
+        roomUpdates.finish()
         mappingTask.cancel()
         _ = await mappingTask.result
     }
@@ -3588,11 +3566,53 @@ private final class MatrixRustSDKRoomListSubscription: @unchecked Sendable {
     }
 }
 
-private struct MatrixRoomListEntriesSnapshot: @unchecked Sendable {
-    let rooms: [Room]
+struct RoomListCoalescingSnapshot<RoomValue>: @unchecked Sendable {
+    let rooms: [RoomValue]
     let changedRoomIDs: Set<String>
     let requiresFullRemap: Bool
 }
+
+final class RoomListLatestSnapshotAccumulator<RoomValue>: @unchecked Sendable {
+    private let lock = NSLock()
+    private var pendingSnapshot: RoomListCoalescingSnapshot<RoomValue>?
+    private let signalContinuation: AsyncStream<Void>.Continuation
+    let signals: AsyncStream<Void>
+
+    init() {
+        let stream = AsyncStream<Void>.makeStream(bufferingPolicy: .bufferingNewest(1))
+        signals = stream.stream
+        signalContinuation = stream.continuation
+    }
+
+    func yield(_ snapshot: RoomListCoalescingSnapshot<RoomValue>) {
+        lock.lock()
+        if let pendingSnapshot {
+            self.pendingSnapshot = RoomListCoalescingSnapshot(
+                rooms: snapshot.rooms,
+                changedRoomIDs: pendingSnapshot.changedRoomIDs.union(snapshot.changedRoomIDs),
+                requiresFullRemap: pendingSnapshot.requiresFullRemap || snapshot.requiresFullRemap
+            )
+        } else {
+            pendingSnapshot = snapshot
+        }
+        lock.unlock()
+        signalContinuation.yield(())
+    }
+
+    func takePendingSnapshot() -> RoomListCoalescingSnapshot<RoomValue>? {
+        lock.lock()
+        defer { lock.unlock() }
+        let snapshot = pendingSnapshot
+        pendingSnapshot = nil
+        return snapshot
+    }
+
+    func finish() {
+        signalContinuation.finish()
+    }
+}
+
+private typealias MatrixRoomListEntriesSnapshot = RoomListCoalescingSnapshot<Room>
 
 private final class MatrixRustSDKRoomListEntriesCollector: RoomListEntriesListener, @unchecked Sendable {
     private let lock = NSLock()
