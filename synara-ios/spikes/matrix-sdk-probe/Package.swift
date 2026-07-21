@@ -12,7 +12,7 @@ let package = Package(
         .executable(name: "MatrixSDKProbe", targets: ["MatrixSDKProbe"])
     ],
     dependencies: [
-        .package(url: "https://github.com/matrix-org/matrix-rust-components-swift.git", exact: "26.05.13")
+        .package(url: "https://github.com/matrix-org/matrix-rust-components-swift.git", exact: "26.06.06")
     ],
     targets: [
         .executableTarget(

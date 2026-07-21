@@ -1056,7 +1056,8 @@ actor MatrixRustSDKClientStore {
             appDisplayName: appDisplayName,
             deviceDisplayName: deviceDisplayName,
             profileTag: nil,
-            lang: lang
+            lang: lang,
+            append: false
         )
     }
 
