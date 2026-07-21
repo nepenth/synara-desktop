@@ -1896,6 +1896,40 @@ private enum MatrixRoomListStateBuilder {
         }
         return RoomListFixtures.sorted(summaries)
     }
+
+    static func incrementalRoomSummaries(
+        from rooms: [Room],
+        changedRoomIDs: Set<String>,
+        requiresFullRemap: Bool,
+        spaceService: SpaceService?,
+        previous: [RoomSummary]
+    ) async -> [RoomSummary] {
+        guard requiresFullRemap == false, previous.isEmpty == false else {
+            return await roomSummaries(from: rooms, spaceService: spaceService, previous: previous)
+        }
+
+        let currentRoomIDs = Set(rooms.map { $0.id() })
+        var summariesByID = Dictionary(
+            uniqueKeysWithValues: previous
+                .filter { currentRoomIDs.contains($0.id) }
+                .map { ($0.id, $0) }
+        )
+        let shouldMapSpaces = rooms.count <= 80
+
+        for room in rooms where changedRoomIDs.contains(room.id()) || summariesByID[room.id()] == nil {
+            if let summary = await MatrixRustSDKRoomListService.mapRoom(
+                room,
+                spaceService: shouldMapSpaces ? spaceService : nil,
+                previous: summariesByID[room.id()]
+            ) {
+                summariesByID[room.id()] = summary
+            } else {
+                summariesByID.removeValue(forKey: room.id())
+            }
+        }
+
+        return RoomListFixtures.sorted(Array(summariesByID.values))
+    }
 }
 
 final class MatrixRustSDKRoomListService: RoomListServicing {
@@ -1991,10 +2025,12 @@ final class MatrixRustSDKRoomListService: RoomListServicing {
         let generation = await clientStore.currentRoomListSyncGeneration()
         let allRooms = try await roomListService.allRooms()
         let spaceService = await client.spaceService()
-        let roomUpdates = AsyncStream<[Room]>.makeStream(bufferingPolicy: .bufferingNewest(1))
+        // Every snapshot carries only the IDs changed by its SDK diff. Keep the stream
+        // lossless so a dropped intermediate diff cannot leave a cached summary stale.
+        let roomUpdates = AsyncStream<MatrixRoomListEntriesSnapshot>.makeStream()
 
-        let listener = MatrixRustSDKRoomListEntriesCollector { rooms in
-            roomUpdates.continuation.yield(rooms)
+        let listener = MatrixRustSDKRoomListEntriesCollector { snapshot in
+            roomUpdates.continuation.yield(snapshot)
         }
         let result = allRooms.entriesWithDynamicAdapters(pageSize: 100, listener: listener)
         _ = result.controller().setFilter(kind: .all(filters: []))
@@ -2015,7 +2051,7 @@ final class MatrixRustSDKRoomListService: RoomListServicing {
                 return
             }
 
-            for await rooms in roomUpdates.stream {
+            for await snapshot in roomUpdates.stream {
                 guard Task.isCancelled == false else {
                     return
                 }
@@ -2023,9 +2059,11 @@ final class MatrixRustSDKRoomListService: RoomListServicing {
                     return
                 }
 
-                await self.clientStore.retainRoomHandles(rooms)
-                let summaries = await MatrixRoomListStateBuilder.roomSummaries(
-                    from: rooms,
+                await self.clientStore.retainRoomHandles(snapshot.rooms)
+                let summaries = await MatrixRoomListStateBuilder.incrementalRoomSummaries(
+                    from: snapshot.rooms,
+                    changedRoomIDs: snapshot.changedRoomIDs,
+                    requiresFullRemap: snapshot.requiresFullRemap,
                     spaceService: spaceService,
                     previous: self.cachedRoomsSnapshot()
                 )
@@ -2219,7 +2257,10 @@ final class MatrixRustSDKRoomListService: RoomListServicing {
             hasHighlight: unread.hasHighlight,
             kind: (await room.isDirect()) ? .directMessage : .room,
             membership: membership,
-            lastActivityAt: latestPreview.timestamp ?? .distantPast,
+            lastActivityAt: RoomActivityTimestamp.resolve(
+                latest: latestPreview.timestamp,
+                previous: previous?.lastActivityAt
+            ),
             parentSpaces: parentSpaces,
             avatarURL: room.avatarUrl().flatMap(URL.init(string:)),
             hasAgentActivity: hasAgentActivity,
@@ -3561,35 +3602,61 @@ private final class MatrixRustSDKRoomListSubscription: @unchecked Sendable {
     }
 }
 
+private struct MatrixRoomListEntriesSnapshot: @unchecked Sendable {
+    let rooms: [Room]
+    let changedRoomIDs: Set<String>
+    let requiresFullRemap: Bool
+}
+
 private final class MatrixRustSDKRoomListEntriesCollector: RoomListEntriesListener, @unchecked Sendable {
     private let lock = NSLock()
     private var rooms: [Room] = []
-    private let onRooms: @Sendable ([Room]) -> Void
+    private let onSnapshot: @Sendable (MatrixRoomListEntriesSnapshot) -> Void
 
-    init(onRooms: @escaping @Sendable ([Room]) -> Void) {
-        self.onRooms = onRooms
+    init(onSnapshot: @escaping @Sendable (MatrixRoomListEntriesSnapshot) -> Void) {
+        self.onSnapshot = onSnapshot
     }
 
     func onUpdate(roomEntriesUpdate: [RoomListEntriesUpdate]) {
         lock.lock()
+        var changedRoomIDs = Set<String>()
+        var requiresFullRemap = false
         for update in roomEntriesUpdate {
-            apply(update)
+            apply(
+                update,
+                changedRoomIDs: &changedRoomIDs,
+                requiresFullRemap: &requiresFullRemap
+            )
         }
         let snapshot = rooms
         lock.unlock()
-        onRooms(snapshot)
+        onSnapshot(
+            MatrixRoomListEntriesSnapshot(
+                rooms: snapshot,
+                changedRoomIDs: changedRoomIDs,
+                requiresFullRemap: requiresFullRemap
+            )
+        )
     }
 
-    private func apply(_ update: RoomListEntriesUpdate) {
+    private func apply(
+        _ update: RoomListEntriesUpdate,
+        changedRoomIDs: inout Set<String>,
+        requiresFullRemap: inout Bool
+    ) {
         switch update {
         case .append(let values):
             rooms.append(contentsOf: values)
+            changedRoomIDs.formUnion(values.map { $0.id() })
         case .clear:
             rooms.removeAll()
+            requiresFullRemap = true
         case .pushFront(let room):
             rooms.insert(room, at: 0)
+            changedRoomIDs.insert(room.id())
         case .pushBack(let room):
             rooms.append(room)
+            changedRoomIDs.insert(room.id())
         case .popFront:
             if rooms.isEmpty == false {
                 rooms.removeFirst()
@@ -3599,10 +3666,12 @@ private final class MatrixRustSDKRoomListEntriesCollector: RoomListEntriesListen
         case .insert(let index, let room):
             let boundedIndex = min(Int(index), rooms.count)
             rooms.insert(room, at: boundedIndex)
+            changedRoomIDs.insert(room.id())
         case .set(let index, let room):
             let intIndex = Int(index)
             if rooms.indices.contains(intIndex) {
                 rooms[intIndex] = room
+                changedRoomIDs.insert(room.id())
             }
         case .remove(let index):
             let intIndex = Int(index)
@@ -3613,6 +3682,8 @@ private final class MatrixRustSDKRoomListEntriesCollector: RoomListEntriesListen
             rooms = Array(rooms.prefix(Int(length)))
         case .reset(let values):
             rooms = values
+            changedRoomIDs.formUnion(values.map { $0.id() })
+            requiresFullRemap = true
         }
     }
 }

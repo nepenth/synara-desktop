@@ -5,6 +5,7 @@ import UIKit
 
 struct RoomListView: View {
     @Environment(\.appEnvironment) private var environment
+    @Environment(\.scenePhase) private var scenePhase
     @State private var state: RoomListState = .idle
     @State private var membershipError: String?
     @State private var searchQuery: String = ProcessInfo.processInfo.environment["SYNARA_UI_TEST_ROOM_SEARCH"] ?? ""
@@ -19,6 +20,9 @@ struct RoomListView: View {
     @State private var roomPendingLeave: RoomSummary?
     @State private var isResettingSession = false
     @State private var sessionRecoveryError: String?
+    @State private var recentActivityReferenceDate = ProcessInfo.processInfo.environment["SYNARA_UI_TESTS"] == "1"
+        ? RoomListFixtures.now
+        : Date()
     @FocusState private var isSearchFocused: Bool
 
     var body: some View {
@@ -84,13 +88,15 @@ struct RoomListView: View {
                 }
             case .loaded(let rooms):
                 let filteredRooms = filteredRooms(from: rooms)
-                let isUITest = ProcessInfo.processInfo.environment["SYNARA_UI_TESTS"] == "1"
-                let referenceDate = isUITest ? RoomListFixtures.now : Date()
-                let recentRooms = RoomListRecentActivity.recent(from: filteredRooms, referenceDate: referenceDate)
+                let activityPartition = RoomListRecentActivity.partition(
+                    from: filteredRooms,
+                    referenceDate: recentActivityReferenceDate
+                )
+                let recentRooms = activityPartition.recent
                 let showRecentSection = searchQuery.isEmpty && selectedSpaceID == nil && !recentRooms.isEmpty
-                let recentIDs = showRecentSection ? Set(recentRooms.map { $0.id }) : Set<String>()
-                let channelRooms = filteredRooms.filter { $0.kind == .room && !recentIDs.contains($0.id) }
-                let directRooms = filteredRooms.filter { $0.kind == .directMessage && !recentIDs.contains($0.id) }
+                let nonRecentRooms = showRecentSection ? activityPartition.remaining : filteredRooms
+                let channelRooms = nonRecentRooms.filter { $0.kind == .room }
+                let directRooms = nonRecentRooms.filter { $0.kind == .directMessage }
                 let spaces = spaces(from: rooms)
                 let spaceUnreadCounts = RoomListSpaceGrouping.unreadCountsBySpaceID(from: rooms)
                 let selectedSpaceTitle = RoomListSpaceGrouping.selectedSpaceName(
@@ -296,6 +302,52 @@ struct RoomListView: View {
             loadRoomsTask?.cancel()
             roomUpdatesTask?.cancel()
         }
+        .task(id: nextRecentActivityExpiration) {
+            await waitForNextRecentActivityExpiration()
+        }
+        .onChange(of: scenePhase) { phase in
+            if phase == .active {
+                refreshRecentActivityClock()
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.significantTimeChangeNotification)) { _ in
+            refreshRecentActivityClock()
+        }
+    }
+
+    private var nextRecentActivityExpiration: Date? {
+        guard case .loaded(let rooms) = state else {
+            return nil
+        }
+        return RoomListRecentActivity.nextExpirationDate(
+            from: rooms,
+            referenceDate: recentActivityReferenceDate
+        )
+    }
+
+    private func waitForNextRecentActivityExpiration() async {
+        guard ProcessInfo.processInfo.environment["SYNARA_UI_TESTS"] != "1",
+              scenePhase == .active,
+              let expiration = nextRecentActivityExpiration else {
+            return
+        }
+
+        let delay = max(0, expiration.timeIntervalSinceNow)
+        do {
+            try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+        } catch {
+            return
+        }
+        guard Task.isCancelled == false else {
+            return
+        }
+        refreshRecentActivityClock()
+    }
+
+    private func refreshRecentActivityClock() {
+        recentActivityReferenceDate = ProcessInfo.processInfo.environment["SYNARA_UI_TESTS"] == "1"
+            ? RoomListFixtures.now
+            : Date()
     }
 
     private func reloadRoomsForRefresh() async {
