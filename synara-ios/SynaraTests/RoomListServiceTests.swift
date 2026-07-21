@@ -502,6 +502,115 @@ final class RoomListServiceTests: XCTestCase {
         XCTAssertEqual(secondBatch.first?.id, "!new:matrix.org")
     }
 
+    func testLatestSnapshotAccumulatorCoalescesRapidDiffsDuringSlowMapping() {
+        let accumulator = RoomListLatestSnapshotAccumulator<String>()
+        accumulator.yield(
+            RoomListCoalescingSnapshot(
+                rooms: ["!one", "!two"],
+                changedRoomIDs: ["!one"],
+                requiresFullRemap: false
+            )
+        )
+        let mappingInProgress = accumulator.takePendingSnapshot()
+
+        accumulator.yield(
+            RoomListCoalescingSnapshot(
+                rooms: ["!one", "!two", "!three"],
+                changedRoomIDs: ["!two"],
+                requiresFullRemap: false
+            )
+        )
+        accumulator.yield(
+            RoomListCoalescingSnapshot(
+                rooms: ["!two", "!three"],
+                changedRoomIDs: ["!three"],
+                requiresFullRemap: false
+            )
+        )
+        let coalesced = accumulator.takePendingSnapshot()
+        accumulator.finish()
+
+        XCTAssertEqual(mappingInProgress?.rooms, ["!one", "!two"])
+        XCTAssertEqual(coalesced?.rooms, ["!two", "!three"])
+        XCTAssertEqual(coalesced?.changedRoomIDs, Set(["!two", "!three"]))
+        XCTAssertEqual(coalesced?.requiresFullRemap, false)
+        XCTAssertNil(accumulator.takePendingSnapshot())
+    }
+
+    func testLatestSnapshotAccumulatorRetainsRemovalInLatestRoomArray() {
+        let accumulator = RoomListLatestSnapshotAccumulator<String>()
+        accumulator.yield(
+            RoomListCoalescingSnapshot(
+                rooms: ["!one", "!two", "!three"],
+                changedRoomIDs: [],
+                requiresFullRemap: false
+            )
+        )
+        _ = accumulator.takePendingSnapshot()
+
+        accumulator.yield(
+            RoomListCoalescingSnapshot(
+                rooms: ["!one", "!three"],
+                changedRoomIDs: [],
+                requiresFullRemap: false
+            )
+        )
+        let removal = accumulator.takePendingSnapshot()
+        accumulator.finish()
+
+        XCTAssertEqual(removal?.rooms, ["!one", "!three"])
+        XCTAssertEqual(removal?.changedRoomIDs, [])
+        XCTAssertEqual(removal?.requiresFullRemap, false)
+    }
+
+    func testLatestSnapshotAccumulatorCarriesResetAcrossLaterDiffs() {
+        let accumulator = RoomListLatestSnapshotAccumulator<String>()
+        accumulator.yield(
+            RoomListCoalescingSnapshot(
+                rooms: ["!reset"],
+                changedRoomIDs: ["!reset"],
+                requiresFullRemap: true
+            )
+        )
+        accumulator.yield(
+            RoomListCoalescingSnapshot(
+                rooms: ["!reset", "!after-reset"],
+                changedRoomIDs: ["!after-reset"],
+                requiresFullRemap: false
+            )
+        )
+        let coalesced = accumulator.takePendingSnapshot()
+        accumulator.finish()
+
+        XCTAssertEqual(coalesced?.rooms, ["!reset", "!after-reset"])
+        XCTAssertEqual(coalesced?.changedRoomIDs, Set(["!reset", "!after-reset"]))
+        XCTAssertEqual(coalesced?.requiresFullRemap, true)
+    }
+
+    func testLatestSnapshotAccumulatorPreservesEmptyResetAsAuthoritative() {
+        let accumulator = RoomListLatestSnapshotAccumulator<String>()
+        accumulator.yield(
+            RoomListCoalescingSnapshot(
+                rooms: ["!stale"],
+                changedRoomIDs: ["!stale"],
+                requiresFullRemap: false
+            )
+        )
+        accumulator.yield(
+            RoomListCoalescingSnapshot(
+                rooms: [],
+                changedRoomIDs: [],
+                requiresFullRemap: true
+            )
+        )
+        let reset = accumulator.takePendingSnapshot()
+        accumulator.finish()
+
+        XCTAssertEqual(reset?.rooms, [])
+        XCTAssertEqual(reset?.changedRoomIDs, ["!stale"])
+        XCTAssertEqual(reset?.requiresFullRemap, true)
+    }
+
 
     func testRecentActivityWithReferenceDateFiltersCorrectlyAndSortsRecencyFirst() {
         let now = RoomListFixtures.now
