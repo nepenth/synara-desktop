@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { ReceiptType } from 'matrix-js-sdk';
 import { AccountDataEvent } from '../../../types/matrix/accountData';
-import { clearUnreadAnchor, markAsRead } from '../notifications';
+import { clearUnreadAnchor, markAsRead, markAsReadAtEvent } from '../notifications';
 import { getThreadRootEventId, roomHaveUnread } from '../room';
 import {
   ROOM_TIMELINE_VIEWPORT_RESTORE_TTL_MS,
@@ -189,6 +189,77 @@ test('markAsRead can explicitly use the loaded live tail for mounted bottom stat
 
   assert.equal(latestTimelineCalls, 0);
   assert.deepEqual(markerArgs, [room.roomId, '$loaded-live-tail', liveTail, undefined]);
+});
+
+test('markAsReadAtEvent commits an authoritative event from a detached latest timeline', async () => {
+  const loadedLiveTail = createTimelineEvent('$loaded-live-tail', { ts: 1 });
+  const detachedLatest = createTimelineEvent('$detached-latest', { ts: 2 });
+  let latestTimelineCalls = 0;
+  let markerArgs: any[] | undefined;
+  const room = {
+    roomId: '!detached-latest:example.org',
+    accountData: { get: () => undefined },
+    getLiveTimeline: () => ({ getEvents: () => [loadedLiveTail] }),
+    compareEventOrdering: () => null,
+  } as any;
+  const mx = {
+    getRoom: () => room,
+    getUserId: () => '@alice:example.org',
+    getAccountData: () => undefined,
+    getLatestTimeline: async () => {
+      latestTimelineCalls += 1;
+      return undefined;
+    },
+    setRoomReadMarkers: async (...args: any[]) => {
+      markerArgs = args;
+    },
+  } as any;
+
+  await markAsReadAtEvent(mx, room.roomId, true, detachedLatest);
+
+  assert.equal(latestTimelineCalls, 0);
+  assert.deepEqual(markerArgs, [room.roomId, '$detached-latest', undefined, detachedLatest]);
+});
+
+test('markAsReadAtEvent preserves custom unread state when the explicit marker fails', async () => {
+  const detachedLatest = createTimelineEvent('$detached-latest', { ts: 2 });
+  let markedUnreadWrites = 0;
+  let unreadAnchorWrites = 0;
+  const room = {
+    roomId: '!detached-failure:example.org',
+    accountData: {
+      get: () => ({ getContent: () => ({ unread: true }) }),
+    },
+    getLiveTimeline: () => ({ getEvents: () => [] }),
+    compareEventOrdering: () => null,
+  } as any;
+  const mx = {
+    getRoom: () => room,
+    getUserId: () => '@alice:example.org',
+    getAccountData: () => ({
+      getContent: () => ({
+        version: 1,
+        anchors: { [room.roomId]: { eventId: '$anchor', ts: 1 } },
+      }),
+    }),
+    setRoomReadMarkers: async () => {
+      throw new Error('detached marker failed');
+    },
+    setRoomAccountData: async () => {
+      markedUnreadWrites += 1;
+    },
+    setAccountData: async () => {
+      unreadAnchorWrites += 1;
+    },
+  } as any;
+
+  await assert.rejects(
+    markAsReadAtEvent(mx, room.roomId, false, detachedLatest),
+    /detached marker failed/
+  );
+
+  assert.equal(markedUnreadWrites, 0);
+  assert.equal(unreadAnchorWrites, 0);
 });
 
 test('markAsRead sends a private receipt in the same exact read-marker request', async () => {

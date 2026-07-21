@@ -16,6 +16,7 @@ import {
 const UNREAD_ANCHOR_ACCOUNT_DATA_VERSION = 1;
 const unreadAnchorWriteQueues = new WeakMap<MatrixClient, Promise<void>>();
 type MarkAsReadMode = 'latest-room' | 'loaded-live-tail';
+type ReadMarkerSource = MarkAsReadMode | 'confirmed-event';
 
 type ReadMarkerRequest = {
   event: MatrixEvent;
@@ -288,27 +289,19 @@ const enqueueReadMarker = (
   return result;
 };
 
-export async function markAsRead(
+const markResolvedEventAsRead = async (
   mx: MatrixClient,
-  roomId: string,
+  room: Room,
   privateReceipt: boolean,
-  mode: MarkAsReadMode = 'latest-room'
-) {
-  const room = mx.getRoom(roomId);
-  if (!room) return;
-
+  latestEvent: MatrixEvent,
+  source: ReadMarkerSource
+): Promise<void> => {
+  const roomId = room.roomId;
   const userId = mx.getUserId();
   if (!userId) return;
-  const timeline =
-    mode === 'latest-room'
-      ? (await getLatestRoomTimeline(mx, room))?.getEvents() ?? getLoadedLiveTimelineEvents(room)
-      : getLoadedLiveTimelineEvents(room);
-  const latestEvent = getLatestReceiptEventFromEvents(timeline);
-
-  if (!latestEvent) return;
 
   const latestEventId = latestEvent.getId();
-  if (!latestEventId) return;
+  if (!latestEventId || latestEvent.isSending()) return;
   const fullyReadEventId = room
     .getAccountData?.(ReceiptType.FullyRead)
     ?.getContent<{ event_id?: string }>().event_id;
@@ -322,7 +315,7 @@ export async function markAsRead(
     recordFoundationDiagnostic('read', 'marker.already-current', {
       roomId,
       eventId: latestEventId,
-      fields: { privateReceipt, mode },
+      fields: { privateReceipt, mode: source },
     });
     return;
   }
@@ -337,7 +330,7 @@ export async function markAsRead(
       recordFoundationDiagnostic('read', 'marker.legacy-success', {
         roomId,
         eventId: latestEventId,
-        fields: { privateReceipt, mode },
+        fields: { privateReceipt, mode: source },
       });
     } catch (error) {
       recordFoundationDiagnostic('read', 'marker.legacy-failed', {
@@ -345,7 +338,7 @@ export async function markAsRead(
         eventId: latestEventId,
         fields: {
           privateReceipt,
-          mode,
+          mode: source,
           errorType: error instanceof Error ? error.name : typeof error,
         },
       });
@@ -355,4 +348,41 @@ export async function markAsRead(
   }
 
   await enqueueReadMarker(mx, room, { event: latestEvent, privateReceipt });
+};
+
+export async function markAsRead(
+  mx: MatrixClient,
+  roomId: string,
+  privateReceipt: boolean,
+  mode: MarkAsReadMode = 'latest-room'
+): Promise<void> {
+  const room = mx.getRoom(roomId);
+  if (!room) return;
+
+  const timeline =
+    mode === 'latest-room'
+      ? (await getLatestRoomTimeline(mx, room))?.getEvents() ?? getLoadedLiveTimelineEvents(room)
+      : getLoadedLiveTimelineEvents(room);
+  const latestEvent = getLatestReceiptEventFromEvents(timeline);
+
+  if (!latestEvent) return;
+
+  await markResolvedEventAsRead(mx, room, privateReceipt, latestEvent, mode);
+}
+
+/**
+ * Commits a caller-confirmed read target without resolving it through the room's
+ * loaded live timeline. Use this after an authoritative SDK latest/context
+ * operation has returned an event, including detached latest timelines.
+ */
+export async function markAsReadAtEvent(
+  mx: MatrixClient,
+  roomId: string,
+  privateReceipt: boolean,
+  event: MatrixEvent
+): Promise<void> {
+  const room = mx.getRoom(roomId);
+  if (!room) return;
+
+  await markResolvedEventAsRead(mx, room, privateReceipt, event, 'confirmed-event');
 }
