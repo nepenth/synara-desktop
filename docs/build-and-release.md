@@ -160,6 +160,14 @@ Configure the GitHub `production-release` Environment with at least one required
 human reviewer. The workflow declares the environment, but repository-level
 review protection must be enabled in GitHub settings.
 
+Do not configure the `production-release` environment with required status checks
+from ordinary CI workflows that do not run on tag refs: those checks cannot
+report against a release-tag deployment and will leave approval permanently
+blocked. Use required human reviewers for the environment and the Release
+workflow's exact-tag validation jobs for automated publication protection.
+Branch-protection status checks remain appropriate for `main` and release
+branches where their workflows actually run.
+
 If a release job fails with `incorrect updater private key password`, rotate the
 Tauri updater keypair and GitHub secrets together. The full command sequence is
 tracked in [../GITHUB_RELEASE_UPDATER_PLAN.md](../GITHUB_RELEASE_UPDATER_PLAN.md#rotate-updater-signing-key-material).
