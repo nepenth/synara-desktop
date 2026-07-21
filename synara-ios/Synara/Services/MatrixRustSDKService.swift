@@ -1944,6 +1944,39 @@ enum RoomListCacheRetentionPolicy {
     }
 }
 
+enum RoomListAuthoritativePruningPolicy {
+    static func provenRemovedIDs(
+        knownRoomIDs: Set<String>,
+        joinedOrInvitedRoomIDs: Set<String>
+    ) -> Set<String> {
+        knownRoomIDs.subtracting(joinedOrInvitedRoomIDs)
+    }
+
+    static func shouldReconcile(
+        cachedRoomIDs: Set<String>,
+        dynamicSnapshotRoomIDs: Set<String>,
+        requiresFullRemap: Bool,
+        hasReconciledCurrentCatchUpPage: Bool = false
+    ) -> Bool {
+        guard cachedRoomIDs.isEmpty == false else {
+            return false
+        }
+        return requiresFullRemap || (
+            cachedRoomIDs.isSubset(of: dynamicSnapshotRoomIDs) == false
+                && hasReconciledCurrentCatchUpPage == false
+        )
+    }
+}
+
+enum RoomListAuthoritativeFallbackPolicy {
+    static func shouldUseCachedFallback(
+        authoritativeRoomCount: Int,
+        cachedRoomCount: Int
+    ) -> Bool {
+        authoritativeRoomCount == 0 && cachedRoomCount > 0
+    }
+}
+
 private enum MatrixRoomListStateBuilder {
     static func build(
         from sdkRooms: [Room],
@@ -1958,7 +1991,10 @@ private enum MatrixRoomListStateBuilder {
         if sorted.isEmpty == false {
             return .loaded(sorted)
         }
-        if fallbackCache.isEmpty == false {
+        if RoomListAuthoritativeFallbackPolicy.shouldUseCachedFallback(
+            authoritativeRoomCount: sdkRooms.count,
+            cachedRoomCount: fallbackCache.count
+        ) {
             return .loaded(fallbackCache)
         }
         return .empty
@@ -2142,6 +2178,7 @@ final class MatrixRustSDKRoomListService: RoomListServicing {
             }
 
             var requestedPageCount = 1
+            var lastReconciledCatchUpPageCount: Int?
             for await _ in roomUpdates.signals {
                 guard Task.isCancelled == false else {
                     return
@@ -2163,13 +2200,40 @@ final class MatrixRustSDKRoomListService: RoomListServicing {
                         controller.addOnePage()
                     }
                     await self.clientStore.retainRoomHandles(snapshot.rooms)
+                    let previousRooms = self.cachedRoomsSnapshot()
+                    var explicitlyRemovedRoomIDs = snapshot.explicitlyRemovedRoomIDs
+                    if RoomListAuthoritativePruningPolicy.shouldReconcile(
+                        cachedRoomIDs: Set(previousRooms.map(\.id)),
+                        dynamicSnapshotRoomIDs: Set(snapshot.rooms.map { $0.id() }),
+                        requiresFullRemap: snapshot.requiresFullRemap,
+                        hasReconciledCurrentCatchUpPage: lastReconciledCatchUpPageCount == requestedPageCount
+                    ) {
+                        if let authoritativeRooms = try? await self.clientStore.rooms(session: session) {
+                            let knownAuthoritativeRoomIDs = Set(authoritativeRooms.map { $0.id() })
+                            let joinedOrInvitedRoomIDs = Set(authoritativeRooms.compactMap { room -> String? in
+                                switch room.membership() {
+                                case .joined, .invited:
+                                    return room.id()
+                                default:
+                                    return nil
+                                }
+                            })
+                            explicitlyRemovedRoomIDs.formUnion(
+                                RoomListAuthoritativePruningPolicy.provenRemovedIDs(
+                                    knownRoomIDs: knownAuthoritativeRoomIDs,
+                                    joinedOrInvitedRoomIDs: joinedOrInvitedRoomIDs
+                                )
+                            )
+                            lastReconciledCatchUpPageCount = requestedPageCount
+                        }
+                    }
                     let summaries = await MatrixRoomListStateBuilder.incrementalRoomSummaries(
                         from: snapshot.rooms,
                         changedRoomIDs: snapshot.changedRoomIDs,
                         requiresFullRemap: snapshot.requiresFullRemap,
-                        explicitlyRemovedRoomIDs: snapshot.explicitlyRemovedRoomIDs,
+                        explicitlyRemovedRoomIDs: explicitlyRemovedRoomIDs,
                         spaceService: spaceService,
-                        previous: self.cachedRoomsSnapshot()
+                        previous: previousRooms
                     )
                     self.setCachedRooms(summaries)
                     self.logger.info(
@@ -2227,21 +2291,31 @@ final class MatrixRustSDKRoomListService: RoomListServicing {
 
                 if summaries.isEmpty == false {
                     setCachedRooms(summaries)
+                    didYieldEmptyState = false
                     logger.info(
                         "Classic room-list fallback mapped rooms count=\(summaries.count)",
                         category: .sync
                     )
                     continuation.yield(.loaded(summaries))
-                } else if cachedRoomsSnapshot().isEmpty == false {
+                } else if RoomListAuthoritativeFallbackPolicy.shouldUseCachedFallback(
+                    authoritativeRoomCount: rooms.count,
+                    cachedRoomCount: cachedRoomsSnapshot().count
+                ) {
                     let cachedSnapshot = cachedRoomsSnapshot()
+                    didYieldEmptyState = false
                     logger.info(
                         "Classic room-list fallback using cached rooms count=\(cachedSnapshot.count)",
                         category: .sync
                     )
                     continuation.yield(.loaded(cachedSnapshot))
-                } else if didYieldEmptyState == false {
-                    didYieldEmptyState = true
-                    continuation.yield(.empty)
+                } else {
+                    if rooms.isEmpty == false {
+                        setCachedRooms([])
+                    }
+                    if didYieldEmptyState == false {
+                        didYieldEmptyState = true
+                        continuation.yield(.empty)
+                    }
                 }
             } catch {
                 let cachedSnapshot = cachedRoomsSnapshot()
@@ -3796,6 +3870,9 @@ private final class MatrixRustSDKRoomListEntriesCollector: RoomListEntriesListen
             rooms.append(contentsOf: values)
             changedRoomIDs.formUnion(values.map { $0.id() })
         case .clear:
+            for room in rooms {
+                recordExplicitRemovalIfNeeded(room, into: &explicitlyRemovedRoomIDs)
+            }
             rooms.removeAll()
             requiresFullRemap = true
         case let .pushFront(room):

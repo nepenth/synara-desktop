@@ -747,6 +747,79 @@ final class RoomListServiceTests: XCTestCase {
         XCTAssertFalse(retained.contains(removedID))
     }
 
+    func testOffPageLeaveIsPrunedFromRetainedRoomsUsingAuthoritativeMembership() {
+        let previousIDs = Set((0 ..< 150).map { "!room-\($0):matrix.org" })
+        let offPageLeftID = "!room-149:matrix.org"
+        let authoritativeKnownIDs = previousIDs
+        let authoritativeActiveIDs = previousIDs.subtracting([offPageLeftID])
+
+        let provenRemovedIDs = RoomListAuthoritativePruningPolicy.provenRemovedIDs(
+            knownRoomIDs: authoritativeKnownIDs,
+            joinedOrInvitedRoomIDs: authoritativeActiveIDs
+        )
+        let retained = RoomListCacheRetentionPolicy.retainedPreviousIDs(
+            previousIDs: previousIDs,
+            explicitlyRemovedIDs: provenRemovedIDs
+        )
+
+        XCTAssertEqual(provenRemovedIDs, [offPageLeftID])
+        XCTAssertEqual(retained.count, 149)
+        XCTAssertTrue(retained.contains("!room-120:matrix.org"))
+        XCTAssertFalse(retained.contains(offPageLeftID))
+        XCTAssertTrue(RoomListAuthoritativePruningPolicy.shouldReconcile(
+            cachedRoomIDs: previousIDs,
+            dynamicSnapshotRoomIDs: Set((0 ..< 100).map { "!room-\($0):matrix.org" }),
+            requiresFullRemap: false
+        ))
+        XCTAssertFalse(RoomListAuthoritativePruningPolicy.shouldReconcile(
+            cachedRoomIDs: previousIDs,
+            dynamicSnapshotRoomIDs: Set((0 ..< 100).map { "!room-\($0):matrix.org" }),
+            requiresFullRemap: false,
+            hasReconciledCurrentCatchUpPage: true
+        ))
+    }
+
+    func testClearReconnectPreservesKnownActiveRoomsAndPrunesOnlyProvenLeftRooms() {
+        let cachedIDs: Set<String> = ["!joined-off-page", "!invited-off-page", "!left-off-page"]
+        let provenRemovedIDs = RoomListAuthoritativePruningPolicy.provenRemovedIDs(
+            knownRoomIDs: cachedIDs,
+            joinedOrInvitedRoomIDs: ["!joined-off-page", "!invited-off-page"]
+        )
+
+        let retainedAfterClear = RoomListCacheRetentionPolicy.retainedPreviousIDs(
+            previousIDs: cachedIDs,
+            explicitlyRemovedIDs: provenRemovedIDs
+        )
+
+        XCTAssertEqual(retainedAfterClear, ["!joined-off-page", "!invited-off-page"])
+        XCTAssertFalse(retainedAfterClear.contains("!left-off-page"))
+        XCTAssertTrue(RoomListAuthoritativePruningPolicy.shouldReconcile(
+            cachedRoomIDs: cachedIDs,
+            dynamicSnapshotRoomIDs: [],
+            requiresFullRemap: true
+        ))
+        XCTAssertFalse(RoomListAuthoritativePruningPolicy.shouldReconcile(
+            cachedRoomIDs: cachedIDs,
+            dynamicSnapshotRoomIDs: cachedIDs,
+            requiresFullRemap: false
+        ))
+    }
+
+    func testAuthoritativeNonemptyRoomArrayNeverFallsBackToGhostCache() {
+        XCTAssertTrue(RoomListAuthoritativeFallbackPolicy.shouldUseCachedFallback(
+            authoritativeRoomCount: 0,
+            cachedRoomCount: 1
+        ))
+        XCTAssertFalse(RoomListAuthoritativeFallbackPolicy.shouldUseCachedFallback(
+            authoritativeRoomCount: 1,
+            cachedRoomCount: 1
+        ))
+        XCTAssertFalse(RoomListAuthoritativeFallbackPolicy.shouldUseCachedFallback(
+            authoritativeRoomCount: 0,
+            cachedRoomCount: 0
+        ))
+    }
+
     func testLatestSnapshotAccumulatorCarriesExplicitRemovalAcrossCoalescing() {
         let accumulator = RoomListLatestSnapshotAccumulator<String>()
         accumulator.yield(RoomListCoalescingSnapshot(
