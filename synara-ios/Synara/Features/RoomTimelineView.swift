@@ -95,6 +95,29 @@ enum RoomTimelineSnapshotPolicy {
     }
 }
 
+enum RoomTimelineReadAcknowledgementPolicy {
+    static func shouldSchedule(
+        isLive: Bool,
+        isConfirmedPinned: Bool,
+        isJumpingToLatest: Bool,
+        isUserInteracting: Bool,
+        eventID: String,
+        lastMarkedEventID: String?
+    ) -> Bool {
+        isLive
+            && isConfirmedPinned
+            && isJumpingToLatest == false
+            && isUserInteracting == false
+            && eventID != lastMarkedEventID
+    }
+}
+
+enum RoomTimelineJumpLatestPolicy {
+    static func shouldShow(isLive: Bool, isConfirmedPinned: Bool, hasItems: Bool, requested: Bool) -> Bool {
+        hasItems && (isLive == false || (requested && isConfirmedPinned == false))
+    }
+}
+
 enum RoomTypingPresentation {
     static func displayName(for userID: String) -> String {
         let localPart = userID.split(separator: ":", maxSplits: 1).first.map(String.init) ?? userID
@@ -177,6 +200,8 @@ struct RoomTimelineView: View {
     @State private var timelinePosition: RoomTimelinePositionState = .preparing
     @State private var timelineTraceID = String(UUID().uuidString.prefix(8))
     @State private var timelineTraceStartedAt = Date()
+    @State private var stableViewportCommand: StableTimelineViewportCommand?
+    @State private var stableViewportCommandID: UInt64 = 0
     private let timelineLogger = AppLogger()
     @Environment(\.openURL) private var openURL
     @Environment(\.dismiss) private var dismiss
@@ -339,188 +364,358 @@ struct RoomTimelineView: View {
                     await loadTimeline()
                 }
             }
-        case .loaded(let items, let isPaginating):
-            ScrollViewReader { proxy in
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
-                        if isPaginating {
-                            ProgressView()
-                                .controlSize(.small)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, SynaraSpacing.xSmall)
-                                .accessibilityIdentifier("TimelinePaginationIndicator")
-                        }
-
-                        if shouldShowCryptoBanner(items: items) {
-                            CryptoRecoveryBanner(
-                                status: cryptoStatus,
-                                onRetry: retryDecryption,
-                                onReviewSecurity: { environment.router.route(to: .settings) },
-                                onDismiss: { isCryptoBannerDismissed = true }
-                            )
-                        }
-
-                        let threadReplyCounts = TimelineReplyCounter.replyCounts(for: items)
-                        let replyPreviewsByEventID = TimelineReplyPreview.previewsByEventID(
-                            in: items,
-                            currentUserID: currentUserID
-                        )
-
-                        ForEach(Array(items.enumerated()), id: \.element.eventID) { index, item in
-                            if shouldShowUnreadDivider(before: item, at: index, in: items) {
-                                UnreadMessagesDivider()
-                                    .padding(.vertical, SynaraSpacing.small)
+        case let .loaded(items, isPaginating):
+            if StableScrollAnchoringFeatureFlag.isEnabled {
+                stableTimelineContent(items: items, isPaginating: isPaginating)
+            } else {
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
+                            if isPaginating {
+                                ProgressView()
+                                    .controlSize(.small)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, SynaraSpacing.xSmall)
+                                    .accessibilityIdentifier("TimelinePaginationIndicator")
                             }
-                            TimelineRow(
-                                item: item,
-                                currentUserID: currentUserID,
-                                isGroupedWithPrevious: isGroupedWithPrevious(index: index, items: items),
-                                animateSend: sendAnimationItemIDs.contains(item.id),
-                                replyPreviewsByEventID: replyPreviewsByEventID,
-                                replyCount: threadReplyCounts[item.eventID] ?? 0,
-                                availability: environment.eventActions.availability(for: item, currentUserID: currentUserID),
-                                onReply: {
-                                    replyTarget = ComposerRelationTarget(
-                                        item: item,
-                                        kind: .reply,
-                                        currentUserID: currentUserID
-                                    )
-                                },
-                                onOpenThread: { openThread(root: item) },
-                                onEdit: { beginEdit(item) },
-                                onRedact: { applyAction(.redact, to: item) },
-                                onReact: { applyAction(.react("👍"), to: item) },
-                                onOpenMedia: { resource in viewerResource = resource },
-                                onAgentAction: { action in
-                                    executeAgentAction(action, sourceEventID: item.eventID)
-                                },
-                                onAgentApprovalReaction: { reactionKey in
-                                    submitAgentApprovalReaction(reactionKey: reactionKey, sourceEventID: item.eventID)
-                                },
-                                onRetryFailedSend: {
-                                    retryFailedMessage(item)
-                                }
-                            )
-                            .id(item.eventID)
-                            .onAppear {
-                                if isAgentRoom == false, index < Self.olderPaginationTopThreshold {
-                                    loadOlderTimelineIfNeeded(anchorItem: item, index: index, items: items)
-                                }
-                            }
-                            .onDisappear {
-                                if item.eventID == items.last?.eventID {
-                                    cancelMarkFullyRead()
-                                }
-                            }
-                        }
 
-                        Color.clear
-                            .frame(height: 1)
-                            .id("\(Self.timelineBottomAnchorID)-\(timelineBottomAnchorGeneration)")
-                            .accessibilityHidden(true)
-                            .onAppear {
-                                isTimelineBottomVisible = true
-                                if activeTimelineMode.isLive {
-                                    timelinePosition = .followingLive
-                                    if isJumpingToLatest == false, let latest = items.last {
-                                        scheduleMarkFullyRead(eventID: latest.eventID)
-                                    }
-                                    showJumpToLatest = false
-                                }
-                                logTimelineEvent("bottom-visible", fields: ["items": "\(items.count)"])
-                            }
-                            .onDisappear {
-                                isTimelineBottomVisible = false
-                                cancelMarkFullyRead()
-                                if isUserDraggingTimeline, activeTimelineMode.isLive {
-                                    timelinePosition = .readingHistory
-                                }
-                                if items.count > 1 && timelinePosition == .readingHistory {
-                                    showJumpToLatest = true
-                                }
-                                logTimelineEvent(
-                                    "bottom-hidden",
-                                    fields: [
-                                        "items": "\(items.count)",
-                                        "userInteracted": "\(hasUserInteractedWithTimeline)"
-                                    ]
+                            if shouldShowCryptoBanner(items: items) {
+                                CryptoRecoveryBanner(
+                                    status: cryptoStatus,
+                                    onRetry: retryDecryption,
+                                    onReviewSecurity: { environment.router.route(to: .settings) },
+                                    onDismiss: { isCryptoBannerDismissed = true }
                                 )
                             }
-                    }
-                    .padding(.horizontal, timelineHorizontalPadding)
-                    .padding(.top, isAgentRoom ? SynaraSpacing.medium : SynaraSpacing.small)
-                    .padding(.bottom, SynaraSpacing.small)
-                }
-                .scrollDismissesKeyboard(.interactively)
-                .background(isAgentRoom ? SynaraColor.agentReviewBackground : SynaraColor.surface)
-                .accessibilityIdentifier("TimelineList")
-                .simultaneousGesture(
-                    DragGesture(minimumDistance: 8)
-                        .onChanged { value in
-                            hasUserInteractedWithTimeline = true
-                            isUserDraggingTimeline = true
-                            timelinePosition = RoomTimelineScrollPolicy.positionDuringUserDrag(
-                                current: timelinePosition,
-                                translationHeight: value.translation.height,
-                                focusedEventID: activeTimelineMode.focusedEventID
+
+                            let threadReplyCounts = TimelineReplyCounter.replyCounts(for: items)
+                            let replyPreviewsByEventID = TimelineReplyPreview.previewsByEventID(
+                                in: items,
+                                currentUserID: currentUserID
                             )
-                            if timelinePosition == .readingHistory,
-                               isTimelineBottomVisible == false {
-                                showJumpToLatest = true
+
+                            ForEach(Array(items.enumerated()), id: \.element.eventID) { index, item in
+                                if shouldShowUnreadDivider(before: item, at: index, in: items) {
+                                    UnreadMessagesDivider()
+                                        .padding(.vertical, SynaraSpacing.small)
+                                }
+                                TimelineRow(
+                                    item: item,
+                                    currentUserID: currentUserID,
+                                    isGroupedWithPrevious: isGroupedWithPrevious(index: index, items: items),
+                                    animateSend: sendAnimationItemIDs.contains(item.id),
+                                    replyPreview: item.replyToEventID.flatMap { replyPreviewsByEventID[$0] },
+                                    replyCount: threadReplyCounts[item.eventID] ?? 0,
+                                    availability: environment.eventActions.availability(for: item, currentUserID: currentUserID),
+                                    onReply: {
+                                        replyTarget = ComposerRelationTarget(
+                                            item: item,
+                                            kind: .reply,
+                                            currentUserID: currentUserID
+                                        )
+                                    },
+                                    onOpenThread: { openThread(root: item) },
+                                    onEdit: { beginEdit(item) },
+                                    onRedact: { applyAction(.redact, to: item) },
+                                    onReact: { applyAction(.react("👍"), to: item) },
+                                    onOpenMedia: { resource in viewerResource = resource },
+                                    onAgentAction: { action in
+                                        executeAgentAction(action, sourceEventID: item.eventID)
+                                    },
+                                    onAgentApprovalReaction: { reactionKey in
+                                        submitAgentApprovalReaction(reactionKey: reactionKey, sourceEventID: item.eventID)
+                                    },
+                                    onRetryFailedSend: {
+                                        retryFailedMessage(item)
+                                    }
+                                )
+                                .id(item.eventID)
+                                .onAppear {
+                                    if isAgentRoom == false, index < Self.olderPaginationTopThreshold {
+                                        loadOlderTimelineIfNeeded(anchorItem: item, index: index, items: items)
+                                    }
+                                }
                             }
-                            if items.count > 8 {
-                                cancelTimelineScroll()
+
+                            Color.clear
+                                .frame(height: 1)
+                                .id("\(Self.timelineBottomAnchorID)-\(timelineBottomAnchorGeneration)")
+                                .accessibilityHidden(true)
+                                .onAppear {
+                                    isTimelineBottomVisible = true
+                                    if activeTimelineMode.isLive {
+                                        timelinePosition = .followingLive
+                                        if isJumpingToLatest == false, let latest = items.last {
+                                            scheduleMarkFullyRead(eventID: latest.eventID)
+                                        }
+                                        showJumpToLatest = false
+                                    }
+                                    logTimelineEvent("bottom-visible", fields: ["items": "\(items.count)"])
+                                }
+                                .onDisappear {
+                                    isTimelineBottomVisible = false
+                                    cancelMarkFullyRead()
+                                    if isUserDraggingTimeline, activeTimelineMode.isLive {
+                                        timelinePosition = .readingHistory
+                                    }
+                                    if items.count > 1 && timelinePosition == .readingHistory {
+                                        showJumpToLatest = true
+                                    }
+                                    logTimelineEvent(
+                                        "bottom-hidden",
+                                        fields: [
+                                            "items": "\(items.count)",
+                                            "userInteracted": "\(hasUserInteractedWithTimeline)",
+                                        ]
+                                    )
+                                }
+                        }
+                        .padding(.horizontal, timelineHorizontalPadding)
+                        .padding(.top, isAgentRoom ? SynaraSpacing.medium : SynaraSpacing.small)
+                        .padding(.bottom, SynaraSpacing.small)
+                    }
+                    .scrollDismissesKeyboard(.interactively)
+                    .background(isAgentRoom ? SynaraColor.agentReviewBackground : SynaraColor.surface)
+                    .accessibilityIdentifier("TimelineList")
+                    .simultaneousGesture(
+                        DragGesture(minimumDistance: 8)
+                            .onChanged { value in
+                                hasUserInteractedWithTimeline = true
+                                isUserDraggingTimeline = true
+                                timelinePosition = RoomTimelineScrollPolicy.positionDuringUserDrag(
+                                    current: timelinePosition,
+                                    translationHeight: value.translation.height,
+                                    focusedEventID: activeTimelineMode.focusedEventID
+                                )
+                                if timelinePosition == .readingHistory,
+                                   isTimelineBottomVisible == false
+                                {
+                                    showJumpToLatest = true
+                                }
+                                if items.count > 8 {
+                                    cancelTimelineScroll()
+                                }
                             }
+                            .onEnded { _ in
+                                finishTimelineUserDrag()
+                            }
+                    )
+                    .overlay(alignment: .bottomTrailing) {
+                        if RoomTimelineJumpLatestPolicy.shouldShow(
+                            isLive: activeTimelineMode.isLive,
+                            isConfirmedPinned: isTimelineBottomVisible,
+                            hasItems: items.last != nil,
+                            requested: showJumpToLatest
+                        ) {
+                            JumpToLatestButton(isLoading: isJumpingToLatest) {
+                                jumpToLatest(proxy: proxy, currentItems: items)
+                            }
+                            .padding(.trailing, SynaraSpacing.large)
+                            .padding(.bottom, SynaraSpacing.medium)
+                            .transition(.scale.combined(with: .opacity))
                         }
-                        .onEnded { _ in
-                            finishTimelineUserDrag()
+                    }
+                    .onAppear {
+                        lastRenderedTimelineCount = items.count
+                        if scrollToInitialPosition(items: items, proxy: proxy) == false {
+                            _ = scrollToAnchoredEvent(items: items, proxy: proxy)
                         }
-                )
-                .overlay(alignment: .bottomTrailing) {
-                    if showJumpToLatest, isTimelineBottomVisible == false, items.last != nil {
-                        JumpToLatestButton(isLoading: isJumpingToLatest) {
-                            jumpToLatest(proxy: proxy, currentItems: items)
+                    }
+                    .onChange(of: state) { currentState in
+                        let traceID = PerformanceTrace.begin("TimelineStateOnChange")
+                        defer { PerformanceTrace.end("TimelineStateOnChange", id: traceID) }
+                        guard case let .loaded(updatedItems, isPaginating) = currentState else {
+                            return
                         }
-                        .padding(.trailing, SynaraSpacing.large)
-                        .padding(.bottom, SynaraSpacing.medium)
-                        .transition(.scale.combined(with: .opacity))
+                        if let anchorID = paginationScrollAnchorID, isPaginating == false {
+                            paginationScrollAnchorID = nil
+                            timelinePosition = .readingHistory
+                            performTimelineScroll(
+                                proxy: proxy,
+                                target: .event(anchorID, anchor: .top),
+                                animated: false,
+                                reason: "pagination-anchor"
+                            )
+                            lastRenderedTimelineCount = updatedItems.count
+                            return
+                        }
+                        if scrollToInitialPosition(items: updatedItems, proxy: proxy) {
+                            return
+                        }
+                        // Explicit focused-event deep links only; never restore old read markers.
+                        if scrollToAnchoredEvent(items: updatedItems, proxy: proxy) {
+                            return
+                        }
+                        _ = scrollToLatestMessageIfNeeded(items: updatedItems, proxy: proxy)
                     }
-                }
-                .onAppear {
-                    lastRenderedTimelineCount = items.count
-                    if scrollToInitialPosition(items: items, proxy: proxy) == false {
-                        _ = scrollToAnchoredEvent(items: items, proxy: proxy)
-                    }
-                }
-                .onChange(of: state) { currentState in
-                    let traceID = PerformanceTrace.begin("TimelineStateOnChange")
-                    defer { PerformanceTrace.end("TimelineStateOnChange", id: traceID) }
-                    guard case .loaded(let updatedItems, let isPaginating) = currentState else {
-                        return
-                    }
-                    if let anchorID = paginationScrollAnchorID, isPaginating == false {
-                        paginationScrollAnchorID = nil
-                        timelinePosition = .readingHistory
-                        performTimelineScroll(
-                            proxy: proxy,
-                            target: .event(anchorID, anchor: .top),
-                            animated: false,
-                            reason: "pagination-anchor"
-                        )
-                        lastRenderedTimelineCount = updatedItems.count
-                        return
-                    }
-                    if scrollToInitialPosition(items: updatedItems, proxy: proxy) {
-                        return
-                    }
-                    // Explicit focused-event deep links only; never restore old read markers.
-                    if scrollToAnchoredEvent(items: updatedItems, proxy: proxy) {
-                        return
-                    }
-                    _ = scrollToLatestMessageIfNeeded(items: updatedItems, proxy: proxy)
                 }
             }
         }
+    }
+
+    private func stableTimelineContent(items: [TimelineItem], isPaginating: Bool) -> some View {
+        let rows = stableViewportRows(items: items, isPaginating: isPaginating)
+        let routeID = stableViewportRouteID
+        let generation = timelineBottomAnchorGeneration
+
+        return StableTimelineViewport(
+            routeID: routeID,
+            sessionGeneration: generation,
+            rows: rows,
+            command: stableViewportCommand,
+            isLive: activeTimelineMode.isLive,
+            isPaginating: isPaginating,
+            backgroundColor: UIColor(isAgentRoom ? SynaraColor.agentReviewBackground : SynaraColor.surface),
+            rowContent: { row in
+                AnyView(stableViewportRowContent(row))
+            },
+            onBottomPinnedChanged: { callbackRouteID, callbackGeneration, isPinned, newestEventID in
+                guard callbackRouteID == stableViewportRouteID,
+                      callbackGeneration == timelineBottomAnchorGeneration
+                else {
+                    return
+                }
+                handleStableBottomPinnedChanged(isPinned: isPinned, newestEventID: newestEventID)
+            },
+            onUserInteractionChanged: { callbackRouteID, callbackGeneration, isInteracting in
+                guard callbackRouteID == stableViewportRouteID,
+                      callbackGeneration == timelineBottomAnchorGeneration
+                else {
+                    return
+                }
+                handleStableUserInteractionChanged(isInteracting: isInteracting)
+            },
+            onPaginationThresholdReached: { callbackRouteID, callbackGeneration, anchorEventID in
+                guard callbackRouteID == stableViewportRouteID,
+                      callbackGeneration == timelineBottomAnchorGeneration,
+                      let oldestEventID = loadedTimelineItems.first?.eventID
+                else {
+                    return false
+                }
+                return loadOlderTimeline(before: oldestEventID, scrollAnchorID: anchorEventID)
+            },
+            onCommandCompleted: { callbackRouteID, callbackGeneration, command, success, targetEventID in
+                guard callbackRouteID == stableViewportRouteID,
+                      callbackGeneration == timelineBottomAnchorGeneration
+                else {
+                    return
+                }
+                handleStableCommandCompleted(command, success: success, targetEventID: targetEventID)
+            }
+        )
+        .id(routeID)
+        .background(isAgentRoom ? SynaraColor.agentReviewBackground : SynaraColor.surface)
+        .overlay(alignment: .bottomTrailing) {
+            if RoomTimelineJumpLatestPolicy.shouldShow(
+                isLive: activeTimelineMode.isLive,
+                isConfirmedPinned: isTimelineBottomVisible,
+                hasItems: items.isEmpty == false,
+                requested: showJumpToLatest
+            ) {
+                JumpToLatestButton(isLoading: isJumpingToLatest) {
+                    jumpToLatestStable(currentItems: items)
+                }
+                .padding(.trailing, SynaraSpacing.large)
+                .padding(.bottom, SynaraSpacing.medium)
+                .transition(.scale.combined(with: .opacity))
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func stableViewportRowContent(_ row: StableTimelineViewportRow) -> some View {
+        switch row.content {
+        case .pagination:
+            ProgressView()
+                .controlSize(.small)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, SynaraSpacing.xSmall)
+                .accessibilityIdentifier("TimelinePaginationIndicator")
+        case let .cryptoBanner(status):
+            CryptoRecoveryBanner(
+                status: status,
+                onRetry: retryDecryption,
+                onReviewSecurity: { environment.router.route(to: .settings) },
+                onDismiss: { isCryptoBannerDismissed = true }
+            )
+            .padding(.horizontal, timelineHorizontalPadding)
+            .padding(.vertical, SynaraSpacing.xSmall)
+        case .unreadDivider:
+            UnreadMessagesDivider()
+                .padding(.horizontal, timelineHorizontalPadding)
+                .padding(.vertical, SynaraSpacing.small)
+        case let .event(eventRow):
+            TimelineRow(
+                item: eventRow.item,
+                currentUserID: currentUserID,
+                isGroupedWithPrevious: eventRow.isGroupedWithPrevious,
+                animateSend: eventRow.animateSend,
+                replyPreview: eventRow.replyPreview,
+                replyCount: eventRow.replyCount,
+                availability: eventRow.availability,
+                onReply: {
+                    replyTarget = ComposerRelationTarget(
+                        item: eventRow.item,
+                        kind: .reply,
+                        currentUserID: currentUserID
+                    )
+                },
+                onOpenThread: { openThread(root: eventRow.item) },
+                onEdit: { beginEdit(eventRow.item) },
+                onRedact: { applyAction(.redact, to: eventRow.item) },
+                onReact: { applyAction(.react("👍"), to: eventRow.item) },
+                onOpenMedia: { resource in viewerResource = resource },
+                onAgentAction: { action in
+                    executeAgentAction(action, sourceEventID: eventRow.item.eventID)
+                },
+                onAgentApprovalReaction: { reactionKey in
+                    submitAgentApprovalReaction(reactionKey: reactionKey, sourceEventID: eventRow.item.eventID)
+                },
+                onRetryFailedSend: { retryFailedMessage(eventRow.item) }
+            )
+            .padding(.horizontal, timelineHorizontalPadding)
+            .padding(.bottom, SynaraSpacing.xSmall)
+        }
+    }
+
+    private func stableViewportRows(items: [TimelineItem], isPaginating: Bool) -> [StableTimelineViewportRow] {
+        let replyCounts = TimelineReplyCounter.replyCounts(for: items)
+        let previews = TimelineReplyPreview.previewsByEventID(in: items, currentUserID: currentUserID)
+        var rows: [StableTimelineViewportRow] = []
+        rows.reserveCapacity(items.count + 3)
+
+        if isPaginating {
+            rows.append(.init(id: .pagination, content: .pagination))
+        }
+        if shouldShowCryptoBanner(items: items) {
+            rows.append(.init(id: .cryptoBanner, content: .cryptoBanner(cryptoStatus)))
+        }
+
+        for (index, item) in items.enumerated() {
+            let stableEventID = item.eventID.isEmpty ? item.id : item.eventID
+            if shouldShowUnreadDivider(before: item, at: index, in: items) {
+                rows.append(.init(id: .unreadDivider(stableEventID), content: .unreadDivider))
+            }
+            rows.append(
+                .init(
+                    id: .event(stableEventID),
+                    content: .event(
+                        .init(
+                            item: item,
+                            isGroupedWithPrevious: isGroupedWithPrevious(index: index, items: items),
+                            animateSend: sendAnimationItemIDs.contains(item.id),
+                            replyPreview: item.replyToEventID.flatMap { previews[$0] },
+                            replyCount: replyCounts[item.eventID] ?? 0,
+                            availability: environment.eventActions.availability(
+                                for: item,
+                                currentUserID: currentUserID
+                            )
+                        )
+                    )
+                )
+            )
+        }
+        return rows
     }
 
     @discardableResult
@@ -769,6 +964,10 @@ struct RoomTimelineView: View {
         roomID + (focusedEventID ?? "")
     }
 
+    private var stableViewportRouteID: String {
+        "\(roomID)|\(timelineTraceID)"
+    }
+
     private func resetTimelineState() {
         stopTimelineUpdates(reason: "room-reset")
         stopTypingUpdates()
@@ -813,6 +1012,7 @@ struct RoomTimelineView: View {
         timelineSession = nil
         timelineTraceID = String(UUID().uuidString.prefix(8))
         timelineTraceStartedAt = Date()
+        stableViewportCommand = nil
         cancelMarkFullyRead()
         logTimelineEvent(
             "room-open",
@@ -1035,6 +1235,9 @@ struct RoomTimelineView: View {
             return nil
         }()
         applyTimelineOutcome(feed.initialOutcome)
+        if StableScrollAnchoringFeatureFlag.isEnabled {
+            enqueueStableInitialCommand(for: feed.mode, generation: feed.generation)
+        }
         logTimelineEvent(
             "stream-started",
             fields: ["mode": feed.mode.isLive ? "live" : "focused", "generation": "\(feed.generation)"]
@@ -1486,11 +1689,13 @@ struct RoomTimelineView: View {
         loadOlderTimeline(before: oldestEventID, scrollAnchorID: anchorItem.eventID)
     }
 
-    private func loadOlderTimeline(before eventID: String?, scrollAnchorID: String? = nil) {
+    @discardableResult
+    private func loadOlderTimeline(before eventID: String?, scrollAnchorID: String? = nil) -> Bool {
         guard let eventID,
               hasReachedOldestMessages == false,
-              case .loaded(let items, false) = state else {
-            return
+              case .loaded(let items, false) = state
+        else {
+            return false
         }
 
         guard RoomTimelinePaginationPolicy.shouldLoadOlderHistory(
@@ -1502,12 +1707,12 @@ struct RoomTimelineView: View {
             isPaginating: false,
             hasReachedOldestMessages: hasReachedOldestMessages
         ) else {
-            return
+            return false
         }
 
         let now = Date()
         guard now.timeIntervalSince(lastOlderPaginationAt) >= Self.olderPaginationDebounceInterval else {
-            return
+            return false
         }
         lastOlderPaginationAt = now
 
@@ -1531,6 +1736,7 @@ struct RoomTimelineView: View {
                 }
                 return
             }
+            let updatedGeneration = await timelineSession.currentGeneration()
             await MainActor.run {
                 let currentItems = loadedTimelineItems.isEmpty ? items : loadedTimelineItems
                 switch outcome {
@@ -1542,6 +1748,7 @@ struct RoomTimelineView: View {
                         }
                     }
                     stopTimelineUpdates(reason: "history-provider-activated")
+                    timelineBottomAnchorGeneration = updatedGeneration
                     activeTimelineMode = .focused(eventID: eventID)
                     let merged = mergeTimelineItems(boundedItems, isPaginating: false)
                     state = .loaded(merged, isPaginating: false)
@@ -1563,14 +1770,19 @@ struct RoomTimelineView: View {
                 }
             }
         }
+        return true
     }
 
     private func scheduleMarkFullyRead(eventID: String) {
         markFullyReadTask?.cancel()
-        guard activeTimelineMode.isLive,
-              isTimelineBottomVisible,
-              isJumpingToLatest == false,
-              lastMarkedFullyReadEventID != eventID else {
+        guard RoomTimelineReadAcknowledgementPolicy.shouldSchedule(
+            isLive: activeTimelineMode.isLive,
+            isConfirmedPinned: isTimelineBottomVisible,
+            isJumpingToLatest: isJumpingToLatest,
+            isUserInteracting: isUserDraggingTimeline,
+            eventID: eventID,
+            lastMarkedEventID: lastMarkedFullyReadEventID
+        ) else {
             return
         }
 
@@ -1579,7 +1791,9 @@ struct RoomTimelineView: View {
             guard Task.isCancelled == false,
                   activeTimelineMode.isLive,
                   isTimelineBottomVisible,
-                  isJumpingToLatest == false else {
+                  isJumpingToLatest == false,
+                  isUserDraggingTimeline == false
+            else {
                 return
             }
 
@@ -1661,6 +1875,161 @@ struct RoomTimelineView: View {
                 }
             }
         }
+    }
+
+    private func jumpToLatestStable(currentItems: [TimelineItem]) {
+        guard isJumpingToLatest == false,
+              let timelineSession
+        else {
+            return
+        }
+
+        dismissKeyboard()
+        isComposerFocused = false
+        cancelTimelineScroll()
+        cancelMarkFullyRead()
+        paginationScrollAnchorID = nil
+        hasReachedOldestMessages = false
+        hasUserInteractedWithTimeline = false
+        isJumpingToLatest = true
+        showJumpToLatest = true
+
+        Task {
+            let signpostID = PerformanceTrace.begin("TimelineJumpToLatest")
+            defer { PerformanceTrace.end("TimelineJumpToLatest", id: signpostID) }
+            let transition = await timelineSession.transitionToLive()
+            await MainActor.run {
+                switch transition {
+                case let .succeeded(feed):
+                    initialReadMarkerEventID = nil
+                    hasPositionedInitialTimeline = false
+                    timelinePosition = .placingInitial
+                    applySessionFeed(feed)
+                    enqueueStableViewportCommand(.latest(animated: true), generation: feed.generation)
+                    lastRenderedTimelineCount = loadedTimelineItems.count
+                    showJumpToLatest = true
+                case .empty:
+                    isJumpingToLatest = false
+                    showJumpToLatest = true
+                    sendError = "Could not load the latest messages. Try again."
+                    logTimelineEvent("jump-latest-empty-preserved", fields: ["rendered": "\(currentItems.count)"])
+                case let .failed(message):
+                    isJumpingToLatest = false
+                    showJumpToLatest = true
+                    sendError = message
+                    logTimelineEvent("jump-latest-failed-preserved", fields: ["rendered": "\(currentItems.count)"])
+                case .superseded:
+                    isJumpingToLatest = false
+                    showJumpToLatest = activeTimelineMode.isLive == false
+                    logTimelineEvent("jump-latest-superseded")
+                }
+            }
+        }
+    }
+
+    private func enqueueStableInitialCommand(for mode: RoomTimelineMode, generation: UInt64) {
+        switch mode {
+        case .live:
+            timelinePosition = .placingInitial
+            enqueueStableViewportCommand(.latest(animated: false), generation: generation)
+        case let .unread(markerEventID):
+            timelinePosition = .readingHistory
+            showJumpToLatest = true
+            enqueueStableViewportCommand(.readMarker(eventID: markerEventID), generation: generation)
+        case let .focused(eventID):
+            timelinePosition = .focusedEvent
+            showJumpToLatest = true
+            enqueueStableViewportCommand(.focused(eventID: eventID, animated: true), generation: generation)
+        }
+    }
+
+    private func enqueueStableViewportCommand(
+        _ kind: StableTimelineViewportCommand.Kind,
+        generation: UInt64
+    ) {
+        stableViewportCommandID &+= 1
+        stableViewportCommand = StableTimelineViewportCommand(
+            id: stableViewportCommandID,
+            routeID: stableViewportRouteID,
+            sessionGeneration: generation,
+            kind: kind
+        )
+    }
+
+    private func handleStableBottomPinnedChanged(isPinned: Bool, newestEventID: String?) {
+        isTimelineBottomVisible = isPinned
+        if isPinned, activeTimelineMode.isLive {
+            timelinePosition = .followingLive
+            showJumpToLatest = false
+            if let newestEventID {
+                scheduleMarkFullyRead(eventID: newestEventID)
+            }
+        } else {
+            cancelMarkFullyRead()
+            if activeTimelineMode.isLive == false || timelinePosition == .readingHistory {
+                showJumpToLatest = loadedTimelineItems.isEmpty == false
+            }
+        }
+    }
+
+    private func handleStableUserInteractionChanged(isInteracting: Bool) {
+        isUserDraggingTimeline = isInteracting
+        if isInteracting {
+            hasUserInteractedWithTimeline = true
+            cancelTimelineScroll()
+            cancelMarkFullyRead()
+            if activeTimelineMode.isLive {
+                timelinePosition = .readingHistory
+            }
+            return
+        }
+
+        timelinePosition = RoomTimelineScrollPolicy.positionAfterUserDrag(
+            isBottomVisible: isTimelineBottomVisible,
+            focusedEventID: activeTimelineMode.focusedEventID
+        )
+        showJumpToLatest = activeTimelineMode.isLive == false || isTimelineBottomVisible == false
+        if isTimelineBottomVisible,
+           activeTimelineMode.isLive,
+           let newestEventID = loadedTimelineItems.last?.eventID
+        {
+            scheduleMarkFullyRead(eventID: newestEventID)
+        }
+    }
+
+    private func handleStableCommandCompleted(
+        _ command: StableTimelineViewportCommand,
+        success: Bool,
+        targetEventID: String?
+    ) {
+        guard stableViewportCommand?.id == command.id else {
+            return
+        }
+        if success {
+            stableViewportCommand = nil
+        }
+
+        switch command.kind {
+        case .latest:
+            isJumpingToLatest = false
+            hasPositionedInitialTimeline = success
+            if success {
+                timelinePosition = .followingLive
+                showJumpToLatest = false
+            }
+        case .readMarker:
+            hasPositionedInitialTimeline = success
+            timelinePosition = .readingHistory
+            showJumpToLatest = true
+        case .focused:
+            hasAnchoredEvent = success
+            timelinePosition = .focusedEvent
+            showJumpToLatest = targetEventID != loadedTimelineItems.last?.eventID
+        }
+        logTimelineEvent(
+            "stable-command-completed",
+            fields: ["success": "\(success)", "target": targetEventID ?? "none"]
+        )
     }
 
     private func dismissKeyboard() {
@@ -3274,7 +3643,7 @@ private struct TimelineRow: View {
     let currentUserID: String
     let isGroupedWithPrevious: Bool
     let animateSend: Bool
-    let replyPreviewsByEventID: [String: TimelineReplyPreview]
+    let replyPreview: TimelineReplyPreview?
     let replyCount: Int
     let availability: EventActionAvailability
     let onReply: () -> Void
@@ -3599,8 +3968,8 @@ private struct TimelineRow: View {
     }
 
     @ViewBuilder
-    private func replyQuoteLabel(for replyToEventID: String) -> some View {
-        if let preview = replyPreviewsByEventID[replyToEventID] {
+    private func replyQuoteLabel(for _: String) -> some View {
+        if let preview = replyPreview {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Replying to \(preview.senderName)")
                     .font(SynaraTypography.messageMeta.weight(.semibold))
