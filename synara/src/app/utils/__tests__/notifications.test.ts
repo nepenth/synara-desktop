@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { ReceiptType } from 'matrix-js-sdk';
 import { AccountDataEvent } from '../../../types/matrix/accountData';
 import { clearUnreadAnchor, markAsRead } from '../notifications';
 import { getThreadRootEventId, roomHaveUnread } from '../room';
@@ -279,6 +280,53 @@ test('markAsRead clears custom unread state without resending an already-current
   assert.equal(markerWrites, 0);
   assert.equal(markedUnreadWrites, 1);
   assert.equal(unreadAnchorWrites, 1);
+});
+
+test('exact read-marker emergency disable uses the SDK receipt fallback', async () => {
+  const originalWindow = globalThis.window;
+  Object.defineProperty(globalThis, 'window', {
+    configurable: true,
+    value: {
+      localStorage: {
+        getItem: (key: string) => (key === 'synara.feature.exactReadMarkers' ? 'false' : null),
+      },
+    },
+  });
+  try {
+    const latest = createTimelineEvent('$legacy-latest');
+    let markerWrites = 0;
+    let receiptArgs: any[] | undefined;
+    const room = {
+      roomId: '!legacy-read:example.org',
+      accountData: { get: () => undefined },
+      getEventReadUpTo: () => '$older',
+      getLiveTimeline: () => ({ getEvents: () => [latest] }),
+      getAccountData: () => undefined,
+      getReadReceiptForUserId: () => undefined,
+    } as any;
+    const mx = {
+      getRoom: () => room,
+      getUserId: () => '@alice:example.org',
+      getAccountData: () => undefined,
+      sendReadReceipt: async (...args: any[]) => {
+        receiptArgs = args;
+      },
+      setRoomReadMarkers: async () => {
+        markerWrites += 1;
+      },
+    } as any;
+
+    await markAsRead(mx, room.roomId, false, 'loaded-live-tail');
+
+    assert.deepEqual(receiptArgs, [latest, ReceiptType.Read]);
+    assert.equal(markerWrites, 0);
+  } finally {
+    if (originalWindow === undefined) {
+      Reflect.deleteProperty(globalThis, 'window');
+    } else {
+      Object.defineProperty(globalThis, 'window', { configurable: true, value: originalWindow });
+    }
+  }
 });
 
 test('markAsRead preserves custom unread state when the server marker fails', async () => {

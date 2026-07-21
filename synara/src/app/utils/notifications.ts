@@ -4,6 +4,8 @@ import type { MatrixEvent } from 'matrix-js-sdk/lib/models/event';
 import type { Room } from 'matrix-js-sdk/lib/models/room';
 import { EventType } from 'matrix-js-sdk/lib/@types/event';
 import { AccountDataEvent, SynaraUnreadAnchorContent } from '../../types/matrix/accountData';
+import { isFoundationFeatureEnabled } from '../config/foundationFeatures';
+import { recordFoundationDiagnostic } from './foundationDiagnostics';
 import { isNotificationEvent, isRoomMarkedUnread } from './room';
 import {
   getLatestReceiptEventFromEvents,
@@ -154,6 +156,11 @@ const commitReadMarker = async (
   );
 
   await clearCustomUnread(mx, room);
+  recordFoundationDiagnostic('read', 'marker.commit-success', {
+    roomId: room.roomId,
+    eventId,
+    fields: { privateReceipt: request.privateReceipt },
+  });
 };
 
 const clearCustomUnread = async (mx: MatrixClient, room: Room): Promise<void> => {
@@ -194,6 +201,15 @@ const drainReadMarkerQueue = async (
         }
         resolveReadMarkerBatch(batch);
       } catch (error) {
+        recordFoundationDiagnostic('read', 'marker.commit-failed', {
+          roomId: room.roomId,
+          eventId: batch.request.event.getId(),
+          fields: {
+            privateReceipt: batch.request.privateReceipt,
+            errorType: error instanceof Error ? error.name : typeof error,
+            waiterCount: batch.waiters.size,
+          },
+        });
         rejectReadMarkerBatch(batch, error);
       } finally {
         queue.active = undefined;
@@ -303,6 +319,38 @@ export async function markAsRead(
   )?.eventId;
   if (fullyReadEventId === latestEventId && receiptEventId === latestEventId) {
     await clearCustomUnread(mx, room);
+    recordFoundationDiagnostic('read', 'marker.already-current', {
+      roomId,
+      eventId: latestEventId,
+      fields: { privateReceipt, mode },
+    });
+    return;
+  }
+
+  if (!isFoundationFeatureEnabled('exactReadMarkers')) {
+    try {
+      await mx.sendReadReceipt(
+        latestEvent,
+        privateReceipt ? ReceiptType.ReadPrivate : ReceiptType.Read
+      );
+      await clearCustomUnread(mx, room);
+      recordFoundationDiagnostic('read', 'marker.legacy-success', {
+        roomId,
+        eventId: latestEventId,
+        fields: { privateReceipt, mode },
+      });
+    } catch (error) {
+      recordFoundationDiagnostic('read', 'marker.legacy-failed', {
+        roomId,
+        eventId: latestEventId,
+        fields: {
+          privateReceipt,
+          mode,
+          errorType: error instanceof Error ? error.name : typeof error,
+        },
+      });
+      throw error;
+    }
     return;
   }
 

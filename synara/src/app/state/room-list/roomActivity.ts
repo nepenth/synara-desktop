@@ -8,6 +8,7 @@ import {
   RoomEvent,
 } from 'matrix-js-sdk';
 import { isNotificationEvent } from '../../utils/room';
+import { recordFoundationDiagnostic } from '../../utils/foundationDiagnostics';
 import { getLoadedLiveTimelineEvents } from '../../utils/timelineLifecycle';
 
 export const RECENT_ROOM_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -122,6 +123,30 @@ export const getRecentRoomExpiryDelay = (
   return Math.min(MAX_RECENT_ROOM_TIMEOUT_MS, Math.max(1, nextExpiry - nowMs + 1));
 };
 
+export const getLegacyRoomActivitySnapshot = (
+  mx: MatrixClient,
+  roomIds: readonly string[]
+): RoomActivitySnapshot => ({
+  revision: 0,
+  entries: new Map(
+    roomIds.flatMap((roomId) => {
+      const room = mx.getRoom(roomId);
+      if (!room) return [];
+      return [
+        [
+          roomId,
+          {
+            roomId,
+            activityTs: room.getLastActiveTimestamp(),
+            bumpStamp: getRoomBumpStamp(room),
+            revision: 0,
+          },
+        ] as const,
+      ];
+    })
+  ),
+});
+
 export class RoomActivityStore {
   private snapshot: RoomActivitySnapshot = { revision: 0, entries: new Map() };
 
@@ -176,6 +201,17 @@ export class RoomActivityStore {
 
     const entries = new Map(this.snapshot.entries);
     entries.set(room.roomId, next);
+    recordFoundationDiagnostic('activity', 'room-activity.updated', {
+      roomId: room.roomId,
+      eventId: latestEventId,
+      fields: {
+        revision: this.snapshot.revision + 1,
+        hasConcreteHead: Boolean(latestEvent),
+        preservedSummary: !latestEvent && preserveMissing && Boolean(previous?.activityTs),
+        activityChanged: previous?.activityTs !== activityTs,
+        latestChanged: previous?.latestEventId !== latestEventId,
+      },
+    });
     this.emit(entries);
   }
 

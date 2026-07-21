@@ -5,10 +5,15 @@ import { EventStatus, MatrixEventEvent, RoomEvent } from 'matrix-js-sdk';
 import {
   RECENT_ROOM_WINDOW_MS,
   RoomActivityStore,
+  getLegacyRoomActivitySnapshot,
   getNextRecentRoomExpiry,
   getRecentRoomExpiryDelay,
   partitionRoomIdsByActivity,
 } from '../roomActivity';
+import {
+  clearDesktopDiagnostics,
+  getDesktopDiagnosticEntries,
+} from '../../../utils/desktopDiagnostics';
 
 const createEvent = (
   id: string,
@@ -85,6 +90,25 @@ test('room activity partitions every room exactly once and sorts recent rooms ne
   assert.equal(new Set([...partition.recentRoomIds, ...partition.nonRecentRoomIds]).size, 3);
 });
 
+test('legacy activity fallback uses bounded room summary metadata without scanning timelines', () => {
+  let scans = 0;
+  const room = {
+    ...createRoom('!legacy:example.org', []),
+    getLastActiveTimestamp: () => 123,
+    getLiveTimeline: () => {
+      scans += 1;
+      return { getEvents: () => [] };
+    },
+  } as any;
+  const mx = new MockMatrixClient([room]);
+
+  const snapshot = getLegacyRoomActivitySnapshot(mx as any, [room.roomId, '!missing:example.org']);
+
+  assert.equal(scans, 0);
+  assert.equal(snapshot.entries.size, 1);
+  assert.equal(snapshot.entries.get(room.roomId)?.activityTs, 123);
+});
+
 test('a live message moves an old room directly into Recent without losing it from both lists', () => {
   const now = 3 * RECENT_ROOM_WINDOW_MS;
   const events = [createEvent('$old', now - RECENT_ROOM_WINDOW_MS - 1)];
@@ -92,6 +116,7 @@ test('a live message moves an old room directly into Recent without losing it fr
   const mx = new MockMatrixClient([room]);
   const store = new RoomActivityStore(mx as any);
   const unsubscribe = store.subscribe(() => undefined);
+  clearDesktopDiagnostics();
 
   assert.deepEqual(
     partitionRoomIdsByActivity([room.roomId], store.getSnapshot(), now).nonRecentRoomIds,
@@ -105,6 +130,12 @@ test('a live message moves an old room directly into Recent without losing it fr
   const partition = partitionRoomIdsByActivity([room.roomId], store.getSnapshot(), now);
   assert.deepEqual(partition.recentRoomIds, [room.roomId]);
   assert.deepEqual(partition.nonRecentRoomIds, []);
+  const diagnostic = getDesktopDiagnosticEntries().find((entry) =>
+    entry.includes('room-activity.updated')
+  );
+  assert.ok(diagnostic);
+  assert.equal(diagnostic.includes(room.roomId), false);
+  assert.equal(diagnostic.includes('$live'), false);
   unsubscribe();
 });
 
