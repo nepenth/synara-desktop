@@ -1,6 +1,6 @@
 # Matrix Rust SDK Alignment Audit
 
-Date: 2026-06-07
+Date: 2026-07-21
 
 ## Summary
 
@@ -52,8 +52,9 @@ Legacy REST paths removed from production and unit-test code:
 ## SDK Capabilities Confirmed In Local Bindings
 
 The checked-in build uses `MatrixRustSDK` from
-`matrix-rust-components-swift` 26.5.13. The local bindings expose the following
-first-class APIs relevant to Synara:
+`matrix-rust-components-swift` 26.6.6 (release tag `26.06.06`, revision
+`ec3b2161ba371a13609e7181077d2f3baef188f5`). The local bindings expose the
+following first-class APIs relevant to Synara:
 
 - Client/session:
   - `ClientBuilder.sessionPaths(...)`
@@ -149,6 +150,27 @@ first-class APIs relevant to Synara:
   - `Client.setAvatarUrl(...)`
   - `Client.accountData(...)`
   - `Client.setAccountData(...)`
+
+## 26.5.13 to 26.6.6 Compatibility Review
+
+The official Swift wrapper comparison contains one breaking signature change
+used by Synara and two additive APIs:
+
+- `Client.setPusher(...)` now requires `append: Bool`. Synara passes `false` to
+  preserve the previous SDK behavior and Matrix request default: registering
+  this device's APNs pusher replaces the matching registration rather than
+  appending another pusher.
+- `Client.tileServer()` and `TileServerInfo` were added for MSC3488 map-tile
+  discovery. Synara does not currently expose location-map UI, so no runtime
+  integration is required.
+- `SqliteStoreBuilder.key(key:)` was added alongside passphrase configuration.
+  Synara continues to use its existing SDK store setup; changing key material
+  as part of a package upgrade would risk making existing stores unreadable.
+
+No timeline, room-list, read-marker, media, authentication, crypto, or sync API
+used by Synara was removed or changed in the generated Swift bindings. Package
+resolution and compile/test evidence for this alignment is recorded in the
+upgrade commit.
 
 ## Alignment Findings
 
