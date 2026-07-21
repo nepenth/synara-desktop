@@ -32,7 +32,7 @@ import classNames from 'classnames';
 import { ReactEditor } from 'slate-react';
 import { Editor } from 'slate';
 import { ErrorBoundary } from 'react-error-boundary';
-import { SessionMembershipData } from 'matrix-js-sdk/lib/matrixrtc/CallMembership';
+import { SessionMembershipData } from 'matrix-js-sdk/lib/matrixrtc/membershipData';
 import to from 'await-to-js';
 import { useAtomValue, useSetAtom } from 'jotai';
 import { useVirtualizer } from '@tanstack/react-virtual';

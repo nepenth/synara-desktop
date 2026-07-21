@@ -2,6 +2,7 @@ import type { MatrixClient } from 'matrix-js-sdk/lib/client';
 import { ReceiptType } from 'matrix-js-sdk/lib/@types/read_receipts';
 import type { MatrixEvent } from 'matrix-js-sdk/lib/models/event';
 import type { Room } from 'matrix-js-sdk/lib/models/room';
+import { EventType } from 'matrix-js-sdk/lib/@types/event';
 import { AccountDataEvent, SynaraUnreadAnchorContent } from '../../types/matrix/accountData';
 import { isNotificationEvent, isRoomMarkedUnread } from './room';
 import {
@@ -61,7 +62,7 @@ export const clearUnreadAnchor = (mx: MatrixClient, roomId: string): Promise<voi
   });
 
 export async function setRoomMarkedUnread(mx: MatrixClient, roomId: string, unread: boolean) {
-  await mx.setRoomAccountData(roomId, AccountDataEvent.MarkedUnread, { unread });
+  await mx.setRoomAccountData(roomId, EventType.MarkedUnread, { unread });
 }
 
 export async function markAsUnread(mx: MatrixClient, roomId: string) {

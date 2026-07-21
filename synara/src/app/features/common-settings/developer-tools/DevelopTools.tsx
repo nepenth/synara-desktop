@@ -31,6 +31,12 @@ import {
 } from '../../../components/AccountDataEditor';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
 
+type ArbitraryRoomAccountDataWriter = (
+  roomId: string,
+  eventType: string,
+  content: object
+) => Promise<unknown>;
+
 type DeveloperToolsProps = {
   requestClose: () => void;
 };
@@ -58,7 +64,9 @@ export function DeveloperTools({ requestClose }: DeveloperToolsProps) {
 
   const submitAccountData: AccountDataSubmitCallback = useCallback(
     async (type, content) => {
-      await mx.setRoomAccountData(room.roomId, type, content);
+      // Developer tools intentionally support custom event types beyond the SDK's known event map.
+      const setRoomAccountData = mx.setRoomAccountData.bind(mx) as ArbitraryRoomAccountDataWriter;
+      await setRoomAccountData(room.roomId, type, content);
     },
     [mx, room.roomId]
   );
