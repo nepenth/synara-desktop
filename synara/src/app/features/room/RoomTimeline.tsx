@@ -196,17 +196,18 @@ import {
   getTimelineRangeAfterPagination,
   getTimelineWindowTailEvent,
   getTimelineWindowTailEventId,
-  getPersistedLiveTailEventId,
   hasUnreadForInitialScroll,
-  shouldCancelTimelineNavigationForRouteChange,
-  shouldApplyLiveTailRefresh,
   shouldGateViewportRestoreOnUnread,
   shouldShowJumpToUnread,
-  timelineWindowEndsAtEventId,
   timelineHasEvents,
   canRestoreViewportFromInitialTimeline,
   type TimelineWindow,
 } from '../../utils/timelineOpening';
+import {
+  TimelineNavigationController,
+  type TimelineNavigationFailure,
+  type TimelineNavigationPhase,
+} from '../../utils/timelineNavigation';
 
 const PollContent = lazy(() =>
   import('../../components/message/content/PollContent').then((module) => ({
@@ -256,8 +257,6 @@ const LIVE_END_PIN_STABLE_FRAMES = 10;
 const COMPOSER_RESIZE_BOTTOM_TOLERANCE = 160;
 const USER_SCROLL_IDLE_MS = 150;
 const JUMP_LATEST_LOAD_TIMEOUT_MS = 15_000;
-
-type JumpLatestPhase = 'idle' | 'loading' | 'settling' | 'error';
 
 type ScrollToOptions = {
   offset?: number;
@@ -715,7 +714,6 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
     fallbackStartedAt: 0,
   });
   const liveTimelineResetPendingRef = useRef(false);
-  const latestTimelineRequestRef = useRef(0);
   const startLiveEndPin = useCallback(() => {
     liveEndPinRef.current = true;
     liveEndPinStateRef.current = {
@@ -775,42 +773,49 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
   const parseMemberEvent = useMemberEventParser();
 
   const [timeline, setTimeline] = useState<TimelineWindow>(() => initialTimelineWindow);
-  const [jumpLatestPhase, setJumpLatestPhase] = useState<JumpLatestPhase>('idle');
-  const jumpLatestPhaseRef = useRef(jumpLatestPhase);
-  jumpLatestPhaseRef.current = jumpLatestPhase;
-  const setJumpLatestPhaseAndRef = useCallback((phase: JumpLatestPhase) => {
-    jumpLatestPhaseRef.current = phase;
-    setJumpLatestPhase(phase);
-  }, []);
-  const jumpLatestPreviousTimelineRef = useRef<TimelineWindow | undefined>(undefined);
-  const jumpLatestFocusedEventRef = useRef<string | undefined>(undefined);
-  const jumpLatestAuthoritativeTailEventIdRef = useRef<string | undefined>(undefined);
-  const jumpLatestExpectedRouteKeyRef = useRef<string | undefined>(undefined);
+  const navigationTimeoutHandlerRef = useRef<
+    (failure: TimelineNavigationFailure<TimelineWindow>) => void
+  >(() => undefined);
+  const navigationControllerRef = useRef<TimelineNavigationController<TimelineWindow> | undefined>(
+    undefined
+  );
+  if (!navigationControllerRef.current) {
+    navigationControllerRef.current = new TimelineNavigationController<TimelineWindow>({
+      routeKey: `${room.roomId}\u0000${eventId ?? ''}`,
+      loadingTimeoutMs: JUMP_LATEST_LOAD_TIMEOUT_MS,
+      settlingTimeoutMs: LIVE_END_PIN_MAX_MS + 750,
+      onTimeout: (failure) => navigationTimeoutHandlerRef.current(failure),
+    });
+  }
+  const navigationController = navigationControllerRef.current;
+  const [jumpLatestPhase, setJumpLatestPhase] = useState<TimelineNavigationPhase>(
+    navigationController.phase
+  );
+  const syncNavigationPhase = useCallback(() => {
+    setJumpLatestPhase(navigationController.phase);
+  }, [navigationController]);
   const [paginationErrors, setPaginationErrors] = useState<TimelinePaginationErrors>({});
   const [, startTimelineTransition] = useTransition();
   const eventsLength = getTimelinesEventsCount(timeline.linkedTimelines);
   const liveTimelineLinked =
     timeline.linkedTimelines[timeline.linkedTimelines.length - 1] === getLiveTimeline(room);
-  const authoritativeLatestWindow = timelineWindowEndsAtEventId(
-    timeline,
-    jumpLatestAuthoritativeTailEventIdRef.current
-  );
   const canPaginateBack =
     typeof timeline.linkedTimelines[0]?.getPaginationToken(Direction.Backward) === 'string';
-  const canPaginateForward =
-    !authoritativeLatestWindow &&
+  const navigationBounds = navigationController.getBounds(
+    getTimelineWindowTailEventId(timeline),
+    liveTimelineLinked,
     typeof timeline.linkedTimelines[timeline.linkedTimelines.length - 1]?.getPaginationToken(
       Direction.Forward
-    ) === 'string';
+    ) === 'string'
+  );
+  const { canPaginateForward, loadedAtEnd } = navigationBounds;
   const loadedAtStart = !canPaginateBack;
-  const loadedAtEnd = authoritativeLatestWindow || (liveTimelineLinked && !canPaginateForward);
   const atLiveEndRef = useRef(loadedAtEnd);
   atLiveEndRef.current = loadedAtEnd;
   const showJumpToUnread = shouldShowJumpToUnread(unreadInfo, timeline);
   const roomOpenDiagnosticsLoggedRef = useRef(false);
   const renderWindowDiagnosticsFingerprintRef = useRef<string | undefined>(undefined);
   const liveEndPaginationSuppressedLoggedRef = useRef(false);
-  const liveTailRefreshRequestRef = useRef(0);
   const firstStableBottomLoggedRef = useRef(false);
   const timelineDiagnosticsKey = `${room.roomId}\u0000${eventId ?? ''}`;
   const timelineDiagnosticsRef = useRef({
@@ -890,21 +895,12 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
     if (eventId || shouldOpenAtUnread || shouldRestoreSavedViewport) return undefined;
     if (!liveEndPinRef.current) return undefined;
 
-    const requestId = liveTailRefreshRequestRef.current + 1;
-    liveTailRefreshRequestRef.current = requestId;
+    const requestId = navigationController.beginLiveTailRefresh();
     let cancelled = false;
 
     void (async () => {
       const latestTimeline = await getLatestRoomTimeline(mx, room);
-      if (
-        cancelled ||
-        !alive() ||
-        !shouldApplyLiveTailRefresh(
-          requestId,
-          liveTailRefreshRequestRef.current,
-          jumpLatestPhaseRef.current
-        )
-      ) {
+      if (cancelled || !alive() || !navigationController.canApplyLiveTailRefresh(requestId)) {
         return;
       }
       if (!latestTimeline) return;
@@ -916,7 +912,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
       if (!timelineHasEvents(nextTimeline)) return;
       const authoritativeTailEventId = getTimelineWindowTailEventId(nextTimeline);
       if (!authoritativeTailEventId) return;
-      jumpLatestAuthoritativeTailEventIdRef.current = authoritativeTailEventId;
+      if (!navigationController.applyLiveTailRefresh(requestId, authoritativeTailEventId)) return;
 
       setTimeline((current) => {
         const currentTail =
@@ -945,7 +941,16 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
     return () => {
       cancelled = true;
     };
-  }, [alive, eventId, mx, room, shouldOpenAtUnread, shouldRestoreSavedViewport, traceTimeline]);
+  }, [
+    alive,
+    eventId,
+    mx,
+    navigationController,
+    room,
+    shouldOpenAtUnread,
+    shouldRestoreSavedViewport,
+    traceTimeline,
+  ]);
 
   const handlePaginationError = useCallback(
     (direction: TimelinePaginationDirection, err: unknown | null) => {
@@ -981,70 +986,42 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
     liveEndPinRef.current = false;
     liveEndPinStateRef.current.stableFrames = 0;
   }, []);
-  const restorePreJumpTimeline = useCallback(() => {
-    const previousTimeline = jumpLatestPreviousTimelineRef.current;
-    jumpLatestPreviousTimelineRef.current = undefined;
-    jumpLatestFocusedEventRef.current = undefined;
-    jumpLatestAuthoritativeTailEventIdRef.current = undefined;
-    if (previousTimeline) setTimeline(previousTimeline);
-  }, []);
-  const cancelLiveEndPinForUser = useCallback(() => {
-    cancelLiveEndPin();
-    if (jumpLatestPhaseRef.current === 'loading' || jumpLatestPhaseRef.current === 'settling') {
-      latestTimelineRequestRef.current += 1;
-      restorePreJumpTimeline();
-      setJumpLatestPhaseAndRef('error');
-    }
-  }, [cancelLiveEndPin, restorePreJumpTimeline, setJumpLatestPhaseAndRef]);
-
-  useEffect(() => {
-    if (jumpLatestPhase !== 'loading' && jumpLatestPhase !== 'settling') return undefined;
-    const timeoutMs =
-      jumpLatestPhase === 'loading' ? JUMP_LATEST_LOAD_TIMEOUT_MS : LIVE_END_PIN_MAX_MS + 750;
-    const timeout = window.setTimeout(() => {
-      latestTimelineRequestRef.current += 1;
+  const applyNavigationFailure = useCallback(
+    (failure: TimelineNavigationFailure<TimelineWindow>) => {
       cancelLiveEndPin();
-      restorePreJumpTimeline();
-      setJumpLatestPhaseAndRef('error');
-      traceTimeline('room-timeline.jump-latest-failed', {
-        errorType: `${jumpLatestPhase}-timeout`,
-      });
-    }, timeoutMs);
-    return () => window.clearTimeout(timeout);
-  }, [
-    cancelLiveEndPin,
-    jumpLatestPhase,
-    restorePreJumpTimeline,
-    setJumpLatestPhaseAndRef,
-    traceTimeline,
-  ]);
-
-  const timelineRouteKey = `${room.roomId}\u0000${eventId ?? ''}`;
-  const previousTimelineRouteKeyRef = useRef(timelineRouteKey);
-  useEffect(() => {
-    const previousRouteKey = previousTimelineRouteKeyRef.current;
-    previousTimelineRouteKeyRef.current = timelineRouteKey;
-    const expectedRouteKey = jumpLatestExpectedRouteKeyRef.current;
-    if (
-      !shouldCancelTimelineNavigationForRouteChange(
-        previousRouteKey,
-        timelineRouteKey,
-        expectedRouteKey
-      )
-    ) {
-      if (timelineRouteKey === expectedRouteKey) {
-        jumpLatestExpectedRouteKeyRef.current = undefined;
-      }
+      if (failure.previousTimeline) setTimeline(failure.previousTimeline);
+      syncNavigationPhase();
+    },
+    [cancelLiveEndPin, syncNavigationPhase]
+  );
+  navigationTimeoutHandlerRef.current = (failure) => {
+    applyNavigationFailure(failure);
+    traceTimeline('room-timeline.jump-latest-failed', {
+      errorType: failure.reason,
+    });
+  };
+  const cancelLiveEndPinForUser = useCallback(() => {
+    const failure = navigationController.cancelForUser();
+    if (failure) {
+      applyNavigationFailure(failure);
       return;
     }
-
-    latestTimelineRequestRef.current += 1;
     cancelLiveEndPin();
-    jumpLatestPreviousTimelineRef.current = undefined;
-    jumpLatestFocusedEventRef.current = undefined;
-    jumpLatestAuthoritativeTailEventIdRef.current = undefined;
-    setJumpLatestPhaseAndRef('idle');
-  }, [cancelLiveEndPin, setJumpLatestPhaseAndRef, timelineRouteKey]);
+  }, [applyNavigationFailure, cancelLiveEndPin, navigationController]);
+
+  const timelineRouteKey = `${room.roomId}\u0000${eventId ?? ''}`;
+  useEffect(() => {
+    if (!navigationController.handleRouteChange(timelineRouteKey)) return;
+    cancelLiveEndPin();
+    syncNavigationPhase();
+  }, [cancelLiveEndPin, navigationController, syncNavigationPhase, timelineRouteKey]);
+
+  useEffect(
+    () => () => {
+      navigationController.dispose();
+    },
+    [navigationController]
+  );
 
   useEffect(() => {
     const scrollEl = scrollRef.current;
@@ -1071,8 +1048,8 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
       beginUserScroll();
       if (
         liveEndPinRef.current ||
-        jumpLatestPhaseRef.current === 'loading' ||
-        jumpLatestPhaseRef.current === 'settling'
+        navigationController.phase === 'loading' ||
+        navigationController.phase === 'settling'
       ) {
         cancelLiveEndPinForUser();
       }
@@ -1091,8 +1068,8 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
         beginUserScroll();
         if (
           liveEndPinRef.current ||
-          jumpLatestPhaseRef.current === 'loading' ||
-          jumpLatestPhaseRef.current === 'settling'
+          navigationController.phase === 'loading' ||
+          navigationController.phase === 'settling'
         ) {
           cancelLiveEndPinForUser();
         }
@@ -1115,7 +1092,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
         userScrollIdleTimerRef.current = undefined;
       }
     };
-  }, [beginUserScroll, cancelLiveEndPinForUser, finishUserScroll]);
+  }, [beginUserScroll, cancelLiveEndPinForUser, finishUserScroll, navigationController]);
 
   useEffect(() => {
     timelineRowsBuildStateRef.current = undefined;
@@ -1366,21 +1343,20 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
   isActuallyAtLiveBottomRef.current = isActuallyAtLiveBottom;
 
   const getPersistableAtLiveBottom = useCallback((): boolean => {
-    if (jumpLatestPhaseRef.current === 'loading' || jumpLatestPhaseRef.current === 'settling') {
+    if (navigationController.phase === 'loading' || navigationController.phase === 'settling') {
       return false;
     }
     if (isActuallyAtLiveBottomRef.current()) return true;
     return atLiveEndRef.current && (atBottomRef.current || liveEndPinRef.current);
-  }, []);
+  }, [navigationController]);
   const persistLiveBottomViewport = useCallback(() => {
     setRoomTimelineViewport(room.roomId, {
       atBottom: true,
-      liveTailEventId: getPersistedLiveTailEventId(
-        jumpLatestAuthoritativeTailEventIdRef.current,
+      liveTailEventId: navigationController.getPersistedLiveTailEventId(
         getLoadedLiveTailEventId(room)
       ),
     });
-  }, [room]);
+  }, [navigationController, room]);
 
   useEffect(
     () => () => {
@@ -1394,10 +1370,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
         atBottom: atLiveBottom,
         anchor,
         liveTailEventId: atLiveBottom
-          ? getPersistedLiveTailEventId(
-              jumpLatestAuthoritativeTailEventIdRef.current,
-              getLoadedLiveTailEventId(room)
-            )
+          ? navigationController.getPersistedLiveTailEventId(getLoadedLiveTailEventId(room))
           : undefined,
       });
     },
@@ -1405,6 +1378,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
       eventId,
       getPersistableAtLiveBottom,
       getPersistableVirtualAnchor,
+      navigationController,
       room,
       room.roomId,
       savedViewport,
@@ -1664,7 +1638,9 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
     useCallback(
       (mEvt: MatrixEvent) => {
         const canAdvanceReadAtLiveTail = () =>
-          !liveEndPinRef.current && jumpLatestPhase !== 'loading' && jumpLatestPhase !== 'settling';
+          !liveEndPinRef.current &&
+          navigationController.phase !== 'loading' &&
+          navigationController.phase !== 'settling';
         const shouldFollowLiveEnd =
           liveEndPinRef.current || isActuallyAtLiveBottom() || atBottomRef.current;
         const shouldReattachLiveTimeline =
@@ -1677,7 +1653,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
           const shouldReplaceVisibleTimeline = shouldFollowLiveEnd || timelineRows.length === 0;
           if (shouldReplaceVisibleTimeline && timelineHasEvents(nextTimeline)) {
             liveTimelineResetPendingRef.current = false;
-            jumpLatestAuthoritativeTailEventIdRef.current = undefined;
+            navigationController.reattachLiveTimeline();
             setTimeline(nextTimeline);
           }
 
@@ -1746,7 +1722,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
         room,
         unreadInfo,
         hideActivity,
-        jumpLatestPhase,
+        navigationController,
         setAtBottomState,
         startLiveEndPin,
         startTimelineTransition,
@@ -1799,10 +1775,17 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
         if (!isActuallyAtLiveBottom() && !atBottomRef.current && !liveEndPinRef.current) {
           captureVirtualAnchor();
         }
-        jumpLatestAuthoritativeTailEventIdRef.current = undefined;
+        navigationController.reattachLiveTimeline();
         setTimeline(nextTimeline);
       }
-    }, [captureVirtualAnchor, isActuallyAtLiveBottom, room, liveTimelineLinked, traceTimeline])
+    }, [
+      captureVirtualAnchor,
+      isActuallyAtLiveBottom,
+      navigationController,
+      room,
+      liveTimelineLinked,
+      traceTimeline,
+    ])
   );
 
   useLiveTimelineReset(
@@ -1850,12 +1833,12 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
   const tryAutoMarkAsRead = useCallback(() => {
     if (
       liveEndPinRef.current ||
-      jumpLatestPhaseRef.current === 'loading' ||
-      jumpLatestPhaseRef.current === 'settling'
+      navigationController.phase === 'loading' ||
+      navigationController.phase === 'settling'
     ) {
       return;
     }
-    const authoritativeTailEventId = jumpLatestAuthoritativeTailEventIdRef.current;
+    const authoritativeTailEventId = navigationController.authoritativeTailEventId;
     const timelineTailEvent = authoritativeTailEventId
       ? getTimelineWindowTailEvent(timeline)
       : undefined;
@@ -1882,7 +1865,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
     if (authoritativeTailEvent || latestTimeline === room.getLiveTimeline()) {
       requestAnimationFrame(markConfirmedBottomAsRead);
     }
-  }, [hideActivity, mx, room, timeline, traceTimeline]);
+  }, [hideActivity, mx, navigationController, room, timeline, traceTimeline]);
 
   useLayoutEffect(() => {
     if (!liveEndPinRef.current || !loadedAtEnd || timelineRows.length === 0) {
@@ -1950,21 +1933,21 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
         }
         cancelLiveEndPin();
         setAtBottomState(bottomConfirmed);
-        if (jumpLatestPhase === 'settling') {
+        if (navigationController.phase === 'settling') {
           if (bottomConfirmed) {
             persistLiveBottomViewport();
-            const focusedEvent = jumpLatestFocusedEventRef.current;
-            jumpLatestPreviousTimelineRef.current = undefined;
-            jumpLatestFocusedEventRef.current = undefined;
-            setJumpLatestPhaseAndRef('idle');
+            const completion = navigationController.completeSettlement(
+              true,
+              `${room.roomId}\u0000`
+            );
+            syncNavigationPhase();
             tryAutoMarkAsRead();
-            if (focusedEvent) {
-              jumpLatestExpectedRouteKeyRef.current = `${room.roomId}\u0000`;
+            if (completion.focusedEventId) {
               navigateRoom(room.roomId, undefined, { replace: true });
             }
           } else {
-            restorePreJumpTimeline();
-            setJumpLatestPhaseAndRef('error');
+            const completion = navigationController.completeSettlement(false);
+            if (completion.failure) applyNavigationFailure(completion.failure);
           }
         }
         return;
@@ -1988,16 +1971,17 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
     };
   }, [
     cancelLiveEndPin,
+    applyNavigationFailure,
     eventsLength,
     loadedAtEnd,
     jumpLatestPhase,
+    navigationController,
     persistLiveBottomViewport,
     navigateRoom,
-    restorePreJumpTimeline,
     room.roomId,
-    setJumpLatestPhaseAndRef,
     roomOpenMode,
     setAtBottomState,
+    syncNavigationPhase,
     timelineRows.length,
     virtualItems,
     virtualizer,
@@ -2198,17 +2182,13 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
   }, [scrollToElement, editId]);
 
   const handleJumpToLatest = async () => {
-    if (jumpLatestPhase === 'loading' || jumpLatestPhase === 'settling') return;
-    liveTailRefreshRequestRef.current += 1;
-    const requestId = latestTimelineRequestRef.current + 1;
-    latestTimelineRequestRef.current = requestId;
-    jumpLatestPreviousTimelineRef.current = timeline;
-    jumpLatestFocusedEventRef.current = eventId;
-    setJumpLatestPhaseAndRef('loading');
+    const requestId = navigationController.beginJump(timeline, eventId);
+    if (requestId === undefined) return;
+    syncNavigationPhase();
 
     try {
       const latestTimeline = await mx.getLatestTimeline(room.getUnfilteredTimelineSet());
-      if (!alive() || latestTimelineRequestRef.current !== requestId) return;
+      if (!alive() || navigationController.phase !== 'loading') return;
       const nextTimeline = latestTimeline
         ? getTimelineEndWindow(getLinkedTimelines(latestTimeline), PAGINATION_LIMIT)
         : getInitialTimeline(room, PAGINATION_LIMIT);
@@ -2217,25 +2197,25 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
       }
       const authoritativeTailEventId = getTimelineWindowTailEventId(nextTimeline);
       if (!authoritativeTailEventId) throw new Error('Latest timeline has no tail event');
+      if (!navigationController.resolveJump(requestId, authoritativeTailEventId)) return;
       pendingVirtualAnchorRef.current = undefined;
       pendingVirtualAnchorGenerationRef.current = undefined;
       restoringSavedViewportRef.current = false;
       lastKnownVirtualAnchorRef.current = undefined;
-      jumpLatestAuthoritativeTailEventIdRef.current = authoritativeTailEventId;
       setTimeline(nextTimeline);
       liveTimelineResetPendingRef.current = false;
       firstStableBottomLoggedRef.current = false;
-      setJumpLatestPhaseAndRef('settling');
+      syncNavigationPhase();
       startLiveEndPin();
       traceTimeline('room-timeline.jump-latest', {
         eventCount: getTimelinesEventsCount(nextTimeline.linkedTimelines),
         fromLiveTimeline: nextTimeline.linkedTimelines.includes(getLiveTimeline(room)),
       });
     } catch (err) {
-      if (!alive() || latestTimelineRequestRef.current !== requestId) return;
-      cancelLiveEndPin();
-      restorePreJumpTimeline();
-      setJumpLatestPhaseAndRef('error');
+      if (!alive()) return;
+      const failure = navigationController.rejectJump(requestId);
+      if (!failure) return;
+      applyNavigationFailure(failure);
       traceTimeline('room-timeline.jump-latest-failed', {
         errorType: err instanceof Error ? err.name : typeof err,
       });
