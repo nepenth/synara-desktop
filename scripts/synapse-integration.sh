@@ -55,22 +55,7 @@ initialize_runtime() {
     printf 'SYNARA_GID=%s\n' "$(id -g)" >> "$env_file"
   fi
 
-  runtime_password="$(sed -n 's/^SYNARA_POSTGRES_PASSWORD=//p' "$env_file")"
-  runtime_port="$(sed -n 's/^SYNARA_PORT=//p' "$env_file")"
-  runtime_uid="$(sed -n 's/^SYNARA_UID=//p' "$env_file")"
-  runtime_gid="$(sed -n 's/^SYNARA_GID=//p' "$env_file")"
-  if [[ ! "$runtime_password" =~ ^[a-f0-9]{64}$ ]]; then
-    echo "Generated PostgreSQL password is missing or malformed; run '$0 reset'." >&2
-    exit 65
-  fi
-  if [[ ! "$runtime_port" =~ ^[1-9][0-9]{3,4}$ ]] || (( runtime_port < 1024 || runtime_port > 65535 )); then
-    echo "Generated harness port is missing or malformed; run '$0 reset'." >&2
-    exit 65
-  fi
-  if [[ ! "$runtime_uid" =~ ^[0-9]+$ || ! "$runtime_gid" =~ ^[0-9]+$ ]]; then
-    echo "Generated harness UID/GID is missing or malformed; run '$0 reset'." >&2
-    exit 65
-  fi
+  load_runtime
 
   if [[ ! -f "$config_file" ]]; then
     registration_secret="$(openssl rand -hex 32)"
@@ -89,6 +74,37 @@ initialize_runtime() {
     key_material="$(openssl rand -base64 32 | tr -d '\n=')"
     printf 'ed25519 a_synara %s\n' "$key_material" > "$signing_key_file"
   fi
+}
+
+load_runtime() {
+  runtime_password="$(sed -n 's/^SYNARA_POSTGRES_PASSWORD=//p' "$env_file")"
+  runtime_port="$(sed -n 's/^SYNARA_PORT=//p' "$env_file")"
+  runtime_uid="$(sed -n 's/^SYNARA_UID=//p' "$env_file")"
+  runtime_gid="$(sed -n 's/^SYNARA_GID=//p' "$env_file")"
+  if [[ ! "$runtime_password" =~ ^[a-f0-9]{64}$ ]]; then
+    echo "Generated PostgreSQL password is missing or malformed; run '$0 reset'." >&2
+    exit 65
+  fi
+  if [[ ! "$runtime_port" =~ ^[1-9][0-9]{3,4}$ ]] || (( runtime_port < 1024 || runtime_port > 65535 )); then
+    echo "Generated harness port is missing or malformed; run '$0 reset'." >&2
+    exit 65
+  fi
+  if [[ ! "$runtime_uid" =~ ^[0-9]+$ || ! "$runtime_gid" =~ ^[0-9]+$ ]]; then
+    echo "Generated harness UID/GID is missing or malformed; run '$0 reset'." >&2
+    exit 65
+  fi
+}
+
+require_initialized_runtime() {
+  if [[ ! -f "$env_file" || ! -f "$config_file" || ! -f "$signing_key_file" ]]; then
+    echo "The disposable Synapse harness is not initialized; run '$0 up' first." >&2
+    return 65
+  fi
+  load_runtime
+}
+
+clear_runtime() {
+  find "$runtime_dir" -mindepth 1 -maxdepth 1 ! -name .gitkeep -exec rm -rf -- {} +
 }
 
 require_command docker
@@ -116,15 +132,17 @@ case "$command_name" in
     if [[ -f "$env_file" ]]; then
       compose down --volumes --remove-orphans
     fi
-    rm -f "$env_file" "$config_file" "$signing_key_file"
+    clear_runtime
     echo "Removed disposable Synapse state and generated secrets."
     ;;
   status)
-    initialize_runtime
+    if ! require_initialized_runtime; then
+      exit 0
+    fi
     compose ps
     ;;
   logs)
-    initialize_runtime
+    require_initialized_runtime
     compose logs --follow synapse
     ;;
   create-user)
