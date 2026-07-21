@@ -20,10 +20,20 @@ type ReadMarkerRequest = {
   privateReceipt: boolean;
 };
 
+type ReadMarkerWaiter = {
+  resolve: () => void;
+  reject: (error: unknown) => void;
+};
+
+type ReadMarkerBatch = {
+  request: ReadMarkerRequest;
+  waiters: Set<ReadMarkerWaiter>;
+};
+
 type RoomReadMarkerQueue = {
-  active?: ReadMarkerRequest;
-  pending?: ReadMarkerRequest;
-  running?: Promise<void>;
+  active?: ReadMarkerBatch;
+  pending?: ReadMarkerBatch;
+  running: boolean;
   lastCompleted?: MatrixEvent;
   lastCompletedPrivateReceipt?: boolean;
 };
@@ -122,7 +132,7 @@ const getRoomReadMarkerQueue = (mx: MatrixClient, roomId: string): RoomReadMarke
 
   let queue = clientQueues.get(roomId);
   if (!queue) {
-    queue = {};
+    queue = { running: false };
     clientQueues.set(roomId, queue);
   }
   return queue;
@@ -134,7 +144,7 @@ const commitReadMarker = async (
   request: ReadMarkerRequest
 ): Promise<void> => {
   const eventId = request.event.getId();
-  if (!eventId) return;
+  if (!eventId) throw new Error('Cannot set a read marker without an event ID');
 
   await mx.setRoomReadMarkers(
     room.roomId,
@@ -153,70 +163,113 @@ const clearCustomUnread = async (mx: MatrixClient, room: Room): Promise<void> =>
   await clearUnreadAnchor(mx, room.roomId);
 };
 
+const resolveReadMarkerBatch = (batch: ReadMarkerBatch): void => {
+  batch.waiters.forEach((waiter) => waiter.resolve());
+  batch.waiters.clear();
+};
+
+const rejectReadMarkerBatch = (batch: ReadMarkerBatch, error: unknown): void => {
+  batch.waiters.forEach((waiter) => waiter.reject(error));
+  batch.waiters.clear();
+};
+
+const drainReadMarkerQueue = async (
+  mx: MatrixClient,
+  room: Room,
+  queue: RoomReadMarkerQueue
+): Promise<void> => {
+  try {
+    while (queue.pending) {
+      const batch = queue.pending;
+      queue.pending = undefined;
+      queue.active = batch;
+      try {
+        await commitReadMarker(mx, room, batch.request);
+        if (
+          !queue.lastCompleted ||
+          compareReadMarkerEvents(room, batch.request.event, queue.lastCompleted) >= 0
+        ) {
+          queue.lastCompleted = batch.request.event;
+          queue.lastCompletedPrivateReceipt = batch.request.privateReceipt;
+        }
+        resolveReadMarkerBatch(batch);
+      } catch (error) {
+        rejectReadMarkerBatch(batch, error);
+      } finally {
+        queue.active = undefined;
+      }
+    }
+  } finally {
+    queue.running = false;
+    if (queue.pending) {
+      queue.running = true;
+      void drainReadMarkerQueue(mx, room, queue);
+    }
+  }
+};
+
+const startReadMarkerQueue = (mx: MatrixClient, room: Room, queue: RoomReadMarkerQueue): void => {
+  if (queue.running) return;
+  queue.running = true;
+  void drainReadMarkerQueue(mx, room, queue);
+};
+
 const enqueueReadMarker = (
   mx: MatrixClient,
   room: Room,
   request: ReadMarkerRequest
 ): Promise<void> => {
   const queue = getRoomReadMarkerQueue(mx, room.roomId);
+  let waiter!: ReadMarkerWaiter;
+  const result = new Promise<void>((resolve, reject) => {
+    waiter = { resolve, reject };
+  });
+
   if (queue.lastCompleted) {
     const completedOrdering = compareReadMarkerEvents(room, request.event, queue.lastCompleted);
-    if (completedOrdering < 0) return queue.running ?? Promise.resolve();
-    if (completedOrdering === 0 && request.privateReceipt === queue.lastCompletedPrivateReceipt) {
-      return clearCustomUnread(mx, room);
+    if (
+      completedOrdering < 0 ||
+      (completedOrdering === 0 && request.privateReceipt === queue.lastCompletedPrivateReceipt)
+    ) {
+      void clearCustomUnread(mx, room).then(waiter.resolve, waiter.reject);
+      return result;
     }
   }
 
   if (queue.active) {
-    const activeOrdering = compareReadMarkerEvents(room, request.event, queue.active.event);
+    const activeOrdering = compareReadMarkerEvents(room, request.event, queue.active.request.event);
     if (
       activeOrdering < 0 ||
-      (activeOrdering === 0 && request.privateReceipt === queue.active.privateReceipt)
+      (activeOrdering === 0 && request.privateReceipt === queue.active.request.privateReceipt)
     ) {
-      return queue.running ?? Promise.resolve();
+      queue.active.waiters.add(waiter);
+      return result;
     }
   }
 
-  if (!queue.pending || compareReadMarkerEvents(room, request.event, queue.pending.event) >= 0) {
-    queue.pending = request;
+  if (queue.pending) {
+    const pendingOrdering = compareReadMarkerEvents(
+      room,
+      request.event,
+      queue.pending.request.event
+    );
+    if (
+      pendingOrdering < 0 ||
+      (pendingOrdering === 0 && request.privateReceipt === queue.pending.request.privateReceipt)
+    ) {
+      queue.pending.waiters.add(waiter);
+      return result;
+    }
+    queue.pending = {
+      request,
+      waiters: new Set([...queue.pending.waiters, waiter]),
+    };
+  } else {
+    queue.pending = { request, waiters: new Set([waiter]) };
   }
 
-  if (!queue.running) {
-    queue.running = (async () => {
-      let lastError: unknown;
-      while (queue.pending) {
-        const next = queue.pending;
-        queue.pending = undefined;
-        if (
-          queue.lastCompleted &&
-          compareReadMarkerEvents(room, next.event, queue.lastCompleted) < 0
-        ) {
-          continue;
-        }
-        queue.active = next;
-        try {
-          await commitReadMarker(mx, room, next);
-          lastError = undefined;
-          if (
-            !queue.lastCompleted ||
-            compareReadMarkerEvents(room, next.event, queue.lastCompleted) >= 0
-          ) {
-            queue.lastCompleted = next.event;
-            queue.lastCompletedPrivateReceipt = next.privateReceipt;
-          }
-        } catch (error) {
-          lastError = error;
-        } finally {
-          queue.active = undefined;
-        }
-      }
-      if (lastError) throw lastError;
-    })().finally(() => {
-      queue.running = undefined;
-    });
-  }
-
-  return queue.running;
+  startReadMarkerQueue(mx, room, queue);
+  return result;
 };
 
 export async function markAsRead(

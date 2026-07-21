@@ -216,7 +216,7 @@ test('markAsRead sends a private receipt in the same exact read-marker request',
 
 test('markAsRead repairs a stale fully-read marker even when the receipt is already latest', async () => {
   const latest = createTimelineEvent('$latest');
-  let markerWrites = 0;
+  let markerArgs: any[] | undefined;
   const room = {
     roomId: '!room:example.org',
     accountData: { get: () => undefined },
@@ -229,14 +229,14 @@ test('markAsRead repairs a stale fully-read marker even when the receipt is alre
     getRoom: () => room,
     getUserId: () => '@alice:example.org',
     getAccountData: () => undefined,
-    setRoomReadMarkers: async () => {
-      markerWrites += 1;
+    setRoomReadMarkers: async (...args: any[]) => {
+      markerArgs = args;
     },
   } as any;
 
   await markAsRead(mx, room.roomId, false, 'loaded-live-tail');
 
-  assert.equal(markerWrites, 1);
+  assert.deepEqual(markerArgs, [room.roomId, '$latest', latest, undefined]);
 });
 
 test('markAsRead clears custom unread state without resending an already-current marker', async () => {
@@ -370,6 +370,130 @@ test('markAsRead serializes writes and coalesces pending markers to the newest e
 
   await Promise.all([firstRequest, duplicateFirstRequest, secondRequest, thirdRequest]);
   assert.deepEqual(writes, ['$first', '$third']);
+});
+
+test('read-marker waiters preserve a successful request when the following write fails', async () => {
+  const first = createTimelineEvent('$first', { ts: 1 });
+  const second = createTimelineEvent('$second', { ts: 2 });
+  let liveEvents = [first];
+  let notifyStarted: (() => void) | undefined;
+  const firstWriteStarted = new Promise<void>((resolve) => {
+    notifyStarted = resolve;
+  });
+  let releaseFirst: (() => void) | undefined;
+  const firstWriteBlocked = new Promise<void>((resolve) => {
+    releaseFirst = resolve;
+  });
+  const writes: string[] = [];
+  const room = {
+    roomId: '!success-then-fail:example.org',
+    accountData: { get: () => undefined },
+    getLiveTimeline: () => ({ getEvents: () => liveEvents }),
+    compareEventOrdering: (leftId: string, rightId: string) =>
+      liveEvents.findIndex((event) => event.getId() === leftId) -
+      liveEvents.findIndex((event) => event.getId() === rightId),
+  } as any;
+  const mx = {
+    getRoom: () => room,
+    getUserId: () => '@alice:example.org',
+    getAccountData: () => undefined,
+    setRoomReadMarkers: async (_roomId: string, eventId: string) => {
+      writes.push(eventId);
+      if (eventId === '$first') {
+        notifyStarted?.();
+        await firstWriteBlocked;
+        return;
+      }
+      throw new Error('second write failed');
+    },
+  } as any;
+
+  const firstRequest = markAsRead(mx, room.roomId, false, 'loaded-live-tail');
+  await firstWriteStarted;
+  liveEvents = [first, second];
+  const secondRequest = markAsRead(mx, room.roomId, false, 'loaded-live-tail');
+  const secondOutcome = assert.rejects(secondRequest, /second write failed/);
+  releaseFirst?.();
+
+  await firstRequest;
+  await secondOutcome;
+  assert.deepEqual(writes, ['$first', '$second']);
+});
+
+test('read-marker waiters reject a failed request without poisoning a newer success', async () => {
+  const first = createTimelineEvent('$first', { ts: 1 });
+  const second = createTimelineEvent('$second', { ts: 2 });
+  let liveEvents = [first];
+  let notifyStarted: (() => void) | undefined;
+  const firstWriteStarted = new Promise<void>((resolve) => {
+    notifyStarted = resolve;
+  });
+  let releaseFirst: (() => void) | undefined;
+  const firstWriteBlocked = new Promise<void>((resolve) => {
+    releaseFirst = resolve;
+  });
+  const writes: string[] = [];
+  const room = {
+    roomId: '!fail-then-success:example.org',
+    accountData: { get: () => undefined },
+    getLiveTimeline: () => ({ getEvents: () => liveEvents }),
+    compareEventOrdering: (leftId: string, rightId: string) =>
+      liveEvents.findIndex((event) => event.getId() === leftId) -
+      liveEvents.findIndex((event) => event.getId() === rightId),
+  } as any;
+  const mx = {
+    getRoom: () => room,
+    getUserId: () => '@alice:example.org',
+    getAccountData: () => undefined,
+    setRoomReadMarkers: async (_roomId: string, eventId: string) => {
+      writes.push(eventId);
+      if (eventId === '$first') {
+        notifyStarted?.();
+        await firstWriteBlocked;
+        throw new Error('first write failed');
+      }
+    },
+  } as any;
+
+  const firstRequest = markAsRead(mx, room.roomId, false, 'loaded-live-tail');
+  await firstWriteStarted;
+  liveEvents = [first, second];
+  const secondRequest = markAsRead(mx, room.roomId, false, 'loaded-live-tail');
+  const firstOutcome = assert.rejects(firstRequest, /first write failed/);
+  releaseFirst?.();
+
+  await firstOutcome;
+  await secondRequest;
+  assert.deepEqual(writes, ['$first', '$second']);
+});
+
+test('read-marker queue accepts a new request after the previous drain settles', async () => {
+  const first = createTimelineEvent('$first', { ts: 1 });
+  const second = createTimelineEvent('$second', { ts: 2 });
+  let liveEvents = [first];
+  const writes: string[] = [];
+  const room = {
+    roomId: '!drain-restart:example.org',
+    accountData: { get: () => undefined },
+    getLiveTimeline: () => ({ getEvents: () => liveEvents }),
+    compareEventOrdering: (leftId: string, rightId: string) =>
+      liveEvents.findIndex((event) => event.getId() === leftId) -
+      liveEvents.findIndex((event) => event.getId() === rightId),
+  } as any;
+  const mx = {
+    getRoom: () => room,
+    getUserId: () => '@alice:example.org',
+    getAccountData: () => undefined,
+    setRoomReadMarkers: async (_roomId: string, eventId: string) => {
+      writes.push(eventId);
+    },
+  } as any;
+
+  await markAsRead(mx, room.roomId, false, 'loaded-live-tail');
+  liveEvents = [first, second];
+  await markAsRead(mx, room.roomId, false, 'loaded-live-tail');
+
+  assert.deepEqual(writes, ['$first', '$second']);
 });
 
 test('roomHaveUnread only infers unread from a loaded slice containing the read marker', () => {
