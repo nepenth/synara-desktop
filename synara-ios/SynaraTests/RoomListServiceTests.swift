@@ -775,19 +775,41 @@ final class RoomListServiceTests: XCTestCase {
             cachedRoomIDs: previousIDs,
             dynamicSnapshotRoomIDs: Set((0 ..< 100).map { "!room-\($0):matrix.org" }),
             requiresFullRemap: false,
-            hasReconciledCurrentCatchUpPage: true,
-            lastSuccessfulReconciliationAt: Date(timeIntervalSince1970: 100),
+            currentCatchUpPageCount: 1,
+            lastAttemptedCatchUpPageCount: 1,
+            lastAttemptedAt: Date(timeIntervalSince1970: 100),
             now: Date(timeIntervalSince1970: 120),
-            minimumInterval: 45
+            minimumInterval: 30
         ))
         XCTAssertTrue(RoomListAuthoritativePruningPolicy.shouldReconcile(
             cachedRoomIDs: previousIDs,
             dynamicSnapshotRoomIDs: Set((0 ..< 100).map { "!room-\($0):matrix.org" }),
             requiresFullRemap: false,
-            hasReconciledCurrentCatchUpPage: true,
-            lastSuccessfulReconciliationAt: Date(timeIntervalSince1970: 100),
-            now: Date(timeIntervalSince1970: 145),
-            minimumInterval: 45
+            currentCatchUpPageCount: 1,
+            lastAttemptedCatchUpPageCount: 1,
+            lastAttemptedAt: Date(timeIntervalSince1970: 100),
+            now: Date(timeIntervalSince1970: 130),
+            minimumInterval: 30
+        ))
+        XCTAssertTrue(RoomListAuthoritativePruningPolicy.shouldReconcile(
+            cachedRoomIDs: previousIDs,
+            dynamicSnapshotRoomIDs: Set((0 ..< 100).map { "!room-\($0):matrix.org" }),
+            requiresFullRemap: false,
+            currentCatchUpPageCount: 2,
+            lastAttemptedCatchUpPageCount: 1,
+            lastAttemptedAt: Date(timeIntervalSince1970: 100),
+            now: Date(timeIntervalSince1970: 101),
+            minimumInterval: 30
+        ))
+        XCTAssertTrue(RoomListAuthoritativePruningPolicy.shouldReconcile(
+            cachedRoomIDs: previousIDs,
+            dynamicSnapshotRoomIDs: Set((0 ..< 100).map { "!room-\($0):matrix.org" }),
+            requiresFullRemap: true,
+            currentCatchUpPageCount: 1,
+            lastAttemptedCatchUpPageCount: 1,
+            lastAttemptedAt: Date(timeIntervalSince1970: 100),
+            now: Date(timeIntervalSince1970: 101),
+            minimumInterval: 30
         ))
     }
 
@@ -916,6 +938,47 @@ final class RoomListServiceTests: XCTestCase {
         ))
         XCTAssertTrue(heartbeatOnlyAccumulator.takePendingSnapshot()?.isReconciliationHeartbeat ?? false)
         heartbeatOnlyAccumulator.finish()
+
+        let heartbeatThenReal = RoomListLatestSnapshotAccumulator<String>()
+        heartbeatThenReal.yield(RoomListCoalescingSnapshot(
+            rooms: ["!one"],
+            changedRoomIDs: [],
+            requiresFullRemap: false,
+            isReconciliationHeartbeat: true
+        ))
+        heartbeatThenReal.yield(RoomListCoalescingSnapshot(
+            rooms: ["!one", "!two"],
+            changedRoomIDs: ["!two"],
+            requiresFullRemap: true,
+            explicitlyRemovedRoomIDs: ["!removed"]
+        ))
+        let heartbeatThenRealSnapshot = heartbeatThenReal.takePendingSnapshot()
+        XCTAssertFalse(heartbeatThenRealSnapshot?.isReconciliationHeartbeat ?? true)
+        XCTAssertEqual(heartbeatThenRealSnapshot?.changedRoomIDs, ["!two"])
+        XCTAssertEqual(heartbeatThenRealSnapshot?.explicitlyRemovedRoomIDs, ["!removed"])
+        XCTAssertTrue(heartbeatThenRealSnapshot?.requiresFullRemap ?? false)
+        heartbeatThenReal.finish()
+
+        let realThenHeartbeat = RoomListLatestSnapshotAccumulator<String>()
+        realThenHeartbeat.yield(RoomListCoalescingSnapshot(
+            rooms: ["!one"],
+            changedRoomIDs: ["!one"],
+            requiresFullRemap: true,
+            explicitlyRemovedRoomIDs: ["!removed"]
+        ))
+        realThenHeartbeat.yield(RoomListCoalescingSnapshot(
+            rooms: ["!one", "!two"],
+            changedRoomIDs: [],
+            requiresFullRemap: false,
+            isReconciliationHeartbeat: true
+        ))
+        let realThenHeartbeatSnapshot = realThenHeartbeat.takePendingSnapshot()
+        XCTAssertFalse(realThenHeartbeatSnapshot?.isReconciliationHeartbeat ?? true)
+        XCTAssertEqual(realThenHeartbeatSnapshot?.rooms, ["!one", "!two"])
+        XCTAssertEqual(realThenHeartbeatSnapshot?.changedRoomIDs, ["!one"])
+        XCTAssertEqual(realThenHeartbeatSnapshot?.explicitlyRemovedRoomIDs, ["!removed"])
+        XCTAssertTrue(realThenHeartbeatSnapshot?.requiresFullRemap ?? false)
+        realThenHeartbeat.finish()
     }
 
     private func makeActivityRoom(id: String, name: String, activity: Date) -> RoomSummary {
