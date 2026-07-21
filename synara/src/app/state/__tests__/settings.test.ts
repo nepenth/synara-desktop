@@ -63,10 +63,7 @@ test('settings store reads legacy desktop shortcuts from the shared settings blo
 
   assert.equal(store.getSharedSettings().themeId, 'aurora');
   assert.equal(store.getSharedSettings().timelineVirtualizationEnabled, false);
-  assert.equal(
-    (store.getSharedSettings() as Record<string, unknown>).desktopShortcutShow,
-    undefined
-  );
+  assert.equal('desktopShortcutShow' in store.getSharedSettings(), false);
   assert.deepEqual(store.getPlatformSettings(), {
     desktopShortcutShow: 'CmdOrCtrl+1',
     desktopShortcutLater: 'CmdOrCtrl+2',

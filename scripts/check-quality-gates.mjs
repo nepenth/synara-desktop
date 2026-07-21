@@ -340,6 +340,7 @@ export function inspectQualityGates({
   ]) {
     for (const command of [
       "npx playwright install --with-deps chromium",
+      "npm run typecheck",
       "npm run test:browser:timeline",
       "npm run check:security",
     ]) {
@@ -402,6 +403,7 @@ export function inspectQualityGates({
     ["node --test scripts/__tests__/*.test.mjs", undefined],
     ["cargo check --locked", "src-tauri"],
     ["cargo test --locked", "src-tauri"],
+    ["npm run typecheck", "synara"],
     ["npm run typecheck:modernization", "synara"],
     ["npm run test:modernization", "synara"],
     ["npm run test:browser:timeline", "synara"],

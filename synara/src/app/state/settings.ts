@@ -151,15 +151,12 @@ const readStoredSettings = (
   }
 };
 
-const pickKnownSettings = <T extends object>(
-  defaults: T,
-  source: Record<string, unknown> | undefined
-): T => {
+const pickKnownSettings = <T extends object>(defaults: T, source: object | undefined): T => {
   const settings = { ...defaults };
   if (!source) return settings;
 
   (Object.keys(defaults) as Array<keyof T>).forEach((key) => {
-    const value = source[String(key)];
+    const value: unknown = Reflect.get(source, key);
     if (value !== undefined) {
       settings[key] = value as T[typeof key];
     }

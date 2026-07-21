@@ -8,6 +8,7 @@
     "src/app/components/hermes/HermesAgentCard.tsx",
     "src/app/utils/__tests__/agentApprovals.test.ts",
     "src/app/utils/__tests__/desktop.test.ts",
+    "src/app/utils/__tests__/matrix.test.ts",
     "src/app/utils/__tests__/hermes.test.ts",
     "src/app/utils/__tests__/polls.test.ts",
     "src/app/utils/desktop.ts",
