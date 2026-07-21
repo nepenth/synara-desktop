@@ -247,6 +247,11 @@ export class TimelineNavigationController<TTimeline> {
     this.requestGeneration += 1;
     this.invalidateLiveTailRefresh();
     this.clearPhaseTimeout();
+    this.previousTimeline = undefined;
+    this.focusedEventId = undefined;
+    this.authoritativeTailEventIdValue = undefined;
+    this.expectedRouteKey = undefined;
+    this.phaseValue = 'idle';
   }
 
   private failActiveNavigation(
