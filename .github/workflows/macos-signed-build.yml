@@ -3,33 +3,35 @@ name: macOS Signed Build
 on:
   workflow_dispatch:
 
+concurrency:
+  group: macos-signed-build-${{ github.ref }}
+  cancel-in-progress: false
+
 permissions:
   contents: read
 
 jobs:
   macos-signed-build:
     name: Signed and notarized DMG
-    runs-on: macos-latest
-    env:
-      APPLE_CERTIFICATE_BASE64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
-      APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-      APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-      APPLE_ID: ${{ secrets.APPLE_ID }}
-      APPLE_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-      APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+    runs-on: macos-15
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      deployments: write
+    environment:
+      name: production-release
     steps:
       - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Setup Node.js
-        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .node-version
           package-manager-cache: false
 
       - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable 2026-07-22
         with:
           targets: aarch64-apple-darwin,x86_64-apple-darwin
 
@@ -45,6 +47,13 @@ jobs:
 
       - name: Validate macOS signing secrets
         shell: bash
+        env:
+          APPLE_CERTIFICATE_BASE64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           missing=()
           for name in \
@@ -67,6 +76,10 @@ jobs:
 
       - name: Import Developer ID Application certificate
         shell: bash
+        env:
+          APPLE_CERTIFICATE_BASE64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
         run: |
           certificate_path="$RUNNER_TEMP/developer-id-application.p12"
           keychain_path="$RUNNER_TEMP/synara-signing.keychain-db"
@@ -91,10 +104,12 @@ jobs:
           security find-identity -v -p codesigning "$keychain_path"
           security find-identity -v -p codesigning "$keychain_path" | grep -F "$APPLE_SIGNING_IDENTITY"
 
-      - name: Build signed and notarized macOS DMG
+      - name: Build signed macOS DMG
         run: npm run tauri build -- --target universal-apple-darwin --bundles dmg --config "{\"bundle\":{\"createUpdaterArtifacts\":false,\"macOS\":{\"signingIdentity\":\"${APPLE_SIGNING_IDENTITY}\",\"providerShortName\":\"${APPLE_TEAM_ID}\"}}}"
         env:
           NODE_OPTIONS: "--max_old_space_size=4096"
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
 
       - name: Verify macOS app signature
         run: |
@@ -112,6 +127,10 @@ jobs:
           spctl --assess --type execute --verbose=4 "$mount_dir/Synara.app"
 
       - name: Notarize and staple macOS DMG
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           dmg_path="$(find src-tauri/target/universal-apple-darwin/release/bundle/dmg -name 'Synara_*.dmg' -print -quit)"
           if [[ -z "$dmg_path" ]]; then
@@ -127,6 +146,12 @@ jobs:
           xcrun stapler staple "$dmg_path"
           xcrun stapler validate "$dmg_path"
           spctl --assess --type open --context context:primary-signature --verbose=4 "$dmg_path"
+
+      - name: Cleanup macOS signing material
+        if: always()
+        run: |
+          security delete-keychain "$RUNNER_TEMP/synara-signing.keychain-db" >/dev/null 2>&1 || true
+          rm -f -- "$RUNNER_TEMP/developer-id-application.p12"
 
       - name: Upload signed macOS DMG
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
