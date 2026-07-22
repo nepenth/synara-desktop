@@ -138,7 +138,7 @@ export const completeAuthenticatedLogin = async (
     ...(typeof loginRes.expires_in_ms === 'number' ? { expiresInMs: loginRes.expires_in_ms } : {}),
   };
 
-  await persistSession(session, { nativeSessionStore });
+  await persistSession(session, { nativeSessionStore, freshLogin: true });
   pushSession(loginBaseUrl, loginRes.access_token);
 };
 

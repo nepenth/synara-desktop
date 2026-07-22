@@ -72,6 +72,9 @@ struct TimelineItem: Identifiable, Equatable {
     let reactions: [String: Int]
     let isEncrypted: Bool
     let deliveryStatus: TimelineDeliveryStatus?
+    /// True when matrix-rust-sdk attached the signed-in user's durable read
+    /// receipt to this event in the active timeline provider.
+    let hasCurrentUserReadReceipt: Bool
 
     init(
         id: String,
@@ -85,7 +88,8 @@ struct TimelineItem: Identifiable, Equatable {
         isEdited: Bool,
         reactions: [String: Int],
         isEncrypted: Bool = false,
-        deliveryStatus: TimelineDeliveryStatus? = nil
+        deliveryStatus: TimelineDeliveryStatus? = nil,
+        hasCurrentUserReadReceipt: Bool = false
     ) {
         self.id = id
         self.eventID = eventID
@@ -99,6 +103,7 @@ struct TimelineItem: Identifiable, Equatable {
         self.reactions = reactions
         self.isEncrypted = isEncrypted
         self.deliveryStatus = deliveryStatus
+        self.hasCurrentUserReadReceipt = hasCurrentUserReadReceipt
     }
 
     var isLocalPending: Bool {
@@ -118,7 +123,8 @@ struct TimelineItem: Identifiable, Equatable {
             isEdited: isEdited,
             reactions: reactions,
             isEncrypted: isEncrypted,
-            deliveryStatus: deliveryStatus
+            deliveryStatus: deliveryStatus,
+            hasCurrentUserReadReceipt: hasCurrentUserReadReceipt
         )
     }
 
@@ -135,7 +141,8 @@ struct TimelineItem: Identifiable, Equatable {
             isEdited: isEdited,
             reactions: reactions,
             isEncrypted: isEncrypted,
-            deliveryStatus: deliveryStatus
+            deliveryStatus: deliveryStatus,
+            hasCurrentUserReadReceipt: hasCurrentUserReadReceipt
         )
     }
 
@@ -753,8 +760,29 @@ enum RoomTimelineMode: Equatable {
 struct RoomTimelineSessionFeed {
     let generation: UInt64
     let mode: RoomTimelineMode
+    let providerIsLive: Bool
     let initialOutcome: TimelineLoadOutcome
     let updates: AsyncStream<TimelineLoadOutcome>
+
+    func presenting(mode: RoomTimelineMode) -> RoomTimelineSessionFeed {
+        RoomTimelineSessionFeed(
+            generation: generation,
+            mode: mode,
+            providerIsLive: providerIsLive,
+            initialOutcome: initialOutcome,
+            updates: updates
+        )
+    }
+}
+
+enum RoomTimelineProviderPresentationPolicy {
+    static func modeWhenPinned(providerIsLive: Bool, currentMode: RoomTimelineMode) -> RoomTimelineMode {
+        providerIsLive ? .live : currentMode
+    }
+
+    static func focusedEventID(providerIsLive: Bool, currentMode: RoomTimelineMode) -> String? {
+        providerIsLive ? nil : currentMode.focusedEventID
+    }
 }
 
 enum RoomTimelineLiveTransition {
@@ -794,6 +822,7 @@ actor RoomTimelineSession {
         return RoomTimelineSessionFeed(
             generation: requestedGeneration,
             mode: mode,
+            providerIsLive: mode.isLive,
             initialOutcome: accepted,
             updates: makeUpdateStream(mode: mode, generation: requestedGeneration)
         )
@@ -816,6 +845,7 @@ actor RoomTimelineSession {
                 RoomTimelineSessionFeed(
                     generation: nextGeneration,
                     mode: .live,
+                    providerIsLive: true,
                     initialOutcome: .loaded(serverItems),
                     updates: makeUpdateStream(mode: .live, generation: nextGeneration)
                 )

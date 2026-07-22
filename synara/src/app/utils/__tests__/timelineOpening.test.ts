@@ -1,11 +1,15 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { Direction, type EventTimeline, type MatrixEvent, type Room } from 'matrix-js-sdk';
+import { EventType } from 'matrix-js-sdk/lib/@types/event';
+import { ReceiptType, type WrappedReceipt } from 'matrix-js-sdk/lib/@types/read_receipts';
 import {
   buildRoomTimelineOpenDiagnostics,
+  canReplaceTimelineWindowPreservingAnchor,
   getEmptyTimeline,
   getInitialTimeline,
   getRoomTimelineOpenMode,
+  getRoomReadFrontierRevisionKey,
   getRoomUnreadInfo,
   getRoomUnreadInfoInTimelineWindow,
   getTimelineEndWindow,
@@ -13,8 +17,14 @@ import {
   getTimelineRangeAfterPagination,
   getTimelineWindowTailEvent,
   getTimelineWindowTailEventId,
+  getTimelineWindowIdentitySnapshot,
   hasUnreadForInitialScroll,
+  LatestTimelineStructuralUpdateQueue,
+  preserveTimelineStructuralUpdateAnchor,
+  receiptEventContainsUser,
+  resolveRoomReadFrontier,
   canRestoreViewportFromInitialTimeline,
+  shouldAdoptTimelineRefresh,
   shouldGateViewportRestoreOnUnread,
   shouldShowJumpToUnread,
   timelineWindowContainsEventId,
@@ -60,25 +70,75 @@ const link = (...timelines: TimelineStub[]): TimelineStub[] => {
 const roomWithTimelines = ({
   live,
   eventTimelines = {},
-  readUpTo,
+  fullyRead,
+  markedUnread = false,
+  publicReceipt,
+  privateReceipt,
   userId = '@alice:example.org',
 }: {
   live: TimelineStub;
   eventTimelines?: Record<string, TimelineStub | null>;
-  readUpTo?: string;
+  fullyRead?: string;
+  markedUnread?: boolean;
+  publicReceipt?: WrappedReceipt;
+  privateReceipt?: WrappedReceipt;
   userId?: string;
-}): Room =>
-  ({
+}): Room => {
+  const linkedTimelines: TimelineStub[] = [];
+  let first: TimelineStub = live;
+  while (first.backward) first = first.backward;
+  let current: TimelineStub | undefined = first;
+  while (current) {
+    linkedTimelines.push(current);
+    current = current.forward;
+  }
+  const linkedEvents = linkedTimelines.flatMap((linkedTimeline) => linkedTimeline.getEvents());
+  const eventIndex = new Map(
+    linkedEvents.flatMap((matrixEvent, index) => {
+      const eventId = matrixEvent.getId();
+      return eventId ? [[eventId, index] as const] : [];
+    })
+  );
+  const accountData = (type: EventType | string): MatrixEvent | undefined => {
+    if (type === EventType.FullyRead && fullyRead) {
+      return { getContent: () => ({ event_id: fullyRead }) } as MatrixEvent;
+    }
+    if (type === EventType.MarkedUnread) {
+      return { getContent: () => ({ unread: markedUnread }) } as MatrixEvent;
+    }
+    return undefined;
+  };
+
+  return {
     client: {
       getUserId: () => userId,
     },
-    getEventReadUpTo: () => readUpTo,
+    getAccountData: accountData,
+    accountData: new Map(),
+    getReadReceiptForUserId: (
+      _receiptUserId: string,
+      _ignoreSynthesized: boolean,
+      receiptType: ReceiptType
+    ) => (receiptType === ReceiptType.ReadPrivate ? privateReceipt : publicReceipt) ?? null,
+    compareEventOrdering: (leftEventId: string, rightEventId: string) => {
+      const leftIndex = eventIndex.get(leftEventId);
+      const rightIndex = eventIndex.get(rightEventId);
+      if (leftIndex === undefined || rightIndex === undefined) return null;
+      return Math.sign(leftIndex - rightIndex);
+    },
+    findEventById: (eventId: string) => linkedEvents.find((evt) => evt.getId() === eventId),
     getLiveTimeline: () => live,
     getUnfilteredTimelineSet: () => ({
       getLiveTimeline: () => live,
       getTimelineForEvent: (eventId: string) => eventTimelines[eventId] ?? null,
     }),
-  } as unknown as Room);
+  } as unknown as Room;
+};
+
+const receipt = (eventId: string, ts: number): WrappedReceipt => ({
+  eventId,
+  data: { ts },
+});
 
 test('timeline opening helpers create bounded live-end windows', () => {
   const [older, live] = link(timeline('older', ['$1', '$2']), timeline('live', ['$3', '$4']));
@@ -195,19 +255,20 @@ test('room unread info resolves explicit anchors and read receipts', () => {
   const [older, live] = link(timeline('older', ['$1']), timeline('live', ['$2']));
   const room = roomWithTimelines({
     live,
-    readUpTo: '$1',
+    publicReceipt: receipt('$1', 1),
+    markedUnread: true,
     eventTimelines: {
       $1: older,
       $2: live,
     },
   });
 
-  assert.deepEqual(getRoomUnreadInfo(room, undefined, true), {
+  assert.deepEqual(getRoomUnreadInfo(room, resolveRoomReadFrontier(room), true), {
     readUptoEventId: '$1',
     inLiveTimeline: true,
     scrollTo: true,
   });
-  assert.deepEqual(getRoomUnreadInfo(room, '$2'), {
+  assert.deepEqual(getRoomUnreadInfo(room, resolveRoomReadFrontier(room, '$2')), {
     readUptoEventId: '$2',
     inLiveTimeline: true,
     scrollTo: false,
@@ -225,7 +286,12 @@ test('room unread info tolerates missing read markers and detached timeline look
   });
 
   assert.equal(getRoomUnreadInfo(room), undefined);
-  assert.deepEqual(getRoomUnreadInfo(room, '$1'), {
+  const markedRoom = roomWithTimelines({
+    live,
+    markedUnread: true,
+    eventTimelines: { $1: detached },
+  });
+  assert.deepEqual(getRoomUnreadInfo(markedRoom, resolveRoomReadFrontier(markedRoom, '$1')), {
     readUptoEventId: '$1',
     inLiveTimeline: false,
     scrollTo: false,
@@ -237,7 +303,8 @@ test('room unread info only becomes an initial placement anchor inside the live-
   const window = getTimelineEndWindow([older, live], 3);
   const room = roomWithTimelines({
     live,
-    readUpTo: '$2',
+    publicReceipt: receipt('$2', 2),
+    markedUnread: true,
     eventTimelines: {
       $2: older,
       $3: live,
@@ -246,19 +313,189 @@ test('room unread info only becomes an initial placement anchor inside the live-
   });
 
   assert.equal(getRoomUnreadInfoInTimelineWindow(room, window), undefined);
-  assert.deepEqual(getRoomUnreadInfoInTimelineWindow(room, window, '$4', true), {
-    readUptoEventId: '$4',
-    inLiveTimeline: true,
-    scrollTo: true,
-  });
+  assert.deepEqual(
+    getRoomUnreadInfoInTimelineWindow(room, window, resolveRoomReadFrontier(room, '$4'), true),
+    {
+      readUptoEventId: '$4',
+      inLiveTimeline: true,
+      scrollTo: true,
+    }
+  );
 });
 
 test('initial unread detection accepts unread counts and explicit anchors', () => {
-  assert.equal(hasUnreadForInitialScroll(undefined), false);
-  assert.equal(hasUnreadForInitialScroll({ total: 0, highlight: 0, from: null }), false);
-  assert.equal(hasUnreadForInitialScroll({ total: 1, highlight: 0, from: null }), true);
-  assert.equal(hasUnreadForInitialScroll({ total: 0, highlight: 1, from: null }), true);
-  assert.equal(hasUnreadForInitialScroll(undefined, '$anchor'), true);
+  const unreadFrontier = {
+    eventId: '$anchor',
+    source: 'marked-unread-anchor' as const,
+    isExplicitlyMarkedUnread: true,
+    isAtLiveTail: false,
+  };
+  const normalFrontier = {
+    source: 'absent' as const,
+    isExplicitlyMarkedUnread: false,
+    isAtLiveTail: false,
+  };
+  assert.equal(hasUnreadForInitialScroll(undefined, normalFrontier), false);
+  assert.equal(
+    hasUnreadForInitialScroll({ total: 0, highlight: 0, from: null }, normalFrontier),
+    false
+  );
+  assert.equal(
+    hasUnreadForInitialScroll({ total: 1, highlight: 0, from: null }, normalFrontier),
+    true
+  );
+  assert.equal(
+    hasUnreadForInitialScroll({ total: 0, highlight: 1, from: null }, normalFrontier),
+    true
+  );
+  assert.equal(hasUnreadForInitialScroll(undefined, unreadFrontier), true);
+});
+
+test('read frontier chooses the newest SDK-ordered fully-read or real receipt position', () => {
+  const live = timeline('live', ['$1', '$2', '$3', '$4', '$5']);
+  const receiptAhead = roomWithTimelines({
+    live,
+    fullyRead: '$2',
+    publicReceipt: receipt('$3', 30),
+    privateReceipt: receipt('$4', 40),
+  });
+  assert.deepEqual(resolveRoomReadFrontier(receiptAhead), {
+    eventId: '$4',
+    source: 'private-receipt',
+    isExplicitlyMarkedUnread: false,
+    isAtLiveTail: false,
+  });
+
+  const fullyReadAhead = roomWithTimelines({
+    live,
+    fullyRead: '$4',
+    publicReceipt: receipt('$2', 50),
+  });
+  assert.deepEqual(resolveRoomReadFrontier(fullyReadAhead), {
+    eventId: '$4',
+    source: 'fully-read',
+    isExplicitlyMarkedUnread: false,
+    isAtLiveTail: false,
+  });
+});
+
+test('read frontier ignores stale Synara anchors unless the room is explicitly marked unread', () => {
+  const live = timeline('live', ['$old-anchor', '$tail']);
+  const normalRoom = roomWithTimelines({
+    live,
+    publicReceipt: receipt('$tail', 100),
+  });
+  const normalFrontier = resolveRoomReadFrontier(normalRoom, '$old-anchor');
+  assert.deepEqual(normalFrontier, {
+    eventId: '$tail',
+    source: 'public-receipt',
+    isExplicitlyMarkedUnread: false,
+    isAtLiveTail: true,
+  });
+  assert.equal(
+    hasUnreadForInitialScroll({ total: 17, highlight: 2, from: null }, normalFrontier),
+    false,
+    'stale unread counters do not pull a current receipt away from the live end'
+  );
+
+  const markedRoom = roomWithTimelines({
+    live,
+    markedUnread: true,
+    publicReceipt: receipt('$tail', 100),
+  });
+  assert.deepEqual(resolveRoomReadFrontier(markedRoom, '$old-anchor'), {
+    eventId: '$old-anchor',
+    source: 'marked-unread-anchor',
+    isExplicitlyMarkedUnread: true,
+    isAtLiveTail: false,
+  });
+});
+
+test('unorderable fully-read markers yield to durable receipts without using event timestamps', () => {
+  const live = timeline('live', ['$tail']);
+  const room = roomWithTimelines({
+    live,
+    fullyRead: '$unloaded-fully-read',
+    publicReceipt: receipt('$tail', 100),
+  });
+
+  assert.deepEqual(resolveRoomReadFrontier(room), {
+    eventId: '$tail',
+    source: 'public-receipt',
+    isExplicitlyMarkedUnread: false,
+    isAtLiveTail: true,
+  });
+});
+
+test('timeline refresh identity includes provider and tail event ID', () => {
+  const provider = timeline('live', ['$old-tail']);
+  const currentWindow = getTimelineEndWindow([provider], 80);
+  const currentIdentity = getTimelineWindowIdentitySnapshot(currentWindow);
+
+  assert.equal(shouldAdoptTimelineRefresh(currentIdentity, currentWindow), false);
+
+  provider.stubEvents = [event('$new-tail')];
+  const replacedTailWindow = getTimelineEndWindow([provider], 80);
+  assert.equal(
+    shouldAdoptTimelineRefresh(currentIdentity, replacedTailWindow),
+    true,
+    'equal count/range with a new event ID must refresh'
+  );
+
+  const replacementProvider = timeline('replacement', ['$old-tail']);
+  assert.equal(
+    shouldAdoptTimelineRefresh(currentIdentity, getTimelineEndWindow([replacementProvider], 80)),
+    true,
+    'provider replacement must refresh even if rows look identical'
+  );
+});
+
+test('structural update queue coalesces to the latest anchored update', () => {
+  type Update = { id: number; preserveAnchor: boolean };
+  const queue = new LatestTimelineStructuralUpdateQueue<Update>();
+  queue.enqueue(preserveTimelineStructuralUpdateAnchor({ id: 1, preserveAnchor: false }));
+  queue.enqueue(preserveTimelineStructuralUpdateAnchor({ id: 2, preserveAnchor: false }));
+
+  assert.equal(queue.hasPending(), true);
+  assert.deepEqual(queue.take(), { id: 2, preserveAnchor: true });
+  assert.equal(queue.take(), undefined);
+  assert.equal(queue.hasPending(), false);
+});
+
+test('bounded live refresh cannot replace a viewport anchored outside the latest 80 events', () => {
+  const live = timeline(
+    'live',
+    Array.from({ length: 100 }, (_, index) => `$event-${index}`)
+  );
+  const latestWindow = getTimelineEndWindow([live], 80);
+
+  assert.equal(canReplaceTimelineWindowPreservingAnchor(latestWindow, '$event-19'), false);
+  assert.equal(canReplaceTimelineWindowPreservingAnchor(latestWindow, '$event-20'), true);
+  assert.equal(canReplaceTimelineWindowPreservingAnchor(latestWindow, '$event-99'), true);
+});
+
+test('receipt advancement changes the frontier revision even when unread counts are unchanged', () => {
+  const live = timeline('live', ['$1', '$2', '$3']);
+  const first = resolveRoomReadFrontier(
+    roomWithTimelines({ live, publicReceipt: receipt('$1', 10) })
+  );
+  const advanced = resolveRoomReadFrontier(
+    roomWithTimelines({ live, publicReceipt: receipt('$2', 20) })
+  );
+
+  assert.notEqual(getRoomReadFrontierRevisionKey(first), getRoomReadFrontierRevisionKey(advanced));
+
+  const ownReceiptEvent = {
+    getContent: () => ({
+      $2: {
+        [ReceiptType.Read]: {
+          '@alice:example.org': { ts: 20 },
+        },
+      },
+    }),
+  } as unknown as MatrixEvent;
+  assert.equal(receiptEventContainsUser(ownReceiptEvent, '@alice:example.org'), true);
+  assert.equal(receiptEventContainsUser(ownReceiptEvent, '@bob:example.org'), false);
 });
 
 test('viewport restore gate uses the actual unread signal, not live-window placement', () => {

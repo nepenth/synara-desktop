@@ -74,6 +74,243 @@ private final class SynaraSessionVerificationDelegate: SessionVerificationContro
     }
 }
 
+enum MatrixSessionRestoreError: LocalizedError, Equatable {
+    case persistedStoreUnavailable
+    case restorationFailed
+    case serverDeviceKeysUnavailable
+    case deviceIdentityMismatch
+
+    /// A failed restore must never destroy the crypto identity and then reuse the
+    /// persisted Matrix device ID with a newly-created store.
+    var shouldDeletePersistedStore: Bool { false }
+
+    var errorDescription: String? {
+        switch self {
+        case .persistedStoreUnavailable:
+            return "Local encryption data is missing. Sign in again to create a new Matrix device; existing local data was preserved."
+        case .restorationFailed:
+            return "Local encryption data could not be restored. Retry first, or sign in again; existing local data was preserved."
+        case .serverDeviceKeysUnavailable:
+            return "The restored device identity could not be confirmed with the homeserver. Retry before signing in again; existing local data was preserved."
+        case .deviceIdentityMismatch:
+            return "The restored encryption identity does not match this Matrix device. Sign in again to create a new device; existing local data was preserved."
+        }
+    }
+}
+
+private struct MatrixPersistedDeviceIdentity: Codable, Equatable {
+    let schemaVersion: Int
+    let userID: String
+    let deviceID: String
+    let homeserver: String
+}
+
+enum MatrixDeviceKeyContinuityResult: Equatable {
+    case matches
+    case unavailable
+    case mismatch
+}
+
+enum MatrixDeviceKeyContinuityValidator {
+    static func validate(
+        responseData: Data,
+        userID: String,
+        deviceID: String,
+        localCurve25519Key: String?,
+        localEd25519Key: String?
+    ) -> MatrixDeviceKeyContinuityResult {
+        guard let localCurve25519Key, localCurve25519Key.isEmpty == false,
+              let localEd25519Key, localEd25519Key.isEmpty == false,
+              let root = try? JSONSerialization.jsonObject(with: responseData) as? [String: Any],
+              let users = root["device_keys"] as? [String: Any],
+              let devices = users[userID] as? [String: Any],
+              let device = devices[deviceID] as? [String: Any],
+              let keys = device["keys"] as? [String: Any],
+              let serverCurve25519Key = keys["curve25519:\(deviceID)"] as? String,
+              let serverEd25519Key = keys["ed25519:\(deviceID)"] as? String
+        else {
+            return .unavailable
+        }
+
+        guard serverCurve25519Key == localCurve25519Key,
+              serverEd25519Key == localEd25519Key
+        else {
+            return .mismatch
+        }
+        return .matches
+    }
+}
+
+enum MatrixVerificationEventSource: Equatable {
+    case delegate
+    case localRequest
+}
+
+struct MatrixVerificationStateReducer {
+    private(set) var state: CryptoVerificationState?
+    private var activeFlowID: String?
+    private var completedFlowIDs = Set<String>()
+    private var completedFlowOrder: [String] = []
+    private static let maximumCompletedFlows = 64
+
+    @discardableResult
+    mutating func reduce(
+        _ candidate: CryptoVerificationState,
+        source: MatrixVerificationEventSource
+    ) -> CryptoVerificationState? {
+        if case .finished = candidate, source != .delegate {
+            return nil
+        }
+
+        if case .requestReceived(let request) = candidate {
+            guard completedFlowIDs.contains(request.flowID) == false else {
+                return nil
+            }
+            // SessionVerificationController callbacks after request receipt do
+            // not carry a flow ID. Keep exactly one active flow so an accepted/
+            // SAS/terminal callback can never be attributed to another request.
+            if let state, state.isTerminal == false {
+                return nil
+            }
+            activeFlowID = request.flowID
+            state = candidate
+            return candidate
+        }
+
+        if case .requestSent = candidate {
+            if let state, state.isTerminal == false {
+                return nil
+            }
+            activeFlowID = nil
+            state = candidate
+            return candidate
+        }
+
+        guard let current = state, current.isTerminal == false else {
+            return nil
+        }
+
+        if candidate.isTerminal {
+            if let activeFlowID {
+                rememberCompletedFlow(activeFlowID)
+            }
+            activeFlowID = nil
+            state = candidate
+            return candidate
+        }
+
+        let currentRank = phaseRank(current)
+        let candidateRank = phaseRank(candidate)
+        guard candidateRank > currentRank else {
+            return nil
+        }
+
+        state = candidate
+        return candidate
+    }
+
+    mutating func reset() {
+        state = nil
+        activeFlowID = nil
+        completedFlowIDs.removeAll()
+        completedFlowOrder.removeAll()
+    }
+
+    private mutating func rememberCompletedFlow(_ flowID: String) {
+        guard completedFlowIDs.insert(flowID).inserted else {
+            return
+        }
+        completedFlowOrder.append(flowID)
+        while completedFlowOrder.count > Self.maximumCompletedFlows {
+            completedFlowIDs.remove(completedFlowOrder.removeFirst())
+        }
+    }
+
+    private func phaseRank(_ state: CryptoVerificationState) -> Int {
+        switch state {
+        case .requestReceived, .requestSent:
+            return 0
+        case .accepted:
+            return 1
+        case .sasStarted:
+            return 2
+        case .emojis, .decimals:
+            return 3
+        case .finished, .cancelled, .failed:
+            return 4
+        }
+    }
+}
+
+/// Coordinates AsyncStream termination with actor-isolated registration. An
+/// `onTermination` task can reach the actor before the registration task; a
+/// bounded tombstone makes that ordering cancel-safe instead of leaking a dead
+/// continuation into `verificationContinuations`.
+struct MatrixVerificationContinuationRegistrationTracker {
+    private var registeredIDs = Set<UUID>()
+    private var cancellationTombstones = Set<UUID>()
+    private var tombstoneOrder: [UUID] = []
+    private static let maximumTombstones = 128
+
+    mutating func register(id: UUID, isTaskCancelled: Bool) -> Bool {
+        guard isTaskCancelled == false else {
+            return false
+        }
+        if cancellationTombstones.remove(id) != nil {
+            compactTombstoneOrder()
+            return false
+        }
+        registeredIDs.insert(id)
+        return true
+    }
+
+    mutating func cancel(id: UUID) {
+        if registeredIDs.remove(id) != nil {
+            return
+        }
+        guard cancellationTombstones.insert(id).inserted else {
+            return
+        }
+        tombstoneOrder.append(id)
+        while cancellationTombstones.count > Self.maximumTombstones,
+              let oldest = tombstoneOrder.first
+        {
+            tombstoneOrder.removeFirst()
+            cancellationTombstones.remove(oldest)
+        }
+    }
+
+    mutating func removeRegistered(id: UUID) {
+        registeredIDs.remove(id)
+    }
+
+    func isRegistered(id: UUID) -> Bool {
+        registeredIDs.contains(id)
+    }
+
+    private mutating func compactTombstoneOrder() {
+        tombstoneOrder.removeAll { cancellationTombstones.contains($0) == false }
+    }
+}
+
+enum MatrixVerificationLifecycleTransition: Equatable {
+    case backgroundPause
+    case foregroundResume
+    case sessionReplaced
+    case localStateReset
+}
+
+enum MatrixVerificationLifecyclePolicy {
+    static func shouldReset(for transition: MatrixVerificationLifecycleTransition) -> Bool {
+        switch transition {
+        case .backgroundPause, .foregroundResume:
+            return false
+        case .sessionReplaced, .localStateReset:
+            return true
+        }
+    }
+}
+
 enum MatrixInteractiveFreshnessPolicy {
     static func shouldPerformSync(
         hasActiveSyncService: Bool,
@@ -197,7 +434,9 @@ actor MatrixRustSDKClientStore {
     private var verificationController: SessionVerificationController?
     private var verificationDelegate: SynaraSessionVerificationDelegate?
     private var verificationContinuations: [UUID: AsyncStream<CryptoVerificationState>.Continuation] = [:]
-    private var lastVerificationState: CryptoVerificationState?
+    private var verificationContinuationRegistrations = MatrixVerificationContinuationRegistrationTracker()
+    private var verificationStateReducer = MatrixVerificationStateReducer()
+    private var verificationIdentityReady = false
     private var retainedClientHandles: [Client] = []
     private var retainedRoomHandlesByID: [String: Room] = [:]
     /// Serializes client creation, restoration, and teardown. Actors allow reentrancy
@@ -238,6 +477,7 @@ actor MatrixRustSDKClientStore {
 
         if activeSession != nil {
             await detachSyncServices()
+            resetVerificationLifecycle(for: .sessionReplaced)
             retainClientHandle(client)
             client = nil
             activeSession = nil
@@ -260,6 +500,13 @@ actor MatrixRustSDKClientStore {
                 deviceId: nil
             )
             await client.encryption().waitForE2eeInitializationTasks()
+            verificationIdentityReady = true
+
+            do {
+                try await installSessionVerificationDelegate(on: client)
+            } catch {
+                logger.info("Matrix verification controller is not ready after login; it will retry on demand", category: .auth)
+            }
 
             let sdkSession = try client.session()
             let availableSlidingSyncVersions = await client.availableSlidingSyncVersions()
@@ -276,6 +523,11 @@ actor MatrixRustSDKClientStore {
                 slidingSyncVersion: slidingSyncVersion,
                 sdkStoreID: storeID
             )
+            do {
+                try Self.recordPersistedStoreIdentity(for: session)
+            } catch {
+                logger.error("Could not record Matrix SDK store identity continuity metadata", category: .auth)
+            }
             self.client = client
             activeSession = session
             syncService = nil
@@ -287,11 +539,13 @@ actor MatrixRustSDKClientStore {
             return session
         } catch let error as ClientError {
             retainClientHandle(client)
+            resetVerificationLifecycle(for: .sessionReplaced)
             self.syncStatus = .failed("Could not sign in.")
             logger.error("Password login SDK client error: \(String(describing: error))", category: .auth)
             throw Self.mapLoginError(error)
         } catch {
             retainClientHandle(client)
+            resetVerificationLifecycle(for: .sessionReplaced)
             syncStatus = .failed("Could not sign in.")
             logger.error("Password login SDK error: \(String(describing: error))", category: .auth)
             // TODO: Map additional non-ClientError login failures when the SDK exposes stable types.
@@ -316,6 +570,9 @@ actor MatrixRustSDKClientStore {
         do {
             _ = try await ensureClient(for: session)
             syncStatus = .syncing
+        } catch let error as MatrixSessionRestoreError {
+            logger.error("Matrix session start requires local-store recovery: \(String(describing: error))", category: .sync)
+            syncStatus = .failed(error.errorDescription ?? "Local encryption data requires recovery.")
         } catch {
             logger.error("Matrix session start failed: \(String(describing: error))", category: .sync)
             syncStatus = .failed("Could not start sync.")
@@ -332,6 +589,22 @@ actor MatrixRustSDKClientStore {
         syncStatus = .stopped
     }
 
+    /// Uses only the active in-memory client captured before local sign-out.
+    /// A wipe must never call `ensureClient`, because doing so could create or
+    /// repair crypto state after the durable session has been deleted.
+    func revokeServerSession(_ session: AuthenticatedSession) async -> Bool {
+        guard activeSession == session, let client else {
+            return false
+        }
+        do {
+            try await client.logout()
+            return true
+        } catch {
+            logger.info("Matrix homeserver logout failed during local wipe", category: .auth)
+            return false
+        }
+    }
+
     func pauseForBackground() async {
         await acquireClientMutationLock()
         defer { releaseClientMutationLock() }
@@ -341,6 +614,7 @@ actor MatrixRustSDKClientStore {
         }
 
         await detachSyncServices()
+        resetVerificationLifecycle(for: .backgroundPause)
 
         if let client {
             do {
@@ -357,6 +631,7 @@ actor MatrixRustSDKClientStore {
 
     func resumeFromForeground(session: AuthenticatedSession) async {
         await acquireClientMutationLock()
+        resetVerificationLifecycle(for: .foregroundResume)
 
         if isClientPaused, let client {
             do {
@@ -461,6 +736,7 @@ actor MatrixRustSDKClientStore {
         activeSession = nil
         syncService = nil
         roomListService = nil
+        resetVerificationLifecycle(for: .localStateReset)
         invalidateInteractiveFreshness()
         lastSuccessfulSyncAt = nil
         isClientPaused = false
@@ -471,23 +747,6 @@ actor MatrixRustSDKClientStore {
         } else {
             try? Self.deletePersistedStores()
         }
-    }
-
-    func resetPersistedStore(for session: AuthenticatedSession) async {
-        await acquireClientMutationLock()
-        defer { releaseClientMutationLock() }
-
-        if activeSession == session {
-            await detachSyncServices()
-            retainClientHandle(client)
-            client = nil
-            activeSession = nil
-        }
-        syncStatus = .stopped
-        invalidateInteractiveFreshness()
-        lastSuccessfulSyncAt = nil
-        unableToDecryptRecorder.reset()
-        try? Self.deletePersistedStore(for: session)
     }
 
     func loadInteractiveRoomListState(
@@ -559,26 +818,11 @@ actor MatrixRustSDKClientStore {
             if fallbackCache.isEmpty == false {
                 return .loaded(fallbackCache)
             }
-            if allowsStoreRepair {
-                return await repairInteractiveRoomListState(
-                    session: session,
-                    fallbackCache: fallbackCache
-                )
+            if let restoreError = error as? MatrixSessionRestoreError {
+                return .failed(restoreError.errorDescription ?? "The local Matrix session requires recovery.")
             }
-            return .failed("The local Matrix session could not be restored. Retry, or sign in again to rebuild local data.")
+            return .failed("The local Matrix session could not be restored. Retry, or sign in again; local encryption data was preserved.")
         }
-    }
-
-    private func repairInteractiveRoomListState(
-        session: AuthenticatedSession,
-        fallbackCache: [RoomSummary]
-    ) async -> RoomListState {
-        await resetPersistedStore(for: session)
-        return await loadInteractiveRoomListState(
-            session: session,
-            fallbackCache: fallbackCache,
-            allowsStoreRepair: false
-        )
     }
 
     func syncOnce(session: AuthenticatedSession, fullState: Bool = false) async throws {
@@ -797,28 +1041,25 @@ actor MatrixRustSDKClientStore {
             throw MessageSendError.failed
         }
         try await controller.requestDeviceVerification()
-        broadcastVerificationState(.requestSent)
+        applyVerificationState(.requestSent, source: .localRequest)
     }
 
     func acceptVerificationRequest(session: AuthenticatedSession) async throws {
         _ = try await ensureClient(for: session)
         let controller = try requireVerificationController()
         try await controller.acceptVerificationRequest()
-        broadcastVerificationState(.accepted)
     }
 
     func startSasVerification(session: AuthenticatedSession) async throws {
         _ = try await ensureClient(for: session)
         let controller = try requireVerificationController()
         try await controller.startSasVerification()
-        broadcastVerificationState(.sasStarted)
     }
 
     func approveVerification(session: AuthenticatedSession) async throws {
         _ = try await ensureClient(for: session)
         let controller = try requireVerificationController()
         try await controller.approveVerification()
-        broadcastVerificationState(.finished)
     }
 
     func declineVerification(session: AuthenticatedSession) async throws {
@@ -1245,10 +1486,17 @@ actor MatrixRustSDKClientStore {
         if invalidatesRoomList {
             roomListSyncGeneration &+= 1
         }
+    }
+
+    private func resetVerificationLifecycle(for transition: MatrixVerificationLifecycleTransition) {
+        guard MatrixVerificationLifecyclePolicy.shouldReset(for: transition) else {
+            return
+        }
         verificationController?.setDelegate(delegate: nil)
         verificationController = nil
         verificationDelegate = nil
-        lastVerificationState = nil
+        verificationIdentityReady = false
+        verificationStateReducer.reset()
     }
 
     func sendRawRoomEvent(roomID: String, eventType: String, content: String, session: AuthenticatedSession) async throws {
@@ -1295,67 +1543,85 @@ actor MatrixRustSDKClientStore {
 
     private func prepareClient(
         for session: AuthenticatedSession,
-        allowsStoreRepair: Bool
+        allowsStoreRepair _: Bool
     ) async throws -> Client {
         if let client, activeSession == session {
             return client
         }
 
-        var allowRepair = allowsStoreRepair
+        if let activeSession, activeSession != session {
+            await detachSyncServices()
+            resetVerificationLifecycle(for: .sessionReplaced)
+            retainClientHandle(client)
+            client = nil
+            self.activeSession = nil
+            unableToDecryptRecorder.reset()
+        }
 
-        while true {
-            if let client, activeSession == session {
-                return client
+        guard Self.persistedStoreIsEligibleForRestore(for: session) else {
+            logger.error("Matrix session restore stopped because its persisted crypto store is unavailable", category: .auth)
+            throw MatrixSessionRestoreError.persistedStoreUnavailable
+        }
+
+        let storeID = session.sdkStoreID ?? Self.storeID(for: session.userID, homeserverURL: session.homeserverURL)
+        let newClient: Client
+        do {
+            newClient = try await buildClient(homeserverURL: session.homeserverURL, storeID: storeID)
+        } catch {
+            logger.error("Matrix SDK store could not be opened; persisted data was preserved", category: .auth)
+            throw MatrixSessionRestoreError.restorationFailed
+        }
+
+        do {
+            try await installUnableToDecryptDelegate(on: newClient)
+            let availableSlidingSyncVersions = await newClient.availableSlidingSyncVersions()
+            let restoreSession = session.sdkSession(availableSlidingSyncVersions: availableSlidingSyncVersions)
+            if session.slidingSyncVersion == "native", availableSlidingSyncVersions.contains(.native) == false {
+                logger.info(
+                    "Restoring Matrix session without native sliding sync because homeserver does not advertise it",
+                    category: .sync
+                )
             }
+            try await newClient.restoreSession(session: restoreSession)
+            let encryption = newClient.encryption()
+            await encryption.waitForE2eeInitializationTasks()
+            try await validateRestoredDeviceKeyContinuity(
+                encryption: encryption,
+                session: session
+            )
+            verificationIdentityReady = true
 
-            if let activeSession, activeSession != session {
-                await detachSyncServices()
-                retainClientHandle(client)
-                client = nil
-                self.activeSession = nil
-                unableToDecryptRecorder.reset()
-            }
-
-            let storeID = session.sdkStoreID ?? Self.storeID(for: session.userID, homeserverURL: session.homeserverURL)
-            let newClient = try await buildClient(homeserverURL: session.homeserverURL, storeID: storeID)
+            client = newClient
+            activeSession = session
 
             do {
-                try await installUnableToDecryptDelegate(on: newClient)
-                let availableSlidingSyncVersions = await newClient.availableSlidingSyncVersions()
-                let restoreSession = session.sdkSession(availableSlidingSyncVersions: availableSlidingSyncVersions)
-                if session.slidingSyncVersion == "native", availableSlidingSyncVersions.contains(.native) == false {
-                    logger.info(
-                        "Restoring Matrix session without native sliding sync because homeserver does not advertise it",
-                        category: .sync
-                    )
-                }
-                try await newClient.restoreSession(session: restoreSession)
-                await newClient.encryption().waitForE2eeInitializationTasks()
                 try await installSessionVerificationDelegate(on: newClient)
-                await ensurePlatformDeviceDisplayName(session: session)
-
-                client = newClient
-                activeSession = session
-                return newClient
             } catch {
-                logger.error(
-                    "Matrix session restore failed repair_available=\(allowRepair): \(String(describing: error))",
-                    category: .auth
-                )
-                retainClientHandle(newClient)
-                if allowRepair {
-                    await detachSyncServices()
-                    retainClientHandle(client)
-                    client = nil
-                    activeSession = nil
-                    syncService = nil
-                    roomListService = nil
-                    try? Self.deletePersistedStore(for: session)
-                    allowRepair = false
-                    continue
-                }
-                throw error
+                logger.info("Matrix verification controller is not ready after restore; it will retry on demand", category: .auth)
             }
+
+            do {
+                try Self.recordPersistedStoreIdentity(for: session)
+            } catch {
+                logger.error("Could not refresh Matrix SDK store identity continuity metadata", category: .auth)
+            }
+            try? Self.pruneLegacyPersistedStoreAfterValidatedRestore(storeID: storeID)
+            await ensurePlatformDeviceDisplayName(session: session)
+            return newClient
+        } catch let error as MatrixSessionRestoreError {
+            logger.error("Matrix session restore failed continuity validation; persisted crypto store was preserved", category: .auth)
+            retainClientHandle(newClient)
+            resetVerificationLifecycle(for: .sessionReplaced)
+            client = nil
+            activeSession = nil
+            throw error
+        } catch {
+            logger.error("Matrix session restore failed; persisted crypto store was preserved: \(String(describing: error))", category: .auth)
+            retainClientHandle(newClient)
+            resetVerificationLifecycle(for: .sessionReplaced)
+            client = nil
+            activeSession = nil
+            throw MatrixSessionRestoreError.restorationFailed
         }
     }
 
@@ -1432,7 +1698,64 @@ actor MatrixRustSDKClientStore {
         try await client.setUtdDelegate(utdDelegate: unableToDecryptRecorder)
     }
 
+    private func validateRestoredDeviceKeyContinuity(
+        encryption: Encryption,
+        session: AuthenticatedSession
+    ) async throws {
+        let localCurve25519Key = await encryption.curve25519Key()
+        let localEd25519Key = await encryption.ed25519Key()
+
+        var url = session.homeserverURL
+        url.appendPathComponent("_matrix")
+        url.appendPathComponent("client")
+        url.appendPathComponent("v3")
+        url.appendPathComponent("keys")
+        url.appendPathComponent("query")
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 15
+        request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(withJSONObject: [
+            "device_keys": [session.userID: [session.deviceID]],
+            "timeout": 10_000,
+        ])
+
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await URLSession.shared.data(for: request)
+        } catch {
+            throw MatrixSessionRestoreError.serverDeviceKeysUnavailable
+        }
+
+        guard let http = response as? HTTPURLResponse,
+              (200 ..< 300).contains(http.statusCode)
+        else {
+            throw MatrixSessionRestoreError.serverDeviceKeysUnavailable
+        }
+
+        switch MatrixDeviceKeyContinuityValidator.validate(
+            responseData: data,
+            userID: session.userID,
+            deviceID: session.deviceID,
+            localCurve25519Key: localCurve25519Key,
+            localEd25519Key: localEd25519Key
+        ) {
+        case .matches:
+            return
+        case .unavailable:
+            throw MatrixSessionRestoreError.serverDeviceKeysUnavailable
+        case .mismatch:
+            throw MatrixSessionRestoreError.deviceIdentityMismatch
+        }
+    }
+
     private func installSessionVerificationDelegate(on client: Client) async throws {
+        guard verificationIdentityReady else {
+            throw MatrixSessionRestoreError.restorationFailed
+        }
         let controller = try await client.getSessionVerificationController()
         let delegate = SynaraSessionVerificationDelegate(clientStore: self)
         controller.setDelegate(delegate: delegate)
@@ -1460,6 +1783,12 @@ actor MatrixRustSDKClientStore {
         continuation: AsyncStream<CryptoVerificationState>.Continuation,
         session: AuthenticatedSession
     ) async {
+        guard verificationContinuationRegistrations.register(
+            id: id,
+            isTaskCancelled: Task.isCancelled
+        ) else {
+            return
+        }
         verificationContinuations[id] = continuation
         do {
             let client = try await ensureClient(for: session)
@@ -1467,22 +1796,35 @@ actor MatrixRustSDKClientStore {
                 try await installSessionVerificationDelegate(on: client)
             }
         } catch {
-            continuation.yield(.failed)
+            logger.error("Matrix verification updates are unavailable until identity restoration succeeds", category: .auth)
         }
-        if let lastVerificationState {
-            continuation.yield(lastVerificationState)
+        guard Task.isCancelled == false,
+              verificationContinuationRegistrations.isRegistered(id: id)
+        else {
+            verificationContinuations.removeValue(forKey: id)
+            verificationContinuationRegistrations.removeRegistered(id: id)
+            return
+        }
+        if let state = verificationStateReducer.state, state.isTerminal == false {
+            continuation.yield(state)
         }
     }
 
     private func removeVerificationContinuation(id: UUID) {
+        verificationContinuationRegistrations.cancel(id: id)
         verificationContinuations.removeValue(forKey: id)
     }
 
-    private func broadcastVerificationState(_ state: CryptoVerificationState) {
-        logger.info("Matrix session verification state: \(state.logLabel)", category: .auth)
-        lastVerificationState = state.isTerminal ? nil : state
+    private func applyVerificationState(
+        _ state: CryptoVerificationState,
+        source: MatrixVerificationEventSource = .delegate
+    ) {
+        guard let update = verificationStateReducer.reduce(state, source: source) else {
+            return
+        }
+        logger.info("Matrix session verification state: \(update.logLabel)", category: .auth)
         for continuation in verificationContinuations.values {
-            continuation.yield(state)
+            continuation.yield(update)
         }
     }
 
@@ -1492,7 +1834,7 @@ actor MatrixRustSDKClientStore {
                 senderId: details.senderProfile.userId,
                 flowId: details.flowId
             )
-            broadcastVerificationState(.requestReceived(
+            applyVerificationState(.requestReceived(
                 CryptoVerificationRequest(
                     userID: details.senderProfile.userId,
                     displayName: details.senderProfile.displayName,
@@ -1502,39 +1844,39 @@ actor MatrixRustSDKClientStore {
                 )
             ))
         } catch {
-            broadcastVerificationState(.failed)
+            applyVerificationState(.failed)
         }
     }
 
     func handleVerificationAccepted() {
-        broadcastVerificationState(.accepted)
+        applyVerificationState(.accepted)
     }
 
     func handleVerificationSasStarted() {
-        broadcastVerificationState(.sasStarted)
+        applyVerificationState(.sasStarted)
     }
 
     func handleVerificationData(_ data: SessionVerificationData) {
         switch data {
         case let .emojis(emojis, _):
-            broadcastVerificationState(.emojis(emojis.map {
+            applyVerificationState(.emojis(emojis.map {
                 CryptoVerificationEmoji(symbol: $0.symbol(), description: $0.description())
             }))
         case let .decimals(values):
-            broadcastVerificationState(.decimals(values))
+            applyVerificationState(.decimals(values))
         }
     }
 
     func handleVerificationFailed() {
-        broadcastVerificationState(.failed)
+        applyVerificationState(.failed)
     }
 
     func handleVerificationCancelled() {
-        broadcastVerificationState(.cancelled)
+        applyVerificationState(.cancelled)
     }
 
     func handleVerificationFinished() {
-        broadcastVerificationState(.finished)
+        applyVerificationState(.finished)
     }
 
     private func cryptoSessionStatus(client: Client) async throws -> SessionCryptoStatus {
@@ -1714,16 +2056,104 @@ actor MatrixRustSDKClientStore {
         return FileManager.default.fileExists(atPath: root.path)
     }
 
+    static func persistedStoreContainsDurableData(for session: AuthenticatedSession) -> Bool {
+        guard let root = try? storeRootURL(create: false) else {
+            return false
+        }
+        return persistedStoreContainsDurableData(for: session, in: root)
+    }
+
+    static func persistedStoreContainsDurableData(for session: AuthenticatedSession, in root: URL) -> Bool {
+        let storeID = session.sdkStoreID ?? storeID(for: session.userID, homeserverURL: session.homeserverURL)
+        let dataDirectory = root
+            .appendingPathComponent("v\(persistedStoreSchemaVersion)", isDirectory: true)
+            .appendingPathComponent(storeID, isDirectory: true)
+            .appendingPathComponent("data", isDirectory: true)
+        guard FileManager.default.fileExists(atPath: dataDirectory.path),
+              let enumerator = FileManager.default.enumerator(
+                at: dataDirectory,
+                includingPropertiesForKeys: [.isRegularFileKey],
+                options: [.skipsHiddenFiles]
+              )
+        else {
+            return false
+        }
+
+        for case let item as URL in enumerator {
+            if (try? item.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true {
+                return true
+            }
+        }
+        return false
+    }
+
+    static func persistedStoreIsEligibleForRestore(for session: AuthenticatedSession) -> Bool {
+        guard let root = try? storeRootURL(create: false) else {
+            return false
+        }
+        return persistedStoreIsEligibleForRestore(for: session, in: root)
+    }
+
+    static func persistedStoreIsEligibleForRestore(for session: AuthenticatedSession, in root: URL) -> Bool {
+        guard persistedStoreContainsDurableData(for: session, in: root) else {
+            return false
+        }
+
+        let marker = persistedStoreIdentityURL(for: session, in: root)
+        guard FileManager.default.fileExists(atPath: marker.path) else {
+            // Compatibility path for stores created before continuity metadata
+            // existed. A successful restore writes the marker immediately.
+            return true
+        }
+
+        guard let data = try? Data(contentsOf: marker),
+              let stored = try? JSONDecoder().decode(MatrixPersistedDeviceIdentity.self, from: data)
+        else {
+            return false
+        }
+        return stored == persistedDeviceIdentity(for: session)
+    }
+
+    static func recordPersistedStoreIdentity(for session: AuthenticatedSession) throws {
+        try recordPersistedStoreIdentity(for: session, in: storeRootURL(create: false))
+    }
+
+    static func recordPersistedStoreIdentity(for session: AuthenticatedSession, in root: URL) throws {
+        let marker = persistedStoreIdentityURL(for: session, in: root)
+        let data = try JSONEncoder().encode(persistedDeviceIdentity(for: session))
+        try data.write(to: marker, options: [.atomic])
+    }
+
+    private static func persistedDeviceIdentity(for session: AuthenticatedSession) -> MatrixPersistedDeviceIdentity {
+        MatrixPersistedDeviceIdentity(
+            schemaVersion: persistedStoreSchemaVersion,
+            userID: session.userID,
+            deviceID: session.deviceID,
+            homeserver: session.homeserverURL.absoluteString
+        )
+    }
+
+    private static func persistedStoreIdentityURL(for session: AuthenticatedSession, in root: URL) -> URL {
+        let storeID = session.sdkStoreID ?? storeID(for: session.userID, homeserverURL: session.homeserverURL)
+        return root
+            .appendingPathComponent("v\(persistedStoreSchemaVersion)", isDirectory: true)
+            .appendingPathComponent(storeID, isDirectory: true)
+            .appendingPathComponent(".synara-device-identity.json", isDirectory: false)
+    }
+
     static func materializePersistedStore(for session: AuthenticatedSession) throws {
         let storeID = session.sdkStoreID ?? storeID(for: session.userID, homeserverURL: session.homeserverURL)
         _ = try sessionPaths(storeID: storeID)
     }
 
-    static func pruneLegacyPersistedStores() throws {
-        try pruneLegacyPersistedStores(in: storeRootURL(create: false))
+    private static func pruneLegacyPersistedStoreAfterValidatedRestore(storeID: String) throws {
+        try pruneLegacyPersistedStores(
+            in: storeRootURL(create: false),
+            validatedStoreIDs: [storeID]
+        )
     }
 
-    static func pruneLegacyPersistedStores(in root: URL) throws {
+    static func pruneLegacyPersistedStores(in root: URL, validatedStoreIDs: Set<String>) throws {
         guard FileManager.default.fileExists(atPath: root.path) else {
             return
         }
@@ -1736,11 +2166,11 @@ actor MatrixRustSDKClientStore {
             }
 
             let name = child.lastPathComponent
-            if name.hasPrefix(versionDirectoryPrefix) {
+            if name.hasPrefix(versionDirectoryPrefix) || validatedStoreIDs.contains(name) == false {
                 continue
             }
 
-            try? FileManager.default.removeItem(at: child)
+            try FileManager.default.removeItem(at: child)
         }
     }
 
@@ -1850,6 +2280,10 @@ final class MatrixRustSDKMatrixClientService: MatrixClientServicing {
     func stop() async {
         await clientStore.stop()
         setSyncStatus(.stopped)
+    }
+
+    func revokeServerSession(_ session: AuthenticatedSession) async -> Bool {
+        await clientStore.revokeServerSession(session)
     }
 
     func warmSync(session: AuthenticatedSession) async {
@@ -2509,6 +2943,17 @@ final class MatrixRustSDKRoomListService: RoomListServicing {
             isMarkedUnread: roomInfo?.isMarkedUnread ?? false
         )
         let latestPreview = await latestPreview(for: room)
+        let recoveredActivityAt: Date?
+        if membership == .joined,
+           RoomActivityRecoveryPolicy.shouldRecover(
+               latestRequiresRecovery: latestPreview.requiresActivityRecovery,
+               previousActivityAt: previous?.lastActivityAt
+           )
+        {
+            recoveredActivityAt = await recoverNewestQualifyingActivity(for: room)
+        } else {
+            recoveredActivityAt = nil
+        }
         let latestAgentCardEventID = latestPreview.agentCard == nil
             ? nil
             : await latestAgentEventID(for: room)
@@ -2533,7 +2978,7 @@ final class MatrixRustSDKRoomListService: RoomListServicing {
             kind: (await room.isDirect()) ? .directMessage : .room,
             membership: membership,
             lastActivityAt: RoomActivityTimestamp.resolve(
-                latest: latestPreview.timestamp,
+                latest: latestPreview.timestamp ?? recoveredActivityAt,
                 previous: previous?.lastActivityAt
             ),
             parentSpaces: parentSpaces,
@@ -2565,22 +3010,40 @@ final class MatrixRustSDKRoomListService: RoomListServicing {
     private static func latestPreview(for room: Room) async -> LatestRoomEventPreview {
         switch await room.latestEvent() {
         case .none:
-            return LatestRoomEventPreview(text: nil, timestamp: nil, hasAgentActivity: false, agentCard: nil)
+            return LatestRoomEventPreview(
+                text: nil,
+                timestamp: nil,
+                hasAgentActivity: false,
+                agentCard: nil,
+                requiresActivityRecovery: false
+            )
         case let .remote(timestamp, sender, isOwn, _, content):
             let preview = previewDetails(content: content, sender: sender, isOwn: isOwn)
+            let activityTimestamp = qualifyingActivityTimestamp(
+                timestamp,
+                content: content,
+                isLocalEcho: false
+            )
             return LatestRoomEventPreview(
                 text: preview.text,
-                timestamp: Date(timeIntervalSince1970: TimeInterval(timestamp) / 1000),
+                timestamp: activityTimestamp,
                 hasAgentActivity: preview.hasAgentActivity,
-                agentCard: preview.agentCard
+                agentCard: preview.agentCard,
+                requiresActivityRecovery: activityTimestamp == nil
             )
         case let .local(timestamp, sender, _, content, _):
             let preview = previewDetails(content: content, sender: sender, isOwn: true)
+            let activityTimestamp = qualifyingActivityTimestamp(
+                timestamp,
+                content: content,
+                isLocalEcho: true
+            )
             return LatestRoomEventPreview(
                 text: preview.text,
-                timestamp: Date(timeIntervalSince1970: TimeInterval(timestamp) / 1000),
+                timestamp: activityTimestamp,
                 hasAgentActivity: preview.hasAgentActivity,
-                agentCard: preview.agentCard
+                agentCard: preview.agentCard,
+                requiresActivityRecovery: activityTimestamp == nil
             )
         case let .remoteInvite(timestamp, inviter, _):
             let inviterName = inviter.map { senderDisplayName($0, isOwn: false) } ?? "Someone"
@@ -2588,8 +3051,69 @@ final class MatrixRustSDKRoomListService: RoomListServicing {
                 text: "\(inviterName) invited you",
                 timestamp: Date(timeIntervalSince1970: TimeInterval(timestamp) / 1000),
                 hasAgentActivity: false,
-                agentCard: nil
+                agentCard: nil,
+                requiresActivityRecovery: false
             )
+        }
+    }
+
+    /// The room summary's `latestEvent` can be a membership/profile/state event,
+    /// hiding a recent message directly behind it. On cold start only, inspect a
+    /// single small SDK timeline page and stop; room-list mapping must never turn
+    /// into an unbounded per-room history walk.
+    private static func recoverNewestQualifyingActivity(for room: Room) async -> Date? {
+        guard let timeline = try? await room.timeline() else {
+            return nil
+        }
+
+        let collector = MatrixRustSDKTimelineCollector()
+        let handle = await timeline.addListener(listener: collector)
+        defer { handle.cancel() }
+
+        _ = try? await timeline.paginateBackwards(
+            numEvents: UInt16(RoomActivityRecoveryPolicy.maximumTimelineEvents)
+        )
+
+        let deadline = ContinuousClock.now.advanced(by: .milliseconds(250))
+        var events = collector.items()
+        while events.isEmpty, ContinuousClock.now < deadline {
+            try? await Task.sleep(for: .milliseconds(25))
+            events = collector.items()
+        }
+
+        let candidates = events.map { event in
+            RoomActivityRecoveryPolicy.Candidate(
+                timestamp: Date(timeIntervalSince1970: TimeInterval(event.timestamp) / 1000),
+                kind: roomActivityKind(
+                    content: event.content,
+                    isLocalEcho: event.eventOrTransactionId.synaraIdentity.serverEventID == nil
+                )
+            )
+        }
+        return RoomActivityRecoveryPolicy.newestQualifyingTimestamp(from: candidates)
+    }
+
+    private static func qualifyingActivityTimestamp(
+        _ timestamp: UInt64,
+        content: TimelineItemContent,
+        isLocalEcho: Bool
+    ) -> Date? {
+        let kind = roomActivityKind(content: content, isLocalEcho: isLocalEcho)
+        guard RoomActivityQualification.qualifies(kind) else {
+            return nil
+        }
+        return Date(timeIntervalSince1970: TimeInterval(timestamp) / 1000)
+    }
+
+    private static func roomActivityKind(
+        content: TimelineItemContent,
+        isLocalEcho: Bool
+    ) -> RoomActivityEventKind {
+        switch content {
+        case .msgLike, .failedToParseMessageLike, .callInvite:
+            return isLocalEcho ? .localEcho : .messageLike
+        case .rtcNotification, .roomMembership, .profileChange, .state, .failedToParseState:
+            return .state
         }
     }
 
@@ -2697,6 +3221,19 @@ private struct LatestRoomEventPreview {
     let timestamp: Date?
     let hasAgentActivity: Bool
     let agentCard: SynaraAgentCard?
+    let requiresActivityRecovery: Bool
+}
+
+enum MatrixTimelineReadReceiptPolicy {
+    static func hasCurrentUserReceipt(
+        readReceiptUserIDs: [String],
+        currentUserID: String?
+    ) -> Bool {
+        guard let currentUserID, currentUserID.isEmpty == false else {
+            return false
+        }
+        return readReceiptUserIDs.contains(currentUserID)
+    }
 }
 
 final class MatrixRustSDKRoomMembershipService: RoomMembershipServicing {
@@ -2997,7 +3534,9 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
                                     return
                                 }
 
-                                let sdkItems = events.compactMap(Self.mapTimelineItem)
+                                let sdkItems = events.compactMap {
+                                    Self.mapTimelineItem($0, currentUserID: session.userID)
+                                }
                                 guard sdkItems.isEmpty == false else {
                                     continue
                                 }
@@ -3151,14 +3690,16 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
             }
             var sdkItems = await Self.waitForMappedTimelineItems(
                 collector: collector,
-                timeoutNanoseconds: 1_500_000_000
+                timeoutNanoseconds: 1_500_000_000,
+                currentUserID: session.userID
             )
 
             while sdkItems.isEmpty && reachedTimelineStart == false {
                 reachedTimelineStart = (try? await timeline.paginateBackwards(numEvents: pageSize)) ?? true
                 sdkItems = await Self.waitForMappedTimelineItems(
                     collector: collector,
-                    timeoutNanoseconds: 750_000_000
+                    timeoutNanoseconds: 750_000_000,
+                    currentUserID: session.userID
                 )
             }
 
@@ -3167,7 +3708,8 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
                 _ = try? await timeline.paginateBackwards(numEvents: pageSize)
                 sdkItems = await Self.waitForMappedTimelineItems(
                     collector: collector,
-                    timeoutNanoseconds: 1_500_000_000
+                    timeoutNanoseconds: 1_500_000_000,
+                    currentUserID: session.userID
                 )
             }
 
@@ -3306,13 +3848,14 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
 
     private static func waitForMappedTimelineItems(
         collector: MatrixRustSDKTimelineCollector,
-        timeoutNanoseconds: UInt64
+        timeoutNanoseconds: UInt64,
+        currentUserID: String? = nil
     ) async -> [TimelineItem] {
         let deadline = DispatchTime.now().uptimeNanoseconds + timeoutNanoseconds
 
         while DispatchTime.now().uptimeNanoseconds < deadline {
             let mappedItems = collector.items()
-                .compactMap(Self.mapTimelineItem)
+                .compactMap { mapTimelineItem($0, currentUserID: currentUserID) }
             if mappedItems.isEmpty == false {
                 return mappedItems
             }
@@ -3320,7 +3863,7 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
         }
 
         return collector.items()
-            .compactMap(Self.mapTimelineItem)
+            .compactMap { mapTimelineItem($0, currentUserID: currentUserID) }
     }
 
     private func loadOlderTimeline(roomID: String, beforeEventID: String, pageSize: UInt16) async -> TimelineLoadOutcome {
@@ -3363,7 +3906,8 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
             _ = try? await timeline.paginateBackwards(numEvents: pageSize)
             let sdkItems = await Self.waitForMappedTimelineItems(
                 collector: collector,
-                timeoutNanoseconds: 1_500_000_000
+                timeoutNanoseconds: 1_500_000_000,
+                currentUserID: session.userID
             )
             let olderItems = sdkItems.filter { item in
                 item.eventID != beforeEventID && item.id != beforeEventID
@@ -3411,7 +3955,10 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
         }
     }
 
-    private static func mapTimelineItem(_ item: EventTimelineItem) -> TimelineItem? {
+    private static func mapTimelineItem(
+        _ item: EventTimelineItem,
+        currentUserID: String?
+    ) -> TimelineItem? {
         let identity = item.eventOrTransactionId.synaraIdentity
         let eventID = identity.presentationID
         let kind: TimelineItem.Kind
@@ -3446,7 +3993,11 @@ final class MatrixRustSDKTimelineService: TimelineServicing {
             isEdited: false,
             reactions: Dictionary(uniqueKeysWithValues: item.content.synaraReactions.map { ($0.key, $0.senders.count) }),
             isEncrypted: item.eventTypeRaw == "m.room.encrypted" || kind == .encryptedPlaceholder,
-            deliveryStatus: identity.serverEventID == nil ? .sent : nil
+            deliveryStatus: identity.serverEventID == nil ? .sent : nil,
+            hasCurrentUserReadReceipt: MatrixTimelineReadReceiptPolicy.hasCurrentUserReceipt(
+                readReceiptUserIDs: Array(item.readReceipts.keys),
+                currentUserID: currentUserID
+            )
         )
     }
 

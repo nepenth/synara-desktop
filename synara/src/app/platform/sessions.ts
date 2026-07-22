@@ -34,6 +34,7 @@ export const normalizePlatformSession = (value: unknown): Session | undefined =>
   const expiresInMs = record.expiresInMs;
   const storedAtMs = record.storedAtMs;
   const refreshToken = readString(record, 'refreshToken');
+  const sessionGeneration = readString(record, 'sessionGeneration');
 
   return {
     baseUrl,
@@ -41,6 +42,7 @@ export const normalizePlatformSession = (value: unknown): Session | undefined =>
     deviceId,
     accessToken,
     refreshToken,
+    ...(sessionGeneration ? { sessionGeneration } : {}),
     expiresInMs:
       typeof expiresInMs === 'number' && Number.isFinite(expiresInMs) ? expiresInMs : undefined,
     storedAtMs:
@@ -60,6 +62,7 @@ const serializePlatformSession = (session: Session) => {
   };
 
   if (session.refreshToken) envelope.refreshToken = session.refreshToken;
+  if (session.sessionGeneration) envelope.sessionGeneration = session.sessionGeneration;
   if (typeof session.expiresInMs === 'number' && Number.isFinite(session.expiresInMs)) {
     envelope.expiresInMs = session.expiresInMs;
   }

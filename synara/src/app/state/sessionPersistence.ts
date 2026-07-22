@@ -10,6 +10,7 @@ import {
 import { clearMatrixLocalStores } from '../../client/matrixLocalStores';
 import {
   fallbackSessionStore,
+  PENDING_FRESH_LOGIN_IDENTITY_KEY,
   type FallbackSessionInput,
   type Session,
   type SessionStorage,
@@ -24,6 +25,18 @@ export type { NativeSessionStoreError };
  * those stores at a time. Multi-account support remains a non-goal.
  */
 export type MatrixSessionIdentity = Pick<Session, 'userId' | 'deviceId'>;
+
+export type FreshLoginBootstrapIdentity = Pick<
+  Session,
+  'userId' | 'deviceId' | 'baseUrl' | 'sessionGeneration'
+>;
+
+export type FreshLoginBootstrapMarker = Required<FreshLoginBootstrapIdentity> & {
+  issuedAtMs: number;
+};
+
+/** A fresh-device bootstrap should never survive beyond the login hand-off window. */
+export const FRESH_LOGIN_BOOTSTRAP_TTL_MS = 10 * 60 * 1000;
 
 export const LAST_BOOTSTRAPPED_MATRIX_IDENTITY_KEY =
   'synara_last_bootstrapped_matrix_identity' as const;
@@ -47,6 +60,103 @@ const parseMatrixSessionIdentity = (value: string | null): MatrixSessionIdentity
   }
 
   return undefined;
+};
+
+const parseFreshLoginBootstrapMarker = (
+  value: string | null
+): FreshLoginBootstrapMarker | undefined => {
+  if (!value) return undefined;
+  try {
+    const parsed = JSON.parse(value) as Partial<FreshLoginBootstrapMarker>;
+    if (
+      typeof parsed.userId === 'string' &&
+      typeof parsed.deviceId === 'string' &&
+      typeof parsed.baseUrl === 'string' &&
+      typeof parsed.sessionGeneration === 'string' &&
+      typeof parsed.issuedAtMs === 'number' &&
+      Number.isFinite(parsed.issuedAtMs)
+    ) {
+      return parsed as FreshLoginBootstrapMarker;
+    }
+  } catch {
+    // Invalid bootstrap metadata is fail-closed below.
+  }
+  return undefined;
+};
+
+export const createFreshLoginSessionGeneration = (): string => {
+  if (typeof globalThis.crypto?.randomUUID === 'function') {
+    return globalThis.crypto.randomUUID();
+  }
+  const bytes = new Uint8Array(16);
+  globalThis.crypto?.getRandomValues?.(bytes);
+  if (bytes.some((byte) => byte !== 0)) {
+    return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+  }
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+};
+
+export const getPendingFreshLoginIdentity = (
+  storage?: SessionStorage,
+  nowMs = Date.now()
+): FreshLoginBootstrapMarker | undefined => {
+  const resolvedStorage = storage ?? getDefaultSessionStorage();
+  if (!resolvedStorage) return undefined;
+  const marker = parseFreshLoginBootstrapMarker(
+    resolvedStorage.getItem(PENDING_FRESH_LOGIN_IDENTITY_KEY)
+  );
+  if (
+    !marker ||
+    marker.issuedAtMs > nowMs ||
+    nowMs - marker.issuedAtMs > FRESH_LOGIN_BOOTSTRAP_TTL_MS
+  ) {
+    resolvedStorage.removeItem(PENDING_FRESH_LOGIN_IDENTITY_KEY);
+    return undefined;
+  }
+  return marker;
+};
+
+export const markPendingFreshLoginIdentity = (
+  identity: FreshLoginBootstrapIdentity,
+  storage?: SessionStorage,
+  issuedAtMs = Date.now()
+): void => {
+  const resolvedStorage = storage ?? getDefaultSessionStorage();
+  if (!resolvedStorage || !identity.sessionGeneration) return;
+  const marker: FreshLoginBootstrapMarker = {
+    userId: identity.userId,
+    deviceId: identity.deviceId,
+    baseUrl: identity.baseUrl,
+    sessionGeneration: identity.sessionGeneration,
+    issuedAtMs,
+  };
+  resolvedStorage.setItem(PENDING_FRESH_LOGIN_IDENTITY_KEY, JSON.stringify(marker));
+};
+
+export const isPendingFreshLoginIdentity = (
+  identity: FreshLoginBootstrapIdentity,
+  storage?: SessionStorage,
+  nowMs = Date.now()
+): boolean => {
+  const marker = getPendingFreshLoginIdentity(storage, nowMs);
+  return Boolean(
+    marker &&
+      identity.sessionGeneration &&
+      marker.userId === identity.userId &&
+      marker.deviceId === identity.deviceId &&
+      marker.baseUrl === identity.baseUrl &&
+      marker.sessionGeneration === identity.sessionGeneration
+  );
+};
+
+export const clearPendingFreshLoginIdentity = (
+  identity: FreshLoginBootstrapIdentity,
+  storage?: SessionStorage,
+  nowMs = Date.now()
+): void => {
+  const resolvedStorage = storage ?? getDefaultSessionStorage();
+  if (!resolvedStorage || !isPendingFreshLoginIdentity(identity, resolvedStorage, nowMs)) return;
+  resolvedStorage.removeItem(PENDING_FRESH_LOGIN_IDENTITY_KEY);
 };
 
 export const getLastBootstrappedMatrixIdentity = (
@@ -150,6 +260,8 @@ export type SessionPersistenceOptions = {
   nativeSessionStore?: Pick<AsyncSessionStore, 'setSession' | 'removeSession'>;
   fallbackStore?: Pick<SessionStore, 'setFallbackSession' | 'removeFallbackSession'>;
   storage?: SessionStorage;
+  /** Set only after a successful Matrix login/registration that created this device. */
+  freshLogin?: boolean;
 };
 
 export type LegacySessionMigrationOptions = SessionPersistenceOptions & {
@@ -175,6 +287,7 @@ const toFallbackSessionInput = (session: Session): FallbackSessionInput => ({
   baseUrl: session.baseUrl,
   deviceId: session.deviceId,
   userId: session.userId,
+  ...(session.sessionGeneration ? { sessionGeneration: session.sessionGeneration } : {}),
 });
 
 const toNativeSession = (session: Session): Session => {
@@ -186,6 +299,7 @@ const toNativeSession = (session: Session): Session => {
   };
 
   if (session.refreshToken) nativeSession.refreshToken = session.refreshToken;
+  if (session.sessionGeneration) nativeSession.sessionGeneration = session.sessionGeneration;
   if (typeof session.expiresInMs === 'number' && Number.isFinite(session.expiresInMs)) {
     nativeSession.expiresInMs = session.expiresInMs;
   }
@@ -205,13 +319,20 @@ export const persistAuthenticatedSession = async (
     nativeSessionStore,
     fallbackStore = fallbackSessionStore,
     storage = getDefaultSessionStorage(),
+    freshLogin = false,
   }: SessionPersistenceOptions = {}
 ): Promise<PersistedSessionResult> => {
-  const nativeSession = toNativeSession(session);
+  const nativeSession = toNativeSession(
+    freshLogin && !session.sessionGeneration
+      ? { ...session, sessionGeneration: createFreshLoginSessionGeneration() }
+      : session
+  );
   let nativeStoreError: NativeSessionStoreError | undefined;
   const persistedIdentity = {
     userId: nativeSession.userId,
     deviceId: nativeSession.deviceId,
+    baseUrl: nativeSession.baseUrl,
+    sessionGeneration: nativeSession.sessionGeneration,
   };
 
   if (nativeSessionStore?.setSession) {
@@ -220,6 +341,7 @@ export const persistAuthenticatedSession = async (
         fallbackStore.removeFallbackSession();
         setSessionBootstrapResult({ session: nativeSession, source: 'native' });
         setLastPersistedMatrixIdentity(persistedIdentity, storage);
+        if (freshLogin) markPendingFreshLoginIdentity(persistedIdentity, storage);
         return {
           session: nativeSession,
           source: 'native',
@@ -238,6 +360,7 @@ export const persistAuthenticatedSession = async (
     nativeStoreError,
   });
   setLastPersistedMatrixIdentity(persistedIdentity, storage);
+  if (freshLogin) markPendingFreshLoginIdentity(persistedIdentity, storage);
 
   return {
     session: fallbackSession,

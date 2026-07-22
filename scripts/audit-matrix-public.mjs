@@ -14,17 +14,27 @@ function normalizeServerName(value) {
     url.hash
   ) {
     throw new Error(
-      "Server name must be a bare HTTPS host with no credentials or path."
+      "Server name must be a bare HTTPS host with no credentials or path.",
     );
   }
   return url.host;
 }
 
-const versionParts = (version) =>
-  version
-    .replace(/^v/, "")
-    .split(".")
-    .map((part) => Number.parseInt(part, 10));
+const versionParts = (version) => {
+  const match = /^v?(\d+)\.(\d+)\.(\d+)(?:(rc|a|b)(\d+))?$/.exec(version);
+  if (!match) {
+    throw new Error(`Invalid Synapse version: ${version}`);
+  }
+  const prereleaseRank =
+    match[4] === undefined ? 3 : { a: 0, b: 1, rc: 2 }[match[4]];
+  return [
+    Number.parseInt(match[1], 10),
+    Number.parseInt(match[2], 10),
+    Number.parseInt(match[3], 10),
+    prereleaseRank,
+    Number.parseInt(match[5] ?? "0", 10),
+  ];
+};
 
 function compareVersions(left, right) {
   const leftParts = versionParts(left);
@@ -57,6 +67,7 @@ async function request(fetchImplementation, url) {
     return {
       ok: response.ok,
       status: response.status,
+      finalUrl: response.url || url,
       elapsedMs: Math.round(performance.now() - startedAt),
       allowOrigin: response.headers.get("access-control-allow-origin"),
       json,
@@ -74,17 +85,21 @@ async function request(fetchImplementation, url) {
 export async function auditMatrixPublic({
   serverName,
   minimumSynapseVersion,
+  federationEnabled = true,
   fetchImplementation = fetch,
 }) {
   const host = normalizeServerName(serverName);
+  if (minimumSynapseVersion) versionParts(minimumSynapseVersion);
   const baseUrl = `https://${host}`;
   const routes = {
     clientWellKnown: "/.well-known/matrix/client",
     serverWellKnown: "/.well-known/matrix/server",
     clientVersions: "/_matrix/client/versions",
     federationVersion: "/_matrix/federation/v1/version",
+    federationKey: "/_matrix/key/v2/server",
     login: "/_matrix/client/v3/login",
     admin: "/_synapse/admin/v1/server_version",
+    adminRegistration: "/_synapse/admin/v1/register",
     metrics: "/_synapse/metrics",
     root: "/",
   };
@@ -92,25 +107,52 @@ export async function auditMatrixPublic({
     Object.entries(routes).map(async ([name, route]) => [
       name,
       await request(fetchImplementation, `${baseUrl}${route}`),
-    ])
+    ]),
   );
   const endpoints = Object.fromEntries(entries);
   const findings = [];
   const finding = (severity, code, message) =>
     findings.push({ severity, code, message });
 
-  for (const name of [
-    "clientWellKnown",
-    "serverWellKnown",
-    "clientVersions",
-    "federationVersion",
-    "login",
-  ]) {
+  for (const [name, result] of Object.entries(endpoints)) {
+    if (!result.finalUrl) continue;
+    let finalOrigin;
+    try {
+      finalOrigin = new URL(result.finalUrl).origin;
+    } catch {
+      finalOrigin = undefined;
+    }
+    if (finalOrigin && finalOrigin !== baseUrl) {
+      finding(
+        "error",
+        `${name}_cross_origin_redirect`,
+        `${name} redirected to a different origin (${finalOrigin}).`,
+      );
+    }
+  }
+
+  if (!federationEnabled && minimumSynapseVersion) {
+    finding(
+      "warning",
+      "synapse_version_unverifiable",
+      "A public non-federated audit cannot verify the Synapse version; compare the installed package or image revision on the server.",
+    );
+  }
+
+  const requiredEndpoints = ["clientWellKnown", "clientVersions", "login"];
+  if (federationEnabled) {
+    requiredEndpoints.push(
+      "serverWellKnown",
+      "federationVersion",
+      "federationKey",
+    );
+  }
+  for (const name of requiredEndpoints) {
     if (!endpoints[name].ok) {
       finding(
         "error",
         `${name}_unavailable`,
-        `${name} returned HTTP ${endpoints[name].status}.`
+        `${name} returned HTTP ${endpoints[name].status}.`,
       );
     }
   }
@@ -119,7 +161,7 @@ export async function auditMatrixPublic({
     finding(
       "warning",
       "client_well_known_cors",
-      "Client discovery does not advertise Access-Control-Allow-Origin: *."
+      "Client discovery does not advertise Access-Control-Allow-Origin: *.",
     );
   }
   const homeserverUrl =
@@ -134,56 +176,99 @@ export async function auditMatrixPublic({
     finding(
       "error",
       "homeserver_discovery",
-      "Client discovery lacks an HTTPS homeserver URL."
+      "Client discovery lacks an HTTPS homeserver URL.",
+    );
+  } else if (discoveredHomeserver.origin !== baseUrl) {
+    finding(
+      "error",
+      "homeserver_discovery_mismatch",
+      `Client discovery points to ${discoveredHomeserver.origin}, not the audited origin ${baseUrl}.`,
     );
   }
 
   const serverDelegation = endpoints.serverWellKnown.json?.["m.server"];
-  if (typeof serverDelegation !== "string") {
+  if (federationEnabled && typeof serverDelegation !== "string") {
     finding(
       "error",
       "federation_discovery",
-      "Server discovery lacks m.server delegation."
+      "Server discovery lacks m.server delegation.",
+    );
+  } else if (!federationEnabled && typeof serverDelegation === "string") {
+    finding(
+      "error",
+      "federation_delegation_present",
+      "Server well-known still advertises federation even though this audit expects federation to be disabled.",
     );
   }
 
   const implementation = endpoints.federationVersion.json?.server;
-  if (implementation?.name !== "Synapse") {
+  if (!federationEnabled && endpoints.federationVersion.ok) {
+    finding(
+      "error",
+      "federation_unexpectedly_enabled",
+      "Federation responds successfully even though this audit expects it to be disabled.",
+    );
+  } else if (federationEnabled && implementation?.name !== "Synapse") {
     finding(
       "warning",
       "implementation",
-      "Federation does not report Synapse as the implementation."
+      "Federation does not report Synapse as the implementation.",
     );
   }
-  if (minimumSynapseVersion && typeof implementation?.version !== "string") {
+  if (!federationEnabled && endpoints.federationKey.ok) {
     finding(
       "error",
-      "synapse_version_missing",
-      "Federation did not report a Synapse version to compare."
+      "federation_key_public",
+      "The federation signing-key endpoint responds successfully even though federation should be disabled.",
     );
-  } else if (
+  }
+  if (
+    federationEnabled &&
     minimumSynapseVersion &&
-    compareVersions(implementation.version, minimumSynapseVersion) < 0
+    typeof implementation?.version !== "string"
   ) {
     finding(
       "error",
-      "synapse_outdated",
-      `Synapse ${implementation.version} is below required ${minimumSynapseVersion}.`
+      "synapse_version_missing",
+      "Federation did not report a Synapse version to compare.",
     );
+  } else if (federationEnabled && minimumSynapseVersion) {
+    try {
+      if (compareVersions(implementation.version, minimumSynapseVersion) < 0) {
+        finding(
+          "error",
+          "synapse_outdated",
+          `Synapse ${implementation.version} is below required ${minimumSynapseVersion}.`,
+        );
+      }
+    } catch {
+      finding(
+        "error",
+        "synapse_version_invalid",
+        `Federation reported an invalid Synapse version (${implementation.version}).`,
+      );
+    }
   }
 
   if (![403, 404].includes(endpoints.admin.status)) {
     finding(
       "error",
       "admin_api_public",
-      `The Synapse Admin API is not blocked by the proxy (HTTP ${endpoints.admin.status}).`
+      `The Synapse Admin API is not blocked by the proxy (HTTP ${endpoints.admin.status}).`,
+    );
+  }
+  if (![403, 404].includes(endpoints.adminRegistration.status)) {
+    finding(
+      "error",
+      "admin_registration_public",
+      `The shared-secret registration path is not blocked by the proxy (HTTP ${endpoints.adminRegistration.status}).`,
     );
   }
   if (![403, 404].includes(endpoints.metrics.status)) {
     finding(
       "error",
       "metrics_public",
-      `Synapse metrics are publicly reachable (HTTP ${endpoints.metrics.status}).`
+      `Synapse metrics are publicly reachable (HTTP ${endpoints.metrics.status}).`,
     );
   }
 
@@ -204,7 +289,7 @@ export async function auditMatrixPublic({
     finding(
       "warning",
       "unstable_auth_discovery",
-      "Authentication discovery still uses the pre-stable org.matrix.msc2965 key."
+      "Authentication discovery still uses the pre-stable org.matrix.msc2965 key.",
     );
   }
   if (authentication?.issuer) {
@@ -218,7 +303,7 @@ export async function auditMatrixPublic({
       finding(
         "error",
         "authentication_https",
-        "Authentication discovery must use HTTPS."
+        "Authentication discovery must use HTTPS.",
       );
     }
   }
@@ -232,28 +317,36 @@ export async function auditMatrixPublic({
       finding(
         "error",
         "identity_server_url",
-        "Client discovery contains an invalid identity-service URL."
+        "Client discovery contains an invalid identity-service URL.",
       );
     }
     if (identityUrl && identityUrl.hostname !== new URL(baseUrl).hostname) {
       finding(
         "warning",
         "external_identity_server",
-        `Client discovery delegates identity-service traffic to ${identityUrl.hostname}; confirm this is intentional.`
+        `Client discovery delegates identity-service traffic to ${identityUrl.hostname}; confirm this is intentional.`,
       );
     }
   }
-  if (endpoints.root.ok) {
+  const rootFinalPath = (() => {
+    try {
+      return new URL(endpoints.root.finalUrl).pathname;
+    } catch {
+      return undefined;
+    }
+  })();
+  if (endpoints.root.ok && !rootFinalPath?.startsWith("/_matrix/static")) {
     finding(
       "warning",
       "shared_content_origin",
-      "The homeserver origin also serves a website; verify it holds no sensitive application state or broadly scoped cookies."
+      "The homeserver origin also serves a website; verify it holds no sensitive application state or broadly scoped cookies.",
     );
   }
 
   return {
     auditedAt: new Date().toISOString(),
     serverName: host,
+    federationExpected: federationEnabled,
     implementation,
     supportedClientVersions: endpoints.clientVersions.json?.versions ?? [],
     loginFlows,
@@ -262,27 +355,38 @@ export async function auditMatrixPublic({
         name,
         {
           status: result.status,
+          ...(result.finalUrl ? { finalUrl: result.finalUrl } : {}),
           elapsedMs: result.elapsedMs,
           ...(result.error ? { error: result.error } : {}),
         },
-      ])
+      ]),
     ),
     findings,
   };
 }
 
-function parseArguments(argumentsList) {
+export function parseArguments(argumentsList) {
   const options = {
     serverName: undefined,
     minimumSynapseVersion: undefined,
+    federationEnabled: true,
     json: false,
   };
   for (let index = 0; index < argumentsList.length; index += 1) {
     const argument = argumentsList[index];
     if (argument === "--minimum-synapse") {
-      options.minimumSynapseVersion = argumentsList[++index];
+      const value = argumentsList[++index];
+      if (!value || value.startsWith("--")) {
+        throw new Error("--minimum-synapse requires a version value.");
+      }
+      versionParts(value);
+      options.minimumSynapseVersion = value;
+    } else if (argument === "--no-federation") {
+      options.federationEnabled = false;
     } else if (argument === "--json") {
       options.json = true;
+    } else if (argument.startsWith("--")) {
+      throw new Error(`Unexpected argument: ${argument}`);
     } else if (!options.serverName) {
       options.serverName = argument;
     } else {
@@ -291,7 +395,7 @@ function parseArguments(argumentsList) {
   }
   if (!options.serverName) {
     throw new Error(
-      "Usage: node scripts/audit-matrix-public.mjs <server-name> [--minimum-synapse X.Y.Z] [--json]"
+      "Usage: node scripts/audit-matrix-public.mjs <server-name> [--minimum-synapse X.Y.Z] [--no-federation] [--json]",
     );
   }
   return options;
@@ -306,7 +410,7 @@ async function main() {
     console.log(
       `${report.serverName}: ${report.implementation?.name ?? "unknown"} ${
         report.implementation?.version ?? "unknown"
-      }`
+      }`,
     );
     for (const item of report.findings) {
       console.log(`[${item.severity}] ${item.code}: ${item.message}`);

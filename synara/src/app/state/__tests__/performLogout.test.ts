@@ -77,9 +77,15 @@ test('performLogout with matrix client stops client, clears stores, and reloads'
   const { mx, calls } = createMockMatrixClient();
   const { deps, clearPersistedCalls, pushCalls, getReloaded } = createLogoutDeps();
 
-  await performLogout(mx, deps);
+  await performLogout(mx, {
+    ...deps,
+    clearPersistedSessions: async (options) => {
+      calls.push('clearPersistedSessions');
+      await deps.clearPersistedSessions(options);
+    },
+  });
 
-  assert.deepEqual(calls, ['stopClient', 'logout', 'clearStores']);
+  assert.deepEqual(calls, ['stopClient', 'logout', 'clearPersistedSessions']);
   assert.equal(clearPersistedCalls.length, 1);
   assert.deepEqual(clearPersistedCalls[0], { nativeSessionStore: deps.nativeSessionStore });
   assert.equal(pushCalls.length, 1);

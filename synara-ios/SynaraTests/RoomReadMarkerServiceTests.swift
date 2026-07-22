@@ -330,27 +330,30 @@ final class RoomReadMarkerServiceTests: XCTestCase {
         XCTAssertEqual(submittedEventIDs, ["$same", "$same"])
     }
 
-    func testRegressionMarkerAfterNewerRequestIsNotFoldedIntoEarlierWrite() async throws {
-        let http = GatedReadMarkerHTTPClient()
+    func testLiveBottomAcknowledgementNeverReusesStaleUICandidateAfterSDKTailAdvances() async throws {
+        let http = RecordingReadMarkerHTTPClient(statusCode: 200, body: "{}")
         let sessionStore = AppSessionStore(currentState: .signedIn(makeSession()))
-        let service = MatrixRoomReadMarkerService(sessionStore: sessionStore, httpClient: http)
+        let clientStore = RecordingReadMarkerClientStore(latestEventID: "$older")
+        let service = MatrixRoomReadMarkerService(
+            sessionStore: sessionStore,
+            clientStore: clientStore,
+            httpClient: http
+        )
 
-        let first = Task { await service.markFullyRead(roomID: "!room:matrix.example", eventID: "$older") }
-        await http.waitUntilRequestCount(1)
-        let newer = Task { await service.markFullyRead(roomID: "!room:matrix.example", eventID: "$newer") }
-        await Task.yield()
-        await http.completeNext(statusCode: 200)
-        await http.waitUntilRequestCount(2)
-        let regression = Task { await service.markFullyRead(roomID: "!room:matrix.example", eventID: "$older") }
-        await Task.yield()
-        await http.completeNext(statusCode: 200)
-        await http.waitUntilRequestCount(3)
-        await http.completeNext(statusCode: 200)
+        let first = await service.markRoomAsRead(roomID: "!room:matrix.example")
+        await clientStore.setLatestEventID("$newer")
+        let newer = await service.markRoomAsRead(roomID: "!room:matrix.example")
+        // This represents a delayed live-bottom task whose UI candidate was old.
+        // markRoomAsRead resolves the SDK tail again, so it cannot submit $older.
+        let staleTask = await service.markRoomAsRead(roomID: "!room:matrix.example")
 
-        let results = await [first.value, newer.value, regression.value]
-        let submittedEventIDs = try await http.submittedEventIDs()
-        XCTAssertEqual(results, [true, true, true])
-        XCTAssertEqual(submittedEventIDs, ["$older", "$newer", "$older"])
+        let submittedEventIDs = try http.requests.map { request in
+            let body = try XCTUnwrap(request.httpBody)
+            let payload = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: String])
+            return try XCTUnwrap(payload["m.fully_read"])
+        }
+        XCTAssertEqual([first, newer, staleTask], ["$older", "$newer", "$newer"])
+        XCTAssertEqual(submittedEventIDs, ["$older", "$newer", "$newer"])
     }
 
     func testFailedMarkerCanRetryTheSameExactEvent() async throws {
@@ -468,10 +471,10 @@ final class RoomReadMarkerServiceTests: XCTestCase {
             writeRetryDelaysNanoseconds: [0]
         )
 
-        let didMark = await service.markRoomAsRead(roomID: "!room:matrix.example")
+        let acknowledgedEventID = await service.markRoomAsRead(roomID: "!room:matrix.example")
 
         let clearedRoomIDs = await clientStore.clearedRoomIDs
-        XCTAssertTrue(didMark)
+        XCTAssertEqual(acknowledgedEventID, "$latest")
         XCTAssertEqual(clearedRoomIDs, ["!room:matrix.example"])
     }
 
@@ -504,10 +507,10 @@ final class RoomReadMarkerServiceTests: XCTestCase {
             writeRetryDelaysNanoseconds: [0]
         )
 
-        let didMark = await service.markRoomAsRead(roomID: "!room:matrix.example")
+        let acknowledgedEventID = await service.markRoomAsRead(roomID: "!room:matrix.example")
 
         let clearedRoomIDs = await clientStore.clearedRoomIDs
-        XCTAssertFalse(didMark)
+        XCTAssertNil(acknowledgedEventID)
         XCTAssertTrue(clearedRoomIDs.isEmpty)
     }
 
@@ -521,10 +524,10 @@ final class RoomReadMarkerServiceTests: XCTestCase {
             httpClient: http
         )
 
-        let didMark = await service.markRoomAsRead(roomID: "!room:matrix.example")
+        let acknowledgedEventID = await service.markRoomAsRead(roomID: "!room:matrix.example")
 
         let clearedRoomIDs = await clientStore.clearedRoomIDs
-        XCTAssertFalse(didMark)
+        XCTAssertNil(acknowledgedEventID)
         XCTAssertTrue(clearedRoomIDs.isEmpty)
         XCTAssertTrue(http.requests.isEmpty)
     }
@@ -539,19 +542,19 @@ final class RoomReadMarkerServiceTests: XCTestCase {
             httpClient: http
         )
 
-        let didMark = await service.markRoomAsRead(roomID: "!room:matrix.example")
+        let acknowledgedEventID = await service.markRoomAsRead(roomID: "!room:matrix.example")
 
         let clearAttempts = await clientStore.clearAttempts
-        XCTAssertFalse(didMark)
+        XCTAssertNil(acknowledgedEventID)
         XCTAssertEqual(clearAttempts, 1)
     }
 
     func testMockMarkRoomAsReadUsesLatestEventMarker() async {
         let service = MockRoomReadMarkerService()
 
-        let didMark = await service.markRoomAsRead(roomID: "!room:matrix.example")
+        let acknowledgedEventID = await service.markRoomAsRead(roomID: "!room:matrix.example")
 
-        XCTAssertTrue(didMark)
+        XCTAssertEqual(acknowledgedEventID, "$latest:!room:matrix.example")
         XCTAssertEqual(service.eventID, "$latest:!room:matrix.example")
     }
 
@@ -566,7 +569,7 @@ final class RoomReadMarkerServiceTests: XCTestCase {
 }
 
 private actor RecordingReadMarkerClientStore: RoomReadMarkerClientStoring {
-    let latestEventIDValue: String?
+    private var latestEventIDValue: String?
     let failsClear: Bool
     private(set) var clearedRoomIDs: [String] = []
     private(set) var clearAttempts = 0
@@ -578,6 +581,10 @@ private actor RecordingReadMarkerClientStore: RoomReadMarkerClientStoring {
 
     func latestEventID(roomID _: String, session _: AuthenticatedSession) async throws -> String? {
         latestEventIDValue
+    }
+
+    func setLatestEventID(_ eventID: String?) {
+        latestEventIDValue = eventID
     }
 
     func clearMarkedUnread(roomID: String, session _: AuthenticatedSession) async throws {

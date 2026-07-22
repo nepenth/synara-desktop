@@ -186,9 +186,11 @@ import {
 } from '../../utils/timelineLinks';
 import {
   buildRoomTimelineOpenDiagnostics,
+  canReplaceTimelineWindowPreservingAnchor,
   getEmptyTimeline,
   getInitialTimeline,
   getRoomTimelineOpenMode,
+  getRoomReadFrontierRevisionKey,
   getRoomUnreadInfo,
   getRoomUnreadInfoInTimelineWindow,
   getTimelineEndWindow,
@@ -196,7 +198,13 @@ import {
   getTimelineRangeAfterPagination,
   getTimelineWindowTailEvent,
   getTimelineWindowTailEventId,
+  getTimelineWindowIdentitySnapshot,
   hasUnreadForInitialScroll,
+  LatestTimelineStructuralUpdateQueue,
+  preserveTimelineStructuralUpdateAnchor,
+  receiptEventContainsUser,
+  resolveRoomReadFrontier,
+  shouldAdoptTimelineRefresh,
   shouldGateViewportRestoreOnUnread,
   shouldShowJumpToUnread,
   timelineHasEvents,
@@ -267,6 +275,12 @@ type ScrollToOptions = {
 
 type ScrollToElement = (element: HTMLElement, opts?: ScrollToOptions) => boolean;
 type ScrollToItem = (index: number, opts?: ScrollToOptions) => boolean;
+
+type PendingStructuralTimelineUpdate = {
+  apply: () => void;
+  preserveAnchor: boolean;
+  reason: string;
+};
 
 const isScrollNearBottom = (
   scrollEl: HTMLElement,
@@ -606,6 +620,31 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
     | SynaraUnreadAnchorContent
     | undefined;
   const unreadAnchorEventId = unreadAnchorContent?.anchors?.[room.roomId]?.eventId;
+  const [, setReadFrontierRevision] = useState(0);
+  useEffect(() => {
+    const userId = mx.getUserId();
+    if (!userId) return undefined;
+
+    const refreshReadFrontier = () => setReadFrontierRevision((revision) => revision + 1);
+    const handleReceipt: RoomEventHandlerMap[RoomEvent.Receipt] = (receiptEvent) => {
+      if (receiptEventContainsUser(receiptEvent, userId)) refreshReadFrontier();
+    };
+    const handleAccountData: RoomEventHandlerMap[RoomEvent.AccountData] = (accountDataEvent) => {
+      if (
+        accountDataEvent.getType() === EventType.FullyRead ||
+        accountDataEvent.getType() === EventType.MarkedUnread
+      ) {
+        refreshReadFrontier();
+      }
+    };
+
+    room.on(RoomEvent.Receipt, handleReceipt);
+    room.on(RoomEvent.AccountData, handleAccountData);
+    return () => {
+      room.removeListener(RoomEvent.Receipt, handleReceipt);
+      room.removeListener(RoomEvent.AccountData, handleAccountData);
+    };
+  }, [mx, room]);
   const { navigateRoom } = useRoomNavigate();
   const mentionClickHandler = useMentionClickHandler(room.roomId);
   const spoilerClickHandler = useSpoilerClickHandler();
@@ -621,11 +660,16 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
     () => (eventId ? getEmptyTimeline() : getInitialTimeline(room, PAGINATION_LIMIT)),
     [eventId, room]
   );
+  const readFrontier = resolveRoomReadFrontier(room, unreadAnchorEventId);
+  const readFrontierRevisionKey = getRoomReadFrontierRevisionKey(readFrontier);
+  const activeUnreadAnchorEventId =
+    readFrontier.source === 'marked-unread-anchor' ? readFrontier.eventId : undefined;
   const hasUnreadSignal =
-    hasUnreadForInitialScroll(unread, unreadAnchorEventId) || roomHaveUnread(mx, room);
+    hasUnreadForInitialScroll(unread, readFrontier) ||
+    (!readFrontier.isAtLiveTail && roomHaveUnread(mx, room));
   const initialUnreadPlacementInfo =
     !eventId && hasUnreadSignal
-      ? getRoomUnreadInfoInTimelineWindow(room, initialTimelineWindow, unreadAnchorEventId, true)
+      ? getRoomUnreadInfoInTimelineWindow(room, initialTimelineWindow, readFrontier, true)
       : undefined;
   const currentLiveTailEventId = getLoadedLiveTailEventId(room);
   const shouldRestoreSavedViewport =
@@ -671,6 +715,13 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
   const userScrollGenerationRef = useRef(0);
   const userScrollingRef = useRef(false);
   const userScrollIdleTimerRef = useRef<number | undefined>(undefined);
+  const structuralTimelineUpdateQueueRef = useRef(
+    new LatestTimelineStructuralUpdateQueue<PendingStructuralTimelineUpdate>()
+  );
+  const requestStructuralTimelineUpdateRef = useRef<
+    (update: PendingStructuralTimelineUpdate) => void
+  >((update) => update.apply());
+  const flushStructuralTimelineUpdateRef = useRef<() => void>(() => undefined);
   const [scrollIdleRevision, setScrollIdleRevision] = useState(0);
   const recordUserScrollIntent = useCallback(() => {
     userScrollGenerationRef.current += 1;
@@ -683,6 +734,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
       userScrollIdleTimerRef.current = undefined;
     }
     setScrollIdleRevision((revision) => revision + 1);
+    flushStructuralTimelineUpdateRef.current();
   }, []);
   const scheduleUserScrollIdle = useCallback(() => {
     if (!userScrollingRef.current) return;
@@ -754,12 +806,12 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
     if (hasUnreadSignal) {
       setUnreadInfo((currentUnreadInfo) => {
         if (currentUnreadInfo?.scrollTo) return currentUnreadInfo;
-        return getRoomUnreadInfo(room, unreadAnchorEventId, false);
+        return getRoomUnreadInfo(room, resolveRoomReadFrontier(room, unreadAnchorEventId), false);
       });
       return;
     }
     setUnreadInfo(undefined);
-  }, [room, unreadAnchorEventId, unread, hasUnreadSignal]);
+  }, [room, unreadAnchorEventId, unread, hasUnreadSignal, readFrontierRevisionKey]);
   const htmlReactParserOptions = useMemo<HTMLReactParserOptions>(
     () =>
       getReactCustomHtmlParser(mx, room.roomId, {
@@ -773,6 +825,8 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
   const parseMemberEvent = useMemberEventParser();
 
   const [timeline, setTimeline] = useState<TimelineWindow>(() => initialTimelineWindow);
+  const timelineRef = useRef(timeline);
+  timelineRef.current = timeline;
   const navigationTimeoutHandlerRef = useRef<
     (failure: TimelineNavigationFailure<TimelineWindow>) => void
   >(() => undefined);
@@ -865,7 +919,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
     roomOpenDiagnosticsLoggedRef.current = true;
     const unreadTarget =
       initialUnreadPlacementInfo?.readUptoEventId ??
-      getRoomUnreadInfo(room, unreadAnchorEventId)?.readUptoEventId;
+      getRoomUnreadInfo(room, resolveRoomReadFrontier(room, unreadAnchorEventId))?.readUptoEventId;
     traceTimeline('room-timeline.open', {
       ...buildRoomTimelineOpenDiagnostics({
         openMode: roomOpenMode,
@@ -896,6 +950,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
     if (!liveEndPinRef.current) return undefined;
 
     const requestId = navigationController.beginLiveTailRefresh();
+    const requestedTimelineIdentity = getTimelineWindowIdentitySnapshot(timelineRef.current);
     let cancelled = false;
 
     void (async () => {
@@ -914,25 +969,22 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
       if (!authoritativeTailEventId) return;
       if (!navigationController.applyLiveTailRefresh(requestId, authoritativeTailEventId)) return;
 
-      setTimeline((current) => {
-        const currentTail =
-          current.linkedTimelines[current.linkedTimelines.length - 1] === getLiveTimeline(room);
-        const nextTail =
-          nextTimeline.linkedTimelines[nextTimeline.linkedTimelines.length - 1] ===
-          getLiveTimeline(room);
-        // Only replace when the attachment actually improved or length changed.
-        if (
-          currentTail &&
-          nextTail &&
-          getTimelinesEventsCount(current.linkedTimelines) ===
-            getTimelinesEventsCount(nextTimeline.linkedTimelines) &&
-          current.range.start === nextTimeline.range.start &&
-          current.range.end === nextTimeline.range.end
-        ) {
-          return current;
-        }
-        return nextTimeline;
-      });
+      if (shouldAdoptTimelineRefresh(requestedTimelineIdentity, nextTimeline)) {
+        requestStructuralTimelineUpdateRef.current({
+          reason: 'live-tail-refresh',
+          preserveAnchor: false,
+          apply: () => {
+            const anchorEventId = pendingVirtualAnchorRef.current?.eventId;
+            if (!canReplaceTimelineWindowPreservingAnchor(nextTimeline, anchorEventId)) {
+              traceTimeline('room-timeline.live-tail-refresh-deferred', {
+                reason: 'anchor-outside-latest-window',
+              });
+              return;
+            }
+            setTimeline(nextTimeline);
+          },
+        });
+      }
       traceTimeline('room-timeline.live-tail-refresh', {
         eventCount: getTimelinesEventsCount(nextTimeline.linkedTimelines),
       });
@@ -1011,6 +1063,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
 
   const timelineRouteKey = `${room.roomId}\u0000${eventId ?? ''}`;
   useEffect(() => {
+    structuralTimelineUpdateQueueRef.current.clear();
     if (!navigationController.handleRouteChange(timelineRouteKey)) return;
     cancelLiveEndPin();
     syncNavigationPhase();
@@ -1121,7 +1174,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
         ignoredUsersSet,
         showHiddenEvents,
         readUptoEventId: currentReadUptoEventId,
-        unreadAnchorEventId,
+        unreadAnchorEventId: activeUnreadAnchorEventId,
         currentUserId: mx.getUserId(),
         eventRange: timeline.range,
       },
@@ -1155,7 +1208,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
     ignoredUsersSet,
     showHiddenEvents,
     currentReadUptoEventId,
-    unreadAnchorEventId,
+    activeUnreadAnchorEventId,
     mx,
   ]);
   useEffect(() => {
@@ -1294,6 +1347,36 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
     pendingVirtualAnchorRef.current = anchor;
     pendingVirtualAnchorGenerationRef.current = userScrollGenerationRef.current;
   }, [getCurrentVirtualAnchor]);
+
+  const requestStructuralTimelineUpdate = useCallback(
+    (update: PendingStructuralTimelineUpdate) => {
+      if (userScrollingRef.current) {
+        structuralTimelineUpdateQueueRef.current.enqueue(
+          preserveTimelineStructuralUpdateAnchor(update)
+        );
+        traceTimeline('room-timeline.structural-update-queued', { reason: update.reason });
+        return;
+      }
+
+      if (update.preserveAnchor) captureVirtualAnchor();
+      startTimelineTransition(update.apply);
+    },
+    [captureVirtualAnchor, startTimelineTransition, traceTimeline]
+  );
+  requestStructuralTimelineUpdateRef.current = requestStructuralTimelineUpdate;
+
+  const flushStructuralTimelineUpdate = useCallback(() => {
+    if (userScrollingRef.current) return;
+    const update = structuralTimelineUpdateQueueRef.current.take();
+    if (!update) return;
+
+    // Measure after momentum has stopped, not when the update first arrived.
+    // This is the same-event anchor the user actually settled on.
+    if (update.preserveAnchor) captureVirtualAnchor();
+    traceTimeline('room-timeline.structural-update-flushed', { reason: update.reason });
+    startTimelineTransition(update.apply);
+  }, [captureVirtualAnchor, startTimelineTransition, traceTimeline]);
+  flushStructuralTimelineUpdateRef.current = flushStructuralTimelineUpdate;
 
   const getPersistableVirtualAnchor = useCallback((): TimelineVirtualAnchor | undefined => {
     const anchor = getCurrentVirtualAnchorRef.current();
@@ -1642,7 +1725,8 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
           navigationController.phase !== 'loading' &&
           navigationController.phase !== 'settling';
         const shouldFollowLiveEnd =
-          liveEndPinRef.current || isActuallyAtLiveBottom() || atBottomRef.current;
+          !userScrollingRef.current &&
+          (liveEndPinRef.current || isActuallyAtLiveBottom() || atBottomRef.current);
         const shouldReattachLiveTimeline =
           liveTimelineResetPendingRef.current ||
           (!liveTimelineLinked && shouldFollowLiveEnd) ||
@@ -1694,7 +1778,9 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
           }
 
           if (!document.hasFocus() && !unreadInfo) {
-            setUnreadInfo(getRoomUnreadInfo(room));
+            setUnreadInfo(
+              getRoomUnreadInfo(room, resolveRoomReadFrontier(room, unreadAnchorEventId))
+            );
           }
 
           scrollToBottomRef.current.count += 1;
@@ -1706,26 +1792,29 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
           }));
           return;
         }
-        captureVirtualAnchor();
-        startTimelineTransition(() => {
-          setTimeline((ct) => ({ ...ct }));
+        requestStructuralTimelineUpdate({
+          reason: 'live-event',
+          preserveAnchor: true,
+          apply: () => setTimeline((current) => ({ ...current })),
         });
         if (!unreadInfo) {
-          setUnreadInfo(getRoomUnreadInfo(room));
+          setUnreadInfo(
+            getRoomUnreadInfo(room, resolveRoomReadFrontier(room, unreadAnchorEventId))
+          );
         }
       },
       [
-        captureVirtualAnchor,
         isActuallyAtLiveBottom,
         liveTimelineLinked,
         mx,
         room,
+        unreadAnchorEventId,
         unreadInfo,
         hideActivity,
         navigationController,
+        requestStructuralTimelineUpdate,
         setAtBottomState,
         startLiveEndPin,
-        startTimelineTransition,
         timelineRows.length,
       ]
     )
@@ -1772,16 +1861,32 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
       }
 
       if (liveTimelineLinked || atBottomRef.current || liveEndPinRef.current) {
-        if (!isActuallyAtLiveBottom() && !atBottomRef.current && !liveEndPinRef.current) {
-          captureVirtualAnchor();
-        }
-        navigationController.reattachLiveTimeline();
-        setTimeline(nextTimeline);
+        const preserveAnchor =
+          userScrollingRef.current ||
+          (!isActuallyAtLiveBottom() && !atBottomRef.current && !liveEndPinRef.current);
+        requestStructuralTimelineUpdate({
+          reason: 'live-timeline-refresh',
+          preserveAnchor,
+          apply: () => {
+            const latestTimeline = getInitialTimeline(room, PAGINATION_LIMIT);
+            if (!timelineHasEvents(latestTimeline)) return;
+            const anchorEventId = pendingVirtualAnchorRef.current?.eventId;
+            if (!canReplaceTimelineWindowPreservingAnchor(latestTimeline, anchorEventId)) {
+              liveTimelineResetPendingRef.current = true;
+              traceTimeline('room-timeline.live-refresh-deferred', {
+                reason: 'anchor-outside-latest-window',
+              });
+              return;
+            }
+            navigationController.reattachLiveTimeline();
+            setTimeline(latestTimeline);
+          },
+        });
       }
     }, [
-      captureVirtualAnchor,
       isActuallyAtLiveBottom,
       navigationController,
+      requestStructuralTimelineUpdate,
       room,
       liveTimelineLinked,
       traceTimeline,

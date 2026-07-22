@@ -13,18 +13,23 @@ model and Element X iOS's live-versus-focused provider model.
 
 ## Read state and room opening
 
-`m.fully_read` is a shared, event-level Matrix marker. It is not a pixel viewport
-and must be written only through `POST /_matrix/client/v3/rooms/{roomId}/read_markers`.
-A write contains `m.fully_read` and exactly one receipt key: `m.read` or
-`m.read.private`, according to the user's receipt privacy mode.
+`m.fully_read`, public `m.read`, and private `m.read.private` are shared,
+event-level Matrix read signals. None is a pixel viewport. A read-marker write
+uses `POST /_matrix/client/v3/rooms/{roomId}/read_markers` and contains
+`m.fully_read` plus exactly one receipt key—`m.read` or `m.read.private`—according
+to the user's receipt privacy mode.
 
 Each client exposes equivalent internal values:
 
 ```text
 RoomReadState {
   fullyReadEventId?: EventId
+  publicReceiptEventId?: EventId
+  privateReceiptEventId?: EventId
+  effectiveFrontierEventId?: EventId
   hasUnread: Boolean
-  markerSource: server | receiptFallback | absent
+  frontierSource: fullyRead | publicReceipt | privateReceipt |
+                  currentLiveBottom | absent
   receiptPrivacy: public | private
 }
 
@@ -36,21 +41,30 @@ NavigationPhase = idle | loadingContext | rebindingLive |
 Rules:
 
 1. An explicit event route opens a bounded focused context and takes precedence.
-2. A room with unread state opens a bounded context around `m.fully_read` and
-   places the first following visible event at the top of the viewport.
-3. A room without unread state restores a valid current-session event/pixel
+2. The effective frontier is the newest comparable event among `m.fully_read`,
+   the current user's unthreaded public receipt, and the current user's
+   unthreaded private receipt. Ordering comes from the SDK timeline/event graph,
+   never lexical event IDs or origin timestamps alone.
+3. A room with unread state opens a bounded context around that effective
+   frontier and places the first following visible event at the top of the
+   viewport.
+4. A room without unread state restores a valid current-session event/pixel
    viewport when the user deliberately left history; otherwise it opens live.
-4. A missing, purged, or inaccessible marker falls back to live without walking
-   history and displays a non-blocking "Unread position unavailable" notice.
-5. A marker change after mount never moves the viewport.
-6. Viewport state is device-local and is invalidated on leave, purge,
+5. A candidate that is missing, purged, inaccessible, or outside the bounded
+   live graph cannot make a known-newer receipt appear older. When the newest
+   frontier cannot be established without walking linked history, fall back to
+   live and display a non-blocking "Unread position unavailable" notice.
+6. A marker or receipt change after mount updates state but never moves the
+   viewport.
+7. Viewport state is device-local and is invalidated on leave, purge,
    incompatible timeline reset, logout, or a newer explicit navigation intent.
-7. Read writes are serialized per room, coalesced to the newest known event, and
+8. Read writes are serialized per room, resolve the authoritative live-tail
+   event at execution time, coalesce to the newest known event, and
    cannot regress when an older request completes late.
-8. Custom unread state clears only after the server marker succeeds. Transient
+9. Custom unread state clears only after the server marker succeeds. Transient
    failure retries after sync resumes without claiming success in the UI.
-9. Automatic read advancement requires an active app, the current live provider
-   generation, and a live-tail sentinel continuously visible for one second.
+10. Automatic read advancement requires an active app, the current live provider
+    generation, and a live-tail sentinel continuously visible for one second.
 
 ## Room activity and Recent 24h
 
@@ -66,16 +80,22 @@ RoomActivity {
 }
 ```
 
-- Unfiltered live timeline events and local sends update the store before room
-  category rendering. Decryption and remote echo may refine the preview without
-  removing the room or moving activity backward.
+- Unfiltered live timeline events and local echoes update the store before room
+  category rendering. The stored last-qualifying-activity timestamp is
+  monotonic. Decryption and remote echo may refine the preview without removing
+  the room or moving activity backward.
 - Message-like bumping events count as activity. Back-pagination, reactions,
-  redactions, and edits do not create new activity timestamps.
+  receipts, typing, presence, ordinary state changes, redactions, and edits do
+  not create new activity timestamps. An edit retains its original message's
+  membership effect, and a redaction does not erase the fact that qualifying
+  activity occurred.
 - Use server/SDK bump data for ordering and change detection, and the relevant
   event timestamp for the 24-hour cutoff. Preserve the last valid timestamp when
   the SDK temporarily lacks a preview event.
-- Recent and normal Rooms are one atomic partition of the same snapshot. Every
-  visible joined room appears in exactly one partition.
+- Recent membership is derived from the monotonic timestamp and a 24-hour cutoff;
+  it expires deterministically even when no further events arrive. Recent and
+  normal Rooms are one atomic partition of the same snapshot. Every visible
+  joined room appears in exactly one partition.
 - Recent sorts by descending activity, then case-insensitive room name, then room
   ID. Recompute at the next expiry boundary and on foreground, clock/time-zone
   change, reconnect, membership change, and timeline reset.

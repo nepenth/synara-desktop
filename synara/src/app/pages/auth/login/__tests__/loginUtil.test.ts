@@ -40,6 +40,10 @@ test('completeAuthenticatedLogin pushes session to the service worker once after
     userId: '@alice:example.org',
     baseUrl: 'https://matrix.example.org',
   });
+  assert.equal(
+    (persistCalls[0]?.options as { freshLogin?: boolean } | undefined)?.freshLogin,
+    true
+  );
   assert.equal(pushCalls.length, 1);
   assert.deepEqual(pushCalls[0], ['https://matrix.example.org', 'access-token']);
 });
