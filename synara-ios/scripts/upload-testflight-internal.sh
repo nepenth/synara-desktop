@@ -173,7 +173,7 @@ distribution_log_path="$(
     "$DIAGNOSTICS_DIR/xcodebuild-export.log" | tail -n 1
 )"
 if [[ -n "$distribution_log_path" && -d "$distribution_log_path" ]]; then
-  ditto "$distribution_log_path" "$DIAGNOSTICS_DIR/$(basename "$distribution_log_path")"
+  cp -R "$distribution_log_path" "$DIAGNOSTICS_DIR/$(basename "$distribution_log_path")"
 fi
 if [[ "$export_status" -ne 0 ]]; then
   exit "$export_status"
