@@ -29,20 +29,29 @@ struct AppLocalWipeService: LocalWiping {
             activeSession = nil
         }
 
-        await matrix.stop()
-        await push.clearRegistrationState()
-        await matrix.resetLocalState(for: activeSession)
-        roomList.clearCache()
-        timeline.clearSessionCaches()
-        drafts.clearAll()
-        router.resetNavigationPathsForAccountChange()
-
+        // Remove the persisted Matrix device session before deleting its SDK
+        // crypto store or stopping reversible services. If Keychain deletion
+        // fails, retaining both prevents the next launch from rebuilding a fresh
+        // store under the same device ID and leaves the running session intact.
         do {
             try session.signOut()
         } catch {
             throw LocalWipeError.sessionDeleteFailed
         }
 
+        // These remote operations are best effort after durable local sign-out.
+        // Clear the pusher while the captured access token is still valid, then
+        // revoke that token/device session without reconstructing a client/store.
+        await push.clearRegistrationState()
+        if let activeSession {
+            _ = await matrix.revokeServerSession(activeSession)
+        }
+        await matrix.stop()
+        await matrix.resetLocalState(for: activeSession)
+        roomList.clearCache()
+        timeline.clearSessionCaches()
+        drafts.clearAll()
+        router.resetNavigationPathsForAccountChange()
     }
 }
 

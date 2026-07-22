@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  deleteIndexedDb,
   isCryptoAccountMismatchError,
   MATRIX_LOCAL_STORE_NAMES,
 } from '../../../client/matrixLocalStores';
@@ -8,6 +9,38 @@ import {
   clearMatrixStoresForIdentityChange,
   shouldClearMatrixStoresBeforeInit,
 } from '../../state/sessionPersistence';
+
+const withIndexedDbDelete = async (
+  trigger: 'success' | 'error' | 'blocked',
+  run: () => Promise<void>
+) => {
+  const originalIndexedDb = globalThis.indexedDB;
+  const request = {
+    error: trigger === 'error' ? new DOMException('delete failed') : null,
+    onsuccess: null as null | (() => void),
+    onerror: null as null | (() => void),
+    onblocked: null as null | (() => void),
+  };
+
+  Object.defineProperty(globalThis, 'indexedDB', {
+    configurable: true,
+    value: {
+      deleteDatabase: () => {
+        queueMicrotask(() => request[`on${trigger}`]?.());
+        return request;
+      },
+    },
+  });
+
+  try {
+    await run();
+  } finally {
+    Object.defineProperty(globalThis, 'indexedDB', {
+      configurable: true,
+      value: originalIndexedDb,
+    });
+  }
+};
 
 test('isCryptoAccountMismatchError detects rust crypto account mismatch failures', () => {
   const error = new Error(
@@ -29,6 +62,21 @@ test('matrix local store names include sync, legacy crypto, and rust crypto stor
     'matrix-js-sdk::matrix-sdk-crypto',
     'matrix-js-sdk::matrix-sdk-crypto-meta',
   ]);
+});
+
+test('IndexedDB deletion resolves only after success', async () => {
+  await withIndexedDbDelete('success', async () => {
+    await deleteIndexedDb('matrix-test');
+  });
+});
+
+test('IndexedDB deletion rejects failed and blocked deletes', async () => {
+  await withIndexedDbDelete('error', async () => {
+    await assert.rejects(() => deleteIndexedDb('matrix-test'), /delete failed/);
+  });
+  await withIndexedDbDelete('blocked', async () => {
+    await assert.rejects(() => deleteIndexedDb('matrix-test'), /blocked by an open client/);
+  });
 });
 
 test('account switch proactive clear complements crypto mismatch fallback detection', async () => {

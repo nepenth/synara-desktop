@@ -8,7 +8,7 @@ final class MatrixStoreLifecycleTests: XCTestCase {
         XCTAssertGreaterThan(MatrixRustSDKClientStore.persistedStoreSchemaVersion, 0)
     }
 
-    func testPruneLegacyPersistedStoresRemovesUnversionedDirectories() throws {
+    func testPruneLegacyPersistedStoresRequiresValidatedRestoreEvidence() throws {
         let root = try makeTemporaryStoreRoot()
         defer { try? FileManager.default.removeItem(at: root) }
 
@@ -19,10 +19,118 @@ final class MatrixStoreLifecycleTests: XCTestCase {
         try FileManager.default.createDirectory(at: legacyStore.appendingPathComponent("data", isDirectory: true), withIntermediateDirectories: true)
         try FileManager.default.createDirectory(at: versionedStore.appendingPathComponent("data", isDirectory: true), withIntermediateDirectories: true)
 
-        try MatrixRustSDKClientStore.pruneLegacyPersistedStores(in: root)
+        try MatrixRustSDKClientStore.pruneLegacyPersistedStores(
+            in: root,
+            validatedStoreIDs: []
+        )
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: legacyStore.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: versionedStore.path))
+
+        try MatrixRustSDKClientStore.pruneLegacyPersistedStores(
+            in: root,
+            validatedStoreIDs: [legacyStore.lastPathComponent]
+        )
 
         XCTAssertFalse(FileManager.default.fileExists(atPath: legacyStore.path))
         XCTAssertTrue(FileManager.default.fileExists(atPath: versionedStore.path))
+    }
+
+    func testPersistedStoreMustContainDurableDataBeforeDeviceRestore() throws {
+        let root = try makeTemporaryStoreRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let session = try makeSession(sdkStoreID: "known-device-store")
+        let dataDirectory = root
+            .appendingPathComponent("v\(MatrixRustSDKClientStore.persistedStoreSchemaVersion)", isDirectory: true)
+            .appendingPathComponent("known-device-store", isDirectory: true)
+            .appendingPathComponent("data", isDirectory: true)
+        try FileManager.default.createDirectory(at: dataDirectory, withIntermediateDirectories: true)
+
+        XCTAssertFalse(MatrixRustSDKClientStore.persistedStoreContainsDurableData(for: session, in: root))
+
+        let database = dataDirectory.appendingPathComponent("matrix-sdk-state.sqlite3")
+        XCTAssertTrue(FileManager.default.createFile(atPath: database.path, contents: Data([0x53, 0x51, 0x4c])))
+
+        XCTAssertTrue(MatrixRustSDKClientStore.persistedStoreContainsDurableData(for: session, in: root))
+        XCTAssertTrue(MatrixRustSDKClientStore.persistedStoreIsEligibleForRestore(for: session, in: root))
+
+        try MatrixRustSDKClientStore.recordPersistedStoreIdentity(for: session, in: root)
+        XCTAssertTrue(MatrixRustSDKClientStore.persistedStoreIsEligibleForRestore(for: session, in: root))
+
+        let mismatchedDevice = AuthenticatedSession(
+            userID: session.userID,
+            deviceID: "DIFFERENT-DEVICE",
+            homeserverURL: session.homeserverURL,
+            accessToken: session.accessToken,
+            sdkStoreID: session.sdkStoreID
+        )
+        XCTAssertFalse(MatrixRustSDKClientStore.persistedStoreIsEligibleForRestore(for: mismatchedDevice, in: root))
+    }
+
+    func testRestoreFailuresAlwaysPreservePersistedCryptoStore() {
+        XCTAssertFalse(MatrixSessionRestoreError.persistedStoreUnavailable.shouldDeletePersistedStore)
+        XCTAssertFalse(MatrixSessionRestoreError.restorationFailed.shouldDeletePersistedStore)
+        XCTAssertFalse(MatrixSessionRestoreError.serverDeviceKeysUnavailable.shouldDeletePersistedStore)
+        XCTAssertFalse(MatrixSessionRestoreError.deviceIdentityMismatch.shouldDeletePersistedStore)
+    }
+
+    func testDeviceKeyContinuityRequiresBothServerKeysToMatch() throws {
+        let response = try deviceKeysResponse(
+            deviceID: "DEVICE",
+            curve25519Key: "curve-key",
+            ed25519Key: "ed-key"
+        )
+
+        XCTAssertEqual(
+            MatrixDeviceKeyContinuityValidator.validate(
+                responseData: response,
+                userID: "@alice:matrix.org",
+                deviceID: "DEVICE",
+                localCurve25519Key: "curve-key",
+                localEd25519Key: "ed-key"
+            ),
+            .matches
+        )
+        XCTAssertEqual(
+            MatrixDeviceKeyContinuityValidator.validate(
+                responseData: response,
+                userID: "@alice:matrix.org",
+                deviceID: "DEVICE",
+                localCurve25519Key: "different",
+                localEd25519Key: "ed-key"
+            ),
+            .mismatch
+        )
+    }
+
+    func testDeviceKeyContinuityFailsClosedForMissingServerOrLocalKeys() throws {
+        let response = try deviceKeysResponse(
+            deviceID: "DEVICE",
+            curve25519Key: "curve-key",
+            ed25519Key: "ed-key"
+        )
+        let missingServerDevice = try JSONSerialization.data(withJSONObject: ["device_keys": [:]])
+
+        XCTAssertEqual(
+            MatrixDeviceKeyContinuityValidator.validate(
+                responseData: missingServerDevice,
+                userID: "@alice:matrix.org",
+                deviceID: "DEVICE",
+                localCurve25519Key: "curve-key",
+                localEd25519Key: "ed-key"
+            ),
+            .unavailable
+        )
+        XCTAssertEqual(
+            MatrixDeviceKeyContinuityValidator.validate(
+                responseData: response,
+                userID: "@alice:matrix.org",
+                deviceID: "DEVICE",
+                localCurve25519Key: nil,
+                localEd25519Key: "ed-key"
+            ),
+            .unavailable
+        )
     }
 
     func testDeletePersistedStoreRemovesOnlyTargetSession() throws {
@@ -104,12 +212,35 @@ final class MatrixStoreLifecycleTests: XCTestCase {
         return base
     }
 
-    private func makeSession(userID: String = "@alice:matrix.org") throws -> AuthenticatedSession {
+    private func deviceKeysResponse(
+        deviceID: String,
+        curve25519Key: String,
+        ed25519Key: String
+    ) throws -> Data {
+        try JSONSerialization.data(withJSONObject: [
+            "device_keys": [
+                "@alice:matrix.org": [
+                    deviceID: [
+                        "keys": [
+                            "curve25519:\(deviceID)": curve25519Key,
+                            "ed25519:\(deviceID)": ed25519Key,
+                        ],
+                    ],
+                ],
+            ],
+        ])
+    }
+
+    private func makeSession(
+        userID: String = "@alice:matrix.org",
+        sdkStoreID: String? = nil
+    ) throws -> AuthenticatedSession {
         AuthenticatedSession(
             userID: userID,
             deviceID: "DEVICE",
             homeserverURL: try XCTUnwrap(URL(string: "https://matrix.org")),
-            accessToken: "secret-token"
+            accessToken: "secret-token",
+            sdkStoreID: sdkStoreID
         )
     }
 }

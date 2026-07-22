@@ -130,7 +130,7 @@ export const useRegisterComplete = (data?: CustomRegisterResponse) => {
             userId,
             baseUrl,
           },
-          { nativeSessionStore: platformSessionStore }
+          { nativeSessionStore: platformSessionStore, freshLogin: true }
         );
         if (!active) return;
         const afterLoginRedirectPath = getAfterLoginRedirectPath();

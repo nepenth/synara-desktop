@@ -127,7 +127,64 @@ enum RoomListRecentActivity {
 
 enum RoomActivityTimestamp {
     static func resolve(latest: Date?, previous: Date?) -> Date {
-        latest ?? previous ?? .distantPast
+        switch (latest, previous) {
+        case let (latest?, previous?):
+            return max(latest, previous)
+        case let (latest?, nil):
+            return latest
+        case let (nil, previous?):
+            return previous
+        case (nil, nil):
+            return .distantPast
+        }
+    }
+}
+
+enum RoomActivityEventKind {
+    case messageLike
+    case localEcho
+    case invite
+    case receipt
+    case typing
+    case state
+}
+
+enum RoomActivityQualification {
+    static func qualifies(_ kind: RoomActivityEventKind) -> Bool {
+        switch kind {
+        case .messageLike, .localEcho, .invite:
+            return true
+        case .receipt, .typing, .state:
+            return false
+        }
+    }
+}
+
+/// Recovers a room's newest message-like activity when the SDK's latest-event
+/// summary happens to be a state event. Recovery is deliberately cold-start
+/// only and bounded to one small SDK timeline page per affected room.
+enum RoomActivityRecoveryPolicy {
+    static let maximumTimelineEvents = 24
+
+    struct Candidate: Equatable {
+        let timestamp: Date
+        let kind: RoomActivityEventKind
+    }
+
+    static func shouldRecover(
+        latestRequiresRecovery: Bool,
+        previousActivityAt: Date?
+    ) -> Bool {
+        latestRequiresRecovery
+            && (previousActivityAt == nil || previousActivityAt == .distantPast)
+    }
+
+    static func newestQualifyingTimestamp(from candidates: [Candidate]) -> Date? {
+        candidates
+            .suffix(maximumTimelineEvents)
+            .reversed()
+            .first { RoomActivityQualification.qualifies($0.kind) }?
+            .timestamp
     }
 }
 

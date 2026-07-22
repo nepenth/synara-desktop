@@ -3,7 +3,8 @@ import Foundation
 protocol RoomReadMarkerServicing {
     func fullyReadEventID(roomID: String) async -> String?
     func markFullyRead(roomID: String, eventID: String) async -> Bool
-    func markRoomAsRead(roomID: String) async -> Bool
+    /// Returns the SDK-authoritative event ID that was acknowledged.
+    func markRoomAsRead(roomID: String) async -> String?
 }
 
 protocol RoomReadMarkerHTTPClient {
@@ -262,28 +263,28 @@ final class MatrixRoomReadMarkerService: RoomReadMarkerServicing {
         }
     }
 
-    func markRoomAsRead(roomID: String) async -> Bool {
+    func markRoomAsRead(roomID: String) async -> String? {
         guard case let .signedIn(session) = sessionStore.currentState else {
-            return false
+            return nil
         }
         let sessionEpoch = sessionStore.sessionEpoch
 
         guard let clientStore else {
-            return false
+            return nil
         }
 
         do {
             guard let eventID = try await clientStore.latestEventID(roomID: roomID, session: session) else {
-                return false
+                return nil
             }
             guard MatrixServerEventIDPolicy.canAcknowledge(eventID) else {
-                return false
+                return nil
             }
 
             guard sessionStore.currentState == .signedIn(session),
                   sessionStore.sessionEpoch == sessionEpoch
             else {
-                return false
+                return nil
             }
             guard await submitReadMarkers(
                 roomID: roomID,
@@ -291,18 +292,18 @@ final class MatrixRoomReadMarkerService: RoomReadMarkerServicing {
                 session: session,
                 sessionEpoch: sessionEpoch
             ) else {
-                return false
+                return nil
             }
             guard sessionStore.currentState == .signedIn(session),
                   sessionStore.sessionEpoch == sessionEpoch
             else {
-                return false
+                return nil
             }
             try await clientStore.clearMarkedUnread(roomID: roomID, session: session)
-            return true
+            return eventID
         } catch {
             logger.info("Matrix mark-room-read completion failed room=redacted", category: .sync)
-            return false
+            return nil
         }
     }
 
@@ -443,8 +444,9 @@ final class MockRoomReadMarkerService: RoomReadMarkerServicing {
         return true
     }
 
-    func markRoomAsRead(roomID: String) async -> Bool {
-        await markFullyRead(roomID: roomID, eventID: "$latest:\(roomID)")
+    func markRoomAsRead(roomID: String) async -> String? {
+        let eventID = "$latest:\(roomID)"
+        return await markFullyRead(roomID: roomID, eventID: eventID) ? eventID : nil
     }
 }
 

@@ -31,6 +31,10 @@ import {
   startClient,
   type ProactiveTokenRefreshHandle,
 } from '../../../client/initMatrix';
+import {
+  canRetryCryptoStoreContinuityFailure,
+  CryptoStoreContinuityError,
+} from '../../../client/cryptoStoreContinuity';
 import { SplashScreen } from '../../components/splash-screen';
 import { ServerConfigsLoader } from '../../components/ServerConfigsLoader';
 import { CapabilitiesProvider } from '../../hooks/useCapabilities';
@@ -326,6 +330,14 @@ export function ClientRoot({ children }: ClientRootProps) {
     loading,
     syncTimedOut,
   });
+  const continuityError =
+    (loadState.status === AsyncStatus.Error &&
+      loadState.error instanceof CryptoStoreContinuityError &&
+      loadState.error) ||
+    (startState.status === AsyncStatus.Error &&
+      startState.error instanceof CryptoStoreContinuityError &&
+      startState.error) ||
+    undefined;
 
   return (
     <AutoDiscovery userId={userId!} baseUrl={baseUrl!}>
@@ -349,11 +361,37 @@ export function ClientRoot({ children }: ClientRootProps) {
                   {startState.status === AsyncStatus.Error && (
                     <Text>{`Failed to start. ${startState.error.message}`}</Text>
                   )}
-                  <Button variant="Critical" onClick={mx ? () => startMatrix(mx) : loadMatrix}>
-                    <Text as="span" size="B400">
-                      Retry
-                    </Text>
-                  </Button>
+                  {continuityError ? (
+                    <>
+                      <Text size="T300" priority="400">
+                        Synara stopped before changing any encryption keys. Your local crypto store
+                        is still intact.
+                      </Text>
+                      <Text size="T300" priority="400">
+                        Before signing out, confirm that another verified client can decrypt your
+                        history or that you have tested your recovery key/key backup. Signing out
+                        permanently removes this device&apos;s local encryption data.
+                      </Text>
+                      {canRetryCryptoStoreContinuityFailure(continuityError) && (
+                        <Button variant="Primary" onClick={loadMatrix}>
+                          <Text as="span" size="B400">
+                            Retry Safety Check
+                          </Text>
+                        </Button>
+                      )}
+                      <Button variant="Critical" onClick={() => void performLogout(mx)}>
+                        <Text as="span" size="B400">
+                          Sign Out and Delete Local Encryption Data
+                        </Text>
+                      </Button>
+                    </>
+                  ) : (
+                    <Button variant="Critical" onClick={mx ? () => startMatrix(mx) : loadMatrix}>
+                      <Text as="span" size="B400">
+                        Retry
+                      </Text>
+                    </Button>
+                  )}
                 </Box>
               </Dialog>
             </Box>

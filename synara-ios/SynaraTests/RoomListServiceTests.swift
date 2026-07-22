@@ -694,15 +694,114 @@ final class RoomListServiceTests: XCTestCase {
         )
     }
 
-    func testRoomActivityTimestampPreservesPreviousWhenLatestPreviewIsUnavailable() {
+    func testRoomActivityTimestampIsMonotonicAcrossPartialAndStaleSnapshots() {
         let previous = RoomListFixtures.now.addingTimeInterval(-120)
+        let staleLatest = previous.addingTimeInterval(-600)
 
         XCTAssertEqual(RoomActivityTimestamp.resolve(latest: nil, previous: previous), previous)
+        XCTAssertEqual(RoomActivityTimestamp.resolve(latest: staleLatest, previous: previous), previous)
         XCTAssertEqual(
             RoomActivityTimestamp.resolve(latest: RoomListFixtures.now, previous: previous),
             RoomListFixtures.now
         )
         XCTAssertEqual(RoomActivityTimestamp.resolve(latest: nil, previous: nil), .distantPast)
+    }
+
+    func testRecentActivityQualificationExcludesEphemeralAndOrdinaryStateEvents() {
+        XCTAssertTrue(RoomActivityQualification.qualifies(.messageLike))
+        XCTAssertTrue(RoomActivityQualification.qualifies(.localEcho))
+        XCTAssertTrue(RoomActivityQualification.qualifies(.invite))
+        XCTAssertFalse(RoomActivityQualification.qualifies(.receipt))
+        XCTAssertFalse(RoomActivityQualification.qualifies(.typing))
+        XCTAssertFalse(RoomActivityQualification.qualifies(.state))
+    }
+
+    func testRecentColdStartRecoveryOnlyRunsForStateLatestWithoutKnownActivity() {
+        XCTAssertTrue(
+            RoomActivityRecoveryPolicy.shouldRecover(
+                latestRequiresRecovery: true,
+                previousActivityAt: nil
+            )
+        )
+        XCTAssertTrue(
+            RoomActivityRecoveryPolicy.shouldRecover(
+                latestRequiresRecovery: true,
+                previousActivityAt: .distantPast
+            )
+        )
+        XCTAssertFalse(
+            RoomActivityRecoveryPolicy.shouldRecover(
+                latestRequiresRecovery: false,
+                previousActivityAt: nil
+            )
+        )
+        XCTAssertFalse(
+            RoomActivityRecoveryPolicy.shouldRecover(
+                latestRequiresRecovery: true,
+                previousActivityAt: RoomListFixtures.now
+            )
+        )
+    }
+
+    func testRecentColdStartRecoveryChoosesNewestQualifyingMessageBehindState() {
+        let messageTimestamp = RoomListFixtures.now.addingTimeInterval(-60)
+        let candidates = [
+            RoomActivityRecoveryPolicy.Candidate(
+                timestamp: messageTimestamp.addingTimeInterval(-60),
+                kind: .messageLike
+            ),
+            RoomActivityRecoveryPolicy.Candidate(timestamp: messageTimestamp, kind: .localEcho),
+            RoomActivityRecoveryPolicy.Candidate(
+                timestamp: RoomListFixtures.now,
+                kind: .state
+            ),
+        ]
+
+        XCTAssertEqual(
+            RoomActivityRecoveryPolicy.newestQualifyingTimestamp(from: candidates),
+            messageTimestamp
+        )
+    }
+
+    func testRecentColdStartRecoveryCannotInspectBeyondOneBoundedPage() {
+        let hiddenOutsideBound = RoomActivityRecoveryPolicy.Candidate(
+            timestamp: RoomListFixtures.now,
+            kind: .messageLike
+        )
+        let boundedStatePage = (0 ..< RoomActivityRecoveryPolicy.maximumTimelineEvents).map { offset in
+            RoomActivityRecoveryPolicy.Candidate(
+                timestamp: RoomListFixtures.now.addingTimeInterval(TimeInterval(offset + 1)),
+                kind: .state
+            )
+        }
+
+        XCTAssertNil(
+            RoomActivityRecoveryPolicy.newestQualifyingTimestamp(
+                from: [hiddenOutsideBound] + boundedStatePage
+            )
+        )
+    }
+
+    func testMonotonicActivityStillExpiresAtDeterministicTwentyFourHourBoundary() {
+        let previous = RoomListFixtures.now.addingTimeInterval(-3600)
+        let activity = RoomActivityTimestamp.resolve(
+            latest: previous.addingTimeInterval(-600),
+            previous: previous
+        )
+        let room = makeActivityRoom(id: "!room:matrix.org", name: "Room", activity: activity)
+        let expiration = previous.addingTimeInterval(RoomListRecentActivity.window)
+
+        XCTAssertEqual(
+            RoomListRecentActivity.partition(
+                from: [room],
+                referenceDate: expiration.addingTimeInterval(-0.001)
+            ).recent.map(\.id),
+            [room.id]
+        )
+        XCTAssertEqual(
+            RoomListRecentActivity.partition(from: [room], referenceDate: expiration).remaining.map(\.id),
+            [room.id]
+        )
     }
 
     func testDynamicRoomListRequestsEveryPageBeyondOneHundredRooms() {

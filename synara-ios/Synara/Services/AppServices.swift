@@ -61,6 +61,9 @@ protocol MatrixClientServicing: AnyObject {
 
     func start(session: AuthenticatedSession) async
     func warmSync(session: AuthenticatedSession) async
+    /// Best-effort authenticated homeserver logout using an already-loaded
+    /// client. Must not create or repair a crypto store during local wipe.
+    func revokeServerSession(_ session: AuthenticatedSession) async -> Bool
     func stop() async
     func pauseForBackground() async
     func resumeFromForeground(session: AuthenticatedSession) async
@@ -593,6 +596,11 @@ final class PlaceholderMatrixClientService: MatrixClientServicing {
         syncStatus = .syncing
     }
 
+    func revokeServerSession(_ session: AuthenticatedSession) async -> Bool {
+        _ = session
+        return false
+    }
+
     func stop() async {
         syncStatus = .stopped
     }
@@ -966,6 +974,9 @@ final class MockMatrixClientService: MatrixClientServicing {
     private(set) var startedSessions: [AuthenticatedSession] = []
     private(set) var stopCallCount = 0
     private(set) var resetCallCount = 0
+    private(set) var revokedSessions: [AuthenticatedSession] = []
+    var serverRevocationResult = true
+    var onOperation: ((String) -> Void)?
 
     var syncStatusDescription: String {
         syncStatus.description
@@ -986,8 +997,15 @@ final class MockMatrixClientService: MatrixClientServicing {
     }
 
     func stop() async {
+        onOperation?("matrix-stop")
         stopCallCount += 1
         syncStatus = .stopped
+    }
+
+    func revokeServerSession(_ session: AuthenticatedSession) async -> Bool {
+        onOperation?("server-revoke")
+        revokedSessions.append(session)
+        return serverRevocationResult
     }
 
     private(set) var pauseCallCount = 0
@@ -1016,6 +1034,7 @@ final class MockMatrixClientService: MatrixClientServicing {
     private(set) var resetSessions: [AuthenticatedSession?] = []
 
     func resetLocalState(for session: AuthenticatedSession?) async {
+        onOperation?("matrix-reset")
         resetCallCount += 1
         resetSessions.append(session)
         syncStatus = .stopped
@@ -1034,6 +1053,7 @@ final class MockPushService: PushServicing {
     private(set) var tokenCallCount = 0
     var isRegistered = false
     var tokenSnippet: String?
+    var onOperation: ((String) -> Void)?
     var registrationStateDescription: String {
         isRegistered ? "Mock registered" : "Mock unregistered"
     }
@@ -1061,6 +1081,7 @@ final class MockPushService: PushServicing {
     }
 
     func clearRegistrationState() async {
+        onOperation?("push-clear")
         clearCallCount += 1
         isRegistered = false
         tokenSnippet = nil

@@ -70,7 +70,8 @@ struct MockEventActionService: EventActionServicing {
                 isEdited: true,
                 reactions: item.reactions,
                 isEncrypted: item.isEncrypted,
-                deliveryStatus: item.deliveryStatus
+                deliveryStatus: item.deliveryStatus,
+                hasCurrentUserReadReceipt: item.hasCurrentUserReadReceipt
             )
         case .redact:
             return TimelineItem(
@@ -83,7 +84,8 @@ struct MockEventActionService: EventActionServicing {
                 isEdited: item.isEdited,
                 reactions: [:],
                 isEncrypted: item.isEncrypted,
-                deliveryStatus: item.deliveryStatus
+                deliveryStatus: item.deliveryStatus,
+                hasCurrentUserReadReceipt: item.hasCurrentUserReadReceipt
             )
         case .react(let reaction):
             var reactions = item.reactions
@@ -98,7 +100,8 @@ struct MockEventActionService: EventActionServicing {
                 isEdited: item.isEdited,
                 reactions: reactions,
                 isEncrypted: item.isEncrypted,
-                deliveryStatus: item.deliveryStatus
+                deliveryStatus: item.deliveryStatus,
+                hasCurrentUserReadReceipt: item.hasCurrentUserReadReceipt
             )
         }
     }

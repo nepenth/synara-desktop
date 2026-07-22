@@ -208,29 +208,68 @@ final class TimelineServiceTests: XCTestCase {
             RoomTimelineFocusPolicy.initialMode(
                 focusedEventID: nil,
                 hasUnreadMessages: false,
-                readMarkerEventID: "$read-marker"
+                fullyReadEventID: "$synthetic-1:matrix.org",
+                liveItems: focusPolicyItems(receiptIndex: 2)
             ),
             .live
         )
     }
 
-    func testRoomTimelineFocusPolicyOpensUnreadRoomsAroundSharedMarker() {
+    func testRoomTimelineFocusPolicyUsesNewerReceiptInsteadOfOlderFullyReadMarker() {
         XCTAssertEqual(
             RoomTimelineFocusPolicy.initialMode(
                 focusedEventID: nil,
                 hasUnreadMessages: true,
-                readMarkerEventID: "$read-marker"
+                fullyReadEventID: "$synthetic-0:matrix.org",
+                liveItems: focusPolicyItems(receiptIndex: 2)
             ),
-            .unread(markerEventID: "$read-marker")
+            .unread(markerEventID: "$synthetic-2:matrix.org")
         )
     }
 
-    func testRoomTimelineFocusPolicyFallsBackLiveWhenUnreadMarkerIsUnavailable() {
+    func testRoomTimelineFocusPolicyUsesNewerComparableFullyReadMarker() {
         XCTAssertEqual(
             RoomTimelineFocusPolicy.initialMode(
                 focusedEventID: nil,
                 hasUnreadMessages: true,
-                readMarkerEventID: nil
+                fullyReadEventID: "$synthetic-2:matrix.org",
+                liveItems: focusPolicyItems(receiptIndex: 0)
+            ),
+            .unread(markerEventID: "$synthetic-2:matrix.org")
+        )
+    }
+
+    func testRoomTimelineFocusPolicyFallsBackLiveForMarkerOutsideBoundedGraph() {
+        XCTAssertEqual(
+            RoomTimelineFocusPolicy.initialMode(
+                focusedEventID: nil,
+                hasUnreadMessages: true,
+                fullyReadEventID: "$prior-day",
+                liveItems: focusPolicyItems(receiptIndex: nil)
+            ),
+            .live
+        )
+    }
+
+    func testRoomTimelineFocusPolicyUsesReceiptInsideGraphWhenFullyReadMarkerIsOutside() {
+        XCTAssertEqual(
+            RoomTimelineFocusPolicy.initialMode(
+                focusedEventID: nil,
+                hasUnreadMessages: true,
+                fullyReadEventID: "$prior-day",
+                liveItems: focusPolicyItems(receiptIndex: 1)
+            ),
+            .unread(markerEventID: "$synthetic-1:matrix.org")
+        )
+    }
+
+    func testRoomTimelineFocusPolicyTreatsReceiptAtLiveTailAsCaughtUp() {
+        XCTAssertEqual(
+            RoomTimelineFocusPolicy.initialMode(
+                focusedEventID: nil,
+                hasUnreadMessages: true,
+                fullyReadEventID: "$prior-day",
+                liveItems: focusPolicyItems(receiptIndex: 3)
             ),
             .live
         )
@@ -241,9 +280,87 @@ final class TimelineServiceTests: XCTestCase {
             RoomTimelineFocusPolicy.initialMode(
                 focusedEventID: "$deep-link",
                 hasUnreadMessages: true,
-                readMarkerEventID: "$read-marker"
+                fullyReadEventID: "$synthetic-1:matrix.org",
+                liveItems: focusPolicyItems(receiptIndex: 2)
             ),
             .focused(eventID: "$deep-link")
+        )
+    }
+
+    func testMatrixTimelineReadReceiptPolicyMatchesOnlySignedInUser() {
+        let users = ["@alice:matrix.example", "@operator:matrix.example"]
+
+        XCTAssertTrue(
+            MatrixTimelineReadReceiptPolicy.hasCurrentUserReceipt(
+                readReceiptUserIDs: users,
+                currentUserID: "@operator:matrix.example"
+            )
+        )
+        XCTAssertFalse(
+            MatrixTimelineReadReceiptPolicy.hasCurrentUserReceipt(
+                readReceiptUserIDs: users,
+                currentUserID: "@other:matrix.example"
+            )
+        )
+        XCTAssertFalse(
+            MatrixTimelineReadReceiptPolicy.hasCurrentUserReceipt(
+                readReceiptUserIDs: users,
+                currentUserID: nil
+            )
+        )
+    }
+
+    func testUnreadPresentationKeepsLiveProviderGenerationAndSnapshot() async throws {
+        let service = MockTimelineService(items: focusPolicyItems(receiptIndex: 1))
+        let session = RoomTimelineSession(roomID: "!room:matrix.example", service: service)
+        let openedFeed = await session.open(mode: .live)
+        let liveFeed = try XCTUnwrap(openedFeed)
+
+        let unreadFeed = liveFeed.presenting(mode: .unread(markerEventID: "$synthetic-1:matrix.org"))
+        let currentGeneration = await session.currentGeneration()
+
+        XCTAssertEqual(unreadFeed.generation, liveFeed.generation)
+        XCTAssertEqual(unreadFeed.initialOutcome, liveFeed.initialOutcome)
+        XCTAssertEqual(unreadFeed.mode, .unread(markerEventID: "$synthetic-1:matrix.org"))
+        XCTAssertTrue(liveFeed.providerIsLive)
+        XCTAssertTrue(unreadFeed.providerIsLive)
+        XCTAssertEqual(currentGeneration, liveFeed.generation)
+    }
+
+    func testLiveProviderResumesFollowAndAcknowledgementAtNaturalBottom() {
+        let unreadMode = RoomTimelineMode.unread(markerEventID: "$marker")
+
+        XCTAssertEqual(
+            RoomTimelineProviderPresentationPolicy.modeWhenPinned(
+                providerIsLive: true,
+                currentMode: unreadMode
+            ),
+            .live
+        )
+        XCTAssertNil(
+            RoomTimelineProviderPresentationPolicy.focusedEventID(
+                providerIsLive: true,
+                currentMode: unreadMode
+            )
+        )
+    }
+
+    func testFocusedProviderRetainsFocusedPresentationAtBottom() {
+        let focusedMode = RoomTimelineMode.focused(eventID: "$focused")
+
+        XCTAssertEqual(
+            RoomTimelineProviderPresentationPolicy.modeWhenPinned(
+                providerIsLive: false,
+                currentMode: focusedMode
+            ),
+            focusedMode
+        )
+        XCTAssertEqual(
+            RoomTimelineProviderPresentationPolicy.focusedEventID(
+                providerIsLive: false,
+                currentMode: focusedMode
+            ),
+            "$focused"
         )
     }
 
@@ -1150,6 +1267,26 @@ final class TimelineServiceTests: XCTestCase {
             items = nil
         }
         return try XCTUnwrap(items)
+    }
+
+    private func focusPolicyItems(receiptIndex: Int?) -> [Synara.TimelineItem] {
+        TimelineFixtures.largeTimeline(count: 4).enumerated().map { index, item in
+            Synara.TimelineItem(
+                id: item.id,
+                eventID: item.eventID,
+                serverEventID: item.serverEventID,
+                senderID: item.senderID,
+                senderAvatarURL: item.senderAvatarURL,
+                timestamp: item.timestamp,
+                kind: item.kind,
+                replyToEventID: item.replyToEventID,
+                isEdited: item.isEdited,
+                reactions: item.reactions,
+                isEncrypted: item.isEncrypted,
+                deliveryStatus: item.deliveryStatus,
+                hasCurrentUserReadReceipt: index == receiptIndex
+            )
+        }
     }
 
     func testTimelineReplyCounterCountsRepliesByRootEvent() {

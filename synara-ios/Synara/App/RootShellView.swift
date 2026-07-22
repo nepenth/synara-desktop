@@ -8,6 +8,7 @@ struct RootShellView: View {
     @State private var tabBadgeUpdatesTask: Task<Void, Never>?
     @State private var cryptoVerificationState: CryptoVerificationState?
     @State private var cryptoVerificationUpdatesTask: Task<Void, Never>?
+    @State private var cryptoVerificationActionError: String?
 
     init(environment: AppEnvironment = .mock()) {
         self.environment = environment
@@ -73,12 +74,19 @@ struct RootShellView: View {
                     state: cryptoVerificationState,
                     onAccept: { runCryptoVerificationAction { await environment.crypto.acceptVerificationRequest() } },
                     onStartSas: { runCryptoVerificationAction { await environment.crypto.startSasVerification() } },
-                    onApprove: { runCryptoVerificationAction({ await environment.crypto.approveVerification() }, isMatchStep: true) },
+                    onApprove: { runCryptoVerificationAction { await environment.crypto.approveVerification() } },
                     onDecline: { runCryptoVerificationAction { await environment.crypto.declineVerification() } },
                     onCancel: { runCryptoVerificationAction { await environment.crypto.cancelVerification() } },
                     onDismissTerminal: { self.cryptoVerificationState = nil }
                 )
             }
+        }
+        .alert("Verification action failed", isPresented: cryptoVerificationActionErrorBinding) {
+            Button("OK", role: .cancel) {
+                cryptoVerificationActionError = nil
+            }
+        } message: {
+            Text(cryptoVerificationActionError ?? "Try the verification step again.")
         }
         .onDisappear {
             tabBadgeUpdatesTask?.cancel()
@@ -94,6 +102,17 @@ struct RootShellView: View {
             set: { isPresented in
                 if isPresented == false {
                     cryptoVerificationState = nil
+                }
+            }
+        )
+    }
+
+    private var cryptoVerificationActionErrorBinding: Binding<Bool> {
+        Binding(
+            get: { cryptoVerificationActionError != nil },
+            set: { isPresented in
+                if isPresented == false {
+                    cryptoVerificationActionError = nil
                 }
             }
         )
@@ -159,30 +178,15 @@ struct RootShellView: View {
         }
     }
 
-    private func runCryptoVerificationAction(_ action: @escaping () async -> CryptoActionResult, isMatchStep: Bool = false) {
+    private func runCryptoVerificationAction(_ action: @escaping () async -> CryptoActionResult) {
         Task {
             let result = await action()
             await MainActor.run {
-                if case .failed(let msg) = result {
-                    if isMatchStep {
-                        // For "They Match", do not immediately force .failed — the verification stream/delegate
-                        // (didFinish / didFail) is the source of truth for SAS. Many flows surface transient
-                        // errors from the approve call while the delegate later delivers the real terminal state.
-                        // Let the listener in startCryptoVerificationUpdates drive .finished / .failed.
-                        // Only force if the stream hasn't moved us to a terminal state after a short grace.
-                        Task { @MainActor in
-                            try? await Task.sleep(nanoseconds: 250_000_000)
-                            if let s = cryptoVerificationState, !s.isTerminal {
-                                cryptoVerificationState = .failed
-                            }
-                        }
-                    } else {
-                        cryptoVerificationState = .failed
-                    }
-                } else if case .completed = result {
-                    // Success path for approve — stream should deliver .finished shortly.
-                    // Kick a status refresh so banners (unverified / UTD) re-evaluate quickly.
-                    // The caller for match step passes isMatchStep: true.
+                switch result {
+                case .completed:
+                    cryptoVerificationActionError = nil
+                case .failed(let message), .unavailable(let message):
+                    cryptoVerificationActionError = message
                 }
             }
         }

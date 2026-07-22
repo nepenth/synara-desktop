@@ -2,14 +2,19 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   clearMatrixStoresForIdentityChange,
+  clearPendingFreshLoginIdentity,
   clearPersistedSessions,
+  FRESH_LOGIN_BOOTSTRAP_TTL_MS,
   getLastBootstrappedMatrixIdentity,
   getLastPersistedMatrixIdentity,
+  getPendingFreshLoginIdentity,
   isPersistedSessionExpired,
+  isPendingFreshLoginIdentity,
   LAST_BOOTSTRAPPED_MATRIX_IDENTITY_KEY,
   LAST_PERSISTED_MATRIX_IDENTITY_KEY,
   matrixSessionIdentitiesMatch,
   migrateLegacySessionToNativeAfterClientInit,
+  markPendingFreshLoginIdentity,
   persistAuthenticatedSession,
   reconcileExpiredPersistedSession,
   SESSION_EXPIRY_CLOCK_SKEW_TOLERANCE_MS,
@@ -417,6 +422,91 @@ test('bootstrapped matrix identity metadata round-trips through storage', () => 
 
   assert.deepEqual(getLastBootstrappedMatrixIdentity(storage), identity);
   assert.equal(storage.getItem(LAST_PERSISTED_MATRIX_IDENTITY_KEY), null);
+});
+
+test('fresh login identity marker is scoped to the exact server-created device', () => {
+  const storage = createMemoryStorage();
+  const identity = {
+    userId: '@alice:example.org',
+    deviceId: 'DEVICEID',
+    baseUrl: 'https://matrix.example.org',
+    sessionGeneration: 'generation-1',
+  };
+  const issuedAtMs = 1_000;
+
+  markPendingFreshLoginIdentity(identity, storage, issuedAtMs);
+  assert.deepEqual(getPendingFreshLoginIdentity(storage, issuedAtMs), {
+    ...identity,
+    issuedAtMs,
+  });
+  assert.equal(isPendingFreshLoginIdentity(identity, storage, issuedAtMs), true);
+  assert.equal(
+    isPendingFreshLoginIdentity({ ...identity, deviceId: 'OTHER_DEVICE' }, storage, issuedAtMs),
+    false
+  );
+  assert.equal(
+    isPendingFreshLoginIdentity(
+      { ...identity, baseUrl: 'https://elsewhere.example.org' },
+      storage,
+      issuedAtMs
+    ),
+    false
+  );
+  assert.equal(
+    isPendingFreshLoginIdentity(
+      { ...identity, sessionGeneration: 'generation-2' },
+      storage,
+      issuedAtMs
+    ),
+    false
+  );
+
+  clearPendingFreshLoginIdentity({ ...identity, deviceId: 'OTHER_DEVICE' }, storage, issuedAtMs);
+  assert.notEqual(getPendingFreshLoginIdentity(storage, issuedAtMs), undefined);
+  clearPendingFreshLoginIdentity(identity, storage, issuedAtMs);
+  assert.equal(getPendingFreshLoginIdentity(storage, issuedAtMs), undefined);
+});
+
+test('fresh login identity marker expires closed and is removed', () => {
+  const storage = createMemoryStorage();
+  const identity = {
+    userId: '@alice:example.org',
+    deviceId: 'DEVICEID',
+    baseUrl: 'https://matrix.example.org',
+    sessionGeneration: 'generation-1',
+  };
+  markPendingFreshLoginIdentity(identity, storage, 1_000);
+
+  assert.equal(
+    isPendingFreshLoginIdentity(identity, storage, 1_000 + FRESH_LOGIN_BOOTSTRAP_TTL_MS + 1),
+    false
+  );
+  assert.equal(getPendingFreshLoginIdentity(storage, 1_000), undefined);
+});
+
+test('fresh authentication persistence writes the crypto continuity marker', async () => {
+  resetSessionBootstrapForTests();
+  const storage = createMemoryStorage();
+  const fallbackStore = createLocalStorageSessionStore(storage);
+  const nativeStore = createNativeSessionStore();
+
+  try {
+    await persistAuthenticatedSession(session, {
+      nativeSessionStore: nativeStore.store,
+      fallbackStore,
+      storage,
+      freshLogin: true,
+    });
+
+    const marker = getPendingFreshLoginIdentity(storage);
+    assert.equal(marker?.userId, session.userId);
+    assert.equal(marker?.deviceId, session.deviceId);
+    assert.equal(marker?.baseUrl, session.baseUrl);
+    assert.equal(typeof marker?.sessionGeneration, 'string');
+    assert.equal(marker?.sessionGeneration, nativeStore.stored[0]?.sessionGeneration);
+  } finally {
+    resetSessionBootstrapForTests();
+  }
 });
 
 test('clearPersistedSessions clears native and legacy session locations', async () => {

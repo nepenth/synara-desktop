@@ -3,6 +3,8 @@ export type Session = {
   userId: string;
   deviceId: string;
   accessToken: string;
+  /** Opaque identifier for one successful login-created session/device bootstrap. */
+  sessionGeneration?: string;
   expiresInMs?: number;
   storedAtMs?: number;
   refreshToken?: string;
@@ -14,7 +16,10 @@ export type SessionStorage = {
   setItem: (key: string, value: string) => void;
   removeItem: (key: string) => void;
 };
-export type FallbackSessionInput = Pick<Session, 'accessToken' | 'baseUrl' | 'deviceId' | 'userId'>;
+export type FallbackSessionInput = Pick<
+  Session,
+  'accessToken' | 'baseUrl' | 'deviceId' | 'userId' | 'sessionGeneration'
+>;
 export type SessionStore = {
   setFallbackSession: (session: FallbackSessionInput) => void;
   removeFallbackSession: () => void;
@@ -26,9 +31,17 @@ export const FALLBACK_SESSION_KEYS = {
   deviceId: 'synara_device_id',
   userId: 'synara_user_id',
   baseUrl: 'synara_hs_base_url',
+  sessionGeneration: 'synara_session_generation',
 } as const;
 
 export const AFTER_LOGIN_REDIRECT_PATH_KEY = 'after_login_redirect_url';
+
+/**
+ * Non-secret marker written after the homeserver creates a new device during login.
+ * Crypto startup uses it to distinguish that device from a restored device whose
+ * local crypto store has gone missing.
+ */
+export const PENDING_FRESH_LOGIN_IDENTITY_KEY = 'synara_pending_fresh_login_identity' as const;
 
 export const NAV_TO_ACTIVE_PATH_PREFIX = 'navToActivePath';
 
@@ -38,7 +51,9 @@ export const SESSION_LOCAL_STORAGE_EXACT_KEYS = [
   FALLBACK_SESSION_KEYS.deviceId,
   FALLBACK_SESSION_KEYS.userId,
   FALLBACK_SESSION_KEYS.baseUrl,
+  FALLBACK_SESSION_KEYS.sessionGeneration,
   AFTER_LOGIN_REDIRECT_PATH_KEY,
+  PENDING_FRESH_LOGIN_IDENTITY_KEY,
 ] as const;
 
 /** localStorage key prefixes removed on logout (e.g. per-user navigation state). */
@@ -63,18 +78,25 @@ export const createLocalStorageSessionStore = (storage: SessionStorage): Session
     storage.setItem(FALLBACK_SESSION_KEYS.deviceId, session.deviceId);
     storage.setItem(FALLBACK_SESSION_KEYS.userId, session.userId);
     storage.setItem(FALLBACK_SESSION_KEYS.baseUrl, session.baseUrl);
+    if (session.sessionGeneration) {
+      storage.setItem(FALLBACK_SESSION_KEYS.sessionGeneration, session.sessionGeneration);
+    } else {
+      storage.removeItem(FALLBACK_SESSION_KEYS.sessionGeneration);
+    }
   },
   removeFallbackSession: () => {
     storage.removeItem(FALLBACK_SESSION_KEYS.baseUrl);
     storage.removeItem(FALLBACK_SESSION_KEYS.userId);
     storage.removeItem(FALLBACK_SESSION_KEYS.deviceId);
     storage.removeItem(FALLBACK_SESSION_KEYS.accessToken);
+    storage.removeItem(FALLBACK_SESSION_KEYS.sessionGeneration);
   },
   getFallbackSession: () => {
     const baseUrl = storage.getItem(FALLBACK_SESSION_KEYS.baseUrl);
     const userId = storage.getItem(FALLBACK_SESSION_KEYS.userId);
     const deviceId = storage.getItem(FALLBACK_SESSION_KEYS.deviceId);
     const accessToken = storage.getItem(FALLBACK_SESSION_KEYS.accessToken);
+    const sessionGeneration = storage.getItem(FALLBACK_SESSION_KEYS.sessionGeneration) ?? undefined;
 
     if (baseUrl && userId && deviceId && accessToken) {
       return {
@@ -82,6 +104,7 @@ export const createLocalStorageSessionStore = (storage: SessionStorage): Session
         userId,
         deviceId,
         accessToken,
+        ...(sessionGeneration ? { sessionGeneration } : {}),
         fallbackSdkStores: true,
       };
     }

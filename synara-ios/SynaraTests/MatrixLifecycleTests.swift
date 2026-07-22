@@ -49,6 +49,139 @@ final class MatrixLifecycleTests: XCTestCase {
         XCTAssertEqual(matrix.backgroundSyncCallCount, 1)
     }
 
+    func testVerificationStateSurvivesBackgroundPauseAndForegroundResume() throws {
+        var reducer = MatrixVerificationStateReducer()
+        let request = CryptoVerificationRequest(
+            userID: "@alice:matrix.org",
+            displayName: "Alice",
+            deviceID: "OTHER",
+            deviceDisplayName: "Other device",
+            flowID: "flow"
+        )
+        reducer.reduce(.requestReceived(request), source: .delegate)
+        reducer.reduce(.accepted, source: .delegate)
+
+        if MatrixVerificationLifecyclePolicy.shouldReset(for: .backgroundPause) {
+            reducer.reset()
+        }
+        if MatrixVerificationLifecyclePolicy.shouldReset(for: .foregroundResume) {
+            reducer.reset()
+        }
+
+        XCTAssertEqual(reducer.state, .accepted)
+        XCTAssertTrue(MatrixVerificationLifecyclePolicy.shouldReset(for: .sessionReplaced))
+        XCTAssertTrue(MatrixVerificationLifecyclePolicy.shouldReset(for: .localStateReset))
+    }
+
+    func testVerificationReducerIgnoresDuplicateAndOutOfOrderCallbacks() {
+        var reducer = MatrixVerificationStateReducer()
+        let emojis = [CryptoVerificationEmoji(symbol: "🐶", description: "Dog")]
+        let request = CryptoVerificationRequest(
+            userID: "@alice:matrix.org",
+            displayName: "Alice",
+            deviceID: "OTHER",
+            deviceDisplayName: "Other device",
+            flowID: "flow"
+        )
+
+        XCTAssertEqual(reducer.reduce(.requestReceived(request), source: .delegate), .requestReceived(request))
+        XCTAssertEqual(reducer.reduce(.accepted, source: .delegate), .accepted)
+        XCTAssertEqual(reducer.reduce(.sasStarted, source: .delegate), .sasStarted)
+        XCTAssertEqual(reducer.reduce(.emojis(emojis), source: .delegate), .emojis(emojis))
+
+        XCTAssertNil(reducer.reduce(.requestReceived(request), source: .delegate))
+        XCTAssertNil(reducer.reduce(.accepted, source: .delegate))
+        XCTAssertNil(reducer.reduce(.sasStarted, source: .delegate))
+        XCTAssertNil(reducer.reduce(.emojis(emojis), source: .delegate))
+        XCTAssertEqual(reducer.state, .emojis(emojis))
+    }
+
+    func testOnlyDelegateDidFinishCanCompleteVerification() {
+        var reducer = MatrixVerificationStateReducer()
+        reducer.reduce(.requestSent, source: .localRequest)
+        reducer.reduce(.sasStarted, source: .delegate)
+
+        XCTAssertNil(reducer.reduce(.finished, source: .localRequest))
+        XCTAssertEqual(reducer.state, .sasStarted)
+        XCTAssertEqual(reducer.reduce(.finished, source: .delegate), .finished)
+        XCTAssertNil(reducer.reduce(.failed, source: .delegate))
+        XCTAssertEqual(reducer.state, .finished)
+    }
+
+    func testVerificationReducerKeepsOneActiveFlowBecauseCallbacksLackFlowIDs() {
+        var reducer = MatrixVerificationStateReducer()
+        let first = CryptoVerificationRequest(
+            userID: "@alice:matrix.org",
+            displayName: "Alice",
+            deviceID: "FIRST",
+            deviceDisplayName: "First device",
+            flowID: "first-flow"
+        )
+        let second = CryptoVerificationRequest(
+            userID: "@alice:matrix.org",
+            displayName: "Alice",
+            deviceID: "SECOND",
+            deviceDisplayName: "Second device",
+            flowID: "second-flow"
+        )
+
+        XCTAssertEqual(reducer.reduce(.requestReceived(first), source: .delegate), .requestReceived(first))
+        XCTAssertNil(reducer.reduce(.requestReceived(second), source: .delegate))
+        XCTAssertEqual(reducer.reduce(.accepted, source: .delegate), .accepted)
+        XCTAssertEqual(reducer.state, .accepted)
+    }
+
+    func testVerificationReducerDeduplicatesCompletedFlowUntilLifecycleReset() {
+        var reducer = MatrixVerificationStateReducer()
+        let completed = CryptoVerificationRequest(
+            userID: "@alice:matrix.org",
+            displayName: "Alice",
+            deviceID: "FIRST",
+            deviceDisplayName: "First device",
+            flowID: "completed-flow"
+        )
+        let next = CryptoVerificationRequest(
+            userID: "@alice:matrix.org",
+            displayName: "Alice",
+            deviceID: "SECOND",
+            deviceDisplayName: "Second device",
+            flowID: "next-flow"
+        )
+
+        reducer.reduce(.requestReceived(completed), source: .delegate)
+        XCTAssertEqual(reducer.reduce(.finished, source: .delegate), .finished)
+        XCTAssertNil(reducer.reduce(.requestReceived(completed), source: .delegate))
+        XCTAssertEqual(reducer.reduce(.requestReceived(next), source: .delegate), .requestReceived(next))
+
+        reducer.reset()
+        XCTAssertEqual(
+            reducer.reduce(.requestReceived(completed), source: .delegate),
+            .requestReceived(completed)
+        )
+    }
+
+    func testVerificationContinuationCancellationBeforeRegistrationUsesTombstone() {
+        var tracker = MatrixVerificationContinuationRegistrationTracker()
+        let id = UUID()
+
+        tracker.cancel(id: id)
+
+        XCTAssertFalse(tracker.register(id: id, isTaskCancelled: false))
+        XCTAssertFalse(tracker.isRegistered(id: id))
+    }
+
+    func testVerificationContinuationCancellationAfterRegistrationRemovesIt() {
+        var tracker = MatrixVerificationContinuationRegistrationTracker()
+        let id = UUID()
+
+        XCTAssertTrue(tracker.register(id: id, isTaskCancelled: false))
+        XCTAssertTrue(tracker.isRegistered(id: id))
+        tracker.cancel(id: id)
+
+        XCTAssertFalse(tracker.isRegistered(id: id))
+        XCTAssertFalse(tracker.register(id: UUID(), isTaskCancelled: true))
+    }
+
     func testTimelineStreamInvalidatesWhenSyncGenerationChanges() {
         XCTAssertFalse(
             MatrixTimelineStreamLifecycle.shouldInvalidate(

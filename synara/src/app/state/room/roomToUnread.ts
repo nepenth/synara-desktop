@@ -34,6 +34,7 @@ import { useStateEventCallback } from '../../hooks/useStateEventCallback';
 import { useSyncState } from '../../hooks/useSyncState';
 import { useRoomsNotificationPreferencesContext } from '../../hooks/useRoomsNotificationPreferences';
 import { AccountDataEvent } from '../../../types/matrix/accountData';
+import { resolveRoomReadFrontier } from '../../utils/timelineOpening';
 
 export type RoomToUnreadAction =
   | {
@@ -118,6 +119,13 @@ export const unreadEqual = (u1: Unread, u2: Unread): boolean => {
   });
 
   return fromEqual;
+};
+
+export const shouldKeepRoomUnreadAfterReceipt = (mx: MatrixClient, room: Room): boolean => {
+  const readFrontier = resolveRoomReadFrontier(room);
+  if (readFrontier.isExplicitlyMarkedUnread) return true;
+  if (readFrontier.isAtLiveTail) return false;
+  return roomHaveNotification(room) || roomHaveUnread(mx, room);
 };
 
 const baseRoomToUnread = atom<RoomToUnread>(new Map());
@@ -239,7 +247,7 @@ export const useBindRoomToUnreadAtom = (mx: MatrixClient, unreadAtom: typeof roo
         )
       );
       if (isMyReceipt) {
-        if (isRoomMarkedUnread(room)) {
+        if (shouldKeepRoomUnreadAfterReceipt(mx, room)) {
           setUnreadAtom({ type: 'PUT', unreadInfo: getUnreadInfo(room) });
           return;
         }

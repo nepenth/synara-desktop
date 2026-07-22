@@ -20,8 +20,8 @@ export const isCryptoAccountMismatchError = (error: unknown): boolean => {
   return error.message.includes(CRYPTO_ACCOUNT_MISMATCH_MESSAGE);
 };
 
-const deleteIndexedDb = (name: string): Promise<void> =>
-  new Promise((resolve) => {
+export const deleteIndexedDb = (name: string): Promise<void> =>
+  new Promise((resolve, reject) => {
     if (typeof indexedDB === 'undefined') {
       resolve();
       return;
@@ -29,8 +29,10 @@ const deleteIndexedDb = (name: string): Promise<void> =>
 
     const request = indexedDB.deleteDatabase(name);
     request.onsuccess = () => resolve();
-    request.onerror = () => resolve();
-    request.onblocked = () => resolve();
+    request.onerror = () =>
+      reject(request.error ?? new Error(`Failed to delete IndexedDB database ${name}.`));
+    request.onblocked = () =>
+      reject(new Error(`Deleting IndexedDB database ${name} was blocked by an open client.`));
   });
 
 export const clearMatrixLocalStores = async (): Promise<void> => {

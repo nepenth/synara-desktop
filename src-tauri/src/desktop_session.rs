@@ -17,6 +17,8 @@ pub struct DesktopSessionEnvelope {
     pub(crate) user_id: String,
     pub(crate) device_id: String,
     pub(crate) access_token: String,
+    #[serde(default)]
+    pub(crate) session_generation: Option<String>,
     pub(crate) refresh_token: Option<String>,
     pub(crate) expires_in_ms: Option<u64>,
     pub(crate) stored_at_ms: Option<u64>,
@@ -86,12 +88,18 @@ pub(crate) fn sanitize_session_envelope(
         "refreshToken",
         DESKTOP_SESSION_MAX_TOKEN_CHARS,
     )?;
+    let session_generation = sanitize_optional_session_field(
+        session.session_generation,
+        "sessionGeneration",
+        DESKTOP_SESSION_MAX_ID_CHARS,
+    )?;
 
     Ok(DesktopSessionEnvelope {
         base_url,
         user_id,
         device_id,
         access_token,
+        session_generation,
         refresh_token,
         expires_in_ms: session.expires_in_ms,
         stored_at_ms: session.stored_at_ms,
@@ -129,6 +137,7 @@ mod tests {
             user_id: "@alice:example.org".to_owned(),
             device_id: "DEVICEID".to_owned(),
             access_token: "access-token".to_owned(),
+            session_generation: Some("generation-1".to_owned()),
             refresh_token: None,
             expires_in_ms: Some(3_600_000),
             stored_at_ms: None,
@@ -142,6 +151,7 @@ mod tests {
             user_id: " @alice:example.org ".to_owned(),
             device_id: " DEVICEID ".to_owned(),
             access_token: " access-token ".to_owned(),
+            session_generation: Some(" generation-1 ".to_owned()),
             refresh_token: Some(" refresh-token ".to_owned()),
             expires_in_ms: Some(3_600_000),
             stored_at_ms: None,
@@ -151,6 +161,7 @@ mod tests {
         assert_eq!(session.base_url, "https://matrix.example.org");
         assert_eq!(session.user_id, "@alice:example.org");
         assert_eq!(session.device_id, "DEVICEID");
+        assert_eq!(session.session_generation.as_deref(), Some("generation-1"));
         assert_eq!(session.access_token, "access-token");
         assert_eq!(session.refresh_token.as_deref(), Some("refresh-token"));
         assert_eq!(session.expires_in_ms, Some(3_600_000));
