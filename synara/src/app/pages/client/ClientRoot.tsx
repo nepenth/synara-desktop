@@ -57,6 +57,7 @@ import {
   selectSyncSplashView,
   SYNC_PREPARED_TIMEOUT_MS,
 } from '../../utils/syncSplashRecovery';
+import { recordClientDiagnostic } from '../../utils/clientDiagnostics';
 
 function ClientRootLoading({ status }: { status: string }) {
   return (
@@ -165,7 +166,14 @@ const useSyncResumeRetry = (mx?: MatrixClient) => {
     const retrySyncIfNeeded = () => {
       retryTimer = undefined;
       if (document.visibilityState === 'hidden' || !mx.clientRunning) return;
-      if (shouldRetrySyncOnResume(mx.getSyncState())) {
+      const state = mx.getSyncState();
+      if (shouldRetrySyncOnResume(state)) {
+        recordClientDiagnostic('session', 'sync.resume-retry', {
+          source: 'resume',
+          syncState: String(state ?? 'null'),
+          documentVisible: document.visibilityState === 'visible',
+          online: navigator.onLine,
+        });
         mx.retryImmediately();
       }
     };
@@ -235,6 +243,8 @@ export function ClientRoot({ children }: ClientRootProps) {
   const [loading, setLoading] = useState(true);
   const [syncTimedOut, setSyncTimedOut] = useState(false);
   const [syncState, setSyncState] = useState<SyncState | null>(null);
+  const syncStateRef = useRef<SyncState | null>(syncState);
+  syncStateRef.current = syncState;
   const syncRetryInFlightRef = useRef(false);
   const { baseUrl, userId } = getActiveSession() ?? {};
 
@@ -279,6 +289,10 @@ export function ClientRoot({ children }: ClientRootProps) {
     useCallback((state, previous) => {
       setSyncState(state);
       logSyncStateTransition(state, previous);
+      recordClientDiagnostic('session', 'sync.transition', {
+        syncState: String(state ?? 'null'),
+        previousSyncState: String(previous ?? 'null'),
+      });
       if (state === 'PREPARED') {
         setLoading(false);
         setSyncTimedOut(false);
@@ -298,6 +312,12 @@ export function ClientRoot({ children }: ClientRootProps) {
 
     const timer = window.setTimeout(() => {
       setSyncTimedOut(true);
+      recordClientDiagnostic('session', 'sync.prepared-timeout', {
+        timedOut: true,
+        syncState: String(syncStateRef.current ?? 'null'),
+        documentVisible: document.visibilityState === 'visible',
+        online: navigator.onLine,
+      });
     }, SYNC_PREPARED_TIMEOUT_MS);
 
     return () => {
@@ -309,6 +329,10 @@ export function ClientRoot({ children }: ClientRootProps) {
     if (!mx || syncRetryInFlightRef.current) return;
     syncRetryInFlightRef.current = true;
     setSyncTimedOut(false);
+    recordClientDiagnostic('session', 'sync.recovery-requested', {
+      source: 'user',
+      syncState: String(syncState ?? 'null'),
+    });
 
     try {
       if (mx.clientRunning) {
@@ -321,7 +345,7 @@ export function ClientRoot({ children }: ClientRootProps) {
     } finally {
       syncRetryInFlightRef.current = false;
     }
-  }, [mx, startMatrix, startState.status]);
+  }, [mx, startMatrix, startState.status, syncState]);
 
   const splashStatus = formatSyncSplashStatus(syncState, Boolean(mx));
   const splashView = selectSyncSplashView({

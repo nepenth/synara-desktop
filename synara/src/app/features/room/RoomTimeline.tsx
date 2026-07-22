@@ -145,6 +145,7 @@ import { parsePollStartContent } from '../../utils/polls';
 import { addRoomNoteItemAccountData, createMessageRoomNoteItem } from '../../utils/roomNotes';
 import { isPerformanceDebugEnabled, perfLog } from '../../utils/performance';
 import { recordFoundationDiagnostic } from '../../utils/foundationDiagnostics';
+import { isClientDiagnosticEnabled, recordClientDiagnostic } from '../../utils/clientDiagnostics';
 import { isFoundationFeatureEnabled } from '../../config/foundationFeatures';
 import {
   buildTimelineRowsWithState,
@@ -280,6 +281,29 @@ type PendingStructuralTimelineUpdate = {
   apply: () => void;
   preserveAnchor: boolean;
   reason: string;
+};
+
+type TimelineDiagnosticEmitter = (label: string, data: Record<string, unknown>) => void;
+
+const DETAILED_TIMELINE_DIAGNOSTIC_EVENTS = new Set([
+  'room-timeline.jump-latest-fetched',
+  'room-timeline.jump-latest-requested',
+  'room-timeline.jump-latest-result-ignored',
+  'room-timeline.jump-latest-settled',
+  'room-timeline.jump-latest-suppressed',
+  'room-timeline.scroll-gesture-ended',
+  'room-timeline.scroll-gesture-started',
+  'room-timeline.unexpected-scroll-jump',
+  'room-timeline.viewport-saved',
+]);
+
+type ScrollGestureDiagnostic = {
+  active: boolean;
+  inputType: string;
+  startedAtMs: number;
+  startScrollTop: number;
+  lastScrollTop: number;
+  maxStepPx: number;
 };
 
 const isScrollNearBottom = (
@@ -715,6 +739,21 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
   const userScrollGenerationRef = useRef(0);
   const userScrollingRef = useRef(false);
   const userScrollIdleTimerRef = useRef<number | undefined>(undefined);
+  const scrollDiagnosticEmitterRef = useRef<TimelineDiagnosticEmitter>(() => undefined);
+  const scrollGestureDiagnosticRef = useRef<ScrollGestureDiagnostic>({
+    active: false,
+    inputType: 'unknown',
+    startedAtMs: 0,
+    startScrollTop: 0,
+    lastScrollTop: 0,
+    maxStepPx: 0,
+  });
+  const scrollGeometryDiagnosticRef = useRef({
+    scrollTop: 0,
+    scrollHeight: 0,
+    sampledAtMs: 0,
+    lastUnexpectedJumpAtMs: 0,
+  });
   const structuralTimelineUpdateQueueRef = useRef(
     new LatestTimelineStructuralUpdateQueue<PendingStructuralTimelineUpdate>()
   );
@@ -729,6 +768,20 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
   const finishUserScroll = useCallback(() => {
     if (!userScrollingRef.current) return;
     userScrollingRef.current = false;
+    const gesture = scrollGestureDiagnosticRef.current;
+    if (gesture.active) {
+      if (isClientDiagnosticEnabled('room')) {
+        scrollDiagnosticEmitterRef.current('room-timeline.scroll-gesture-ended', {
+          inputKind: gesture.inputType,
+          durationMs: Math.max(0, performance.now() - gesture.startedAtMs),
+          previousScrollTop: gesture.startScrollTop,
+          scrollTop: gesture.lastScrollTop,
+          scrollDelta: gesture.lastScrollTop - gesture.startScrollTop,
+          maxScrollDelta: gesture.maxStepPx,
+        });
+      }
+      gesture.active = false;
+    }
     if (userScrollIdleTimerRef.current !== undefined) {
       window.clearTimeout(userScrollIdleTimerRef.current);
       userScrollIdleTimerRef.current = undefined;
@@ -743,11 +796,30 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
     }
     userScrollIdleTimerRef.current = window.setTimeout(finishUserScroll, USER_SCROLL_IDLE_MS);
   }, [finishUserScroll]);
-  const beginUserScroll = useCallback(() => {
-    recordUserScrollIntent();
-    userScrollingRef.current = true;
-    scheduleUserScrollIdle();
-  }, [recordUserScrollIntent, scheduleUserScrollIdle]);
+  const beginUserScroll = useCallback(
+    (inputType: string) => {
+      recordUserScrollIntent();
+      if (!userScrollingRef.current && isClientDiagnosticEnabled('room')) {
+        const scrollTop = scrollRef.current?.scrollTop ?? 0;
+        scrollGestureDiagnosticRef.current = {
+          active: true,
+          inputType,
+          startedAtMs: performance.now(),
+          startScrollTop: scrollTop,
+          lastScrollTop: scrollTop,
+          maxStepPx: 0,
+        };
+        scrollDiagnosticEmitterRef.current('room-timeline.scroll-gesture-started', {
+          inputKind: inputType,
+          atBottom: atBottomRef.current,
+          liveEndPinned: liveEndPinRef.current,
+        });
+      }
+      userScrollingRef.current = true;
+      scheduleUserScrollIdle();
+    },
+    [recordUserScrollIntent, scheduleUserScrollIdle]
+  );
   const scrollToBottomRef = useRef({
     count: 0,
     smooth: true,
@@ -845,6 +917,9 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
   const [jumpLatestPhase, setJumpLatestPhase] = useState<TimelineNavigationPhase>(
     navigationController.phase
   );
+  const navigationPhaseRef = useRef(navigationController.phase);
+  navigationPhaseRef.current = navigationController.phase;
+  const jumpLatestStartedAtRef = useRef<number | undefined>(undefined);
   const syncNavigationPhase = useCallback(() => {
     setJumpLatestPhase(navigationController.phase);
   }, [navigationController]);
@@ -896,15 +971,39 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
         sequence: diagnostics.sequence,
         elapsedMs: Math.round(performance.now() - diagnostics.startedAtMs),
       };
-      recordFoundationDiagnostic('timeline', label, {
-        roomId: room.roomId,
-        eventId,
-        fields: payload,
-      });
+      if (DETAILED_TIMELINE_DIAGNOSTIC_EVENTS.has(label)) {
+        recordClientDiagnostic(
+          'room',
+          label,
+          { ...payload, traceSequence: payload.sequence },
+          {
+            roomId: room.roomId,
+            eventId,
+          }
+        );
+      } else {
+        recordFoundationDiagnostic('timeline', label, {
+          roomId: room.roomId,
+          eventId,
+          fields: payload,
+        });
+      }
+      if (label === 'room-timeline.slow-event-render') {
+        recordClientDiagnostic(
+          'performance',
+          label,
+          { ...payload, traceSequence: payload.sequence },
+          {
+            roomId: room.roomId,
+            eventId,
+          }
+        );
+      }
       perfLog(label, payload);
     },
     [eventId, room.roomId]
   );
+  scrollDiagnosticEmitterRef.current = traceTimeline;
 
   useEffect(() => {
     roomOpenDiagnosticsLoggedRef.current = false;
@@ -930,6 +1029,16 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
       }),
       boundedContextsEnabled: BOUNDED_TIMELINE_CONTEXTS_ENABLED,
       stableAnchoringEnabled: STABLE_SCROLL_ANCHORING_ENABLED,
+      hasUnreadSignal,
+      readFrontierSource: readFrontier.source,
+      readFrontierAtLiveTail: readFrontier.isAtLiveTail,
+      hasSavedViewport: Boolean(savedViewport),
+      savedViewportAtBottom: savedViewport?.atBottom,
+      ageMs: savedViewport
+        ? Math.max(0, roomOpenedAtMsRef.current - savedViewport.updatedAtMs)
+        : undefined,
+      anchorInWindow: canRestoreViewportFromInitialTimeline(savedViewport, initialTimelineWindow),
+      restoredSavedViewport: shouldRestoreSavedViewport,
     });
   }, [
     eventId,
@@ -938,6 +1047,11 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
     loadedAtEnd,
     room,
     roomOpenMode,
+    readFrontier.isAtLiveTail,
+    readFrontier.source,
+    savedViewport,
+    shouldRestoreSavedViewport,
+    hasUnreadSignal,
     unreadAnchorEventId,
     traceTimeline,
   ]);
@@ -1050,16 +1164,31 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
     applyNavigationFailure(failure);
     traceTimeline('room-timeline.jump-latest-failed', {
       errorType: failure.reason,
+      durationMs:
+        jumpLatestStartedAtRef.current === undefined
+          ? undefined
+          : performance.now() - jumpLatestStartedAtRef.current,
+      generation: navigationController.snapshot.requestGeneration,
     });
+    jumpLatestStartedAtRef.current = undefined;
   };
   const cancelLiveEndPinForUser = useCallback(() => {
     const failure = navigationController.cancelForUser();
     if (failure) {
       applyNavigationFailure(failure);
+      traceTimeline('room-timeline.jump-latest-failed', {
+        errorType: failure.reason,
+        durationMs:
+          jumpLatestStartedAtRef.current === undefined
+            ? undefined
+            : performance.now() - jumpLatestStartedAtRef.current,
+        generation: navigationController.snapshot.requestGeneration,
+      });
+      jumpLatestStartedAtRef.current = undefined;
       return;
     }
     cancelLiveEndPin();
-  }, [applyNavigationFailure, cancelLiveEndPin, navigationController]);
+  }, [applyNavigationFailure, cancelLiveEndPin, navigationController, traceTimeline]);
 
   const timelineRouteKey = `${room.roomId}\u0000${eventId ?? ''}`;
   useEffect(() => {
@@ -1081,6 +1210,56 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
     if (!scrollEl) return undefined;
 
     const handleScroll = () => {
+      if (!isClientDiagnosticEnabled('room')) {
+        scheduleUserScrollIdle();
+        if (liveEndPinRef.current) return;
+        const nextAtBottom = isActuallyAtLiveBottomRef.current();
+        if (atBottomRef.current !== nextAtBottom) {
+          setAtBottomState(nextAtBottom);
+        }
+        return;
+      }
+      const sampledAtMs = performance.now();
+      const scrollTop = scrollEl.scrollTop;
+      const scrollHeight = scrollEl.scrollHeight;
+      const previousGeometry = scrollGeometryDiagnosticRef.current;
+      const intervalMs = sampledAtMs - previousGeometry.sampledAtMs;
+      const scrollDeltaPx = scrollTop - previousGeometry.scrollTop;
+      const heightDelta = scrollHeight - previousGeometry.scrollHeight;
+      const gesture = scrollGestureDiagnosticRef.current;
+      if (gesture.active) {
+        gesture.lastScrollTop = scrollTop;
+        gesture.maxStepPx = Math.max(gesture.maxStepPx, Math.abs(scrollDeltaPx));
+      }
+      const unexpectedJumpThresholdPx = Math.max(600, scrollEl.offsetHeight * 0.9);
+      if (
+        userScrollingRef.current &&
+        previousGeometry.sampledAtMs > 0 &&
+        intervalMs > 0 &&
+        intervalMs <= 150 &&
+        Math.abs(scrollDeltaPx) >= unexpectedJumpThresholdPx &&
+        sampledAtMs - previousGeometry.lastUnexpectedJumpAtMs >= 1000
+      ) {
+        scrollDiagnosticEmitterRef.current('room-timeline.unexpected-scroll-jump', {
+          previousScrollTop: previousGeometry.scrollTop,
+          scrollTop,
+          scrollDelta: scrollDeltaPx,
+          previousScrollHeight: previousGeometry.scrollHeight,
+          scrollHeight,
+          heightDelta,
+          durationMs: intervalMs,
+          viewportHeight: scrollEl.offsetHeight,
+          bottomGap: getTimelineBottomGap(scrollHeight, scrollTop, scrollEl.offsetHeight),
+          inputKind: gesture.inputType,
+          liveEndPinned: liveEndPinRef.current,
+          navigationPhase: navigationPhaseRef.current,
+          structuralUpdateQueued: structuralTimelineUpdateQueueRef.current.hasPending(),
+        });
+        previousGeometry.lastUnexpectedJumpAtMs = sampledAtMs;
+      }
+      previousGeometry.scrollTop = scrollTop;
+      previousGeometry.scrollHeight = scrollHeight;
+      previousGeometry.sampledAtMs = sampledAtMs;
       scheduleUserScrollIdle();
       if (liveEndPinRef.current) return;
       const nextAtBottom = isActuallyAtLiveBottomRef.current();
@@ -1097,8 +1276,8 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
     const scrollEl = scrollRef.current;
     if (!scrollEl) return undefined;
 
-    const cancelForUserScroll = () => {
-      beginUserScroll();
+    const cancelForUserScroll = (inputType: string) => {
+      beginUserScroll(inputType);
       if (
         liveEndPinRef.current ||
         navigationController.phase === 'loading' ||
@@ -1118,7 +1297,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
         evt.key === 'End' ||
         evt.key === ' '
       ) {
-        beginUserScroll();
+        beginUserScroll('keyboard');
         if (
           liveEndPinRef.current ||
           navigationController.phase === 'loading' ||
@@ -1129,15 +1308,18 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
       }
     };
 
-    scrollEl.addEventListener('wheel', cancelForUserScroll, { passive: true });
-    scrollEl.addEventListener('touchstart', cancelForUserScroll, { passive: true });
-    scrollEl.addEventListener('pointerdown', cancelForUserScroll, { passive: true });
+    const handleWheel = () => cancelForUserScroll('wheel');
+    const handleTouchStart = () => cancelForUserScroll('touch');
+    const handlePointerDown = () => cancelForUserScroll('pointer');
+    scrollEl.addEventListener('wheel', handleWheel, { passive: true });
+    scrollEl.addEventListener('touchstart', handleTouchStart, { passive: true });
+    scrollEl.addEventListener('pointerdown', handlePointerDown, { passive: true });
     scrollEl.addEventListener('scrollend', finishUserScroll);
     window.addEventListener('keydown', cancelForScrollKey);
     return () => {
-      scrollEl.removeEventListener('wheel', cancelForUserScroll);
-      scrollEl.removeEventListener('touchstart', cancelForUserScroll);
-      scrollEl.removeEventListener('pointerdown', cancelForUserScroll);
+      scrollEl.removeEventListener('wheel', handleWheel);
+      scrollEl.removeEventListener('touchstart', handleTouchStart);
+      scrollEl.removeEventListener('pointerdown', handlePointerDown);
       scrollEl.removeEventListener('scrollend', finishUserScroll);
       window.removeEventListener('keydown', cancelForScrollKey);
       if (userScrollIdleTimerRef.current !== undefined) {
@@ -1449,6 +1631,19 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
         : undefined;
       const atLiveBottom = restoreAnchor ? false : getPersistableAtLiveBottom();
       const anchor = atLiveBottom ? undefined : restoreAnchor ?? getPersistableVirtualAnchor();
+      const scrollEl = scrollRef.current;
+      traceTimeline('room-timeline.viewport-saved', {
+        atBottom: atLiveBottom,
+        savedAnchorPresent: Boolean(anchor),
+        liveTailRecorded: atLiveBottom,
+        bottomGap: scrollEl
+          ? getTimelineBottomGap(scrollEl.scrollHeight, scrollEl.scrollTop, scrollEl.offsetHeight)
+          : undefined,
+        loadedAtEnd: atLiveEndRef.current,
+        navigationPhase: navigationController.phase,
+        userScrolling: userScrollingRef.current,
+        structuralUpdateQueued: structuralTimelineUpdateQueueRef.current.hasPending(),
+      });
       setRoomTimelineViewport(room.roomId, {
         atBottom: atLiveBottom,
         anchor,
@@ -1465,6 +1660,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
       room,
       room.roomId,
       savedViewport,
+      traceTimeline,
     ]
   );
 
@@ -2046,6 +2242,18 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
               `${room.roomId}\u0000`
             );
             syncNavigationPhase();
+            traceTimeline('room-timeline.jump-latest-settled', {
+              outcome: 'confirmed',
+              durationMs:
+                jumpLatestStartedAtRef.current === undefined
+                  ? undefined
+                  : performance.now() - jumpLatestStartedAtRef.current,
+              generation: navigationController.snapshot.requestGeneration,
+              bottomGap,
+              stableFrames: state.stableFrames,
+              fallbackUsed: timedOut,
+            });
+            jumpLatestStartedAtRef.current = undefined;
             tryAutoMarkAsRead();
             if (completion.focusedEventId) {
               navigateRoom(room.roomId, undefined, { replace: true });
@@ -2053,6 +2261,18 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
           } else {
             const completion = navigationController.completeSettlement(false);
             if (completion.failure) applyNavigationFailure(completion.failure);
+            traceTimeline('room-timeline.jump-latest-settled', {
+              outcome: 'unconfirmed',
+              durationMs:
+                jumpLatestStartedAtRef.current === undefined
+                  ? undefined
+                  : performance.now() - jumpLatestStartedAtRef.current,
+              generation: navigationController.snapshot.requestGeneration,
+              bottomGap,
+              stableFrames: state.stableFrames,
+              fallbackUsed: timedOut,
+            });
+            jumpLatestStartedAtRef.current = undefined;
           }
         }
         return;
@@ -2287,13 +2507,36 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
   }, [scrollToElement, editId]);
 
   const handleJumpToLatest = async () => {
+    traceTimeline('room-timeline.jump-latest-requested', {
+      navigationPhase: navigationController.phase,
+      atBottom: atBottomRef.current,
+      loadedAtEnd,
+      openMode: roomOpenMode,
+    });
     const requestId = navigationController.beginJump(timeline, eventId);
-    if (requestId === undefined) return;
+    if (requestId === undefined) {
+      traceTimeline('room-timeline.jump-latest-suppressed', {
+        reason: 'navigation-in-flight',
+        navigationPhase: navigationController.phase,
+      });
+      return;
+    }
+    jumpLatestStartedAtRef.current = performance.now();
     syncNavigationPhase();
 
     try {
+      const fetchStartedAtMs = performance.now();
       const latestTimeline = await mx.getLatestTimeline(room.getUnfilteredTimelineSet());
-      if (!alive() || navigationController.phase !== 'loading') return;
+      const fetchDurationMs = performance.now() - fetchStartedAtMs;
+      if (!alive() || navigationController.phase !== 'loading') {
+        traceTimeline('room-timeline.jump-latest-result-ignored', {
+          reason: !alive() ? 'unmounted' : 'stale-navigation',
+          generation: requestId,
+          requestDurationMs: fetchDurationMs,
+        });
+        jumpLatestStartedAtRef.current = undefined;
+        return;
+      }
       const nextTimeline = latestTimeline
         ? getTimelineEndWindow(getLinkedTimelines(latestTimeline), PAGINATION_LIMIT)
         : getInitialTimeline(room, PAGINATION_LIMIT);
@@ -2302,7 +2545,22 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
       }
       const authoritativeTailEventId = getTimelineWindowTailEventId(nextTimeline);
       if (!authoritativeTailEventId) throw new Error('Latest timeline has no tail event');
-      if (!navigationController.resolveJump(requestId, authoritativeTailEventId)) return;
+      if (!navigationController.resolveJump(requestId, authoritativeTailEventId)) {
+        traceTimeline('room-timeline.jump-latest-result-ignored', {
+          reason: 'stale-navigation',
+          generation: requestId,
+          requestDurationMs: fetchDurationMs,
+        });
+        jumpLatestStartedAtRef.current = undefined;
+        return;
+      }
+      traceTimeline('room-timeline.jump-latest-fetched', {
+        outcome: 'accepted',
+        generation: requestId,
+        requestDurationMs: fetchDurationMs,
+        eventCount: getTimelinesEventsCount(nextTimeline.linkedTimelines),
+        fromLiveTimeline: nextTimeline.linkedTimelines.includes(getLiveTimeline(room)),
+      });
       pendingVirtualAnchorRef.current = undefined;
       pendingVirtualAnchorGenerationRef.current = undefined;
       restoringSavedViewportRef.current = false;
@@ -2315,6 +2573,8 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
       traceTimeline('room-timeline.jump-latest', {
         eventCount: getTimelinesEventsCount(nextTimeline.linkedTimelines),
         fromLiveTimeline: nextTimeline.linkedTimelines.includes(getLiveTimeline(room)),
+        generation: requestId,
+        navigationPhase: navigationController.phase,
       });
     } catch (err) {
       if (!alive()) return;
@@ -2323,7 +2583,13 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
       applyNavigationFailure(failure);
       traceTimeline('room-timeline.jump-latest-failed', {
         errorType: err instanceof Error ? err.name : typeof err,
+        durationMs:
+          jumpLatestStartedAtRef.current === undefined
+            ? undefined
+            : performance.now() - jumpLatestStartedAtRef.current,
+        generation: requestId,
       });
+      jumpLatestStartedAtRef.current = undefined;
     }
   };
 
@@ -3282,7 +3548,10 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
   );
 
   const renderEventRow = (row: TimelineEventRow) => {
-    const perfStart = isPerformanceDebugEnabled() ? performance.now() : 0;
+    const perfStart =
+      isPerformanceDebugEnabled() || isClientDiagnosticEnabled('performance')
+        ? performance.now()
+        : 0;
     const { mEvent, eventId: mEventId, eventIndex: item, timelineSet, collapse } = row;
 
     const eventJSX = renderMatrixEvent(

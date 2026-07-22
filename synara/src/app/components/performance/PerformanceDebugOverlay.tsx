@@ -1,5 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { isPerformanceDebugEnabled } from '../../utils/performance';
+import { useAtomValue } from 'jotai';
+import { desktopPlatformSettingsAtom } from '../../state/settings';
+import {
+  recordClientDiagnostic,
+  refreshDesktopDiagnosticsConfig,
+} from '../../utils/clientDiagnostics';
+import { isLegacyPerformanceDebugEnabled } from '../../utils/performance';
 
 type PerformanceSnapshot = {
   fps: number;
@@ -22,13 +28,23 @@ const readMemoryMb = (): number | undefined => {
 };
 
 export function PerformanceDebugOverlay() {
-  const [enabled] = useState(() => isPerformanceDebugEnabled());
+  const platformSettings = useAtomValue(desktopPlatformSettingsAtom);
+  const diagnosticsEnabled =
+    platformSettings.desktopDiagnosticsEnabled && platformSettings.desktopDiagnosticsPerformance;
+  const legacyEnabled = isLegacyPerformanceDebugEnabled();
+  const enabled = diagnosticsEnabled || legacyEnabled;
+  const showOverlay =
+    legacyEnabled || (diagnosticsEnabled && platformSettings.desktopDiagnosticsOverlay);
   const [snapshot, setSnapshot] = useState<PerformanceSnapshot>({
     fps: 0,
     longTasks: 0,
     lastLongTaskMs: 0,
     renderedTimelineRows: 0,
   });
+
+  useEffect(() => {
+    refreshDesktopDiagnosticsConfig(platformSettings);
+  }, [platformSettings]);
 
   useEffect(() => {
     if (!enabled) return undefined;
@@ -38,19 +54,34 @@ export function PerformanceDebugOverlay() {
     let animationFrame = 0;
     let longTasks = 0;
     let lastLongTaskMs = 0;
+    let maxLongTaskMs = 0;
+    let lastDiagnosticTs = 0;
     let observer: PerformanceObserver | undefined;
 
     const tick = (now: number) => {
       frameCount += 1;
       if (now - lastFpsTs >= 1000) {
         const fps = Math.round((frameCount * 1000) / (now - lastFpsTs));
-        setSnapshot({
+        const nextSnapshot = {
           fps,
           longTasks,
           lastLongTaskMs,
           renderedTimelineRows: readRenderedTimelineRows(),
           memoryMb: readMemoryMb(),
-        });
+        };
+        if (showOverlay) setSnapshot(nextSnapshot);
+        if (now - lastDiagnosticTs >= 5_000) {
+          recordClientDiagnostic('performance', 'runtime.sample', {
+            fps: nextSnapshot.fps,
+            renderedRowCount: nextSnapshot.renderedTimelineRows,
+            longTaskCount: nextSnapshot.longTasks,
+            lastLongTaskMs: nextSnapshot.lastLongTaskMs,
+            maxLongTaskMs,
+            memoryMb: nextSnapshot.memoryMb,
+            documentVisible: document.visibilityState === 'visible',
+          });
+          lastDiagnosticTs = now;
+        }
         frameCount = 0;
         lastFpsTs = now;
       }
@@ -63,6 +94,7 @@ export function PerformanceDebugOverlay() {
           list.getEntries().forEach((entry) => {
             longTasks += 1;
             lastLongTaskMs = Math.round(entry.duration);
+            maxLongTaskMs = Math.max(maxLongTaskMs, lastLongTaskMs);
           });
         });
         observer.observe({ entryTypes: ['longtask'] });
@@ -76,9 +108,9 @@ export function PerformanceDebugOverlay() {
       window.cancelAnimationFrame(animationFrame);
       observer?.disconnect();
     };
-  }, [enabled]);
+  }, [enabled, showOverlay]);
 
-  if (!enabled) return null;
+  if (!showOverlay) return null;
 
   return (
     <div

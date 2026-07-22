@@ -14,6 +14,8 @@ const tests = [
   'src/app/utils/__tests__/roomNotes.test.ts',
   'src/app/utils/__tests__/notifications.test.ts',
   'src/app/utils/__tests__/foundationDiagnostics.test.ts',
+  'src/app/utils/__tests__/clientDiagnostics.test.ts',
+  'src/app/utils/__tests__/diagnosticsReport.test.ts',
   'src/app/utils/__tests__/boundedLru.test.ts',
   'src/app/notifications/__tests__/badgeSummary.test.ts',
   'src/app/notifications/__tests__/systemNotification.test.ts',

@@ -35,11 +35,16 @@ Shared settings are platform-neutral controls for theme, composer behavior,
 timeline display, notification preferences, date/time formatting, GIF opt-in,
 and developer tools visibility.
 
-Desktop-only shortcut fields are not shared settings:
+Desktop-only shortcut and diagnostic fields are not shared settings:
 
 - `desktopShortcutShow`
 - `desktopShortcutLater`
 - `desktopShortcutNotifications`
+- `desktopDiagnosticsEnabled`
+- `desktopDiagnosticsPerformance`
+- `desktopDiagnosticsSession`
+- `desktopDiagnosticsRoomState`
+- `desktopDiagnosticsOverlay`
 
 ## iOS Notes
 
@@ -52,6 +57,6 @@ Desktop-only shortcut fields are not shared settings:
 ## Acceptance Criteria
 
 - Shared settings fixtures validate without desktop shortcut fields.
-- Desktop platform settings fixtures validate with only desktop shortcut fields.
+- Desktop platform settings fixtures validate with only desktop shortcut and diagnostic fields.
 - Runtime tests prove legacy merged shortcut settings migrate into platform
   settings while new writes split shared and platform state.

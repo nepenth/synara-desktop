@@ -61,7 +61,12 @@
     "desktopPlatform": {
       "desktopShortcutShow": "CmdOrCtrl+Shift+C",
       "desktopShortcutLater": "CmdOrCtrl+Shift+L",
-      "desktopShortcutNotifications": "CmdOrCtrl+Shift+N"
+      "desktopShortcutNotifications": "CmdOrCtrl+Shift+N",
+      "desktopDiagnosticsEnabled": false,
+      "desktopDiagnosticsPerformance": false,
+      "desktopDiagnosticsSession": false,
+      "desktopDiagnosticsRoomState": false,
+      "desktopDiagnosticsOverlay": false
     }
   },
   "invalid": {
@@ -124,6 +129,11 @@
       "desktopShortcutShow": "CmdOrCtrl+Shift+C",
       "desktopShortcutLater": "CmdOrCtrl+Shift+L",
       "desktopShortcutNotifications": "CmdOrCtrl+Shift+N",
+      "desktopDiagnosticsEnabled": false,
+      "desktopDiagnosticsPerformance": false,
+      "desktopDiagnosticsSession": false,
+      "desktopDiagnosticsRoomState": false,
+      "desktopDiagnosticsOverlay": false,
       "themeId": "aurora"
     }
   }

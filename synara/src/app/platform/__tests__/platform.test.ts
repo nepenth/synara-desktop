@@ -3,12 +3,15 @@ import assert from 'node:assert/strict';
 import {
   applyDesktopSecretStoreCapability,
   getPlatformCapabilities,
+  clearPlatformDiagnostics,
+  getPlatformDiagnosticsStatus,
   getPlatformIntegrationStatus,
   getPlatformSecretStoreBackendLabel,
   getPlatformSecretStoreSessionPersistence,
   getPlatformSecretStoreStatusDescription,
   getPlatformSecretStoreStatusLabel,
   getPlatformNotificationCount,
+  readPlatformDiagnosticsReport,
   getPlatformSecretStoreStatus,
   isDesktopSecretStoreOperationError,
   isDesktopPlatform,
@@ -205,6 +208,65 @@ test('platform diagnostics reads desktop integration status when supported', asy
       mediaPortal: { name: 'Media Portal', ready: false, supported: false, message: 'Missing' },
     });
     assert.deepEqual(calls, [{ command: 'desktop_get_integration_status', args: undefined }]);
+  } finally {
+    (globalThis as any).window = originalWindow;
+  }
+});
+
+test('platform structured diagnostics normalize status, report handling, and clear', async () => {
+  const calls: string[] = [];
+  const originalWindow = globalThis.window;
+  (globalThis as any).window = {
+    __SYNARA_DESKTOP__: {
+      platform: 'tauri',
+      invoke: async (command: string) => {
+        calls.push(command);
+        if (command === 'desktop_diagnostics_status') {
+          return {
+            available: true,
+            entryCount: 2,
+            totalBytes: 512,
+            oldestTimestampMs: 10,
+            newestTimestampMs: 20,
+          };
+        }
+        if (command === 'desktop_read_diagnostics') {
+          return {
+            schemaVersion: 1,
+            entries: [{ category: 'room', event: 'room-timeline.open', fields: {} }],
+          };
+        }
+        if (command === 'desktop_clear_diagnostics') return true;
+        return undefined;
+      },
+    },
+  };
+
+  try {
+    assert.deepEqual(await getPlatformDiagnosticsStatus(), {
+      available: true,
+      entryCount: 2,
+      sizeBytes: 512,
+      oldestTimestampMs: 10,
+      newestTimestampMs: 20,
+    });
+    const report = JSON.parse((await readPlatformDiagnosticsReport()) ?? '{}') as Record<
+      string,
+      unknown
+    >;
+    assert.equal(report.privacy, undefined);
+    assert.deepEqual(report.handlingPolicy, {
+      storage: 'local-only',
+      upload: 'manual-only',
+      schema: 'strict-allowlist-v1',
+      reviewBeforeSharing: true,
+    });
+    assert.equal(await clearPlatformDiagnostics(), true);
+    assert.deepEqual(calls, [
+      'desktop_diagnostics_status',
+      'desktop_read_diagnostics',
+      'desktop_clear_diagnostics',
+    ]);
   } finally {
     (globalThis as any).window = originalWindow;
   }

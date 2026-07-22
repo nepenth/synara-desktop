@@ -167,6 +167,10 @@ pub fn run() {
             desktop::desktop_get_performance_capabilities,
             desktop_logging::desktop_append_log,
             desktop_logging::desktop_log_path,
+            desktop_logging::desktop_record_diagnostic,
+            desktop_logging::desktop_diagnostics_status,
+            desktop_logging::desktop_read_diagnostics,
+            desktop_logging::desktop_clear_diagnostics,
             desktop_spellcheck::desktop_enable_spellcheck,
             desktop_agent_actions::desktop_agent_action
         ])

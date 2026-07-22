@@ -3,7 +3,7 @@ const importMetaEnv = (import.meta as ImportMeta & { env?: Record<string, string
   .env;
 const PERF_BUILD_FLAG = importMetaEnv?.VITE_SYNARA_PERFORMANCE_DEBUG === 'true';
 
-export const isPerformanceDebugEnabled = (): boolean => {
+export const isLegacyPerformanceDebugEnabled = (): boolean => {
   if (PERF_BUILD_FLAG) return true;
   try {
     return window.localStorage.getItem(PERF_STORAGE_KEY) === 'true';
@@ -11,6 +11,11 @@ export const isPerformanceDebugEnabled = (): boolean => {
     return false;
   }
 };
+
+// Keep the legacy console/Performance API instrumentation isolated from the
+// structured diagnostic store. Structured capture has its own privacy filter
+// and must not implicitly enable unsanitized console output.
+export const isPerformanceDebugEnabled = isLegacyPerformanceDebugEnabled;
 
 export const perfMark = (name: string): void => {
   if (!isPerformanceDebugEnabled()) return;
