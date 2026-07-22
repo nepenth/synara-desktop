@@ -36,6 +36,7 @@ import SwiftUI
         }
 
         static let maximumMissingTargetAttempts = 3
+        static let maximumReadMarkerSettlementAttempts = 6
 
         static func shouldDeferSnapshot(isDragging: Bool, isDecelerating: Bool) -> Bool {
             isDragging || isDecelerating
@@ -340,6 +341,7 @@ import SwiftUI
         private var pendingCommandRetry: DispatchWorkItem?
         private var pendingCommandRetryID: UUID?
         private var pendingCommandRetryCommandID: UInt64?
+        private var pendingReadMarkerSettlementCommandID: UInt64?
         private var missingTargetAttempts: [UInt64: Int] = [:]
         private var isDragging = false
         private var isDecelerating = false
@@ -367,6 +369,11 @@ import SwiftUI
         override func viewDidLayoutSubviews() {
             super.viewDidLayoutSubviews()
             tableView.frame = view.bounds
+            if let command = configuration?.command,
+               lastExecutedCommandID != command.id
+            {
+                _ = executeCommandIfNeeded(command)
+            }
             updateDiagnostics()
         }
 
@@ -390,6 +397,7 @@ import SwiftUI
                 pendingCommandRetry = nil
                 pendingCommandRetryID = nil
                 pendingCommandRetryCommandID = nil
+                pendingReadMarkerSettlementCommandID = nil
                 missingTargetAttempts.removeAll()
                 lastExecutedCommandID = nil
                 paginationRequestInFlight = false
@@ -565,6 +573,35 @@ import SwiftUI
                 retryOrCompleteCommand(command, targetEventID: nil)
                 return true
             }
+            guard tableView.bounds.width > 0, tableView.bounds.height > 0 else {
+                // SwiftUI may deliver the data snapshot before assigning this
+                // representable a frame. Keep the command pending without
+                // consuming its missing-target retry budget; the next layout
+                // pass will execute it against real viewport dimensions.
+                return true
+            }
+
+            let targetsReadMarker: Bool
+            if case .readMarker = command.kind {
+                targetsReadMarker = true
+            } else {
+                targetsReadMarker = false
+            }
+            let firedRetryCount = missingTargetAttempts[command.id] ?? 0
+            if targetsReadMarker,
+               firedRetryCount > 0,
+               isRowAtVisualTop(target.0)
+            {
+                completeCommand(command, success: true, targetEventID: target.1)
+                reportBottomPinnedIfChanged(force: true)
+                return true
+            }
+            if targetsReadMarker,
+               pendingReadMarkerSettlementCommandID == command.id,
+               pendingCommandRetryCommandID == command.id
+            {
+                return true
+            }
 
             if target.3 {
                 cancelPendingCommandRetry()
@@ -595,10 +632,19 @@ import SwiftUI
                 }
                 let succeeded = StableTimelineViewportPolicy.commandSucceeded(
                     targetsLatest: targetsLatest,
-                    isTargetVisible: isRowVisible(target.0),
+                    isTargetVisible: targetsReadMarker ? isRowAtVisualTop(target.0) : isRowVisible(target.0),
                     isConfirmedPinned: isConfirmedPinned()
                 )
-                if succeeded {
+                if succeeded,
+                   targetsReadMarker,
+                   firedRetryCount < StableTimelineViewportPolicy.maximumReadMarkerSettlementAttempts
+                {
+                    // Self-sizing cells update their measured heights after
+                    // the first scroll. The delayed retry must first observe
+                    // that this placement stayed stable before completing it.
+                    pendingReadMarkerSettlementCommandID = command.id
+                    scheduleMissingTargetRetry(command)
+                } else if succeeded {
                     completeCommand(command, success: true, targetEventID: target.1)
                 } else {
                     retryOrCompleteCommand(command, targetEventID: target.1)
@@ -652,6 +698,7 @@ import SwiftUI
                 pendingCommandRetry = nil
                 pendingCommandRetryID = nil
                 pendingCommandRetryCommandID = nil
+                pendingReadMarkerSettlementCommandID = nil
                 guard configuration?.command?.id == command.id,
                       configuration?.routeID == command.routeID,
                       configuration?.sessionGeneration == command.sessionGeneration
@@ -674,6 +721,7 @@ import SwiftUI
             let abandonedCommandID = pendingCommandRetryCommandID
             pendingCommandRetryID = nil
             pendingCommandRetryCommandID = nil
+            pendingReadMarkerSettlementCommandID = nil
             pendingCommandRetry?.cancel()
             pendingCommandRetry = nil
             if let abandonedCommandID {
@@ -830,7 +878,7 @@ import SwiftUI
                 else {
                     return nil
                 }
-                return (cell, tableView.convert(cell.frame, to: view))
+                return (cell, cell.convert(cell.bounds, to: view))
             }
             guard let candidate = candidates.min(by: { $0.1.minY < $1.1.minY }),
                   let id = candidate.0.stableID
@@ -869,7 +917,7 @@ import SwiftUI
                 guard let cell = cell as? Cell, cell.stableID == id else {
                     return nil
                 }
-                return tableView.convert(cell.frame, to: view)
+                return cell.convert(cell.bounds, to: view)
             }.first
         }
 
@@ -878,6 +926,14 @@ import SwiftUI
                 return false
             }
             return tableView.indexPathsForVisibleRows?.contains(indexPath) == true
+        }
+
+        private func isRowAtVisualTop(_ id: StableTimelineViewportItemID) -> Bool {
+            guard let rowFrame = frame(for: id) else {
+                return false
+            }
+            let viewportTop = tableView.convert(tableView.bounds, to: view).minY
+            return abs(rowFrame.minY - viewportTop) <= 4
         }
 
         private func isConfirmedPinned() -> Bool {
@@ -937,7 +993,7 @@ import SwiftUI
                 else {
                     return nil
                 }
-                return (eventID, tableView.convert(cell.frame, to: view).minY)
+                return (eventID, cell.convert(cell.bounds, to: view).minY)
             }.min(by: { $0.1 < $1.1 })?.0
         }
 
