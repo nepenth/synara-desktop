@@ -70,14 +70,37 @@ defense-in-depth measure.
 The script disables Xcode-managed build-number mutation so App Store Connect uses
 the build number committed in `Synara.xcodeproj` and `project.yml`.
 
-After upload, Apple still performs server-side processing. If App Store Connect
-shows "Missing Compliance", answer the export-compliance prompt before the build
-can be installed through TestFlight.
+The upload command proves only that Apple accepted the package transport. After
+upload, run the processing and internal-distribution gate with the exact values
+reported by Xcode:
+
+```sh
+SYNARA_ASC_KEY_PATH="/secure/path/AuthKey_KEYID.p8" \
+SYNARA_ASC_KEY_ID="KEYID" \
+SYNARA_ASC_ISSUER_ID="issuer-uuid" \
+SYNARA_IOS_MARKETING_VERSION="X.Y.Z" \
+SYNARA_IOS_BUILD_NUMBER="X.Y.Z" \
+SYNARA_TESTFLIGHT_INTERNAL_GROUP_IDS="group-uuid" \
+node synara-ios/scripts/promote-testflight-internal.mjs
+```
+
+The gate follows the prerelease-version and build-upload relationships so it can
+observe builds that Apple's ordinary build collection omits while processing. It
+requires the upload to become `COMPLETE`, the exact build to become `VALID`, all
+configured groups to be internal and assigned, and the internal build state to
+become `IN_BETA_TESTING`. Missing export compliance, failed processing, an
+expired build, or a bounded timeout fails the release.
 
 The upload uses `testFlightInternalTestingOnly`, and App Store Connect makes the
 processed build available to internal testers through the configured internal
-distribution settings. Do not run `promote-testflight-internal.rb` as part of the
-normal upload path.
+distribution settings. Groups configured for automatic access to all builds do
+not require a relationship mutation; the gate explicitly adds and verifies any
+missing manual internal-group relationship. It writes a redacted Apple-state
+snapshot to `SYNARA_IOS_DIAGNOSTICS_DIR`.
+
+The upload script also records the archive and export logs and copies Xcode's
+`.xcdistributionlogs` bundle when available. Keep these diagnostics for both
+successful and failed uploads; never store the API private key in them.
 
 ## GitHub Release Integration
 
@@ -97,9 +120,15 @@ Required `testflight` environment secrets:
 - `SYNARA_ASC_ISSUER_ID`
 
 The job also consumes the repository secret `APPLE_TEAM_ID` and repository
-variable `SYNARA_PUSH_GATEWAY_URL`. Internal-only upload remains the default;
+variables `SYNARA_PUSH_GATEWAY_URL` and
+`SYNARA_TESTFLIGHT_INTERNAL_GROUP_IDS` (a comma-delimited list of App Store
+Connect internal beta-group IDs). Internal-only upload remains the default;
 external TestFlight still requires an explicit release decision and configured
 external tester groups.
 
 The final GitHub Release is not created unless iOS, macOS, both Linux builds,
-notarization, updater metadata, and artifact verification all succeed.
+notarization, updater metadata, and artifact verification all succeed. The iOS
+upload and processing checks run as separate jobs, so rerunning failed jobs can
+retry Apple processing without uploading the same build number again. The iOS
+gate is not successful until the exact build is available to the configured
+internal TestFlight groups.
