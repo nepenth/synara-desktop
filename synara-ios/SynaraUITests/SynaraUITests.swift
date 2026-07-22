@@ -145,10 +145,19 @@ final class SynaraUITests: XCTestCase {
     }
 
     func testUnreadRoomRoutePositionsAfterSharedReadMarker() {
-        let app = launchRoomApp(readMarkerEventID: "$security:!project:matrix.org")
+        let app = launchRoomApp(
+            readMarkerEventID: "$synthetic-30:matrix.org",
+            largeTimelineCount: 60
+        )
+        let viewport = timelineViewport(in: app)
 
-        XCTAssertTrue(timelineViewport(in: app).waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["+1 — I'll update the doc and share a draft."].waitForExistence(timeout: 5))
+        XCTAssertTrue(viewport.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Synthetic message 31"].waitForExistence(timeout: 5))
+        XCTAssertTrue(
+            waitForViewportDiagnostics(viewport, containing: "topEvent=$synthetic-31:matrix.org", timeout: 5),
+            "Unexpected viewport diagnostics: \(String(describing: viewport.value))"
+        )
+        XCTAssertTrue(waitForViewportDiagnostics(viewport, containing: "pinned=false", timeout: 5))
         XCTAssertTrue(app.buttons["JumpToLatestButton"].waitForExistence(timeout: 5))
     }
 
@@ -291,13 +300,18 @@ final class SynaraUITests: XCTestCase {
         let initialProjectViewport = timelineViewport(in: app)
         XCTAssertTrue(waitForViewportDiagnostics(initialProjectViewport, containing: "routeID=!project:matrix.org", timeout: 5))
         XCTAssertTrue(waitForViewportDiagnostics(initialProjectViewport, containing: "newestEvent=$alex-thread:!project:matrix.org", timeout: 5))
-        let initialGeneration = Int(viewportDiagnostics(initialProjectViewport)["generation"] ?? "")
-        XCTAssertNotNil(initialGeneration)
+        let initialDiagnostics = viewportDiagnostics(initialProjectViewport)
+        let initialRouteID = initialDiagnostics["routeID"]
+        let initialGeneration = Int(initialDiagnostics["generation"] ?? "")
+        XCTAssertNotNil(initialRouteID)
+        XCTAssertEqual(initialGeneration, 1)
         tap(app.buttons["Back"], timeout: 5)
         tap(app.buttons["RoomRow-!general:matrix.org"], timeout: 5)
         let generalViewport = timelineViewport(in: app)
         XCTAssertTrue(waitForViewportDiagnostics(generalViewport, containing: "routeID=!general:matrix.org", timeout: 5))
         XCTAssertTrue(waitForViewportDiagnostics(generalViewport, containing: "newestEvent=$alex-thread:!general:matrix.org", timeout: 5))
+        let generalRouteID = viewportDiagnostics(generalViewport)["routeID"]
+        XCTAssertNotNil(generalRouteID)
         tap(app.buttons["Back"], timeout: 5)
         tap(app.buttons["RoomRow-!project:matrix.org"], timeout: 5)
 
@@ -306,9 +320,12 @@ final class SynaraUITests: XCTestCase {
         XCTAssertTrue(waitForViewportDiagnostics(finalViewport, containing: "newestEvent=$alex-thread:!project:matrix.org", timeout: 5))
         XCTAssertTrue(waitForViewportDiagnostics(finalViewport, containing: "pinned=true", timeout: 5))
         let diagnostics = viewportDiagnostics(finalViewport)
+        let finalRouteID = diagnostics["routeID"]
         let finalGeneration = Int(diagnostics["generation"] ?? "")
-        XCTAssertNotNil(finalGeneration)
-        XCTAssertGreaterThan(finalGeneration ?? 0, initialGeneration ?? .max)
+        XCTAssertNotNil(finalRouteID)
+        XCTAssertEqual(finalGeneration, 1)
+        XCTAssertNotEqual(finalRouteID, initialRouteID)
+        XCTAssertNotEqual(finalRouteID, generalRouteID)
         XCTAssertEqual(diagnostics["newestEvent"], "$alex-thread:!project:matrix.org")
         XCTAssertFalse(finalViewport.value.debugDescription.contains("!general:matrix.org"))
     }
@@ -935,13 +952,20 @@ final class SynaraUITests: XCTestCase {
         return app
     }
 
-    private func launchRoomApp(readMarkerEventID: String? = nil) -> XCUIApplication {
+    private func launchRoomApp(
+        readMarkerEventID: String? = nil,
+        largeTimelineCount: Int? = nil
+    ) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchEnvironment["SYNARA_UI_TESTS"] = "1"
         app.launchEnvironment["SYNARA_UI_TEST_ROOM_ID"] = "!project:matrix.org"
         app.launchEnvironment["SYNARA_UI_TEST_ROOM_TITLE"] = "Project"
         if let readMarkerEventID {
             app.launchEnvironment["SYNARA_UI_TEST_READ_MARKER_EVENT_ID"] = readMarkerEventID
+        }
+        if let largeTimelineCount {
+            app.launchEnvironment["SYNARA_UI_TEST_LARGE_TIMELINE"] = "1"
+            app.launchEnvironment["SYNARA_UI_TEST_LARGE_TIMELINE_COUNT"] = "\(largeTimelineCount)"
         }
         launch(app)
         return app

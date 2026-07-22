@@ -38,6 +38,11 @@ test('modernization opt-in settings default off', () => {
   assert.equal(defaultSettings.timelineVirtualizationEnabled, true);
   assert.equal(store.getSettings().gifSearchEnabled, false);
   assert.equal(store.getSettings().timelineVirtualizationEnabled, true);
+  assert.equal(defaultSettings.desktopDiagnosticsEnabled, false);
+  assert.equal(defaultSettings.desktopDiagnosticsPerformance, false);
+  assert.equal(defaultSettings.desktopDiagnosticsSession, false);
+  assert.equal(defaultSettings.desktopDiagnosticsRoomState, false);
+  assert.equal(defaultSettings.desktopDiagnosticsOverlay, false);
 });
 
 test('shared settings defaults exclude desktop shortcut settings', () => {
@@ -68,6 +73,11 @@ test('settings store reads legacy desktop shortcuts from the shared settings blo
     desktopShortcutShow: 'CmdOrCtrl+1',
     desktopShortcutLater: 'CmdOrCtrl+2',
     desktopShortcutNotifications: 'CmdOrCtrl+3',
+    desktopDiagnosticsEnabled: false,
+    desktopDiagnosticsPerformance: false,
+    desktopDiagnosticsSession: false,
+    desktopDiagnosticsRoomState: false,
+    desktopDiagnosticsOverlay: false,
   });
   assert.equal(store.getSettings().desktopShortcutNotifications, 'CmdOrCtrl+3');
 });
@@ -82,6 +92,11 @@ test('settings store writes shared and desktop platform settings separately', ()
     desktopShortcutShow: 'CmdOrCtrl+1',
     desktopShortcutLater: 'CmdOrCtrl+2',
     desktopShortcutNotifications: 'CmdOrCtrl+3',
+    desktopDiagnosticsEnabled: true,
+    desktopDiagnosticsPerformance: true,
+    desktopDiagnosticsSession: true,
+    desktopDiagnosticsRoomState: true,
+    desktopDiagnosticsOverlay: true,
   });
 
   const shared = storage.getObject('settings');
@@ -93,7 +108,30 @@ test('settings store writes shared and desktop platform settings separately', ()
     desktopShortcutShow: 'CmdOrCtrl+1',
     desktopShortcutLater: 'CmdOrCtrl+2',
     desktopShortcutNotifications: 'CmdOrCtrl+3',
+    desktopDiagnosticsEnabled: true,
+    desktopDiagnosticsPerformance: true,
+    desktopDiagnosticsSession: true,
+    desktopDiagnosticsRoomState: true,
+    desktopDiagnosticsOverlay: true,
   });
+});
+
+test('desktop diagnostic settings stay out of the shared settings payload', () => {
+  const storage = createMemoryStorage();
+  const store = createLocalStorageSettingsStore(storage);
+
+  store.setSettings({
+    ...defaultSettings,
+    desktopDiagnosticsEnabled: true,
+    desktopDiagnosticsRoomState: true,
+  });
+
+  const shared = storage.getObject('settings');
+  const platform = storage.getObject('platformSettings');
+  assert.equal(shared?.desktopDiagnosticsEnabled, undefined);
+  assert.equal(shared?.desktopDiagnosticsRoomState, undefined);
+  assert.equal(platform?.desktopDiagnosticsEnabled, true);
+  assert.equal(platform?.desktopDiagnosticsRoomState, true);
 });
 
 test('splitSettings and mergeSettingsSnapshot round-trip known settings', () => {

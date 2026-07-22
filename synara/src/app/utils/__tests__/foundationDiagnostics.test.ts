@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { clearDesktopDiagnostics, getDesktopDiagnosticEntries } from '../desktopDiagnostics';
+import { defaultDesktopPlatformSettings } from '../../state/settings';
+import {
+  refreshDesktopDiagnosticsConfig,
+  resetClientDiagnosticsForTests,
+} from '../clientDiagnostics';
 import {
   clearFoundationDiagnosticTokens,
   recordFoundationDiagnostic,
@@ -42,7 +47,7 @@ test('foundation diagnostics tokenize identifiers and reject message-shaped fiel
 test('foundation diagnostic storage and structured entries remain bounded', () => {
   resetDiagnostics();
   for (let index = 0; index < 75; index += 1) {
-    recordFoundationDiagnostic('activity', 'room-activity.updated', {
+    recordFoundationDiagnostic('timeline', 'room-timeline.open', {
       roomId: `!room-${index}:example.org`,
       eventId: `$event-${index}`,
       fields: { revision: index, hasConcreteHead: true },
@@ -91,5 +96,44 @@ test('foundation diagnostics cannot fail client operations when a native logger 
     } else {
       Object.defineProperty(globalThis, 'window', { configurable: true, value: originalWindow });
     }
+  }
+});
+
+test('structured room-activity diagnostics cap native writes during bursts', () => {
+  resetDiagnostics();
+  const calls: Array<{ command: string }> = [];
+  const originalWindow = globalThis.window;
+  Object.defineProperty(globalThis, 'window', {
+    configurable: true,
+    value: {
+      __SYNARA_DESKTOP__: {
+        invoke: (command: string) => {
+          calls.push({ command });
+          return Promise.resolve();
+        },
+      },
+    },
+  });
+  try {
+    refreshDesktopDiagnosticsConfig({
+      ...defaultDesktopPlatformSettings,
+      desktopDiagnosticsEnabled: true,
+      desktopDiagnosticsRoomState: true,
+    });
+    for (let index = 0; index < 100; index += 1) {
+      recordFoundationDiagnostic('activity', 'room-activity.updated', {
+        roomId: `!room-${index}:example.org`,
+        eventId: `$event-${index}`,
+        fields: { revision: index, activityChanged: true },
+      });
+    }
+
+    assert.equal(calls.filter(({ command }) => command === 'desktop_record_diagnostic').length, 12);
+    assert.equal(calls.filter(({ command }) => command === 'desktop_append_log').length, 12);
+  } finally {
+    if (originalWindow === undefined) Reflect.deleteProperty(globalThis, 'window');
+    else Object.defineProperty(globalThis, 'window', { configurable: true, value: originalWindow });
+    resetClientDiagnosticsForTests();
+    resetDiagnostics();
   }
 });

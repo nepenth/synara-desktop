@@ -5,7 +5,16 @@
   "title": "SynaraDesktopPlatformSettings",
   "type": "object",
   "additionalProperties": false,
-  "required": ["desktopShortcutShow", "desktopShortcutLater", "desktopShortcutNotifications"],
+  "required": [
+    "desktopShortcutShow",
+    "desktopShortcutLater",
+    "desktopShortcutNotifications",
+    "desktopDiagnosticsEnabled",
+    "desktopDiagnosticsPerformance",
+    "desktopDiagnosticsSession",
+    "desktopDiagnosticsRoomState",
+    "desktopDiagnosticsOverlay"
+  ],
   "properties": {
     "desktopShortcutShow": {
       "type": "string",
@@ -18,6 +27,11 @@
     "desktopShortcutNotifications": {
       "type": "string",
       "minLength": 1
-    }
+    },
+    "desktopDiagnosticsEnabled": { "type": "boolean" },
+    "desktopDiagnosticsPerformance": { "type": "boolean" },
+    "desktopDiagnosticsSession": { "type": "boolean" },
+    "desktopDiagnosticsRoomState": { "type": "boolean" },
+    "desktopDiagnosticsOverlay": { "type": "boolean" }
   }
 }

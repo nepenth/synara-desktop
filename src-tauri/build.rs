@@ -28,6 +28,10 @@ const DESKTOP_COMMANDS: &[&str] = &[
     "desktop_get_performance_capabilities",
     "desktop_append_log",
     "desktop_log_path",
+    "desktop_record_diagnostic",
+    "desktop_diagnostics_status",
+    "desktop_read_diagnostics",
+    "desktop_clear_diagnostics",
     "desktop_agent_action",
 ];
 

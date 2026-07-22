@@ -1,4 +1,5 @@
 import { fallbackSessionStore, type Session, type SessionStore } from './sessions';
+import { recordClientDiagnostic } from '../utils/clientDiagnostics';
 
 export type AsyncSessionStore = {
   getSession: () => Promise<Session | undefined>;
@@ -32,21 +33,47 @@ export const resolveSessionBootstrap = async ({
   nativeSessionStore,
   fallbackStore = fallbackSessionStore,
 }: SessionBootstrapOptions = {}): Promise<SessionBootstrapResult> => {
+  const bootstrapStartedAtMs = performance.now();
   let nativeStoreError: SessionBootstrapResult['nativeStoreError'];
 
+  recordClientDiagnostic('session', 'bootstrap.started', {
+    nativeStoreConfigured: Boolean(nativeSessionStore),
+  });
+
   if (nativeSessionStore) {
+    const nativeReadStartedAtMs = performance.now();
     try {
       const nativeSession = await nativeSessionStore.getSession();
+      recordClientDiagnostic('session', 'bootstrap.native-read-completed', {
+        outcome: nativeSession ? 'found' : 'missing',
+        durationMs: performance.now() - nativeReadStartedAtMs,
+        hasRefreshToken: Boolean(nativeSession?.refreshToken),
+        hasExpiryMetadata: typeof nativeSession?.expiresInMs === 'number',
+      });
       if (nativeSession) {
+        recordClientDiagnostic('session', 'bootstrap.completed', {
+          source: 'native',
+          durationMs: performance.now() - bootstrapStartedAtMs,
+        });
         return { session: nativeSession, source: 'native' };
       }
-    } catch {
+    } catch (error) {
       nativeStoreError = NATIVE_SESSION_STORE_ERROR;
+      recordClientDiagnostic('session', 'bootstrap.native-read-completed', {
+        outcome: 'error',
+        durationMs: performance.now() - nativeReadStartedAtMs,
+        errorType: error instanceof Error ? error.name : typeof error,
+      });
     }
   }
 
   const fallbackSession = fallbackStore.getFallbackSession();
   if (fallbackSession) {
+    recordClientDiagnostic('session', 'bootstrap.completed', {
+      source: 'legacy-fallback',
+      durationMs: performance.now() - bootstrapStartedAtMs,
+      nativeStoreError: Boolean(nativeStoreError),
+    });
     return {
       session: fallbackSession,
       source: 'legacy-fallback',
@@ -54,6 +81,11 @@ export const resolveSessionBootstrap = async ({
     };
   }
 
+  recordClientDiagnostic('session', 'bootstrap.completed', {
+    source: 'none',
+    durationMs: performance.now() - bootstrapStartedAtMs,
+    nativeStoreError: Boolean(nativeStoreError),
+  });
   return { source: 'none', nativeStoreError };
 };
 
@@ -70,7 +102,12 @@ export const initializeSessionBootstrap = (
   if (!activeBootstrapPromise) {
     activeBootstrapPromise = resolveSessionBootstrap(options)
       .then(cacheSessionBootstrapResult)
-      .catch(() => cacheSessionBootstrapResult({ source: 'none' }));
+      .catch((error) => {
+        recordClientDiagnostic('session', 'bootstrap.failed', {
+          errorType: error instanceof Error ? error.name : typeof error,
+        });
+        return cacheSessionBootstrapResult({ source: 'none' });
+      });
   }
   return activeBootstrapPromise;
 };
