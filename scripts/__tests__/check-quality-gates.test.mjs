@@ -138,12 +138,37 @@ ${iosBuildStep}
     needs: [quality-gate]
   macos:
     needs: [quality-gate]
-  ios-testflight:
+  ios-testflight-upload:
     needs: [quality-gate]
+    outputs:
+      marketing_version: \${{ steps.upload_ios.outputs.marketing_version }}
+      build_number: \${{ steps.upload_ios.outputs.build_number }}
     steps:
-      - run: synara-ios/scripts/upload-testflight-internal.sh
+      - id: upload_ios
+        run: synara-ios/scripts/upload-testflight-internal.sh
         env:
           SYNARA_TESTFLIGHT_INTERNAL_ONLY: \${{ vars.SYNARA_TESTFLIGHT_INTERNAL_ONLY || 'true' }}
+          SYNARA_IOS_DIAGNOSTICS_DIR: \${{ runner.temp }}/synara-ios-testflight-diagnostics
+      - if: always()
+        uses: actions/upload-artifact@fixture
+        with:
+          path: \${{ runner.temp }}/synara-ios-testflight-diagnostics
+          retention-days: 30
+  ios-testflight:
+    needs: [ios-testflight-upload]
+    timeout-minutes: 50
+    steps:
+      - run: node synara-ios/scripts/promote-testflight-internal.mjs
+        env:
+          SYNARA_IOS_MARKETING_VERSION: \${{ needs.ios-testflight-upload.outputs.marketing_version }}
+          SYNARA_IOS_BUILD_NUMBER: \${{ needs.ios-testflight-upload.outputs.build_number }}
+          SYNARA_TESTFLIGHT_INTERNAL_GROUP_IDS: \${{ vars.SYNARA_TESTFLIGHT_INTERNAL_GROUP_IDS }}
+          SYNARA_IOS_DIAGNOSTICS_DIR: \${{ runner.temp }}/synara-ios-testflight-diagnostics
+      - if: always()
+        uses: actions/upload-artifact@fixture
+        with:
+          path: \${{ runner.temp }}/synara-ios-testflight-diagnostics
+          retention-days: 30
   updater-metadata:
     needs: [macos]
   publish-gh-release:
@@ -466,6 +491,67 @@ test("rejects manual release dispatch and dispatch-input TestFlight control", ()
   assert.equal(result.ok, false);
   assert.match(result.errors.join("\n"), /tag-only/i);
   assert.match(result.errors.join("\n"), /repository variable/i);
+});
+
+test("rejects a TestFlight release that does not verify Apple processing", () => {
+  const result = inspect({
+    releaseWorkflow: releaseWorkflow.replace(
+      "      - run: node synara-ios/scripts/promote-testflight-internal.mjs",
+      "      - run: echo uploaded"
+    ),
+  });
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join("\n"), /verify and promote/i);
+});
+
+test("rejects detached TestFlight version or group verification", () => {
+  for (const workflow of [
+    releaseWorkflow.replace(
+      "needs.ios-testflight-upload.outputs.build_number",
+      "needs.other.outputs.build_number"
+    ),
+    releaseWorkflow.replace(
+      "vars.SYNARA_TESTFLIGHT_INTERNAL_GROUP_IDS",
+      "vars.OTHER_TESTFLIGHT_GROUP_IDS"
+    ),
+  ]) {
+    const result = inspect({ releaseWorkflow: workflow });
+    assert.equal(result.ok, false);
+    assert.match(result.errors.join("\n"), /exact uploaded version\/build/i);
+  }
+});
+
+test("rejects TestFlight verification coupled to an upload retry", () => {
+  const result = inspect({
+    releaseWorkflow: releaseWorkflow.replace(
+      "  ios-testflight:\n    needs: [ios-testflight-upload]",
+      "  ios-testflight:\n    needs: [quality-gate]"
+    ),
+  });
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join("\n"), /failed-job retries.*duplicate/i);
+});
+
+test("rejects TestFlight diagnostics that are not preserved on failure", () => {
+  const result = inspect({
+    releaseWorkflow: releaseWorkflow.replaceAll(
+      "      - if: always()\n        uses: actions/upload-artifact@fixture",
+      "      - if: success()\n        uses: actions/upload-artifact@fixture"
+    ),
+  });
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join("\n"), /diagnostics.*always/i);
+});
+
+test("rejects TestFlight upload diagnostics that are not preserved", () => {
+  const result = inspect({
+    releaseWorkflow: releaseWorkflow.replace(
+      "      - if: always()\n        uses: actions/upload-artifact@fixture",
+      "      - if: success()\n        uses: actions/upload-artifact@fixture"
+    ),
+  });
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join("\n"), /upload diagnostics.*always/i);
 });
 
 test("rejects release documentation that recommends unavailable CI checks", () => {
