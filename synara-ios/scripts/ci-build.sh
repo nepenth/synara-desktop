@@ -75,6 +75,10 @@ if [[ "${RUN_IOS_TESTS:-0}" == "1" ]]; then
     -destination "$TEST_DESTINATION" \
     -derivedDataPath "$DERIVED_DATA_PATH" \
     -resultBundlePath "$RESULT_BUNDLE_DIR/test-$RESULT_STAMP.xcresult" \
+    -parallel-testing-enabled NO \
+    -maximum-concurrent-test-simulator-destinations 1 \
+    -retry-tests-on-failure \
+    -test-iterations 2 \
     "${PACKAGE_ARGS[@]}" \
     test \
     "${UNSIGNED_BUILD_ARGS[@]}"

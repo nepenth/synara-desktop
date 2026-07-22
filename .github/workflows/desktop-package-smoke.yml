@@ -15,38 +15,74 @@ on:
       - "synara/**"
   pull_request:
     branches: [main, "release/**"]
-    paths:
-      - ".github/workflows/desktop-package-smoke.yml"
-      - "package.json"
-      - "package-lock.json"
-      - ".node-version"
-      - "config.json"
-      - "scripts/**"
-      - "packaging/arch/**"
-      - "src-tauri/**"
-      - "synara/**"
   workflow_dispatch:
 
 concurrency:
   group: package-smoke-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
+  changes:
+    name: Detect package-sensitive changes
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    outputs:
+      packages: ${{ steps.scope.outputs.packages }}
+    steps:
+      - name: Checkout repository history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Determine whether packages must be built
+        id: scope
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" != "pull_request" ]]; then
+            echo "packages=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if git diff --quiet "$BASE_SHA" "$HEAD_SHA" -- \
+            .github/workflows/desktop-package-smoke.yml \
+            .node-version \
+            config.json \
+            package.json \
+            package-lock.json \
+            packaging/arch \
+            scripts \
+            src-tauri \
+            synara; then
+            echo "packages=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "packages=true" >> "$GITHUB_OUTPUT"
+          fi
+
   linux-deb:
     name: Linux .deb package
+    needs: [changes]
+    if: needs.changes.outputs.packages == 'true'
     runs-on: ubuntu-22.04
+    timeout-minutes: 60
     steps:
       - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Setup Node.js
-        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .node-version
           package-manager-cache: false
 
       - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable 2026-07-22
 
       - name: Install Linux Tauri dependencies
         run: |
@@ -83,11 +119,14 @@ jobs:
 
   linux-arch:
     name: Linux Arch package
+    needs: [changes]
+    if: needs.changes.outputs.packages == 'true'
     runs-on: ubuntu-22.04
+    timeout-minutes: 60
     container: archlinux:base-devel
     steps:
       - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install Arch build dependencies
         run: |
@@ -144,19 +183,22 @@ jobs:
 
   macos-app:
     name: macOS app bundle
-    runs-on: macos-latest
+    needs: [changes]
+    if: needs.changes.outputs.packages == 'true'
+    runs-on: macos-15
+    timeout-minutes: 60
     steps:
       - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Setup Node.js
-        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .node-version
           package-manager-cache: false
 
       - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable 2026-07-22
 
       - name: Install desktop dependencies
         run: npm ci
@@ -183,3 +225,35 @@ jobs:
           path: src-tauri/target/release/bundle/macos/Synara.app
           if-no-files-found: error
           retention-days: 7
+
+  package-gate:
+    name: Desktop package gate
+    if: always()
+    needs: [changes, linux-deb, linux-arch, macos-app]
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    steps:
+      - name: Require every applicable package build
+        env:
+          CHANGES_RESULT: ${{ needs.changes.result }}
+          PACKAGES_REQUIRED: ${{ needs.changes.outputs.packages }}
+          DEB_RESULT: ${{ needs.linux-deb.result }}
+          ARCH_RESULT: ${{ needs.linux-arch.result }}
+          MACOS_RESULT: ${{ needs.macos-app.result }}
+        run: |
+          if [[ "$CHANGES_RESULT" != "success" ]]; then
+            echo "Package change detection: $CHANGES_RESULT" >&2
+            exit 1
+          fi
+
+          if [[ "$PACKAGES_REQUIRED" != "true" ]]; then
+            echo "No package-sensitive files changed; package builds are not required."
+            exit 0
+          fi
+
+          if [[ "$DEB_RESULT" != "success" || "$ARCH_RESULT" != "success" || "$MACOS_RESULT" != "success" ]]; then
+            echo "Linux .deb package: $DEB_RESULT" >&2
+            echo "Linux Arch package: $ARCH_RESULT" >&2
+            echo "macOS app bundle: $MACOS_RESULT" >&2
+            exit 1
+          fi

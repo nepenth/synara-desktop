@@ -6,15 +6,16 @@ Synara Desktop is a Tauri-based native desktop Matrix client focused on fast, se
 
 **Start here for codebase orientation:** [`CODEBASE_KNOWLEDGE_BASE.md`](CODEBASE_KNOWLEDGE_BASE.md) — architecture, feature inventory, in-progress work, critical file paths, and expansion guidance. Review it before starting new tasks in this repository (including AI-assisted work).
 
-| Area | Entry points |
-| ---- | ------------ |
-| Monorepo layout | [`docs/repository-layout.md`](docs/repository-layout.md) |
-| Desktop shell & native bridge | [`docs/desktop-modernization.md`](docs/desktop-modernization.md), [`MODERNIZATION.md`](MODERNIZATION.md) |
-| Architecture decisions | [`docs/adr/`](docs/adr/) |
-| Desktop validation & release | [`docs/build-and-release.md`](docs/build-and-release.md), [`docs/production-smoke-checklist.md`](docs/production-smoke-checklist.md), [`docs/desktop-validation-status.md`](docs/desktop-validation-status.md), [`docs/linux.md`](docs/linux.md) |
-| Shared Matrix contracts | [`synara/docs/synara-contracts.md`](synara/docs/synara-contracts.md), [`synara/docs/contracts/`](synara/docs/contracts/) |
-| App runtime (React/Vite) | [`synara/README.md`](synara/README.md), [`synara/docs/`](synara/docs/) |
-| iOS app | [`synara-ios/README.md`](synara-ios/README.md), [`synara-ios/docs/`](synara-ios/docs/) |
+| Area                          | Entry points                                                                                                                                                                                                                                     |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Monorepo layout               | [`docs/repository-layout.md`](docs/repository-layout.md)                                                                                                                                                                                         |
+| Desktop shell & native bridge | [`docs/desktop-modernization.md`](docs/desktop-modernization.md), [`MODERNIZATION.md`](MODERNIZATION.md)                                                                                                                                         |
+| Architecture decisions        | [`docs/adr/`](docs/adr/)                                                                                                                                                                                                                         |
+| Desktop validation & release  | [`docs/build-and-release.md`](docs/build-and-release.md), [`docs/production-smoke-checklist.md`](docs/production-smoke-checklist.md), [`docs/desktop-validation-status.md`](docs/desktop-validation-status.md), [`docs/linux.md`](docs/linux.md) |
+| Synapse production operations | [`docs/synapse-production-audit-runbook.md`](docs/synapse-production-audit-runbook.md)                                                                                                                                                           |
+| Shared Matrix contracts       | [`synara/docs/synara-contracts.md`](synara/docs/synara-contracts.md), [`synara/docs/contracts/`](synara/docs/contracts/)                                                                                                                         |
+| App runtime (React/Vite)      | [`synara/README.md`](synara/README.md), [`synara/docs/`](synara/docs/)                                                                                                                                                                           |
+| iOS app                       | [`synara-ios/README.md`](synara-ios/README.md), [`synara-ios/docs/`](synara-ios/docs/)                                                                                                                                                           |
 
 ## Download
 
