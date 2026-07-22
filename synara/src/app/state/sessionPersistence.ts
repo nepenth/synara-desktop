@@ -16,6 +16,7 @@ import {
   type SessionStorage,
   type SessionStore,
 } from './sessions';
+import { recordClientDiagnostic } from '../utils/clientDiagnostics';
 
 export type { NativeSessionStoreError };
 
@@ -322,6 +323,7 @@ export const persistAuthenticatedSession = async (
     freshLogin = false,
   }: SessionPersistenceOptions = {}
 ): Promise<PersistedSessionResult> => {
+  const persistenceStartedAtMs = performance.now();
   const nativeSession = toNativeSession(
     freshLogin && !session.sessionGeneration
       ? { ...session, sessionGeneration: createFreshLoginSessionGeneration() }
@@ -335,20 +337,42 @@ export const persistAuthenticatedSession = async (
     sessionGeneration: nativeSession.sessionGeneration,
   };
 
+  recordClientDiagnostic('session', 'persistence.started', {
+    freshLogin,
+    nativeStoreConfigured: Boolean(nativeSessionStore?.setSession),
+    hasRefreshToken: Boolean(nativeSession.refreshToken),
+    hasExpiryMetadata: typeof nativeSession.expiresInMs === 'number',
+  });
+
   if (nativeSessionStore?.setSession) {
+    const nativeWriteStartedAtMs = performance.now();
     try {
       if (await nativeSessionStore.setSession(nativeSession)) {
         fallbackStore.removeFallbackSession();
         setSessionBootstrapResult({ session: nativeSession, source: 'native' });
         setLastPersistedMatrixIdentity(persistedIdentity, storage);
         if (freshLogin) markPendingFreshLoginIdentity(persistedIdentity, storage);
+        recordClientDiagnostic('session', 'persistence.completed', {
+          source: 'native',
+          durationMs: performance.now() - persistenceStartedAtMs,
+          nativeWriteDurationMs: performance.now() - nativeWriteStartedAtMs,
+        });
         return {
           session: nativeSession,
           source: 'native',
         };
       }
-    } catch {
+      recordClientDiagnostic('session', 'persistence.native-write-completed', {
+        outcome: 'unavailable',
+        durationMs: performance.now() - nativeWriteStartedAtMs,
+      });
+    } catch (error) {
       nativeStoreError = NATIVE_SESSION_STORE_ERROR;
+      recordClientDiagnostic('session', 'persistence.native-write-completed', {
+        outcome: 'error',
+        durationMs: performance.now() - nativeWriteStartedAtMs,
+        errorType: error instanceof Error ? error.name : typeof error,
+      });
     }
   }
 
@@ -362,6 +386,12 @@ export const persistAuthenticatedSession = async (
   setLastPersistedMatrixIdentity(persistedIdentity, storage);
   if (freshLogin) markPendingFreshLoginIdentity(persistedIdentity, storage);
 
+  recordClientDiagnostic('session', 'persistence.completed', {
+    source: 'legacy-fallback',
+    durationMs: performance.now() - persistenceStartedAtMs,
+    nativeStoreError: Boolean(nativeStoreError),
+  });
+
   return {
     session: fallbackSession,
     source: 'legacy-fallback',
@@ -374,20 +404,38 @@ export const migrateLegacySessionToNativeAfterClientInit = async ({
   fallbackStore = fallbackSessionStore,
   bootstrapResult = getSessionBootstrapResult(),
 }: LegacySessionMigrationOptions = {}): Promise<LegacySessionMigrationResult> => {
+  const migrationStartedAtMs = performance.now();
   if (bootstrapResult.source !== 'legacy-fallback' || !bootstrapResult.session) {
+    recordClientDiagnostic('session', 'migration.completed', {
+      outcome: 'skipped',
+      durationMs: performance.now() - migrationStartedAtMs,
+    });
     return { status: 'skipped' };
   }
 
   const nativeSession = toNativeSession(bootstrapResult.session);
   if (!nativeSessionStore?.setSession) {
+    recordClientDiagnostic('session', 'migration.completed', {
+      outcome: 'native-unavailable',
+      durationMs: performance.now() - migrationStartedAtMs,
+    });
     return { status: 'native-unavailable', session: bootstrapResult.session };
   }
 
   try {
     if (!(await nativeSessionStore.setSession(nativeSession))) {
+      recordClientDiagnostic('session', 'migration.completed', {
+        outcome: 'native-unavailable',
+        durationMs: performance.now() - migrationStartedAtMs,
+      });
       return { status: 'native-unavailable', session: bootstrapResult.session };
     }
-  } catch {
+  } catch (error) {
+    recordClientDiagnostic('session', 'migration.completed', {
+      outcome: 'failed',
+      durationMs: performance.now() - migrationStartedAtMs,
+      errorType: error instanceof Error ? error.name : typeof error,
+    });
     return {
       status: 'failed',
       session: bootstrapResult.session,
@@ -397,38 +445,79 @@ export const migrateLegacySessionToNativeAfterClientInit = async ({
 
   fallbackStore.removeFallbackSession();
   setSessionBootstrapResult({ session: nativeSession, source: 'native' });
+  recordClientDiagnostic('session', 'migration.completed', {
+    outcome: 'migrated',
+    durationMs: performance.now() - migrationStartedAtMs,
+  });
   return { status: 'migrated', session: nativeSession };
 };
 
 export const reconcileExpiredPersistedSession = async (
   options: SessionPersistenceOptions = {}
 ): Promise<SessionBootstrapResult> => {
+  const reconciliationStartedAtMs = performance.now();
   const bootstrap = getSessionBootstrapResult();
-  if (!bootstrap.session || !isPersistedSessionExpired(bootstrap.session)) {
+  const expired = Boolean(bootstrap.session && isPersistedSessionExpired(bootstrap.session));
+  if (!expired) {
+    recordClientDiagnostic('session', 'expired-session.reconciliation-completed', {
+      outcome: bootstrap.session ? 'not-expired' : 'no-session',
+      durationMs: performance.now() - reconciliationStartedAtMs,
+      hasSession: Boolean(bootstrap.session),
+      expired,
+    });
     return bootstrap;
   }
 
-  await clearPersistedSessions(options);
-  return { source: 'none' };
+  try {
+    await clearPersistedSessions(options);
+    recordClientDiagnostic('session', 'expired-session.reconciliation-completed', {
+      outcome: 'expired-cleared',
+      durationMs: performance.now() - reconciliationStartedAtMs,
+      hasSession: true,
+      expired,
+    });
+    return { source: 'none' };
+  } catch (error) {
+    recordClientDiagnostic('session', 'expired-session.reconciliation-completed', {
+      outcome: 'error',
+      durationMs: performance.now() - reconciliationStartedAtMs,
+      hasSession: true,
+      expired,
+      errorType: error instanceof Error ? error.name : typeof error,
+    });
+    throw error;
+  }
 };
 
 export const clearPersistedSessions = async ({
   nativeSessionStore,
   fallbackStore = fallbackSessionStore,
 }: SessionPersistenceOptions = {}): Promise<void> => {
+  const clearStartedAtMs = performance.now();
+  let nativeRemovalError = false;
+  let matrixStoreClearSuccess = false;
   clearSessionBootstrap();
 
   try {
     await nativeSessionStore?.removeSession?.();
   } catch {
+    nativeRemovalError = true;
     // Logout and local data reset must continue even if the native store is unavailable.
   }
 
   fallbackStore.removeFallbackSession();
   try {
     await clearMatrixLocalStores();
+    matrixStoreClearSuccess = true;
   } catch {
     // Logout must continue even if IndexedDB cleanup is unavailable.
   }
   clearSessionBootstrap();
+  recordClientDiagnostic('session', 'persisted-session-clear.completed', {
+    outcome: 'completed',
+    durationMs: performance.now() - clearStartedAtMs,
+    nativeStoreConfigured: Boolean(nativeSessionStore?.removeSession),
+    nativeRemovalError,
+    matrixStoreClearSuccess,
+  });
 };

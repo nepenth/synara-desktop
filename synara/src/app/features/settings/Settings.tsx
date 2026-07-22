@@ -30,10 +30,12 @@ import { Notifications } from './notifications';
 import { Devices } from './devices';
 import { EmojisStickers } from './emojis-stickers';
 import { DeveloperTools } from './developer-tools';
+import { Diagnostics } from './diagnostics';
 import { About } from './about';
 import { UseStateProvider } from '../../components/UseStateProvider';
 import { stopPropagation } from '../../utils/keyboard';
 import { LogoutDialog } from '../../components/LogoutDialog';
+import { isDesktopPlatform } from '../../platform';
 
 export enum SettingsPages {
   GeneralPage,
@@ -41,6 +43,7 @@ export enum SettingsPages {
   NotificationPage,
   DevicesPage,
   EmojisStickersPage,
+  DiagnosticsPage,
   DeveloperToolsPage,
   AboutPage,
 }
@@ -79,6 +82,15 @@ const useSettingsMenuItems = (): SettingsMenuItem[] =>
         name: 'Emojis & Stickers',
         icon: Icons.Smile,
       },
+      ...(isDesktopPlatform()
+        ? [
+            {
+              page: SettingsPages.DiagnosticsPage,
+              name: 'Diagnostics',
+              icon: Icons.File,
+            },
+          ]
+        : []),
       {
         page: SettingsPages.DeveloperToolsPage,
         name: 'Developer Tools',
@@ -225,6 +237,9 @@ export function Settings({ initialPage, requestClose }: SettingsProps) {
       )}
       {activePage === SettingsPages.EmojisStickersPage && (
         <EmojisStickers requestClose={handlePageRequestClose} />
+      )}
+      {activePage === SettingsPages.DiagnosticsPage && (
+        <Diagnostics requestClose={handlePageRequestClose} />
       )}
       {activePage === SettingsPages.DeveloperToolsPage && (
         <DeveloperTools requestClose={handlePageRequestClose} />

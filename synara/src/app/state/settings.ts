@@ -56,6 +56,11 @@ export interface DesktopPlatformSettings {
   desktopShortcutShow: string;
   desktopShortcutLater: string;
   desktopShortcutNotifications: string;
+  desktopDiagnosticsEnabled: boolean;
+  desktopDiagnosticsPerformance: boolean;
+  desktopDiagnosticsSession: boolean;
+  desktopDiagnosticsRoomState: boolean;
+  desktopDiagnosticsOverlay: boolean;
 }
 
 export type PlatformSettings = DesktopPlatformSettings;
@@ -117,6 +122,11 @@ export const defaultDesktopPlatformSettings: DesktopPlatformSettings = {
   desktopShortcutShow: 'CmdOrCtrl+Shift+C',
   desktopShortcutLater: 'CmdOrCtrl+Shift+L',
   desktopShortcutNotifications: 'CmdOrCtrl+Shift+N',
+  desktopDiagnosticsEnabled: false,
+  desktopDiagnosticsPerformance: false,
+  desktopDiagnosticsSession: false,
+  desktopDiagnosticsRoomState: false,
+  desktopDiagnosticsOverlay: false,
 };
 
 export const defaultPlatformSettings: PlatformSettings = {

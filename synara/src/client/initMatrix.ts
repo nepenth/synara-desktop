@@ -37,6 +37,7 @@ import { platformSessionStore } from '../app/platform';
 import { clearNotificationCaches } from '../app/notifications/notificationCaches';
 import { assertCryptoStoreContinuity, CryptoStoreContinuityError } from './cryptoStoreContinuity';
 import { ensureVerificationRequestInbox } from './verificationRequestInbox';
+import { recordClientDiagnostic } from '../app/utils/clientDiagnostics';
 
 export const REFRESH_BEFORE_EXPIRY_MS = 60_000;
 
@@ -98,18 +99,40 @@ export const refreshAndPersistSession = async (
     nativeSessionStore,
   }: RefreshAndPersistSessionDeps
 ): Promise<RefreshAndPersistResult> => {
-  const response = await mx.refreshToken(refreshToken);
-  applyRefreshedCredentialsToClient(mx, response);
-  const refreshedSession: MatrixClientSession = {
-    ...toRefreshedSession(session, response),
-    storedAtMs: Date.now(),
-  };
-  await persistSession(refreshedSession, { nativeSessionStore });
-  pushSession(refreshedSession.baseUrl, refreshedSession.accessToken);
-  return {
-    tokens: toAccessTokens(response),
-    session: refreshedSession,
-  };
+  const startedAtMs = performance.now();
+  let refreshPhase = 'request';
+  recordClientDiagnostic('session', 'token-refresh.started');
+  try {
+    const response = await mx.refreshToken(refreshToken);
+    const refreshedAtMs = performance.now();
+    refreshPhase = 'apply-credentials';
+    applyRefreshedCredentialsToClient(mx, response);
+    const refreshedSession: MatrixClientSession = {
+      ...toRefreshedSession(session, response),
+      storedAtMs: Date.now(),
+    };
+    refreshPhase = 'persist';
+    await persistSession(refreshedSession, { nativeSessionStore });
+    refreshPhase = 'service-worker';
+    pushSession(refreshedSession.baseUrl, refreshedSession.accessToken);
+    recordClientDiagnostic('session', 'token-refresh.completed', {
+      outcome: 'persisted',
+      requestDurationMs: refreshedAtMs - startedAtMs,
+      durationMs: performance.now() - startedAtMs,
+    });
+    return {
+      tokens: toAccessTokens(response),
+      session: refreshedSession,
+    };
+  } catch (error) {
+    recordClientDiagnostic('session', 'token-refresh.completed', {
+      outcome: 'error',
+      phase: refreshPhase,
+      durationMs: performance.now() - startedAtMs,
+      errorType: error instanceof Error ? error.name : typeof error,
+    });
+    throw error;
+  }
 };
 
 export const createTokenRefreshFunction = (
@@ -197,24 +220,51 @@ const startMatrixClient = async (
   session: MatrixClientSession,
   options: CreateMatrixClientOptions = {}
 ): Promise<MatrixClient> => {
+  const startupStartedAtMs = performance.now();
+  let initializationPhase = 'store-startup';
   const refreshDeps = session.refreshToken
     ? { ...defaultRefreshDeps(), ...options.refreshDeps }
     : undefined;
   const mx = createMatrixClient(session, { refreshDeps });
+  recordClientDiagnostic('session', 'matrix-client.initialization-started', {
+    hasRefreshToken: Boolean(session.refreshToken),
+    fallbackSdkStores: Boolean(session.fallbackSdkStores),
+  });
   try {
+    const storeStartedAtMs = performance.now();
     await mx.store.startup();
+    recordClientDiagnostic('session', 'matrix-store.startup-completed', {
+      durationMs: performance.now() - storeStartedAtMs,
+    });
+    initializationPhase = 'crypto-initialization';
+    const cryptoStartedAtMs = performance.now();
     await mx.initRustCrypto();
+    recordClientDiagnostic('session', 'matrix-crypto.initialization-completed', {
+      durationMs: performance.now() - cryptoStartedAtMs,
+    });
+    initializationPhase = 'crypto-continuity';
+    const continuityStartedAtMs = performance.now();
     const continuity = await assertCryptoStoreContinuity(mx, {
       userId: session.userId,
       deviceId: session.deviceId,
       allowMissingServerDevice: options.allowMissingServerDevice,
     });
+    recordClientDiagnostic('session', 'crypto-continuity.completed', {
+      outcome: continuity,
+      durationMs: performance.now() - continuityStartedAtMs,
+    });
+    initializationPhase = 'continuity-finalization';
     if (continuity === 'matched') {
       clearPendingFreshLoginIdentity(session);
     } else {
       pendingFreshLoginContinuity.set(mx, session);
     }
+    initializationPhase = 'verification-inbox';
     ensureVerificationRequestInbox(mx);
+    recordClientDiagnostic('session', 'matrix-client.initialization-completed', {
+      outcome: 'ready-to-start',
+      durationMs: performance.now() - startupStartedAtMs,
+    });
     return mx;
   } catch (error) {
     // Closes the Rust OlmMachine/IndexedDB handle without deleting any data.
@@ -222,6 +272,12 @@ const startMatrixClient = async (
     // sync cache; it has no supported non-destructive close API. Do not reach
     // into its private backend or delete either crypto store on a safety error.
     mx.stopClient();
+    recordClientDiagnostic('session', 'matrix-client.initialization-completed', {
+      outcome: 'error',
+      phase: initializationPhase,
+      durationMs: performance.now() - startupStartedAtMs,
+      errorType: error instanceof Error ? error.name : typeof error,
+    });
     throw error;
   }
 };
@@ -253,8 +309,13 @@ export const initClient = async (
     startMatrixClient: startClient = startMatrixClient,
   }: InitClientDeps = {}
 ): Promise<MatrixClient> => {
+  const initStartedAtMs = performance.now();
   const freshLogin = isFreshLoginIdentity(session);
   const identityCleared = freshLogin ? await clearStoresForIdentityChange(session) : false;
+  recordClientDiagnostic('session', 'matrix-client.bootstrap-decision', {
+    freshLogin,
+    identityStoresCleared: identityCleared,
+  });
   if (identityCleared) {
     clearNotificationCaches();
   }
@@ -262,8 +323,17 @@ export const initClient = async (
   try {
     const client = await startClient(session, { allowMissingServerDevice: freshLogin });
     recordBootstrappedMatrixIdentity(session, setLastBootstrapped);
+    recordClientDiagnostic('session', 'matrix-client.bootstrap-completed', {
+      outcome: 'initialized',
+      durationMs: performance.now() - initStartedAtMs,
+    });
     return client;
   } catch (error) {
+    recordClientDiagnostic('session', 'matrix-client.bootstrap-completed', {
+      outcome: 'error',
+      durationMs: performance.now() - initStartedAtMs,
+      errorType: error instanceof Error ? error.name : typeof error,
+    });
     if (isCryptoAccountMismatchError(error)) {
       throw new CryptoStoreContinuityError(
         session.userId,
@@ -284,12 +354,23 @@ export const waitForInitialSyncPrepared = async (
   mx: MatrixClient,
   timeoutMs = POST_START_CRYPTO_CONTINUITY_TIMEOUT_MS
 ): Promise<void> => {
-  if (mx.getSyncState() === SyncState.Prepared) return;
+  const startedAtMs = performance.now();
+  if (mx.getSyncState() === SyncState.Prepared) {
+    recordClientDiagnostic('session', 'initial-sync.prepared', {
+      outcome: 'already-prepared',
+      durationMs: 0,
+    });
+    return;
+  }
 
   await new Promise<void>((resolve, reject) => {
     const handleSync = (state: SyncState) => {
       if (state !== SyncState.Prepared) return;
       cleanup();
+      recordClientDiagnostic('session', 'initial-sync.prepared', {
+        outcome: 'prepared',
+        durationMs: performance.now() - startedAtMs,
+      });
       resolve();
     };
     const cleanup = () => {
@@ -299,6 +380,10 @@ export const waitForInitialSyncPrepared = async (
 
     const timer = setTimeout(() => {
       cleanup();
+      recordClientDiagnostic('session', 'initial-sync.prepared', {
+        outcome: 'timeout',
+        durationMs: performance.now() - startedAtMs,
+      });
       reject(new Error('Initial sync did not become ready for the crypto continuity check.'));
     }, timeoutMs);
     mx.on(ClientEvent.Sync, handleSync);
@@ -360,15 +445,43 @@ export const startClient = async (
     confirmContinuity = confirmFreshLoginCryptoContinuity,
   }: StartClientContinuityDeps = {}
 ) => {
+  const startCallStartedAtMs = performance.now();
   const pendingSession = pendingSessionOverride ?? pendingFreshLoginContinuity.get(mx);
+  let clientStartCompleted = false;
+  recordClientDiagnostic('session', 'matrix-client.start-requested', {
+    continuityConfirmationPending: Boolean(pendingSession),
+  });
   try {
     await mx.startClient({
       lazyLoadMembers: true,
     });
+    clientStartCompleted = true;
+    recordClientDiagnostic('session', 'matrix-client.start-call-completed', {
+      outcome: 'started',
+      durationMs: performance.now() - startCallStartedAtMs,
+      continuityConfirmationPending: Boolean(pendingSession),
+    });
     if (!pendingSession) return;
     await waitForPrepared(mx);
+    const continuityStartedAtMs = performance.now();
     await confirmContinuity(mx, pendingSession);
+    recordClientDiagnostic('session', 'crypto-continuity.post-sync-completed', {
+      outcome: 'matched',
+      durationMs: performance.now() - continuityStartedAtMs,
+    });
   } catch (error) {
+    recordClientDiagnostic(
+      'session',
+      clientStartCompleted
+        ? 'crypto-continuity.post-sync-completed'
+        : 'matrix-client.start-call-completed',
+      {
+        outcome: 'error',
+        durationMs: performance.now() - startCallStartedAtMs,
+        continuityConfirmationPending: Boolean(pendingSession),
+        errorType: error instanceof Error ? error.name : typeof error,
+      }
+    );
     if (!pendingSession) throw error;
     mx.stopClient();
     throw error instanceof CryptoStoreContinuityError
