@@ -17,6 +17,7 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
+      - run: npm run check:release-updater
       - run: npx playwright install --with-deps chromium
         working-directory: synara
       - run: npm run typecheck
@@ -84,6 +85,7 @@ jobs:
           npm run check:quality-gates
           npm run check:synapse-harness
           npm run check:production-smoke
+          npm run check:release-updater
           node --test scripts/__tests__/*.test.mjs
       - run: |
           cargo check --locked
@@ -201,6 +203,19 @@ const inspect = (overrides = {}) =>
 
 test("accepts complete CI and exact-tag release gates", () => {
   assert.deepEqual(inspect(), { ok: true, errors: [] });
+});
+
+test("rejects missing release-updater validation before and after tagging", () => {
+  for (const [override, workflow] of [
+    ["ciWorkflow", ciWorkflow],
+    ["releaseWorkflow", releaseWorkflow],
+  ]) {
+    const result = inspect({
+      [override]: workflow.replace("npm run check:release-updater", "true"),
+    });
+    assert.equal(result.ok, false, override);
+    assert.match(result.errors.join("\n"), /check:release-updater/);
+  }
 });
 
 test("rejects missing real-layout timeline execution", () => {

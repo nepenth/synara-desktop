@@ -42,10 +42,14 @@ const readyInputs = {
       env:
         SYNARA_UPDATER_PUBKEY: \${{ vars.SYNARA_UPDATER_PUBKEY }}
         SYNARA_UPDATER_ENDPOINT: \${{ vars.SYNARA_UPDATER_ENDPOINT }}
-    env:
-      APPLE_PASSWORD: \${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-      TAURI_SIGNING_PRIVATE_KEY: \${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: \${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+    - name: Build macOS universal release packages
+      run: npm run tauri build -- --target universal-apple-darwin
+      env:
+        APPLE_ID: \${{ secrets.APPLE_ID }}
+        APPLE_PASSWORD: \${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+        APPLE_TEAM_ID: \${{ secrets.APPLE_TEAM_ID }}
+        TAURI_SIGNING_PRIVATE_KEY: \${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        TAURI_SIGNING_PRIVATE_KEY_PASSWORD: \${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
     files: |
       src-tauri/target/universal-apple-darwin/release/bundle/macos/*.sig
       latest.json
@@ -100,18 +104,20 @@ test("release updater gate requires packaged localhost remote capability", () =>
   assert.match(result.errors.join("\n"), /packaged localhost webview origin/);
 });
 
-test("release updater gate requires Tauri app notarization credentials", () => {
-  const result = inspectReleaseUpdaterReadiness({
-    ...readyInputs,
-    releaseWorkflow: readyInputs.releaseWorkflow.replace(
-      /\s*APPLE_PASSWORD:.*\n/,
-      "\n",
-    ),
-    requireEnabled: true,
-  });
+test("non-release gate requires all Apple credentials on the Tauri build step", () => {
+  for (const variable of ["APPLE_ID", "APPLE_PASSWORD", "APPLE_TEAM_ID"]) {
+    const result = inspectReleaseUpdaterReadiness({
+      ...readyInputs,
+      releaseWorkflow: readyInputs.releaseWorkflow.replace(
+        new RegExp(`\\s*${variable}:.*\\n`),
+        "\n",
+      ),
+      requireEnabled: false,
+    });
 
-  assert.equal(result.ok, false);
-  assert.match(result.errors.join("\n"), /APPLE_PASSWORD/);
+    assert.equal(result.ok, false, variable);
+    assert.match(result.errors.join("\n"), /Tauri build step/, variable);
+  }
 });
 
 test("release updater gate fails when release config forces updater artifacts off", () => {
@@ -125,7 +131,7 @@ test("release updater gate fails when release config forces updater artifacts of
   assert.match(result.errors.join("\n"), /createUpdaterArtifacts to false/);
 });
 
-test("release updater gate requires workflow updater channel materialization when config is disabled", () => {
+test("non-release gate requires workflow updater channel materialization when config is disabled", () => {
   const result = inspectReleaseUpdaterReadiness({
     ...readyInputs,
     tauriConfig: {
@@ -144,9 +150,9 @@ test("release updater gate requires workflow updater channel materialization whe
     requireEnabled: false,
   });
 
-  assert.equal(result.ok, true);
+  assert.equal(result.ok, false);
   assert.match(
-    result.warnings.join("\n"),
+    result.errors.join("\n"),
     /configure the release updater channel/,
   );
 });
@@ -222,7 +228,7 @@ test("non-release check warns instead of failing while updater is intentionally 
     desktopPackage: {
       dependencies: {},
     },
-    releaseWorkflow: '{"bundle":{"createUpdaterArtifacts":false}}',
+    releaseWorkflow: readyInputs.releaseWorkflow,
     requireEnabled: false,
   });
 

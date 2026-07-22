@@ -71,6 +71,9 @@ jobs:
       - name: Check production smoke contract
         run: npm run check:production-smoke
 
+      - name: Check release updater workflow contract
+        run: npm run check:release-updater
+
       - name: Test repository delivery scripts
         run: node --test scripts/__tests__/*.test.mjs
 

@@ -25,16 +25,57 @@ const isHttpsEndpoint = (endpoint) => {
 
 const hasWorkflowPattern = (workflow, pattern) => pattern.test(workflow);
 
+const workflowStepContaining = (workflow, command) => {
+  const lines = workflow.split(/\r?\n/);
+  const commandIndex = lines.findIndex((line) => line.includes(command));
+  if (commandIndex === -1) return "";
+
+  let start = commandIndex;
+  let stepIndent;
+  while (start >= 0) {
+    const match = lines[start].match(/^(\s*)-\s+(?:name|run|uses):/);
+    if (match) {
+      stepIndent = match[1].length;
+      break;
+    }
+    start -= 1;
+  }
+  if (stepIndent === undefined) return "";
+
+  let end = start + 1;
+  while (end < lines.length) {
+    const match = lines[end].match(/^(\s*)-\s+(?:name|run|uses):/);
+    if (match && match[1].length === stepIndent) break;
+    end += 1;
+  }
+  return lines.slice(start, end).join("\n");
+};
+
 const workflowConfiguresUpdaterChannel = (workflow) =>
   hasWorkflowPattern(workflow, /configure-release-updater\.mjs/) &&
   hasWorkflowPattern(workflow, /SYNARA_UPDATER_PUBKEY/) &&
   hasWorkflowPattern(workflow, /SYNARA_UPDATER_ENDPOINT/);
 
-const workflowConfiguresTauriNotarization = (workflow) =>
-  hasWorkflowPattern(
+const workflowConfiguresTauriNotarization = (workflow) => {
+  const buildStep = workflowStepContaining(
     workflow,
-    /APPLE_PASSWORD:\s*\$\{\{\s*secrets\.APPLE_APP_SPECIFIC_PASSWORD\s*\}\}/,
+    "npm run tauri build -- --target universal-apple-darwin",
   );
+  return (
+    hasWorkflowPattern(
+      buildStep,
+      /APPLE_ID:\s*\$\{\{\s*secrets\.APPLE_ID\s*\}\}/,
+    ) &&
+    hasWorkflowPattern(
+      buildStep,
+      /APPLE_PASSWORD:\s*\$\{\{\s*secrets\.APPLE_APP_SPECIFIC_PASSWORD\s*\}\}/,
+    ) &&
+    hasWorkflowPattern(
+      buildStep,
+      /APPLE_TEAM_ID:\s*\$\{\{\s*secrets\.APPLE_TEAM_ID\s*\}\}/,
+    )
+  );
+};
 
 const workflowPublishesGeneratedUpdaterMetadata = (workflow) =>
   hasWorkflowPattern(workflow, /updater-metadata:/) &&
@@ -227,7 +268,7 @@ export function inspectReleaseUpdaterReadiness({
       /createUpdaterArtifacts["']?\s*:\s*false/,
     )
   ) {
-    report(
+    errors.push(
       `${releaseWorkflowPath} still overrides bundle.createUpdaterArtifacts to false.`,
     );
   }
@@ -236,43 +277,43 @@ export function inspectReleaseUpdaterReadiness({
     updaterArtifacts !== true &&
     !workflowConfiguresUpdaterChannel(releaseWorkflow)
   ) {
-    report(
+    errors.push(
       `${releaseWorkflowPath} must configure the release updater channel before strict validation.`,
     );
   }
 
   if (!hasWorkflowPattern(releaseWorkflow, /TAURI_SIGNING_PRIVATE_KEY/)) {
-    report(
+    errors.push(
       `${releaseWorkflowPath} must expose TAURI_SIGNING_PRIVATE_KEY to release builds.`,
     );
   }
 
   if (!workflowConfiguresTauriNotarization(releaseWorkflow)) {
-    report(
-      `${releaseWorkflowPath} must expose APPLE_APP_SPECIFIC_PASSWORD as APPLE_PASSWORD so Tauri notarizes the app bundle.`,
+    errors.push(
+      `${releaseWorkflowPath} must expose APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD as APPLE_PASSWORD, and APPLE_TEAM_ID on the Tauri build step so it notarizes the app bundle.`,
     );
   }
 
   if (
     !hasWorkflowPattern(releaseWorkflow, /TAURI_SIGNING_PRIVATE_KEY_PASSWORD/)
   ) {
-    report(
+    errors.push(
       `${releaseWorkflowPath} must expose TAURI_SIGNING_PRIVATE_KEY_PASSWORD to release builds.`,
     );
   }
 
   if (!hasWorkflowPattern(releaseWorkflow, /\.sig/)) {
-    report(`${releaseWorkflowPath} must upload updater signature sidecars.`);
+    errors.push(`${releaseWorkflowPath} must upload updater signature sidecars.`);
   }
 
   if (!workflowPublishesGeneratedUpdaterMetadata(releaseWorkflow)) {
-    report(
+    errors.push(
       `${releaseWorkflowPath} must generate and upload signed updater metadata from macOS updater artifacts.`,
     );
   }
 
   if (!workflowVerifiesMacosDistributableContents(releaseWorkflow)) {
-    report(
+    errors.push(
       `${releaseWorkflowPath} must verify the mounted macOS DMG app and extracted updater archive before publishing.`,
     );
   }
@@ -315,7 +356,7 @@ function main() {
     );
   } else {
     console.log(
-      "[release-updater] updater is disabled; run with --require-enabled to enforce release readiness.",
+      "[release-updater] release workflow contract is valid; runtime updater configuration remains disabled until release materialization.",
     );
   }
 }

@@ -97,6 +97,7 @@ jobs:
           npm run check:quality-gates
           npm run check:synapse-harness
           npm run check:production-smoke
+          npm run check:release-updater
           node --test scripts/__tests__/*.test.mjs
 
       - name: Check and test Rust desktop shell
@@ -434,6 +435,8 @@ jobs:
         run: npm run tauri build -- --target universal-apple-darwin --bundles app,dmg --config "{\"bundle\":{\"macOS\":{\"signingIdentity\":\"${APPLE_SIGNING_IDENTITY}\",\"providerShortName\":\"${APPLE_TEAM_ID}\"}}}"
         env:
           NODE_OPTIONS: "--max_old_space_size=4096"
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
