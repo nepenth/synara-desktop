@@ -94,7 +94,7 @@ final class TimelineServiceTests: XCTestCase {
             RoomTypingPresentation.text(
                 for: ["@automation:matrix.org", "@alice:matrix.org", "@bob:matrix.org"]
             ),
-            "alice, bob, and 1 more are typing..."
+            "alice, automation, and 1 more are typing..."
         )
         XCTAssertNil(RoomTypingPresentation.text(for: []))
     }
