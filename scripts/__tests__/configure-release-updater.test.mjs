@@ -76,10 +76,14 @@ test("release updater config satisfies strict release readiness inspection", () 
         env:
           SYNARA_UPDATER_PUBKEY: \${{ vars.SYNARA_UPDATER_PUBKEY }}
           SYNARA_UPDATER_ENDPOINT: \${{ vars.SYNARA_UPDATER_ENDPOINT }}
-      env:
-        APPLE_PASSWORD: \${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-        TAURI_SIGNING_PRIVATE_KEY: \${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-        TAURI_SIGNING_PRIVATE_KEY_PASSWORD: \${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+      - name: Build macOS universal release packages
+        run: npm run tauri build -- --target universal-apple-darwin
+        env:
+          APPLE_ID: \${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: \${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: \${{ secrets.APPLE_TEAM_ID }}
+          TAURI_SIGNING_PRIVATE_KEY: \${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: \${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
       files: |
         src-tauri/target/universal-apple-darwin/release/bundle/macos/*.sig
         latest.json
