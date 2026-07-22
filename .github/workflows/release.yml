@@ -136,7 +136,7 @@ jobs:
 
       - name: Upload exact-tag iOS result bundles
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: exact-tag-ios-test-results
           path: /private/tmp/synara-ios-results/*.xcresult
@@ -246,7 +246,7 @@ jobs:
           NODE_OPTIONS: "--max_old_space_size=4096"
 
       - name: Upload Linux .deb for release
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: gh-release-linux-deb
           path: src-tauri/target/release/bundle/deb/Synara_*.deb
@@ -313,7 +313,7 @@ jobs:
         run: scripts/build-pacman-repo.sh
 
       - name: Upload pacman repository assets
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: synara-pacman-repo-assets
           path: dist/pacman-repo/*
@@ -490,7 +490,7 @@ jobs:
           spctl --assess --type open --context context:primary-signature --verbose=4 src-tauri/target/universal-apple-darwin/release/bundle/dmg/Synara_*.dmg
 
       - name: Collect macOS updater artifacts
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: macos-updater-artifacts
           if-no-files-found: error
@@ -499,7 +499,7 @@ jobs:
             src-tauri/target/universal-apple-darwin/release/bundle/macos/*.tar.gz.sig
 
       - name: Upload macOS release assets for GH release
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: gh-release-macos
           path: |
@@ -546,7 +546,7 @@ jobs:
             --output latest.json
 
       - name: Upload signed updater metadata for GH release
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: gh-release-updater
           path: latest.json
@@ -789,7 +789,7 @@ jobs:
 
       - name: Upload TestFlight diagnostics
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ios-testflight-upload-${{ github.run_attempt }}
           path: ${{ runner.temp }}/synara-ios-testflight-diagnostics
@@ -850,7 +850,7 @@ jobs:
 
       - name: Upload TestFlight processing diagnostics
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ios-testflight-processing-${{ github.run_attempt }}
           path: ${{ runner.temp }}/synara-ios-testflight-diagnostics
