@@ -101,7 +101,7 @@ You can also react to this prompt:
 
   assert.match(prompt?.body ?? '', /Plain HTTP URL/);
   assert.equal(prompt?.commandPreview, 'set -euo pipefail');
-  assert.match(prompt?.command ?? '', /camofox-browser\.whyland\.com/);
+  assert.match(prompt?.command ?? '', /browser-control\.example\.com/);
   assert.match(prompt?.command ?? '', /python3 - <<'PY'/);
   assert.match(prompt?.command ?? '', /json\.load/);
   assert.doesNotMatch(prompt?.command ?? '', /Reason:/);
