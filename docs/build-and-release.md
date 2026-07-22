@@ -132,11 +132,16 @@ npm run bump:version -- X.Y.Z --ios-build X.Y.Z
    - Linux `.deb`.
    - Arch-family `synara-desktop-bin` package plus fixed `pacman-repo` release
      assets (`synara.db`, `synara.files`, and package file).
-   - iOS signed archive uploaded to internal TestFlight.
+   - iOS signed archive uploaded to internal TestFlight, followed by an
+     App Store Connect gate that requires the exact build to be valid and in
+     beta testing for every configured internal group.
 6. Only after every build and verification passes, the workflow creates the
    versioned GitHub Release and updates the fixed pacman repository through the
    `production-release` environment approval.
-7. Verify the processed TestFlight build and hosted macOS `latest.json`.
+7. Confirm the workflow's TestFlight state snapshot and hosted macOS
+   `latest.json`. Manual App Store Connect inspection is confirmatory; the
+   workflow already fails unless Apple reports the exact build as
+   `IN_BETA_TESTING`.
 8. Verify the fixed pacman repo URL:
 
 ```text
