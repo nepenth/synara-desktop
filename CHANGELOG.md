@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- Bumped coordinated macOS, Linux, and iOS release metadata to `1.2.59` after
+  the `1.2.58` iOS build was promoted to internal TestFlight testing.
+- Added opt-in, privacy-filtered desktop diagnostics for performance, session
+  persistence, room state and positioning, recent-room organization, and an
+  on-screen performance overlay, with bounded local retention and manual
+  export controls.
+- Stabilized iOS unread/read-marker positioning and variable-height timeline
+  anchor restoration by deferring placement until layout settles and using
+  view-space cell geometry consistently.
+- Restored Tauri app-bundle notarization credentials to the production macOS
+  build and made PR/exact-tag validation fail early when the updater,
+  notarization, signing, metadata, or distributable-verification contract is
+  incomplete.
 - Bumped coordinated macOS, Linux, and iOS release metadata to `1.2.34`.
 - Activated native desktop spell checking when the shared composer receives
   focus: macOS now enables AppKit continuous spell checking on the active

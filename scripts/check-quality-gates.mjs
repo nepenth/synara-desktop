@@ -350,6 +350,20 @@ export function inspectQualityGates({
     }
   }
 
+  for (const [jobLines, label] of [
+    [ciJobs.get("validate"), "CI desktop validation"],
+    [
+      releaseJobs.get("exact-tag-desktop-quality"),
+      "Exact-tag desktop validation",
+    ],
+  ]) {
+    if (!hasRequiredCommandStep(jobLines, "npm run check:release-updater")) {
+      errors.push(
+        `${label} must execute npm run check:release-updater at repository root.`,
+      );
+    }
+  }
+
   const synapseError = synapseIntegrationJobError(
     ciJobs.get("synapse-integration")
   );
