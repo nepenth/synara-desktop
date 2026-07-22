@@ -408,7 +408,7 @@ tracked in docs, contracts, and functionality matrices instead.
 4. **Hash router:** Enabled by default — deep links use `#/` paths.
 5. **Semantic release:** Configured on `dev` branch in `synara/package.json`; desktop uses `bump-version.mjs`.
 6. **Former submodule:** `synara/` is inline-tracked; no `.gitmodules`.
-7. **Provenance:** AGPL derived from prior upstream lineage (LegacyClient-adjacent stack).
+7. **Provenance:** AGPL-derived codebase; preserve the repository license and provenance notices.
 
 ---
 
