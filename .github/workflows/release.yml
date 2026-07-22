@@ -552,12 +552,15 @@ jobs:
           path: latest.json
           if-no-files-found: error
 
-  ios-testflight:
-    name: iOS internal TestFlight release
+  ios-testflight-upload:
+    name: Upload iOS internal TestFlight build
     if: startsWith(github.ref_name, 'v')
     needs: [quality-gate]
     runs-on: macos-26
     timeout-minutes: 45
+    outputs:
+      marketing_version: ${{ steps.upload_ios.outputs.marketing_version }}
+      build_number: ${{ steps.upload_ios.outputs.build_number }}
     environment:
       name: testflight
       url: https://appstoreconnect.apple.com/apps
@@ -589,6 +592,7 @@ jobs:
           SYNARA_ASC_ISSUER_ID: ${{ secrets.SYNARA_ASC_ISSUER_ID }}
           SYNARA_IOS_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           SYNARA_PUSH_GATEWAY_URL: ${{ vars.SYNARA_PUSH_GATEWAY_URL }}
+          SYNARA_TESTFLIGHT_INTERNAL_GROUP_IDS: ${{ vars.SYNARA_TESTFLIGHT_INTERNAL_GROUP_IDS }}
         run: |
           missing=()
           for name in \
@@ -600,7 +604,8 @@ jobs:
             SYNARA_ASC_KEY_ID \
             SYNARA_ASC_ISSUER_ID \
             SYNARA_IOS_TEAM_ID \
-            SYNARA_PUSH_GATEWAY_URL; do
+            SYNARA_PUSH_GATEWAY_URL \
+            SYNARA_TESTFLIGHT_INTERNAL_GROUP_IDS; do
             if [[ -z "${!name}" ]]; then
               missing+=("$name")
             fi
@@ -751,12 +756,14 @@ jobs:
           echo "SYNARA_CI_ASC_KEY_PATH=$api_key_path" >> "$GITHUB_ENV"
 
       - name: Archive and upload TestFlight build
+        id: upload_ios
         env:
           SYNARA_ASC_KEY_ID: ${{ secrets.SYNARA_ASC_KEY_ID }}
           SYNARA_ASC_ISSUER_ID: ${{ secrets.SYNARA_ASC_ISSUER_ID }}
           SYNARA_IOS_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           SYNARA_PUSH_GATEWAY_URL: ${{ vars.SYNARA_PUSH_GATEWAY_URL }}
           SYNARA_TESTFLIGHT_INTERNAL_ONLY: ${{ vars.SYNARA_TESTFLIGHT_INTERNAL_ONLY || 'true' }}
+          SYNARA_IOS_DIAGNOSTICS_DIR: ${{ runner.temp }}/synara-ios-testflight-diagnostics
         run: synara-ios/scripts/upload-testflight-internal.sh
 
       - name: Clean signing material
@@ -766,7 +773,7 @@ jobs:
           if [[ -n "${SYNARA_CI_KEYCHAIN_PATH:-}" ]]; then
             security delete-keychain "$SYNARA_CI_KEYCHAIN_PATH" >/dev/null 2>&1 || true
           fi
-          rm -f \
+          for cleanup_path in \
             "${SYNARA_CI_CERTIFICATE_PATH:-}" \
             "${SYNARA_CI_ASC_KEY_PATH:-}" \
             "${SYNARA_IOS_PROVISIONING_PROFILE_PATH:-}" \
@@ -774,7 +781,81 @@ jobs:
             "${SYNARA_CI_APP_PROFILE_SOURCE:-}" \
             "${SYNARA_CI_APP_PROFILE_PLIST:-}" \
             "${SYNARA_CI_NOTIFICATION_PROFILE_SOURCE:-}" \
-            "${SYNARA_CI_NOTIFICATION_PROFILE_PLIST:-}"
+            "${SYNARA_CI_NOTIFICATION_PROFILE_PLIST:-}"; do
+            if [[ -n "$cleanup_path" ]]; then
+              rm -f -- "$cleanup_path"
+            fi
+          done
+
+      - name: Upload TestFlight diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ios-testflight-upload-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/synara-ios-testflight-diagnostics
+          if-no-files-found: warn
+          retention-days: 30
+
+  ios-testflight:
+    name: Verify and promote internal TestFlight build
+    if: startsWith(github.ref_name, 'v')
+    needs: [ios-testflight-upload]
+    runs-on: ubuntu-22.04
+    timeout-minutes: 50
+    environment:
+      name: testflight
+      url: https://appstoreconnect.apple.com/apps
+    permissions:
+      contents: read
+      deployments: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+
+      - name: Prepare App Store Connect API key
+        shell: bash
+        env:
+          SYNARA_ASC_KEY_BASE64: ${{ secrets.SYNARA_ASC_KEY_BASE64 }}
+          SYNARA_ASC_KEY_ID: ${{ secrets.SYNARA_ASC_KEY_ID }}
+        run: |
+          api_key_path="$RUNNER_TEMP/AuthKey_${SYNARA_ASC_KEY_ID}.p8"
+          printf '%s' "$SYNARA_ASC_KEY_BASE64" | /usr/bin/base64 --decode > "$api_key_path"
+          chmod 600 "$api_key_path"
+          echo "SYNARA_ASC_KEY_PATH=$api_key_path" >> "$GITHUB_ENV"
+
+      - name: Verify and promote internal TestFlight build
+        env:
+          SYNARA_ASC_KEY_ID: ${{ secrets.SYNARA_ASC_KEY_ID }}
+          SYNARA_ASC_ISSUER_ID: ${{ secrets.SYNARA_ASC_ISSUER_ID }}
+          SYNARA_IOS_MARKETING_VERSION: ${{ needs.ios-testflight-upload.outputs.marketing_version }}
+          SYNARA_IOS_BUILD_NUMBER: ${{ needs.ios-testflight-upload.outputs.build_number }}
+          SYNARA_TESTFLIGHT_INTERNAL_GROUP_IDS: ${{ vars.SYNARA_TESTFLIGHT_INTERNAL_GROUP_IDS }}
+          SYNARA_TESTFLIGHT_PROCESSING_TIMEOUT_SECONDS: "2400"
+          SYNARA_TESTFLIGHT_POLL_INTERVAL_SECONDS: "15"
+          SYNARA_IOS_DIAGNOSTICS_DIR: ${{ runner.temp }}/synara-ios-testflight-diagnostics
+        run: node synara-ios/scripts/promote-testflight-internal.mjs
+
+      - name: Clean App Store Connect API key
+        if: always()
+        run: |
+          if [[ -n "${SYNARA_ASC_KEY_PATH:-}" ]]; then
+            rm -f -- "$SYNARA_ASC_KEY_PATH"
+          fi
+
+      - name: Upload TestFlight processing diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ios-testflight-processing-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/synara-ios-testflight-diagnostics
+          if-no-files-found: warn
+          retention-days: 30
 
   publish-gh-release:
     name: Publish GitHub Release (all clients)

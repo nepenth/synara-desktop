@@ -13,6 +13,7 @@ NOTIFICATION_SERVICE_BUNDLE_ID="${SYNARA_IOS_NOTIFICATION_SERVICE_BUNDLE_ID:-${B
 NOTIFICATION_SERVICE_PROVISIONING_PROFILE="${SYNARA_IOS_NOTIFICATION_SERVICE_PROVISIONING_PROFILE:-}"
 PUSH_GATEWAY_URL="${SYNARA_PUSH_GATEWAY_URL:-}"
 ARCHIVE_ROOT="${SYNARA_IOS_ARCHIVE_ROOT:-/tmp}"
+DIAGNOSTICS_DIR="${SYNARA_IOS_DIAGNOSTICS_DIR:-${RUNNER_TEMP:-$ARCHIVE_ROOT}/synara-ios-testflight-diagnostics}"
 
 require_env() {
   local name="$1"
@@ -88,6 +89,12 @@ archive_path="$ARCHIVE_ROOT/Synara-${marketing_version}-${build_number}.xcarchiv
 export_path="$ARCHIVE_ROOT/Synara-${marketing_version}-${build_number}-export"
 export_options="$(mktemp "${TMPDIR:-/tmp}/synara-export-options.XXXXXX.plist")"
 notification_service_profile_entry=""
+mkdir -p "$DIAGNOSTICS_DIR"
+
+if [[ -n "${GITHUB_OUTPUT:-}" ]]; then
+  printf 'marketing_version=%s\n' "$marketing_version" >> "$GITHUB_OUTPUT"
+  printf 'build_number=%s\n' "$build_number" >> "$GITHUB_OUTPUT"
+fi
 
 if [[ -n "$NOTIFICATION_SERVICE_PROVISIONING_PROFILE" ]]; then
   notification_service_profile_entry="
@@ -129,6 +136,7 @@ cat > "$export_options" <<PLIST
 PLIST
 
 echo "Archiving Synara ${marketing_version} (${build_number}) to ${archive_path}"
+set +e
 run_xcodebuild \
   -project "$PROJECT_DIR/Synara.xcodeproj" \
   -scheme "$SCHEME" \
@@ -140,14 +148,35 @@ run_xcodebuild \
   SYNARA_IOS_NOTIFICATION_SERVICE_PROVISIONING_PROFILE="$NOTIFICATION_SERVICE_PROVISIONING_PROFILE" \
   SYNARA_PUSH_GATEWAY_URL="$PUSH_GATEWAY_URL" \
   archive \
-  -allowProvisioningUpdates
+  -allowProvisioningUpdates \
+  2>&1 | tee "$DIAGNOSTICS_DIR/xcodebuild-archive.log"
+archive_status="${PIPESTATUS[0]}"
+set -e
+if [[ "$archive_status" -ne 0 ]]; then
+  exit "$archive_status"
+fi
 
 echo "Uploading Synara ${marketing_version} (${build_number}) to App Store Connect"
+set +e
 run_xcodebuild \
   -exportArchive \
   -archivePath "$archive_path" \
   -exportOptionsPlist "$export_options" \
   -exportPath "$export_path" \
-  -allowProvisioningUpdates
+  -allowProvisioningUpdates \
+  2>&1 | tee "$DIAGNOSTICS_DIR/xcodebuild-export.log"
+export_status="${PIPESTATUS[0]}"
+set -e
 
-echo "Upload complete. Wait for App Store Connect processing, then install from TestFlight."
+distribution_log_path="$(
+  sed -nE 's/.*Created bundle at path "([^"]+\.xcdistributionlogs)".*/\1/p' \
+    "$DIAGNOSTICS_DIR/xcodebuild-export.log" | tail -n 1
+)"
+if [[ -n "$distribution_log_path" && -d "$distribution_log_path" ]]; then
+  ditto "$distribution_log_path" "$DIAGNOSTICS_DIR/$(basename "$distribution_log_path")"
+fi
+if [[ "$export_status" -ne 0 ]]; then
+  exit "$export_status"
+fi
+
+echo "Upload transport complete. App Store Connect processing must still be verified."

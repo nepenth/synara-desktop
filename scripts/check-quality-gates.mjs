@@ -434,7 +434,12 @@ export function inspectQualityGates({
     errors.push(`Release aggregate ${releaseAggregateError}.`);
   }
 
-  for (const job of ["linux-deb", "linux-arch", "macos", "ios-testflight"]) {
+  for (const job of [
+    "linux-deb",
+    "linux-arch",
+    "macos",
+    "ios-testflight-upload",
+  ]) {
     if (
       !sameList(getList(releaseJobs.get(job) ?? [], "needs", 4), [
         "quality-gate",
@@ -444,6 +449,16 @@ export function inspectQualityGates({
         `Release artifact job ${job} needs must be exactly [quality-gate] at job scope.`
       );
     }
+  }
+
+  if (
+    !sameList(getList(releaseJobs.get("ios-testflight") ?? [], "needs", 4), [
+      "ios-testflight-upload",
+    ])
+  ) {
+    errors.push(
+      "TestFlight verification must depend only on the successful upload job so failed-job retries cannot duplicate the upload."
+    );
   }
 
   if (
@@ -489,8 +504,11 @@ export function inspectQualityGates({
       "TestFlight internal-only control must use the repository variable, not a workflow-dispatch input."
     );
   }
+  const testflightUpload = releaseJobs.get("ios-testflight-upload") ?? [];
   const testflight = releaseJobs.get("ios-testflight") ?? [];
-  const internalOnlyValues = parseSteps(testflight).flatMap((step) => [
+  const testflightUploadSteps = parseSteps(testflightUpload);
+  const testflightSteps = parseSteps(testflight);
+  const internalOnlyValues = testflightUploadSteps.flatMap((step) => [
     getStepEnvironment(step).get("SYNARA_TESTFLIGHT_INTERNAL_ONLY"),
   ]);
   if (
@@ -500,6 +518,110 @@ export function inspectQualityGates({
   ) {
     errors.push(
       "TestFlight internal-only control must default the SYNARA_TESTFLIGHT_INTERNAL_ONLY repository variable to true."
+    );
+  }
+
+  const testflightTimeout = Number(getScalar(testflight, "timeout-minutes", 4));
+  if (
+    !Number.isInteger(testflightTimeout) ||
+    testflightTimeout < 50 ||
+    testflightTimeout > 120
+  ) {
+    errors.push(
+      "TestFlight job timeout-minutes must be between 50 and 120 so Apple processing is bounded but observable."
+    );
+  }
+
+  const uploadStepIndex = testflightUploadSteps.findIndex((step) =>
+    hasUnconditionalCommand(
+      executableLines(getStepRun(step)),
+      "synara-ios/scripts/upload-testflight-internal.sh"
+    )
+  );
+  const uploadStep = testflightUploadSteps[uploadStepIndex] ?? [];
+  if (
+    uploadStepIndex < 0 ||
+    getScalar(uploadStep, "id", 8) !== "upload_ios" ||
+    getScalar(uploadStep, "if", 8) !== undefined ||
+    getScalar(uploadStep, "continue-on-error", 8) !== undefined ||
+    getStepEnvironment(uploadStep).get("SYNARA_IOS_DIAGNOSTICS_DIR") !==
+      "${{ runner.temp }}/synara-ios-testflight-diagnostics"
+  ) {
+    errors.push(
+      "TestFlight upload must be an unconditional upload_ios step that preserves distribution diagnostics."
+    );
+  }
+
+  if (
+    getScalar(testflightUpload, "outputs", 4) !== "" ||
+    getNestedScalar(testflightUpload, "outputs", "marketing_version", 4) !==
+      "${{ steps.upload_ios.outputs.marketing_version }}" ||
+    getNestedScalar(testflightUpload, "outputs", "build_number", 4) !==
+      "${{ steps.upload_ios.outputs.build_number }}"
+  ) {
+    errors.push(
+      "TestFlight upload job must expose the exact uploaded marketing version and build number."
+    );
+  }
+
+  const uploadDiagnosticsStepIndex = testflightUploadSteps.findIndex(
+    (step) =>
+      getScalar(step, "uses", 8)?.startsWith("actions/upload-artifact@") &&
+      getNestedScalar(step, "with", "path", 8) ===
+        "${{ runner.temp }}/synara-ios-testflight-diagnostics"
+  );
+  const uploadDiagnosticsStep =
+    testflightUploadSteps[uploadDiagnosticsStepIndex] ?? [];
+  if (
+    uploadDiagnosticsStepIndex <= uploadStepIndex ||
+    getScalar(uploadDiagnosticsStep, "if", 8) !== "always()" ||
+    getNestedScalar(uploadDiagnosticsStep, "with", "retention-days", 8) !== "30"
+  ) {
+    errors.push(
+      "TestFlight upload diagnostics must be preserved with if: always() and 30-day retention."
+    );
+  }
+
+  const verifierStepIndex = testflightSteps.findIndex((step) =>
+    hasUnconditionalCommand(
+      executableLines(getStepRun(step)),
+      "node synara-ios/scripts/promote-testflight-internal.mjs"
+    )
+  );
+  const verifierStep = testflightSteps[verifierStepIndex] ?? [];
+  const verifierEnvironment = getStepEnvironment(verifierStep);
+  if (
+    verifierStepIndex < 0 ||
+    getScalar(verifierStep, "if", 8) !== undefined ||
+    getScalar(verifierStep, "continue-on-error", 8) !== undefined ||
+    verifierEnvironment.get("SYNARA_IOS_MARKETING_VERSION") !==
+      "${{ needs.ios-testflight-upload.outputs.marketing_version }}" ||
+    verifierEnvironment.get("SYNARA_IOS_BUILD_NUMBER") !==
+      "${{ needs.ios-testflight-upload.outputs.build_number }}" ||
+    verifierEnvironment.get("SYNARA_TESTFLIGHT_INTERNAL_GROUP_IDS") !==
+      "${{ vars.SYNARA_TESTFLIGHT_INTERNAL_GROUP_IDS }}" ||
+    verifierEnvironment.get("SYNARA_IOS_DIAGNOSTICS_DIR") !==
+      "${{ runner.temp }}/synara-ios-testflight-diagnostics"
+  ) {
+    errors.push(
+      "TestFlight release must verify and promote the exact uploaded version/build to configured internal groups."
+    );
+  }
+
+  const diagnosticsStepIndex = testflightSteps.findIndex(
+    (step) =>
+      getScalar(step, "uses", 8)?.startsWith("actions/upload-artifact@") &&
+      getNestedScalar(step, "with", "path", 8) ===
+        "${{ runner.temp }}/synara-ios-testflight-diagnostics"
+  );
+  const diagnosticsStep = testflightSteps[diagnosticsStepIndex] ?? [];
+  if (
+    diagnosticsStepIndex <= verifierStepIndex ||
+    getScalar(diagnosticsStep, "if", 8) !== "always()" ||
+    getNestedScalar(diagnosticsStep, "with", "retention-days", 8) !== "30"
+  ) {
+    errors.push(
+      "TestFlight processing diagnostics must be uploaded after verification with if: always() and 30-day retention."
     );
   }
 
