@@ -10,6 +10,7 @@ devAssets/*
 AuthKey_*.p8
 *.p8
 .env.macos-signing.local
+.env
 DerivedData/
 *.xcuserstate
 xcuserdata/
