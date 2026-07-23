@@ -1,0 +1,23 @@
+[package]
+name = "matrix-rust-sdk-0-18-probe"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.93"
+publish = false
+description = "Isolated compile-only API-shape probes for matrix-sdk / matrix-sdk-ui 0.18.0"
+license = "AGPL-3.0-only"
+
+[dependencies]
+# Exact pins for P0.3a. Request no crate-default features and no explicit
+# features on either direct dependency. Client/ClientBuilder/Room do not require
+# sqlite or automatic-room-key-forwarding for compile-only API-shape probes.
+# matrix-sdk-ui 0.18.0 itself depends on matrix-sdk with feature "e2e-encryption";
+# Cargo feature unification may therefore enable e2e-encryption on matrix-sdk
+# transitively. That is not a direct request from this probe crate.
+# No experimental features are requested.
+matrix-sdk = { version = "=0.18.0", default-features = false }
+matrix-sdk-ui = { version = "=0.18.0", default-features = false }
+
+[lib]
+name = "matrix_rust_sdk_0_18_probe"
+path = "src/lib.rs"
