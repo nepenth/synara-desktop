@@ -1,25 +1,34 @@
 //! Compile-only public API-shape probes for `matrix-sdk` / `matrix-sdk-ui` 0.18.0.
 //!
-//! Each probe below forces the compiler to resolve named public types and
-//! function signatures. **These probes do not prove runtime or network
-//! semantics.** They never connect to a homeserver, open a store, or handle
-//! secrets.
+//! Each probe forces the compiler to resolve named public types and function
+//! signatures. **These probes do not prove runtime or network semantics.** They
+//! never connect to a homeserver, open a store, or handle secrets.
 //!
 //! Upstream pin: tag `matrix-sdk-0.18.0`, commit
 //! `1c44fb66214667c6d00acaf72ab592493653708b`.
+//!
+//! Modules group stable capability areas for P0.3b. P0.3a probe IDs are preserved.
 
 #![forbid(unsafe_code)]
 #![deny(unreachable_pub)]
 
-use matrix_sdk::{Client, ClientBuilder, Room};
-use matrix_sdk_ui::timeline::{RoomExt, TimelineBuilder};
-use matrix_sdk_ui::{
-    RoomListService, Timeline,
-    sync_service::{SyncService, SyncServiceBuilder},
-};
+pub mod account_data;
+pub mod auth;
+pub mod e2ee;
+pub mod media;
+pub mod messaging;
+pub mod notifications;
+pub mod p0_3a;
+pub mod room_ops;
+pub mod search;
+pub mod spaces;
+pub mod sync_rooms;
+pub mod threads;
+pub mod timeline;
 
-/// Probe catalog (stable IDs used by provenance docs).
+/// Probe catalog (stable IDs used by capability docs). Successful compile probes only.
 pub const PROBE_IDS: &[&str] = &[
+    // P0.3a foundation
     "P0.3a-client-type",
     "P0.3a-client-builder-type",
     "P0.3a-client-builder-fn",
@@ -31,146 +40,106 @@ pub const PROBE_IDS: &[&str] = &[
     "P0.3a-timeline-type",
     "P0.3a-timeline-builder-type",
     "P0.3a-room-ext-timeline-builder",
+    // Auth / discovery / session
+    "P0.3b-client-builder-homeserver-url",
+    "P0.3b-client-builder-server-name",
+    "P0.3b-client-builder-server-name-or-url",
+    "P0.3b-auth-session-type",
+    "P0.3b-client-matrix-auth",
+    "P0.3b-matrix-auth-login-username",
+    "P0.3b-matrix-auth-get-login-types",
+    "P0.3b-client-restore-session",
+    "P0.3b-client-logout",
+    // Sync / room list / room lookup
+    "P0.3b-sync-service-start",
+    "P0.3b-sync-service-room-list-service",
+    "P0.3b-client-sync-once",
+    "P0.3b-room-list-service-all-rooms",
+    "P0.3b-client-get-room",
+    "P0.3b-client-rooms",
+    "P0.3b-client-joined-rooms",
+    "P0.3b-room-state",
+    // Timeline
+    "P0.3b-timeline-subscribe",
+    "P0.3b-timeline-paginate-backwards",
+    "P0.3b-timeline-paginate-forwards",
+    "P0.3b-timeline-builder-with-focus",
+    "P0.3b-timeline-focus-type",
+    // Messaging
+    "P0.3b-room-send",
+    "P0.3b-room-send-state-event",
+    "P0.3b-room-redact",
+    "P0.3b-room-typing-notice",
+    "P0.3b-room-send-single-receipt",
+    "P0.3b-timeline-mark-as-read",
+    // Media
+    "P0.3b-media-type",
+    "P0.3b-client-media",
+    "P0.3b-media-upload",
+    "P0.3b-media-get-media-content",
+    // Room ops / profile
+    "P0.3b-client-create-room",
+    "P0.3b-client-join-room-by-id",
+    "P0.3b-room-leave",
+    "P0.3b-room-invite-user-by-id",
+    "P0.3b-room-members",
+    "P0.3b-room-set-name",
+    "P0.3b-room-update-power-levels",
+    "P0.3b-room-ban-user",
+    "P0.3b-account-type",
+    "P0.3b-client-account",
+    "P0.3b-account-get-display-name",
+    // Account data
+    "P0.3b-account-account-data-raw",
+    "P0.3b-account-set-account-data-raw",
+    // Notifications
+    "P0.3b-notification-settings-type",
+    "P0.3b-client-notification-settings",
+    "P0.3b-account-push-rules",
+    "P0.3b-notification-set-room-notification-mode",
+    // E2EE / devices / recovery
+    "P0.3b-encryption-type",
+    "P0.3b-client-encryption",
+    "P0.3b-encryption-get-user-devices",
+    "P0.3b-encryption-cross-signing-status",
+    "P0.3b-encryption-recovery",
+    "P0.3b-encryption-backups",
+    "P0.3b-client-devices",
+    "P0.3b-encryption-get-verification-request",
+    // Search (stable high-level only)
+    "P0.3b-client-search-users",
+    "P0.3b-room-directory-search-type",
+    "P0.3b-room-directory-search-new",
+    // Spaces
+    "P0.3b-client-joined-space-rooms",
+    "P0.3b-space-service-type",
+    "P0.3b-space-service-new",
+    "P0.3b-space-room-list-type",
+    "P0.3b-space-service-space-room-list",
+    // Threads / relations
+    "P0.3b-room-relations",
+    "P0.3b-thread-list-service-type",
+    "P0.3b-room-ext-thread-list-service",
+    "P0.3b-timeline-is-threaded",
 ];
 
-/// P0.3a-client-type — `matrix_sdk::Client` is a public type.
-///
-/// Source (pinned commit): `crates/matrix-sdk/src/client/mod.rs` (`pub struct Client`)
-/// and crate-root re-export in `crates/matrix-sdk/src/lib.rs`.
-///
-/// Compile-only API-shape probe; does not prove runtime/network semantics.
-pub fn probe_client_type() -> &'static str {
-    std::any::type_name::<Client>()
-}
-
-/// P0.3a-client-builder-type — `matrix_sdk::ClientBuilder` is a public type.
-///
-/// Source (pinned commit): `crates/matrix-sdk/src/client/builder/mod.rs`
-/// (`pub struct ClientBuilder`) and crate-root re-export.
-///
-/// Compile-only API-shape probe; does not prove runtime/network semantics.
-pub fn probe_client_builder_type() -> &'static str {
-    std::any::type_name::<ClientBuilder>()
-}
-
-/// P0.3a-client-builder-fn — `Client::builder() -> ClientBuilder`.
-///
-/// Source (pinned commit): `crates/matrix-sdk/src/client/mod.rs`
-/// (`pub fn builder() -> ClientBuilder`).
-///
-/// Compile-only API-shape probe; does not prove runtime/network semantics.
-pub fn probe_client_builder_fn() {
-    let _ctor: fn() -> ClientBuilder = Client::builder;
-    let _ = _ctor;
-}
-
-/// P0.3a-room-type — `matrix_sdk::Room` is a public type.
-///
-/// Source (pinned commit): `crates/matrix-sdk/src/room/mod.rs` (`pub struct Room`)
-/// and crate-root re-export in `crates/matrix-sdk/src/lib.rs`.
-///
-/// Compile-only API-shape probe; does not prove runtime/network semantics.
-pub fn probe_room_type() -> &'static str {
-    std::any::type_name::<Room>()
-}
-
-/// P0.3a-room-room-id-fn — `Room.room_id()` is reachable on the public `Room`
-/// type via `Deref` to `matrix_sdk_base::Room` (`BaseRoom`).
-///
-/// Source (pinned commit):
-/// - `crates/matrix-sdk/src/room/mod.rs` (`impl Deref for Room`)
-/// - `crates/matrix-sdk-base/src/room/mod.rs` (`pub fn room_id(&self) -> &RoomId`)
-///
-/// Compile-only API-shape probe; does not prove runtime/network semantics.
-/// UFCS (`Room::room_id`) is intentionally not used: Deref methods are only
-/// available via method-call syntax.
-pub fn probe_room_room_id_fn() {
-    fn _shape(room: &Room) {
-        let _id = room.room_id();
-        let _ = _id.as_str();
-    }
-    let _ = _shape;
-}
-
-/// P0.3a-sync-service-type — `matrix_sdk_ui::sync_service::SyncService`.
-///
-/// Source (pinned commit): `crates/matrix-sdk-ui/src/sync_service.rs`
-/// (`pub struct SyncService`). Not re-exported at the UI crate root.
-///
-/// Compile-only API-shape probe; does not prove runtime/network semantics.
-pub fn probe_sync_service_type() -> &'static str {
-    std::any::type_name::<SyncService>()
-}
-
-/// P0.3a-sync-service-builder-fn — `SyncService::builder(Client) -> SyncServiceBuilder`.
-///
-/// Source (pinned commit): `crates/matrix-sdk-ui/src/sync_service.rs`
-/// (`pub fn builder(client: Client) -> SyncServiceBuilder`).
-///
-/// Compile-only API-shape probe; does not prove runtime/network semantics.
-pub fn probe_sync_service_builder_fn() {
-    let _ctor: fn(Client) -> SyncServiceBuilder = SyncService::builder;
-    let _ = _ctor;
-}
-
-/// P0.3a-room-list-service-type — `matrix_sdk_ui::RoomListService`.
-///
-/// Source (pinned commit): `crates/matrix-sdk-ui/src/room_list_service/mod.rs`
-/// (`pub struct RoomListService`) and crate-root re-export in
-/// `crates/matrix-sdk-ui/src/lib.rs`.
-///
-/// Compile-only API-shape probe; does not prove runtime/network semantics.
-pub fn probe_room_list_service_type() -> &'static str {
-    std::any::type_name::<RoomListService>()
-}
-
-/// P0.3a-timeline-type — `matrix_sdk_ui::Timeline`.
-///
-/// Source (pinned commit): `crates/matrix-sdk-ui/src/timeline/mod.rs`
-/// (`pub struct Timeline`) and crate-root re-export in
-/// `crates/matrix-sdk-ui/src/lib.rs`.
-///
-/// Compile-only API-shape probe; does not prove runtime/network semantics.
-pub fn probe_timeline_type() -> &'static str {
-    std::any::type_name::<Timeline>()
-}
-
-/// P0.3a-timeline-builder-type — `matrix_sdk_ui::timeline::TimelineBuilder`.
-///
-/// Source (pinned commit): `crates/matrix-sdk-ui/src/timeline/builder.rs`
-/// (`pub struct TimelineBuilder`).
-///
-/// Compile-only API-shape probe; does not prove runtime/network semantics.
-pub fn probe_timeline_builder_type() -> &'static str {
-    std::any::type_name::<TimelineBuilder>()
-}
-
-/// P0.3a-room-ext-timeline-builder — `RoomExt::timeline_builder(&Room) -> TimelineBuilder`.
-///
-/// Source (pinned commit): `crates/matrix-sdk-ui/src/timeline/traits.rs`
-/// (`pub trait RoomExt`, `fn timeline_builder(&self) -> TimelineBuilder`).
-///
-/// Compile-only API-shape probe; does not prove runtime/network semantics.
-pub fn probe_room_ext_timeline_builder() {
-    let _method: fn(&Room) -> TimelineBuilder = RoomExt::timeline_builder;
-    let _ = _method;
-}
-
-/// Run every probe function so `cargo test` exercises the monomorphized shapes.
+/// Run every successful compile-only probe so `cargo test` monomorphizes shapes.
 ///
 /// Still compile-only: no network, no stores, no secrets.
 pub fn run_all_probes() {
-    let _ = probe_client_type();
-    let _ = probe_client_builder_type();
-    probe_client_builder_fn();
-    let _ = probe_room_type();
-    probe_room_room_id_fn();
-    let _ = probe_sync_service_type();
-    probe_sync_service_builder_fn();
-    let _ = probe_room_list_service_type();
-    let _ = probe_timeline_type();
-    let _ = probe_timeline_builder_type();
-    probe_room_ext_timeline_builder();
+    p0_3a::run_all();
+    auth::run_all();
+    sync_rooms::run_all();
+    timeline::run_all();
+    messaging::run_all();
+    media::run_all();
+    room_ops::run_all();
+    account_data::run_all();
+    notifications::run_all();
+    e2ee::run_all();
+    search::run_all();
+    spaces::run_all();
+    threads::run_all();
 }
 
 #[cfg(test)]
@@ -181,13 +150,20 @@ mod tests {
     fn all_api_shape_probes_compile_and_run() {
         // Compile-only API-shape probe execution; does not prove runtime/network semantics.
         run_all_probes();
-        assert_eq!(PROBE_IDS.len(), 11);
-        assert!(probe_client_type().contains("Client"));
-        assert!(probe_client_builder_type().contains("ClientBuilder"));
-        assert!(probe_room_type().contains("Room"));
-        assert!(probe_sync_service_type().contains("SyncService"));
-        assert!(probe_room_list_service_type().contains("RoomListService"));
-        assert!(probe_timeline_type().contains("Timeline"));
-        assert!(probe_timeline_builder_type().contains("TimelineBuilder"));
+        assert_eq!(PROBE_IDS.len(), 80);
+        // Uniqueness
+        let mut seen = std::collections::BTreeSet::new();
+        for id in PROBE_IDS {
+            assert!(seen.insert(*id), "duplicate probe id: {id}");
+        }
+        assert!(p0_3a::probe_client_type().contains("Client"));
+        assert!(p0_3a::probe_room_type().contains("Room"));
+        assert!(p0_3a::probe_sync_service_type().contains("SyncService"));
+        assert!(p0_3a::probe_timeline_type().contains("Timeline"));
+        assert!(auth::probe_auth_session_type().contains("AuthSession"));
+        assert!(media::probe_media_type().contains("Media"));
+        assert!(e2ee::probe_encryption_type().contains("Encryption"));
+        assert!(spaces::probe_space_service_type().contains("SpaceService"));
+        assert!(threads::probe_thread_list_service_type().contains("ThreadListService"));
     }
 }

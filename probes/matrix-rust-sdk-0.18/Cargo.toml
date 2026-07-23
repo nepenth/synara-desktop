@@ -8,7 +8,7 @@ description = "Isolated compile-only API-shape probes for matrix-sdk / matrix-sd
 license = "AGPL-3.0-only"
 
 [dependencies]
-# Exact pins for P0.3a. Request no crate-default features and no explicit
+# Exact pins for P0.3a/P0.3b. Request no crate-default features and no explicit
 # features on either direct dependency. Client/ClientBuilder/Room do not require
 # sqlite or automatic-room-key-forwarding for compile-only API-shape probes.
 # matrix-sdk-ui 0.18.0 itself depends on matrix-sdk with feature "e2e-encryption";
