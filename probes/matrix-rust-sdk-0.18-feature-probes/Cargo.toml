@@ -1,0 +1,39 @@
+[package]
+name = "matrix-rust-sdk-0-18-feature-probes"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.93"
+publish = false
+description = "Isolated feature-gate / typed-request / gap compile-only probes for matrix-sdk / matrix-sdk-ui 0.18.0 (P0.3c)"
+license = "AGPL-3.0-only"
+
+# Local probe profiles are mutually exclusive for validation. Each maps to an
+# independent `cargo check --features profile-*` graph. Do not enable multiple
+# profile-* features together when validating feature graphs.
+#
+# matrix-sdk and matrix-sdk-ui are requested with default-features=false.
+# matrix-sdk-ui 0.18.0 depends on matrix-sdk with feature "e2e-encryption";
+# Cargo feature unification therefore enables e2e-encryption on matrix-sdk.
+# That is transitive unification, not a direct request from this crate.
+# automatic-room-key-forwarding is never requested.
+[features]
+default = []
+# Stable typed Client::send residual paths and stable gap API shapes.
+# No experimental matrix-sdk feature is requested.
+profile-stable-typed = []
+# Local message index / experimental-search surface only.
+profile-experimental-search = ["matrix-sdk/experimental-search"]
+# Widget / Element Call driver surface only.
+profile-experimental-widgets = ["matrix-sdk/experimental-widgets"]
+# SQLite store builder surface only.
+profile-sqlite = ["matrix-sdk/sqlite"]
+
+[dependencies]
+matrix-sdk = { version = "=0.18.0", default-features = false }
+matrix-sdk-ui = { version = "=0.18.0", default-features = false }
+# Used only for inert Raw JSON content shapes in typed probes (no network I/O).
+serde_json = "1"
+
+[lib]
+name = "matrix_rust_sdk_0_18_feature_probes"
+path = "src/lib.rs"

@@ -1,0 +1,366 @@
+{
+  "schema_version": 1,
+  "task_id": "P0.3a",
+  "title": "Exact 0.18.0 provenance and locked probe foundation",
+  "upstream": {
+    "repository": "https://github.com/matrix-org/matrix-rust-sdk",
+    "release_tag": "matrix-sdk-0.18.0",
+    "release_url": "https://github.com/matrix-org/matrix-rust-sdk/releases/tag/matrix-sdk-0.18.0",
+    "commit": "1c44fb66214667c6d00acaf72ab592493653708b",
+    "commit_url": "https://github.com/matrix-org/matrix-rust-sdk/commit/1c44fb66214667c6d00acaf72ab592493653708b",
+    "tree_url": "https://github.com/matrix-org/matrix-rust-sdk/tree/1c44fb66214667c6d00acaf72ab592493653708b",
+    "core_docs_rs": "https://docs.rs/matrix-sdk/0.18.0/matrix_sdk/",
+    "ui_docs_rs": "https://docs.rs/matrix-sdk-ui/0.18.0/matrix_sdk_ui/",
+    "crates_io_matrix_sdk": "https://crates.io/crates/matrix-sdk/0.18.0",
+    "crates_io_matrix_sdk_ui": "https://crates.io/crates/matrix-sdk-ui/0.18.0",
+    "upstream_rust_version": "1.93",
+    "upstream_edition": "2024",
+    "tag_commit_verification": {
+      "commands": [
+        "git clone --depth 1 --branch matrix-sdk-0.18.0 https://github.com/matrix-org/matrix-rust-sdk matrix-rust-sdk",
+        "git rev-parse HEAD"
+      ],
+      "result_commit": "1c44fb66214667c6d00acaf72ab592493653708b",
+      "expected_commit": "1c44fb66214667c6d00acaf72ab592493653708b",
+      "match": true,
+      "notes": "Cloning the annotated tag matrix-sdk-0.18.0 detaches HEAD at commit 1c44fb66214667c6d00acaf72ab592493653708b. Absolute temporary clone paths are intentionally omitted."
+    }
+  },
+  "probe": {
+    "crate_path": "probes/matrix-rust-sdk-0.18",
+    "package_name": "matrix-rust-sdk-0-18-probe",
+    "package_version": "0.1.0",
+    "edition": "2024",
+    "rust_version": "1.93",
+    "lockfile": "probes/matrix-rust-sdk-0.18/Cargo.lock",
+    "production": false,
+    "connects_to_server": false,
+    "secrets": false,
+    "experimental_features_enabled": false
+  },
+  "direct_dependencies": [
+    {
+      "name": "matrix-sdk",
+      "requested": "=0.18.0",
+      "requested_default_features": false,
+      "requested_features": [],
+      "resolved_version": "0.18.0",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "checksum": "7083d580527511ac5d9369e03b9f2b20902e76949f1b3964051f978e4d3756ae",
+      "resolved_enabled_features": ["e2e-encryption"],
+      "feature_notes": [
+        "This probe requests default-features=false and features=[].",
+        "Client, ClientBuilder, and Room do not require the matrix-sdk features sqlite or automatic-room-key-forwarding for compile-only API-shape probes; those features are not requested and are not present in the resolved feature set.",
+        "resolved_enabled_features includes e2e-encryption solely via Cargo feature unification: matrix-sdk-ui 0.18.0 depends on matrix-sdk with features=[\"e2e-encryption\"]. That is transitive unification, not a direct request from this probe.",
+        "The matrix-sdk feature flags default, sqlite, and automatic-room-key-forwarding are not enabled in this resolution."
+      ]
+    },
+    {
+      "name": "matrix-sdk-ui",
+      "requested": "=0.18.0",
+      "requested_default_features": false,
+      "requested_features": [],
+      "resolved_version": "0.18.0",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "checksum": "6d1f2b8a8cf57164d7cee4eb61c0b9f074b2e11d766a9391b7db0b9f2cbd83d8",
+      "resolved_enabled_features": [],
+      "feature_notes": [
+        "This probe requests default-features=false and features=[].",
+        "matrix-sdk-ui crate defaults are empty; resolved_enabled_features is empty.",
+        "The published matrix-sdk-ui 0.18.0 package depends on matrix-sdk with feature e2e-encryption, which unifies into the matrix-sdk node (see matrix-sdk.resolved_enabled_features)."
+      ]
+    }
+  ],
+  "feature_unification": {
+    "summary": "matrix-sdk-ui 0.18.0 requests matrix-sdk/e2e-encryption. With probe direct deps using default-features=false and no explicit features, Cargo still enables e2e-encryption on the unified matrix-sdk package.",
+    "matrix_sdk_ui_declares": {
+      "dependency": "matrix-sdk",
+      "features": ["e2e-encryption"]
+    },
+    "probe_does_not_request": [
+      "default",
+      "e2e-encryption",
+      "sqlite",
+      "automatic-room-key-forwarding",
+      "experimental-*"
+    ]
+  },
+  "relevant_transitive_versions": {
+    "matrix-sdk-base": "0.18.0",
+    "matrix-sdk-common": "0.18.0",
+    "matrix-sdk-crypto": "0.18.0",
+    "matrix-sdk-store-encryption": "0.18.0",
+    "ruma": "0.16.0",
+    "reqwest": "0.13.4",
+    "vodozemac": "0.10.0"
+  },
+  "relevant_transitive_notes": "Host-target cargo tree for the probe does not include matrix-sdk-sqlite. matrix-sdk-crypto and matrix-sdk-store-encryption appear because e2e-encryption is unified onto matrix-sdk via matrix-sdk-ui.",
+  "source_permalinks": {
+    "commit": "1c44fb66214667c6d00acaf72ab592493653708b",
+    "base": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b",
+    "entries": [
+      {
+        "id": "matrix-sdk-lib-reexports",
+        "path": "crates/matrix-sdk/src/lib.rs",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/lib.rs#L75-L93",
+        "lines": "75-93",
+        "notes": "Verified range L75-L93: Client/ClientBuilder re-export block (L75-L78) through Room re-export (L93)"
+      },
+      {
+        "id": "client-struct",
+        "path": "crates/matrix-sdk/src/client/mod.rs",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/client/mod.rs#L202",
+        "lines": "202",
+        "notes": "pub struct Client"
+      },
+      {
+        "id": "client-builder-fn",
+        "path": "crates/matrix-sdk/src/client/mod.rs",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/client/mod.rs#L528",
+        "lines": "528",
+        "notes": "Client::builder() -> ClientBuilder"
+      },
+      {
+        "id": "client-builder-struct",
+        "path": "crates/matrix-sdk/src/client/builder/mod.rs",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/client/builder/mod.rs#L111",
+        "lines": "111",
+        "notes": "pub struct ClientBuilder"
+      },
+      {
+        "id": "room-struct",
+        "path": "crates/matrix-sdk/src/room/mod.rs",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/room/mod.rs#L212",
+        "lines": "212",
+        "notes": "pub struct Room"
+      },
+      {
+        "id": "room-deref",
+        "path": "crates/matrix-sdk/src/room/mod.rs",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/room/mod.rs#L217-L224",
+        "lines": "217-224",
+        "notes": "impl Deref for Room; Target = BaseRoom"
+      },
+      {
+        "id": "base-room-room-id",
+        "path": "crates/matrix-sdk-base/src/room/mod.rs",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk-base/src/room/mod.rs#L138",
+        "lines": "138",
+        "notes": "BaseRoom::room_id(&self) -> &RoomId; reachable on matrix_sdk::Room via Deref"
+      },
+      {
+        "id": "ui-lib-reexports",
+        "path": "crates/matrix-sdk-ui/src/lib.rs",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk-ui/src/lib.rs#L29",
+        "lines": "29",
+        "notes": "Crate-root re-exports of RoomListService and Timeline"
+      },
+      {
+        "id": "sync-service-struct",
+        "path": "crates/matrix-sdk-ui/src/sync_service.rs",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk-ui/src/sync_service.rs#L583",
+        "lines": "583",
+        "notes": "pub struct SyncService (module path only; not crate-root re-exported)"
+      },
+      {
+        "id": "sync-service-builder-fn",
+        "path": "crates/matrix-sdk-ui/src/sync_service.rs",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk-ui/src/sync_service.rs#L606",
+        "lines": "606",
+        "notes": "SyncService::builder(Client) -> SyncServiceBuilder"
+      },
+      {
+        "id": "room-list-service-struct",
+        "path": "crates/matrix-sdk-ui/src/room_list_service/mod.rs",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk-ui/src/room_list_service/mod.rs#L121",
+        "lines": "121",
+        "notes": "pub struct RoomListService"
+      },
+      {
+        "id": "timeline-struct",
+        "path": "crates/matrix-sdk-ui/src/timeline/mod.rs",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk-ui/src/timeline/mod.rs#L113",
+        "lines": "113",
+        "notes": "pub struct Timeline"
+      },
+      {
+        "id": "timeline-builder-struct",
+        "path": "crates/matrix-sdk-ui/src/timeline/builder.rs",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk-ui/src/timeline/builder.rs#L39",
+        "lines": "39",
+        "notes": "pub struct TimelineBuilder"
+      },
+      {
+        "id": "room-ext-trait",
+        "path": "crates/matrix-sdk-ui/src/timeline/traits.rs",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk-ui/src/timeline/traits.rs#L42-L61",
+        "lines": "42-61",
+        "notes": "pub trait RoomExt; timeline_builder(&self) -> TimelineBuilder"
+      }
+    ]
+  },
+  "probes": [
+    {
+      "id": "P0.3a-client-type",
+      "api_path": "matrix_sdk::Client",
+      "kind": "compile-only-type-presence",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3a-client-builder-type",
+      "api_path": "matrix_sdk::ClientBuilder",
+      "kind": "compile-only-type-presence",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3a-client-builder-fn",
+      "api_path": "matrix_sdk::Client::builder",
+      "kind": "compile-only-fn-signature",
+      "signature": "fn() -> ClientBuilder",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3a-room-type",
+      "api_path": "matrix_sdk::Room",
+      "kind": "compile-only-type-presence",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3a-room-room-id-fn",
+      "api_path": "matrix_sdk::Room::room_id (via Deref to matrix_sdk_base::Room)",
+      "kind": "compile-only-method-call-resolution",
+      "proves_runtime": false,
+      "notes": "UFCS Room::room_id is not available because room_id is defined on BaseRoom; method-call syntax resolves through Deref."
+    },
+    {
+      "id": "P0.3a-sync-service-type",
+      "api_path": "matrix_sdk_ui::sync_service::SyncService",
+      "kind": "compile-only-type-presence",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3a-sync-service-builder-fn",
+      "api_path": "matrix_sdk_ui::sync_service::SyncService::builder",
+      "kind": "compile-only-fn-signature",
+      "signature": "fn(Client) -> SyncServiceBuilder",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3a-room-list-service-type",
+      "api_path": "matrix_sdk_ui::RoomListService",
+      "kind": "compile-only-type-presence",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3a-timeline-type",
+      "api_path": "matrix_sdk_ui::Timeline",
+      "kind": "compile-only-type-presence",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3a-timeline-builder-type",
+      "api_path": "matrix_sdk_ui::timeline::TimelineBuilder",
+      "kind": "compile-only-type-presence",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3a-room-ext-timeline-builder",
+      "api_path": "matrix_sdk_ui::timeline::RoomExt::timeline_builder",
+      "kind": "compile-only-fn-signature",
+      "signature": "fn(&Room) -> TimelineBuilder",
+      "proves_runtime": false
+    }
+  ],
+  "validation": {
+    "toolchain": {
+      "rustc": "1.93.0",
+      "cargo": "1.93.0"
+    },
+    "commands": [
+      {
+        "command": "cargo metadata --locked --format-version 1",
+        "cwd": "probes/matrix-rust-sdk-0.18",
+        "env": {
+          "CARGO_TARGET_DIR": "<isolated-temporary-target-dir>"
+        },
+        "exit_code": 0,
+        "outcome": "matrix-sdk requested default-features=false features=[]; resolved_enabled_features=[e2e-encryption] via matrix-sdk-ui unification. matrix-sdk-ui requested default-features=false features=[]; resolved_enabled_features=[]. sqlite and automatic-room-key-forwarding not enabled."
+      },
+      {
+        "command": "cargo fmt --check",
+        "cwd": "probes/matrix-rust-sdk-0.18",
+        "exit_code": 0,
+        "outcome": "pass"
+      },
+      {
+        "command": "cargo check --locked",
+        "cwd": "probes/matrix-rust-sdk-0.18",
+        "env": {
+          "CARGO_TARGET_DIR": "<isolated-temporary-target-dir>"
+        },
+        "exit_code": 0,
+        "outcome": "pass"
+      },
+      {
+        "command": "cargo test --locked",
+        "cwd": "probes/matrix-rust-sdk-0.18",
+        "env": {
+          "CARGO_TARGET_DIR": "<isolated-temporary-target-dir>"
+        },
+        "exit_code": 0,
+        "outcome": "1 passed (tests::all_api_shape_probes_compile_and_run)"
+      },
+      {
+        "command": "cargo doc --locked --no-deps",
+        "cwd": "probes/matrix-rust-sdk-0.18",
+        "env": {
+          "CARGO_TARGET_DIR": "<isolated-temporary-target-dir>"
+        },
+        "exit_code": 0,
+        "outcome": "probe crate docs generated"
+      },
+      {
+        "command": "cargo doc --locked -p matrix-sdk -p matrix-sdk-ui --no-deps",
+        "cwd": "probes/matrix-rust-sdk-0.18",
+        "env": {
+          "CARGO_TARGET_DIR": "<isolated-temporary-target-dir>"
+        },
+        "exit_code": 0,
+        "outcome": "core and UI docs generated under isolated temporary target doc dir"
+      }
+    ],
+    "rustdoc_outputs": {
+      "generated": true,
+      "committed": false,
+      "relative_paths_under_doc": [
+        "matrix_sdk/index.html",
+        "matrix_sdk/struct.Client.html",
+        "matrix_sdk/struct.ClientBuilder.html",
+        "matrix_sdk/room/struct.Room.html",
+        "matrix_sdk_ui/index.html",
+        "matrix_sdk_ui/sync_service/struct.SyncService.html",
+        "matrix_sdk_ui/room_list_service/struct.RoomListService.html",
+        "matrix_sdk_ui/timeline/struct.Timeline.html"
+      ],
+      "existence_checks": {
+        "matrix_sdk/index.html": true,
+        "matrix_sdk/struct.Client.html": true,
+        "matrix_sdk/struct.ClientBuilder.html": true,
+        "matrix_sdk/room/struct.Room.html": true,
+        "matrix_sdk_ui/index.html": true,
+        "matrix_sdk_ui/sync_service/struct.SyncService.html": true,
+        "matrix_sdk_ui/room_list_service/struct.RoomListService.html": true,
+        "matrix_sdk_ui/timeline/struct.Timeline.html": true
+      }
+    }
+  },
+  "limitations": [
+    "Probes are compile-only API-shape checks. They do not prove network, sync, encryption, store, or homeserver semantics.",
+    "This artifact is the P0.3a foundation only. The full P0.3 capability dossier is not written here.",
+    "No experimental matrix-sdk features were requested or enabled; capabilities gated on experimental-* remain unprobed.",
+    "e2e-encryption is present on matrix-sdk only through transitive feature unification from matrix-sdk-ui, not as a direct probe request.",
+    "sqlite and automatic-room-key-forwarding are neither requested nor resolved as matrix-sdk features in this probe graph.",
+    "Generated rustdoc HTML under CARGO_TARGET_DIR is local-only and must not be committed.",
+    "Production Cargo manifests (including src-tauri/Cargo.toml) are intentionally unchanged and must not depend on matrix-sdk yet."
+  ]
+}

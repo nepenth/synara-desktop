@@ -1,0 +1,3180 @@
+{
+  "schema_version": 1,
+  "task_id": "P0.3b",
+  "title": "Stable Matrix Rust SDK 0.18.0 capability probes",
+  "upstream": {
+    "repository": "https://github.com/matrix-org/matrix-rust-sdk",
+    "release_tag": "matrix-sdk-0.18.0",
+    "commit": "1c44fb66214667c6d00acaf72ab592493653708b",
+    "commit_url": "https://github.com/matrix-org/matrix-rust-sdk/commit/1c44fb66214667c6d00acaf72ab592493653708b",
+    "tree_url": "https://github.com/matrix-org/matrix-rust-sdk/tree/1c44fb66214667c6d00acaf72ab592493653708b",
+    "core_docs_rs": "https://docs.rs/matrix-sdk/0.18.0/matrix_sdk/",
+    "ui_docs_rs": "https://docs.rs/matrix-sdk-ui/0.18.0/matrix_sdk_ui/",
+    "tag_commit_verification": {
+      "expected_commit": "1c44fb66214667c6d00acaf72ab592493653708b",
+      "result_commit": "1c44fb66214667c6d00acaf72ab592493653708b",
+      "match": true,
+      "commands": [
+        "git clone --depth 1 --branch matrix-sdk-0.18.0 https://github.com/matrix-org/matrix-rust-sdk matrix-rust-sdk",
+        "git rev-parse HEAD"
+      ],
+      "notes": "Absolute temporary clone paths intentionally omitted."
+    }
+  },
+  "probe_crate": {
+    "path": "probes/matrix-rust-sdk-0.18",
+    "package_name": "matrix-rust-sdk-0-18-probe",
+    "package_version": "0.1.0",
+    "edition": "2024",
+    "rust_version": "1.93",
+    "lockfile": "probes/matrix-rust-sdk-0.18/Cargo.lock",
+    "production": false,
+    "connects_to_server": false,
+    "secrets": false,
+    "experimental_features_enabled": false
+  },
+  "direct_dependencies": [
+    {
+      "name": "matrix-sdk",
+      "requested": "=0.18.0",
+      "requested_default_features": false,
+      "requested_features": [],
+      "resolved_version": "0.18.0",
+      "resolved_enabled_features": ["e2e-encryption"],
+      "feature_notes": [
+        "This probe requests default-features=false and features=[].",
+        "resolved_enabled_features includes e2e-encryption solely via Cargo feature unification from matrix-sdk-ui 0.18.0.",
+        "sqlite and automatic-room-key-forwarding are not enabled.",
+        "No experimental-* features are enabled."
+      ]
+    },
+    {
+      "name": "matrix-sdk-ui",
+      "requested": "=0.18.0",
+      "requested_default_features": false,
+      "requested_features": [],
+      "resolved_version": "0.18.0",
+      "resolved_enabled_features": [],
+      "feature_notes": [
+        "This probe requests default-features=false and features=[].",
+        "matrix-sdk-ui crate defaults are empty; resolved_enabled_features is empty."
+      ]
+    }
+  ],
+  "candidate_selection": {
+    "method": "Reviewed Plan Section 7 areas and P0.1 desktop-sdk-usage categories; selected representative stable public API shapes present at the pinned commit that compile with the P0.3a feature resolution.",
+    "minimum_areas_covered": [
+      "client construction/homeserver discovery and login/session restore",
+      "sync",
+      "room lookup/list/state",
+      "timeline creation/subscription/pagination",
+      "message send, state send, redaction, receipts/read markers, typing",
+      "media retrieval and upload",
+      "room create/join/leave/invite/member/profile/power operations",
+      "account data",
+      "push rules/notifications",
+      "devices/E2EE/verification/recovery",
+      "server-side search (stable user/directory; message search deferred)",
+      "spaces/hierarchy",
+      "threads/relations",
+      "calls/widgets (deferred experimental)"
+    ],
+    "evidence_status_policy": "stable-api-probed or deferred-to-p0.3c only. Final Section 5 states such as confirmed-stable are not used: compile evidence alone does not prove runtime, live-server, or UI behavior.",
+    "uncovered_or_deferred_for_p0_3c_or_p0_3d": [
+      "Server-side room message search high-level API (absent); typed Client::send residual path (P0.3c)",
+      "experimental-search local message index (P0.3c)",
+      "experimental-widgets / Element Call / MatrixRTC widget bridge (P0.3c)",
+      "sqlite store builders and encrypted store runtime (feature sqlite not enabled; P0.3c/P0.5)",
+      "SSO/OAuth full callback flow runtime (API exists; deeper OAuth surfaces may expand in P0.3c)",
+      "SAS verification request inbox runtime details (types accessible via encryption module; deeper verification APIs in P0.3c)",
+      "Live Synapse two-client tests and UI acceptance (P0.3d / later phases)",
+      "Polls, composer drafts, and product-specific custom event contracts mapping (parity, not API absence)"
+    ]
+  },
+  "probe_catalog": [
+    {
+      "id": "P0.3a-client-type",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3a-client-builder-type",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3a-client-builder-fn",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3a-room-type",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3a-room-room-id-fn",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3a-sync-service-type",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3a-sync-service-builder-fn",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3a-room-list-service-type",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3a-timeline-type",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3a-timeline-builder-type",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3a-room-ext-timeline-builder",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3b-client-builder-homeserver-url",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3b-client-builder-server-name",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3b-client-builder-server-name-or-url",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3b-auth-session-type",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3b-client-matrix-auth",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3b-matrix-auth-login-username",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3b-matrix-auth-get-login-types",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3b-client-restore-session",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3b-client-logout",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3b-sync-service-start",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3b-sync-service-room-list-service",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3b-client-sync-once",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3b-room-list-service-all-rooms",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3b-client-get-room",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3b-client-rooms",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3b-client-joined-rooms",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3b-room-state",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3b-timeline-subscribe",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3b-timeline-paginate-backwards",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3b-timeline-paginate-forwards",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3b-timeline-builder-with-focus",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3b-timeline-focus-type",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3b-room-send",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3b-room-send-state-event",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3b-room-redact",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3b-room-typing-notice",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3b-room-send-single-receipt",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3b-timeline-mark-as-read",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3b-media-type",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3b-client-media",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3b-media-upload",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3b-media-get-media-content",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3b-client-create-room",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3b-client-join-room-by-id",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3b-room-leave",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3b-room-invite-user-by-id",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3b-room-members",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3b-room-set-name",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3b-room-update-power-levels",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3b-room-ban-user",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3b-account-type",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3b-client-account",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3b-account-get-display-name",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3b-account-account-data-raw",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3b-account-set-account-data-raw",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3b-notification-settings-type",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3b-client-notification-settings",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3b-account-push-rules",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3b-notification-set-room-notification-mode",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3b-encryption-type",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3b-client-encryption",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3b-encryption-get-user-devices",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3b-encryption-cross-signing-status",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3b-encryption-recovery",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3b-encryption-backups",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3b-client-devices",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3b-encryption-get-verification-request",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3b-client-search-users",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3b-room-directory-search-type",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3b-room-directory-search-new",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3b-client-joined-space-rooms",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3b-space-service-type",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3b-space-service-new",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3b-space-room-list-type",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3b-space-service-space-room-list",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3b-room-relations",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3b-thread-list-service-type",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3b-room-ext-thread-list-service",
+      "proves_runtime": false
+    },
+    {
+      "id": "P0.3b-timeline-is-threaded",
+      "proves_runtime": false
+    }
+  ],
+  "capabilities": [
+    {
+      "id": "SC-001",
+      "plan_section_7_area": "7.1-authentication-and-account-lifecycle",
+      "p0_1_linkage": {
+        "categories": ["uia_auth", "client_methods"],
+        "representative_paths": [
+          "synara/src/app/components/ActionUIA.tsx",
+          "synara/src/app/components/AuthFlowsLoader.tsx"
+        ],
+        "notes": "P0.1: uia_auth (74 files), client_methods (130)."
+      },
+      "api_path": "matrix_sdk::Client",
+      "required_features": {
+        "requested_direct": [],
+        "resolved_on_matrix_sdk": ["e2e-encryption"],
+        "resolved_on_matrix_sdk_ui": [],
+        "notes": "e2e-encryption only via matrix-sdk-ui unification; not a direct request."
+      },
+      "stability_evidence": "Public stable API at matrix-sdk-0.18.0 pin; no experimental feature gate for this shape.",
+      "source": {
+        "path": "crates/matrix-sdk/src/client/mod.rs",
+        "lines": "202",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/client/mod.rs#L202",
+        "notes": "pub struct Client"
+      },
+      "probe_id": "P0.3a-client-type",
+      "probe_file": "probes/matrix-rust-sdk-0.18/src/p0_3a.rs",
+      "compile_outcome": "pass",
+      "evidence_status": "stable-api-probed",
+      "limits": "Compile-only API shape. Does not prove runtime, network, homeserver, store, or UI semantics."
+    },
+    {
+      "id": "SC-002",
+      "plan_section_7_area": "7.1-authentication-and-account-lifecycle",
+      "p0_1_linkage": {
+        "categories": ["uia_auth", "client_methods"],
+        "representative_paths": [
+          "synara/src/app/components/ActionUIA.tsx",
+          "synara/src/app/components/AuthFlowsLoader.tsx"
+        ],
+        "notes": "P0.1: uia_auth (74 files), client_methods (130)."
+      },
+      "api_path": "matrix_sdk::ClientBuilder",
+      "required_features": {
+        "requested_direct": [],
+        "resolved_on_matrix_sdk": ["e2e-encryption"],
+        "resolved_on_matrix_sdk_ui": [],
+        "notes": "e2e-encryption only via matrix-sdk-ui unification; not a direct request."
+      },
+      "stability_evidence": "Public stable API at matrix-sdk-0.18.0 pin; no experimental feature gate for this shape.",
+      "source": {
+        "path": "crates/matrix-sdk/src/client/builder/mod.rs",
+        "lines": "111",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/client/builder/mod.rs#L111",
+        "notes": "pub struct ClientBuilder"
+      },
+      "probe_id": "P0.3a-client-builder-type",
+      "probe_file": "probes/matrix-rust-sdk-0.18/src/p0_3a.rs",
+      "compile_outcome": "pass",
+      "evidence_status": "stable-api-probed",
+      "limits": "Compile-only API shape. Does not prove runtime, network, homeserver, store, or UI semantics."
+    },
+    {
+      "id": "SC-003",
+      "plan_section_7_area": "7.1-authentication-and-account-lifecycle",
+      "p0_1_linkage": {
+        "categories": ["uia_auth", "client_methods"],
+        "representative_paths": [
+          "synara/src/app/components/ActionUIA.tsx",
+          "synara/src/app/components/AuthFlowsLoader.tsx"
+        ],
+        "notes": "P0.1: uia_auth (74 files), client_methods (130)."
+      },
+      "api_path": "matrix_sdk::Client::builder() -> ClientBuilder",
+      "required_features": {
+        "requested_direct": [],
+        "resolved_on_matrix_sdk": ["e2e-encryption"],
+        "resolved_on_matrix_sdk_ui": [],
+        "notes": "e2e-encryption only via matrix-sdk-ui unification; not a direct request."
+      },
+      "stability_evidence": "Public stable API at matrix-sdk-0.18.0 pin; no experimental feature gate for this shape.",
+      "source": {
+        "path": "crates/matrix-sdk/src/client/mod.rs",
+        "lines": "528",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/client/mod.rs#L528",
+        "notes": "pub fn builder"
+      },
+      "probe_id": "P0.3a-client-builder-fn",
+      "probe_file": "probes/matrix-rust-sdk-0.18/src/p0_3a.rs",
+      "compile_outcome": "pass",
+      "evidence_status": "stable-api-probed",
+      "limits": "Compile-only API shape. Does not prove runtime, network, homeserver, store, or UI semantics."
+    },
+    {
+      "id": "SC-004",
+      "plan_section_7_area": "7.1-authentication-and-account-lifecycle",
+      "p0_1_linkage": {
+        "categories": ["uia_auth", "client_methods"],
+        "representative_paths": [
+          "synara/src/app/components/ActionUIA.tsx",
+          "synara/src/app/components/AuthFlowsLoader.tsx"
+        ],
+        "notes": "P0.1: uia_auth (74 files), client_methods (130)."
+      },
+      "api_path": "matrix_sdk::ClientBuilder::homeserver_url",
+      "required_features": {
+        "requested_direct": [],
+        "resolved_on_matrix_sdk": ["e2e-encryption"],
+        "resolved_on_matrix_sdk_ui": [],
+        "notes": "e2e-encryption only via matrix-sdk-ui unification; not a direct request."
+      },
+      "stability_evidence": "Public stable API at matrix-sdk-0.18.0 pin; no experimental feature gate for this shape.",
+      "source": {
+        "path": "crates/matrix-sdk/src/client/builder/mod.rs",
+        "lines": "188",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/client/builder/mod.rs#L188",
+        "notes": "pub fn homeserver_url"
+      },
+      "probe_id": "P0.3b-client-builder-homeserver-url",
+      "probe_file": "probes/matrix-rust-sdk-0.18/src/auth.rs",
+      "compile_outcome": "pass",
+      "evidence_status": "stable-api-probed",
+      "limits": "Compile-only API shape. Does not prove runtime, network, homeserver, store, or UI semantics."
+    },
+    {
+      "id": "SC-005",
+      "plan_section_7_area": "7.1-authentication-and-account-lifecycle",
+      "p0_1_linkage": {
+        "categories": ["uia_auth", "client_methods"],
+        "representative_paths": [
+          "synara/src/app/components/ActionUIA.tsx",
+          "synara/src/app/components/AuthFlowsLoader.tsx"
+        ],
+        "notes": "P0.1: uia_auth (74 files), client_methods (130)."
+      },
+      "api_path": "matrix_sdk::ClientBuilder::server_name",
+      "required_features": {
+        "requested_direct": [],
+        "resolved_on_matrix_sdk": ["e2e-encryption"],
+        "resolved_on_matrix_sdk_ui": [],
+        "notes": "e2e-encryption only via matrix-sdk-ui unification; not a direct request."
+      },
+      "stability_evidence": "Public stable API at matrix-sdk-0.18.0 pin; no experimental feature gate for this shape.",
+      "source": {
+        "path": "crates/matrix-sdk/src/client/builder/mod.rs",
+        "lines": "202",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/client/builder/mod.rs#L202",
+        "notes": "pub fn server_name"
+      },
+      "probe_id": "P0.3b-client-builder-server-name",
+      "probe_file": "probes/matrix-rust-sdk-0.18/src/auth.rs",
+      "compile_outcome": "pass",
+      "evidence_status": "stable-api-probed",
+      "limits": "Compile-only API shape. Does not prove runtime, network, homeserver, store, or UI semantics."
+    },
+    {
+      "id": "SC-006",
+      "plan_section_7_area": "7.1-authentication-and-account-lifecycle",
+      "p0_1_linkage": {
+        "categories": ["uia_auth", "client_methods"],
+        "representative_paths": [
+          "synara/src/app/components/ActionUIA.tsx",
+          "synara/src/app/components/AuthFlowsLoader.tsx"
+        ],
+        "notes": "P0.1: uia_auth (74 files), client_methods (130)."
+      },
+      "api_path": "matrix_sdk::ClientBuilder::server_name_or_homeserver_url",
+      "required_features": {
+        "requested_direct": [],
+        "resolved_on_matrix_sdk": ["e2e-encryption"],
+        "resolved_on_matrix_sdk_ui": [],
+        "notes": "e2e-encryption only via matrix-sdk-ui unification; not a direct request."
+      },
+      "stability_evidence": "Public stable API at matrix-sdk-0.18.0 pin; no experimental feature gate for this shape.",
+      "source": {
+        "path": "crates/matrix-sdk/src/client/builder/mod.rs",
+        "lines": "237",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/client/builder/mod.rs#L237",
+        "notes": "pub fn server_name_or_homeserver_url"
+      },
+      "probe_id": "P0.3b-client-builder-server-name-or-url",
+      "probe_file": "probes/matrix-rust-sdk-0.18/src/auth.rs",
+      "compile_outcome": "pass",
+      "evidence_status": "stable-api-probed",
+      "limits": "Compile-only API shape. Does not prove runtime, network, homeserver, store, or UI semantics."
+    },
+    {
+      "id": "SC-007",
+      "plan_section_7_area": "7.1-authentication-and-account-lifecycle",
+      "p0_1_linkage": {
+        "categories": ["uia_auth", "client_methods"],
+        "representative_paths": [
+          "synara/src/app/components/ActionUIA.tsx",
+          "synara/src/app/components/AuthFlowsLoader.tsx"
+        ],
+        "notes": "P0.1: uia_auth (74 files), client_methods (130)."
+      },
+      "api_path": "matrix_sdk::AuthSession",
+      "required_features": {
+        "requested_direct": [],
+        "resolved_on_matrix_sdk": ["e2e-encryption"],
+        "resolved_on_matrix_sdk_ui": [],
+        "notes": "e2e-encryption only via matrix-sdk-ui unification; not a direct request."
+      },
+      "stability_evidence": "Public stable API at matrix-sdk-0.18.0 pin; no experimental feature gate for this shape.",
+      "source": {
+        "path": "crates/matrix-sdk/src/authentication/mod.rs",
+        "lines": "193",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/authentication/mod.rs#L193",
+        "notes": "pub enum AuthSession"
+      },
+      "probe_id": "P0.3b-auth-session-type",
+      "probe_file": "probes/matrix-rust-sdk-0.18/src/auth.rs",
+      "compile_outcome": "pass",
+      "evidence_status": "stable-api-probed",
+      "limits": "Compile-only API shape. Does not prove runtime, network, homeserver, store, or UI semantics."
+    },
+    {
+      "id": "SC-008",
+      "plan_section_7_area": "7.1-authentication-and-account-lifecycle",
+      "p0_1_linkage": {
+        "categories": ["uia_auth", "client_methods"],
+        "representative_paths": [
+          "synara/src/app/components/ActionUIA.tsx",
+          "synara/src/app/components/AuthFlowsLoader.tsx"
+        ],
+        "notes": "P0.1: uia_auth (74 files), client_methods (130)."
+      },
+      "api_path": "matrix_sdk::Client::matrix_auth() -> MatrixAuth",
+      "required_features": {
+        "requested_direct": [],
+        "resolved_on_matrix_sdk": ["e2e-encryption"],
+        "resolved_on_matrix_sdk_ui": [],
+        "notes": "e2e-encryption only via matrix-sdk-ui unification; not a direct request."
+      },
+      "stability_evidence": "Public stable API at matrix-sdk-0.18.0 pin; no experimental feature gate for this shape.",
+      "source": {
+        "path": "crates/matrix-sdk/src/client/mod.rs",
+        "lines": "783",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/client/mod.rs#L783",
+        "notes": "pub fn matrix_auth"
+      },
+      "probe_id": "P0.3b-client-matrix-auth",
+      "probe_file": "probes/matrix-rust-sdk-0.18/src/auth.rs",
+      "compile_outcome": "pass",
+      "evidence_status": "stable-api-probed",
+      "limits": "Compile-only API shape. Does not prove runtime, network, homeserver, store, or UI semantics."
+    },
+    {
+      "id": "SC-009",
+      "plan_section_7_area": "7.1-authentication-and-account-lifecycle",
+      "p0_1_linkage": {
+        "categories": ["uia_auth", "client_methods"],
+        "representative_paths": [
+          "synara/src/app/components/ActionUIA.tsx",
+          "synara/src/app/components/AuthFlowsLoader.tsx"
+        ],
+        "notes": "P0.1: uia_auth (74 files), client_methods (130)."
+      },
+      "api_path": "matrix_sdk::authentication::matrix::MatrixAuth::login_username",
+      "required_features": {
+        "requested_direct": [],
+        "resolved_on_matrix_sdk": ["e2e-encryption"],
+        "resolved_on_matrix_sdk_ui": [],
+        "notes": "e2e-encryption only via matrix-sdk-ui unification; not a direct request."
+      },
+      "stability_evidence": "Public stable API at matrix-sdk-0.18.0 pin; no experimental feature gate for this shape.",
+      "source": {
+        "path": "crates/matrix-sdk/src/authentication/matrix/mod.rs",
+        "lines": "175",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/authentication/matrix/mod.rs#L175",
+        "notes": "pub fn login_username"
+      },
+      "probe_id": "P0.3b-matrix-auth-login-username",
+      "probe_file": "probes/matrix-rust-sdk-0.18/src/auth.rs",
+      "compile_outcome": "pass",
+      "evidence_status": "stable-api-probed",
+      "limits": "Compile-only API shape. Does not prove runtime, network, homeserver, store, or UI semantics."
+    },
+    {
+      "id": "SC-010",
+      "plan_section_7_area": "7.1-authentication-and-account-lifecycle",
+      "p0_1_linkage": {
+        "categories": ["uia_auth", "client_methods"],
+        "representative_paths": [
+          "synara/src/app/components/ActionUIA.tsx",
+          "synara/src/app/components/AuthFlowsLoader.tsx"
+        ],
+        "notes": "P0.1: uia_auth (74 files), client_methods (130)."
+      },
+      "api_path": "matrix_sdk::authentication::matrix::MatrixAuth::get_login_types",
+      "required_features": {
+        "requested_direct": [],
+        "resolved_on_matrix_sdk": ["e2e-encryption"],
+        "resolved_on_matrix_sdk_ui": [],
+        "notes": "e2e-encryption only via matrix-sdk-ui unification; not a direct request."
+      },
+      "stability_evidence": "Public stable API at matrix-sdk-0.18.0 pin; no experimental feature gate for this shape.",
+      "source": {
+        "path": "crates/matrix-sdk/src/authentication/matrix/mod.rs",
+        "lines": "82",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/authentication/matrix/mod.rs#L82",
+        "notes": "pub async fn get_login_types"
+      },
+      "probe_id": "P0.3b-matrix-auth-get-login-types",
+      "probe_file": "probes/matrix-rust-sdk-0.18/src/auth.rs",
+      "compile_outcome": "pass",
+      "evidence_status": "stable-api-probed",
+      "limits": "Compile-only API shape. Does not prove runtime, network, homeserver, store, or UI semantics."
+    },
+    {
+      "id": "SC-011",
+      "plan_section_7_area": "7.1-authentication-and-account-lifecycle",
+      "p0_1_linkage": {
+        "categories": ["uia_auth", "client_methods"],
+        "representative_paths": [
+          "synara/src/app/components/ActionUIA.tsx",
+          "synara/src/app/components/AuthFlowsLoader.tsx"
+        ],
+        "notes": "P0.1: uia_auth (74 files), client_methods (130)."
+      },
+      "api_path": "matrix_sdk::Client::restore_session",
+      "required_features": {
+        "requested_direct": [],
+        "resolved_on_matrix_sdk": ["e2e-encryption"],
+        "resolved_on_matrix_sdk_ui": [],
+        "notes": "e2e-encryption only via matrix-sdk-ui unification; not a direct request."
+      },
+      "stability_evidence": "Public stable API at matrix-sdk-0.18.0 pin; no experimental feature gate for this shape.",
+      "source": {
+        "path": "crates/matrix-sdk/src/client/mod.rs",
+        "lines": "1451",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/client/mod.rs#L1451",
+        "notes": "pub async fn restore_session"
+      },
+      "probe_id": "P0.3b-client-restore-session",
+      "probe_file": "probes/matrix-rust-sdk-0.18/src/auth.rs",
+      "compile_outcome": "pass",
+      "evidence_status": "stable-api-probed",
+      "limits": "Compile-only API shape. Does not prove runtime, network, homeserver, store, or UI semantics."
+    },
+    {
+      "id": "SC-012",
+      "plan_section_7_area": "7.1-authentication-and-account-lifecycle",
+      "p0_1_linkage": {
+        "categories": ["uia_auth", "client_methods"],
+        "representative_paths": [
+          "synara/src/app/components/ActionUIA.tsx",
+          "synara/src/app/components/AuthFlowsLoader.tsx"
+        ],
+        "notes": "P0.1: uia_auth (74 files), client_methods (130)."
+      },
+      "api_path": "matrix_sdk::Client::logout",
+      "required_features": {
+        "requested_direct": [],
+        "resolved_on_matrix_sdk": ["e2e-encryption"],
+        "resolved_on_matrix_sdk_ui": [],
+        "notes": "e2e-encryption only via matrix-sdk-ui unification; not a direct request."
+      },
+      "stability_evidence": "Public stable API at matrix-sdk-0.18.0 pin; no experimental feature gate for this shape.",
+      "source": {
+        "path": "crates/matrix-sdk/src/client/mod.rs",
+        "lines": "1512",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/client/mod.rs#L1512",
+        "notes": "pub async fn logout"
+      },
+      "probe_id": "P0.3b-client-logout",
+      "probe_file": "probes/matrix-rust-sdk-0.18/src/auth.rs",
+      "compile_outcome": "pass",
+      "evidence_status": "stable-api-probed",
+      "limits": "Compile-only API shape. Does not prove runtime, network, homeserver, store, or UI semantics."
+    },
+    {
+      "id": "SC-013",
+      "plan_section_7_area": "7.2-sync-room-list-navigation-and-state",
+      "p0_1_linkage": {
+        "categories": [
+          "sync_lifecycle",
+          "room_lists",
+          "client_methods",
+          "room_methods"
+        ],
+        "representative_paths": [
+          "synara/src/app/pages/client/ClientNonUIFeatures.tsx",
+          "synara/src/app/plugins/call/CallEmbed.ts"
+        ],
+        "notes": "P0.1: sync_lifecycle (15), room_lists (50), room_methods (91)."
+      },
+      "api_path": "matrix_sdk_ui::sync_service::SyncService",
+      "required_features": {
+        "requested_direct": [],
+        "resolved_on_matrix_sdk": ["e2e-encryption"],
+        "resolved_on_matrix_sdk_ui": [],
+        "notes": "UI crate resolved features empty; matrix-sdk still unified with e2e-encryption."
+      },
+      "stability_evidence": "Public stable API at matrix-sdk-0.18.0 pin; no experimental feature gate for this shape.",
+      "source": {
+        "path": "crates/matrix-sdk-ui/src/sync_service.rs",
+        "lines": "583",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk-ui/src/sync_service.rs#L583",
+        "notes": "pub struct SyncService"
+      },
+      "probe_id": "P0.3a-sync-service-type",
+      "probe_file": "probes/matrix-rust-sdk-0.18/src/p0_3a.rs",
+      "compile_outcome": "pass",
+      "evidence_status": "stable-api-probed",
+      "limits": "Compile-only API shape. Does not prove runtime, network, homeserver, store, or UI semantics."
+    },
+    {
+      "id": "SC-014",
+      "plan_section_7_area": "7.2-sync-room-list-navigation-and-state",
+      "p0_1_linkage": {
+        "categories": [
+          "sync_lifecycle",
+          "room_lists",
+          "client_methods",
+          "room_methods"
+        ],
+        "representative_paths": [
+          "synara/src/app/pages/client/ClientNonUIFeatures.tsx",
+          "synara/src/app/plugins/call/CallEmbed.ts"
+        ],
+        "notes": "P0.1: sync_lifecycle (15), room_lists (50), room_methods (91)."
+      },
+      "api_path": "matrix_sdk_ui::sync_service::SyncService::builder",
+      "required_features": {
+        "requested_direct": [],
+        "resolved_on_matrix_sdk": ["e2e-encryption"],
+        "resolved_on_matrix_sdk_ui": [],
+        "notes": "UI crate resolved features empty; matrix-sdk still unified with e2e-encryption."
+      },
+      "stability_evidence": "Public stable API at matrix-sdk-0.18.0 pin; no experimental feature gate for this shape.",
+      "source": {
+        "path": "crates/matrix-sdk-ui/src/sync_service.rs",
+        "lines": "606",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk-ui/src/sync_service.rs#L606",
+        "notes": "pub fn builder"
+      },
+      "probe_id": "P0.3a-sync-service-builder-fn",
+      "probe_file": "probes/matrix-rust-sdk-0.18/src/p0_3a.rs",
+      "compile_outcome": "pass",
+      "evidence_status": "stable-api-probed",
+      "limits": "Compile-only API shape. Does not prove runtime, network, homeserver, store, or UI semantics."
+    },
+    {
+      "id": "SC-015",
+      "plan_section_7_area": "7.2-sync-room-list-navigation-and-state",
+      "p0_1_linkage": {
+        "categories": [
+          "sync_lifecycle",
+          "room_lists",
+          "client_methods",
+          "room_methods"
+        ],
+        "representative_paths": [
+          "synara/src/app/pages/client/ClientNonUIFeatures.tsx",
+          "synara/src/app/plugins/call/CallEmbed.ts"
+        ],
+        "notes": "P0.1: sync_lifecycle (15), room_lists (50), room_methods (91)."
+      },
+      "api_path": "matrix_sdk_ui::sync_service::SyncService::start",
+      "required_features": {
+        "requested_direct": [],
+        "resolved_on_matrix_sdk": ["e2e-encryption"],
+        "resolved_on_matrix_sdk_ui": [],
+        "notes": "UI crate resolved features empty; matrix-sdk still unified with e2e-encryption."
+      },
+      "stability_evidence": "Public stable API at matrix-sdk-0.18.0 pin; no experimental feature gate for this shape.",
+      "source": {
+        "path": "crates/matrix-sdk-ui/src/sync_service.rs",
+        "lines": "629",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk-ui/src/sync_service.rs#L629",
+        "notes": "pub async fn start"
+      },
+      "probe_id": "P0.3b-sync-service-start",
+      "probe_file": "probes/matrix-rust-sdk-0.18/src/sync_rooms.rs",
+      "compile_outcome": "pass",
+      "evidence_status": "stable-api-probed",
+      "limits": "Compile-only API shape. Does not prove runtime, network, homeserver, store, or UI semantics."
+    },
+    {
+      "id": "SC-016",
+      "plan_section_7_area": "7.2-sync-room-list-navigation-and-state",
+      "p0_1_linkage": {
+        "categories": [
+          "sync_lifecycle",
+          "room_lists",
+          "client_methods",
+          "room_methods"
+        ],
+        "representative_paths": [
+          "synara/src/app/pages/client/ClientNonUIFeatures.tsx",
+          "synara/src/app/plugins/call/CallEmbed.ts"
+        ],
+        "notes": "P0.1: sync_lifecycle (15), room_lists (50), room_methods (91)."
+      },
+      "api_path": "matrix_sdk_ui::sync_service::SyncService::room_list_service",
+      "required_features": {
+        "requested_direct": [],
+        "resolved_on_matrix_sdk": ["e2e-encryption"],
+        "resolved_on_matrix_sdk_ui": [],
+        "notes": "UI crate resolved features empty; matrix-sdk still unified with e2e-encryption."
+      },
+      "stability_evidence": "Public stable API at matrix-sdk-0.18.0 pin; no experimental feature gate for this shape.",
+      "source": {
+        "path": "crates/matrix-sdk-ui/src/sync_service.rs",
+        "lines": "612",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk-ui/src/sync_service.rs#L612",
+        "notes": "pub fn room_list_service"
+      },
+      "probe_id": "P0.3b-sync-service-room-list-service",
+      "probe_file": "probes/matrix-rust-sdk-0.18/src/sync_rooms.rs",
+      "compile_outcome": "pass",
+      "evidence_status": "stable-api-probed",
+      "limits": "Compile-only API shape. Does not prove runtime, network, homeserver, store, or UI semantics."
+    },
+    {
+      "id": "SC-017",
+      "plan_section_7_area": "7.2-sync-room-list-navigation-and-state",
+      "p0_1_linkage": {
+        "categories": [
+          "sync_lifecycle",
+          "room_lists",
+          "client_methods",
+          "room_methods"
+        ],
+        "representative_paths": [
+          "synara/src/app/pages/client/ClientNonUIFeatures.tsx",
+          "synara/src/app/plugins/call/CallEmbed.ts"
+        ],
+        "notes": "P0.1: sync_lifecycle (15), room_lists (50), room_methods (91)."
+      },
+      "api_path": "matrix_sdk::Client::sync_once",
+      "required_features": {
+        "requested_direct": [],
+        "resolved_on_matrix_sdk": ["e2e-encryption"],
+        "resolved_on_matrix_sdk_ui": [],
+        "notes": "e2e-encryption only via matrix-sdk-ui unification; not a direct request."
+      },
+      "stability_evidence": "Public stable API at matrix-sdk-0.18.0 pin; no experimental feature gate for this shape.",
+      "source": {
+        "path": "crates/matrix-sdk/src/client/mod.rs",
+        "lines": "2835",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/client/mod.rs#L2835",
+        "notes": "pub async fn sync_once"
+      },
+      "probe_id": "P0.3b-client-sync-once",
+      "probe_file": "probes/matrix-rust-sdk-0.18/src/sync_rooms.rs",
+      "compile_outcome": "pass",
+      "evidence_status": "stable-api-probed",
+      "limits": "Compile-only API shape. Does not prove runtime, network, homeserver, store, or UI semantics."
+    },
+    {
+      "id": "SC-018",
+      "plan_section_7_area": "7.2-sync-room-list-navigation-and-state",
+      "p0_1_linkage": {
+        "categories": [
+          "sync_lifecycle",
+          "room_lists",
+          "client_methods",
+          "room_methods"
+        ],
+        "representative_paths": [
+          "synara/src/app/pages/client/ClientNonUIFeatures.tsx",
+          "synara/src/app/plugins/call/CallEmbed.ts"
+        ],
+        "notes": "P0.1: sync_lifecycle (15), room_lists (50), room_methods (91)."
+      },
+      "api_path": "matrix_sdk_ui::RoomListService",
+      "required_features": {
+        "requested_direct": [],
+        "resolved_on_matrix_sdk": ["e2e-encryption"],
+        "resolved_on_matrix_sdk_ui": [],
+        "notes": "UI crate resolved features empty; matrix-sdk still unified with e2e-encryption."
+      },
+      "stability_evidence": "Public stable API at matrix-sdk-0.18.0 pin; no experimental feature gate for this shape.",
+      "source": {
+        "path": "crates/matrix-sdk-ui/src/room_list_service/mod.rs",
+        "lines": "121",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk-ui/src/room_list_service/mod.rs#L121",
+        "notes": "pub struct RoomListService"
+      },
+      "probe_id": "P0.3a-room-list-service-type",
+      "probe_file": "probes/matrix-rust-sdk-0.18/src/p0_3a.rs",
+      "compile_outcome": "pass",
+      "evidence_status": "stable-api-probed",
+      "limits": "Compile-only API shape. Does not prove runtime, network, homeserver, store, or UI semantics."
+    },
+    {
+      "id": "SC-019",
+      "plan_section_7_area": "7.2-sync-room-list-navigation-and-state",
+      "p0_1_linkage": {
+        "categories": [
+          "sync_lifecycle",
+          "room_lists",
+          "client_methods",
+          "room_methods"
+        ],
+        "representative_paths": [
+          "synara/src/app/pages/client/ClientNonUIFeatures.tsx",
+          "synara/src/app/plugins/call/CallEmbed.ts"
+        ],
+        "notes": "P0.1: sync_lifecycle (15), room_lists (50), room_methods (91)."
+      },
+      "api_path": "matrix_sdk_ui::RoomListService::all_rooms",
+      "required_features": {
+        "requested_direct": [],
+        "resolved_on_matrix_sdk": ["e2e-encryption"],
+        "resolved_on_matrix_sdk_ui": [],
+        "notes": "UI crate resolved features empty; matrix-sdk still unified with e2e-encryption."
+      },
+      "stability_evidence": "Public stable API at matrix-sdk-0.18.0 pin; no experimental feature gate for this shape.",
+      "source": {
+        "path": "crates/matrix-sdk-ui/src/room_list_service/mod.rs",
+        "lines": "459",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk-ui/src/room_list_service/mod.rs#L459",
+        "notes": "pub async fn all_rooms"
+      },
+      "probe_id": "P0.3b-room-list-service-all-rooms",
+      "probe_file": "probes/matrix-rust-sdk-0.18/src/sync_rooms.rs",
+      "compile_outcome": "pass",
+      "evidence_status": "stable-api-probed",
+      "limits": "Compile-only API shape. Does not prove runtime, network, homeserver, store, or UI semantics."
+    },
+    {
+      "id": "SC-020",
+      "plan_section_7_area": "7.2-sync-room-list-navigation-and-state",
+      "p0_1_linkage": {
+        "categories": [
+          "sync_lifecycle",
+          "room_lists",
+          "client_methods",
+          "room_methods"
+        ],
+        "representative_paths": [
+          "synara/src/app/pages/client/ClientNonUIFeatures.tsx",
+          "synara/src/app/plugins/call/CallEmbed.ts"
+        ],
+        "notes": "P0.1: sync_lifecycle (15), room_lists (50), room_methods (91)."
+      },
+      "api_path": "matrix_sdk::Room",
+      "required_features": {
+        "requested_direct": [],
+        "resolved_on_matrix_sdk": ["e2e-encryption"],
+        "resolved_on_matrix_sdk_ui": [],
+        "notes": "e2e-encryption only via matrix-sdk-ui unification; not a direct request."
+      },
+      "stability_evidence": "Public stable API at matrix-sdk-0.18.0 pin; no experimental feature gate for this shape.",
+      "source": {
+        "path": "crates/matrix-sdk/src/room/mod.rs",
+        "lines": "212",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/room/mod.rs#L212",
+        "notes": "pub struct Room"
+      },
+      "probe_id": "P0.3a-room-type",
+      "probe_file": "probes/matrix-rust-sdk-0.18/src/p0_3a.rs",
+      "compile_outcome": "pass",
+      "evidence_status": "stable-api-probed",
+      "limits": "Compile-only API shape. Does not prove runtime, network, homeserver, store, or UI semantics."
+    },
+    {
+      "id": "SC-021",
+      "plan_section_7_area": "7.2-sync-room-list-navigation-and-state",
+      "p0_1_linkage": {
+        "categories": [
+          "sync_lifecycle",
+          "room_lists",
+          "client_methods",
+          "room_methods"
+        ],
+        "representative_paths": [
+          "synara/src/app/pages/client/ClientNonUIFeatures.tsx",
+          "synara/src/app/plugins/call/CallEmbed.ts"
+        ],
+        "notes": "P0.1: sync_lifecycle (15), room_lists (50), room_methods (91)."
+      },
+      "api_path": "matrix_sdk::Room::room_id (via Deref to BaseRoom)",
+      "required_features": {
+        "requested_direct": [],
+        "resolved_on_matrix_sdk": ["e2e-encryption"],
+        "resolved_on_matrix_sdk_ui": [],
+        "notes": "e2e-encryption only via matrix-sdk-ui unification; not a direct request."
+      },
+      "stability_evidence": "Public stable API at matrix-sdk-0.18.0 pin; no experimental feature gate for this shape.",
+      "source": {
+        "path": "crates/matrix-sdk-base/src/room/mod.rs",
+        "lines": "138",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk-base/src/room/mod.rs#L138",
+        "notes": "BaseRoom::room_id"
+      },
+      "probe_id": "P0.3a-room-room-id-fn",
+      "probe_file": "probes/matrix-rust-sdk-0.18/src/p0_3a.rs",
+      "compile_outcome": "pass",
+      "evidence_status": "stable-api-probed",
+      "limits": "Compile-only API shape. Does not prove runtime, network, homeserver, store, or UI semantics."
+    },
+    {
+      "id": "SC-022",
+      "plan_section_7_area": "7.2-sync-room-list-navigation-and-state",
+      "p0_1_linkage": {
+        "categories": [
+          "sync_lifecycle",
+          "room_lists",
+          "client_methods",
+          "room_methods"
+        ],
+        "representative_paths": [
+          "synara/src/app/pages/client/ClientNonUIFeatures.tsx",
+          "synara/src/app/plugins/call/CallEmbed.ts"
+        ],
+        "notes": "P0.1: sync_lifecycle (15), room_lists (50), room_methods (91)."
+      },
+      "api_path": "matrix_sdk::Client::get_room",
+      "required_features": {
+        "requested_direct": [],
+        "resolved_on_matrix_sdk": ["e2e-encryption"],
+        "resolved_on_matrix_sdk_ui": [],
+        "notes": "e2e-encryption only via matrix-sdk-ui unification; not a direct request."
+      },
+      "stability_evidence": "Public stable API at matrix-sdk-0.18.0 pin; no experimental feature gate for this shape.",
+      "source": {
+        "path": "crates/matrix-sdk/src/client/mod.rs",
+        "lines": "1347",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/client/mod.rs#L1347",
+        "notes": "pub fn get_room"
+      },
+      "probe_id": "P0.3b-client-get-room",
+      "probe_file": "probes/matrix-rust-sdk-0.18/src/sync_rooms.rs",
+      "compile_outcome": "pass",
+      "evidence_status": "stable-api-probed",
+      "limits": "Compile-only API shape. Does not prove runtime, network, homeserver, store, or UI semantics."
+    },
+    {
+      "id": "SC-023",
+      "plan_section_7_area": "7.2-sync-room-list-navigation-and-state",
+      "p0_1_linkage": {
+        "categories": [
+          "sync_lifecycle",
+          "room_lists",
+          "client_methods",
+          "room_methods"
+        ],
+        "representative_paths": [
+          "synara/src/app/pages/client/ClientNonUIFeatures.tsx",
+          "synara/src/app/plugins/call/CallEmbed.ts"
+        ],
+        "notes": "P0.1: sync_lifecycle (15), room_lists (50), room_methods (91)."
+      },
+      "api_path": "matrix_sdk::Client::rooms",
+      "required_features": {
+        "requested_direct": [],
+        "resolved_on_matrix_sdk": ["e2e-encryption"],
+        "resolved_on_matrix_sdk_ui": [],
+        "notes": "e2e-encryption only via matrix-sdk-ui unification; not a direct request."
+      },
+      "stability_evidence": "Public stable API at matrix-sdk-0.18.0 pin; no experimental feature gate for this shape.",
+      "source": {
+        "path": "crates/matrix-sdk/src/client/mod.rs",
+        "lines": "1293",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/client/mod.rs#L1293",
+        "notes": "pub fn rooms"
+      },
+      "probe_id": "P0.3b-client-rooms",
+      "probe_file": "probes/matrix-rust-sdk-0.18/src/sync_rooms.rs",
+      "compile_outcome": "pass",
+      "evidence_status": "stable-api-probed",
+      "limits": "Compile-only API shape. Does not prove runtime, network, homeserver, store, or UI semantics."
+    },
+    {
+      "id": "SC-024",
+      "plan_section_7_area": "7.2-sync-room-list-navigation-and-state",
+      "p0_1_linkage": {
+        "categories": [
+          "sync_lifecycle",
+          "room_lists",
+          "client_methods",
+          "room_methods"
+        ],
+        "representative_paths": [
+          "synara/src/app/pages/client/ClientNonUIFeatures.tsx",
+          "synara/src/app/plugins/call/CallEmbed.ts"
+        ],
+        "notes": "P0.1: sync_lifecycle (15), room_lists (50), room_methods (91)."
+      },
+      "api_path": "matrix_sdk::Client::joined_rooms",
+      "required_features": {
+        "requested_direct": [],
+        "resolved_on_matrix_sdk": ["e2e-encryption"],
+        "resolved_on_matrix_sdk_ui": [],
+        "notes": "e2e-encryption only via matrix-sdk-ui unification; not a direct request."
+      },
+      "stability_evidence": "Public stable API at matrix-sdk-0.18.0 pin; no experimental feature gate for this shape.",
+      "source": {
+        "path": "crates/matrix-sdk/src/client/mod.rs",
+        "lines": "1319",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/client/mod.rs#L1319",
+        "notes": "pub fn joined_rooms"
+      },
+      "probe_id": "P0.3b-client-joined-rooms",
+      "probe_file": "probes/matrix-rust-sdk-0.18/src/sync_rooms.rs",
+      "compile_outcome": "pass",
+      "evidence_status": "stable-api-probed",
+      "limits": "Compile-only API shape. Does not prove runtime, network, homeserver, store, or UI semantics."
+    },
+    {
+      "id": "SC-025",
+      "plan_section_7_area": "7.2-sync-room-list-navigation-and-state",
+      "p0_1_linkage": {
+        "categories": [
+          "sync_lifecycle",
+          "room_lists",
+          "client_methods",
+          "room_methods"
+        ],
+        "representative_paths": [
+          "synara/src/app/pages/client/ClientNonUIFeatures.tsx",
+          "synara/src/app/plugins/call/CallEmbed.ts"
+        ],
+        "notes": "P0.1: sync_lifecycle (15), room_lists (50), room_methods (91)."
+      },
+      "api_path": "matrix_sdk::Room::state (via Deref to BaseRoom)",
+      "required_features": {
+        "requested_direct": [],
+        "resolved_on_matrix_sdk": ["e2e-encryption"],
+        "resolved_on_matrix_sdk_ui": [],
+        "notes": "e2e-encryption only via matrix-sdk-ui unification; not a direct request."
+      },
+      "stability_evidence": "Public stable API at matrix-sdk-0.18.0 pin; no experimental feature gate for this shape.",
+      "source": {
+        "path": "crates/matrix-sdk-base/src/room/state.rs",
+        "lines": "23",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk-base/src/room/state.rs#L23",
+        "notes": "pub fn state -> RoomState"
+      },
+      "probe_id": "P0.3b-room-state",
+      "probe_file": "probes/matrix-rust-sdk-0.18/src/sync_rooms.rs",
+      "compile_outcome": "pass",
+      "evidence_status": "stable-api-probed",
+      "limits": "Compile-only API shape. Does not prove runtime, network, homeserver, store, or UI semantics."
+    },
+    {
+      "id": "SC-026",
+      "plan_section_7_area": "7.3-timeline-and-event-presentation",
+      "p0_1_linkage": {
+        "categories": ["timelines", "room_methods"],
+        "representative_paths": [
+          "synara/src/app/components/message/Reply.tsx",
+          "synara/src/app/features/room/RoomInput.tsx"
+        ],
+        "notes": "P0.1: timelines (34 files)."
+      },
+      "api_path": "matrix_sdk_ui::Timeline",
+      "required_features": {
+        "requested_direct": [],
+        "resolved_on_matrix_sdk": ["e2e-encryption"],
+        "resolved_on_matrix_sdk_ui": [],
+        "notes": "UI crate resolved features empty; matrix-sdk still unified with e2e-encryption."
+      },
+      "stability_evidence": "Public stable API at matrix-sdk-0.18.0 pin; no experimental feature gate for this shape.",
+      "source": {
+        "path": "crates/matrix-sdk-ui/src/timeline/mod.rs",
+        "lines": "113",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk-ui/src/timeline/mod.rs#L113",
+        "notes": "pub struct Timeline"
+      },
+      "probe_id": "P0.3a-timeline-type",
+      "probe_file": "probes/matrix-rust-sdk-0.18/src/p0_3a.rs",
+      "compile_outcome": "pass",
+      "evidence_status": "stable-api-probed",
+      "limits": "Compile-only API shape. Does not prove runtime, network, homeserver, store, or UI semantics."
+    },
+    {
+      "id": "SC-027",
+      "plan_section_7_area": "7.3-timeline-and-event-presentation",
+      "p0_1_linkage": {
+        "categories": ["timelines", "room_methods"],
+        "representative_paths": [
+          "synara/src/app/components/message/Reply.tsx",
+          "synara/src/app/features/room/RoomInput.tsx"
+        ],
+        "notes": "P0.1: timelines (34 files)."
+      },
+      "api_path": "matrix_sdk_ui::timeline::TimelineBuilder",
+      "required_features": {
+        "requested_direct": [],
+        "resolved_on_matrix_sdk": ["e2e-encryption"],
+        "resolved_on_matrix_sdk_ui": [],
+        "notes": "UI crate resolved features empty; matrix-sdk still unified with e2e-encryption."
+      },
+      "stability_evidence": "Public stable API at matrix-sdk-0.18.0 pin; no experimental feature gate for this shape.",
+      "source": {
+        "path": "crates/matrix-sdk-ui/src/timeline/builder.rs",
+        "lines": "39",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk-ui/src/timeline/builder.rs#L39",
+        "notes": "pub struct TimelineBuilder"
+      },
+      "probe_id": "P0.3a-timeline-builder-type",
+      "probe_file": "probes/matrix-rust-sdk-0.18/src/p0_3a.rs",
+      "compile_outcome": "pass",
+      "evidence_status": "stable-api-probed",
+      "limits": "Compile-only API shape. Does not prove runtime, network, homeserver, store, or UI semantics."
+    },
+    {
+      "id": "SC-028",
+      "plan_section_7_area": "7.3-timeline-and-event-presentation",
+      "p0_1_linkage": {
+        "categories": ["timelines", "room_methods"],
+        "representative_paths": [
+          "synara/src/app/components/message/Reply.tsx",
+          "synara/src/app/features/room/RoomInput.tsx"
+        ],
+        "notes": "P0.1: timelines (34 files)."
+      },
+      "api_path": "matrix_sdk_ui::timeline::RoomExt::timeline_builder",
+      "required_features": {
+        "requested_direct": [],
+        "resolved_on_matrix_sdk": ["e2e-encryption"],
+        "resolved_on_matrix_sdk_ui": [],
+        "notes": "UI crate resolved features empty; matrix-sdk still unified with e2e-encryption."
+      },
+      "stability_evidence": "Public stable API at matrix-sdk-0.18.0 pin; no experimental feature gate for this shape.",
+      "source": {
+        "path": "crates/matrix-sdk-ui/src/timeline/traits.rs",
+        "lines": "42-61",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk-ui/src/timeline/traits.rs#L42-L61",
+        "notes": "RoomExt::timeline_builder"
+      },
+      "probe_id": "P0.3a-room-ext-timeline-builder",
+      "probe_file": "probes/matrix-rust-sdk-0.18/src/p0_3a.rs",
+      "compile_outcome": "pass",
+      "evidence_status": "stable-api-probed",
+      "limits": "Compile-only API shape. Does not prove runtime, network, homeserver, store, or UI semantics."
+    },
+    {
+      "id": "SC-029",
+      "plan_section_7_area": "7.3-timeline-and-event-presentation",
+      "p0_1_linkage": {
+        "categories": ["timelines", "room_methods"],
+        "representative_paths": [
+          "synara/src/app/components/message/Reply.tsx",
+          "synara/src/app/features/room/RoomInput.tsx"
+        ],
+        "notes": "P0.1: timelines (34 files)."
+      },
+      "api_path": "matrix_sdk_ui::Timeline::subscribe",
+      "required_features": {
+        "requested_direct": [],
+        "resolved_on_matrix_sdk": ["e2e-encryption"],
+        "resolved_on_matrix_sdk_ui": [],
+        "notes": "UI crate resolved features empty; matrix-sdk still unified with e2e-encryption."
+      },
+      "stability_evidence": "Public stable API at matrix-sdk-0.18.0 pin; no experimental feature gate for this shape.",
+      "source": {
+        "path": "crates/matrix-sdk-ui/src/timeline/mod.rs",
+        "lines": "300",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk-ui/src/timeline/mod.rs#L300",
+        "notes": "pub async fn subscribe"
+      },
+      "probe_id": "P0.3b-timeline-subscribe",
+      "probe_file": "probes/matrix-rust-sdk-0.18/src/timeline.rs",
+      "compile_outcome": "pass",
+      "evidence_status": "stable-api-probed",
+      "limits": "Compile-only API shape. Does not prove runtime, network, homeserver, store, or UI semantics."
+    },
+    {
+      "id": "SC-030",
+      "plan_section_7_area": "7.3-timeline-and-event-presentation",
+      "p0_1_linkage": {
+        "categories": ["timelines", "room_methods"],
+        "representative_paths": [
+          "synara/src/app/components/message/Reply.tsx",
+          "synara/src/app/features/room/RoomInput.tsx"
+        ],
+        "notes": "P0.1: timelines (34 files)."
+      },
+      "api_path": "matrix_sdk_ui::Timeline::paginate_backwards",
+      "required_features": {
+        "requested_direct": [],
+        "resolved_on_matrix_sdk": ["e2e-encryption"],
+        "resolved_on_matrix_sdk_ui": [],
+        "notes": "UI crate resolved features empty; matrix-sdk still unified with e2e-encryption."
+      },
+      "stability_evidence": "Public stable API at matrix-sdk-0.18.0 pin; no experimental feature gate for this shape.",
+      "source": {
+        "path": "crates/matrix-sdk-ui/src/timeline/pagination.rs",
+        "lines": "33",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk-ui/src/timeline/pagination.rs#L33",
+        "notes": "pub async fn paginate_backwards"
+      },
+      "probe_id": "P0.3b-timeline-paginate-backwards",
+      "probe_file": "probes/matrix-rust-sdk-0.18/src/timeline.rs",
+      "compile_outcome": "pass",
+      "evidence_status": "stable-api-probed",
+      "limits": "Compile-only API shape. Does not prove runtime, network, homeserver, store, or UI semantics."
+    },
+    {
+      "id": "SC-031",
+      "plan_section_7_area": "7.3-timeline-and-event-presentation",
+      "p0_1_linkage": {
+        "categories": ["timelines", "room_methods"],
+        "representative_paths": [
+          "synara/src/app/components/message/Reply.tsx",
+          "synara/src/app/features/room/RoomInput.tsx"
+        ],
+        "notes": "P0.1: timelines (34 files)."
+      },
+      "api_path": "matrix_sdk_ui::Timeline::paginate_forwards",
+      "required_features": {
+        "requested_direct": [],
+        "resolved_on_matrix_sdk": ["e2e-encryption"],
+        "resolved_on_matrix_sdk_ui": [],
+        "notes": "UI crate resolved features empty; matrix-sdk still unified with e2e-encryption."
+      },
+      "stability_evidence": "Public stable API at matrix-sdk-0.18.0 pin; no experimental feature gate for this shape.",
+      "source": {
+        "path": "crates/matrix-sdk-ui/src/timeline/pagination.rs",
+        "lines": "82",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk-ui/src/timeline/pagination.rs#L82",
+        "notes": "pub async fn paginate_forwards"
+      },
+      "probe_id": "P0.3b-timeline-paginate-forwards",
+      "probe_file": "probes/matrix-rust-sdk-0.18/src/timeline.rs",
+      "compile_outcome": "pass",
+      "evidence_status": "stable-api-probed",
+      "limits": "Compile-only API shape. Does not prove runtime, network, homeserver, store, or UI semantics."
+    },
+    {
+      "id": "SC-032",
+      "plan_section_7_area": "7.3-timeline-and-event-presentation",
+      "p0_1_linkage": {
+        "categories": ["timelines", "room_methods"],
+        "representative_paths": [
+          "synara/src/app/components/message/Reply.tsx",
+          "synara/src/app/features/room/RoomInput.tsx"
+        ],
+        "notes": "P0.1: timelines (34 files)."
+      },
+      "api_path": "matrix_sdk_ui::timeline::TimelineBuilder::with_focus",
+      "required_features": {
+        "requested_direct": [],
+        "resolved_on_matrix_sdk": ["e2e-encryption"],
+        "resolved_on_matrix_sdk_ui": [],
+        "notes": "UI crate resolved features empty; matrix-sdk still unified with e2e-encryption."
+      },
+      "stability_evidence": "Public stable API at matrix-sdk-0.18.0 pin; no experimental feature gate for this shape.",
+      "source": {
+        "path": "crates/matrix-sdk-ui/src/timeline/builder.rs",
+        "lines": "69",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk-ui/src/timeline/builder.rs#L69",
+        "notes": "pub fn with_focus"
+      },
+      "probe_id": "P0.3b-timeline-builder-with-focus",
+      "probe_file": "probes/matrix-rust-sdk-0.18/src/timeline.rs",
+      "compile_outcome": "pass",
+      "evidence_status": "stable-api-probed",
+      "limits": "Compile-only API shape. Does not prove runtime, network, homeserver, store, or UI semantics."
+    },
+    {
+      "id": "SC-033",
+      "plan_section_7_area": "7.3-timeline-and-event-presentation",
+      "p0_1_linkage": {
+        "categories": ["timelines", "room_methods"],
+        "representative_paths": [
+          "synara/src/app/components/message/Reply.tsx",
+          "synara/src/app/features/room/RoomInput.tsx"
+        ],
+        "notes": "P0.1: timelines (34 files)."
+      },
+      "api_path": "matrix_sdk_ui::timeline::TimelineFocus",
+      "required_features": {
+        "requested_direct": [],
+        "resolved_on_matrix_sdk": ["e2e-encryption"],
+        "resolved_on_matrix_sdk_ui": [],
+        "notes": "UI crate resolved features empty; matrix-sdk still unified with e2e-encryption."
+      },
+      "stability_evidence": "Public stable API at matrix-sdk-0.18.0 pin; no experimental feature gate for this shape.",
+      "source": {
+        "path": "crates/matrix-sdk-ui/src/timeline/mod.rs",
+        "lines": "127",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk-ui/src/timeline/mod.rs#L127",
+        "notes": "pub enum TimelineFocus"
+      },
+      "probe_id": "P0.3b-timeline-focus-type",
+      "probe_file": "probes/matrix-rust-sdk-0.18/src/timeline.rs",
+      "compile_outcome": "pass",
+      "evidence_status": "stable-api-probed",
+      "limits": "Compile-only API shape. Does not prove runtime, network, homeserver, store, or UI semantics."
+    },
+    {
+      "id": "SC-034",
+      "plan_section_7_area": "7.4-composer-and-message-actions",
+      "p0_1_linkage": {
+        "categories": [
+          "custom_raw_event_sends",
+          "room_methods",
+          "typing",
+          "receipts"
+        ],
+        "representative_paths": [
+          "synara/src/app/features/room/RoomTimeline.tsx",
+          "synara/src/app/components/create-room/utils.ts"
+        ],
+        "notes": "P0.1: custom_raw_event_sends (20), typing (1), receipts (6)."
+      },
+      "api_path": "matrix_sdk::Room::send",
+      "required_features": {
+        "requested_direct": [],
+        "resolved_on_matrix_sdk": ["e2e-encryption"],
+        "resolved_on_matrix_sdk_ui": [],
+        "notes": "e2e-encryption only via matrix-sdk-ui unification; not a direct request."
+      },
+      "stability_evidence": "Public stable API at matrix-sdk-0.18.0 pin; no experimental feature gate for this shape.",
+      "source": {
+        "path": "crates/matrix-sdk/src/room/mod.rs",
+        "lines": "2540",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/room/mod.rs#L2540",
+        "notes": "pub fn send"
+      },
+      "probe_id": "P0.3b-room-send",
+      "probe_file": "probes/matrix-rust-sdk-0.18/src/messaging.rs",
+      "compile_outcome": "pass",
+      "evidence_status": "stable-api-probed",
+      "limits": "Compile-only API shape. Does not prove runtime, network, homeserver, store, or UI semantics."
+    },
+    {
+      "id": "SC-035",
+      "plan_section_7_area": "7.4-composer-and-message-actions",
+      "p0_1_linkage": {
+        "categories": [
+          "custom_raw_event_sends",
+          "room_methods",
+          "typing",
+          "receipts"
+        ],
+        "representative_paths": [
+          "synara/src/app/features/room/RoomTimeline.tsx",
+          "synara/src/app/components/create-room/utils.ts"
+        ],
+        "notes": "P0.1: custom_raw_event_sends (20), typing (1), receipts (6)."
+      },
+      "api_path": "matrix_sdk::Room::send_state_event",
+      "required_features": {
+        "requested_direct": [],
+        "resolved_on_matrix_sdk": ["e2e-encryption"],
+        "resolved_on_matrix_sdk_ui": [],
+        "notes": "e2e-encryption only via matrix-sdk-ui unification; not a direct request."
+      },
+      "stability_evidence": "Public stable API at matrix-sdk-0.18.0 pin; no experimental feature gate for this shape.",
+      "source": {
+        "path": "crates/matrix-sdk/src/room/mod.rs",
+        "lines": "3059",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/room/mod.rs#L3059",
+        "notes": "pub async fn send_state_event"
+      },
+      "probe_id": "P0.3b-room-send-state-event",
+      "probe_file": "probes/matrix-rust-sdk-0.18/src/messaging.rs",
+      "compile_outcome": "pass",
+      "evidence_status": "stable-api-probed",
+      "limits": "Compile-only API shape. Does not prove runtime, network, homeserver, store, or UI semantics."
+    },
+    {
+      "id": "SC-036",
+      "plan_section_7_area": "7.4-composer-and-message-actions",
+      "p0_1_linkage": {
+        "categories": [
+          "custom_raw_event_sends",
+          "room_methods",
+          "typing",
+          "receipts"
+        ],
+        "representative_paths": [
+          "synara/src/app/features/room/RoomTimeline.tsx",
+          "synara/src/app/components/create-room/utils.ts"
+        ],
+        "notes": "P0.1: custom_raw_event_sends (20), typing (1), receipts (6)."
+      },
+      "api_path": "matrix_sdk::Room::redact",
+      "required_features": {
+        "requested_direct": [],
+        "resolved_on_matrix_sdk": ["e2e-encryption"],
+        "resolved_on_matrix_sdk_ui": [],
+        "notes": "e2e-encryption only via matrix-sdk-ui unification; not a direct request."
+      },
+      "stability_evidence": "Public stable API at matrix-sdk-0.18.0 pin; no experimental feature gate for this shape.",
+      "source": {
+        "path": "crates/matrix-sdk/src/room/mod.rs",
+        "lines": "3386",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/room/mod.rs#L3386",
+        "notes": "pub async fn redact"
+      },
+      "probe_id": "P0.3b-room-redact",
+      "probe_file": "probes/matrix-rust-sdk-0.18/src/messaging.rs",
+      "compile_outcome": "pass",
+      "evidence_status": "stable-api-probed",
+      "limits": "Compile-only API shape. Does not prove runtime, network, homeserver, store, or UI semantics."
+    },
+    {
+      "id": "SC-037",
+      "plan_section_7_area": "7.4-composer-and-message-actions",
+      "p0_1_linkage": {
+        "categories": [
+          "custom_raw_event_sends",
+          "room_methods",
+          "typing",
+          "receipts"
+        ],
+        "representative_paths": [
+          "synara/src/app/features/room/RoomTimeline.tsx",
+          "synara/src/app/components/create-room/utils.ts"
+        ],
+        "notes": "P0.1: custom_raw_event_sends (20), typing (1), receipts (6)."
+      },
+      "api_path": "matrix_sdk::Room::typing_notice",
+      "required_features": {
+        "requested_direct": [],
+        "resolved_on_matrix_sdk": ["e2e-encryption"],
+        "resolved_on_matrix_sdk_ui": [],
+        "notes": "e2e-encryption only via matrix-sdk-ui unification; not a direct request."
+      },
+      "stability_evidence": "Public stable API at matrix-sdk-0.18.0 pin; no experimental feature gate for this shape.",
+      "source": {
+        "path": "crates/matrix-sdk/src/room/mod.rs",
+        "lines": "2094",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/room/mod.rs#L2094",
+        "notes": "pub async fn typing_notice"
+      },
+      "probe_id": "P0.3b-room-typing-notice",
+      "probe_file": "probes/matrix-rust-sdk-0.18/src/messaging.rs",
+      "compile_outcome": "pass",
+      "evidence_status": "stable-api-probed",
+      "limits": "Compile-only API shape. Does not prove runtime, network, homeserver, store, or UI semantics."
+    },
+    {
+      "id": "SC-038",
+      "plan_section_7_area": "7.4-composer-and-message-actions",
+      "p0_1_linkage": {
+        "categories": [
+          "custom_raw_event_sends",
+          "room_methods",
+          "typing",
+          "receipts"
+        ],
+        "representative_paths": [
+          "synara/src/app/features/room/RoomTimeline.tsx",
+          "synara/src/app/components/create-room/utils.ts"
+        ],
+        "notes": "P0.1: custom_raw_event_sends (20), typing (1), receipts (6)."
+      },
+      "api_path": "matrix_sdk::Room::send_single_receipt",
+      "required_features": {
+        "requested_direct": [],
+        "resolved_on_matrix_sdk": ["e2e-encryption"],
+        "resolved_on_matrix_sdk_ui": [],
+        "notes": "e2e-encryption only via matrix-sdk-ui unification; not a direct request."
+      },
+      "stability_evidence": "Public stable API at matrix-sdk-0.18.0 pin; no experimental feature gate for this shape.",
+      "source": {
+        "path": "crates/matrix-sdk/src/room/mod.rs",
+        "lines": "2167",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/room/mod.rs#L2167",
+        "notes": "pub async fn send_single_receipt"
+      },
+      "probe_id": "P0.3b-room-send-single-receipt",
+      "probe_file": "probes/matrix-rust-sdk-0.18/src/messaging.rs",
+      "compile_outcome": "pass",
+      "evidence_status": "stable-api-probed",
+      "limits": "Compile-only API shape. Does not prove runtime, network, homeserver, store, or UI semantics."
+    },
+    {
+      "id": "SC-039",
+      "plan_section_7_area": "7.4-composer-and-message-actions",
+      "p0_1_linkage": {
+        "categories": [
+          "custom_raw_event_sends",
+          "room_methods",
+          "typing",
+          "receipts"
+        ],
+        "representative_paths": [
+          "synara/src/app/features/room/RoomTimeline.tsx",
+          "synara/src/app/components/create-room/utils.ts"
+        ],
+        "notes": "P0.1: custom_raw_event_sends (20), typing (1), receipts (6)."
+      },
+      "api_path": "matrix_sdk_ui::Timeline::mark_as_read",
+      "required_features": {
+        "requested_direct": [],
+        "resolved_on_matrix_sdk": ["e2e-encryption"],
+        "resolved_on_matrix_sdk_ui": [],
+        "notes": "UI crate resolved features empty; matrix-sdk still unified with e2e-encryption."
+      },
+      "stability_evidence": "Public stable API at matrix-sdk-0.18.0 pin; no experimental feature gate for this shape.",
+      "source": {
+        "path": "crates/matrix-sdk-ui/src/timeline/mod.rs",
+        "lines": "836",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk-ui/src/timeline/mod.rs#L836",
+        "notes": "pub async fn mark_as_read"
+      },
+      "probe_id": "P0.3b-timeline-mark-as-read",
+      "probe_file": "probes/matrix-rust-sdk-0.18/src/messaging.rs",
+      "compile_outcome": "pass",
+      "evidence_status": "stable-api-probed",
+      "limits": "Compile-only API shape. Does not prove runtime, network, homeserver, store, or UI semantics."
+    },
+    {
+      "id": "SC-040",
+      "plan_section_7_area": "7.5-media",
+      "p0_1_linkage": {
+        "categories": ["authenticated_media", "client_methods"],
+        "representative_paths": [
+          "synara/src/app/features/room/RoomInput.tsx",
+          "synara/src/app/features/room/msgContent.ts"
+        ],
+        "notes": "P0.1: authenticated_media (7 files)."
+      },
+      "api_path": "matrix_sdk::Media",
+      "required_features": {
+        "requested_direct": [],
+        "resolved_on_matrix_sdk": ["e2e-encryption"],
+        "resolved_on_matrix_sdk_ui": [],
+        "notes": "e2e-encryption only via matrix-sdk-ui unification; not a direct request."
+      },
+      "stability_evidence": "Public stable API at matrix-sdk-0.18.0 pin; no experimental feature gate for this shape.",
+      "source": {
+        "path": "crates/matrix-sdk/src/media.rs",
+        "lines": "65",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/media.rs#L65",
+        "notes": "pub struct Media"
+      },
+      "probe_id": "P0.3b-media-type",
+      "probe_file": "probes/matrix-rust-sdk-0.18/src/media.rs",
+      "compile_outcome": "pass",
+      "evidence_status": "stable-api-probed",
+      "limits": "Compile-only API shape. Does not prove runtime, network, homeserver, store, or UI semantics."
+    },
+    {
+      "id": "SC-041",
+      "plan_section_7_area": "7.5-media",
+      "p0_1_linkage": {
+        "categories": ["authenticated_media", "client_methods"],
+        "representative_paths": [
+          "synara/src/app/features/room/RoomInput.tsx",
+          "synara/src/app/features/room/msgContent.ts"
+        ],
+        "notes": "P0.1: authenticated_media (7 files)."
+      },
+      "api_path": "matrix_sdk::Client::media() -> Media",
+      "required_features": {
+        "requested_direct": [],
+        "resolved_on_matrix_sdk": ["e2e-encryption"],
+        "resolved_on_matrix_sdk_ui": [],
+        "notes": "e2e-encryption only via matrix-sdk-ui unification; not a direct request."
+      },
+      "stability_evidence": "Public stable API at matrix-sdk-0.18.0 pin; no experimental feature gate for this shape.",
+      "source": {
+        "path": "crates/matrix-sdk/src/client/mod.rs",
+        "lines": "799",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/client/mod.rs#L799",
+        "notes": "pub fn media"
+      },
+      "probe_id": "P0.3b-client-media",
+      "probe_file": "probes/matrix-rust-sdk-0.18/src/media.rs",
+      "compile_outcome": "pass",
+      "evidence_status": "stable-api-probed",
+      "limits": "Compile-only API shape. Does not prove runtime, network, homeserver, store, or UI semantics."
+    },
+    {
+      "id": "SC-042",
+      "plan_section_7_area": "7.5-media",
+      "p0_1_linkage": {
+        "categories": ["authenticated_media", "client_methods"],
+        "representative_paths": [
+          "synara/src/app/features/room/RoomInput.tsx",
+          "synara/src/app/features/room/msgContent.ts"
+        ],
+        "notes": "P0.1: authenticated_media (7 files)."
+      },
+      "api_path": "matrix_sdk::Media::upload",
+      "required_features": {
+        "requested_direct": [],
+        "resolved_on_matrix_sdk": ["e2e-encryption"],
+        "resolved_on_matrix_sdk_ui": [],
+        "notes": "e2e-encryption only via matrix-sdk-ui unification; not a direct request."
+      },
+      "stability_evidence": "Public stable API at matrix-sdk-0.18.0 pin; no experimental feature gate for this shape.",
+      "source": {
+        "path": "crates/matrix-sdk/src/media.rs",
+        "lines": "200",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/media.rs#L200",
+        "notes": "pub fn upload"
+      },
+      "probe_id": "P0.3b-media-upload",
+      "probe_file": "probes/matrix-rust-sdk-0.18/src/media.rs",
+      "compile_outcome": "pass",
+      "evidence_status": "stable-api-probed",
+      "limits": "Compile-only API shape. Does not prove runtime, network, homeserver, store, or UI semantics. Probe takes Media::upload as a method value so the compiler checks the public signature without naming mime::Mime (not a direct probe dependency) and without naming the private SendMediaUploadRequest return type."
+    },
+    {
+      "id": "SC-043",
+      "plan_section_7_area": "7.5-media",
+      "p0_1_linkage": {
+        "categories": ["authenticated_media", "client_methods"],
+        "representative_paths": [
+          "synara/src/app/features/room/RoomInput.tsx",
+          "synara/src/app/features/room/msgContent.ts"
+        ],
+        "notes": "P0.1: authenticated_media (7 files)."
+      },
+      "api_path": "matrix_sdk::Media::get_media_content",
+      "required_features": {
+        "requested_direct": [],
+        "resolved_on_matrix_sdk": ["e2e-encryption"],
+        "resolved_on_matrix_sdk_ui": [],
+        "notes": "e2e-encryption only via matrix-sdk-ui unification; not a direct request."
+      },
+      "stability_evidence": "Public stable API at matrix-sdk-0.18.0 pin; no experimental feature gate for this shape.",
+      "source": {
+        "path": "crates/matrix-sdk/src/media.rs",
+        "lines": "418",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/media.rs#L418",
+        "notes": "pub async fn get_media_content"
+      },
+      "probe_id": "P0.3b-media-get-media-content",
+      "probe_file": "probes/matrix-rust-sdk-0.18/src/media.rs",
+      "compile_outcome": "pass",
+      "evidence_status": "stable-api-probed",
+      "limits": "Compile-only API shape. Does not prove runtime, network, homeserver, store, or UI semantics."
+    },
+    {
+      "id": "SC-044",
+      "plan_section_7_area": "7.6-room-profile-member-and-permission-management",
+      "p0_1_linkage": {
+        "categories": ["room_methods", "client_methods"],
+        "representative_paths": [
+          "synara/src/app/components/RoomSummaryLoader.tsx",
+          "synara/src/app/components/create-room/utils.ts"
+        ],
+        "notes": "P0.1: room_methods (91 files)."
+      },
+      "api_path": "matrix_sdk::Client::create_room",
+      "required_features": {
+        "requested_direct": [],
+        "resolved_on_matrix_sdk": ["e2e-encryption"],
+        "resolved_on_matrix_sdk_ui": [],
+        "notes": "e2e-encryption only via matrix-sdk-ui unification; not a direct request."
+      },
+      "stability_evidence": "Public stable API at matrix-sdk-0.18.0 pin; no experimental feature gate for this shape.",
+      "source": {
+        "path": "crates/matrix-sdk/src/client/mod.rs",
+        "lines": "1797",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/client/mod.rs#L1797",
+        "notes": "pub async fn create_room"
+      },
+      "probe_id": "P0.3b-client-create-room",
+      "probe_file": "probes/matrix-rust-sdk-0.18/src/room_ops.rs",
+      "compile_outcome": "pass",
+      "evidence_status": "stable-api-probed",
+      "limits": "Compile-only API shape. Does not prove runtime, network, homeserver, store, or UI semantics."
+    },
+    {
+      "id": "SC-045",
+      "plan_section_7_area": "7.6-room-profile-member-and-permission-management",
+      "p0_1_linkage": {
+        "categories": ["room_methods", "client_methods"],
+        "representative_paths": [
+          "synara/src/app/components/RoomSummaryLoader.tsx",
+          "synara/src/app/components/create-room/utils.ts"
+        ],
+        "notes": "P0.1: room_methods (91 files)."
+      },
+      "api_path": "matrix_sdk::Client::join_room_by_id",
+      "required_features": {
+        "requested_direct": [],
+        "resolved_on_matrix_sdk": ["e2e-encryption"],
+        "resolved_on_matrix_sdk_ui": [],
+        "notes": "e2e-encryption only via matrix-sdk-ui unification; not a direct request."
+      },
+      "stability_evidence": "Public stable API at matrix-sdk-0.18.0 pin; no experimental feature gate for this shape.",
+      "source": {
+        "path": "crates/matrix-sdk/src/client/mod.rs",
+        "lines": "1679",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/client/mod.rs#L1679",
+        "notes": "pub async fn join_room_by_id"
+      },
+      "probe_id": "P0.3b-client-join-room-by-id",
+      "probe_file": "probes/matrix-rust-sdk-0.18/src/room_ops.rs",
+      "compile_outcome": "pass",
+      "evidence_status": "stable-api-probed",
+      "limits": "Compile-only API shape. Does not prove runtime, network, homeserver, store, or UI semantics."
+    },
+    {
+      "id": "SC-046",
+      "plan_section_7_area": "7.6-room-profile-member-and-permission-management",
+      "p0_1_linkage": {
+        "categories": ["room_methods", "client_methods"],
+        "representative_paths": [
+          "synara/src/app/components/RoomSummaryLoader.tsx",
+          "synara/src/app/components/create-room/utils.ts"
+        ],
+        "notes": "P0.1: room_methods (91 files)."
+      },
+      "api_path": "matrix_sdk::Room::leave",
+      "required_features": {
+        "requested_direct": [],
+        "resolved_on_matrix_sdk": ["e2e-encryption"],
+        "resolved_on_matrix_sdk_ui": [],
+        "notes": "e2e-encryption only via matrix-sdk-ui unification; not a direct request."
+      },
+      "stability_evidence": "Public stable API at matrix-sdk-0.18.0 pin; no experimental feature gate for this shape.",
+      "source": {
+        "path": "crates/matrix-sdk/src/room/mod.rs",
+        "lines": "469",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/room/mod.rs#L469",
+        "notes": "pub async fn leave"
+      },
+      "probe_id": "P0.3b-room-leave",
+      "probe_file": "probes/matrix-rust-sdk-0.18/src/room_ops.rs",
+      "compile_outcome": "pass",
+      "evidence_status": "stable-api-probed",
+      "limits": "Compile-only API shape. Does not prove runtime, network, homeserver, store, or UI semantics."
+    },
+    {
+      "id": "SC-047",
+      "plan_section_7_area": "7.6-room-profile-member-and-permission-management",
+      "p0_1_linkage": {
+        "categories": ["room_methods", "client_methods"],
+        "representative_paths": [
+          "synara/src/app/components/RoomSummaryLoader.tsx",
+          "synara/src/app/components/create-room/utils.ts"
+        ],
+        "notes": "P0.1: room_methods (91 files)."
+      },
+      "api_path": "matrix_sdk::Room::invite_user_by_id",
+      "required_features": {
+        "requested_direct": [],
+        "resolved_on_matrix_sdk": ["e2e-encryption"],
+        "resolved_on_matrix_sdk_ui": [],
+        "notes": "e2e-encryption only via matrix-sdk-ui unification; not a direct request."
+      },
+      "stability_evidence": "Public stable API at matrix-sdk-0.18.0 pin; no experimental feature gate for this shape.",
+      "source": {
+        "path": "crates/matrix-sdk/src/room/mod.rs",
+        "lines": "2023",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/room/mod.rs#L2023",
+        "notes": "pub async fn invite_user_by_id"
+      },
+      "probe_id": "P0.3b-room-invite-user-by-id",
+      "probe_file": "probes/matrix-rust-sdk-0.18/src/room_ops.rs",
+      "compile_outcome": "pass",
+      "evidence_status": "stable-api-probed",
+      "limits": "Compile-only API shape. Does not prove runtime, network, homeserver, store, or UI semantics."
+    },
+    {
+      "id": "SC-048",
+      "plan_section_7_area": "7.6-room-profile-member-and-permission-management",
+      "p0_1_linkage": {
+        "categories": ["room_methods", "client_methods"],
+        "representative_paths": [
+          "synara/src/app/components/RoomSummaryLoader.tsx",
+          "synara/src/app/components/create-room/utils.ts"
+        ],
+        "notes": "P0.1: room_methods (91 files)."
+      },
+      "api_path": "matrix_sdk::Room::members",
+      "required_features": {
+        "requested_direct": [],
+        "resolved_on_matrix_sdk": ["e2e-encryption"],
+        "resolved_on_matrix_sdk_ui": [],
+        "notes": "e2e-encryption only via matrix-sdk-ui unification; not a direct request."
+      },
+      "stability_evidence": "Public stable API at matrix-sdk-0.18.0 pin; no experimental feature gate for this shape.",
+      "source": {
+        "path": "crates/matrix-sdk/src/room/mod.rs",
+        "lines": "1240",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/room/mod.rs#L1240",
+        "notes": "pub async fn members"
+      },
+      "probe_id": "P0.3b-room-members",
+      "probe_file": "probes/matrix-rust-sdk-0.18/src/room_ops.rs",
+      "compile_outcome": "pass",
+      "evidence_status": "stable-api-probed",
+      "limits": "Compile-only API shape. Does not prove runtime, network, homeserver, store, or UI semantics."
+    },
+    {
+      "id": "SC-049",
+      "plan_section_7_area": "7.6-room-profile-member-and-permission-management",
+      "p0_1_linkage": {
+        "categories": ["room_methods", "client_methods"],
+        "representative_paths": [
+          "synara/src/app/components/RoomSummaryLoader.tsx",
+          "synara/src/app/components/create-room/utils.ts"
+        ],
+        "notes": "P0.1: room_methods (91 files)."
+      },
+      "api_path": "matrix_sdk::Room::set_name",
+      "required_features": {
+        "requested_direct": [],
+        "resolved_on_matrix_sdk": ["e2e-encryption"],
+        "resolved_on_matrix_sdk_ui": [],
+        "notes": "e2e-encryption only via matrix-sdk-ui unification; not a direct request."
+      },
+      "stability_evidence": "Public stable API at matrix-sdk-0.18.0 pin; no experimental feature gate for this shape.",
+      "source": {
+        "path": "crates/matrix-sdk/src/room/mod.rs",
+        "lines": "2958",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/room/mod.rs#L2958",
+        "notes": "pub async fn set_name"
+      },
+      "probe_id": "P0.3b-room-set-name",
+      "probe_file": "probes/matrix-rust-sdk-0.18/src/room_ops.rs",
+      "compile_outcome": "pass",
+      "evidence_status": "stable-api-probed",
+      "limits": "Compile-only API shape. Does not prove runtime, network, homeserver, store, or UI semantics."
+    },
+    {
+      "id": "SC-050",
+      "plan_section_7_area": "7.6-room-profile-member-and-permission-management",
+      "p0_1_linkage": {
+        "categories": ["room_methods", "client_methods"],
+        "representative_paths": [
+          "synara/src/app/components/RoomSummaryLoader.tsx",
+          "synara/src/app/components/create-room/utils.ts"
+        ],
+        "notes": "P0.1: room_methods (91 files)."
+      },
+      "api_path": "matrix_sdk::Room::update_power_levels",
+      "required_features": {
+        "requested_direct": [],
+        "resolved_on_matrix_sdk": ["e2e-encryption"],
+        "resolved_on_matrix_sdk_ui": [],
+        "notes": "e2e-encryption only via matrix-sdk-ui unification; not a direct request."
+      },
+      "stability_evidence": "Public stable API at matrix-sdk-0.18.0 pin; no experimental feature gate for this shape.",
+      "source": {
+        "path": "crates/matrix-sdk/src/room/mod.rs",
+        "lines": "2884",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/room/mod.rs#L2884",
+        "notes": "pub async fn update_power_levels"
+      },
+      "probe_id": "P0.3b-room-update-power-levels",
+      "probe_file": "probes/matrix-rust-sdk-0.18/src/room_ops.rs",
+      "compile_outcome": "pass",
+      "evidence_status": "stable-api-probed",
+      "limits": "Compile-only API shape. Does not prove runtime, network, homeserver, store, or UI semantics."
+    },
+    {
+      "id": "SC-051",
+      "plan_section_7_area": "7.6-room-profile-member-and-permission-management",
+      "p0_1_linkage": {
+        "categories": ["room_methods", "client_methods"],
+        "representative_paths": [
+          "synara/src/app/components/RoomSummaryLoader.tsx",
+          "synara/src/app/components/create-room/utils.ts"
+        ],
+        "notes": "P0.1: room_methods (91 files)."
+      },
+      "api_path": "matrix_sdk::Room::ban_user",
+      "required_features": {
+        "requested_direct": [],
+        "resolved_on_matrix_sdk": ["e2e-encryption"],
+        "resolved_on_matrix_sdk_ui": [],
+        "notes": "e2e-encryption only via matrix-sdk-ui unification; not a direct request."
+      },
+      "stability_evidence": "Public stable API at matrix-sdk-0.18.0 pin; no experimental feature gate for this shape.",
+      "source": {
+        "path": "crates/matrix-sdk/src/room/mod.rs",
+        "lines": "1973",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/room/mod.rs#L1973",
+        "notes": "pub async fn ban_user"
+      },
+      "probe_id": "P0.3b-room-ban-user",
+      "probe_file": "probes/matrix-rust-sdk-0.18/src/room_ops.rs",
+      "compile_outcome": "pass",
+      "evidence_status": "stable-api-probed",
+      "limits": "Compile-only API shape. Does not prove runtime, network, homeserver, store, or UI semantics."
+    },
+    {
+      "id": "SC-052",
+      "plan_section_7_area": "7.6-room-profile-member-and-permission-management",
+      "p0_1_linkage": {
+        "categories": ["room_methods", "client_methods"],
+        "representative_paths": [
+          "synara/src/app/components/RoomSummaryLoader.tsx",
+          "synara/src/app/components/create-room/utils.ts"
+        ],
+        "notes": "P0.1: room_methods (91 files)."
+      },
+      "api_path": "matrix_sdk::Account",
+      "required_features": {
+        "requested_direct": [],
+        "resolved_on_matrix_sdk": ["e2e-encryption"],
+        "resolved_on_matrix_sdk_ui": [],
+        "notes": "e2e-encryption only via matrix-sdk-ui unification; not a direct request."
+      },
+      "stability_evidence": "Public stable API at matrix-sdk-0.18.0 pin; no experimental feature gate for this shape.",
+      "source": {
+        "path": "crates/matrix-sdk/src/account.rs",
+        "lines": "82",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/account.rs#L82",
+        "notes": "pub struct Account"
+      },
+      "probe_id": "P0.3b-account-type",
+      "probe_file": "probes/matrix-rust-sdk-0.18/src/room_ops.rs",
+      "compile_outcome": "pass",
+      "evidence_status": "stable-api-probed",
+      "limits": "Compile-only API shape. Does not prove runtime, network, homeserver, store, or UI semantics."
+    },
+    {
+      "id": "SC-053",
+      "plan_section_7_area": "7.6-room-profile-member-and-permission-management",
+      "p0_1_linkage": {
+        "categories": ["room_methods", "client_methods"],
+        "representative_paths": [
+          "synara/src/app/components/RoomSummaryLoader.tsx",
+          "synara/src/app/components/create-room/utils.ts"
+        ],
+        "notes": "P0.1: room_methods (91 files)."
+      },
+      "api_path": "matrix_sdk::Client::account() -> Account",
+      "required_features": {
+        "requested_direct": [],
+        "resolved_on_matrix_sdk": ["e2e-encryption"],
+        "resolved_on_matrix_sdk_ui": [],
+        "notes": "e2e-encryption only via matrix-sdk-ui unification; not a direct request."
+      },
+      "stability_evidence": "Public stable API at matrix-sdk-0.18.0 pin; no experimental feature gate for this shape.",
+      "source": {
+        "path": "crates/matrix-sdk/src/client/mod.rs",
+        "lines": "788",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/client/mod.rs#L788",
+        "notes": "pub fn account"
+      },
+      "probe_id": "P0.3b-client-account",
+      "probe_file": "probes/matrix-rust-sdk-0.18/src/room_ops.rs",
+      "compile_outcome": "pass",
+      "evidence_status": "stable-api-probed",
+      "limits": "Compile-only API shape. Does not prove runtime, network, homeserver, store, or UI semantics."
+    },
+    {
+      "id": "SC-054",
+      "plan_section_7_area": "7.6-room-profile-member-and-permission-management",
+      "p0_1_linkage": {
+        "categories": ["room_methods", "client_methods"],
+        "representative_paths": [
+          "synara/src/app/components/RoomSummaryLoader.tsx",
+          "synara/src/app/components/create-room/utils.ts"
+        ],
+        "notes": "P0.1: room_methods (91 files)."
+      },
+      "api_path": "matrix_sdk::Account::get_display_name",
+      "required_features": {
+        "requested_direct": [],
+        "resolved_on_matrix_sdk": ["e2e-encryption"],
+        "resolved_on_matrix_sdk_ui": [],
+        "notes": "e2e-encryption only via matrix-sdk-ui unification; not a direct request."
+      },
+      "stability_evidence": "Public stable API at matrix-sdk-0.18.0 pin; no experimental feature gate for this shape.",
+      "source": {
+        "path": "crates/matrix-sdk/src/account.rs",
+        "lines": "114",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/account.rs#L114",
+        "notes": "pub async fn get_display_name"
+      },
+      "probe_id": "P0.3b-account-get-display-name",
+      "probe_file": "probes/matrix-rust-sdk-0.18/src/room_ops.rs",
+      "compile_outcome": "pass",
+      "evidence_status": "stable-api-probed",
+      "limits": "Compile-only API shape. Does not prove runtime, network, homeserver, store, or UI semantics."
+    },
+    {
+      "id": "SC-055",
+      "plan_section_7_area": "7.7-account-data-and-custom-contracts",
+      "p0_1_linkage": {
+        "categories": ["account_data"],
+        "representative_paths": [
+          "synara/src/app/features/lobby/Lobby.tsx",
+          "synara/src/app/features/room/RoomTimeline.tsx"
+        ],
+        "notes": "P0.1: account_data (13 files)."
+      },
+      "api_path": "matrix_sdk::Account::account_data_raw",
+      "required_features": {
+        "requested_direct": [],
+        "resolved_on_matrix_sdk": ["e2e-encryption"],
+        "resolved_on_matrix_sdk_ui": [],
+        "notes": "e2e-encryption only via matrix-sdk-ui unification; not a direct request."
+      },
+      "stability_evidence": "Public stable API at matrix-sdk-0.18.0 pin; no experimental feature gate for this shape.",
+      "source": {
+        "path": "crates/matrix-sdk/src/account.rs",
+        "lines": "908",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/account.rs#L908",
+        "notes": "pub async fn account_data_raw"
+      },
+      "probe_id": "P0.3b-account-account-data-raw",
+      "probe_file": "probes/matrix-rust-sdk-0.18/src/account_data.rs",
+      "compile_outcome": "pass",
+      "evidence_status": "stable-api-probed",
+      "limits": "Compile-only API shape. Does not prove runtime, network, homeserver, store, or UI semantics."
+    },
+    {
+      "id": "SC-056",
+      "plan_section_7_area": "7.7-account-data-and-custom-contracts",
+      "p0_1_linkage": {
+        "categories": ["account_data"],
+        "representative_paths": [
+          "synara/src/app/features/lobby/Lobby.tsx",
+          "synara/src/app/features/room/RoomTimeline.tsx"
+        ],
+        "notes": "P0.1: account_data (13 files)."
+      },
+      "api_path": "matrix_sdk::Account::set_account_data_raw",
+      "required_features": {
+        "requested_direct": [],
+        "resolved_on_matrix_sdk": ["e2e-encryption"],
+        "resolved_on_matrix_sdk_ui": [],
+        "notes": "e2e-encryption only via matrix-sdk-ui unification; not a direct request."
+      },
+      "stability_evidence": "Public stable API at matrix-sdk-0.18.0 pin; no experimental feature gate for this shape.",
+      "source": {
+        "path": "crates/matrix-sdk/src/account.rs",
+        "lines": "1007",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/account.rs#L1007",
+        "notes": "pub async fn set_account_data_raw"
+      },
+      "probe_id": "P0.3b-account-set-account-data-raw",
+      "probe_file": "probes/matrix-rust-sdk-0.18/src/account_data.rs",
+      "compile_outcome": "pass",
+      "evidence_status": "stable-api-probed",
+      "limits": "Compile-only API shape. Does not prove runtime, network, homeserver, store, or UI semantics."
+    },
+    {
+      "id": "SC-057",
+      "plan_section_7_area": "7.8-notifications",
+      "p0_1_linkage": {
+        "categories": ["notifications_push_rules"],
+        "representative_paths": [
+          "synara/src/app/features/settings/notifications/AllMessages.tsx",
+          "synara/src/app/features/settings/notifications/KeywordMessages.tsx"
+        ],
+        "notes": "P0.1: notifications_push_rules (8 files)."
+      },
+      "api_path": "matrix_sdk::notification_settings::NotificationSettings",
+      "required_features": {
+        "requested_direct": [],
+        "resolved_on_matrix_sdk": ["e2e-encryption"],
+        "resolved_on_matrix_sdk_ui": [],
+        "notes": "e2e-encryption only via matrix-sdk-ui unification; not a direct request."
+      },
+      "stability_evidence": "Public stable API at matrix-sdk-0.18.0 pin; no experimental feature gate for this shape.",
+      "source": {
+        "path": "crates/matrix-sdk/src/notification_settings/mod.rs",
+        "lines": "81",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/notification_settings/mod.rs#L81",
+        "notes": "pub struct NotificationSettings"
+      },
+      "probe_id": "P0.3b-notification-settings-type",
+      "probe_file": "probes/matrix-rust-sdk-0.18/src/notifications.rs",
+      "compile_outcome": "pass",
+      "evidence_status": "stable-api-probed",
+      "limits": "Compile-only API shape. Does not prove runtime, network, homeserver, store, or UI semantics."
+    },
+    {
+      "id": "SC-058",
+      "plan_section_7_area": "7.8-notifications",
+      "p0_1_linkage": {
+        "categories": ["notifications_push_rules"],
+        "representative_paths": [
+          "synara/src/app/features/settings/notifications/AllMessages.tsx",
+          "synara/src/app/features/settings/notifications/KeywordMessages.tsx"
+        ],
+        "notes": "P0.1: notifications_push_rules (8 files)."
+      },
+      "api_path": "matrix_sdk::Client::notification_settings",
+      "required_features": {
+        "requested_direct": [],
+        "resolved_on_matrix_sdk": ["e2e-encryption"],
+        "resolved_on_matrix_sdk_ui": [],
+        "notes": "e2e-encryption only via matrix-sdk-ui unification; not a direct request."
+      },
+      "stability_evidence": "Public stable API at matrix-sdk-0.18.0 pin; no experimental feature gate for this shape.",
+      "source": {
+        "path": "crates/matrix-sdk/src/client/mod.rs",
+        "lines": "3225",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/client/mod.rs#L3225",
+        "notes": "pub async fn notification_settings"
+      },
+      "probe_id": "P0.3b-client-notification-settings",
+      "probe_file": "probes/matrix-rust-sdk-0.18/src/notifications.rs",
+      "compile_outcome": "pass",
+      "evidence_status": "stable-api-probed",
+      "limits": "Compile-only API shape. Does not prove runtime, network, homeserver, store, or UI semantics."
+    },
+    {
+      "id": "SC-059",
+      "plan_section_7_area": "7.8-notifications",
+      "p0_1_linkage": {
+        "categories": ["notifications_push_rules"],
+        "representative_paths": [
+          "synara/src/app/features/settings/notifications/AllMessages.tsx",
+          "synara/src/app/features/settings/notifications/KeywordMessages.tsx"
+        ],
+        "notes": "P0.1: notifications_push_rules (8 files)."
+      },
+      "api_path": "matrix_sdk::Account::push_rules",
+      "required_features": {
+        "requested_direct": [],
+        "resolved_on_matrix_sdk": ["e2e-encryption"],
+        "resolved_on_matrix_sdk_ui": [],
+        "notes": "e2e-encryption only via matrix-sdk-ui unification; not a direct request."
+      },
+      "stability_evidence": "Public stable API at matrix-sdk-0.18.0 pin; no experimental feature gate for this shape.",
+      "source": {
+        "path": "crates/matrix-sdk/src/account.rs",
+        "lines": "1122",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/account.rs#L1122",
+        "notes": "pub async fn push_rules"
+      },
+      "probe_id": "P0.3b-account-push-rules",
+      "probe_file": "probes/matrix-rust-sdk-0.18/src/notifications.rs",
+      "compile_outcome": "pass",
+      "evidence_status": "stable-api-probed",
+      "limits": "Compile-only API shape. Does not prove runtime, network, homeserver, store, or UI semantics."
+    },
+    {
+      "id": "SC-060",
+      "plan_section_7_area": "7.8-notifications",
+      "p0_1_linkage": {
+        "categories": ["notifications_push_rules"],
+        "representative_paths": [
+          "synara/src/app/features/settings/notifications/AllMessages.tsx",
+          "synara/src/app/features/settings/notifications/KeywordMessages.tsx"
+        ],
+        "notes": "P0.1: notifications_push_rules (8 files)."
+      },
+      "api_path": "matrix_sdk::notification_settings::NotificationSettings::set_room_notification_mode",
+      "required_features": {
+        "requested_direct": [],
+        "resolved_on_matrix_sdk": ["e2e-encryption"],
+        "resolved_on_matrix_sdk_ui": [],
+        "notes": "e2e-encryption only via matrix-sdk-ui unification; not a direct request."
+      },
+      "stability_evidence": "Public stable API at matrix-sdk-0.18.0 pin; no experimental feature gate for this shape.",
+      "source": {
+        "path": "crates/matrix-sdk/src/notification_settings/mod.rs",
+        "lines": "305",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/notification_settings/mod.rs#L305",
+        "notes": "pub async fn set_room_notification_mode"
+      },
+      "probe_id": "P0.3b-notification-set-room-notification-mode",
+      "probe_file": "probes/matrix-rust-sdk-0.18/src/notifications.rs",
+      "compile_outcome": "pass",
+      "evidence_status": "stable-api-probed",
+      "limits": "Compile-only API shape. Does not prove runtime, network, homeserver, store, or UI semantics."
+    },
+    {
+      "id": "SC-061",
+      "plan_section_7_area": "7.9-devices-e2ee-verification-and-recovery",
+      "p0_1_linkage": {
+        "categories": ["crypto_verification_recovery"],
+        "representative_paths": [
+          "synara/src/app/components/BackupRestore.tsx",
+          "synara/src/app/components/DeviceVerification.tsx"
+        ],
+        "notes": "P0.1: crypto_verification_recovery (22 files)."
+      },
+      "api_path": "matrix_sdk::encryption::Encryption",
+      "required_features": {
+        "requested_direct": [],
+        "resolved_on_matrix_sdk": ["e2e-encryption"],
+        "resolved_on_matrix_sdk_ui": [],
+        "notes": "API is feature-gated by e2e-encryption, which is resolved in this probe graph via UI unification."
+      },
+      "stability_evidence": "Public under feature e2e-encryption; enabled in this probe graph via matrix-sdk-ui unification (not a direct experimental gate).",
+      "source": {
+        "path": "crates/matrix-sdk/src/encryption/mod.rs",
+        "lines": "892",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/encryption/mod.rs#L892",
+        "notes": "pub struct Encryption"
+      },
+      "probe_id": "P0.3b-encryption-type",
+      "probe_file": "probes/matrix-rust-sdk-0.18/src/e2ee.rs",
+      "compile_outcome": "pass",
+      "evidence_status": "stable-api-probed",
+      "limits": "Compile-only API shape. Does not prove runtime, network, homeserver, store, or UI semantics."
+    },
+    {
+      "id": "SC-062",
+      "plan_section_7_area": "7.9-devices-e2ee-verification-and-recovery",
+      "p0_1_linkage": {
+        "categories": ["crypto_verification_recovery"],
+        "representative_paths": [
+          "synara/src/app/components/BackupRestore.tsx",
+          "synara/src/app/components/DeviceVerification.tsx"
+        ],
+        "notes": "P0.1: crypto_verification_recovery (22 files)."
+      },
+      "api_path": "matrix_sdk::Client::encryption() -> Encryption",
+      "required_features": {
+        "requested_direct": [],
+        "resolved_on_matrix_sdk": ["e2e-encryption"],
+        "resolved_on_matrix_sdk_ui": [],
+        "notes": "API is feature-gated by e2e-encryption, which is resolved in this probe graph via UI unification."
+      },
+      "stability_evidence": "Public under feature e2e-encryption; enabled in this probe graph via matrix-sdk-ui unification (not a direct experimental gate).",
+      "source": {
+        "path": "crates/matrix-sdk/src/client/mod.rs",
+        "lines": "794",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/client/mod.rs#L794",
+        "notes": "pub fn encryption"
+      },
+      "probe_id": "P0.3b-client-encryption",
+      "probe_file": "probes/matrix-rust-sdk-0.18/src/e2ee.rs",
+      "compile_outcome": "pass",
+      "evidence_status": "stable-api-probed",
+      "limits": "Compile-only API shape. Does not prove runtime, network, homeserver, store, or UI semantics."
+    },
+    {
+      "id": "SC-063",
+      "plan_section_7_area": "7.9-devices-e2ee-verification-and-recovery",
+      "p0_1_linkage": {
+        "categories": ["crypto_verification_recovery"],
+        "representative_paths": [
+          "synara/src/app/components/BackupRestore.tsx",
+          "synara/src/app/components/DeviceVerification.tsx"
+        ],
+        "notes": "P0.1: crypto_verification_recovery (22 files)."
+      },
+      "api_path": "matrix_sdk::encryption::Encryption::get_user_devices",
+      "required_features": {
+        "requested_direct": [],
+        "resolved_on_matrix_sdk": ["e2e-encryption"],
+        "resolved_on_matrix_sdk_ui": [],
+        "notes": "API is feature-gated by e2e-encryption, which is resolved in this probe graph via UI unification."
+      },
+      "stability_evidence": "Public under feature e2e-encryption; enabled in this probe graph via matrix-sdk-ui unification (not a direct experimental gate).",
+      "source": {
+        "path": "crates/matrix-sdk/src/encryption/mod.rs",
+        "lines": "1156",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/encryption/mod.rs#L1156",
+        "notes": "pub async fn get_user_devices"
+      },
+      "probe_id": "P0.3b-encryption-get-user-devices",
+      "probe_file": "probes/matrix-rust-sdk-0.18/src/e2ee.rs",
+      "compile_outcome": "pass",
+      "evidence_status": "stable-api-probed",
+      "limits": "Compile-only API shape. Does not prove runtime, network, homeserver, store, or UI semantics."
+    },
+    {
+      "id": "SC-064",
+      "plan_section_7_area": "7.9-devices-e2ee-verification-and-recovery",
+      "p0_1_linkage": {
+        "categories": ["crypto_verification_recovery"],
+        "representative_paths": [
+          "synara/src/app/components/BackupRestore.tsx",
+          "synara/src/app/components/DeviceVerification.tsx"
+        ],
+        "notes": "P0.1: crypto_verification_recovery (22 files)."
+      },
+      "api_path": "matrix_sdk::encryption::Encryption::cross_signing_status",
+      "required_features": {
+        "requested_direct": [],
+        "resolved_on_matrix_sdk": ["e2e-encryption"],
+        "resolved_on_matrix_sdk_ui": [],
+        "notes": "API is feature-gated by e2e-encryption, which is resolved in this probe graph via UI unification."
+      },
+      "stability_evidence": "Public under feature e2e-encryption; enabled in this probe graph via matrix-sdk-ui unification (not a direct experimental gate).",
+      "source": {
+        "path": "crates/matrix-sdk/src/encryption/mod.rs",
+        "lines": "976",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/encryption/mod.rs#L976",
+        "notes": "pub async fn cross_signing_status"
+      },
+      "probe_id": "P0.3b-encryption-cross-signing-status",
+      "probe_file": "probes/matrix-rust-sdk-0.18/src/e2ee.rs",
+      "compile_outcome": "pass",
+      "evidence_status": "stable-api-probed",
+      "limits": "Compile-only API shape. Does not prove runtime, network, homeserver, store, or UI semantics."
+    },
+    {
+      "id": "SC-065",
+      "plan_section_7_area": "7.9-devices-e2ee-verification-and-recovery",
+      "p0_1_linkage": {
+        "categories": ["crypto_verification_recovery"],
+        "representative_paths": [
+          "synara/src/app/components/BackupRestore.tsx",
+          "synara/src/app/components/DeviceVerification.tsx"
+        ],
+        "notes": "P0.1: crypto_verification_recovery (22 files)."
+      },
+      "api_path": "matrix_sdk::encryption::Encryption::recovery() -> Recovery",
+      "required_features": {
+        "requested_direct": [],
+        "resolved_on_matrix_sdk": ["e2e-encryption"],
+        "resolved_on_matrix_sdk_ui": [],
+        "notes": "API is feature-gated by e2e-encryption, which is resolved in this probe graph via UI unification."
+      },
+      "stability_evidence": "Public under feature e2e-encryption; enabled in this probe graph via matrix-sdk-ui unification (not a direct experimental gate).",
+      "source": {
+        "path": "crates/matrix-sdk/src/encryption/mod.rs",
+        "lines": "1796",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/encryption/mod.rs#L1796",
+        "notes": "pub fn recovery"
+      },
+      "probe_id": "P0.3b-encryption-recovery",
+      "probe_file": "probes/matrix-rust-sdk-0.18/src/e2ee.rs",
+      "compile_outcome": "pass",
+      "evidence_status": "stable-api-probed",
+      "limits": "Compile-only API shape. Does not prove runtime, network, homeserver, store, or UI semantics."
+    },
+    {
+      "id": "SC-066",
+      "plan_section_7_area": "7.9-devices-e2ee-verification-and-recovery",
+      "p0_1_linkage": {
+        "categories": ["crypto_verification_recovery"],
+        "representative_paths": [
+          "synara/src/app/components/BackupRestore.tsx",
+          "synara/src/app/components/DeviceVerification.tsx"
+        ],
+        "notes": "P0.1: crypto_verification_recovery (22 files)."
+      },
+      "api_path": "matrix_sdk::encryption::Encryption::backups() -> Backups",
+      "required_features": {
+        "requested_direct": [],
+        "resolved_on_matrix_sdk": ["e2e-encryption"],
+        "resolved_on_matrix_sdk_ui": [],
+        "notes": "API is feature-gated by e2e-encryption, which is resolved in this probe graph via UI unification."
+      },
+      "stability_evidence": "Public under feature e2e-encryption; enabled in this probe graph via matrix-sdk-ui unification (not a direct experimental gate).",
+      "source": {
+        "path": "crates/matrix-sdk/src/encryption/mod.rs",
+        "lines": "1791",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/encryption/mod.rs#L1791",
+        "notes": "pub fn backups"
+      },
+      "probe_id": "P0.3b-encryption-backups",
+      "probe_file": "probes/matrix-rust-sdk-0.18/src/e2ee.rs",
+      "compile_outcome": "pass",
+      "evidence_status": "stable-api-probed",
+      "limits": "Compile-only API shape. Does not prove runtime, network, homeserver, store, or UI semantics."
+    },
+    {
+      "id": "SC-067",
+      "plan_section_7_area": "7.9-devices-e2ee-verification-and-recovery",
+      "p0_1_linkage": {
+        "categories": ["crypto_verification_recovery"],
+        "representative_paths": [
+          "synara/src/app/components/BackupRestore.tsx",
+          "synara/src/app/components/DeviceVerification.tsx"
+        ],
+        "notes": "P0.1: crypto_verification_recovery (22 files)."
+      },
+      "api_path": "matrix_sdk::Client::devices",
+      "required_features": {
+        "requested_direct": [],
+        "resolved_on_matrix_sdk": ["e2e-encryption"],
+        "resolved_on_matrix_sdk_ui": [],
+        "notes": "e2e-encryption only via matrix-sdk-ui unification; not a direct request."
+      },
+      "stability_evidence": "Public under feature e2e-encryption; enabled in this probe graph via matrix-sdk-ui unification (not a direct experimental gate).",
+      "source": {
+        "path": "crates/matrix-sdk/src/client/mod.rs",
+        "lines": "2640",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/client/mod.rs#L2640",
+        "notes": "pub async fn devices"
+      },
+      "probe_id": "P0.3b-client-devices",
+      "probe_file": "probes/matrix-rust-sdk-0.18/src/e2ee.rs",
+      "compile_outcome": "pass",
+      "evidence_status": "stable-api-probed",
+      "limits": "Compile-only API shape. Does not prove runtime, network, homeserver, store, or UI semantics."
+    },
+    {
+      "id": "SC-084",
+      "plan_section_7_area": "7.9-devices-e2ee-verification-and-recovery",
+      "p0_1_linkage": {
+        "categories": ["crypto_verification_recovery"],
+        "representative_paths": [
+          "synara/src/app/components/BackupRestore.tsx",
+          "synara/src/app/components/DeviceVerification.tsx"
+        ],
+        "notes": "P0.1: crypto_verification_recovery (device verification UI)."
+      },
+      "api_path": "matrix_sdk::encryption::Encryption::get_verification_request",
+      "required_features": {
+        "requested_direct": [],
+        "resolved_on_matrix_sdk": ["e2e-encryption"],
+        "resolved_on_matrix_sdk_ui": [],
+        "notes": "API is feature-gated by e2e-encryption, which is resolved in this probe graph via matrix-sdk-ui unification (not a direct experimental gate)."
+      },
+      "stability_evidence": "Public under feature e2e-encryption; enabled in this probe graph via matrix-sdk-ui unification (not a direct experimental gate).",
+      "source": {
+        "path": "crates/matrix-sdk/src/encryption/mod.rs",
+        "lines": "1062-1070",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/encryption/mod.rs#L1062-L1070",
+        "notes": "pub async fn get_verification_request -> Option<VerificationRequest>"
+      },
+      "probe_id": "P0.3b-encryption-get-verification-request",
+      "probe_file": "probes/matrix-rust-sdk-0.18/src/e2ee.rs",
+      "compile_outcome": "pass",
+      "evidence_status": "stable-api-probed",
+      "limits": "Compile-only API shape. Does not prove runtime, network, homeserver, store, SAS, or UI verification semantics."
+    },
+    {
+      "id": "SC-068",
+      "plan_section_7_area": "7.10-search",
+      "p0_1_linkage": {
+        "categories": ["searches"],
+        "representative_paths": [
+          "synara/src/app/features/message-search/useMessageSearch.ts",
+          "synara/src/app/pages/auth/login/Login.tsx"
+        ],
+        "notes": "P0.1: searches (4 files)."
+      },
+      "api_path": "matrix_sdk::Client::search_users",
+      "required_features": {
+        "requested_direct": [],
+        "resolved_on_matrix_sdk": ["e2e-encryption"],
+        "resolved_on_matrix_sdk_ui": [],
+        "notes": "e2e-encryption only via matrix-sdk-ui unification; not a direct request."
+      },
+      "stability_evidence": "Public stable API at matrix-sdk-0.18.0 pin; no experimental feature gate for this shape.",
+      "source": {
+        "path": "crates/matrix-sdk/src/client/mod.rs",
+        "lines": "702",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/client/mod.rs#L702",
+        "notes": "pub async fn search_users"
+      },
+      "probe_id": "P0.3b-client-search-users",
+      "probe_file": "probes/matrix-rust-sdk-0.18/src/search.rs",
+      "compile_outcome": "pass",
+      "evidence_status": "stable-api-probed",
+      "limits": "Compile-only API shape. Does not prove runtime, network, homeserver, store, or UI semantics."
+    },
+    {
+      "id": "SC-069",
+      "plan_section_7_area": "7.10-search",
+      "p0_1_linkage": {
+        "categories": ["searches"],
+        "representative_paths": [
+          "synara/src/app/features/message-search/useMessageSearch.ts",
+          "synara/src/app/pages/auth/login/Login.tsx"
+        ],
+        "notes": "P0.1: searches (4 files)."
+      },
+      "api_path": "matrix_sdk::room_directory_search::RoomDirectorySearch",
+      "required_features": {
+        "requested_direct": [],
+        "resolved_on_matrix_sdk": ["e2e-encryption"],
+        "resolved_on_matrix_sdk_ui": [],
+        "notes": "e2e-encryption only via matrix-sdk-ui unification; not a direct request."
+      },
+      "stability_evidence": "Public stable API at matrix-sdk-0.18.0 pin; no experimental feature gate for this shape.",
+      "source": {
+        "path": "crates/matrix-sdk/src/room_directory_search.rs",
+        "lines": "114",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/room_directory_search.rs#L114",
+        "notes": "pub struct RoomDirectorySearch"
+      },
+      "probe_id": "P0.3b-room-directory-search-type",
+      "probe_file": "probes/matrix-rust-sdk-0.18/src/search.rs",
+      "compile_outcome": "pass",
+      "evidence_status": "stable-api-probed",
+      "limits": "Compile-only API shape. Does not prove runtime, network, homeserver, store, or UI semantics."
+    },
+    {
+      "id": "SC-070",
+      "plan_section_7_area": "7.10-search",
+      "p0_1_linkage": {
+        "categories": ["searches"],
+        "representative_paths": [
+          "synara/src/app/features/message-search/useMessageSearch.ts",
+          "synara/src/app/pages/auth/login/Login.tsx"
+        ],
+        "notes": "P0.1: searches (4 files)."
+      },
+      "api_path": "matrix_sdk::room_directory_search::RoomDirectorySearch::new",
+      "required_features": {
+        "requested_direct": [],
+        "resolved_on_matrix_sdk": ["e2e-encryption"],
+        "resolved_on_matrix_sdk_ui": [],
+        "notes": "e2e-encryption only via matrix-sdk-ui unification; not a direct request."
+      },
+      "stability_evidence": "Public stable API at matrix-sdk-0.18.0 pin; no experimental feature gate for this shape.",
+      "source": {
+        "path": "crates/matrix-sdk/src/room_directory_search.rs",
+        "lines": "125",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/room_directory_search.rs#L125",
+        "notes": "pub fn new"
+      },
+      "probe_id": "P0.3b-room-directory-search-new",
+      "probe_file": "probes/matrix-rust-sdk-0.18/src/search.rs",
+      "compile_outcome": "pass",
+      "evidence_status": "stable-api-probed",
+      "limits": "Compile-only API shape. Does not prove runtime, network, homeserver, store, or UI semantics."
+    },
+    {
+      "id": "SC-071",
+      "plan_section_7_area": "7.10-search",
+      "p0_1_linkage": {
+        "categories": ["searches"],
+        "representative_paths": [
+          "synara/src/app/features/message-search/useMessageSearch.ts",
+          "synara/src/app/pages/auth/login/Login.tsx"
+        ],
+        "notes": "P0.1: searches (4 files)."
+      },
+      "api_path": "Server-side room message search (/search) high-level API",
+      "required_features": {
+        "requested_direct": [],
+        "resolved_on_matrix_sdk": ["e2e-encryption"],
+        "resolved_on_matrix_sdk_ui": [],
+        "notes": "No high-level stable API in this feature set."
+      },
+      "stability_evidence": "No dedicated stable high-level public API for room message search at this pin. Local/experimental search is feature-gated by experimental-search (module matrix_sdk::message_search / search_index; lib.rs cfg). Typed Client::send with ruma::api::client::search is the residual path and is deferred per P0.3b rules.",
+      "source": {
+        "path": "crates/matrix-sdk/src/lib.rs",
+        "lines": "67-74",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/lib.rs#L67-L74",
+        "notes": "cfg(feature = experimental-search) modules message_search and search_index"
+      },
+      "probe_id": null,
+      "probe_file": null,
+      "compile_outcome": "not-probed",
+      "evidence_status": "deferred-to-p0.3c",
+      "limits": "Deferred: high-level API absent or experimental; generic typed Client::send path and experimental-search local index require P0.3c feature/experimental analysis. Not a false support claim."
+    },
+    {
+      "id": "SC-072",
+      "plan_section_7_area": "7.10-search",
+      "p0_1_linkage": {
+        "categories": ["searches"],
+        "representative_paths": [
+          "synara/src/app/features/message-search/useMessageSearch.ts",
+          "synara/src/app/pages/auth/login/Login.tsx"
+        ],
+        "notes": "P0.1: searches (4 files)."
+      },
+      "api_path": "matrix_sdk::message_search / search_index (experimental-search)",
+      "required_features": {
+        "requested_direct": [],
+        "required_feature_absent": "experimental-search",
+        "resolved_on_matrix_sdk": ["e2e-encryption"],
+        "resolved_on_matrix_sdk_ui": []
+      },
+      "stability_evidence": "Feature-gated by experimental-search; not enabled in P0.3a/P0.3b feature resolution.",
+      "source": {
+        "path": "crates/matrix-sdk/src/lib.rs",
+        "lines": "67-74",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/lib.rs#L67-L74",
+        "notes": "#[cfg(feature = \"experimental-search\")]"
+      },
+      "probe_id": null,
+      "probe_file": null,
+      "compile_outcome": "not-probed",
+      "evidence_status": "deferred-to-p0.3c",
+      "limits": "Deferred: experimental feature not enabled. Enabling experimental-search is out of scope for P0.3b."
+    },
+    {
+      "id": "SC-073",
+      "plan_section_7_area": "7.2-sync-room-list-navigation-and-state",
+      "p0_1_linkage": {
+        "categories": ["spaces", "room_lists"],
+        "representative_paths": [
+          "synara/src/app/components/room-card/RoomCard.tsx",
+          "synara/src/app/features/lobby/Lobby.tsx"
+        ],
+        "notes": "P0.1: spaces (18 files). Plan §7.2 includes spaces/hierarchy."
+      },
+      "api_path": "matrix_sdk::Client::joined_space_rooms",
+      "required_features": {
+        "requested_direct": [],
+        "resolved_on_matrix_sdk": ["e2e-encryption"],
+        "resolved_on_matrix_sdk_ui": [],
+        "notes": "e2e-encryption only via matrix-sdk-ui unification; not a direct request."
+      },
+      "stability_evidence": "Public stable API at matrix-sdk-0.18.0 pin; no experimental feature gate for this shape.",
+      "source": {
+        "path": "crates/matrix-sdk/src/client/mod.rs",
+        "lines": "1334",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/client/mod.rs#L1334",
+        "notes": "pub fn joined_space_rooms"
+      },
+      "probe_id": "P0.3b-client-joined-space-rooms",
+      "probe_file": "probes/matrix-rust-sdk-0.18/src/spaces.rs",
+      "compile_outcome": "pass",
+      "evidence_status": "stable-api-probed",
+      "limits": "Compile-only API shape. Does not prove runtime, network, homeserver, store, or UI semantics."
+    },
+    {
+      "id": "SC-074",
+      "plan_section_7_area": "7.2-sync-room-list-navigation-and-state",
+      "p0_1_linkage": {
+        "categories": ["spaces", "room_lists"],
+        "representative_paths": [
+          "synara/src/app/components/room-card/RoomCard.tsx",
+          "synara/src/app/features/lobby/Lobby.tsx"
+        ],
+        "notes": "P0.1: spaces (18 files). Plan §7.2 includes spaces/hierarchy."
+      },
+      "api_path": "matrix_sdk_ui::spaces::SpaceService",
+      "required_features": {
+        "requested_direct": [],
+        "resolved_on_matrix_sdk": ["e2e-encryption"],
+        "resolved_on_matrix_sdk_ui": [],
+        "notes": "UI crate resolved features empty; matrix-sdk still unified with e2e-encryption."
+      },
+      "stability_evidence": "Public stable API at matrix-sdk-0.18.0 pin; no experimental feature gate for this shape.",
+      "source": {
+        "path": "crates/matrix-sdk-ui/src/spaces/mod.rs",
+        "lines": "140",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk-ui/src/spaces/mod.rs#L140",
+        "notes": "pub struct SpaceService"
+      },
+      "probe_id": "P0.3b-space-service-type",
+      "probe_file": "probes/matrix-rust-sdk-0.18/src/spaces.rs",
+      "compile_outcome": "pass",
+      "evidence_status": "stable-api-probed",
+      "limits": "Compile-only API shape. Does not prove runtime, network, homeserver, store, or UI semantics."
+    },
+    {
+      "id": "SC-075",
+      "plan_section_7_area": "7.2-sync-room-list-navigation-and-state",
+      "p0_1_linkage": {
+        "categories": ["spaces", "room_lists"],
+        "representative_paths": [
+          "synara/src/app/components/room-card/RoomCard.tsx",
+          "synara/src/app/features/lobby/Lobby.tsx"
+        ],
+        "notes": "P0.1: spaces (18 files). Plan §7.2 includes spaces/hierarchy."
+      },
+      "api_path": "matrix_sdk_ui::spaces::SpaceService::new",
+      "required_features": {
+        "requested_direct": [],
+        "resolved_on_matrix_sdk": ["e2e-encryption"],
+        "resolved_on_matrix_sdk_ui": [],
+        "notes": "UI crate resolved features empty; matrix-sdk still unified with e2e-encryption."
+      },
+      "stability_evidence": "Public stable API at matrix-sdk-0.18.0 pin; no experimental feature gate for this shape.",
+      "source": {
+        "path": "crates/matrix-sdk-ui/src/spaces/mod.rs",
+        "lines": "150",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk-ui/src/spaces/mod.rs#L150",
+        "notes": "pub async fn new"
+      },
+      "probe_id": "P0.3b-space-service-new",
+      "probe_file": "probes/matrix-rust-sdk-0.18/src/spaces.rs",
+      "compile_outcome": "pass",
+      "evidence_status": "stable-api-probed",
+      "limits": "Compile-only API shape. Does not prove runtime, network, homeserver, store, or UI semantics."
+    },
+    {
+      "id": "SC-076",
+      "plan_section_7_area": "7.2-sync-room-list-navigation-and-state",
+      "p0_1_linkage": {
+        "categories": ["spaces", "room_lists"],
+        "representative_paths": [
+          "synara/src/app/components/room-card/RoomCard.tsx",
+          "synara/src/app/features/lobby/Lobby.tsx"
+        ],
+        "notes": "P0.1: spaces (18 files). Plan §7.2 includes spaces/hierarchy."
+      },
+      "api_path": "matrix_sdk_ui::spaces::room_list::SpaceRoomList",
+      "required_features": {
+        "requested_direct": [],
+        "resolved_on_matrix_sdk": ["e2e-encryption"],
+        "resolved_on_matrix_sdk_ui": [],
+        "notes": "UI crate resolved features empty; matrix-sdk still unified with e2e-encryption."
+      },
+      "stability_evidence": "Public stable API at matrix-sdk-0.18.0 pin; no experimental feature gate for this shape.",
+      "source": {
+        "path": "crates/matrix-sdk-ui/src/spaces/room_list.rs",
+        "lines": "104",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk-ui/src/spaces/room_list.rs#L104",
+        "notes": "pub struct SpaceRoomList"
+      },
+      "probe_id": "P0.3b-space-room-list-type",
+      "probe_file": "probes/matrix-rust-sdk-0.18/src/spaces.rs",
+      "compile_outcome": "pass",
+      "evidence_status": "stable-api-probed",
+      "limits": "Compile-only API shape. Does not prove runtime, network, homeserver, store, or UI semantics."
+    },
+    {
+      "id": "SC-077",
+      "plan_section_7_area": "7.2-sync-room-list-navigation-and-state",
+      "p0_1_linkage": {
+        "categories": ["spaces", "room_lists"],
+        "representative_paths": [
+          "synara/src/app/components/room-card/RoomCard.tsx",
+          "synara/src/app/features/lobby/Lobby.tsx"
+        ],
+        "notes": "P0.1: spaces (18 files). Plan §7.2 includes spaces/hierarchy."
+      },
+      "api_path": "matrix_sdk_ui::spaces::SpaceService::space_room_list",
+      "required_features": {
+        "requested_direct": [],
+        "resolved_on_matrix_sdk": ["e2e-encryption"],
+        "resolved_on_matrix_sdk_ui": [],
+        "notes": "UI crate resolved features empty; matrix-sdk still unified with e2e-encryption."
+      },
+      "stability_evidence": "Public stable API at matrix-sdk-0.18.0 pin; no experimental feature gate for this shape.",
+      "source": {
+        "path": "crates/matrix-sdk-ui/src/spaces/mod.rs",
+        "lines": "330",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk-ui/src/spaces/mod.rs#L330",
+        "notes": "pub async fn space_room_list"
+      },
+      "probe_id": "P0.3b-space-service-space-room-list",
+      "probe_file": "probes/matrix-rust-sdk-0.18/src/spaces.rs",
+      "compile_outcome": "pass",
+      "evidence_status": "stable-api-probed",
+      "limits": "Compile-only API shape. Does not prove runtime, network, homeserver, store, or UI semantics."
+    },
+    {
+      "id": "SC-078",
+      "plan_section_7_area": "7.3-timeline-and-event-presentation",
+      "p0_1_linkage": {
+        "categories": ["threads", "timelines"],
+        "representative_paths": [
+          "synara/src/app/state/room-list/roomActivity.ts",
+          "synara/src/app/components/message/Reply.tsx"
+        ],
+        "notes": "P0.1: threads (1 file), timelines (34). Plan §7.3 threads/relations."
+      },
+      "api_path": "matrix_sdk::Room::relations",
+      "required_features": {
+        "requested_direct": [],
+        "resolved_on_matrix_sdk": ["e2e-encryption"],
+        "resolved_on_matrix_sdk_ui": [],
+        "notes": "e2e-encryption only via matrix-sdk-ui unification; not a direct request."
+      },
+      "stability_evidence": "Public stable API at matrix-sdk-0.18.0 pin; no experimental feature gate for this shape.",
+      "source": {
+        "path": "crates/matrix-sdk/src/room/mod.rs",
+        "lines": "4279",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/room/mod.rs#L4279",
+        "notes": "pub async fn relations"
+      },
+      "probe_id": "P0.3b-room-relations",
+      "probe_file": "probes/matrix-rust-sdk-0.18/src/threads.rs",
+      "compile_outcome": "pass",
+      "evidence_status": "stable-api-probed",
+      "limits": "Compile-only API shape. Does not prove runtime, network, homeserver, store, or UI semantics."
+    },
+    {
+      "id": "SC-079",
+      "plan_section_7_area": "7.3-timeline-and-event-presentation",
+      "p0_1_linkage": {
+        "categories": ["threads", "timelines"],
+        "representative_paths": [
+          "synara/src/app/state/room-list/roomActivity.ts",
+          "synara/src/app/components/message/Reply.tsx"
+        ],
+        "notes": "P0.1: threads (1 file), timelines (34). Plan §7.3 threads/relations."
+      },
+      "api_path": "matrix_sdk_ui::timeline::ThreadListService",
+      "required_features": {
+        "requested_direct": [],
+        "resolved_on_matrix_sdk": ["e2e-encryption"],
+        "resolved_on_matrix_sdk_ui": [],
+        "notes": "UI crate resolved features empty; matrix-sdk still unified with e2e-encryption."
+      },
+      "stability_evidence": "Public stable API at matrix-sdk-0.18.0 pin; no experimental feature gate for this shape.",
+      "source": {
+        "path": "crates/matrix-sdk-ui/src/timeline/thread_list_service.rs",
+        "lines": "148",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk-ui/src/timeline/thread_list_service.rs#L148",
+        "notes": "pub struct ThreadListService"
+      },
+      "probe_id": "P0.3b-thread-list-service-type",
+      "probe_file": "probes/matrix-rust-sdk-0.18/src/threads.rs",
+      "compile_outcome": "pass",
+      "evidence_status": "stable-api-probed",
+      "limits": "Compile-only API shape. Does not prove runtime, network, homeserver, store, or UI semantics."
+    },
+    {
+      "id": "SC-080",
+      "plan_section_7_area": "7.3-timeline-and-event-presentation",
+      "p0_1_linkage": {
+        "categories": ["threads", "timelines"],
+        "representative_paths": [
+          "synara/src/app/state/room-list/roomActivity.ts",
+          "synara/src/app/components/message/Reply.tsx"
+        ],
+        "notes": "P0.1: threads (1 file), timelines (34). Plan §7.3 threads/relations."
+      },
+      "api_path": "matrix_sdk_ui::timeline::RoomExt::thread_list_service",
+      "required_features": {
+        "requested_direct": [],
+        "resolved_on_matrix_sdk": ["e2e-encryption"],
+        "resolved_on_matrix_sdk_ui": [],
+        "notes": "UI crate resolved features empty; matrix-sdk still unified with e2e-encryption."
+      },
+      "stability_evidence": "Public stable API at matrix-sdk-0.18.0 pin; no experimental feature gate for this shape.",
+      "source": {
+        "path": "crates/matrix-sdk-ui/src/timeline/traits.rs",
+        "lines": "71",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk-ui/src/timeline/traits.rs#L71",
+        "notes": "fn thread_list_service"
+      },
+      "probe_id": "P0.3b-room-ext-thread-list-service",
+      "probe_file": "probes/matrix-rust-sdk-0.18/src/threads.rs",
+      "compile_outcome": "pass",
+      "evidence_status": "stable-api-probed",
+      "limits": "Compile-only API shape. Does not prove runtime, network, homeserver, store, or UI semantics."
+    },
+    {
+      "id": "SC-081",
+      "plan_section_7_area": "7.3-timeline-and-event-presentation",
+      "p0_1_linkage": {
+        "categories": ["threads", "timelines"],
+        "representative_paths": [
+          "synara/src/app/state/room-list/roomActivity.ts",
+          "synara/src/app/components/message/Reply.tsx"
+        ],
+        "notes": "P0.1: threads (1 file), timelines (34). Plan §7.3 threads/relations."
+      },
+      "api_path": "matrix_sdk_ui::Timeline::is_threaded",
+      "required_features": {
+        "requested_direct": [],
+        "resolved_on_matrix_sdk": ["e2e-encryption"],
+        "resolved_on_matrix_sdk_ui": [],
+        "notes": "UI crate resolved features empty; matrix-sdk still unified with e2e-encryption."
+      },
+      "stability_evidence": "Public stable API at matrix-sdk-0.18.0 pin; no experimental feature gate for this shape.",
+      "source": {
+        "path": "crates/matrix-sdk-ui/src/timeline/mod.rs",
+        "lines": "865",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk-ui/src/timeline/mod.rs#L865",
+        "notes": "pub fn is_threaded"
+      },
+      "probe_id": "P0.3b-timeline-is-threaded",
+      "probe_file": "probes/matrix-rust-sdk-0.18/src/threads.rs",
+      "compile_outcome": "pass",
+      "evidence_status": "stable-api-probed",
+      "limits": "Compile-only API shape. Does not prove runtime, network, homeserver, store, or UI semantics."
+    },
+    {
+      "id": "SC-082",
+      "plan_section_7_area": "7.11-calls-and-widgets",
+      "p0_1_linkage": {
+        "categories": ["matrixrtc_calls"],
+        "representative_paths": [
+          "synara/src/app/features/call-status/LiveChip.tsx",
+          "synara/src/app/features/call-status/MemberGlance.tsx"
+        ],
+        "notes": "P0.1: matrixrtc_calls (5 files)."
+      },
+      "api_path": "matrix_sdk::widget (experimental-widgets)",
+      "required_features": {
+        "requested_direct": [],
+        "required_feature_absent": "experimental-widgets",
+        "resolved_on_matrix_sdk": ["e2e-encryption"],
+        "resolved_on_matrix_sdk_ui": []
+      },
+      "stability_evidence": "Module is feature-gated by experimental-widgets and is not enabled in the P0.3a/P0.3b feature resolution.",
+      "source": {
+        "path": "crates/matrix-sdk/src/lib.rs",
+        "lines": "64-65",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/lib.rs#L64-L65",
+        "notes": "#[cfg(feature = \"experimental-widgets\")] pub mod widget"
+      },
+      "probe_id": null,
+      "probe_file": null,
+      "compile_outcome": "not-probed",
+      "evidence_status": "deferred-to-p0.3c",
+      "limits": "Deferred: experimental-widgets not enabled. Element Call/widget APIs require the experimental feature gate and P0.3c/P0.3d analysis. No false support claim."
+    },
+    {
+      "id": "SC-083",
+      "plan_section_7_area": "7.1-authentication-and-account-lifecycle",
+      "p0_1_linkage": {
+        "categories": ["indexeddb_matrix_stores", "uia_auth"],
+        "representative_paths": [
+          "synara/src/client/initMatrix.ts",
+          "synara/src/app/components/ActionUIA.tsx"
+        ],
+        "notes": "P0.1: indexeddb_matrix_stores (1 file). SQLite store is the Rust analog."
+      },
+      "api_path": "matrix_sdk::ClientBuilder::sqlite_store",
+      "required_features": {
+        "requested_direct": [],
+        "required_feature_absent": "sqlite",
+        "resolved_on_matrix_sdk": ["e2e-encryption"],
+        "resolved_on_matrix_sdk_ui": []
+      },
+      "stability_evidence": "Method is cfg-gated by feature sqlite, which is not enabled (and not requested) in this probe resolution.",
+      "source": {
+        "path": "crates/matrix-sdk/src/client/builder/mod.rs",
+        "lines": "254-261",
+        "url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/client/builder/mod.rs#L254-L261",
+        "notes": "#[cfg(feature = \"sqlite\")] pub fn sqlite_store"
+      },
+      "probe_id": null,
+      "probe_file": null,
+      "compile_outcome": "not-probed",
+      "evidence_status": "deferred-to-p0.3c",
+      "limits": "Deferred: sqlite feature intentionally not enabled per P0.3a/P0.3b constraints. Store selection is P0.3c/P0.5 territory."
+    }
+  ],
+  "summary": {
+    "candidate_count": 84,
+    "stable_api_probed_count": 80,
+    "deferred_to_p0_3c_count": 4,
+    "probe_id_count": 80,
+    "by_area": {
+      "7.1-authentication-and-account-lifecycle": {
+        "total": 13,
+        "stable_api_probed": 12,
+        "deferred_to_p0_3c": 1
+      },
+      "7.2-sync-room-list-navigation-and-state": {
+        "total": 18,
+        "stable_api_probed": 18,
+        "deferred_to_p0_3c": 0
+      },
+      "7.3-timeline-and-event-presentation": {
+        "total": 12,
+        "stable_api_probed": 12,
+        "deferred_to_p0_3c": 0
+      },
+      "7.4-composer-and-message-actions": {
+        "total": 6,
+        "stable_api_probed": 6,
+        "deferred_to_p0_3c": 0
+      },
+      "7.5-media": {
+        "total": 4,
+        "stable_api_probed": 4,
+        "deferred_to_p0_3c": 0
+      },
+      "7.6-room-profile-member-and-permission-management": {
+        "total": 11,
+        "stable_api_probed": 11,
+        "deferred_to_p0_3c": 0
+      },
+      "7.7-account-data-and-custom-contracts": {
+        "total": 2,
+        "stable_api_probed": 2,
+        "deferred_to_p0_3c": 0
+      },
+      "7.8-notifications": {
+        "total": 4,
+        "stable_api_probed": 4,
+        "deferred_to_p0_3c": 0
+      },
+      "7.9-devices-e2ee-verification-and-recovery": {
+        "total": 8,
+        "stable_api_probed": 8,
+        "deferred_to_p0_3c": 0
+      },
+      "7.10-search": {
+        "total": 5,
+        "stable_api_probed": 3,
+        "deferred_to_p0_3c": 2
+      },
+      "7.11-calls-and-widgets": {
+        "total": 1,
+        "stable_api_probed": 0,
+        "deferred_to_p0_3c": 1
+      }
+    }
+  }
+}
