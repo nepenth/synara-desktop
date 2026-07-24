@@ -1,0 +1,591 @@
+{
+  "task_id": "P0.6",
+  "title": "Baseline reliability/performance evidence",
+  "date": "2026-07-24",
+  "base_integration_commit": "a2d288b0762104fb15a6c4829bfe1293e865f5b6",
+  "base_integration_branch": "feature/matrix-rust-sdk-full-replacement",
+  "work_branch": "matrix-rust/p0.6-performance-baseline",
+  "p0_5_status": "MERGED",
+  "p0_5_pr": 45,
+  "product": {
+    "app_version": "1.2.59",
+    "matrix_client": "matrix-js-sdk",
+    "matrix_js_sdk_version": "42.0.0",
+    "notes": "Baseline is current JS product, not Matrix Rust SDK"
+  },
+  "status": "accepted_pending_integration_merge",
+  "merged": false,
+  "environment": {
+    "os": "macos",
+    "os_version": "26.5.2",
+    "os_build": "25F84",
+    "arch": "arm64",
+    "cpu": "Apple M2",
+    "ram_gib": 24,
+    "node": "v22.22.3",
+    "npm": "10.9.8",
+    "rustc": "1.93.0 (254b59607 2026-01-19)",
+    "cargo": "1.93.0 (083ac5135 2025-12-15)",
+    "tauri_app_launched_for_live_metrics": false,
+    "homeserver_for_live_metrics": null,
+    "disposable_synapse_available": true,
+    "disposable_synapse_started": false,
+    "linux_host_available": false
+  },
+  "metrics": [
+    {
+      "id": "M-STARTUP-READY",
+      "name": "startup-to-ready",
+      "definition": "Process/webview start or cold session restore to interactive signed-in shell after crypto boot and usable sync",
+      "start_marker": "app launch / ClientRoot initClient begin",
+      "stop_marker": "splash dismissed; main chrome interactive",
+      "primary_owner": "tauri-shell + web-bootstrap + matrix-js-sdk store/crypto/sync",
+      "measurement_method": "live-manual",
+      "status": "residual-pending-live",
+      "phase13_budget": {
+        "kind": "p95_relative",
+        "max_regression": 0.1
+      },
+      "privacy": "no account identifiers; anonymous run index only"
+    },
+    {
+      "id": "M-ROOM-SWITCH-STABLE",
+      "name": "room-switch-to-first-stable-render",
+      "definition": "Room selection to first stable timeline render",
+      "start_marker": "room select / route change",
+      "stop_marker": "room-timeline.first-stable-bottom elapsedMs (or focused-mode stable equivalent)",
+      "related_records": [
+        "room-timeline.open",
+        "room-timeline.render-window",
+        "room-timeline.first-stable-bottom"
+      ],
+      "primary_owner": "web-timeline RoomTimeline + matrix-js-sdk room/timeline",
+      "measurement_method": "live-manual-timeline-diagnostics",
+      "status": "residual-pending-live",
+      "phase13_budget": {
+        "kind": "p95_relative",
+        "max_regression": 0.1
+      },
+      "privacy": "no room/event IDs in artifacts"
+    },
+    {
+      "id": "M-TIMELINE-OPEN-INITIAL",
+      "name": "initial-timeline-open",
+      "definition": "Initial open of large room requiring timeline load (cleartext / already decrypted)",
+      "start_marker": "room open",
+      "stop_marker": "first stable timeline render",
+      "primary_owner": "matrix-js-sdk timeline window + virtualization",
+      "measurement_method": "live-manual-timeline-diagnostics",
+      "status": "residual-pending-live",
+      "phase13_budget": {
+        "kind": "p95_relative",
+        "max_regression": 0.1
+      },
+      "privacy": "counts and timings only"
+    },
+    {
+      "id": "M-TIMELINE-OPEN-ENCRYPTED",
+      "name": "initial-encrypted-timeline-open",
+      "definition": "Encrypted room open to first stable readable render (decrypted or stable UTD placeholders)",
+      "start_marker": "encrypted room select",
+      "stop_marker": "first stable render with crypto path exercised",
+      "primary_owner": "rust-crypto-wasm + timeline decrypt + UI",
+      "measurement_method": "live-manual",
+      "status": "residual-pending-live",
+      "phase13_budget": {
+        "kind": "p95_relative",
+        "max_regression": 0.1,
+        "plan_name": "initial encrypted timeline p95"
+      },
+      "privacy": "never log plaintext or ciphertext"
+    },
+    {
+      "id": "M-PAGINATION-BACKWARD",
+      "name": "pagination-backward",
+      "definition": "One backward history page with anchor preserved",
+      "start_marker": "room-timeline.pagination-start",
+      "stop_marker": "room-timeline.pagination-complete",
+      "primary_owner": "matrix-js-sdk pagination + virtual anchor restore",
+      "measurement_method": "live-manual-timeline-diagnostics",
+      "status": "residual-pending-live",
+      "phase13_budget": {
+        "kind": "p95_relative",
+        "max_regression": 0.1
+      },
+      "privacy": "range counts only; no event bodies"
+    },
+    {
+      "id": "M-RECONNECT-SETTLE",
+      "name": "reconnect-offline-to-online-settle",
+      "definition": "Offline to online until sync healthy and UI settled",
+      "start_marker": "network offline while previously SYNCING",
+      "stop_marker": "sync healthy; room list/timeline consistent",
+      "primary_owner": "matrix-js-sdk sync + network + reconnect UI",
+      "measurement_method": "live-manual",
+      "status": "residual-pending-live",
+      "phase13_budget": {
+        "kind": "p95_relative",
+        "max_regression": 0.1,
+        "notes": "also covered under P13.1 soak/reconnect"
+      },
+      "privacy": "no tokens or device IDs in committed tables"
+    },
+    {
+      "id": "M-MEDIA-OPEN",
+      "name": "media-load-or-open",
+      "definition": "Thumbnail or attachment open to first paint of media content",
+      "start_marker": "user open media",
+      "stop_marker": "first visible decode/paint or failure UI",
+      "primary_owner": "media fetch/cache + webview decode",
+      "measurement_method": "live-manual",
+      "status": "residual-pending-live",
+      "phase13_budget": {
+        "kind": "p95_relative",
+        "max_regression": 0.1
+      },
+      "privacy": "media class labels only; no secret-bearing MXC/filenames"
+    },
+    {
+      "id": "M-IDLE-CPU",
+      "name": "idle-cpu-after-settled-sync",
+      "definition": "Process CPU percent after settled sync, no input, steady-state >=60s",
+      "start_marker": "settled sync idle begin",
+      "stop_marker": "end of sampling window",
+      "primary_owner": "sync idle + web timers + shell",
+      "measurement_method": "live-manual-os-tools",
+      "status": "residual-pending-live",
+      "phase13_budget": {
+        "kind": "noise_band",
+        "provisional_absolute_pp": 2,
+        "notes": "Phase 0 noise band; refine when live samples exist"
+      },
+      "privacy": "aggregates only"
+    },
+    {
+      "id": "M-MEMORY-LARGE-ACCOUNT",
+      "name": "memory-after-standard-large-account-scenario",
+      "definition": "JS heap (if exposed) + process RSS after standard large-account scenario",
+      "standard_scenario": {
+        "min_joined_rooms_target": 200,
+        "rooms_to_open": 5,
+        "include_encrypted_large_room": true,
+        "large_room_loaded_events_target": 1000,
+        "settle_minutes": 2,
+        "notes": "If account smaller, use max available and record N"
+      },
+      "primary_owner": "matrix-js-sdk stores + DOM/virtualizer + crypto",
+      "measurement_method": "live-manual",
+      "status": "residual-pending-live",
+      "phase13_budget": {
+        "kind": "relative",
+        "max_regression": 0.15,
+        "also": "no_unbounded_growth"
+      },
+      "privacy": "counts only; no room names"
+    },
+    {
+      "id": "M-DISK-GROWTH",
+      "name": "disk-growth-indexeddb-crypto-appdata",
+      "definition": "App data / IndexedDB / crypto store growth over fixed scenario",
+      "fixed_scenario": "cold launch \u2192 login/restore \u2192 idle 10m with 5 light room opens \u2192 size delta",
+      "primary_owner": "IndexedDB + rust-crypto store (today); native sqlite post-cutover",
+      "measurement_method": "live-manual",
+      "status": "residual-pending-live",
+      "phase13_budget": {
+        "kind": "no_unbounded_growth",
+        "compare": "scenario_delta"
+      },
+      "privacy": "never commit store dumps; path class only"
+    },
+    {
+      "id": "M-TIMELINE-MAP-10K",
+      "name": "synthetic-timeline-row-map-10k",
+      "definition": "Synthetic row key/index map for rendered window 200 from 10k virtual events",
+      "primary_owner": "web timeline virtualization mapping layer",
+      "measurement_method": "automated-harness",
+      "status": "measured",
+      "phase13_budget": {
+        "kind": "absolute_and_canary",
+        "absolute_budget_ms": 25,
+        "notes": "mapping canary; does not replace live room-switch budgets"
+      },
+      "privacy": "synthetic keys only"
+    },
+    {
+      "id": "M-TIMELINE-MAP-50K",
+      "name": "synthetic-timeline-row-map-50k",
+      "definition": "Synthetic row key/index map for rendered window 200 from 50k virtual events",
+      "primary_owner": "web timeline virtualization mapping layer",
+      "measurement_method": "automated-harness",
+      "status": "measured",
+      "phase13_budget": {
+        "kind": "absolute_and_canary",
+        "absolute_budget_ms": 25,
+        "notes": "mapping canary; does not replace live room-switch budgets"
+      },
+      "privacy": "synthetic keys only"
+    }
+  ],
+  "automated_runs": [
+    {
+      "id": "timeline-map-multi-iter-50",
+      "harness": "scripts/matrix-rust-p0.6-baseline-harness.mjs",
+      "product_harness": "synara/scripts/run-timeline-performance-harness.mjs",
+      "measured_surface": "synthetic timeline row key/index mapping only (not end-to-end UX latency)",
+      "iterations": 50,
+      "budget_ms": 25,
+      "percentile_method": "nearest-rank",
+      "captured_at": "2026-07-24T23:28:12.781Z",
+      "host": {
+        "os": "macos",
+        "arch": "arm64",
+        "node": "v22.22.3",
+        "cpu": "Apple M2"
+      },
+      "command": "node scripts/matrix-rust-p0.6-baseline-harness.mjs --iterations 50 --json",
+      "scenarios": [
+        {
+          "metric_id": "M-TIMELINE-MAP-10000",
+          "label": "synthetic timeline row map (10000 events, rendered window 200)",
+          "event_count": 10000,
+          "rendered_events": 200,
+          "rows": 202,
+          "budget_ms": 25,
+          "unit": "ms",
+          "n": 50,
+          "min_ms": 0.024333,
+          "p50_ms": 0.038375,
+          "p95_ms": 0.161084,
+          "max_ms": 0.279333,
+          "mean_ms": 0.051656,
+          "samples_ms": [
+            0.024333,
+            0.024667,
+            0.024708,
+            0.02475,
+            0.025,
+            0.025083,
+            0.0255,
+            0.025542,
+            0.031959,
+            0.032,
+            0.032291,
+            0.032333,
+            0.032416,
+            0.032459,
+            0.032459,
+            0.03275,
+            0.034084,
+            0.037625,
+            0.037709,
+            0.03775,
+            0.03775,
+            0.037792,
+            0.038,
+            0.038334,
+            0.038375,
+            0.038583,
+            0.039333,
+            0.039334,
+            0.040208,
+            0.040459,
+            0.040958,
+            0.041208,
+            0.042083,
+            0.042917,
+            0.0435,
+            0.044625,
+            0.045125,
+            0.046666,
+            0.04675,
+            0.046916,
+            0.04825,
+            0.048709,
+            0.049042,
+            0.060125,
+            0.060958,
+            0.085416,
+            0.106834,
+            0.161084,
+            0.248709,
+            0.279333
+          ],
+          "result": "pass"
+        },
+        {
+          "metric_id": "M-TIMELINE-MAP-50000",
+          "label": "synthetic timeline row map (50000 events, rendered window 200)",
+          "event_count": 50000,
+          "rendered_events": 200,
+          "rows": 202,
+          "budget_ms": 25,
+          "unit": "ms",
+          "n": 50,
+          "min_ms": 0.024417,
+          "p50_ms": 0.025542,
+          "p95_ms": 0.086875,
+          "max_ms": 0.1165,
+          "mean_ms": 0.029903,
+          "samples_ms": [
+            0.024417,
+            0.024458,
+            0.024458,
+            0.024458,
+            0.024542,
+            0.024542,
+            0.024542,
+            0.024583,
+            0.024583,
+            0.024583,
+            0.024583,
+            0.024625,
+            0.024625,
+            0.024666,
+            0.024708,
+            0.024875,
+            0.025042,
+            0.025375,
+            0.025375,
+            0.025417,
+            0.0255,
+            0.0255,
+            0.0255,
+            0.025541,
+            0.025542,
+            0.025542,
+            0.025542,
+            0.025625,
+            0.025625,
+            0.025625,
+            0.025625,
+            0.025625,
+            0.025666,
+            0.025708,
+            0.02575,
+            0.026292,
+            0.026333,
+            0.026416,
+            0.026458,
+            0.0265,
+            0.026625,
+            0.026625,
+            0.026791,
+            0.026917,
+            0.027125,
+            0.027292,
+            0.028458,
+            0.086875,
+            0.091583,
+            0.1165
+          ],
+          "result": "pass"
+        }
+      ]
+    },
+    {
+      "id": "timeline-performance-product-harness-smoke",
+      "harness": "synara/scripts/run-timeline-performance-harness.mjs",
+      "command": "cd synara && npm run test:timeline-performance",
+      "note": "single-shot smoke; multi-iteration run is authoritative for p50/p95",
+      "budget_ms": 25,
+      "illustrative_single_run": [
+        {
+          "event_count": 10000,
+          "rendered_events": 200,
+          "rows": 202,
+          "duration_ms": 0.09
+        },
+        {
+          "event_count": 50000,
+          "rendered_events": 200,
+          "rows": 202,
+          "duration_ms": 0.05
+        }
+      ],
+      "result": "pass"
+    }
+  ],
+  "residuals": [
+    {
+      "metric_id": "M-STARTUP-READY",
+      "status": "residual-pending-live",
+      "blocker": "signed-in multi-run live protocol not executed in agent session; methodology documented"
+    },
+    {
+      "metric_id": "M-ROOM-SWITCH-STABLE",
+      "status": "residual-pending-live",
+      "blocker": "signed-in multi-run live protocol not executed in agent session; methodology documented"
+    },
+    {
+      "metric_id": "M-TIMELINE-OPEN-INITIAL",
+      "status": "residual-pending-live",
+      "blocker": "signed-in multi-run live protocol not executed in agent session; methodology documented"
+    },
+    {
+      "metric_id": "M-TIMELINE-OPEN-ENCRYPTED",
+      "status": "residual-pending-live",
+      "blocker": "signed-in multi-run live protocol not executed in agent session; methodology documented"
+    },
+    {
+      "metric_id": "M-PAGINATION-BACKWARD",
+      "status": "residual-pending-live",
+      "blocker": "signed-in multi-run live protocol not executed in agent session; methodology documented"
+    },
+    {
+      "metric_id": "M-RECONNECT-SETTLE",
+      "status": "residual-pending-live",
+      "blocker": "signed-in multi-run live protocol not executed in agent session; methodology documented"
+    },
+    {
+      "metric_id": "M-MEDIA-OPEN",
+      "status": "residual-pending-live",
+      "blocker": "signed-in multi-run live protocol not executed in agent session; methodology documented"
+    },
+    {
+      "metric_id": "M-IDLE-CPU",
+      "status": "residual-pending-live",
+      "blocker": "signed-in multi-run live protocol not executed in agent session; methodology documented"
+    },
+    {
+      "metric_id": "M-MEMORY-LARGE-ACCOUNT",
+      "status": "residual-pending-live",
+      "blocker": "signed-in multi-run live protocol not executed in agent session; methodology documented"
+    },
+    {
+      "metric_id": "M-DISK-GROWTH",
+      "status": "residual-pending-live",
+      "blocker": "signed-in multi-run live protocol not executed in agent session; methodology documented"
+    },
+    {
+      "metric_id": "LINUX-LIVE-ALL",
+      "status": "residual-pending-live",
+      "blocker": "Linux host not available on this agent machine; procedure documented in performance-baseline.md"
+    }
+  ],
+  "phase13_budgets": {
+    "source": "docs/matrix-rust-sdk-full-replacement-plan.md Phase 13",
+    "rules": [
+      {
+        "plan": "startup-to-ready p95: no worse than 10%",
+        "metric_ids": [
+          "M-STARTUP-READY"
+        ],
+        "max_regression": 0.1
+      },
+      {
+        "plan": "room-switch-to-first-stable-render p95: no worse than 10%",
+        "metric_ids": [
+          "M-ROOM-SWITCH-STABLE"
+        ],
+        "max_regression": 0.1
+      },
+      {
+        "plan": "initial encrypted timeline p95: no worse than 10%",
+        "metric_ids": [
+          "M-TIMELINE-OPEN-ENCRYPTED"
+        ],
+        "max_regression": 0.1
+      },
+      {
+        "plan": "pagination p95: no worse than 10%",
+        "metric_ids": [
+          "M-PAGINATION-BACKWARD"
+        ],
+        "max_regression": 0.1
+      },
+      {
+        "plan": "idle CPU after settled sync: no regression beyond Phase 0 noise",
+        "metric_ids": [
+          "M-IDLE-CPU"
+        ],
+        "provisional_noise_band_absolute_pp": 2
+      },
+      {
+        "plan": "memory after standard large-account scenario: no worse than 15%",
+        "metric_ids": [
+          "M-MEMORY-LARGE-ACCOUNT"
+        ],
+        "max_regression": 0.15
+      },
+      {
+        "plan": "no unbounded memory, channel, media-cache, or store growth",
+        "metric_ids": [
+          "M-MEMORY-LARGE-ACCOUNT",
+          "M-DISK-GROWTH"
+        ]
+      },
+      {
+        "plan": "timeline scroll/anchor acceptance remains at least as good as baseline",
+        "metric_ids": [
+          "M-ROOM-SWITCH-STABLE",
+          "M-PAGINATION-BACKWARD",
+          "M-TIMELINE-MAP-10K",
+          "M-TIMELINE-MAP-50K"
+        ]
+      }
+    ],
+    "additional_p0_6_metrics_with_same_latency_policy": [
+      {
+        "metric_ids": [
+          "M-RECONNECT-SETTLE",
+          "M-MEDIA-OPEN",
+          "M-TIMELINE-OPEN-INITIAL"
+        ],
+        "max_regression": 0.1
+      }
+    ]
+  },
+  "live_protocol": {
+    "documented": true,
+    "executed": false,
+    "platforms": {
+      "macos": {
+        "procedure": true,
+        "executed": false
+      },
+      "linux": {
+        "procedure": true,
+        "executed": false
+      }
+    },
+    "instrumentation": {
+      "localStorage_flag": "synara.performance.debug=true",
+      "timeline_diagnostics": "docs/timeline-diagnostics.md",
+      "performance_notes": "synara/docs/synara-performance.md"
+    },
+    "sample_size_guidance": {
+      "room_switch_timeline_pagination_media": 20,
+      "startup_cold": 10,
+      "reconnect": 10,
+      "idle_cpu_memory_disk": 5
+    },
+    "blockers": [
+      "no signed-in multi-run UI automation in task scope",
+      "stop condition forbids multi-hour Synapse soaks / large UI frameworks",
+      "Linux host unavailable on agent"
+    ]
+  },
+  "non_goals": [
+    "Not a Matrix Rust SDK performance study (no production SDK accepted yet)",
+    "Not dual-backend A/B",
+    "No product behavior changes for better numbers",
+    "Cold cargo check times are not UX baselines",
+    "iOS performance-report.md is reference only",
+    "No secrets, room IDs, event content, or tokens in artifacts"
+  ],
+  "reviewer_commands": [
+    "cd synara && npm run test:timeline-performance",
+    "node scripts/matrix-rust-p0.6-baseline-harness.mjs --iterations 50",
+    "node --test scripts/__tests__/matrix-rust-p0.6-baseline-harness.test.mjs"
+  ],
+  "related_paths": [
+    "docs/matrix-rust-sdk/performance-baseline.md",
+    "scripts/matrix-rust-p0.6-baseline-harness.mjs",
+    "scripts/__tests__/matrix-rust-p0.6-baseline-harness.test.mjs",
+    "synara/scripts/run-timeline-performance-harness.mjs",
+    "synara/docs/synara-performance.md",
+    "docs/timeline-diagnostics.md",
+    "docs/production-smoke-checklist.md"
+  ],
+  "verdict": "pass-with-residuals"
+}
