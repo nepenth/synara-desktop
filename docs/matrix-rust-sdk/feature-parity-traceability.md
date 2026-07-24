@@ -6633,7 +6633,7 @@ Limited rejected-review correction (`p0.2-correct-41-fr-7.10-002-global-message-
 - **Existing tests**:
   - _(none)_
 - **Planned** `AT-FR-7.10-002-001` task `P6.8` level `integration`
-  - Scenario: Integration against disposable Synapse: (A) EXPOSURE — open Home Message Search or Space Message Search (allowGlobal hosts); assert Global chip is visible. (B) GLOBAL SEARCH — enable Global (URL global=true); enter search_term known to match messages in more than one room outside the host default list if applicable; assert useMessageSearch/mx.search issues room_events search with rooms filter undefined/absent (not bound only to host rooms list); results may group across rooms. (C) SCOPE TOGGLE — clear Global back to host default; assert rooms re-bound to host list (room-scoped adjacency, not sole pass). (D) DISTINCTIONS — room-scoped-only without Global (FR-7.10-001), filter-only sender/date/type (FR-7.10-003), Open result alone (FR-7.10-004), user/directory Search modal alone (FR-7.10-005), cancel/stale (FR-7.10-007) do not satisfy this FR. After cutover P6.8 (+P11.3), same observables via typed SC-071 Client::send search request path + product IPC — not raw /_matrix HTTP, not dual-backend/SDK selector, not experimental SC-072, not invented high-level search API. SC-071 alone, compile-only, raw HTTP, room-scoped-only, filter-only, Open-only, directory-only, helper/fixture-only FAIL.
+  - Scenario: Integration against disposable Synapse: (A) EXPOSURE — open Home Message Search or Space Message Search (allowGlobal hosts); assert Global chip is visible. (B) GLOBAL SEARCH — enable Global (URL global=true); enter search_term known to match messages in more than one room outside the host default list if applicable; assert useMessageSearch/mx.search issues room_events search with rooms filter undefined/absent (not bound only to host rooms list); results may group across rooms. (C) PAGINATION UNDER GLOBAL — with enough matches, next_batch/nextToken fetchNextPage still works with rooms omitted. (D) SCOPE TOGGLE — clear Global back to host default; assert rooms re-bound to host list (room-scoped adjacency, not sole pass). (E) DISTINCTIONS — room-scoped-only without Global (FR-7.10-001), filter-only sender/date/type (FR-7.10-003), Open result alone (FR-7.10-004), user/directory Search modal alone (FR-7.10-005), cancel/stale (FR-7.10-007) do not satisfy this FR. After cutover P6.8 (+P11.3), same observables via typed SC-071 Client::send search request path + product IPC — not raw /_matrix HTTP, not dual-backend/SDK selector, not experimental SC-072, not invented high-level search API. SC-071 alone, compile-only, raw HTTP, room-scoped-only, filter-only, Open-only, directory-only, helper/fixture-only FAIL.
   - Test target: HomeSearch/SpaceSearch allowGlobal; SearchFilters Global chip; MessageSearch global=true → rooms undefined; useMessageSearch mx.search without rooms filter; post-cutover typed SC-071 Client::send search + IPC (P6.8/P11.3)
   - Preconditions:
     - Disposable Synapse with multiple joined rooms whose history is server-searchable; at least one term matching messages in a room outside a narrow host list when testing global vs host scope.
@@ -6646,11 +6646,13 @@ Limited rejected-review correction (`p0.2-correct-41-fr-7.10-002-global-message-
     3. GLOBAL SEARCH: select Global; enter a term; assert product path issues room_events search with rooms undefined/absent (not restricted to host default room list alone).
     4. RESULTS: assert matching results render (may span multiple rooms); optional: confirm host-default-only scope would not include a cross-room hit that global does.
     5. SCOPE TOGGLE: return to host default chip; assert rooms re-bound (documents distinction from FR-7.10-001 without substituting for this FR).
-    6. After cutover P6.8 (+P11.3), repeat global search via typed Client::send search (SC-071) under Rust ownership + product IPC. Citing SC-071 alone, compile-only blocked, raw /_matrix HTTP, dual-backend/SDK selector, SC-072 experimental, room-scoped-only, filter-only, Open-only, directory-only, or helper/fixture-only is a FAIL.
+    6. PAGINATION UNDER GLOBAL: with enough global matches, assert next_batch/nextToken fetchNextPage still appends results while rooms remain undefined/absent.
+    7. After cutover P6.8 (+P11.3), repeat global search + pagination via typed Client::send search (SC-071) under Rust ownership + product IPC. Citing SC-071 alone, compile-only blocked, raw /_matrix HTTP, dual-backend/SDK selector, SC-072 experimental, room-scoped-only, filter-only, Open-only, directory-only, or helper/fixture-only is a FAIL.
   - Assertions:
     - EXPOSED: Global message search UI is reachable (allowGlobal + Global chip on Home/Space Message Search).
     - GLOBAL REQUEST: with global=true and no rooms sub-filter, room_events search does not bind filter.rooms to the host-only room list (rooms undefined/absent).
     - RESULTS: server search returns matching events under global scope; UI renders result groups.
+    - PAGINATION UNDER GLOBAL: next_batch/nextToken pagination still functions with rooms omitted.
     - DISTINCTIONS: this FR ≠ FR-7.10-001 room-scoped; ≠ FR-7.10-003 filters beyond Global; ≠ FR-7.10-004 Open; ≠ FR-7.10-005 user/directory; ≠ FR-7.10-006 local search; ≠ FR-7.10-007 cancel/stale.
     - COORDINATION: search remains through useMessageSearch + MessageSearch (or Rust/IPC successors), not ad-hoc dual writers.
     - CUTOVER: P6.8 (+P11.3) preserves global scope via typed SC-071 Client::send search path; SC alone / compile-only never product pass; no raw /_matrix runtime HTTP; no dual-backend/SDK selector; no SC-072 substitution.
@@ -9361,18 +9363,21 @@ Limited rejected-review correction (`p0.2-correct-41-fr-7.10-002-global-message-
   1. Launch Synara desktop on the target platform against disposable Synapse; open Home Message Search (or Space Message Search) via the Message Search nav entry.
   2. EXPOSURE: confirm the Global chip is visible (allowGlobal host).
   3. GLOBAL SEARCH: select Global; enter a known term in SearchInput; confirm results appear and may span rooms beyond the host default list; confirm request/scope uses global=true (rooms not forced to host-only list).
-  4. SCOPE TOGGLE: select the host default chip (e.g. Home / space name); confirm scope returns to host rooms list (room-scoped adjacency).
-  5. DISTINCTIONS (negative for this FR alone): do not treat room-scoped RoomSidePanel search without Global (FR-7.10-001), filter-only sender/date/type (FR-7.10-003), Open on a result (FR-7.10-004), user/directory Search modal (FR-7.10-005), or cancel/stale alone (FR-7.10-007) as satisfying global message search exposure.
-  6. After cutover P6.8 (+P11.3): repeat global search; confirm typed SC-071 Client::send search path (not raw /_matrix from the renderer, not dual-backend/SDK selector, not SC-072 experimental local search).
+  4. PAGINATION UNDER GLOBAL: with enough matches, scroll/load more; confirm additional results load via next_batch while still in Global scope.
+  5. SCOPE TOGGLE: select the host default chip (e.g. Home / space name); confirm scope returns to host rooms list (room-scoped adjacency).
+  6. DISTINCTIONS (negative for this FR alone): do not treat room-scoped RoomSidePanel search without Global (FR-7.10-001), filter-only sender/date/type (FR-7.10-003), Open on a result (FR-7.10-004), user/directory Search modal (FR-7.10-005), or cancel/stale alone (FR-7.10-007) as satisfying global message search exposure.
+  7. After cutover P6.8 (+P11.3): repeat global search + pagination; confirm typed SC-071 Client::send search path (not raw /_matrix from the renderer, not dual-backend/SDK selector, not SC-072 experimental local search).
 - Expected:
   - EXPOSED: Global message search is reachable from Home/Space Message Search with Global chip.
   - GLOBAL REQUEST: global=true leaves rooms unrestricted (undefined/absent) for server room_events search; results render.
+  - PAGINATION UNDER GLOBAL: further pages load via next_batch/nextToken under Global scope when more results exist.
   - SCOPE TOGGLE: host default chip re-binds rooms list without removing Global availability.
   - No unexpected raw /\_matrix traffic from the app renderer for this flow on the post-cutover build; no dual-backend/SDK selector.
   - SC-071 alone / compile-only / raw HTTP / room-scoped-only / filter-only / Open-only / directory-only / SC-072 / helper-only do not pass this FR.
 - Clause breakdown:
   - global message search currently exposed (Home/Space allowGlobal + Global chip)
   - global=true → rooms undefined → mx.search without room filter
+  - next_batch pagination still works under global scope
   - cutover P6.8 (+P11.3) typed SC-071 Client::send search; SC-only/raw HTTP/SC-072/helper-only FAIL
 
 ### `MA-FR-7.10-003` (FR-7.10-003)
@@ -11606,7 +11611,7 @@ Limited rejected-review correction (`p0.2-correct-41-fr-7.10-002-global-message-
 
 ### `AT-FR-7.10-002-001`
 
-- Integration against disposable Synapse: (A) EXPOSURE — open Home Message Search or Space Message Search (allowGlobal hosts); assert Global chip is visible. (B) GLOBAL SEARCH — enable Global (URL global=true); enter search_term known to match messages in more than one room outside the host default list if applicable; assert useMessageSearch/mx.search issues room_events search with rooms filter undefined/absent (not bound only to host rooms list); results may group across rooms. (C) SCOPE TOGGLE — clear Global back to host default; assert rooms re-bound to host list (room-scoped adjacency, not sole pass). (D) DISTINCTIONS — room-scoped-only without Global (FR-7.10-001), filter-only sender/date/type (FR-7.10-003), Open result alone (FR-7.10-004), user/directory Search modal alone (FR-7.10-005), cancel/stale (FR-7.10-007) do not satisfy this FR. After cutover P6.8 (+P11.3), same observables via typed SC-071 Client::send search request path + product IPC — not raw /_matrix HTTP, not dual-backend/SDK selector, not experimental SC-072, not invented high-level search API. SC-071 alone, compile-only, raw HTTP, room-scoped-only, filter-only, Open-only, directory-only, helper/fixture-only FAIL.
+- Integration against disposable Synapse: (A) EXPOSURE — open Home Message Search or Space Message Search (allowGlobal hosts); assert Global chip is visible. (B) GLOBAL SEARCH — enable Global (URL global=true); enter search_term known to match messages in more than one room outside the host default list if applicable; assert useMessageSearch/mx.search issues room_events search with rooms filter undefined/absent (not bound only to host rooms list); results may group across rooms. (C) PAGINATION UNDER GLOBAL — with enough matches, next_batch/nextToken fetchNextPage still works with rooms omitted. (D) SCOPE TOGGLE — clear Global back to host default; assert rooms re-bound to host list (room-scoped adjacency, not sole pass). (E) DISTINCTIONS — room-scoped-only without Global (FR-7.10-001), filter-only sender/date/type (FR-7.10-003), Open result alone (FR-7.10-004), user/directory Search modal alone (FR-7.10-005), cancel/stale (FR-7.10-007) do not satisfy this FR. After cutover P6.8 (+P11.3), same observables via typed SC-071 Client::send search request path + product IPC — not raw /_matrix HTTP, not dual-backend/SDK selector, not experimental SC-072, not invented high-level search API. SC-071 alone, compile-only, raw HTTP, room-scoped-only, filter-only, Open-only, directory-only, helper/fixture-only FAIL.
 - target: HomeSearch/SpaceSearch allowGlobal; SearchFilters Global chip; MessageSearch global=true → rooms undefined; useMessageSearch mx.search without rooms filter; post-cutover typed SC-071 Client::send search + IPC (P6.8/P11.3)
 - actions:
   1. Boot integration harness against disposable Synapse. Do not use fixture-only mocks that skip product MessageSearch/allowGlobal path, dual-backend selectors, raw HTTP, or helper-only pass criteria.
@@ -11614,11 +11619,13 @@ Limited rejected-review correction (`p0.2-correct-41-fr-7.10-002-global-message-
   3. GLOBAL SEARCH: select Global; enter a term; assert product path issues room_events search with rooms undefined/absent (not restricted to host default room list alone).
   4. RESULTS: assert matching results render (may span multiple rooms); optional: confirm host-default-only scope would not include a cross-room hit that global does.
   5. SCOPE TOGGLE: return to host default chip; assert rooms re-bound (documents distinction from FR-7.10-001 without substituting for this FR).
-  6. After cutover P6.8 (+P11.3), repeat global search via typed Client::send search (SC-071) under Rust ownership + product IPC. Citing SC-071 alone, compile-only blocked, raw /_matrix HTTP, dual-backend/SDK selector, SC-072 experimental, room-scoped-only, filter-only, Open-only, directory-only, or helper/fixture-only is a FAIL.
+  6. PAGINATION UNDER GLOBAL: with enough global matches, assert next_batch/nextToken fetchNextPage still appends results while rooms remain undefined/absent.
+  7. After cutover P6.8 (+P11.3), repeat global search + pagination via typed Client::send search (SC-071) under Rust ownership + product IPC. Citing SC-071 alone, compile-only blocked, raw /_matrix HTTP, dual-backend/SDK selector, SC-072 experimental, room-scoped-only, filter-only, Open-only, directory-only, or helper/fixture-only is a FAIL.
 - assertions:
   - EXPOSED: Global message search UI is reachable (allowGlobal + Global chip on Home/Space Message Search).
   - GLOBAL REQUEST: with global=true and no rooms sub-filter, room_events search does not bind filter.rooms to the host-only room list (rooms undefined/absent).
   - RESULTS: server search returns matching events under global scope; UI renders result groups.
+  - PAGINATION UNDER GLOBAL: next_batch/nextToken pagination still functions with rooms omitted.
   - DISTINCTIONS: this FR ≠ FR-7.10-001 room-scoped; ≠ FR-7.10-003 filters beyond Global; ≠ FR-7.10-004 Open; ≠ FR-7.10-005 user/directory; ≠ FR-7.10-006 local search; ≠ FR-7.10-007 cancel/stale.
   - COORDINATION: search remains through useMessageSearch + MessageSearch (or Rust/IPC successors), not ad-hoc dual writers.
   - CUTOVER: P6.8 (+P11.3) preserves global scope via typed SC-071 Client::send search path; SC alone / compile-only never product pass; no raw /_matrix runtime HTTP; no dual-backend/SDK selector; no SC-072 substitution.
