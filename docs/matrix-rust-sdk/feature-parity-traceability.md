@@ -4,7 +4,7 @@
 
 ## Correction pass status
 
-Limited rejected-review correction (`p0.2-correct-26-fr-7.8-008-privacy-safe-encrypted-notifications`) for **FR-7.8-008** only: retarget privacy-safe encrypted notification behavior from wrong push-rule preference linkage / EncryptedContent timeline / utils/notifications sendReadReceipt owner to ClientNonUIFeatures OS notification body content (Message room+sender redaction; Invite count-only; Later generic due; AgentApproval optional commandPreview disclosure) + SystemNotificationPrivacy DTO + platform/desktop privacy drop; keep status `partial` under `GATE-7.8-008-ENCRYPTED-PRIVATE-MODE` (privacy enum never applied by generation; dropped before desktop_notify; encrypted rooms not treated differently); rewrite planned AT/MA; honest rust_target without claiming SC-057/SC-061 implement OS privacy redaction; cutover must not dump decrypted content into OS notifications without a privacy gate (no raw `/_matrix/` HTTP). JSON and Markdown synchronized. Accepted corrections for **FR-7.8-001 through FR-7.8-007** preserved. Prior corrections and accepted **7.1–7.3** preserved. **P0.2 is not complete.**
+Limited rejected-review correction (`p0.2-correct-27-fr-7.9-001-encrypted-store-init-before-sync`) for **FR-7.9-001** only: replace generic “via 2 files” / notes=null / shallow AT with concrete encrypted-store-before-sync order evidence from `initMatrix.ts` (store.startup → initRustCrypto → assertCryptoStoreContinuity → ready-to-start; product `startClient` only after) + `cryptoStoreContinuity.ts` (`getCrypto` gate after initRustCrypto before startClient) + `ClientRoot` lifecycle sequencing; retarget methods/listeners (`initRustCrypto`, `getCrypto`, `startClient`, `getSyncState`, `stopClient`, `ClientEvent.Sync`); rewrite planned AT/MA for restore/login/negative continuity and cutover P2.2/P2.3/P8.1/P8.8 via native encrypted SQLite under Rust ownership + lifecycle actor; honest rust_target SC-061/SC-062/SC-083 compile-only blocked (current browser IndexedDB + rust-crypto wasm; cutover native encrypted SQLite); SC IDs alone / raw HTTP / helper-only FAIL. JSON and Markdown synchronized. Accepted corrections for **FR-7.8-001 through FR-7.8-009** preserved. Prior corrections and accepted **7.1–7.3** preserved. **P0.2 is not complete.**
 
 ## Provenance
 
@@ -5584,48 +5584,67 @@ Limited rejected-review correction (`p0.2-correct-26-fr-7.8-008-privacy-safe-enc
 - **Text**: encrypted store initialization before sync;
 - **Lines**: 425–425
 - **Status**: `implemented`
-- **Behavior**: Current desktop implements this via 2 production matrix-js-sdk-related file(s); status=implemented.
+- **Behavior**: Current desktop implements encrypted store initialization before sync: createMatrixClient builds IndexedDB sync+legacy crypto stores; startMatrixClient runs store.startup → initRustCrypto → assertCryptoStoreContinuity (getCrypto + authoritative keys/query) and returns a ready client without starting sync; product startClient (and ClientRoot sequencing) only then calls mx.startClient. Fresh-login may confirm continuity after initial Prepared without skipping pre-start crypto init. status=implemented.
+- **Notes**: Evidence (conservative): (1) Store construction createMatrixClient initMatrix.ts L168–210: IndexedDBStore(dbName=MATRIX_SYNC_STORE_NAME 'web-sync-store') L172–176; IndexedDBCryptoStore(MATRIX_LEGACY_CRYPTO_STORE_NAME 'crypto-store') L178–181; createClient with store, cryptoStore, cryptoCallbacks, verificationMethods ['m.sas.v1'] L184–207. matrixLocalStores.ts also names rust-crypto IndexedDB DBs matrix-js-sdk::matrix-sdk-crypto and matrix-js-sdk::matrix-sdk-crypto-meta opened by initRustCrypto. Current product store is browser/IndexedDB + rust-crypto wasm via matrix-js-sdk — not native SQLite. (2) startMatrixClient L219–283 ordered phases: store-startup await mx.store.startup() L235; crypto-initialization await mx.initRustCrypto() L241; crypto-continuity await assertCryptoStoreContinuity L247–251; continuity-finalization L256–261; verification-inbox ensureVerificationRequestInbox L263; returns mx with outcome ready-to-start L264–268 WITHOUT calling mx.startClient. (3) cryptoStoreContinuity.ts module doc L41–45: assertCryptoStoreContinuity must run after initRustCrypto and before startClient. Implementation L47–93: mx.getCrypto() L59 (crypto-unavailable if null); crypto.getOwnDeviceKeys L64; mx.downloadKeysForUsers authoritative /keys/query L67 (not local device cache); match ed25519/curve25519 or throw CryptoStoreContinuityError which preserves local crypto store (error text L19–23). allowMissingServerDevice only for explicit fresh login → 'fresh-server-device'. (4) initClient L302–346: if fresh login may clearMatrixStoresForIdentityChange; then startMatrixClient(session, {allowMissingServerDevice: freshLogin}); records last bootstrapped identity only on success; maps crypto account mismatch to CryptoStoreContinuityError identity-key-mismatch. (5) Product startClient L440–495 is the only productive sync start: await mx.startClient({lazyLoadMembers:true}) L455–457 only after crypto-ready client exists. If pendingFreshLoginContinuity session: waitForInitialSyncPrepared (getSyncState L358; ClientEvent.Sync on L389 / removeListener L378) then confirmFreshLoginCryptoContinuity; on failure mx.stopClient L486 and rethrow continuity error. Restored sessions with matched continuity return immediately after start without post-start re-gate. (6) ClientRoot.tsx lifecycle L251–285: loadMatrix = initClient then migrateLegacySessionToNativeAfterClientInit; startMatrix = startClient(m) only when mx && !mx.clientRunning. Splash/loading until SyncState PREPARED L296–298. Continuity error UI L357–418: states store still intact; Retry Safety Check only when canRetryCryptoStoreContinuityFailure; Sign Out warns local encryption data deletion — does not auto-wipe store on safety fail. (7) Failure-path preserve: startMatrixClient catch L269–281 mx.stopClient without destroy/delete of crypto stores (comment L270–273). (8) Existing tests synara/src/app/state/__tests__/initMatrix.test.ts: initClient identity-clear order; restore mismatch no store clear; allowMissingServerDevice only fresh login; continuity match/mismatch/query-incomplete/fresh-vs-restored; post-start continuity retry/clear-bootstrap; startClient stop+normalize on post-start failure. Unit/mocked only — not E2E order AT. (9) Cutover P2.2 store paths/encryption keys, P2.3 SDK client builder, P8.1 crypto readiness projection, P8.8 crypto-store continuity must preserve order: open/init encrypted store + continuity gate before productive sync / room+crypto state publication via native encrypted SQLite under Rust ownership + lifecycle actor. SC-061/SC-062/SC-083 alone, compile-only blocked states, raw /_matrix HTTP, helper/fixture-only, or starting sync before crypto readiness FAIL.
 - **UI**: `synara/src/app/pages/client/ClientRoot.tsx`
+- **UI rationale**: ClientRoot sequences initClient (store+crypto+continuity) then startClient only when mx exists and !mx.clientRunning (L251–285), keeps splash until sync PREPARED (L296–298), and surfaces CryptoStoreContinuityError without deleting the local crypto store (L357–418). It does not own store construction or initRustCrypto.
 - **Owners**: `synara/src/client/initMatrix.ts`, `synara/src/client/cryptoStoreContinuity.ts`
 - **Files**:
+  - `synara/src/client/initMatrix.ts` symbols=['initRustCrypto', 'startClient', 'getSyncState', 'stopClient'] retained_m=5 retained_l=2
+    - method `initRustCrypto`:L241 — startMatrixClient awaits after store.startup, before continuity and before any mx.startClient
+    - method `startClient`:L455 — product startClient only after crypto-ready client
+    - method `getSyncState`:L358 — waitForInitialSyncPrepared for fresh-login post-start continuity (not pre-start skip)
+    - method `stopClient`:L274 — init failure closes without deleting crypto stores
+    - method `stopClient`:L486 — post-start continuity failure stops productive sync
+    - listener `on:ClientEvent.Sync`:L389 — Prepared waiter after startClient
+    - listener `removeListener:ClientEvent.Sync`:L378 — Prepared waiter cleanup
+    - note: createMatrixClient L172–210 IndexedDBStore+IndexedDBCryptoStore; startMatrixClient order store.startup → initRustCrypto → assertCryptoStoreContinuity → ready-to-start without sync
   - `synara/src/client/cryptoStoreContinuity.ts` symbols=['getCrypto'] retained_m=1 retained_l=0
-    - method `getCrypto`:L59 — None
-  - `synara/src/client/initMatrix.ts` symbols=['initRustCrypto'] retained_m=1 retained_l=0
-    - method `initRustCrypto`:L241 — None
+    - method `getCrypto`:L59 — continuity requires crypto after initRustCrypto; crypto-unavailable blocks ready-to-start
+    - note: module doc L41–45 must run after initRustCrypto and before startClient; authoritative downloadKeysForUsers; preserves store on failure
 - **Behavior-relevant methods (top-level)**:
-  - `getCrypto` `synara/src/client/cryptoStoreContinuity.ts`:L59 — None
-  - `initRustCrypto` `synara/src/client/initMatrix.ts`:L241 — None
+  - `initRustCrypto` `synara/src/client/initMatrix.ts`:L241 — encrypted rust-crypto store init before productive sync
+  - `getCrypto` `synara/src/client/cryptoStoreContinuity.ts`:L59 — continuity gate before productive sync start
+  - `startClient` `synara/src/client/initMatrix.ts`:L455 — productive sync only after crypto readiness
+  - `getSyncState` `synara/src/client/initMatrix.ts`:L358 — post-start Prepared wait for fresh-login continuity
+  - `stopClient` `synara/src/client/initMatrix.ts`:L274 — preserve crypto store on init failure
+  - `stopClient` `synara/src/client/initMatrix.ts`:L486 — stop sync on post-start continuity failure
 - **Behavior-relevant listeners (top-level)**:
-  - —
+  - `on:ClientEvent.Sync` `synara/src/client/initMatrix.ts`:L389 — Prepared waiter after startClient
+  - `removeListener:ClientEvent.Sync` `synara/src/client/initMatrix.ts`:L378 — Prepared waiter cleanup
 - **Unfiltered linked candidates**: methods=16 listeners=2
 - **Rust**: `compile-shape-only-blocked-for-product` caps=['SC-061', 'SC-062', 'SC-083'] gaps=[]
   - `SC-061` `blocked` `matrix_sdk::encryption::Encryption` https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/encryption/mod.rs#L892
   - `SC-062` `blocked` `matrix_sdk::Client::encryption() -> Encryption` https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/client/mod.rs#L794
   - `SC-083` `blocked` `matrix_sdk::ClientBuilder::sqlite_store` https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/client/builder/mod.rs#L254-L261
+  - Honest: SC-061/SC-062 crypto API shape; SC-083 native encrypted SQLite builder. All blocked compile-only. Current product is browser IndexedDB + rust-crypto wasm (initRustCrypto), not native SQLite. Cutover P2.2/P2.3/P8.1/P8.8 must preserve store+continuity before productive sync via native encrypted SQLite under Rust ownership + lifecycle actor; SC IDs alone / raw HTTP / helper-only FAIL.
 - **Tasks**: `P2.2`, `P2.3`, `P8.1`, `P8.8`
 - **Existing tests**:
-  - `synara/src/app/state/__tests__/initMatrix.test.ts` — client/crypto init path unit coverage
+  - `synara/src/app/state/__tests__/initMatrix.test.ts` — unit/mocked initClient/continuity/startClient failure paths only; not E2E store-before-sync order AT
 - **Planned** `AT-FR-7.9-001-001` task `P2.2` level `integration-e2e`
-  - Scenario: 7.9/FR-7.9-001: exercise 'encrypted store initialization before sync;' via owner `synara/src/client/initMatrix.ts` and UI `synara/src/app/pages/client/ClientRoot.tsx`, then confirm Rust/IPC cutover task `P2.2` preserves observable behavior without raw Matrix runtime HTTP.
-  - Test target: None
+  - Scenario: Integration-e2e against disposable Synapse: restore and login paths initialize the encrypted crypto store (initRustCrypto / Rust encrypted store successor) and pass continuity/readiness before productive sync; product startClient / ClientRoot does not run productive sync or publish room/crypto state before crypto readiness as product implements. After cutover P2.2/P2.3/P8.1/P8.8, same order via native encrypted SQLite under Rust ownership + lifecycle actor/IPC; SC-061/SC-062/SC-083 alone, compile-only blocked states, raw /_matrix HTTP, or helper/fixture-only FAIL.
+  - Test target: initMatrix startMatrixClient order (store.startup → initRustCrypto → assertCryptoStoreContinuity → ready-to-start) + product startClient after crypto readiness + cryptoStoreContinuity getCrypto gate + ClientRoot initClient-then-startClient sequencing; post-cutover Rust encrypted SQLite store + lifecycle actor (P2.2/P2.3/P8.1/P8.8)
   - Preconditions:
-    - Desktop app, E2EE-capable session; second device for verification
-    - Recovery key / backup fixtures; isolated multi-account profiles when testing isolation
-    - Linked owner path present in tree: synara/src/client/initMatrix.ts
-    - Primary UI/lifecycle surface: synara/src/app/pages/client/ClientRoot.tsx
+    - Disposable Synapse; desktop app with E2EE-capable session fixtures for both restored session and fresh login.
+    - Named owners present: synara/src/client/initMatrix.ts (store construct + ordered crypto init + startClient) and synara/src/client/cryptoStoreContinuity.ts (getCrypto continuity gate).
+    - Lifecycle surface: synara/src/app/pages/client/ClientRoot.tsx sequences initClient then startClient and gates UI until PREPARED / continuity error.
+    - Observable diagnostics or harness hooks able to assert phase order (crypto-initialization / crypto-continuity before matrix-client.start-call / productive sync).
   - Actions:
-    1. Boot the appropriate harness for level=integration-e2e against disposable Synapse (or iOS notes if any).
-    2. Establish fixtures required by the clause list: encrypted store initialization before sync.
-    3. Open UI/lifecycle surface `synara/src/app/pages/client/ClientRoot.tsx` (or follow ui_entry_points_rationale if no dedicated UI).
-    4. Step 1: perform the product action that implements «encrypted store initialization before sync» using current owner `synara/src/client/initMatrix.ts`.
-    5. Force process restart and/or offline→online transition where lifecycle continuity is implied.
+    1. Boot the integration harness against disposable Synapse. Do not use fixture-only mocks that bypass product initClient/startMatrixClient/startClient order, helper-only harnesses, dual-backend selectors, or raw HTTP.
+    2. RESTORED SESSION: cold-start with a previously bootstrapped encrypted-session fixture. Observe initClient/startMatrixClient phases: store.startup then initRustCrypto (or Rust encrypted store open) then assertCryptoStoreContinuity (getCrypto + identity match) complete before product startClient / mx.startClient. Assert ClientRoot does not leave crypto-ready gating until readiness; splash remains until PREPARED or continuity error.
+    3. FRESH LOGIN: login path that clears/creates identity stores as product implements; allowMissingServerDevice only while fresh; assert initRustCrypto still completes before startClient; if post-start confirmFreshLoginCryptoContinuity runs, it is after start and must not replace the pre-start crypto init gate.
+    4. NEGATIVE CONTINUITY: force identity-key-mismatch or crypto-unavailable; assert startMatrixClient fails before productive sync, stopClient without deleting crypto store, ClientRoot shows continuity error (store intact messaging), and room/crypto state is not published as a successful session.
+    5. PROCESS RESTART: kill and relaunch with restored crypto store; re-assert store open + continuity before sync on second boot.
+    6. After cutover tasks P2.2/P2.3/P8.1/P8.8, repeat restored/login/negative/restart observables via native encrypted SQLite under Rust ownership + product lifecycle actor/IPC. Citing SC-061/SC-062/SC-083 alone, compile-only blocked states, raw /_matrix HTTP, helper/fixture-only, or starting sync before encrypted store readiness is a FAIL.
   - Assertions:
-    - Each clause is observable: «encrypted store initialization before sync».
-    - State coordination remains through `synara/src/client/initMatrix.ts` (or its Rust/IPC successor after cutover), not ad-hoc dual writers.
-    - Behavior-relevant current JS method candidates exercised or replaced: getCrypto, initRustCrypto (AST candidates; not type-proven receivers).
-    - Rust mapping remains conservative: caps=[SC-061,SC-062,SC-083] gaps=[none]; compile-only blocked states are not treated as runtime pass.
-    - No new production matrix-js-sdk usage and no raw /\_matrix runtime HTTP unless dossier marks that exact behavior typed-sdk-request-required.
-    - Encrypted payloads are not leaked to unintended rooms/logs/disk.
+    - ORDER: on restore and login, encrypted crypto store initialization (initRustCrypto / Rust encrypted store open) completes before productive mx.startClient / sync.
+    - CONTINUITY: assertCryptoStoreContinuity (getCrypto + authoritative identity match) runs after crypto init and before productive sync start as product implements; crypto-unavailable / identity-key-mismatch block ready-to-start.
+    - NO PRODUCTIVE SYNC BEFORE READY: ClientRoot/startClient does not treat the session as successfully running or publish room/crypto product state when crypto init/continuity failed.
+    - PRESERVE STORE ON SAFETY FAIL: continuity/crypto init failure stops client without deleting the local crypto store (unless user explicitly signs out).
+    - FRESH LOGIN: allowMissingServerDevice only for explicit fresh login; post-start continuity confirmation does not skip pre-start crypto init.
+    - CUTOVER: P2.2/P2.3/P8.1/P8.8 preserve the same order via native encrypted SQLite under Rust ownership + lifecycle actor; SC IDs alone never implement product order; no raw /_matrix runtime HTTP; no dual-backend/SDK selector.
+    - No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless the dossier marks that exact behavior typed-sdk-request-required.
+    - Encrypted payloads / crypto store contents are not leaked to unintended rooms/logs/disk on failure paths.
   - does_not_currently_exist: `True`
 - **Manual**: `MA-FR-7.9-001`
 
@@ -8857,20 +8876,24 @@ Limited rejected-review correction (`p0.2-correct-26-fr-7.8-008-privacy-safe-enc
 
 - Platforms: macOS, Linux
 - Preconditions:
-  - Desktop app, E2EE-capable session; second device for verification
-  - Recovery key / backup fixtures; isolated multi-account profiles when testing isolation
-  - State owner available: synara/src/client/initMatrix.ts
-  - UI/lifecycle: synara/src/app/pages/client/ClientRoot.tsx
-  - Current status baseline: implemented
+  - Disposable Synapse; desktop app with E2EE-capable restored-session and fresh-login fixtures.
+  - State owners available: synara/src/client/initMatrix.ts and synara/src/client/cryptoStoreContinuity.ts.
+  - Lifecycle surface: synara/src/app/pages/client/ClientRoot.tsx.
+  - Current status baseline: implemented (store/crypto init before productive sync).
 - Actions:
-  1. Launch Synara desktop on the target platform against disposable Synapse; use a clean or known fixture profile as required by «encrypted store initialization before sync;».
-  2. Identify state owner `synara/src/client/initMatrix.ts` and open `synara/src/app/pages/client/ClientRoot.tsx`.
-  3. Action 1 — «encrypted store initialization before sync»: perform the minimal user/system steps that trigger this clause (use linked files under current_production_files if the entry point is indirect).
-  4. Repeat critical path in an encrypted room / with a second device when the clause involves keys or verification.
+  1. Launch Synara desktop against disposable Synapse with a restored encrypted-session profile.
+  2. Observe cold start: ClientRoot runs initClient (store.startup → initRustCrypto → crypto continuity) before startClient; splash remains until PREPARED or a continuity error.
+  3. Confirm productive sync/session UI only after crypto readiness (no successful room/crypto product state while crypto init failed).
+  4. Repeat with a fresh login path; confirm crypto init still precedes productive startClient; allowMissingServerDevice only while product marks the identity fresh.
+  5. Optional negative: induce continuity failure if fixture allows; confirm error UI states local crypto store is intact and does not auto-delete encryption data; Retry Safety Check only for transient query failures.
+  6. Force process restart with restored store; re-confirm crypto init before sync on relaunch.
+  7. On a post-cutover build (P2.2/P2.3/P8.1/P8.8), repeat restore/login order via native encrypted SQLite + lifecycle actor without raw /_matrix renderer HTTP.
 - Expected:
-  - All clauses under «encrypted store initialization before sync;» produce the user-visible or system-observable success criteria without error toasts unrelated to intentional negative tests.
-  - Clause 1 «encrypted store initialization before sync» is satisfied on macOS, Linux with owner `synara/src/client/initMatrix.ts`.
-  - No unexpected raw /\_matrix traffic from the app renderer for this flow on the post-cutover build.
+  - Encrypted crypto store initialization completes before productive sync on restore and login paths.
+  - Continuity/readiness gate (getCrypto + identity match as product implements) blocks ready-to-start on crypto-unavailable or identity-key-mismatch; store preserved on safety failure.
+  - ClientRoot does not present a successfully running encrypted session when crypto init/continuity failed.
+  - Clause «encrypted store initialization before sync» is satisfied on macOS, Linux with owners initMatrix.ts + cryptoStoreContinuity.ts.
+  - Post-cutover: same order via Rust encrypted SQLite + lifecycle actor; SC-061/SC-062/SC-083 alone or raw /_matrix traffic never pass.
 
 ### `MA-FR-7.9-002` (FR-7.9-002)
 
@@ -11085,21 +11108,24 @@ Limited rejected-review correction (`p0.2-correct-26-fr-7.8-008-privacy-safe-enc
 
 ### `AT-FR-7.9-001-001`
 
-- 7.9/FR-7.9-001: exercise 'encrypted store initialization before sync;' via owner `synara/src/client/initMatrix.ts` and UI `synara/src/app/pages/client/ClientRoot.tsx`, then confirm Rust/IPC cutover task `P2.2` preserves observable behavior without raw Matrix runtime HTTP.
-- target: None
+- Integration-e2e against disposable Synapse: restore and login paths initialize the encrypted crypto store (initRustCrypto / Rust encrypted store successor) and pass continuity/readiness before productive sync; product startClient / ClientRoot does not run productive sync or publish room/crypto state before crypto readiness as product implements. After cutover P2.2/P2.3/P8.1/P8.8, same order via native encrypted SQLite under Rust ownership + lifecycle actor/IPC; SC-061/SC-062/SC-083 alone, compile-only blocked states, raw /_matrix HTTP, or helper/fixture-only FAIL.
+- target: initMatrix startMatrixClient order (store.startup → initRustCrypto → assertCryptoStoreContinuity → ready-to-start) + product startClient after crypto readiness + cryptoStoreContinuity getCrypto gate + ClientRoot initClient-then-startClient sequencing; post-cutover Rust encrypted SQLite store + lifecycle actor (P2.2/P2.3/P8.1/P8.8)
 - actions:
-  1. Boot the appropriate harness for level=integration-e2e against disposable Synapse (or iOS notes if any).
-  2. Establish fixtures required by the clause list: encrypted store initialization before sync.
-  3. Open UI/lifecycle surface `synara/src/app/pages/client/ClientRoot.tsx` (or follow ui_entry_points_rationale if no dedicated UI).
-  4. Step 1: perform the product action that implements «encrypted store initialization before sync» using current owner `synara/src/client/initMatrix.ts`.
-  5. Force process restart and/or offline→online transition where lifecycle continuity is implied.
+  1. Boot the integration harness against disposable Synapse. Do not use fixture-only mocks that bypass product initClient/startMatrixClient/startClient order, helper-only harnesses, dual-backend selectors, or raw HTTP.
+  2. RESTORED SESSION: cold-start with a previously bootstrapped encrypted-session fixture. Observe initClient/startMatrixClient phases: store.startup then initRustCrypto (or Rust encrypted store open) then assertCryptoStoreContinuity (getCrypto + identity match) complete before product startClient / mx.startClient. Assert ClientRoot does not leave crypto-ready gating until readiness; splash remains until PREPARED or continuity error.
+  3. FRESH LOGIN: login path that clears/creates identity stores as product implements; allowMissingServerDevice only while fresh; assert initRustCrypto still completes before startClient; if post-start confirmFreshLoginCryptoContinuity runs, it is after start and must not replace the pre-start crypto init gate.
+  4. NEGATIVE CONTINUITY: force identity-key-mismatch or crypto-unavailable; assert startMatrixClient fails before productive sync, stopClient without deleting crypto store, ClientRoot shows continuity error (store intact messaging), and room/crypto state is not published as a successful session.
+  5. PROCESS RESTART: kill and relaunch with restored crypto store; re-assert store open + continuity before sync on second boot.
+  6. After cutover tasks P2.2/P2.3/P8.1/P8.8, repeat restored/login/negative/restart observables via native encrypted SQLite under Rust ownership + product lifecycle actor/IPC. Citing SC-061/SC-062/SC-083 alone, compile-only blocked states, raw /_matrix HTTP, helper/fixture-only, or starting sync before encrypted store readiness is a FAIL.
 - assertions:
-  - Each clause is observable: «encrypted store initialization before sync».
-  - State coordination remains through `synara/src/client/initMatrix.ts` (or its Rust/IPC successor after cutover), not ad-hoc dual writers.
-  - Behavior-relevant current JS method candidates exercised or replaced: getCrypto, initRustCrypto (AST candidates; not type-proven receivers).
-  - Rust mapping remains conservative: caps=[SC-061,SC-062,SC-083] gaps=[none]; compile-only blocked states are not treated as runtime pass.
-  - No new production matrix-js-sdk usage and no raw /\_matrix runtime HTTP unless dossier marks that exact behavior typed-sdk-request-required.
-  - Encrypted payloads are not leaked to unintended rooms/logs/disk.
+  - ORDER: on restore and login, encrypted crypto store initialization (initRustCrypto / Rust encrypted store open) completes before productive mx.startClient / sync.
+  - CONTINUITY: assertCryptoStoreContinuity (getCrypto + authoritative identity match) runs after crypto init and before productive sync start as product implements; crypto-unavailable / identity-key-mismatch block ready-to-start.
+  - NO PRODUCTIVE SYNC BEFORE READY: ClientRoot/startClient does not treat the session as successfully running or publish room/crypto product state when crypto init/continuity failed.
+  - PRESERVE STORE ON SAFETY FAIL: continuity/crypto init failure stops client without deleting the local crypto store (unless user explicitly signs out).
+  - FRESH LOGIN: allowMissingServerDevice only for explicit fresh login; post-start continuity confirmation does not skip pre-start crypto init.
+  - CUTOVER: P2.2/P2.3/P8.1/P8.8 preserve the same order via native encrypted SQLite under Rust ownership + lifecycle actor; SC IDs alone never implement product order; no raw /_matrix runtime HTTP; no dual-backend/SDK selector.
+  - No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless the dossier marks that exact behavior typed-sdk-request-required.
+  - Encrypted payloads / crypto store contents are not leaked to unintended rooms/logs/disk on failure paths.
 
 ### `AT-FR-7.9-002-001`
 
@@ -11649,7 +11675,7 @@ Limited rejected-review correction (`p0.2-correct-26-fr-7.8-008-privacy-safe-enc
 - `ET-FR-7.8-007-01` `FR-7.8-007` `synara/src/app/notifications/__tests__/systemNotification.test.ts` — normalizeSystemNotificationRequest unit coverage only; not E2E focus/suppression AT for MessageNotifications gates
 - `ET-FR-7.8-009-01` `FR-7.8-009` `synara-ios/SynaraTests/PushServiceTests.swift` — Existing XCTest coverage: register after session+token; clear/unregister on logout; token rotation replace; no register without gateway; sparse route resolution; badge parsing; route payload variants.
 - `ET-FR-7.8-009-02` `FR-7.8-009` `synara-ios/SynaraTests/NotificationPermissionCoordinatorTests.swift` — Existing XCTest coverage for first-sign-in permission prompt coordinating authorization + push registration begin.
-- `ET-FR-7.9-001-01` `FR-7.9-001` `synara/src/app/state/__tests__/initMatrix.test.ts` — client/crypto init path unit coverage
+- `ET-FR-7.9-001-01` `FR-7.9-001` `synara/src/app/state/__tests__/initMatrix.test.ts` — unit/mocked initClient/continuity/startClient failure paths only; not E2E store-before-sync order AT
 - `ET-FR-7.9-005-01` `FR-7.9-005` `synara/src/app/utils/__tests__/verification.test.ts` — SAS/verification helper unit coverage
 - `ET-FR-7.9-011-01` `FR-7.9-011` `synara/src/app/state/__tests__/sessions.test.ts` — multi-session isolation bookkeeping
 - `ET-FR-7.10-003-01` `FR-7.10-003` `synara/src/app/utils/__tests__/messageSearchFilters.test.ts` — search filter helper unit coverage

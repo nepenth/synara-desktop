@@ -32,29 +32,23 @@ without explicit user approval.
 - Ancestry: integration is ancestor of P0.2 branch
 - Checkpoint commits: `06d0f86` (traceability scaffold), `9c91e0f` (handoff)
 - **Accepted this session:**
-  - FR-7.8-004 @ `67d0e31`
-  - FR-7.8-005 @ `48ee30f`
-  - FR-7.8-006 @ `e170487`
-  - FR-7.8-007 @ `8db0bde`
-  - FR-7.8-008 (`p0.2-correct-26-...`) pending commit after this handoff update
-  - FR-7.8-009 accepted as-is after orchestrator source review (iOS
-    PushService/setPusher evidence already concrete; no rewrite required)
-- **Next writer task:** FR-7.9-001 (encrypted store initialization before
-  sync), then remaining 7.9–7.11 shallow rows
+  - FR-7.8-004 through FR-7.8-009 (section 7.8 complete for P0.2 audit)
+  - FR-7.9-001 (`p0.2-correct-27-...`) pending commit after this handoff update
+- **Next writer task:** FR-7.9-002 (cross-signing status), then remaining
+  shallow 7.9–7.11 rows (~27)
 - No production Matrix Rust SDK replacement code accepted
+- **No open P0.2 PR yet** (open after P0.2 complete or batch checkpoint)
 
 Phase 0 evidence accepted before this handoff:
 
 - P0.1 SDK usage inventory is merged to the integration branch.
 - P0.3 exact Matrix Rust SDK 0.18.0 capability dossier is merged to the
   integration branch.
-- P0.2 traceability checkpoint commit `06d0f86` is pushed on
-  `matrix-rust/p0.2-parity-traceability`. It contains the full 119-requirement
-  matrix and accepted corrections for FR-7.8-001 through FR-7.8-003.
-  Handoff commit `9c91e0f` is also on the branch tip.
+- P0.2 branch carries accepted 7.8 corrections through FR-7.8-009 and
+  continuing 7.9+ audits.
 
-P0.2 is not complete. Section 7.8 accepted through FR-7.8-009. Resume at
-FR-7.9-001, then audit remaining 7.9–7.11 before declaring P0.2 accepted.
+P0.2 is not complete. Resume at FR-7.9-002, then audit remaining 7.9–7.11
+before declaring P0.2 accepted.
 
 Accepted notification findings that must be preserved:
 
@@ -106,6 +100,12 @@ Accepted notification findings that must be preserved:
   `MatrixRustSDKService.setPusher`/`deletePusher` (SDK-owned); resolveRoute
   including sparse event-id fallback; Settings registration UI; existing XCTest
   baseline. SC-057/SC-058 are not pusher CRUD. Desktop APNs pusher N/A.
+- FR-7.9-001: status `implemented`. Ordered path: IndexedDB stores →
+  `store.startup` → `initRustCrypto` → `assertCryptoStoreContinuity` → ready
+  client **without** sync → product `startClient` only after crypto readiness
+  (`initMatrix.ts` + `cryptoStoreContinuity.ts` + ClientRoot). Current product
+  is browser IndexedDB + rust-crypto wasm; cutover is native encrypted SQLite
+  under Rust. SC-061/062/083 compile-only blocked states are not runtime pass.
 
 ## Branch and PR contract
 
