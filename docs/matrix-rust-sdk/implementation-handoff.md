@@ -37,9 +37,9 @@ without explicit user approval.
 - **Progress loop:** host scheduled task every **4 minutes**
   (ID `019f95928db7`) continues bounded FR audits; also daily durable
   orchestrator `9022c2f8-9b21-411a-acf9-a36c10515f72`
-- **Last accepted:** FR-7.11-005 call session cleanup **partial** (`p0.2-correct-51`)
-- **Next writer task:** FR-7.11-006 (CSP and origin restrictions), then remaining
-  7.11 (~3 FRs)
+- **Last accepted:** FR-7.11-006 CSP/origin **partial** (`p0.2-correct-52`)
+- **Next writer task:** FR-7.11-007 (experimental-widgets risk acceptance), then
+  FR-7.11-008 contingency
 
 - No production Matrix Rust SDK replacement code accepted
 - **No open P0.2 PR yet** (open after P0.2 complete)
@@ -52,7 +52,7 @@ Phase 0 evidence accepted before this handoff:
 - P0.2 branch carries accepted 7.8–7.9, FR-7.10-001..007, and FR-7.11-001..005 corrections (**FR-7.10-005**, **FR-7.10-007**,
   **FR-7.11-003..005** remain partial by gate); ~3 shallow rows remain in 7.11.
 
-P0.2 is not complete. Resume at FR-7.11-006, then audit remaining 7.11
+P0.2 is not complete. Resume at FR-7.11-007, then audit remaining 7.11
 before declaring P0.2 accepted.
 
 Accepted notification findings that must be preserved:
