@@ -4,7 +4,7 @@
 
 ## Correction pass status
 
-Limited rejected-review correction (`p0.2-correct-45-fr-7.10-006-server-vs-experimental-local-search`) for **FR-7.10-006** only: replace shallow notes (Decision: server-side via JS client.search / generic AT-MA / methods=`search` without decision evidence) with concrete **server-vs-experimental-local DECISION** evidence — sole production `mx.search` message-body path `useMessageSearch` L105; `MessageSearch` binds only `useMessageSearch`; **SC-072 experimental local is NOT product UI / not adopted**; `useAsyncSearch` honesty (rooms/users lists, not message bodies); EXCLUDE 001–005/007 UX clauses as sole pass; rust_target `decision-server-typed-search` SC-071 **ADOPTED** + SC-072 **NOT ADOPTED**; rewrite AT/MA as decision acceptance for P6.8 (+P11.3/P1.2); status remains `implemented`. JSON and Markdown synchronized. Accepted corrections for **FR-7.8-001 through FR-7.8-009**, **FR-7.9-001..013** (**FR-7.9-011** remains partial), **FR-7.10-001..005** (**FR-7.10-005** remains partial) preserved. Prior corrections and accepted **7.1–7.3** preserved. **P0.2 is not complete.**
+Limited rejected-review correction (`p0.2-correct-46-fr-7.10-007-search-cancel-stale-rejection`) for **FR-7.10-007** only: replace shallow notes (Cancellation/stale-result rejection is partially product-side around search hook / generic AT-MA) with concrete **cancel + stale** evidence — `MessageSearch` `useInfiniteQuery` `queryKey=['search', term, order, rooms, senders]` **solid stale isolation** (no `placeholderData`/`keepPreviousData`); `enabled: !!term` + Clear; `queryFn` and `mx.search` **without AbortSignal** (cancel **partial**); rewrite AT/MA as race/stale + cancel honesty for P6.8 (+P11.3); rust_target `product-querykey-stale-rejection-partial-http-cancel` caps=[SC-071]; status remains `partial`. JSON and Markdown synchronized. Accepted corrections for **FR-7.8-001 through FR-7.8-009**, **FR-7.9-001..013** (**FR-7.9-011** remains partial), **FR-7.10-001..006** (**FR-7.10-005** remains partial) preserved. Prior corrections and accepted **7.1–7.3** preserved. **P0.2 is not complete.**
 
 ## Provenance
 
@@ -6911,47 +6911,62 @@ Limited rejected-review correction (`p0.2-correct-45-fr-7.10-006-server-vs-exper
 - **Text**: search cancellation and stale-result rejection.
 - **Lines**: 447–447
 - **Status**: `partial`
-- **Behavior**: Current desktop implements this via 2 production matrix-js-sdk-related file(s); status=partial.
-- **Notes**: Cancellation/stale-result rejection is partially product-side around search hook; full guarantees planned in P6.8 tests.
-- **UI**: `synara/src/app/features/message-search/MessageSearch.tsx`
-- **Owners**: `synara/src/app/features/message-search/useMessageSearch.ts`
+- **Behavior**: PARTIAL: stale-result rejection is solid via React Query queryKey isolation (term/order/rooms/senders); search cancellation is only implicit (key change / enabled false / RQ observer teardown) — product does NOT pass AbortSignal to queryFn or mx.search and has no cancelQueries. status=partial.
+- **Notes**: Evidence (conservative): (1) STALE REJECTION (implemented product-side): MessageSearch.tsx useInfiniteQuery L102–114 queryKey=['search', msgSearchParams.term, order, rooms, senders]; UI reads data/status for the active key only. No placeholderData / keepPreviousData / isPlaceholderData — when term/filters change, a new key is observed and prior key results are not rendered as current (pending skeleton L306–313; SearchInput loading status==='pending' L255). (2) TERM CHANGE RACE: handleSearch L139–146 writes URL term → msgSearchParams → new queryKey; concurrent in-flight mx.search for old key is not applied to the new key's data bucket. Filter changes (rooms/senders/order URL handlers L158–208) likewise rekey. (3) CANCELLATION (partial / incomplete): (a) enabled: !!msgSearchParams.term L103 — Clear/handleSearchClear L147–156 deletes term → query disabled; (b) TanStack Query v5.24.1 may abort its internal signal when the prior key loses observers, BUT product queryFn is ({ pageParam }) => searchMessages(pageParam) L111 — does NOT use signal; (c) useMessageSearch searchMessages L76–112 / mx.search({ body, next_batch }) L105–108 accepts no AbortSignal — HTTP may continue after rekey; (d) App.tsx QueryClient has default options only — no cancelQueries on term change; (e) SearchInput Clear is term-reset, not an abort control. (4) isFetching: only isFetchingNextPage is used (pagination FR-7.10-001 adjacency); no isFetching-driven race guard beyond status/data for current key. (5) DISTINCTIONS: room-scoped pagination FR-7.10-001; Global FR-7.10-002; filters FR-7.10-003; Open FR-7.10-004; user/directory FR-7.10-005; server-vs-local FR-7.10-006. This FR is cancel + stale only. (6) No existing automated AT. (7) Cutover P6.8 (+P11.3): preserve queryKey-equivalent stale isolation over typed SC-071 Client::send search + product IPC; prefer wiring AbortSignal/cancel through IPC for full cancel parity; no raw /_matrix HTTP, no dual-backend. SC-071 alone / compile-only / room-search-only / filter-only FAIL.
+- **Limits**: P0.1 method candidates are AST name hits unless marked source-inspected. Stale rejection is product React Query keying — not a Matrix SDK API. Explicit HTTP cancellation is NOT implemented (no signal → mx.search). RQ framework abort of unused queries is not proven end-to-end against matrix-js-sdk HTTP. SC-071 remains typed-sdk-request-required; cutover must use typed Client::send search + product IPC race handling, not raw HTTP. No E2E AT yet.
+- **UI**: `synara/src/app/features/message-search/MessageSearch.tsx`, `synara/src/app/features/message-search/SearchInput.tsx`
+- **UI rationale**: MessageSearch owns useInfiniteQuery queryKey isolation (stale rejection) and term enablement/clear. SearchInput presents pending spinner and Clear chip. Hosts (HomeSearch/SpaceSearch/RoomSidePanel) only mount MessageSearch — no alternate cancel/stale path.
+- **Owners**: `synara/src/app/features/message-search/MessageSearch.tsx`, `synara/src/app/features/message-search/useMessageSearch.ts`
 - **Files**:
-  - `synara/src/app/features/message-search/MessageSearch.tsx` symbols=[] retained_m=0 retained_l=0
-  - `synara/src/app/features/message-search/useMessageSearch.ts` symbols=['search'] retained_m=1 retained_l=0
-    - method `search`:L105 — None
+  - `synara/src/app/features/message-search/MessageSearch.tsx` symbols=['useInfiniteQuery queryKey', 'enabled term', 'status pending loading', 'handleSearchClear'] retained_m=0 retained_l=0
+    - line `useInfiniteQuery queryKey term/order/rooms/senders`:L102 — PRIMARY STALE REJECTION: queryKey=['search', term, order, rooms, senders] L104–110 — each param set is a separate React Query cache entry; UI data binds only to the active key so results for a prior term/filters do not populate the current search.
+    - line `enabled !!msgSearchParams.term`:L103 — Query disabled when term is empty — Clear/delete term stops further fetches for the previous key path (implicit cancel at React Query enablement layer, not HTTP AbortSignal).
+    - line `queryFn pageParam only (no signal)`:L111 — queryFn: ({ pageParam }) => searchMessages(pageParam) — does NOT destructure or forward React Query AbortSignal; product never cancels mx.search via signal.
+    - line `SearchInput loading status===pending`:L255 — loading={status === 'pending'} — UI shows spinner while the active queryKey is fetching; no isFetching / isPlaceholderData race flags; no keepPreviousData/placeholderData so old key data is not shown as current.
+    - line `handleSearchClear deletes term`:L147 — Clear chip deletes URL term (L147–156) → enabled false; not an explicit cancelQueries / AbortController cancel of in-flight HTTP.
+    - line `handleSearch sets term URL param`:L139 — New term writes URL param → msgSearchParams.term change → queryKey change → new cache bucket (stale isolation). Race with prior in-flight mx.search is handled by key isolation, not by aborting the prior HTTP.
+  - `synara/src/app/features/message-search/useMessageSearch.ts` symbols=['search', 'searchMessages useCallback deps'] retained_m=1 retained_l=0
+    - line `searchMessages useCallback deps term/order/rooms/senders`:L76 — searchMessages closes over term/order/rooms/senders (deps L111); new params produce a new callback identity bound by MessageSearch into queryFn — supports key-aligned request body, not HTTP abort.
+    - method `search`:L105 — mx.search({ body, next_batch }) L105–108 — sole MatrixClient.search call; NO AbortSignal / cancel token argument. Explicit network cancellation is NOT implemented at the SDK call site (gap for full cancel clause).
+  - `synara/src/app/features/message-search/SearchInput.tsx` symbols=['loading Spinner', 'Clear Chip onReset'] retained_m=0 retained_l=0
+    - line `loading Spinner before active`:L38 — Shows Spinner when active&&loading (parent passes status==='pending') — visual feedback during in-flight search for the active term; not a cancel control.
+    - line `Clear Chip type=reset onClick onReset`:L46 — Clear chip calls onReset → handleSearchClear deletes term; disables query (enabled false). Not an explicit in-flight abort button.
 - **Behavior-relevant methods (top-level)**:
-  - `search` `synara/src/app/features/message-search/useMessageSearch.ts`:L105 — None
+  - `search` `synara/src/app/features/message-search/useMessageSearch.ts`:L105 — Shows absence of explicit HTTP abort at the sole message-search call site; stale rejection does not depend on this method rejecting late responses — it depends on MessageSearch queryKey isolation.
 - **Behavior-relevant listeners (top-level)**:
   - —
 - **Unfiltered linked candidates**: methods=2 listeners=0
-- **Rust**: `typed-sdk-request-required-server-search` caps=['SC-071'] gaps=[]
+- **Rust**: `product-querykey-stale-rejection-partial-http-cancel` caps=['SC-071'] gaps=[]
   - `SC-071` `typed-sdk-request-required` `Server-side room message search (/search) high-level API` https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/lib.rs#L67-L74
-- **Tasks**: `P6.8`
+- Honest: rust_target for FR-7.10-007: product-querykey-stale-rejection-partial-http-cancel. Stale-result rejection is product React Query queryKey isolation (implemented). Explicit HTTP cancel is partial (no AbortSignal to mx.search). Cutover P6.8 (+P11.3) must preserve stale isolation over typed SC-071 Client::send search + product IPC and should wire cancel/abort for full cancel parity — not raw /_matrix HTTP, not dual-backend/SDK selector, not inventing high-level search cancel API. SC-071 alone / compile-only / search-pagination-only FAIL as cancel/stale acceptance.
+- **Tasks**: `P6.8`, `P11.3`
 - **Blockers**:
-  - (medium) typed-sdk-request-required: FR-7.10-007 requires typed SDK request route (not raw HTTP, not invented high-level API).
+  - (medium) product-querykey-stale-rejection-partial-http-cancel: FR-7.10-007: preserve product queryKey-equivalent stale isolation over typed SC-071 Client::send search; explicit HTTP cancel remains partial (no AbortSignal to mx.search today) — cutover should wire cancel/abort via IPC; no raw /_matrix HTTP, no dual-backend.
 - **Existing tests**:
   - _(none)_
 - **Planned** `AT-FR-7.10-007-001` task `P6.8` level `integration`
-  - Scenario: 7.10/FR-7.10-007: exercise 'search cancellation and stale-result rejection.' via owner `synara/src/app/features/message-search/useMessageSearch.ts` and UI `synara/src/app/features/message-search/MessageSearch.tsx`, then confirm Rust/IPC cutover task `P6.8` preserves observable behavior without raw Matrix runtime HTTP.
-  - Test target: None
+  - Scenario: Integration against disposable Synapse: (A) STALE REJECTION — start Message Search with term A that matches known events; while first response is in flight or after results, change to term B (or change rooms/senders/order); assert UI for the active queryKey shows only B results (or pending for B) and never applies A results under B; no keepPreviousData bleed. (B) TERM CLEAR — Clear deletes term; assert enabled path stops and prior results leave the active surface. (C) CANCEL HONESTY — document/assert product does not currently pass AbortSignal to mx.search; if post-cutover adds cancel, assert in-flight typed search is aborted or discarded without UI apply. (D) DISTINCTIONS — room-scoped pagination alone (FR-7.10-001), Global alone (002), filters alone (003), Open alone (004), user/directory alone (005), server-vs-local alone (006) do not satisfy this FR. After cutover P6.8 (+P11.3), same observables via typed SC-071 Client::send search + product IPC with queryKey-equivalent stale isolation — not raw /_matrix HTTP, not dual-backend. SC-071 alone / compile-only / search-only FAIL.
+  - Test target: MessageSearch useInfiniteQuery queryKey isolation + pending/clear UX; useMessageSearch mx.search without AbortSignal (cancel gap); post-cutover typed SC-071 + product race handling (P6.8/P11.3)
   - Preconditions:
-    - Desktop app; room with searchable indexed history on Synapse
-    - Public room directory populated; second user for user search
-    - Linked owner path present in tree: synara/src/app/features/message-search/useMessageSearch.ts
-    - Primary UI/lifecycle surface: synara/src/app/features/message-search/MessageSearch.tsx
+    - Disposable Synapse with searchable history and at least two distinguishable search_terms (A and B) with different result sets.
+    - Named owners present: MessageSearch.tsx (useInfiniteQuery queryKey), useMessageSearch.ts (mx.search without AbortSignal), SearchInput.tsx (loading/Clear).
+    - Harness can change term/filters while a search is in flight and observe which results render for the active key.
+    - Do not accept room-scoped-only (001), global-only (002), filter-only (003), Open-only (004), directory-only (005), decision-only (006), SC-071 alone, or compile-only as sole pass for this FR.
   - Actions:
-    1. Boot the appropriate harness for level=integration against disposable Synapse (or iOS notes if any).
-    2. Establish fixtures required by the clause list: search cancellation; stale-result rejection.
-    3. Open UI/lifecycle surface `synara/src/app/features/message-search/MessageSearch.tsx` (or follow ui_entry_points_rationale if no dedicated UI).
-    4. Step 1: perform the product action that implements «search cancellation» using current owner `synara/src/app/features/message-search/useMessageSearch.ts`.
-    5. Step 2: perform the product action that implements «stale-result rejection» using current owner `synara/src/app/features/message-search/useMessageSearch.ts`.
-    6. Issue search, paginate results, cancel in-flight query, and re-issue with different filters to catch stale results.
+    1. Boot integration harness against disposable Synapse. Do not use fixture-only mocks that skip product MessageSearch queryKey orchestration, dual-backend selectors, raw HTTP, or search-pagination-only pass criteria.
+    2. STALE REJECTION: open Message Search; submit term A; before or after A completes, submit term B (or change rooms/senders/order URL params); assert active UI data matches B only (pending skeleton or B groups) — A results must not appear under B.
+    3. TERM CLEAR: with active term/results, Clear; assert term removed and results surface clears / query disabled.
+    4. CANCEL HONESTY: observe that current product queryFn does not forward AbortSignal to mx.search; after cutover, if cancel is implemented, assert aborted/discarded in-flight responses do not populate UI.
+    5. After cutover P6.8 (+P11.3), repeat race scenarios via typed Client::send search (SC-071) under Rust ownership + product IPC with equivalent key isolation. Citing SC-071 alone, compile-only blocked, raw /_matrix HTTP, dual-backend/SDK selector, or search-pagination-only is a FAIL.
   - Assertions:
-    - Each clause is observable: «search cancellation»; «stale-result rejection».
-    - State coordination remains through `synara/src/app/features/message-search/useMessageSearch.ts` (or its Rust/IPC successor after cutover), not ad-hoc dual writers.
-    - Behavior-relevant current JS method candidates exercised or replaced: search (AST candidates; not type-proven receivers).
-    - Rust mapping remains conservative: caps=[SC-071] gaps=[none]; compile-only blocked states are not treated as runtime pass.
-    - No new production matrix-js-sdk usage and no raw /\_matrix runtime HTTP unless dossier marks that exact behavior typed-sdk-request-required.
+    - STALE REJECTION: changing term/order/rooms/senders rekeys the search; UI never applies prior-key results to the active key (no keepPreviousData bleed).
+    - TERM CLEAR: deleting term disables the active search path and removes active results surface.
+    - CANCEL HONESTY: current product lacks AbortSignal→mx.search; full HTTP cancel is residual/partial — do not claim implemented cancel without evidence.
+    - DISTINCTIONS: this FR ≠ FR-7.10-001 pagination; ≠ FR-7.10-002 Global; ≠ FR-7.10-003 filters; ≠ FR-7.10-004 Open; ≠ FR-7.10-005 user/directory; ≠ FR-7.10-006 server-vs-local.
+    - COORDINATION: cancel/stale remains through MessageSearch useInfiniteQuery + useMessageSearch (or Rust/IPC successors), not ad-hoc dual writers / dual-backend.
+    - CUTOVER: P6.8 (+P11.3) preserves queryKey-equivalent stale isolation over typed SC-071 Client::send search; prefer abort wiring for full cancel; SC alone / compile-only never product pass; no raw /_matrix runtime HTTP; no dual-backend/SDK selector.
+    - No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless the dossier marks that exact behavior typed-sdk-request-required.
+    - SC-071 alone, compile-only, raw HTTP, dual-backend, and search-pagination-only are not accepted as sole pass criteria for this FR.
   - does_not_currently_exist: `True`
 - **Manual**: `MA-FR-7.10-007`
 
@@ -9523,22 +9538,23 @@ Limited rejected-review correction (`p0.2-correct-45-fr-7.10-006-server-vs-exper
 
 - Platforms: macOS, Linux
 - Preconditions:
-  - Desktop app; room with searchable indexed history on Synapse
-  - Public room directory populated; second user for user search
-  - State owner available: synara/src/app/features/message-search/useMessageSearch.ts
-  - UI/lifecycle: synara/src/app/features/message-search/MessageSearch.tsx
-  - Current status baseline: partial
+  - Disposable Synapse with searchable history and two distinguishable search terms A and B.
+  - State owners: MessageSearch.tsx (useInfiniteQuery queryKey), useMessageSearch.ts (mx.search without AbortSignal).
+  - UI: MessageSearch + SearchInput loading/Clear.
+  - Current status baseline: partial (stale isolation solid; HTTP cancel partial).
 - Actions:
-  1. Launch Synara desktop on the target platform against disposable Synapse; use a clean or known fixture profile as required by «search cancellation and stale-result rejection.».
-  2. Identify state owner `synara/src/app/features/message-search/useMessageSearch.ts` and open `synara/src/app/features/message-search/MessageSearch.tsx`.
-  3. Action 1 — «search cancellation»: perform the minimal user/system steps that trigger this clause (use linked files under current_production_files if the entry point is indirect).
-  4. Action 2 — «stale-result rejection»: perform the minimal user/system steps that trigger this clause (use linked files under current_production_files if the entry point is indirect).
-  5. Run search, change filters, paginate, click a result to open event context, cancel a slow query and ensure UI does not apply stale results.
+  1. Launch Synara desktop on the target platform against disposable Synapse.
+  2. STALE REJECTION: open Message Search; search term A; quickly change to term B (or change rooms/senders/order); observe that results under the active key match only B (or show pending for B) and never flash A results as B.
+  3. TERM CLEAR: with an active term, Clear; observe term removed and results surface clears.
+  4. CANCEL HONESTY: note there is no dedicated Cancel that aborts HTTP — Clear disables term; do not require proven matrix-js-sdk Abort for baseline partial status.
+  5. DISTINCTIONS: do not treat room search+pagination alone (001), Global alone (002), filters alone (003), Open alone (004), directory alone (005), or server-vs-local alone (006) as passing this FR.
+  6. On post-cutover build: repeat term-race scenarios via typed SC-071 Client::send search + product IPC; no raw /_matrix HTTP; no dual-backend.
 - Expected:
-  - All clauses under «search cancellation and stale-result rejection.» produce the user-visible or system-observable success criteria without error toasts unrelated to intentional negative tests.
-  - Clause 1 «search cancellation» is satisfied on macOS, Linux with owner `synara/src/app/features/message-search/useMessageSearch.ts`.
-  - Clause 2 «stale-result rejection» is satisfied on macOS, Linux with owner `synara/src/app/features/message-search/useMessageSearch.ts`.
-  - No unexpected raw /\_matrix traffic from the app renderer for this flow on the post-cutover build.
+  - STALE REJECTION: UI never applies prior-queryKey results to the active term/filter key.
+  - TERM CLEAR: clearing term disables search path and clears active results surface.
+  - CANCEL: baseline remains partial without AbortSignal→mx.search; full HTTP cancel is residual improvement, not required to claim partial status.
+  - DISTINCTIONS: 001–006 alone do not pass this FR.
+  - No unexpected raw /_matrix traffic from the app renderer for this flow on the post-cutover build; no dual-backend/SDK selector.
 
 ### `MA-FR-7.11-001` (FR-7.11-001)
 
@@ -11771,21 +11787,23 @@ Limited rejected-review correction (`p0.2-correct-45-fr-7.10-006-server-vs-exper
 
 ### `AT-FR-7.10-007-001`
 
-- 7.10/FR-7.10-007: exercise 'search cancellation and stale-result rejection.' via owner `synara/src/app/features/message-search/useMessageSearch.ts` and UI `synara/src/app/features/message-search/MessageSearch.tsx`, then confirm Rust/IPC cutover task `P6.8` preserves observable behavior without raw Matrix runtime HTTP.
-- target: None
+- Integration against disposable Synapse: (A) STALE REJECTION — start Message Search with term A that matches known events; while first response is in flight or after results, change to term B (or change rooms/senders/order); assert UI for the active queryKey shows only B results (or pending for B) and never applies A results under B; no keepPreviousData bleed. (B) TERM CLEAR — Clear deletes term; assert enabled path stops and prior results leave the active surface. (C) CANCEL HONESTY — document/assert product does not currently pass AbortSignal to mx.search; if post-cutover adds cancel, assert in-flight typed search is aborted or discarded without UI apply. (D) DISTINCTIONS — room-scoped pagination alone (FR-7.10-001), Global alone (002), filters alone (003), Open alone (004), user/directory alone (005), server-vs-local alone (006) do not satisfy this FR. After cutover P6.8 (+P11.3), same observables via typed SC-071 Client::send search + product IPC with queryKey-equivalent stale isolation — not raw /_matrix HTTP, not dual-backend. SC-071 alone / compile-only / search-only FAIL.
+- target: MessageSearch useInfiniteQuery queryKey isolation + pending/clear UX; useMessageSearch mx.search without AbortSignal (cancel gap); post-cutover typed SC-071 + product race handling (P6.8/P11.3)
 - actions:
-  1. Boot the appropriate harness for level=integration against disposable Synapse (or iOS notes if any).
-  2. Establish fixtures required by the clause list: search cancellation; stale-result rejection.
-  3. Open UI/lifecycle surface `synara/src/app/features/message-search/MessageSearch.tsx` (or follow ui_entry_points_rationale if no dedicated UI).
-  4. Step 1: perform the product action that implements «search cancellation» using current owner `synara/src/app/features/message-search/useMessageSearch.ts`.
-  5. Step 2: perform the product action that implements «stale-result rejection» using current owner `synara/src/app/features/message-search/useMessageSearch.ts`.
-  6. Issue search, paginate results, cancel in-flight query, and re-issue with different filters to catch stale results.
+  1. Boot integration harness against disposable Synapse. Do not use fixture-only mocks that skip product MessageSearch queryKey orchestration, dual-backend selectors, raw HTTP, or search-pagination-only pass criteria.
+  2. STALE REJECTION: open Message Search; submit term A; before or after A completes, submit term B (or change rooms/senders/order URL params); assert active UI data matches B only (pending skeleton or B groups) — A results must not appear under B.
+  3. TERM CLEAR: with active term/results, Clear; assert term removed and results surface clears / query disabled.
+  4. CANCEL HONESTY: observe that current product queryFn does not forward AbortSignal to mx.search; after cutover, if cancel is implemented, assert aborted/discarded in-flight responses do not populate UI.
+  5. After cutover P6.8 (+P11.3), repeat race scenarios via typed Client::send search (SC-071) under Rust ownership + product IPC with equivalent key isolation. Citing SC-071 alone, compile-only blocked, raw /_matrix HTTP, dual-backend/SDK selector, or search-pagination-only is a FAIL.
 - assertions:
-  - Each clause is observable: «search cancellation»; «stale-result rejection».
-  - State coordination remains through `synara/src/app/features/message-search/useMessageSearch.ts` (or its Rust/IPC successor after cutover), not ad-hoc dual writers.
-  - Behavior-relevant current JS method candidates exercised or replaced: search (AST candidates; not type-proven receivers).
-  - Rust mapping remains conservative: caps=[SC-071] gaps=[none]; compile-only blocked states are not treated as runtime pass.
-  - No new production matrix-js-sdk usage and no raw /\_matrix runtime HTTP unless dossier marks that exact behavior typed-sdk-request-required.
+  - STALE REJECTION: changing term/order/rooms/senders rekeys the search; UI never applies prior-key results to the active key (no keepPreviousData bleed).
+  - TERM CLEAR: deleting term disables the active search path and removes active results surface.
+  - CANCEL HONESTY: current product lacks AbortSignal→mx.search; full HTTP cancel is residual/partial — do not claim implemented cancel without evidence.
+  - DISTINCTIONS: this FR ≠ FR-7.10-001 pagination; ≠ FR-7.10-002 Global; ≠ FR-7.10-003 filters; ≠ FR-7.10-004 Open; ≠ FR-7.10-005 user/directory; ≠ FR-7.10-006 server-vs-local.
+  - COORDINATION: cancel/stale remains through MessageSearch useInfiniteQuery + useMessageSearch (or Rust/IPC successors), not ad-hoc dual writers / dual-backend.
+  - CUTOVER: P6.8 (+P11.3) preserves queryKey-equivalent stale isolation over typed SC-071 Client::send search; prefer abort wiring for full cancel; SC alone / compile-only never product pass; no raw /_matrix runtime HTTP; no dual-backend/SDK selector.
+  - No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless the dossier marks that exact behavior typed-sdk-request-required.
+  - SC-071 alone, compile-only, raw HTTP, dual-backend, and search-pagination-only are not accepted as sole pass criteria for this FR.
 
 ### `AT-FR-7.11-001-001`
 
@@ -12239,7 +12257,7 @@ Limited rejected-review correction (`p0.2-correct-45-fr-7.10-006-server-vs-exper
 - `FR-7.10-002` typed-sdk-request-required: FR-7.10-002 requires typed SC-071 Client::send search path for global (rooms-unrestricted) message search (not raw HTTP, not invented high-level search API, not dual-backend, not SC-072 experimental local search).
 - `FR-7.10-003` typed-sdk-request-required: FR-7.10-003 requires typed SC-071 Client::send search path for server senders/rooms/search_term filters plus product-layer preservation of client type/date filters (not raw HTTP, not invented high-level search filter API, not dual-backend).
 - `FR-7.10-006` typed-sdk-request-required: FR-7.10-006 requires typed SDK request route (not raw HTTP, not invented high-level API).
-- `FR-7.10-007` typed-sdk-request-required: FR-7.10-007 requires typed SDK request route (not raw HTTP, not invented high-level API).
+- `FR-7.10-007` product-querykey-stale-rejection-partial-http-cancel: FR-7.10-007: preserve product queryKey-equivalent stale isolation over typed SC-071 Client::send search; explicit HTTP cancel remains partial (no AbortSignal to mx.search today) — cutover should wire cancel/abort via IPC; no raw /_matrix HTTP, no dual-backend.
 - `FR-7.11-001` experimental-widgets-and-call-parity: Call/widget path depends on experimental-widgets and MatrixRTC gaps; widget plumbing ≠ call parity.
 - `FR-7.11-002` experimental-widgets-and-call-parity: Call/widget path depends on experimental-widgets and MatrixRTC gaps; widget plumbing ≠ call parity.
 - `FR-7.11-003` upstream-change-required: FR-7.11-003 depends on upstream-change-required gap(s): ['GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION', 'GAP-MATRIXRTC-MEMBERSHIP-PRESENCE']
