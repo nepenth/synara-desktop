@@ -60299,7 +60299,7 @@
             "line": 1,
             "named_imports": ["CryptoApi"],
             "is_type_only": false,
-            "linked_requirement_ids": ["FR-7.9-002", "FR-7.9-008"],
+            "linked_requirement_ids": ["FR-7.9-002"],
             "cutover_disposition": "replace-deep-js-sdk-import-with-synara-dto-or-rust-projection"
           },
           {
@@ -61561,7 +61561,7 @@
             "line": 1,
             "named_imports": ["CryptoApi"],
             "is_type_only": false,
-            "linked_requirement_ids": ["FR-7.9-002", "FR-7.9-004", "FR-7.9-008"],
+            "linked_requirement_ids": ["FR-7.9-002", "FR-7.9-004"],
             "cutover_disposition": "replace-deep-js-sdk-import-with-synara-dto-or-rust-projection"
           },
           {
@@ -64301,15 +64301,164 @@
       "current_status": "implemented",
       "current_production_files": [
         {
+          "path": "synara/src/app/utils/room.ts",
+          "bucket": "utility",
+          "categories": [
+            "crypto_verification_recovery",
+            "timelines",
+            "client_methods"
+          ],
+          "symbols_or_candidates": [
+            "decryptAllTimelineEvent",
+            "getCrypto",
+            "attemptDecryption",
+            "isEncrypted"
+          ],
+          "line_refs": [
+            {
+              "symbol": "decryptAllTimelineEvent",
+              "line": 401,
+              "kind": "product_helper",
+              "relevance_reason": "Bulk UTD retry helper: for each encrypted event in an EventTimeline, call attemptDecryption with { isRetry: true }."
+            },
+            {
+              "symbol": "getCrypto",
+              "line": 402,
+              "kind": "method_candidate",
+              "relevance_reason": "Crypto gate; no-op if crypto unavailable."
+            },
+            {
+              "symbol": "isEncrypted",
+              "line": 406,
+              "kind": "method_candidate",
+              "relevance_reason": "Filters timeline events still encrypted before retry."
+            },
+            {
+              "symbol": "attemptDecryption",
+              "line": 408,
+              "kind": "method_candidate",
+              "relevance_reason": "event.attemptDecryption(crypto as CryptoBackend, { isRetry: true }) — core undecryptable-event retry call."
+            }
+          ],
+          "model_coupling": ["EventTimeline", "MatrixClient", "MatrixEvent"],
+          "behavior_relevant_method_candidates": [
+            {
+              "name": "getCrypto",
+              "line": 402,
+              "category": "crypto_verification_recovery",
+              "kind": "property_call_candidate",
+              "confidence": "Source-inspected product call site (exact-line); mx: MatrixClient.",
+              "relevance_reason": "Crypto backend gate for bulk decrypt retry."
+            },
+            {
+              "name": "attemptDecryption",
+              "line": 408,
+              "category": "crypto_verification_recovery",
+              "kind": "property_call_candidate",
+              "confidence": "Source-inspected product call site (exact-line); MatrixEvent.attemptDecryption with isRetry:true.",
+              "relevance_reason": "Primary UTD retry API for paginated/history encrypted events."
+            }
+          ],
+          "behavior_relevant_listener_candidates": [],
+          "symbols_or_candidates_note": "Primary crypto retry owner. decryptAllTimelineEvent not a P0.1 AST method name hit (product helper wrapping attemptDecryption). deep import CryptoBackend L20."
+        },
+        {
+          "path": "synara/src/app/features/room/RoomTimeline.tsx",
+          "bucket": "feature",
+          "categories": ["timelines", "crypto_verification_recovery", "event_emitters_listeners"],
+          "symbols_or_candidates": [
+            "decryptAllTimelineEvent",
+            "EncryptedContent",
+            "MessageNotDecryptedContent",
+            "RoomMessageEncrypted"
+          ],
+          "line_refs": [
+            {
+              "symbol": "decryptAllTimelineEvent",
+              "line": 529,
+              "kind": "product_call",
+              "relevance_reason": "After paginateEventTimeline on an encrypted room (hasEncryptionStateEvent), force decryptAllTimelineEvent on the fetched timeline before recalibrate/render."
+            },
+            {
+              "symbol": "EncryptedContent",
+              "line": 2981,
+              "kind": "product_ui",
+              "relevance_reason": "RoomMessageEncrypted renderer wraps body in EncryptedContent so Decrypted re-renders plaintext content."
+            },
+            {
+              "symbol": "MessageNotDecryptedContent",
+              "line": 3029,
+              "kind": "product_ui",
+              "relevance_reason": "While still m.room.encrypted: 'This message is not decrypted yet'."
+            }
+          ],
+          "model_coupling": ["MatrixEvent", "Room"],
+          "behavior_relevant_method_candidates": [
+            {
+              "name": "decryptAllTimelineEvent",
+              "line": 529,
+              "category": "crypto_verification_recovery",
+              "kind": "product_call_candidate",
+              "confidence": "Source-inspected product call site (exact-line); product helper from utils/room.ts.",
+              "relevance_reason": "Pagination path triggers bulk UTD retry for encrypted rooms."
+            },
+            {
+              "name": "hasEncryptionStateEvent",
+              "line": 528,
+              "category": "crypto_verification_recovery",
+              "kind": "property_call_candidate",
+              "confidence": "Source-inspected product call site (exact-line).",
+              "relevance_reason": "Gates bulk decrypt retry to encrypted rooms only."
+            }
+          ],
+          "behavior_relevant_listener_candidates": [],
+          "symbols_or_candidates_note": "Timeline host for bulk retry on pagination + encrypted message UI. Not sole owner of attemptDecryption (room.ts)."
+        },
+        {
           "path": "synara/src/app/features/room/message/EncryptedContent.tsx",
           "bucket": "feature",
           "categories": ["event_emitters_listeners", "timelines"],
-          "symbols_or_candidates": [],
-          "line_refs": [],
+          "symbols_or_candidates": [
+            "EncryptedContent",
+            "MatrixEventEvent.Decrypted"
+          ],
+          "line_refs": [
+            {
+              "symbol": "MatrixEventEvent.Decrypted",
+              "line": 18,
+              "kind": "listener_candidate",
+              "relevance_reason": "mEvent.on(MatrixEventEvent.Decrypted) toggles encrypted-type state so children re-render after successful retry/decrypt."
+            },
+            {
+              "symbol": "MatrixEventEvent.Decrypted",
+              "line": 20,
+              "kind": "listener_candidate",
+              "relevance_reason": "removeListener cleanup for Decrypted."
+            }
+          ],
           "model_coupling": ["MatrixEvent"],
           "behavior_relevant_method_candidates": [],
-          "behavior_relevant_listener_candidates": [],
-          "symbols_or_candidates_note": "No requirement-relevant method/listener candidates filtered from this file's P0.1 AST hits; file remains linked for structural/model ownership. See all_candidates_in_linked_files on the requirement."
+          "behavior_relevant_listener_candidates": [
+            {
+              "event": "MatrixEventEvent.Decrypted",
+              "method": "on",
+              "line": 18,
+              "category": "timelines",
+              "kind": "listener_candidate",
+              "confidence": "Source-inspected product listener on MatrixEvent; exact-line.",
+              "relevance_reason": "UTD UI update propagation: when keys arrive / retry succeeds, event type leaves m.room.encrypted and children re-render plaintext."
+            },
+            {
+              "event": "MatrixEventEvent.Decrypted",
+              "method": "removeListener",
+              "line": 20,
+              "category": "timelines",
+              "kind": "listener_candidate",
+              "confidence": "Source-inspected product listener cleanup; exact-line.",
+              "relevance_reason": "Listener cleanup for Decrypted."
+            }
+          ],
+          "symbols_or_candidates_note": "UI lifecycle wrapper for encrypted timeline items. Does not itself call attemptDecryption; relies on crypto/SDK retry + Decrypted event."
         },
         {
           "path": "synara/src/app/hooks/useRoomEvent.ts",
@@ -64320,17 +64469,19 @@
             "crypto_verification_recovery",
             "timelines"
           ],
-          "symbols_or_candidates": ["getCrypto", "getCrypto"],
+          "symbols_or_candidates": ["getCrypto", "attemptDecryption", "isEncrypted"],
           "line_refs": [
             {
-              "symbol": "getCrypto",
+              "symbol": "isEncrypted",
               "line": 21,
-              "kind": "method_candidate"
+              "kind": "method_candidate",
+              "relevance_reason": "Fetched remote events: if encrypted and crypto present, attempt decryption before returning MatrixEvent."
             },
             {
-              "symbol": "getCrypto",
+              "symbol": "attemptDecryption",
               "line": 22,
-              "kind": "method_candidate"
+              "kind": "method_candidate",
+              "relevance_reason": "mEvent.attemptDecryption(mx.getCrypto() as CryptoBackend) for out-of-timeline / fetchRoomEvent path."
             }
           ],
           "model_coupling": ["MatrixEvent", "Room"],
@@ -64340,77 +64491,182 @@
               "line": 21,
               "category": "crypto_verification_recovery",
               "kind": "property_call_candidate",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+              "confidence": "Source-inspected product call site (exact-line); mx from useMatrixClient.",
+              "relevance_reason": "Crypto gate before per-event decrypt attempt on fetch."
             },
             {
-              "name": "getCrypto",
+              "name": "attemptDecryption",
               "line": 22,
               "category": "crypto_verification_recovery",
               "kind": "property_call_candidate",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+              "confidence": "Source-inspected product call site (exact-line); CryptoBackend cast from deep import.",
+              "relevance_reason": "Per-event decrypt attempt when loading an event by id (replies/context)."
             }
           ],
-          "behavior_relevant_listener_candidates": []
+          "behavior_relevant_listener_candidates": [],
+          "symbols_or_candidates_note": "Secondary retry/attempt path for fetched events (not bulk pagination). deep import CryptoBackend L4."
         },
         {
-          "path": "synara/src/app/hooks/useRoomEventReaders.ts",
-          "bucket": "hook",
-          "categories": [
-            "room_methods",
-            "event_emitters_listeners",
-            "timelines",
-            "receipts"
+          "path": "synara/src/app/components/message/content/FallbackContent.tsx",
+          "bucket": "component",
+          "categories": ["timelines"],
+          "symbols_or_candidates": [
+            "MessageBadEncryptedContent",
+            "MessageNotDecryptedContent"
           ],
-          "symbols_or_candidates": [],
-          "line_refs": [],
-          "model_coupling": ["Room"],
+          "line_refs": [
+            {
+              "symbol": "MessageBadEncryptedContent",
+              "line": 34,
+              "kind": "product_ui",
+              "relevance_reason": "Unable to decrypt message (m.bad.encrypted / permanent UTD presentation)."
+            },
+            {
+              "symbol": "MessageNotDecryptedContent",
+              "line": 41,
+              "kind": "product_ui",
+              "relevance_reason": "This message is not decrypted yet (still m.room.encrypted pending retry)."
+            }
+          ],
+          "model_coupling": [],
           "behavior_relevant_method_candidates": [],
           "behavior_relevant_listener_candidates": [],
-          "symbols_or_candidates_note": "No requirement-relevant method/listener candidates filtered from this file's P0.1 AST hits; file remains linked for structural/model ownership. See all_candidates_in_linked_files on the requirement."
+          "symbols_or_candidates_note": "Presentation strings for UTD/pending-decrypt. Presentation taxonomy also FR-7.3-009; this FR owns retry-to-clear path. No matrix-js-sdk import (not in P0.1 220 ledger as crypto)."
         },
         {
-          "path": "synara/src/app/utils/matrix-crypto.ts",
-          "bucket": "utility",
-          "categories": ["crypto_verification_recovery"],
-          "symbols_or_candidates": [],
-          "line_refs": [],
-          "model_coupling": ["CryptoApi"],
+          "path": "synara/src/app/components/message/MsgTypeRenderers.tsx",
+          "bucket": "component",
+          "categories": ["timelines"],
+          "symbols_or_candidates": ["MBadEncrypted", "MessageBadEncryptedContent"],
+          "line_refs": [
+            {
+              "symbol": "MBadEncrypted",
+              "line": 33,
+              "kind": "product_ui",
+              "relevance_reason": "Renders MessageBadEncryptedContent for failed decryption content."
+            }
+          ],
+          "model_coupling": [],
           "behavior_relevant_method_candidates": [],
           "behavior_relevant_listener_candidates": [],
-          "symbols_or_candidates_note": "No requirement-relevant method/listener candidates filtered from this file's P0.1 AST hits; file remains linked for structural/model ownership. See all_candidates_in_linked_files on the requirement."
+          "symbols_or_candidates_note": "MBadEncrypted used by RenderMessageContent when msgtype === m.bad.encrypted."
+        },
+        {
+          "path": "synara/src/app/components/RenderMessageContent.tsx",
+          "bucket": "component",
+          "categories": ["timelines"],
+          "symbols_or_candidates": ["MBadEncrypted", "m.bad.encrypted"],
+          "line_refs": [
+            {
+              "symbol": "m.bad.encrypted",
+              "line": 272,
+              "kind": "product_ui",
+              "relevance_reason": "msgType === 'm.bad.encrypted' returns <MBadEncrypted />."
+            }
+          ],
+          "model_coupling": [],
+          "behavior_relevant_method_candidates": [],
+          "behavior_relevant_listener_candidates": [],
+          "symbols_or_candidates_note": "Routes permanent UTD content to MBadEncrypted. Shared with FR-7.3-009 presentation."
         }
       ],
       "ui_entry_points": [
-        "synara/src/app/features/room/message/EncryptedContent.tsx"
+        "synara/src/app/features/room/RoomTimeline.tsx",
+        "synara/src/app/features/room/message/EncryptedContent.tsx",
+        "synara/src/app/components/message/content/FallbackContent.tsx",
+        "synara/src/app/components/RenderMessageContent.tsx"
       ],
+      "ui_entry_points_rationale": "RoomTimeline mounts EncryptedContent for m.room.encrypted and shows MessageNotDecryptedContent while still encrypted; after Decrypted or successful attemptDecryption, RenderMessageContent/MBadEncrypted present plaintext or permanent UTD. Product has NO dedicated Retry/Request-keys button — retry is automatic on encrypted-room pagination (decryptAllTimelineEvent isRetry) and on key-arrival via MatrixEventEvent.Decrypted re-render. Notifications/RoomPinMenu reuse EncryptedContent (secondary surfaces). Presentation-only of encrypted/UTD states is FR-7.3-009; this FR is retry + clear path.",
       "state_owners": [
         {
-          "path": "synara/src/app/utils/matrix-crypto.ts",
-          "ownership_evidence": "Identified as coordination/state module for this behavior via path role (state/client/util service) and P0.1 categories/candidates; not merely a presentational component."
+          "path": "synara/src/app/utils/room.ts",
+          "ownership_evidence": "Owns decryptAllTimelineEvent: getCrypto → filter isEncrypted → attemptDecryption(..., { isRetry: true }). Called by RoomTimeline after paginateEventTimeline on encrypted rooms."
+        },
+        {
+          "path": "synara/src/app/features/room/message/EncryptedContent.tsx",
+          "ownership_evidence": "Owns MatrixEventEvent.Decrypted subscription that re-renders encrypted message body when decryption succeeds (retry or late keys)."
+        },
+        {
+          "path": "synara/src/app/hooks/useRoomEvent.ts",
+          "ownership_evidence": "Owns per-event attemptDecryption when fetchRoomEvent loads an encrypted event (reply/context path)."
         }
       ],
       "current_js_sdk": {
         "behavior_relevant_method_candidates": [
           {
-            "path": "synara/src/app/hooks/useRoomEvent.ts",
+            "path": "synara/src/app/utils/room.ts",
             "name": "getCrypto",
-            "line": 21,
+            "line": 402,
             "category": "crypto_verification_recovery",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+            "confidence": "Source-inspected product call site (exact-line).",
+            "relevance_reason": "Bulk decrypt retry crypto gate."
+          },
+          {
+            "path": "synara/src/app/utils/room.ts",
+            "name": "attemptDecryption",
+            "line": 408,
+            "category": "crypto_verification_recovery",
+            "confidence": "Source-inspected product call site (exact-line); { isRetry: true }.",
+            "relevance_reason": "Primary UTD retry: force re-attempt decryption for encrypted timeline events."
+          },
+          {
+            "path": "synara/src/app/features/room/RoomTimeline.tsx",
+            "name": "hasEncryptionStateEvent",
+            "line": 528,
+            "category": "crypto_verification_recovery",
+            "confidence": "Source-inspected product call site (exact-line).",
+            "relevance_reason": "Encrypted-room gate before bulk retry."
+          },
+          {
+            "path": "synara/src/app/features/room/RoomTimeline.tsx",
+            "name": "decryptAllTimelineEvent",
+            "line": 529,
+            "category": "crypto_verification_recovery",
+            "confidence": "Source-inspected product call site (exact-line).",
+            "relevance_reason": "Pagination triggers bulk UTD retry."
           },
           {
             "path": "synara/src/app/hooks/useRoomEvent.ts",
             "name": "getCrypto",
+            "line": 21,
+            "category": "crypto_verification_recovery",
+            "confidence": "Source-inspected product call site (exact-line).",
+            "relevance_reason": "Per-event fetch decrypt crypto gate."
+          },
+          {
+            "path": "synara/src/app/hooks/useRoomEvent.ts",
+            "name": "attemptDecryption",
             "line": 22,
             "category": "crypto_verification_recovery",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+            "confidence": "Source-inspected product call site (exact-line).",
+            "relevance_reason": "Per-event decrypt attempt on fetchRoomEvent path."
           }
         ],
-        "behavior_relevant_listener_candidates": [],
+        "behavior_relevant_listener_candidates": [
+          {
+            "path": "synara/src/app/features/room/message/EncryptedContent.tsx",
+            "event": "MatrixEventEvent.Decrypted",
+            "method": "on",
+            "line": 18,
+            "category": "timelines",
+            "confidence": "Source-inspected product listener (exact-line).",
+            "relevance_reason": "Re-render when event decrypts (retry success / late keys)."
+          },
+          {
+            "path": "synara/src/app/features/room/message/EncryptedContent.tsx",
+            "event": "MatrixEventEvent.Decrypted",
+            "method": "removeListener",
+            "line": 20,
+            "category": "timelines",
+            "confidence": "Source-inspected product listener cleanup (exact-line).",
+            "relevance_reason": "Decrypted listener cleanup."
+          }
+        ],
+        "behavior_relevance_policy": "Exact-line source inspection for UTD retry: retain decryptAllTimelineEvent + attemptDecryption({ isRetry: true }), RoomTimeline pagination trigger, EncryptedContent MatrixEventEvent.Decrypted, useRoomEvent per-event attemptDecryption, MessageNotDecryptedContent / MessageBadEncryptedContent / MBadEncrypted UTD presentation. Exclude matrix-crypto.ts verifiedDevice (FR-7.9-002/004 trust). Exclude useRoomEventReaders receipts (FR-7.3-005). Exclude LocalBackup room-key file import/export (FR-7.9-007). Exclude server key backup restore (FR-7.9-006). Exclude SAS (FR-7.9-005). Presentation taxonomy of encrypted/redacted/unsupported alone is FR-7.3-009. Product has no dedicated Retry/Request-keys button.",
         "all_candidates_in_linked_files": {
           "method_count": 4,
           "listener_count": 10,
-          "note": "Unfiltered P0.1 AST candidates across linked production import files. Do not treat these as proven APIs for this requirement; use behavior_relevant_* fields.",
+          "note": "Unfiltered P0.1 AST candidates across original P0.1-linked files (EncryptedContent, useRoomEvent, useRoomEventReaders, matrix-crypto). Primary retry surfaces room.ts/RoomTimeline/FallbackContent are source-inspected beyond that ledger subset. Do not treat unfiltered AST as proven APIs; use behavior_relevant_* fields.",
           "methods_sample": [
             {
               "path": "synara/src/app/hooks/useRoomEvent.ts",
@@ -64445,58 +64701,10 @@
               "event": "MatrixEventEvent.Decrypted",
               "method": "removeListener",
               "line": 20
-            },
-            {
-              "path": "synara/src/app/hooks/useRoomEventReaders.ts",
-              "event": "RoomEvent.Receipt",
-              "method": "on",
-              "line": 51
-            },
-            {
-              "path": "synara/src/app/hooks/useRoomEventReaders.ts",
-              "event": "RoomEvent.LocalEchoUpdated",
-              "method": "on",
-              "line": 52
-            },
-            {
-              "path": "synara/src/app/hooks/useRoomEventReaders.ts",
-              "event": "RoomEvent.TimelineReset",
-              "method": "on",
-              "line": 53
-            },
-            {
-              "path": "synara/src/app/hooks/useRoomEventReaders.ts",
-              "event": "RoomEvent.TimelineRefresh",
-              "method": "on",
-              "line": 54
-            },
-            {
-              "path": "synara/src/app/hooks/useRoomEventReaders.ts",
-              "event": "RoomEvent.Receipt",
-              "method": "removeListener",
-              "line": 56
-            },
-            {
-              "path": "synara/src/app/hooks/useRoomEventReaders.ts",
-              "event": "RoomEvent.LocalEchoUpdated",
-              "method": "removeListener",
-              "line": 57
-            },
-            {
-              "path": "synara/src/app/hooks/useRoomEventReaders.ts",
-              "event": "RoomEvent.TimelineReset",
-              "method": "removeListener",
-              "line": 58
-            },
-            {
-              "path": "synara/src/app/hooks/useRoomEventReaders.ts",
-              "event": "RoomEvent.TimelineRefresh",
-              "method": "removeListener",
-              "line": 59
             }
           ]
         },
-        "models": ["CryptoApi", "MatrixEvent", "Room"],
+        "models": ["CryptoBackend", "MatrixEvent", "Room", "EventTimeline", "MatrixClient"],
         "network_routes": [],
         "deep_imports": [
           {
@@ -64513,34 +64721,41 @@
             "cutover_disposition": "replace-deep-js-sdk-import-with-synara-dto-or-rust-projection"
           },
           {
-            "path": "synara/src/app/utils/matrix-crypto.ts",
-            "module": "matrix-js-sdk/lib/crypto-api",
-            "line": 1,
-            "named_imports": ["CryptoApi"],
+            "path": "synara/src/app/utils/room.ts",
+            "module": "matrix-js-sdk/lib/common-crypto/CryptoBackend",
+            "line": 20,
+            "named_imports": ["CryptoBackend"],
             "is_type_only": false,
             "linked_requirement_ids": ["FR-7.9-008"],
             "cutover_disposition": "replace-deep-js-sdk-import-with-synara-dto-or-rust-projection"
           }
         ],
-        "method_candidates": ["getCrypto", "getCrypto"],
-        "listener_events": []
+        "method_candidates": [
+          "getCrypto",
+          "attemptDecryption",
+          "decryptAllTimelineEvent",
+          "hasEncryptionStateEvent",
+          "isEncrypted"
+        ],
+        "listener_events": ["MatrixEventEvent.Decrypted"]
       },
       "current_behavior_and_limits": {
-        "summary": "Current desktop implements this via 4 production matrix-js-sdk-related file(s); status=implemented.",
-        "notes": null,
-        "limits": "P0.1 method candidates are AST name hits, not type-checked receiver proofs."
+        "summary": "Product implements automatic undecryptable-event retry (no dedicated Retry button): encrypted-room pagination runs decryptAllTimelineEvent → attemptDecryption(..., { isRetry: true }); EncryptedContent re-renders on MatrixEventEvent.Decrypted; useRoomEvent attempts decrypt on fetchRoomEvent; UI shows MessageNotDecryptedContent while pending and MessageBadEncryptedContent/MBadEncrypted for m.bad.encrypted. status=implemented.",
+        "notes": "Evidence (conservative): (1) RETRY BULK room.ts decryptAllTimelineEvent L401–410: getCrypto L402; filter event.isEncrypted L406; attemptDecryption(crypto as CryptoBackend, { isRetry: true }) L408; Promise.allSettled. (2) RETRY TRIGGER RoomTimeline pagination L524–530: after paginateEventTimeline, if room.hasEncryptionStateEvent() then decryptAllTimelineEvent(mx, fetchedTimeline) L529 before recalibrate. (3) UI LIFECYCLE EncryptedContent L10–24: state from getType()===RoomMessageEncrypted; mEvent.on(MatrixEventEvent.Decrypted) L18 re-toggles; removeListener L20. RoomTimeline RoomMessageEncrypted branch L2908–3038 wraps EncryptedContent L2981; still encrypted → MessageNotDecryptedContent L3029. (4) PER-EVENT useRoomEvent L21–22: if isEncrypted && getCrypto then attemptDecryption (no isRetry flag). (5) PERMANENT UTD FallbackContent MessageBadEncryptedContent L34–38 'Unable to decrypt message'; MessageNotDecryptedContent L41–45 'This message is not decrypted yet'; MsgTypeRenderers MBadEncrypted L33–38; RenderMessageContent L272–273 msgtype m.bad.encrypted → MBadEncrypted. Reply.tsx L100/123 badEncryption uses MessageBadEncryptedContent (presentation). (6) NON-EVIDENCE: matrix-crypto.ts is verifiedDevice only (FR-7.9-002/004) — wrong prior owner. useRoomEventReaders is receipts (FR-7.3-005) — wrong prior link. LocalBackup import/export FR-7.9-007; server backup restore FR-7.9-006; SAS FR-7.9-005; encrypted/UTD presentation taxonomy alone FR-7.3-009. CallEmbed decryptEventIfNeeded is call-path only (FR-7.11), not timeline UTD retry. No product 'Retry decrypt' or 'Request keys' button. (7) Cutover P8.7 (+P5.10 UTD update propagation) via Rust Encryption/timeline ownership + product EncryptedContent-equivalent DTO updates + IPC; SC-061 alone / compile-only / raw HTTP / dual-backend / room-key-file-only / server-backup-only / presentation-only FAIL.",
+        "limits": "P0.1 method/listener candidates are AST name hits, not type-checked receiver proofs. decryptAllTimelineEvent/attemptDecryption isRetry path is source-inspected (room.ts not previously linked on this FR). Product retry is automatic — no manual retry control. SC-061 is Encryption type probe only; no separate SC for MatrixEvent.attemptDecryption or timeline UTD re-emit. Rust timeline typically re-decrypts when room keys arrive; product must preserve pending-UTD → decrypted (or permanent UTD) observables via IPC DTOs under P5.10+P8.7. SC-061 remains compile-shape-only blocked (E3–E5 missing). Do not count SC-061 alone, raw /_matrix HTTP, dual-backend, room-key import alone (FR-7.9-007), server backup restore alone (FR-7.9-006), or presentation-only (FR-7.3-009) as closing this FR."
       },
       "p0_1_linkage": {
         "categories": ["crypto_verification_recovery", "timelines"],
         "file_ledger_paths": [
           "synara/src/app/features/room/message/EncryptedContent.tsx",
           "synara/src/app/hooks/useRoomEvent.ts",
-          "synara/src/app/hooks/useRoomEventReaders.ts",
-          "synara/src/app/utils/matrix-crypto.ts"
-        ]
+          "synara/src/app/utils/room.ts",
+          "synara/src/app/features/room/RoomTimeline.tsx"
+        ],
+        "notes": "Elevated room.ts and RoomTimeline as primary retry surfaces (source-inspected). Demoted matrix-crypto.ts (verifiedDevice only) and useRoomEventReaders (receipts). FallbackContent/MsgTypeRenderers/RenderMessageContent are UTD presentation surfaces shared with FR-7.3-009."
       },
       "rust_target": {
-        "support_conclusion": "compile-shape-only-blocked-for-product",
+        "support_conclusion": "utd-retry-compile-shape-only-blocked-for-product",
         "capability_ids": ["SC-061"],
         "gap_ids": [],
         "capabilities": [
@@ -64551,12 +64766,12 @@
               "requested_direct": [],
               "resolved_on_matrix_sdk": ["e2e-encryption"],
               "resolved_on_matrix_sdk_ui": [],
-              "notes": "API is feature-gated by e2e-encryption, which is resolved in this probe graph via UI unification."
+              "notes": "API is feature-gated by e2e-encryption, which is resolved in this probe graph via UI unification. Umbrella Encryption type; product UTD retry maps to timeline/crypto re-decrypt when keys available plus IPC DTO updates (P5.10 + P8.7) — not export_room_keys/import_room_keys (FR-7.9-007) and not Backups (FR-7.9-006)."
             },
             "final_state": "blocked",
             "final": {
               "final_state": "blocked",
-              "final_state_rationale": "E1+E2 present (stable API + compile probe). E3 semantic test, E4 live Synapse, and E5 UI acceptance are not present in P0.3; compile-only evidence is not product confirmation.",
+              "final_state_rationale": "E1+E2 present for Encryption type (stable API + compile probe). Product UTD retry is attemptDecryption(isRetry) + Decrypted UI propagation; Rust side is timeline/crypto automatic re-decrypt + item update projection — not a separately SC-probed API. E3 semantic test, E4 live Synapse, and E5 UI acceptance are not present in P0.3; compile-only evidence is not product confirmation.",
               "missing_gates": [
                 "semantic_or_integration_test",
                 "live_synapse_two_client",
@@ -64571,11 +64786,15 @@
           }
         ],
         "gaps": [],
-        "notes": "Mappings use only accepted P0.3 capability/gap IDs. Compile probes establish API shape only; final dossier states remain blocked/typed/upstream until E3–E5 gates exist.",
+        "notes": "Honest rust_target for FR-7.9-008: product automatic UTD retry (pagination isRetry bulk decrypt + Decrypted re-render + per-event attempt). Rust cutover under P8.7 (encrypted-history recovery) and P5.10 (UTD/decryption update propagation) must preserve: (a) pending not-yet-decrypted UI; (b) automatic re-decrypt when keys available / history load; (c) permanent Unable-to-decrypt when keys cannot be obtained; via Rust crypto+timeline ownership + product UX + IPC DTO — not SC-061 alone, not SC-066/GAP-RECOVERY-BACKUP, not dual-backend/SDK selector, not unapproved raw /_matrix HTTP, not room-key-file-only (FR-7.9-007), not server-backup-only (FR-7.9-006), not presentation-only (FR-7.3-009). SC-061 remains final_state=blocked (E3–E5 missing).",
         "distinctions_preserved": [
-          "server typed search (SC-071) vs experimental local search (SC-072)",
-          "widget plumbing (SC-082/GAP widget) vs call parity (membership write/key session gaps)",
-          "compile shape (E1/E2) vs runtime/UI parity (E3–E5 missing => blocked)"
+          "compile shape (E1/E2) vs runtime/UI parity (E3–E5 missing => blocked)",
+          "UTD retry/re-decrypt (this FR) vs encrypted/UTD presentation taxonomy (FR-7.3-009)",
+          "automatic retry (no Retry button) vs server key backup restore (FR-7.9-006)",
+          "automatic retry vs room-key file import/export (FR-7.9-007)",
+          "SC-061 Encryption umbrella vs SC-066 Backups / GAP-RECOVERY-BACKUP",
+          "P8.7 UTD retry/history recovery vs P5.10 timeline UTD update propagation (both required for product cutover)",
+          "no dual-backend/SDK selector; no unapproved raw /_matrix HTTP"
         ]
       },
       "implementation_tasks": [
@@ -64583,13 +64802,13 @@
           "task_id": "P8.7",
           "title": "UTD retry and encrypted-history recovery",
           "phase": "Phase 8 — E2EE, devices, verification, backup, and recovery",
-          "scope_rationale": "Accepted plan task P8.7 covers this Section 7.9 behavior during Phase 8 — E2EE, devices, verification, backup, and recovery."
+          "scope_rationale": "Accepted plan task P8.7 covers UTD retry and encrypted-history recovery cutover for this Section 7.9 behavior. Must preserve automatic retry + pending/permanent UTD observables, not drop them."
         },
         {
           "task_id": "P5.10",
           "title": "UTD/decryption update propagation",
           "phase": "Phase 5 — Timeline, threads, receipts, and event mapping",
-          "scope_rationale": "Accepted plan task P5.10 covers this Section 7.9 behavior during Phase 5 — Timeline, threads, receipts, and event mapping."
+          "scope_rationale": "Accepted plan task P5.10 covers timeline DTO propagation when encrypted items become decrypted (EncryptedContent MatrixEventEvent.Decrypted equivalent)."
         }
       ],
       "automated_tests": {
@@ -64602,33 +64821,44 @@
             "task_id": "P8.7",
             "phase": "Phase 8 — E2EE, devices, verification, backup, and recovery",
             "level": "integration-e2e",
-            "scenario": "7.9/FR-7.9-008: exercise 'undecryptable-event retry;' via owner `synara/src/app/utils/matrix-crypto.ts` and UI `synara/src/app/features/room/message/EncryptedContent.tsx`, then confirm Rust/IPC cutover task `P8.7` preserves observable behavior without raw Matrix runtime HTTP.",
+            "scenario": "Integration-e2e against disposable Synapse with an E2EE room: (A) PENDING UTD — create/fixture messages that remain encrypted on receiver (missing megolm keys); assert timeline shows MessageNotDecryptedContent ('This message is not decrypted yet') or product-equivalent pending state via EncryptedContent. (B) RETRY SUCCESS — after room keys become available (key forward, backup restore FR-7.9-006 path as fixture only, or second-device history), assert decrypt path runs (pagination decryptAllTimelineEvent/attemptDecryption isRetry and/or SDK decrypt + Decrypted) and UI re-renders plaintext body without process restart. (C) PERMANENT UTD — for events that remain undecryptable, assert MessageBadEncryptedContent / MBadEncrypted ('Unable to decrypt message') via m.bad.encrypted. (D) PAGINATION RETRY — paginate encrypted history and assert RoomTimeline invokes decryptAllTimelineEvent for hasEncryptionStateEvent rooms. After cutover P8.7+P5.10 same observables via Rust crypto+timeline ownership + product UX + IPC DTO; SC-061 alone, compile-only blocked, raw /_matrix HTTP, dual-backend, room-key-file-only (FR-7.9-007), server-backup-restore-only (FR-7.9-006), presentation-only (FR-7.3-009), or helper/fixture-only FAIL.",
+            "test_target": "decryptAllTimelineEvent (room.ts); RoomTimeline pagination encrypted decrypt; EncryptedContent Decrypted listener; useRoomEvent attemptDecryption; MessageNotDecryptedContent / MessageBadEncryptedContent / MBadEncrypted; post-cutover P8.7+P5.10 Rust timeline UTD→decrypted DTO",
             "preconditions": [
-              "Desktop app, E2EE-capable session; second device for verification",
-              "Recovery key / backup fixtures; isolated multi-account profiles when testing isolation",
-              "Linked owner path present in tree: synara/src/app/utils/matrix-crypto.ts",
-              "Primary UI/lifecycle surface: synara/src/app/features/room/message/EncryptedContent.tsx"
+              "Disposable Synapse; two E2EE-capable sessions (or controlled missing-key fixture) in an encrypted room.",
+              "Named product surfaces present: room.ts decryptAllTimelineEvent, RoomTimeline EncryptedContent+MessageNotDecryptedContent, useRoomEvent attemptDecryption, FallbackContent/MsgTypeRenderers/RenderMessageContent UTD strings.",
+              "Harness can observe pending not-decrypted UI, post-key plaintext re-render, permanent unable-to-decrypt, and encrypted-room pagination decrypt trigger; does not bypass product path with dual-backend/raw HTTP/helper-only pass criteria.",
+              "Do not accept LocalBackup room-key file alone (FR-7.9-007), BackupRestore server restore alone (FR-7.9-006), SAS alone (FR-7.9-005), or encrypted/UTD presentation taxonomy alone (FR-7.3-009) as sole pass for this FR."
             ],
             "trigger_actions": [
-              "Boot the appropriate harness for level=integration-e2e against disposable Synapse (or iOS notes if any).",
-              "Establish fixtures required by the clause list: undecryptable-event retry.",
-              "Open UI/lifecycle surface `synara/src/app/features/room/message/EncryptedContent.tsx` (or follow ui_entry_points_rationale if no dedicated UI).",
-              "Step 1: perform the product action that implements «undecryptable-event retry» using current owner `synara/src/app/utils/matrix-crypto.ts`.",
-              "Force process restart and/or offline→online transition where lifecycle continuity is implied."
+              "Boot integration harness against disposable Synapse. Do not use fixture-only mocks that skip product EncryptedContent/RoomTimeline decrypt paths, dual-backend selectors, raw HTTP, or helper-only pass criteria.",
+              "PENDING: Arrange encrypted events without room keys on the under-test session; open room timeline; assert MessageNotDecryptedContent (or product-equivalent pending UTD) is visible for those events.",
+              "RETRY SUCCESS: Make room keys available to the session (key share / restore fixture). Trigger history load or pagination if needed. Assert EncryptedContent re-renders plaintext (Decrypted path) without requiring a dedicated Retry button click.",
+              "PAGINATION: On encrypted room with hasEncryptionStateEvent, paginate timeline; assert decryptAllTimelineEvent / attemptDecryption isRetry path is exercised for encrypted events (or product-equivalent bulk re-decrypt after cutover).",
+              "PERMANENT UTD: For events that remain undecryptable, assert MessageBadEncryptedContent / MBadEncrypted presentation.",
+              "After cutover P8.7+P5.10, repeat pending → decrypted and permanent UTD observables via Rust crypto+timeline ownership + IPC DTO. Citing SC-061 alone, compile-only, raw /_matrix HTTP, dual-backend/SDK selector, room-key-file-only, server-backup-only, presentation-only, or helper/fixture-only is a FAIL."
             ],
             "assertions": [
-              "Each clause is observable: «undecryptable-event retry».",
-              "State coordination remains through `synara/src/app/utils/matrix-crypto.ts` (or its Rust/IPC successor after cutover), not ad-hoc dual writers.",
-              "Behavior-relevant current JS method candidates exercised or replaced: getCrypto, getCrypto (AST candidates; not type-proven receivers).",
-              "Rust mapping remains conservative: caps=[SC-061] gaps=[none]; compile-only blocked states are not treated as runtime pass.",
-              "No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless dossier marks that exact behavior typed-sdk-request-required."
+              "PENDING: encrypted events without keys show not-yet-decrypted UI (MessageNotDecryptedContent or equivalent) via EncryptedContent.",
+              "RETRY: when keys become available, events re-decrypt and UI updates to plaintext without a dedicated product Retry button (automatic path).",
+              "PAGINATION: encrypted-room pagination triggers bulk re-decrypt (decryptAllTimelineEvent / isRetry) or Rust/IPC successor.",
+              "PERMANENT UTD: m.bad.encrypted / MessageBadEncryptedContent remains for permanently undecryptable events.",
+              "COORDINATION: retry remains through room.ts decryptAllTimelineEvent + EncryptedContent Decrypted + useRoomEvent attemptDecryption (or Rust/IPC successors), not ad-hoc dual writers.",
+              "CUTOVER: P8.7+P5.10 preserve pending/retry-success/permanent-UTD observables via Rust ownership + IPC DTO; SC-061 compile-only never product pass; no SC-066/GAP-RECOVERY-BACKUP as sole mapping; no raw /_matrix runtime HTTP; no dual-backend/SDK selector.",
+              "No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless the dossier marks that exact behavior typed-sdk-request-required.",
+              "Room-key file import alone (FR-7.9-007), server backup restore alone (FR-7.9-006), SAS alone (FR-7.9-005), and presentation-only (FR-7.3-009) are not accepted as sole pass criteria for this FR."
             ],
             "required_environment": [
-              "Desktop app, E2EE-capable session; second device for verification",
-              "Recovery key / backup fixtures; isolated multi-account profiles when testing isolation"
+              "Disposable Synapse",
+              "E2EE-capable desktop sessions; encrypted room; ability to withhold/supply room keys",
+              "Timeline pagination and encrypted message UI surfaces"
             ],
             "does_not_currently_exist": true,
-            "clause_breakdown": ["undecryptable-event retry"]
+            "clause_breakdown": [
+              "pending not-yet-decrypted UI for encrypted events",
+              "automatic UTD retry (attemptDecryption isRetry / key-arrival Decrypted re-render)",
+              "permanent unable-to-decrypt presentation",
+              "cutover P8.7+P5.10 Rust crypto+timeline + product UX + IPC; SC-only/raw HTTP/presentation-only FAIL"
+            ]
           }
         ]
       },
@@ -64641,13 +64871,15 @@
       ],
       "security_privacy_lifecycle_concerns": [
         "token-and-store-isolation",
-        "no-raw-matrix-http"
+        "no-raw-matrix-http",
+        "no-decrypted-content-in-diagnostics"
       ],
       "traceability_status": "complete-conservative",
       "blockers": []
     },
     {
       "id": "FR-7.9-009",
+
       "origin": "plan-section-7",
       "section_id": "7.9",
       "plan_heading": "### 7.9 Devices, E2EE, verification, and recovery",
@@ -79163,7 +79395,8 @@
         "FR-7.2-011",
         "FR-7.3-008",
         "FR-7.3-009",
-        "FR-7.3-010"
+        "FR-7.3-010",
+        "FR-7.9-008"
       ],
       "rationale": null,
       "p0_1_role": "production",
@@ -83011,8 +83244,7 @@
         "FR-7.3-002",
         "FR-7.3-005",
         "FR-7.3-009",
-        "FR-7.3-013",
-        "FR-7.9-008"
+        "FR-7.3-013"
       ],
       "rationale": null,
       "p0_1_role": "production",
@@ -87808,7 +88040,7 @@
       "constructor_candidates": [],
       "import_modules": ["matrix-js-sdk/lib/crypto-api"],
       "classification": "requirement-linked",
-      "linked_requirement_ids": ["FR-7.9-002", "FR-7.9-004", "FR-7.9-008"],
+      "linked_requirement_ids": ["FR-7.9-002", "FR-7.9-004"],
       "rationale": null,
       "p0_1_role": "production",
       "desktop_runtime": true,
@@ -88385,7 +88617,8 @@
         "FR-7.8-004",
         "FR-7.8-005",
         "FR-7.8-006",
-        "FR-7.8-007"
+        "FR-7.8-007",
+        "FR-7.9-008"
       ],
       "rationale": null,
       "p0_1_role": "production",
@@ -90288,7 +90521,7 @@
       "line": 1,
       "named_imports": ["CryptoApi"],
       "is_type_only": false,
-      "linked_requirement_ids": ["FR-7.9-002", "FR-7.9-004", "FR-7.9-008"],
+      "linked_requirement_ids": ["FR-7.9-002", "FR-7.9-004"],
       "cutover_disposition": "replace-deep-js-sdk-import-with-synara-dto-or-rust-projection"
     },
     {
@@ -90377,7 +90610,8 @@
         "FR-7.5-007",
         "FR-7.6-008",
         "FR-7.8-001",
-        "FR-7.8-002"
+        "FR-7.8-002",
+        "FR-7.9-008"
       ],
       "cutover_disposition": "replace-deep-js-sdk-import-with-synara-dto-or-rust-projection"
     },
@@ -91093,7 +91327,8 @@
         "FR-7.8-002",
         "FR-7.8-004",
         "FR-7.8-005",
-        "FR-7.8-006"
+        "FR-7.8-006",
+        "FR-7.9-008"
       ],
       "cutover_disposition": "migrate-via-account-data-service-and-raw-content-extraction-tasks",
       "tasks": ["P6.7", "P5.9", "P12.6"],
@@ -95571,33 +95806,44 @@
         "task_id": "P8.7",
         "phase": "Phase 8 — E2EE, devices, verification, backup, and recovery",
         "level": "integration-e2e",
-        "scenario": "7.9/FR-7.9-008: exercise 'undecryptable-event retry;' via owner `synara/src/app/utils/matrix-crypto.ts` and UI `synara/src/app/features/room/message/EncryptedContent.tsx`, then confirm Rust/IPC cutover task `P8.7` preserves observable behavior without raw Matrix runtime HTTP.",
+        "scenario": "Integration-e2e against disposable Synapse with an E2EE room: (A) PENDING UTD — create/fixture messages that remain encrypted on receiver (missing megolm keys); assert timeline shows MessageNotDecryptedContent ('This message is not decrypted yet') or product-equivalent pending state via EncryptedContent. (B) RETRY SUCCESS — after room keys become available (key forward, backup restore FR-7.9-006 path as fixture only, or second-device history), assert decrypt path runs (pagination decryptAllTimelineEvent/attemptDecryption isRetry and/or SDK decrypt + Decrypted) and UI re-renders plaintext body without process restart. (C) PERMANENT UTD — for events that remain undecryptable, assert MessageBadEncryptedContent / MBadEncrypted ('Unable to decrypt message') via m.bad.encrypted. (D) PAGINATION RETRY — paginate encrypted history and assert RoomTimeline invokes decryptAllTimelineEvent for hasEncryptionStateEvent rooms. After cutover P8.7+P5.10 same observables via Rust crypto+timeline ownership + product UX + IPC DTO; SC-061 alone, compile-only blocked, raw /_matrix HTTP, dual-backend, room-key-file-only (FR-7.9-007), server-backup-restore-only (FR-7.9-006), presentation-only (FR-7.3-009), or helper/fixture-only FAIL.",
+        "test_target": "decryptAllTimelineEvent (room.ts); RoomTimeline pagination encrypted decrypt; EncryptedContent Decrypted listener; useRoomEvent attemptDecryption; MessageNotDecryptedContent / MessageBadEncryptedContent / MBadEncrypted; post-cutover P8.7+P5.10 Rust timeline UTD→decrypted DTO",
         "preconditions": [
-          "Desktop app, E2EE-capable session; second device for verification",
-          "Recovery key / backup fixtures; isolated multi-account profiles when testing isolation",
-          "Linked owner path present in tree: synara/src/app/utils/matrix-crypto.ts",
-          "Primary UI/lifecycle surface: synara/src/app/features/room/message/EncryptedContent.tsx"
+          "Disposable Synapse; two E2EE-capable sessions (or controlled missing-key fixture) in an encrypted room.",
+          "Named product surfaces present: room.ts decryptAllTimelineEvent, RoomTimeline EncryptedContent+MessageNotDecryptedContent, useRoomEvent attemptDecryption, FallbackContent/MsgTypeRenderers/RenderMessageContent UTD strings.",
+          "Harness can observe pending not-decrypted UI, post-key plaintext re-render, permanent unable-to-decrypt, and encrypted-room pagination decrypt trigger; does not bypass product path with dual-backend/raw HTTP/helper-only pass criteria.",
+          "Do not accept LocalBackup room-key file alone (FR-7.9-007), BackupRestore server restore alone (FR-7.9-006), SAS alone (FR-7.9-005), or encrypted/UTD presentation taxonomy alone (FR-7.3-009) as sole pass for this FR."
         ],
         "trigger_actions": [
-          "Boot the appropriate harness for level=integration-e2e against disposable Synapse (or iOS notes if any).",
-          "Establish fixtures required by the clause list: undecryptable-event retry.",
-          "Open UI/lifecycle surface `synara/src/app/features/room/message/EncryptedContent.tsx` (or follow ui_entry_points_rationale if no dedicated UI).",
-          "Step 1: perform the product action that implements «undecryptable-event retry» using current owner `synara/src/app/utils/matrix-crypto.ts`.",
-          "Force process restart and/or offline→online transition where lifecycle continuity is implied."
+          "Boot integration harness against disposable Synapse. Do not use fixture-only mocks that skip product EncryptedContent/RoomTimeline decrypt paths, dual-backend selectors, raw HTTP, or helper-only pass criteria.",
+          "PENDING: Arrange encrypted events without room keys on the under-test session; open room timeline; assert MessageNotDecryptedContent (or product-equivalent pending UTD) is visible for those events.",
+          "RETRY SUCCESS: Make room keys available to the session (key share / restore fixture). Trigger history load or pagination if needed. Assert EncryptedContent re-renders plaintext (Decrypted path) without requiring a dedicated Retry button click.",
+          "PAGINATION: On encrypted room with hasEncryptionStateEvent, paginate timeline; assert decryptAllTimelineEvent / attemptDecryption isRetry path is exercised for encrypted events (or product-equivalent bulk re-decrypt after cutover).",
+          "PERMANENT UTD: For events that remain undecryptable, assert MessageBadEncryptedContent / MBadEncrypted presentation.",
+          "After cutover P8.7+P5.10, repeat pending → decrypted and permanent UTD observables via Rust crypto+timeline ownership + IPC DTO. Citing SC-061 alone, compile-only, raw /_matrix HTTP, dual-backend/SDK selector, room-key-file-only, server-backup-only, presentation-only, or helper/fixture-only is a FAIL."
         ],
         "assertions": [
-          "Each clause is observable: «undecryptable-event retry».",
-          "State coordination remains through `synara/src/app/utils/matrix-crypto.ts` (or its Rust/IPC successor after cutover), not ad-hoc dual writers.",
-          "Behavior-relevant current JS method candidates exercised or replaced: getCrypto, getCrypto (AST candidates; not type-proven receivers).",
-          "Rust mapping remains conservative: caps=[SC-061] gaps=[none]; compile-only blocked states are not treated as runtime pass.",
-          "No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless dossier marks that exact behavior typed-sdk-request-required."
+          "PENDING: encrypted events without keys show not-yet-decrypted UI (MessageNotDecryptedContent or equivalent) via EncryptedContent.",
+          "RETRY: when keys become available, events re-decrypt and UI updates to plaintext without a dedicated product Retry button (automatic path).",
+          "PAGINATION: encrypted-room pagination triggers bulk re-decrypt (decryptAllTimelineEvent / isRetry) or Rust/IPC successor.",
+          "PERMANENT UTD: m.bad.encrypted / MessageBadEncryptedContent remains for permanently undecryptable events.",
+          "COORDINATION: retry remains through room.ts decryptAllTimelineEvent + EncryptedContent Decrypted + useRoomEvent attemptDecryption (or Rust/IPC successors), not ad-hoc dual writers.",
+          "CUTOVER: P8.7+P5.10 preserve pending/retry-success/permanent-UTD observables via Rust ownership + IPC DTO; SC-061 compile-only never product pass; no SC-066/GAP-RECOVERY-BACKUP as sole mapping; no raw /_matrix runtime HTTP; no dual-backend/SDK selector.",
+          "No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless the dossier marks that exact behavior typed-sdk-request-required.",
+          "Room-key file import alone (FR-7.9-007), server backup restore alone (FR-7.9-006), SAS alone (FR-7.9-005), and presentation-only (FR-7.3-009) are not accepted as sole pass criteria for this FR."
         ],
         "required_environment": [
-          "Desktop app, E2EE-capable session; second device for verification",
-          "Recovery key / backup fixtures; isolated multi-account profiles when testing isolation"
+          "Disposable Synapse",
+          "E2EE-capable desktop sessions; encrypted room; ability to withhold/supply room keys",
+          "Timeline pagination and encrypted message UI surfaces"
         ],
         "does_not_currently_exist": true,
-        "clause_breakdown": ["undecryptable-event retry"]
+        "clause_breakdown": [
+          "pending not-yet-decrypted UI for encrypted events",
+          "automatic UTD retry (attemptDecryption isRetry / key-arrival Decrypted re-render)",
+          "permanent unable-to-decrypt presentation",
+          "cutover P8.7+P5.10 Rust crypto+timeline + product UX + IPC; SC-only/raw HTTP/presentation-only FAIL"
+        ]
       },
       {
         "id": "AT-FR-7.9-009-001",
@@ -98752,25 +98998,33 @@
       "requirement_id": "FR-7.9-008",
       "platforms": ["macOS", "Linux"],
       "preconditions": [
-        "Desktop app, E2EE-capable session; second device for verification",
-        "Recovery key / backup fixtures; isolated multi-account profiles when testing isolation",
-        "State owner available: synara/src/app/utils/matrix-crypto.ts",
-        "UI/lifecycle: synara/src/app/features/room/message/EncryptedContent.tsx",
-        "Current status baseline: implemented"
+        "Desktop app against disposable Synapse; two E2EE sessions (or missing-key fixture) in an encrypted room.",
+        "Product surfaces available: room.ts decryptAllTimelineEvent, RoomTimeline EncryptedContent + MessageNotDecryptedContent, useRoomEvent attemptDecryption, FallbackContent/MBadEncrypted UTD strings.",
+        "UI/lifecycle: encrypted room timeline with pending/permanent UTD presentation; no dedicated Retry button expected.",
+        "Current status baseline: implemented (automatic retry)"
       ],
       "actions": [
-        "Launch Synara desktop on the target platform against disposable Synapse; use a clean or known fixture profile as required by «undecryptable-event retry;».",
-        "Identify state owner `synara/src/app/utils/matrix-crypto.ts` and open `synara/src/app/features/room/message/EncryptedContent.tsx`.",
-        "Action 1 — «undecryptable-event retry»: perform the minimal user/system steps that trigger this clause (use linked files under current_production_files if the entry point is indirect).",
-        "Disable network for ≥10s, re-enable, and re-check sync/timeline/send queue observables.",
-        "Repeat critical path in an encrypted room / with a second device when the clause involves keys or verification."
+        "Launch Synara desktop on the target platform against disposable Synapse with an E2EE profile in an encrypted room.",
+        "PENDING: Withhold room keys for some encrypted messages on the under-test session; open the room; confirm MessageNotDecryptedContent ('This message is not decrypted yet') or product-equivalent pending UI via EncryptedContent.",
+        "RETRY SUCCESS: Supply room keys (key share or restore fixture). Paginate or wait for decrypt; confirm plaintext body replaces pending UTD without clicking a Retry button.",
+        "PAGINATION: Scroll/load older encrypted history; confirm bulk re-decrypt path for encrypted rooms (decryptAllTimelineEvent / isRetry or post-cutover equivalent).",
+        "PERMANENT UTD: Confirm events that remain undecryptable show MessageBadEncryptedContent / MBadEncrypted ('Unable to decrypt message').",
+        "Confirm LocalBackup file import alone (FR-7.9-007), server BackupRestore alone (FR-7.9-006), and presentation taxonomy alone (FR-7.3-009) are not used as sole pass for this FR."
       ],
       "expected_results": [
-        "All clauses under «undecryptable-event retry;» produce the user-visible or system-observable success criteria without error toasts unrelated to intentional negative tests.",
-        "Clause 1 «undecryptable-event retry» is satisfied on macOS, Linux with owner `synara/src/app/utils/matrix-crypto.ts`.",
-        "No unexpected raw /_matrix traffic from the app renderer for this flow on the post-cutover build."
+        "Pending encrypted events show not-yet-decrypted UI; successful key availability updates to plaintext automatically.",
+        "Encrypted-room pagination exercises bulk re-decrypt (decryptAllTimelineEvent attemptDecryption isRetry or Rust/IPC successor under P8.7+P5.10).",
+        "Permanent UTD presents Unable to decrypt message for m.bad.encrypted.",
+        "No unexpected raw /_matrix traffic from the app renderer for this flow on the post-cutover build.",
+        "Room-key file import alone (FR-7.9-007), server backup restore alone (FR-7.9-006), SAS alone (FR-7.9-005), and presentation-only (FR-7.3-009) do not close this FR.",
+        "Clauses pending UTD, automatic retry, permanent UTD, and cutover observables satisfied on macOS and Linux via room.ts + EncryptedContent + RoomTimeline (or Rust/IPC successors under P8.7+P5.10)."
       ],
-      "clause_breakdown": ["undecryptable-event retry"]
+      "clause_breakdown": [
+        "pending not-yet-decrypted UI",
+        "automatic UTD retry (isRetry / Decrypted re-render)",
+        "permanent unable-to-decrypt presentation",
+        "cutover P8.7+P5.10 preserves via Rust crypto+timeline + product UX"
+      ]
     },
     {
       "id": "MA-FR-7.9-009",
@@ -100771,6 +101025,17 @@
         "FR-7.9-007: current_status partial → implemented (product retains UI). current_behavior_and_limits documents LocalBackup Export Messages Data and Import Messages Data under Settings Devices; notes no longer partial/conditional. Wrong owners BackupRestore.tsx, useKeyBackup.ts, backupRestore.ts demoted/excluded; LocalBackup.tsx, Devices.tsx, cryptE2ERoomKeys.js elevated as product surfaces not in P0.1 220 import ledger.",
         "FR-7.9-007: retargeted behavior_relevant methods to getCrypto, exportRoomKeysAsJson, importRoomKeysAsJson (source-inspected). Listeners empty (no KeyBackup*). Excluded restoreKeyBackup/KeyBackup* (FR-7.9-006/009), recovery setup (FR-7.9-006), cross-signing (FR-7.9-002), SAS (FR-7.9-005).",
         "FR-7.9-007: planned AT/MA require export file download + import decryptability, cutover P8.6 via Rust Encryption::export_room_keys/import_room_keys (SC-061) + product UX + IPC; SC-061 alone, SC-066, GAP-RECOVERY-BACKUP, compile-only, raw HTTP, dual-backend, server-backup-only, helper-only FAIL. rust_target room-key-file-export-import-compile-shape-only-blocked-for-product. Top-level AT-FR-7.9-007-001 and MA-FR-7.9-007 updated byte-aligned. file_coverage_ledger/deep_import_ledger: removed FR-7.9-007 from BackupRestore/useKeyBackup/backupRestore. Summary status_distribution recomputed (implemented 97, partial 21). Accepted FR-7.8-001 through FR-7.8-009 and FR-7.9-001..006 preserved. JSON and Markdown synchronized."
+      ]
+    },
+    {
+      "id": "p0.2-correct-34-fr-7.9-008-undecryptable-event-retry",
+      "scope": "Rejected-review limited correction: FR-7.9-008 only — replace wrong matrix-crypto.ts / useRoomEventReaders owners and shallow AT with concrete automatic UTD retry evidence: room.ts decryptAllTimelineEvent + attemptDecryption({ isRetry: true }); RoomTimeline pagination hasEncryptionStateEvent gate; EncryptedContent MatrixEventEvent.Decrypted re-render; useRoomEvent per-event attemptDecryption; MessageNotDecryptedContent / MessageBadEncryptedContent / MBadEncrypted; no dedicated Retry button; exclude FR-7.3-009 presentation-only, FR-7.9-006/007 key acquisition, FR-7.9-002/004 verifiedDevice; rewrite AT/MA for P8.7+P5.10; honest rust_target SC-061 utd-retry-compile-shape-only-blocked-for-product",
+      "requirements_rewritten": ["FR-7.9-008"],
+      "not_claimed_complete": true,
+      "changes": [
+        "FR-7.9-008: current_status remains implemented. current_behavior_and_limits documents automatic UTD retry (pagination isRetry bulk decrypt, Decrypted re-render, per-event attempt, pending/permanent UTD strings); notes no longer null. Wrong owners matrix-crypto.ts (verifiedDevice) and useRoomEventReaders (receipts) demoted/excluded; room.ts, RoomTimeline, EncryptedContent, useRoomEvent, FallbackContent/MsgTypeRenderers/RenderMessageContent elevated.",
+        "FR-7.9-008: retargeted behavior_relevant methods/listeners to getCrypto, attemptDecryption (isRetry), decryptAllTimelineEvent, hasEncryptionStateEvent; MatrixEventEvent.Decrypted on/removeListener. Excluded verifiedDevice (FR-7.9-002/004), receipts (FR-7.3-005), LocalBackup (FR-7.9-007), server backup (FR-7.9-006), SAS (FR-7.9-005).",
+        "FR-7.9-008: planned AT/MA require pending UTD UI, automatic retry success, permanent UTD, pagination bulk decrypt, cutover P8.7+P5.10 via Rust crypto+timeline + product UX + IPC; SC-061 alone, compile-only, raw HTTP, dual-backend, room-key-file-only, server-backup-only, presentation-only, helper-only FAIL. rust_target utd-retry-compile-shape-only-blocked-for-product. Top-level AT-FR-7.9-008-001 and MA-FR-7.9-008 updated byte-aligned. file_coverage_ledger/deep_import_ledger: removed FR-7.9-008 from matrix-crypto and useRoomEventReaders; added to room.ts and RoomTimeline; EncryptedContent/useRoomEvent retain. Status distribution unchanged. Accepted FR-7.8-001 through FR-7.8-009 and FR-7.9-001..007 preserved. JSON and Markdown synchronized."
       ]
     }
   ]
