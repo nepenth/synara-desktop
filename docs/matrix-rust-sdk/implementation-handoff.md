@@ -37,8 +37,7 @@ without explicit user approval.
 - **Progress loop:** host scheduled task every **4 minutes**
   (ID `019f95928db7`) continues bounded FR audits; also daily durable
   orchestrator `9022c2f8-9b21-411a-acf9-a36c10515f72`
-- **Last accepted:** FR-7.10-003 sender/room/date/content filters **implemented**
-  (`p0.2-correct-42`; two-layer server+client evidence)
+- **Last accepted:** FR-7.10-003 search filters (`p0.2-correct-42`)
 - **Next writer task:** FR-7.10-004 (event-context navigation from results), then
   remaining 7.10–7.11 (~12)
 
