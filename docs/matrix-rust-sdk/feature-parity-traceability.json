@@ -72889,7 +72889,7 @@
         435,
         435
       ],
-      "current_status": "implemented",
+      "current_status": "partial",
       "current_production_files": [
         {
           "path": "synara/src/client/matrixLocalStores.ts",
@@ -73315,7 +73315,7 @@
         "listener_events": []
       },
       "current_behavior_and_limits": {
-        "summary": "Product implements sequential multi-account store/key isolation under a single active session: fixed global IndexedDB Matrix store names (MATRIX_LOCAL_STORE_NAMES) are clear-and-replaced on identity change (fresh-login clearMatrixStoresForIdentityChange when last bootstrapped userId/deviceId differs) or logout (clearPersistedSessions); single-slot FALLBACK_SESSION_KEYS / clearSessionLocalStorage isolate session tokens; ClientRoot mounts one getActiveSession\u2192initClient. Concurrent multi-account dual clients / parallel per-userId stores are a non-goal. status=implemented.",
+        "summary": "Product implements sequential multi-account store/key isolation under a single active session: fixed global IndexedDB Matrix store names (MATRIX_LOCAL_STORE_NAMES) are clear-and-replaced on identity change (fresh-login clearMatrixStoresForIdentityChange when last bootstrapped userId/deviceId differs) or logout (clearPersistedSessions); single-slot FALLBACK_SESSION_KEYS / clearSessionLocalStorage isolate session tokens; ClientRoot mounts one getActiveSession\u2192initClient. Concurrent multi-account dual clients / parallel per-userId stores are a non-goal. status=partial.",
         "notes": "Evidence (conservative): (1) SINGLE-SESSION MODEL sessions.ts L1\u201312 Session shape (userId/deviceId/accessToken/baseUrl/sessionGeneration/fallbackSdkStores); L29\u201335 FALLBACK_SESSION_KEYS single-slot keys; L68\u201374 comment Single-session fallback storage for Synara; L75\u2013114 set/get/remove overwrite same keys; L168\u2013175 clearSessionLocalStorage removes SESSION_LOCAL_STORAGE_EXACT_KEYS + NAV_TO_ACTIVE_PATH_PREFIX only (settings preserved). (2) FIXED GLOBAL STORES matrixLocalStores.ts L1\u201310 MATRIX_LOCAL_STORE_NAMES = web-sync-store, crypto-store, matrix-js-sdk::matrix-sdk-crypto, matrix-js-sdk::matrix-sdk-crypto-meta \u2014 NOT per-userId parallel DBs; L38\u201340 clearMatrixLocalStores deletes all; L15\u201321 isCryptoAccountMismatchError detects rust crypto account mismatch fallback. (3) IDENTITY-CHANGE CLEAR sessionPersistence.ts L23\u201327 comment: fixed IndexedDB names \u21d2 only one account's local data at a time; multi-account non-goal; L42\u201343 LAST_BOOTSTRAPPED_MATRIX_IDENTITY_KEY; L220\u2013229 shouldClearMatrixStoresBeforeInit when lastBootstrapped differs; L236\u2013246 clearMatrixStoresForIdentityChange \u2192 clearStores(); L492\u2013523 clearPersistedSessions also clearMatrixLocalStores on logout wipe (FR-7.1-010 adjacency). (4) INIT WIRE-UP initMatrix.ts L168\u2013211 createMatrixClient: IndexedDBStore(dbName=MATRIX_SYNC_STORE_NAME) + IndexedDBCryptoStore(MATRIX_LEGACY_CRYPTO_STORE_NAME) + createClient L207; L302\u2013346 initClient: if pending fresh login, clearMatrixStoresForIdentityChange then startMatrixClient; setLastBootstrappedMatrixIdentity on success; L337\u2013342 isCryptoAccountMismatchError \u2192 CryptoStoreContinuityError identity-key-mismatch (fallback). (5) SINGLE MOUNT ClientRoot.tsx L249\u2013262 getActiveSession(); initClient(session) \u2014 one active client; sessionBootstrap activeSession singleton. (6) TESTS matrixLocalStores.test.ts alice\u2192bob proactive clear + fixed names + mismatch detection; sessionPersistence.test.ts shouldClear/clearMatrixStoresForIdentityChange; sessions.test.ts clearSessionLocalStorage key scope; initMatrix.test.ts clear on fresh login when identity differs / no clear on restored mismatch. (7) NON-EVIDENCE / OUT OF SCOPE: getCrypto/assertCryptoStoreContinuity primary = FR-7.9-012 continuity; initRustCrypto order = FR-7.9-001; full logout UX wipe = FR-7.1-010 primary; account switching UX without state crossover = FR-7.1-009 (this FR is stores/keys isolation only); concurrent dual multi-account clients not product. (8) Cutover P2.2 (store paths/encryption keys) + P3.6 (session restore/account switching) + P8.8 (crypto-store continuity adjacency): preserve sequential isolation of stores/keys via SC-061 Encryption + SC-083 sqlite_store per-account store path under cutover + product single-session policy + IPC \u2014 not SC alone, not compile-only blocked, not raw /_matrix HTTP, not dual-backend, not concurrent dual-client claim, not continuity-only, not logout-wipe-only, not helper-only.",
         "limits": "P0.1 method/listener candidates are AST name hits, not type-checked receiver proofs. Product multi-account is sequential single-active-session isolation (clear fixed-name IndexedDB + single-slot keys), not concurrent dual Matrix clients or per-userId parallel store maps. initClient proactive clear runs only on pending fresh-login identity path (isPendingFreshLoginIdentity); restored sessions must not clear stores (initMatrix.test.ts). Logout clearPersistedSessions is the other full store wipe path. createClient is source-inspected as the retained JS SDK method; isolation primitives are product helpers. sessions.ts / sessionPersistence.ts / matrixLocalStores.ts / ClientRoot.tsx / sessionBootstrap.ts are not all in original P0.1 AST sample for this FR's prior linkage (cryptoStoreContinuity+initMatrix). Rust SC-061+SC-083 remain compile-shape-only blocked (E3\u2013E5 missing); support_conclusion multi-account-store-isolation-compile-shape-only-blocked-for-product \u2014 compile-only \u2260 pass. Do not claim concurrent multi-account dual clients or Rust runtime per-account store isolation from E1/E2 alone."
       },
@@ -73550,7 +73550,8 @@
         "platform_packaging_p0_5",
         "semantic_or_integration_test",
         "sqlite_store_open_migrate_runtime",
-        "ui_acceptance"
+        "ui_acceptance",
+        "GATE-7.9-011-CONCURRENT-MULTI-ACCOUNT-STORES"
       ],
       "security_privacy_lifecycle_concerns": [
         "token-and-store-isolation",
@@ -73558,7 +73559,13 @@
         "single-active-session-sequential-isolation-not-concurrent-dual-clients"
       ],
       "traceability_status": "complete-conservative",
-      "blockers": []
+      "blockers": [
+        {
+          "severity": "medium",
+          "kind": "product-policy-gap",
+          "summary": "Plan text requires fully isolated multi-account stores/keys; product is sequential single-active fixed-name stores with multi-account concurrent support as non-goal."
+        }
+      ]
     },
     {
       "id": "FR-7.9-012",
@@ -111421,8 +111428,8 @@
     "planned_required_automated_tests": 119,
     "manual_acceptance_cases": 119,
     "status_distribution": {
-      "implemented": 97,
-      "partial": 21,
+      "implemented": 96,
+      "partial": 22,
       "not-currently-exposed": 1
     },
     "shared_matrix_infrastructure_files": 20,
