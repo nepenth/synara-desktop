@@ -1,0 +1,414 @@
+{
+  "task_id": "P0.7",
+  "title": "Migration UX decision record",
+  "date": "2026-07-24",
+  "work_branch": "matrix-rust/p0.7-migration-ux",
+  "base_integration_commit": "9e0cfcae8c377161a73ce8e01f889f485e233e5e",
+  "base_tip_message": "docs(matrix): merge P0.6 performance baseline",
+  "canonical_md": "docs/matrix-rust-sdk/migration-ux-decision.md",
+  "status": "accepted_pending_integration_merge",
+  "merged": false,
+  "verdict": "migration_ux_decided",
+  "plan_refs": [
+    "docs/matrix-rust-sdk-full-replacement-plan.md#3",
+    "docs/matrix-rust-sdk-full-replacement-plan.md#8",
+    "docs/matrix-rust-sdk-full-replacement-plan.md#phase-3",
+    "docs/matrix-rust-sdk-full-replacement-plan.md#phase-11",
+    "docs/matrix-rust-sdk-full-replacement-plan.md#phase-14"
+  ],
+  "decisions": [
+    {
+      "id": "D-LEGACY-DETECT",
+      "status": "decided",
+      "summary": "Detect legacy session via inert signals (IndexedDB store names, credential envelope, fallback session keys, cutover marker) without starting matrix-js-sdk or opening crypto APIs.",
+      "owning_tasks": [
+        "P3.7"
+      ],
+      "constraints": [
+        "never_construct_matrix_client_for_detect",
+        "never_init_js_rust_crypto_for_detect",
+        "never_start_js_sync_for_detect"
+      ]
+    },
+    {
+      "id": "D-REAUTH",
+      "status": "decided",
+      "summary": "Reauthentication is required for users with a legacy Matrix session at cutover; silent continuation on the old access token is not product policy.",
+      "owning_tasks": [
+        "P3.2",
+        "P3.3",
+        "P3.7"
+      ],
+      "constraints": [
+        "password_and_sso_supported_paths",
+        "no_silent_token_continue"
+      ]
+    },
+    {
+      "id": "D-NEW-DEVICE",
+      "status": "decided",
+      "summary": "Create a new Matrix device via normal login/SSO with platform display name Synara macOS or Synara Linux; do not claim the legacy device ID.",
+      "owning_tasks": [
+        "P3.2",
+        "P3.3"
+      ],
+      "constraints": [
+        "device_name_synara_macos",
+        "device_name_synara_linux",
+        "no_device_id_reuse_across_sdk_stores"
+      ]
+    },
+    {
+      "id": "D-TOKEN-CONTINUITY",
+      "status": "decided",
+      "summary": "Do not copy access token, refresh token, or device ID from legacy JS session material into a fresh Rust crypto/state store by default (plan \u00a78.1).",
+      "owning_tasks": [
+        "P3.5",
+        "P3.7"
+      ],
+      "constraints": [
+        "default_no_token_copy",
+        "default_no_device_id_copy",
+        "exception_requires_written_threat_and_continuity_review"
+      ]
+    },
+    {
+      "id": "D-KEY-RECOVERY",
+      "status": "decided",
+      "summary": "After reauth and Rust store open: guided recovery key / secret storage / key backup restore; deferral allowed only with explicit acknowledgement that encrypted history may be incomplete.",
+      "owning_tasks": [
+        "P3.8",
+        "P8.5",
+        "P8.7"
+      ],
+      "constraints": [
+        "never_log_recovery_secrets",
+        "no_false_e2ee_history_ready_without_recovery_or_deferral_ack",
+        "room_key_file_import_not_default_cutover_path"
+      ]
+    },
+    {
+      "id": "D-TRANSITION-COMPLETE",
+      "status": "decided",
+      "summary": "Mark complete only when Rust stores open, session secrets are native-persisted, sync readiness is confirmed, cutover marker is written, and no JS Matrix client was started.",
+      "owning_tasks": [
+        "P3.7",
+        "P2.x",
+        "P4.1",
+        "P3.5"
+      ],
+      "constraints": [
+        "store_open_required",
+        "native_credential_persist_required",
+        "sync_ready_required",
+        "no_js_client_during_transition"
+      ]
+    },
+    {
+      "id": "D-LEGACY-RETAIN",
+      "status": "decided-with-open-parameter",
+      "summary": "Retain legacy Matrix IndexedDB inertly for a bounded window; never reopen it with matrix-js-sdk in the new product.",
+      "owning_tasks": [
+        "P3.7",
+        "P14.2"
+      ],
+      "constraints": [
+        "inert_only",
+        "never_reopen_js_client",
+        "bounded_window"
+      ],
+      "open_parameter": "legacy_retention"
+    },
+    {
+      "id": "D-CLEANUP",
+      "status": "decided",
+      "summary": "Explicit, idempotent, scoped cleanup of legacy Matrix IndexedDB names and legacy token keys only after successful transition; strong confirm for early cleanup; never drafts/settings/downloads.",
+      "owning_tasks": [
+        "P3.7",
+        "P3.8",
+        "P14.2"
+      ],
+      "constraints": [
+        "scoped_to_legacy_matrix_stores_and_token_keys",
+        "idempotent",
+        "confirmation_required_for_early_cleanup",
+        "preserve_non_matrix_local_data"
+      ]
+    },
+    {
+      "id": "D-ROLLBACK",
+      "status": "decided",
+      "summary": "Rollback means prior product build plus preserved inert legacy data within the retention window; not dual-runtime or in-app SDK selector.",
+      "owning_tasks": [
+        "P13.6",
+        "P14.x",
+        "P3.7"
+      ],
+      "constraints": [
+        "no_in_app_js_toggle",
+        "no_dual_runtime",
+        "cleanup_ends_legacy_rollback_promise"
+      ]
+    },
+    {
+      "id": "D-PRESERVE-LOCAL",
+      "status": "decided",
+      "summary": "Drafts, platform settings, downloads, and unrelated local configuration survive cutover, failure, and Matrix-scoped cleanup.",
+      "owning_tasks": [
+        "P3.7",
+        "P3.8"
+      ],
+      "constraints": [
+        "drafts_survive",
+        "settings_survive",
+        "downloads_survive"
+      ]
+    },
+    {
+      "id": "D-ACCOUNT-SWITCH",
+      "status": "decided",
+      "summary": "Separate store directories, keys, and session generations per account; sequential single-active isolation only\u2014do not promise concurrent multi-account (FR-7.9-011 remains partial).",
+      "owning_tasks": [
+        "P3.6",
+        "P3.7"
+      ],
+      "constraints": [
+        "sequential_single_active_only",
+        "no_concurrent_multi_account_promise",
+        "identity_change_explicit_store_replace",
+        "fr_7_9_011_not_repromoted"
+      ]
+    },
+    {
+      "id": "D-LOGOUT-WIPE",
+      "status": "decided",
+      "summary": "Logout and local wipe are distinct actions with distinct confirmations; crash recovery must not auto-wipe.",
+      "owning_tasks": [
+        "P3.8",
+        "P2.x"
+      ],
+      "constraints": [
+        "logout_ends_server_session_and_clears_credentials",
+        "wipe_destroys_local_matrix_stores",
+        "no_auto_wipe_on_crash"
+      ]
+    },
+    {
+      "id": "D-USER-COPY",
+      "status": "decided",
+      "summary": "Honest one-time sign-in and recovery messaging; no secrets in copy; no dual-backend language; set expectations for encrypted history dependency on recovery.",
+      "owning_tasks": [
+        "P3.7",
+        "P3.8"
+      ],
+      "constraints": [
+        "no_secrets_in_copy",
+        "no_silent_seamless_migration_claim",
+        "no_dual_backend_ui_language"
+      ]
+    },
+    {
+      "id": "D-FAILURE",
+      "status": "decided",
+      "summary": "Failed or crashed transition preserves legacy data, isolates incomplete Rust store generations, and always offers retry.",
+      "owning_tasks": [
+        "P3.7",
+        "P13.2"
+      ],
+      "constraints": [
+        "legacy_intact_on_failure",
+        "retry_always_offered",
+        "no_compensating_legacy_delete"
+      ]
+    },
+    {
+      "id": "D-NO-DUAL-BACKEND",
+      "status": "decided",
+      "summary": "Hard constraint: no dual production backend, SDK selector, simultaneous JS+Rust clients, or permanent matrix-js-sdk runtime path after cutover.",
+      "owning_tasks": [
+        "P11.4",
+        "P11.5",
+        "P11.6",
+        "P11.7",
+        "P11.8",
+        "P11.9",
+        "P11.10",
+        "P14.4"
+      ],
+      "constraints": [
+        "no_sdk_selector",
+        "no_simultaneous_js_and_rust",
+        "no_permanent_js_runtime_path",
+        "atomic_cutover"
+      ]
+    }
+  ],
+  "happy_path_steps": [
+    "Launch with Rust-only Matrix bootstrap (no matrix-js-sdk).",
+    "Detect legacy session using inert signals only.",
+    "Show one-time migration explanation (reauth + recovery expectations; drafts/settings kept).",
+    "Require password or SSO reauthentication.",
+    "Create new named device (Synara macOS / Synara Linux); no token/device import.",
+    "Open native Rust SQLite stores; bind store keys in OS credential store.",
+    "Persist new session envelope to native credential store after success path.",
+    "Guide key recovery / backup restore; allow explicit deferral with warning.",
+    "Start sync and wait for product readiness.",
+    "Write non-secret cutover completion marker; leave legacy IndexedDB inert.",
+    "Enter normal product shell with single Matrix owner.",
+    "Later offer scoped cleanup after retention window or early confirm."
+  ],
+  "open_parameters": [
+    {
+      "id": "legacy_retention",
+      "status": "decided-with-open-parameter",
+      "recommended_default": "later_of_30_days_after_transition_complete_or_2_app_releases",
+      "owner": [
+        "product",
+        "P3.7",
+        "P14.2"
+      ]
+    },
+    {
+      "id": "early_cleanup_allowed",
+      "status": "decided",
+      "recommended_default": true,
+      "notes": "Requires strong confirmation that rollback via legacy data will no longer be possible."
+    },
+    {
+      "id": "recovery_required_to_complete",
+      "status": "decided",
+      "recommended_default": false,
+      "notes": "Complete allowed with explicit deferral acknowledgement; must not claim E2EE history ready without recovery."
+    },
+    {
+      "id": "cutover_marker_schema",
+      "status": "deferred-to-phase",
+      "recommended_default": {
+        "userId": "string",
+        "completedAt": "iso8601",
+        "appVersion": "string",
+        "generation": "string"
+      },
+      "owner": [
+        "P3.7"
+      ]
+    },
+    {
+      "id": "incomplete_rust_store_policy",
+      "status": "deferred-to-phase",
+      "recommended_default": "discard_incomplete_generation_and_retry",
+      "owner": [
+        "P2.x",
+        "P3.7"
+      ]
+    },
+    {
+      "id": "cleanup_prompt_mode",
+      "status": "deferred-to-phase",
+      "recommended_default": "soft_prompt_once_after_retention_plus_settings_entry",
+      "owner": [
+        "P3.7",
+        "P14.2"
+      ]
+    }
+  ],
+  "non_goals": [
+    "dual_backend_or_sdk_selector",
+    "silent_token_device_import_into_fresh_crypto_store",
+    "automatic_invisible_migration_skipping_reauth",
+    "concurrent_multi_account_clients",
+    "reopen_js_client_after_cutover_even_for_recovery",
+    "production_session_or_migration_code_in_p0_7",
+    "change_fr_7_8_to_7_11_statuses_or_repromote_fr_7_9_011",
+    "windows_support_without_separate_authorization",
+    "binary_indexeddb_to_sqlite_store_conversion"
+  ],
+  "user_copy_principles": [
+    "No secrets in copy, logs, or templates (tokens, recovery keys, passwords, device IDs, event plaintext).",
+    "Set expectations: one-time sign-in required; encrypted history depends on recovery key/backup.",
+    "Do not claim silent seamless migration.",
+    "State that drafts and settings are preserved.",
+    "State that older Matrix data remains unused until cleanup.",
+    "Honest failure: previous data not removed; retry available.",
+    "No dual-backend or 'use old engine' product language.",
+    "Prefer user-facing terms over internal SDK names in primary UI."
+  ],
+  "draft_user_copy": {
+    "migration.title": "Update your signed-in session",
+    "migration.body": "Synara now uses a more secure session engine. You\u2019ll sign in once more. Your drafts and settings stay on this computer. Encrypted message history is restored with your recovery key.",
+    "migration.cta_continue": "Continue to sign in",
+    "migration.cta_learn": "What happens to my data?",
+    "migration.learn_body": "We don\u2019t reuse your previous secure store automatically. After you sign in, we\u2019ll help restore encryption keys if you have a recovery key. Older Matrix data on this device stays unused until you clean it up.",
+    "recovery.title": "Restore encryption",
+    "recovery.body": "Enter your recovery key to unlock encrypted message history on this device. We never send your recovery key to Synara servers as app telemetry.",
+    "recovery.defer": "Continue without restoring now",
+    "recovery.defer_warn": "Some older encrypted messages may not be readable until you restore.",
+    "transition.success": "You\u2019re set. Synara is ready on this device.",
+    "transition.failure": "We couldn\u2019t finish the update. Your previous data on this device was not removed. You can try again.",
+    "cleanup.title": "Remove older Matrix data?",
+    "cleanup.body": "This deletes unused data from the previous session engine on this device. Drafts and settings are kept. You can\u2019t use that older data to roll back afterward.",
+    "cleanup.confirm": "Delete older Matrix data",
+    "logout.title": "Sign out?",
+    "wipe.title": "Delete local Matrix data?",
+    "wipe.body": "This removes Synara\u2019s Matrix data for this account on this device. It is different from signing out on the server."
+  },
+  "failure_modes": [
+    {
+      "id": "login_cancelled",
+      "user_outcome": "Remain on migration/login; not complete",
+      "data_outcome": "legacy_intact"
+    },
+    {
+      "id": "store_open_failed",
+      "user_outcome": "Error and Retry",
+      "data_outcome": "legacy_intact; incomplete_rust_store_isolated"
+    },
+    {
+      "id": "credential_store_unavailable",
+      "user_outcome": "Unsupported/migration state; do not complete with permanent WebView tokens",
+      "data_outcome": "legacy_intact"
+    },
+    {
+      "id": "wrong_recovery_key",
+      "user_outcome": "Error; optional defer with warning",
+      "data_outcome": "legacy_intact"
+    },
+    {
+      "id": "sync_not_ready",
+      "user_outcome": "Do not mark complete; reconnect/retry guidance",
+      "data_outcome": "legacy_intact"
+    },
+    {
+      "id": "crash_mid_transition",
+      "user_outcome": "Relaunch resumes incomplete migration; no auto-wipe",
+      "data_outcome": "legacy_intact"
+    }
+  ],
+  "legacy_store_names_current_product": [
+    "web-sync-store",
+    "crypto-store",
+    "matrix-js-sdk::matrix-sdk-crypto",
+    "matrix-js-sdk::matrix-sdk-crypto-meta"
+  ],
+  "device_display_names": {
+    "macos": "Synara macOS",
+    "linux": "Synara Linux",
+    "ios": "Synara iOS"
+  },
+  "related_fr": [
+    "FR-7.9-001",
+    "FR-7.9-006",
+    "FR-7.9-011",
+    "FR-7.9-012",
+    "FR-7.9-013"
+  ],
+  "related_fr_notes": {
+    "FR-7.9-001": "implemented \u2014 store-before-sync boot order meaning retained under native SQLite cutover",
+    "FR-7.9-006": "implemented \u2014 recovery product meaning rehomed to P8.5/P3.8",
+    "FR-7.9-011": "partial \u2014 sequential single-active only; do not re-promote",
+    "FR-7.9-012": "implemented \u2014 restore must not wipe healthy stores; identity change explicit",
+    "FR-7.9-013": "partial \u2014 non-destructive anomaly guidance; no invented silent auto-wipe"
+  },
+  "phase0_note": "Migration UX policy is decided for Phase 0 acceptance before session code is written. Implementation starts at Phase 3 (P3.7 and related auth tasks).",
+  "blocked_on_user": []
+}
