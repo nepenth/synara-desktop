@@ -49,9 +49,8 @@ Phase 0 evidence accepted before this handoff:
 - P0.1 SDK usage inventory is merged to the integration branch.
 - P0.3 exact Matrix Rust SDK 0.18.0 capability dossier is merged to the
   integration branch.
-- P0.2 branch carries accepted 7.8–7.9, FR-7.10-001..007, and FR-7.11-001..002
-  corrections (**FR-7.10-005** and **FR-7.10-007** remain partial by gate);
-  ~6 shallow rows remain in 7.11.
+- P0.2 branch carries accepted 7.8–7.9, FR-7.10-001..007, and FR-7.11-001..003 corrections (**FR-7.10-005**, **FR-7.10-007**, and
+  **FR-7.11-003** remain partial by gate); ~5 shallow rows remain in 7.11.
 
 P0.2 is not complete. Resume at FR-7.11-004, then audit remaining 7.11
 before declaring P0.2 accepted.
@@ -214,6 +213,12 @@ Accepted notification findings that must be preserved:
   CallEmbed.getWidget → `/public/element-call/index.html` + iframe +
   ClientWidgetApi postMessage + CallWidgetDriver capabilities. SC-082
   experimental-widgets (not membership display 001). Widget plumbing ≠ call parity.
+
+
+- FR-7.11-003: status **`partial`** under
+  `GATE-7.11-003-NATIVE-OR-PRODUCT-MEMBERSHIP-WRITE`. Join via useCallStart/
+  JoinCall; leave via hangup; decline capability-only (no product Decline UI);
+  member status after actions (display ownership 001). Widget-mediated write.
 
 
 
