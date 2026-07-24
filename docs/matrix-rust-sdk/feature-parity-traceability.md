@@ -4,7 +4,7 @@
 
 ## Correction pass status
 
-Limited rejected-review correction (`p0.2-correct-22-fr-7.8-004-native-notification-generation`) for **FR-7.8-004** only: retarget desktop native notification generation from wrong push-rule preference linkage to concrete SystemNotification enablement + ClientNonUIFeatures InviteNotifications/MessageNotifications generation (plus AgentApprovalNotifications/LaterReminderNotifications emitters) + normalizeSystemNotificationRequest / showPlatformNotification platform bridge; remove AllMessages/KeywordMessages/SpecialMessages/NotificationModeSwitcher as primary owners/files; rewrite planned AT/MA for permission/message/invite/suppression paths and P9.2 Rust-owned candidate stream + desktop bridge cutover (no raw `/_matrix/` HTTP; SC IDs alone fail; push-rule settings UI cannot substitute; helper/fixture-only fails); SC-057 retained as rules/settings support only, not native OS notification generation. Status remains `implemented`. JSON and Markdown synchronized. Accepted corrections for **FR-7.8-001 through FR-7.8-003** preserved. Prior corrections and accepted **7.1–7.3** preserved. **P0.2 is not complete.**
+Limited rejected-review correction (`p0.2-correct-23-fr-7.8-005-unread-badge-summaries`) for **FR-7.8-005** only: retarget correct unread/badge summaries from wrong push-rule preference linkage to roomToUnreadAtom + badgeSummary aggregation + RoomNavItem UnreadBadge + PlatformBadgeAndTrayUpdater/setPlatformBadgeCount; remove AllMessages/KeywordMessages/SpecialMessages/NotificationModeSwitcher/SystemNotification/inbox Notifications/utils/notifications as primary owners/files; rewrite planned AT/MA for room map (timeline/receipt/membership/marked-unread), nav badge, platform summarizeNotifications (later/invites), independent highlight/total/later/invites/clamps, and P9.3/P4.3 Rust-owned unread/highlight + product badge aggregation / IPC badge DTO cutover (no raw `/_matrix/` HTTP; SC-057 alone fails; push-rule settings UI / native generation / helper-only cannot substitute). Status remains `implemented`. JSON and Markdown synchronized. Accepted corrections for **FR-7.8-001 through FR-7.8-004** preserved. Prior corrections and accepted **7.1–7.3** preserved. **P0.2 is not complete.**
 
 ## Provenance
 
@@ -5222,62 +5222,86 @@ Limited rejected-review correction (`p0.2-correct-22-fr-7.8-004-native-notificat
 - **Text**: correct unread/badge summaries;
 - **Lines**: 417–417
 - **Status**: `implemented`
-- **Behavior**: Current desktop implements this via 8 production matrix-js-sdk-related file(s); status=implemented.
-- **UI**: `synara/src/app/features/room-nav/RoomNavItem.tsx`
-- **Owners**: `synara/src/app/state/room/roomToUnread.ts`, `synara/src/app/utils/notifications.ts`
+- **Behavior**: Current desktop implements correct unread/badge summaries via roomToUnreadAtom + badgeSummary aggregation + RoomNavItem UnreadBadge + PlatformBadgeAndTrayUpdater platform badge/tray; status=implemented.
+- **Notes**: Evidence (conservative): (1) Room unread state owner `synara/src/app/state/room/roomToUnread.ts`: `roomToUnreadAtom` + `useBindRoomToUnreadAtom`; PUT/DELETE of `{highlight,total,from}` via `getUnreadInfo`/`getUnreadInfos`; `putUnreadInfo`/`deleteUnreadInfo` parent/space roll-up; listeners `RoomEvent.Timeline` on/remove L231/233 (recompute, skip spaces/mute/self), `RoomEvent.Receipt` L257/259 with `shouldKeepRoomUnreadAfterReceipt` (L124–129), `RoomEvent.MyMembership` L279/281 (leave DELETE), `RoomEvent.AccountData` for `AccountDataEvent.MarkedUnread` L304/306; RESET on bind, sync prepared/syncing, notification prefs, SpaceChild. (2) Badge aggregation pure functions `synara/src/app/notifications/badgeSummary.ts`: `summarizeNotifications` — when `unread.highlight !== undefined` add clamp(highlight) only (skip total for that entry), else add clamp(total); `appBadgeCount = laterActiveCount + highlightCount + unreadCount`; `inboxBadgeCount = laterActiveCount + inviteCount + agentApprovalCount`; `summarizeBadgeCount`/`getBadgeCount` wrappers; existing unit tests `badgeSummary.test.ts` only (not E2E UI/platform). Production `roomToUnread` values always include `highlight` so platform path typically sums highlights+later into `appBadgeCount`; nav still shows `count=total`. (3) Platform badge + tray application `synara/src/app/pages/client/ClientNonUIFeatures.tsx` `PlatformBadgeAndTrayUpdater` L262–291: `getPlatformNotificationSummary({ unreadCounts: roomToUnread.values(), laterActiveCount, inviteCount })` then `setPlatformBadgeCount(summary.appBadgeCount)` and `setPlatformTrayState` (unreadCount/highlightCount/laterCount/notificationInboxCount/doNotDisturb); `FaviconUpdater` L223–245 uses roomToUnread total/highlight for favicon only. This is badge/summary application, not native OS notification generation (FR-7.8-004). Bridge: `synara/src/app/platform/badge.ts`. (4) In-app UnreadBadge UI `synara/src/app/features/room-nav/RoomNavItem.tsx`: `useRoomUnread(room.roomId, roomToUnreadAtom)` L265; `UnreadBadge highlight={unread.highlight > 0} count={unread.total}` L374–376; mark-as-read/unread is secondary. (5) Secondary helpers: `getUnreadInfo`/`getUnreadInfos` in `synara/src/app/utils/room.ts` L250–273; `useRoomUnread` in `synara/src/app/state/hooks/unread.ts`; UnreadBadge presentational component. (6) Explicit non-evidence: push-rule preference surfaces AllMessages/KeywordMessages/SpecialMessages/NotificationModeSwitcher; SystemNotification enablement; native generation InviteNotifications/MessageNotifications; sendReadReceipt-as-badge-owner; utils/notifications.ts inbox/list/receipt helpers; SC-057 alone. Existing badgeSummary unit tests and roomToUnread receipt-helper unit tests are not E2E badge/tray AT. Limits: P0.1 method/listener candidates are AST name hits, not type-checked receiver proofs. Do not count generic SC-057 alone, compile-only blocked states, raw HTTP, push-rule settings UI, native notification generation, sendReadReceipt, or helper/fixture-only as closing unread/badge summaries. Cutover P9.3/P4.3 must preserve the same observables via Rust-owned unread/highlight + product badge aggregation / IPC badge DTO; SC IDs alone, raw `/_matrix` HTTP, push-rule settings UI, native gen path, and helper-only fail.
+- **UI**: `synara/src/app/features/room-nav/RoomNavItem.tsx` (UnreadBadge), `synara/src/app/pages/client/ClientNonUIFeatures.tsx` (PlatformBadgeAndTrayUpdater / FaviconUpdater; badge/tray only)
+- **Owners**: `synara/src/app/state/room/roomToUnread.ts`, `synara/src/app/notifications/badgeSummary.ts`, `synara/src/app/platform/badge.ts`, `synara/src/app/pages/client/ClientNonUIFeatures.tsx`, `synara/src/app/features/room-nav/RoomNavItem.tsx`
 - **Files**:
-  - `synara/src/app/features/settings/notifications/AllMessages.tsx` symbols=['setPushRuleActions'] retained_m=1 retained_l=0
-    - method `setPushRuleActions`:L67 — None
-  - `synara/src/app/features/settings/notifications/KeywordMessages.tsx` symbols=['addPushRule', 'deletePushRule', 'setPushRuleActions'] retained_m=3 retained_l=0
-    - method `addPushRule`:L30 — None
-    - method `deletePushRule`:L114 — None
-    - method `setPushRuleActions`:L135 — None
-  - `synara/src/app/features/settings/notifications/NotificationModeSwitcher.tsx` symbols=[] retained_m=0 retained_l=0
-  - `synara/src/app/features/settings/notifications/SpecialMessages.tsx` symbols=['setPushRuleActions'] retained_m=1 retained_l=0
-    - method `setPushRuleActions`:L106 — None
-  - `synara/src/app/features/settings/notifications/SystemNotification.tsx` symbols=[] retained_m=0 retained_l=0
-  - `synara/src/app/pages/client/inbox/Notifications.tsx` symbols=[] retained_m=0 retained_l=0
-  - `synara/src/app/state/room/roomToUnread.ts` symbols=[] retained_m=0 retained_l=2
-    - listener `on:RoomEvent.Receipt`:L257 — None
-    - listener `removeListener:RoomEvent.Receipt`:L259 — None
-  - `synara/src/app/utils/notifications.ts` symbols=['sendReadReceipt'] retained_m=1 retained_l=0
-    - method `sendReadReceipt`:L402 — None
+  - `synara/src/app/state/room/roomToUnread.ts` symbols=['isSpaceRoom', 'getUserId', 'on:RoomEvent.Timeline', 'on:RoomEvent.Receipt', 'on:RoomEvent.MyMembership', 'on:RoomEvent.AccountData', ...] retained_m=5 retained_l=8
+    - method `isSpaceRoom`:L219 — Timeline unread handler skips space rooms
+    - method `getUserId`:L228 — Timeline suppresses self-sent events
+    - method `getUserId`:L239 — Receipt handler identifies own receipts
+    - method `isSpaceRoom`:L241 — Receipt path skips spaces
+    - method `isSpaceRoom`:L287 — Marked-unread AccountData ignores spaces
+    - listener `on:RoomEvent.Timeline`:L231 — recompute room unread/highlight
+    - listener `removeListener:RoomEvent.Timeline`:L233 — teardown
+    - listener `on:RoomEvent.Receipt`:L257 — clear/refresh unread
+    - listener `removeListener:RoomEvent.Receipt`:L259 — teardown
+    - listener `on:RoomEvent.MyMembership`:L279 — leave DELETE unread
+    - listener `removeListener:RoomEvent.MyMembership`:L281 — teardown
+    - listener `on:RoomEvent.AccountData`:L304 — m.marked_unread
+    - listener `removeListener:RoomEvent.AccountData`:L306 — teardown
+  - `synara/src/app/utils/room.ts` symbols=['getRooms', 'isSpaceRoom'] retained_m=2 retained_l=0
+    - method `getRooms`:L261 — getUnreadInfos seeds RESET
+    - method `isSpaceRoom`:L262 — getUnreadInfos skips spaces
+    - note: getUnreadInfo/getUnreadInfos product helpers supply {highlight,total}
+  - `synara/src/app/pages/client/ClientNonUIFeatures.tsx` symbols=[] retained_m=0 retained_l=0
+    - note: PlatformBadgeAndTrayUpdater L262–291 + FaviconUpdater L223–245; badge/tray only, not native generation
+  - `synara/src/app/features/room-nav/RoomNavItem.tsx` symbols=[] retained_m=0 retained_l=0
+    - note: useRoomUnread + UnreadBadge highlight vs total (L265, L374–376)
+  - `synara/src/app/notifications/badgeSummary.ts` symbols=['summarizeNotifications', 'summarizeBadgeCount', 'getBadgeCount'] retained_m=0 retained_l=0
+    - note: Non-P0.1 pure aggregation; appBadgeCount vs inboxBadgeCount formulas
+  - `synara/src/app/platform/badge.ts` symbols=['setPlatformBadgeCount', 'getPlatformNotificationSummary'] retained_m=0 retained_l=0
+    - note: Non-P0.1 platform bridge
+  - `synara/src/app/components/unread-badge/UnreadBadge.tsx` symbols=['UnreadBadge'] retained_m=0 retained_l=0
+  - `synara/src/app/state/hooks/unread.ts` symbols=['useRoomUnread', 'useRoomsUnread'] retained_m=0 retained_l=0
 - **Behavior-relevant methods (top-level)**:
-  - `setPushRuleActions` `synara/src/app/features/settings/notifications/AllMessages.tsx`:L67 — None
-  - `addPushRule` `synara/src/app/features/settings/notifications/KeywordMessages.tsx`:L30 — None
-  - `deletePushRule` `synara/src/app/features/settings/notifications/KeywordMessages.tsx`:L114 — None
-  - `setPushRuleActions` `synara/src/app/features/settings/notifications/KeywordMessages.tsx`:L135 — None
-  - `setPushRuleActions` `synara/src/app/features/settings/notifications/SpecialMessages.tsx`:L106 — None
-  - `sendReadReceipt` `synara/src/app/utils/notifications.ts`:L402 — None
+  - `isSpaceRoom` `synara/src/app/state/room/roomToUnread.ts`:L219 — Timeline skips spaces
+  - `getUserId` `synara/src/app/state/room/roomToUnread.ts`:L228 — Timeline suppresses self
+  - `getUserId` `synara/src/app/state/room/roomToUnread.ts`:L239 — Receipt own-user detect
+  - `isSpaceRoom` `synara/src/app/state/room/roomToUnread.ts`:L241 — Receipt skips spaces
+  - `isSpaceRoom` `synara/src/app/state/room/roomToUnread.ts`:L287 — Marked-unread skips spaces
+  - `getRooms` `synara/src/app/utils/room.ts`:L261 — getUnreadInfos seed
+  - `isSpaceRoom` `synara/src/app/utils/room.ts`:L262 — getUnreadInfos skip spaces
 - **Behavior-relevant listeners (top-level)**:
-  - `on:RoomEvent.Receipt` `synara/src/app/state/room/roomToUnread.ts`:L257 — None
-  - `removeListener:RoomEvent.Receipt` `synara/src/app/state/room/roomToUnread.ts`:L259 — None
-- **Unfiltered linked candidates**: methods=22 listeners=8
-- **Rust**: `compile-shape-only-blocked-for-product` caps=['SC-057'] gaps=[]
-  - `SC-057` `blocked` `matrix_sdk::notification_settings::NotificationSettings` https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/notification_settings/mod.rs#L81
+  - `on:RoomEvent.Timeline` `synara/src/app/state/room/roomToUnread.ts`:L231 — recompute unread/highlight
+  - `removeListener:RoomEvent.Timeline` `synara/src/app/state/room/roomToUnread.ts`:L233 — teardown
+  - `on:RoomEvent.Receipt` `synara/src/app/state/room/roomToUnread.ts`:L257 — clear/refresh unread
+  - `removeListener:RoomEvent.Receipt` `synara/src/app/state/room/roomToUnread.ts`:L259 — teardown
+  - `on:RoomEvent.MyMembership` `synara/src/app/state/room/roomToUnread.ts`:L279 — leave DELETE
+  - `removeListener:RoomEvent.MyMembership` `synara/src/app/state/room/roomToUnread.ts`:L281 — teardown
+  - `on:RoomEvent.AccountData` `synara/src/app/state/room/roomToUnread.ts`:L304 — m.marked_unread
+  - `removeListener:RoomEvent.AccountData` `synara/src/app/state/room/roomToUnread.ts`:L306 — teardown
+- **Unfiltered linked candidates**: methods=25 listeners=14
+- **Rust**: `product-desktop-bridge-with-sdk-rules` caps=[] gaps=[]
+  - Cutover notes: No accepted P0.3 SC is badge aggregation. Badge math and platform application are product-owned over any SDK per-room unread/highlight counts. SC-057 NotificationSettings is push-rule/settings only and never passes as badge summarization. Per-room highlight/total inputs may come from Rust-owned room/unread projections under P4.3/P9.3 plus an IPC badge DTO; do not invent unread-count SC IDs.
 - **Tasks**: `P9.3`, `P4.3`
 - **Existing tests**:
-  - `synara/src/app/notifications/__tests__/badgeSummary.test.ts` — badge summary unit coverage
+  - `synara/src/app/notifications/__tests__/badgeSummary.test.ts` — summarizeNotifications/summarizeBadgeCount/getBadgeCount unit coverage only (app vs inbox formulas, clamps); not E2E RoomNavItem or platform badge/tray
+  - `synara/src/app/state/room/__tests__/roomToUnread.test.ts` — shouldKeepRoomUnreadAfterReceipt unit cases only; not full map/listener integration
 - **Planned** `AT-FR-7.8-005-001` task `P9.3` level `integration`
-  - Scenario: 7.8/FR-7.8-005: exercise 'correct unread/badge summaries;' via owner `synara/src/app/state/room/roomToUnread.ts` and UI `synara/src/app/features/room-nav/RoomNavItem.tsx`, then confirm Rust/IPC cutover task `P9.3` preserves observable behavior without raw Matrix runtime HTTP.
-  - Test target: None
+  - Scenario: Integration against disposable Synapse: roomToUnread map updates on timeline/receipt/membership/marked-unread with highlight vs total and parent/space roll-up; RoomNavItem UnreadBadge reflects highlight vs total; platform app badge/tray matches summarizeNotifications (later/invites as product applies) including independent highlight-only, total-only, later, invites, and clamp cases. After cutover P9.3/P4.3, same observables via Rust-owned unread/highlight + product badge aggregation / IPC badge DTO. No raw /_matrix HTTP; SC-057 alone fails; push-rule settings UI / native generation path / helper-only cannot substitute.
+  - Test target: roomToUnread + badgeSummary + RoomNavItem UnreadBadge + PlatformBadgeAndTrayUpdater/setPlatformBadgeCount; post-cutover Rust-owned unread/highlight + product badge aggregation / IPC badge DTO (P9.3/P4.3)
   - Preconditions:
-    - Desktop app with notification permission granted (OS)
-    - Rooms with distinct push-rule modes; backgrounded window fixture
-    - Linked owner path present in tree: synara/src/app/state/room/roomToUnread.ts
-    - Primary UI/lifecycle surface: synara/src/app/features/room-nav/RoomNavItem.tsx
+    - Disposable Synapse; desktop app with platform badge/tray path available.
+    - Named unread owner: synara/src/app/state/room/roomToUnread.ts (roomToUnreadAtom / useBindRoomToUnreadAtom).
+    - Named UI: RoomNavItem UnreadBadge; ClientNonUIFeatures PlatformBadgeAndTrayUpdater / FaviconUpdater.
+    - Named aggregation: badgeSummary.summarizeNotifications / platform getPlatformNotificationSummary + setPlatformBadgeCount.
+    - Fixtures for highlight-bearing rooms, total-only (or highlight:0) rooms, later items, invites, parent/space hierarchy, leave/membership, marked-unread.
   - Actions:
-    1. Boot the appropriate harness for level=integration against disposable Synapse (or iOS notes if any).
-    2. Establish fixtures required by the clause list: correct unread/badge summaries.
-    3. Open UI/lifecycle surface `synara/src/app/features/room-nav/RoomNavItem.tsx` (or follow ui_entry_points_rationale if no dedicated UI).
-    4. Step 1: perform the product action that implements «correct unread/badge summaries» using current owner `synara/src/app/state/room/roomToUnread.ts`.
+    1. Boot the integration harness against disposable Synapse. Do not use fixture-only mocks that bypass product unread map, push-rule settings UI alone, native notification generation paths, alternate UI, helper-only harnesses, or raw HTTP.
+    2. ROOM MAP: inject live notifiable timeline events, own receipts (clear vs shouldKeepRoomUnreadAfterReceipt / marked-unread), leave membership, and m.marked_unread account data. Assert roomToUnread PUT/DELETE of {highlight,total,from} with parent/space roll-up when applicable.
+    3. NAV BADGE: open RoomNavItem for rooms with distinct highlight vs total; assert UnreadBadge highlight={highlight>0} and count={total}.
+    4. PLATFORM: with roomToUnread values + laterActiveCount + inviteCount, assert getPlatformNotificationSummary/setPlatformBadgeCount/tray match summarizeNotifications formulas (appBadgeCount vs inboxBadgeCount) including later and invites as product applies.
+    5. INDEPENDENT CASES: highlight-only rooms, total-only / highlight-undefined sources, later items, invites, and clamp/negative/fractional inputs; one case does not substitute for another.
+    6. After cutover tasks P9.3 and/or P4.3, repeat the same room-map, nav, and platform observables via Rust-owned unread/highlight + product badge aggregation / IPC badge DTO. Citing SC-057 alone, compile-only blocked states, raw /_matrix HTTP, push-rule settings UI (AllMessages/Keyword/Special/NotificationModeSwitcher), SystemNotification enablement, native generation (FR-7.8-004), sendReadReceipt-as-badge-owner, or helper/fixture-only is a FAIL.
   - Assertions:
-    - Each clause is observable: «correct unread/badge summaries».
-    - State coordination remains through `synara/src/app/state/room/roomToUnread.ts` (or its Rust/IPC successor after cutover), not ad-hoc dual writers.
-    - Behavior-relevant current JS method candidates exercised or replaced: setPushRuleActions, addPushRule, deletePushRule, setPushRuleActions, setPushRuleActions, sendReadReceipt (AST candidates; not type-proven receivers).
-    - Behavior-relevant listener candidates observed or replaced: on:RoomEvent.Receipt, removeListener:RoomEvent.Receipt.
-    - Rust mapping remains conservative: caps=[SC-057] gaps=[none]; compile-only blocked states are not treated as runtime pass.
-    - No new production matrix-js-sdk usage and no raw /\_matrix runtime HTTP unless dossier marks that exact behavior typed-sdk-request-required.
+    - ROOM MAP: roomToUnread updates on timeline/receipt/membership/marked-unread with highlight vs total and parent/space roll-up correctness when product does roll-up.
+    - NAV: RoomNavItem UnreadBadge reflects highlight vs total from useRoomUnread/roomToUnreadAtom.
+    - PLATFORM: app badge and tray summary match summarizeNotifications including later/invites as product applies; distinct from native notification generation.
+    - INDEPENDENT: highlight-only, total-only, later, invites, and clamp cases each pass; one does not substitute for another.
+    - Rust/IPC cutover preserves same observables via Rust-owned unread/highlight + product badge aggregation / IPC badge DTO; SC-057 alone is rules/settings only and never passes as badge summarization; raw HTTP, push-rule UI, native gen, helper-only never pass.
+    - No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless the dossier marks that exact behavior typed-sdk-request-required.
   - does_not_currently_exist: `True`
 - **Manual**: `MA-FR-7.8-005`
 
@@ -8680,19 +8704,24 @@ Limited rejected-review correction (`p0.2-correct-22-fr-7.8-004-native-notificat
 
 - Platforms: macOS, Linux
 - Preconditions:
-  - Desktop app with notification permission granted (OS)
-  - Rooms with distinct push-rule modes; backgrounded window fixture
-  - State owner available: synara/src/app/state/room/roomToUnread.ts
-  - UI/lifecycle: synara/src/app/features/room-nav/RoomNavItem.tsx
+  - Disposable Synapse; desktop app with platform badge/tray path available.
+  - Named unread owner: roomToUnreadAtom / useBindRoomToUnreadAtom in synara/src/app/state/room/roomToUnread.ts.
+  - Named UI: RoomNavItem UnreadBadge; ClientNonUIFeatures PlatformBadgeAndTrayUpdater.
+  - Named aggregation: badgeSummary.summarizeNotifications; getPlatformNotificationSummary / setPlatformBadgeCount.
   - Current status baseline: implemented
 - Actions:
-  1. Launch Synara desktop on the target platform against disposable Synapse; use a clean or known fixture profile as required by «correct unread/badge summaries;».
-  2. Identify state owner `synara/src/app/state/room/roomToUnread.ts` and open `synara/src/app/features/room-nav/RoomNavItem.tsx`.
-  3. Action 1 — «correct unread/badge summaries»: perform the minimal user/system steps that trigger this clause (use linked files under current_production_files if the entry point is indirect).
+  1. Launch Synara desktop against disposable Synapse with rooms that can produce highlight vs total unreads, later items, and invites.
+  2. ROOM MAP — receive live notifiable messages while not in the room; mark as read; leave a room; toggle marked-unread. Observe room nav badges and parent/space roll-up if applicable.
+  3. NAV BADGE — confirm RoomNavItem UnreadBadge uses highlight styling when highlight>0 and displays total count.
+  4. PLATFORM — observe OS/desktop app badge and tray counts track room unreads + later + invites per product summarizeNotifications formulas.
+  5. INDEPENDENT — exercise highlight-only rooms, non-highlight totals (as product supplies), later items, invites, and zero/clear cases.
+  6. After cutover P9.3/P4.3, repeat the same observables via Rust-owned unread/highlight + IPC badge DTO without raw /_matrix HTTP.
 - Expected:
-  - All clauses under «correct unread/badge summaries;» produce the user-visible or system-observable success criteria without error toasts unrelated to intentional negative tests.
-  - Clause 1 «correct unread/badge summaries» is satisfied on macOS, Linux with owner `synara/src/app/state/room/roomToUnread.ts`.
-  - No unexpected raw /\_matrix traffic from the app renderer for this flow on the post-cutover build.
+  - Room unread map drives highlight vs total badges correctly on timeline/receipt/membership/marked-unread and parent roll-up when product does it.
+  - RoomNavItem UnreadBadge reflects highlight vs total.
+  - Platform app badge/tray matches summarizeNotifications (appBadgeCount vs inboxBadgeCount) including later/invites as product applies.
+  - Push-rule settings UI, SystemNotification enablement, native notification generation, sendReadReceipt-as-badge-owner, helper/fixture-only, and generic SC-057 alone do not satisfy this FR.
+  - No unexpected raw /_matrix traffic from the app renderer for this flow on the post-cutover build.
 
 ### `MA-FR-7.8-006` (FR-7.8-006)
 
@@ -10904,20 +10933,22 @@ Limited rejected-review correction (`p0.2-correct-22-fr-7.8-004-native-notificat
 
 ### `AT-FR-7.8-005-001`
 
-- 7.8/FR-7.8-005: exercise 'correct unread/badge summaries;' via owner `synara/src/app/state/room/roomToUnread.ts` and UI `synara/src/app/features/room-nav/RoomNavItem.tsx`, then confirm Rust/IPC cutover task `P9.3` preserves observable behavior without raw Matrix runtime HTTP.
-- target: None
+- Integration against disposable Synapse: roomToUnread map updates on timeline/receipt/membership/marked-unread with highlight vs total and parent/space roll-up; RoomNavItem UnreadBadge reflects highlight vs total; platform app badge/tray matches summarizeNotifications (later/invites as product applies) including independent highlight-only, total-only, later, invites, and clamp cases. After cutover P9.3/P4.3, same observables via Rust-owned unread/highlight + product badge aggregation / IPC badge DTO. No raw /_matrix HTTP; SC-057 alone fails; push-rule settings UI / native generation path / helper-only cannot substitute.
+- target: roomToUnread + badgeSummary + RoomNavItem UnreadBadge + PlatformBadgeAndTrayUpdater/setPlatformBadgeCount; post-cutover Rust-owned unread/highlight + product badge aggregation / IPC badge DTO (P9.3/P4.3)
 - actions:
-  1. Boot the appropriate harness for level=integration against disposable Synapse (or iOS notes if any).
-  2. Establish fixtures required by the clause list: correct unread/badge summaries.
-  3. Open UI/lifecycle surface `synara/src/app/features/room-nav/RoomNavItem.tsx` (or follow ui_entry_points_rationale if no dedicated UI).
-  4. Step 1: perform the product action that implements «correct unread/badge summaries» using current owner `synara/src/app/state/room/roomToUnread.ts`.
+  1. Boot the integration harness against disposable Synapse. Do not use fixture-only mocks that bypass product unread map, push-rule settings UI alone, native notification generation paths, alternate UI, helper-only harnesses, or raw HTTP.
+  2. ROOM MAP: inject live notifiable timeline events, own receipts (clear vs shouldKeepRoomUnreadAfterReceipt / marked-unread), leave membership, and m.marked_unread account data. Assert roomToUnread PUT/DELETE of {highlight,total,from} with parent/space roll-up when applicable.
+  3. NAV BADGE: open RoomNavItem for rooms with distinct highlight vs total; assert UnreadBadge highlight={highlight>0} and count={total}.
+  4. PLATFORM: with roomToUnread values + laterActiveCount + inviteCount, assert getPlatformNotificationSummary/setPlatformBadgeCount/tray match summarizeNotifications formulas (appBadgeCount vs inboxBadgeCount) including later and invites as product applies.
+  5. INDEPENDENT CASES: highlight-only rooms, total-only / highlight-undefined sources, later items, invites, and clamp/negative/fractional inputs; one case does not substitute for another.
+  6. After cutover tasks P9.3 and/or P4.3, repeat the same room-map, nav, and platform observables via Rust-owned unread/highlight + product badge aggregation / IPC badge DTO. Citing SC-057 alone, compile-only blocked states, raw /_matrix HTTP, push-rule settings UI (AllMessages/Keyword/Special/NotificationModeSwitcher), SystemNotification enablement, native generation (FR-7.8-004), sendReadReceipt-as-badge-owner, or helper/fixture-only is a FAIL.
 - assertions:
-  - Each clause is observable: «correct unread/badge summaries».
-  - State coordination remains through `synara/src/app/state/room/roomToUnread.ts` (or its Rust/IPC successor after cutover), not ad-hoc dual writers.
-  - Behavior-relevant current JS method candidates exercised or replaced: setPushRuleActions, addPushRule, deletePushRule, setPushRuleActions, setPushRuleActions, sendReadReceipt (AST candidates; not type-proven receivers).
-  - Behavior-relevant listener candidates observed or replaced: on:RoomEvent.Receipt, removeListener:RoomEvent.Receipt.
-  - Rust mapping remains conservative: caps=[SC-057] gaps=[none]; compile-only blocked states are not treated as runtime pass.
-  - No new production matrix-js-sdk usage and no raw /\_matrix runtime HTTP unless dossier marks that exact behavior typed-sdk-request-required.
+  - ROOM MAP: roomToUnread updates on timeline/receipt/membership/marked-unread with highlight vs total and parent/space roll-up correctness when product does roll-up.
+  - NAV: RoomNavItem UnreadBadge reflects highlight vs total from useRoomUnread/roomToUnreadAtom.
+  - PLATFORM: app badge and tray summary match summarizeNotifications including later/invites as product applies; distinct from native notification generation.
+  - INDEPENDENT: highlight-only, total-only, later, invites, and clamp cases each pass; one does not substitute for another.
+  - Rust/IPC cutover preserves same observables via Rust-owned unread/highlight + product badge aggregation / IPC badge DTO; SC-057 alone is rules/settings only and never passes as badge summarization; raw HTTP, push-rule UI, native gen, helper-only never pass.
+  - No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless the dossier marks that exact behavior typed-sdk-request-required.
 
 ### `AT-FR-7.8-006-001`
 
@@ -11549,7 +11580,7 @@ Limited rejected-review correction (`p0.2-correct-22-fr-7.8-004-native-notificat
 - `ET-FR-7.7-009-03` `FR-7.7-009` `synara/src/app/utils/__tests__/roomNotes.test.ts` — Unit coverage of room-notes normalization of malformed account data and per-room item mutations that must stay fixture-compatible. Not live iOS.
 - `ET-FR-7.8-004-01` `FR-7.8-004` `synara/src/app/notifications/__tests__/systemNotification.test.ts` — normalizeSystemNotificationRequest unit coverage only (title/body/route/actions/privacy/sound bounds); not E2E native generation
 - `ET-FR-7.8-004-02` `FR-7.8-004` `synara/src/app/utils/__tests__/notifications.test.ts` — notification candidate helpers only; not a substitute for product generation paths
-- `ET-FR-7.8-005-01` `FR-7.8-005` `synara/src/app/notifications/__tests__/badgeSummary.test.ts` — badge summary unit coverage
+- `ET-FR-7.8-005-01` `FR-7.8-005` `synara/src/app/notifications/__tests__/badgeSummary.test.ts` — summarizeNotifications/summarizeBadgeCount/getBadgeCount unit coverage only (app vs inbox formulas, clamps); not E2E RoomNavItem or platform badge/tray
 - `ET-FR-7.8-007-01` `FR-7.8-007` `synara/src/app/notifications/__tests__/systemNotification.test.ts` — suppression/focus-related notification behavior unit coverage where present
 - `ET-FR-7.8-009-01` `FR-7.8-009` `synara-ios/SynaraTests/PushServiceTests.swift` — Existing XCTest coverage: register after session+token; clear/unregister on logout; token rotation replace; no register without gateway; sparse route resolution; badge parsing; route payload variants.
 - `ET-FR-7.8-009-02` `FR-7.8-009` `synara-ios/SynaraTests/NotificationPermissionCoordinatorTests.swift` — Existing XCTest coverage for first-sign-in permission prompt coordinating authorization + push registration begin.
@@ -11633,7 +11664,7 @@ Limited rejected-review correction (`p0.2-correct-22-fr-7.8-004-native-notificat
 | `synara/src/app/features/message-search/SearchFilters.tsx`                     | `feature`          | `requirement-linked`           |   0 |   4 | `FR-7.3-007`,`FR-7.3-008`,`FR-7.3-009`,`FR-7.3-010`,`FR-7.3-014`,`FR-7.3-016`,`FR-7.4-004`,`FR-7.10-002`,`FR-7.10-003`                                                                                                                    |
 | `synara/src/app/features/message-search/SearchResultGroup.tsx`                 | `feature`          | `requirement-linked`           |   0 |   0 | `FR-7.3-007`,`FR-7.3-008`,`FR-7.3-009`,`FR-7.3-010`,`FR-7.3-014`,`FR-7.3-016`,`FR-7.4-004`,`FR-7.10-001`,`FR-7.10-004`                                                                                                                    |
 | `synara/src/app/features/message-search/useMessageSearch.ts`                   | `feature`          | `requirement-linked`           |   0 |   1 | `FR-7.3-007`,`FR-7.3-008`,`FR-7.3-009`,`FR-7.3-010`,`FR-7.3-014`,`FR-7.3-016`,`FR-7.4-004`,`FR-7.6-006`,`FR-7.10-001`,`FR-7.10-002`,`FR-7.10-003`,`FR-7.10-004`,`FR-7.10-006`,`FR-7.10-007`                                               |
-| `synara/src/app/features/room-nav/RoomNavItem.tsx`                             | `feature`          | `requirement-linked`           |   0 |   3 | `FR-7.2-004`,`FR-7.2-005`                                                                                                                                                                                                                 |
+| `synara/src/app/features/room-nav/RoomNavItem.tsx`                             | `feature`          | `requirement-linked`           |   0 |   3 | `FR-7.2-004`,`FR-7.2-005`,`FR-7.8-005`                                                                                                                                                                                                                 |
 | `synara/src/app/features/room-settings/RoomSettings.tsx`                       | `feature`          | `requirement-linked`           |   0 |   0 | `FR-7.6-005`,`FR-7.7-007`                                                                                                                                                                                                                 |
 | `synara/src/app/features/room/CommandAutocomplete.tsx`                         | `feature`          | `requirement-linked`           |   0 |   0 | `FR-7.4-010`                                                                                                                                                                                                                              |
 | `synara/src/app/features/room/MembersDrawer.tsx`                               | `feature`          | `requirement-linked`           |   0 |   0 | `FR-7.6-004`,`FR-7.6-005`                                                                                                                                                                                                                 |
@@ -11658,11 +11689,11 @@ Limited rejected-review correction (`p0.2-correct-22-fr-7.8-004-native-notificat
 | `synara/src/app/features/settings/devices/OtherDevices.tsx`                    | `feature`          | `requirement-linked`           |   0 |   2 | `FR-7.7-007`,`FR-7.9-003`,`FR-7.9-010`                                                                                                                                                                                                    |
 | `synara/src/app/features/settings/devices/Verification.tsx`                    | `feature`          | `requirement-linked`           |   0 |   3 | `FR-7.7-007`,`FR-7.9-002`,`FR-7.9-004`,`FR-7.9-005`                                                                                                                                                                                       |
 | `synara/src/app/features/settings/emojis-stickers/GlobalPacks.tsx`             | `feature`          | `requirement-linked`           |   0 |   4 | `FR-7.7-005`,`FR-7.7-007`                                                                                                                                                                                                                 |
-| `synara/src/app/features/settings/notifications/AllMessages.tsx`               | `feature`          | `requirement-linked`           |   0 |   1 | `FR-7.2-005`,`FR-7.2-011`,`FR-7.3-007`,`FR-7.3-008`,`FR-7.3-009`,`FR-7.3-010`,`FR-7.3-014`,`FR-7.3-016`,`FR-7.4-004`,`FR-7.7-003`,`FR-7.7-007`,`FR-7.8-001`,`FR-7.8-003`,`FR-7.8-005`,`FR-7.8-006`,`FR-7.8-007`,`FR-7.8-008` |
-| `synara/src/app/features/settings/notifications/KeywordMessages.tsx`           | `feature`          | `requirement-linked`           |   0 |   3 | `FR-7.2-005`,`FR-7.2-011`,`FR-7.3-007`,`FR-7.3-008`,`FR-7.3-009`,`FR-7.3-010`,`FR-7.3-014`,`FR-7.3-016`,`FR-7.4-004`,`FR-7.7-003`,`FR-7.7-007`,`FR-7.8-001`,`FR-7.8-003`,`FR-7.8-005`,`FR-7.8-006`,`FR-7.8-007`,`FR-7.8-008` |
-| `synara/src/app/features/settings/notifications/NotificationModeSwitcher.tsx`  | `feature`          | `requirement-linked`           |   0 |   0 | `FR-7.2-005`,`FR-7.2-011`,`FR-7.7-003`,`FR-7.7-007`,`FR-7.8-001`,`FR-7.8-002`,`FR-7.8-005`,`FR-7.8-006`,`FR-7.8-007`,`FR-7.8-008`                                                                                            |
-| `synara/src/app/features/settings/notifications/SpecialMessages.tsx`           | `feature`          | `requirement-linked`           |   0 |   2 | `FR-7.2-005`,`FR-7.2-011`,`FR-7.3-007`,`FR-7.3-008`,`FR-7.3-009`,`FR-7.3-010`,`FR-7.3-014`,`FR-7.3-016`,`FR-7.4-004`,`FR-7.7-003`,`FR-7.7-007`,`FR-7.8-001`,`FR-7.8-003`,`FR-7.8-005`,`FR-7.8-006`,`FR-7.8-007`,`FR-7.8-008` |
-| `synara/src/app/features/settings/notifications/SystemNotification.tsx`        | `feature`          | `requirement-linked`           |   0 |   0 | `FR-7.2-005`,`FR-7.2-011`,`FR-7.7-003`,`FR-7.7-007`,`FR-7.8-004`,`FR-7.8-005`,`FR-7.8-006`,`FR-7.8-007`,`FR-7.8-008`                                                                                                                      |
+| `synara/src/app/features/settings/notifications/AllMessages.tsx`               | `feature`          | `requirement-linked`           |   0 |   1 | `FR-7.2-005`,`FR-7.2-011`,`FR-7.3-007`,`FR-7.3-008`,`FR-7.3-009`,`FR-7.3-010`,`FR-7.3-014`,`FR-7.3-016`,`FR-7.4-004`,`FR-7.7-003`,`FR-7.7-007`,`FR-7.8-001`,`FR-7.8-003`,`FR-7.8-006`,`FR-7.8-007`,`FR-7.8-008` |
+| `synara/src/app/features/settings/notifications/KeywordMessages.tsx`           | `feature`          | `requirement-linked`           |   0 |   3 | `FR-7.2-005`,`FR-7.2-011`,`FR-7.3-007`,`FR-7.3-008`,`FR-7.3-009`,`FR-7.3-010`,`FR-7.3-014`,`FR-7.3-016`,`FR-7.4-004`,`FR-7.7-003`,`FR-7.7-007`,`FR-7.8-001`,`FR-7.8-003`,`FR-7.8-006`,`FR-7.8-007`,`FR-7.8-008` |
+| `synara/src/app/features/settings/notifications/NotificationModeSwitcher.tsx`  | `feature`          | `requirement-linked`           |   0 |   0 | `FR-7.2-005`,`FR-7.2-011`,`FR-7.7-003`,`FR-7.7-007`,`FR-7.8-001`,`FR-7.8-002`,`FR-7.8-006`,`FR-7.8-007`,`FR-7.8-008`                                                                                            |
+| `synara/src/app/features/settings/notifications/SpecialMessages.tsx`           | `feature`          | `requirement-linked`           |   0 |   2 | `FR-7.2-005`,`FR-7.2-011`,`FR-7.3-007`,`FR-7.3-008`,`FR-7.3-009`,`FR-7.3-010`,`FR-7.3-014`,`FR-7.3-016`,`FR-7.4-004`,`FR-7.7-003`,`FR-7.7-007`,`FR-7.8-001`,`FR-7.8-003`,`FR-7.8-006`,`FR-7.8-007`,`FR-7.8-008` |
+| `synara/src/app/features/settings/notifications/SystemNotification.tsx`        | `feature`          | `requirement-linked`           |   0 |   0 | `FR-7.2-005`,`FR-7.2-011`,`FR-7.7-003`,`FR-7.7-007`,`FR-7.8-004`,`FR-7.8-006`,`FR-7.8-007`,`FR-7.8-008`                                                                                                                      |
 | `synara/src/app/features/space-settings/SpaceSettings.tsx`                     | `feature`          | `requirement-linked`           |   0 |   0 | `FR-7.2-009`,`FR-7.7-007`                                                                                                                                                                                                                 |
 | `synara/src/app/hooks/types.ts`                                                | `hook`             | `shared-matrix-infrastructure` |   0 |   0 | `FR-7.2-001`,`FR-7.3-001`,`FR-7.6-004`                                                                                                                                                                                                    |
 | `synara/src/app/hooks/useAccountDataCallback.ts`                               | `hook`             | `shared-matrix-infrastructure` |   2 |   0 | `FR-7.1-002`,`FR-7.2-001`,`FR-7.6-001`,`FR-7.3-002`,`FR-7.2-002`,`FR-7.2-006`,`FR-7.3-001`,`FR-7.6-004`,`FR-7.1-008`                                                                                                                      |
@@ -11731,12 +11762,12 @@ Limited rejected-review correction (`p0.2-correct-22-fr-7.8-004-native-notificat
 | `synara/src/app/pages/auth/register/registerUtil.ts`                           | `page`             | `requirement-linked`           |   0 |   1 | `FR-7.1-001`,`FR-7.1-004`,`FR-7.1-006`                                                                                                                                                                                                    |
 | `synara/src/app/pages/auth/reset-password/PasswordResetForm.tsx`               | `page`             | `requirement-linked`           |   0 |   0 | `FR-7.1-001`,`FR-7.1-004`,`FR-7.1-006`                                                                                                                                                                                                    |
 | `synara/src/app/pages/auth/reset-password/resetPasswordUtil.ts`                | `page`             | `requirement-linked`           |   0 |   1 | `FR-7.1-001`,`FR-7.1-004`,`FR-7.1-006`                                                                                                                                                                                                    |
-| `synara/src/app/pages/client/ClientNonUIFeatures.tsx`                          | `page`             | `requirement-linked`           |   6 |  18 | `FR-7.8-004`,`FR-7.8-007`,`FR-7.11-005`,`FR-7.4-006`                                                                                                                                                                                       |
+| `synara/src/app/pages/client/ClientNonUIFeatures.tsx`                          | `page`             | `requirement-linked`           |   6 |  18 | `FR-7.8-004`,`FR-7.8-005`,`FR-7.8-007`,`FR-7.11-005`,`FR-7.4-006`                                                                                                                                                                                       |
 | `synara/src/app/pages/client/ClientRoot.tsx`                                   | `page`             | `requirement-linked`           |   2 |   5 | `FR-7.1-007`,`FR-7.1-008`,`FR-7.1-012`,`FR-7.2-001`,`FR-7.2-002`,`FR-7.4-005`,`FR-7.5-005`,`FR-7.1-010`                                                                                                                                   |
 | `synara/src/app/pages/client/SyncStatus.tsx`                                   | `page`             | `requirement-linked`           |   0 |   0 | `FR-7.2-001`                                                                                                                                                                                                                              |
 | `synara/src/app/pages/client/explore/Server.tsx`                               | `page`             | `requirement-linked`           |   0 |   1 | `FR-7.6-006`,`FR-7.10-005`                                                                                                                                                                                                                |
 | `synara/src/app/pages/client/inbox/Invites.tsx`                                | `page`             | `requirement-linked`           |   0 |   7 | `FR-7.2-003`,`FR-7.6-001`                                                                                                                                                                                                                 |
-| `synara/src/app/pages/client/inbox/Notifications.tsx`                          | `page`             | `requirement-linked`           |   0 |   2 | `FR-7.2-005`,`FR-7.2-011`,`FR-7.7-003`,`FR-7.8-005`,`FR-7.8-006`,`FR-7.8-007`,`FR-7.8-008`                                                                                                                                               |
+| `synara/src/app/pages/client/inbox/Notifications.tsx`                          | `page`             | `requirement-linked`           |   0 |   2 | `FR-7.2-005`,`FR-7.2-011`,`FR-7.7-003`,`FR-7.8-006`,`FR-7.8-007`,`FR-7.8-008`                                                                                                                                               |
 | `synara/src/app/pages/client/sidebar/SpaceTabs.tsx`                            | `page`             | `requirement-linked`           |   0 |   7 | `FR-7.2-008`,`FR-7.7-007`                                                                                                                                                                                                                 |
 | `synara/src/app/pages/client/space/Space.tsx`                                  | `page`             | `requirement-linked`           |   0 |   7 | `FR-7.2-009`,`FR-7.6-001`                                                                                                                                                                                                                 |
 | `synara/src/app/pages/client/syncStatusCopy.ts`                                | `page`             | `requirement-linked`           |   0 |   0 | `FR-7.2-001`                                                                                                                                                                                                                              |
@@ -11767,9 +11798,9 @@ Limited rejected-review correction (`p0.2-correct-22-fr-7.8-004-native-notificat
 | `synara/src/app/utils/matrix-crypto.ts`                                        | `utility`          | `requirement-linked`           |   0 |   0 | `FR-7.9-008`                                                                                                                                                                                                                              |
 | `synara/src/app/utils/matrix-uia.ts`                                           | `utility`          | `requirement-linked`           |   0 |   0 | `FR-7.1-006`                                                                                                                                                                                                                              |
 | `synara/src/app/utils/matrix.ts`                                               | `utility`          | `requirement-linked`           |   0 |   9 | `FR-7.3-007`,`FR-7.4-005`,`FR-7.4-007`,`FR-7.5-001`,`FR-7.5-003`,`FR-7.5-004`,`FR-7.5-007`,`FR-7.5-008`,`FR-7.5-011`,`FR-7.6-008`                                                                                                         |
-| `synara/src/app/utils/notifications.ts`                                        | `utility`          | `requirement-linked`           |   0 |   9 | `FR-7.2-005`,`FR-7.2-011`,`FR-7.7-003`,`FR-7.8-005`,`FR-7.8-006`,`FR-7.8-007`,`FR-7.8-008`                                                                                                                                               |
+| `synara/src/app/utils/notifications.ts`                                        | `utility`          | `requirement-linked`           |   0 |   9 | `FR-7.2-005`,`FR-7.2-011`,`FR-7.7-003`,`FR-7.8-006`,`FR-7.8-007`,`FR-7.8-008`                                                                                                                                               |
 | `synara/src/app/utils/polls.ts`                                                | `utility`          | `requirement-linked`           |   0 |   0 | `FR-7.3-011`,`FR-7.4-006`                                                                                                                                                                                                                 |
-| `synara/src/app/utils/room.ts`                                                 | `utility`          | `requirement-linked`           |   0 |  15 | `FR-7.5-001`,`FR-7.5-002`,`FR-7.5-007`,`FR-7.6-008`,`FR-7.8-001`,`FR-7.8-002`,`FR-7.8-004`                                                                                                                                                 |
+| `synara/src/app/utils/room.ts`                                                 | `utility`          | `requirement-linked`           |   0 |  15 | `FR-7.5-001`,`FR-7.5-002`,`FR-7.5-007`,`FR-7.6-008`,`FR-7.8-001`,`FR-7.8-002`,`FR-7.8-004`,`FR-7.8-005`                                                                                                                                                 |
 | `synara/src/app/utils/roomNotes.ts`                                            | `utility`          | `requirement-linked`           |   0 |   2 | `FR-7.3-014`,`FR-7.3-015`,`FR-7.7-002`,`FR-7.7-008`,`FR-7.7-009`                                                                                                                                                                          |
 | `synara/src/app/utils/sort.ts`                                                 | `utility`          | `requirement-linked`           |   0 |   4 | `FR-7.2-004`                                                                                                                                                                                                                              |
 | `synara/src/app/utils/syncLifecycle.ts`                                        | `utility`          | `requirement-linked`           |   0 |   0 | `FR-7.2-001`,`FR-7.2-002`,`FR-7.3-017`                                                                                                                                                                                                    |
