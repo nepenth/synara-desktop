@@ -77874,19 +77874,223 @@
       "current_status": "implemented",
       "current_production_files": [
         {
-          "path": "synara/src/app/features/call-status/CallRoomName.tsx",
+          "path": "synara/src/app/hooks/useCall.ts",
+          "bucket": "hook",
+          "categories": [
+            "room_methods",
+            "event_emitters_listeners",
+            "matrixrtc_calls"
+          ],
+          "symbols_or_candidates": [
+            "useCallSession getRoomSession",
+            "useCallMembers session.memberships",
+            "MatrixRTCSessionManagerEvents.SessionStarted",
+            "MatrixRTCSessionManagerEvents.SessionEnded",
+            "MatrixRTCSessionEvent.MembershipsChanged",
+            "useCallMembersChange"
+          ],
+          "line_refs": [
+            {
+              "symbol": "useCallSession mx.matrixRTC.getRoomSession",
+              "line": 14,
+              "kind": "product_helper",
+              "relevance_reason": "PRIMARY SESSION OWNER L11–33: useCallSession initializes from mx.matrixRTC.getRoomSession(room) and rebinds on SessionStarted/SessionEnded — MatrixRTC session source for membership projection."
+            },
+            {
+              "symbol": "useCallMembers initial session.memberships",
+              "line": 37,
+              "kind": "product_helper",
+              "relevance_reason": "PRIMARY MEMBERSHIP STATE L36–52: seeds React state from [...session.memberships] — current CallMembership[] displayed by Synara."
+            },
+            {
+              "symbol": "updateMemberships set session.memberships",
+              "line": 40,
+              "kind": "product_helper",
+              "relevance_reason": "On MembershipsChanged, copies session.memberships into React state for UI consumers (Live counts / member cards / room-nav badge)."
+            },
+            {
+              "symbol": "on:MatrixRTCSessionManagerEvents.SessionStarted",
+              "line": 25,
+              "kind": "listener_candidate",
+              "relevance_reason": "Subscribes mx.matrixRTC SessionStarted for room-scoped session rebind."
+            },
+            {
+              "symbol": "on:MatrixRTCSessionManagerEvents.SessionEnded",
+              "line": 26,
+              "kind": "listener_candidate",
+              "relevance_reason": "Subscribes mx.matrixRTC SessionEnded for room-scoped session rebind."
+            },
+            {
+              "symbol": "off:MatrixRTCSessionManagerEvents.SessionStarted",
+              "line": 28,
+              "kind": "listener_candidate",
+              "relevance_reason": "Cleanup off SessionStarted on unmount."
+            },
+            {
+              "symbol": "off:MatrixRTCSessionManagerEvents.SessionEnded",
+              "line": 29,
+              "kind": "listener_candidate",
+              "relevance_reason": "Cleanup off SessionEnded on unmount."
+            },
+            {
+              "symbol": "on:MatrixRTCSessionEvent.MembershipsChanged useCallMembers",
+              "line": 46,
+              "kind": "listener_candidate",
+              "relevance_reason": "session.on(MembershipsChanged) drives live membership list for display."
+            },
+            {
+              "symbol": "removeListener:MatrixRTCSessionEvent.MembershipsChanged useCallMembers",
+              "line": 48,
+              "kind": "listener_candidate",
+              "relevance_reason": "Cleanup removeListener MembershipsChanged for useCallMembers."
+            },
+            {
+              "symbol": "useCallMembersChange on MembershipsChanged",
+              "line": 57,
+              "kind": "listener_candidate",
+              "relevance_reason": "useCallMembersChange L55–62 registers MembershipsChanged for side-effect consumers."
+            },
+            {
+              "symbol": "useCallMembersChange removeListener MembershipsChanged",
+              "line": 59,
+              "kind": "listener_candidate",
+              "relevance_reason": "Cleanup for useCallMembersChange MembershipsChanged."
+            }
+          ],
+          "model_coupling": [
+            "CallMembership",
+            "Room",
+            "MatrixRTCSession"
+          ],
+          "behavior_relevant_method_candidates": [
+            {
+              "name": "getRoomSession",
+              "line": 14,
+              "category": "matrixrtc_calls",
+              "kind": "property_call_candidate",
+              "confidence": "Source-inspected product call site (exact-line) on mx.matrixRTC; getRoomSession supplies MatrixRTCSession for memberships.",
+              "relevance_reason": "Binds the MatrixRTCSession whose .memberships array is the current membership state displayed by Synara."
+            }
+          ],
+          "behavior_relevant_listener_candidates": [
+            {
+              "event": "MatrixRTCSessionManagerEvents.SessionStarted",
+              "method": "on",
+              "line": 25,
+              "category": "matrixrtc_calls",
+              "confidence": "Source-inspected: mx.matrixRTC.on(SessionStarted) roomId-filtered session rebind.",
+              "relevance_reason": "Keeps session/memberships current when a room session starts."
+            },
+            {
+              "event": "MatrixRTCSessionManagerEvents.SessionEnded",
+              "method": "on",
+              "line": 26,
+              "category": "matrixrtc_calls",
+              "confidence": "Source-inspected: mx.matrixRTC.on(SessionEnded) roomId-filtered session rebind.",
+              "relevance_reason": "Keeps session/memberships current when a room session ends."
+            },
+            {
+              "event": "MatrixRTCSessionManagerEvents.SessionStarted",
+              "method": "off",
+              "line": 28,
+              "category": "matrixrtc_calls",
+              "confidence": "Source-inspected cleanup.",
+              "relevance_reason": "Listener lifecycle for session rebind."
+            },
+            {
+              "event": "MatrixRTCSessionManagerEvents.SessionEnded",
+              "method": "off",
+              "line": 29,
+              "category": "matrixrtc_calls",
+              "confidence": "Source-inspected cleanup.",
+              "relevance_reason": "Listener lifecycle for session rebind."
+            },
+            {
+              "event": "MatrixRTCSessionEvent.MembershipsChanged",
+              "method": "on",
+              "line": 46,
+              "category": "matrixrtc_calls",
+              "confidence": "Source-inspected: session.on(MembershipsChanged) updates CallMembership[] state for display.",
+              "relevance_reason": "Primary live-update event for displayed MatrixRTC memberships."
+            },
+            {
+              "event": "MatrixRTCSessionEvent.MembershipsChanged",
+              "method": "removeListener",
+              "line": 48,
+              "category": "matrixrtc_calls",
+              "confidence": "Source-inspected cleanup.",
+              "relevance_reason": "Listener lifecycle for membership display state."
+            },
+            {
+              "event": "MatrixRTCSessionEvent.MembershipsChanged",
+              "method": "on",
+              "line": 57,
+              "category": "matrixrtc_calls",
+              "confidence": "Source-inspected useCallMembersChange MembershipsChanged subscription.",
+              "relevance_reason": "Same membership event surface used by consumers."
+            },
+            {
+              "event": "MatrixRTCSessionEvent.MembershipsChanged",
+              "method": "removeListener",
+              "line": 59,
+              "category": "matrixrtc_calls",
+              "confidence": "Source-inspected cleanup.",
+              "relevance_reason": "Listener lifecycle for membership change consumers."
+            }
+          ],
+          "symbols_or_candidates_note": "PRIMARY coordination owner for FR-7.11-001 membership DISPLAY. RETAIN: getRoomSession + session.memberships + MembershipsChanged + SessionStarted/Ended rebind. EXCLUDE as sole evidence: join/leave writes (003), widget embed (002), encryption keys (004), cleanup (005), CallRoomName title-only, useCallEmbed join/embed adjacency, RoomTimeline m.call.member historical render, SC-082 widgets alone."
+        },
+        {
+          "path": "synara/src/app/features/call-status/CallStatus.tsx",
           "bucket": "feature",
           "categories": [
-            "room_methods"
+            "matrixrtc_calls"
           ],
-          "symbols_or_candidates": [],
-          "line_refs": [],
+          "symbols_or_candidates": [
+            "useCallSession",
+            "useCallMembers",
+            "LiveChip",
+            "MemberGlance",
+            "memberVisible"
+          ],
+          "line_refs": [
+            {
+              "symbol": "useCallSession room",
+              "line": 24,
+              "kind": "product_helper",
+              "relevance_reason": "Joined-call status bar binds MatrixRTC session for the callEmbed room."
+            },
+            {
+              "symbol": "useCallMembers room session",
+              "line": 25,
+              "kind": "product_helper",
+              "relevance_reason": "Reads current CallMembership[] for LiveChip count and MemberGlance avatars."
+            },
+            {
+              "symbol": "memberVisible callJoined && length",
+              "line": 32,
+              "kind": "product_helper",
+              "relevance_reason": "Shows membership UI only when joined AND memberships non-empty."
+            },
+            {
+              "symbol": "LiveChip count members",
+              "line": 45,
+              "kind": "product_helper",
+              "relevance_reason": "PRIMARY joined-call LIVE count: LiveChip count={callMembers.length} members={callMembers}."
+            },
+            {
+              "symbol": "MemberGlance members speakers",
+              "line": 66,
+              "kind": "product_helper",
+              "relevance_reason": "PRIMARY joined-call member glance from CallMembership[]."
+            }
+          ],
           "model_coupling": [
             "Room"
           ],
           "behavior_relevant_method_candidates": [],
           "behavior_relevant_listener_candidates": [],
-          "symbols_or_candidates_note": "No requirement-relevant method/listener candidates filtered from this file's P0.1 AST hits; file remains linked for structural/model ownership. See all_candidates_in_linked_files on the requirement."
+          "symbols_or_candidates_note": "Joined-call status bar composer for membership display (LiveChip + MemberGlance). CallRoomName is title-only adjacency, not membership-list evidence."
         },
         {
           "path": "synara/src/app/features/call-status/LiveChip.tsx",
@@ -77895,15 +78099,39 @@
             "room_methods",
             "matrixrtc_calls"
           ],
-          "symbols_or_candidates": [],
-          "line_refs": [],
+          "symbols_or_candidates": [
+            "members.map callMember",
+            "count Live text",
+            "membershipID key",
+            "callMember.sender"
+          ],
+          "line_refs": [
+            {
+              "symbol": "members.map callMember sender/name",
+              "line": 74,
+              "kind": "product_helper",
+              "relevance_reason": "Maps CallMembership[] into menu items (sender → display name/avatar) — identity projection of current memberships."
+            },
+            {
+              "symbol": "MenuItem key membershipID",
+              "line": 87,
+              "kind": "product_helper",
+              "relevance_reason": "Keys menu rows by callMember.membershipID — membership-identity field on display."
+            },
+            {
+              "symbol": "count Live chip text",
+              "line": 133,
+              "kind": "product_helper",
+              "relevance_reason": "PRIMARY LIVE COUNT UI: renders '{count} Live' from callMembers.length."
+            }
+          ],
           "model_coupling": [
             "CallMembership",
             "Room"
           ],
           "behavior_relevant_method_candidates": [],
           "behavior_relevant_listener_candidates": [],
-          "symbols_or_candidates_note": "No requirement-relevant method/listener candidates filtered from this file's P0.1 AST hits; file remains linked for structural/model ownership. See all_candidates_in_linked_files on the requirement."
+          "symbols_or_candidates_note": "Joined-call Live count chip + expandable membership list menu. Deep-imports CallMembership type."
         },
         {
           "path": "synara/src/app/features/call-status/MemberGlance.tsx",
@@ -77912,15 +78140,96 @@
             "room_methods",
             "matrixrtc_calls"
           ],
-          "symbols_or_candidates": [],
-          "line_refs": [],
+          "symbols_or_candidates": [
+            "members.slice max",
+            "callMember.sender",
+            "membershipID key",
+            "remainingCount"
+          ],
+          "line_refs": [
+            {
+              "symbol": "visibleMembers members.slice max",
+              "line": 27,
+              "kind": "product_helper",
+              "relevance_reason": "Slices current CallMembership[] (default max=6) for stacked avatar glance."
+            },
+            {
+              "symbol": "visibleMembers.map callMember.sender",
+              "line": 32,
+              "kind": "product_helper",
+              "relevance_reason": "Maps each membership sender to stacked avatar (identity display)."
+            },
+            {
+              "symbol": "StackedAvatar key membershipID",
+              "line": 43,
+              "kind": "product_helper",
+              "relevance_reason": "Keys avatars by callMember.membershipID."
+            },
+            {
+              "symbol": "remainingCount +N",
+              "line": 69,
+              "kind": "product_helper",
+              "relevance_reason": "Shows +N when memberships exceed max glance size."
+            }
+          ],
           "model_coupling": [
             "CallMembership",
             "Room"
           ],
           "behavior_relevant_method_candidates": [],
           "behavior_relevant_listener_candidates": [],
-          "symbols_or_candidates_note": "No requirement-relevant method/listener candidates filtered from this file's P0.1 AST hits; file remains linked for structural/model ownership. See all_candidates_in_linked_files on the requirement."
+          "symbols_or_candidates_note": "Joined-call stacked avatar glance of current memberships."
+        },
+        {
+          "path": "synara/src/app/features/call/CallView.tsx",
+          "bucket": "feature",
+          "categories": [
+            "matrixrtc_calls"
+          ],
+          "symbols_or_candidates": [
+            "CallPrescreen useCallMembers",
+            "hasParticipant",
+            "n Live Badge",
+            "CallMemberRenderer"
+          ],
+          "line_refs": [
+            {
+              "symbol": "useCallSession room CallPrescreen",
+              "line": 73,
+              "kind": "product_helper",
+              "relevance_reason": "CallPrescreen binds MatrixRTC session for pre-join membership display."
+            },
+            {
+              "symbol": "useCallMembers CallPrescreen",
+              "line": 74,
+              "kind": "product_helper",
+              "relevance_reason": "CallPrescreen reads current memberships for participant list and Live badge."
+            },
+            {
+              "symbol": "hasParticipant callMembers.length",
+              "line": 75,
+              "kind": "product_helper",
+              "relevance_reason": "hasParticipant = callMembers.length > 0 gates Participant header."
+            },
+            {
+              "symbol": "Badge callMembers.length Live",
+              "line": 93,
+              "kind": "product_helper",
+              "relevance_reason": "Pre-join UI shows '{callMembers.length} Live' Critical Badge."
+            },
+            {
+              "symbol": "CallMemberRenderer members",
+              "line": 98,
+              "kind": "product_helper",
+              "relevance_reason": "Renders CallMembership cards for current participants before join."
+            }
+          ],
+          "model_coupling": [
+            "Room"
+          ],
+          "behavior_relevant_method_candidates": [],
+          "behavior_relevant_listener_candidates": [],
+          "symbols_or_candidates_note": "CallPrescreen membership DISPLAY before join. EXCLUDE join controls (003) and widget embed placement (002) as sole evidence."
         },
         {
           "path": "synara/src/app/features/call/CallMemberCard.tsx",
@@ -77928,163 +78237,110 @@
           "categories": [
             "matrixrtc_calls"
           ],
-          "symbols_or_candidates": [],
-          "line_refs": [],
+          "symbols_or_candidates": [
+            "CallMemberCard member.sender",
+            "membershipID",
+            "callIntent audio",
+            "CallMemberRenderer"
+          ],
+          "line_refs": [
+            {
+              "symbol": "member.sender userId",
+              "line": 26,
+              "kind": "product_helper",
+              "relevance_reason": "CallMemberCard reads member.sender for identity display."
+            },
+            {
+              "symbol": "member.callIntent audioOnly",
+              "line": 35,
+              "kind": "product_helper",
+              "relevance_reason": "audioOnly = member.callIntent === 'audio' drives mute-camera icon — membership field on display."
+            },
+            {
+              "symbol": "SequenceCard key membershipID",
+              "line": 40,
+              "kind": "product_helper",
+              "relevance_reason": "Card keyed by member.membershipID."
+            },
+            {
+              "symbol": "CallMemberRenderer members map",
+              "line": 88,
+              "kind": "product_helper",
+              "relevance_reason": "CallMemberRenderer maps CallMembership[] to CallMemberCard list (prescreen)."
+            }
+          ],
           "model_coupling": [
             "CallMembership"
           ],
           "behavior_relevant_method_candidates": [],
           "behavior_relevant_listener_candidates": [],
-          "symbols_or_candidates_note": "No requirement-relevant method/listener candidates filtered from this file's P0.1 AST hits; file remains linked for structural/model ownership. See all_candidates_in_linked_files on the requirement."
+          "symbols_or_candidates_note": "MEMBER IDENTITY cards: sender, membershipID, callIntent. Deep-imports CallMembership."
         },
         {
-          "path": "synara/src/app/hooks/useCall.ts",
-          "bucket": "hook",
+          "path": "synara/src/app/features/room-nav/RoomNavItem.tsx",
+          "bucket": "feature",
           "categories": [
-            "room_methods",
-            "event_emitters_listeners",
             "matrixrtc_calls"
           ],
-          "symbols_or_candidates": [],
+          "symbols_or_candidates": [
+            "useCallSession",
+            "useCallMembers",
+            "n Live Badge isCallRoom"
+          ],
           "line_refs": [
             {
-              "symbol": "on:MatrixRTCSessionManagerEvents.SessionStarted",
-              "line": 25,
-              "kind": "listener_candidate"
+              "symbol": "useCallSession room nav",
+              "line": 287,
+              "kind": "product_helper",
+              "relevance_reason": "Room nav binds MatrixRTC session for live membership indicator."
             },
             {
-              "symbol": "on:MatrixRTCSessionManagerEvents.SessionEnded",
-              "line": 26,
-              "kind": "listener_candidate"
+              "symbol": "useCallMembers room session nav",
+              "line": 288,
+              "kind": "product_helper",
+              "relevance_reason": "Room nav reads callMembers for Live badge count without requiring join."
             },
             {
-              "symbol": "off:MatrixRTCSessionManagerEvents.SessionStarted",
-              "line": 28,
-              "kind": "listener_candidate"
-            },
-            {
-              "symbol": "off:MatrixRTCSessionManagerEvents.SessionEnded",
-              "line": 29,
-              "kind": "listener_candidate"
-            },
-            {
-              "symbol": "on:MatrixRTCSessionEvent.MembershipsChanged",
-              "line": 46,
-              "kind": "listener_candidate"
-            },
-            {
-              "symbol": "removeListener:MatrixRTCSessionEvent.MembershipsChanged",
-              "line": 48,
-              "kind": "listener_candidate"
-            },
-            {
-              "symbol": "on:MatrixRTCSessionEvent.MembershipsChanged",
-              "line": 57,
-              "kind": "listener_candidate"
-            },
-            {
-              "symbol": "removeListener:MatrixRTCSessionEvent.MembershipsChanged",
-              "line": 59,
-              "kind": "listener_candidate"
+              "symbol": "isCallRoom callMembers.length Live Badge",
+              "line": 385,
+              "kind": "product_helper",
+              "relevance_reason": "When room.isCallRoom() && callMembers.length > 0, shows Critical Badge '{callMembers.length} Live' (L385–390) — display without join."
             }
           ],
           "model_coupling": [
-            "CallMembership",
-            "Room"
-          ],
-          "behavior_relevant_method_candidates": [],
-          "behavior_relevant_listener_candidates": [
-            {
-              "event": "MatrixRTCSessionManagerEvents.SessionStarted",
-              "method": "on",
-              "line": 25,
-              "category": "matrixrtc_calls",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            },
-            {
-              "event": "MatrixRTCSessionManagerEvents.SessionEnded",
-              "method": "on",
-              "line": 26,
-              "category": "matrixrtc_calls",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            },
-            {
-              "event": "MatrixRTCSessionManagerEvents.SessionStarted",
-              "method": "off",
-              "line": 28,
-              "category": "matrixrtc_calls",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            },
-            {
-              "event": "MatrixRTCSessionManagerEvents.SessionEnded",
-              "method": "off",
-              "line": 29,
-              "category": "matrixrtc_calls",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            },
-            {
-              "event": "MatrixRTCSessionEvent.MembershipsChanged",
-              "method": "on",
-              "line": 46,
-              "category": "matrixrtc_calls",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            },
-            {
-              "event": "MatrixRTCSessionEvent.MembershipsChanged",
-              "method": "removeListener",
-              "line": 48,
-              "category": "matrixrtc_calls",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            },
-            {
-              "event": "MatrixRTCSessionEvent.MembershipsChanged",
-              "method": "on",
-              "line": 57,
-              "category": "matrixrtc_calls",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            },
-            {
-              "event": "MatrixRTCSessionEvent.MembershipsChanged",
-              "method": "removeListener",
-              "line": 59,
-              "category": "matrixrtc_calls",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            }
-          ]
-        },
-        {
-          "path": "synara/src/app/hooks/useCallEmbed.ts",
-          "bucket": "hook",
-          "categories": [
-            "client_methods",
-            "room_methods"
-          ],
-          "symbols_or_candidates": [],
-          "line_refs": [],
-          "model_coupling": [
-            "MatrixClient",
             "Room"
           ],
           "behavior_relevant_method_candidates": [],
           "behavior_relevant_listener_candidates": [],
-          "symbols_or_candidates_note": "No requirement-relevant method/listener candidates filtered from this file's P0.1 AST hits; file remains linked for structural/model ownership. See all_candidates_in_linked_files on the requirement."
+          "symbols_or_candidates_note": "Room-list Live badge from current memberships (display without join). EXCLUDE handleStartCall join path (003) as sole evidence."
         }
       ],
       "ui_entry_points": [
-        "synara/src/app/features/call-status/LiveChip.tsx"
+        "synara/src/app/features/call-status/CallStatus.tsx",
+        "synara/src/app/features/call-status/LiveChip.tsx",
+        "synara/src/app/features/call-status/MemberGlance.tsx",
+        "synara/src/app/features/call/CallView.tsx",
+        "synara/src/app/features/call/CallMemberCard.tsx",
+        "synara/src/app/features/room-nav/RoomNavItem.tsx"
       ],
+      "ui_entry_points_rationale": "FR-7.11-001 is membership DISPLAY. Primary surfaces: (1) RoomNavItem '{n} Live' badge when call room has memberships (without join); (2) CallView CallPrescreen participant list + Live badge before join; (3) joined CallStatus LiveChip + MemberGlance. All consume useCallMembers. EXCLUDE as sole primary: CallRoomName (title only), useCallEmbed/createCallEmbed (join/embed adjacency), RoomTimeline m.call.member historical render, widget embed RoomView (002), hangup controls (003), encryption (004), cleanup (005), CSP (006), experimental risk (007).",
       "state_owners": [
         {
           "path": "synara/src/app/hooks/useCall.ts",
-          "ownership_evidence": "Identified as coordination/state module for this behavior via path role (state/client/util service) and P0.1 categories/candidates; not merely a presentational component."
-        },
-        {
-          "path": "synara/src/app/state/callEmbed.ts",
-          "ownership_evidence": "Identified as coordination/state module for this behavior via path role (state/client/util service) and P0.1 categories/candidates; not merely a presentational component."
+          "ownership_evidence": "Owns MatrixRTC session binding (mx.matrixRTC.getRoomSession + SessionStarted/Ended) and CallMembership[] projection (session.memberships + MembershipsChanged) consumed by all membership display UIs (RoomNavItem, CallView prescreen, CallStatus LiveChip/MemberGlance)."
         }
       ],
       "current_js_sdk": {
-        "behavior_relevant_method_candidates": [],
+        "behavior_relevant_method_candidates": [
+          {
+            "path": "synara/src/app/hooks/useCall.ts",
+            "name": "getRoomSession",
+            "line": 14,
+            "category": "matrixrtc_calls",
+            "confidence": "Source-inspected product call site (exact-line) on mx.matrixRTC; getRoomSession supplies MatrixRTCSession for memberships.",
+            "relevance_reason": "Session source for current membership state (session.memberships)."
+          }
+        ],
         "behavior_relevant_listener_candidates": [
           {
             "path": "synara/src/app/hooks/useCall.ts",
@@ -78092,7 +78348,8 @@
             "method": "on",
             "line": 25,
             "category": "matrixrtc_calls",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+            "confidence": "Source-inspected mx.matrixRTC.on(SessionStarted) for room-scoped session rebind.",
+            "relevance_reason": "Session lifecycle for membership source."
           },
           {
             "path": "synara/src/app/hooks/useCall.ts",
@@ -78100,7 +78357,8 @@
             "method": "on",
             "line": 26,
             "category": "matrixrtc_calls",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+            "confidence": "Source-inspected mx.matrixRTC.on(SessionEnded).",
+            "relevance_reason": "Session lifecycle for membership source."
           },
           {
             "path": "synara/src/app/hooks/useCall.ts",
@@ -78108,7 +78366,8 @@
             "method": "off",
             "line": 28,
             "category": "matrixrtc_calls",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+            "confidence": "Source-inspected cleanup.",
+            "relevance_reason": "Listener lifecycle."
           },
           {
             "path": "synara/src/app/hooks/useCall.ts",
@@ -78116,7 +78375,8 @@
             "method": "off",
             "line": 29,
             "category": "matrixrtc_calls",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+            "confidence": "Source-inspected cleanup.",
+            "relevance_reason": "Listener lifecycle."
           },
           {
             "path": "synara/src/app/hooks/useCall.ts",
@@ -78124,7 +78384,8 @@
             "method": "on",
             "line": 46,
             "category": "matrixrtc_calls",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+            "confidence": "Source-inspected session.on(MembershipsChanged) → setMemberships([...session.memberships]).",
+            "relevance_reason": "Primary live membership update for display."
           },
           {
             "path": "synara/src/app/hooks/useCall.ts",
@@ -78132,7 +78393,8 @@
             "method": "removeListener",
             "line": 48,
             "category": "matrixrtc_calls",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+            "confidence": "Source-inspected cleanup.",
+            "relevance_reason": "Listener lifecycle."
           },
           {
             "path": "synara/src/app/hooks/useCall.ts",
@@ -78140,7 +78402,8 @@
             "method": "on",
             "line": 57,
             "category": "matrixrtc_calls",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+            "confidence": "Source-inspected useCallMembersChange.",
+            "relevance_reason": "Same MembershipsChanged surface for consumers."
           },
           {
             "path": "synara/src/app/hooks/useCall.ts",
@@ -78148,11 +78411,12 @@
             "method": "removeListener",
             "line": 59,
             "category": "matrixrtc_calls",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+            "confidence": "Source-inspected cleanup.",
+            "relevance_reason": "Listener lifecycle."
           }
         ],
         "all_candidates_in_linked_files": {
-          "method_count": 0,
+          "method_count": 1,
           "listener_count": 8,
           "note": "Unfiltered P0.1 AST candidates across linked production import files. Do not treat these as proven APIs for this requirement; use behavior_relevant_* fields.",
           "methods_sample": [],
@@ -78305,96 +78569,42 @@
             "cutover_disposition": "replace-deep-js-sdk-import-with-synara-dto-or-rust-projection"
           }
         ],
-        "method_candidates": [],
+        "method_candidates": [
+          "getRoomSession"
+        ],
         "listener_events": [
           "MatrixRTCSessionEvent.MembershipsChanged",
           "MatrixRTCSessionManagerEvents.SessionEnded",
           "MatrixRTCSessionManagerEvents.SessionStarted"
-        ]
+        ],
+        "behavior_relevance_policy": "Exact-line source inspection for current MatrixRTC membership state DISPLAY only. RETAIN: useCallSession mx.matrixRTC.getRoomSession + SessionStarted/Ended rebind; useCallMembers session.memberships + MembershipsChanged; UI LiveChip/MemberGlance/CallMemberCard/CallView CallPrescreen/RoomNavItem Live badge consuming CallMembership[]. EXCLUDE as sole evidence: widget embed (FR-7.11-002); join/leave write (FR-7.11-003); encryption keys (FR-7.11-004); cleanup (FR-7.11-005); CSP (FR-7.11-006); experimental-widgets risk (FR-7.11-007); RoomTimeline m.call.member history alone; CallRoomName; callEmbed atom alone; SC-082 alone as membership display; Room::has_active_room_call boolean alone as full membership list; dual-backend/SDK selector/raw /_matrix HTTP."
       },
       "current_behavior_and_limits": {
-        "summary": "Current desktop implements this via 6 production matrix-js-sdk-related file(s); status=implemented.",
-        "notes": null,
-        "limits": "P0.1 method candidates are AST name hits, not type-checked receiver proofs."
+        "summary": "IMPLEMENTED: Synara displays current MatrixRTC membership state via matrix-js-sdk MatrixRTCSession.memberships projected by useCallMembers (MembershipsChanged) and shown as '{n} Live' counts + member identity UIs (RoomNavItem, CallView CallPrescreen, joined CallStatus LiveChip/MemberGlance). status=implemented.",
+        "notes": "Evidence (conservative): (1) PRODUCT MEANING — FR-7.11-001 is DISPLAY of current MatrixRTC membership state (who is in the call now), NOT widget embed (002), NOT join/leave writes (003), NOT encryption keys (004), NOT cleanup (005). (2) SESSION + MEMBERSHIPS OWNER — useCall.ts: useCallSession L11–33 seeds and rebinds mx.matrixRTC.getRoomSession(room) on MatrixRTCSessionManagerEvents.SessionStarted/SessionEnded (on L25–26, off L28–29); useCallMembers L36–52 seeds [...session.memberships] L37 and updates on MatrixRTCSessionEvent.MembershipsChanged L46–48; useCallMembersChange L55–61 same event for consumers. (3) JOINED CALL STATUS UI — CallStatus.tsx L24–25 session/members; L32 memberVisible = callJoined && callMembers.length > 0; L45 LiveChip count={callMembers.length} members={callMembers}; L66 MemberGlance members={callMembers}. LiveChip.tsx maps members (sender, membershipID) L74–116 and shows '{count} Live' L133. MemberGlance.tsx stacked avatars L27–68 (max 6 + remaining). (4) PRE-JOIN CALL VIEW — CallView CallPrescreen L73–75 useCallSession/useCallMembers; L91–95 '{n} Live' Badge; L98 CallMemberRenderer. CallMemberCard.tsx shows sender name/avatar, membershipID key, callIntent==='audio' icon L26–69; CallMemberRenderer lists cards L74–114. (5) ROOM LIST — RoomNavItem L287–288 session/members; L385–390 isCallRoom && callMembers.length > 0 → Critical '{n} Live' badge (display without join). (6) ADJACENCY EXCLUDED AS SOLE EVIDENCE — createCallEmbed rtcSession.memberships.length for ongoing intent (useCallEmbed L46–48) is join/embed adjacency; RoomTimeline GroupCallMemberPrefix/SessionMembershipData is historical timeline render of m.call.member, not live session.memberships projection; CallRoomName is room title only; callEmbed atom is embed ownership not membership list. (7) DISTINCTIONS — 002 widget; 003 write; 004 keys; 005 cleanup; 006 CSP; 007 risk. (8) No existing automated AT. (9) Cutover P10.4 (+P11.3): replace js-sdk MatrixRTCSession.memberships projection with Rust/IPC equivalent. Honest gap: GAP-MATRIXRTC-MEMBERSHIP-PRESENCE provides Room::has_active_room_call boolean presence only (probe P0.3c-room-has-active-room-call; E1/E2 only) — NOT full CallMembership list (sender/membershipID/callIntent). Product cutover must project list (e.g. from call member state / product DTO), not claim boolean alone as full list parity. SC-082 experimental-widgets is widget plumbing, NOT membership display primary (dossier: no SC-082 cross-ref on GAP-MATRIXRTC-MEMBERSHIP-PRESENCE). SC-082 alone / compile-only / raw HTTP / dual-backend / inventing high-level MatrixRTC session API FAIL.",
+        "limits": "P0.1 method candidates are AST name hits unless marked source-inspected. Product status is implemented for DISPLAY via matrix-js-sdk MatrixRTC session memberships. Rust pin has only boolean Room::has_active_room_call under GAP-MATRIXRTC-MEMBERSHIP-PRESENCE (blocked E3–E5); full membership list projection is residual product work for cutover. Do not treat SC-082 as this FR's primary capability. No E2E AT yet."
       },
       "p0_1_linkage": {
         "categories": [
           "matrixrtc_calls"
         ],
         "file_ledger_paths": [
-          "synara/src/app/features/call-status/CallRoomName.tsx",
+          "synara/src/app/hooks/useCall.ts",
+          "synara/src/app/features/call-status/CallStatus.tsx",
           "synara/src/app/features/call-status/LiveChip.tsx",
           "synara/src/app/features/call-status/MemberGlance.tsx",
+          "synara/src/app/features/call/CallView.tsx",
           "synara/src/app/features/call/CallMemberCard.tsx",
-          "synara/src/app/hooks/useCall.ts",
-          "synara/src/app/hooks/useCallEmbed.ts"
+          "synara/src/app/features/room-nav/RoomNavItem.tsx"
         ]
       },
       "rust_target": {
-        "support_conclusion": "gap-matrixrtc-membership-read",
-        "capability_ids": [
-          "SC-082"
-        ],
+        "support_conclusion": "product-matrixrtc-membership-display-gap-presence-boolean-only",
+        "capability_ids": [],
         "gap_ids": [
           "GAP-MATRIXRTC-MEMBERSHIP-PRESENCE"
         ],
-        "capabilities": [
-          {
-            "capability_id": "SC-082",
-            "api_path": "matrix_sdk::widget (experimental-widgets)",
-            "required_features": {
-              "requested_direct": [],
-              "required_feature_absent": "experimental-widgets",
-              "resolved_on_matrix_sdk": [
-                "e2e-encryption"
-              ],
-              "resolved_on_matrix_sdk_ui": []
-            },
-            "final_state": "blocked",
-            "final": {
-              "p0_3c_resolution_id": "SC-082",
-              "p0_3c_route_class": "experimental-api",
-              "p0_3c_evidence_status": "experimental-api-probed",
-              "p0_3c_profile": "profile-experimental-widgets",
-              "p0_3c_probe_ids": [
-                "P0.3c-widget-driver-type",
-                "P0.3c-widget-driver-handle-type",
-                "P0.3c-widget-settings-type",
-                "P0.3c-widget-driver-new",
-                "P0.3c-widget-settings-generate-webview-url",
-                "P0.3c-widget-new-virtual-element-call",
-                "P0.3c-widget-capabilities-type",
-                "P0.3c-widget-capabilities-send-read-fields",
-                "P0.3c-widget-to-device-event-filter-type"
-              ],
-              "final_state": "blocked",
-              "final_state_rationale": "experimental-widgets APIs compile-probed. Module existence does not imply Element Call product parity. Experimental not accepted for production here.",
-              "missing_gates": [
-                "experimental_feature_risk_gate",
-                "element_call_host_and_postmessage",
-                "live_call_parity",
-                "ui_acceptance"
-              ],
-              "section_5_evidence_present": [
-                "E1-experimental-api",
-                "E2-compile-probes"
-              ],
-              "notes": "Do not infer call parity from widget module presence.",
-              "cross_ref_gap_ids": [
-                "GAP-MATRIXRTC-WIDGET-CAPABILITY-PLUMBING",
-                "GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION"
-              ],
-              "cross_ref_rationale": {
-                "GAP-MATRIXRTC-WIDGET-CAPABILITY-PLUMBING": "Same experimental-widgets profile/surface: Capabilities, filters, virtual Element Call URL helpers are the SC-082 experimental API shape.",
-                "GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION": "SC-082 module existence does not close membership write or encryption-key session lifecycle; this gap records the remaining no-viable high-level public route."
-              }
-            },
-            "source_url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/lib.rs#L64-L65",
-            "p0_3b_evidence_status": "deferred-to-p0.3c",
-            "p0_3b_probe_id": null,
-            "plan_section_7_area": "7.11-calls-and-widgets"
-          }
-        ],
+        "capabilities": [],
         "gaps": [
           {
             "gap_id": "GAP-MATRIXRTC-MEMBERSHIP-PRESENCE",
@@ -78403,12 +78613,14 @@
             "final_state": "blocked",
             "final": {
               "final_state": "blocked",
-              "final_state_rationale": "Stable API entry points compile-probed in P0.3c. E3/E4/E5 not present; remaining semantic/runtime work recorded on the gap row.",
+              "final_state_rationale": "Stable API Room::has_active_room_call compile-probed in P0.3c (E1/E2). E3/E4/E5 not present. API is boolean presence only — does not provide full membership list (sender/membershipID/callIntent) that product UI displays today.",
+
               "missing_gates": [
                 "semantic_or_integration_test",
                 "live_synapse_two_client",
                 "ui_acceptance",
-                "remaining_semantic_runtime_work"
+                "remaining_semantic_runtime_work",
+                "GATE-7.11-001-FULL-MEMBERSHIP-LIST-PROJECTION"
               ],
               "section_5_evidence_present": [
                 "E1",
@@ -78422,15 +78634,20 @@
             "probe_ids": [
               "P0.3c-room-has-active-room-call"
             ],
-            "summary": "Room::has_active_room_call (via BaseRoom Deref) exposes active room-call membership presence. Does NOT provide membership writes, join/leave, or encryption-key exchange.",
-            "remaining_work": "Product UI for live membership display; write path separate."
+            "summary": "Room::has_active_room_call (via BaseRoom Deref) exposes active room-call membership presence. Does NOT provide membership writes, join/leave, encryption-key exchange, or full membership list fields product displays.",
+            "remaining_work": "Product UI for live membership display must project list equivalent to MatrixRTCSession.memberships; boolean presence alone is insufficient for LiveChip/MemberGlance/CallMemberCard parity. Write path separate (FR-7.11-003)."
           }
         ],
-        "notes": "Mappings use only accepted P0.3 capability/gap IDs. Compile probes establish API shape only; final dossier states remain blocked/typed/upstream until E3–E5 gates exist.",
+        "notes": "Honest rust_target for FR-7.11-001: product-matrixrtc-membership-display-gap-presence-boolean-only. Product DISPLAY is implemented on matrix-js-sdk (useCallMembers → session.memberships). Rust pin gap is GAP-MATRIXRTC-MEMBERSHIP-PRESENCE (Room::has_active_room_call boolean). SC-082 experimental-widgets intentionally NOT listed as primary capability — dossier states stable MatrixRTC presence is not SC-082. Cutover P10.4 (+P11.3) must preserve count+list display via product IPC projection; boolean alone / SC-082 alone / compile-only / raw HTTP / dual-backend FAIL.",
         "distinctions_preserved": [
-          "server typed search (SC-071) vs experimental local search (SC-072)",
-          "widget plumbing (SC-082/GAP widget) vs call parity (membership write/key session gaps)",
-          "compile shape (E1/E2) vs runtime/UI parity (E3–E5 missing => blocked)"
+          "membership DISPLAY (this FR) vs widget plumbing SC-082 / FR-7.11-002",
+          "membership DISPLAY (this FR) vs join/leave write / FR-7.11-003 / GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION",
+          "membership DISPLAY (this FR) vs encryption-key flow / FR-7.11-004",
+          "membership DISPLAY (this FR) vs session cleanup / FR-7.11-005",
+          "Room::has_active_room_call boolean presence vs full CallMembership list projection",
+          "session.memberships live projection vs RoomTimeline m.call.member history render",
+          "compile shape (E1/E2) vs runtime/UI parity (E3–E5 missing => gap blocked)",
+          "typed/product IPC projection vs raw /_matrix HTTP or dual-backend/SDK selector"
         ]
       },
       "implementation_tasks": [
@@ -78438,17 +78655,18 @@
           "task_id": "P10.4",
           "title": "MatrixRTC membership/call-state projection",
           "phase": "Phase 10 — Element Call and widget completion",
-          "scope_rationale": "Accepted plan task P10.4 covers this Section 7.11 behavior during Phase 10 — Element Call and widget completion."
+          "scope_rationale": "Accepted plan task P10.4 covers MatrixRTC membership/call-state projection; must preserve FR-7.11-001 Live count + member list display over GAP-MATRIXRTC-MEMBERSHIP-PRESENCE + product list projection (boolean alone insufficient)."
         },
         {
           "task_id": "P11.3",
           "title": "Convert components/features/pages by domain",
           "phase": "Phase 11 — React conversion and atomic desktop cutover",
-          "scope_rationale": "Accepted plan task P11.3 covers this Section 7.11 behavior during Phase 11 — React conversion and atomic desktop cutover."
+          "scope_rationale": "Accepted plan task P11.3 covers React conversion of useCall + LiveChip/MemberGlance/CallMemberCard/CallView/RoomNavItem under Rust/IPC ownership for membership display."
         }
       ],
       "automated_tests": {
         "existing": [],
+
         "planned_required": [
           {
             "id": "AT-FR-7.11-001-001",
@@ -78457,37 +78675,41 @@
             "task_id": "P10.4",
             "phase": "Phase 10 — Element Call and widget completion",
             "level": "integration-e2e",
-            "scenario": "7.11/FR-7.11-001: exercise 'current MatrixRTC membership state displayed by Synara;' via owner `synara/src/app/hooks/useCall.ts` and UI `synara/src/app/features/call-status/LiveChip.tsx`, then confirm Rust/IPC cutover task `P10.4` preserves observable behavior without raw Matrix runtime HTTP.",
+            "scenario": "Integration against disposable Synapse (two clients): (A) MEMBERSHIP LIST — Client B joins MatrixRTC call; Client A observes useCallMembers session.memberships + MembershipsChanged. (B) LIVE COUNT UI — RoomNavItem '{n} Live'; CallView CallPrescreen Live badge + CallMemberRenderer. (C) JOINED STATUS — CallStatus LiveChip + MemberGlance. (D) LEAVE UPDATE via MembershipsChanged. (E) DISTINCTIONS — not 002 widget, 003 write, 004 keys, 005 cleanup, 006 CSP, 007 risk, timeline history alone, has_active_room_call boolean alone as full list. Cutover P10.4 (+P11.3) Rust/IPC list projection under GAP-MATRIXRTC-MEMBERSHIP-PRESENCE; SC-082 alone / compile-only / raw HTTP / dual-backend FAIL.",
+            "test_target": "useCall.ts getRoomSession + session.memberships + MembershipsChanged; RoomNavItem/CallView/LiveChip/MemberGlance/CallMemberCard; post-cutover P10.4/P11.3 GAP-MATRIXRTC-MEMBERSHIP-PRESENCE list projection",
             "preconditions": [
-              "Desktop app with Element Call / widget config for the build",
-              "Room with MatrixRTC membership fixtures; two clients for join/leave",
-              "CSP-enabled production-like shell",
-              "Linked owner path present in tree: synara/src/app/hooks/useCall.ts",
-              "Primary UI/lifecycle surface: synara/src/app/features/call-status/LiveChip.tsx"
+              "Disposable Synapse with two clients; call room with MatrixRTC memberships.",
+              "Named owners: useCall.ts, CallStatus/LiveChip/MemberGlance, CallView/CallMemberCard, RoomNavItem.",
+              "Do not accept widget-only (002), write-only (003), keys-only (004), cleanup-only (005), SC-082 alone, boolean alone as full list, or compile-only as sole pass."
             ],
             "trigger_actions": [
-              "Boot the appropriate harness for level=integration-e2e against disposable Synapse (or iOS notes if any).",
-              "Establish fixtures required by the clause list: current MatrixRTC membership state displayed by Synara.",
-              "Open UI/lifecycle surface `synara/src/app/features/call-status/LiveChip.tsx` (or follow ui_entry_points_rationale if no dedicated UI).",
-              "Step 1: perform the product action that implements «current MatrixRTC membership state displayed by Synara» using current owner `synara/src/app/hooks/useCall.ts`.",
-              "Start/stop embedded call/widget session; change room; logout; close window — confirm cleanup."
+              "Boot integration harness against disposable Synapse with two clients.",
+              "MEMBERSHIP LIST: B joins call; A opens room; assert memberships include B and CallPrescreen Live + cards.",
+              "NAV LIVE BADGE: assert RoomNavItem Critical '{n} Live' when isCallRoom and memberships non-empty.",
+              "JOINED STATUS: when A joined, assert LiveChip count menu and MemberGlance avatars.",
+              "LEAVE UPDATE: B leaves; assert list/count updates via MembershipsChanged.",
+              "After cutover P10.4 (+P11.3), repeat via Rust/IPC; SC-082 alone / boolean alone as full list / raw HTTP / dual-backend FAIL."
             ],
             "assertions": [
-              "Each clause is observable: «current MatrixRTC membership state displayed by Synara».",
-              "State coordination remains through `synara/src/app/hooks/useCall.ts` (or its Rust/IPC successor after cutover), not ad-hoc dual writers.",
-              "Behavior-relevant listener candidates observed or replaced: on:MatrixRTCSessionManagerEvents.SessionStarted, on:MatrixRTCSessionManagerEvents.SessionEnded, off:MatrixRTCSessionManagerEvents.SessionStarted, off:MatrixRTCSessionManagerEvents.SessionEnded, on:MatrixRTCSessionEvent.MembershipsChanged, removeListener:MatrixRTCSessionEvent.MembershipsChanged.",
-              "Rust mapping remains conservative: caps=[SC-082] gaps=[GAP-MATRIXRTC-MEMBERSHIP-PRESENCE]; compile-only blocked states are not treated as runtime pass.",
-              "No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless dossier marks that exact behavior typed-sdk-request-required.",
-              "Widget plumbing success is not recorded as full call parity if membership-write/key-session gaps remain."
+              "MEMBERSHIP DISPLAY: count + member identity driven by useCallSession/useCallMembers.",
+              "LIVE SURFACES: RoomNavItem, CallView, joined CallStatus reflect session.memberships.",
+              "UPDATES: MembershipsChanged and SessionStarted/Ended rebind keep display current.",
+              "DISTINCTIONS: this FR ≠ 002–007; ≠ timeline history alone.",
+              "COORDINATION: through useCall.ts or Rust/IPC successor, not dual-backend.",
+              "CUTOVER: P10.4 (+P11.3) list projection under GAP-MATRIXRTC-MEMBERSHIP-PRESENCE; SC-082 alone / compile-only never product pass; no raw /_matrix HTTP.",
+              "No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless typed-sdk-request-required for that exact behavior."
             ],
             "required_environment": [
-              "Desktop app with Element Call / widget config for the build",
-              "Room with MatrixRTC membership fixtures; two clients for join/leave",
-              "CSP-enabled production-like shell"
+              "Disposable Synapse; two clients; call room with MatrixRTC memberships",
+              "Product surfaces: useCall.ts, CallStatus/LiveChip/MemberGlance, CallView/CallMemberCard, RoomNavItem"
             ],
             "does_not_currently_exist": true,
             "clause_breakdown": [
-              "current MatrixRTC membership state displayed by Synara"
+              "current MatrixRTC membership state (session.memberships) displayed by Synara",
+              "Live count indicators (RoomNavItem, CallView, LiveChip)",
+              "Member identity display (sender, membershipID, display name, optional callIntent)",
+              "live updates via MembershipsChanged + session rebind",
+              "cutover P10.4 (+P11.3) list projection under GAP-MATRIXRTC-MEMBERSHIP-PRESENCE; SC-082/widget alone FAIL"
             ]
           }
         ]
@@ -78495,26 +78717,30 @@
       "manual_acceptance_id": "MA-FR-7.11-001",
       "migration_cutover_disposition": "replace-js-sdk-with-rust-via-ipc",
       "missing_evidence_gates": [
-        "element_call_host_and_postmessage",
-        "experimental_feature_risk_gate",
-        "live_call_parity",
-        "ui_acceptance"
+        "live_synapse_two_client",
+        "semantic_or_integration_test",
+        "ui_acceptance",
+        "remaining_semantic_runtime_work",
+        "GATE-7.11-001-FULL-MEMBERSHIP-LIST-PROJECTION"
       ],
       "security_privacy_lifecycle_concerns": [
         "no-raw-matrix-http",
-        "experimental-widgets-risk"
+        "no-dual-backend-matrixrtc-membership-selector",
+        "membership-display-not-widget-parity"
       ],
       "traceability_status": "complete-conservative",
       "blockers": [
+        "GATE-7.11-001-FULL-MEMBERSHIP-LIST-PROJECTION",
         {
-          "severity": "high",
-          "kind": "experimental-widgets-and-call-parity",
-          "summary": "Call/widget path depends on experimental-widgets and MatrixRTC gaps; widget plumbing ≠ call parity."
+          "severity": "medium",
+          "kind": "gap-matrixrtc-membership-presence-list-projection",
+          "summary": "FR-7.11-001 product display is implemented via matrix-js-sdk MatrixRTCSession.memberships. Cutover P10.4 (+P11.3) under GAP-MATRIXRTC-MEMBERSHIP-PRESENCE: Room::has_active_room_call is boolean presence only (E1/E2; E3–E5 missing) — not full membership list. Product must project list equivalent; SC-082 is NOT primary for this FR. Compile-only / SC-082 alone / raw HTTP / dual-backend FAIL."
         }
       ]
     },
     {
       "id": "FR-7.11-002",
+
       "origin": "plan-section-7",
       "section_id": "7.11",
       "plan_heading": "### 7.11 Calls and widgets",
@@ -79183,21 +79409,6 @@
       ],
       "current_status": "partial",
       "current_production_files": [
-        {
-          "path": "synara/src/app/features/call-status/CallRoomName.tsx",
-          "bucket": "feature",
-          "categories": [
-            "room_methods"
-          ],
-          "symbols_or_candidates": [],
-          "line_refs": [],
-          "model_coupling": [
-            "Room"
-          ],
-          "behavior_relevant_method_candidates": [],
-          "behavior_relevant_listener_candidates": [],
-          "symbols_or_candidates_note": "No requirement-relevant method/listener candidates filtered from this file's P0.1 AST hits; file remains linked for structural/model ownership. See all_candidates_in_linked_files on the requirement."
-        },
         {
           "path": "synara/src/app/features/call-status/LiveChip.tsx",
           "bucket": "feature",
@@ -86129,7 +86340,6 @@
       ],
       "classification": "requirement-linked",
       "linked_requirement_ids": [
-        "FR-7.11-001",
         "FR-7.11-003"
       ],
       "rationale": null,
@@ -88155,7 +88365,8 @@
       "linked_requirement_ids": [
         "FR-7.2-004",
         "FR-7.2-005",
-        "FR-7.8-005"
+        "FR-7.8-005",
+        "FR-7.11-001"
       ],
       "rationale": null,
       "p0_1_role": "production",
@@ -91125,7 +91336,6 @@
       ],
       "classification": "requirement-linked",
       "linked_requirement_ids": [
-        "FR-7.11-001",
         "FR-7.11-002",
         "FR-7.11-003",
         "FR-7.11-004",
@@ -108093,37 +108303,41 @@
         "task_id": "P10.4",
         "phase": "Phase 10 — Element Call and widget completion",
         "level": "integration-e2e",
-        "scenario": "7.11/FR-7.11-001: exercise 'current MatrixRTC membership state displayed by Synara;' via owner `synara/src/app/hooks/useCall.ts` and UI `synara/src/app/features/call-status/LiveChip.tsx`, then confirm Rust/IPC cutover task `P10.4` preserves observable behavior without raw Matrix runtime HTTP.",
+        "scenario": "Integration against disposable Synapse (two clients): (A) MEMBERSHIP LIST — Client B joins MatrixRTC call; Client A observes useCallMembers session.memberships + MembershipsChanged. (B) LIVE COUNT UI — RoomNavItem '{n} Live'; CallView CallPrescreen Live badge + CallMemberRenderer. (C) JOINED STATUS — CallStatus LiveChip + MemberGlance. (D) LEAVE UPDATE via MembershipsChanged. (E) DISTINCTIONS — not 002 widget, 003 write, 004 keys, 005 cleanup, 006 CSP, 007 risk, timeline history alone, has_active_room_call boolean alone as full list. Cutover P10.4 (+P11.3) Rust/IPC list projection under GAP-MATRIXRTC-MEMBERSHIP-PRESENCE; SC-082 alone / compile-only / raw HTTP / dual-backend FAIL.",
+        "test_target": "useCall.ts getRoomSession + session.memberships + MembershipsChanged; RoomNavItem/CallView/LiveChip/MemberGlance/CallMemberCard; post-cutover P10.4/P11.3 GAP-MATRIXRTC-MEMBERSHIP-PRESENCE list projection",
         "preconditions": [
-          "Desktop app with Element Call / widget config for the build",
-          "Room with MatrixRTC membership fixtures; two clients for join/leave",
-          "CSP-enabled production-like shell",
-          "Linked owner path present in tree: synara/src/app/hooks/useCall.ts",
-          "Primary UI/lifecycle surface: synara/src/app/features/call-status/LiveChip.tsx"
+          "Disposable Synapse with two clients; call room with MatrixRTC memberships.",
+          "Named owners: useCall.ts, CallStatus/LiveChip/MemberGlance, CallView/CallMemberCard, RoomNavItem.",
+          "Do not accept widget-only (002), write-only (003), keys-only (004), cleanup-only (005), SC-082 alone, boolean alone as full list, or compile-only as sole pass."
         ],
         "trigger_actions": [
-          "Boot the appropriate harness for level=integration-e2e against disposable Synapse (or iOS notes if any).",
-          "Establish fixtures required by the clause list: current MatrixRTC membership state displayed by Synara.",
-          "Open UI/lifecycle surface `synara/src/app/features/call-status/LiveChip.tsx` (or follow ui_entry_points_rationale if no dedicated UI).",
-          "Step 1: perform the product action that implements «current MatrixRTC membership state displayed by Synara» using current owner `synara/src/app/hooks/useCall.ts`.",
-          "Start/stop embedded call/widget session; change room; logout; close window — confirm cleanup."
+          "Boot integration harness against disposable Synapse with two clients.",
+          "MEMBERSHIP LIST: B joins call; A opens room; assert memberships include B and CallPrescreen Live + cards.",
+          "NAV LIVE BADGE: assert RoomNavItem Critical '{n} Live' when isCallRoom and memberships non-empty.",
+          "JOINED STATUS: when A joined, assert LiveChip count menu and MemberGlance avatars.",
+          "LEAVE UPDATE: B leaves; assert list/count updates via MembershipsChanged.",
+          "After cutover P10.4 (+P11.3), repeat via Rust/IPC; SC-082 alone / boolean alone as full list / raw HTTP / dual-backend FAIL."
         ],
         "assertions": [
-          "Each clause is observable: «current MatrixRTC membership state displayed by Synara».",
-          "State coordination remains through `synara/src/app/hooks/useCall.ts` (or its Rust/IPC successor after cutover), not ad-hoc dual writers.",
-          "Behavior-relevant listener candidates observed or replaced: on:MatrixRTCSessionManagerEvents.SessionStarted, on:MatrixRTCSessionManagerEvents.SessionEnded, off:MatrixRTCSessionManagerEvents.SessionStarted, off:MatrixRTCSessionManagerEvents.SessionEnded, on:MatrixRTCSessionEvent.MembershipsChanged, removeListener:MatrixRTCSessionEvent.MembershipsChanged.",
-          "Rust mapping remains conservative: caps=[SC-082] gaps=[GAP-MATRIXRTC-MEMBERSHIP-PRESENCE]; compile-only blocked states are not treated as runtime pass.",
-          "No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless dossier marks that exact behavior typed-sdk-request-required.",
-          "Widget plumbing success is not recorded as full call parity if membership-write/key-session gaps remain."
+          "MEMBERSHIP DISPLAY: count + member identity driven by useCallSession/useCallMembers.",
+          "LIVE SURFACES: RoomNavItem, CallView, joined CallStatus reflect session.memberships.",
+          "UPDATES: MembershipsChanged and SessionStarted/Ended rebind keep display current.",
+          "DISTINCTIONS: this FR ≠ 002–007; ≠ timeline history alone.",
+          "COORDINATION: through useCall.ts or Rust/IPC successor, not dual-backend.",
+          "CUTOVER: P10.4 (+P11.3) list projection under GAP-MATRIXRTC-MEMBERSHIP-PRESENCE; SC-082 alone / compile-only never product pass; no raw /_matrix HTTP.",
+          "No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless typed-sdk-request-required for that exact behavior."
         ],
         "required_environment": [
-          "Desktop app with Element Call / widget config for the build",
-          "Room with MatrixRTC membership fixtures; two clients for join/leave",
-          "CSP-enabled production-like shell"
+          "Disposable Synapse; two clients; call room with MatrixRTC memberships",
+          "Product surfaces: useCall.ts, CallStatus/LiveChip/MemberGlance, CallView/CallMemberCard, RoomNavItem"
         ],
         "does_not_currently_exist": true,
         "clause_breakdown": [
-          "current MatrixRTC membership state displayed by Synara"
+          "current MatrixRTC membership state (session.memberships) displayed by Synara",
+          "Live count indicators (RoomNavItem, CallView, LiveChip)",
+          "Member identity display (sender, membershipID, display name, optional callIntent)",
+          "live updates via MembershipsChanged + session rebind",
+          "cutover P10.4 (+P11.3) list projection under GAP-MATRIXRTC-MEMBERSHIP-PRESENCE; SC-082/widget alone FAIL"
         ]
       },
       {
@@ -111801,26 +112015,30 @@
         "Linux"
       ],
       "preconditions": [
-        "Desktop app with Element Call / widget config for the build",
-        "Room with MatrixRTC membership fixtures; two clients for join/leave",
-        "CSP-enabled production-like shell",
-        "State owner available: synara/src/app/hooks/useCall.ts",
-        "UI/lifecycle: synara/src/app/features/call-status/LiveChip.tsx",
-        "Current status baseline: implemented"
+        "Disposable Synapse with two clients; call room supporting MatrixRTC memberships.",
+        "State owner: useCall.ts (useCallSession + useCallMembers).",
+        "UI: RoomNavItem Live badge; CallView CallPrescreen CallMemberRenderer; when joined CallStatus LiveChip + MemberGlance.",
+        "Current status baseline: implemented (product displays current memberships via matrix-js-sdk MatrixRTC session)."
       ],
       "actions": [
-        "Launch Synara desktop on the target platform against disposable Synapse; use a clean or known fixture profile as required by «current MatrixRTC membership state displayed by Synara;».",
-        "Identify state owner `synara/src/app/hooks/useCall.ts` and open `synara/src/app/features/call-status/LiveChip.tsx`.",
-        "Action 1 — «current MatrixRTC membership state displayed by Synara»: perform the minimal user/system steps that trigger this clause (use linked files under current_production_files if the entry point is indirect).",
-        "Join call/widget, verify membership UI, leave/decline as applicable, switch rooms, and close window; confirm sessions clean up."
+        "Launch Synara desktop on the target platform against disposable Synapse.",
+        "MEMBERSHIP LIST: with peer B in the call, open the call room; observe CallPrescreen '{n} Live' and participant cards for current members.",
+        "NAV LIVE BADGE: in room list, observe Critical '{n} Live' on the call room when memberships non-empty.",
+        "JOINED STATUS: join the call; observe LiveChip '{count} Live' member menu and MemberGlance avatars.",
+        "LEAVE UPDATE: peer leaves; observe Live count/list update without requiring app restart.",
+        "DISTINCTIONS: do not treat widget embed alone (002), join/leave write alone (003), key flow alone (004), or cleanup alone (005) as passing this display FR.",
+        "On post-cutover build: repeat membership display via Rust/IPC projection; no raw /_matrix HTTP; no dual-backend; SC-082 widget alone is not membership display parity."
       ],
       "expected_results": [
-        "All clauses under «current MatrixRTC membership state displayed by Synara;» produce the user-visible or system-observable success criteria without error toasts unrelated to intentional negative tests.",
-        "Clause 1 «current MatrixRTC membership state displayed by Synara» is satisfied on macOS, Linux with owner `synara/src/app/hooks/useCall.ts`.",
-        "No unexpected raw /_matrix traffic from the app renderer for this flow on the post-cutover build."
+        "CURRENT MEMBERSHIPS displayed: count and member identities match MatrixRTC session memberships.",
+        "LIVE SURFACES update when peers join/leave.",
+        "DISTINCTIONS: 002–007 alone do not pass this FR.",
+        "Post-cutover: same display observables without raw /_matrix runtime HTTP or dual-backend."
       ],
       "clause_breakdown": [
-        "current MatrixRTC membership state displayed by Synara"
+        "current MatrixRTC membership state displayed by Synara",
+        "Live count + member list/identity surfaces",
+        "live membership change updates"
       ]
     },
     {
@@ -112102,9 +112320,9 @@
     },
     {
       "requirement_id": "FR-7.11-001",
-      "severity": "high",
-      "kind": "experimental-widgets-and-call-parity",
-      "summary": "Call/widget path depends on experimental-widgets and MatrixRTC gaps; widget plumbing ≠ call parity."
+      "severity": "medium",
+      "kind": "gap-matrixrtc-membership-presence-list-projection",
+      "summary": "FR-7.11-001 product display is implemented via matrix-js-sdk MatrixRTCSession.memberships. Cutover P10.4 (+P11.3) under GAP-MATRIXRTC-MEMBERSHIP-PRESENCE: Room::has_active_room_call is boolean presence only (E1/E2; E3–E5 missing) — not full membership list. Product must project list equivalent; SC-082 is NOT primary for this FR. Compile-only / SC-082 alone / raw HTTP / dual-backend FAIL."
     },
     {
       "requirement_id": "FR-7.11-002",
@@ -112118,6 +112336,7 @@
       "kind": "upstream-change-required",
       "summary": "FR-7.11-003 depends on upstream-change-required gap(s): ['GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION', 'GAP-MATRIXRTC-MEMBERSHIP-PRESENCE']"
     },
+
     {
       "requirement_id": "FR-7.11-003",
       "severity": "high",
@@ -112185,9 +112404,9 @@
     "unresolved_planning_blockers": [
       {
         "requirement_id": "FR-7.11-001",
-        "severity": "high",
-        "kind": "experimental-widgets-and-call-parity",
-        "summary": "Call/widget path depends on experimental-widgets and MatrixRTC gaps; widget plumbing ≠ call parity."
+        "severity": "medium",
+        "kind": "gap-matrixrtc-membership-presence-list-projection",
+        "summary": "FR-7.11-001 product display is implemented via matrix-js-sdk MatrixRTCSession.memberships. Cutover P10.4 (+P11.3) under GAP-MATRIXRTC-MEMBERSHIP-PRESENCE: Room::has_active_room_call is boolean presence only (E1/E2; E3–E5 missing) — not full membership list. Product must project list equivalent; SC-082 is NOT primary for this FR. Compile-only / SC-082 alone / raw HTTP / dual-backend FAIL."
       },
       {
         "requirement_id": "FR-7.11-002",
@@ -112201,6 +112420,7 @@
         "kind": "upstream-change-required",
         "summary": "FR-7.11-003 depends on upstream-change-required gap(s): ['GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION', 'GAP-MATRIXRTC-MEMBERSHIP-PRESENCE']"
       },
+
       {
         "requirement_id": "FR-7.11-003",
         "severity": "high",
@@ -113771,6 +113991,21 @@
         "FR-7.10-007: retargeted primary owner to MessageSearch.tsx (queryKey/enabled/queryFn/clear/pending); useMessageSearch.ts documents empty-term short-circuit + mx.search without abortSignal; SearchInput.tsx loading/Clear. Behavior-relevant method: search L105 with cancel-gap relevance. Concrete line_refs for queryKey L102–114, enabled L103, queryFn no signal L111, handleSearch/handleSearchClear, empty term L78–82, mx.search L105.",
         "FR-7.10-007: planned AT/MA rewritten as STALE REJECTION + CANCEL GATE fail-closed + CLEAR TERM + DISTINCTIONS from 001–006; cutover P6.8 (+P11.3) typed SC-071 Client::send abort/cancel + product IPC; SC-071 alone, compile-only, raw HTTP, dual-backend, invented cancel API, search-pagination-only FAIL. rust_target product-querykey-stale-rejection-partial-http-cancel caps=[SC-071]. Top-level AT-FR-7.10-007-001 and MA-FR-7.10-007 updated byte-aligned. Status distribution unchanged (partial). Accepted FR-7.8-001 through FR-7.8-009, FR-7.9-001..013 (011 remains partial), FR-7.10-001..006 (005 remains partial) preserved. JSON and Markdown synchronized."
       ]
+    },
+    {
+      "id": "p0.2-correct-47-fr-7.11-001-matrixrtc-membership-display",
+      "scope": "Rejected-review limited correction: FR-7.11-001 only — replace shallow file-count notes / generic AT-MA / SC-082-primary mapping with concrete MatrixRTC membership DISPLAY evidence: useCall getRoomSession + session.memberships + MembershipsChanged; UI RoomNavItem/CallView/LiveChip/MemberGlance/CallMemberCard; honest rust_target product-matrixrtc-membership-display-gap-presence-boolean-only caps=[] gaps=[GAP-MATRIXRTC-MEMBERSHIP-PRESENCE]; SC-082 not primary; status remains implemented",
+      "requirements_rewritten": [
+        "FR-7.11-001"
+      ],
+      "not_claimed_complete": true,
+      "changes": [
+        "FR-7.11-001: current_status remains implemented. current_behavior_and_limits documents concrete membership DISPLAY via useCallMembers session.memberships and Live UI surfaces; notes no longer shallow file-count one-liner.",
+        "FR-7.11-001: retargeted owners/files to useCall.ts + CallStatus/LiveChip/MemberGlance + CallView/CallMemberCard + RoomNavItem; removed CallRoomName/useCallEmbed/callEmbed as sole ownership; source-inspected line_refs and getRoomSession method candidate; listeners retained as MembershipsChanged/SessionStarted/Ended.",
+        "FR-7.11-001: rust_target product-matrixrtc-membership-display-gap-presence-boolean-only caps=[] gaps=[GAP-MATRIXRTC-MEMBERSHIP-PRESENCE]; removed SC-082 as primary (widget ≠ membership display); GATE-7.11-001-FULL-MEMBERSHIP-LIST-PROJECTION for list beyond boolean has_active_room_call.",
+        "FR-7.11-001: planned AT/MA rewritten as MEMBERSHIP LIST + LIVE SURFACES + UPDATES + DISTINCTIONS from 002–007; cutover P10.4 (+P11.3); SC-082 alone, boolean alone, compile-only, raw HTTP, dual-backend FAIL. Top-level AT/MA/blockers updated. Accepted FR-7.8-001..009, FR-7.9-001..013 (011 partial), FR-7.10-001..007 (005/007 partial) preserved. JSON and Markdown synchronized."
+      ]
     }
   ]
 }
+

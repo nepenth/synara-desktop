@@ -37,11 +37,9 @@ without explicit user approval.
 - **Progress loop:** host scheduled task every **4 minutes**
   (ID `019f95928db7`) continues bounded FR audits; also daily durable
   orchestrator `9022c2f8-9b21-411a-acf9-a36c10515f72`
-- **Last accepted:** FR-7.10-007 search cancel/stale **partial** under
-  `GATE-7.10-007-SEARCH-ABORT-SIGNAL` (`p0.2-correct-46`); **section 7.10 P0.2
-  quality audit complete** (005 + 007 remain partial by gate)
-- **Next writer task:** FR-7.11-001 (MatrixRTC membership state), then remaining
-  7.11 (~8 FRs)
+- **Last accepted:** FR-7.11-001 MatrixRTC membership display (`p0.2-correct-47`)
+- **Next writer task:** FR-7.11-002 (Element Call widget embed), then remaining
+  7.11 (~7 FRs)
 
 - No production Matrix Rust SDK replacement code accepted
 - **No open P0.2 PR yet** (open after P0.2 complete)
@@ -55,7 +53,7 @@ Phase 0 evidence accepted before this handoff:
   (**FR-7.10-005** remains partial under GATE-7.10-005-USER-DIRECTORY-SEARCH);
   ~9 shallow rows remain in 7.11.
 
-P0.2 is not complete. Resume at FR-7.11-001, then audit remaining 7.11
+P0.2 is not complete. Resume at FR-7.11-002, then audit remaining 7.11
 before declaring P0.2 accepted.
 
 Accepted notification findings that must be preserved:
