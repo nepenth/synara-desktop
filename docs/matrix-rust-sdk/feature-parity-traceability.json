@@ -61131,140 +61131,97 @@
       "current_status": "implemented",
       "current_production_files": [
         {
-          "path": "synara/src/app/components/DeviceVerification.tsx",
-          "bucket": "component",
-          "categories": [
-            "client_methods",
-            "crypto_verification_recovery",
-            "uia_auth"
-          ],
-          "symbols_or_candidates": [
-            "getCrypto",
-            "getVerificationRequestsToDeviceInProgress"
-          ],
+          "path": "synara/src/app/utils/matrix-crypto.ts",
+          "bucket": "utility",
+          "categories": ["crypto_verification_recovery"],
+          "symbols_or_candidates": ["getDeviceVerificationStatus", "verifiedDevice"],
           "line_refs": [
             {
-              "symbol": "getCrypto",
-              "line": 395,
-              "kind": "method_candidate"
+              "symbol": "getDeviceVerificationStatus",
+              "line": 8,
+              "kind": "method_candidate",
+              "relevance_reason": "verifiedDevice awaits api.getDeviceVerificationStatus(userId, deviceId); product trust bit is status.crossSigningVerified (L12)."
             },
             {
-              "symbol": "getVerificationRequestsToDeviceInProgress",
-              "line": 395,
-              "kind": "method_candidate"
+              "symbol": "crossSigningVerified",
+              "line": 12,
+              "kind": "trust_field",
+              "relevance_reason": "Only trust field consumed: return status.crossSigningVerified; null status → null (Unsupported upstream)."
             }
           ],
-          "model_coupling": ["VerificationRequest"],
+          "model_coupling": ["CryptoApi"],
           "behavior_relevant_method_candidates": [
             {
-              "name": "getCrypto",
-              "line": 395,
+              "name": "getDeviceVerificationStatus",
+              "line": 8,
               "category": "crypto_verification_recovery",
               "kind": "property_call_candidate",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            },
-            {
-              "name": "getVerificationRequestsToDeviceInProgress",
-              "line": 395,
-              "category": "crypto_verification_recovery",
-              "kind": "property_call_candidate",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+              "confidence": "Source-inspected product call site (exact-line); may be absent from P0.1 AST method inventory.",
+              "relevance_reason": "Sole SDK call for device trust state: getDeviceVerificationStatus → crossSigningVerified boolean or null."
             }
           ],
-          "behavior_relevant_listener_candidates": []
+          "behavior_relevant_listener_candidates": [],
+          "symbols_or_candidates_note": "Primary crypto helper for device trust. P0.1 AST methodCandidates empty; getDeviceVerificationStatus retained from exact-line source inspection."
         },
         {
-          "path": "synara/src/app/components/DeviceVerificationSetup.tsx",
-          "bucket": "component",
-          "categories": [
-            "client_methods",
-            "crypto_verification_recovery",
-            "uia_auth"
-          ],
+          "path": "synara/src/app/hooks/useDeviceVerificationStatus.ts",
+          "bucket": "hook",
+          "categories": ["crypto_verification_recovery"],
           "symbols_or_candidates": [
-            "getCrypto",
-            "createRecoveryKeyFromPassphrase",
-            "bootstrapSecretStorage",
-            "bootstrapCrossSigning",
-            "resetKeyBackup"
+            "VerificationStatus",
+            "useDeviceVerificationDetect",
+            "useDeviceVerificationStatus",
+            "useUnverifiedDeviceCount",
+            "verifiedDevice"
           ],
           "line_refs": [
             {
-              "symbol": "getCrypto",
-              "line": 139,
-              "kind": "method_candidate"
+              "symbol": "VerificationStatus",
+              "line": 9,
+              "kind": "product_enum",
+              "relevance_reason": "Unknown/Unverified/Verified/Unsupported product status projection of crossSigningVerified."
             },
             {
-              "symbol": "createRecoveryKeyFromPassphrase",
-              "line": 142,
-              "kind": "method_candidate"
+              "symbol": "useDeviceVerificationDetect",
+              "line": 16,
+              "kind": "product_status_hook",
+              "relevance_reason": "Maps verifiedDevice to VerificationStatus; refreshes on mount and DevicesUpdated for userId."
             },
             {
-              "symbol": "bootstrapSecretStorage",
-              "line": 148,
-              "kind": "method_candidate"
+              "symbol": "useDeviceVerificationStatus",
+              "line": 53,
+              "kind": "product_status_hook",
+              "relevance_reason": "Stateful status owner used by Devices badge, UnverifiedTab, LogoutDialog, DeviceVerificationStatus."
             },
             {
-              "symbol": "bootstrapCrossSigning",
-              "line": 153,
-              "kind": "method_candidate"
-            },
-            {
-              "symbol": "resetKeyBackup",
-              "line": 158,
-              "kind": "method_candidate"
+              "symbol": "useUnverifiedDeviceCount",
+              "line": 65,
+              "kind": "product_status_hook",
+              "relevance_reason": "Counts other devices with verifiedDevice===false for badge «N Unverified» and UnverifiedTab count."
             }
           ],
-          "model_coupling": ["MatrixError"],
-          "behavior_relevant_method_candidates": [
-            {
-              "name": "getCrypto",
-              "line": 139,
-              "category": "crypto_verification_recovery",
-              "kind": "property_call_candidate",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            },
-            {
-              "name": "createRecoveryKeyFromPassphrase",
-              "line": 142,
-              "category": "crypto_verification_recovery",
-              "kind": "property_call_candidate",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            },
-            {
-              "name": "bootstrapSecretStorage",
-              "line": 148,
-              "category": "crypto_verification_recovery",
-              "kind": "property_call_candidate",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            },
-            {
-              "name": "bootstrapCrossSigning",
-              "line": 153,
-              "category": "crypto_verification_recovery",
-              "kind": "property_call_candidate",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            },
-            {
-              "name": "resetKeyBackup",
-              "line": 158,
-              "category": "crypto_verification_recovery",
-              "kind": "property_call_candidate",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            }
-          ],
-          "behavior_relevant_listener_candidates": []
+          "model_coupling": ["CryptoApi"],
+          "behavior_relevant_method_candidates": [],
+          "behavior_relevant_listener_candidates": [],
+          "symbols_or_candidates_note": "Primary product status owner. Calls verifiedDevice (matrix-crypto); no direct getDeviceVerificationStatus AST hit. Refresh uses useDeviceListChange (DevicesUpdated) — list ownership remains FR-7.9-003; status re-query is this FR."
         },
         {
           "path": "synara/src/app/components/DeviceVerificationStatus.ts",
           "bucket": "component",
           "categories": ["crypto_verification_recovery"],
-          "symbols_or_candidates": [],
-          "line_refs": [],
+          "symbols_or_candidates": ["DeviceVerificationStatus", "useDeviceVerificationStatus"],
+          "line_refs": [
+            {
+              "symbol": "DeviceVerificationStatus",
+              "line": 15,
+              "kind": "product_ui",
+              "relevance_reason": "Render-prop component: useDeviceVerificationStatus(crypto,userId,deviceId) → children(status) for OtherDevices per-device status."
+            }
+          ],
           "model_coupling": ["CryptoApi"],
           "behavior_relevant_method_candidates": [],
           "behavior_relevant_listener_candidates": [],
-          "symbols_or_candidates_note": "No requirement-relevant method/listener candidates filtered from this file's P0.1 AST hits; file remains linked for structural/model ownership. See all_candidates_in_linked_files on the requirement."
+          "symbols_or_candidates_note": "Thin per-device status projector for OtherDevices. Not SAS ceremony."
         },
         {
           "path": "synara/src/app/features/settings/devices/Verification.tsx",
@@ -61274,51 +61231,183 @@
             "crypto_verification_recovery",
             "uia_auth"
           ],
-          "symbols_or_candidates": [
-            "requestOwnUserVerification",
-            "requestDeviceVerification"
-          ],
+          "symbols_or_candidates": ["VerificationStatusBadge"],
           "line_refs": [
             {
-              "symbol": "requestOwnUserVerification",
-              "line": 124,
-              "kind": "method_candidate"
-            },
-            {
-              "symbol": "requestDeviceVerification",
-              "line": 230,
-              "kind": "method_candidate"
+              "symbol": "VerificationStatusBadge",
+              "line": 44,
+              "kind": "product_ui",
+              "relevance_reason": "Primary badge UI: Spinner/Unverified/N Unverified/Verified from VerificationStatus + otherUnverifiedCount."
             }
           ],
           "model_coupling": ["CryptoApi", "VerificationRequest"],
-          "behavior_relevant_method_candidates": [
-            {
-              "name": "requestOwnUserVerification",
-              "line": 124,
-              "category": "crypto_verification_recovery",
-              "kind": "property_call_candidate",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            },
-            {
-              "name": "requestDeviceVerification",
-              "line": 230,
-              "category": "crypto_verification_recovery",
-              "kind": "property_call_candidate",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            }
-          ],
-          "behavior_relevant_listener_candidates": []
-        },
-        {
-          "path": "synara/src/app/hooks/useDeviceVerificationStatus.ts",
-          "bucket": "hook",
-          "categories": ["crypto_verification_recovery"],
-          "symbols_or_candidates": [],
-          "line_refs": [],
-          "model_coupling": ["CryptoApi"],
           "behavior_relevant_method_candidates": [],
           "behavior_relevant_listener_candidates": [],
-          "symbols_or_candidates_note": "No requirement-relevant method/listener candidates filtered from this file's P0.1 AST hits; file remains linked for structural/model ownership. See all_candidates_in_linked_files on the requirement."
+          "symbols_or_candidates_note": "Status display: VerificationStatusBadge L44-75. requestOwnUserVerification L124 and requestDeviceVerification L230 are SAS ceremony start actions (FR-7.9-005) — excluded from behavior_relevant. VerifyCurrentDeviceTile/VerifyOtherDeviceTile Unverified InfoCards are status-gated surfaces; ceremony contents are FR-7.9-005. Enable/Reset are FR-7.9-002."
+        },
+        {
+          "path": "synara/src/app/features/settings/devices/Devices.tsx",
+          "bucket": "feature",
+          "categories": ["crypto_verification_recovery"],
+          "symbols_or_candidates": [
+            "useDeviceVerificationStatus",
+            "useUnverifiedDeviceCount",
+            "VerificationStatusBadge"
+          ],
+          "line_refs": [
+            {
+              "symbol": "useDeviceVerificationStatus",
+              "line": 49,
+              "kind": "product_ui",
+              "relevance_reason": "Current-device status for badge and VerifyCurrentDeviceTile/BackupRestore gating."
+            },
+            {
+              "symbol": "useUnverifiedDeviceCount",
+              "line": 56,
+              "kind": "product_ui",
+              "relevance_reason": "Other-device unverified count fed to VerificationStatusBadge."
+            },
+            {
+              "symbol": "VerificationStatusBadge",
+              "line": 103,
+              "kind": "product_ui",
+              "relevance_reason": "Shown when crossSigningActive; primary Settings trust badge."
+            },
+            {
+              "symbol": "VerifyCurrentDeviceTile gate",
+              "line": 131,
+              "kind": "product_ui",
+              "relevance_reason": "Unverified current-device trust surface when crossSigningActive && Unverified."
+            }
+          ],
+          "model_coupling": [],
+          "behavior_relevant_method_candidates": [],
+          "behavior_relevant_listener_candidates": [],
+          "symbols_or_candidates_note": "Primary Settings → Devices trust UI composition. No direct matrix-js-sdk import. List split is FR-7.9-003; cross-signing active gate is FR-7.9-002; status/badge is this FR."
+        },
+        {
+          "path": "synara/src/app/features/settings/devices/OtherDevices.tsx",
+          "bucket": "feature",
+          "categories": [
+            "client_methods",
+            "crypto_verification_recovery",
+            "uia_auth"
+          ],
+          "symbols_or_candidates": ["DeviceVerificationStatus"],
+          "line_refs": [
+            {
+              "symbol": "DeviceVerificationStatus",
+              "line": 168,
+              "kind": "product_ui",
+              "relevance_reason": "Per other-device status when showVerification; Unverified status gates VerifyOtherDeviceTile."
+            }
+          ],
+          "model_coupling": ["MatrixError"],
+          "behavior_relevant_method_candidates": [],
+          "behavior_relevant_listener_candidates": [],
+          "symbols_or_candidates_note": "Other-device status display for own-account sessions. List ownership FR-7.9-003; Verify action FR-7.9-005; delete FR-7.9-010."
+        },
+        {
+          "path": "synara/src/app/pages/client/sidebar/UnverifiedTab.tsx",
+          "bucket": "page",
+          "categories": ["crypto_verification_recovery"],
+          "symbols_or_candidates": [
+            "useDeviceVerificationStatus",
+            "useUnverifiedDeviceCount",
+            "UnverifiedTab"
+          ],
+          "line_refs": [
+            {
+              "symbol": "useDeviceVerificationStatus",
+              "line": 29,
+              "kind": "product_ui",
+              "relevance_reason": "Current-device Unverified drives Critical sidebar indicator."
+            },
+            {
+              "symbol": "useUnverifiedDeviceCount",
+              "line": 37,
+              "kind": "product_ui",
+              "relevance_reason": "Other-device unverified count for Warning badge when current is verified."
+            },
+            {
+              "symbol": "UnverifiedTab",
+              "line": 88,
+              "kind": "product_ui",
+              "relevance_reason": "Returns null when !crossSigningActive; else UnverifiedIndicator trust banner."
+            }
+          ],
+          "model_coupling": [],
+          "behavior_relevant_method_candidates": [],
+          "behavior_relevant_listener_candidates": [],
+          "symbols_or_candidates_note": "Sidebar trust banner consumer. List split for device ids is FR-7.9-003; active gate FR-7.9-002; status projection this FR. Not a P0.1 production-import row."
+        },
+        {
+          "path": "synara/src/app/components/LogoutDialog.tsx",
+          "bucket": "component",
+          "categories": ["crypto_verification_recovery"],
+          "symbols_or_candidates": ["useDeviceVerificationStatus"],
+          "line_refs": [
+            {
+              "symbol": "useDeviceVerificationStatus",
+              "line": 21,
+              "kind": "product_ui",
+              "relevance_reason": "Current device status via mx.getDeviceId(); Unverified + encrypted rooms + cross-signing active → logout warning."
+            }
+          ],
+          "model_coupling": [],
+          "behavior_relevant_method_candidates": [],
+          "behavior_relevant_listener_candidates": [],
+          "symbols_or_candidates_note": "Logout consumer of device verification status. Not a P0.1 production-import row."
+        },
+        {
+          "path": "synara/src/app/hooks/useDeviceList.ts",
+          "bucket": "hook",
+          "categories": [
+            "client_methods",
+            "event_emitters_listeners",
+            "crypto_verification_recovery",
+            "uia_auth"
+          ],
+          "symbols_or_candidates": [
+            "useDeviceListChange",
+            "on:CryptoEvent.DevicesUpdated",
+            "removeListener:CryptoEvent.DevicesUpdated"
+          ],
+          "line_refs": [
+            {
+              "symbol": "on:CryptoEvent.DevicesUpdated",
+              "line": 12,
+              "kind": "listener_candidate",
+              "relevance_reason": "useDeviceListChange registers DevicesUpdated; useDeviceVerificationDetect/useUnverifiedDeviceCount use it to re-query trust status."
+            },
+            {
+              "symbol": "removeListener:CryptoEvent.DevicesUpdated",
+              "line": 14,
+              "kind": "listener_candidate",
+              "relevance_reason": "Cleanup for DevicesUpdated status refresh path."
+            }
+          ],
+          "model_coupling": [],
+          "behavior_relevant_method_candidates": [],
+          "behavior_relevant_listener_candidates": [
+            {
+              "event": "CryptoEvent.DevicesUpdated",
+              "method": "on",
+              "line": 12,
+              "category": "crypto_verification_recovery",
+              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
+              "relevance_reason": "Wired product refresh for device trust status re-query (not list ownership — FR-7.9-003)."
+            },
+            {
+              "event": "CryptoEvent.DevicesUpdated",
+              "method": "removeListener",
+              "line": 14,
+              "category": "crypto_verification_recovery",
+              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
+              "relevance_reason": "Listener cleanup for status refresh."
+            }
+          ],
+          "symbols_or_candidates_note": "Shared DevicesUpdated helper used by status hooks for refresh. getDevices list fetch/split remains FR-7.9-003 primary ownership; retained here only for status refresh path."
         },
         {
           "path": "synara/src/app/hooks/useUserTrustStatusChange.ts",
@@ -61327,439 +61416,84 @@
             "event_emitters_listeners",
             "crypto_verification_recovery"
           ],
-          "symbols_or_candidates": [],
+          "symbols_or_candidates": [
+            "on:CryptoEvent.UserTrustStatusChanged",
+            "removeListener:CryptoEvent.UserTrustStatusChanged"
+          ],
           "line_refs": [
             {
               "symbol": "on:CryptoEvent.UserTrustStatusChanged",
               "line": 11,
-              "kind": "listener_candidate"
+              "kind": "listener_candidate_unused",
+              "relevance_reason": "Hook defines UserTrustStatusChanged on/removeListener but has zero product import/call sites — unused."
             },
             {
               "symbol": "removeListener:CryptoEvent.UserTrustStatusChanged",
               "line": 13,
-              "kind": "listener_candidate"
+              "kind": "listener_candidate_unused",
+              "relevance_reason": "Unused cleanup pair for UserTrustStatusChanged."
             }
           ],
           "model_coupling": [],
           "behavior_relevant_method_candidates": [],
-          "behavior_relevant_listener_candidates": [
-            {
-              "event": "CryptoEvent.UserTrustStatusChanged",
-              "method": "on",
-              "line": 11,
-              "category": "crypto_verification_recovery",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            },
-            {
-              "event": "CryptoEvent.UserTrustStatusChanged",
-              "method": "removeListener",
-              "line": 13,
-              "category": "crypto_verification_recovery",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            }
-          ]
-        },
-        {
-          "path": "synara/src/app/hooks/useVerificationRequest.ts",
-          "bucket": "hook",
-          "categories": [
-            "event_emitters_listeners",
-            "crypto_verification_recovery"
-          ],
-          "symbols_or_candidates": [],
-          "line_refs": [
-            {
-              "symbol": "on:CryptoEvent.VerificationRequestReceived",
-              "line": 21,
-              "kind": "listener_candidate"
-            },
-            {
-              "symbol": "removeListener:CryptoEvent.VerificationRequestReceived",
-              "line": 23,
-              "kind": "listener_candidate"
-            },
-            {
-              "symbol": "on:VerificationRequestEvent.Change",
-              "line": 33,
-              "kind": "listener_candidate"
-            },
-            {
-              "symbol": "removeListener:VerificationRequestEvent.Change",
-              "line": 35,
-              "kind": "listener_candidate"
-            },
-            {
-              "symbol": "on:VerifierEvent.Cancel",
-              "line": 58,
-              "kind": "listener_candidate"
-            },
-            {
-              "symbol": "removeListener:VerifierEvent.Cancel",
-              "line": 60,
-              "kind": "listener_candidate"
-            },
-            {
-              "symbol": "on:VerifierEvent.ShowSas",
-              "line": 70,
-              "kind": "listener_candidate"
-            },
-            {
-              "symbol": "removeListener:VerifierEvent.ShowSas",
-              "line": 76,
-              "kind": "listener_candidate"
-            },
-            {
-              "symbol": "on:VerifierEvent.ShowReciprocateQr",
-              "line": 86,
-              "kind": "listener_candidate"
-            },
-            {
-              "symbol": "removeListener:VerifierEvent.ShowReciprocateQr",
-              "line": 88,
-              "kind": "listener_candidate"
-            }
-          ],
-          "model_coupling": ["VerificationRequest"],
-          "behavior_relevant_method_candidates": [],
-          "behavior_relevant_listener_candidates": [
-            {
-              "event": "CryptoEvent.VerificationRequestReceived",
-              "method": "on",
-              "line": 21,
-              "category": "crypto_verification_recovery",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            },
-            {
-              "event": "CryptoEvent.VerificationRequestReceived",
-              "method": "removeListener",
-              "line": 23,
-              "category": "crypto_verification_recovery",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            },
-            {
-              "event": "VerificationRequestEvent.Change",
-              "method": "on",
-              "line": 33,
-              "category": "crypto_verification_recovery",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            },
-            {
-              "event": "VerificationRequestEvent.Change",
-              "method": "removeListener",
-              "line": 35,
-              "category": "crypto_verification_recovery",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            },
-            {
-              "event": "VerifierEvent.Cancel",
-              "method": "on",
-              "line": 58,
-              "category": "event_emitters_listeners",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            },
-            {
-              "event": "VerifierEvent.Cancel",
-              "method": "removeListener",
-              "line": 60,
-              "category": "event_emitters_listeners",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            },
-            {
-              "event": "VerifierEvent.ShowSas",
-              "method": "on",
-              "line": 70,
-              "category": "event_emitters_listeners",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            },
-            {
-              "event": "VerifierEvent.ShowSas",
-              "method": "removeListener",
-              "line": 76,
-              "category": "event_emitters_listeners",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            },
-            {
-              "event": "VerifierEvent.ShowReciprocateQr",
-              "method": "on",
-              "line": 86,
-              "category": "event_emitters_listeners",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            },
-            {
-              "event": "VerifierEvent.ShowReciprocateQr",
-              "method": "removeListener",
-              "line": 88,
-              "category": "event_emitters_listeners",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            }
-          ]
-        },
-        {
-          "path": "synara/src/app/utils/verification.ts",
-          "bucket": "utility",
-          "categories": ["crypto_verification_recovery"],
-          "symbols_or_candidates": [],
-          "line_refs": [],
-          "model_coupling": ["VerificationRequest"],
-          "behavior_relevant_method_candidates": [],
           "behavior_relevant_listener_candidates": [],
-          "symbols_or_candidates_note": "No requirement-relevant method/listener candidates filtered from this file's P0.1 AST hits; file remains linked for structural/model ownership. See all_candidates_in_linked_files on the requirement."
-        },
-        {
-          "path": "synara/src/client/verificationRequestInbox.ts",
-          "bucket": "client-lifecycle",
-          "categories": [
-            "client_methods",
-            "event_emitters_listeners",
-            "crypto_verification_recovery"
-          ],
-          "symbols_or_candidates": [],
-          "line_refs": [
-            {
-              "symbol": "on:CryptoEvent.VerificationRequestReceived",
-              "line": 66,
-              "kind": "listener_candidate"
-            }
-          ],
-          "model_coupling": ["MatrixClient", "VerificationRequest"],
-          "behavior_relevant_method_candidates": [],
-          "behavior_relevant_listener_candidates": [
-            {
-              "event": "CryptoEvent.VerificationRequestReceived",
-              "method": "on",
-              "line": 66,
-              "category": "crypto_verification_recovery",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            }
-          ]
+          "symbols_or_candidates_note": "UNUSED: useUserTrustStatusChange is never imported outside its definition file. Product status refresh uses DevicesUpdated via useDeviceListChange, not UserTrustStatusChanged. Documented as non-evidence; listeners not behavior_relevant."
         }
       ],
       "ui_entry_points": [
-        "synara/src/app/features/settings/devices/Verification.tsx"
+        "synara/src/app/features/settings/devices/Devices.tsx",
+        "synara/src/app/features/settings/devices/Verification.tsx",
+        "synara/src/app/features/settings/devices/OtherDevices.tsx",
+        "synara/src/app/pages/client/sidebar/UnverifiedTab.tsx",
+        "synara/src/app/components/LogoutDialog.tsx"
       ],
+      "ui_entry_points_rationale": "Devices.tsx is the primary Settings → Devices surface that loads current/other status and renders VerificationStatusBadge plus status-gated Current Unverified tile. Verification.tsx owns VerificationStatusBadge (status display). OtherDevices renders per-device DeviceVerificationStatus. UnverifiedTab is the sidebar trust banner. LogoutDialog warns on Unverified current device. DeviceVerification.tsx SAS ceremony and requestOwnUserVerification/requestDeviceVerification are FR-7.9-005 — not primary UI for this FR.",
       "state_owners": [
         {
           "path": "synara/src/app/hooks/useDeviceVerificationStatus.ts",
-          "ownership_evidence": "Identified as coordination/state module for this behavior via path role (state/client/util service) and P0.1 categories/candidates; not merely a presentational component."
+          "ownership_evidence": "Owns VerificationStatus enum, useDeviceVerificationDetect/useDeviceVerificationStatus/useUnverifiedDeviceCount — single product projection from verifiedDevice to UI status + other-unverified counts with DevicesUpdated refresh."
+        },
+        {
+          "path": "synara/src/app/utils/matrix-crypto.ts",
+          "ownership_evidence": "Owns verifiedDevice: getDeviceVerificationStatus → crossSigningVerified device trust bit."
         }
       ],
       "current_js_sdk": {
         "behavior_relevant_method_candidates": [
           {
-            "path": "synara/src/app/components/DeviceVerification.tsx",
-            "name": "getCrypto",
-            "line": 395,
+            "path": "synara/src/app/utils/matrix-crypto.ts",
+            "name": "getDeviceVerificationStatus",
+            "line": 8,
             "category": "crypto_verification_recovery",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-          },
-          {
-            "path": "synara/src/app/components/DeviceVerification.tsx",
-            "name": "getVerificationRequestsToDeviceInProgress",
-            "line": 395,
-            "category": "crypto_verification_recovery",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-          },
-          {
-            "path": "synara/src/app/components/DeviceVerificationSetup.tsx",
-            "name": "getCrypto",
-            "line": 139,
-            "category": "crypto_verification_recovery",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-          },
-          {
-            "path": "synara/src/app/components/DeviceVerificationSetup.tsx",
-            "name": "createRecoveryKeyFromPassphrase",
-            "line": 142,
-            "category": "crypto_verification_recovery",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-          },
-          {
-            "path": "synara/src/app/components/DeviceVerificationSetup.tsx",
-            "name": "bootstrapSecretStorage",
-            "line": 148,
-            "category": "crypto_verification_recovery",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-          },
-          {
-            "path": "synara/src/app/components/DeviceVerificationSetup.tsx",
-            "name": "bootstrapCrossSigning",
-            "line": 153,
-            "category": "crypto_verification_recovery",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-          },
-          {
-            "path": "synara/src/app/components/DeviceVerificationSetup.tsx",
-            "name": "resetKeyBackup",
-            "line": 158,
-            "category": "crypto_verification_recovery",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-          },
-          {
-            "path": "synara/src/app/features/settings/devices/Verification.tsx",
-            "name": "requestOwnUserVerification",
-            "line": 124,
-            "category": "crypto_verification_recovery",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-          },
-          {
-            "path": "synara/src/app/features/settings/devices/Verification.tsx",
-            "name": "requestDeviceVerification",
-            "line": 230,
-            "category": "crypto_verification_recovery",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+            "confidence": "Source-inspected product call site (exact-line); may be absent from P0.1 AST method inventory.",
+            "relevance_reason": "Device trust: status.crossSigningVerified boolean or null → VerificationStatus."
           }
         ],
         "behavior_relevant_listener_candidates": [
           {
-            "path": "synara/src/app/hooks/useUserTrustStatusChange.ts",
-            "event": "CryptoEvent.UserTrustStatusChanged",
+            "path": "synara/src/app/hooks/useDeviceList.ts",
+            "event": "CryptoEvent.DevicesUpdated",
             "method": "on",
-            "line": 11,
+            "line": 12,
             "category": "crypto_verification_recovery",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
+            "relevance_reason": "Wired refresh for useDeviceVerificationDetect/useUnverifiedDeviceCount status re-query."
           },
           {
-            "path": "synara/src/app/hooks/useUserTrustStatusChange.ts",
-            "event": "CryptoEvent.UserTrustStatusChanged",
+            "path": "synara/src/app/hooks/useDeviceList.ts",
+            "event": "CryptoEvent.DevicesUpdated",
             "method": "removeListener",
-            "line": 13,
+            "line": 14,
             "category": "crypto_verification_recovery",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-          },
-          {
-            "path": "synara/src/app/hooks/useVerificationRequest.ts",
-            "event": "CryptoEvent.VerificationRequestReceived",
-            "method": "on",
-            "line": 21,
-            "category": "crypto_verification_recovery",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-          },
-          {
-            "path": "synara/src/app/hooks/useVerificationRequest.ts",
-            "event": "CryptoEvent.VerificationRequestReceived",
-            "method": "removeListener",
-            "line": 23,
-            "category": "crypto_verification_recovery",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-          },
-          {
-            "path": "synara/src/app/hooks/useVerificationRequest.ts",
-            "event": "VerificationRequestEvent.Change",
-            "method": "on",
-            "line": 33,
-            "category": "crypto_verification_recovery",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-          },
-          {
-            "path": "synara/src/app/hooks/useVerificationRequest.ts",
-            "event": "VerificationRequestEvent.Change",
-            "method": "removeListener",
-            "line": 35,
-            "category": "crypto_verification_recovery",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-          },
-          {
-            "path": "synara/src/app/hooks/useVerificationRequest.ts",
-            "event": "VerifierEvent.Cancel",
-            "method": "on",
-            "line": 58,
-            "category": "event_emitters_listeners",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-          },
-          {
-            "path": "synara/src/app/hooks/useVerificationRequest.ts",
-            "event": "VerifierEvent.Cancel",
-            "method": "removeListener",
-            "line": 60,
-            "category": "event_emitters_listeners",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-          },
-          {
-            "path": "synara/src/app/hooks/useVerificationRequest.ts",
-            "event": "VerifierEvent.ShowSas",
-            "method": "on",
-            "line": 70,
-            "category": "event_emitters_listeners",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-          },
-          {
-            "path": "synara/src/app/hooks/useVerificationRequest.ts",
-            "event": "VerifierEvent.ShowSas",
-            "method": "removeListener",
-            "line": 76,
-            "category": "event_emitters_listeners",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-          },
-          {
-            "path": "synara/src/app/hooks/useVerificationRequest.ts",
-            "event": "VerifierEvent.ShowReciprocateQr",
-            "method": "on",
-            "line": 86,
-            "category": "event_emitters_listeners",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-          },
-          {
-            "path": "synara/src/app/hooks/useVerificationRequest.ts",
-            "event": "VerifierEvent.ShowReciprocateQr",
-            "method": "removeListener",
-            "line": 88,
-            "category": "event_emitters_listeners",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-          },
-          {
-            "path": "synara/src/client/verificationRequestInbox.ts",
-            "event": "CryptoEvent.VerificationRequestReceived",
-            "method": "on",
-            "line": 66,
-            "category": "crypto_verification_recovery",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
+            "relevance_reason": "Cleanup for DevicesUpdated-driven status refresh."
           }
         ],
         "all_candidates_in_linked_files": {
-          "method_count": 11,
-          "listener_count": 13,
-          "note": "Unfiltered P0.1 AST candidates across linked production import files. Do not treat these as proven APIs for this requirement; use behavior_relevant_* fields.",
+          "method_count": 6,
+          "listener_count": 4,
+          "note": "Unfiltered P0.1 AST candidates across linked production-import files (matrix-crypto may add zero AST methods; Verification.tsx AST hits include ceremony methods excluded from behavior_relevant; useUserTrustStatusChange unused). Devices/UnverifiedTab/LogoutDialog have no direct matrix-js-sdk imports. Do not treat samples as proven APIs; use behavior_relevant_* fields.",
           "methods_sample": [
-            {
-              "path": "synara/src/app/components/DeviceVerification.tsx",
-              "name": "getCrypto",
-              "line": 395
-            },
-            {
-              "path": "synara/src/app/components/DeviceVerification.tsx",
-              "name": "getSafeUserId",
-              "line": 395
-            },
-            {
-              "path": "synara/src/app/components/DeviceVerification.tsx",
-              "name": "getVerificationRequestsToDeviceInProgress",
-              "line": 395
-            },
-            {
-              "path": "synara/src/app/components/DeviceVerificationSetup.tsx",
-              "name": "getCrypto",
-              "line": 139
-            },
-            {
-              "path": "synara/src/app/components/DeviceVerificationSetup.tsx",
-              "name": "createRecoveryKeyFromPassphrase",
-              "line": 142
-            },
-            {
-              "path": "synara/src/app/components/DeviceVerificationSetup.tsx",
-              "name": "bootstrapSecretStorage",
-              "line": 148
-            },
-            {
-              "path": "synara/src/app/components/DeviceVerificationSetup.tsx",
-              "name": "bootstrapCrossSigning",
-              "line": 153
-            },
-            {
-              "path": "synara/src/app/components/DeviceVerificationSetup.tsx",
-              "name": "resetKeyBackup",
-              "line": 158
-            },
             {
               "path": "synara/src/app/features/settings/devices/Verification.tsx",
               "name": "requestOwnUserVerification",
@@ -61774,9 +61508,36 @@
               "path": "synara/src/app/features/settings/devices/Verification.tsx",
               "name": "requestDeviceVerification",
               "line": 230
+            },
+            {
+              "path": "synara/src/app/features/settings/devices/OtherDevices.tsx",
+              "name": "getCrypto",
+              "line": 27
+            },
+            {
+              "path": "synara/src/app/features/settings/devices/OtherDevices.tsx",
+              "name": "getSafeUserId",
+              "line": 170
+            },
+            {
+              "path": "synara/src/app/hooks/useDeviceList.ts",
+              "name": "getDevices",
+              "line": 25
             }
           ],
           "listeners_sample": [
+            {
+              "path": "synara/src/app/hooks/useDeviceList.ts",
+              "event": "CryptoEvent.DevicesUpdated",
+              "method": "on",
+              "line": 12
+            },
+            {
+              "path": "synara/src/app/hooks/useDeviceList.ts",
+              "event": "CryptoEvent.DevicesUpdated",
+              "method": "removeListener",
+              "line": 14
+            },
             {
               "path": "synara/src/app/hooks/useUserTrustStatusChange.ts",
               "event": "CryptoEvent.UserTrustStatusChanged",
@@ -61788,112 +61549,28 @@
               "event": "CryptoEvent.UserTrustStatusChanged",
               "method": "removeListener",
               "line": 13
-            },
-            {
-              "path": "synara/src/app/hooks/useVerificationRequest.ts",
-              "event": "CryptoEvent.VerificationRequestReceived",
-              "method": "on",
-              "line": 21
-            },
-            {
-              "path": "synara/src/app/hooks/useVerificationRequest.ts",
-              "event": "CryptoEvent.VerificationRequestReceived",
-              "method": "removeListener",
-              "line": 23
-            },
-            {
-              "path": "synara/src/app/hooks/useVerificationRequest.ts",
-              "event": "VerificationRequestEvent.Change",
-              "method": "on",
-              "line": 33
-            },
-            {
-              "path": "synara/src/app/hooks/useVerificationRequest.ts",
-              "event": "VerificationRequestEvent.Change",
-              "method": "removeListener",
-              "line": 35
-            },
-            {
-              "path": "synara/src/app/hooks/useVerificationRequest.ts",
-              "event": "VerifierEvent.Cancel",
-              "method": "on",
-              "line": 58
-            },
-            {
-              "path": "synara/src/app/hooks/useVerificationRequest.ts",
-              "event": "VerifierEvent.Cancel",
-              "method": "removeListener",
-              "line": 60
-            },
-            {
-              "path": "synara/src/app/hooks/useVerificationRequest.ts",
-              "event": "VerifierEvent.ShowSas",
-              "method": "on",
-              "line": 70
-            },
-            {
-              "path": "synara/src/app/hooks/useVerificationRequest.ts",
-              "event": "VerifierEvent.ShowSas",
-              "method": "removeListener",
-              "line": 76
-            },
-            {
-              "path": "synara/src/app/hooks/useVerificationRequest.ts",
-              "event": "VerifierEvent.ShowReciprocateQr",
-              "method": "on",
-              "line": 86
-            },
-            {
-              "path": "synara/src/app/hooks/useVerificationRequest.ts",
-              "event": "VerifierEvent.ShowReciprocateQr",
-              "method": "removeListener",
-              "line": 88
-            },
-            {
-              "path": "synara/src/client/verificationRequestInbox.ts",
-              "event": "CryptoEvent.VerificationRequestReceived",
-              "method": "on",
-              "line": 66
             }
           ]
         },
-        "models": [
-          "CryptoApi",
-          "MatrixClient",
-          "MatrixError",
-          "VerificationRequest"
-        ],
+        "models": ["CryptoApi", "MatrixError"],
         "network_routes": [],
         "deep_imports": [
           {
-            "path": "synara/src/app/components/DeviceVerification.tsx",
+            "path": "synara/src/app/utils/matrix-crypto.ts",
             "module": "matrix-js-sdk/lib/crypto-api",
             "line": 1,
-            "named_imports": [
-              "ShowSasCallbacks",
-              "VerificationPhase",
-              "VerificationRequest",
-              "Verifier"
-            ],
+            "named_imports": ["CryptoApi"],
             "is_type_only": false,
-            "linked_requirement_ids": [
-              "FR-7.9-002",
-              "FR-7.9-004",
-              "FR-7.9-005"
-            ],
+            "linked_requirement_ids": ["FR-7.9-002", "FR-7.9-004", "FR-7.9-008"],
             "cutover_disposition": "replace-deep-js-sdk-import-with-synara-dto-or-rust-projection"
           },
           {
-            "path": "synara/src/app/components/DeviceVerification.tsx",
-            "module": "matrix-js-sdk/lib/types",
-            "line": 8,
-            "named_imports": ["VerificationMethod"],
+            "path": "synara/src/app/hooks/useDeviceVerificationStatus.ts",
+            "module": "matrix-js-sdk/lib/crypto-api",
+            "line": 2,
+            "named_imports": ["CryptoApi"],
             "is_type_only": false,
-            "linked_requirement_ids": [
-              "FR-7.9-002",
-              "FR-7.9-004",
-              "FR-7.9-005"
-            ],
+            "linked_requirement_ids": ["FR-7.9-002", "FR-7.9-004"],
             "cutover_disposition": "replace-deep-js-sdk-import-with-synara-dto-or-rust-projection"
           },
           {
@@ -61902,11 +61579,7 @@
             "line": 2,
             "named_imports": ["CryptoApi"],
             "is_type_only": false,
-            "linked_requirement_ids": [
-              "FR-7.9-002",
-              "FR-7.9-004",
-              "FR-7.9-005"
-            ],
+            "linked_requirement_ids": ["FR-7.9-002", "FR-7.9-004"],
             "cutover_disposition": "replace-deep-js-sdk-import-with-synara-dto-or-rust-projection"
           },
           {
@@ -61924,16 +61597,12 @@
             "cutover_disposition": "replace-deep-js-sdk-import-with-synara-dto-or-rust-projection"
           },
           {
-            "path": "synara/src/app/hooks/useDeviceVerificationStatus.ts",
+            "path": "synara/src/app/hooks/useDeviceList.ts",
             "module": "matrix-js-sdk/lib/crypto-api",
-            "line": 2,
-            "named_imports": ["CryptoApi"],
+            "line": 4,
+            "named_imports": ["CryptoEvent", "CryptoEventHandlerMap"],
             "is_type_only": false,
-            "linked_requirement_ids": [
-              "FR-7.9-002",
-              "FR-7.9-004",
-              "FR-7.9-005"
-            ],
+            "linked_requirement_ids": ["FR-7.9-003", "FR-7.9-004", "FR-7.9-010"],
             "cutover_disposition": "replace-deep-js-sdk-import-with-synara-dto-or-rust-projection"
           },
           {
@@ -61944,87 +61613,32 @@
             "is_type_only": false,
             "linked_requirement_ids": ["FR-7.9-004"],
             "cutover_disposition": "replace-deep-js-sdk-import-with-synara-dto-or-rust-projection"
-          },
-          {
-            "path": "synara/src/app/hooks/useVerificationRequest.ts",
-            "module": "matrix-js-sdk/lib/crypto-api",
-            "line": 2,
-            "named_imports": [
-              "CryptoEvent",
-              "CryptoEventHandlerMap",
-              "VerificationPhase",
-              "VerificationRequest",
-              "VerificationRequestEvent",
-              "VerificationRequestEventHandlerMap",
-              "Verifier",
-              "VerifierEvent",
-              "VerifierEventHandlerMap"
-            ],
-            "is_type_only": false,
-            "linked_requirement_ids": ["FR-7.9-004", "FR-7.9-005"],
-            "cutover_disposition": "replace-deep-js-sdk-import-with-synara-dto-or-rust-projection"
-          },
-          {
-            "path": "synara/src/app/utils/verification.ts",
-            "module": "matrix-js-sdk/lib/crypto-api",
-            "line": 1,
-            "named_imports": [
-              "ShowSasCallbacks",
-              "VerificationPhase",
-              "VerificationRequest",
-              "Verifier"
-            ],
-            "is_type_only": false,
-            "linked_requirement_ids": ["FR-7.9-004", "FR-7.9-005"],
-            "cutover_disposition": "replace-deep-js-sdk-import-with-synara-dto-or-rust-projection"
-          },
-          {
-            "path": "synara/src/client/verificationRequestInbox.ts",
-            "module": "matrix-js-sdk/lib/crypto-api",
-            "line": 2,
-            "named_imports": ["CryptoEvent", "VerificationRequest"],
-            "is_type_only": false,
-            "linked_requirement_ids": ["FR-7.9-004", "FR-7.9-005"],
-            "cutover_disposition": "replace-deep-js-sdk-import-with-synara-dto-or-rust-projection"
           }
         ],
-        "method_candidates": [
-          "getCrypto",
-          "getVerificationRequestsToDeviceInProgress",
-          "getCrypto",
-          "createRecoveryKeyFromPassphrase",
-          "bootstrapSecretStorage",
-          "bootstrapCrossSigning",
-          "resetKeyBackup",
-          "requestOwnUserVerification",
-          "requestDeviceVerification"
-        ],
-        "listener_events": [
-          "CryptoEvent.UserTrustStatusChanged",
-          "CryptoEvent.VerificationRequestReceived",
-          "VerificationRequestEvent.Change",
-          "VerifierEvent.Cancel",
-          "VerifierEvent.ShowReciprocateQr",
-          "VerifierEvent.ShowSas"
-        ]
+        "method_candidates": ["getDeviceVerificationStatus"],
+        "listener_events": ["CryptoEvent.DevicesUpdated"],
+        "behavior_relevance_policy": "Exact-line source inspection: retain getDeviceVerificationStatus.crossSigningVerified and DevicesUpdated refresh used by status hooks. Exclude requestOwnUserVerification/requestDeviceVerification/getVerificationRequestsToDeviceInProgress/ShowSas/VerificationRequestReceived (FR-7.9-005 SAS). Exclude bootstrapCrossSigning/createRecoveryKeyFromPassphrase (FR-7.9-002). Exclude getDevices list ownership (FR-7.9-003). Exclude unused UserTrustStatusChanged hook from behavior_relevant."
       },
       "current_behavior_and_limits": {
-        "summary": "Current desktop implements this via 9 production matrix-js-sdk-related file(s); status=implemented.",
-        "notes": null,
-        "limits": "P0.1 method candidates are AST name hits, not type-checked receiver proofs."
+        "summary": "Current desktop implements device trust and verification state as getDeviceVerificationStatus.crossSigningVerified projected through verifiedDevice → VerificationStatus (Unknown/Unverified/Verified/Unsupported) and useUnverifiedDeviceCount for other own devices. Settings Devices badge, OtherDevices per-device status, UnverifiedTab, and LogoutDialog display and gate on that status; refresh is DevicesUpdated via useDeviceListChange. status=implemented.",
+        "notes": "Evidence (conservative): (1) Trust source matrix-crypto.ts verifiedDevice L3-13: await api.getDeviceVerificationStatus(userId, deviceId); if !status return null; else return status.crossSigningVerified boolean. Product trust bit is crossSigningVerified only (not localTrust / other flags). (2) Status enum useDeviceVerificationStatus.ts VerificationStatus L9-14: Unknown, Unverified, Verified, Unsupported. useDeviceVerificationDetect L16-51: verifiedDevice → null=Unsupported, true=Verified, false=Unverified; missing crypto/deviceId → Unknown; seeds on useEffect L37-39; refreshes via useDeviceListChange when userIds.includes(userId) L41-50. useDeviceVerificationStatus L53-63 state wrapper. useUnverifiedDeviceCount L65-106 counts devices where verifiedDevice===false for other-device badge counts; same DevicesUpdated refresh. (3) DeviceVerificationStatus.ts L15-24 render-prop wrapper around useDeviceVerificationStatus for per-device UI. (4) VerificationStatusBadge Verification.tsx L44-75: Spinner when Unknown or otherUnverifiedCount not number; Critical «Unverified» if current Unverified; Warning «{N} Unverified» if others unverified; else Success «Verified». (5) Devices.tsx L49-60 current status + otherUnverifiedCount; L101-108 badge when crossSigningActive; L131-139 VerifyCurrentDeviceTile when current Unverified; L140-142 BackupRestore when Verified; L153-155 OtherDevices showVerification only when current Verified. (6) OtherDevices.tsx L168-178 DeviceVerificationStatus → Unverified shows VerifyOtherDeviceTile (tile is status-gated; verify action is FR-7.9-005). (7) UnverifiedTab.tsx L88-93 null when !crossSigningActive; L29-47 status+count; L46-76 Critical avatar current Unverified else Warning+count for others. (8) LogoutDialog.tsx L21-25 status via getDeviceId; L50-58 Unverified Device warning when encrypted rooms + active + current Unverified. (9) Wired refresh path is CryptoEvent.DevicesUpdated via useDeviceListChange (useDeviceList.ts L7-16 on L12 / removeListener L14) used by useDeviceVerificationDetect/useUnverifiedDeviceCount — not UserTrustStatusChanged. (10) useUserTrustStatusChange.ts L5-16 defines on/removeListener CryptoEvent.UserTrustStatusChanged but has ZERO product import/call sites — unused; document only, not primary evidence. (11) Explicit non-evidence: SAS ceremony DeviceVerification.tsx, useVerificationRequest ShowSas/VerificationRequestReceived, verificationRequestInbox, requestOwnUserVerification L124 / requestDeviceVerification L230 (FR-7.9-005); bootstrapCrossSigning / DeviceVerificationSetup Enable (FR-7.9-002); getDevices list ownership (FR-7.9-003). Status-gated Unverified InfoCards are trust display surfaces; ceremony buttons inside them are FR-7.9-005. (12) Cutover P8.2/P8.4 must preserve Verified/Unverified display for current+other devices, badge/banner/count, and DevicesUpdated-driven refresh via Rust device trust projection + IPC DTO; SC-063/SC-064 alone, compile-only blocked, raw /_matrix HTTP, dual-backend, SAS-only, or helper-only FAIL.",
+        "limits": "P0.1 method/listener candidates are AST name hits, not type-checked receiver proofs. Product trust bit is crossSigningVerified only via getDeviceVerificationStatus; no product call to UserTrustStatusChanged. useUserTrustStatusChange is defined but unused. Devices.tsx / UnverifiedTab.tsx / LogoutDialog.tsx lack direct matrix-js-sdk imports (may be absent from 220 P0.1 production-import ledger). SC-063/SC-064 remain compile-shape-only blocked (E3–E5 missing). Do not count SC IDs alone, raw /_matrix HTTP, helper-only harnesses, SAS ceremony (FR-7.9-005), bootstrapCrossSigning (FR-7.9-002), or getDevices list (FR-7.9-003) as closing this FR."
       },
       "p0_1_linkage": {
         "categories": ["crypto_verification_recovery"],
         "file_ledger_paths": [
-          "synara/src/app/components/DeviceVerification.tsx",
-          "synara/src/app/components/DeviceVerificationSetup.tsx",
+          "synara/src/app/utils/matrix-crypto.ts",
+          "synara/src/app/hooks/useDeviceVerificationStatus.ts",
           "synara/src/app/components/DeviceVerificationStatus.ts",
           "synara/src/app/features/settings/devices/Verification.tsx",
-          "synara/src/app/hooks/useDeviceVerificationStatus.ts",
-          "synara/src/app/hooks/useUserTrustStatusChange.ts",
-          "synara/src/app/hooks/useVerificationRequest.ts",
-          "synara/src/app/utils/verification.ts",
-          "synara/src/client/verificationRequestInbox.ts"
+          "synara/src/app/features/settings/devices/OtherDevices.tsx",
+          "synara/src/app/hooks/useDeviceList.ts",
+          "synara/src/app/hooks/useUserTrustStatusChange.ts"
+        ],
+        "product_surfaces_not_in_p0_1_import_ledger": [
+          "synara/src/app/features/settings/devices/Devices.tsx",
+          "synara/src/app/pages/client/sidebar/UnverifiedTab.tsx",
+          "synara/src/app/components/LogoutDialog.tsx"
         ]
       },
       "rust_target": {
@@ -62084,11 +61698,14 @@
           }
         ],
         "gaps": [],
-        "notes": "Mappings use only accepted P0.3 capability/gap IDs. Compile probes establish API shape only; final dossier states remain blocked/typed/upstream until E3–E5 gates exist.",
+        "notes": "Honest rust_target for FR-7.9-004: SC-063 Encryption::get_user_devices is the dossier-backed crypto-side analogue for enumerating devices with trust/verification metadata (product today uses JS getDeviceVerificationStatus.crossSigningVerified per device_id). SC-064 Encryption::cross_signing_status is related identity/cross-signing precondition (also FR-7.9-002 active status) — not a substitute for per-device Verified/Unverified display. Both remain final_state=blocked (compile-shape only; E3–E5 missing). Cutover under P8.2 (device list/trust) and P8.4 (cross-signing/identity state) must preserve current/other Verified vs Unverified UI, badge counts, UnverifiedTab/LogoutDialog, and status refresh via Rust ownership + IPC DTO — not SC IDs alone, not dual-backend/SDK selector, not unapproved raw /_matrix HTTP, not helper-only, not SAS ceremony alone.",
         "distinctions_preserved": [
-          "server typed search (SC-071) vs experimental local search (SC-072)",
-          "widget plumbing (SC-082/GAP widget) vs call parity (membership write/key session gaps)",
-          "compile shape (E1/E2) vs runtime/UI parity (E3–E5 missing => blocked)"
+          "compile shape (E1/E2) vs runtime/UI parity (E3–E5 missing => blocked)",
+          "per-device trust (crossSigningVerified / SC-063 device trust projection) vs account cross-signing active (FR-7.9-002 / SC-064)",
+          "status/trust display (this FR) vs SAS ceremony UI (FR-7.9-005)",
+          "status projection vs getDevices list ownership (FR-7.9-003)",
+          "wired DevicesUpdated status refresh vs unused UserTrustStatusChanged hook",
+          "SC-063/SC-064 API shape vs product badge/UnverifiedTab/LogoutDialog observables"
         ]
       },
       "implementation_tasks": [
@@ -62096,13 +61713,13 @@
           "task_id": "P8.2",
           "title": "Device list/trust and deletion",
           "phase": "Phase 8 — E2EE, devices, verification, backup, and recovery",
-          "scope_rationale": "Accepted plan task P8.2 covers this Section 7.9 behavior during Phase 8 — E2EE, devices, verification, backup, and recovery."
+          "scope_rationale": "Accepted plan task P8.2 covers device trust status projection and related device management cutover for this Section 7.9 behavior."
         },
         {
           "task_id": "P8.4",
           "title": "Cross-signing and identity state",
           "phase": "Phase 8 — E2EE, devices, verification, backup, and recovery",
-          "scope_rationale": "Accepted plan task P8.4 covers this Section 7.9 behavior during Phase 8 — E2EE, devices, verification, backup, and recovery."
+          "scope_rationale": "Accepted plan task P8.4 covers identity/cross-signing-related state that must publish device trust status to Settings Devices / UnverifiedTab / logout consumers after cutover."
         }
       ],
       "automated_tests": {
@@ -62115,35 +61732,47 @@
             "task_id": "P8.2",
             "phase": "Phase 8 — E2EE, devices, verification, backup, and recovery",
             "level": "integration-e2e",
-            "scenario": "7.9/FR-7.9-004: exercise 'device trust and verification state;' via owner `synara/src/app/hooks/useDeviceVerificationStatus.ts` and UI `synara/src/app/features/settings/devices/Verification.tsx`, then confirm Rust/IPC cutover task `P8.2` preserves observable behavior without raw Matrix runtime HTTP.",
+            "scenario": "Integration-e2e against disposable Synapse with cross-signing active: Settings → Devices VerificationStatusBadge and DeviceVerificationStatus tiles show Verified vs Unverified (and Unsupported when status is null) for current device and other own-account devices from getDeviceVerificationStatus.crossSigningVerified via verifiedDevice/useDeviceVerificationStatus. UnverifiedTab and LogoutDialog consume the same status projection. After trust/verification state changes (post-ceremony outcome or DevicesUpdated), badge/banner/count refresh without process restart. After cutover P8.2/P8.4 same observables via Rust device trust projection (SC-063 get_user_devices; SC-064 cross_signing_status as related identity precondition) + IPC DTO; SC-063/SC-064 alone, compile-only blocked states, raw /_matrix HTTP, dual-backend, SAS-ceremony-only, or helper/fixture-only FAIL.",
+            "test_target": "matrix-crypto verifiedDevice (getDeviceVerificationStatus.crossSigningVerified) + useDeviceVerificationStatus/useUnverifiedDeviceCount + VerificationStatusBadge + Devices/OtherDevices/UnverifiedTab/LogoutDialog status surfaces; refresh via CryptoEvent.DevicesUpdated (useDeviceListChange); post-cutover SC-063/SC-064 trust projection under P8.2/P8.4",
             "preconditions": [
-              "Desktop app, E2EE-capable session; second device for verification",
-              "Recovery key / backup fixtures; isolated multi-account profiles when testing isolation",
-              "Linked owner path present in tree: synara/src/app/hooks/useDeviceVerificationStatus.ts",
-              "Primary UI/lifecycle surface: synara/src/app/features/settings/devices/Verification.tsx"
+              "Disposable Synapse; desktop app with E2EE-capable session and cross-signing active (m.cross_signing.master present / useCrossSigningActive true) so status surfaces are shown (not Enable path).",
+              "Fixtures: (A) current device Unverified (crossSigningVerified false); (B) current device Verified; (C) multi-session with at least one other own-account device Unverified for otherUnverifiedCount / OtherDevices tile; (D) optional Unsupported when getDeviceVerificationStatus returns null/absent.",
+              "Named product surfaces present: matrix-crypto.ts, useDeviceVerificationStatus.ts, DeviceVerificationStatus.ts, Verification.tsx VerificationStatusBadge, Devices.tsx, OtherDevices.tsx, UnverifiedTab.tsx, LogoutDialog.tsx.",
+              "Harness can observe badge/banner/tile status labels and refresh after DevicesUpdated without bypassing product verifiedDevice/useDeviceVerificationStatus. Second device/session for multi-device fixture; SAS ceremony steps are out of scope except as a means to produce a trust-state change."
             ],
             "trigger_actions": [
-              "Boot the appropriate harness for level=integration-e2e against disposable Synapse (or iOS notes if any).",
-              "Establish fixtures required by the clause list: device trust; verification state.",
-              "Open UI/lifecycle surface `synara/src/app/features/settings/devices/Verification.tsx` (or follow ui_entry_points_rationale if no dedicated UI).",
-              "Step 1: perform the product action that implements «device trust» using current owner `synara/src/app/hooks/useDeviceVerificationStatus.ts`.",
-              "Step 2: perform the product action that implements «verification state» using current owner `synara/src/app/hooks/useDeviceVerificationStatus.ts`.",
-              "Force process restart and/or offline→online transition where lifecycle continuity is implied."
+              "Boot integration harness against disposable Synapse. Do not use fixture-only mocks that skip product verifiedDevice/getDeviceVerificationStatus, dual-backend selectors, raw HTTP, or helper-only pass criteria.",
+              "CURRENT UNVERIFIED: open Settings → Devices with cross-signing active and current device Unverified. Assert VerificationStatusBadge shows Critical «Unverified»; VerifyCurrentDeviceTile (Unverified InfoCard) appears under Current; OtherDevices showVerification is false (other verify tiles gated until current is Verified).",
+              "CURRENT VERIFIED: with current device Verified and zero other unverified, assert badge Success «Verified». With current Verified and N other Unverified, assert Warning «N Unverified» badge and OtherDevices DeviceVerificationStatus shows Unverified tiles for those device_ids.",
+              "UNSUPPORTED/UNKNOWN: when getDeviceVerificationStatus yields null, product maps Unsupported; when crypto/deviceId missing, Unknown — badge shows Spinner while Unknown or while otherUnverifiedCount is not yet a number.",
+              "SIDEBAR/LOGOUT: UnverifiedTab (active only when cross-signing active) shows Critical avatar when current Unverified, or Warning avatar+count when only others are Unverified; null when all verified. LogoutDialog with encrypted rooms + active cross-signing + current Unverified shows «Unverified Device» warning.",
+              "REFRESH: after a trust/verification state change (e.g. successful verification elsewhere, or DevicesUpdated for own userId), assert useDeviceVerificationDetect/useUnverifiedDeviceCount re-run and UI updates without process restart. Do not treat unused useUserTrustStatusChange (UserTrustStatusChanged) as the wired refresh path.",
+              "PROCESS RESTART: relaunch session; re-assert Verified/Unverified display from restored crypto trust state without dual writers.",
+              "After cutover P8.2/P8.4, repeat current/other status display, banner/count, and refresh/restart observables via Rust device trust projection (SC-063; SC-064 related) under product lifecycle actor/IPC DTOs. Citing SC-063/SC-064 alone, compile-only blocked states, raw /_matrix HTTP, dual-backend/SDK selector, SAS ceremony UI alone, or helper/fixture-only is a FAIL."
             ],
             "assertions": [
-              "Each clause is observable: «device trust»; «verification state».",
-              "State coordination remains through `synara/src/app/hooks/useDeviceVerificationStatus.ts` (or its Rust/IPC successor after cutover), not ad-hoc dual writers.",
-              "Behavior-relevant current JS method candidates exercised or replaced: getCrypto, getVerificationRequestsToDeviceInProgress, getCrypto, createRecoveryKeyFromPassphrase, bootstrapSecretStorage, bootstrapCrossSigning, resetKeyBackup, requestOwnUserVerification (AST candidates; not type-proven receivers).",
-              "Behavior-relevant listener candidates observed or replaced: on:CryptoEvent.UserTrustStatusChanged, removeListener:CryptoEvent.UserTrustStatusChanged, on:CryptoEvent.VerificationRequestReceived, removeListener:CryptoEvent.VerificationRequestReceived, on:VerificationRequestEvent.Change, removeListener:VerificationRequestEvent.Change.",
-              "Rust mapping remains conservative: caps=[SC-063,SC-064] gaps=[none]; compile-only blocked states are not treated as runtime pass.",
-              "No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless dossier marks that exact behavior typed-sdk-request-required."
+              "CURRENT: badge and Current section reflect VerificationStatus from getDeviceVerificationStatus.crossSigningVerified for this session device (Verified / Unverified / Unsupported / Unknown loading).",
+              "OTHER: other own-account devices show per-device status via DeviceVerificationStatus when showVerification (current Verified + cross-signing active); otherUnverifiedCount drives badge «N Unverified» and UnverifiedTab count.",
+              "DISPLAY SURFACES: VerificationStatusBadge, UnverifiedTab, LogoutDialog Unverified warning, and status-gated Unverified InfoCards update from the same useDeviceVerificationStatus/useUnverifiedDeviceCount projection.",
+              "REFRESH: DevicesUpdated (useDeviceListChange) refreshes status/count without process restart; UserTrustStatusChanged hook is unused in product and is not required evidence.",
+              "FETCH: status originates from getDeviceVerificationStatus → crossSigningVerified (or Rust SC-063 successor), coordinated through verifiedDevice/useDeviceVerificationStatus (or IPC successor), not ad-hoc dual writers.",
+              "CUTOVER: P8.2/P8.4 preserves verified vs unverified display and post-trust-change refresh via Rust ownership + IPC DTO; SC-063/SC-064 compile-only never passes product acceptance; no raw /_matrix runtime HTTP; no dual-backend/SDK selector.",
+              "No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless the dossier marks that exact behavior typed-sdk-request-required.",
+              "SAS ceremony UI (DeviceVerification, requestOwnUserVerification, ShowSas, verification inbox), bootstrapCrossSigning establish (FR-7.9-002), and getDevices list ownership (FR-7.9-003) are not accepted as sole pass criteria for this FR."
             ],
             "required_environment": [
-              "Desktop app, E2EE-capable session; second device for verification",
-              "Recovery key / backup fixtures; isolated multi-account profiles when testing isolation"
+              "Disposable Synapse",
+              "Desktop app with cross-signing-active fixtures: current Verified and current Unverified; multi-session other-unverified optional",
+              "Optional second client/session to produce other-device Unverified state and post-verification trust change"
             ],
             "does_not_currently_exist": true,
-            "clause_breakdown": ["device trust", "verification state"]
+            "clause_breakdown": [
+              "current-device verification state Verified/Unverified/Unsupported/Unknown",
+              "other own-device verification state and otherUnverifiedCount",
+              "trust/status display surfaces (badge, UnverifiedTab, LogoutDialog, status-gated tiles)",
+              "status refresh after DevicesUpdated / trust change without process restart",
+              "cutover P8.2/P8.4 Rust trust projection + IPC DTO; SC-only/raw HTTP/helper-only/SAS-only FAIL"
+            ]
           }
         ]
       },
@@ -62156,13 +61785,15 @@
       ],
       "security_privacy_lifecycle_concerns": [
         "token-and-store-isolation",
-        "no-raw-matrix-http"
+        "no-raw-matrix-http",
+        "device-trust-status-ui-only"
       ],
       "traceability_status": "complete-conservative",
       "blockers": []
     },
     {
       "id": "FR-7.9-005",
+
       "origin": "plan-section-7",
       "section_id": "7.9",
       "plan_heading": "### 7.9 Devices, E2EE, verification, and recovery",
@@ -74901,7 +74532,7 @@
         "matrix-js-sdk/lib/types"
       ],
       "classification": "requirement-linked",
-      "linked_requirement_ids": ["FR-7.9-004", "FR-7.9-005"],
+      "linked_requirement_ids": ["FR-7.9-005"],
       "rationale": null,
       "p0_1_role": "production",
       "desktop_runtime": true,
@@ -75006,7 +74637,6 @@
       "classification": "requirement-linked",
       "linked_requirement_ids": [
         "FR-7.9-002",
-        "FR-7.9-004",
         "FR-7.9-005",
         "FR-7.9-006"
       ],
@@ -75057,7 +74687,7 @@
       "constructor_candidates": [],
       "import_modules": ["matrix-js-sdk/lib/crypto-api"],
       "classification": "requirement-linked",
-      "linked_requirement_ids": ["FR-7.9-002", "FR-7.9-004", "FR-7.9-005"],
+      "linked_requirement_ids": ["FR-7.9-002", "FR-7.9-004"],
       "rationale": null,
       "p0_1_role": "production",
       "desktop_runtime": true,
@@ -80396,7 +80026,7 @@
       "constructor_candidates": [],
       "import_modules": ["matrix-js-sdk"],
       "classification": "requirement-linked",
-      "linked_requirement_ids": ["FR-7.7-007", "FR-7.9-003", "FR-7.9-010"],
+      "linked_requirement_ids": ["FR-7.7-007", "FR-7.9-003", "FR-7.9-004", "FR-7.9-010"],
       "rationale": null,
       "p0_1_role": "production",
       "desktop_runtime": true,
@@ -81595,7 +81225,7 @@
       "constructor_candidates": [],
       "import_modules": ["matrix-js-sdk", "matrix-js-sdk/lib/crypto-api"],
       "classification": "requirement-linked",
-      "linked_requirement_ids": ["FR-7.9-003", "FR-7.9-010"],
+      "linked_requirement_ids": ["FR-7.9-003", "FR-7.9-004", "FR-7.9-010"],
       "rationale": null,
       "p0_1_role": "production",
       "desktop_runtime": true,
@@ -81648,7 +81278,7 @@
       "constructor_candidates": [],
       "import_modules": ["matrix-js-sdk/lib/crypto-api"],
       "classification": "requirement-linked",
-      "linked_requirement_ids": ["FR-7.9-002", "FR-7.9-004", "FR-7.9-005"],
+      "linked_requirement_ids": ["FR-7.9-002", "FR-7.9-004"],
       "rationale": null,
       "p0_1_role": "production",
       "desktop_runtime": true,
@@ -84417,7 +84047,7 @@
       "constructor_candidates": [],
       "import_modules": ["matrix-js-sdk/lib/crypto-api"],
       "classification": "requirement-linked",
-      "linked_requirement_ids": ["FR-7.9-004", "FR-7.9-005"],
+      "linked_requirement_ids": ["FR-7.9-005"],
       "rationale": null,
       "p0_1_role": "production",
       "desktop_runtime": true,
@@ -87981,7 +87611,7 @@
       "constructor_candidates": [],
       "import_modules": ["matrix-js-sdk/lib/crypto-api"],
       "classification": "requirement-linked",
-      "linked_requirement_ids": ["FR-7.9-002", "FR-7.9-008"],
+      "linked_requirement_ids": ["FR-7.9-002", "FR-7.9-004", "FR-7.9-008"],
       "rationale": null,
       "p0_1_role": "production",
       "desktop_runtime": true,
@@ -89232,7 +88862,7 @@
       "constructor_candidates": [],
       "import_modules": ["matrix-js-sdk/lib/crypto-api"],
       "classification": "requirement-linked",
-      "linked_requirement_ids": ["FR-7.9-004", "FR-7.9-005"],
+      "linked_requirement_ids": ["FR-7.9-005"],
       "rationale": null,
       "p0_1_role": "production",
       "desktop_runtime": true,
@@ -89610,7 +89240,7 @@
       "constructor_candidates": [],
       "import_modules": ["matrix-js-sdk", "matrix-js-sdk/lib/crypto-api"],
       "classification": "requirement-linked",
-      "linked_requirement_ids": ["FR-7.9-004", "FR-7.9-005"],
+      "linked_requirement_ids": ["FR-7.9-005"],
       "rationale": null,
       "p0_1_role": "production",
       "desktop_runtime": true,
@@ -89750,7 +89380,7 @@
         "Verifier"
       ],
       "is_type_only": false,
-      "linked_requirement_ids": ["FR-7.9-004", "FR-7.9-005"],
+      "linked_requirement_ids": ["FR-7.9-005"],
       "cutover_disposition": "replace-deep-js-sdk-import-with-synara-dto-or-rust-projection"
     },
     {
@@ -89759,7 +89389,7 @@
       "line": 8,
       "named_imports": ["VerificationMethod"],
       "is_type_only": false,
-      "linked_requirement_ids": ["FR-7.9-004", "FR-7.9-005"],
+      "linked_requirement_ids": ["FR-7.9-005"],
       "cutover_disposition": "replace-deep-js-sdk-import-with-synara-dto-or-rust-projection"
     },
     {
@@ -89768,7 +89398,7 @@
       "line": 2,
       "named_imports": ["CryptoApi"],
       "is_type_only": false,
-      "linked_requirement_ids": ["FR-7.9-002", "FR-7.9-004", "FR-7.9-005"],
+      "linked_requirement_ids": ["FR-7.9-002", "FR-7.9-004"],
       "cutover_disposition": "replace-deep-js-sdk-import-with-synara-dto-or-rust-projection"
     },
     {
@@ -90184,7 +89814,7 @@
       "line": 4,
       "named_imports": ["CryptoEvent", "CryptoEventHandlerMap"],
       "is_type_only": false,
-      "linked_requirement_ids": ["FR-7.9-003", "FR-7.9-010"],
+      "linked_requirement_ids": ["FR-7.9-003", "FR-7.9-004", "FR-7.9-010"],
       "cutover_disposition": "replace-deep-js-sdk-import-with-synara-dto-or-rust-projection"
     },
     {
@@ -90193,7 +89823,7 @@
       "line": 2,
       "named_imports": ["CryptoApi"],
       "is_type_only": false,
-      "linked_requirement_ids": ["FR-7.9-002", "FR-7.9-004", "FR-7.9-005"],
+      "linked_requirement_ids": ["FR-7.9-002", "FR-7.9-004"],
       "cutover_disposition": "replace-deep-js-sdk-import-with-synara-dto-or-rust-projection"
     },
     {
@@ -90332,7 +89962,7 @@
         "VerifierEventHandlerMap"
       ],
       "is_type_only": false,
-      "linked_requirement_ids": ["FR-7.9-004", "FR-7.9-005"],
+      "linked_requirement_ids": ["FR-7.9-005"],
       "cutover_disposition": "replace-deep-js-sdk-import-with-synara-dto-or-rust-projection"
     },
     {
@@ -90462,7 +90092,7 @@
       "line": 1,
       "named_imports": ["CryptoApi"],
       "is_type_only": false,
-      "linked_requirement_ids": ["FR-7.9-002", "FR-7.9-008"],
+      "linked_requirement_ids": ["FR-7.9-002", "FR-7.9-004", "FR-7.9-008"],
       "cutover_disposition": "replace-deep-js-sdk-import-with-synara-dto-or-rust-projection"
     },
     {
@@ -90661,7 +90291,7 @@
         "Verifier"
       ],
       "is_type_only": false,
-      "linked_requirement_ids": ["FR-7.9-004", "FR-7.9-005"],
+      "linked_requirement_ids": ["FR-7.9-005"],
       "cutover_disposition": "replace-deep-js-sdk-import-with-synara-dto-or-rust-projection"
     },
     {
@@ -90707,7 +90337,7 @@
       "line": 2,
       "named_imports": ["CryptoEvent", "VerificationRequest"],
       "is_type_only": false,
-      "linked_requirement_ids": ["FR-7.9-004", "FR-7.9-005"],
+      "linked_requirement_ids": ["FR-7.9-005"],
       "cutover_disposition": "replace-deep-js-sdk-import-with-synara-dto-or-rust-projection"
     }
   ],
@@ -95546,35 +95176,47 @@
         "task_id": "P8.2",
         "phase": "Phase 8 — E2EE, devices, verification, backup, and recovery",
         "level": "integration-e2e",
-        "scenario": "7.9/FR-7.9-004: exercise 'device trust and verification state;' via owner `synara/src/app/hooks/useDeviceVerificationStatus.ts` and UI `synara/src/app/features/settings/devices/Verification.tsx`, then confirm Rust/IPC cutover task `P8.2` preserves observable behavior without raw Matrix runtime HTTP.",
+        "scenario": "Integration-e2e against disposable Synapse with cross-signing active: Settings → Devices VerificationStatusBadge and DeviceVerificationStatus tiles show Verified vs Unverified (and Unsupported when status is null) for current device and other own-account devices from getDeviceVerificationStatus.crossSigningVerified via verifiedDevice/useDeviceVerificationStatus. UnverifiedTab and LogoutDialog consume the same status projection. After trust/verification state changes (post-ceremony outcome or DevicesUpdated), badge/banner/count refresh without process restart. After cutover P8.2/P8.4 same observables via Rust device trust projection (SC-063 get_user_devices; SC-064 cross_signing_status as related identity precondition) + IPC DTO; SC-063/SC-064 alone, compile-only blocked states, raw /_matrix HTTP, dual-backend, SAS-ceremony-only, or helper/fixture-only FAIL.",
+        "test_target": "matrix-crypto verifiedDevice (getDeviceVerificationStatus.crossSigningVerified) + useDeviceVerificationStatus/useUnverifiedDeviceCount + VerificationStatusBadge + Devices/OtherDevices/UnverifiedTab/LogoutDialog status surfaces; refresh via CryptoEvent.DevicesUpdated (useDeviceListChange); post-cutover SC-063/SC-064 trust projection under P8.2/P8.4",
         "preconditions": [
-          "Desktop app, E2EE-capable session; second device for verification",
-          "Recovery key / backup fixtures; isolated multi-account profiles when testing isolation",
-          "Linked owner path present in tree: synara/src/app/hooks/useDeviceVerificationStatus.ts",
-          "Primary UI/lifecycle surface: synara/src/app/features/settings/devices/Verification.tsx"
+          "Disposable Synapse; desktop app with E2EE-capable session and cross-signing active (m.cross_signing.master present / useCrossSigningActive true) so status surfaces are shown (not Enable path).",
+          "Fixtures: (A) current device Unverified (crossSigningVerified false); (B) current device Verified; (C) multi-session with at least one other own-account device Unverified for otherUnverifiedCount / OtherDevices tile; (D) optional Unsupported when getDeviceVerificationStatus returns null/absent.",
+          "Named product surfaces present: matrix-crypto.ts, useDeviceVerificationStatus.ts, DeviceVerificationStatus.ts, Verification.tsx VerificationStatusBadge, Devices.tsx, OtherDevices.tsx, UnverifiedTab.tsx, LogoutDialog.tsx.",
+          "Harness can observe badge/banner/tile status labels and refresh after DevicesUpdated without bypassing product verifiedDevice/useDeviceVerificationStatus. Second device/session for multi-device fixture; SAS ceremony steps are out of scope except as a means to produce a trust-state change."
         ],
         "trigger_actions": [
-          "Boot the appropriate harness for level=integration-e2e against disposable Synapse (or iOS notes if any).",
-          "Establish fixtures required by the clause list: device trust; verification state.",
-          "Open UI/lifecycle surface `synara/src/app/features/settings/devices/Verification.tsx` (or follow ui_entry_points_rationale if no dedicated UI).",
-          "Step 1: perform the product action that implements «device trust» using current owner `synara/src/app/hooks/useDeviceVerificationStatus.ts`.",
-          "Step 2: perform the product action that implements «verification state» using current owner `synara/src/app/hooks/useDeviceVerificationStatus.ts`.",
-          "Force process restart and/or offline→online transition where lifecycle continuity is implied."
+          "Boot integration harness against disposable Synapse. Do not use fixture-only mocks that skip product verifiedDevice/getDeviceVerificationStatus, dual-backend selectors, raw HTTP, or helper-only pass criteria.",
+          "CURRENT UNVERIFIED: open Settings → Devices with cross-signing active and current device Unverified. Assert VerificationStatusBadge shows Critical «Unverified»; VerifyCurrentDeviceTile (Unverified InfoCard) appears under Current; OtherDevices showVerification is false (other verify tiles gated until current is Verified).",
+          "CURRENT VERIFIED: with current device Verified and zero other unverified, assert badge Success «Verified». With current Verified and N other Unverified, assert Warning «N Unverified» badge and OtherDevices DeviceVerificationStatus shows Unverified tiles for those device_ids.",
+          "UNSUPPORTED/UNKNOWN: when getDeviceVerificationStatus yields null, product maps Unsupported; when crypto/deviceId missing, Unknown — badge shows Spinner while Unknown or while otherUnverifiedCount is not yet a number.",
+          "SIDEBAR/LOGOUT: UnverifiedTab (active only when cross-signing active) shows Critical avatar when current Unverified, or Warning avatar+count when only others are Unverified; null when all verified. LogoutDialog with encrypted rooms + active cross-signing + current Unverified shows «Unverified Device» warning.",
+          "REFRESH: after a trust/verification state change (e.g. successful verification elsewhere, or DevicesUpdated for own userId), assert useDeviceVerificationDetect/useUnverifiedDeviceCount re-run and UI updates without process restart. Do not treat unused useUserTrustStatusChange (UserTrustStatusChanged) as the wired refresh path.",
+          "PROCESS RESTART: relaunch session; re-assert Verified/Unverified display from restored crypto trust state without dual writers.",
+          "After cutover P8.2/P8.4, repeat current/other status display, banner/count, and refresh/restart observables via Rust device trust projection (SC-063; SC-064 related) under product lifecycle actor/IPC DTOs. Citing SC-063/SC-064 alone, compile-only blocked states, raw /_matrix HTTP, dual-backend/SDK selector, SAS ceremony UI alone, or helper/fixture-only is a FAIL."
         ],
         "assertions": [
-          "Each clause is observable: «device trust»; «verification state».",
-          "State coordination remains through `synara/src/app/hooks/useDeviceVerificationStatus.ts` (or its Rust/IPC successor after cutover), not ad-hoc dual writers.",
-          "Behavior-relevant current JS method candidates exercised or replaced: getCrypto, getVerificationRequestsToDeviceInProgress, getCrypto, createRecoveryKeyFromPassphrase, bootstrapSecretStorage, bootstrapCrossSigning, resetKeyBackup, requestOwnUserVerification (AST candidates; not type-proven receivers).",
-          "Behavior-relevant listener candidates observed or replaced: on:CryptoEvent.UserTrustStatusChanged, removeListener:CryptoEvent.UserTrustStatusChanged, on:CryptoEvent.VerificationRequestReceived, removeListener:CryptoEvent.VerificationRequestReceived, on:VerificationRequestEvent.Change, removeListener:VerificationRequestEvent.Change.",
-          "Rust mapping remains conservative: caps=[SC-063,SC-064] gaps=[none]; compile-only blocked states are not treated as runtime pass.",
-          "No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless dossier marks that exact behavior typed-sdk-request-required."
+          "CURRENT: badge and Current section reflect VerificationStatus from getDeviceVerificationStatus.crossSigningVerified for this session device (Verified / Unverified / Unsupported / Unknown loading).",
+          "OTHER: other own-account devices show per-device status via DeviceVerificationStatus when showVerification (current Verified + cross-signing active); otherUnverifiedCount drives badge «N Unverified» and UnverifiedTab count.",
+          "DISPLAY SURFACES: VerificationStatusBadge, UnverifiedTab, LogoutDialog Unverified warning, and status-gated Unverified InfoCards update from the same useDeviceVerificationStatus/useUnverifiedDeviceCount projection.",
+          "REFRESH: DevicesUpdated (useDeviceListChange) refreshes status/count without process restart; UserTrustStatusChanged hook is unused in product and is not required evidence.",
+          "FETCH: status originates from getDeviceVerificationStatus → crossSigningVerified (or Rust SC-063 successor), coordinated through verifiedDevice/useDeviceVerificationStatus (or IPC successor), not ad-hoc dual writers.",
+          "CUTOVER: P8.2/P8.4 preserves verified vs unverified display and post-trust-change refresh via Rust ownership + IPC DTO; SC-063/SC-064 compile-only never passes product acceptance; no raw /_matrix runtime HTTP; no dual-backend/SDK selector.",
+          "No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless the dossier marks that exact behavior typed-sdk-request-required.",
+          "SAS ceremony UI (DeviceVerification, requestOwnUserVerification, ShowSas, verification inbox), bootstrapCrossSigning establish (FR-7.9-002), and getDevices list ownership (FR-7.9-003) are not accepted as sole pass criteria for this FR."
         ],
         "required_environment": [
-          "Desktop app, E2EE-capable session; second device for verification",
-          "Recovery key / backup fixtures; isolated multi-account profiles when testing isolation"
+          "Disposable Synapse",
+          "Desktop app with cross-signing-active fixtures: current Verified and current Unverified; multi-session other-unverified optional",
+          "Optional second client/session to produce other-device Unverified state and post-verification trust change"
         ],
         "does_not_currently_exist": true,
-        "clause_breakdown": ["device trust", "verification state"]
+        "clause_breakdown": [
+          "current-device verification state Verified/Unverified/Unsupported/Unknown",
+          "other own-device verification state and otherUnverifiedCount",
+          "trust/status display surfaces (badge, UnverifiedTab, LogoutDialog, status-gated tiles)",
+          "status refresh after DevicesUpdated / trust change without process restart",
+          "cutover P8.2/P8.4 Rust trust projection + IPC DTO; SC-only/raw HTTP/helper-only/SAS-only FAIL"
+        ]
       },
       {
         "id": "AT-FR-7.9-005-001",
@@ -98747,26 +98389,35 @@
       "requirement_id": "FR-7.9-004",
       "platforms": ["macOS", "Linux"],
       "preconditions": [
-        "Desktop app, E2EE-capable session; second device for verification",
-        "Recovery key / backup fixtures; isolated multi-account profiles when testing isolation",
-        "State owner available: synara/src/app/hooks/useDeviceVerificationStatus.ts",
-        "UI/lifecycle: synara/src/app/features/settings/devices/Verification.tsx",
+        "Disposable Synapse; desktop app with E2EE session and cross-signing active so Devices shows status badge (not Enable).",
+        "Known fixtures: current device Unverified; current device Verified; optional multi-session other Unverified.",
+        "State owner: synara/src/app/hooks/useDeviceVerificationStatus.ts + matrix-crypto verifiedDevice.",
+        "UI surfaces: Devices VerificationStatusBadge, OtherDevices DeviceVerificationStatus, UnverifiedTab, LogoutDialog.",
         "Current status baseline: implemented"
       ],
       "actions": [
-        "Launch Synara desktop on the target platform against disposable Synapse; use a clean or known fixture profile as required by «device trust and verification state;».",
-        "Identify state owner `synara/src/app/hooks/useDeviceVerificationStatus.ts` and open `synara/src/app/features/settings/devices/Verification.tsx`.",
-        "Action 1 — «device trust»: perform the minimal user/system steps that trigger this clause (use linked files under current_production_files if the entry point is indirect).",
-        "Action 2 — «verification state»: perform the minimal user/system steps that trigger this clause (use linked files under current_production_files if the entry point is indirect).",
-        "Repeat critical path in an encrypted room / with a second device when the clause involves keys or verification."
+        "Launch Synara desktop on the target platform against disposable Synapse with cross-signing active.",
+        "Open Settings → Devices. Observe VerificationStatusBadge for current-device status (Unverified / Verified / N Unverified / spinner).",
+        "With current Unverified: confirm Unverified InfoCard under Current and UnverifiedTab Critical indicator; open Logout with an encrypted room and confirm Unverified Device warning.",
+        "With current Verified and other Unverified devices: confirm Warning badge count, UnverifiedTab Warning count, and OtherDevices Unverified tiles for those sessions.",
+        "After a verification/trust change for a device (complete SAS elsewhere if needed — ceremony itself is FR-7.9-005), confirm badge/banner/count update without process restart.",
+        "Relaunch the app and re-check Verified/Unverified display from restored trust state.",
+        "On post-cutover build: same observables via Rust trust projection + IPC; no raw /_matrix from renderer; SC IDs alone / helper-only not accepted."
       ],
       "expected_results": [
-        "All clauses under «device trust and verification state;» produce the user-visible or system-observable success criteria without error toasts unrelated to intentional negative tests.",
-        "Clause 1 «device trust» is satisfied on macOS, Linux with owner `synara/src/app/hooks/useDeviceVerificationStatus.ts`.",
-        "Clause 2 «verification state» is satisfied on macOS, Linux with owner `synara/src/app/hooks/useDeviceVerificationStatus.ts`.",
-        "No unexpected raw /_matrix traffic from the app renderer for this flow on the post-cutover build."
+        "Current and other own-device verification states display correctly (Verified vs Unverified; Unsupported/Unknown loading behavior as product implements).",
+        "UnverifiedTab and LogoutDialog reflect the same status projection as Devices badge.",
+        "Status updates after trust/verification state change and after process restart without dual writers.",
+        "Clause «device trust» and «verification state» satisfied on macOS and Linux via useDeviceVerificationStatus / verifiedDevice (or Rust/IPC successor).",
+        "No unexpected raw /_matrix traffic from the app renderer for this flow on the post-cutover build.",
+        "SAS ceremony, bootstrapCrossSigning alone, and device list alone do not close this FR."
       ],
-      "clause_breakdown": ["device trust", "verification state"]
+      "clause_breakdown": [
+        "current and other device Verified/Unverified display",
+        "badge / UnverifiedTab / LogoutDialog trust surfaces",
+        "refresh after trust change",
+        "cutover P8.2/P8.4 without raw HTTP / SC-only pass"
+      ]
     },
     {
       "id": "MA-FR-7.9-005",
@@ -100836,6 +100487,17 @@
         "FR-7.9-003: current_status remains implemented. current_behavior_and_limits documents getDevices own-account list, getDeviceId Current vs Others split, Devices.tsx Current/OtherDevices UI, DeviceTile identity (device_id/display_name/last_seen/ed25519), DevicesUpdated own-user refresh, UnverifiedTab consumer; notes no longer null. Clarified other-device = other own sessions not third-party users; no getUserDeviceInfo.",
         "FR-7.9-003: retargeted behavior_relevant methods/listeners to getDevices, getDeviceId, getUserId, getOwnDeviceKeys, CryptoEvent.DevicesUpdated on/removeListener. Excluded getCrypto/VerifyOtherDeviceTile (FR-7.9-004/005) and deleteMultipleDevices/UIA (FR-7.9-010) from behavior_relevant. Primary UI retargeted from OtherDevices-only to Devices.tsx + OtherDevices + UnverifiedTab.",
         "FR-7.9-003: planned AT/MA require multi-session Current/Others observables, refresh, cutover P8.2 via Rust SC-067 list projection; SC-067/SC-063 alone, compile-only, raw HTTP, helper/fixture-only FAIL. rust_target SC-067 primary + SC-063 secondary compile-shape-only-blocked-for-product. Top-level AT-FR-7.9-003-001 and MA-FR-7.9-003 updated byte-aligned. Status distribution unchanged. Accepted FR-7.8-001 through FR-7.8-009 and FR-7.9-001..002 preserved. JSON and Markdown synchronized."
+      ]
+    },
+    {
+      "id": "p0.2-correct-30-fr-7.9-004-device-trust-verification-state",
+      "scope": "Rejected-review limited correction: FR-7.9-004 only — replace generic via-9-files notes=null shallow AT mixing SAS ceremony/bootstrap with concrete device trust/verification state evidence: getDeviceVerificationStatus.crossSigningVerified via verifiedDevice; VerificationStatus Unknown/Unverified/Verified/Unsupported; useDeviceVerificationStatus/useUnverifiedDeviceCount; VerificationStatusBadge; Devices/OtherDevices/UnverifiedTab/LogoutDialog surfaces; DevicesUpdated refresh; unused useUserTrustStatusChange documented; demote SAS ceremony methods; rewrite AT/MA for P8.2/P8.4 cutover; honest rust_target SC-063/SC-064 compile-only blocked",
+      "requirements_rewritten": ["FR-7.9-004"],
+      "not_claimed_complete": true,
+      "changes": [
+        "FR-7.9-004: current_status remains implemented. current_behavior_and_limits documents getDeviceVerificationStatus.crossSigningVerified → VerificationStatus, badge/UnverifiedTab/LogoutDialog/OtherDevices status surfaces, DevicesUpdated refresh, unused UserTrustStatusChanged hook; notes no longer null. Wrong primary owners DeviceVerification SAS, DeviceVerificationSetup bootstrap, useVerificationRequest, verification inbox removed from behavior_relevant.",
+        "FR-7.9-004: retargeted behavior_relevant methods/listeners to getDeviceVerificationStatus and CryptoEvent.DevicesUpdated on/removeListener. Excluded requestOwnUserVerification/requestDeviceVerification/ShowSas/VerificationRequestReceived (FR-7.9-005), bootstrapCrossSigning (FR-7.9-002), getDevices list ownership (FR-7.9-003). useUserTrustStatusChange listeners demoted (unused).",
+        "FR-7.9-004: planned AT/MA require verified vs unverified display for current and other devices, status refresh after trust change, cutover P8.2/P8.4 via Rust trust state + IPC DTO; SC-063/SC-064 alone, compile-only, raw HTTP, SAS-only, helper/fixture-only FAIL. rust_target SC-063/SC-064 compile-shape-only-blocked-for-product. Top-level AT-FR-7.9-004-001 and MA-FR-7.9-004 updated byte-aligned. File/deep-import ledger: remove FR-7.9-004 from DeviceVerification/Setup/useVerificationRequest/verification.ts/inbox; add to matrix-crypto and useDeviceList. Status distribution unchanged. Accepted FR-7.8-001 through FR-7.8-009 and FR-7.9-001..003 preserved. JSON and Markdown synchronized."
       ]
     }
   ]

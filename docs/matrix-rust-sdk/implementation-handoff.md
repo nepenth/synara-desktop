@@ -33,11 +33,10 @@ without explicit user approval.
 - Checkpoint commits: `06d0f86` (traceability scaffold), `9c91e0f` (handoff)
 - **Accepted this session:**
   - FR-7.8-004 through FR-7.8-009 (section 7.8 complete for P0.2 audit)
-  - FR-7.9-001 @ `db944b3`
-  - FR-7.9-002 @ `328c30c`
-  - FR-7.9-003 (`p0.2-correct-29-...`) pending commit after this handoff update
-- **Next writer task:** FR-7.9-004 (device trust and verification state), then
-  remaining shallow 7.9–7.11 rows (~25)
+  - FR-7.9-001 through FR-7.9-003
+  - FR-7.9-004 (`p0.2-correct-30-...`) pending commit after this handoff update
+- **Next writer task:** FR-7.9-005 (SAS verification and request inbox), then
+  remaining shallow 7.9–7.11 rows
 - No production Matrix Rust SDK replacement code accepted
 - **No open P0.2 PR yet** (open after P0.2 complete or batch checkpoint)
 
@@ -46,10 +45,9 @@ Phase 0 evidence accepted before this handoff:
 - P0.1 SDK usage inventory is merged to the integration branch.
 - P0.3 exact Matrix Rust SDK 0.18.0 capability dossier is merged to the
   integration branch.
-- P0.2 branch carries accepted 7.8 corrections through FR-7.8-009 and
-  continuing 7.9+ audits.
+- P0.2 branch carries accepted 7.8–7.9.004 corrections and continuing 7.9+ audits.
 
-P0.2 is not complete. Resume at FR-7.9-004, then audit remaining 7.9–7.11
+P0.2 is not complete. Resume at FR-7.9-005, then audit remaining 7.9–7.11
 before declaring P0.2 accepted.
 
 Accepted notification findings that must be preserved:
@@ -119,6 +117,11 @@ Accepted notification findings that must be preserved:
   `getDeviceId()` (other = other sessions of the logged-in user, not third
   parties). Devices/OtherDevices/UnverifiedTab; refresh via
   `CryptoEvent.DevicesUpdated`. SC-067 primary (compile-only blocked ≠ pass).
+- FR-7.9-004: status `implemented`. Trust bit is
+  `getDeviceVerificationStatus.crossSigningVerified` via `verifiedDevice` →
+  VerificationStatus badges on Devices/OtherDevices/UnverifiedTab/Logout;
+  refresh via DevicesUpdated. SAS ceremony is FR-7.9-005; list is FR-7.9-003.
+  SC-063/064 compile-only ≠ product pass.
 
 ## Branch and PR contract
 

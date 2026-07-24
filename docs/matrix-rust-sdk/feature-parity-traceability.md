@@ -4,7 +4,7 @@
 
 ## Correction pass status
 
-Limited rejected-review correction (`p0.2-correct-29-fr-7.9-003-own-and-other-device-lists`) for **FR-7.9-003** only: replace generic “via 3 files” / notes=null / shallow AT with concrete own-device and other-device list evidence — `useDeviceList` via `mx.getDevices()`; `useSplitCurrentDevice` via `getDeviceId` Current vs Others (other own-account sessions, not third-party users); Settings Devices Current/OtherDevices UI; DeviceTile identity fields; `CryptoEvent.DevicesUpdated` refresh; UnverifiedTab list consumer; rewrite planned AT/MA for multi-session list observables and cutover P8.2; honest rust_target SC-067 primary + SC-063 secondary compile-only blocked; SC IDs alone / raw HTTP / helper-only FAIL. JSON and Markdown synchronized. Accepted corrections for **FR-7.8-001 through FR-7.8-009** and **FR-7.9-001..002** preserved. Prior corrections and accepted **7.1–7.3** preserved. **P0.2 is not complete.**
+Limited rejected-review correction (`p0.2-correct-30-fr-7.9-004-device-trust-verification-state`) for **FR-7.9-004** only: replace generic “via 9 files” / notes=null / methods mixing SAS ceremony+bootstrap with concrete device trust/verification state evidence — `getDeviceVerificationStatus.crossSigningVerified` via `verifiedDevice`; `VerificationStatus` Unknown/Unverified/Verified/Unsupported; `useDeviceVerificationStatus`/`useUnverifiedDeviceCount`; `VerificationStatusBadge`; Devices/OtherDevices/UnverifiedTab/LogoutDialog surfaces; wired `CryptoEvent.DevicesUpdated` refresh; unused `useUserTrustStatusChange` documented; demote SAS ceremony methods to non-primary (FR-7.9-005); rewrite planned AT/MA for verified vs unverified display + cutover P8.2/P8.4; honest rust_target SC-063/SC-064 compile-only blocked; SC IDs alone / raw HTTP / SAS-only / helper-only FAIL. JSON and Markdown synchronized. Accepted corrections for **FR-7.8-001 through FR-7.8-009** and **FR-7.9-001..003** preserved. Prior corrections and accepted **7.1–7.3** preserved. **P0.2 is not complete.**
 
 ## Provenance
 
@@ -5805,94 +5805,70 @@ Limited rejected-review correction (`p0.2-correct-29-fr-7.9-003-own-and-other-de
 - **Text**: device trust and verification state;
 - **Lines**: 428–428
 - **Status**: `implemented`
-- **Behavior**: Current desktop implements this via 9 production matrix-js-sdk-related file(s); status=implemented.
-- **UI**: `synara/src/app/features/settings/devices/Verification.tsx`
-- **Owners**: `synara/src/app/hooks/useDeviceVerificationStatus.ts`
+- **Behavior**: Current desktop implements device trust and verification state as `getDeviceVerificationStatus.crossSigningVerified` projected through `verifiedDevice` → `VerificationStatus` (Unknown/Unverified/Verified/Unsupported) and `useUnverifiedDeviceCount` for other own devices. Settings Devices badge, OtherDevices per-device status, UnverifiedTab, and LogoutDialog display and gate on that status; refresh is `DevicesUpdated` via `useDeviceListChange`. status=implemented.
+- **Notes**: Evidence (conservative): (1) Trust source `matrix-crypto.ts` `verifiedDevice` L3–13: `getDeviceVerificationStatus` → `crossSigningVerified` only. (2) `VerificationStatus` L9–14; `useDeviceVerificationDetect` L16–51 maps null/true/false → Unsupported/Verified/Unverified; refresh via `useDeviceListChange` L41–50; `useUnverifiedDeviceCount` L65–106. (3) `DeviceVerificationStatus.ts` L15–24 render-prop. (4) `VerificationStatusBadge` L44–75 Spinner/Unverified/N Unverified/Verified. (5) `Devices.tsx` L49–60 status+count; L103 badge; L131 Unverified tile gate; L153 showVerification when current Verified. (6) `OtherDevices` L168–178 per-device status. (7) `UnverifiedTab` L29–93 banner. (8) `LogoutDialog` L21–58 Unverified warning. (9) Wired refresh = `CryptoEvent.DevicesUpdated` (`useDeviceList.ts` L12/L14), not `UserTrustStatusChanged`. (10) `useUserTrustStatusChange` unused (zero call sites). (11) Non-evidence: SAS ceremony (FR-7.9-005), bootstrapCrossSigning (FR-7.9-002), getDevices list (FR-7.9-003). (12) Cutover P8.2/P8.4 via Rust trust projection + IPC; SC-063/SC-064 alone / compile-only / raw HTTP / SAS-only / helper-only FAIL.
+- **UI**: `synara/src/app/features/settings/devices/Devices.tsx`, `synara/src/app/features/settings/devices/Verification.tsx`, `synara/src/app/features/settings/devices/OtherDevices.tsx`, `synara/src/app/pages/client/sidebar/UnverifiedTab.tsx`, `synara/src/app/components/LogoutDialog.tsx`
+- **UI rationale**: Devices is primary Settings trust surface (badge + status-gated tiles). VerificationStatusBadge is the status display. OtherDevices shows per-device status. UnverifiedTab/LogoutDialog consume the same projection. SAS ceremony UI is FR-7.9-005.
+- **Owners**: `synara/src/app/hooks/useDeviceVerificationStatus.ts`, `synara/src/app/utils/matrix-crypto.ts`
 - **Files**:
-  - `synara/src/app/components/DeviceVerification.tsx` symbols=['getCrypto', 'getVerificationRequestsToDeviceInProgress'] retained_m=2 retained_l=0
-    - method `getCrypto`:L395 — None
-    - method `getVerificationRequestsToDeviceInProgress`:L395 — None
-  - `synara/src/app/components/DeviceVerificationSetup.tsx` symbols=['getCrypto', 'createRecoveryKeyFromPassphrase', 'bootstrapSecretStorage', 'bootstrapCrossSigning', 'resetKeyBackup'] retained_m=5 retained_l=0
-    - method `getCrypto`:L139 — None
-    - method `createRecoveryKeyFromPassphrase`:L142 — None
-    - method `bootstrapSecretStorage`:L148 — None
-    - method `bootstrapCrossSigning`:L153 — None
-    - method `resetKeyBackup`:L158 — None
-  - `synara/src/app/components/DeviceVerificationStatus.ts` symbols=[] retained_m=0 retained_l=0
-  - `synara/src/app/features/settings/devices/Verification.tsx` symbols=['requestOwnUserVerification', 'requestDeviceVerification'] retained_m=2 retained_l=0
-    - method `requestOwnUserVerification`:L124 — None
-    - method `requestDeviceVerification`:L230 — None
-  - `synara/src/app/hooks/useDeviceVerificationStatus.ts` symbols=[] retained_m=0 retained_l=0
-  - `synara/src/app/hooks/useUserTrustStatusChange.ts` symbols=[] retained_m=0 retained_l=2
-    - listener `on:CryptoEvent.UserTrustStatusChanged`:L11 — None
-    - listener `removeListener:CryptoEvent.UserTrustStatusChanged`:L13 — None
-  - `synara/src/app/hooks/useVerificationRequest.ts` symbols=[] retained_m=0 retained_l=10
-    - listener `on:CryptoEvent.VerificationRequestReceived`:L21 — None
-    - listener `removeListener:CryptoEvent.VerificationRequestReceived`:L23 — None
-    - listener `on:VerificationRequestEvent.Change`:L33 — None
-    - listener `removeListener:VerificationRequestEvent.Change`:L35 — None
-    - listener `on:VerifierEvent.Cancel`:L58 — None
-    - listener `removeListener:VerifierEvent.Cancel`:L60 — None
-    - listener `on:VerifierEvent.ShowSas`:L70 — None
-    - listener `removeListener:VerifierEvent.ShowSas`:L76 — None
-    - listener `on:VerifierEvent.ShowReciprocateQr`:L86 — None
-    - listener `removeListener:VerifierEvent.ShowReciprocateQr`:L88 — None
-  - `synara/src/app/utils/verification.ts` symbols=[] retained_m=0 retained_l=0
-  - `synara/src/client/verificationRequestInbox.ts` symbols=[] retained_m=0 retained_l=1
-    - listener `on:CryptoEvent.VerificationRequestReceived`:L66 — None
+  - `synara/src/app/utils/matrix-crypto.ts` symbols=['getDeviceVerificationStatus', 'verifiedDevice'] retained_m=1 retained_l=0
+    - method `getDeviceVerificationStatus`:L8 — trust bit via crossSigningVerified
+  - `synara/src/app/hooks/useDeviceVerificationStatus.ts` symbols=['VerificationStatus', 'useDeviceVerificationStatus', 'useUnverifiedDeviceCount'] retained_m=0 retained_l=0
+    - note: L9–14 enum; L16–63 status detect+state; L65–106 other-unverified count; DevicesUpdated refresh
+  - `synara/src/app/components/DeviceVerificationStatus.ts` symbols=['DeviceVerificationStatus'] retained_m=0 retained_l=0
+    - note: L15–24 render-prop for OtherDevices per-device status
+  - `synara/src/app/features/settings/devices/Verification.tsx` symbols=['VerificationStatusBadge'] retained_m=0 retained_l=0
+    - note: L44–75 badge; requestOwnUserVerification/requestDeviceVerification excluded (FR-7.9-005)
+  - `synara/src/app/features/settings/devices/Devices.tsx` symbols=['useDeviceVerificationStatus', 'VerificationStatusBadge'] retained_m=0 retained_l=0
+    - note: L49–60 status+count; L103 badge; L131 Unverified gate; no direct matrix-js-sdk import
+  - `synara/src/app/features/settings/devices/OtherDevices.tsx` symbols=['DeviceVerificationStatus'] retained_m=0 retained_l=0
+    - note: L168–178 per-device status when showVerification
+  - `synara/src/app/pages/client/sidebar/UnverifiedTab.tsx` symbols=['useDeviceVerificationStatus', 'UnverifiedTab'] retained_m=0 retained_l=0
+    - note: L29–93 Critical/Warning trust banner
+  - `synara/src/app/components/LogoutDialog.tsx` symbols=['useDeviceVerificationStatus'] retained_m=0 retained_l=0
+    - note: L21–58 Unverified Device logout warning
+  - `synara/src/app/hooks/useDeviceList.ts` symbols=['useDeviceListChange'] retained_m=0 retained_l=2
+    - listener `on:CryptoEvent.DevicesUpdated`:L12 — status refresh path
+    - listener `removeListener:CryptoEvent.DevicesUpdated`:L14 — cleanup
+  - `synara/src/app/hooks/useUserTrustStatusChange.ts` symbols=[] retained_m=0 retained_l=0
+    - note: UNUSED — UserTrustStatusChanged defined but zero product call sites; not behavior_relevant
 - **Behavior-relevant methods (top-level)**:
-  - `getCrypto` `synara/src/app/components/DeviceVerification.tsx`:L395 — None
-  - `getVerificationRequestsToDeviceInProgress` `synara/src/app/components/DeviceVerification.tsx`:L395 — None
-  - `getCrypto` `synara/src/app/components/DeviceVerificationSetup.tsx`:L139 — None
-  - `createRecoveryKeyFromPassphrase` `synara/src/app/components/DeviceVerificationSetup.tsx`:L142 — None
-  - `bootstrapSecretStorage` `synara/src/app/components/DeviceVerificationSetup.tsx`:L148 — None
-  - `bootstrapCrossSigning` `synara/src/app/components/DeviceVerificationSetup.tsx`:L153 — None
-  - `resetKeyBackup` `synara/src/app/components/DeviceVerificationSetup.tsx`:L158 — None
-  - `requestOwnUserVerification` `synara/src/app/features/settings/devices/Verification.tsx`:L124 — None
-  - `requestDeviceVerification` `synara/src/app/features/settings/devices/Verification.tsx`:L230 — None
+  - `getDeviceVerificationStatus` `synara/src/app/utils/matrix-crypto.ts`:L8 — crossSigningVerified trust bit
 - **Behavior-relevant listeners (top-level)**:
-  - `on:CryptoEvent.UserTrustStatusChanged` `synara/src/app/hooks/useUserTrustStatusChange.ts`:L11 — None
-  - `removeListener:CryptoEvent.UserTrustStatusChanged` `synara/src/app/hooks/useUserTrustStatusChange.ts`:L13 — None
-  - `on:CryptoEvent.VerificationRequestReceived` `synara/src/app/hooks/useVerificationRequest.ts`:L21 — None
-  - `removeListener:CryptoEvent.VerificationRequestReceived` `synara/src/app/hooks/useVerificationRequest.ts`:L23 — None
-  - `on:VerificationRequestEvent.Change` `synara/src/app/hooks/useVerificationRequest.ts`:L33 — None
-  - `removeListener:VerificationRequestEvent.Change` `synara/src/app/hooks/useVerificationRequest.ts`:L35 — None
-  - `on:VerifierEvent.Cancel` `synara/src/app/hooks/useVerificationRequest.ts`:L58 — None
-  - `removeListener:VerifierEvent.Cancel` `synara/src/app/hooks/useVerificationRequest.ts`:L60 — None
-  - `on:VerifierEvent.ShowSas` `synara/src/app/hooks/useVerificationRequest.ts`:L70 — None
-  - `removeListener:VerifierEvent.ShowSas` `synara/src/app/hooks/useVerificationRequest.ts`:L76 — None
-  - `on:VerifierEvent.ShowReciprocateQr` `synara/src/app/hooks/useVerificationRequest.ts`:L86 — None
-  - `removeListener:VerifierEvent.ShowReciprocateQr` `synara/src/app/hooks/useVerificationRequest.ts`:L88 — None
-  - `on:CryptoEvent.VerificationRequestReceived` `synara/src/client/verificationRequestInbox.ts`:L66 — None
-- **Unfiltered linked candidates**: methods=11 listeners=13
+  - `on:CryptoEvent.DevicesUpdated` `synara/src/app/hooks/useDeviceList.ts`:L12 — status re-query refresh
+  - `removeListener:CryptoEvent.DevicesUpdated` `synara/src/app/hooks/useDeviceList.ts`:L14 — cleanup
+- **Unfiltered linked candidates**: methods=6 listeners=4
 - **Rust**: `compile-shape-only-blocked-for-product` caps=['SC-063', 'SC-064'] gaps=[]
   - `SC-063` `blocked` `matrix_sdk::encryption::Encryption::get_user_devices` https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/encryption/mod.rs#L1156
   - `SC-064` `blocked` `matrix_sdk::encryption::Encryption::cross_signing_status` https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/encryption/mod.rs#L976
+  - Honest: SC-063 is crypto-side device trust enum analogue for per-device verification metadata. SC-064 is related cross-signing/identity precondition (also FR-7.9-002), not per-device Verified display. Both compile-only blocked. Cutover P8.2/P8.4 via Rust ownership+IPC DTO; SC IDs alone / raw HTTP / SAS-only / helper-only FAIL.
 - **Tasks**: `P8.2`, `P8.4`
 - **Existing tests**:
   - _(none)_
 - **Planned** `AT-FR-7.9-004-001` task `P8.2` level `integration-e2e`
-  - Scenario: 7.9/FR-7.9-004: exercise 'device trust and verification state;' via owner `synara/src/app/hooks/useDeviceVerificationStatus.ts` and UI `synara/src/app/features/settings/devices/Verification.tsx`, then confirm Rust/IPC cutover task `P8.2` preserves observable behavior without raw Matrix runtime HTTP.
-  - Test target: None
+  - Scenario: Integration-e2e against disposable Synapse with cross-signing active: Settings → Devices VerificationStatusBadge and DeviceVerificationStatus tiles show Verified vs Unverified (and Unsupported when status is null) for current device and other own-account devices from getDeviceVerificationStatus.crossSigningVerified via verifiedDevice/useDeviceVerificationStatus. UnverifiedTab and LogoutDialog consume the same status projection. After trust/verification state changes (post-ceremony outcome or DevicesUpdated), badge/banner/count refresh without process restart. After cutover P8.2/P8.4 same observables via Rust device trust projection (SC-063 get_user_devices; SC-064 cross_signing_status as related identity precondition) + IPC DTO; SC-063/SC-064 alone, compile-only blocked states, raw /\_matrix HTTP, dual-backend, SAS-ceremony-only, or helper/fixture-only FAIL.
+  - Test target: matrix-crypto verifiedDevice (getDeviceVerificationStatus.crossSigningVerified) + useDeviceVerificationStatus/useUnverifiedDeviceCount + VerificationStatusBadge + Devices/OtherDevices/UnverifiedTab/LogoutDialog status surfaces; refresh via CryptoEvent.DevicesUpdated (useDeviceListChange); post-cutover SC-063/SC-064 trust projection under P8.2/P8.4
   - Preconditions:
-    - Desktop app, E2EE-capable session; second device for verification
-    - Recovery key / backup fixtures; isolated multi-account profiles when testing isolation
-    - Linked owner path present in tree: synara/src/app/hooks/useDeviceVerificationStatus.ts
-    - Primary UI/lifecycle surface: synara/src/app/features/settings/devices/Verification.tsx
+    - Disposable Synapse; desktop app with E2EE-capable session and cross-signing active so status surfaces are shown (not Enable path).
+    - Fixtures: (A) current Unverified; (B) current Verified; (C) multi-session other Unverified; (D) optional Unsupported when status null.
+    - Named product surfaces: matrix-crypto.ts, useDeviceVerificationStatus.ts, DeviceVerificationStatus.ts, VerificationStatusBadge, Devices.tsx, OtherDevices.tsx, UnverifiedTab.tsx, LogoutDialog.tsx.
+    - Harness observes badge/banner/tile labels and DevicesUpdated refresh without bypassing product verifiedDevice.
   - Actions:
-    1. Boot the appropriate harness for level=integration-e2e against disposable Synapse (or iOS notes if any).
-    2. Establish fixtures required by the clause list: device trust; verification state.
-    3. Open UI/lifecycle surface `synara/src/app/features/settings/devices/Verification.tsx` (or follow ui_entry_points_rationale if no dedicated UI).
-    4. Step 1: perform the product action that implements «device trust» using current owner `synara/src/app/hooks/useDeviceVerificationStatus.ts`.
-    5. Step 2: perform the product action that implements «verification state» using current owner `synara/src/app/hooks/useDeviceVerificationStatus.ts`.
-    6. Force process restart and/or offline→online transition where lifecycle continuity is implied.
+    1. Boot integration harness against disposable Synapse. No fixture-only mocks, dual-backend, raw HTTP, or helper-only pass.
+    2. CURRENT UNVERIFIED: open Settings → Devices; assert Critical «Unverified» badge and VerifyCurrentDeviceTile; other verify tiles gated off.
+    3. CURRENT VERIFIED: assert Success «Verified» or Warning «N Unverified» with OtherDevices Unverified tiles when applicable.
+    4. UNSUPPORTED/UNKNOWN: null status → Unsupported; missing crypto/deviceId → Unknown spinner path.
+    5. SIDEBAR/LOGOUT: UnverifiedTab Critical vs Warning+count; LogoutDialog Unverified Device warning with encrypted rooms.
+    6. REFRESH: after trust change / DevicesUpdated, UI updates without process restart; do not treat unused UserTrustStatusChanged as wired path.
+    7. PROCESS RESTART: relaunch; re-assert Verified/Unverified from restored trust state.
+    8. After cutover P8.2/P8.4, repeat via Rust trust projection + IPC. SC-063/SC-064 alone, compile-only, raw HTTP, dual-backend, SAS-only, or helper-only is a FAIL.
   - Assertions:
-    - Each clause is observable: «device trust»; «verification state».
-    - State coordination remains through `synara/src/app/hooks/useDeviceVerificationStatus.ts` (or its Rust/IPC successor after cutover), not ad-hoc dual writers.
-    - Behavior-relevant current JS method candidates exercised or replaced: getCrypto, getVerificationRequestsToDeviceInProgress, getCrypto, createRecoveryKeyFromPassphrase, bootstrapSecretStorage, bootstrapCrossSigning, resetKeyBackup, requestOwnUserVerification (AST candidates; not type-proven receivers).
-    - Behavior-relevant listener candidates observed or replaced: on:CryptoEvent.UserTrustStatusChanged, removeListener:CryptoEvent.UserTrustStatusChanged, on:CryptoEvent.VerificationRequestReceived, removeListener:CryptoEvent.VerificationRequestReceived, on:VerificationRequestEvent.Change, removeListener:VerificationRequestEvent.Change.
-    - Rust mapping remains conservative: caps=[SC-063,SC-064] gaps=[none]; compile-only blocked states are not treated as runtime pass.
-    - No new production matrix-js-sdk usage and no raw /\_matrix runtime HTTP unless dossier marks that exact behavior typed-sdk-request-required.
+    - CURRENT/OTHER: Verified/Unverified/Unsupported/Unknown display for current and other own devices.
+    - DISPLAY SURFACES: badge, UnverifiedTab, LogoutDialog, status-gated tiles share the same projection.
+    - REFRESH: DevicesUpdated re-queries status; UserTrustStatusChanged unused.
+    - FETCH: status from getDeviceVerificationStatus → crossSigningVerified (or SC-063 successor) via verifiedDevice/useDeviceVerificationStatus.
+    - CUTOVER: P8.2/P8.4 preserves display+refresh via Rust+IPC; SC compile-only never product pass; no raw /\_matrix; no dual-backend.
+    - SAS ceremony, bootstrapCrossSigning alone, and getDevices list alone are not sole pass criteria.
   - does_not_currently_exist: `True`
 - **Manual**: `MA-FR-7.9-004`
 
@@ -8980,22 +8956,26 @@ Limited rejected-review correction (`p0.2-correct-29-fr-7.9-003-own-and-other-de
 
 - Platforms: macOS, Linux
 - Preconditions:
-  - Desktop app, E2EE-capable session; second device for verification
-  - Recovery key / backup fixtures; isolated multi-account profiles when testing isolation
-  - State owner available: synara/src/app/hooks/useDeviceVerificationStatus.ts
-  - UI/lifecycle: synara/src/app/features/settings/devices/Verification.tsx
+  - Disposable Synapse; desktop app with E2EE session and cross-signing active so Devices shows status badge (not Enable).
+  - Known fixtures: current device Unverified; current device Verified; optional multi-session other Unverified.
+  - State owner: synara/src/app/hooks/useDeviceVerificationStatus.ts + matrix-crypto verifiedDevice.
+  - UI surfaces: Devices VerificationStatusBadge, OtherDevices DeviceVerificationStatus, UnverifiedTab, LogoutDialog.
   - Current status baseline: implemented
 - Actions:
-  1. Launch Synara desktop on the target platform against disposable Synapse; use a clean or known fixture profile as required by «device trust and verification state;».
-  2. Identify state owner `synara/src/app/hooks/useDeviceVerificationStatus.ts` and open `synara/src/app/features/settings/devices/Verification.tsx`.
-  3. Action 1 — «device trust»: perform the minimal user/system steps that trigger this clause (use linked files under current_production_files if the entry point is indirect).
-  4. Action 2 — «verification state»: perform the minimal user/system steps that trigger this clause (use linked files under current_production_files if the entry point is indirect).
-  5. Repeat critical path in an encrypted room / with a second device when the clause involves keys or verification.
+  1. Launch Synara desktop on the target platform against disposable Synapse with cross-signing active.
+  2. Open Settings → Devices. Observe VerificationStatusBadge for current-device status (Unverified / Verified / N Unverified / spinner).
+  3. With current Unverified: confirm Unverified InfoCard under Current and UnverifiedTab Critical indicator; open Logout with an encrypted room and confirm Unverified Device warning.
+  4. With current Verified and other Unverified devices: confirm Warning badge count, UnverifiedTab Warning count, and OtherDevices Unverified tiles for those sessions.
+  5. After a verification/trust change for a device (complete SAS elsewhere if needed — ceremony itself is FR-7.9-005), confirm badge/banner/count update without process restart.
+  6. Relaunch the app and re-check Verified/Unverified display from restored trust state.
+  7. On post-cutover build: same observables via Rust trust projection + IPC; no raw /\_matrix from renderer; SC IDs alone / helper-only not accepted.
 - Expected:
-  - All clauses under «device trust and verification state;» produce the user-visible or system-observable success criteria without error toasts unrelated to intentional negative tests.
-  - Clause 1 «device trust» is satisfied on macOS, Linux with owner `synara/src/app/hooks/useDeviceVerificationStatus.ts`.
-  - Clause 2 «verification state» is satisfied on macOS, Linux with owner `synara/src/app/hooks/useDeviceVerificationStatus.ts`.
+  - Current and other own-device verification states display correctly (Verified vs Unverified; Unsupported/Unknown loading behavior as product implements).
+  - UnverifiedTab and LogoutDialog reflect the same status projection as Devices badge.
+  - Status updates after trust/verification state change and after process restart without dual writers.
+  - Clause «device trust» and «verification state» satisfied on macOS and Linux via useDeviceVerificationStatus / verifiedDevice (or Rust/IPC successor).
   - No unexpected raw /\_matrix traffic from the app renderer for this flow on the post-cutover build.
+  - SAS ceremony, bootstrapCrossSigning alone, and device list alone do not close this FR.
 
 ### `MA-FR-7.9-005` (FR-7.9-005)
 
@@ -11214,22 +11194,24 @@ Limited rejected-review correction (`p0.2-correct-29-fr-7.9-003-own-and-other-de
 
 ### `AT-FR-7.9-004-001`
 
-- 7.9/FR-7.9-004: exercise 'device trust and verification state;' via owner `synara/src/app/hooks/useDeviceVerificationStatus.ts` and UI `synara/src/app/features/settings/devices/Verification.tsx`, then confirm Rust/IPC cutover task `P8.2` preserves observable behavior without raw Matrix runtime HTTP.
-- target: None
+- Integration-e2e against disposable Synapse with cross-signing active: Settings → Devices VerificationStatusBadge and DeviceVerificationStatus tiles show Verified vs Unverified (and Unsupported when status is null) for current device and other own-account devices from getDeviceVerificationStatus.crossSigningVerified via verifiedDevice/useDeviceVerificationStatus. UnverifiedTab and LogoutDialog consume the same status projection. After trust/verification state changes (post-ceremony outcome or DevicesUpdated), badge/banner/count refresh without process restart. After cutover P8.2/P8.4 same observables via Rust device trust projection (SC-063 get_user_devices; SC-064 cross_signing_status as related identity precondition) + IPC DTO; SC-063/SC-064 alone, compile-only blocked states, raw /\_matrix HTTP, dual-backend, SAS-ceremony-only, or helper/fixture-only FAIL.
+- target: matrix-crypto verifiedDevice (getDeviceVerificationStatus.crossSigningVerified) + useDeviceVerificationStatus/useUnverifiedDeviceCount + VerificationStatusBadge + Devices/OtherDevices/UnverifiedTab/LogoutDialog status surfaces; refresh via CryptoEvent.DevicesUpdated (useDeviceListChange); post-cutover SC-063/SC-064 trust projection under P8.2/P8.4
 - actions:
-  1. Boot the appropriate harness for level=integration-e2e against disposable Synapse (or iOS notes if any).
-  2. Establish fixtures required by the clause list: device trust; verification state.
-  3. Open UI/lifecycle surface `synara/src/app/features/settings/devices/Verification.tsx` (or follow ui_entry_points_rationale if no dedicated UI).
-  4. Step 1: perform the product action that implements «device trust» using current owner `synara/src/app/hooks/useDeviceVerificationStatus.ts`.
-  5. Step 2: perform the product action that implements «verification state» using current owner `synara/src/app/hooks/useDeviceVerificationStatus.ts`.
-  6. Force process restart and/or offline→online transition where lifecycle continuity is implied.
+  1. Boot integration harness against disposable Synapse. No fixture-only mocks, dual-backend, raw HTTP, or helper-only pass.
+  2. CURRENT UNVERIFIED: open Settings → Devices; assert Critical «Unverified» badge and VerifyCurrentDeviceTile; other verify tiles gated off.
+  3. CURRENT VERIFIED: assert Success «Verified» or Warning «N Unverified» with OtherDevices Unverified tiles when applicable.
+  4. UNSUPPORTED/UNKNOWN: null status → Unsupported; missing crypto/deviceId → Unknown spinner path.
+  5. SIDEBAR/LOGOUT: UnverifiedTab Critical vs Warning+count; LogoutDialog Unverified Device warning with encrypted rooms.
+  6. REFRESH: after trust change / DevicesUpdated, UI updates without process restart; do not treat unused UserTrustStatusChanged as wired path.
+  7. PROCESS RESTART: relaunch; re-assert Verified/Unverified from restored trust state.
+  8. After cutover P8.2/P8.4, repeat via Rust trust projection + IPC. SC-063/SC-064 alone, compile-only, raw HTTP, dual-backend, SAS-only, or helper-only is a FAIL.
 - assertions:
-  - Each clause is observable: «device trust»; «verification state».
-  - State coordination remains through `synara/src/app/hooks/useDeviceVerificationStatus.ts` (or its Rust/IPC successor after cutover), not ad-hoc dual writers.
-  - Behavior-relevant current JS method candidates exercised or replaced: getCrypto, getVerificationRequestsToDeviceInProgress, getCrypto, createRecoveryKeyFromPassphrase, bootstrapSecretStorage, bootstrapCrossSigning, resetKeyBackup, requestOwnUserVerification (AST candidates; not type-proven receivers).
-  - Behavior-relevant listener candidates observed or replaced: on:CryptoEvent.UserTrustStatusChanged, removeListener:CryptoEvent.UserTrustStatusChanged, on:CryptoEvent.VerificationRequestReceived, removeListener:CryptoEvent.VerificationRequestReceived, on:VerificationRequestEvent.Change, removeListener:VerificationRequestEvent.Change.
-  - Rust mapping remains conservative: caps=[SC-063,SC-064] gaps=[none]; compile-only blocked states are not treated as runtime pass.
-  - No new production matrix-js-sdk usage and no raw /\_matrix runtime HTTP unless dossier marks that exact behavior typed-sdk-request-required.
+  - CURRENT/OTHER: Verified/Unverified/Unsupported/Unknown display for current and other own devices.
+  - DISPLAY SURFACES: badge, UnverifiedTab, LogoutDialog, status-gated tiles share the same projection.
+  - REFRESH: DevicesUpdated re-queries status; UserTrustStatusChanged unused.
+  - FETCH: status from getDeviceVerificationStatus → crossSigningVerified (or SC-063 successor) via verifiedDevice/useDeviceVerificationStatus.
+  - CUTOVER: P8.2/P8.4 preserves display+refresh via Rust+IPC; SC compile-only never product pass; no raw /\_matrix; no dual-backend.
+  - SAS ceremony, bootstrapCrossSigning alone, and getDevices list alone are not sole pass criteria.
 
 ### `AT-FR-7.9-005-001`
 
@@ -11738,9 +11720,9 @@ Limited rejected-review correction (`p0.2-correct-29-fr-7.9-003-own-and-other-de
 | `synara/src/app/components/AuthFlowsLoader.tsx`                                | `component`        | `requirement-linked`           |   0 |   2 | `FR-7.1-001`,`FR-7.1-005`,`FR-7.1-006`                                                                                                                                                                                                    |
 | `synara/src/app/components/BackupRestore.tsx`                                  | `component`        | `requirement-linked`           |   0 |   0 | `FR-7.9-006`,`FR-7.9-007`,`FR-7.9-009`,`FR-7.9-013`                                                                                                                                                                                       |
 | `synara/src/app/components/CapabilitiesLoader.tsx`                             | `component`        | `requirement-linked`           |   0 |   1 | `FR-7.1-013`                                                                                                                                                                                                                              |
-| `synara/src/app/components/DeviceVerification.tsx`                             | `component`        | `requirement-linked`           |   0 |   3 | `FR-7.9-004`,`FR-7.9-005`                                                                                                                                                                                                    |
-| `synara/src/app/components/DeviceVerificationSetup.tsx`                        | `component`        | `requirement-linked`           |   0 |   5 | `FR-7.9-002`,`FR-7.9-004`,`FR-7.9-005`,`FR-7.9-006`                                                                                                                                                                                       |
-| `synara/src/app/components/DeviceVerificationStatus.ts`                        | `component`        | `requirement-linked`           |   0 |   0 | `FR-7.9-002`,`FR-7.9-004`,`FR-7.9-005`                                                                                                                                                                                                    |
+| `synara/src/app/components/DeviceVerification.tsx`                             | `component`        | `requirement-linked`           |   0 |   3 | `FR-7.9-005`                                                                                                                                                                                                    |
+| `synara/src/app/components/DeviceVerificationSetup.tsx`                        | `component`        | `requirement-linked`           |   0 |   5 | `FR-7.9-002`,`FR-7.9-005`,`FR-7.9-006`                                                                                                                                                                                       |
+| `synara/src/app/components/DeviceVerificationStatus.ts`                        | `component`        | `requirement-linked`           |   0 |   0 | `FR-7.9-002`,`FR-7.9-004`                                                                                                                                                                                                    |
 | `synara/src/app/components/JoinRulesSwitcher.tsx`                              | `component`        | `requirement-linked`           |   0 |   0 | `FR-7.6-002`                                                                                                                                                                                                                              |
 | `synara/src/app/components/RenderMessageContent.tsx`                           | `component`        | `requirement-linked`           |   0 |   0 | `FR-7.3-007`,`FR-7.3-008`,`FR-7.3-009`,`FR-7.3-010`,`FR-7.3-014`,`FR-7.3-016`,`FR-7.4-004`,`FR-7.4-006`,`FR-7.5-005`                                                                                                                      |
 | `synara/src/app/components/RoomSummaryLoader.tsx`                              | `component`        | `requirement-linked`           |   0 |   1 | `FR-7.2-007`                                                                                                                                                                                                                              |
@@ -11826,7 +11808,7 @@ Limited rejected-review correction (`p0.2-correct-29-fr-7.9-003-own-and-other-de
 | `synara/src/app/features/room/room-pin-menu/RoomPinMenu.tsx`                   | `feature`          | `shared-matrix-infrastructure` |   0 |   2 | `FR-7.1-002`,`FR-7.2-001`,`FR-7.6-001`,`FR-7.3-001`,`FR-7.6-004`,`FR-7.1-006`,`FR-7.1-005`,`FR-7.3-014`,`FR-7.7-008`,`FR-7.2-008`                                                                                                         |
 | `synara/src/app/features/search/Search.tsx`                                    | `feature`          | `requirement-linked`           |   0 |   4 | `FR-7.6-006`,`FR-7.10-002`,`FR-7.10-005`                                                                                                                                                                                                  |
 | `synara/src/app/features/settings/devices/DeviceTile.tsx`                      | `feature`          | `requirement-linked`           |   0 |   0 | `FR-7.7-007`,`FR-7.9-003`,`FR-7.9-010`                                                                                                                                                                                                    |
-| `synara/src/app/features/settings/devices/OtherDevices.tsx`                    | `feature`          | `requirement-linked`           |   0 |   2 | `FR-7.7-007`,`FR-7.9-003`,`FR-7.9-010`                                                                                                                                                                                                    |
+| `synara/src/app/features/settings/devices/OtherDevices.tsx`                    | `feature`          | `requirement-linked`           |   0 |   2 | `FR-7.7-007`,`FR-7.9-003`,`FR-7.9-004`,`FR-7.9-010`                                                                                                                                                                                                    |
 | `synara/src/app/features/settings/devices/Verification.tsx`                    | `feature`          | `requirement-linked`           |   0 |   3 | `FR-7.7-007`,`FR-7.9-002`,`FR-7.9-004`,`FR-7.9-005`                                                                                                                                                                                       |
 | `synara/src/app/features/settings/emojis-stickers/GlobalPacks.tsx`             | `feature`          | `requirement-linked`           |   0 |   4 | `FR-7.7-005`,`FR-7.7-007`                                                                                                                                                                                                                 |
 | `synara/src/app/features/settings/notifications/AllMessages.tsx`               | `feature`          | `requirement-linked`           |   0 |   1 | `FR-7.2-005`,`FR-7.2-011`,`FR-7.3-007`,`FR-7.3-008`,`FR-7.3-009`,`FR-7.3-010`,`FR-7.3-014`,`FR-7.3-016`,`FR-7.4-004`,`FR-7.7-003`,`FR-7.7-007`,`FR-7.8-001`,`FR-7.8-003` |
@@ -11843,8 +11825,8 @@ Limited rejected-review correction (`p0.2-correct-29-fr-7.9-003-own-and-other-de
 | `synara/src/app/hooks/useCallEmbed.ts`                                         | `hook`             | `requirement-linked`           |   0 |   0 | `FR-7.11-001`,`FR-7.11-002`,`FR-7.11-003`,`FR-7.11-004`,`FR-7.11-005`,`FR-7.11-006`,`FR-7.11-007`,`FR-7.11-008`                                                                                                                           |
 | `synara/src/app/hooks/useCapabilities.ts`                                      | `hook`             | `requirement-linked`           |   0 |   0 | `FR-7.1-013`                                                                                                                                                                                                                              |
 | `synara/src/app/hooks/useCommands.ts`                                          | `hook`             | `requirement-linked`           |   0 |  16 | `FR-7.4-010`,`FR-7.6-001`                                                                                                                                                                                                                 |
-| `synara/src/app/hooks/useDeviceList.ts`                                        | `hook`             | `requirement-linked`           |   2 |   3 | `FR-7.9-003`,`FR-7.9-010`                                                                                                                                                                                                                 |
-| `synara/src/app/hooks/useDeviceVerificationStatus.ts`                          | `hook`             | `requirement-linked`           |   0 |   0 | `FR-7.9-002`,`FR-7.9-004`,`FR-7.9-005`                                                                                                                                                                                                    |
+| `synara/src/app/hooks/useDeviceList.ts`                                        | `hook`             | `requirement-linked`           |   2 |   3 | `FR-7.9-003`,`FR-7.9-004`,`FR-7.9-010`                                                                                                                                                                                                                 |
+| `synara/src/app/hooks/useDeviceVerificationStatus.ts`                          | `hook`             | `requirement-linked`           |   0 |   0 | `FR-7.9-002`,`FR-7.9-004`                                                                                                                                                                                                    |
 | `synara/src/app/hooks/useGetRoom.ts`                                           | `hook`             | `requirement-linked`           |   0 |   1 | `FR-7.5-001`,`FR-7.5-002`,`FR-7.6-008`                                                                                                                                                                                                    |
 | `synara/src/app/hooks/useImagePackRooms.ts`                                    | `hook`             | `requirement-linked`           |   0 |   1 | `FR-7.7-005`,`FR-7.7-009`                                                                                                                                                                                                                 |
 | `synara/src/app/hooks/useImagePacks.ts`                                        | `hook`             | `requirement-linked`           |   0 |   0 | `FR-7.7-005`,`FR-7.7-009`                                                                                                                                                                                                                 |
@@ -11890,7 +11872,7 @@ Limited rejected-review correction (`p0.2-correct-29-fr-7.9-003-own-and-other-de
 | `synara/src/app/hooks/useUserPresence.ts`                                      | `hook`             | `requirement-linked`           |   6 |   0 | `FR-7.2-013`                                                                                                                                                                                                                              |
 | `synara/src/app/hooks/useUserProfile.ts`                                       | `hook`             | `requirement-linked`           |   4 |   0 | `FR-7.6-004`,`FR-7.6-007`,`FR-7.6-008`                                                                                                                                                                                                    |
 | `synara/src/app/hooks/useUserTrustStatusChange.ts`                             | `hook`             | `requirement-linked`           |   2 |   0 | `FR-7.9-004`                                                                                                                                                                                                                              |
-| `synara/src/app/hooks/useVerificationRequest.ts`                               | `hook`             | `requirement-linked`           |  10 |   0 | `FR-7.9-004`,`FR-7.9-005`                                                                                                                                                                                                                 |
+| `synara/src/app/hooks/useVerificationRequest.ts`                               | `hook`             | `requirement-linked`           |  10 |   0 | `FR-7.9-005`                                                                                                                                                                                                                 |
 | `synara/src/app/matrix/media.ts`                                               | `media-boundary`   | `requirement-linked`           |   0 |   0 | `FR-7.4-005`,`FR-7.5-001`,`FR-7.5-002`,`FR-7.5-004`,`FR-7.5-005`,`FR-7.5-006`,`FR-7.5-007`,`FR-7.5-008`,`FR-7.5-009`,`FR-7.5-010`,`FR-7.5-011`                                                                                            |
 | `synara/src/app/pages/auth/SSOLogin.tsx`                                       | `page`             | `requirement-linked`           |   0 |   2 | `FR-7.1-001`,`FR-7.1-004`,`FR-7.5-001`,`FR-7.5-007`                                                                                                                                                                                       |
 | `synara/src/app/pages/auth/login/Login.tsx`                                    | `page`             | `requirement-linked`           |   0 |   1 | `FR-7.1-001`,`FR-7.1-002`,`FR-7.1-004`                                                                                                                                                                                                    |
@@ -11935,7 +11917,7 @@ Limited rejected-review correction (`p0.2-correct-29-fr-7.9-003-own-and-other-de
 | `synara/src/app/state/upload.ts`                                               | `state`            | `requirement-linked`           |   0 |   0 | `FR-7.3-007`,`FR-7.4-005`,`FR-7.4-007`,`FR-7.5-003`,`FR-7.5-004`,`FR-7.5-008`,`FR-7.5-011`                                                                                                                                                |
 | `synara/src/app/utils/forward.ts`                                              | `utility`          | `requirement-linked`           |   0 |   1 | `FR-7.4-011`                                                                                                                                                                                                                              |
 | `synara/src/app/utils/later.ts`                                                | `utility`          | `requirement-linked`           |   0 |   2 | `FR-7.2-011`,`FR-7.3-014`,`FR-7.3-015`,`FR-7.7-001`,`FR-7.7-008`,`FR-7.7-009`                                                                                                                                                             |
-| `synara/src/app/utils/matrix-crypto.ts`                                        | `utility`          | `requirement-linked`           |   0 |   0 | `FR-7.9-002`,`FR-7.9-008`                                                                                                                                                                                                                              |
+| `synara/src/app/utils/matrix-crypto.ts`                                        | `utility`          | `requirement-linked`           |   0 |   0 | `FR-7.9-002`,`FR-7.9-004`,`FR-7.9-008`                                                                                                                                                                                                                              |
 | `synara/src/app/utils/matrix-uia.ts`                                           | `utility`          | `requirement-linked`           |   0 |   0 | `FR-7.1-006`                                                                                                                                                                                                                              |
 | `synara/src/app/utils/matrix.ts`                                               | `utility`          | `requirement-linked`           |   0 |   9 | `FR-7.3-007`,`FR-7.4-005`,`FR-7.4-007`,`FR-7.5-001`,`FR-7.5-003`,`FR-7.5-004`,`FR-7.5-007`,`FR-7.5-008`,`FR-7.5-011`,`FR-7.6-008`                                                                                                         |
 | `synara/src/app/utils/notifications.ts`                                        | `utility`          | `requirement-linked`           |   0 |   9 | `FR-7.2-005`,`FR-7.2-011`,`FR-7.7-003`                                                                                                                                               |
@@ -11948,10 +11930,10 @@ Limited rejected-review correction (`p0.2-correct-29-fr-7.9-003-own-and-other-de
 | `synara/src/app/utils/timelineLifecycle.ts`                                    | `utility`          | `requirement-linked`           |   0 |   4 | `FR-7.2-012`,`FR-7.3-001`,`FR-7.3-002`,`FR-7.3-017`,`FR-7.3-006`                                                                                                                                                                          |
 | `synara/src/app/utils/timelineLinks.ts`                                        | `utility`          | `requirement-linked`           |   0 |   3 | `FR-7.2-011`,`FR-7.3-004`                                                                                                                                                                                                                 |
 | `synara/src/app/utils/timelineOpening.ts`                                      | `utility`          | `requirement-linked`           |   0 |   5 | `FR-7.2-011`,`FR-7.3-001`,`FR-7.3-004`,`FR-7.3-005`,`FR-7.7-003`,`FR-7.7-004`,`FR-7.8-006`,`FR-7.10-004`                                                                                                                                  |
-| `synara/src/app/utils/verification.ts`                                         | `utility`          | `requirement-linked`           |   0 |   0 | `FR-7.9-004`,`FR-7.9-005`                                                                                                                                                                                                                 |
+| `synara/src/app/utils/verification.ts`                                         | `utility`          | `requirement-linked`           |   0 |   0 | `FR-7.9-005`                                                                                                                                                                                                                 |
 | `synara/src/client/cryptoStoreContinuity.ts`                                   | `client-lifecycle` | `requirement-linked`           |   0 |   1 | `FR-7.9-001`,`FR-7.9-011`,`FR-7.9-012`,`FR-7.9-013`                                                                                                                                                                                       |
 | `synara/src/client/initMatrix.ts`                                              | `client-lifecycle` | `requirement-linked`           |   2 |  15 | `FR-7.1-007`,`FR-7.1-008`,`FR-7.1-009`,`FR-7.1-010`,`FR-7.1-011`,`FR-7.1-012`,`FR-7.2-001`,`FR-7.5-001`,`FR-7.6-008`,`FR-7.9-001`,`FR-7.9-011`,`FR-7.9-012`,`FR-7.9-013`                                                                  |
-| `synara/src/client/verificationRequestInbox.ts`                                | `client-lifecycle` | `requirement-linked`           |   1 |   0 | `FR-7.9-004`,`FR-7.9-005`                                                                                                                                                                                                                 |
+| `synara/src/client/verificationRequestInbox.ts`                                | `client-lifecycle` | `requirement-linked`           |   1 |   0 | `FR-7.9-005`                                                                                                                                                                                                                 |
 | `synara/src/types/matrix/common.ts`                                            | `shared-type`      | `shared-matrix-infrastructure` |   0 |   0 | `FR-7.1-001`,`FR-7.3-001`,`FR-7.6-004`                                                                                                                                                                                                    |
 
 ## Networking/deep/custom
