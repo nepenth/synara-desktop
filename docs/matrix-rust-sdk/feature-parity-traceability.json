@@ -57351,130 +57351,135 @@
       "current_status": "implemented",
       "current_production_files": [
         {
-          "path": "synara/src/app/features/settings/notifications/AllMessages.tsx",
-          "bucket": "feature",
-          "categories": ["client_methods", "notifications_push_rules"],
-          "symbols_or_candidates": ["setPushRuleActions"],
-          "line_refs": [
-            {
-              "symbol": "setPushRuleActions",
-              "line": 67,
-              "kind": "method_candidate"
-            }
-          ],
-          "model_coupling": [],
-          "behavior_relevant_method_candidates": [
-            {
-              "name": "setPushRuleActions",
-              "line": 67,
-              "category": "notifications_push_rules",
-              "kind": "property_call_candidate",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            }
-          ],
-          "behavior_relevant_listener_candidates": []
-        },
-        {
-          "path": "synara/src/app/features/settings/notifications/KeywordMessages.tsx",
-          "bucket": "feature",
-          "categories": ["client_methods", "notifications_push_rules"],
+          "path": "synara/src/app/utils/desktop.ts",
+          "bucket": "utility",
+          "categories": [],
           "symbols_or_candidates": [
-            "addPushRule",
-            "deletePushRule",
-            "setPushRuleActions"
+            "buildDesktopNotificationRoomRoute",
+            "sanitizeDesktopNotificationRoute"
           ],
-          "line_refs": [
-            {
-              "symbol": "addPushRule",
-              "line": 30,
-              "kind": "method_candidate"
-            },
-            {
-              "symbol": "deletePushRule",
-              "line": 114,
-              "kind": "method_candidate"
-            },
-            {
-              "symbol": "setPushRuleActions",
-              "line": 135,
-              "kind": "method_candidate"
-            }
-          ],
-          "model_coupling": [],
-          "behavior_relevant_method_candidates": [
-            {
-              "name": "addPushRule",
-              "line": 30,
-              "category": "notifications_push_rules",
-              "kind": "property_call_candidate",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            },
-            {
-              "name": "deletePushRule",
-              "line": 114,
-              "category": "notifications_push_rules",
-              "kind": "property_call_candidate",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            },
-            {
-              "name": "setPushRuleActions",
-              "line": 135,
-              "category": "notifications_push_rules",
-              "kind": "property_call_candidate",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            }
-          ],
-          "behavior_relevant_listener_candidates": []
-        },
-        {
-          "path": "synara/src/app/features/settings/notifications/NotificationModeSwitcher.tsx",
-          "bucket": "feature",
-          "categories": ["notifications_push_rules"],
-          "symbols_or_candidates": [],
           "line_refs": [],
           "model_coupling": [],
           "behavior_relevant_method_candidates": [],
           "behavior_relevant_listener_candidates": [],
-          "symbols_or_candidates_note": "No requirement-relevant method/listener candidates filtered from this file's P0.1 AST hits; file remains linked for structural/model ownership. See all_candidates_in_linked_files on the requirement."
+          "symbols_or_candidates_note": "Non-P0.1 product helpers. buildDesktopNotificationRoomRoute(roomId, eventId?) → getHomeRoomPath (L332-333). sanitizeDesktopNotificationRoute rejects empty/scheme/non-absolute internal routes (L325-329). showDesktopNotification re-sanitizes route (L967)."
         },
         {
-          "path": "synara/src/app/features/settings/notifications/SpecialMessages.tsx",
-          "bucket": "feature",
+          "path": "synara/src/app/notifications/systemNotification.ts",
+          "bucket": "utility",
+          "categories": [],
+          "symbols_or_candidates": ["normalizeSystemNotificationRequest"],
+          "line_refs": [],
+          "model_coupling": [],
+          "behavior_relevant_method_candidates": [],
+          "behavior_relevant_listener_candidates": [],
+          "symbols_or_candidates_note": "Non-P0.1 product helper. normalizeSystemNotificationRequest (L82-105) routes via normalizeSynaraRoute — internal destinations only; rejects external/unsupported/oversized."
+        },
+        {
+          "path": "synara/src/app/platform/notifications.ts",
+          "bucket": "utility",
+          "categories": [],
+          "symbols_or_candidates": [
+            "showPlatformNotification",
+            "PLATFORM_NOTIFICATION_ACTION_EVENT",
+            "registerPlatformNotificationActionListener"
+          ],
+          "line_refs": [],
+          "model_coupling": [],
+          "behavior_relevant_method_candidates": [],
+          "behavior_relevant_listener_candidates": [],
+          "symbols_or_candidates_note": "Non-P0.1 product desktop bridge. showPlatformNotification normalize→showDesktopNotification passes route. PLATFORM_NOTIFICATION_ACTION_EVENT=synara://notification-action for action buttons; agent-approval open-room navigates via navigateRoom."
+        },
+        {
+          "path": "synara/src/app/pages/client/ClientNonUIFeatures.tsx",
+          "bucket": "page",
           "categories": [
             "client_methods",
-            "notifications_push_rules",
-            "uia_auth"
+            "room_methods",
+            "event_emitters_listeners",
+            "sync_lifecycle",
+            "room_lists",
+            "timelines",
+            "spaces",
+            "uia_auth",
+            "custom_raw_event_sends"
           ],
-          "symbols_or_candidates": ["setPushRuleActions"],
+          "symbols_or_candidates": [
+            "findEventById",
+            "findEventById",
+            "getRoom",
+            "findEventById"
+          ],
           "line_refs": [
             {
-              "symbol": "setPushRuleActions",
-              "line": 106,
+              "symbol": "findEventById",
+              "line": 441,
+              "kind": "method_candidate"
+            },
+            {
+              "symbol": "findEventById",
+              "line": 696,
+              "kind": "method_candidate"
+            },
+            {
+              "symbol": "getRoom",
+              "line": 822,
+              "kind": "method_candidate"
+            },
+            {
+              "symbol": "findEventById",
+              "line": 823,
               "kind": "method_candidate"
             }
           ],
-          "model_coupling": [],
+          "model_coupling": ["MatrixEvent", "Room"],
           "behavior_relevant_method_candidates": [
             {
-              "name": "setPushRuleActions",
-              "line": 106,
-              "category": "notifications_push_rules",
+              "name": "findEventById",
+              "line": 441,
+              "category": "timelines",
               "kind": "property_call_candidate",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
+              "relevance_reason": "MessageNotifications resolves thread-root openEventId for buildDesktopNotificationRoomRoute / navigateRoom destination."
+            },
+            {
+              "name": "findEventById",
+              "line": 696,
+              "category": "timelines",
+              "kind": "property_call_candidate",
+              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
+              "relevance_reason": "AgentApprovalNotifications resolves thread-root openEventId for route attachment and navigateRoom open."
+            },
+            {
+              "name": "getRoom",
+              "line": 822,
+              "category": "room_lists",
+              "kind": "property_call_candidate",
+              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
+              "relevance_reason": "LaterReminderNotifications loads room to resolve event for thread-root openEventId before route/notify."
+            },
+            {
+              "name": "findEventById",
+              "line": 823,
+              "category": "timelines",
+              "kind": "property_call_candidate",
+              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
+              "relevance_reason": "LaterReminderNotifications finds reminder event for getThreadRootEventId open destination."
             }
           ],
-          "behavior_relevant_listener_candidates": []
+          "behavior_relevant_listener_candidates": [],
+          "symbols_or_candidates_note": "Route attachment + open owners for this FR (not generation-as-such): MessageNotifications route L388 + onclick navigateRoom L400-401 + openEventId L441; AgentApproval route L532 + navigateRoom L552/595/633 + openEventId L696; LaterReminder route L785 + navigateRoom L798 + openEventId L824; InviteNotifications distinct class navigate(getInboxInvitesPath) L321-322 (no room/event route). Timeline listeners drive generation (FR-7.8-004) and are not retained as routing methods here."
         },
         {
-          "path": "synara/src/app/features/settings/notifications/SystemNotification.tsx",
-          "bucket": "feature",
+          "path": "synara/src/app/hooks/useRoomNavigate.ts",
+          "bucket": "hook",
           "categories": [],
-          "symbols_or_candidates": [],
+          "symbols_or_candidates": ["navigateRoom", "navigateSpace"],
           "line_refs": [],
           "model_coupling": [],
           "behavior_relevant_method_candidates": [],
           "behavior_relevant_listener_candidates": [],
-          "symbols_or_candidates_note": "No requirement-relevant method/listener candidates filtered from this file's P0.1 AST hits; file remains linked for structural/model ownership. See all_candidates_in_linked_files on the requirement."
+          "symbols_or_candidates_note": "Non-P0.1 product router. navigateRoom(roomId, eventId?) (L36-67) chooses space/DM/home path with eventId for deep-link open used by notification onclick and inbox Notifications Open."
         },
         {
           "path": "synara/src/app/pages/client/inbox/Notifications.tsx",
@@ -57485,11 +57490,16 @@
             "room_lists",
             "timelines"
           ],
-          "symbols_or_candidates": ["findEventById"],
+          "symbols_or_candidates": ["findEventById", "getRoom"],
           "line_refs": [
             {
               "symbol": "findEventById",
               "line": 488,
+              "kind": "method_candidate"
+            },
+            {
+              "symbol": "getRoom",
+              "line": 764,
               "kind": "method_candidate"
             }
           ],
@@ -57500,42 +57510,49 @@
               "line": 488,
               "category": "timelines",
               "kind": "property_call_candidate",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
+              "relevance_reason": "Inbox notification item resolves thread-root openEventId for Open chip / navigateRoom."
+            },
+            {
+              "name": "getRoom",
+              "line": 764,
+              "category": "room_lists",
+              "kind": "property_call_candidate",
+              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
+              "relevance_reason": "Inbox notification groups resolve Room for rendering and open handlers."
             }
           ],
-          "behavior_relevant_listener_candidates": []
+          "behavior_relevant_listener_candidates": [],
+          "symbols_or_candidates_note": "Inbox list open path: onOpen={navigateRoom} L779; handleOpenClick → onOpen(room.roomId, eventId) L417-420; data-event-id={openEventId} L546; openEventId from getThreadRootEventId(room.findEventById(event.event_id)) ?? event.event_id L488-489."
         },
         {
-          "path": "synara/src/app/utils/notifications.ts",
+          "path": "synara/src/app/utils/room.ts",
           "bucket": "utility",
           "categories": [
             "client_methods",
             "room_methods",
+            "crypto_verification_recovery",
+            "authenticated_media",
             "account_data",
             "room_lists",
             "timelines",
+            "spaces",
             "receipts",
+            "notifications_push_rules",
             "uia_auth"
           ],
-          "symbols_or_candidates": ["sendReadReceipt"],
-          "line_refs": [
-            {
-              "symbol": "sendReadReceipt",
-              "line": 402,
-              "kind": "method_candidate"
-            }
+          "symbols_or_candidates": [],
+          "line_refs": [],
+          "model_coupling": [
+            "EventTimeline",
+            "MatrixClient",
+            "MatrixEvent",
+            "Room",
+            "RoomMember"
           ],
-          "model_coupling": ["MatrixClient", "MatrixEvent", "Room"],
-          "behavior_relevant_method_candidates": [
-            {
-              "name": "sendReadReceipt",
-              "line": 402,
-              "category": "receipts",
-              "kind": "property_call_candidate",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            }
-          ],
-          "behavior_relevant_listener_candidates": []
+          "behavior_relevant_method_candidates": [],
+          "behavior_relevant_listener_candidates": [],
+          "symbols_or_candidates_note": "getThreadRootEventId (L243-248) is a product helper (not a P0.1 AST property-name row) used by MessageNotifications, AgentApproval, LaterReminder, and inbox Notifications to resolve thread-root open event ids for routes and navigateRoom."
         },
         {
           "path": "synara/src/app/utils/timelineOpening.ts",
@@ -57553,105 +57570,139 @@
           "model_coupling": ["EventTimeline", "MatrixEvent", "Room"],
           "behavior_relevant_method_candidates": [],
           "behavior_relevant_listener_candidates": [],
-          "symbols_or_candidates_note": "No requirement-relevant method/listener candidates filtered from this file's P0.1 AST hits; file remains linked for structural/model ownership. See all_candidates_in_linked_files on the requirement."
+          "symbols_or_candidates_note": "Event-focused timeline windowing after room/event navigation: getTimelineFocusRange (L139+), getEmptyTimeline/getInitialTimeline, timelineWindowContainsEventId (L207+). Consumed when RoomTimeline opens with eventId from route params. Not notification emission or push rules."
+        },
+        {
+          "path": "synara/src/app/pages/pathUtils.ts",
+          "bucket": "utility",
+          "categories": [],
+          "symbols_or_candidates": ["getHomeRoomPath", "getInboxInvitesPath"],
+          "line_refs": [],
+          "model_coupling": [],
+          "behavior_relevant_method_candidates": [],
+          "behavior_relevant_listener_candidates": [],
+          "symbols_or_candidates_note": "Non-P0.1 path helpers. getHomeRoomPath used by buildDesktopNotificationRoomRoute; getInboxInvitesPath is the invite notification distinct route class."
+        },
+        {
+          "path": "synara/src/app/routes/synaraRoutes.ts",
+          "bucket": "utility",
+          "categories": [],
+          "symbols_or_candidates": [
+            "normalizeSynaraRoute",
+            "parseSynaraRouteDestination"
+          ],
+          "line_refs": [],
+          "model_coupling": [],
+          "behavior_relevant_method_candidates": [],
+          "behavior_relevant_listener_candidates": [],
+          "symbols_or_candidates_note": "Non-P0.1 route schema. normalizeSynaraRoute used by normalizeSystemNotificationRequest to accept only documented internal destinations (home/direct/space room(+event), etc.)."
         }
       ],
       "ui_entry_points": [
-        "synara/src/app/pages/client/inbox/Notifications.tsx"
+        "synara/src/app/pages/client/inbox/Notifications.tsx",
+        "synara/src/app/pages/client/ClientNonUIFeatures.tsx"
       ],
       "state_owners": [
         {
+          "path": "synara/src/app/utils/desktop.ts",
+          "ownership_evidence": "Primary route construction for desktop notification room/event deep-links: buildDesktopNotificationRoomRoute + sanitizeDesktopNotificationRoute; showDesktopNotification re-sanitizes before IPC."
+        },
+        {
+          "path": "synara/src/app/notifications/systemNotification.ts",
+          "ownership_evidence": "normalizeSystemNotificationRequest bounds and validates route via normalizeSynaraRoute (internal-only; rejects external/unsupported/oversized) before platform show."
+        },
+        {
+          "path": "synara/src/app/platform/notifications.ts",
+          "ownership_evidence": "showPlatformNotification passes normalized route to desktop show; PLATFORM_NOTIFICATION_ACTION_EVENT / registerPlatformNotificationActionListener for action-driven open (navigateRoom) paths."
+        },
+        {
+          "path": "synara/src/app/hooks/useRoomNavigate.ts",
+          "ownership_evidence": "navigateRoom(roomId, eventId?) is the product open owner used by notification onclick and inbox Notifications Open."
+        },
+        {
+          "path": "synara/src/app/pages/client/ClientNonUIFeatures.tsx",
+          "ownership_evidence": "Attaches routes on Message/Agent/Later notifications and opens via navigateRoom; InviteNotifications uses distinct getInboxInvitesPath class; agent action listener may navigateRoom for open-room plans."
+        },
+        {
+          "path": "synara/src/app/pages/client/inbox/Notifications.tsx",
+          "ownership_evidence": "Inbox notification list Open resolves openEventId (thread-root via findEventById + getThreadRootEventId) and calls navigateRoom."
+        },
+        {
           "path": "synara/src/app/utils/timelineOpening.ts",
-          "ownership_evidence": "Identified as coordination/state module for this behavior via path role (state/client/util service) and P0.1 categories/candidates; not merely a presentational component."
+          "ownership_evidence": "Event-focused timeline window helpers used when RoomTimeline opens at a routed eventId."
         }
       ],
       "current_js_sdk": {
         "behavior_relevant_method_candidates": [
           {
-            "path": "synara/src/app/features/settings/notifications/AllMessages.tsx",
-            "name": "setPushRuleActions",
-            "line": 67,
-            "category": "notifications_push_rules",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+            "path": "synara/src/app/pages/client/ClientNonUIFeatures.tsx",
+            "name": "findEventById",
+            "line": 441,
+            "category": "timelines",
+            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
+            "relevance_reason": "MessageNotifications resolves thread-root openEventId for route / navigateRoom destination."
           },
           {
-            "path": "synara/src/app/features/settings/notifications/KeywordMessages.tsx",
-            "name": "addPushRule",
-            "line": 30,
-            "category": "notifications_push_rules",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+            "path": "synara/src/app/pages/client/ClientNonUIFeatures.tsx",
+            "name": "findEventById",
+            "line": 696,
+            "category": "timelines",
+            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
+            "relevance_reason": "AgentApprovalNotifications resolves thread-root openEventId for route/open."
           },
           {
-            "path": "synara/src/app/features/settings/notifications/KeywordMessages.tsx",
-            "name": "deletePushRule",
-            "line": 114,
-            "category": "notifications_push_rules",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+            "path": "synara/src/app/pages/client/ClientNonUIFeatures.tsx",
+            "name": "getRoom",
+            "line": 822,
+            "category": "room_lists",
+            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
+            "relevance_reason": "LaterReminderNotifications loads room for event/thread-root open resolution."
           },
           {
-            "path": "synara/src/app/features/settings/notifications/KeywordMessages.tsx",
-            "name": "setPushRuleActions",
-            "line": 135,
-            "category": "notifications_push_rules",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-          },
-          {
-            "path": "synara/src/app/features/settings/notifications/SpecialMessages.tsx",
-            "name": "setPushRuleActions",
-            "line": 106,
-            "category": "notifications_push_rules",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+            "path": "synara/src/app/pages/client/ClientNonUIFeatures.tsx",
+            "name": "findEventById",
+            "line": 823,
+            "category": "timelines",
+            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
+            "relevance_reason": "LaterReminderNotifications finds event for getThreadRootEventId open destination."
           },
           {
             "path": "synara/src/app/pages/client/inbox/Notifications.tsx",
             "name": "findEventById",
             "line": 488,
             "category": "timelines",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
+            "relevance_reason": "Inbox Open resolves thread-root openEventId for navigateRoom."
           },
           {
-            "path": "synara/src/app/utils/notifications.ts",
-            "name": "sendReadReceipt",
-            "line": 402,
-            "category": "receipts",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+            "path": "synara/src/app/pages/client/inbox/Notifications.tsx",
+            "name": "getRoom",
+            "line": 764,
+            "category": "room_lists",
+            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
+            "relevance_reason": "Inbox groups resolve Room for open handlers."
           }
         ],
         "behavior_relevant_listener_candidates": [],
         "all_candidates_in_linked_files": {
-          "method_count": 22,
-          "listener_count": 0,
-          "note": "Unfiltered P0.1 AST candidates across linked production import files. Do not treat these as proven APIs for this requirement; use behavior_relevant_* fields.",
+          "method_count": 25,
+          "listener_count": 6,
+          "note": "Unfiltered P0.1 AST candidates across P0.1-linked production import files (ClientNonUIFeatures, Notifications, room.ts, timelineOpening). Do not treat these as proven APIs for this requirement; use behavior_relevant_* fields. Push-rule files are not linked for this FR.",
           "methods_sample": [
             {
-              "path": "synara/src/app/features/settings/notifications/AllMessages.tsx",
-              "name": "setPushRuleActions",
-              "line": 67
+              "path": "synara/src/app/pages/client/ClientNonUIFeatures.tsx",
+              "name": "findEventById",
+              "line": 441
             },
             {
-              "path": "synara/src/app/features/settings/notifications/KeywordMessages.tsx",
-              "name": "addPushRule",
-              "line": 30
+              "path": "synara/src/app/pages/client/ClientNonUIFeatures.tsx",
+              "name": "findEventById",
+              "line": 696
             },
             {
-              "path": "synara/src/app/features/settings/notifications/KeywordMessages.tsx",
-              "name": "deletePushRule",
-              "line": 114
-            },
-            {
-              "path": "synara/src/app/features/settings/notifications/KeywordMessages.tsx",
-              "name": "setPushRuleActions",
-              "line": 135
-            },
-            {
-              "path": "synara/src/app/features/settings/notifications/SpecialMessages.tsx",
-              "name": "setPushRuleActions",
-              "line": 106
-            },
-            {
-              "path": "synara/src/app/features/settings/notifications/SpecialMessages.tsx",
-              "name": "getUserId",
-              "line": 116
+              "path": "synara/src/app/pages/client/ClientNonUIFeatures.tsx",
+              "name": "getRoom",
+              "line": 822
             },
             {
               "path": "synara/src/app/pages/client/inbox/Notifications.tsx",
@@ -57662,138 +57713,26 @@
               "path": "synara/src/app/pages/client/inbox/Notifications.tsx",
               "name": "getRoom",
               "line": 764
-            },
-            {
-              "path": "synara/src/app/utils/notifications.ts",
-              "name": "getAccountData",
-              "line": 71
-            },
-            {
-              "path": "synara/src/app/utils/notifications.ts",
-              "name": "setAccountData",
-              "line": 77
-            },
-            {
-              "path": "synara/src/app/utils/notifications.ts",
-              "name": "setRoomAccountData",
-              "line": 105
-            },
-            {
-              "path": "synara/src/app/utils/notifications.ts",
-              "name": "setRoomReadMarkers",
-              "line": 196
-            },
-            {
-              "path": "synara/src/app/utils/notifications.ts",
-              "name": "getUserId",
-              "line": 377
-            },
-            {
-              "path": "synara/src/app/utils/notifications.ts",
-              "name": "getAccountData",
-              "line": 383
-            },
-            {
-              "path": "synara/src/app/utils/notifications.ts",
-              "name": "sendReadReceipt",
-              "line": 402
             }
           ],
-          "listeners_sample": []
+          "listeners_sample": [
+            {
+              "path": "synara/src/app/pages/client/ClientNonUIFeatures.tsx",
+              "event": "RoomEvent.Timeline",
+              "method": "on",
+              "line": 475
+            }
+          ]
         },
-        "models": ["EventTimeline", "MatrixClient", "MatrixEvent", "Room"],
+        "models": [
+          "EventTimeline",
+          "MatrixClient",
+          "MatrixEvent",
+          "Room",
+          "RoomMember"
+        ],
         "network_routes": [],
         "deep_imports": [
-          {
-            "path": "synara/src/app/utils/notifications.ts",
-            "module": "matrix-js-sdk/lib/client",
-            "line": 1,
-            "named_imports": ["MatrixClient"],
-            "is_type_only": true,
-            "linked_requirement_ids": [
-              "FR-7.2-005",
-              "FR-7.2-011",
-              "FR-7.7-003",
-              "FR-7.8-004",
-              "FR-7.8-005",
-              "FR-7.8-006",
-              "FR-7.8-007",
-              "FR-7.8-008"
-            ],
-            "cutover_disposition": "replace-deep-js-sdk-import-with-synara-dto-or-rust-projection"
-          },
-          {
-            "path": "synara/src/app/utils/notifications.ts",
-            "module": "matrix-js-sdk/lib/@types/read_receipts",
-            "line": 2,
-            "named_imports": ["ReceiptType"],
-            "is_type_only": false,
-            "linked_requirement_ids": [
-              "FR-7.2-005",
-              "FR-7.2-011",
-              "FR-7.7-003",
-              "FR-7.8-004",
-              "FR-7.8-005",
-              "FR-7.8-006",
-              "FR-7.8-007",
-              "FR-7.8-008"
-            ],
-            "cutover_disposition": "replace-deep-js-sdk-import-with-synara-dto-or-rust-projection"
-          },
-          {
-            "path": "synara/src/app/utils/notifications.ts",
-            "module": "matrix-js-sdk/lib/models/event",
-            "line": 3,
-            "named_imports": ["MatrixEvent"],
-            "is_type_only": true,
-            "linked_requirement_ids": [
-              "FR-7.2-005",
-              "FR-7.2-011",
-              "FR-7.7-003",
-              "FR-7.8-004",
-              "FR-7.8-005",
-              "FR-7.8-006",
-              "FR-7.8-007",
-              "FR-7.8-008"
-            ],
-            "cutover_disposition": "replace-deep-js-sdk-import-with-synara-dto-or-rust-projection"
-          },
-          {
-            "path": "synara/src/app/utils/notifications.ts",
-            "module": "matrix-js-sdk/lib/models/room",
-            "line": 4,
-            "named_imports": ["Room"],
-            "is_type_only": true,
-            "linked_requirement_ids": [
-              "FR-7.2-005",
-              "FR-7.2-011",
-              "FR-7.7-003",
-              "FR-7.8-004",
-              "FR-7.8-005",
-              "FR-7.8-006",
-              "FR-7.8-007",
-              "FR-7.8-008"
-            ],
-            "cutover_disposition": "replace-deep-js-sdk-import-with-synara-dto-or-rust-projection"
-          },
-          {
-            "path": "synara/src/app/utils/notifications.ts",
-            "module": "matrix-js-sdk/lib/@types/event",
-            "line": 5,
-            "named_imports": ["EventType"],
-            "is_type_only": false,
-            "linked_requirement_ids": [
-              "FR-7.2-005",
-              "FR-7.2-011",
-              "FR-7.7-003",
-              "FR-7.8-004",
-              "FR-7.8-005",
-              "FR-7.8-006",
-              "FR-7.8-007",
-              "FR-7.8-008"
-            ],
-            "cutover_disposition": "replace-deep-js-sdk-import-with-synara-dto-or-rust-projection"
-          },
           {
             "path": "synara/src/app/utils/timelineOpening.ts",
             "module": "matrix-js-sdk/lib/@types/event",
@@ -57833,39 +57772,53 @@
               "FR-7.10-004"
             ],
             "cutover_disposition": "replace-deep-js-sdk-import-with-synara-dto-or-rust-projection"
+          },
+          {
+            "path": "synara/src/app/utils/room.ts",
+            "module": "matrix-js-sdk/lib/common-crypto/CryptoBackend",
+            "line": null,
+            "named_imports": [],
+            "is_type_only": true,
+            "linked_requirement_ids": [
+              "FR-7.5-001",
+              "FR-7.5-002",
+              "FR-7.5-007",
+              "FR-7.6-008",
+              "FR-7.8-001",
+              "FR-7.8-002",
+              "FR-7.8-004",
+              "FR-7.8-005",
+              "FR-7.8-006"
+            ],
+            "cutover_disposition": "replace-deep-js-sdk-import-with-synara-dto-or-rust-projection"
           }
         ],
         "method_candidates": [
-          "setPushRuleActions",
-          "addPushRule",
-          "deletePushRule",
-          "setPushRuleActions",
-          "setPushRuleActions",
           "findEventById",
-          "sendReadReceipt"
+          "findEventById",
+          "getRoom",
+          "findEventById",
+          "findEventById",
+          "getRoom"
         ],
         "listener_events": []
       },
       "current_behavior_and_limits": {
-        "summary": "Current desktop implements this via 8 production matrix-js-sdk-related file(s); status=implemented.",
-        "notes": null,
-        "limits": "P0.1 method candidates are AST name hits, not type-checked receiver proofs."
+        "summary": "Current desktop implements event resolution and deep-link routing via buildDesktopNotificationRoomRoute + normalizeSystemNotificationRequest / showPlatformNotification route pass-through + useRoomNavigate.navigateRoom open (Message/Agent/Later routes; Invite distinct inbox invites path) + inbox Notifications Open with thread-root openEventId + timelineOpening event focus; status=implemented.",
+        "notes": "Evidence (conservative): (1) Route construction synara/src/app/utils/desktop.ts: buildDesktopNotificationRoomRoute(roomId, eventId?) → getHomeRoomPath(roomId, eventId) (pathUtils L96-102 encode room/event). sanitizeDesktopNotificationRoute (L325-329) rejects empty, scheme-bearing (://), and non-/ or non-# prefixes; MAX_DESKTOP_ROUTE_LENGTH=2048. showDesktopNotification re-sanitizes route (L967) before desktop_notify IPC. (2) Request normalize synara/src/app/notifications/systemNotification.ts normalizeSystemNotificationRequest (L82-105): route via normalizeSynaraRoute (synaraRoutes.ts L139-145) — only documented internal app destinations; rejects external https, unsupported internal (e.g. /login/…), oversized routes; bounds title/body/actions. Existing unit tests systemNotification.test.ts and synaraRoutes.test.ts cover normalize only. (3) Platform bridge synara/src/app/platform/notifications.ts: showPlatformNotification (L25-37) normalize → showDesktopNotification; PLATFORM_NOTIFICATION_ACTION_EVENT='synara://notification-action' (L20); registerPlatformNotificationActionListener (L40-50) for action buttons (agent-approval open-room uses navigateRoom). Desktop shell (src-tauri desktop_notifications.rs) on default click navigates main window to sanitized route (Linux wait_for_action default action → navigate_main_window). (4) Generation paths that attach routes (FR-7.8-004 owns emission; this FR owns resolution/routing destination): ClientNonUIFeatures MessageNotifications showPlatformNotification route: buildDesktopNotificationRoomRoute(roomId, eventId) L388; openEventId = getThreadRootEventId(room.findEventById(eventId)) ?? eventId L441; window.Notification.onclick → navigateRoom(roomId, eventId) L400-401. AgentApprovalNotifications attaches route L532 with thread-root openEventId L696; onclick navigateRoom L552; native action handler open-room → navigateRoom L595/633; registers PLATFORM_NOTIFICATION_ACTION_EVENT listener L663-676. LaterReminderNotifications route L785; openEventId via getThreadRootEventId(event) L824; onclick navigateRoom L798-799. (5) Invite path is a DISTINCT route class: InviteNotifications platform payload has no room/event route; browser Notification.onclick → navigate(getInboxInvitesPath()) L321-322 (inbox invites, not room/event deep-link). (6) Router owner useRoomNavigate.navigateRoom (useRoomNavigate.ts L36-67): resolves canonical alias, space parent path (getSpaceRoomPath), DM (getDirectRoomPath), or home (getHomeRoomPath) with optional eventId. Inbox Notifications.tsx: onOpen={navigateRoom} L779; RoomNotificationsGroupComp handleOpenClick → onOpen(room.roomId, eventId) L417-420 with data-event-id={openEventId} L546 where openEventId = getThreadRootEventId(room.findEventById(event.event_id)) ?? event.event_id L488-489. (7) Event-focused timeline after route: Room.tsx/RoomView receives eventId from route params; RoomTimeline uses eventId with timelineOpening helpers (getTimelineFocusRange L139+, getEmptyTimeline/getInitialTimeline, timelineWindowContainsEventId L207+). timelineOpening is product windowing for focused event open — not notification emission. (8) Secondary helper getThreadRootEventId in utils/room.ts L243-248 resolves thread-root open event when relation is Thread. (9) Explicit non-evidence: push-rule preference surfaces AllMessages/KeywordMessages/SpecialMessages/NotificationModeSwitcher; SystemNotification enablement; badge/tray math alone (FR-7.8-005); native generation without route/open (FR-7.8-004 owns generation); sendReadReceipt/mark-as-read helpers in utils/notifications.ts; SC-032/SC-022 alone; helper/fixture/compile-only. Existing desktop.test.ts route builder units and systemNotification route-rejection units are not E2E deep-link AT.",
+        "limits": "P0.1 method/listener candidates are AST name hits, not type-checked receiver proofs. Do not count push-rule settings UI, badge-only, native generation without open/route, SC-032/SC-022 alone, compile-only blocked states, raw /_matrix HTTP, or helper/fixture-only as closing event resolution / deep-link routing. Cutover P9.4/P4.8 must preserve the same observables via Rust-owned event identity + Synara route DTOs / product navigateRoom bridge; SC IDs alone, raw HTTP, push-rule UI, badge-only, generation-only, and helper-only fail."
       },
       "p0_1_linkage": {
         "categories": ["timelines", "room_lists"],
         "file_ledger_paths": [
-          "synara/src/app/features/settings/notifications/AllMessages.tsx",
-          "synara/src/app/features/settings/notifications/KeywordMessages.tsx",
-          "synara/src/app/features/settings/notifications/NotificationModeSwitcher.tsx",
-          "synara/src/app/features/settings/notifications/SpecialMessages.tsx",
-          "synara/src/app/features/settings/notifications/SystemNotification.tsx",
+          "synara/src/app/pages/client/ClientNonUIFeatures.tsx",
           "synara/src/app/pages/client/inbox/Notifications.tsx",
-          "synara/src/app/utils/notifications.ts",
+          "synara/src/app/utils/room.ts",
           "synara/src/app/utils/timelineOpening.ts"
         ]
       },
       "rust_target": {
-        "support_conclusion": "compile-shape-only-blocked-for-product",
+        "support_conclusion": "product-desktop-bridge-with-sdk-event-context",
         "capability_ids": ["SC-032", "SC-022"],
         "gap_ids": [],
         "capabilities": [
@@ -57881,7 +57834,7 @@
             "final_state": "blocked",
             "final": {
               "final_state": "blocked",
-              "final_state_rationale": "E1+E2 present (stable API + compile probe). E3 semantic test, E4 live Synapse, and E5 UI acceptance are not present in P0.3; compile-only evidence is not product confirmation.",
+              "final_state_rationale": "E1+E2 present (stable API + compile probe). E3 semantic test, E4 live Synapse, and E5 UI acceptance are not present in P0.3; compile-only evidence is not product confirmation. Even when unblocked, timeline focus alone does not implement product notification→room/event routing.",
               "missing_gates": [
                 "semantic_or_integration_test",
                 "live_synapse_two_client",
@@ -57906,7 +57859,7 @@
             "final_state": "blocked",
             "final": {
               "final_state": "blocked",
-              "final_state_rationale": "E1+E2 present (stable API + compile probe). E3 semantic test, E4 live Synapse, and E5 UI acceptance are not present in P0.3; compile-only evidence is not product confirmation.",
+              "final_state_rationale": "E1+E2 present (stable API + compile probe). E3 semantic test, E4 live Synapse, and E5 UI acceptance are not present in P0.3; compile-only evidence is not product confirmation. Room lookup supports event identity context but does not replace product route DTOs / navigateRoom.",
               "missing_gates": [
                 "semantic_or_integration_test",
                 "live_synapse_two_client",
@@ -57921,11 +57874,15 @@
           }
         ],
         "gaps": [],
-        "notes": "Mappings use only accepted P0.3 capability/gap IDs. Compile probes establish API shape only; final dossier states remain blocked/typed/upstream until E3–E5 gates exist.",
+        "notes": "Mappings use only accepted P0.3 capability/gap IDs. SC-032 TimelineBuilder::with_focus and SC-022 Client::get_room are dossier-backed for event/timeline context after a route lands in a room, but product notification→destination routing is owned by Synara route DTOs (buildDesktopNotificationRoomRoute / normalizeSynaraRoute / sanitizeDesktopNotificationRoute) and navigateRoom / desktop navigate_main_window. SC-032/SC-022 alone never pass as deep-link routing. Cutover P9.4/P4.8: Rust-owned event identity + Synara route DTOs / product open bridge; no raw /_matrix HTTP; do not invent routing SC IDs. Compile-only blocked states, push-rule UI, badge-only, generation-only, helper-only never pass.",
         "distinctions_preserved": [
           "server typed search (SC-071) vs experimental local search (SC-072)",
           "widget plumbing (SC-082/GAP widget) vs call parity (membership write/key session gaps)",
-          "compile shape (E1/E2) vs runtime/UI parity (E3–E5 missing => blocked)"
+          "compile shape (E1/E2) vs runtime/UI parity (E3–E5 missing => blocked)",
+          "SC-032 timeline focus / SC-022 get_room event context vs product route DTO + navigateRoom deep-link routing",
+          "native notification generation (FR-7.8-004) vs event resolution/deep-link routing (FR-7.8-006)",
+          "unread/badge summaries (FR-7.8-005) vs deep-link open destinations (FR-7.8-006)",
+          "invite inbox path vs room/event notification routes"
         ]
       },
       "implementation_tasks": [
@@ -57943,7 +57900,33 @@
         }
       ],
       "automated_tests": {
-        "existing": [],
+        "existing": [
+          {
+            "path": "synara/src/app/notifications/__tests__/systemNotification.test.ts",
+            "evidence": "normalizeSystemNotificationRequest unit coverage for route reject (external/unsupported/oversized) and accept; not E2E notification click navigation",
+            "status": "existing-verified-path"
+          },
+          {
+            "path": "synara/src/app/utils/__tests__/desktop.test.ts",
+            "evidence": "buildDesktopNotificationRoomRoute encode room/event anchors unit coverage; not E2E platform click open",
+            "status": "existing-verified-path"
+          },
+          {
+            "path": "synara/src/app/routes/__tests__/synaraRoutes.test.ts",
+            "evidence": "normalizeSynaraRoute accept/reject documented destinations unit coverage only",
+            "status": "existing-verified-path"
+          },
+          {
+            "path": "synara/src/app/utils/__tests__/timelineOpening.test.ts",
+            "evidence": "timeline focus/window helper unit cases only; not notification deep-link E2E",
+            "status": "existing-verified-path"
+          },
+          {
+            "path": "synara/src/app/utils/__tests__/notifications.test.ts",
+            "evidence": "includes getThreadRootEventId unit cases among notification helpers; not a substitute for product route/open AT",
+            "status": "existing-verified-path"
+          }
+        ],
         "planned_required": [
           {
             "id": "AT-FR-7.8-006-001",
@@ -57952,33 +57935,45 @@
             "task_id": "P9.4",
             "phase": "Phase 9 — Notifications, push semantics, and deep links",
             "level": "integration",
-            "scenario": "7.8/FR-7.8-006: exercise 'event resolution and deep-link routing;' via owner `synara/src/app/utils/timelineOpening.ts` and UI `synara/src/app/pages/client/inbox/Notifications.tsx`, then confirm Rust/IPC cutover task `P9.4` preserves observable behavior without raw Matrix runtime HTTP.",
+            "scenario": "Integration against disposable Synapse: message notification click/route opens correct room + event (including thread-root when product resolves it via getThreadRootEventId/findEventById); invite notification routes to inbox invites path when product does so; inbox Notifications list Open uses navigateRoom(roomId, openEventId); normalizeSystemNotificationRequest rejects external/unsupported/oversized routes. After cutover P9.4/P4.8, same observables via Rust-owned event identity + Synara route DTOs / product navigateRoom bridge. No raw /_matrix HTTP; SC-032/SC-022 alone fail; push-rule UI / badge-only / native-generation-without-open / helper-only cannot substitute.",
             "preconditions": [
-              "Desktop app with notification permission granted (OS)",
-              "Rooms with distinct push-rule modes; backgrounded window fixture",
-              "Linked owner path present in tree: synara/src/app/utils/timelineOpening.ts",
-              "Primary UI/lifecycle surface: synara/src/app/pages/client/inbox/Notifications.tsx"
+              "Disposable Synapse; desktop app with platform notification + in-app navigation available.",
+              "Named route builders: buildDesktopNotificationRoomRoute / sanitizeDesktopNotificationRoute (desktop.ts); normalizeSystemNotificationRequest (systemNotification.ts); showPlatformNotification (platform/notifications.ts).",
+              "Named open owners: useRoomNavigate.navigateRoom; ClientNonUIFeatures MessageNotifications/AgentApproval/LaterReminder route attach + onclick; InviteNotifications getInboxInvitesPath class.",
+              "Named inbox surface: pages/client/inbox/Notifications.tsx Open chip → navigateRoom with thread-root openEventId.",
+              "Named event-focus helpers: getThreadRootEventId (utils/room.ts); timelineOpening getTimelineFocusRange / RoomTimeline eventId param path.",
+              "Fixtures: notifiable message in room; thread reply notification; invite; external/unsupported/oversized route strings for normalize rejection."
             ],
             "trigger_actions": [
-              "Boot the appropriate harness for level=integration against disposable Synapse (or iOS notes if any).",
-              "Establish fixtures required by the clause list: event resolution; deep-link routing.",
-              "Open UI/lifecycle surface `synara/src/app/pages/client/inbox/Notifications.tsx` (or follow ui_entry_points_rationale if no dedicated UI).",
-              "Step 1: perform the product action that implements «event resolution» using current owner `synara/src/app/utils/timelineOpening.ts`.",
-              "Step 2: perform the product action that implements «deep-link routing» using current owner `synara/src/app/utils/timelineOpening.ts`."
+              "Boot the integration harness against disposable Synapse. Do not use fixture-only mocks that bypass product route builders, push-rule settings UI alone, badge/tray alone, native generation without click/open, alternate UI, helper-only harnesses, or raw HTTP.",
+              "MESSAGE ROUTE/OPEN: generate a message notification with route from buildDesktopNotificationRoomRoute(roomId, openEventId) where openEventId resolves via getThreadRootEventId(room.findEventById(eventId)) ?? eventId when product does so. Click platform notification (or window.Notification onclick) / follow route and assert navigation opens correct room + event (thread-root when product resolves it).",
+              "INVITE ROUTE CLASS: exercise InviteNotifications click path; assert product navigates to getInboxInvitesPath() (inbox invites), not a room/event deep-link — document as distinct route class.",
+              "INBOX LIST OPEN: open inbox Notifications.tsx; select Open on a notification item; assert onOpen/navigateRoom(roomId, openEventId) with openEventId = thread-root ?? event.event_id (findEventById + getThreadRootEventId).",
+              "NORMALIZE REJECT: assert normalizeSystemNotificationRequest rejects external routes (https://…), unsupported internal routes (e.g. /login/…), and oversized routes; accepts documented home/direct/space room(+event) routes only.",
+              "After cutover tasks P9.4 and/or P4.8, repeat the same message open, invite inbox path, inbox list open, and normalize-reject observables via Rust-owned event identity + Synara route DTOs / product navigateRoom bridge. Citing SC-032/SC-022 alone, compile-only blocked states, raw /_matrix HTTP, push-rule settings UI (AllMessages/Keyword/Special/NotificationModeSwitcher), badge-only (FR-7.8-005), native generation without open (FR-7.8-004 alone), or helper/fixture-only is a FAIL."
             ],
             "assertions": [
-              "Each clause is observable: «event resolution»; «deep-link routing».",
-              "State coordination remains through `synara/src/app/utils/timelineOpening.ts` (or its Rust/IPC successor after cutover), not ad-hoc dual writers.",
-              "Behavior-relevant current JS method candidates exercised or replaced: setPushRuleActions, addPushRule, deletePushRule, setPushRuleActions, setPushRuleActions, findEventById, sendReadReceipt (AST candidates; not type-proven receivers).",
-              "Rust mapping remains conservative: caps=[SC-032,SC-022] gaps=[none]; compile-only blocked states are not treated as runtime pass.",
-              "No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless dossier marks that exact behavior typed-sdk-request-required."
+              "MESSAGE: notification route/click opens correct room + event; thread-root openEventId used when product resolves via getThreadRootEventId/findEventById.",
+              "INVITE: invite notification open uses inbox invites path (getInboxInvitesPath), distinct from room/event routes.",
+              "INBOX LIST: Notifications Open navigates via navigateRoom(roomId, openEventId) with thread-root resolution when applicable.",
+              "NORMALIZE: external/unsupported/oversized routes rejected; internal room(+event) routes preserved when valid.",
+              "Rust/IPC cutover preserves same observables via Rust-owned event identity + Synara route DTOs / product navigateRoom; SC-032 (timeline focus) and SC-022 (get_room) alone never pass as deep-link routing; raw HTTP, push-rule UI, badge-only, generation-only, helper-only never pass.",
+              "No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless the dossier marks that exact behavior typed-sdk-request-required."
             ],
             "required_environment": [
-              "Desktop app with notification permission granted (OS)",
-              "Rooms with distinct push-rule modes; backgrounded window fixture"
+              "Disposable Synapse",
+              "Desktop app with platform notification click navigation and in-app inbox Notifications",
+              "Rooms with ordinary and thread-related notifiable events; invite fixture; route-rejection cases"
             ],
             "does_not_currently_exist": true,
-            "clause_breakdown": ["event resolution", "deep-link routing"]
+            "clause_breakdown": [
+              "message notification room+event route/open (incl. thread-root when product resolves)",
+              "invite notification → inbox invites path (distinct route class)",
+              "inbox Notifications list Open → navigateRoom(roomId, openEventId)",
+              "normalize rejects external/unsupported/oversized routes",
+              "cutover Rust-owned event identity + Synara route DTOs (no SC-only / raw HTTP / push-rule UI / badge-only / generation-only / helper-only)"
+            ],
+            "test_target": "buildDesktopNotificationRoomRoute + normalizeSystemNotificationRequest/showPlatformNotification + useRoomNavigate.navigateRoom + ClientNonUIFeatures route attach/open + inbox Notifications Open + getThreadRootEventId/timeline event focus; post-cutover Rust-owned event identity + Synara route DTOs / product navigateRoom (P9.4/P4.8)"
           }
         ]
       },
@@ -57999,6 +57994,7 @@
       "section_id": "7.8",
       "plan_heading": "### 7.8 Notifications",
       "normalized_text": "notification suppression for active/focused contexts;",
+
       "plan_line_range": [419, 419],
       "current_status": "implemented",
       "current_production_files": [
@@ -80429,7 +80425,6 @@
         "FR-7.7-007",
         "FR-7.8-001",
         "FR-7.8-003",
-        "FR-7.8-006",
         "FR-7.8-007",
         "FR-7.8-008"
       ],
@@ -80521,7 +80516,6 @@
         "FR-7.7-007",
         "FR-7.8-001",
         "FR-7.8-003",
-        "FR-7.8-006",
         "FR-7.8-007",
         "FR-7.8-008"
       ],
@@ -80574,7 +80568,6 @@
         "FR-7.7-007",
         "FR-7.8-001",
         "FR-7.8-002",
-        "FR-7.8-006",
         "FR-7.8-007",
         "FR-7.8-008"
       ],
@@ -80639,7 +80632,6 @@
         "FR-7.7-007",
         "FR-7.8-001",
         "FR-7.8-003",
-        "FR-7.8-006",
         "FR-7.8-007",
         "FR-7.8-008"
       ],
@@ -80696,7 +80688,6 @@
         "FR-7.7-003",
         "FR-7.7-007",
         "FR-7.8-004",
-        "FR-7.8-006",
         "FR-7.8-007",
         "FR-7.8-008"
       ],
@@ -85059,6 +85050,7 @@
       "linked_requirement_ids": [
         "FR-7.8-004",
         "FR-7.8-005",
+        "FR-7.8-006",
         "FR-7.8-007",
         "FR-7.11-005",
         "FR-7.4-006"
@@ -88140,7 +88132,6 @@
         "FR-7.2-005",
         "FR-7.2-011",
         "FR-7.7-003",
-        "FR-7.8-006",
         "FR-7.8-007",
         "FR-7.8-008"
       ],
@@ -88404,7 +88395,8 @@
         "FR-7.8-001",
         "FR-7.8-002",
         "FR-7.8-004",
-        "FR-7.8-005"
+        "FR-7.8-005",
+        "FR-7.8-006"
       ],
       "rationale": null,
       "p0_1_role": "production",
@@ -90321,9 +90313,6 @@
         "FR-7.2-005",
         "FR-7.2-011",
         "FR-7.7-003",
-        "FR-7.8-004",
-        "FR-7.8-005",
-        "FR-7.8-006",
         "FR-7.8-007",
         "FR-7.8-008"
       ],
@@ -90339,9 +90328,6 @@
         "FR-7.2-005",
         "FR-7.2-011",
         "FR-7.7-003",
-        "FR-7.8-004",
-        "FR-7.8-005",
-        "FR-7.8-006",
         "FR-7.8-007",
         "FR-7.8-008"
       ],
@@ -90357,9 +90343,6 @@
         "FR-7.2-005",
         "FR-7.2-011",
         "FR-7.7-003",
-        "FR-7.8-004",
-        "FR-7.8-005",
-        "FR-7.8-006",
         "FR-7.8-007",
         "FR-7.8-008"
       ],
@@ -90375,9 +90358,6 @@
         "FR-7.2-005",
         "FR-7.2-011",
         "FR-7.7-003",
-        "FR-7.8-004",
-        "FR-7.8-005",
-        "FR-7.8-006",
         "FR-7.8-007",
         "FR-7.8-008"
       ],
@@ -90393,9 +90373,6 @@
         "FR-7.2-005",
         "FR-7.2-011",
         "FR-7.7-003",
-        "FR-7.8-004",
-        "FR-7.8-005",
-        "FR-7.8-006",
         "FR-7.8-007",
         "FR-7.8-008"
       ],
@@ -91109,9 +91086,6 @@
         "FR-7.2-005",
         "FR-7.2-011",
         "FR-7.7-003",
-        "FR-7.8-004",
-        "FR-7.8-005",
-        "FR-7.8-006",
         "FR-7.8-007",
         "FR-7.8-008"
       ],
@@ -91140,7 +91114,10 @@
         "FR-7.5-007",
         "FR-7.6-008",
         "FR-7.8-001",
-        "FR-7.8-002"
+        "FR-7.8-002",
+        "FR-7.8-004",
+        "FR-7.8-005",
+        "FR-7.8-006"
       ],
       "cutover_disposition": "migrate-via-account-data-service-and-raw-content-extraction-tasks",
       "tasks": ["P6.7", "P5.9", "P12.6"],
@@ -95072,33 +95049,45 @@
         "task_id": "P9.4",
         "phase": "Phase 9 — Notifications, push semantics, and deep links",
         "level": "integration",
-        "scenario": "7.8/FR-7.8-006: exercise 'event resolution and deep-link routing;' via owner `synara/src/app/utils/timelineOpening.ts` and UI `synara/src/app/pages/client/inbox/Notifications.tsx`, then confirm Rust/IPC cutover task `P9.4` preserves observable behavior without raw Matrix runtime HTTP.",
+        "scenario": "Integration against disposable Synapse: message notification click/route opens correct room + event (including thread-root when product resolves it via getThreadRootEventId/findEventById); invite notification routes to inbox invites path when product does so; inbox Notifications list Open uses navigateRoom(roomId, openEventId); normalizeSystemNotificationRequest rejects external/unsupported/oversized routes. After cutover P9.4/P4.8, same observables via Rust-owned event identity + Synara route DTOs / product navigateRoom bridge. No raw /_matrix HTTP; SC-032/SC-022 alone fail; push-rule UI / badge-only / native-generation-without-open / helper-only cannot substitute.",
         "preconditions": [
-          "Desktop app with notification permission granted (OS)",
-          "Rooms with distinct push-rule modes; backgrounded window fixture",
-          "Linked owner path present in tree: synara/src/app/utils/timelineOpening.ts",
-          "Primary UI/lifecycle surface: synara/src/app/pages/client/inbox/Notifications.tsx"
+          "Disposable Synapse; desktop app with platform notification + in-app navigation available.",
+          "Named route builders: buildDesktopNotificationRoomRoute / sanitizeDesktopNotificationRoute (desktop.ts); normalizeSystemNotificationRequest (systemNotification.ts); showPlatformNotification (platform/notifications.ts).",
+          "Named open owners: useRoomNavigate.navigateRoom; ClientNonUIFeatures MessageNotifications/AgentApproval/LaterReminder route attach + onclick; InviteNotifications getInboxInvitesPath class.",
+          "Named inbox surface: pages/client/inbox/Notifications.tsx Open chip → navigateRoom with thread-root openEventId.",
+          "Named event-focus helpers: getThreadRootEventId (utils/room.ts); timelineOpening getTimelineFocusRange / RoomTimeline eventId param path.",
+          "Fixtures: notifiable message in room; thread reply notification; invite; external/unsupported/oversized route strings for normalize rejection."
         ],
         "trigger_actions": [
-          "Boot the appropriate harness for level=integration against disposable Synapse (or iOS notes if any).",
-          "Establish fixtures required by the clause list: event resolution; deep-link routing.",
-          "Open UI/lifecycle surface `synara/src/app/pages/client/inbox/Notifications.tsx` (or follow ui_entry_points_rationale if no dedicated UI).",
-          "Step 1: perform the product action that implements «event resolution» using current owner `synara/src/app/utils/timelineOpening.ts`.",
-          "Step 2: perform the product action that implements «deep-link routing» using current owner `synara/src/app/utils/timelineOpening.ts`."
+          "Boot the integration harness against disposable Synapse. Do not use fixture-only mocks that bypass product route builders, push-rule settings UI alone, badge/tray alone, native generation without click/open, alternate UI, helper-only harnesses, or raw HTTP.",
+          "MESSAGE ROUTE/OPEN: generate a message notification with route from buildDesktopNotificationRoomRoute(roomId, openEventId) where openEventId resolves via getThreadRootEventId(room.findEventById(eventId)) ?? eventId when product does so. Click platform notification (or window.Notification onclick) / follow route and assert navigation opens correct room + event (thread-root when product resolves it).",
+          "INVITE ROUTE CLASS: exercise InviteNotifications click path; assert product navigates to getInboxInvitesPath() (inbox invites), not a room/event deep-link — document as distinct route class.",
+          "INBOX LIST OPEN: open inbox Notifications.tsx; select Open on a notification item; assert onOpen/navigateRoom(roomId, openEventId) with openEventId = thread-root ?? event.event_id (findEventById + getThreadRootEventId).",
+          "NORMALIZE REJECT: assert normalizeSystemNotificationRequest rejects external routes (https://…), unsupported internal routes (e.g. /login/…), and oversized routes; accepts documented home/direct/space room(+event) routes only.",
+          "After cutover tasks P9.4 and/or P4.8, repeat the same message open, invite inbox path, inbox list open, and normalize-reject observables via Rust-owned event identity + Synara route DTOs / product navigateRoom bridge. Citing SC-032/SC-022 alone, compile-only blocked states, raw /_matrix HTTP, push-rule settings UI (AllMessages/Keyword/Special/NotificationModeSwitcher), badge-only (FR-7.8-005), native generation without open (FR-7.8-004 alone), or helper/fixture-only is a FAIL."
         ],
         "assertions": [
-          "Each clause is observable: «event resolution»; «deep-link routing».",
-          "State coordination remains through `synara/src/app/utils/timelineOpening.ts` (or its Rust/IPC successor after cutover), not ad-hoc dual writers.",
-          "Behavior-relevant current JS method candidates exercised or replaced: setPushRuleActions, addPushRule, deletePushRule, setPushRuleActions, setPushRuleActions, findEventById, sendReadReceipt (AST candidates; not type-proven receivers).",
-          "Rust mapping remains conservative: caps=[SC-032,SC-022] gaps=[none]; compile-only blocked states are not treated as runtime pass.",
-          "No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless dossier marks that exact behavior typed-sdk-request-required."
+          "MESSAGE: notification route/click opens correct room + event; thread-root openEventId used when product resolves via getThreadRootEventId/findEventById.",
+          "INVITE: invite notification open uses inbox invites path (getInboxInvitesPath), distinct from room/event routes.",
+          "INBOX LIST: Notifications Open navigates via navigateRoom(roomId, openEventId) with thread-root resolution when applicable.",
+          "NORMALIZE: external/unsupported/oversized routes rejected; internal room(+event) routes preserved when valid.",
+          "Rust/IPC cutover preserves same observables via Rust-owned event identity + Synara route DTOs / product navigateRoom; SC-032 (timeline focus) and SC-022 (get_room) alone never pass as deep-link routing; raw HTTP, push-rule UI, badge-only, generation-only, helper-only never pass.",
+          "No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless the dossier marks that exact behavior typed-sdk-request-required."
         ],
         "required_environment": [
-          "Desktop app with notification permission granted (OS)",
-          "Rooms with distinct push-rule modes; backgrounded window fixture"
+          "Disposable Synapse",
+          "Desktop app with platform notification click navigation and in-app inbox Notifications",
+          "Rooms with ordinary and thread-related notifiable events; invite fixture; route-rejection cases"
         ],
         "does_not_currently_exist": true,
-        "clause_breakdown": ["event resolution", "deep-link routing"]
+        "clause_breakdown": [
+          "message notification room+event route/open (incl. thread-root when product resolves)",
+          "invite notification → inbox invites path (distinct route class)",
+          "inbox Notifications list Open → navigateRoom(roomId, openEventId)",
+          "normalize rejects external/unsupported/oversized routes",
+          "cutover Rust-owned event identity + Synara route DTOs (no SC-only / raw HTTP / push-rule UI / badge-only / generation-only / helper-only)"
+        ],
+        "test_target": "buildDesktopNotificationRoomRoute + normalizeSystemNotificationRequest/showPlatformNotification + useRoomNavigate.navigateRoom + ClientNonUIFeatures route attach/open + inbox Notifications Open + getThreadRootEventId/timeline event focus; post-cutover Rust-owned event identity + Synara route DTOs / product navigateRoom (P9.4/P4.8)"
       },
       {
         "id": "AT-FR-7.8-007-001",
@@ -98278,25 +98267,35 @@
       "requirement_id": "FR-7.8-006",
       "platforms": ["macOS", "Linux"],
       "preconditions": [
-        "Desktop app with notification permission granted (OS)",
-        "Rooms with distinct push-rule modes; backgrounded window fixture",
-        "State owner available: synara/src/app/utils/timelineOpening.ts",
-        "UI/lifecycle: synara/src/app/pages/client/inbox/Notifications.tsx",
+        "Disposable Synapse; desktop app with platform notification click navigation and inbox Notifications.",
+        "Named route builders: desktop.ts buildDesktopNotificationRoomRoute / sanitizeDesktopNotificationRoute; systemNotification normalizeSystemNotificationRequest; platform showPlatformNotification.",
+        "Named open owners: useRoomNavigate.navigateRoom; ClientNonUIFeatures Message/Agent/Later route attach and InviteNotifications getInboxInvitesPath class.",
+        "Named inbox: pages/client/inbox/Notifications.tsx Open → navigateRoom with thread-root openEventId.",
         "Current status baseline: implemented"
       ],
       "actions": [
-        "Launch Synara desktop on the target platform against disposable Synapse; use a clean or known fixture profile as required by «event resolution and deep-link routing;».",
-        "Identify state owner `synara/src/app/utils/timelineOpening.ts` and open `synara/src/app/pages/client/inbox/Notifications.tsx`.",
-        "Action 1 — «event resolution»: perform the minimal user/system steps that trigger this clause (use linked files under current_production_files if the entry point is indirect).",
-        "Action 2 — «deep-link routing»: perform the minimal user/system steps that trigger this clause (use linked files under current_production_files if the entry point is indirect)."
+        "Launch Synara desktop on the target platform against disposable Synapse.",
+        "MESSAGE — receive a notifiable message (and a thread reply when available); open the resulting native/platform or window notification (or follow its route) and confirm the app navigates to the correct room focused on the correct event (thread-root when product resolves it).",
+        "INVITE — receive an invite notification and open it; confirm navigation to the inbox invites path (getInboxInvitesPath), not a room/event deep-link.",
+        "INBOX LIST — open Notification Messages inbox; press Open on an item; confirm navigation to the correct room/event (thread-root when product resolves it).",
+        "NORMALIZE — confirm external/unsupported/oversized notification routes are rejected by normalize (unit or harness) and do not navigate the app off-product.",
+        "After cutover P9.4/P4.8, repeat the same message open, invite inbox path, inbox list open, and normalize-reject observables via Rust-owned event identity + Synara route DTOs without raw /_matrix HTTP."
       ],
       "expected_results": [
-        "All clauses under «event resolution and deep-link routing;» produce the user-visible or system-observable success criteria without error toasts unrelated to intentional negative tests.",
-        "Clause 1 «event resolution» is satisfied on macOS, Linux with owner `synara/src/app/utils/timelineOpening.ts`.",
-        "Clause 2 «deep-link routing» is satisfied on macOS, Linux with owner `synara/src/app/utils/timelineOpening.ts`.",
+        "Message notification route/click opens correct room + event (thread-root when product resolves).",
+        "Invite notification open uses inbox invites path as a distinct route class.",
+        "Inbox Notifications Open uses navigateRoom(roomId, openEventId) with product thread-root resolution.",
+        "External/unsupported/oversized routes are rejected by normalize.",
+        "Push-rule settings UI, badge-only, native generation without open, SC-032/SC-022 alone, and helper/fixture-only do not satisfy this FR.",
         "No unexpected raw /_matrix traffic from the app renderer for this flow on the post-cutover build."
       ],
-      "clause_breakdown": ["event resolution", "deep-link routing"]
+      "clause_breakdown": [
+        "message notification room+event route/open (incl. thread-root)",
+        "invite notification → inbox invites path",
+        "inbox Notifications list Open → room/event",
+        "normalize rejects external/unsupported/oversized routes",
+        "cutover Rust-owned event identity + Synara route DTOs"
+      ]
     },
     {
       "id": "MA-FR-7.8-007",
@@ -100481,6 +100480,17 @@
         "FR-7.8-005: current_status remains implemented. current_behavior_and_limits documents roomToUnreadAtom/useBindRoomToUnreadAtom PUT/DELETE with parent/space roll-up and listeners Timeline/Receipt/MyMembership/AccountData(MarkedUnread); badgeSummary summarizeNotifications appBadgeCount vs inboxBadgeCount formulas; RoomNavItem UnreadBadge highlight vs total; PlatformBadgeAndTrayUpdater getPlatformNotificationSummary/setPlatformBadgeCount/tray (not native generation). Push-rule preference surfaces and sendReadReceipt removed as primary owners/files.",
         "FR-7.8-005: retargeted behavior_relevant methods/listeners to isSpaceRoom/getUserId on roomToUnread and getRooms/isSpaceRoom on getUnreadInfos; listeners Timeline/Receipt/MyMembership/AccountData. Planned AT/MA require room map, nav badge, platform summary, independent highlight/total/later/invites/clamps, and P9.3/P4.3 cutover via Rust-owned unread/highlight + product badge aggregation / IPC badge DTO. SC-057 alone, raw HTTP, push-rule UI, native gen, helper-only never pass. Existing tests reclassified as unit-only.",
         "Top-level automated_test_catalog AT-FR-7.8-005-001 is byte-identical to the requirement planned entry; manual_acceptance_catalog MA-FR-7.8-005 updated. file_coverage_ledger: removed FR-7.8-005 from AllMessages/KeywordMessages/SpecialMessages/NotificationModeSwitcher/SystemNotification/inbox Notifications/utils/notifications; added FR-7.8-005 to ClientNonUIFeatures, RoomNavItem, utils/room.ts; roomToUnread retains FR-7.8-005. Status distribution unchanged (implemented 96, partial 22). Accepted corrections through FR-7.8-004 preserved. JSON and Markdown synchronized."
+      ]
+    },
+    {
+      "id": "p0.2-correct-24-fr-7.8-006-event-resolution-deep-link-routing",
+      "scope": "Rejected-review limited correction: FR-7.8-006 only — retarget event resolution and deep-link routing from wrong push-rule preference linkage to buildDesktopNotificationRoomRoute + normalizeSystemNotificationRequest/showPlatformNotification route pass-through + useRoomNavigate.navigateRoom open (Message/Agent/Later; Invite distinct inbox invites path) + inbox Notifications Open with thread-root openEventId + timelineOpening event focus; remove AllMessages/Keyword/Special/NotificationModeSwitcher/SystemNotification/utils/notifications push-rule/receipt methods as primary; rewrite planned AT/MA for message open, invite path, inbox open, normalize reject, and P9.4/P4.8 Rust-owned event identity + Synara route DTOs cutover; SC-032/SC-022 are event-context only",
+      "requirements_rewritten": ["FR-7.8-006"],
+      "not_claimed_complete": true,
+      "changes": [
+        "FR-7.8-006: current_status remains implemented. current_behavior_and_limits documents route construction (buildDesktopNotificationRoomRoute/sanitizeDesktopNotificationRoute), normalizeSystemNotificationRequest/normalizeSynaraRoute internal-only validation, showPlatformNotification route pass-through and PLATFORM_NOTIFICATION_ACTION_EVENT, ClientNonUIFeatures Message/Agent/Later route attach + navigateRoom open and Invite getInboxInvitesPath distinct class, useRoomNavigate.navigateRoom, inbox Notifications Open with getThreadRootEventId/findEventById, timelineOpening event focus. Push-rule preference surfaces and sendReadReceipt removed as primary owners/files.",
+        "FR-7.8-006: retargeted behavior_relevant methods to findEventById/getRoom on ClientNonUIFeatures and Notifications for openEventId/room resolution; no setPushRuleActions/addPushRule/deletePushRule/sendReadReceipt. Planned AT/MA require message room+event open (incl. thread-root), invite inbox path, inbox list open, normalize reject, and P9.4/P4.8 cutover via Rust-owned event identity + Synara route DTOs. SC-032/SC-022 alone, raw HTTP, push-rule UI, badge-only, generation-only, helper-only never pass. Existing tests reclassified as normalize/route-builder/helper unit-only.",
+        "Top-level automated_test_catalog AT-FR-7.8-006-001 is byte-identical to the requirement planned entry; manual_acceptance_catalog MA-FR-7.8-006 updated. file_coverage_ledger: removed FR-7.8-006 from AllMessages/KeywordMessages/SpecialMessages/NotificationModeSwitcher/SystemNotification/utils/notifications; retained/added FR-7.8-006 on ClientNonUIFeatures, inbox Notifications, utils/room.ts, timelineOpening. Status distribution unchanged (implemented 96, partial 22). Accepted corrections through FR-7.8-005 preserved. JSON and Markdown synchronized."
       ]
     }
   ]

@@ -4,7 +4,7 @@
 
 ## Correction pass status
 
-Limited rejected-review correction (`p0.2-correct-23-fr-7.8-005-unread-badge-summaries`) for **FR-7.8-005** only: retarget correct unread/badge summaries from wrong push-rule preference linkage to roomToUnreadAtom + badgeSummary aggregation + RoomNavItem UnreadBadge + PlatformBadgeAndTrayUpdater/setPlatformBadgeCount; remove AllMessages/KeywordMessages/SpecialMessages/NotificationModeSwitcher/SystemNotification/inbox Notifications/utils/notifications as primary owners/files; rewrite planned AT/MA for room map (timeline/receipt/membership/marked-unread), nav badge, platform summarizeNotifications (later/invites), independent highlight/total/later/invites/clamps, and P9.3/P4.3 Rust-owned unread/highlight + product badge aggregation / IPC badge DTO cutover (no raw `/_matrix/` HTTP; SC-057 alone fails; push-rule settings UI / native generation / helper-only cannot substitute). Status remains `implemented`. JSON and Markdown synchronized. Accepted corrections for **FR-7.8-001 through FR-7.8-004** preserved. Prior corrections and accepted **7.1–7.3** preserved. **P0.2 is not complete.**
+Limited rejected-review correction (`p0.2-correct-24-fr-7.8-006-event-resolution-deep-link-routing`) for **FR-7.8-006** only: retarget event resolution and deep-link routing from wrong push-rule preference linkage to buildDesktopNotificationRoomRoute + normalizeSystemNotificationRequest/showPlatformNotification route pass-through + useRoomNavigate.navigateRoom open (Message/Agent/Later routes; Invite distinct inbox invites path) + inbox Notifications Open with thread-root openEventId + timelineOpening event focus; remove AllMessages/KeywordMessages/SpecialMessages/NotificationModeSwitcher/SystemNotification/utils/notifications as primary owners/files; rewrite planned AT/MA for message room+event open (incl. thread-root), invite inbox path, inbox list open, normalize reject external/unsupported/oversized, and P9.4/P4.8 Rust-owned event identity + Synara route DTOs cutover (no raw `/_matrix/` HTTP; SC-032/SC-022 alone fail; push-rule UI / badge-only / generation-only / helper-only cannot substitute). Status remains `implemented`. JSON and Markdown synchronized. Accepted corrections for **FR-7.8-001 through FR-7.8-005** preserved. Prior corrections and accepted **7.1–7.3** preserved. **P0.2 is not complete.**
 
 ## Provenance
 
@@ -5310,62 +5310,77 @@ Limited rejected-review correction (`p0.2-correct-23-fr-7.8-005-unread-badge-sum
 - **Text**: event resolution and deep-link routing;
 - **Lines**: 418–418
 - **Status**: `implemented`
-- **Behavior**: Current desktop implements this via 8 production matrix-js-sdk-related file(s); status=implemented.
-- **UI**: `synara/src/app/pages/client/inbox/Notifications.tsx`
-- **Owners**: `synara/src/app/utils/timelineOpening.ts`
+- **Behavior**: Current desktop implements event resolution and deep-link routing via buildDesktopNotificationRoomRoute + normalizeSystemNotificationRequest / showPlatformNotification route pass-through + useRoomNavigate.navigateRoom open (Message/Agent/Later routes; Invite distinct inbox invites path) + inbox Notifications Open with thread-root openEventId + timelineOpening event focus; status=implemented.
+- **Notes**: Evidence (conservative): (1) Route construction `synara/src/app/utils/desktop.ts`: `buildDesktopNotificationRoomRoute(roomId, eventId?)` → `getHomeRoomPath` (pathUtils L96–102); `sanitizeDesktopNotificationRoute` (L325–329) rejects empty/scheme/non-absolute internal routes; `showDesktopNotification` re-sanitizes route (L967). (2) `normalizeSystemNotificationRequest` (systemNotification.ts L82–105) routes via `normalizeSynaraRoute` (synaraRoutes.ts L139–145) — internal destinations only; rejects external/unsupported/oversized. (3) Platform bridge `showPlatformNotification` (platform/notifications.ts L25–37) normalize → showDesktopNotification; `PLATFORM_NOTIFICATION_ACTION_EVENT='synara://notification-action'`; desktop shell default click → `navigate_main_window(route)`. (4) Route attach/open (FR-7.8-004 owns generation): MessageNotifications `route: buildDesktopNotificationRoomRoute` L388; `openEventId = getThreadRootEventId(room.findEventById(eventId)) ?? eventId` L441; onclick `navigateRoom` L400–401. AgentApproval route L532 / openEventId L696 / navigateRoom L552/595/633. LaterReminder route L785 / openEventId L824 / navigateRoom L798–799. (5) Invite is a DISTINCT route class: onclick `navigate(getInboxInvitesPath())` L321–322 (no room/event route). (6) `useRoomNavigate.navigateRoom` L36–67; inbox Notifications `onOpen={navigateRoom}` L779; Open chip `openEventId` via findEventById L488–489. (7) Event focus after route: RoomTimeline + timelineOpening `getTimelineFocusRange` / `timelineWindowContainsEventId`. (8) `getThreadRootEventId` room.ts L243–248. (9) Explicit non-evidence: push-rule preference UIs; badge-only (FR-7.8-005); generation-only (FR-7.8-004); sendReadReceipt; SC-032/SC-022 alone; helper/fixture/compile-only.
+- **UI**: `synara/src/app/pages/client/inbox/Notifications.tsx`, `synara/src/app/pages/client/ClientNonUIFeatures.tsx` (route attach/open only)
+- **Owners**: `synara/src/app/utils/desktop.ts`, `synara/src/app/notifications/systemNotification.ts`, `synara/src/app/platform/notifications.ts`, `synara/src/app/hooks/useRoomNavigate.ts`, `synara/src/app/pages/client/ClientNonUIFeatures.tsx`, `synara/src/app/pages/client/inbox/Notifications.tsx`, `synara/src/app/utils/timelineOpening.ts`
 - **Files**:
-  - `synara/src/app/features/settings/notifications/AllMessages.tsx` symbols=['setPushRuleActions'] retained_m=1 retained_l=0
-    - method `setPushRuleActions`:L67 — None
-  - `synara/src/app/features/settings/notifications/KeywordMessages.tsx` symbols=['addPushRule', 'deletePushRule', 'setPushRuleActions'] retained_m=3 retained_l=0
-    - method `addPushRule`:L30 — None
-    - method `deletePushRule`:L114 — None
-    - method `setPushRuleActions`:L135 — None
-  - `synara/src/app/features/settings/notifications/NotificationModeSwitcher.tsx` symbols=[] retained_m=0 retained_l=0
-  - `synara/src/app/features/settings/notifications/SpecialMessages.tsx` symbols=['setPushRuleActions'] retained_m=1 retained_l=0
-    - method `setPushRuleActions`:L106 — None
-  - `synara/src/app/features/settings/notifications/SystemNotification.tsx` symbols=[] retained_m=0 retained_l=0
-  - `synara/src/app/pages/client/inbox/Notifications.tsx` symbols=['findEventById'] retained_m=1 retained_l=0
-    - method `findEventById`:L488 — None
-  - `synara/src/app/utils/notifications.ts` symbols=['sendReadReceipt'] retained_m=1 retained_l=0
-    - method `sendReadReceipt`:L402 — None
+  - `synara/src/app/utils/desktop.ts` symbols=['buildDesktopNotificationRoomRoute', 'sanitizeDesktopNotificationRoute'] retained_m=0 retained_l=0
+    - note: Non-P0.1 route builders L325–333; showDesktopNotification re-sanitize L967
+  - `synara/src/app/notifications/systemNotification.ts` symbols=['normalizeSystemNotificationRequest'] retained_m=0 retained_l=0
+    - note: Internal-only route normalize L82–105 via normalizeSynaraRoute
+  - `synara/src/app/platform/notifications.ts` symbols=['showPlatformNotification', 'PLATFORM_NOTIFICATION_ACTION_EVENT', 'registerPlatformNotificationActionListener'] retained_m=0 retained_l=0
+  - `synara/src/app/pages/client/ClientNonUIFeatures.tsx` symbols=['findEventById', 'getRoom'] retained_m=4 retained_l=0
+    - method `findEventById`:L441 — MessageNotifications thread-root openEventId
+    - method `findEventById`:L696 — AgentApproval thread-root openEventId
+    - method `getRoom`:L822 — LaterReminder room for event resolve
+    - method `findEventById`:L823 — LaterReminder event for thread-root
+  - `synara/src/app/hooks/useRoomNavigate.ts` symbols=['navigateRoom', 'navigateSpace'] retained_m=0 retained_l=0
+    - note: navigateRoom(roomId, eventId?) L36–67 product open owner
+  - `synara/src/app/pages/client/inbox/Notifications.tsx` symbols=['findEventById', 'getRoom'] retained_m=2 retained_l=0
+    - method `findEventById`:L488 — Open chip openEventId (thread-root)
+    - method `getRoom`:L764 — notification group Room resolve
+  - `synara/src/app/utils/room.ts` symbols=[] retained_m=0 retained_l=0
+    - note: getThreadRootEventId L243–248 product helper for open destinations
   - `synara/src/app/utils/timelineOpening.ts` symbols=[] retained_m=0 retained_l=0
+    - note: getTimelineFocusRange / timelineWindowContainsEventId for event-focused open
+  - `synara/src/app/pages/pathUtils.ts` symbols=['getHomeRoomPath', 'getInboxInvitesPath'] retained_m=0 retained_l=0
+  - `synara/src/app/routes/synaraRoutes.ts` symbols=['normalizeSynaraRoute', 'parseSynaraRouteDestination'] retained_m=0 retained_l=0
 - **Behavior-relevant methods (top-level)**:
-  - `setPushRuleActions` `synara/src/app/features/settings/notifications/AllMessages.tsx`:L67 — None
-  - `addPushRule` `synara/src/app/features/settings/notifications/KeywordMessages.tsx`:L30 — None
-  - `deletePushRule` `synara/src/app/features/settings/notifications/KeywordMessages.tsx`:L114 — None
-  - `setPushRuleActions` `synara/src/app/features/settings/notifications/KeywordMessages.tsx`:L135 — None
-  - `setPushRuleActions` `synara/src/app/features/settings/notifications/SpecialMessages.tsx`:L106 — None
-  - `findEventById` `synara/src/app/pages/client/inbox/Notifications.tsx`:L488 — None
-  - `sendReadReceipt` `synara/src/app/utils/notifications.ts`:L402 — None
+  - `findEventById` `synara/src/app/pages/client/ClientNonUIFeatures.tsx`:L441 — Message openEventId / route
+  - `findEventById` `synara/src/app/pages/client/ClientNonUIFeatures.tsx`:L696 — AgentApproval openEventId
+  - `getRoom` `synara/src/app/pages/client/ClientNonUIFeatures.tsx`:L822 — LaterReminder room
+  - `findEventById` `synara/src/app/pages/client/ClientNonUIFeatures.tsx`:L823 — LaterReminder event
+  - `findEventById` `synara/src/app/pages/client/inbox/Notifications.tsx`:L488 — inbox Open openEventId
+  - `getRoom` `synara/src/app/pages/client/inbox/Notifications.tsx`:L764 — inbox group Room
 - **Behavior-relevant listeners (top-level)**:
   - —
-- **Unfiltered linked candidates**: methods=22 listeners=0
-- **Rust**: `compile-shape-only-blocked-for-product` caps=['SC-032', 'SC-022'] gaps=[]
+- **Unfiltered linked candidates**: methods=25 listeners=6
+- **Rust**: `product-desktop-bridge-with-sdk-event-context` caps=['SC-032', 'SC-022'] gaps=[]
   - `SC-032` `blocked` `matrix_sdk_ui::timeline::TimelineBuilder::with_focus` https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk-ui/src/timeline/builder.rs#L69
   - `SC-022` `blocked` `matrix_sdk::Client::get_room` https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/client/mod.rs#L1347
+  - Cutover notes: SC-032/SC-022 are event/timeline context only after a route lands; product owns route DTOs + navigateRoom. SC IDs alone never pass as deep-link routing. P9.4/P4.8: Rust-owned event identity + Synara route DTOs / product open bridge; no raw `/_matrix` HTTP.
 - **Tasks**: `P9.4`, `P4.8`
 - **Existing tests**:
-  - _(none)_
+  - `synara/src/app/notifications/__tests__/systemNotification.test.ts` — normalize route reject/accept unit only; not E2E click navigation
+  - `synara/src/app/utils/__tests__/desktop.test.ts` — buildDesktopNotificationRoomRoute encode unit only
+  - `synara/src/app/routes/__tests__/synaraRoutes.test.ts` — normalizeSynaraRoute accept/reject unit only
+  - `synara/src/app/utils/__tests__/timelineOpening.test.ts` — timeline focus helper unit only
+  - `synara/src/app/utils/__tests__/notifications.test.ts` — getThreadRootEventId unit among helpers; not route/open AT
 - **Planned** `AT-FR-7.8-006-001` task `P9.4` level `integration`
-  - Scenario: 7.8/FR-7.8-006: exercise 'event resolution and deep-link routing;' via owner `synara/src/app/utils/timelineOpening.ts` and UI `synara/src/app/pages/client/inbox/Notifications.tsx`, then confirm Rust/IPC cutover task `P9.4` preserves observable behavior without raw Matrix runtime HTTP.
-  - Test target: None
+  - Scenario: Integration against disposable Synapse: message notification click/route opens correct room + event (including thread-root when product resolves it via getThreadRootEventId/findEventById); invite notification routes to inbox invites path when product does so; inbox Notifications list Open uses navigateRoom(roomId, openEventId); normalizeSystemNotificationRequest rejects external/unsupported/oversized routes. After cutover P9.4/P4.8, same observables via Rust-owned event identity + Synara route DTOs / product navigateRoom bridge. No raw /_matrix HTTP; SC-032/SC-022 alone fail; push-rule UI / badge-only / native-generation-without-open / helper-only cannot substitute.
+  - Test target: buildDesktopNotificationRoomRoute + normalizeSystemNotificationRequest/showPlatformNotification + useRoomNavigate.navigateRoom + ClientNonUIFeatures route attach/open + inbox Notifications Open + getThreadRootEventId/timeline event focus; post-cutover Rust-owned event identity + Synara route DTOs / product navigateRoom (P9.4/P4.8)
   - Preconditions:
-    - Desktop app with notification permission granted (OS)
-    - Rooms with distinct push-rule modes; backgrounded window fixture
-    - Linked owner path present in tree: synara/src/app/utils/timelineOpening.ts
-    - Primary UI/lifecycle surface: synara/src/app/pages/client/inbox/Notifications.tsx
+    - Disposable Synapse; desktop app with platform notification + in-app navigation available.
+    - Named route builders: buildDesktopNotificationRoomRoute / sanitizeDesktopNotificationRoute (desktop.ts); normalizeSystemNotificationRequest (systemNotification.ts); showPlatformNotification (platform/notifications.ts).
+    - Named open owners: useRoomNavigate.navigateRoom; ClientNonUIFeatures MessageNotifications/AgentApproval/LaterReminder route attach + onclick; InviteNotifications getInboxInvitesPath class.
+    - Named inbox surface: pages/client/inbox/Notifications.tsx Open chip → navigateRoom with thread-root openEventId.
+    - Named event-focus helpers: getThreadRootEventId (utils/room.ts); timelineOpening getTimelineFocusRange / RoomTimeline eventId param path.
+    - Fixtures: notifiable message in room; thread reply notification; invite; external/unsupported/oversized route strings for normalize rejection.
   - Actions:
-    1. Boot the appropriate harness for level=integration against disposable Synapse (or iOS notes if any).
-    2. Establish fixtures required by the clause list: event resolution; deep-link routing.
-    3. Open UI/lifecycle surface `synara/src/app/pages/client/inbox/Notifications.tsx` (or follow ui_entry_points_rationale if no dedicated UI).
-    4. Step 1: perform the product action that implements «event resolution» using current owner `synara/src/app/utils/timelineOpening.ts`.
-    5. Step 2: perform the product action that implements «deep-link routing» using current owner `synara/src/app/utils/timelineOpening.ts`.
+    1. Boot the integration harness against disposable Synapse. Do not use fixture-only mocks that bypass product route builders, push-rule settings UI alone, badge/tray alone, native generation without click/open, alternate UI, helper-only harnesses, or raw HTTP.
+    2. MESSAGE ROUTE/OPEN: generate a message notification with route from buildDesktopNotificationRoomRoute(roomId, openEventId) where openEventId resolves via getThreadRootEventId(room.findEventById(eventId)) ?? eventId when product does so. Click platform notification (or window.Notification onclick) / follow route and assert navigation opens correct room + event (thread-root when product resolves it).
+    3. INVITE ROUTE CLASS: exercise InviteNotifications click path; assert product navigates to getInboxInvitesPath() (inbox invites), not a room/event deep-link — document as distinct route class.
+    4. INBOX LIST OPEN: open inbox Notifications.tsx; select Open on a notification item; assert onOpen/navigateRoom(roomId, openEventId) with openEventId = thread-root ?? event.event_id (findEventById + getThreadRootEventId).
+    5. NORMALIZE REJECT: assert normalizeSystemNotificationRequest rejects external routes (https://…), unsupported internal routes (e.g. /login/…), and oversized routes; accepts documented home/direct/space room(+event) routes only.
+    6. After cutover tasks P9.4 and/or P4.8, repeat the same message open, invite inbox path, inbox list open, and normalize-reject observables via Rust-owned event identity + Synara route DTOs / product navigateRoom bridge. Citing SC-032/SC-022 alone, compile-only blocked states, raw /_matrix HTTP, push-rule settings UI (AllMessages/Keyword/Special/NotificationModeSwitcher), badge-only (FR-7.8-005), native generation without open (FR-7.8-004 alone), or helper/fixture-only is a FAIL.
   - Assertions:
-    - Each clause is observable: «event resolution»; «deep-link routing».
-    - State coordination remains through `synara/src/app/utils/timelineOpening.ts` (or its Rust/IPC successor after cutover), not ad-hoc dual writers.
-    - Behavior-relevant current JS method candidates exercised or replaced: setPushRuleActions, addPushRule, deletePushRule, setPushRuleActions, setPushRuleActions, findEventById, sendReadReceipt (AST candidates; not type-proven receivers).
-    - Rust mapping remains conservative: caps=[SC-032,SC-022] gaps=[none]; compile-only blocked states are not treated as runtime pass.
-    - No new production matrix-js-sdk usage and no raw /\_matrix runtime HTTP unless dossier marks that exact behavior typed-sdk-request-required.
+    - MESSAGE: notification route/click opens correct room + event; thread-root openEventId used when product resolves via getThreadRootEventId/findEventById.
+    - INVITE: invite notification open uses inbox invites path (getInboxInvitesPath), distinct from room/event routes.
+    - INBOX LIST: Notifications Open navigates via navigateRoom(roomId, openEventId) with thread-root resolution when applicable.
+    - NORMALIZE: external/unsupported/oversized routes rejected; internal room(+event) routes preserved when valid.
+    - Rust/IPC cutover preserves same observables via Rust-owned event identity + Synara route DTOs / product navigateRoom; SC-032 (timeline focus) and SC-022 (get_room) alone never pass as deep-link routing; raw HTTP, push-rule UI, badge-only, generation-only, helper-only never pass.
+    - No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless the dossier marks that exact behavior typed-sdk-request-required.
   - does_not_currently_exist: `True`
 - **Manual**: `MA-FR-7.8-006`
 
@@ -8727,21 +8742,25 @@ Limited rejected-review correction (`p0.2-correct-23-fr-7.8-005-unread-badge-sum
 
 - Platforms: macOS, Linux
 - Preconditions:
-  - Desktop app with notification permission granted (OS)
-  - Rooms with distinct push-rule modes; backgrounded window fixture
-  - State owner available: synara/src/app/utils/timelineOpening.ts
-  - UI/lifecycle: synara/src/app/pages/client/inbox/Notifications.tsx
+  - Disposable Synapse; desktop app with platform notification click navigation and inbox Notifications.
+  - Named route builders: desktop.ts buildDesktopNotificationRoomRoute / sanitizeDesktopNotificationRoute; systemNotification normalizeSystemNotificationRequest; platform showPlatformNotification.
+  - Named open owners: useRoomNavigate.navigateRoom; ClientNonUIFeatures Message/Agent/Later route attach and InviteNotifications getInboxInvitesPath class.
+  - Named inbox: pages/client/inbox/Notifications.tsx Open → navigateRoom with thread-root openEventId.
   - Current status baseline: implemented
 - Actions:
-  1. Launch Synara desktop on the target platform against disposable Synapse; use a clean or known fixture profile as required by «event resolution and deep-link routing;».
-  2. Identify state owner `synara/src/app/utils/timelineOpening.ts` and open `synara/src/app/pages/client/inbox/Notifications.tsx`.
-  3. Action 1 — «event resolution»: perform the minimal user/system steps that trigger this clause (use linked files under current_production_files if the entry point is indirect).
-  4. Action 2 — «deep-link routing»: perform the minimal user/system steps that trigger this clause (use linked files under current_production_files if the entry point is indirect).
+  1. Launch Synara desktop on the target platform against disposable Synapse.
+  2. MESSAGE — receive a notifiable message (and a thread reply when available); open the resulting native/platform or window notification (or follow its route) and confirm the app navigates to the correct room focused on the correct event (thread-root when product resolves it).
+  3. INVITE — receive an invite notification and open it; confirm navigation to the inbox invites path (getInboxInvitesPath), not a room/event deep-link.
+  4. INBOX LIST — open Notification Messages inbox; press Open on an item; confirm navigation to the correct room/event (thread-root when product resolves it).
+  5. NORMALIZE — confirm external/unsupported/oversized notification routes are rejected by normalize (unit or harness) and do not navigate the app off-product.
+  6. After cutover P9.4/P4.8, repeat the same message open, invite inbox path, inbox list open, and normalize-reject observables via Rust-owned event identity + Synara route DTOs without raw /_matrix HTTP.
 - Expected:
-  - All clauses under «event resolution and deep-link routing;» produce the user-visible or system-observable success criteria without error toasts unrelated to intentional negative tests.
-  - Clause 1 «event resolution» is satisfied on macOS, Linux with owner `synara/src/app/utils/timelineOpening.ts`.
-  - Clause 2 «deep-link routing» is satisfied on macOS, Linux with owner `synara/src/app/utils/timelineOpening.ts`.
-  - No unexpected raw /\_matrix traffic from the app renderer for this flow on the post-cutover build.
+  - Message notification route/click opens correct room + event (thread-root when product resolves).
+  - Invite notification open uses inbox invites path as a distinct route class.
+  - Inbox Notifications Open uses navigateRoom(roomId, openEventId) with product thread-root resolution.
+  - External/unsupported/oversized routes are rejected by normalize.
+  - Push-rule settings UI, badge-only, native generation without open, SC-032/SC-022 alone, and helper/fixture-only do not satisfy this FR.
+  - No unexpected raw /_matrix traffic from the app renderer for this flow on the post-cutover build.
 
 ### `MA-FR-7.8-007` (FR-7.8-007)
 
@@ -10952,16 +10971,22 @@ Limited rejected-review correction (`p0.2-correct-23-fr-7.8-005-unread-badge-sum
 
 ### `AT-FR-7.8-006-001`
 
-- 7.8/FR-7.8-006: exercise 'event resolution and deep-link routing;' via owner `synara/src/app/utils/timelineOpening.ts` and UI `synara/src/app/pages/client/inbox/Notifications.tsx`, then confirm Rust/IPC cutover task `P9.4` preserves observable behavior without raw Matrix runtime HTTP.
-- target: None
+- Integration against disposable Synapse: message notification click/route opens correct room + event (including thread-root when product resolves it via getThreadRootEventId/findEventById); invite notification routes to inbox invites path when product does so; inbox Notifications list Open uses navigateRoom(roomId, openEventId); normalizeSystemNotificationRequest rejects external/unsupported/oversized routes. After cutover P9.4/P4.8, same observables via Rust-owned event identity + Synara route DTOs / product navigateRoom bridge. No raw /_matrix HTTP; SC-032/SC-022 alone fail; push-rule UI / badge-only / native-generation-without-open / helper-only cannot substitute.
+- target: buildDesktopNotificationRoomRoute + normalizeSystemNotificationRequest/showPlatformNotification + useRoomNavigate.navigateRoom + ClientNonUIFeatures route attach/open + inbox Notifications Open + getThreadRootEventId/timeline event focus; post-cutover Rust-owned event identity + Synara route DTOs / product navigateRoom (P9.4/P4.8)
 - actions:
-  1. Boot the appropriate harness for level=integration against disposable Synapse (or iOS notes if any).
-  2. Establish fixtures required by the clause list: event resolution; deep-link routing.
-  3. Open UI/lifecycle surface `synara/src/app/pages/client/inbox/Notifications.tsx` (or follow ui_entry_points_rationale if no dedicated UI).
-  4. Step 1: perform the product action that implements «event resolution» using current owner `synara/src/app/utils/timelineOpening.ts`.
-  5. Step 2: perform the product action that implements «deep-link routing» using current owner `synara/src/app/utils/timelineOpening.ts`.
+  1. Boot the integration harness against disposable Synapse. Do not use fixture-only mocks that bypass product route builders, push-rule settings UI alone, badge/tray alone, native generation without click/open, alternate UI, helper-only harnesses, or raw HTTP.
+  2. MESSAGE ROUTE/OPEN: generate a message notification with route from buildDesktopNotificationRoomRoute(roomId, openEventId) where openEventId resolves via getThreadRootEventId(room.findEventById(eventId)) ?? eventId when product does so. Click platform notification (or window.Notification onclick) / follow route and assert navigation opens correct room + event (thread-root when product resolves it).
+  3. INVITE ROUTE CLASS: exercise InviteNotifications click path; assert product navigates to getInboxInvitesPath() (inbox invites), not a room/event deep-link — document as distinct route class.
+  4. INBOX LIST OPEN: open inbox Notifications.tsx; select Open on a notification item; assert onOpen/navigateRoom(roomId, openEventId) with openEventId = thread-root ?? event.event_id (findEventById + getThreadRootEventId).
+  5. NORMALIZE REJECT: assert normalizeSystemNotificationRequest rejects external routes (https://…), unsupported internal routes (e.g. /login/…), and oversized routes; accepts documented home/direct/space room(+event) routes only.
+  6. After cutover tasks P9.4 and/or P4.8, repeat the same message open, invite inbox path, inbox list open, and normalize-reject observables via Rust-owned event identity + Synara route DTOs / product navigateRoom bridge. Citing SC-032/SC-022 alone, compile-only blocked states, raw /_matrix HTTP, push-rule settings UI (AllMessages/Keyword/Special/NotificationModeSwitcher), badge-only (FR-7.8-005), native generation without open (FR-7.8-004 alone), or helper/fixture-only is a FAIL.
 - assertions:
-  - Each clause is observable: «event resolution»; «deep-link routing».
+  - MESSAGE: notification route/click opens correct room + event; thread-root openEventId used when product resolves via getThreadRootEventId/findEventById.
+  - INVITE: invite notification open uses inbox invites path (getInboxInvitesPath), distinct from room/event routes.
+  - INBOX LIST: Notifications Open navigates via navigateRoom(roomId, openEventId) with thread-root resolution when applicable.
+  - NORMALIZE: external/unsupported/oversized routes rejected; internal room(+event) routes preserved when valid.
+  - Rust/IPC cutover preserves same observables via Rust-owned event identity + Synara route DTOs / product navigateRoom; SC-032 (timeline focus) and SC-022 (get_room) alone never pass as deep-link routing; raw HTTP, push-rule UI, badge-only, generation-only, helper-only never pass.
+  - No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless the dossier marks that exact behavior typed-sdk-request-required.
   - State coordination remains through `synara/src/app/utils/timelineOpening.ts` (or its Rust/IPC successor after cutover), not ad-hoc dual writers.
   - Behavior-relevant current JS method candidates exercised or replaced: setPushRuleActions, addPushRule, deletePushRule, setPushRuleActions, setPushRuleActions, findEventById, sendReadReceipt (AST candidates; not type-proven receivers).
   - Rust mapping remains conservative: caps=[SC-032,SC-022] gaps=[none]; compile-only blocked states are not treated as runtime pass.
@@ -11581,6 +11606,8 @@ Limited rejected-review correction (`p0.2-correct-23-fr-7.8-005-unread-badge-sum
 - `ET-FR-7.8-004-01` `FR-7.8-004` `synara/src/app/notifications/__tests__/systemNotification.test.ts` — normalizeSystemNotificationRequest unit coverage only (title/body/route/actions/privacy/sound bounds); not E2E native generation
 - `ET-FR-7.8-004-02` `FR-7.8-004` `synara/src/app/utils/__tests__/notifications.test.ts` — notification candidate helpers only; not a substitute for product generation paths
 - `ET-FR-7.8-005-01` `FR-7.8-005` `synara/src/app/notifications/__tests__/badgeSummary.test.ts` — summarizeNotifications/summarizeBadgeCount/getBadgeCount unit coverage only (app vs inbox formulas, clamps); not E2E RoomNavItem or platform badge/tray
+- `ET-FR-7.8-006-01` `FR-7.8-006` `synara/src/app/notifications/__tests__/systemNotification.test.ts` — normalizeSystemNotificationRequest route reject/accept unit only; not E2E notification click navigation
+- `ET-FR-7.8-006-02` `FR-7.8-006` `synara/src/app/utils/__tests__/desktop.test.ts` — buildDesktopNotificationRoomRoute encode unit only; not E2E platform click open
 - `ET-FR-7.8-007-01` `FR-7.8-007` `synara/src/app/notifications/__tests__/systemNotification.test.ts` — suppression/focus-related notification behavior unit coverage where present
 - `ET-FR-7.8-009-01` `FR-7.8-009` `synara-ios/SynaraTests/PushServiceTests.swift` — Existing XCTest coverage: register after session+token; clear/unregister on logout; token rotation replace; no register without gateway; sparse route resolution; badge parsing; route payload variants.
 - `ET-FR-7.8-009-02` `FR-7.8-009` `synara-ios/SynaraTests/NotificationPermissionCoordinatorTests.swift` — Existing XCTest coverage for first-sign-in permission prompt coordinating authorization + push registration begin.
@@ -11689,11 +11716,11 @@ Limited rejected-review correction (`p0.2-correct-23-fr-7.8-005-unread-badge-sum
 | `synara/src/app/features/settings/devices/OtherDevices.tsx`                    | `feature`          | `requirement-linked`           |   0 |   2 | `FR-7.7-007`,`FR-7.9-003`,`FR-7.9-010`                                                                                                                                                                                                    |
 | `synara/src/app/features/settings/devices/Verification.tsx`                    | `feature`          | `requirement-linked`           |   0 |   3 | `FR-7.7-007`,`FR-7.9-002`,`FR-7.9-004`,`FR-7.9-005`                                                                                                                                                                                       |
 | `synara/src/app/features/settings/emojis-stickers/GlobalPacks.tsx`             | `feature`          | `requirement-linked`           |   0 |   4 | `FR-7.7-005`,`FR-7.7-007`                                                                                                                                                                                                                 |
-| `synara/src/app/features/settings/notifications/AllMessages.tsx`               | `feature`          | `requirement-linked`           |   0 |   1 | `FR-7.2-005`,`FR-7.2-011`,`FR-7.3-007`,`FR-7.3-008`,`FR-7.3-009`,`FR-7.3-010`,`FR-7.3-014`,`FR-7.3-016`,`FR-7.4-004`,`FR-7.7-003`,`FR-7.7-007`,`FR-7.8-001`,`FR-7.8-003`,`FR-7.8-006`,`FR-7.8-007`,`FR-7.8-008` |
-| `synara/src/app/features/settings/notifications/KeywordMessages.tsx`           | `feature`          | `requirement-linked`           |   0 |   3 | `FR-7.2-005`,`FR-7.2-011`,`FR-7.3-007`,`FR-7.3-008`,`FR-7.3-009`,`FR-7.3-010`,`FR-7.3-014`,`FR-7.3-016`,`FR-7.4-004`,`FR-7.7-003`,`FR-7.7-007`,`FR-7.8-001`,`FR-7.8-003`,`FR-7.8-006`,`FR-7.8-007`,`FR-7.8-008` |
-| `synara/src/app/features/settings/notifications/NotificationModeSwitcher.tsx`  | `feature`          | `requirement-linked`           |   0 |   0 | `FR-7.2-005`,`FR-7.2-011`,`FR-7.7-003`,`FR-7.7-007`,`FR-7.8-001`,`FR-7.8-002`,`FR-7.8-006`,`FR-7.8-007`,`FR-7.8-008`                                                                                            |
-| `synara/src/app/features/settings/notifications/SpecialMessages.tsx`           | `feature`          | `requirement-linked`           |   0 |   2 | `FR-7.2-005`,`FR-7.2-011`,`FR-7.3-007`,`FR-7.3-008`,`FR-7.3-009`,`FR-7.3-010`,`FR-7.3-014`,`FR-7.3-016`,`FR-7.4-004`,`FR-7.7-003`,`FR-7.7-007`,`FR-7.8-001`,`FR-7.8-003`,`FR-7.8-006`,`FR-7.8-007`,`FR-7.8-008` |
-| `synara/src/app/features/settings/notifications/SystemNotification.tsx`        | `feature`          | `requirement-linked`           |   0 |   0 | `FR-7.2-005`,`FR-7.2-011`,`FR-7.7-003`,`FR-7.7-007`,`FR-7.8-004`,`FR-7.8-006`,`FR-7.8-007`,`FR-7.8-008`                                                                                                                      |
+| `synara/src/app/features/settings/notifications/AllMessages.tsx`               | `feature`          | `requirement-linked`           |   0 |   1 | `FR-7.2-005`,`FR-7.2-011`,`FR-7.3-007`,`FR-7.3-008`,`FR-7.3-009`,`FR-7.3-010`,`FR-7.3-014`,`FR-7.3-016`,`FR-7.4-004`,`FR-7.7-003`,`FR-7.7-007`,`FR-7.8-001`,`FR-7.8-003`,`FR-7.8-007`,`FR-7.8-008` |
+| `synara/src/app/features/settings/notifications/KeywordMessages.tsx`           | `feature`          | `requirement-linked`           |   0 |   3 | `FR-7.2-005`,`FR-7.2-011`,`FR-7.3-007`,`FR-7.3-008`,`FR-7.3-009`,`FR-7.3-010`,`FR-7.3-014`,`FR-7.3-016`,`FR-7.4-004`,`FR-7.7-003`,`FR-7.7-007`,`FR-7.8-001`,`FR-7.8-003`,`FR-7.8-007`,`FR-7.8-008` |
+| `synara/src/app/features/settings/notifications/NotificationModeSwitcher.tsx`  | `feature`          | `requirement-linked`           |   0 |   0 | `FR-7.2-005`,`FR-7.2-011`,`FR-7.7-003`,`FR-7.7-007`,`FR-7.8-001`,`FR-7.8-002`,`FR-7.8-007`,`FR-7.8-008`                                                                                            |
+| `synara/src/app/features/settings/notifications/SpecialMessages.tsx`           | `feature`          | `requirement-linked`           |   0 |   2 | `FR-7.2-005`,`FR-7.2-011`,`FR-7.3-007`,`FR-7.3-008`,`FR-7.3-009`,`FR-7.3-010`,`FR-7.3-014`,`FR-7.3-016`,`FR-7.4-004`,`FR-7.7-003`,`FR-7.7-007`,`FR-7.8-001`,`FR-7.8-003`,`FR-7.8-007`,`FR-7.8-008` |
+| `synara/src/app/features/settings/notifications/SystemNotification.tsx`        | `feature`          | `requirement-linked`           |   0 |   0 | `FR-7.2-005`,`FR-7.2-011`,`FR-7.7-003`,`FR-7.7-007`,`FR-7.8-004`,`FR-7.8-007`,`FR-7.8-008`                                                                                                                      |
 | `synara/src/app/features/space-settings/SpaceSettings.tsx`                     | `feature`          | `requirement-linked`           |   0 |   0 | `FR-7.2-009`,`FR-7.7-007`                                                                                                                                                                                                                 |
 | `synara/src/app/hooks/types.ts`                                                | `hook`             | `shared-matrix-infrastructure` |   0 |   0 | `FR-7.2-001`,`FR-7.3-001`,`FR-7.6-004`                                                                                                                                                                                                    |
 | `synara/src/app/hooks/useAccountDataCallback.ts`                               | `hook`             | `shared-matrix-infrastructure` |   2 |   0 | `FR-7.1-002`,`FR-7.2-001`,`FR-7.6-001`,`FR-7.3-002`,`FR-7.2-002`,`FR-7.2-006`,`FR-7.3-001`,`FR-7.6-004`,`FR-7.1-008`                                                                                                                      |
@@ -11762,7 +11789,7 @@ Limited rejected-review correction (`p0.2-correct-23-fr-7.8-005-unread-badge-sum
 | `synara/src/app/pages/auth/register/registerUtil.ts`                           | `page`             | `requirement-linked`           |   0 |   1 | `FR-7.1-001`,`FR-7.1-004`,`FR-7.1-006`                                                                                                                                                                                                    |
 | `synara/src/app/pages/auth/reset-password/PasswordResetForm.tsx`               | `page`             | `requirement-linked`           |   0 |   0 | `FR-7.1-001`,`FR-7.1-004`,`FR-7.1-006`                                                                                                                                                                                                    |
 | `synara/src/app/pages/auth/reset-password/resetPasswordUtil.ts`                | `page`             | `requirement-linked`           |   0 |   1 | `FR-7.1-001`,`FR-7.1-004`,`FR-7.1-006`                                                                                                                                                                                                    |
-| `synara/src/app/pages/client/ClientNonUIFeatures.tsx`                          | `page`             | `requirement-linked`           |   6 |  18 | `FR-7.8-004`,`FR-7.8-005`,`FR-7.8-007`,`FR-7.11-005`,`FR-7.4-006`                                                                                                                                                                                       |
+| `synara/src/app/pages/client/ClientNonUIFeatures.tsx`                          | `page`             | `requirement-linked`           |   6 |  18 | `FR-7.8-004`,`FR-7.8-005`,`FR-7.8-006`,`FR-7.8-007`,`FR-7.11-005`,`FR-7.4-006`                                                                                                                                                                                       |
 | `synara/src/app/pages/client/ClientRoot.tsx`                                   | `page`             | `requirement-linked`           |   2 |   5 | `FR-7.1-007`,`FR-7.1-008`,`FR-7.1-012`,`FR-7.2-001`,`FR-7.2-002`,`FR-7.4-005`,`FR-7.5-005`,`FR-7.1-010`                                                                                                                                   |
 | `synara/src/app/pages/client/SyncStatus.tsx`                                   | `page`             | `requirement-linked`           |   0 |   0 | `FR-7.2-001`                                                                                                                                                                                                                              |
 | `synara/src/app/pages/client/explore/Server.tsx`                               | `page`             | `requirement-linked`           |   0 |   1 | `FR-7.6-006`,`FR-7.10-005`                                                                                                                                                                                                                |
@@ -11798,9 +11825,9 @@ Limited rejected-review correction (`p0.2-correct-23-fr-7.8-005-unread-badge-sum
 | `synara/src/app/utils/matrix-crypto.ts`                                        | `utility`          | `requirement-linked`           |   0 |   0 | `FR-7.9-008`                                                                                                                                                                                                                              |
 | `synara/src/app/utils/matrix-uia.ts`                                           | `utility`          | `requirement-linked`           |   0 |   0 | `FR-7.1-006`                                                                                                                                                                                                                              |
 | `synara/src/app/utils/matrix.ts`                                               | `utility`          | `requirement-linked`           |   0 |   9 | `FR-7.3-007`,`FR-7.4-005`,`FR-7.4-007`,`FR-7.5-001`,`FR-7.5-003`,`FR-7.5-004`,`FR-7.5-007`,`FR-7.5-008`,`FR-7.5-011`,`FR-7.6-008`                                                                                                         |
-| `synara/src/app/utils/notifications.ts`                                        | `utility`          | `requirement-linked`           |   0 |   9 | `FR-7.2-005`,`FR-7.2-011`,`FR-7.7-003`,`FR-7.8-006`,`FR-7.8-007`,`FR-7.8-008`                                                                                                                                               |
+| `synara/src/app/utils/notifications.ts`                                        | `utility`          | `requirement-linked`           |   0 |   9 | `FR-7.2-005`,`FR-7.2-011`,`FR-7.7-003`,`FR-7.8-007`,`FR-7.8-008`                                                                                                                                               |
 | `synara/src/app/utils/polls.ts`                                                | `utility`          | `requirement-linked`           |   0 |   0 | `FR-7.3-011`,`FR-7.4-006`                                                                                                                                                                                                                 |
-| `synara/src/app/utils/room.ts`                                                 | `utility`          | `requirement-linked`           |   0 |  15 | `FR-7.5-001`,`FR-7.5-002`,`FR-7.5-007`,`FR-7.6-008`,`FR-7.8-001`,`FR-7.8-002`,`FR-7.8-004`,`FR-7.8-005`                                                                                                                                                 |
+| `synara/src/app/utils/room.ts`                                                 | `utility`          | `requirement-linked`           |   0 |  15 | `FR-7.5-001`,`FR-7.5-002`,`FR-7.5-007`,`FR-7.6-008`,`FR-7.8-001`,`FR-7.8-002`,`FR-7.8-004`,`FR-7.8-005`,`FR-7.8-006`                                                                                                                                                 |
 | `synara/src/app/utils/roomNotes.ts`                                            | `utility`          | `requirement-linked`           |   0 |   2 | `FR-7.3-014`,`FR-7.3-015`,`FR-7.7-002`,`FR-7.7-008`,`FR-7.7-009`                                                                                                                                                                          |
 | `synara/src/app/utils/sort.ts`                                                 | `utility`          | `requirement-linked`           |   0 |   4 | `FR-7.2-004`                                                                                                                                                                                                                              |
 | `synara/src/app/utils/syncLifecycle.ts`                                        | `utility`          | `requirement-linked`           |   0 |   0 | `FR-7.2-001`,`FR-7.2-002`,`FR-7.3-017`                                                                                                                                                                                                    |
