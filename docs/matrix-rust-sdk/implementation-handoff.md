@@ -33,21 +33,22 @@ without explicit user approval.
 - Checkpoint commits: `06d0f86` (traceability scaffold), `9c91e0f` (handoff)
 - **Accepted this session:**
   - FR-7.8-004 through FR-7.8-009 (section 7.8 complete for P0.2 audit)
-  - FR-7.9-001 through FR-7.9-007
-  - FR-7.9-008 (`p0.2-correct-34-...`) pending commit after this handoff update
-- **Next writer task:** FR-7.9-009 (key-backup state listeners), then remaining
-  shallow 7.9–7.11 rows
+  - FR-7.9-001 through FR-7.9-009
+- **Paused after FR-7.9-009** (orchestrator pause for status review)
+- **Next writer task on resume:** FR-7.9-010 (device deletion and UIA), then
+  remaining shallow 7.9–7.11 rows (~19)
 - No production Matrix Rust SDK replacement code accepted
-- **No open P0.2 PR yet** (open after P0.2 complete or batch checkpoint)
+- **No open P0.2 PR yet** (open after P0.2 complete)
 
 Phase 0 evidence accepted before this handoff:
 
 - P0.1 SDK usage inventory is merged to the integration branch.
 - P0.3 exact Matrix Rust SDK 0.18.0 capability dossier is merged to the
   integration branch.
-- P0.2 branch carries accepted 7.8–7.9.008 corrections and continuing 7.9+ audits.
+- P0.2 branch carries accepted 7.8–7.9.009 corrections; ~19 shallow rows remain
+  in 7.9–7.11.
 
-P0.2 is not complete. Resume at FR-7.9-009, then audit remaining 7.9–7.11
+P0.2 is not complete. Resume at FR-7.9-010, then audit remaining 7.9–7.11
 before declaring P0.2 accepted.
 
 Accepted notification findings that must be preserved:
@@ -140,6 +141,10 @@ Accepted notification findings that must be preserved:
   decryptAllTimelineEvent → attemptDecryption({isRetry:true}) on encrypted
   pagination; EncryptedContent MatrixEventEvent.Decrypted re-render; permanent
   UTD fallbacks. No dedicated Retry button.
+- FR-7.9-009: status `implemented`. Key-backup state listeners in
+  `useKeyBackup.ts` (KeyBackupStatus / SessionsRemaining / Failed /
+  DecryptionKeyCached) drive BackupRestore Connected/Disconnected/Syncing/
+  failure/trust UI. Recovery setup is 006; LocalBackup files is 007.
 
 ## Branch and PR contract
 
