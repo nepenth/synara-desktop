@@ -4,7 +4,7 @@
 
 ## Correction pass status
 
-Limited rejected-review correction (`p0.2-correct-35-fr-7.9-009-key-backup-state-listeners`) for **FR-7.9-009** only: replace generic “via 3 files” / `notes=null` / shallow AT with concrete **key-backup state listener** evidence — `useKeyBackup.ts` `CryptoEvent.KeyBackupStatus` / `KeyBackupSessionsRemaining` / `KeyBackupFailed` / `KeyBackupDecryptionKeyCached`; `getActiveSessionBackupVersion` Connected seed; `getKeyBackupInfo`; `isKeyBackupTrusted`; `BackupRestoreTile` Connected/Disconnected/Syncing(n)/failure/trust UI; Devices Verified mount; demote `backupRestore.ts` progress atom to FR-7.9-006; exclude recovery setup/restore (FR-7.9-006) and room-key file (FR-7.9-007); rewrite planned AT/MA for product observables + cutover P8.5; honest rust_target SC-066 + GAP-RECOVERY-BACKUP `key-backup-state-listeners-compile-shape-only-blocked-for-product` (SC-065 recovery setup is not primary); SC alone / compile-only / raw HTTP / dual-backend / setup-only / restore-only / file-only / helper-only FAIL. Status remains `implemented`. JSON and Markdown synchronized. Accepted corrections for **FR-7.8-001 through FR-7.8-009** and **FR-7.9-001..008** preserved. Prior corrections and accepted **7.1–7.3** preserved. **P0.2 is not complete.**
+Limited rejected-review correction (`p0.2-correct-36-fr-7.9-010-device-deletion-and-uia`) for **FR-7.9-010** only: replace generic “via 4 files” / `notes=null` / wrong `getDevices`+`getDeviceId` list methods with concrete **device deletion + UIA** evidence — `OtherDevices.tsx` multi-select `deleted` Set + `mx.deleteMultipleDevices` + `useUIAMatrixError` 401→`ActionUIA` Password/SSO; `DeviceDeleteBtn`; success `refreshDeviceList`; failure text; OIDC `sessionEnd` branch; current device not multi-deletable (`DeviceLogoutBtn`); exclude list (FR-7.9-003) and trust (FR-7.9-004); rewrite planned AT/MA for product observables + cutover P8.2+P3.4; honest rust_target GAP-DEVICE-NAMING-DELETE + GAP-UIA with SC-067 list-only secondary `device-deletion-uia-compile-shape-only-blocked-for-product`; SC-067 alone / compile-only / raw HTTP / dual-backend / list-only / trust-only / helper-only FAIL. Status remains `implemented`. JSON and Markdown synchronized. Accepted corrections for **FR-7.8-001 through FR-7.8-009** and **FR-7.9-001..009** preserved. Prior corrections and accepted **7.1–7.3** preserved. **P0.2 is not complete.**
 
 ## Provenance
 
@@ -6277,54 +6277,61 @@ Limited rejected-review correction (`p0.2-correct-35-fr-7.9-009-key-backup-state
 - **Text**: device deletion and UIA;
 - **Lines**: 434–434
 - **Status**: `implemented`
-- **Behavior**: Current desktop implements this via 4 production matrix-js-sdk-related file(s); status=implemented.
-- **UI**: `synara/src/app/features/settings/devices/OtherDevices.tsx`
-- **Owners**: `synara/src/app/hooks/useDeviceList.ts`
+- **Behavior**: Product implements other-device deletion with interactive auth: Settings → Devices → Others multi-select (DeviceDeleteBtn) then bulk `mx.deleteMultipleDevices`; 401 UIA via `useUIAMatrixError` + `ActionUIA` (Password/SSO). Current this-session device is not multi-deleteable (`DeviceLogoutBtn`). OIDC sessions use external account-management `sessionEnd`. status=implemented.
+- **Notes**: Evidence (conservative): (1) SCOPE `Devices.tsx` L149–157 mounts `OtherDevices` only with `otherDevices` from `useSplitCurrentDevice` — current this-session is Current tile with `DeviceLogoutBtn` L127 (`LogoutDialog`), never `DeviceDeleteBtn` / `deleted` Set. Only other own-account sessions are deletable via this FR. (2) MULTI-SELECT `OtherDevices` L31 `deleted` Set; L59–68 `handleToggleDelete`; L141 Critical card when selected; L158–163 `DeviceDeleteBtn` Delete/Undo when `!authMetadata`; L183–250 sticky Critical menu when `deleted.size>0` with count, Cancel (clear Set), Logout → `deleteDevices()`. (3) DELETE API L75–91 `useAsync` `deleteDevices(authDict?)`: `mx.deleteMultipleDevices(Array.from(deleted), authDict)` L78 — primary JS method (source-inspected; not in original P0.1 AST sample). (4) SUCCESS L84–87 clear `deleted` Set + `refreshDeviceList()` so Others re-renders without process restart. (5) UIA L93–96 `useUIAMatrixError`: `httpStatus===401` → `authData` (`IAuthData`), else `deleteError`. L96 `deleting` = Loading || authData. L207–224 when authData: `ActionUIAFlowsLoader` filters `SUPPORTED_IN_APP_UIA_STAGES=[Password,Sso]` (`ActionUIA.tsx` L9); unsupported → message; `ActionUIA` runs `PasswordStage` (`getUserId` L39 + password AuthDict) or `SSOStage` (`getFallbackAuthUrl` L47) and re-calls `deleteDevices(authDict)`. `handleCancelAuth` L99–101 resets deleteState Idle. (6) FAILURE non-401: L198–201 “Failed to logout devices! … {deleteError.message}”. (7) OIDC BRANCH L107–130 Device Dashboard; L44–57 `handleDeleteOIDC` opens `account_management_uri`/`issuer` with `action=sessionEnd` + `device_id` — external, not `deleteMultipleDevices`/UIA. L151–156 `DeviceDeleteBtn` uses `handleDeleteOIDC` when `authMetadata` present. (8) NON-EVIDENCE / OUT OF SCOPE: `getDevices`/`getDeviceId`/`DevicesUpdated` list fetch+split = FR-7.9-003; `getCrypto`/`getSafeUserId`/`VerifyOtherDeviceTile`/`DeviceVerificationStatus` = FR-7.9-004/005; `setDeviceDetails` rename = naming adjacent not this FR text; `DeviceLogoutBtn` current logout ≠ other-device delete; `DeviceVerificationSetup` ActionUIA for signing keys = FR-7.9-006; registration/password-reset UIA = FR-7.1-006 / auth. (9) Cutover P8.2 (delete) + P3.4 (UIA stage completion): preserve multi-select other-device delete, Password/SSO UIA, success list refresh, failure text, OIDC external path policy via Rust `Client::delete_devices` (GAP-DEVICE-NAMING-DELETE) + UIA AuthData (GAP-UIA) + product UX + IPC — not SC-067 devices list alone, not compile-only blocked, not raw `/_matrix` HTTP, not dual-backend, not list-only, not trust/verification-only, not helper-only.
+- **Limits**: P0.1 method/listener candidates are AST name hits, not type-checked receiver proofs. `deleteMultipleDevices` and `getFallbackAuthUrl` are source-inspected beyond original P0.1 AST samples for linked files. `Devices.tsx` has no direct matrix-js-sdk import (product surface not in 220 P0.1 import ledger). No product single-device `mx.deleteDevice` call site — only `deleteMultipleDevices`. Rust: no separate SC ID for `delete_devices`; primary mapping is GAP-DEVICE-NAMING-DELETE (`Client::delete_devices`) + GAP-UIA; SC-067 `Client::devices` is list (FR-7.9-003) and may support post-delete refresh only — SC-067 alone never closes this FR. Gaps remain compile-shape-only blocked (E3–E5 missing).
+- **UI**: `synara/src/app/features/settings/devices/OtherDevices.tsx`, `synara/src/app/features/settings/devices/Devices.tsx`
+- **UI rationale**: Settings → Devices mounts Current with `DeviceLogoutBtn` (this-session logout) and `OtherDevices(otherDevices, refreshDeviceList)` for other own-account sessions only. `OtherDevices` is the sole multi-select delete + UIA surface; current device is never in the `deleted` Set.
+- **Owners**: `synara/src/app/features/settings/devices/OtherDevices.tsx`, `synara/src/app/components/ActionUIA.tsx`, `synara/src/app/hooks/useDeviceList.ts` (refresh only)
 - **Files**:
-  - `synara/src/app/components/ActionUIA.tsx` symbols=[] retained_m=0 retained_l=0
-  - `synara/src/app/features/settings/devices/DeviceTile.tsx` symbols=[] retained_m=0 retained_l=0
-  - `synara/src/app/features/settings/devices/OtherDevices.tsx` symbols=['getCrypto'] retained_m=1 retained_l=0
-    - method `getCrypto`:L27 — None
-  - `synara/src/app/hooks/useDeviceList.ts` symbols=['getDevices', 'getDeviceId'] retained_m=2 retained_l=2
-    - method `getDevices`:L25 — None
-    - method `getDeviceId`:L66 — None
-    - listener `on:CryptoEvent.DevicesUpdated`:L12 — None
-    - listener `removeListener:CryptoEvent.DevicesUpdated`:L14 — None
+  - `synara/src/app/features/settings/devices/OtherDevices.tsx` symbols=['deleteMultipleDevices','deleted','ActionUIA'] retained_m=1 retained_l=0
+    - method `deleteMultipleDevices`:L78 — bulk delete selected other-device ids with optional AuthDict
+  - `synara/src/app/components/ActionUIA.tsx` symbols=['ActionUIA','ActionUIAFlowsLoader','getUserId','getFallbackAuthUrl'] retained_m=2 retained_l=0
+    - method `getUserId`:L39 — PasswordStage user identifier
+    - method `getFallbackAuthUrl`:L47 — SSOStage fallback auth URL
+  - `synara/src/app/features/settings/devices/DeviceTile.tsx` symbols=['DeviceDeleteBtn'] retained_m=0 retained_l=0
+    - UI DeviceDeleteBtn L233 Delete/Undo chip (OtherDevices options only)
+  - `synara/src/app/hooks/useDeviceList.ts` symbols=['refreshDeviceList'] retained_m=0 retained_l=0
+    - refresh after delete Success (list fetch/split/DevicesUpdated = FR-7.9-003)
 - **Behavior-relevant methods (top-level)**:
-  - `getCrypto` `synara/src/app/features/settings/devices/OtherDevices.tsx`:L27 — None
-  - `getDevices` `synara/src/app/hooks/useDeviceList.ts`:L25 — None
-  - `getDeviceId` `synara/src/app/hooks/useDeviceList.ts`:L66 — None
+  - `deleteMultipleDevices` `synara/src/app/features/settings/devices/OtherDevices.tsx`:L78 — primary delete API
+  - `getUserId` `synara/src/app/components/ActionUIA.tsx`:L39 — Password UIA userId
+  - `getFallbackAuthUrl` `synara/src/app/components/ActionUIA.tsx`:L47 — SSO UIA URL
 - **Behavior-relevant listeners (top-level)**:
-  - `on:CryptoEvent.DevicesUpdated` `synara/src/app/hooks/useDeviceList.ts`:L12 — None
-  - `removeListener:CryptoEvent.DevicesUpdated` `synara/src/app/hooks/useDeviceList.ts`:L14 — None
-- **Unfiltered linked candidates**: methods=6 listeners=2
-- **Rust**: `gap-device-delete-uia` caps=['SC-067'] gaps=['GAP-DEVICE-NAMING-DELETE', 'GAP-UIA']
-  - `SC-067` `blocked` `matrix_sdk::Client::devices` https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/client/mod.rs#L2640
+  - — (delete is request/response; `DevicesUpdated` is FR-7.9-003 list refresh)
+- **Unfiltered linked candidates**: methods=6 listeners=2 (original P0.1; `deleteMultipleDevices`/`getFallbackAuthUrl` source-inspected beyond sample)
+- **Rust**: `device-deletion-uia-compile-shape-only-blocked-for-product` caps=['SC-067'] gaps=['GAP-DEVICE-NAMING-DELETE', 'GAP-UIA']
+  - `SC-067` `blocked` `matrix_sdk::Client::devices` https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/client/mod.rs#L2640 — list only; not delete
+  - Honest: primary delete+UIA is GAP-DEVICE-NAMING-DELETE `Client::delete_devices` + GAP-UIA AuthData. SC-067 is post-delete list refresh analogue only. Do **not** map sole pass to SC-067 alone, list-only (FR-7.9-003), trust-only (FR-7.9-004), or SAS-only (FR-7.9-005).
 - **Tasks**: `P8.2`, `P3.4`
 - **Existing tests**:
   - _(none)_
 - **Planned** `AT-FR-7.9-010-001` task `P8.2` level `integration-e2e`
-  - Scenario: 7.9/FR-7.9-010: exercise 'device deletion and UIA;' via owner `synara/src/app/hooks/useDeviceList.ts` and UI `synara/src/app/features/settings/devices/OtherDevices.tsx`, then confirm Rust/IPC cutover task `P8.2` preserves observable behavior without raw Matrix runtime HTTP.
-  - Test target: None
+  - Scenario: Integration-e2e against disposable Synapse with multi-session account (non-OIDC password session preferred for in-app UIA): (A) SCOPE — Settings → Devices shows Current without multi-delete; Others lists other own-account sessions. (B) MULTI-SELECT — select ≥1 other device via DeviceDeleteBtn; sticky Logout menu shows count; Cancel clears selection. (C) DELETE+UIA — Logout triggers `mx.deleteMultipleDevices`; when server returns 401 with UIA flows, ActionUIA presents Password (and/or SSO) stage; completing password AuthDict retries delete and succeeds. (D) REFRESH — on success, deleted devices leave Others list via `refreshDeviceList` without process restart. (E) FAILURE — non-401 error shows Failed to logout devices text; selection retained for retry. (F) OIDC (if fixture) — with `account_management_uri`, delete control opens external sessionEnd URL rather than in-app UIA. After cutover P8.2+P3.4 same observables via Rust `Client::delete_devices` (GAP-DEVICE-NAMING-DELETE) + UIA AuthData (GAP-UIA) + product UX + IPC; SC-067 alone, compile-only blocked, raw `/_matrix` HTTP, dual-backend, list-only (FR-7.9-003), trust-only (FR-7.9-004), SAS-only (FR-7.9-005), or helper/fixture-only FAIL.
+  - Test target: OtherDevices multi-select + deleteMultipleDevices + useUIAMatrixError + ActionUIA Password/SSO; DeviceDeleteBtn; refreshDeviceList success path; Devices.tsx OtherDevices mount (not Current); post-cutover P8.2+P3.4 GAP-DEVICE-NAMING-DELETE + GAP-UIA + IPC
   - Preconditions:
-    - Desktop app, E2EE-capable session; second device for verification
-    - Recovery key / backup fixtures; isolated multi-account profiles when testing isolation
-    - Linked owner path present in tree: synara/src/app/hooks/useDeviceList.ts
-    - Primary UI/lifecycle surface: synara/src/app/features/settings/devices/OtherDevices.tsx
+    - Disposable Synapse; multi-session account with ≥1 other own-account device_id in getDevices; password-capable session for in-app UIA (or controlled 401 UIA fixture).
+    - Named product surfaces present: OtherDevices.tsx, ActionUIA.tsx, DeviceTile DeviceDeleteBtn, Devices.tsx OtherDevices mount, useDeviceList refreshDeviceList.
+    - Harness can multi-select other devices, submit Logout, complete Password UIA (or inject 401 authData), observe list refresh and failure text; does not bypass product OtherDevices with dual-backend/raw HTTP/helper-only pass criteria.
+    - Do not accept device list load alone (FR-7.9-003), trust/verification alone (FR-7.9-004), SAS alone (FR-7.9-005), recovery signing-key UIA alone (FR-7.9-006), or current-session DeviceLogoutBtn alone as sole pass for this FR.
   - Actions:
-    1. Boot the appropriate harness for level=integration-e2e against disposable Synapse (or iOS notes if any).
-    2. Establish fixtures required by the clause list: device deletion; UIA.
-    3. Open UI/lifecycle surface `synara/src/app/features/settings/devices/OtherDevices.tsx` (or follow ui_entry_points_rationale if no dedicated UI).
-    4. Step 1: perform the product action that implements «device deletion» using current owner `synara/src/app/hooks/useDeviceList.ts`.
-    5. Step 2: perform the product action that implements «UIA» using current owner `synara/src/app/hooks/useDeviceList.ts`.
-    6. Force process restart and/or offline→online transition where lifecycle continuity is implied.
+    1. Boot integration harness against disposable Synapse. Do not use fixture-only mocks that skip product OtherDevices deleteMultipleDevices + ActionUIA, dual-backend selectors, raw HTTP, or helper-only pass criteria.
+    2. SCOPE: Open Settings → Devices. Assert Current has Logout (this session) not multi-delete select; Others lists other sessions.
+    3. MULTI-SELECT: Toggle ≥1 other device Delete; assert Critical selection + sticky menu count; Cancel clears selection.
+    4. DELETE+UIA: Select other device(s); Logout. If 401 UIA, complete Password (or SSO) stage via ActionUIA; assert delete completes.
+    5. REFRESH: Assert removed device_id(s) no longer appear in Others after success without process restart.
+    6. FAILURE: Induce non-401 delete error; assert Failed to logout devices message and ability to retry.
+    7. After cutover P8.2+P3.4, repeat multi-select delete + UIA + refresh via Rust delete_devices + UIA + product UX + IPC. Citing SC-067 alone, compile-only, raw `/_matrix` HTTP, dual-backend/SDK selector, list-only, trust/SAS-only, or helper/fixture-only is a FAIL.
   - Assertions:
-    - Each clause is observable: «device deletion»; «UIA».
-    - State coordination remains through `synara/src/app/hooks/useDeviceList.ts` (or its Rust/IPC successor after cutover), not ad-hoc dual writers.
-    - Behavior-relevant current JS method candidates exercised or replaced: getCrypto, getDevices, getDeviceId (AST candidates; not type-proven receivers).
-    - Behavior-relevant listener candidates observed or replaced: on:CryptoEvent.DevicesUpdated, removeListener:CryptoEvent.DevicesUpdated.
-    - Rust mapping remains conservative: caps=[SC-067] gaps=[GAP-DEVICE-NAMING-DELETE,GAP-UIA]; compile-only blocked states are not treated as runtime pass.
-    - No new production matrix-js-sdk usage and no raw /\_matrix runtime HTTP unless dossier marks that exact behavior typed-sdk-request-required.
+    - SCOPE: only other own-account devices are multi-selectable for delete; current this-session uses DeviceLogoutBtn, not deleted Set.
+    - DELETE: product calls deleteMultipleDevices (or Rust Client::delete_devices successor) with selected device ids.
+    - UIA: 401 with flows surfaces ActionUIA Password and/or SSO; completed AuthDict retries delete successfully.
+    - REFRESH: success clears selection and removes deleted devices from Others via refreshDeviceList (or Rust/IPC list successor) without process restart.
+    - FAILURE: non-401 shows Failed to logout devices (or product-equivalent) with error detail.
+    - COORDINATION: delete state remains through OtherDevices + ActionUIA (or Rust/IPC successors), not ad-hoc dual writers; list ownership remains FR-7.9-003.
+    - CUTOVER: P8.2+P3.4 preserves delete+UIA+refresh observables via GAP-DEVICE-NAMING-DELETE + GAP-UIA + product UX + IPC; SC-067 alone / compile-only never product pass; no raw `/_matrix` runtime HTTP; no dual-backend/SDK selector.
+    - No new production matrix-js-sdk usage and no raw `/_matrix` runtime HTTP unless the dossier marks that exact behavior typed-sdk-request-required.
+    - Device list alone (FR-7.9-003), trust alone (FR-7.9-004), SAS alone (FR-7.9-005), recovery UIA alone (FR-7.9-006), and helper unit tests alone are not accepted as sole pass criteria for this FR.
   - does_not_currently_exist: `True`
 - **Manual**: `MA-FR-7.9-010`
 
@@ -9150,22 +9157,27 @@ Limited rejected-review correction (`p0.2-correct-35-fr-7.9-009-key-backup-state
 
 - Platforms: macOS, Linux
 - Preconditions:
-  - Desktop app, E2EE-capable session; second device for verification
-  - Recovery key / backup fixtures; isolated multi-account profiles when testing isolation
-  - State owner available: synara/src/app/hooks/useDeviceList.ts
-  - UI/lifecycle: synara/src/app/features/settings/devices/OtherDevices.tsx
+  - Disposable Synapse; multi-session account with ≥1 other own-account device; password session preferred for in-app UIA.
+  - State owners available: OtherDevices.tsx (delete multi-select + deleteMultipleDevices), ActionUIA.tsx (Password/SSO UIA).
+  - UI/lifecycle: Settings → Devices (Devices.tsx) mounting OtherDevices for other sessions; DeviceDeleteBtn on Other rows.
+  - Ability to complete interactive password UIA when server challenges delete; observe Others list refresh without process restart.
   - Current status baseline: implemented
 - Actions:
-  1. Launch Synara desktop on the target platform against disposable Synapse; use a clean or known fixture profile as required by «device deletion and UIA;».
-  2. Identify state owner `synara/src/app/hooks/useDeviceList.ts` and open `synara/src/app/features/settings/devices/OtherDevices.tsx`.
-  3. Action 1 — «device deletion»: perform the minimal user/system steps that trigger this clause (use linked files under current_production_files if the entry point is indirect).
-  4. Action 2 — «UIA»: perform the minimal user/system steps that trigger this clause (use linked files under current_production_files if the entry point is indirect).
-  5. Repeat critical path in an encrypted room / with a second device when the clause involves keys or verification.
+  1. Launch Synara desktop on the target platform against disposable Synapse with a multi-session account.
+  2. Open Settings → Devices. Confirm Current shows this-session Logout (DeviceLogoutBtn) and does not offer multi-select delete chips for the current device.
+  3. In Others, select one or more other devices via Delete; confirm sticky Critical Logout menu shows selection count; Cancel clears selection.
+  4. Select other device(s) again and Logout. If prompted for account password (or SSO) UIA, complete the stage via ActionUIA.
+  5. Confirm deleted device(s) disappear from Others without restarting the app; non-401 failure (if induced) shows Failed to logout devices text.
+  6. If the session has OIDC account_management_uri, confirm delete control opens external session dashboard (sessionEnd) rather than in-app multi-delete UIA.
+  7. Confirm device list load alone (FR-7.9-003), trust/verification alone (FR-7.9-004), and SAS alone (FR-7.9-005) are not used as sole pass for this FR.
 - Expected:
-  - All clauses under «device deletion and UIA;» produce the user-visible or system-observable success criteria without error toasts unrelated to intentional negative tests.
-  - Clause 1 «device deletion» is satisfied on macOS, Linux with owner `synara/src/app/hooks/useDeviceList.ts`.
-  - Clause 2 «UIA» is satisfied on macOS, Linux with owner `synara/src/app/hooks/useDeviceList.ts`.
+  - Only other own-account devices can be multi-selected for delete; current this-session uses DeviceLogoutBtn.
+  - Logout of selected devices completes via deleteMultipleDevices after any required Password/SSO UIA.
+  - Successful delete refreshes Others (refreshDeviceList) so removed sessions are gone without process restart.
+  - Non-401 failures surface Failed to logout devices (or product-equivalent) with error detail.
   - No unexpected raw /\_matrix traffic from the app renderer for this flow on the post-cutover build.
+  - Device list alone (FR-7.9-003), trust alone (FR-7.9-004), SAS alone (FR-7.9-005), and recovery UIA alone (FR-7.9-006) do not close this FR.
+  - Clauses multi-select delete, UIA re-auth, success refresh, failure text, and cutover observables satisfied on macOS and Linux via OtherDevices + ActionUIA (or Rust/IPC successors under P8.2+P3.4).
 
 ### `MA-FR-7.9-011` (FR-7.9-011)
 
@@ -11385,22 +11397,26 @@ Limited rejected-review correction (`p0.2-correct-35-fr-7.9-009-key-backup-state
 
 ### `AT-FR-7.9-010-001`
 
-- 7.9/FR-7.9-010: exercise 'device deletion and UIA;' via owner `synara/src/app/hooks/useDeviceList.ts` and UI `synara/src/app/features/settings/devices/OtherDevices.tsx`, then confirm Rust/IPC cutover task `P8.2` preserves observable behavior without raw Matrix runtime HTTP.
-- target: None
+- Integration-e2e against disposable Synapse with multi-session account (non-OIDC password session preferred for in-app UIA): (A) SCOPE — Settings → Devices shows Current without multi-delete; Others lists other own-account sessions. (B) MULTI-SELECT — select ≥1 other device via DeviceDeleteBtn; sticky Logout menu shows count; Cancel clears selection. (C) DELETE+UIA — Logout triggers mx.deleteMultipleDevices; when server returns 401 with UIA flows, ActionUIA presents Password (and/or SSO) stage; completing password AuthDict retries delete and succeeds. (D) REFRESH — on success, deleted devices leave Others list via refreshDeviceList without process restart. (E) FAILURE — non-401 error shows Failed to logout devices text; selection retained for retry. (F) OIDC (if fixture) — with account_management_uri, delete control opens external sessionEnd URL rather than in-app UIA. After cutover P8.2+P3.4 same observables via Rust Client::delete_devices (GAP-DEVICE-NAMING-DELETE) + UIA AuthData (GAP-UIA) + product UX + IPC; SC-067 alone, compile-only blocked, raw /\_matrix HTTP, dual-backend, list-only (FR-7.9-003), trust-only (FR-7.9-004), SAS-only (FR-7.9-005), or helper/fixture-only FAIL.
+- target: OtherDevices multi-select + deleteMultipleDevices + useUIAMatrixError + ActionUIA Password/SSO; DeviceDeleteBtn; refreshDeviceList success path; Devices.tsx OtherDevices mount (not Current); post-cutover P8.2+P3.4 GAP-DEVICE-NAMING-DELETE + GAP-UIA + IPC
 - actions:
-  1. Boot the appropriate harness for level=integration-e2e against disposable Synapse (or iOS notes if any).
-  2. Establish fixtures required by the clause list: device deletion; UIA.
-  3. Open UI/lifecycle surface `synara/src/app/features/settings/devices/OtherDevices.tsx` (or follow ui_entry_points_rationale if no dedicated UI).
-  4. Step 1: perform the product action that implements «device deletion» using current owner `synara/src/app/hooks/useDeviceList.ts`.
-  5. Step 2: perform the product action that implements «UIA» using current owner `synara/src/app/hooks/useDeviceList.ts`.
-  6. Force process restart and/or offline→online transition where lifecycle continuity is implied.
+  1. Boot integration harness against disposable Synapse. Do not use fixture-only mocks that skip product OtherDevices deleteMultipleDevices + ActionUIA, dual-backend selectors, raw HTTP, or helper-only pass criteria.
+  2. SCOPE: Open Settings → Devices. Assert Current has Logout (this session) not multi-delete select; Others lists other sessions.
+  3. MULTI-SELECT: Toggle ≥1 other device Delete; assert Critical selection + sticky menu count; Cancel clears selection.
+  4. DELETE+UIA: Select other device(s); Logout. If 401 UIA, complete Password (or SSO) stage via ActionUIA; assert delete completes.
+  5. REFRESH: Assert removed device_id(s) no longer appear in Others after success without process restart.
+  6. FAILURE: Induce non-401 delete error; assert Failed to logout devices message and ability to retry.
+  7. After cutover P8.2+P3.4, repeat multi-select delete + UIA + refresh via Rust delete_devices + UIA + product UX + IPC. Citing SC-067 alone, compile-only, raw /\_matrix HTTP, dual-backend/SDK selector, list-only, trust/SAS-only, or helper/fixture-only is a FAIL.
 - assertions:
-  - Each clause is observable: «device deletion»; «UIA».
-  - State coordination remains through `synara/src/app/hooks/useDeviceList.ts` (or its Rust/IPC successor after cutover), not ad-hoc dual writers.
-  - Behavior-relevant current JS method candidates exercised or replaced: getCrypto, getDevices, getDeviceId (AST candidates; not type-proven receivers).
-  - Behavior-relevant listener candidates observed or replaced: on:CryptoEvent.DevicesUpdated, removeListener:CryptoEvent.DevicesUpdated.
-  - Rust mapping remains conservative: caps=[SC-067] gaps=[GAP-DEVICE-NAMING-DELETE,GAP-UIA]; compile-only blocked states are not treated as runtime pass.
-  - No new production matrix-js-sdk usage and no raw /\_matrix runtime HTTP unless dossier marks that exact behavior typed-sdk-request-required.
+  - SCOPE: only other own-account devices are multi-selectable for delete; current this-session uses DeviceLogoutBtn, not deleted Set.
+  - DELETE: product calls deleteMultipleDevices (or Rust Client::delete_devices successor) with selected device ids.
+  - UIA: 401 with flows surfaces ActionUIA Password and/or SSO; completed AuthDict retries delete successfully.
+  - REFRESH: success clears selection and removes deleted devices from Others via refreshDeviceList (or Rust/IPC list successor) without process restart.
+  - FAILURE: non-401 shows Failed to logout devices (or product-equivalent) with error detail.
+  - COORDINATION: delete state remains through OtherDevices + ActionUIA (or Rust/IPC successors), not ad-hoc dual writers; list ownership remains FR-7.9-003.
+  - CUTOVER: P8.2+P3.4 preserves delete+UIA+refresh observables via GAP-DEVICE-NAMING-DELETE + GAP-UIA + product UX + IPC; SC-067 alone / compile-only never product pass; no raw /\_matrix runtime HTTP; no dual-backend/SDK selector.
+  - No new production matrix-js-sdk usage and no raw /\_matrix runtime HTTP unless the dossier marks that exact behavior typed-sdk-request-required.
+  - Device list alone (FR-7.9-003), trust alone (FR-7.9-004), SAS alone (FR-7.9-005), recovery UIA alone (FR-7.9-006), and helper unit tests alone are not accepted as sole pass criteria for this FR.
 
 ### `AT-FR-7.9-011-001`
 
