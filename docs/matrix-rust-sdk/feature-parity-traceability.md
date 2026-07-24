@@ -4,7 +4,7 @@
 
 ## Correction pass status
 
-Limited rejected-review correction (`p0.2-correct-42-fr-7.10-003-search-filters`) for **FR-7.10-003** only: replace shallow notes (via 3 production files / empty line_refs on SearchFilters/MessageSearch / generic AT-MA) with concrete **sender, room, date, and content filters used by the UI** evidence — TWO LAYERS: server `filter.rooms`/`filter.senders`/`search_term`/`order_by` via `useMessageSearch`/`mx.search`; client type + from/to via `filterMessageSearchGroups`; SearchFilters multi-room/type/sender/date/OrderButton UI; MessageSearch URL handlers; `messageSearchFilters` helpers; EXCLUDE Global (FR-7.10-002), room-scoped default (FR-7.10-001), Open (FR-7.10-004), user/directory (FR-7.10-005), SC-072 local (FR-7.10-006), cancel/stale (FR-7.10-007); honest rust_target `typed-sdk-request-required-server-search` (SC-071 only) + product type/date preservation; status remains `implemented`. JSON and Markdown synchronized. Accepted corrections for **FR-7.8-001 through FR-7.8-009**, **FR-7.9-001..013** (**FR-7.9-011** remains partial), **FR-7.10-001**, and **FR-7.10-002** preserved. Prior corrections and accepted **7.1–7.3** preserved. **P0.2 is not complete.**
+Limited rejected-review correction (`p0.2-correct-43-fr-7.10-004-event-context-nav`) for **FR-7.10-004** only: replace shallow notes (via 5 production files / null notes / wrong primary methods `search` L105 + `getUserId` L318 / generic AT-MA / JumpToTime+useMessageSearch without Open evidence) with concrete **event-context navigation from results** evidence — Open Chip `data-event-id={mainEventId}` + `handleOpenClick` → `onOpen(roomId, eventId)`; MessageSearch `onOpen={navigateRoom}`; `useRoomNavigate.navigateRoom` embeds `eventId` in home/direct/space room paths; `getRoomTimelineOpenMode(focusedEventId)` → `'focused-event'`; honesty that Matrix `/search` `event_context` before/after 0 is NOT this FR (adjacency of FR-7.10-001); EXCLUDE JumpToTime alone, `mx.search` alone, room-scoped/global/filters/directory/local/cancel; honest rust_target `gap-event-context` SC-032/SC-033 + GAP-EVENT-CONTEXT; status remains `implemented`. JSON and Markdown synchronized. Accepted corrections for **FR-7.8-001 through FR-7.8-009**, **FR-7.9-001..013** (**FR-7.9-011** remains partial), **FR-7.10-001**, **FR-7.10-002**, and **FR-7.10-003** preserved. Prior corrections and accepted **7.1–7.3** preserved. **P0.2 is not complete.**
 
 ## Provenance
 
@@ -14,7 +14,7 @@ Limited rejected-review correction (`p0.2-correct-42-fr-7.10-003-search-filters`
 
 ## Summary
 
-- FR 119 · files 220 · AT 119 · MA 119 · existing refs 50
+- FR 119 · files 220 · AT 119 · MA 119 · existing refs 51
 
 ### Status distribution
 
@@ -6724,48 +6724,54 @@ Limited rejected-review correction (`p0.2-correct-42-fr-7.10-003-search-filters`
 - **Text**: event-context navigation from results;
 - **Lines**: 444–444
 - **Status**: `implemented`
-- **Behavior**: Current desktop implements this via 5 production matrix-js-sdk-related file(s); status=implemented.
-- **UI**: `synara/src/app/features/message-search/SearchResultGroup.tsx`
-- **Owners**: `synara/src/app/utils/timelineOpening.ts`
+- **Behavior**: Current desktop implements event-context navigation from Message Search results: Open Chip → onOpen(roomId, eventId) → navigateRoom embeds eventId in room route → RoomTimeline open mode 'focused-event' when route eventId is present. Replace results open mainEventId (original). Not server /search event_context payloads (before/after 0). status=implemented.
+- **Notes**: Evidence (conservative): (1) PRODUCT MEANING — this FR is Open from a search result into the room timeline focused on that event. It is NOT the Matrix /search room_events.event_context request fields (useMessageSearch sets before_limit=0 after_limit=0 include_profile=false — server context payloads are unused; that body detail is FR-7.10-001 adjacency). (2) OPEN CHIP: SearchResultGroup.tsx mainEventId L232–234 = RelationType.Replace ? relation.event_id : event.event_id; Open Chip L297–304 data-event-id={mainEventId} onClick={handleOpenClick}; handleOpenClick L192–196 reads data-event-id → onOpen(room.roomId, eventId). Reply row L307–316 also uses handleOpenClick (Reply.tsx sets data-event-id on reply/thread-root targets). (3) WIRING: MessageSearch.tsx L70 useRoomNavigate(); L345 SearchResultGroup onOpen={navigateRoom}. (4) NAVIGATE WITH EVENT ID: useRoomNavigate.ts navigateRoom(roomId, eventId?) L36–67 builds path via getSpaceRoomPath / getDirectRoomPath / getHomeRoomPath with eventId; pathUtils getHomeRoomPath L96–102, getDirectRoomPath L119–126, getSpaceRoomPath L147–159 encode eventId into route params. RoomProviders (home/direct/space) pass useParams().eventId into RoomTimeline. (5) FOCUSED-EVENT OPEN: timelineOpening.ts getRoomTimelineOpenMode L510–523: if focusedEventId return 'focused-event' (priority over unread-window/saved-viewport/live-end). RoomTimeline.tsx L716–720 roomOpenMode = getRoomTimelineOpenMode({ focusedEventId: eventId, ... }) — consumer of route eventId. Unit: timelineOpening.test.ts open-mode prefers focused-event when focusedEventId set — unit evidence not integration pass alone. (6) EXCLUDE: room-scoped search+pagination FR-7.10-001; Global FR-7.10-002; sender/room/date/type filters FR-7.10-003; user/directory Search.tsx FR-7.10-005; SC-072 local FR-7.10-006; cancel/stale FR-7.10-007; useMessageSearch.mx.search alone; SearchInput alone; JumpToTime alone (adjacent jump-by-time UX, not on search Open path); getUserId alone; unread/live-tail open alone; SC-032/033 compile-only. (7) Cutover P6.8 (+P4.8/P5.4): preserve Open → room timeline focused on event_id via Rust timeline focus (SC-032 TimelineBuilder::with_focus / SC-033 TimelineFocus) + product route DTO / navigateRoom successor — not raw /_matrix HTTP, dual-backend, SDK selector, invented high-level search-context APIs. Product does not require server search event_context payloads (before/after 0). GAP-EVENT-CONTEXT residual honesty (Room::event_with_context / timeline focus integration) remains cutover work, not a claim that current product fails Open. SC-032/033 alone / compile-only / raw HTTP / search-only / filter-only / JumpToTime-only / helper-unit-only FAIL.
+- **Limits**: P0.1 method candidates are AST name hits unless marked source-inspected. Architecture honesty: event-context navigation here is product Open → navigateRoom(eventId) → focused-event open mode; product intentionally does not use server /search event_context before/after (0/0). Replace Open targets original event id (mainEventId). JumpToTime is not on this path. No E2E AT yet. Unit timelineOpening.test.ts covers open-mode priority only. SC-032/SC-033 are compile-probed timeline focus APIs (blocked E3–E5); do not treat compile-only as product pass. GAP-EVENT-CONTEXT residual for Rust timeline focus integration at cutover. Do not invent high-level search-context APIs. Do not substitute SC-071 search alone or SC-072 local search for Open.
+- **UI**: `synara/src/app/features/message-search/SearchResultGroup.tsx`, `synara/src/app/features/message-search/MessageSearch.tsx`
+- **UI rationale**: SearchResultGroup is the Open chrome on Message Search results: Open Chip data-event-id={mainEventId} + handleOpenClick → onOpen(roomId, eventId); Replace events open the original event id. MessageSearch wires onOpen={navigateRoom} from useRoomNavigate. navigateRoom embeds eventId into home/direct/space room paths; RoomProviders pass route eventId into RoomTimeline; getRoomTimelineOpenMode(focusedEventId) returns 'focused-event'. NOT the Matrix /search event_context request fields (product sets before_limit/after_limit=0 in useMessageSearch — FR-7.10-001 adjacency). JumpToTime is jump-by-time UX and is NOT on the search-result Open path. features/search/Search.tsx is user/directory (FR-7.10-005).
+- **Owners**: `synara/src/app/features/message-search/SearchResultGroup.tsx`, `synara/src/app/hooks/useRoomNavigate.ts`, `synara/src/app/utils/timelineOpening.ts`
 - **Files**:
-  - `synara/src/app/features/message-search/MessageSearch.tsx` symbols=[] retained_m=0 retained_l=0
-  - `synara/src/app/features/message-search/SearchResultGroup.tsx` symbols=[] retained_m=0 retained_l=0
-  - `synara/src/app/features/message-search/useMessageSearch.ts` symbols=['search'] retained_m=1 retained_l=0
-    - method `search`:L105 — None
-  - `synara/src/app/features/room/jump-to-time/JumpToTime.tsx` symbols=[] retained_m=0 retained_l=0
-  - `synara/src/app/utils/timelineOpening.ts` symbols=['getUserId'] retained_m=1 retained_l=0
-    - method `getUserId`:L318 — None
+  - `synara/src/app/features/message-search/SearchResultGroup.tsx` symbols=['handleOpenClick', 'mainEventId', 'Open Chip data-event-id', 'onOpen prop'] retained_m=0 retained_l=0
+  - `synara/src/app/features/message-search/MessageSearch.tsx` symbols=['useRoomNavigate navigateRoom', 'onOpen={navigateRoom}'] retained_m=0 retained_l=0
+  - `synara/src/app/hooks/useRoomNavigate.ts` symbols=['navigateRoom'] retained_m=0 retained_l=0
+  - `synara/src/app/utils/timelineOpening.ts` symbols=['getRoomTimelineOpenMode', "RoomTimelineOpenMode focused-event"] retained_m=0 retained_l=0
 - **Behavior-relevant methods (top-level)**:
-  - `search` `synara/src/app/features/message-search/useMessageSearch.ts`:L105 — None
-  - `getUserId` `synara/src/app/utils/timelineOpening.ts`:L318 — None
+  - — (product helpers: handleOpenClick / navigateRoom / getRoomTimelineOpenMode; no matrix-js-sdk search/getUserId as primary Open evidence)
 - **Behavior-relevant listeners (top-level)**:
   - —
-- **Unfiltered linked candidates**: methods=7 listeners=0
+- **Unfiltered linked candidates**: methods=3 listeners=0
 - **Rust**: `gap-event-context` caps=['SC-032', 'SC-033'] gaps=['GAP-EVENT-CONTEXT']
   - `SC-032` `blocked` `matrix_sdk_ui::timeline::TimelineBuilder::with_focus` https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk-ui/src/timeline/builder.rs#L69
   - `SC-033` `blocked` `matrix_sdk_ui::timeline::TimelineFocus` https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk-ui/src/timeline/mod.rs#L127
+  - Honest: gap-event-context with SC-032 (TimelineBuilder::with_focus) + SC-033 (TimelineFocus) + GAP-EVENT-CONTEXT residual. Cutover Open must preserve navigateRoom(eventId) → focused timeline open via Rust timeline focus APIs + product route DTO/IPC (P6.8 + P4.8/P5.4) — not raw /_matrix HTTP, not dual-backend/SDK selector, not invented high-level search-context APIs. Product does NOT use server /search event_context before/after (0/0); do not require SC-071 search-context fields for this FR. SC-032/033 alone / compile-only / raw HTTP / search-only (FR-7.10-001) / filter-only (FR-7.10-003) / JumpToTime-only / helper-unit-only FAIL.
 - **Tasks**: `P6.8`, `P5.4`, `P4.8`
+- **Blockers**:
+  - (medium) gap-event-context-timeline-focus: FR-7.10-004 cutover requires Rust timeline focus (SC-032/SC-033) + product route DTO for Open → focused event; GAP-EVENT-CONTEXT residual; SC alone / compile-only not product pass; product does not use /search event_context before/after (0/0).
 - **Existing tests**:
-  - _(none)_
+  - `synara/src/app/utils/__tests__/timelineOpening.test.ts` — Unit coverage for getRoomTimelineOpenMode: prefers focused-event when focusedEventId set — focused-open helper evidence only; not integration pass alone for Open from search.
 - **Planned** `AT-FR-7.10-004-001` task `P6.8` level `integration`
-  - Scenario: 7.10/FR-7.10-004: exercise 'event-context navigation from results;' via owner `synara/src/app/utils/timelineOpening.ts` and UI `synara/src/app/features/message-search/SearchResultGroup.tsx`, then confirm Rust/IPC cutover task `P6.8` preserves observable behavior without raw Matrix runtime HTTP.
-  - Test target: None
+  - Scenario: Integration against disposable Synapse: (A) OPEN ROUTE — from Message Search results, click Open on a result; assert navigateRoom path carries eventId (home/direct/space room route with event param) via SearchResultGroup handleOpenClick → onOpen(roomId, eventId). (B) FOCUSED-EVENT — assert room opens in focused-event mode (getRoomTimelineOpenMode focusedEventId → 'focused-event') and timeline focuses/scrolls/highlights that event (product equivalent). (C) REPLACE — for an m.replace result, Open uses mainEventId (original/relation.event_id) not only the replace event id. (D) DISTINCTIONS — room-scoped search+pagination alone (FR-7.10-001), Global alone (FR-7.10-002), filter-only (FR-7.10-003), user/directory Search alone (FR-7.10-005), local SC-072 (FR-7.10-006), cancel/stale (FR-7.10-007), JumpToTime alone, mx.search alone do not satisfy this FR. After cutover P6.8 (+P4.8/P5.4), same observables via Rust timeline focus (SC-032/SC-033) + product route DTO/IPC — not raw /_matrix HTTP, not dual-backend/SDK selector, not invented high-level search-context APIs. SC-032/033 alone, compile-only, raw HTTP, search-only, filter-only, JumpToTime-only, helper-unit-only FAIL. GAP-EVENT-CONTEXT residual honesty: product does not use server /search event_context before/after (0/0).
+  - Test target: SearchResultGroup Open Chip/handleOpenClick/mainEventId; MessageSearch onOpen={navigateRoom}; useRoomNavigate.navigateRoom(eventId); timelineOpening getRoomTimelineOpenMode focused-event; post-cutover SC-032/SC-033 + product route DTO (P6.8/P4.8/P5.4)
   - Preconditions:
-    - Desktop app; room with searchable indexed history on Synapse
-    - Public room directory populated; second user for user search
-    - Linked owner path present in tree: synara/src/app/utils/timelineOpening.ts
-    - Primary UI/lifecycle surface: synara/src/app/features/message-search/SearchResultGroup.tsx
+    - Disposable Synapse with searchable room history containing at least one ordinary message and, where feasible, one edited (m.replace) message.
+    - Named owners present: SearchResultGroup.tsx, MessageSearch.tsx, useRoomNavigate.ts, timelineOpening.ts.
+    - Harness can observe route navigation with eventId and room open mode focused-event (or timeline scroll/highlight to event).
+    - Do not accept room-scoped-only (FR-7.10-001), global-only (FR-7.10-002), filter-only (FR-7.10-003), user/directory-only (FR-7.10-005), cancel/stale-only (FR-7.10-007), JumpToTime-only, mx.search-only, or unit-only timelineOpening.test.ts as sole pass for this FR.
   - Actions:
-    1. Boot the appropriate harness for level=integration against disposable Synapse (or iOS notes if any).
-    2. Establish fixtures required by the clause list: event-context navigation from results.
-    3. Open UI/lifecycle surface `synara/src/app/features/message-search/SearchResultGroup.tsx` (or follow ui_entry_points_rationale if no dedicated UI).
-    4. Step 1: perform the product action that implements «event-context navigation from results» using current owner `synara/src/app/utils/timelineOpening.ts`.
+    1. Boot integration harness against disposable Synapse. Do not use fixture-only mocks that skip product MessageSearch Open path, dual-backend selectors, raw HTTP, or helper-only pass criteria.
+    2. OPEN: open Message Search; enter a term that returns results; click Open on a result Chip; assert navigation to room route includes eventId and Open used data-event-id from the Chip.
+    3. FOCUSED-EVENT: assert room timeline opens with focusedEventId set / open mode focused-event (or product equivalent scroll/highlight to that event).
+    4. REPLACE (when fixture available): open an edited result; assert mainEventId (original) is used for Open, not only the replace event id.
+    5. After cutover P6.8 (+P4.8/P5.4), repeat Open → focused timeline via Rust timeline focus (SC-032/SC-033) under Rust ownership + product route DTO/IPC. Citing SC-032/033 alone, compile-only blocked, raw /_matrix HTTP, dual-backend/SDK selector, invented high-level search-context API, search-only, filter-only, JumpToTime-only, or helper-unit-only is a FAIL.
   - Assertions:
-    - Each clause is observable: «event-context navigation from results».
-    - State coordination remains through `synara/src/app/utils/timelineOpening.ts` (or its Rust/IPC successor after cutover), not ad-hoc dual writers.
-    - Behavior-relevant current JS method candidates exercised or replaced: search, getUserId (AST candidates; not type-proven receivers).
-    - Rust mapping remains conservative: caps=[SC-032,SC-033] gaps=[GAP-EVENT-CONTEXT]; compile-only blocked states are not treated as runtime pass.
-    - No new production matrix-js-sdk usage and no raw /\_matrix runtime HTTP unless dossier marks that exact behavior typed-sdk-request-required.
+    - OPEN ROUTE: Open Chip → handleOpenClick → onOpen(roomId, eventId); navigateRoom embeds eventId in home/direct/space room path.
+    - FOCUSED-EVENT: room open mode is focused-event (or product equivalent focus/scroll/highlight) for that eventId — not unread/live-tail alone.
+    - REPLACE: mainEventId prefers RelationType.Replace original event_id when applicable.
+    - DISTINCTIONS: this FR ≠ FR-7.10-001 search/pagination; ≠ FR-7.10-002 Global; ≠ FR-7.10-003 filters; ≠ FR-7.10-005 user/directory; ≠ FR-7.10-006 local search; ≠ FR-7.10-007 cancel/stale; ≠ JumpToTime alone; ≠ /search event_context before/after fields.
+    - COORDINATION: Open through SearchResultGroup + MessageSearch onOpen + useRoomNavigate + timelineOpening focused-event (or Rust/IPC + product successors), not ad-hoc dual writers.
+    - CUTOVER: P6.8 (+P4.8/P5.4) preserves Open → room timeline focused on event_id via SC-032/SC-033 timeline focus + product route DTO; SC alone / compile-only never product pass; no raw /_matrix runtime HTTP; no dual-backend/SDK selector; no invented high-level search-context APIs; GAP-EVENT-CONTEXT residual honesty (product before/after 0).
+    - No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless the dossier marks that exact behavior typed-sdk-request-required.
+    - Search-only, filter-only, global-only, directory-only, cancel/stale-only, JumpToTime-only, and timelineOpening unit tests alone are not accepted as sole pass criteria for this FR.
   - does_not_currently_exist: `True`
 - **Manual**: `MA-FR-7.10-004`
 
@@ -9422,20 +9428,27 @@ Limited rejected-review correction (`p0.2-correct-42-fr-7.10-003-search-filters`
 
 - Platforms: macOS, Linux
 - Preconditions:
-  - Desktop app; room with searchable indexed history on Synapse
-  - Public room directory populated; second user for user search
-  - State owner available: synara/src/app/utils/timelineOpening.ts
-  - UI/lifecycle: synara/src/app/features/message-search/SearchResultGroup.tsx
-  - Current status baseline: implemented
+  - Desktop app against disposable Synapse; searchable room history with at least one message result; optionally an edited (m.replace) message.
+  - State owners available: SearchResultGroup.tsx Open, useRoomNavigate.navigateRoom, timelineOpening getRoomTimelineOpenMode
+  - UI/lifecycle: MessageSearch.tsx + SearchResultGroup.tsx Open Chip
+  - Current status baseline: implemented (Open → navigateRoom(eventId) → focused-event)
 - Actions:
-  1. Launch Synara desktop on the target platform against disposable Synapse; use a clean or known fixture profile as required by «event-context navigation from results;».
-  2. Identify state owner `synara/src/app/utils/timelineOpening.ts` and open `synara/src/app/features/message-search/SearchResultGroup.tsx`.
-  3. Action 1 — «event-context navigation from results»: perform the minimal user/system steps that trigger this clause (use linked files under current_production_files if the entry point is indirect).
-  4. Run search, change filters, paginate, click a result to open event context, cancel a slow query and ensure UI does not apply stale results.
+  1. Launch Synara desktop on the target platform against disposable Synapse; open Message Search (Home/Space or room search panel).
+  2. OPEN: enter a known term; click Open on a search result Chip; confirm navigation enters the room with that event focused (route carries eventId; timeline focuses/scrolls/highlights the event).
+  3. REPLACE (if available): Open an edited result; confirm focus targets the original event (mainEventId), not only the replace event.
+  4. DISTINCTIONS (negative for this FR alone): do not treat room-scoped search+pagination alone (FR-7.10-001), Global chip alone (FR-7.10-002), filter-only sender/date/type (FR-7.10-003), user/directory Search modal (FR-7.10-005), cancel/stale alone (FR-7.10-007), or JumpToTime alone as satisfying event-context navigation from results.
+  5. After cutover P6.8 (+P4.8/P5.4): repeat Open → focused timeline; confirm Rust timeline focus (SC-032/SC-033) + product route DTO path (not raw /_matrix from the renderer, not dual-backend/SDK selector, not invented high-level search-context APIs). Product does not require server /search event_context before/after (0/0).
 - Expected:
-  - All clauses under «event-context navigation from results;» produce the user-visible or system-observable success criteria without error toasts unrelated to intentional negative tests.
-  - Clause 1 «event-context navigation from results» is satisfied on macOS, Linux with owner `synara/src/app/utils/timelineOpening.ts`.
-  - No unexpected raw /\_matrix traffic from the app renderer for this flow on the post-cutover build.
+  - OPEN: Open Chip navigates to room with eventId; timeline opens focused on that event (focused-event mode or product equivalent).
+  - REPLACE: edited results Open to mainEventId (original) when RelationType.Replace.
+  - DISTINCTIONS: search/pagination/filters/global/directory/cancel/JumpToTime alone do not pass this FR.
+  - No unexpected raw /_matrix traffic from the app renderer for this flow on the post-cutover build; no dual-backend/SDK selector.
+  - SC-032/SC-033 alone / compile-only / raw HTTP / search-only / filter-only / JumpToTime-only / helper-unit-only do not pass this FR.
+- Clause breakdown:
+  - Open Chip → onOpen(roomId, eventId) → navigateRoom route with eventId
+  - timeline focused-event open mode on that event
+  - Replace mainEventId prefers original
+  - cutover P6.8 (+P4.8/P5.4) SC-032/SC-033 + product route DTO; SC-only/raw HTTP/helper-only FAIL
 
 ### `MA-FR-7.10-005` (FR-7.10-005)
 
@@ -11670,19 +11683,23 @@ Limited rejected-review correction (`p0.2-correct-42-fr-7.10-003-search-filters`
 
 ### `AT-FR-7.10-004-001`
 
-- 7.10/FR-7.10-004: exercise 'event-context navigation from results;' via owner `synara/src/app/utils/timelineOpening.ts` and UI `synara/src/app/features/message-search/SearchResultGroup.tsx`, then confirm Rust/IPC cutover task `P6.8` preserves observable behavior without raw Matrix runtime HTTP.
-- target: None
+- Integration against disposable Synapse: (A) OPEN ROUTE — from Message Search results, click Open on a result; assert navigateRoom path carries eventId (home/direct/space room route with event param) via SearchResultGroup handleOpenClick → onOpen(roomId, eventId). (B) FOCUSED-EVENT — assert room opens in focused-event mode (getRoomTimelineOpenMode focusedEventId → 'focused-event') and timeline focuses/scrolls/highlights that event (product equivalent). (C) REPLACE — for an m.replace result, Open uses mainEventId (original/relation.event_id) not only the replace event id. (D) DISTINCTIONS — room-scoped search+pagination alone (FR-7.10-001), Global alone (FR-7.10-002), filter-only (FR-7.10-003), user/directory Search alone (FR-7.10-005), local SC-072 (FR-7.10-006), cancel/stale (FR-7.10-007), JumpToTime alone, mx.search alone do not satisfy this FR. After cutover P6.8 (+P4.8/P5.4), same observables via Rust timeline focus (SC-032/SC-033) + product route DTO/IPC — not raw /_matrix HTTP, not dual-backend/SDK selector, not invented high-level search-context APIs. SC-032/033 alone, compile-only, raw HTTP, search-only, filter-only, JumpToTime-only, helper-unit-only FAIL. GAP-EVENT-CONTEXT residual honesty: product does not use server /search event_context before/after (0/0).
+- target: SearchResultGroup Open Chip/handleOpenClick/mainEventId; MessageSearch onOpen={navigateRoom}; useRoomNavigate.navigateRoom(eventId); timelineOpening getRoomTimelineOpenMode focused-event; post-cutover SC-032/SC-033 + product route DTO (P6.8/P4.8/P5.4)
 - actions:
-  1. Boot the appropriate harness for level=integration against disposable Synapse (or iOS notes if any).
-  2. Establish fixtures required by the clause list: event-context navigation from results.
-  3. Open UI/lifecycle surface `synara/src/app/features/message-search/SearchResultGroup.tsx` (or follow ui_entry_points_rationale if no dedicated UI).
-  4. Step 1: perform the product action that implements «event-context navigation from results» using current owner `synara/src/app/utils/timelineOpening.ts`.
+  1. Boot integration harness against disposable Synapse. Do not use fixture-only mocks that skip product MessageSearch Open path, dual-backend selectors, raw HTTP, or helper-only pass criteria.
+  2. OPEN: open Message Search; enter a term that returns results; click Open on a result Chip; assert navigation to room route includes eventId and Open used data-event-id from the Chip.
+  3. FOCUSED-EVENT: assert room timeline opens with focusedEventId set / open mode focused-event (or product equivalent scroll/highlight to that event).
+  4. REPLACE (when fixture available): open an edited result; assert mainEventId (original) is used for Open, not only the replace event id.
+  5. After cutover P6.8 (+P4.8/P5.4), repeat Open → focused timeline via Rust timeline focus (SC-032/SC-033) under Rust ownership + product route DTO/IPC. Citing SC-032/033 alone, compile-only blocked, raw /_matrix HTTP, dual-backend/SDK selector, invented high-level search-context API, search-only, filter-only, JumpToTime-only, or helper-unit-only is a FAIL.
 - assertions:
-  - Each clause is observable: «event-context navigation from results».
-  - State coordination remains through `synara/src/app/utils/timelineOpening.ts` (or its Rust/IPC successor after cutover), not ad-hoc dual writers.
-  - Behavior-relevant current JS method candidates exercised or replaced: search, getUserId (AST candidates; not type-proven receivers).
-  - Rust mapping remains conservative: caps=[SC-032,SC-033] gaps=[GAP-EVENT-CONTEXT]; compile-only blocked states are not treated as runtime pass.
-  - No new production matrix-js-sdk usage and no raw /\_matrix runtime HTTP unless dossier marks that exact behavior typed-sdk-request-required.
+  - OPEN ROUTE: Open Chip → handleOpenClick → onOpen(roomId, eventId); navigateRoom embeds eventId in home/direct/space room path.
+  - FOCUSED-EVENT: room open mode is focused-event (or product equivalent focus/scroll/highlight) for that eventId — not unread/live-tail alone.
+  - REPLACE: mainEventId prefers RelationType.Replace original event_id when applicable.
+  - DISTINCTIONS: this FR ≠ FR-7.10-001 search/pagination; ≠ FR-7.10-002 Global; ≠ FR-7.10-003 filters; ≠ FR-7.10-005 user/directory; ≠ FR-7.10-006 local search; ≠ FR-7.10-007 cancel/stale; ≠ JumpToTime alone; ≠ /search event_context before/after fields.
+  - COORDINATION: Open through SearchResultGroup + MessageSearch onOpen + useRoomNavigate + timelineOpening focused-event (or Rust/IPC + product successors), not ad-hoc dual writers.
+  - CUTOVER: P6.8 (+P4.8/P5.4) preserves Open → room timeline focused on event_id via SC-032/SC-033 timeline focus + product route DTO; SC alone / compile-only never product pass; no raw /_matrix runtime HTTP; no dual-backend/SDK selector; no invented high-level search-context APIs; GAP-EVENT-CONTEXT residual honesty (product before/after 0).
+  - No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless the dossier marks that exact behavior typed-sdk-request-required.
+  - Search-only, filter-only, global-only, directory-only, cancel/stale-only, JumpToTime-only, and timelineOpening unit tests alone are not accepted as sole pass criteria for this FR.
 
 ### `AT-FR-7.10-005-001`
 
@@ -11950,7 +11967,8 @@ Limited rejected-review correction (`p0.2-correct-42-fr-7.10-003-search-filters`
 - `ET-FR-7.9-012-01` `FR-7.9-012` `synara/src/app/state/__tests__/initMatrix.test.ts` — Unit/mocked continuity preserve coverage: restored sessions must not clear stores; match/mismatch/query-incomplete; canRetry only for server-query-incomplete; post-start stop without wipe. Not E2E crash/upgrade AT.
 - `ET-FR-7.9-013-01` `FR-7.9-013` `synara/src/app/state/__tests__/initMatrix.test.ts` — Unit/mocked store-safety detection + non-destructive path: assertCryptoStoreContinuity mismatch/query-incomplete without deletion; canRetry only server-query-incomplete; post-start stop without wipe; mismatch map without clear. Not E2E corruption integrity AT.
 - `ET-FR-7.9-013-02` `FR-7.9-013` `synara/src/app/matrix/__tests__/matrixLocalStores.test.ts` — Unit: isCryptoAccountMismatchError detects rust crypto account mismatch string; ignores unrelated failures. Store-state anomaly detector only — not integrity_check E2E.
-- `ET-FR-7.10-003-01` `FR-7.10-003` `synara/src/app/utils/__tests__/messageSearchFilters.test.ts` — Unit coverage for parseSenderFilter, isMessageSearchResultForType, isMessageSearchResultInDateRange, filterMessageSearchGroups — client helper evidence only; not integration pass alone.
+- `ET-FR-7.10-003-01` `FR-7.10-003` `synara/src/app/utils/__tests__/messageSearchFilters.test.ts` — Unit coverage for parseSenderFilter, isMessageSearchResultForType, isMessageSearchResultInDateRange, filterMessageSearchFilters — client helper evidence only; not integration pass alone.
+- `ET-FR-7.10-004-01` `FR-7.10-004` `synara/src/app/utils/__tests__/timelineOpening.test.ts` — Unit coverage for getRoomTimelineOpenMode: prefers focused-event when focusedEventId set (priority over unread-window/saved-viewport/live-end) — focused-open helper evidence only; not integration pass alone for Open from search.
 
 ## File ledger (220)
 
@@ -12026,7 +12044,7 @@ Limited rejected-review correction (`p0.2-correct-42-fr-7.10-003-search-filters`
 | `synara/src/app/features/message-search/MessageSearch.tsx`                     | `feature`          | `requirement-linked`           |   0 |   1 | `FR-7.3-007`,`FR-7.3-008`,`FR-7.3-009`,`FR-7.3-010`,`FR-7.3-014`,`FR-7.3-016`,`FR-7.4-004`,`FR-7.6-006`,`FR-7.10-001`,`FR-7.10-002`,`FR-7.10-003`,`FR-7.10-004`,`FR-7.10-005`,`FR-7.10-007`                                               |
 | `synara/src/app/features/message-search/SearchFilters.tsx`                     | `feature`          | `requirement-linked`           |   0 |   4 | `FR-7.3-007`,`FR-7.3-008`,`FR-7.3-009`,`FR-7.3-010`,`FR-7.3-014`,`FR-7.3-016`,`FR-7.4-004`,`FR-7.10-002`,`FR-7.10-003`                                                                                                                    |
 | `synara/src/app/features/message-search/SearchResultGroup.tsx`                 | `feature`          | `requirement-linked`           |   0 |   0 | `FR-7.3-007`,`FR-7.3-008`,`FR-7.3-009`,`FR-7.3-010`,`FR-7.3-014`,`FR-7.3-016`,`FR-7.4-004`,`FR-7.10-001`,`FR-7.10-004`                                                                                                                    |
-| `synara/src/app/features/message-search/useMessageSearch.ts`                   | `feature`          | `requirement-linked`           |   0 |   1 | `FR-7.3-007`,`FR-7.3-008`,`FR-7.3-009`,`FR-7.3-010`,`FR-7.3-014`,`FR-7.3-016`,`FR-7.4-004`,`FR-7.6-006`,`FR-7.10-001`,`FR-7.10-002`,`FR-7.10-003`,`FR-7.10-004`,`FR-7.10-006`,`FR-7.10-007`                                               |
+| `synara/src/app/features/message-search/useMessageSearch.ts`                   | `feature`          | `requirement-linked`           |   0 |   1 | `FR-7.3-007`,`FR-7.3-008`,`FR-7.3-009`,`FR-7.3-010`,`FR-7.3-014`,`FR-7.3-016`,`FR-7.4-004`,`FR-7.6-006`,`FR-7.10-001`,`FR-7.10-002`,`FR-7.10-003`,`FR-7.10-006`,`FR-7.10-007`                                               |
 | `synara/src/app/features/room-nav/RoomNavItem.tsx`                             | `feature`          | `requirement-linked`           |   0 |   3 | `FR-7.2-004`,`FR-7.2-005`,`FR-7.8-005`                                                                                                                                                                                                                 |
 | `synara/src/app/features/room-settings/RoomSettings.tsx`                       | `feature`          | `requirement-linked`           |   0 |   0 | `FR-7.6-005`,`FR-7.7-007`                                                                                                                                                                                                                 |
 | `synara/src/app/features/room/CommandAutocomplete.tsx`                         | `feature`          | `requirement-linked`           |   0 |   0 | `FR-7.4-010`                                                                                                                                                                                                                              |
@@ -12038,7 +12056,7 @@ Limited rejected-review correction (`p0.2-correct-42-fr-7.10-003-search-filters`
 | `synara/src/app/features/room/RoomViewFollowing.tsx`                           | `feature`          | `requirement-linked`           |   0 |   1 | `FR-7.2-012`,`FR-7.3-001`,`FR-7.3-012`                                                                                                                                                                                                    |
 | `synara/src/app/features/room/RoomViewHeader.tsx`                              | `feature`          | `requirement-linked`           |   0 |   1 | `FR-7.2-012`,`FR-7.3-001`,`FR-7.3-012`                                                                                                                                                                                                    |
 | `synara/src/app/features/room/RoomViewTyping.tsx`                              | `feature`          | `requirement-linked`           |   0 |   1 | `FR-7.2-012`,`FR-7.2-013`,`FR-7.3-001`,`FR-7.3-012`,`FR-7.4-008`                                                                                                                                                                          |
-| `synara/src/app/features/room/jump-to-time/JumpToTime.tsx`                     | `feature`          | `requirement-linked`           |   0 |   0 | `FR-7.3-003`,`FR-7.3-004`,`FR-7.10-004`                                                                                                                                                                                                   |
+| `synara/src/app/features/room/jump-to-time/JumpToTime.tsx`                     | `feature`          | `requirement-linked`           |   0 |   0 | `FR-7.3-003`,`FR-7.3-004`                                                                                                                                                                                                   |
 | `synara/src/app/features/room/message/EncryptedContent.tsx`                    | `feature`          | `requirement-linked`           |   2 |   0 | `FR-7.3-007`,`FR-7.3-008`,`FR-7.3-009`,`FR-7.3-010`,`FR-7.3-014`,`FR-7.3-016`,`FR-7.4-004`,`FR-7.5-002`,`FR-7.5-011`,`FR-7.9-008`                                                                                            |
 | `synara/src/app/features/room/message/Message.tsx`                             | `feature`          | `requirement-linked`           |   0 |   9 | `FR-7.3-007`,`FR-7.3-008`,`FR-7.3-009`,`FR-7.3-010`,`FR-7.3-014`,`FR-7.3-016`,`FR-7.4-004`                                                                                                                                                |
 | `synara/src/app/features/room/message/MessageEditor.tsx`                       | `feature`          | `requirement-linked`           |   0 |   1 | `FR-7.3-007`,`FR-7.3-008`,`FR-7.3-009`,`FR-7.3-010`,`FR-7.3-014`,`FR-7.3-016`,`FR-7.4-002`,`FR-7.4-003`,`FR-7.4-004`                                                                                                                      |
