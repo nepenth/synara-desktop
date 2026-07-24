@@ -37,13 +37,12 @@ without explicit user approval.
 - **Progress loop:** host scheduled task every **4 minutes**
   (ID `019f95928db7`) continues bounded FR audits; also daily durable
   orchestrator `9022c2f8-9b21-411a-acf9-a36c10515f72`
-- **Last accepted:** FR-7.11-008 widget contingency documentation
-  **not-currently-exposed** under `GATE-7.11-008-DOCUMENTED-CONTINGENCY-ARTIFACT`
-  (`p0.2-correct-54`); **sections 7.8–7.11 P0.2 quality audit complete**
-
-- **Next writer task:** Open/review P0.2 PR to `feature/matrix-rust-sdk-full-replacement`
-  (do not merge main). No further 7.10–7.11 shallow FR audits remain.
-
+- **Last accepted:** FR-7.11-008 widget contingency **not-currently-exposed**
+  (`p0.2-correct-54`)
+- **P0.2 quality audit of §7.8–7.11: COMPLETE**
+- **Next:** open task PR → `feature/matrix-rust-sdk-full-replacement` (not main);
+  remaining shallow scaffold notes for §7.1–7.7 may need a later pass if
+  full-matrix depth is required beyond the handoff resume scope
 
 - No production Matrix Rust SDK replacement code accepted
 - **No open P0.2 PR yet** (open after P0.2 complete)
