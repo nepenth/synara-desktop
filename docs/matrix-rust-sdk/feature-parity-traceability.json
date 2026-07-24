@@ -60556,15 +60556,156 @@
       "current_status": "implemented",
       "current_production_files": [
         {
-          "path": "synara/src/app/features/settings/devices/DeviceTile.tsx",
+          "path": "synara/src/app/hooks/useDeviceList.ts",
+          "bucket": "hook",
+          "categories": [
+            "client_methods",
+            "event_emitters_listeners",
+            "crypto_verification_recovery",
+            "uia_auth"
+          ],
+          "symbols_or_candidates": [
+            "getDevices",
+            "getDeviceId",
+            "getUserId",
+            "useDeviceList",
+            "useSplitCurrentDevice",
+            "useDeviceListChange",
+            "on:CryptoEvent.DevicesUpdated",
+            "removeListener:CryptoEvent.DevicesUpdated"
+          ],
+          "line_refs": [
+            {
+              "symbol": "getDevices",
+              "line": 25,
+              "kind": "method_candidate",
+              "relevance_reason": "useDeviceList fetchDevices: mx.getDevices() → data.devices ?? [] is the sole product own-account session list source (IMyDevice[])."
+            },
+            {
+              "symbol": "getDeviceId",
+              "line": 66,
+              "kind": "method_candidate",
+              "relevance_reason": "useSplitCurrentDevice uses mx.getDeviceId() to identify the current session among the own-account list."
+            },
+            {
+              "symbol": "getUserId",
+              "line": 44,
+              "kind": "method_candidate",
+              "relevance_reason": "DevicesUpdated refresh filters to own userId so only this account's device-list updates refetch the list."
+            },
+            {
+              "symbol": "useDeviceList",
+              "line": 21,
+              "kind": "product_list_owner",
+              "relevance_reason": "Primary list owner: react-query key ['devices'], staleTime 0, refetchOnMount always; returns [deviceList, refreshDeviceList]."
+            },
+            {
+              "symbol": "useSplitCurrentDevice",
+              "line": 62,
+              "kind": "product_list_split",
+              "relevance_reason": "Splits own-account devices into currentDevice (device_id === getDeviceId) vs otherDevices (remaining sessions) — product meaning of own-device vs other-device lists."
+            },
+            {
+              "symbol": "on:CryptoEvent.DevicesUpdated",
+              "line": 12,
+              "kind": "listener_candidate",
+              "relevance_reason": "useDeviceListChange registers CryptoEvent.DevicesUpdated to refresh own-device list when crypto device list updates."
+            },
+            {
+              "symbol": "removeListener:CryptoEvent.DevicesUpdated",
+              "line": 14,
+              "kind": "listener_candidate",
+              "relevance_reason": "Cleanup removes DevicesUpdated listener on unmount."
+            }
+          ],
+          "model_coupling": [],
+          "behavior_relevant_method_candidates": [
+            {
+              "name": "getDevices",
+              "line": 25,
+              "category": "client_methods",
+              "kind": "property_call_candidate",
+              "confidence": "Source-inspected product call site (exact-line); AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
+              "relevance_reason": "Own-account device list fetch: await mx.getDevices(); return data.devices ?? []."
+            },
+            {
+              "name": "getDeviceId",
+              "line": 66,
+              "category": "client_methods",
+              "kind": "property_call_candidate",
+              "confidence": "Source-inspected product call site (exact-line); AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
+              "relevance_reason": "Current-session identity for useSplitCurrentDevice find/filter."
+            },
+            {
+              "name": "getUserId",
+              "line": 44,
+              "category": "client_methods",
+              "kind": "property_call_candidate",
+              "confidence": "Source-inspected product call site (exact-line); may be absent from P0.1 retained method inventory categories for this FR.",
+              "relevance_reason": "DevicesUpdated handler only refreshDeviceList when users.includes(own userId)."
+            }
+          ],
+          "behavior_relevant_listener_candidates": [
+            {
+              "event": "CryptoEvent.DevicesUpdated",
+              "method": "on",
+              "line": 12,
+              "category": "crypto_verification_recovery",
+              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
+              "relevance_reason": "Reactive refresh of own-device list when crypto reports device updates for this user."
+            },
+            {
+              "event": "CryptoEvent.DevicesUpdated",
+              "method": "removeListener",
+              "line": 14,
+              "category": "crypto_verification_recovery",
+              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
+              "relevance_reason": "Listener cleanup for DevicesUpdated-driven list refresh."
+            }
+          ],
+          "symbols_or_candidates_note": "Primary state owner for own-account device lists. L21-53 useDeviceList: getDevices + react-query + DevicesUpdated own-user refresh. L62-76 useSplitCurrentDevice: getDeviceId → current vs other sessions of the same user. L56-59 useDeviceIds. Product does not call getUserDeviceInfo / other-user device list APIs."
+        },
+        {
+          "path": "synara/src/app/features/settings/devices/Devices.tsx",
           "bucket": "feature",
           "categories": ["crypto_verification_recovery"],
-          "symbols_or_candidates": [],
-          "line_refs": [],
-          "model_coupling": ["CryptoApi", "MatrixError"],
+          "symbols_or_candidates": [
+            "useDeviceList",
+            "useSplitCurrentDevice",
+            "useDeviceIds",
+            "OtherDevices",
+            "DeviceTile"
+          ],
+          "line_refs": [
+            {
+              "symbol": "useDeviceList",
+              "line": 46,
+              "kind": "product_ui",
+              "relevance_reason": "Settings → Devices page loads [devices, refreshDeviceList] from useDeviceList."
+            },
+            {
+              "symbol": "useSplitCurrentDevice",
+              "line": 48,
+              "kind": "product_ui",
+              "relevance_reason": "Splits list into currentDevice vs otherDevices for Current and Others UI sections."
+            },
+            {
+              "symbol": "Current section DeviceTile",
+              "line": 116,
+              "kind": "product_ui",
+              "relevance_reason": "L116-147 'Current' heading + DeviceTile for currentDevice (own this-session device); placeholder while loading."
+            },
+            {
+              "symbol": "OtherDevices",
+              "line": 149,
+              "kind": "product_ui",
+              "relevance_reason": "L149-157 passes otherDevices + refreshDeviceList into OtherDevices (other sessions of self)."
+            }
+          ],
+          "model_coupling": [],
           "behavior_relevant_method_candidates": [],
           "behavior_relevant_listener_candidates": [],
-          "symbols_or_candidates_note": "No requirement-relevant method/listener candidates filtered from this file's P0.1 AST hits; file remains linked for structural/model ownership. See all_candidates_in_linked_files on the requirement."
+          "symbols_or_candidates_note": "Primary Settings → Devices UI composition. L46-48 list load+split; L115-147 Current own-device tile; L148 loading placeholder when devices===undefined; L149-157 OtherDevices for other own-account sessions. No direct matrix-js-sdk import (not in 220 P0.1 production-import ledger). Security/verification chrome on this page is FR-7.9-002/004/005."
         },
         {
           "path": "synara/src/app/features/settings/devices/OtherDevices.tsx",
@@ -60574,124 +60715,143 @@
             "crypto_verification_recovery",
             "uia_auth"
           ],
-          "symbols_or_candidates": ["getCrypto"],
+          "symbols_or_candidates": ["OtherDevices", "DeviceTile"],
           "line_refs": [
             {
-              "symbol": "getCrypto",
-              "line": 27,
-              "kind": "method_candidate"
+              "symbol": "OtherDevices",
+              "line": 25,
+              "kind": "product_ui",
+              "relevance_reason": "Renders the other-device list surface from props.devices (already split other own-account sessions)."
+            },
+            {
+              "symbol": "last_seen_ts sort + DeviceTile map",
+              "line": 132,
+              "kind": "product_ui",
+              "relevance_reason": "L132-181 sorts by last_seen_ts desc and maps each IMyDevice to DeviceTile under 'Others' heading (L106)."
             }
           ],
           "model_coupling": ["MatrixError"],
-          "behavior_relevant_method_candidates": [
-            {
-              "name": "getCrypto",
-              "line": 27,
-              "category": "crypto_verification_recovery",
-              "kind": "property_call_candidate",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            }
-          ],
-          "behavior_relevant_listener_candidates": []
+          "behavior_relevant_method_candidates": [],
+          "behavior_relevant_listener_candidates": [],
+          "symbols_or_candidates_note": "Other-device list renderer for own-account non-current sessions. getCrypto L27 and DeviceVerificationStatus/VerifyOtherDeviceTile are verification (FR-7.9-004/005) — excluded from behavior_relevant for this FR. deleteMultipleDevices L78 and OIDC session dashboard are FR-7.9-010 / account-management, not list ownership."
         },
         {
-          "path": "synara/src/app/hooks/useDeviceList.ts",
-          "bucket": "hook",
-          "categories": [
-            "client_methods",
-            "event_emitters_listeners",
-            "crypto_verification_recovery",
-            "uia_auth"
+          "path": "synara/src/app/features/settings/devices/DeviceTile.tsx",
+          "bucket": "feature",
+          "categories": ["crypto_verification_recovery"],
+          "symbols_or_candidates": [
+            "DeviceTile",
+            "DeviceDetails",
+            "getOwnDeviceKeys"
           ],
-          "symbols_or_candidates": ["getDevices", "getDeviceId"],
           "line_refs": [
             {
-              "symbol": "getDevices",
+              "symbol": "DeviceTile",
+              "line": 270,
+              "kind": "product_ui",
+              "relevance_reason": "Per-device row: display_name ?? device_id, last_seen_ts activity, expandable DeviceDetails."
+            },
+            {
+              "symbol": "DeviceDetails",
+              "line": 64,
+              "kind": "product_ui",
+              "relevance_reason": "Shows device_id and last_seen_ip identity fields for list identity surface."
+            },
+            {
+              "symbol": "getOwnDeviceKeys",
+              "line": 87,
+              "kind": "method_candidate",
+              "relevance_reason": "DeviceKeyDetails on current device expands crypto.getOwnDeviceKeys() ed25519 device key identity."
+            }
+          ],
+          "model_coupling": ["CryptoApi", "MatrixError"],
+          "behavior_relevant_method_candidates": [
+            {
+              "name": "getOwnDeviceKeys",
+              "line": 87,
+              "category": "crypto_verification_recovery",
+              "kind": "property_call_candidate",
+              "confidence": "Source-inspected product call site (exact-line); may be absent from P0.1 AST method inventory for this file.",
+              "relevance_reason": "Current-device identity: crypto.getOwnDeviceKeys() → ed25519 displayed under DeviceKeyDetails (Devices.tsx children of current DeviceTile)."
+            }
+          ],
+          "behavior_relevant_listener_candidates": [],
+          "symbols_or_candidates_note": "Shared device row for Current and Others. Identity fields: display_name, device_id, last_seen_ts, last_seen_ip; current device also shows ed25519 via getOwnDeviceKeys. setDeviceDetails rename L119 is list-adjacent refresh (not list ownership primary). DeviceLogoutBtn/DeviceDeleteBtn are logout/delete (FR-7.9-010 / session end), not list fetch."
+        },
+        {
+          "path": "synara/src/app/pages/client/sidebar/UnverifiedTab.tsx",
+          "bucket": "page",
+          "categories": ["crypto_verification_recovery"],
+          "symbols_or_candidates": [
+            "useDeviceList",
+            "useSplitCurrentDevice",
+            "useDeviceIds"
+          ],
+          "line_refs": [
+            {
+              "symbol": "useDeviceList",
               "line": 25,
-              "kind": "method_candidate"
+              "kind": "product_ui",
+              "relevance_reason": "Sidebar consumer reuses own-device list for current vs other device identity when computing unverified indicators."
             },
             {
-              "symbol": "getDeviceId",
-              "line": 66,
-              "kind": "method_candidate"
-            },
-            {
-              "symbol": "on:CryptoEvent.DevicesUpdated",
-              "line": 12,
-              "kind": "listener_candidate"
-            },
-            {
-              "symbol": "removeListener:CryptoEvent.DevicesUpdated",
-              "line": 14,
-              "kind": "listener_candidate"
+              "symbol": "useSplitCurrentDevice",
+              "line": 27,
+              "kind": "product_ui",
+              "relevance_reason": "Same current/other split as Settings Devices for list-derived badge inputs."
             }
           ],
           "model_coupling": [],
-          "behavior_relevant_method_candidates": [
-            {
-              "name": "getDevices",
-              "line": 25,
-              "category": "uia_auth",
-              "kind": "property_call_candidate",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            },
-            {
-              "name": "getDeviceId",
-              "line": 66,
-              "category": "uia_auth",
-              "kind": "property_call_candidate",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            }
-          ],
-          "behavior_relevant_listener_candidates": [
-            {
-              "event": "CryptoEvent.DevicesUpdated",
-              "method": "on",
-              "line": 12,
-              "category": "crypto_verification_recovery",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            },
-            {
-              "event": "CryptoEvent.DevicesUpdated",
-              "method": "removeListener",
-              "line": 14,
-              "category": "crypto_verification_recovery",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            }
-          ]
+          "behavior_relevant_method_candidates": [],
+          "behavior_relevant_listener_candidates": [],
+          "symbols_or_candidates_note": "Secondary consumer of own-device/other-device lists for UnverifiedTab badge counts. Verification status projection is FR-7.9-002/004; list load+split ownership remains this FR. Not a P0.1 production-import row."
         }
       ],
       "ui_entry_points": [
-        "synara/src/app/features/settings/devices/OtherDevices.tsx"
+        "synara/src/app/features/settings/devices/Devices.tsx",
+        "synara/src/app/features/settings/devices/OtherDevices.tsx",
+        "synara/src/app/pages/client/sidebar/UnverifiedTab.tsx"
       ],
+      "ui_entry_points_rationale": "Devices.tsx is the primary Settings → Devices surface: Current (own this-session device) and Others (other own-account sessions via OtherDevices). OtherDevices.tsx is the other-device list renderer. UnverifiedTab.tsx is a sidebar consumer of the same useDeviceList + useSplitCurrentDevice lists. Product does not expose a third-party-user device list UI.",
       "state_owners": [
         {
           "path": "synara/src/app/hooks/useDeviceList.ts",
-          "ownership_evidence": "Identified as coordination/state module for this behavior via path role (state/client/util service) and P0.1 categories/candidates; not merely a presentational component."
+          "ownership_evidence": "Owns useDeviceList (getDevices + react-query + DevicesUpdated refresh), useSplitCurrentDevice (getDeviceId current vs other sessions), useDeviceIds, useDeviceListChange — single coordination path for own-account device lists."
         }
       ],
       "current_js_sdk": {
         "behavior_relevant_method_candidates": [
           {
-            "path": "synara/src/app/features/settings/devices/OtherDevices.tsx",
-            "name": "getCrypto",
-            "line": 27,
-            "category": "crypto_verification_recovery",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-          },
-          {
             "path": "synara/src/app/hooks/useDeviceList.ts",
             "name": "getDevices",
             "line": 25,
-            "category": "uia_auth",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+            "category": "client_methods",
+            "confidence": "Source-inspected product call site (exact-line); AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
+            "relevance_reason": "Own-account session list: mx.getDevices() → devices array."
           },
           {
             "path": "synara/src/app/hooks/useDeviceList.ts",
             "name": "getDeviceId",
             "line": 66,
-            "category": "uia_auth",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+            "category": "client_methods",
+            "confidence": "Source-inspected product call site (exact-line); AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
+            "relevance_reason": "Current-session device_id for Current vs Others split."
+          },
+          {
+            "path": "synara/src/app/hooks/useDeviceList.ts",
+            "name": "getUserId",
+            "line": 44,
+            "category": "client_methods",
+            "confidence": "Source-inspected product call site (exact-line).",
+            "relevance_reason": "DevicesUpdated own-user filter before refreshDeviceList."
+          },
+          {
+            "path": "synara/src/app/features/settings/devices/DeviceTile.tsx",
+            "name": "getOwnDeviceKeys",
+            "line": 87,
+            "category": "crypto_verification_recovery",
+            "confidence": "Source-inspected product call site (exact-line); may be absent from P0.1 AST method inventory for this file.",
+            "relevance_reason": "Current-device crypto identity (ed25519) under DeviceKeyDetails."
           }
         ],
         "behavior_relevant_listener_candidates": [
@@ -60701,7 +60861,8 @@
             "method": "on",
             "line": 12,
             "category": "crypto_verification_recovery",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
+            "relevance_reason": "Reactive own-device list refresh on crypto device updates."
           },
           {
             "path": "synara/src/app/hooks/useDeviceList.ts",
@@ -60709,13 +60870,14 @@
             "method": "removeListener",
             "line": 14,
             "category": "crypto_verification_recovery",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
+            "relevance_reason": "Cleanup for DevicesUpdated list refresh."
           }
         ],
         "all_candidates_in_linked_files": {
-          "method_count": 5,
+          "method_count": 6,
           "listener_count": 2,
-          "note": "Unfiltered P0.1 AST candidates across linked production import files. Do not treat these as proven APIs for this requirement; use behavior_relevant_* fields.",
+          "note": "Unfiltered P0.1 AST candidates across linked production import files (DeviceTile, OtherDevices, useDeviceList). Devices.tsx / UnverifiedTab.tsx have no direct matrix-js-sdk imports. Do not treat these as proven APIs for this requirement; use behavior_relevant_* fields.",
           "methods_sample": [
             {
               "path": "synara/src/app/features/settings/devices/OtherDevices.tsx",
@@ -60741,6 +60903,11 @@
               "path": "synara/src/app/hooks/useDeviceList.ts",
               "name": "getDeviceId",
               "line": 66
+            },
+            {
+              "path": "synara/src/app/features/settings/devices/DeviceTile.tsx",
+              "name": "getOwnDeviceKeys",
+              "line": 87
             }
           ],
           "listeners_sample": [
@@ -60758,7 +60925,7 @@
             }
           ]
         },
-        "models": ["CryptoApi", "MatrixError"],
+        "models": ["CryptoApi", "MatrixError", "IMyDevice"],
         "network_routes": [],
         "deep_imports": [
           {
@@ -60784,13 +60951,18 @@
             "cutover_disposition": "replace-deep-js-sdk-import-with-synara-dto-or-rust-projection"
           }
         ],
-        "method_candidates": ["getCrypto", "getDevices", "getDeviceId"],
+        "method_candidates": [
+          "getDevices",
+          "getDeviceId",
+          "getUserId",
+          "getOwnDeviceKeys"
+        ],
         "listener_events": ["CryptoEvent.DevicesUpdated"]
       },
       "current_behavior_and_limits": {
-        "summary": "Current desktop implements this via 3 production matrix-js-sdk-related file(s); status=implemented.",
-        "notes": null,
-        "limits": "P0.1 method candidates are AST name hits, not type-checked receiver proofs."
+        "summary": "Current desktop implements own-device and other-device lists as own-account session listing: useDeviceList fetches mx.getDevices() IMyDevice[]; useSplitCurrentDevice splits by mx.getDeviceId() into Current (this session) vs Others (remaining sessions). Settings → Devices renders both surfaces; UnverifiedTab reuses the same list split. status=implemented.",
+        "notes": "Evidence (conservative): (1) List fetch useDeviceList.ts L24-27 mx.getDevices() → data.devices ?? []; react-query key ['devices'] L19/L29-35 with staleTime 0, refetchOnMount always, gcTime Infinity; returns [deviceList, refreshDeviceList] L37-53. (2) Refresh: L41-50 useDeviceListChange on CryptoEvent.DevicesUpdated (L12 on / L14 removeListener) refreshes only when users.includes(mx.getUserId() L44). Manual refreshDeviceList also after rename/delete success paths. (3) Identity/split L62-76 useSplitCurrentDevice: currentDeviceId=mx.getDeviceId(); currentDevice=find device_id match; otherDevices=filter !== current — product «own-device» = Current this-session; «other-device lists» = other own-account sessions (not third-party users). useDeviceIds L56-59 maps device_id strings. (4) Primary UI Devices.tsx L46-48 load+split; L116-147 Current heading + DeviceTile(currentDevice) with DeviceKeyDetails + placeholder; L148 DevicesPlaceholder while devices===undefined; L149-157 OtherDevices(otherDevices, refreshDeviceList). Settings route Settings.tsx DevicesPage. (5) OtherDevices.tsx L106 'Others'; L132-181 sort last_seen_ts desc + DeviceTile per device; null when empty. (6) DeviceTile identity L317 display_name??device_id; L319 last_seen_ts; DeviceDetails L64-78 device_id + last_seen_ip; DeviceKeyDetails L84-103 crypto.getOwnDeviceKeys() ed25519 for current device only. (7) UnverifiedTab.tsx L25-40 reuses useDeviceList + useSplitCurrentDevice + useDeviceIds for sidebar unverified counts (list consumer). (8) Non-evidence / out of scope: no product getUserDeviceInfo / other-user device list UI; getCrypto + VerifyOtherDeviceTile / DeviceVerificationStatus on OtherDevices are FR-7.9-004/005; deleteMultipleDevices/UIA/OIDC session dashboard are FR-7.9-010; setDeviceDetails rename is list-adjacent; cross-signing status is FR-7.9-002. (9) Cutover P8.2 must preserve Current/Others list surfaces, getDevices identity fields, getDeviceId split, DevicesUpdated refresh via Rust ownership + IPC; SC-067/SC-063 alone, compile-only blocked, raw /_matrix HTTP, dual-backend, or helper-only FAIL.",
+        "limits": "P0.1 method/listener candidates are AST name hits, not type-checked receiver proofs. Product other-device list means other sessions of the logged-in user, not other users' devices — no getUserDeviceInfo call sites. Devices.tsx / UnverifiedTab.tsx lack direct matrix-js-sdk imports (may be absent from 220 P0.1 production-import ledger). SC-067 is the dossier analogue for Client::devices / own session list; SC-063 Encryption::get_user_devices is crypto-side user device enumeration not used by the Settings list path today — both remain compile-shape-only blocked (E3–E5 missing). Do not count SC IDs alone, raw /_matrix HTTP, helper-only harnesses, verification ceremony, or device deletion as closing this FR."
       },
       "p0_1_linkage": {
         "categories": ["crypto_verification_recovery", "client_methods"],
@@ -60798,38 +60970,17 @@
           "synara/src/app/features/settings/devices/DeviceTile.tsx",
           "synara/src/app/features/settings/devices/OtherDevices.tsx",
           "synara/src/app/hooks/useDeviceList.ts"
+        ],
+        "product_surfaces_not_in_p0_1_import_ledger": [
+          "synara/src/app/features/settings/devices/Devices.tsx",
+          "synara/src/app/pages/client/sidebar/UnverifiedTab.tsx"
         ]
       },
       "rust_target": {
         "support_conclusion": "compile-shape-only-blocked-for-product",
-        "capability_ids": ["SC-063", "SC-067"],
+        "capability_ids": ["SC-067", "SC-063"],
         "gap_ids": [],
         "capabilities": [
-          {
-            "capability_id": "SC-063",
-            "api_path": "matrix_sdk::encryption::Encryption::get_user_devices",
-            "required_features": {
-              "requested_direct": [],
-              "resolved_on_matrix_sdk": ["e2e-encryption"],
-              "resolved_on_matrix_sdk_ui": [],
-              "notes": "API is feature-gated by e2e-encryption, which is resolved in this probe graph via UI unification."
-            },
-            "final_state": "blocked",
-            "final": {
-              "final_state": "blocked",
-              "final_state_rationale": "E1+E2 present (stable API + compile probe). E3 semantic test, E4 live Synapse, and E5 UI acceptance are not present in P0.3; compile-only evidence is not product confirmation.",
-              "missing_gates": [
-                "semantic_or_integration_test",
-                "live_synapse_two_client",
-                "ui_acceptance"
-              ],
-              "section_5_evidence_present": ["E1", "E2"]
-            },
-            "source_url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/encryption/mod.rs#L1156",
-            "p0_3b_evidence_status": "stable-api-probed",
-            "p0_3b_probe_id": "P0.3b-encryption-get-user-devices",
-            "plan_section_7_area": "7.9-devices-e2ee-verification-and-recovery"
-          },
           {
             "capability_id": "SC-067",
             "api_path": "matrix_sdk::Client::devices",
@@ -60854,14 +61005,43 @@
             "p0_3b_evidence_status": "stable-api-probed",
             "p0_3b_probe_id": "P0.3b-client-devices",
             "plan_section_7_area": "7.9-devices-e2ee-verification-and-recovery"
+          },
+          {
+            "capability_id": "SC-063",
+            "api_path": "matrix_sdk::encryption::Encryption::get_user_devices",
+            "required_features": {
+              "requested_direct": [],
+              "resolved_on_matrix_sdk": ["e2e-encryption"],
+              "resolved_on_matrix_sdk_ui": [],
+              "notes": "API is feature-gated by e2e-encryption, which is resolved in this probe graph via UI unification."
+            },
+            "final_state": "blocked",
+            "final": {
+              "final_state": "blocked",
+              "final_state_rationale": "E1+E2 present (stable API + compile probe). E3 semantic test, E4 live Synapse, and E5 UI acceptance are not present in P0.3; compile-only evidence is not product confirmation.",
+              "missing_gates": [
+                "semantic_or_integration_test",
+                "live_synapse_two_client",
+                "ui_acceptance"
+              ],
+              "section_5_evidence_present": ["E1", "E2"]
+            },
+            "source_url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/encryption/mod.rs#L1156",
+            "p0_3b_evidence_status": "stable-api-probed",
+            "p0_3b_probe_id": "P0.3b-encryption-get-user-devices",
+            "plan_section_7_area": "7.9-devices-e2ee-verification-and-recovery"
           }
         ],
         "gaps": [],
-        "notes": "Mappings use only accepted P0.3 capability/gap IDs. Compile probes establish API shape only; final dossier states remain blocked/typed/upstream until E3–E5 gates exist.",
+        "notes": "Honest rust_target for FR-7.9-003: SC-067 Client::devices is the dossier-backed analogue to product mx.getDevices() own-account session list (primary Settings Devices list path). SC-063 Encryption::get_user_devices is crypto-side per-user device enumeration; current product Settings list does not call JS getUserDeviceInfo and does not render other users' devices — SC-063 remains a possible cutover crypto device surface but is not product-proven for this FR's list UI. Both remain final_state=blocked (compile-shape only; E3–E5 missing). Current-session identity (getDeviceId split) and DevicesUpdated refresh have no separate P0.3 capability IDs claimed. Cutover under P8.2 (device list/trust and deletion) must preserve Current/Others list observables, identity fields, and refresh via Rust ownership + IPC — not SC IDs alone, not dual-backend/SDK selector, not unapproved raw /_matrix HTTP, not helper-only harnesses.",
         "distinctions_preserved": [
-          "server typed search (SC-071) vs experimental local search (SC-072)",
-          "widget plumbing (SC-082/GAP widget) vs call parity (membership write/key session gaps)",
-          "compile shape (E1/E2) vs runtime/UI parity (E3–E5 missing => blocked)"
+          "compile shape (E1/E2) vs runtime/UI parity (E3–E5 missing => blocked)",
+          "own-account session list (getDevices / SC-067) vs crypto get_user_devices (SC-063) not used by Settings list UI today",
+          "own-device Current (getDeviceId match) vs other-device Others (remaining own sessions) — not third-party user devices",
+          "list fetch+split+refresh (this FR) vs device verification ceremony (FR-7.9-004/005)",
+          "list surfaces vs device deletion/UIA (FR-7.9-010)",
+          "list vs cross-signing status (FR-7.9-002)",
+          "SC-067/SC-063 API shape vs product Settings Devices / UnverifiedTab observables"
         ]
       },
       "implementation_tasks": [
@@ -60869,7 +61049,7 @@
           "task_id": "P8.2",
           "title": "Device list/trust and deletion",
           "phase": "Phase 8 — E2EE, devices, verification, backup, and recovery",
-          "scope_rationale": "Accepted plan task P8.2 covers this Section 7.9 behavior during Phase 8 — E2EE, devices, verification, backup, and recovery."
+          "scope_rationale": "Accepted plan task P8.2 covers own/other device list load, identity split, refresh, and related device management cutover for this Section 7.9 behavior."
         }
       ],
       "automated_tests": {
@@ -60882,35 +61062,47 @@
             "task_id": "P8.2",
             "phase": "Phase 8 — E2EE, devices, verification, backup, and recovery",
             "level": "integration-e2e",
-            "scenario": "7.9/FR-7.9-003: exercise 'own-device and other-device lists;' via owner `synara/src/app/hooks/useDeviceList.ts` and UI `synara/src/app/features/settings/devices/OtherDevices.tsx`, then confirm Rust/IPC cutover task `P8.2` preserves observable behavior without raw Matrix runtime HTTP.",
+            "scenario": "Integration-e2e against disposable Synapse: multi-session account shows Settings → Devices Current tile for this session (device_id === client getDeviceId, display_name/last_seen identity) and Others list for remaining own-account sessions (sorted by last_seen_ts). useDeviceList loads via getDevices; DevicesUpdated for own userId refreshes the list without process restart. UnverifiedTab may consume the same split. After cutover P8.2 same observables via Rust Client::devices (SC-067) and list projection + IPC; SC-067/SC-063 alone, compile-only blocked states, raw /_matrix HTTP, dual-backend, or helper/fixture-only FAIL.",
+            "test_target": "useDeviceList (getDevices + DevicesUpdated refresh) + useSplitCurrentDevice (getDeviceId Current vs Others) + Devices.tsx Current/OtherDevices surfaces + DeviceTile identity fields; post-cutover SC-067 Client::devices (+ optional SC-063 crypto device enum) under P8.2",
             "preconditions": [
-              "Desktop app, E2EE-capable session; second device for verification",
-              "Recovery key / backup fixtures; isolated multi-account profiles when testing isolation",
-              "Linked owner path present in tree: synara/src/app/hooks/useDeviceList.ts",
-              "Primary UI/lifecycle surface: synara/src/app/features/settings/devices/OtherDevices.tsx"
+              "Disposable Synapse; desktop app with E2EE-capable session fixtures: (A) single-session account (Current only, empty Others); (B) multi-session account with at least one other own-account device_id present in getDevices.",
+              "Named product surfaces present: useDeviceList.ts, Devices.tsx Settings Devices page, OtherDevices.tsx, DeviceTile.tsx.",
+              "Harness can observe UI (Current tile device_id/display_name; Others rows) and list refresh after DevicesUpdated / refreshDeviceList without bypassing product useDeviceList.",
+              "Optional second client/session for multi-device fixture; recovery/verification fixtures not required for list-only path."
             ],
             "trigger_actions": [
-              "Boot the appropriate harness for level=integration-e2e against disposable Synapse (or iOS notes if any).",
-              "Establish fixtures required by the clause list: own-device; other-device lists.",
-              "Open UI/lifecycle surface `synara/src/app/features/settings/devices/OtherDevices.tsx` (or follow ui_entry_points_rationale if no dedicated UI).",
-              "Step 1: perform the product action that implements «own-device» using current owner `synara/src/app/hooks/useDeviceList.ts`.",
-              "Step 2: perform the product action that implements «other-device lists» using current owner `synara/src/app/hooks/useDeviceList.ts`.",
-              "Force process restart and/or offline→online transition where lifecycle continuity is implied."
+              "Boot integration harness against disposable Synapse. Do not use fixture-only mocks that skip product useDeviceList/getDevices, dual-backend selectors, raw HTTP, or helper-only pass criteria.",
+              "OWN/CURRENT: open Settings → Devices with multi-session fixture. Assert Current section shows a DeviceTile for the session whose device_id matches client getDeviceId; identity fields include display_name or device_id and may show last activity / expandable device_id + last_seen_ip; current device may show DeviceKeyDetails ed25519 when expanded.",
+              "OTHER: assert Others section lists remaining own-account devices (not current device_id), sorted with more recent last_seen_ts first when timestamps present; empty Others when only one session.",
+              "REFRESH: trigger a DevicesUpdated for own userId (or call product refresh path after a list-mutating action such as rename if available) and assert the list re-renders without requiring process restart. Confirm loading placeholder path when devices is still undefined on first paint.",
+              "CONSUMER (optional): with cross-signing active, UnverifiedTab uses the same list split for other-device ids — assert it does not invent a separate list source.",
+              "PROCESS RESTART: relaunch multi-session session; re-assert Current/Others from restored client + getDevices without dual writers.",
+              "After cutover P8.2, repeat Current/Others/refresh/restart observables via Rust Client::devices (SC-067) list projection under product lifecycle actor/IPC. Citing SC-067 or SC-063 alone, compile-only blocked states, raw /_matrix HTTP, dual-backend/SDK selector, or helper/fixture-only is a FAIL."
             ],
             "assertions": [
-              "Each clause is observable: «own-device»; «other-device lists».",
-              "State coordination remains through `synara/src/app/hooks/useDeviceList.ts` (or its Rust/IPC successor after cutover), not ad-hoc dual writers.",
-              "Behavior-relevant current JS method candidates exercised or replaced: getCrypto, getDevices, getDeviceId (AST candidates; not type-proven receivers).",
-              "Behavior-relevant listener candidates observed or replaced: on:CryptoEvent.DevicesUpdated, removeListener:CryptoEvent.DevicesUpdated.",
-              "Rust mapping remains conservative: caps=[SC-063,SC-067] gaps=[none]; compile-only blocked states are not treated as runtime pass.",
-              "No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless dossier marks that exact behavior typed-sdk-request-required."
+              "OWN/CURRENT: Settings Devices Current shows this-session device matching getDeviceId with product identity fields (display_name/device_id, optional last_seen).",
+              "OTHER: Others lists only other own-account sessions (not current device_id); no third-party user device list required for this FR.",
+              "FETCH: list data originates from getDevices (or Rust SC-067 successor), coordinated through useDeviceList (or IPC successor), not ad-hoc dual writers.",
+              "REFRESH: DevicesUpdated for own userId (or explicit refreshDeviceList) updates the UI without process restart.",
+              "SPLIT: useSplitCurrentDevice semantics preserved post-cutover (current vs other own sessions).",
+              "CUTOVER: P8.2 preserves Current/Others list observables via Rust ownership + IPC; SC-067/SC-063 compile-only never passes product acceptance; no raw /_matrix runtime HTTP; no dual-backend/SDK selector.",
+              "No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless the dossier marks that exact behavior typed-sdk-request-required.",
+              "Device list identity fields (device_id, last_seen_ip) not leaked to unintended rooms/logs beyond product UI surfaces."
             ],
             "required_environment": [
-              "Desktop app, E2EE-capable session; second device for verification",
-              "Recovery key / backup fixtures; isolated multi-account profiles when testing isolation"
+              "Disposable Synapse",
+              "Desktop app with single-session and multi-session own-account fixtures",
+              "Optional second client/session to populate otherDevices"
             ],
             "does_not_currently_exist": true,
-            "clause_breakdown": ["own-device", "other-device lists"]
+            "clause_breakdown": [
+              "own-device Current list via getDevices + getDeviceId split",
+              "other-device Others list (other own-account sessions)",
+              "identity fields device_id/display_name/last_seen_ts/last_seen_ip (+ current ed25519)",
+              "DevicesUpdated / refreshDeviceList refresh",
+              "Settings Devices + UnverifiedTab list consumers",
+              "cutover P8.2 Rust Client::devices projection; SC-only/raw HTTP/helper-only FAIL"
+            ]
           }
         ]
       },
@@ -60923,7 +61115,8 @@
       ],
       "security_privacy_lifecycle_concerns": [
         "token-and-store-isolation",
-        "no-raw-matrix-http"
+        "no-raw-matrix-http",
+        "device-identity-fields-ui-only"
       ],
       "traceability_status": "complete-conservative",
       "blockers": []
@@ -95304,35 +95497,47 @@
         "task_id": "P8.2",
         "phase": "Phase 8 — E2EE, devices, verification, backup, and recovery",
         "level": "integration-e2e",
-        "scenario": "7.9/FR-7.9-003: exercise 'own-device and other-device lists;' via owner `synara/src/app/hooks/useDeviceList.ts` and UI `synara/src/app/features/settings/devices/OtherDevices.tsx`, then confirm Rust/IPC cutover task `P8.2` preserves observable behavior without raw Matrix runtime HTTP.",
+        "scenario": "Integration-e2e against disposable Synapse: multi-session account shows Settings → Devices Current tile for this session (device_id === client getDeviceId, display_name/last_seen identity) and Others list for remaining own-account sessions (sorted by last_seen_ts). useDeviceList loads via getDevices; DevicesUpdated for own userId refreshes the list without process restart. UnverifiedTab may consume the same split. After cutover P8.2 same observables via Rust Client::devices (SC-067) and list projection + IPC; SC-067/SC-063 alone, compile-only blocked states, raw /_matrix HTTP, dual-backend, or helper/fixture-only FAIL.",
+        "test_target": "useDeviceList (getDevices + DevicesUpdated refresh) + useSplitCurrentDevice (getDeviceId Current vs Others) + Devices.tsx Current/OtherDevices surfaces + DeviceTile identity fields; post-cutover SC-067 Client::devices (+ optional SC-063 crypto device enum) under P8.2",
         "preconditions": [
-          "Desktop app, E2EE-capable session; second device for verification",
-          "Recovery key / backup fixtures; isolated multi-account profiles when testing isolation",
-          "Linked owner path present in tree: synara/src/app/hooks/useDeviceList.ts",
-          "Primary UI/lifecycle surface: synara/src/app/features/settings/devices/OtherDevices.tsx"
+          "Disposable Synapse; desktop app with E2EE-capable session fixtures: (A) single-session account (Current only, empty Others); (B) multi-session account with at least one other own-account device_id present in getDevices.",
+          "Named product surfaces present: useDeviceList.ts, Devices.tsx Settings Devices page, OtherDevices.tsx, DeviceTile.tsx.",
+          "Harness can observe UI (Current tile device_id/display_name; Others rows) and list refresh after DevicesUpdated / refreshDeviceList without bypassing product useDeviceList.",
+          "Optional second client/session for multi-device fixture; recovery/verification fixtures not required for list-only path."
         ],
         "trigger_actions": [
-          "Boot the appropriate harness for level=integration-e2e against disposable Synapse (or iOS notes if any).",
-          "Establish fixtures required by the clause list: own-device; other-device lists.",
-          "Open UI/lifecycle surface `synara/src/app/features/settings/devices/OtherDevices.tsx` (or follow ui_entry_points_rationale if no dedicated UI).",
-          "Step 1: perform the product action that implements «own-device» using current owner `synara/src/app/hooks/useDeviceList.ts`.",
-          "Step 2: perform the product action that implements «other-device lists» using current owner `synara/src/app/hooks/useDeviceList.ts`.",
-          "Force process restart and/or offline→online transition where lifecycle continuity is implied."
+          "Boot integration harness against disposable Synapse. Do not use fixture-only mocks that skip product useDeviceList/getDevices, dual-backend selectors, raw HTTP, or helper-only pass criteria.",
+          "OWN/CURRENT: open Settings → Devices with multi-session fixture. Assert Current section shows a DeviceTile for the session whose device_id matches client getDeviceId; identity fields include display_name or device_id and may show last activity / expandable device_id + last_seen_ip; current device may show DeviceKeyDetails ed25519 when expanded.",
+          "OTHER: assert Others section lists remaining own-account devices (not current device_id), sorted with more recent last_seen_ts first when timestamps present; empty Others when only one session.",
+          "REFRESH: trigger a DevicesUpdated for own userId (or call product refresh path after a list-mutating action such as rename if available) and assert the list re-renders without requiring process restart. Confirm loading placeholder path when devices is still undefined on first paint.",
+          "CONSUMER (optional): with cross-signing active, UnverifiedTab uses the same list split for other-device ids — assert it does not invent a separate list source.",
+          "PROCESS RESTART: relaunch multi-session session; re-assert Current/Others from restored client + getDevices without dual writers.",
+          "After cutover P8.2, repeat Current/Others/refresh/restart observables via Rust Client::devices (SC-067) list projection under product lifecycle actor/IPC. Citing SC-067 or SC-063 alone, compile-only blocked states, raw /_matrix HTTP, dual-backend/SDK selector, or helper/fixture-only is a FAIL."
         ],
         "assertions": [
-          "Each clause is observable: «own-device»; «other-device lists».",
-          "State coordination remains through `synara/src/app/hooks/useDeviceList.ts` (or its Rust/IPC successor after cutover), not ad-hoc dual writers.",
-          "Behavior-relevant current JS method candidates exercised or replaced: getCrypto, getDevices, getDeviceId (AST candidates; not type-proven receivers).",
-          "Behavior-relevant listener candidates observed or replaced: on:CryptoEvent.DevicesUpdated, removeListener:CryptoEvent.DevicesUpdated.",
-          "Rust mapping remains conservative: caps=[SC-063,SC-067] gaps=[none]; compile-only blocked states are not treated as runtime pass.",
-          "No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless dossier marks that exact behavior typed-sdk-request-required."
+          "OWN/CURRENT: Settings Devices Current shows this-session device matching getDeviceId with product identity fields (display_name/device_id, optional last_seen).",
+          "OTHER: Others lists only other own-account sessions (not current device_id); no third-party user device list required for this FR.",
+          "FETCH: list data originates from getDevices (or Rust SC-067 successor), coordinated through useDeviceList (or IPC successor), not ad-hoc dual writers.",
+          "REFRESH: DevicesUpdated for own userId (or explicit refreshDeviceList) updates the UI without process restart.",
+          "SPLIT: useSplitCurrentDevice semantics preserved post-cutover (current vs other own sessions).",
+          "CUTOVER: P8.2 preserves Current/Others list observables via Rust ownership + IPC; SC-067/SC-063 compile-only never passes product acceptance; no raw /_matrix runtime HTTP; no dual-backend/SDK selector.",
+          "No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless the dossier marks that exact behavior typed-sdk-request-required.",
+          "Device list identity fields (device_id, last_seen_ip) not leaked to unintended rooms/logs beyond product UI surfaces."
         ],
         "required_environment": [
-          "Desktop app, E2EE-capable session; second device for verification",
-          "Recovery key / backup fixtures; isolated multi-account profiles when testing isolation"
+          "Disposable Synapse",
+          "Desktop app with single-session and multi-session own-account fixtures",
+          "Optional second client/session to populate otherDevices"
         ],
         "does_not_currently_exist": true,
-        "clause_breakdown": ["own-device", "other-device lists"]
+        "clause_breakdown": [
+          "own-device Current list via getDevices + getDeviceId split",
+          "other-device Others list (other own-account sessions)",
+          "identity fields device_id/display_name/last_seen_ts/last_seen_ip (+ current ed25519)",
+          "DevicesUpdated / refreshDeviceList refresh",
+          "Settings Devices + UnverifiedTab list consumers",
+          "cutover P8.2 Rust Client::devices projection; SC-only/raw HTTP/helper-only FAIL"
+        ]
       },
       {
         "id": "AT-FR-7.9-004-001",
@@ -98508,26 +98713,34 @@
       "requirement_id": "FR-7.9-003",
       "platforms": ["macOS", "Linux"],
       "preconditions": [
-        "Desktop app, E2EE-capable session; second device for verification",
-        "Recovery key / backup fixtures; isolated multi-account profiles when testing isolation",
-        "State owner available: synara/src/app/hooks/useDeviceList.ts",
-        "UI/lifecycle: synara/src/app/features/settings/devices/OtherDevices.tsx",
+        "Disposable Synapse; desktop app with E2EE-capable session.",
+        "Fixture A: single-session account. Fixture B: multi-session account (second own device logged in).",
+        "State owner: useDeviceList / useSplitCurrentDevice (useDeviceList.ts) via getDevices + getDeviceId.",
+        "UI: Settings → Devices (Devices.tsx Current + OtherDevices); optional UnverifiedTab consumer.",
         "Current status baseline: implemented"
       ],
       "actions": [
-        "Launch Synara desktop on the target platform against disposable Synapse; use a clean or known fixture profile as required by «own-device and other-device lists;».",
-        "Identify state owner `synara/src/app/hooks/useDeviceList.ts` and open `synara/src/app/features/settings/devices/OtherDevices.tsx`.",
-        "Action 1 — «own-device»: perform the minimal user/system steps that trigger this clause (use linked files under current_production_files if the entry point is indirect).",
-        "Action 2 — «other-device lists»: perform the minimal user/system steps that trigger this clause (use linked files under current_production_files if the entry point is indirect).",
-        "Repeat critical path in an encrypted room / with a second device when the clause involves keys or verification."
+        "Launch Synara desktop against disposable Synapse with Fixture B (multi-session).",
+        "Open Settings → Devices. Confirm Current section shows this session's device (name/device_id identity; expandable details).",
+        "Confirm Others section lists other own-account sessions and does not include the current device_id.",
+        "With Fixture A (single session): confirm Current still shows and Others is empty/hidden.",
+        "Optional: expand current device and confirm device key / identity fields as product implements; confirm list still loads after relaunch.",
+        "Optional: with cross-signing active, confirm UnverifiedTab uses the same device list split rather than a separate source.",
+        "On a post-cutover build (P8.2), repeat Current/Others list observables without raw /_matrix renderer HTTP; SC-067/SC-063 alone must not be accepted as pass."
       ],
       "expected_results": [
-        "All clauses under «own-device and other-device lists;» produce the user-visible or system-observable success criteria without error toasts unrelated to intentional negative tests.",
-        "Clause 1 «own-device» is satisfied on macOS, Linux with owner `synara/src/app/hooks/useDeviceList.ts`.",
-        "Clause 2 «other-device lists» is satisfied on macOS, Linux with owner `synara/src/app/hooks/useDeviceList.ts`.",
-        "No unexpected raw /_matrix traffic from the app renderer for this flow on the post-cutover build."
+        "Current device is visible and matches this session identity (getDeviceId).",
+        "Others lists only other own-account sessions when present; empty when single-session.",
+        "List fields (display_name/device_id/last activity) are user-visible without unrelated errors.",
+        "Clause «own-device and other-device lists» is satisfied on macOS, Linux with owner useDeviceList.ts + Devices UI.",
+        "Post-cutover: same observables via Rust ownership/IPC; no unexpected raw /_matrix traffic; SC-067/SC-063 compile-only is not a product pass."
       ],
-      "clause_breakdown": ["own-device", "other-device lists"]
+      "clause_breakdown": [
+        "own-device Current list",
+        "other-device Others list (other own sessions)",
+        "identity fields and refresh",
+        "Settings Devices / UnverifiedTab consumers"
+      ]
     },
     {
       "id": "MA-FR-7.9-004",
@@ -100612,6 +100825,17 @@
         "FR-7.9-002: current_status remains implemented. current_behavior_and_limits documents active flag (useCrossSigningActive / m.cross_signing.master), device crossSigningVerified, Devices Enable vs badge, UnverifiedTab/LogoutDialog gates, bootstrapCrossSigning enable/manual/reset; notes no longer null. Wrong owners initMatrix + primary UI DeviceVerification SAS removed.",
         "FR-7.9-002: retargeted behavior_relevant methods/listeners to getDeviceVerificationStatus, bootstrapCrossSigning pipeline (getCrypto/createRecoveryKeyFromPassphrase/bootstrapSecretStorage/resetKeyBackup), ClientEvent.AccountData on/removeListener. Excluded requestOwnUserVerification/requestDeviceVerification/getVerificationRequestsToDeviceInProgress as FR-7.9-004/005.",
         "FR-7.9-002: planned AT/MA require inactive Enable, post-bootstrap active badge, device Verified/Unverified, cutover P8.4/P8.1 via Rust SC-064 projection; SC-064 alone, compile-only, raw HTTP, helper/fixture-only FAIL. rust_target SC-064/SC-061/SC-062 compile-shape-only-blocked-for-product. Top-level AT-FR-7.9-002-001 and MA-FR-7.9-002 updated byte-aligned. File ledger: remove FR-7.9-002 from DeviceVerification.tsx; add to matrix-crypto.ts and useAccountDataCallback.ts. Status distribution unchanged. Accepted FR-7.8-001 through FR-7.8-009 and FR-7.9-001 preserved. JSON and Markdown synchronized."
+      ]
+    },
+    {
+      "id": "p0.2-correct-29-fr-7.9-003-own-and-other-device-lists",
+      "scope": "Rejected-review limited correction: FR-7.9-003 only — replace generic via-3-files notes=null shallow AT with concrete own-device/other-device list evidence: useDeviceList getDevices; useSplitCurrentDevice getDeviceId Current vs Others; Devices.tsx Current/OtherDevices surfaces; DeviceTile identity fields; DevicesUpdated refresh; UnverifiedTab list consumer; rewrite AT/MA for P8.2 cutover; honest rust_target SC-067 primary + SC-063 secondary compile-only blocked; no other-user device list UI",
+      "requirements_rewritten": ["FR-7.9-003"],
+      "not_claimed_complete": true,
+      "changes": [
+        "FR-7.9-003: current_status remains implemented. current_behavior_and_limits documents getDevices own-account list, getDeviceId Current vs Others split, Devices.tsx Current/OtherDevices UI, DeviceTile identity (device_id/display_name/last_seen/ed25519), DevicesUpdated own-user refresh, UnverifiedTab consumer; notes no longer null. Clarified other-device = other own sessions not third-party users; no getUserDeviceInfo.",
+        "FR-7.9-003: retargeted behavior_relevant methods/listeners to getDevices, getDeviceId, getUserId, getOwnDeviceKeys, CryptoEvent.DevicesUpdated on/removeListener. Excluded getCrypto/VerifyOtherDeviceTile (FR-7.9-004/005) and deleteMultipleDevices/UIA (FR-7.9-010) from behavior_relevant. Primary UI retargeted from OtherDevices-only to Devices.tsx + OtherDevices + UnverifiedTab.",
+        "FR-7.9-003: planned AT/MA require multi-session Current/Others observables, refresh, cutover P8.2 via Rust SC-067 list projection; SC-067/SC-063 alone, compile-only, raw HTTP, helper/fixture-only FAIL. rust_target SC-067 primary + SC-063 secondary compile-shape-only-blocked-for-product. Top-level AT-FR-7.9-003-001 and MA-FR-7.9-003 updated byte-aligned. Status distribution unchanged. Accepted FR-7.8-001 through FR-7.8-009 and FR-7.9-001..002 preserved. JSON and Markdown synchronized."
       ]
     }
   ]
