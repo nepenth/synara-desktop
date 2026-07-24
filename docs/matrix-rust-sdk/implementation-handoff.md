@@ -25,15 +25,16 @@ without explicit user approval.
 **Host task id:** `9022c2f8-9b21-411a-acf9-a36c10515f72`
 (`matrix-rust-sdk-replacement-orchestrator`, daily check-in)
 
-**Session state (2026-07-24, P0.7 accepted — PR to integration):**
+**Session state (2026-07-24, P1.1 active — Rust 1.93 pin):**
 
 - **Integration tip:** `feature/matrix-rust-sdk-full-replacement` @
-  `9e0cfcae8c377161a73ce8e01f889f485e233e5e`
-  (P0.1 + P0.3 + P0.2 + P0.4 + P0.5 + **P0.6 MERGED** — PR #46; tip message:
-  `docs(matrix): merge P0.6 performance baseline`)
-- **Active work branch:** `matrix-rust/p0.7-migration-ux` (docs only; **not
-  merged to integration yet**; no production `src-tauri` / product behavior
-  changes)
+  `ffc930f6eea5c5ce301e355cdee26d843e70d2ed`
+  (Phase 0: P0.1–P0.7 **all MERGED** into integration; tip includes P0.7
+  migration UX decision)
+- **Active work branch:** `matrix-rust/p1.1-rust-toolchain-pin` — permanent
+  Rust **1.93** pin (`rust-toolchain.toml`, `src-tauri` `rust-version`, CI
+  `dtolnay/rust-toolchain` `toolchain: 1.93`). **Not merged to integration
+  yet.** No production Matrix SDK deps; no dual-backend.
 - **P0.2 PR:** https://github.com/nepenth/synara-desktop/pull/42 — **MERGED**
   into integration (docs-only). **Never merge to `main` without explicit user
   approval.**
@@ -64,38 +65,42 @@ without explicit user approval.
   latencies / Linux live / memory-CPU-disk are **methodology-only residuals**
   (no fabricated live p50/p95). Verdict: **`pass-with-residuals`**. No production
   Matrix code changes.
-- **P0.7:** **accepted by independent review** (docs only). Artifacts:
+- **P0.7:** **MERGED** into integration (docs only). Artifacts:
   `migration-ux-decision.md` + `.json`; optional ADR pointer
   `docs/adr/0003-matrix-rust-sdk-migration-ux.md`. Verdict:
-  **`migration_ux_decided`**. PR targets integration — **do not claim MERGED until PR lands**. Required decision IDs
+  **`migration_ux_decided`**. Required decision IDs
   `D-LEGACY-DETECT`…`D-NO-DUAL-BACKEND` recorded; no dual-backend; no unsafe
   token/device reuse into fresh crypto store; FR-7.9-011 remains sequential
   single-active only. **No production session/migration code.**
+- **P1.1:** **in progress** on `matrix-rust/p1.1-rust-toolchain-pin` — pin
+  channel/`rust-version`/CI to **1.93** (MSRV for matrix-sdk 0.18.0). Local
+  validation: production `src-tauri` `cargo check/test --locked` on 1.93.
+  **Do not claim MERGED until PR lands into integration.**
 - **Optional later:** §7.1–7.7 scaffold rows may still have shallow notes if a
   full-matrix depth pass is desired beyond the handoff resume scope
-- **Progress loop:** 4-minute scheduler `019f95928db7` (retarget to Phase 0
-  remaining); daily durable orchestrator `9022c2f8-9b21-411a-acf9-a36c10515f72`
-- **No production Matrix Rust SDK replacement code accepted yet**
+- **Progress loop:** daily durable orchestrator `9022c2f8-9b21-411a-acf9-a36c10515f72`
+- **No production Matrix Rust SDK replacement code accepted yet** (P1.1 is
+  toolchain/MSRV only; SDK deps are P1.2)
 
-Phase 0 evidence accepted:
+Phase 0 evidence accepted (complete):
 
-- P0.1 SDK usage inventory — merged
-- P0.3 exact Matrix Rust SDK 0.18.0 capability dossier — merged
+- P0.1 SDK usage inventory — **merged**
+- P0.3 exact Matrix Rust SDK 0.18.0 capability dossier — **merged**
 - P0.2 feature-parity traceability (§7.8–7.11 quality audit) — **merged**
 - P0.4 Swift/Rust version provenance — **merged**
 - P0.5 Toolchain compatibility (Rust 1.93 / Tauri 2 / matrix-sdk 0.18) —
   **merged** (PR #45; `pass-with-residuals`)
 - P0.6 Baseline reliability/performance evidence —
-  **merged** (integration tip `9e0cfca`, PR #46; `pass-with-residuals`;
-  automated timeline mapping measured; live UX residuals documented)
+  **merged** (PR #46; `pass-with-residuals`; automated timeline mapping
+  measured; live UX residuals documented)
 - P0.7 Migration UX decision record —
-  **accepted, awaiting integration PR merge** (`migration_ux_decided`; docs only;
-  implementation ownership starts Phase 3 / P3.7)
+  **merged** (`migration_ux_decided`; docs only; implementation ownership
+  starts Phase 3 / P3.7)
 
 **Next program work:**
 
-1. **P0.7** merge accepted PR into integration (closes Phase 0 docs gates)
-2. **P1.1** permanent Rust 1.93 toolchain pin / MSRV bump
+1. **P1.1** land permanent Rust 1.93 toolchain pin / MSRV into integration
+2. **P1.2** exact Matrix Rust SDK deps in production `src-tauri` (after P1.1)
 
 Accepted notification findings that must be preserved:
 
