@@ -4,7 +4,7 @@
 
 ## Correction pass status
 
-Limited rejected-review correction (`p0.2-correct-43-fr-7.10-004-event-context-nav`) for **FR-7.10-004** only: replace shallow notes (via 5 production files / null notes / wrong primary methods `search` L105 + `getUserId` L318 / generic AT-MA / JumpToTime+useMessageSearch without Open evidence) with concrete **event-context navigation from results** evidence — Open Chip `data-event-id={mainEventId}` + `handleOpenClick` → `onOpen(roomId, eventId)`; MessageSearch `onOpen={navigateRoom}`; `useRoomNavigate.navigateRoom` embeds `eventId` in home/direct/space room paths; `getRoomTimelineOpenMode(focusedEventId)` → `'focused-event'`; honesty that Matrix `/search` `event_context` before/after 0 is NOT this FR (adjacency of FR-7.10-001); EXCLUDE JumpToTime alone, `mx.search` alone, room-scoped/global/filters/directory/local/cancel; honest rust_target `gap-event-context` SC-032/SC-033 + GAP-EVENT-CONTEXT; status remains `implemented`. JSON and Markdown synchronized. Accepted corrections for **FR-7.8-001 through FR-7.8-009**, **FR-7.9-001..013** (**FR-7.9-011** remains partial), **FR-7.10-001**, **FR-7.10-002**, and **FR-7.10-003** preserved. Prior corrections and accepted **7.1–7.3** preserved. **P0.2 is not complete.**
+Limited rejected-review correction (`p0.2-correct-44-fr-7.10-005-user-and-public-room-search`) for **FR-7.10-005** only: replace shallow notes (via 4 production files / null notes / wrong primary methods `getSafeUserId`+`getUserId` / generic `searchModal`+`Search.tsx` AT-MA / MessageSearch mislink) with concrete **user-directory + public-room directory** evidence — CallWidgetDriver `client.searchUserDirectory` L297; Server.tsx PublicRooms `fetchPublicRooms` POST `/publicRooms` `filter.generic_search_term` + since pagination + RoomCards; Search.tsx demoted to explore-entry / local quick-switcher honesty (NOT server directory APIs); drop MessageSearch as primary; EXCLUDE message search 001–004, local invite autocomplete alone, SC-072; honest rust_target `compile-shape-only-blocked-for-product` SC-068+SC-069+SC-070 with raw-HTTP publicRooms cutover honesty; status remains `implemented`. JSON and Markdown synchronized. Accepted corrections for **FR-7.8-001 through FR-7.8-009**, **FR-7.9-001..013** (**FR-7.9-011** remains partial), **FR-7.10-001**, **FR-7.10-002**, **FR-7.10-003**, and **FR-7.10-004** preserved. Prior corrections and accepted **7.1–7.3** preserved. **P0.2 is not complete.**
 
 ## Provenance
 
@@ -6780,56 +6780,65 @@ Limited rejected-review correction (`p0.2-correct-43-fr-7.10-004-event-context-n
 - **Text**: user and public-room search;
 - **Lines**: 445–445
 - **Status**: `implemented`
-- **Behavior**: Current desktop implements this via 4 production matrix-js-sdk-related file(s); status=implemented.
-- **UI**: `synara/src/app/features/search/Search.tsx`, `synara/src/app/pages/client/explore/Server.tsx`
-- **Owners**: `synara/src/app/state/searchModal.ts`
+- **Behavior**: Current desktop implements public-room directory search in Explore PublicRooms (raw POST /publicRooms with generic_search_term + since pagination) and Matrix user-directory search via CallWidgetDriver client.searchUserDirectory (widget path). Main invite/quick-switcher UIs are local autocomplete only. status=implemented.
+- **Notes**: Evidence (conservative): (1) PRODUCT MEANING — FR-7.10-005 is Matrix user-directory search + public-room directory search. It is NOT room_events message search (FR-7.10-001..004), NOT experimental local message search (FR-7.10-006), and NOT cancel/stale (FR-7.10-007). (2) USER DIRECTORY API: sole production matrix-js-sdk user_directory call is CallWidgetDriver.ts searchUserDirectory L291–307 → client.searchUserDirectory({ term: searchTerm, limit }) mapping results to { userId: user_id, displayName: display_name, avatarUrl: avatar_url }. Widget ISearchUserDirectoryResult path for Element Call. (3) USER UI HONESTY: main-app InviteUserPrompt.tsx filters useDirectUsers via local useAsyncSearch (L63–78, L117–129) and accepts exact isUserId MXID — does NOT call searchUserDirectory. features/search/Search.tsx quick-switcher (Ctrl/Cmd+K, searchModalAtom) uses useAsyncSearch over joined rooms/DMs/spaces (L186–275, prefixes #/@/*) — local name/localpart filter only; @ is DM rooms not server user_directory. (4) PUBLIC-ROOM SEARCH PRIMARY: pages/client/explore/Server.tsx PublicRooms L343–666. fetchPublicRooms L371–395: mx.http.authedRequest Method.Post '/publicRooms' query { server } body { limit, since, filter: { generic_search_term: term, room_types }, third_party_instance_id }. useQuery key ['publicRooms', limit, since, term, type, instance] L397–408. Search form L93–145 handleSearchSubmit → onSearch(term); handleSearch L438–443 explore({ term, since: undefined }); Clear L445–453. Pagination: paginateBack/Front L428–436 via prev_batch/next_batch → since URL; buttons L618–642. Results RoomCard L588–616 onView navigateSpace/navigateRoom; empty L644–656 'No communities found!'; loading skeleton L575–580; error L582–586. Type chips All/Spaces/Rooms L65–81, L540–556. Limit L360–364, L463–465. URL params useServerSearchParams L49–59 (limit/since/term/type/instance). getUserId L346 is only used to derive userServer for third-party protocol chip visibility — NOT a search API. (5) PUBLIC-ROOM ENTRY ADJACENCY: Search.tsx explore action L250–257 navigate(getExplorePath()) aliases explore/discover/public rooms — navigation entry only, not directory API. Router.tsx routes _SERVER_PATH → PublicRooms. Explore.tsx AddServer has mx.publicRooms({ server, limit: 1 }) probe (L47–48) — not the primary search UI (Explore.tsx not in P0.1 220 import ledger). (6) EXCLUDE as sole evidence: MessageSearch/useMessageSearch mx.search room_events (FR-7.10-001..004); getSafeUserId on Search.tsx (DM display); local InviteUserPrompt/AdditionalCreatorInput autocomplete alone; SC-071 message search; SC-072 local; dual-backend; compile-only SC-068/069/070 as product pass. (7) No existing automated AT for directory search E2E. (8) Cutover P6.8 (+P11.3): user directory → SC-068 Client::search_users; public rooms → SC-069 RoomDirectorySearch + SC-070 ::new (not raw /_matrix HTTP retention for publicRooms, not dual-backend/SDK selector, not invented high-level APIs). SC alone / compile-only / raw HTTP / message-search-only / local-autocomplete-only FAIL.
+- **Limits**: P0.1 method candidates are AST name hits unless marked source-inspected. Product public-room search uses mx.http.authedRequest raw POST /publicRooms (not MatrixClient.publicRooms wrapper on the search path) — cutover must move to typed RoomDirectorySearch (SC-069/SC-070), not retain raw HTTP. User directory server API is only on the CallWidgetDriver path; main invite/quick-switcher UIs are local list filters + exact MXID entry. No E2E AT yet. SC-068/069/070 are compile-probed (blocked E3–E5); do not treat compile-only as product pass. Do not invent high-level APIs beyond accepted caps. Do not substitute SC-071 message search or SC-072 local search for this FR.
+- **UI**: `synara/src/app/pages/client/explore/Server.tsx`, `synara/src/app/features/search/Search.tsx`, `synara/src/app/plugins/call/CallWidgetDriver.ts`
+- **UI rationale**: Public-room search chrome is Explore Server PublicRooms (Server.tsx): Search form (generic_search_term), type chips, limit, prev/next pagination, RoomCard grid. Router routes explore server path to PublicRooms. features/search/Search.tsx quick-switcher (searchModalAtom / Ctrl+K) provides Explore Rooms action to getExplorePath — entry adjacency only; its #/@/* search is local joined-room filter, not server directory. User directory server API is exposed via CallWidgetDriver.searchUserDirectory for Element Call widgets — not via main InviteUserPrompt (local DM list + exact MXID). MessageSearch.tsx is FR-7.10-001..004 — EXCLUDE.
+- **Owners**: `synara/src/app/pages/client/explore/Server.tsx`, `synara/src/app/plugins/call/CallWidgetDriver.ts`, `synara/src/app/state/searchModal.ts`
 - **Files**:
-  - `synara/src/app/features/message-search/MessageSearch.tsx` symbols=[] retained_m=0 retained_l=0
-  - `synara/src/app/features/search/Search.tsx` symbols=['getSafeUserId', 'getSafeUserId'] retained_m=2 retained_l=0
-    - method `getSafeUserId`:L266 — None
-    - method `getSafeUserId`:L468 — None
-  - `synara/src/app/pages/client/explore/Server.tsx` symbols=['getUserId'] retained_m=1 retained_l=0
-    - method `getUserId`:L346 — None
-  - `synara/src/app/plugins/call/CallWidgetDriver.ts` symbols=['getSafeUserId', 'searchUserDirectory'] retained_m=2 retained_l=0
-    - method `getSafeUserId`:L43 — None
-    - method `searchUserDirectory`:L297 — None
+  - `synara/src/app/pages/client/explore/Server.tsx` symbols=['fetchPublicRooms POST /publicRooms', 'generic_search_term', 'PublicRooms Search form', 'paginate since/next_batch/prev_batch'] retained_m=0 retained_l=0
+    - line `fetchPublicRooms mx.http.authedRequest POST /publicRooms`:L379 — Primary public-room directory search: authedRequest Method.Post '/publicRooms' with server query and body filter.generic_search_term + room_types + since/limit/third_party_instance_id (L371–395).
+    - line `filter.generic_search_term`:L389 — generic_search_term = serverSearchParams.term — the public-room search term field.
+    - line `useQuery publicRooms`:L397 — React Query key/queryFn for publicRooms directory fetch keyed by server+limit+since+term+type+instance.
+    - line `Search form handleSearchSubmit`:L94 — Explore Server Search form submits term → onSearch (L93–145).
+    - line `handleSearch explore term`:L438 — handleSearch writes URL term and clears since for a new public-room search page.
+    - line `paginateFront next_batch`:L433 — Pagination uses next_batch → since URL param (prev_batch L428–431).
+    - line `RoomCard results`:L592 — Renders public room chunk as RoomCards; onView navigateSpace/navigateRoom.
+  - `synara/src/app/plugins/call/CallWidgetDriver.ts` symbols=['searchUserDirectory'] retained_m=1 retained_l=0
+    - method `searchUserDirectory`:L297 — Sole production user-directory search call.
+  - `synara/src/app/features/search/Search.tsx` symbols=['explore action getExplorePath', 'useAsyncSearch local rooms'] retained_m=0 retained_l=0
+    - line `explore QuickSwitcherAction`:L250 — Quick-switcher action 'Explore Rooms' navigate(getExplorePath()) — navigation entry to public-room explore UI only; does not call /publicRooms.
+    - line `useAsyncSearch targetRooms`:L275 — Local useAsyncSearch over joined rooms/DMs/spaces — NOT server user_directory or publicRooms. Documented for honesty / EXCLUDE as sole directory-search evidence.
+    - line `SearchModalRenderer mod+k`:L587 — Modal open/close via searchModalAtom + Ctrl/Cmd+K — modal shell only.
 - **Behavior-relevant methods (top-level)**:
-  - `getSafeUserId` `synara/src/app/features/search/Search.tsx`:L266 — None
-  - `getSafeUserId` `synara/src/app/features/search/Search.tsx`:L468 — None
-  - `getUserId` `synara/src/app/pages/client/explore/Server.tsx`:L346 — None
-  - `getSafeUserId` `synara/src/app/plugins/call/CallWidgetDriver.ts`:L43 — None
-  - `searchUserDirectory` `synara/src/app/plugins/call/CallWidgetDriver.ts`:L297 — None
+  - `searchUserDirectory` `synara/src/app/plugins/call/CallWidgetDriver.ts`:L297 — Sole production Matrix user_directory search call.
 - **Behavior-relevant listeners (top-level)**:
   - —
-- **Unfiltered linked candidates**: methods=17 listeners=0
+- **Unfiltered linked candidates**: methods=15 listeners=0
 - **Rust**: `compile-shape-only-blocked-for-product` caps=['SC-068', 'SC-069', 'SC-070'] gaps=[]
   - `SC-068` `blocked` `matrix_sdk::Client::search_users` https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/client/mod.rs#L702
   - `SC-069` `blocked` `matrix_sdk::room_directory_search::RoomDirectorySearch` https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/room_directory_search.rs#L114
   - `SC-070` `blocked` `matrix_sdk::room_directory_search::RoomDirectorySearch::new` https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/room_directory_search.rs#L125
-- **Tasks**: `P6.8`
+- Honest: rust_target for FR-7.10-005: compile-shape-only-blocked-for-product with SC-068 (Client::search_users) for user directory + SC-069/SC-070 (RoomDirectorySearch / ::new) for public room directory. Cutover P6.8 (+P11.3) must preserve (1) searchUserDirectory → SC-068 and (2) PublicRooms generic_search_term + pagination → RoomDirectorySearch under typed SDK + product DTO/IPC — not raw /_matrix HTTP retention for publicRooms, not dual-backend/SDK selector, not invented high-level APIs, not SC-071 message search, not SC-072 local. SC-068/069/070 alone / compile-only / raw HTTP / message-search-only / local-autocomplete-only FAIL.
+- **Tasks**: `P6.8`, `P11.3`
+- **Blockers**:
+  - (medium) compile-shape-only-blocked-for-product: FR-7.10-005 cutover requires SC-068 user-directory + SC-069/SC-070 RoomDirectorySearch under typed SDK + product DTO; SC alone / compile-only not product pass; current publicRooms path is raw HTTP and must not be retained as the cutover route.
 - **Existing tests**:
   - _(none)_
 - **Planned** `AT-FR-7.10-005-001` task `P6.8` level `integration`
-  - Scenario: 7.10/FR-7.10-005: exercise 'user and public-room search;' via owner `synara/src/app/state/searchModal.ts` and UI `synara/src/app/features/search/Search.tsx`, then confirm Rust/IPC cutover task `P6.8` preserves observable behavior without raw Matrix runtime HTTP.
-  - Test target: None
+  - Scenario: Integration against disposable Synapse: (A) USER DIRECTORY — invoke CallWidgetDriver searchUserDirectory / client.searchUserDirectory with a known localpart (or MXID term); assert results include that user_id (display_name/avatar_url when present). Product main InviteUserPrompt and quick-switcher Search.tsx @-filter are local useAsyncSearch over known DMs/rooms — they do NOT call server user_directory and do not alone satisfy this clause. (B) PUBLIC-ROOM SEARCH — open Explore → server PublicRooms (Server.tsx); enter term; assert POST /publicRooms body includes filter.generic_search_term; results RoomCard list or empty 'No communities found!'; paginate via since/next_batch/prev_batch when tokens exist. (C) DISTINCTIONS — room-scoped message search (FR-7.10-001), Global message search (FR-7.10-002), message filters (FR-7.10-003), Open event-context (FR-7.10-004), local SC-072 (FR-7.10-006), cancel/stale (FR-7.10-007), and local-only invite/quick-switcher autocomplete do not satisfy this FR. After cutover P6.8 (+P11.3): same observables via Rust Client::search_users (SC-068) + RoomDirectorySearch (SC-069/SC-070) under typed SDK ownership + product DTO/IPC — not raw /_matrix HTTP retention for publicRooms, not dual-backend/SDK selector, not invented high-level APIs. SC-068/069/070 alone / compile-only / raw HTTP / message-search-only / local-autocomplete-only FAIL.
+  - Test target: CallWidgetDriver.searchUserDirectory → client.searchUserDirectory; Server.tsx PublicRooms fetchPublicRooms POST /publicRooms generic_search_term + since pagination + RoomCard results; post-cutover SC-068 + SC-069/SC-070 + product DTO (P6.8/P11.3)
   - Preconditions:
-    - Desktop app; room with searchable indexed history on Synapse
-    - Public room directory populated; second user for user search
-    - Linked owner path present in tree: synara/src/app/state/searchModal.ts
-    - Primary UI/lifecycle surface: synara/src/app/features/search/Search.tsx
+    - Disposable Synapse with at least one searchable directory user and public room directory entries.
+    - Named owners present: CallWidgetDriver.ts (user directory), Server.tsx PublicRooms (public-room search).
+    - Harness can invoke widget searchUserDirectory path and open Explore/Server public directory UI.
+    - Do not accept message-search-only (FR-7.10-001..004), local InviteUserPrompt/quick-switcher useAsyncSearch alone, SC-068/069/070 compile-only, raw HTTP retention, or dual-backend as sole pass for this FR.
   - Actions:
-    1. Boot the appropriate harness for level=integration against disposable Synapse (or iOS notes if any).
-    2. Establish fixtures required by the clause list: user; public-room search.
-    3. Open UI/lifecycle surface `synara/src/app/features/search/Search.tsx` (or follow ui_entry_points_rationale if no dedicated UI).
-    4. Step 1: perform the product action that implements «user» using current owner `synara/src/app/state/searchModal.ts`.
-    5. Step 2: perform the product action that implements «public-room search» using current owner `synara/src/app/state/searchModal.ts`.
-    6. Issue search, paginate results, cancel in-flight query, and re-issue with different filters to catch stale results.
+    1. Boot integration harness against disposable Synapse. Do not use fixture-only mocks that skip product directory paths, dual-backend selectors, raw-HTTP-as-pass, or local-autocomplete-only criteria.
+    2. USER DIRECTORY: call searchUserDirectory (CallWidgetDriver / client.searchUserDirectory) with a known term; assert results include that user_id.
+    3. PUBLIC-ROOM SEARCH: open Explore server PublicRooms; submit Search term; assert request uses filter.generic_search_term and UI shows matching RoomCards or empty state.
+    4. PUBLIC-ROOM PAGINATION (when tokens exist): exercise Next/Previous Page (since/next_batch/prev_batch).
+    5. After cutover P6.8 (+P11.3), repeat user directory via SC-068 and public room directory via RoomDirectorySearch SC-069/SC-070 under Rust ownership + product DTO/IPC. Citing SC alone, compile-only blocked, raw /_matrix HTTP, dual-backend/SDK selector, message-search-only, or local-autocomplete-only is a FAIL.
   - Assertions:
-    - Each clause is observable: «user»; «public-room search».
-    - State coordination remains through `synara/src/app/state/searchModal.ts` (or its Rust/IPC successor after cutover), not ad-hoc dual writers.
-    - Behavior-relevant current JS method candidates exercised or replaced: getSafeUserId, getSafeUserId, getUserId, getSafeUserId, searchUserDirectory (AST candidates; not type-proven receivers).
-    - Rust mapping remains conservative: caps=[SC-068,SC-069,SC-070] gaps=[none]; compile-only blocked states are not treated as runtime pass.
-    - No new production matrix-js-sdk usage and no raw /\_matrix runtime HTTP unless dossier marks that exact behavior typed-sdk-request-required.
+    - USER DIRECTORY: client.searchUserDirectory({ term, limit }) returns known user_id (CallWidgetDriver maps user_id/display_name/avatar_url).
+    - PUBLIC-ROOM SEARCH: PublicRooms issues directory search with filter.generic_search_term; results or empty state without crash; RoomCard onView navigateRoom/navigateSpace when joined path available.
+    - PUBLIC-ROOM PAGINATION: since/next_batch/prev_batch page controls work when tokens present.
+    - DISTINCTIONS: this FR ≠ FR-7.10-001 room-scoped message search; ≠ FR-7.10-002 Global; ≠ FR-7.10-003 filters; ≠ FR-7.10-004 Open; ≠ FR-7.10-006 local SC-072; ≠ FR-7.10-007 cancel/stale; ≠ local InviteUserPrompt/quick-switcher autocomplete alone; ≠ mx.search room_events.
+    - COORDINATION: user directory via CallWidgetDriver searchUserDirectory; public rooms via Server.tsx PublicRooms (or Rust/IPC successors), not ad-hoc dual writers / dual-backend.
+    - CUTOVER: P6.8 (+P11.3) preserves user + public-room directory search via SC-068 + SC-069/SC-070 + product DTO; SC alone / compile-only never product pass; no raw /_matrix runtime HTTP retention for publicRooms; no dual-backend/SDK selector; no invented high-level APIs.
+    - No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless the dossier marks that exact behavior typed-sdk-request-required.
+    - Message-search-only, Open-only, filter-only, global-only, cancel/stale-only, and local-autocomplete-only are not accepted as sole pass criteria for this FR.
   - does_not_currently_exist: `True`
 - **Manual**: `MA-FR-7.10-005`
 
@@ -9454,22 +9463,22 @@ Limited rejected-review correction (`p0.2-correct-43-fr-7.10-004-event-context-n
 
 - Platforms: macOS, Linux
 - Preconditions:
-  - Desktop app; room with searchable indexed history on Synapse
-  - Public room directory populated; second user for user search
-  - State owner available: synara/src/app/state/searchModal.ts
-  - UI/lifecycle: synara/src/app/features/search/Search.tsx
-  - Current status baseline: implemented
+  - Desktop app against disposable Synapse; public room directory populated; second searchable user for user directory.
+  - State/owners available: CallWidgetDriver.searchUserDirectory (user directory); Server.tsx PublicRooms (public-room search).
+  - UI/lifecycle: Explore → server PublicRooms Search form; widget user-directory path for searchUserDirectory.
+  - Current status baseline: implemented (public-room directory UI + widget user-directory API; main invite/quick-switcher are local lists, not server user_directory).
 - Actions:
-  1. Launch Synara desktop on the target platform against disposable Synapse; use a clean or known fixture profile as required by «user and public-room search;».
-  2. Identify state owner `synara/src/app/state/searchModal.ts` and open `synara/src/app/features/search/Search.tsx`.
-  3. Action 1 — «user»: perform the minimal user/system steps that trigger this clause (use linked files under current_production_files if the entry point is indirect).
-  4. Action 2 — «public-room search»: perform the minimal user/system steps that trigger this clause (use linked files under current_production_files if the entry point is indirect).
-  5. Run search, change filters, paginate, click a result to open event context, cancel a slow query and ensure UI does not apply stale results.
+  1. Launch Synara desktop on the target platform against disposable Synapse.
+  2. USER DIRECTORY: exercise CallWidgetDriver / client.searchUserDirectory with a known localpart; confirm results include that user. Do not treat InviteUserPrompt local DM autocomplete or quick-switcher @-filter alone as user directory search.
+  3. PUBLIC-ROOM SEARCH: open Explore → choose/open a server PublicRooms page; enter a search term; confirm matching public communities list or empty 'No communities found!'; when available paginate Next/Previous.
+  4. DISTINCTIONS (negative for this FR alone): do not treat room-scoped message search (FR-7.10-001), Global message search (FR-7.10-002), sender/room/date/type filters (FR-7.10-003), Open from message results (FR-7.10-004), local SC-072 (FR-7.10-006), cancel/stale (FR-7.10-007), or local-only invite/quick-switcher autocomplete as satisfying user and public-room directory search.
+  5. After cutover P6.8 (+P11.3): repeat user directory via SC-068 Client::search_users and public rooms via RoomDirectorySearch SC-069/SC-070 under Rust ownership + product DTO/IPC (not raw /_matrix from the renderer, not dual-backend/SDK selector, not invented high-level APIs).
 - Expected:
-  - All clauses under «user and public-room search;» produce the user-visible or system-observable success criteria without error toasts unrelated to intentional negative tests.
-  - Clause 1 «user» is satisfied on macOS, Linux with owner `synara/src/app/state/searchModal.ts`.
-  - Clause 2 «public-room search» is satisfied on macOS, Linux with owner `synara/src/app/state/searchModal.ts`.
-  - No unexpected raw /\_matrix traffic from the app renderer for this flow on the post-cutover build.
+  - USER DIRECTORY: searchUserDirectory returns the known user_id (and profile fields when present).
+  - PUBLIC-ROOM SEARCH: PublicRooms search term yields matching RoomCards or empty state; pagination works when tokens exist.
+  - DISTINCTIONS: message-search / Open / filters / global / local-autocomplete alone do not pass this FR.
+  - No unexpected raw /_matrix traffic from the app renderer for this flow on the post-cutover build; no dual-backend/SDK selector; publicRooms cutover uses typed RoomDirectorySearch path not raw HTTP retention.
+  - SC-068/069/070 alone / compile-only / raw HTTP / message-search-only / local-autocomplete-only do not pass this FR.
 
 ### `MA-FR-7.10-006` (FR-7.10-006)
 
@@ -11703,21 +11712,23 @@ Limited rejected-review correction (`p0.2-correct-43-fr-7.10-004-event-context-n
 
 ### `AT-FR-7.10-005-001`
 
-- 7.10/FR-7.10-005: exercise 'user and public-room search;' via owner `synara/src/app/state/searchModal.ts` and UI `synara/src/app/features/search/Search.tsx`, then confirm Rust/IPC cutover task `P6.8` preserves observable behavior without raw Matrix runtime HTTP.
-- target: None
+- Integration against disposable Synapse: (A) USER DIRECTORY — invoke CallWidgetDriver searchUserDirectory / client.searchUserDirectory with a known localpart (or MXID term); assert results include that user_id (display_name/avatar_url when present). Product main InviteUserPrompt and quick-switcher Search.tsx @-filter are local useAsyncSearch over known DMs/rooms — they do NOT call server user_directory and do not alone satisfy this clause. (B) PUBLIC-ROOM SEARCH — open Explore → server PublicRooms (Server.tsx); enter term; assert POST /publicRooms body includes filter.generic_search_term; results RoomCard list or empty 'No communities found!'; paginate via since/next_batch/prev_batch when tokens exist. (C) DISTINCTIONS — room-scoped message search (FR-7.10-001), Global message search (FR-7.10-002), message filters (FR-7.10-003), Open event-context (FR-7.10-004), local SC-072 (FR-7.10-006), cancel/stale (FR-7.10-007), and local-only invite/quick-switcher autocomplete do not satisfy this FR. After cutover P6.8 (+P11.3): same observables via Rust Client::search_users (SC-068) + RoomDirectorySearch (SC-069/SC-070) under typed SDK ownership + product DTO/IPC — not raw /_matrix HTTP retention for publicRooms, not dual-backend/SDK selector, not invented high-level APIs. SC-068/069/070 alone / compile-only / raw HTTP / message-search-only / local-autocomplete-only FAIL.
+- target: CallWidgetDriver.searchUserDirectory → client.searchUserDirectory; Server.tsx PublicRooms fetchPublicRooms POST /publicRooms generic_search_term + since pagination + RoomCard results; post-cutover SC-068 + SC-069/SC-070 + product DTO (P6.8/P11.3)
 - actions:
-  1. Boot the appropriate harness for level=integration against disposable Synapse (or iOS notes if any).
-  2. Establish fixtures required by the clause list: user; public-room search.
-  3. Open UI/lifecycle surface `synara/src/app/features/search/Search.tsx` (or follow ui_entry_points_rationale if no dedicated UI).
-  4. Step 1: perform the product action that implements «user» using current owner `synara/src/app/state/searchModal.ts`.
-  5. Step 2: perform the product action that implements «public-room search» using current owner `synara/src/app/state/searchModal.ts`.
-  6. Issue search, paginate results, cancel in-flight query, and re-issue with different filters to catch stale results.
+  1. Boot integration harness against disposable Synapse. Do not use fixture-only mocks that skip product directory paths, dual-backend selectors, raw-HTTP-as-pass, or local-autocomplete-only criteria.
+  2. USER DIRECTORY: call searchUserDirectory (CallWidgetDriver / client.searchUserDirectory) with a known term; assert results include that user_id.
+  3. PUBLIC-ROOM SEARCH: open Explore server PublicRooms; submit Search term; assert request uses filter.generic_search_term and UI shows matching RoomCards or empty state.
+  4. PUBLIC-ROOM PAGINATION (when tokens exist): exercise Next/Previous Page (since/next_batch/prev_batch).
+  5. After cutover P6.8 (+P11.3), repeat user directory via SC-068 and public room directory via RoomDirectorySearch SC-069/SC-070 under Rust ownership + product DTO/IPC. Citing SC alone, compile-only blocked, raw /_matrix HTTP, dual-backend/SDK selector, message-search-only, or local-autocomplete-only is a FAIL.
 - assertions:
-  - Each clause is observable: «user»; «public-room search».
-  - State coordination remains through `synara/src/app/state/searchModal.ts` (or its Rust/IPC successor after cutover), not ad-hoc dual writers.
-  - Behavior-relevant current JS method candidates exercised or replaced: getSafeUserId, getSafeUserId, getUserId, getSafeUserId, searchUserDirectory (AST candidates; not type-proven receivers).
-  - Rust mapping remains conservative: caps=[SC-068,SC-069,SC-070] gaps=[none]; compile-only blocked states are not treated as runtime pass.
-  - No new production matrix-js-sdk usage and no raw /\_matrix runtime HTTP unless dossier marks that exact behavior typed-sdk-request-required.
+  - USER DIRECTORY: client.searchUserDirectory({ term, limit }) returns known user_id (CallWidgetDriver maps user_id/display_name/avatar_url).
+  - PUBLIC-ROOM SEARCH: PublicRooms issues directory search with filter.generic_search_term; results or empty state without crash; RoomCard onView navigateRoom/navigateSpace when joined path available.
+  - PUBLIC-ROOM PAGINATION: since/next_batch/prev_batch page controls work when tokens present.
+  - DISTINCTIONS: this FR ≠ FR-7.10-001 room-scoped message search; ≠ FR-7.10-002 Global; ≠ FR-7.10-003 filters; ≠ FR-7.10-004 Open; ≠ FR-7.10-006 local SC-072; ≠ FR-7.10-007 cancel/stale; ≠ local InviteUserPrompt/quick-switcher autocomplete alone; ≠ mx.search room_events.
+  - COORDINATION: user directory via CallWidgetDriver searchUserDirectory; public rooms via Server.tsx PublicRooms (or Rust/IPC successors), not ad-hoc dual writers / dual-backend.
+  - CUTOVER: P6.8 (+P11.3) preserves user + public-room directory search via SC-068 + SC-069/SC-070 + product DTO; SC alone / compile-only never product pass; no raw /_matrix runtime HTTP retention for publicRooms; no dual-backend/SDK selector; no invented high-level APIs.
+  - No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless the dossier marks that exact behavior typed-sdk-request-required.
+  - Message-search-only, Open-only, filter-only, global-only, cancel/stale-only, and local-autocomplete-only are not accepted as sole pass criteria for this FR.
 
 ### `AT-FR-7.10-006-001`
 
@@ -12041,7 +12052,7 @@ Limited rejected-review correction (`p0.2-correct-43-fr-7.10-004-event-context-n
 | `synara/src/app/features/lobby/RoomItem.tsx`                                   | `feature`          | `requirement-linked`           |   0 |   1 | `FR-7.2-004`,`FR-7.2-008`,`FR-7.6-001`,`FR-7.7-007`                                                                                                                                                                                       |
 | `synara/src/app/features/lobby/SpaceHierarchy.tsx`                             | `feature`          | `requirement-linked`           |   0 |   6 | `FR-7.2-004`,`FR-7.2-008`,`FR-7.2-009`,`FR-7.7-007`                                                                                                                                                                                       |
 | `synara/src/app/features/lobby/SpaceItem.tsx`                                  | `feature`          | `requirement-linked`           |   0 |   1 | `FR-7.2-004`,`FR-7.2-008`,`FR-7.6-001`,`FR-7.7-007`                                                                                                                                                                                       |
-| `synara/src/app/features/message-search/MessageSearch.tsx`                     | `feature`          | `requirement-linked`           |   0 |   1 | `FR-7.3-007`,`FR-7.3-008`,`FR-7.3-009`,`FR-7.3-010`,`FR-7.3-014`,`FR-7.3-016`,`FR-7.4-004`,`FR-7.6-006`,`FR-7.10-001`,`FR-7.10-002`,`FR-7.10-003`,`FR-7.10-004`,`FR-7.10-005`,`FR-7.10-007`                                               |
+| `synara/src/app/features/message-search/MessageSearch.tsx`                     | `feature`          | `requirement-linked`           |   0 |   1 | `FR-7.3-007`,`FR-7.3-008`,`FR-7.3-009`,`FR-7.3-010`,`FR-7.3-014`,`FR-7.3-016`,`FR-7.4-004`,`FR-7.6-006`,`FR-7.10-001`,`FR-7.10-002`,`FR-7.10-003`,`FR-7.10-004`,`FR-7.10-007`                                               |
 | `synara/src/app/features/message-search/SearchFilters.tsx`                     | `feature`          | `requirement-linked`           |   0 |   4 | `FR-7.3-007`,`FR-7.3-008`,`FR-7.3-009`,`FR-7.3-010`,`FR-7.3-014`,`FR-7.3-016`,`FR-7.4-004`,`FR-7.10-002`,`FR-7.10-003`                                                                                                                    |
 | `synara/src/app/features/message-search/SearchResultGroup.tsx`                 | `feature`          | `requirement-linked`           |   0 |   0 | `FR-7.3-007`,`FR-7.3-008`,`FR-7.3-009`,`FR-7.3-010`,`FR-7.3-014`,`FR-7.3-016`,`FR-7.4-004`,`FR-7.10-001`,`FR-7.10-004`                                                                                                                    |
 | `synara/src/app/features/message-search/useMessageSearch.ts`                   | `feature`          | `requirement-linked`           |   0 |   1 | `FR-7.3-007`,`FR-7.3-008`,`FR-7.3-009`,`FR-7.3-010`,`FR-7.3-014`,`FR-7.3-016`,`FR-7.4-004`,`FR-7.6-006`,`FR-7.10-001`,`FR-7.10-002`,`FR-7.10-003`,`FR-7.10-006`,`FR-7.10-007`                                               |
