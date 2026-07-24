@@ -78614,7 +78614,6 @@
             "final": {
               "final_state": "blocked",
               "final_state_rationale": "Stable API Room::has_active_room_call compile-probed in P0.3c (E1/E2). E3/E4/E5 not present. API is boolean presence only — does not provide full membership list (sender/membershipID/callIntent) that product UI displays today.",
-
               "missing_gates": [
                 "semantic_or_integration_test",
                 "live_synapse_two_client",
@@ -78666,7 +78665,6 @@
       ],
       "automated_tests": {
         "existing": [],
-
         "planned_required": [
           {
             "id": "AT-FR-7.11-001-001",
@@ -82768,12 +82766,32 @@
           "behavior_relevant_method_candidates": [],
           "behavior_relevant_listener_candidates": [],
           "symbols_or_candidates_note": "Build-time same-origin packaging enabling CSP frame-src 'self' for Element Call assets."
+        },
+        {
+          "path": "synara/index.html",
+          "bucket": "shell",
+          "categories": [],
+          "symbols_or_candidates": [
+            "no Content-Security-Policy meta"
+          ],
+          "line_refs": [
+            {
+              "symbol": "no Content-Security-Policy meta (residual)",
+              "line": 1,
+              "kind": "product_helper",
+              "relevance_reason": "DOCUMENT CSP RESIDUAL: synara/index.html has charset/viewport/description/og/theme-color/favicon only — no Content-Security-Policy meta for frame-src/script-src EC hardening (web/dev shell). Desktop relies on Tauri CSP injection instead."
+            }
+          ],
+          "model_coupling": [],
+          "behavior_relevant_method_candidates": [],
+          "behavior_relevant_listener_candidates": [],
+          "symbols_or_candidates_note": "Honest residual owner: document-level CSP meta absent in renderer HTML."
         }
       ],
       "ui_entry_points": [
         "synara/src/app/plugins/call/CallEmbed.ts"
       ],
-      "ui_entry_points_rationale": "FR-7.11-006 is CSP and origin restrictions for Element Call embed — not a dedicated settings screen. Product surfaces: CallEmbed.getIframe sandbox/allow; getWidget parentUrl + same-origin /public/element-call URL; Tauri app.security.csp (shell). EXCLUDE membership display (001); embed URL/capabilities alone without CSP (002); join/leave (003); encryption keys (004); cleanup (005); experimental risk acceptance alone (007).",
+      "ui_entry_points_rationale": "FR-7.11-006 is CSP and origin restrictions for Element Call embed — not a dedicated settings screen. Product surfaces: CallEmbed.getIframe sandbox/allow; getWidget parentUrl + same-origin /public/element-call URL; Tauri app.security.csp (shell); index.html document CSP residual. EXCLUDE membership display (001); embed URL/capabilities alone without CSP (002); join/leave (003); encryption keys (004); cleanup (005); experimental risk acceptance alone (007).",
       "state_owners": [
         {
           "path": "synara/src/app/plugins/call/CallEmbed.ts",
@@ -82786,10 +82804,14 @@
         {
           "path": "synara/vite.config.js",
           "ownership_evidence": "Build packaging of element-call-embedded into public/element-call for same-origin load under frame-src 'self'."
+        },
+        {
+          "path": "synara/index.html",
+          "ownership_evidence": "DOCUMENT CSP residual: no Content-Security-Policy meta in renderer HTML (desktop relies on Tauri CSP)."
         }
       ],
       "current_js_sdk": {
-        "behavior_relevance_policy": "Exact-line source inspection for CSP and origin restrictions only. RETAIN: CallEmbed.getWidget parentUrl=window.location.origin + same-origin /public/element-call URL; CallEmbed.getIframe sandbox+allow; ClientWidgetApi construct (dependency targetOrigin=widget.origin); Tauri app.security.csp frame-src 'self'; vite static-copy same-origin packaging. EXCLUDE as sole evidence: membership DISPLAY (001); embed URL/capabilities alone without CSP (002); join/leave (003); encryption-key ToDeviceEvent (004); cleanup dispose (005); experimental risk alone (007); getDeviceId; widgetUrl.search false Client.search AST; CallWidgetDriver searchUserDirectory; utils getCallCapabilities; dual-backend/raw /_matrix HTTP. Dependency residual: matrix-widget-api PostmessageTransport.strictOriginCheck defaults false and is not product-enabled.",
+        "behavior_relevance_policy": "Exact-line source inspection for CSP and origin restrictions only. RETAIN: CallEmbed.getWidget parentUrl=window.location.origin + same-origin /public/element-call URL; CallEmbed.getIframe sandbox+allow; ClientWidgetApi construct (dependency targetOrigin=widget.origin); Tauri app.security.csp frame-src 'self'; vite static-copy same-origin packaging; index.html no CSP meta residual. EXCLUDE as sole evidence: membership DISPLAY (001); embed URL/capabilities alone without CSP (002); join/leave (003); encryption-key ToDeviceEvent (004); cleanup dispose (005); experimental risk alone (007); getDeviceId; widgetUrl.search false Client.search AST; CallWidgetDriver searchUserDirectory; utils getCallCapabilities; dual-backend/raw /_matrix HTTP. Dependency residual: matrix-widget-api PostmessageTransport.strictOriginCheck defaults false and is not product-enabled.",
         "behavior_relevant_method_candidates": [
           {
             "path": "synara/src/app/plugins/call/CallEmbed.ts",
@@ -82851,7 +82873,8 @@
         "file_ledger_paths": [
           "synara/src/app/plugins/call/CallEmbed.ts",
           "src-tauri/tauri.conf.json",
-          "synara/vite.config.js"
+          "synara/vite.config.js",
+          "synara/index.html"
         ]
       },
       "rust_target": {
@@ -109017,39 +109040,46 @@
         "kind": "planned-required",
         "task_id": "P10.1",
         "phase": "Phase 10 — Element Call and widget completion",
-        "level": "integration-e2e",
-        "scenario": "7.11/FR-7.11-007: exercise 'explicit risk acceptance for `experimental-widgets` at `0.18.0`;' via owner `synara/src/app/plugins/call/CallEmbed.ts` and UI `(no dedicated UI — see ui_entry_points_rationale)`, then confirm Rust/IPC cutover task `P10.1` preserves observable behavior without raw Matrix runtime HTTP.",
+        "level": "planning-gate-review",
+        "scenario": "Planning-gate review for FR-7.11-007 experimental-widgets risk acceptance at pin 0.18.0: (A) PIN — acceptance record names matrix-rust-sdk pin 0.18.0 / 1c44fb66214667c6d00acaf72ab592493653708b and feature experimental-widgets. (B) DOSSIER BASELINE — SC-082 blocked E1/E2; missing experimental_feature_risk_gate pre-acceptance; defer-with-blocking-risk + RISK-CALLS critical acknowledged. (C) RESIDUALS ACCEPTED — widget plumbing ≠ call parity; GAP-MATRIXRTC-WIDGET-CAPABILITY-PLUMBING + GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION residuals listed; membership write/key session not claimed closed by enablement. (D) OWNER + TESTS — named owner; required tests (widget protocol / two-client Element Call smoke / encrypted call / teardown / CSP) referenced per Phase 10 AC. (E) ENABLEMENT RULE — experimental-widgets not in production feature set until this gate closes; compile-only SC-082 FAIL. (F) DISTINCTIONS — not 001–006 runtime alone, not 008 contingency alone. Cutover P10.1: formal acceptance artifact required; CallEmbed AST / embed-alone / raw HTTP / dual-backend FAIL.",
+        "test_target": "P10.1 experimental-widget risk dossier artifact + SC-082 experimental_feature_risk_gate closed at pin 0.18.0; Phase 10 AC 'Experimental API risk is explicitly accepted with a pinned version and tests'",
         "preconditions": [
-          "Desktop app with Element Call / widget config for the build",
-          "Room with MatrixRTC membership fixtures; two clients for join/leave",
-          "CSP-enabled production-like shell",
-          "Linked owner path present in tree: synara/src/app/plugins/call/CallEmbed.ts",
-          "Primary UI/lifecycle surface: (no dedicated UI — see ui_entry_points_rationale)"
+          "Capability dossier SC-082 and RISK-CALLS available as baseline (blocked / critical).",
+          "Plan §7.11 clause and P10.1 task present.",
+          "Do not accept: CallEmbed getDeviceId/search AST, ToDeviceEvent, embed-alone (002), CSP-alone (006), contingency-alone (008), compile-only SC-082, or claiming production-accepted without a formal acceptance record."
         ],
         "trigger_actions": [
-          "Boot the appropriate harness for level=integration-e2e against disposable Synapse (or iOS notes if any).",
-          "Establish fixtures required by the clause list: explicit risk acceptance for `experimental-widgets` at `0.18.0`.",
-          "Open UI/lifecycle surface `(no dedicated UI — see ui_entry_points_rationale)` (or follow ui_entry_points_rationale if no dedicated UI).",
-          "Step 1: perform the product action that implements «explicit risk acceptance for `experimental-widgets` at `0.18.0`» using current owner `synara/src/app/plugins/call/CallEmbed.ts`.",
-          "Start/stop embedded call/widget session; change room; logout; close window — confirm cleanup."
+          "Locate P10.1 risk dossier / acceptance artifact (or document absence → GATE fail).",
+          "PIN: assert record names experimental-widgets and pin 0.18.0 (1c44fb66…).",
+          "BASELINE: assert SC-082 missing experimental_feature_risk_gate is acknowledged as the gate being closed; defer-with-blocking-risk + RISK-CALLS residuals listed.",
+          "RESIDUALS: assert acceptance does not claim full call parity / membership write / key session closed solely by enabling experimental-widgets.",
+          "OWNER+TESTS: assert named decision owner and required Phase 10 tests referenced.",
+          "ENABLEMENT: assert production feature set does not enable experimental-widgets until gate closed; post-P10.1 enablement only with artifact present.",
+          "DISTINCTIONS: confirm this review is not 001–006 runtime AT and not 008 contingency alone."
         ],
         "assertions": [
-          "Each clause is observable: «explicit risk acceptance for `experimental-widgets` at `0.18.0`».",
-          "State coordination remains through `synara/src/app/plugins/call/CallEmbed.ts` (or its Rust/IPC successor after cutover), not ad-hoc dual writers.",
-          "Behavior-relevant current JS method candidates exercised or replaced: getDeviceId, search, getDeviceId, searchUserDirectory (AST candidates; not type-proven receivers).",
-          "Behavior-relevant listener candidates observed or replaced: on:ClientEvent.ToDeviceEvent, off:ClientEvent.ToDeviceEvent.",
-          "Rust mapping remains conservative: caps=[SC-082] gaps=[GAP-MATRIXRTC-WIDGET-CAPABILITY-PLUMBING]; compile-only blocked states are not treated as runtime pass.",
-          "No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless dossier marks that exact behavior typed-sdk-request-required.",
-          "Widget plumbing success is not recorded as full call parity if membership-write/key-session gaps remain."
+          "ACCEPTANCE ARTIFACT: formal risk acceptance / P10.1 dossier exists naming experimental-widgets at pin 0.18.0 (or GATE remains open / status partial).",
+          "PIN+FEATURE: pin and feature name match plan/dossier (0.18.0 / experimental-widgets).",
+          "RESIDUALS: accepted residuals include experimental status, widget plumbing ≠ call parity, membership-write/key-session gaps as applicable.",
+          "OWNER+TESTS: owner and required tests recorded per Phase 10 AC.",
+          "ENABLEMENT RULE: experimental-widgets not production-enabled without this gate; SC-082 compile-only never product pass.",
+          "DISTINCTIONS: this FR ≠ 001/002-alone/003/004/005/006/008.",
+          "COORDINATION: through plan P10.1 risk dossier + dossier SC-082 gate, not dual-backend feature flags.",
+          "CUTOVER: P10.1 under GATE-7.11-007-EXPERIMENTAL-WIDGETS-RISK-ACCEPTANCE; no raw /_matrix HTTP; no dual-backend.",
+          "No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless typed-sdk-request-required for that exact behavior."
         ],
         "required_environment": [
-          "Desktop app with Element Call / widget config for the build",
-          "Room with MatrixRTC membership fixtures; two clients for join/leave",
-          "CSP-enabled production-like shell"
+          "P0.3 capability dossier + feature/gap analysis artifacts",
+          "Plan §7.11 / Phase 10 P10.1 task text",
+          "P10.1 risk dossier deliverable (when produced) or documented absence"
         ],
         "does_not_currently_exist": true,
         "clause_breakdown": [
-          "explicit risk acceptance for `experimental-widgets` at `0.18.0`"
+          "formal risk acceptance artifact for experimental-widgets at pin 0.18.0 (absent → partial)",
+          "SC-082 experimental_feature_risk_gate closed via P10.1",
+          "residuals accepted (plumbing ≠ call parity; write/key session gaps)",
+          "owner + tests per Phase 10 AC",
+          "enablement rule: no production experimental-widgets without gate"
         ]
       },
       {
@@ -112657,7 +112687,7 @@
         "Desktop production-like shell with Tauri CSP enabled.",
         "Element Call embedded assets under public/element-call (vite packaging).",
         "Call room fixture sufficient to open CallEmbed iframe.",
-        "State owners available: CallEmbed.ts, src-tauri/tauri.conf.json, synara/vite.config.js.",
+        "State owners available: CallEmbed.ts, src-tauri/tauri.conf.json, synara/vite.config.js, synara/index.html residual.",
         "Current status baseline: partial under GATE-7.11-006-CSP-ORIGIN-HARDENING."
       ],
       "actions": [
@@ -112665,7 +112695,7 @@
         "SHELL CSP: confirm Tauri app.security.csp is in effect (frame-src 'self' among directives); note connect-src residual breadth.",
         "IFRAME SANDBOX: join/start embedded call; inspect Call Embed iframe sandbox and allow attributes.",
         "ORIGIN: confirm iframe src is same-origin /public/element-call path and widget parentUrl matches client origin.",
-        "Document residuals: no CSP meta on shell/embed HTML; sandbox scripts+same-origin; strictOriginCheck not product-enabled.",
+        "Document residuals: no Content-Security-Policy meta on synara/index.html (and element-call HTML); sandbox scripts+same-origin; strictOriginCheck not product-enabled.",
         "Do not accept membership-display-only, embed-URL-only, join/leave-only, keys-only, cleanup-only, or SC-082 alone as CSP pass."
       ],
       "expected_results": [
@@ -112691,27 +112721,32 @@
         "Linux"
       ],
       "preconditions": [
-        "Desktop app with Element Call / widget config for the build",
-        "Room with MatrixRTC membership fixtures; two clients for join/leave",
-        "CSP-enabled production-like shell",
-        "State owner available: synara/src/app/plugins/call/CallEmbed.ts",
-        "UI/lifecycle: (no dedicated UI — see ui_entry_points_rationale)",
-        "Current status baseline: partial"
+        "Capability dossier SC-082 + RISK-CALLS and feature/gap experimental-widgets decision available as baseline.",
+        "Plan §7.11 risk-acceptance clause + P10.1 Exact experimental-widget risk dossier task available.",
+        "No dedicated UI (planning/risk gate); empty UI justified.",
+        "Current status baseline: partial under GATE-7.11-007-EXPERIMENTAL-WIDGETS-RISK-ACCEPTANCE."
       ],
       "actions": [
-        "Launch Synara desktop on the target platform against disposable Synapse; use a clean or known fixture profile as required by «explicit risk acceptance for `experimental-widgets` at `0.18.0`;».",
-        "Identify state owner `synara/src/app/plugins/call/CallEmbed.ts` and open `(no dedicated UI — see ui_entry_points_rationale)`.",
-        "Action 1 — «explicit risk acceptance for `experimental-widgets` at `0.18.0`»: perform the minimal user/system steps that trigger this clause (use linked files under current_production_files if the entry point is indirect).",
-        "Join call/widget, verify membership UI, leave/decline as applicable, switch rooms, and close window; confirm sessions clean up."
+        "Locate formal P10.1 experimental-widget risk dossier / acceptance artifact (or document absence → gate open / partial).",
+        "Verify artifact names feature experimental-widgets and pin 0.18.0 (1c44fb66214667c6d00acaf72ab592493653708b).",
+        "Verify residuals accepted: experimental status; widget plumbing ≠ call parity; SC-082 blocked E1/E2 pre-acceptance; GAP-MATRIXRTC-WIDGET-CAPABILITY-PLUMBING and membership-write/key-session residuals not claimed closed by enablement alone.",
+        "Verify named decision owner and required Phase 10 tests (widget protocol / two-client smoke / encrypted call / teardown / CSP) are referenced.",
+        "Verify production feature set does not enable experimental-widgets without this gate closed; SC-082 compile-only is not acceptance.",
+        "Confirm distinctions: not 001–006 runtime alone; not 008 contingency alone; contingency path remains P10.7 if acceptance cannot authorize."
       ],
       "expected_results": [
-        "All clauses under «explicit risk acceptance for `experimental-widgets` at `0.18.0`;» produce the user-visible or system-observable success criteria without error toasts unrelated to intentional negative tests.",
-        "Clause 1 «explicit risk acceptance for `experimental-widgets` at `0.18.0`» is satisfied on macOS, Linux with owner `synara/src/app/plugins/call/CallEmbed.ts`.",
-        "No unexpected raw /_matrix traffic from the app renderer for this flow on the post-cutover build.",
-        "Empty UI entry points justified: Intentionally empty: planning/risk/contingency gate rather than a user-facing control in the current desktop UI. Tracked via tasks P10.1/P10.7; no product screen solely owns this a"
+        "Formal risk acceptance / P10.1 dossier exists for experimental-widgets at pin 0.18.0 OR status remains partial under GATE-7.11-007 (do not pass without artifact).",
+        "Pin + feature name match plan/dossier; residuals and owner/tests recorded per Phase 10 AC.",
+        "experimental_feature_risk_gate closed only when artifact authorizes production enablement; compile-only SC-082 FAIL.",
+        "Empty UI entry points justified: planning/risk gate, not a user-facing control; P10.1 primary, P10.7 adjacency for contingency.",
+        "No unexpected raw /_matrix traffic; no dual-backend call exception as substitute for this gate."
       ],
       "clause_breakdown": [
-        "explicit risk acceptance for `experimental-widgets` at `0.18.0`"
+        "formal risk acceptance artifact for experimental-widgets at pin 0.18.0",
+        "SC-082 experimental_feature_risk_gate via P10.1",
+        "residuals accepted (plumbing ≠ call parity)",
+        "owner + tests per Phase 10 AC",
+        "enablement rule: no production experimental-widgets without gate"
       ]
     },
     {
@@ -112827,8 +112862,8 @@
     {
       "requirement_id": "FR-7.11-007",
       "severity": "high",
-      "kind": "experimental-widgets-and-call-parity",
-      "summary": "Call/widget path depends on experimental-widgets and MatrixRTC gaps; widget plumbing ≠ call parity."
+      "kind": "product-experimental-widgets-risk-acceptance-partial-gate-not-formalized",
+      "summary": "FR-7.11-007 product path is PARTIAL: plan §7.11 + P10.1 + Phase 10 AC require explicit risk acceptance for experimental-widgets at pin 0.18.0; dossier SC-082 is blocked with experimental_feature_risk_gate missing; feature decision is defer-with-blocking-risk / not Phase 1 minimum; RISK-CALLS critical. No formal product risk-acceptance document yet authorizes production enablement. Compile-only SC-082 / embed-alone / CallEmbed AST / raw HTTP / dual-backend / claiming production-accepted FAIL. Cutover P10.1 under GATE-7.11-007-EXPERIMENTAL-WIDGETS-RISK-ACCEPTANCE."
     },
     {
       "requirement_id": "FR-7.11-008",
@@ -114515,11 +114550,10 @@
       "not_claimed_complete": true,
       "changes": [
         "FR-7.11-006: current_status remains partial under GATE-7.11-006-CSP-ORIGIN-HARDENING. current_behavior_and_limits documents shell CSP + iframe sandbox + same-origin packaging + parentUrl present; residuals on connect-src breadth, no CSP meta, sandbox scripts+same-origin, strictOriginCheck off, no security AT; notes no longer shallow file-count/null.",
-        "FR-7.11-006: retargeted production_files to CallEmbed.ts, src-tauri/tauri.conf.json, synara/vite.config.js (demoted useCallEmbed, CallWidgetDriver, utils, getDeviceId/search AST, ToDeviceEvent); source-inspected line_refs for getWidget/getIframe/CSP/packaging.",
+        "FR-7.11-006: retargeted production_files to CallEmbed.ts, src-tauri/tauri.conf.json, synara/vite.config.js, synara/index.html residual (demoted useCallEmbed, CallWidgetDriver, utils, getDeviceId/search AST, ToDeviceEvent); source-inspected line_refs for getWidget/getIframe/CSP/packaging/no meta CSP.",
         "FR-7.11-006: rust_target product-csp-origin-restrictions-partial-shell-and-iframe caps=[SC-082 host residual] gaps=[GAP-MATRIXRTC-WIDGET-CAPABILITY-PLUMBING]; SC-082 alone never closes CSP; cutover P10.6 (+P13.5).",
         "FR-7.11-006: planned AT/MA rewritten as SHELL CSP + IFRAME SANDBOX + ORIGIN + STRICT ORIGIN residual + NO META CSP residual + DISTINCTIONS 001–005/007 + GATE fail-closed. Top-level AT/MA/risks/unresolved_planning_blockers updated. Accepted FR-7.8-001..009, FR-7.9-001..013 (011 partial), FR-7.10-001..007, FR-7.11-001..005 (003/004/005 partial under their gates) preserved. JSON and Markdown synchronized."
       ]
     }
   ]
 }
-
