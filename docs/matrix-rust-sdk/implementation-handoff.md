@@ -37,10 +37,12 @@ without explicit user approval.
 - **Progress loop:** host scheduled task every **4 minutes**
   (ID `019f95928db7`) continues bounded FR audits; also daily durable
   orchestrator `9022c2f8-9b21-411a-acf9-a36c10515f72`
-- **Last accepted:** FR-7.11-004 call encryption-key flow **partial**
-  (`p0.2-correct-50`)
-- **Next writer task:** FR-7.11-005 (session cleanup), then remaining 7.11
-  (~4 FRs)
+- **Last accepted:** FR-7.11-004 call encryption-key flow **partial** under
+  `GATE-7.11-004-NATIVE-MATRIXRTC-KEY-SESSION` (`p0.2-correct-50`)
+
+- **Next writer task:** FR-7.11-005 (session cleanup on room change/logout/window close),
+  then remaining 7.11 (~4)
+
 
 - No production Matrix Rust SDK replacement code accepted
 - **No open P0.2 PR yet** (open after P0.2 complete)
@@ -50,8 +52,9 @@ Phase 0 evidence accepted before this handoff:
 - P0.1 SDK usage inventory is merged to the integration branch.
 - P0.3 exact Matrix Rust SDK 0.18.0 capability dossier is merged to the
   integration branch.
-- P0.2 branch carries accepted 7.8–7.9, FR-7.10-001..007, and FR-7.11-001..003 corrections (**FR-7.10-005**, **FR-7.10-007**, and
-  **FR-7.11-003** remain partial by gate); ~5 shallow rows remain in 7.11.
+- P0.2 branch carries accepted 7.8–7.9, FR-7.10-001..007, and FR-7.11-001..004 corrections (**FR-7.10-005**, **FR-7.10-007**,
+  **FR-7.11-003**, and **FR-7.11-004** remain partial by gate); ~4 shallow
+  rows remain in 7.11.
 
 P0.2 is not complete. Resume at FR-7.11-005, then audit remaining 7.11
 before declaring P0.2 accepted.
@@ -220,6 +223,12 @@ Accepted notification findings that must be preserved:
   `GATE-7.11-003-NATIVE-OR-PRODUCT-MEMBERSHIP-WRITE`. Join via useCallStart/
   JoinCall; leave via hangup; decline capability-only (no product Decline UI);
   member status after actions (display ownership 001). Widget-mediated write.
+
+
+- FR-7.11-004: status **`partial`** under
+  `GATE-7.11-004-NATIVE-MATRIXRTC-KEY-SESSION`. Widget-mediated to-device
+  encrypt/queue + feedToDevice + encryption_keys capabilities; no product-
+  owned native MatrixRTC key-session API.
 
 
 
