@@ -4,7 +4,7 @@
 
 ## Correction pass status
 
-Limited rejected-review correction (`p0.2-correct-47-fr-7.11-001-matrixrtc-membership-display`) for **FR-7.11-001** only: replace shallow notes (via 6 production files / null notes / wrong SC-082 primary / empty UI line_refs / generic AT-MA / CallRoomName+useCallEmbed mislink) with concrete **MatrixRTC membership DISPLAY** evidence — `useCallSession` `getRoomSession` + SessionStarted/Ended; `useCallMembers` `session.memberships` + MembershipsChanged; CallStatus LiveChip/MemberGlance; LiveChip `{n} Live`; CallView CallPrescreen Live + CallMemberRenderer; CallMemberCard sender/membershipID/callIntent; RoomNavItem Live badge without join; EXCLUDE CallRoomName title-only, useCallEmbed join/embed adjacency, RoomTimeline historical, SC-082 widgets alone; rust_target `product-matrixrtc-membership-display-gap-presence-boolean-only` caps=[] gaps=[GAP-MATRIXRTC-MEMBERSHIP-PRESENCE]; status remains `implemented`; rewrite AT/MA for P10.4 (+P11.3) list projection not boolean-only. JSON and Markdown synchronized. Accepted corrections for **FR-7.8-001 through FR-7.8-009**, **FR-7.9-001..013** (**FR-7.9-011** remains partial), **FR-7.10-001..007** (**FR-7.10-005** and **FR-7.10-007** remain partial) preserved. Prior corrections and accepted **7.1–7.3** preserved. **P0.2 is not complete.**
+Limited rejected-review correction (`p0.2-correct-48-fr-7.11-002-element-call-widget-embed`) for **FR-7.11-002** only: replace shallow notes (via 5 production files / false `Client.search` AST on `widgetUrl.search` / `RoomView.tsx` mis-UI / via-servers mislink / generic AT-MA) with concrete **Element Call embed** evidence — `CallEmbed.getWidget` → `/public/element-call/index.html` + params; sandboxed iframe + `ClientWidgetApi`/`CallWidgetDriver` postMessage bridge; `getCallCapabilities` + `validateCapabilities`; `createCallEmbed`/`useCallStart`/PrescreenControls Join; CallEmbedProvider container; EXCLUDE membership DISPLAY (001), join/leave write (003), key session (004), cleanup alone (005), CSP alone (006), risk alone (007), FOCI alone as primary, `RoomView.tsx` chat shell; rust_target `product-element-call-embed-sc082-experimental-widgets-not-call-parity` caps=[SC-082] gaps=[GAP-MATRIXRTC-WIDGET-CAPABILITY-PLUMBING, GAP-MATRIXRTC-FOCI residual]; status remains `implemented`; rewrite AT/MA for P10.2/P10.3 (+P10.1). JSON and Markdown synchronized. Accepted corrections for **FR-7.8-001 through FR-7.8-009**, **FR-7.9-001..013** (**FR-7.9-011** remains partial), **FR-7.10-001..007**, **FR-7.11-001** preserved. Prior corrections and accepted **7.1–7.3** preserved. **P0.2 is not complete.**
 
 ## Provenance
 
@@ -7072,68 +7072,121 @@ Limited rejected-review correction (`p0.2-correct-47-fr-7.11-001-matrixrtc-membe
 
 ### `FR-7.11-002` — ### 7.11 Calls and widgets
 
-
 - **Text**: embedded Element Call startup, widget URL generation, capabilities, and postMessage transport;
 - **Lines**: 452–453
 - **Status**: `implemented`
-- **Behavior**: Current desktop implements this via 5 production matrix-js-sdk-related file(s); status=implemented.
-- **Notes**: Preserve distinction: widget plumbing != full call parity.
-- **UI**: `synara/src/app/features/room/RoomView.tsx`
-- **Owners**: `synara/src/app/plugins/call/CallEmbed.ts`, `synara/src/app/state/callEmbed.ts`
+- **Behavior**: IMPLEMENTED: Synara embeds Element Call via sandboxed iframe + matrix-widget-api ClientWidgetApi (PostmessageTransport), generates widget URL to /public/element-call/index.html with room/user/device/intent params, negotiates capabilities via CallWidgetDriver.validateCapabilities(getCallCapabilities), and bridges Matrix events/to-device/sends through CallWidgetDriver. status=implemented.
+- **Notes**: Evidence (conservative): (1) PRODUCT MEANING — FR-7.11-002 is embedded Element Call STARTUP + widget URL + capabilities + postMessage bridge; NOT membership DISPLAY (001), NOT join/leave write product (003), NOT encryption-key session (004), NOT cleanup alone (005), NOT CSP alone (006), NOT experimental risk acceptance alone (007). (2) STARTUP PATH — Room.tsx L48 isCallRoom → L73 CallView; PrescreenControls L52 Join → useCallStart L64–72 → createCallEmbed L38–56 (getRoomSession for ongoing, getIntent, getWidget, new CallEmbed); CallEmbedProvider L51–61 data-call-embed-container hosts iframe; vite copies @element-hq/element-call-embedded → public/element-call. (3) WIDGET URL — CallEmbed.getWidget L59–106: URLSearchParams widgetId/parentUrl/baseUrl/roomId/userId/deviceId/intent/skipLobby/confineToRoom/appPrompt/perParticipantE2EE/lang/theme; URL BASE_URL/public/element-call/index.html; IWidget type m.call; getIframe L108–124 sandbox+allow; constructor L133–135 getCompleteUrl into iframe.src. EXCLUDE widgetUrl.search L91 as Client.search (false AST). (4) CAPABILITIES — utils.getCallCapabilities L9–118; CallWidgetDriver ctor L36–44 allowed set; validateCapabilities L46–48 intersection. (5) POSTMESSAGE BRIDGE — ClientWidgetApi(widget, iframe, CallWidgetDriver) L138–139 (matrix-widget-api PostmessageTransport); start L199–221 setViewedRoomId + JoinCall + Event/Decrypted/RoomState/ToDevice feeds; feedEvent/feedStateUpdate/feedToDevice; outbound hangup L179, setTheme L173–176, CallControl DeviceMute L128–129; driver sendEvent/sendToDevice for widget→Matrix. (6) OWNERSHIP — callEmbedAtom disposes previous L12–14; hangup clears atom CallEmbedProvider L21–25. (7) ADJACENCY EXCLUDED AS SOLE EVIDENCE — RoomView.tsx is chat for non-call rooms; via-servers unused by call plugin; Live membership UI is 001; encryption_keys capability type ≠ 004 session; FOCI Client::rtc_foci not called on this product path. (8) No existing automated AT. (9) Cutover P10.2/P10.3 (+P10.1 risk): replace js-sdk+matrix-widget-api embed with SC-082 experimental-widgets via IPC — experimental; gates element_call_host_and_postmessage + experimental_feature_risk_gate remain; compile-only E1/E2 never product pass; membership-write/key-session gaps remain outside this FR; widget plumbing ≠ full call parity. SC-082 alone / FOCI alone / raw HTTP / dual-backend FAIL.
+- **Limits**: P0.1 method candidates are AST name hits unless marked source-inspected. Product status is implemented for embed/URL/capabilities/postMessage on matrix-js-sdk + matrix-widget-api + embedded Element Call assets. Rust pin SC-082 experimental-widgets is blocked (E1/E2 only; experimental not accepted for production without risk gate). GAP-MATRIXRTC-WIDGET-CAPABILITY-PLUMBING is capability plumbing only. GAP-MATRIXRTC-FOCI is residual adjacency (product path does not wire Client::rtc_foci). No E2E AT yet.
+- **UI**: `synara/src/app/features/call/PrescreenControls.tsx`, `synara/src/app/features/call/CallView.tsx`, `synara/src/app/features/room/Room.tsx`, `synara/src/app/components/CallEmbedProvider.tsx`, `synara/src/app/features/room-nav/RoomNavItem.tsx`
+- **UI rationale**: FR-7.11-002 is Element Call EMBED plumbing. Primary: Room.tsx isCallRoom → CallView; PrescreenControls Join → createCallEmbed; CallEmbedProvider hosts iframe; CallView placement when joined. EXCLUDE RoomView.tsx chat timeline as sole embed host. EXCLUDE membership Live chips alone (001), hangup/leave alone (003), encryption alone (004), CSP alone (006).
+- **Owners**: `synara/src/app/plugins/call/CallEmbed.ts`, `synara/src/app/plugins/call/CallWidgetDriver.ts`, `synara/src/app/plugins/call/utils.ts`, `synara/src/app/hooks/useCallEmbed.ts`, `synara/src/app/state/callEmbed.ts`
 - **Files**:
-  - `synara/src/app/hooks/useCallEmbed.ts` symbols=[] retained_m=0 retained_l=0
-  - `synara/src/app/plugins/call/CallEmbed.ts` symbols=['getDeviceId', 'search'] retained_m=2 retained_l=2
-    - method `getDeviceId`:L66 — None
-    - method `search`:L91 — None
-    - listener `on:ClientEvent.ToDeviceEvent`:L221 — None
-    - listener `off:ClientEvent.ToDeviceEvent`:L240 — None
-  - `synara/src/app/plugins/call/CallWidgetDriver.ts` symbols=['getDeviceId', 'searchUserDirectory'] retained_m=2 retained_l=0
-    - method `getDeviceId`:L40 — None
-    - method `searchUserDirectory`:L297 — None
-  - `synara/src/app/plugins/call/utils.ts` symbols=[] retained_m=0 retained_l=0
-  - `synara/src/app/plugins/via-servers.ts` symbols=[] retained_m=0 retained_l=0
+  - `synara/src/app/plugins/call/CallEmbed.ts` symbols=['getIntent', 'getWidget', 'getIframe', 'ClientWidgetApi', 'CallWidgetDriver', 'feedEvent', 'transport.send', 'getDeviceId', 'getSafeUserId', 'ClientEvent.Event', 'MatrixEventEvent.Decrypted', 'RoomStateEvent.Events', 'ClientEvent.ToDeviceEvent'] retained_m=3 retained_l=8
+    - line `CallEmbed.getIntent`:L51 — Maps dm+ongoing → ElementCallIntent for widget URL.
+    - line `CallEmbed.getWidget URL + element-call index.html`:L59 — PRIMARY WIDGET URL GENERATION L59–106.
+    - line `CallEmbed.getIframe sandbox+allow`:L108 — Sandboxed iframe host for postMessage.
+    - line `constructor ClientWidgetApi + CallWidgetDriver`:L133 — PRIMARY EMBED + POSTMESSAGE BRIDGE L133–139.
+    - line `listenAction DeviceMute`:L152 — Inbound media-state postMessage.
+    - line `start setViewedRoomId + feeds`:L199 — JoinCall + Event/Decrypted/RoomState/ToDevice feeds.
+    - method `getSafeUserId`:L65 — Widget URL userId.
+    - method `getDeviceId`:L66 — Widget URL deviceId.
+    - method `getSafeUserId`:L134 — getCompleteUrl currentUserId.
+    - listener `on:ClientEvent.Event`:L218 — feedEvent host→widget.
+    - listener `on:MatrixEventEvent.Decrypted`:L219 — decrypt re-feed.
+    - listener `on:RoomStateEvent.Events`:L220 — feedStateUpdate.
+    - listener `on:ClientEvent.ToDeviceEvent`:L221 — feedToDevice.
+    - listener `off:ClientEvent.Event`:L237 — dispose cleanup.
+    - listener `off:MatrixEventEvent.Decrypted`:L238 — dispose cleanup.
+    - listener `off:RoomStateEvent.Events`:L239 — dispose cleanup.
+    - listener `off:ClientEvent.ToDeviceEvent`:L240 — dispose cleanup.
+    - note `widgetUrl.search`:L91 — EXCLUDED: URLSearchParams assignment, NOT Client.search.
+  - `synara/src/app/plugins/call/CallWidgetDriver.ts` symbols=['getCallCapabilities', 'validateCapabilities', 'sendEvent', 'sendToDevice', 'getDeviceId'] retained_m=5 retained_l=0
+    - line `constructor getCallCapabilities`:L36 — PRIMARY CAPABILITIES allowed set.
+    - line `validateCapabilities`:L46 — requested∩allowed negotiation.
+    - method `getDeviceId`:L40 — device-scoped capability keys.
+    - method `getSafeUserId`:L43 — capability user scope.
+    - method `sendStateEvent`:L64 — widget→Matrix state send.
+    - method `sendEvent`:L74 — widget→Matrix timeline send.
+    - method `sendToDevice`:L149 — widget→Matrix to-device (004 adjacency).
+  - `synara/src/app/plugins/call/utils.ts` symbols=['getCallCapabilities'] retained_m=0 retained_l=0
+    - line `getCallCapabilities Set`:L9 — PRIMARY CAPABILITY SET L9–118.
+  - `synara/src/app/hooks/useCallEmbed.ts` symbols=['createCallEmbed', 'useCallStart', 'getRoomSession'] retained_m=1 retained_l=0
+    - line `createCallEmbed factory`:L38 — getRoomSession+getIntent+getWidget+new CallEmbed.
+    - line `useCallStart setCallEmbed`:L58 — Join path into callEmbedAtom.
+    - method `getRoomSession`:L46 — ongoing intent for URL only (not 001 display).
+  - `synara/src/app/state/callEmbed.ts` symbols=['callEmbedAtom dispose'] retained_m=0 retained_l=0
+    - line `callEmbedAtom setter dispose prev`:L6 — single active embed; dispose previous.
+  - `synara/src/app/components/CallEmbedProvider.tsx` symbols=['data-call-embed-container', 'useCallHangupEvent'] retained_m=0 retained_l=0
+    - line `data-call-embed-container ref`:L51 — iframe host container.
+    - line `useCallHangupEvent clear atom`:L21 — hangup → setCallEmbed(undefined).
+  - `synara/src/app/features/room/Room.tsx` symbols=['isCallRoom', 'CallView'] retained_m=0 retained_l=0
+    - line `room.isCallRoom CallView mount`:L48 — call rooms mount CallView (not RoomView chat).
+    - line `CallView render`:L73 — primary call shell.
+  - `synara/src/app/features/call/CallView.tsx` symbols=['useCallEmbedPlacementSync', 'CallPrescreen', 'CallJoined'] retained_m=0 retained_l=0
+    - line `useCallEmbedPlacementSync`:L133 — positions embed container.
+    - line `CallPrescreen vs CallJoined`:L147 — pre-join Join UI vs joined embed surface.
+  - `synara/src/app/features/call/PrescreenControls.tsx` symbols=['useCallStart Join'] retained_m=0 retained_l=0
+    - line `Join onClick startCall`:L52 — PRIMARY USER STARTUP.
+  - `synara/src/app/plugins/call/CallControl.ts` symbols=['transport.send DeviceMute'] retained_m=0 retained_l=0
+    - line `setMediaState DeviceMute`:L128 — outbound postMessage mute.
+  - `synara/src/app/plugins/call/types.ts` symbols=['ElementCallIntent', 'ElementWidgetActions'] retained_m=0 retained_l=0
+    - line `ElementCallIntent enum`:L1 — URL intent strings.
+    - line `ElementWidgetActions`:L20 — join/hangup/mute action names.
 - **Behavior-relevant methods (top-level)**:
-  - `getDeviceId` `synara/src/app/plugins/call/CallEmbed.ts`:L66 — None
-  - `search` `synara/src/app/plugins/call/CallEmbed.ts`:L91 — None
-  - `getDeviceId` `synara/src/app/plugins/call/CallWidgetDriver.ts`:L40 — None
-  - `searchUserDirectory` `synara/src/app/plugins/call/CallWidgetDriver.ts`:L297 — None
+  - `getSafeUserId` `synara/src/app/plugins/call/CallEmbed.ts`:L65 — Widget URL identity.
+  - `getDeviceId` `synara/src/app/plugins/call/CallEmbed.ts`:L66 — Widget URL device.
+  - `getSafeUserId` `synara/src/app/plugins/call/CallEmbed.ts`:L134 — iframe complete URL.
+  - `getDeviceId` `synara/src/app/plugins/call/CallWidgetDriver.ts`:L40 — capability device scope.
+  - `getSafeUserId` `synara/src/app/plugins/call/CallWidgetDriver.ts`:L43 — capability user scope.
+  - `sendStateEvent` `synara/src/app/plugins/call/CallWidgetDriver.ts`:L64 — postMessage bridge send.
+  - `sendEvent` `synara/src/app/plugins/call/CallWidgetDriver.ts`:L74 — postMessage bridge send.
+  - `sendToDevice` `synara/src/app/plugins/call/CallWidgetDriver.ts`:L149 — postMessage bridge to-device.
+  - `getRoomSession` `synara/src/app/hooks/useCallEmbed.ts`:L46 — widget URL intent (start vs join).
 - **Behavior-relevant listeners (top-level)**:
-  - `on:ClientEvent.ToDeviceEvent` `synara/src/app/plugins/call/CallEmbed.ts`:L221 — None
-  - `off:ClientEvent.ToDeviceEvent` `synara/src/app/plugins/call/CallEmbed.ts`:L240 — None
+  - `on:ClientEvent.Event` `synara/src/app/plugins/call/CallEmbed.ts`:L218 — postMessage feed.
+  - `on:MatrixEventEvent.Decrypted` `synara/src/app/plugins/call/CallEmbed.ts`:L219 — postMessage feed.
+  - `on:RoomStateEvent.Events` `synara/src/app/plugins/call/CallEmbed.ts`:L220 — postMessage feed.
+  - `on:ClientEvent.ToDeviceEvent` `synara/src/app/plugins/call/CallEmbed.ts`:L221 — postMessage feed.
+  - `off:ClientEvent.Event` `synara/src/app/plugins/call/CallEmbed.ts`:L237 — dispose.
+  - `off:MatrixEventEvent.Decrypted` `synara/src/app/plugins/call/CallEmbed.ts`:L238 — dispose.
+  - `off:RoomStateEvent.Events` `synara/src/app/plugins/call/CallEmbed.ts`:L239 — dispose.
+  - `off:ClientEvent.ToDeviceEvent` `synara/src/app/plugins/call/CallEmbed.ts`:L240 — dispose.
 - **Unfiltered linked candidates**: methods=20 listeners=10
-- **Rust**: `experimental-widgets-plumbing-not-call-parity` caps=['SC-082'] gaps=['GAP-MATRIXRTC-WIDGET-CAPABILITY-PLUMBING', 'GAP-MATRIXRTC-FOCI']
+- **Rust**: `product-element-call-embed-sc082-experimental-widgets-not-call-parity` caps=['SC-082'] gaps=['GAP-MATRIXRTC-WIDGET-CAPABILITY-PLUMBING', 'GAP-MATRIXRTC-FOCI']
   - `SC-082` `blocked` `matrix_sdk::widget (experimental-widgets)` https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/lib.rs#L64-L65
+  - `GAP-MATRIXRTC-WIDGET-CAPABILITY-PLUMBING` `blocked` `experimental-widgets capability plumbing` https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/widget/capabilities.rs#L45
+  - `GAP-MATRIXRTC-FOCI` `blocked` `Client::rtc_foci (residual adjacency only)` https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/client/mod.rs#L2574
+- Honest: rust_target for FR-7.11-002: product-element-call-embed-sc082-experimental-widgets-not-call-parity (family: experimental-widgets-plumbing-not-call-parity). Product EMBED is implemented on matrix-js-sdk + matrix-widget-api + @element-hq/element-call-embedded. Rust primary is SC-082 experimental-widgets (blocked E1/E2). Primary gap GAP-MATRIXRTC-WIDGET-CAPABILITY-PLUMBING. GAP-MATRIXRTC-FOCI residual only — product path does not call Client::rtc_foci; FOCI alone never product pass. Cutover P10.2/P10.3 (+P10.1). Compile-only / SC-082 alone without host / FOCI alone / raw HTTP / dual-backend / full call parity claim FAIL.
 - **Tasks**: `P10.2`, `P10.3`, `P10.1`
 - **Blockers**:
-  - (high) experimental-widgets-and-call-parity: Call/widget path depends on experimental-widgets and MatrixRTC gaps; widget plumbing ≠ call parity.
+  - GATE-7.11-002-EXPERIMENTAL-WIDGETS-HOST-POSTMESSAGE
+  - (high) experimental-widgets-sc082-host-postmessage-not-call-parity: FR-7.11-002 product embed is implemented via matrix-js-sdk + matrix-widget-api ClientWidgetApi + CallEmbed/CallWidgetDriver + embedded Element Call assets. Cutover P10.2/P10.3 (+P10.1) under SC-082 experimental-widgets + GAP-MATRIXRTC-WIDGET-CAPABILITY-PLUMBING: E1/E2 only; element_call_host_and_postmessage + experimental_feature_risk_gate missing. Widget plumbing ≠ membership write/key session/full call parity. Compile-only / SC-082 alone without host / FOCI alone / raw HTTP / dual-backend FAIL.
 - **Existing tests**:
   - _(none)_
 - **Planned** `AT-FR-7.11-002-001` task `P10.2` level `integration-e2e`
-  - Scenario: 7.11/FR-7.11-002: exercise 'embedded Element Call startup, widget URL generation, capabilities, and postMessage transport;' via owner `synara/src/app/plugins/call/CallEmbed.ts` and UI `synara/src/app/features/room/RoomView.tsx`, then confirm Rust/IPC cutover task `P10.2` preserves observable behavior without raw Matrix runtime HTTP.
-  - Test target: None
+  - Scenario: Integration against disposable Synapse (call room + Element Call assets): (A) STARTUP — Join via PrescreenControls creates CallEmbed; iframe under data-call-embed-container with /public/element-call/index.html. (B) WIDGET URL — assert query params roomId/userId/deviceId/intent/baseUrl/widgetId/parentUrl; exclude Client.search false hit. (C) CAPABILITIES — CallWidgetDriver.validateCapabilities grants only getCallCapabilities set. (D) POSTMESSAGE — ClientWidgetApi bridge: host Event/State/ToDevice feeds; outbound Hangup/DeviceMute/Theme; widget sendEvent/sendToDevice via driver. (E) DISTINCTIONS — not 001 membership display, 003 write, 004 key session, 005 cleanup alone, 006 CSP alone, 007 risk alone; FOCI not required for this FR. Cutover P10.2/P10.3 (+P10.1): SC-082 experimental-widgets + host/postMessage; compile-only / SC-082 alone without host / raw HTTP / dual-backend / full call parity claim FAIL.
+  - Test target: CallEmbed.getWidget/getIframe/ClientWidgetApi; CallWidgetDriver.validateCapabilities+getCallCapabilities; createCallEmbed/useCallStart; PrescreenControls Join; CallEmbedProvider container; post-cutover P10.2/P10.3 SC-082 + host/postMessage
   - Preconditions:
-    - Desktop app with Element Call / widget config for the build
-    - Room with MatrixRTC membership fixtures; two clients for join/leave
-    - CSP-enabled production-like shell
-    - Linked owner path present in tree: synara/src/app/plugins/call/CallEmbed.ts
-    - Primary UI/lifecycle surface: synara/src/app/features/room/RoomView.tsx
+    - Disposable Synapse; call room (isCallRoom); Element Call embedded assets present (public/element-call).
+    - Named owners: CallEmbed.ts, CallWidgetDriver.ts, utils.getCallCapabilities, useCallEmbed.createCallEmbed, CallEmbedProvider, PrescreenControls/CallView/Room.tsx.
+    - Do not accept membership-display-only (001), write-only (003), keys-only (004), cleanup-only (005), CSP-only (006), risk-dossier-only (007), FOCI alone, compile-only, or RoomView.tsx chat shell as sole embed host.
   - Actions:
-    1. Boot the appropriate harness for level=integration-e2e against disposable Synapse (or iOS notes if any).
-    2. Establish fixtures required by the clause list: embedded Element Call startup; widget URL generation; capabilities; postMessage transport.
-    3. Open UI/lifecycle surface `synara/src/app/features/room/RoomView.tsx` (or follow ui_entry_points_rationale if no dedicated UI).
-    4. Step 1: perform the product action that implements «embedded Element Call startup» using current owner `synara/src/app/plugins/call/CallEmbed.ts`.
-    5. Step 2: perform the product action that implements «widget URL generation» using current owner `synara/src/app/plugins/call/CallEmbed.ts`.
-    6. Step 3: perform the product action that implements «capabilities» using current owner `synara/src/app/plugins/call/CallEmbed.ts`.
-    7. Step 4: perform the product action that implements «postMessage transport» using current owner `synara/src/app/plugins/call/CallEmbed.ts`.
-    8. Start/stop embedded call/widget session; change room; logout; close window — confirm cleanup.
+    1. Boot integration harness against disposable Synapse with Element Call assets.
+    2. STARTUP: open call room; click Join; assert CallEmbed created, iframe src under element-call/index.html, container data-call-embed-container present.
+    3. WIDGET URL: assert URL params include roomId, userId, deviceId, intent, baseUrl, widgetId, parentUrl, skipLobby, confineToRoom.
+    4. CAPABILITIES: assert validateCapabilities intersection with getCallCapabilities (e.g. msc3401.call.member, MSC3846TurnServers, encryption_keys room event type present in set).
+    5. POSTMESSAGE: after join, assert host feeds events into widget API and hangup/device_mute transport.send path works; dispose/hangup removes iframe.
+    6. After cutover P10.2/P10.3 (+P10.1 risk), repeat via SC-082 + product host/postMessage IPC; SC-082 alone without host / compile-only / raw HTTP / dual-backend FAIL.
   - Assertions:
-    - Each clause is observable: «embedded Element Call startup»; «widget URL generation»; «capabilities»; «postMessage transport».
-    - State coordination remains through `synara/src/app/plugins/call/CallEmbed.ts` (or its Rust/IPC successor after cutover), not ad-hoc dual writers.
-    - Behavior-relevant current JS method candidates exercised or replaced: getDeviceId, search, getDeviceId, searchUserDirectory (AST candidates; not type-proven receivers).
-    - Behavior-relevant listener candidates observed or replaced: on:ClientEvent.ToDeviceEvent, off:ClientEvent.ToDeviceEvent.
-    - Rust mapping remains conservative: caps=[SC-082] gaps=[GAP-MATRIXRTC-WIDGET-CAPABILITY-PLUMBING,GAP-MATRIXRTC-FOCI]; compile-only blocked states are not treated as runtime pass.
-    - No new production matrix-js-sdk usage and no raw /\_matrix runtime HTTP unless dossier marks that exact behavior typed-sdk-request-required.
-    - Widget plumbing success is not recorded as full call parity if membership-write/key-session gaps remain.
+    - STARTUP: sandboxed Element Call iframe hosted; CallEmbed + ClientWidgetApi (or Rust/IPC successor) active.
+    - WIDGET URL: complete URL points at embedded Element Call with required identity/room/intent params.
+    - CAPABILITIES: only allowed capabilities granted; policy owned by getCallCapabilities/CallWidgetDriver (or successor).
+    - POSTMESSAGE: bidirectional bridge (host feed + transport.send + driver send/read) observable.
+    - DISTINCTIONS: this FR ≠ 001/003/004/005/006/007; ≠ FOCI alone; ≠ Client.search.
+    - COORDINATION: through CallEmbed/callEmbedAtom or Rust/IPC successor, not dual-backend.
+    - CUTOVER: P10.2/P10.3 (+P10.1) under SC-082 + GAP-MATRIXRTC-WIDGET-CAPABILITY-PLUMBING; compile-only never product pass; widget plumbing ≠ full call parity; no raw /\_matrix HTTP.
+    - No new production matrix-js-sdk usage and no raw /\_matrix runtime HTTP unless typed-sdk-request-required for that exact behavior.
   - does_not_currently_exist: `True`
 - **Manual**: `MA-FR-7.11-002`
 
@@ -9617,27 +9670,25 @@ Limited rejected-review correction (`p0.2-correct-47-fr-7.11-001-matrixrtc-membe
 
 - Platforms: macOS, Linux
 - Preconditions:
-  - Desktop app with Element Call / widget config for the build
-  - Room with MatrixRTC membership fixtures; two clients for join/leave
-  - CSP-enabled production-like shell
-  - State owner available: synara/src/app/plugins/call/CallEmbed.ts
-  - UI/lifecycle: synara/src/app/features/room/RoomView.tsx
-  - Current status baseline: implemented
+  - Disposable Synapse; call room (isCallRoom); Element Call embedded assets (public/element-call).
+  - State owners: CallEmbed.ts (getWidget/ClientWidgetApi), CallWidgetDriver.ts + utils.getCallCapabilities, useCallEmbed.createCallEmbed, callEmbedAtom.
+  - UI: Room.tsx → CallView; PrescreenControls Join; CallEmbedProvider data-call-embed-container (not RoomView.tsx chat shell as sole host).
+  - Current status baseline: implemented (product embeds Element Call via matrix-widget-api postMessage bridge).
 - Actions:
-  1. Launch Synara desktop on the target platform against disposable Synapse; use a clean or known fixture profile as required by «embedded Element Call startup, widget URL generation, capabilities, and postMessage transport;».
-  2. Identify state owner `synara/src/app/plugins/call/CallEmbed.ts` and open `synara/src/app/features/room/RoomView.tsx`.
-  3. Action 1 — «embedded Element Call startup»: perform the minimal user/system steps that trigger this clause (use linked files under current_production_files if the entry point is indirect).
-  4. Action 2 — «widget URL generation»: perform the minimal user/system steps that trigger this clause (use linked files under current_production_files if the entry point is indirect).
-  5. Action 3 — «capabilities»: perform the minimal user/system steps that trigger this clause (use linked files under current_production_files if the entry point is indirect).
-  6. Action 4 — «postMessage transport»: perform the minimal user/system steps that trigger this clause (use linked files under current_production_files if the entry point is indirect).
-  7. Join call/widget, verify membership UI, leave/decline as applicable, switch rooms, and close window; confirm sessions clean up.
+  1. Launch Synara desktop on the target platform against disposable Synapse with Element Call assets present.
+  2. STARTUP: open a call room; click Join; observe sandboxed Element Call iframe under the fixed call-embed container.
+  3. WIDGET URL: inspect iframe src — /public/element-call/index.html with roomId/userId/deviceId/intent/baseUrl/widgetId/parentUrl (and related flags).
+  4. CAPABILITIES: confirm call proceeds with negotiated capabilities (driver allows only getCallCapabilities set).
+  5. POSTMESSAGE: mute/hangup host controls affect the embedded call; hangup/dispose removes the embed without orphan iframe.
+  6. DISTINCTIONS: do not treat membership Live display alone (001), join/leave write alone (003), key session alone (004), cleanup alone (005), CSP alone (006), or risk dossier alone (007) as passing this embed FR.
+  7. On post-cutover build: repeat embed/URL/capabilities/postMessage via SC-082 experimental-widgets + product host IPC; no raw /\_matrix HTTP; no dual-backend; SC-082 alone without host/postMessage is not product pass.
 - Expected:
-  - All clauses under «embedded Element Call startup, widget URL generation, capabilities, and postMessage transport;» produce the user-visible or system-observable success criteria without error toasts unrelated to intentional negative tests.
-  - Clause 1 «embedded Element Call startup» is satisfied on macOS, Linux with owner `synara/src/app/plugins/call/CallEmbed.ts`.
-  - Clause 2 «widget URL generation» is satisfied on macOS, Linux with owner `synara/src/app/plugins/call/CallEmbed.ts`.
-  - Clause 3 «capabilities» is satisfied on macOS, Linux with owner `synara/src/app/plugins/call/CallEmbed.ts`.
-  - Clause 4 «postMessage transport» is satisfied on macOS, Linux with owner `synara/src/app/plugins/call/CallEmbed.ts`.
-  - No unexpected raw /\_matrix traffic from the app renderer for this flow on the post-cutover build.
+  - EMBED STARTUP: Element Call iframe hosted and CallEmbed active after Join.
+  - WIDGET URL: complete URL targets embedded Element Call with required params.
+  - CAPABILITIES: capability negotiation limited to product allow-list.
+  - POSTMESSAGE: bidirectional host↔widget messaging works for feeds and control actions.
+  - DISTINCTIONS: 001/003–007 alone do not pass this FR; FOCI alone does not pass.
+  - Post-cutover: same embed observables without raw /\_matrix runtime HTTP or dual-backend; widget plumbing ≠ full call parity.
 
 ### `MA-FR-7.11-003` (FR-7.11-003)
 
@@ -11864,25 +11915,24 @@ Limited rejected-review correction (`p0.2-correct-47-fr-7.11-001-matrixrtc-membe
 
 ### `AT-FR-7.11-002-001`
 
-- 7.11/FR-7.11-002: exercise 'embedded Element Call startup, widget URL generation, capabilities, and postMessage transport;' via owner `synara/src/app/plugins/call/CallEmbed.ts` and UI `synara/src/app/features/room/RoomView.tsx`, then confirm Rust/IPC cutover task `P10.2` preserves observable behavior without raw Matrix runtime HTTP.
-- target: None
+- Integration against disposable Synapse (call room + Element Call assets): (A) STARTUP — Join via PrescreenControls creates CallEmbed; iframe under data-call-embed-container with /public/element-call/index.html. (B) WIDGET URL — assert query params roomId/userId/deviceId/intent/baseUrl/widgetId/parentUrl; exclude Client.search false hit. (C) CAPABILITIES — CallWidgetDriver.validateCapabilities grants only getCallCapabilities set. (D) POSTMESSAGE — ClientWidgetApi bridge: host Event/State/ToDevice feeds; outbound Hangup/DeviceMute/Theme; widget sendEvent/sendToDevice via driver. (E) DISTINCTIONS — not 001 membership display, 003 write, 004 key session, 005 cleanup alone, 006 CSP alone, 007 risk alone; FOCI not required for this FR. Cutover P10.2/P10.3 (+P10.1): SC-082 experimental-widgets + host/postMessage; compile-only / SC-082 alone without host / raw HTTP / dual-backend / full call parity claim FAIL.
+- target: CallEmbed.getWidget/getIframe/ClientWidgetApi; CallWidgetDriver.validateCapabilities+getCallCapabilities; createCallEmbed/useCallStart; PrescreenControls Join; CallEmbedProvider container; post-cutover P10.2/P10.3 SC-082 + host/postMessage
 - actions:
-  1. Boot the appropriate harness for level=integration-e2e against disposable Synapse (or iOS notes if any).
-  2. Establish fixtures required by the clause list: embedded Element Call startup; widget URL generation; capabilities; postMessage transport.
-  3. Open UI/lifecycle surface `synara/src/app/features/room/RoomView.tsx` (or follow ui_entry_points_rationale if no dedicated UI).
-  4. Step 1: perform the product action that implements «embedded Element Call startup» using current owner `synara/src/app/plugins/call/CallEmbed.ts`.
-  5. Step 2: perform the product action that implements «widget URL generation» using current owner `synara/src/app/plugins/call/CallEmbed.ts`.
-  6. Step 3: perform the product action that implements «capabilities» using current owner `synara/src/app/plugins/call/CallEmbed.ts`.
-  7. Step 4: perform the product action that implements «postMessage transport» using current owner `synara/src/app/plugins/call/CallEmbed.ts`.
-  8. Start/stop embedded call/widget session; change room; logout; close window — confirm cleanup.
+  1. Boot integration harness against disposable Synapse with Element Call assets.
+  2. STARTUP: open call room; click Join; assert CallEmbed created, iframe src under element-call/index.html, container data-call-embed-container present.
+  3. WIDGET URL: assert URL params include roomId, userId, deviceId, intent, baseUrl, widgetId, parentUrl, skipLobby, confineToRoom.
+  4. CAPABILITIES: assert validateCapabilities intersection with getCallCapabilities (e.g. msc3401.call.member, MSC3846TurnServers, encryption_keys room event type present in set).
+  5. POSTMESSAGE: after join, assert host feeds events into widget API and hangup/device_mute transport.send path works; dispose/hangup removes iframe.
+  6. After cutover P10.2/P10.3 (+P10.1 risk), repeat via SC-082 + product host/postMessage IPC; SC-082 alone without host / compile-only / raw HTTP / dual-backend FAIL.
 - assertions:
-  - Each clause is observable: «embedded Element Call startup»; «widget URL generation»; «capabilities»; «postMessage transport».
-  - State coordination remains through `synara/src/app/plugins/call/CallEmbed.ts` (or its Rust/IPC successor after cutover), not ad-hoc dual writers.
-  - Behavior-relevant current JS method candidates exercised or replaced: getDeviceId, search, getDeviceId, searchUserDirectory (AST candidates; not type-proven receivers).
-  - Behavior-relevant listener candidates observed or replaced: on:ClientEvent.ToDeviceEvent, off:ClientEvent.ToDeviceEvent.
-  - Rust mapping remains conservative: caps=[SC-082] gaps=[GAP-MATRIXRTC-WIDGET-CAPABILITY-PLUMBING,GAP-MATRIXRTC-FOCI]; compile-only blocked states are not treated as runtime pass.
-  - No new production matrix-js-sdk usage and no raw /\_matrix runtime HTTP unless dossier marks that exact behavior typed-sdk-request-required.
-  - Widget plumbing success is not recorded as full call parity if membership-write/key-session gaps remain.
+  - STARTUP: sandboxed Element Call iframe hosted; CallEmbed + ClientWidgetApi (or Rust/IPC successor) active.
+  - WIDGET URL: complete URL points at embedded Element Call with required identity/room/intent params.
+  - CAPABILITIES: only allowed capabilities granted; policy owned by getCallCapabilities/CallWidgetDriver (or successor).
+  - POSTMESSAGE: bidirectional bridge (host feed + transport.send + driver send/read) observable.
+  - DISTINCTIONS: this FR ≠ 001/003/004/005/006/007; ≠ FOCI alone; ≠ Client.search.
+  - COORDINATION: through CallEmbed/callEmbedAtom or Rust/IPC successor, not dual-backend.
+  - CUTOVER: P10.2/P10.3 (+P10.1) under SC-082 + GAP-MATRIXRTC-WIDGET-CAPABILITY-PLUMBING; compile-only never product pass; widget plumbing ≠ full call parity; no raw /\_matrix HTTP.
+  - No new production matrix-js-sdk usage and no raw /\_matrix runtime HTTP unless typed-sdk-request-required for that exact behavior.
 
 ### `AT-FR-7.11-003-001`
 
@@ -12170,7 +12220,7 @@ Limited rejected-review correction (`p0.2-correct-47-fr-7.11-001-matrixrtc-membe
 | `synara/src/app/hooks/useAuthFlows.ts`                                         | `hook`             | `requirement-linked`           |   0 |   0 | `FR-7.1-005`                                                                                                                                                                                                                              |
 | `synara/src/app/hooks/useAuthMetadata.ts`                                      | `hook`             | `requirement-linked`           |   0 |   0 | `FR-7.1-013`                                                                                                                                                                                                                              |
 | `synara/src/app/hooks/useCall.ts`                                              | `hook`             | `requirement-linked`           |   8 |   0 | `FR-7.11-001`,`FR-7.11-003`,`FR-7.11-004`,`FR-7.11-005`                                                                                                                                                                                   |
-| `synara/src/app/hooks/useCallEmbed.ts`                                         | `hook`             | `requirement-linked`           |   0 |   0 | `FR-7.11-002`,`FR-7.11-003`,`FR-7.11-004`,`FR-7.11-005`,`FR-7.11-006`,`FR-7.11-007`,`FR-7.11-008`                                                                                                                                         |
+| `synara/src/app/hooks/useCallEmbed.ts`                                         | `hook`             | `requirement-linked`           |   1 |   0 | `FR-7.11-002`,`FR-7.11-003`,`FR-7.11-004`,`FR-7.11-005`,`FR-7.11-006`,`FR-7.11-007`,`FR-7.11-008`                                                                                                                                         |
 | `synara/src/app/hooks/useCapabilities.ts`                                      | `hook`             | `requirement-linked`           |   0 |   0 | `FR-7.1-013`                                                                                                                                                                                                                              |
 | `synara/src/app/hooks/useCommands.ts`                                          | `hook`             | `requirement-linked`           |   0 |  16 | `FR-7.4-010`,`FR-7.6-001`                                                                                                                                                                                                                 |
 | `synara/src/app/hooks/useDeviceList.ts`                                        | `hook`             | `requirement-linked`           |   2 |   3 | `FR-7.9-003`,`FR-7.9-004`,`FR-7.9-010`                                                                                                                                                                                                                 |
@@ -12241,14 +12291,14 @@ Limited rejected-review correction (`p0.2-correct-47-fr-7.11-001-matrixrtc-membe
 | `synara/src/app/pages/client/sidebar/SpaceTabs.tsx`                            | `page`             | `requirement-linked`           |   0 |   7 | `FR-7.2-008`,`FR-7.7-007`                                                                                                                                                                                                                 |
 | `synara/src/app/pages/client/space/Space.tsx`                                  | `page`             | `requirement-linked`           |   0 |   7 | `FR-7.2-009`,`FR-7.6-001`                                                                                                                                                                                                                 |
 | `synara/src/app/pages/client/syncStatusCopy.ts`                                | `page`             | `requirement-linked`           |   0 |   0 | `FR-7.2-001`                                                                                                                                                                                                                              |
-| `synara/src/app/plugins/call/CallEmbed.ts`                                     | `plugin`           | `requirement-linked`           |  10 |   9 | `FR-7.11-002`,`FR-7.11-003`,`FR-7.11-004`,`FR-7.11-005`,`FR-7.11-006`,`FR-7.11-007`,`FR-7.11-008`                                                                                                                                         |
-| `synara/src/app/plugins/call/CallWidgetDriver.ts`                              | `plugin`           | `requirement-linked`           |   0 |  11 | `FR-7.3-007`,`FR-7.4-005`,`FR-7.4-007`,`FR-7.5-001`,`FR-7.5-003`,`FR-7.5-004`,`FR-7.5-008`,`FR-7.5-011`,`FR-7.6-006`,`FR-7.10-005`,`FR-7.11-002`,`FR-7.11-003`,`FR-7.11-004`,`FR-7.11-006`,`FR-7.11-007`,`FR-7.11-008`                    |
+| `synara/src/app/plugins/call/CallEmbed.ts`                                     | `plugin`           | `requirement-linked`           |   3 |   8 | `FR-7.11-002`,`FR-7.11-003`,`FR-7.11-004`,`FR-7.11-005`,`FR-7.11-006`,`FR-7.11-007`,`FR-7.11-008`                                                                                                                                         |
+| `synara/src/app/plugins/call/CallWidgetDriver.ts`                              | `plugin`           | `requirement-linked`           |   5 |   0 | `FR-7.3-007`,`FR-7.4-005`,`FR-7.4-007`,`FR-7.5-001`,`FR-7.5-003`,`FR-7.5-004`,`FR-7.5-008`,`FR-7.5-011`,`FR-7.6-006`,`FR-7.10-005`,`FR-7.11-002`,`FR-7.11-003`,`FR-7.11-004`,`FR-7.11-006`,`FR-7.11-007`,`FR-7.11-008`                    |
 | `synara/src/app/plugins/call/utils.ts`                                         | `plugin`           | `requirement-linked`           |   0 |   0 | `FR-7.11-002`,`FR-7.11-006`                                                                                                                                                                                                               |
 | `synara/src/app/plugins/custom-emoji/ImagePack.ts`                             | `plugin`           | `requirement-linked`           |   0 |   0 | `FR-7.7-005`,`FR-7.7-008`,`FR-7.7-009`                                                                                                                                                                                                    |
 | `synara/src/app/plugins/custom-emoji/utils.ts`                                 | `plugin`           | `requirement-linked`           |   0 |   2 | `FR-7.7-005`,`FR-7.7-008`                                                                                                                                                                                                                 |
 | `synara/src/app/plugins/react-custom-html-parser.tsx`                          | `plugin`           | `requirement-linked`           |   0 |   4 | `FR-7.7-008`                                                                                                                                                                                                                              |
 | `synara/src/app/plugins/recent-emoji.ts`                                       | `plugin`           | `requirement-linked`           |   0 |   1 | `FR-7.7-006`,`FR-7.7-007`                                                                                                                                                                                                                 |
-| `synara/src/app/plugins/via-servers.ts`                                        | `plugin`           | `shared-matrix-infrastructure` |   0 |   0 | `FR-7.3-001`,`FR-7.6-001`,`FR-7.6-004`,`FR-7.7-005`,`FR-7.11-002`,`FR-7.4-002`                                                                                                                                                            |
+| `synara/src/app/plugins/via-servers.ts`                                        | `plugin`           | `shared-matrix-infrastructure` |   0 |   0 | `FR-7.3-001`,`FR-7.6-001`,`FR-7.6-004`,`FR-7.7-005`,`FR-7.4-002`                                                                                                                                                                          |
 | `synara/src/app/state/backupRestore.ts`                                        | `state`            | `requirement-linked`           |   0 |   0 | `FR-7.9-006`,`FR-7.9-009`                                                                                                                                                                                                                 |
 | `synara/src/app/state/hooks/inviteList.ts`                                     | `state`            | `requirement-linked`           |   0 |   7 | `FR-7.2-003`                                                                                                                                                                                                                              |
 | `synara/src/app/state/hooks/roomList.ts`                                       | `state`            | `requirement-linked`           |   0 |  13 | `FR-7.2-003`                                                                                                                                                                                                                              |
@@ -12298,7 +12348,7 @@ Limited rejected-review correction (`p0.2-correct-47-fr-7.11-001-matrixrtc-membe
 - `FR-7.10-006` typed-sdk-request-required: FR-7.10-006 requires typed SDK request route (not raw HTTP, not invented high-level API).
 - `FR-7.10-007` product-querykey-stale-rejection-partial-http-cancel: FR-7.10-007 partial under GATE-7.10-007-SEARCH-ABORT-SIGNAL: queryKey stale isolation present; true transport cancel missing (mx.search without optional abortSignal; queryFn does not forward RQ signal). Cutover requires typed SC-071 Client::send abort/cancel + product IPC preserving stale rejection — not raw HTTP, dual-backend, or invented high-level search-cancel API.
 - `FR-7.11-001` gap-matrixrtc-membership-presence-list-projection: FR-7.11-001 product display is implemented via matrix-js-sdk MatrixRTCSession.memberships. Cutover P10.4 (+P11.3) under GAP-MATRIXRTC-MEMBERSHIP-PRESENCE: Room::has_active_room_call is boolean presence only (E1/E2; E3–E5 missing) — not full membership list. Product must project list equivalent; SC-082 is NOT primary for this FR. Compile-only / SC-082 alone / raw HTTP / dual-backend FAIL.
-- `FR-7.11-002` experimental-widgets-and-call-parity: Call/widget path depends on experimental-widgets and MatrixRTC gaps; widget plumbing ≠ call parity.
+- `FR-7.11-002` experimental-widgets-sc082-host-postmessage-not-call-parity: FR-7.11-002 product embed is implemented via matrix-js-sdk + matrix-widget-api ClientWidgetApi + CallEmbed/CallWidgetDriver + embedded Element Call assets. Cutover P10.2/P10.3 (+P10.1) under SC-082 experimental-widgets + GAP-MATRIXRTC-WIDGET-CAPABILITY-PLUMBING: E1/E2 only; element_call_host_and_postmessage + experimental_feature_risk_gate missing. Widget plumbing ≠ membership write/key session/full call parity. Compile-only / SC-082 alone without host / FOCI alone / raw HTTP / dual-backend FAIL.
 - `FR-7.11-003` upstream-change-required: FR-7.11-003 depends on upstream-change-required gap(s): ['GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION', 'GAP-MATRIXRTC-MEMBERSHIP-PRESENCE']
 - `FR-7.11-003` experimental-widgets-and-call-parity: Call/widget path depends on experimental-widgets and MatrixRTC gaps; widget plumbing ≠ call parity.
 - `FR-7.11-004` upstream-change-required: FR-7.11-004 depends on upstream-change-required gap(s): ['GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION']
