@@ -25,16 +25,14 @@ without explicit user approval.
 **Host task id:** `9022c2f8-9b21-411a-acf9-a36c10515f72`
 (`matrix-rust-sdk-replacement-orchestrator`, daily check-in)
 
-**Session state (2026-07-24, P1.1 active — Rust 1.93 pin):**
+**Session state (2026-07-24, P1.1 MERGED — next P1.2):**
 
 - **Integration tip:** `feature/matrix-rust-sdk-full-replacement` @
-  `ffc930f6eea5c5ce301e355cdee26d843e70d2ed`
-  (Phase 0: P0.1–P0.7 **all MERGED** into integration; tip includes P0.7
-  migration UX decision)
-- **Active work branch:** `matrix-rust/p1.1-rust-toolchain-pin` — permanent
-  Rust **1.93** pin (`rust-toolchain.toml`, `src-tauri` `rust-version`, CI
-  `dtolnay/rust-toolchain` `toolchain: 1.93`). **Not merged to integration
-  yet.** No production Matrix SDK deps; no dual-backend.
+  `21ed18809a13edbf2e5b82e6d0c498edade6d57c`
+  (Phase 0 complete + **P1.1 MERGED** — PR #48; tip message:
+  `chore(matrix): merge P1.1 Rust 1.93 toolchain pin`)
+- **Active work:** next **P1.2** — exact `matrix-sdk` / `matrix-sdk-ui` `=0.18.0`
+  production deps + feature rationale (no login/sync yet). No dual-backend.
 - **P0.2 PR:** https://github.com/nepenth/synara-desktop/pull/42 — **MERGED**
   into integration (docs-only). **Never merge to `main` without explicit user
   approval.**
@@ -72,15 +70,20 @@ without explicit user approval.
   `D-LEGACY-DETECT`…`D-NO-DUAL-BACKEND` recorded; no dual-backend; no unsafe
   token/device reuse into fresh crypto store; FR-7.9-011 remains sequential
   single-active only. **No production session/migration code.**
-- **P1.1:** **in progress** on `matrix-rust/p1.1-rust-toolchain-pin` — pin
-  channel/`rust-version`/CI to **1.93** (MSRV for matrix-sdk 0.18.0). Local
-  validation: production `src-tauri` `cargo check/test --locked` on 1.93.
-  **Do not claim MERGED until PR lands into integration.**
+- **P1.1:** **MERGED** into integration (PR #48). Artifacts:
+  repo-root `rust-toolchain.toml` (`channel = "1.93"`, rustfmt+clippy);
+  `src-tauri` `rust-version = "1.93"` (edition remains 2021); all desktop
+  workflows pin `dtolnay/rust-toolchain` `toolchain: 1.93`; build-and-release
+  prerequisite note. Local independent review: `cargo check/test --locked`
+  PASS on rustc 1.93.1 (101 tests). Clippy `-D warnings` residual is
+  pre-existing product lints (out of P1.1 scope). **No production Matrix SDK
+  deps yet** (P1.2).
 - **Optional later:** §7.1–7.7 scaffold rows may still have shallow notes if a
   full-matrix depth pass is desired beyond the handoff resume scope
-- **Progress loop:** daily durable orchestrator `9022c2f8-9b21-411a-acf9-a36c10515f72`
-- **No production Matrix Rust SDK replacement code accepted yet** (P1.1 is
-  toolchain/MSRV only; SDK deps are P1.2)
+- **Progress loop:** 4-minute scheduler `019f95928db7`; daily durable
+  orchestrator `9022c2f8-9b21-411a-acf9-a36c10515f72`
+- **No production Matrix Rust SDK client/sync/login code accepted yet**
+  (P1.1 toolchain only; P1.2 adds crates without starting a second client)
 
 Phase 0 evidence accepted (complete):
 
@@ -97,10 +100,16 @@ Phase 0 evidence accepted (complete):
   **merged** (`migration_ux_decided`; docs only; implementation ownership
   starts Phase 3 / P3.7)
 
+Phase 1 progress:
+
+- P1.1 permanent Rust 1.93 toolchain pin — **merged** (PR #48)
+
 **Next program work:**
 
-1. **P1.1** land permanent Rust 1.93 toolchain pin / MSRV into integration
-2. **P1.2** exact Matrix Rust SDK deps in production `src-tauri` (after P1.1)
+1. **P1.2** exact Matrix Rust SDK deps (`matrix-sdk` / `matrix-sdk-ui` `=0.18.0`)
+   in production `src-tauri` + feature rationale / license review — **no**
+   production login/sync yet; JS client remains sole runtime backend
+2. **P1.3** versioned Matrix IPC schemas
 
 Accepted notification findings that must be preserved:
 
