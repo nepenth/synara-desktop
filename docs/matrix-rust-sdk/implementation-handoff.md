@@ -37,8 +37,9 @@ without explicit user approval.
 - **Progress loop:** host scheduled task every **4 minutes**
   (ID `019f95928db7`) continues bounded FR audits; also daily durable
   orchestrator `9022c2f8-9b21-411a-acf9-a36c10515f72`
-- **Last accepted:** FR-7.10-007 search cancel/stale **partial** (`p0.2-correct-46`);
-  **section 7.10 P0.2 quality audit complete**
+- **Last accepted:** FR-7.10-007 search cancel/stale **partial** under
+  `GATE-7.10-007-SEARCH-ABORT-SIGNAL` (`p0.2-correct-46`); **section 7.10 P0.2
+  quality audit complete** (005 + 007 remain partial by gate)
 - **Next writer task:** FR-7.11-001 (MatrixRTC membership state), then remaining
   7.11 (~8 FRs)
 
@@ -199,6 +200,11 @@ Accepted notification findings that must be preserved:
 - FR-7.10-006: status `implemented`. Explicit decision: message search is
   server `mx.search` only (SC-071); SC-072 experimental local **not adopted**.
   `useAsyncSearch` is list filter honesty only, not message bodies.
+- FR-7.10-007: status **`partial`** under
+  `GATE-7.10-007-SEARCH-ABORT-SIGNAL`. Stale isolation via React Query
+  `queryKey=['search', term, order, rooms, senders]`; transport cancel
+  missing (`mx.search` without optional `abortSignal`; queryFn does not
+  forward RQ `signal`).
 
 
 ## Branch and PR contract
