@@ -4,7 +4,7 @@
 
 ## Correction pass status
 
-Limited rejected-review correction (`p0.2-correct-53-fr-7.11-007-experimental-widgets-risk-acceptance`) for **FR-7.11-007** only: replace shallow notes (implemented via 3 files / getDeviceId-search false AST / ToDeviceEvent / generic e2e AT-MA) with concrete **risk-gate** evidence — plan §7.11 + **P10.1** Exact experimental-widget risk dossier + Phase 10 AC; dossier **SC-082** blocked with `experimental_feature_risk_gate` missing; `defer-with-blocking-risk`; **RISK-CALLS** critical; honest **partial** under `GATE-7.11-007-EXPERIMENTAL-WIDGETS-RISK-ACCEPTANCE` (formal acceptance not formalized); rust_target `product-experimental-widgets-risk-acceptance-partial-gate-not-formalized` caps=[SC-082] gaps=[GAP-MATRIXRTC-WIDGET-CAPABILITY-PLUMBING]; rewrite AT/MA as planning-gate-review for P10.1. JSON and Markdown synchronized. Accepted corrections for **FR-7.8-001 through FR-7.8-009**, **FR-7.9-001..013** (**FR-7.9-011** remains partial), **FR-7.10-001..007**, **FR-7.11-001..006** (003/004/005/006 remain partial under their gates) preserved. Prior corrections and accepted **7.1–7.3** preserved. **P0.2 is not complete.**
+Limited rejected-review correction (`p0.2-correct-54-fr-7.11-008-widget-contingency-docs`) for **FR-7.11-008** only: replace shallow notes (not-currently-exposed via 3 files / getDeviceId-search-searchUserDirectory false AST / ToDeviceEvent / generic e2e AT-MA) with concrete **documented contingency** planning evidence — plan §7.11 L461–466 contingency clause + no-hidden-permanent-js constraint + **P10.7** Failure and upstream-gap decision gate + Phase 10 fail-closed; dossier **SC-082** + **GAP-MATRIXRTC-WIDGET-CAPABILITY-PLUMBING** + **GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION** + **RISK-CALLS** as residual drivers; honest **not-currently-exposed** under `GATE-7.11-008-DOCUMENTED-CONTINGENCY-ARTIFACT` (formal contingency decision not delivered); rust_target `planning-contingency-required` caps=[SC-082] gaps=[GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION, GAP-MATRIXRTC-WIDGET-CAPABILITY-PLUMBING]; **reject silent dual-backend** without explicit new user decision; rewrite AT/MA as planning-gate-review for P10.7. JSON and Markdown synchronized. Accepted corrections for **FR-7.8-001 through FR-7.8-009**, **FR-7.9-001..013** (**FR-7.9-011** remains partial), **FR-7.10-001..007**, **FR-7.11-001..007** (003–007 remain partial under their gates) preserved. Prior corrections and accepted **7.1–7.3** preserved. **Last FR in 7.8–7.11 for P0.2 quality audit. P0.2 is not complete.**
 
 ## Provenance
 
@@ -7611,63 +7611,70 @@ Limited rejected-review correction (`p0.2-correct-53-fr-7.11-007-experimental-wi
 ### `FR-7.11-008` — ### 7.11 Calls and widgets
 
 - **Text**: a documented contingency if upstream widget behavior cannot meet current call parity without reintroducing `matrix-js-sdk`.
-- **Lines**: 459–460
+- **Lines**: 461–462
 - **Status**: `not-currently-exposed`
-- **Behavior**: Current desktop implements this via 3 production matrix-js-sdk-related file(s); status=not-currently-exposed.
-- **Notes**: Contingency documentation is a required planning deliverable if widgets cannot meet call parity without matrix-js-sdk. Not a current user-visible behavior; tracked as planning requirement with P10.7 gate. Must not retain matrix-js-sdk as hidden permanent call-only dependency without new user decision.
+- **Behavior**: NOT-CURRENTLY-EXPOSED: FR-7.11-008 is a planning contingency requirement, not a user-visible runtime feature. Present: (1) plan §7.11 L461–462 requires a documented contingency if upstream widget behavior cannot meet current call parity without reintroducing matrix-js-sdk; (2) L464–466 allows delay/upstream patch and forbids retaining matrix-js-sdk as a hidden permanent call-only dependency without a new user decision; (3) P10.7 Failure and upstream-gap decision gate is the owning delivery/decision task; (4) Phase 10 L1125–1126 fail-closed — do not cut over with a permanent JavaScript SDK exception; (5) §3.1 no dual production backend; §3.3 no silent raw REST; (6) dossier residuals SC-082 blocked + GAP-MATRIXRTC-WIDGET-CAPABILITY-PLUMBING + GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION + RISK-CALLS critical are WHY contingency is needed. Absent: formal contingency decision artifact under GATE-7.11-008-DOCUMENTED-CONTINGENCY-ARTIFACT (chosen path: delay cutover / upstream patch / explicit new user decision — not silent dual-backend). status=not-currently-exposed.
+- **Notes**: Evidence (conservative): (1) PRODUCT MEANING — FR-7.11-008 is DOCUMENTED CONTINGENCY if widgets cannot meet call parity without reintroducing matrix-js-sdk; NOT membership DISPLAY (001), NOT embed plumbing alone (002), NOT join/leave (003), NOT encryption keys (004), NOT cleanup (005), NOT CSP alone (006), NOT experimental-widgets risk ACCEPTANCE alone (007/P10.1). (2) PLAN CLAUSE — matrix-rust-sdk-full-replacement-plan.md §7.11 L461–462: 'a documented contingency if upstream widget behavior cannot meet current call parity without reintroducing matrix-js-sdk'. (3) CONSTRAINT — L464–466: contingency may delay final cutover or require upstream patch; may NOT retain matrix-js-sdk as hidden permanent call-only dependency without new user decision. (4) PLAN TASK — P10.7 L1105 Failure and upstream-gap decision gate; Phase 10 L1125–1126: if phase fails, migration remains blocked; do not cut over with permanent JS SDK exception. (5) FULL-REPLACEMENT — §3.1 no dual production backend; §3.3 no silent raw REST. (6) DOSSIER DRIVERS — SC-082 blocked; GAP-MATRIXRTC-WIDGET-CAPABILITY-PLUMBING; GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION; RISK-CALLS critical. (7) FEATURE DECISION — experimental-widgets defer-with-blocking-risk / not Phase 1 minimum / blocking call-track risk. (8) NO FORMAL CONTINGENCY ARTIFACT — plan clause alone is not the delivered contingency decision document; P10.7 not delivered. (9) DEMOTION — prior shallow row used CallEmbed getDeviceId/search and CallWidgetDriver searchUserDirectory / ToDeviceEvent as 'implementation' evidence; false AST / wrong-FR runtime hits. (10) Cutover: produce contingency decision via P10.7 under GATE-7.11-008; CallEmbed AST / embed-alone / risk-acceptance-alone (007) / raw HTTP / silent dual-backend / claiming contingency implemented FAIL.
+- **Limits**: Not-currently-exposed: plan contingency language + P10.7 task exist, but formal contingency decision artifact is not delivered and this is not a product-exposed runtime behavior. Dossier residuals explain need; they are not the contingency document. Risk acceptance is FR-7.11-007/P10.1, not this FR.
 - **UI**: —
-- **UI rationale**: Intentionally empty: planning/risk/contingency gate rather than a user-facing control in the current desktop UI. Tracked via tasks P10.1/P10.7; no product screen solely owns this acceptance text.
-- **Owners**: `synara/src/app/plugins/call/CallEmbed.ts`
+- **UI rationale**: FR-7.11-008 is a documented CONTINGENCY planning gate (plan §7.11 + P10.7) if upstream widget behavior cannot meet current call parity without reintroducing matrix-js-sdk — not a user-facing control. No desktop settings screen owns this contingency text. Tracked via P10.7 (Failure and upstream-gap decision gate) with adjacency P10.1 (risk acceptance FR-7.11-007). EXCLUDE membership display (001); embed URL/capabilities/postMessage alone (002); join/leave (003); encryption keys (004); cleanup (005); CSP alone (006); experimental-widgets risk acceptance alone (007).
+- **Owners**: `docs/matrix-rust-sdk-full-replacement-plan.md`, `docs/matrix-rust-sdk/0.18.0-capability-dossier.md`
 - **Files**:
-  - `synara/src/app/hooks/useCallEmbed.ts` symbols=[] retained_m=0 retained_l=0
-  - `synara/src/app/plugins/call/CallEmbed.ts` symbols=['getDeviceId', 'search'] retained_m=2 retained_l=2
-    - method `getDeviceId`:L66 — None
-    - method `search`:L91 — None
-    - listener `on:ClientEvent.ToDeviceEvent`:L221 — None
-    - listener `off:ClientEvent.ToDeviceEvent`:L240 — None
-  - `synara/src/app/plugins/call/CallWidgetDriver.ts` symbols=['getDeviceId', 'searchUserDirectory'] retained_m=2 retained_l=0
-    - method `getDeviceId`:L40 — None
-    - method `searchUserDirectory`:L297 — None
+  - `docs/matrix-rust-sdk-full-replacement-plan.md` symbols=['§7.11 documented contingency clause', '§7.11 no hidden permanent matrix-js-sdk constraint', 'P10.7 Failure and upstream-gap decision gate', 'Phase 10 fail-closed no permanent JS SDK exception'] retained_m=0 retained_l=0
+    - plan `§7.11 documented contingency if widgets cannot meet call parity without matrix-js-sdk`:L461 — PRIMARY plan clause
+    - plan `§7.11 contingency may delay cutover or require upstream patch; may not retain matrix-js-sdk as hidden permanent call-only dependency without new user decision`:L464 — CONSTRAINT
+    - plan `P10.7 Failure and upstream-gap decision gate`:L1105 — PRIMARY delivery task
+    - plan `Phase 10 fail-closed: do not cut over with permanent JavaScript SDK exception`:L1125 — fail-closed
+    - plan `§3.1 No dual production backend`:L56 — full-replacement constraint
+    - plan `§3.3 No silent fallback to raw REST`:L78 — no silent raw REST
+  - `docs/matrix-rust-sdk/0.18.0-capability-dossier.md` symbols=['SC-082 experimental-widgets blocked', 'GAP-MATRIXRTC-WIDGET-CAPABILITY-PLUMBING', 'GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION', 'RISK-CALLS critical'] retained_m=0 retained_l=0
+    - evidence `SC-082 matrix_sdk::widget (experimental-widgets)`:L316 — DRIVER residual blocked
+    - evidence `GAP-MATRIXRTC-WIDGET-CAPABILITY-PLUMBING`:L502 — plumbing ≠ call parity
+    - evidence `GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION`:L515 — upstream-change-required driver
+    - evidence `RISK-CALLS critical`:L692 — dual backend / raw HTTP blocking question
+  - `docs/matrix-rust-sdk/0.18.0-feature-and-gap-analysis.md` symbols=['experimental-widgets defer-with-blocking-risk', 'blocking call-track risk', 'membership write + key session no viable route'] retained_m=0 retained_l=0
+    - evidence `experimental-widgets defer-with-blocking-risk`:L430 — dedicated risk gate required
+    - evidence `experimental-widgets blocking call-track risk`:L463 — shapes only, not call parity
+    - evidence `GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION no viable high-level public route`:L403 — upstream residual
 - **Behavior-relevant methods (top-level)**:
-  - `getDeviceId` `synara/src/app/plugins/call/CallEmbed.ts`:L66 — None
-  - `search` `synara/src/app/plugins/call/CallEmbed.ts`:L91 — None
-  - `getDeviceId` `synara/src/app/plugins/call/CallWidgetDriver.ts`:L40 — None
-  - `searchUserDirectory` `synara/src/app/plugins/call/CallWidgetDriver.ts`:L297 — None
+  - _(none — planning/contingency gate; demoted CallEmbed getDeviceId/search and CallWidgetDriver searchUserDirectory AST)_
 - **Behavior-relevant listeners (top-level)**:
-  - `on:ClientEvent.ToDeviceEvent` `synara/src/app/plugins/call/CallEmbed.ts`:L221 — None
-  - `off:ClientEvent.ToDeviceEvent` `synara/src/app/plugins/call/CallEmbed.ts`:L240 — None
-- **Unfiltered linked candidates**: methods=20 listeners=10
+  - _(none — demoted ToDeviceEvent as non-contingency evidence)_
+- **Unfiltered linked candidates**: methods=0 listeners=0
 - **Rust**: `planning-contingency-required` caps=['SC-082'] gaps=['GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION', 'GAP-MATRIXRTC-WIDGET-CAPABILITY-PLUMBING']
   - `SC-082` `blocked` `matrix_sdk::widget (experimental-widgets)` https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/lib.rs#L64-L65
-- **Tasks**: `P10.7`, `P14.5`
+- Honest: rust_target for FR-7.11-008: planning-contingency-required. Plan §7.11 + P10.7 require documented contingency; formal contingency decision artifact not delivered (GATE-7.11-008 open). SC-082 + MatrixRTC gaps are residual drivers only. Cutover P10.7: produce contingency decision; no dual-backend without explicit new user approval; no silent matrix-js-sdk retention; no raw HTTP. Risk acceptance = FR-7.11-007/P10.1. Compile-only / CallEmbed AST / embed-alone / claiming contingency implemented FAIL.
+- **Tasks**: `P10.7`, `P10.1`
 - **Blockers**:
-  - (high) upstream-change-required: FR-7.11-008 depends on upstream-change-required gap(s): ['GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION', 'GAP-MATRIXRTC-WIDGET-CAPABILITY-PLUMBING']
-  - (high) experimental-widgets-and-call-parity: Call/widget path depends on experimental-widgets and MatrixRTC gaps; widget plumbing ≠ call parity.
+  - GATE-7.11-008-DOCUMENTED-CONTINGENCY-ARTIFACT
+  - (high) planning-contingency-required: FR-7.11-008 is NOT-CURRENTLY-EXPOSED: plan §7.11 + P10.7 require a documented contingency if widgets cannot meet call parity without reintroducing matrix-js-sdk; L464–466 + §3.1/§3.3 forbid permanent dual-backend / hidden matrix-js-sdk without new user decision. Dossier residuals SC-082 blocked + GAP-MATRIXRTC-WIDGET-CAPABILITY-PLUMBING + GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION + RISK-CALLS force contingency need. Formal contingency decision artifact not delivered. CallEmbed AST / embed-alone / risk-acceptance-alone (007) / raw HTTP / silent dual-backend / claiming contingency implemented FAIL. Cutover P10.7 under GATE-7.11-008-DOCUMENTED-CONTINGENCY-ARTIFACT.
 - **Existing tests**:
   - _(none)_
-- **Planned** `AT-FR-7.11-008-001` task `P10.7` level `integration-e2e`
-  - Scenario: 7.11/FR-7.11-008: exercise 'a documented contingency if upstream widget behavior cannot meet current call parity without reintroducing `matrix-js-sdk`.' via owner `synara/src/app/plugins/call/CallEmbed.ts` and UI `(no dedicated UI — see ui_entry_points_rationale)`, then confirm Rust/IPC cutover task `P10.7` preserves observable behavior without raw Matrix runtime HTTP.
-  - Test target: None
+- **Planned** `AT-FR-7.11-008-001` task `P10.7` level `planning-gate-review`
+  - Scenario: Planning-gate review for FR-7.11-008 documented contingency: (A) PLAN CLAUSE — plan §7.11 L461–462 requires documented contingency if upstream widget behavior cannot meet call parity without reintroducing matrix-js-sdk. (B) P10.7 TASK — Failure and upstream-gap decision gate present (L1105); Phase 10 L1125–1126 fail-closed if phase fails. (C) CONSTRAINT — L464–466 + §3.1/§3.3: contingency may delay cutover or require upstream patch; must NOT retain matrix-js-sdk as hidden permanent call-only dependency without new user decision; no dual production backend; no silent raw REST. (D) ARTIFACT residual — formal contingency decision document under GATE-7.11-008-DOCUMENTED-CONTINGENCY-ARTIFACT is absent → status remains not-currently-exposed / gate open (fail-closed). (E) DRIVERS — SC-082 blocked + GAP-MATRIXRTC-WIDGET-CAPABILITY-PLUMBING + GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION + RISK-CALLS acknowledged as residuals forcing contingency need. (F) DISTINCTIONS — not 001–006 runtime alone; not 007 risk acceptance alone. Cutover P10.7: contingency decision required; CallEmbed AST / embed-alone / raw HTTP / silent dual-backend FAIL.
+  - Test target: P10.7 contingency decision artifact + GATE-7.11-008-DOCUMENTED-CONTINGENCY-ARTIFACT; plan §7.11 L461–466 + Phase 10 fail-closed L1125–1126; no permanent dual-backend without explicit new user decision
   - Preconditions:
-    - Desktop app with Element Call / widget config for the build
-    - Room with MatrixRTC membership fixtures; two clients for join/leave
-    - CSP-enabled production-like shell
-    - Linked owner path present in tree: synara/src/app/plugins/call/CallEmbed.ts
-    - Primary UI/lifecycle surface: (no dedicated UI — see ui_entry_points_rationale)
+    - Plan §7.11 contingency clause + L464–466 constraint + P10.7 task available.
+    - Capability dossier SC-082 + GAP-MATRIXRTC-WIDGET-CAPABILITY-PLUMBING + GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION + RISK-CALLS available as residual drivers.
+    - Do not accept: CallEmbed getDeviceId/search AST, CallWidgetDriver searchUserDirectory, ToDeviceEvent, embed-alone (002), join-leave alone (003), keys alone (004), cleanup alone (005), CSP alone (006), risk-acceptance-alone (007), compile-only SC-082, silent dual-backend, or claiming contingency implemented without formal decision artifact.
   - Actions:
-    1. Boot the appropriate harness for level=integration-e2e against disposable Synapse (or iOS notes if any).
-    2. Establish fixtures required by the clause list: a documented contingency if upstream widget behavior cannot meet current call parity without reintroducing `matrix-js-sdk`.
-    3. Open UI/lifecycle surface `(no dedicated UI — see ui_entry_points_rationale)` (or follow ui_entry_points_rationale if no dedicated UI).
-    4. Step 1: perform the product action that implements «a documented contingency if upstream widget behavior cannot meet current call parity without reintroducing `matrix-js-sdk`» using current owner `synara/src/app/plugins/call/CallEmbed.ts`.
-    5. Start/stop embedded call/widget session; change room; logout; close window — confirm cleanup.
+    1. Locate formal P10.7 contingency decision artifact (or document absence → GATE open / not-currently-exposed).
+    2. PLAN CLAUSE: assert §7.11 L461–462 contingency requirement is present and owned by this FR.
+    3. P10.7: assert Failure and upstream-gap decision gate task exists; Phase 10 fail-closed language present.
+    4. CONSTRAINT: assert decision path forbids permanent hidden matrix-js-sdk / dual-backend without new user decision; delay and upstream patch are allowed outcomes.
+    5. ARTIFACT: assert formal contingency decision records chosen path (delay cutover / upstream patch / explicit user-approved exception) or gate remains open.
+    6. DRIVERS: assert SC-082 + MatrixRTC membership-write/key-session + widget-plumbing residuals are listed as why contingency may fire.
+    7. DISTINCTIONS: confirm this review is not 001–006 runtime AT and not 007 risk-acceptance alone.
   - Assertions:
-    - Each clause is observable: «a documented contingency if upstream widget behavior cannot meet current call parity without reintroducing `matrix-js-sdk`».
-    - State coordination remains through `synara/src/app/plugins/call/CallEmbed.ts` (or its Rust/IPC successor after cutover), not ad-hoc dual writers.
-    - Behavior-relevant current JS method candidates exercised or replaced: getDeviceId, search, getDeviceId, searchUserDirectory (AST candidates; not type-proven receivers).
-    - Behavior-relevant listener candidates observed or replaced: on:ClientEvent.ToDeviceEvent, off:ClientEvent.ToDeviceEvent.
-    - Rust mapping remains conservative: caps=[SC-082] gaps=[GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION,GAP-MATRIXRTC-WIDGET-CAPABILITY-PLUMBING]; compile-only blocked states are not treated as runtime pass.
-    - No new production matrix-js-sdk usage and no raw /\_matrix runtime HTTP unless dossier marks that exact behavior typed-sdk-request-required.
-    - Widget plumbing success is not recorded as full call parity if membership-write/key-session gaps remain.
+    - PLAN CLAUSE present: documented contingency required if widgets cannot meet call parity without reintroducing matrix-js-sdk.
+    - P10.7 TASK present: Failure and upstream-gap decision gate owns delivery.
+    - CONSTRAINT: no permanent dual-backend / hidden matrix-js-sdk call-only dependency without explicit new user decision; no silent raw /\_matrix REST.
+    - ARTIFACT residual: formal contingency decision exists OR status remains not-currently-exposed under GATE-7.11-008-DOCUMENTED-CONTINGENCY-ARTIFACT (fail-closed).
+    - DRIVERS: SC-082 + GAP-MATRIXRTC-WIDGET-CAPABILITY-PLUMBING + GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION residuals acknowledged; not claimed closed by plan clause alone.
+    - DISTINCTIONS: this FR ≠ 001/002-alone/003/004/005/006/007 risk-acceptance.
+    - COORDINATION: through plan P10.7 contingency decision, not dual-backend feature flags or CallEmbed runtime AST.
+    - CUTOVER: P10.7 under GATE-7.11-008; no raw /\_matrix HTTP; no silent dual-backend; no permanent JS SDK exception without user decision.
+    - No new production matrix-js-sdk usage and no raw /\_matrix runtime HTTP unless typed-sdk-request-required for that exact behavior.
   - does_not_currently_exist: `True`
 - **Manual**: `MA-FR-7.11-008`
 
@@ -9872,21 +9879,22 @@ Limited rejected-review correction (`p0.2-correct-53-fr-7.11-007-experimental-wi
 
 - Platforms: macOS, Linux
 - Preconditions:
-  - Desktop app with Element Call / widget config for the build
-  - Room with MatrixRTC membership fixtures; two clients for join/leave
-  - CSP-enabled production-like shell
-  - State owner available: synara/src/app/plugins/call/CallEmbed.ts
-  - UI/lifecycle: (no dedicated UI — see ui_entry_points_rationale)
-  - Current status baseline: not-currently-exposed
+  - Plan §7.11 contingency clause + L464–466 constraint + P10.7 task available.
+  - Capability dossier SC-082 + GAP-MATRIXRTC-WIDGET-CAPABILITY-PLUMBING + GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION + RISK-CALLS available as residual drivers.
+  - No dedicated UI (planning/contingency gate); empty UI justified.
+  - Current status baseline: not-currently-exposed under GATE-7.11-008-DOCUMENTED-CONTINGENCY-ARTIFACT.
 - Actions:
-  1. Search desktop UI/settings for any exposure of «a documented contingency if upstream widget behavior cannot meet current call parity without reintroducing `matrix-js-sdk`.».
-  2. Document absence or presence; if present, stop and reopen the matrix row as implemented.
-  3. Confirm planning disposition tasks remain correct and no hidden matrix-js-sdk retention is introduced for this item.
+  1. Locate formal P10.7 contingency decision artifact (or document absence → gate open / not-currently-exposed).
+  2. PLAN CLAUSE: verify §7.11 L461–462 contingency requirement is present and owned by this FR.
+  3. CONSTRAINT: verify L464–466 + §3.1/§3.3 forbid permanent dual-backend / hidden matrix-js-sdk without new user decision; delay and upstream patch are allowed.
+  4. DRIVERS: verify SC-082 + MatrixRTC membership-write/key-session + widget-plumbing residuals are listed as why contingency may fire.
+  5. ARTIFACT: verify formal decision records chosen path (delay cutover / upstream patch / explicit user-approved exception) or gate remains open.
+  6. DISTINCTIONS: not 001–006 runtime alone; not 007 risk acceptance alone; contingency path is P10.7.
 - Expected:
-  - All clauses under «a documented contingency if upstream widget behavior cannot meet current call parity without reintroducing `matrix-js-sdk`.» produce the user-visible or system-observable success criteria without error toasts unrelated to intentional negative tests.
-  - Clause 1 «a documented contingency if upstream widget behavior cannot meet current call parity without reintroducing `matrix-js-sdk`» is satisfied on macOS, Linux with owner `synara/src/app/plugins/call/CallEmbed.ts`.
-  - No unexpected raw /\_matrix traffic from the app renderer for this flow on the post-cutover build.
-  - Empty UI entry points justified: Intentionally empty: planning/risk/contingency gate rather than a user-facing control in the current desktop UI. Tracked via tasks P10.1/P10.7; no product screen solely owns this a
+  - Formal contingency decision artifact exists for widgets-cannot-meet-parity path OR status remains not-currently-exposed under GATE-7.11-008 (do not pass without artifact).
+  - Constraint: no permanent dual-backend / hidden matrix-js-sdk call-only dependency without explicit new user decision; no silent raw /\_matrix REST.
+  - Empty UI entry points justified: planning/contingency gate, not a user-facing control; P10.7 primary, P10.1 adjacency for risk acceptance.
+  - No unexpected raw /\_matrix traffic; no silent dual-backend call exception as substitute for this gate.
 
 ## Planned catalog
 
@@ -12112,22 +12120,26 @@ Limited rejected-review correction (`p0.2-correct-53-fr-7.11-007-experimental-wi
 
 ### `AT-FR-7.11-008-001`
 
-- 7.11/FR-7.11-008: exercise 'a documented contingency if upstream widget behavior cannot meet current call parity without reintroducing `matrix-js-sdk`.' via owner `synara/src/app/plugins/call/CallEmbed.ts` and UI `(no dedicated UI — see ui_entry_points_rationale)`, then confirm Rust/IPC cutover task `P10.7` preserves observable behavior without raw Matrix runtime HTTP.
-- target: None
+- Planning-gate review for FR-7.11-008 documented contingency: (A) PLAN CLAUSE — plan §7.11 L461–462 requires documented contingency if upstream widget behavior cannot meet call parity without reintroducing matrix-js-sdk. (B) P10.7 TASK — Failure and upstream-gap decision gate present (L1105); Phase 10 L1125–1126 fail-closed if phase fails. (C) CONSTRAINT — L464–466 + §3.1/§3.3: contingency may delay cutover or require upstream patch; must NOT retain matrix-js-sdk as hidden permanent call-only dependency without new user decision; no dual production backend; no silent raw REST. (D) ARTIFACT residual — formal contingency decision document under GATE-7.11-008-DOCUMENTED-CONTINGENCY-ARTIFACT is absent → status remains not-currently-exposed / gate open (fail-closed). (E) DRIVERS — SC-082 blocked + GAP-MATRIXRTC-WIDGET-CAPABILITY-PLUMBING + GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION + RISK-CALLS acknowledged as residuals forcing contingency need. (F) DISTINCTIONS — not 001–006 runtime alone; not 007 risk acceptance alone. Cutover P10.7: contingency decision required; CallEmbed AST / embed-alone / raw HTTP / silent dual-backend FAIL.
+- target: P10.7 contingency decision artifact + GATE-7.11-008-DOCUMENTED-CONTINGENCY-ARTIFACT; plan §7.11 L461–466 + Phase 10 fail-closed L1125–1126; no permanent dual-backend without explicit new user decision
 - actions:
-  1. Boot the appropriate harness for level=integration-e2e against disposable Synapse (or iOS notes if any).
-  2. Establish fixtures required by the clause list: a documented contingency if upstream widget behavior cannot meet current call parity without reintroducing `matrix-js-sdk`.
-  3. Open UI/lifecycle surface `(no dedicated UI — see ui_entry_points_rationale)` (or follow ui_entry_points_rationale if no dedicated UI).
-  4. Step 1: perform the product action that implements «a documented contingency if upstream widget behavior cannot meet current call parity without reintroducing `matrix-js-sdk`» using current owner `synara/src/app/plugins/call/CallEmbed.ts`.
-  5. Start/stop embedded call/widget session; change room; logout; close window — confirm cleanup.
+  1. Locate formal P10.7 contingency decision artifact (or document absence → GATE open / not-currently-exposed).
+  2. PLAN CLAUSE: assert §7.11 L461–462 contingency requirement is present and owned by this FR.
+  3. P10.7: assert Failure and upstream-gap decision gate task exists; Phase 10 fail-closed language present.
+  4. CONSTRAINT: assert decision path forbids permanent hidden matrix-js-sdk / dual-backend without new user decision; delay and upstream patch are allowed outcomes.
+  5. ARTIFACT: assert formal contingency decision records chosen path (delay cutover / upstream patch / explicit user-approved exception) or gate remains open.
+  6. DRIVERS: assert SC-082 + MatrixRTC membership-write/key-session + widget-plumbing residuals are listed as why contingency may fire.
+  7. DISTINCTIONS: confirm this review is not 001–006 runtime AT and not 007 risk-acceptance alone.
 - assertions:
-  - Each clause is observable: «a documented contingency if upstream widget behavior cannot meet current call parity without reintroducing `matrix-js-sdk`».
-  - State coordination remains through `synara/src/app/plugins/call/CallEmbed.ts` (or its Rust/IPC successor after cutover), not ad-hoc dual writers.
-  - Behavior-relevant current JS method candidates exercised or replaced: getDeviceId, search, getDeviceId, searchUserDirectory (AST candidates; not type-proven receivers).
-  - Behavior-relevant listener candidates observed or replaced: on:ClientEvent.ToDeviceEvent, off:ClientEvent.ToDeviceEvent.
-  - Rust mapping remains conservative: caps=[SC-082] gaps=[GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION,GAP-MATRIXRTC-WIDGET-CAPABILITY-PLUMBING]; compile-only blocked states are not treated as runtime pass.
-  - No new production matrix-js-sdk usage and no raw /\_matrix runtime HTTP unless dossier marks that exact behavior typed-sdk-request-required.
-  - Widget plumbing success is not recorded as full call parity if membership-write/key-session gaps remain.
+  - PLAN CLAUSE present: documented contingency required if widgets cannot meet call parity without reintroducing matrix-js-sdk.
+  - P10.7 TASK present: Failure and upstream-gap decision gate owns delivery.
+  - CONSTRAINT: no permanent dual-backend / hidden matrix-js-sdk call-only dependency without explicit new user decision; no silent raw /\_matrix REST.
+  - ARTIFACT residual: formal contingency decision exists OR status remains not-currently-exposed under GATE-7.11-008-DOCUMENTED-CONTINGENCY-ARTIFACT (fail-closed).
+  - DRIVERS: SC-082 + GAP-MATRIXRTC-WIDGET-CAPABILITY-PLUMBING + GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION residuals acknowledged; not claimed closed by plan clause alone.
+  - DISTINCTIONS: this FR ≠ 001/002-alone/003/004/005/006/007 risk-acceptance.
+  - COORDINATION: through plan P10.7 contingency decision, not dual-backend feature flags or CallEmbed runtime AST.
+  - CUTOVER: P10.7 under GATE-7.11-008; no raw /\_matrix HTTP; no silent dual-backend; no permanent JS SDK exception without user decision.
+  - No new production matrix-js-sdk usage and no raw /\_matrix runtime HTTP unless typed-sdk-request-required for that exact behavior.
 
 ## Existing tests
 
@@ -12431,8 +12443,7 @@ Limited rejected-review correction (`p0.2-correct-53-fr-7.11-007-experimental-wi
 - `FR-7.11-005` product-call-session-cleanup-partial-lifecycle-hooks: FR-7.11-005 product path is PARTIAL: hangup/clear dispose pipeline present (callEmbedAtom → CallEmbed.dispose; CallEmbedProvider hangup clear; End UI). Room-nav retains session; logout/window-close lack explicit hangup/dispose. Cutover P10.5 (+P2.6/P3.8); SC-082 residual only. Compile-only / SC-082 alone / hangup-leave-alone as full cleanup / raw HTTP FAIL.
 - `FR-7.11-006` product-csp-origin-restrictions-partial-shell-and-iframe: FR-7.11-006 product path is PARTIAL: Tauri CSP (frame-src 'self') + CallEmbed iframe sandbox/allow + same-origin element-call packaging + parentUrl origin present. Residuals: broad connect-src; no CSP meta; sandbox scripts+same-origin; strictOriginCheck not product-enabled; no security AT. Cutover P10.6 (+P13.5); SC-082 residual only. Compile-only / SC-082 alone / embed-URL-alone / raw HTTP FAIL.
 - `FR-7.11-007` product-experimental-widgets-risk-acceptance-partial-gate-not-formalized: FR-7.11-007 product path is PARTIAL: plan §7.11 + P10.1 + Phase 10 AC require explicit risk acceptance for experimental-widgets at pin 0.18.0; dossier SC-082 is blocked with experimental_feature_risk_gate missing; feature decision is defer-with-blocking-risk / not Phase 1 minimum; RISK-CALLS critical. No formal product risk-acceptance document yet authorizes production enablement. Compile-only SC-082 / embed-alone / CallEmbed AST / raw HTTP / dual-backend / claiming production-accepted FAIL. Cutover P10.1 under GATE-7.11-007-EXPERIMENTAL-WIDGETS-RISK-ACCEPTANCE.
-- `FR-7.11-008` upstream-change-required: FR-7.11-008 depends on upstream-change-required gap(s): ['GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION', 'GAP-MATRIXRTC-WIDGET-CAPABILITY-PLUMBING']
-- `FR-7.11-008` experimental-widgets-and-call-parity: Call/widget path depends on experimental-widgets and MatrixRTC gaps; widget plumbing ≠ call parity.
+- `FR-7.11-008` planning-contingency-required: FR-7.11-008 is NOT-CURRENTLY-EXPOSED: plan §7.11 + P10.7 require a documented contingency if widgets cannot meet call parity without reintroducing matrix-js-sdk; L464–466 + §3.1/§3.3 forbid permanent dual-backend / hidden matrix-js-sdk without new user decision. Dossier residuals SC-082 blocked + GAP-MATRIXRTC-WIDGET-CAPABILITY-PLUMBING + GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION + RISK-CALLS force contingency need. Formal contingency decision artifact not delivered. CallEmbed AST / embed-alone / risk-acceptance-alone (007) / raw HTTP / silent dual-backend / claiming contingency implemented FAIL. Cutover P10.7 under GATE-7.11-008-DOCUMENTED-CONTINGENCY-ARTIFACT.
 - `FR-7.8-009` p0_3-dossier-evidence-gap: P0.3 lacks set_pusher/delete_pusher/notification-resolution capability IDs; iOS implemented via Swift bindings; track under P0.4/P9.6/P12.1.
 
 ---
