@@ -25,16 +25,15 @@ without explicit user approval.
 **Host task id:** `9022c2f8-9b21-411a-acf9-a36c10515f72`
 (`matrix-rust-sdk-replacement-orchestrator`, daily check-in)
 
-**Session state (2026-07-24, P0.6 accepted — PR to integration):**
+**Session state (2026-07-24, P0.7 accepted — PR to integration):**
 
-- **Integration tip (unchanged until P0.6 merge):**
-  `feature/matrix-rust-sdk-full-replacement` @
-  `a2d288b0762104fb15a6c4829bfe1293e865f5b6`
-  (P0.1 + P0.3 + P0.2 + P0.4 + **P0.5 MERGED** — PR #45; tip message:
-  `docs(matrix): merge P0.5 toolchain compatibility`)
-- **Active work branch:** `matrix-rust/p0.6-performance-baseline` (docs +
-  optional baseline harness only; **not merged to integration yet**; no
-  production `src-tauri` / product behavior changes)
+- **Integration tip:** `feature/matrix-rust-sdk-full-replacement` @
+  `9e0cfcae8c377161a73ce8e01f889f485e233e5e`
+  (P0.1 + P0.3 + P0.2 + P0.4 + P0.5 + **P0.6 MERGED** — PR #46; tip message:
+  `docs(matrix): merge P0.6 performance baseline`)
+- **Active work branch:** `matrix-rust/p0.7-migration-ux` (docs only; **not
+  merged to integration yet**; no production `src-tauri` / product behavior
+  changes)
 - **P0.2 PR:** https://github.com/nepenth/synara-desktop/pull/42 — **MERGED**
   into integration (docs-only). **Never merge to `main` without explicit user
   approval.**
@@ -57,14 +56,21 @@ without explicit user approval.
   production matrix-sdk deps; workflows not edited. Residuals: Linux not local;
   full universal product + notarization not re-run with SDK; permanent pin is
   **P1.1**. **Never merge to `main` without explicit user approval.**
-- **P0.6:** **accepted by independent review** (`pass-with-residuals`; docs +
-  harness only). Artifacts: `performance-baseline.md` + `.json`; aggregator
+- **P0.6:** **MERGED** into integration (docs + harness only, PR #46). Artifacts:
+  `performance-baseline.md` + `.json`; aggregator
   `scripts/matrix-rust-p0.6-baseline-harness.mjs` (+ unit test). Baseline is
   current **`matrix-js-sdk` product**, not Rust SDK. Automated timeline
   row-mapping multi-iteration p50/p95 recorded on macOS arm64; live UX
   latencies / Linux live / memory-CPU-disk are **methodology-only residuals**
-  (no fabricated live p50/p95). PR targets integration — **do not claim MERGED
-  until PR lands**. No production Matrix code changes.
+  (no fabricated live p50/p95). Verdict: **`pass-with-residuals`**. No production
+  Matrix code changes.
+- **P0.7:** **accepted by independent review** (docs only). Artifacts:
+  `migration-ux-decision.md` + `.json`; optional ADR pointer
+  `docs/adr/0003-matrix-rust-sdk-migration-ux.md`. Verdict:
+  **`migration_ux_decided`**. PR targets integration — **do not claim MERGED until PR lands**. Required decision IDs
+  `D-LEGACY-DETECT`…`D-NO-DUAL-BACKEND` recorded; no dual-backend; no unsafe
+  token/device reuse into fresh crypto store; FR-7.9-011 remains sequential
+  single-active only. **No production session/migration code.**
 - **Optional later:** §7.1–7.7 scaffold rows may still have shallow notes if a
   full-matrix depth pass is desired beyond the handoff resume scope
 - **Progress loop:** 4-minute scheduler `019f95928db7` (retarget to Phase 0
@@ -78,16 +84,18 @@ Phase 0 evidence accepted:
 - P0.2 feature-parity traceability (§7.8–7.11 quality audit) — **merged**
 - P0.4 Swift/Rust version provenance — **merged**
 - P0.5 Toolchain compatibility (Rust 1.93 / Tauri 2 / matrix-sdk 0.18) —
-  **merged** (integration tip `a2d288b`, PR #45; `pass-with-residuals`)
+  **merged** (PR #45; `pass-with-residuals`)
 - P0.6 Baseline reliability/performance evidence —
-  **accepted, awaiting integration PR merge** (`pass-with-residuals`;
+  **merged** (integration tip `9e0cfca`, PR #46; `pass-with-residuals`;
   automated timeline mapping measured; live UX residuals documented)
+- P0.7 Migration UX decision record —
+  **accepted, awaiting integration PR merge** (`migration_ux_decided`; docs only;
+  implementation ownership starts Phase 3 / P3.7)
 
-**Next program work (Phase 0 remaining):**
+**Next program work:**
 
-1. **P0.6** merge accepted PR into integration  
-2. **P0.7** Migration UX  
-3. After Phase 0: **P1.1** permanent Rust 1.93 toolchain pin / MSRV bump
+1. **P0.7** merge accepted PR into integration (closes Phase 0 docs gates)
+2. **P1.1** permanent Rust 1.93 toolchain pin / MSRV bump
 
 Accepted notification findings that must be preserved:
 
@@ -348,8 +356,9 @@ Before accepting a task or merging its PR, the reviewer must independently:
 2. Complete P0.4 — **done** (merged into integration, PR #44).
 3. Complete P0.5 — **done** (merged into integration @ `a2d288b`, PR #45;
    `pass-with-residuals`).
-4. Complete remaining Phase 0 gates: **P0.6** performance baseline (accepted;
-   merge PR into integration; `pass-with-residuals`), then **P0.7** migration UX.
+4. Complete remaining Phase 0 gate: **P0.7** migration UX (accepted; merge PR
+   into integration closes Phase 0 docs). **P0.6 MERGED** @ `9e0cfca` (PR #46;
+   `pass-with-residuals`).
 5. Build the Phase 1 foundation: Rust 1.93, exact SDK pins, versioned
    Synara-owned IPC schemas, lifecycle/store security, and test infrastructure.
 6. Implement Phases 2–11 by bounded capability task: authentication/sync,
