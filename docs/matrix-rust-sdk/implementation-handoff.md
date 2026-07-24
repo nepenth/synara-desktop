@@ -25,27 +25,39 @@ without explicit user approval.
 **Host task id:** `9022c2f8-9b21-411a-acf9-a36c10515f72`
 (`matrix-rust-sdk-replacement-orchestrator`, daily check-in)
 
-**Session state (2026-07-24, P0.4 accepted — PR to integration):**
+**Session state (2026-07-24, P0.5 accepted — PR to integration):**
 
-- **Integration tip (unchanged until P0.4 merge):**
+- **Integration tip (unchanged until P0.5 merge):**
   `feature/matrix-rust-sdk-full-replacement` @
-  `c76f4ff7cb19e3e6d1536e9b8f7b8d269f374dcb`
-  (P0.1 + P0.3 + **P0.2** merged; handoff note after P0.2)
-- **Active work branch:** `matrix-rust/p0.4-swift-rust-provenance` (docs-only
-  P0.4 provenance; **not merged to integration yet**)
+  `4d318da9fdf0689b9cb085a6387fbf338fd67fd2`
+  (P0.1 + P0.3 + P0.2 + **P0.4 MERGED** — PR #44; tip message:
+  `docs(matrix): merge P0.4 Swift/Rust version provenance`)
+- **Active work branch:** `matrix-rust/p0.5-toolchain-compatibility` (docs +
+  isolated probes only; **not merged to integration yet**; no production
+  `src-tauri` changes)
 - **P0.2 PR:** https://github.com/nepenth/synara-desktop/pull/42 — **MERGED**
   into integration (docs-only). **Never merge to `main` without explicit user
   approval.**
 - **P0.2 quality audit of §7.8–7.11:** COMPLETE (source-line evidence; honest
-  partial/NCE gates retained; zero shallow rows remaining in 7.8–7.11)
-- **P0.4:** **accepted by independent review** (docs-only). Evidence:
+  partial/NCE gates retained; zero shallow rows remaining in 7.8–7.11). **Do not
+  re-open FR-7.8–7.11 rows or re-promote FR-7.9-011.**
+- **P0.4:** **MERGED** into integration (docs-only, PR #44). Evidence:
   `swift-rust-version-provenance.md` + `.json`. Embedded Rust commit for
   components-swift `26.06.06` proven as
   `1c44fb66214667c6d00acaf72ab592493653708b` (same as desktop
   `matrix-sdk-0.18.0`). Alignment decision: **exact same git commit** (A); iOS
-  pin and desktop crate pins **unchanged**. PR targets integration — **do not
-  claim MERGED until PR lands**. **Never merge to `main` without explicit user
-  approval.**
+  pin and desktop crate pins **unchanged**.
+- **P0.5:** **accepted by independent review** (docs + isolated probes only).
+  Artifacts: `toolchain-compatibility-report.md` + `.json`; coexistence probe
+  `probes/tauri-matrix-sdk-compat/`. Verdict: **`pass-with-residuals`**.
+  Local proofs on Rust 1.93: matrix-sdk 0.18 probe `cargo check --locked` PASS;
+  production `src-tauri` `cargo check --locked` PASS (no SDK); Tauri 2.11 +
+  matrix-sdk/ui 0.18 coexistence `cargo check/test --locked` PASS including
+  `--target x86_64-apple-darwin`. Production `src-tauri` **not** modified; no
+  production matrix-sdk deps; workflows not edited. Residuals: Linux not local;
+  full universal product + notarization not re-run with SDK; permanent pin is
+  **P1.1**. PR targets integration — **do not claim MERGED until PR lands**.
+  **Never merge to `main` without explicit user approval.**
 - **Optional later:** §7.1–7.7 scaffold rows may still have shallow notes if a
   full-matrix depth pass is desired beyond the handoff resume scope
 - **Progress loop:** 4-minute scheduler `019f95928db7` (retarget to Phase 0
@@ -57,14 +69,16 @@ Phase 0 evidence accepted:
 - P0.1 SDK usage inventory — merged
 - P0.3 exact Matrix Rust SDK 0.18.0 capability dossier — merged
 - P0.2 feature-parity traceability (§7.8–7.11 quality audit) — **merged**
-- P0.4 Swift/Rust version provenance — **accepted, awaiting integration PR merge**
+- P0.4 Swift/Rust version provenance — **merged** (integration tip `4d318da`)
+- P0.5 Toolchain compatibility (Rust 1.93 / Tauri 2 / matrix-sdk 0.18) —
+  **accepted, awaiting integration PR merge** (`pass-with-residuals`)
 
 **Next program work (Phase 0 remaining):**
 
-1. **P0.4** merge accepted PR into integration  
-2. **P0.5** Toolchain compatibility (Rust 1.93)  
-3. **P0.6** Performance baseline  
-4. **P0.7** Migration UX
+1. **P0.5** merge accepted PR into integration  
+2. **P0.6** Performance baseline  
+3. **P0.7** Migration UX  
+4. After Phase 0: **P1.1** permanent Rust 1.93 toolchain pin / MSRV bump
 
 Accepted notification findings that must be preserved:
 
@@ -322,17 +336,18 @@ Before accepting a task or merging its PR, the reviewer must independently:
 ## Remaining program sequence
 
 1. Complete P0.2 — **done** (merged into integration).
-2. Complete remaining Phase 0 gates: **P0.4** Swift provenance (accepted;
-   merge PR into integration), then **P0.5** toolchain compatibility,
+2. Complete P0.4 — **done** (merged into integration @ `4d318da`, PR #44).
+3. Complete remaining Phase 0 gates: **P0.5** toolchain compatibility
+   (accepted — `pass-with-residuals`; merge PR into integration), then
    **P0.6** performance baseline, and **P0.7** migration UX.
-3. Build the Phase 1 foundation: Rust 1.93, exact SDK pins, versioned
+4. Build the Phase 1 foundation: Rust 1.93, exact SDK pins, versioned
    Synara-owned IPC schemas, lifecycle/store security, and test infrastructure.
-4. Implement Phases 2–11 by bounded capability task: authentication/sync,
+5. Implement Phases 2–11 by bounded capability task: authentication/sync,
    rooms/timelines, messaging/media, E2EE/verification/recovery, account data,
    notifications, search, spaces/threads, and calls/widgets.
-5. Complete Phase 12 cutover and deletion: Rust is sole desktop Matrix owner;
+6. Complete Phase 12 cutover and deletion: Rust is sole desktop Matrix owner;
    no `matrix-js-sdk`, JS sync/crypto/store, or product raw Matrix HTTP remains.
-6. Complete Phases 13–14: reliability/performance/security/release validation,
+7. Complete Phases 13–14: reliability/performance/security/release validation,
    final deletion audit, integration review, and an explicitly approved final PR
    to `main`.
 
