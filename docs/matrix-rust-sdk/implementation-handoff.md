@@ -37,10 +37,10 @@ without explicit user approval.
 - **Progress loop:** host scheduled task every **4 minutes**
   (ID `019f95928db7`) continues bounded FR audits; also daily durable
   orchestrator `9022c2f8-9b21-411a-acf9-a36c10515f72`
-- **Last accepted:** FR-7.10-005 user/public-room search **partial**
-  (`p0.2-correct-44`)
-- **Next writer task:** FR-7.10-006 (server vs experimental local search), then
-  remaining 7.10–7.11 (~10)
+- **Last accepted:** FR-7.10-006 server vs experimental local search **implemented**
+  (`p0.2-correct-45`; server SC-071 adopted, SC-072 not adopted)
+- **Next writer task:** FR-7.10-007 (search cancellation and stale-result
+  rejection), then remaining 7.10–7.11 (~9)
 
 - No production Matrix Rust SDK replacement code accepted
 - **No open P0.2 PR yet** (open after P0.2 complete)
@@ -50,10 +50,11 @@ Phase 0 evidence accepted before this handoff:
 - P0.1 SDK usage inventory is merged to the integration branch.
 - P0.3 exact Matrix Rust SDK 0.18.0 capability dossier is merged to the
   integration branch.
-- P0.2 branch carries accepted 7.8–7.9 and FR-7.10-001..004 corrections;
-  ~11 shallow rows remain in 7.10–7.11.
+- P0.2 branch carries accepted 7.8–7.9 and FR-7.10-001..006 corrections
+  (**FR-7.10-005** remains partial under GATE-7.10-005-USER-DIRECTORY-SEARCH);
+  ~9 shallow rows remain in 7.10–7.11.
 
-P0.2 is not complete. Resume at FR-7.10-006, then audit remaining 7.10–7.11
+P0.2 is not complete. Resume at FR-7.10-007, then audit remaining 7.10–7.11
 before declaring P0.2 accepted.
 
 Accepted notification findings that must be preserved:
@@ -188,6 +189,16 @@ Accepted notification findings that must be preserved:
   `useMessageSearch`/`mx.search`; client type + from/to via
   `filterMessageSearchGroups` / `messageSearchFilters`; SearchFilters
   multi-room/type/sender/date UI. Global is 002; room-scoped default is 001.
+- FR-7.10-004: status `implemented`. Open Chip → `navigateRoom(eventId)` →
+  `getRoomTimelineOpenMode` focused-event. Not Matrix `/search` event_context
+  (before/after 0). JumpToTime not on Open path.
+- FR-7.10-005: status **`partial`** under
+  `GATE-7.10-005-USER-DIRECTORY-SEARCH`. Public rooms: Explore
+  `PublicRooms` POST `/publicRooms`. Server user-directory is widget-only
+  (`CallWidgetDriver`); product Invite/CreateChat are exact-ID/local only.
+- FR-7.10-006: status `implemented`. Explicit decision: message search is
+  server `mx.search` only (SC-071); SC-072 experimental local **not adopted**.
+  `useAsyncSearch` is list filter honesty only, not message bodies.
 
 
 ## Branch and PR contract
