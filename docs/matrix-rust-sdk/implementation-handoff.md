@@ -25,15 +25,27 @@ without explicit user approval.
 **Host task id:** `9022c2f8-9b21-411a-acf9-a36c10515f72`
 (`matrix-rust-sdk-replacement-orchestrator`, daily check-in)
 
-**Session state (2026-07-24, post-P0.2 merge):**
+**Session state (2026-07-24, P0.4 accepted — PR to integration):**
 
-- **Integration:** `feature/matrix-rust-sdk-full-replacement` @ `339d367`
-  (P0.1 + P0.3 + **P0.2** merged)
+- **Integration tip (unchanged until P0.4 merge):**
+  `feature/matrix-rust-sdk-full-replacement` @
+  `c76f4ff7cb19e3e6d1536e9b8f7b8d269f374dcb`
+  (P0.1 + P0.3 + **P0.2** merged; handoff note after P0.2)
+- **Active work branch:** `matrix-rust/p0.4-swift-rust-provenance` (docs-only
+  P0.4 provenance; **not merged to integration yet**)
 - **P0.2 PR:** https://github.com/nepenth/synara-desktop/pull/42 — **MERGED**
   into integration (docs-only). **Never merge to `main` without explicit user
   approval.**
 - **P0.2 quality audit of §7.8–7.11:** COMPLETE (source-line evidence; honest
   partial/NCE gates retained; zero shallow rows remaining in 7.8–7.11)
+- **P0.4:** **accepted by independent review** (docs-only). Evidence:
+  `swift-rust-version-provenance.md` + `.json`. Embedded Rust commit for
+  components-swift `26.06.06` proven as
+  `1c44fb66214667c6d00acaf72ab592493653708b` (same as desktop
+  `matrix-sdk-0.18.0`). Alignment decision: **exact same git commit** (A); iOS
+  pin and desktop crate pins **unchanged**. PR targets integration — **do not
+  claim MERGED until PR lands**. **Never merge to `main` without explicit user
+  approval.**
 - **Optional later:** §7.1–7.7 scaffold rows may still have shallow notes if a
   full-matrix depth pass is desired beyond the handoff resume scope
 - **Progress loop:** 4-minute scheduler `019f95928db7` (retarget to Phase 0
@@ -45,10 +57,11 @@ Phase 0 evidence accepted:
 - P0.1 SDK usage inventory — merged
 - P0.3 exact Matrix Rust SDK 0.18.0 capability dossier — merged
 - P0.2 feature-parity traceability (§7.8–7.11 quality audit) — **merged**
+- P0.4 Swift/Rust version provenance — **accepted, awaiting integration PR merge**
 
 **Next program work (Phase 0 remaining):**
 
-1. **P0.4** Swift/Rust version provenance  
+1. **P0.4** merge accepted PR into integration  
 2. **P0.5** Toolchain compatibility (Rust 1.93)  
 3. **P0.6** Performance baseline  
 4. **P0.7** Migration UX
@@ -308,9 +321,10 @@ Before accepting a task or merging its PR, the reviewer must independently:
 
 ## Remaining program sequence
 
-1. Complete P0.2 and merge its reviewed PR into integration.
-2. Complete remaining Phase 0 gates: P0.4 Swift provenance, P0.5 toolchain
-   compatibility, P0.6 performance baseline, and P0.7 migration UX.
+1. Complete P0.2 — **done** (merged into integration).
+2. Complete remaining Phase 0 gates: **P0.4** Swift provenance (accepted;
+   merge PR into integration), then **P0.5** toolchain compatibility,
+   **P0.6** performance baseline, and **P0.7** migration UX.
 3. Build the Phase 1 foundation: Rust 1.93, exact SDK pins, versioned
    Synara-owned IPC schemas, lifecycle/store security, and test infrastructure.
 4. Implement Phases 2–11 by bounded capability task: authentication/sync,
