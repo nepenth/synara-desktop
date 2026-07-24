@@ -4,7 +4,7 @@
 
 ## Correction pass status
 
-Limited rejected-review correction (`p0.2-correct-36-fr-7.9-010-device-deletion-and-uia`) for **FR-7.9-010** only: replace generic “via 4 files” / `notes=null` / wrong `getDevices`+`getDeviceId` list methods with concrete **device deletion + UIA** evidence — `OtherDevices.tsx` multi-select `deleted` Set + `mx.deleteMultipleDevices` + `useUIAMatrixError` 401→`ActionUIA` Password/SSO; `DeviceDeleteBtn`; success `refreshDeviceList`; failure text; OIDC `sessionEnd` branch; current device not multi-deletable (`DeviceLogoutBtn`); exclude list (FR-7.9-003) and trust (FR-7.9-004); rewrite planned AT/MA for product observables + cutover P8.2+P3.4; honest rust_target GAP-DEVICE-NAMING-DELETE + GAP-UIA with SC-067 list-only secondary `device-deletion-uia-compile-shape-only-blocked-for-product`; SC-067 alone / compile-only / raw HTTP / dual-backend / list-only / trust-only / helper-only FAIL. Status remains `implemented`. JSON and Markdown synchronized. Accepted corrections for **FR-7.8-001 through FR-7.8-009** and **FR-7.9-001..009** preserved. Prior corrections and accepted **7.1–7.3** preserved. **P0.2 is not complete.**
+Limited rejected-review correction (`p0.2-correct-37-fr-7.9-011-multiple-accounts-isolated-stores`) for **FR-7.9-011** only: replace generic “via 2 files” / `notes=null` / wrong `getCrypto`+`initRustCrypto` isolation claim / `implemented` status with honest **sequential single-active wipe isolation** evidence — fixed `MATRIX_LOCAL_STORE_NAMES` (`web-sync-store`, `crypto-store`, `matrix-js-sdk::matrix-sdk-crypto[+meta]`); `sessionPersistence.ts` multi-account **non-goal** + `clearMatrixStoresForIdentityChange`; `initClient` freshLogin wipe gate (restored sessions do not wipe = FR-7.9-012 boundary); single `activeSession` / no account switcher; demote `cryptoStoreContinuity` (FR-7.9-012); rewrite planned AT/MA for fixed-names / A→B sequential wipe / keys isolation + cutover P2.2+P3.6; honest rust_target `sequential-identity-wipe-partial-not-concurrent-multi-account-stores-compile-shape-only-blocked-for-product` (SC-083 primary path policy + SC-061 keys); SC alone / compile-only / raw HTTP / dual-backend / concurrent-without-policy / store-init-only / continuity-only / helper-only FAIL. Status demoted `implemented`→`partial`. JSON and Markdown synchronized. Accepted corrections for **FR-7.8-001 through FR-7.8-009** and **FR-7.9-001..010** preserved. Prior corrections and accepted **7.1–7.3** preserved. **P0.2 is not complete.**
 
 ## Provenance
 
@@ -14,13 +14,13 @@ Limited rejected-review correction (`p0.2-correct-36-fr-7.9-010-device-deletion-
 
 ## Summary
 
-- FR 119 · files 220 · AT 119 · MA 119 · existing refs 45
+- FR 119 · files 220 · AT 119 · MA 119 · existing refs 46
 
 ### Status distribution
 
-- `implemented`: 97
+- `implemented`: 96
 - `not-currently-exposed`: 1
-- `partial`: 21
+- `partial`: 22
 
 ### 7.1–7.3 retained vs excluded
 
@@ -219,7 +219,7 @@ Limited rejected-review correction (`p0.2-correct-36-fr-7.9-010-device-deletion-
 | `FR-7.9-008`  | `implemented`           | undecryptable-event retry;                                               | `AT-FR-7.9-008-001`  | `MA-FR-7.9-008`  |
 | `FR-7.9-009`  | `implemented`           | key-backup state listeners;                                              | `AT-FR-7.9-009-001`  | `MA-FR-7.9-009`  |
 | `FR-7.9-010`  | `implemented`           | device deletion and UIA;                                                 | `AT-FR-7.9-010-001`  | `MA-FR-7.9-010`  |
-| `FR-7.9-011`  | `implemented`           | multiple accounts with fully isolated stores and keys;                   | `AT-FR-7.9-011-001`  | `MA-FR-7.9-011`  |
+| `FR-7.9-011`  | `partial`               | multiple accounts with fully isolated stores and keys;                   | `AT-FR-7.9-011-001`  | `MA-FR-7.9-011`  |
 | `FR-7.9-012`  | `implemented`           | store continuity across upgrades and crashes;                            | `AT-FR-7.9-012-001`  | `MA-FR-7.9-012`  |
 | `FR-7.9-013`  | `partial`               | store corruption detection and non-destructive recovery guidance.        | `AT-FR-7.9-013-001`  | `MA-FR-7.9-013`  |
 | `FR-7.10-001` | `implemented`           | room message search and pagination;                                      | `AT-FR-7.10-001-001` | `MA-FR-7.10-001` |
@@ -6339,48 +6339,66 @@ Limited rejected-review correction (`p0.2-correct-36-fr-7.9-010-device-deletion-
 
 - **Text**: multiple accounts with fully isolated stores and keys;
 - **Lines**: 435–435
-- **Status**: `implemented`
-- **Behavior**: Current desktop implements this via 2 production matrix-js-sdk-related file(s); status=implemented.
+- **Status**: `partial`
+- **Behavior**: Product implements sequential single-active-account store/key isolation via fixed IndexedDB names + wipe-on-identity-change (fresh login only), not concurrent multi-account fully isolated stores. Explicit product non-goal for multi-account. status=partial.
+- **Notes**: Evidence (conservative): (1) FIXED STORE NAMES matrixLocalStores.ts L1–10: MATRIX_SYNC_STORE_NAME='web-sync-store', MATRIX_LEGACY_CRYPTO_STORE_NAME='crypto-store', MATRIX_RUST_CRYPTO_STORE_PREFIX='matrix-js-sdk' → matrix-js-sdk::matrix-sdk-crypto and ::matrix-sdk-crypto-meta. MATRIX_LOCAL_STORE_NAMES is the wipe list. Names are global constants — not parameterized by userId/deviceId. (2) PRODUCT POLICY sessionPersistence.ts L23–27: fixed IndexedDB names ⇒ only one Matrix account's local data at a time; multi-account support remains a non-goal. MIP1-17 documents the same single-account assumption. (3) SEQUENTIAL WIPE clearMatrixStoresForIdentityChange L236–246: if shouldClearMatrixStoresBeforeInit (last bootstrapped userId+deviceId differs) then clearMatrixLocalStores(). matrixSessionIdentitiesMatch L209–218. (4) FRESH-LOGIN GATE initClient L314: identityCleared = freshLogin ? clearStoresForIdentityChange(session) : false — restored sessions MUST NOT wipe (FR-7.9-012 continuity). initMatrix.test.ts: clear when fresh + mismatch; restored mismatch does not clear. (5) CLIENT BINDING createMatrixClient L172–181 always attaches fixed IndexedDBStore/IndexedDBCryptoStore; initRustCrypto L241 opens fixed rust-crypto DBs for constructor identity. (6) SINGLE ACTIVE sessionBootstrap activeSession L27 + getActiveSession L115; sessions.ts single-session fallback L67–74 fixed FALLBACK_SESSION_KEYS; ClientRoot uses getActiveSession only — no account switcher UI. (7) KEYS isolation is wipe-then-init: after identity change wipe, new account's keys occupy the same DB names; isCryptoAccountMismatchError is fallback if wipe skipped. (8) NON-EVIDENCE: concurrent multi-account stores, per-user IndexedDB names, multi-session native store, account switcher UI, cryptoStoreContinuity primary (FR-7.9-012), store-before-sync order (FR-7.9-001), FR-7.1-009 shallow account-switch mapping. sessions.test.ts is single-session localStorage bookkeeping — NOT multi-session isolation. (9) Cutover P2.2 store paths/keys + P3.6 session restore/account switching: if product keeps single-active policy, preserve sequential wipe/isolation + single session; if product elevates concurrent multi-account, assign per-account SC-083 sqlite_store paths + isolated crypto + multi-session product UX. SC-083/SC-061 alone, compile-only, raw HTTP, dual-backend, concurrent-isolation claim without product policy, helper-only FAIL.
+- **Limits**: P0.1 method candidates are AST name hits, not type-checked receiver proofs. matrixLocalStores/sessionPersistence/sessions/sessionBootstrap are source-inspected product owners outside or beyond original P0.1 AST samples. Plan text “multiple accounts with fully isolated stores and keys” is not met as concurrent multi-store isolation; only sequential single-active wipe isolation exists. Rust SC-083 path-parameterized stores can implement per-account isolation only if product assigns distinct paths — compile-shape only today (E3–E5 missing).
 - **UI**: `synara/src/app/pages/client/ClientRoot.tsx`
-- **Owners**: `synara/src/app/state/sessions.ts`, `synara/src/client/initMatrix.ts`
+- **UI rationale**: ClientRoot loads the single getActiveSession() via initClient; no account-switcher UI. Isolation is sequential (logout/login or fresh login with different identity triggers wipe), not concurrent multi-account UI.
+- **Owners**: `synara/src/app/state/sessionPersistence.ts`, `synara/src/client/matrixLocalStores.ts`, `synara/src/client/initMatrix.ts`, `synara/src/app/state/sessionBootstrap.ts`
 - **Files**:
-  - `synara/src/client/cryptoStoreContinuity.ts` symbols=['getCrypto'] retained_m=1 retained_l=0
-    - method `getCrypto`:L59 — None
-  - `synara/src/client/initMatrix.ts` symbols=['initRustCrypto'] retained_m=1 retained_l=0
-    - method `initRustCrypto`:L241 — None
+  - `synara/src/client/matrixLocalStores.ts` symbols=['MATRIX_LOCAL_STORE_NAMES','clearMatrixLocalStores','isCryptoAccountMismatchError'] retained_m=0 retained_l=0
+    - Fixed global store names L1–10; clearMatrixLocalStores L38; isCryptoAccountMismatchError L15
+  - `synara/src/app/state/sessionPersistence.ts` symbols=['clearMatrixStoresForIdentityChange','shouldClearMatrixStoresBeforeInit','matrixSessionIdentitiesMatch'] retained_m=0 retained_l=0
+    - Multi-account non-goal comment L23–27; identity match L209; shouldClear L220; clear on mismatch L236
+  - `synara/src/client/initMatrix.ts` symbols=['initRustCrypto','createMatrixClient','initClient'] retained_m=1 retained_l=0
+    - method `initRustCrypto`:L241 — rust crypto keys into fixed-prefix IndexedDB after optional identity wipe
+    - Fixed IndexedDBStore/IndexedDBCryptoStore L172–181; freshLogin wipe gate L314
+  - `synara/src/app/state/sessions.ts` symbols=['createLocalStorageSessionStore','FALLBACK_SESSION_KEYS'] retained_m=0 retained_l=0
+    - Single-session fallback storage L67–74 (not multi-account concurrent)
+  - `synara/src/app/state/sessionBootstrap.ts` symbols=['getActiveSession','activeSession'] retained_m=0 retained_l=0
+    - Single activeSession L27; getActiveSession L115
 - **Behavior-relevant methods (top-level)**:
-  - `getCrypto` `synara/src/client/cryptoStoreContinuity.ts`:L59 — None
-  - `initRustCrypto` `synara/src/client/initMatrix.ts`:L241 — None
+  - `initRustCrypto` `synara/src/client/initMatrix.ts`:L241 — keys into fixed crypto stores after optional wipe
 - **Behavior-relevant listeners (top-level)**:
   - —
-- **Unfiltered linked candidates**: methods=16 listeners=2
-- **Rust**: `compile-shape-only-blocked-for-product` caps=['SC-061', 'SC-083'] gaps=[]
-  - `SC-061` `blocked` `matrix_sdk::encryption::Encryption` https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/encryption/mod.rs#L892
-  - `SC-083` `blocked` `matrix_sdk::ClientBuilder::sqlite_store` https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/client/builder/mod.rs#L254-L261
-- **Tasks**: `P2.2`, `P3.6`, `P8.8`
+- **Unfiltered linked candidates**: methods=15 listeners=2 (initMatrix P0.1 import file only; other owners non-import)
+- **Rust**: `sequential-identity-wipe-partial-not-concurrent-multi-account-stores-compile-shape-only-blocked-for-product` caps=['SC-083', 'SC-061'] gaps=[]
+  - `SC-083` `blocked` `matrix_sdk::ClientBuilder::sqlite_store` https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/client/builder/mod.rs#L254-L261 — path can be per-account IF product assigns distinct paths
+  - `SC-061` `blocked` `matrix_sdk::encryption::Encryption` https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/encryption/mod.rs#L892 — keys surface under active store, not multi-account isolation
+  - Honest: current product is sequential single-active wipe isolation with fixed store names and multi-account non-goal — partial vs plan “fully isolated” multi-account. Do **not** map sole pass to SC-083 alone, SC-061 alone, concurrent multi-store without product policy, store-init-order (FR-7.9-001), or continuity (FR-7.9-012).
+- **Tasks**: `P2.2`, `P3.6`
 - **Existing tests**:
-  - `synara/src/app/state/__tests__/sessions.test.ts` — multi-session isolation bookkeeping
+  - `synara/src/app/state/__tests__/sessionPersistence.test.ts` — Unit: identity match + clear only on mismatch (not concurrent multi-account e2e)
+  - `synara/src/app/matrix/__tests__/matrixLocalStores.test.ts` — Unit: fixed MATRIX_LOCAL_STORE_NAMES + proactive clear complements mismatch detection
+  - `synara/src/app/state/__tests__/initMatrix.test.ts` — Unit/mocked: fresh-login wipe; restored must not clear
 - **Planned** `AT-FR-7.9-011-001` task `P2.2` level `integration-e2e`
-  - Scenario: 7.9/FR-7.9-011: exercise 'multiple accounts with fully isolated stores and keys;' via owner `synara/src/app/state/sessions.ts` and UI `synara/src/app/pages/client/ClientRoot.tsx`, then confirm Rust/IPC cutover task `P2.2` preserves observable behavior without raw Matrix runtime HTTP.
-  - Test target: None
+  - Scenario: Integration-e2e against disposable Synapse documenting current sequential single-active isolation (status=partial) and cutover under P2.2+P3.6: (A) FIXED NAMES — assert product store names are fixed globals (web-sync-store, crypto-store, matrix-js-sdk::matrix-sdk-crypto[+meta]), not per-userId DBs. (B) SEQUENTIAL WIPE — login account A with E2EE activity writing keys/sync; logout; fresh-login account B with different userId/deviceId; assert clearMatrixStoresForIdentityChange wiped prior stores before init and B initializes without crypto account-mismatch to A. (C) SAME IDENTITY — re-init same userId+deviceId does not wipe stores. (D) RESTORED NO WIPE — restored (non-fresh) session must not clear stores (FR-7.9-012 continuity boundary). (E) SINGLE ACTIVE — only one getActiveSession; no concurrent multi-account switcher UI keeping two crypto stores live. (F) KEYS — after A→B sequential switch, B's rust crypto keys occupy the fixed crypto DBs; A's prior local keys are not reused. After cutover P2.2+P3.6: either preserve sequential wipe/isolation policy via Rust SC-083 store paths + product single-active UX + IPC, or if product elevates concurrent multi-account, require per-account store paths + isolated keys + multi-session UX. SC-083 alone, SC-061 alone, compile-only blocked, raw /\_matrix HTTP, dual-backend, concurrent-isolation claim without product policy, store-init-order-only (FR-7.9-001), continuity-only (FR-7.9-012), or helper/fixture-only FAIL.
+  - Test target: matrixLocalStores fixed names + clearMatrixLocalStores; sessionPersistence clearMatrixStoresForIdentityChange/shouldClear; initClient freshLogin wipe gate + fixed IndexedDBStore/IndexedDBCryptoStore + initRustCrypto; sessionBootstrap single activeSession; post-cutover P2.2+P3.6 SC-083 path policy + product UX + IPC
   - Preconditions:
-    - Desktop app, E2EE-capable session; second device for verification
-    - Recovery key / backup fixtures; isolated multi-account profiles when testing isolation
-    - Linked owner path present in tree: synara/src/app/state/sessions.ts
-    - Primary UI/lifecycle surface: synara/src/app/pages/client/ClientRoot.tsx
+    - Disposable Synapse; two distinct Matrix accounts A and B (different userId) with ability to fresh-login each after logout.
+    - Named product surfaces present: matrixLocalStores.ts, sessionPersistence.ts clearMatrixStoresForIdentityChange, initMatrix createMatrixClient/initClient, ClientRoot getActiveSession init path.
+    - Harness can observe IndexedDB store names and/or crypto account-mismatch absence after A→B switch; does not claim concurrent multi-account UI that does not exist.
+    - Do not accept store-before-sync order alone (FR-7.9-001), continuity preserve alone (FR-7.9-012), corruption guidance alone (FR-7.9-013), or sessions.test.ts single-session localStorage alone as sole pass for this FR.
   - Actions:
-    1. Boot the appropriate harness for level=integration-e2e against disposable Synapse (or iOS notes if any).
-    2. Establish fixtures required by the clause list: multiple accounts with fully isolated stores; keys.
-    3. Open UI/lifecycle surface `synara/src/app/pages/client/ClientRoot.tsx` (or follow ui_entry_points_rationale if no dedicated UI).
-    4. Step 1: perform the product action that implements «multiple accounts with fully isolated stores» using current owner `synara/src/app/state/sessions.ts`.
-    5. Step 2: perform the product action that implements «keys» using current owner `synara/src/app/state/sessions.ts`.
-    6. Force process restart and/or offline→online transition where lifecycle continuity is implied.
+    1. Boot integration harness against disposable Synapse. Do not use fixture-only mocks that skip product identity wipe + fixed store binding, dual-backend selectors, raw HTTP, or helper-only pass criteria.
+    2. FIXED NAMES: assert MATRIX_LOCAL_STORE_NAMES / createMatrixClient use fixed global DB names not parameterized by userId.
+    3. SEQUENTIAL WIPE A→B: login A, establish crypto/sync local state; logout; fresh-login B; assert proactive store clear on identity mismatch and successful B init without account-mismatch to A.
+    4. SAME IDENTITY: re-bootstrap same identity; assert stores not unnecessarily wiped.
+    5. RESTORED NO WIPE: with restored (non-fresh) session path, assert clearMatrixStoresForIdentityChange is not invoked (continuity boundary for FR-7.9-012).
+    6. SINGLE ACTIVE: assert only one active session drives ClientRoot; no concurrent second account crypto client.
+    7. After cutover P2.2+P3.6, repeat isolation observables via Rust store-path/session policy + product UX + IPC. Citing SC-083 alone, SC-061 alone, compile-only, raw /\_matrix HTTP, dual-backend/SDK selector, concurrent multi-store without product policy, store-init-only, continuity-only, or helper/fixture-only is a FAIL.
   - Assertions:
-    - Each clause is observable: «multiple accounts with fully isolated stores»; «keys».
-    - State coordination remains through `synara/src/app/state/sessions.ts` (or its Rust/IPC successor after cutover), not ad-hoc dual writers.
-    - Behavior-relevant current JS method candidates exercised or replaced: getCrypto, initRustCrypto (AST candidates; not type-proven receivers).
-    - Rust mapping remains conservative: caps=[SC-061,SC-083] gaps=[none]; compile-only blocked states are not treated as runtime pass.
-    - No new production matrix-js-sdk usage and no raw /\_matrix runtime HTTP unless dossier marks that exact behavior typed-sdk-request-required.
+    - FIXED NAMES: sync/crypto store names are fixed globals; not concurrent per-user IndexedDB names in current product.
+    - SEQUENTIAL WIPE: identity change on fresh login clears prior MATRIX_LOCAL_STORE_NAMES before init; next account keys/stores do not crossover from prior account.
+    - SAME IDENTITY: matching userId+deviceId does not clear stores.
+    - RESTORED NO WIPE: non-fresh restore does not clear stores (FR-7.9-012 boundary).
+    - SINGLE ACTIVE: one active session only; no concurrent multi-account switcher with two live isolated crypto stores in current product.
+    - KEYS: after A→B sequential switch, B uses fresh crypto store occupancy under fixed names; A keys not retained for B.
+    - COORDINATION: isolation policy remains through sessionPersistence + matrixLocalStores + initClient (or Rust/IPC successors), not ad-hoc dual writers.
+    - CUTOVER: P2.2+P3.6 preserves sequential isolation (or concurrent multi-store if product elevates multi-account) via SC-083 path policy + product UX + IPC; SC alone / compile-only never product pass; no raw /\_matrix runtime HTTP; no dual-backend/SDK selector.
+    - No new production matrix-js-sdk usage and no raw /\_matrix runtime HTTP unless the dossier marks that exact behavior typed-sdk-request-required.
+    - Store-init-order alone (FR-7.9-001), continuity alone (FR-7.9-012), corruption alone (FR-7.9-013), and helper unit tests alone are not accepted as sole pass criteria for this FR.
   - does_not_currently_exist: `True`
 - **Manual**: `MA-FR-7.9-011`
 
@@ -9183,22 +9201,24 @@ Limited rejected-review correction (`p0.2-correct-36-fr-7.9-010-device-deletion-
 
 - Platforms: macOS, Linux
 - Preconditions:
-  - Desktop app, E2EE-capable session; second device for verification
-  - Recovery key / backup fixtures; isolated multi-account profiles when testing isolation
-  - State owner available: synara/src/app/state/sessions.ts
-  - UI/lifecycle: synara/src/app/pages/client/ClientRoot.tsx
-  - Current status baseline: implemented
+  - Disposable Synapse; two distinct Matrix accounts A and B; desktop build with IndexedDB Matrix stores.
+  - State owners available: sessionPersistence.ts, matrixLocalStores.ts, initMatrix.ts; UI/lifecycle ClientRoot.tsx single getActiveSession path.
+  - Current status baseline: partial (sequential single-active wipe isolation; multi-account concurrent stores are a product non-goal).
 - Actions:
-  1. Launch Synara desktop on the target platform against disposable Synapse; use a clean or known fixture profile as required by «multiple accounts with fully isolated stores and keys;».
-  2. Identify state owner `synara/src/app/state/sessions.ts` and open `synara/src/app/pages/client/ClientRoot.tsx`.
-  3. Action 1 — «multiple accounts with fully isolated stores»: perform the minimal user/system steps that trigger this clause (use linked files under current_production_files if the entry point is indirect).
-  4. Action 2 — «keys»: perform the minimal user/system steps that trigger this clause (use linked files under current_production_files if the entry point is indirect).
-  5. Repeat critical path in an encrypted room / with a second device when the clause involves keys or verification.
+  1. Launch Synara desktop against disposable Synapse with a clean profile.
+  2. FIXED NAMES: confirm product uses fixed global store names (web-sync-store / crypto-store / matrix-js-sdk rust crypto DBs), not per-user DB names.
+  3. SEQUENTIAL A→B: login account A and use an encrypted room so local crypto/sync state exists; logout; fresh-login account B; confirm no crypto account-mismatch error and B operates as B (not A).
+  4. SAME IDENTITY: restart/restore same B session; confirm stores are not wiped and session continues.
+  5. SINGLE ACTIVE: confirm no multi-account switcher keeps two live sessions/crypto stores; only one active session.
+  6. After cutover P2.2+P3.6, re-check sequential isolation (or concurrent multi-store if product elevates multi-account) via Rust store paths + product UX + IPC without raw renderer /\_matrix HTTP.
 - Expected:
-  - All clauses under «multiple accounts with fully isolated stores and keys;» produce the user-visible or system-observable success criteria without error toasts unrelated to intentional negative tests.
-  - Clause 1 «multiple accounts with fully isolated stores» is satisfied on macOS, Linux with owner `synara/src/app/state/sessions.ts`.
-  - Clause 2 «keys» is satisfied on macOS, Linux with owner `synara/src/app/state/sessions.ts`.
+  - FIXED NAMES: isolation is via fixed globals + wipe, not concurrent per-user stores in current product.
+  - SEQUENTIAL WIPE: A→B fresh login does not leave A crypto/sync keys active for B; no account-mismatch toast from residual A store.
+  - SAME IDENTITY / RESTORED: same-device restore does not unnecessarily wipe (continuity boundary FR-7.9-012).
+  - SINGLE ACTIVE: only one active session; multi-account concurrent isolation is not claimed as implemented.
   - No unexpected raw /\_matrix traffic from the app renderer for this flow on the post-cutover build.
+  - Store-init-order alone (FR-7.9-001) and continuity alone (FR-7.9-012) do not close this FR.
+  - Clauses fixed-names, sequential wipe, single-active, keys isolation, and cutover observables satisfied on macOS and Linux via sessionPersistence + matrixLocalStores + initMatrix (or Rust/IPC successors under P2.2+P3.6).
 
 ### `MA-FR-7.9-012` (FR-7.9-012)
 
@@ -11420,21 +11440,27 @@ Limited rejected-review correction (`p0.2-correct-36-fr-7.9-010-device-deletion-
 
 ### `AT-FR-7.9-011-001`
 
-- 7.9/FR-7.9-011: exercise 'multiple accounts with fully isolated stores and keys;' via owner `synara/src/app/state/sessions.ts` and UI `synara/src/app/pages/client/ClientRoot.tsx`, then confirm Rust/IPC cutover task `P2.2` preserves observable behavior without raw Matrix runtime HTTP.
-- target: None
+- Integration-e2e against disposable Synapse documenting current sequential single-active isolation (status=partial) and cutover under P2.2+P3.6: (A) FIXED NAMES — assert product store names are fixed globals (web-sync-store, crypto-store, matrix-js-sdk::matrix-sdk-crypto[+meta]), not per-userId DBs. (B) SEQUENTIAL WIPE — login account A with E2EE activity writing keys/sync; logout; fresh-login account B with different userId/deviceId; assert clearMatrixStoresForIdentityChange wiped prior stores before init and B initializes without crypto account-mismatch to A. (C) SAME IDENTITY — re-init same userId+deviceId does not wipe stores. (D) RESTORED NO WIPE — restored (non-fresh) session must not clear stores (FR-7.9-012 continuity boundary). (E) SINGLE ACTIVE — only one getActiveSession; no concurrent multi-account switcher UI keeping two crypto stores live. (F) KEYS — after A→B sequential switch, B's rust crypto keys occupy the fixed crypto DBs; A's prior local keys are not reused. After cutover P2.2+P3.6: either preserve sequential wipe/isolation policy via Rust SC-083 store paths + product single-active UX + IPC, or if product elevates concurrent multi-account, require per-account store paths + isolated keys + multi-session UX. SC-083 alone, SC-061 alone, compile-only blocked, raw /\_matrix HTTP, dual-backend, concurrent-isolation claim without product policy, store-init-order-only (FR-7.9-001), continuity-only (FR-7.9-012), or helper/fixture-only FAIL.
+- target: matrixLocalStores fixed names + clearMatrixLocalStores; sessionPersistence clearMatrixStoresForIdentityChange/shouldClear; initClient freshLogin wipe gate + fixed IndexedDBStore/IndexedDBCryptoStore + initRustCrypto; sessionBootstrap single activeSession; post-cutover P2.2+P3.6 SC-083 path policy + product UX + IPC
 - actions:
-  1. Boot the appropriate harness for level=integration-e2e against disposable Synapse (or iOS notes if any).
-  2. Establish fixtures required by the clause list: multiple accounts with fully isolated stores; keys.
-  3. Open UI/lifecycle surface `synara/src/app/pages/client/ClientRoot.tsx` (or follow ui_entry_points_rationale if no dedicated UI).
-  4. Step 1: perform the product action that implements «multiple accounts with fully isolated stores» using current owner `synara/src/app/state/sessions.ts`.
-  5. Step 2: perform the product action that implements «keys» using current owner `synara/src/app/state/sessions.ts`.
-  6. Force process restart and/or offline→online transition where lifecycle continuity is implied.
+  1. Boot integration harness against disposable Synapse. Do not use fixture-only mocks that skip product identity wipe + fixed store binding, dual-backend selectors, raw HTTP, or helper-only pass criteria.
+  2. FIXED NAMES: assert MATRIX_LOCAL_STORE_NAMES / createMatrixClient use fixed global DB names not parameterized by userId.
+  3. SEQUENTIAL WIPE A→B: login A, establish crypto/sync local state; logout; fresh-login B; assert proactive store clear on identity mismatch and successful B init without account-mismatch to A.
+  4. SAME IDENTITY: re-bootstrap same identity; assert stores not unnecessarily wiped.
+  5. RESTORED NO WIPE: with restored (non-fresh) session path, assert clearMatrixStoresForIdentityChange is not invoked (continuity boundary for FR-7.9-012).
+  6. SINGLE ACTIVE: assert only one active session drives ClientRoot; no concurrent second account crypto client.
+  7. After cutover P2.2+P3.6, repeat isolation observables via Rust store-path/session policy + product UX + IPC. Citing SC-083 alone, SC-061 alone, compile-only, raw /\_matrix HTTP, dual-backend/SDK selector, concurrent multi-store without product policy, store-init-only, continuity-only, or helper/fixture-only is a FAIL.
 - assertions:
-  - Each clause is observable: «multiple accounts with fully isolated stores»; «keys».
-  - State coordination remains through `synara/src/app/state/sessions.ts` (or its Rust/IPC successor after cutover), not ad-hoc dual writers.
-  - Behavior-relevant current JS method candidates exercised or replaced: getCrypto, initRustCrypto (AST candidates; not type-proven receivers).
-  - Rust mapping remains conservative: caps=[SC-061,SC-083] gaps=[none]; compile-only blocked states are not treated as runtime pass.
-  - No new production matrix-js-sdk usage and no raw /\_matrix runtime HTTP unless dossier marks that exact behavior typed-sdk-request-required.
+  - FIXED NAMES: sync/crypto store names are fixed globals; not concurrent per-user IndexedDB names in current product.
+  - SEQUENTIAL WIPE: identity change on fresh login clears prior MATRIX_LOCAL_STORE_NAMES before init; next account keys/stores do not crossover from prior account.
+  - SAME IDENTITY: matching userId+deviceId does not clear stores.
+  - RESTORED NO WIPE: non-fresh restore does not clear stores (FR-7.9-012 boundary).
+  - SINGLE ACTIVE: one active session only; no concurrent multi-account switcher with two live isolated crypto stores in current product.
+  - KEYS: after A→B sequential switch, B uses fresh crypto store occupancy under fixed names; A keys not retained for B.
+  - COORDINATION: isolation policy remains through sessionPersistence + matrixLocalStores + initClient (or Rust/IPC successors), not ad-hoc dual writers.
+  - CUTOVER: P2.2+P3.6 preserves sequential isolation (or concurrent multi-store if product elevates multi-account) via SC-083 path policy + product UX + IPC; SC alone / compile-only never product pass; no raw /\_matrix runtime HTTP; no dual-backend/SDK selector.
+  - No new production matrix-js-sdk usage and no raw /\_matrix runtime HTTP unless the dossier marks that exact behavior typed-sdk-request-required.
+  - Store-init-order alone (FR-7.9-001), continuity alone (FR-7.9-012), corruption alone (FR-7.9-013), and helper unit tests alone are not accepted as sole pass criteria for this FR.
 
 ### `AT-FR-7.9-012-001`
 
@@ -11801,7 +11827,9 @@ Limited rejected-review correction (`p0.2-correct-36-fr-7.9-010-device-deletion-
 - `ET-FR-7.9-001-01` `FR-7.9-001` `synara/src/app/state/__tests__/initMatrix.test.ts` — unit/mocked initClient/continuity/startClient failure paths only; not E2E store-before-sync order AT
 - `ET-FR-7.9-005-01` `FR-7.9-005` `synara/src/app/utils/__tests__/verification.test.ts` — Unit-only: inbox merge/dedupe/early-queue, cancel-on-exit, phaseFromVerifierCancellation, getInitialSasCallbacks — not two-client SAS e2e
 - `ET-FR-7.9-006-01` `FR-7.9-006` `synara/src/app/matrix/__tests__/secretStorageKeys.test.ts` — Unit-only: storePrivateKey + clearSecretStorageKeys cache behavior — not recovery setup/backup restore e2e
-- `ET-FR-7.9-011-01` `FR-7.9-011` `synara/src/app/state/__tests__/sessions.test.ts` — multi-session isolation bookkeeping
+- `ET-FR-7.9-011-01` `FR-7.9-011` `synara/src/app/state/__tests__/sessionPersistence.test.ts` — Unit: identity match + clear only on mismatch — not concurrent multi-account e2e
+- `ET-FR-7.9-011-02` `FR-7.9-011` `synara/src/app/matrix/__tests__/matrixLocalStores.test.ts` — Unit: fixed MATRIX_LOCAL_STORE_NAMES + proactive clear complements mismatch detection
+- `ET-FR-7.9-011-03` `FR-7.9-011` `synara/src/app/state/__tests__/initMatrix.test.ts` — Unit/mocked: fresh-login wipe; restored must not clear
 - `ET-FR-7.10-003-01` `FR-7.10-003` `synara/src/app/utils/__tests__/messageSearchFilters.test.ts` — search filter helper unit coverage
 
 ## File ledger (220)
@@ -12024,7 +12052,7 @@ Limited rejected-review correction (`p0.2-correct-36-fr-7.9-010-device-deletion-
 | `synara/src/app/utils/timelineLinks.ts`                                        | `utility`          | `requirement-linked`           |   0 |   3 | `FR-7.2-011`,`FR-7.3-004`                                                                                                                                                                                                                 |
 | `synara/src/app/utils/timelineOpening.ts`                                      | `utility`          | `requirement-linked`           |   0 |   5 | `FR-7.2-011`,`FR-7.3-001`,`FR-7.3-004`,`FR-7.3-005`,`FR-7.7-003`,`FR-7.7-004`,`FR-7.8-006`,`FR-7.10-004`                                                                                                                                  |
 | `synara/src/app/utils/verification.ts`                                         | `utility`          | `requirement-linked`           |   0 |   0 | `FR-7.9-005`                                                                                                                                                                                                                 |
-| `synara/src/client/cryptoStoreContinuity.ts`                                   | `client-lifecycle` | `requirement-linked`           |   0 |   1 | `FR-7.9-001`,`FR-7.9-011`,`FR-7.9-012`,`FR-7.9-013`                                                                                                                                                                                       |
+| `synara/src/client/cryptoStoreContinuity.ts`                                   | `client-lifecycle` | `requirement-linked`           |   0 |   1 | `FR-7.9-001`,`FR-7.9-012`,`FR-7.9-013`                                                                                                                                                                                                    |
 | `synara/src/client/initMatrix.ts`                                              | `client-lifecycle` | `requirement-linked`           |   2 |  15 | `FR-7.1-007`,`FR-7.1-008`,`FR-7.1-009`,`FR-7.1-010`,`FR-7.1-011`,`FR-7.1-012`,`FR-7.2-001`,`FR-7.5-001`,`FR-7.6-008`,`FR-7.9-001`,`FR-7.9-005`,`FR-7.9-011`,`FR-7.9-012`,`FR-7.9-013`                                                                  |
 | `synara/src/client/verificationRequestInbox.ts`                                | `client-lifecycle` | `requirement-linked`           |   1 |   0 | `FR-7.9-005`                                                                                                                                                                                                                 |
 | `synara/src/types/matrix/common.ts`                                            | `shared-type`      | `shared-matrix-infrastructure` |   0 |   0 | `FR-7.1-001`,`FR-7.3-001`,`FR-7.6-004`                                                                                                                                                                                                    |
