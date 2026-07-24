@@ -49,9 +49,8 @@ Phase 0 evidence accepted before this handoff:
 - P0.1 SDK usage inventory is merged to the integration branch.
 - P0.3 exact Matrix Rust SDK 0.18.0 capability dossier is merged to the
   integration branch.
-- P0.2 branch carries accepted 7.8–7.9, FR-7.10-001..007, and FR-7.11-001..004 corrections (**FR-7.10-005**, **FR-7.10-007**,
-  **FR-7.11-003**, and **FR-7.11-004** remain partial by gate); ~4 shallow
-  rows remain in 7.11.
+- P0.2 branch carries accepted 7.8–7.9, FR-7.10-001..007, and FR-7.11-001..005 corrections (**FR-7.10-005**, **FR-7.10-007**,
+  **FR-7.11-003..005** remain partial by gate); ~3 shallow rows remain in 7.11.
 
 P0.2 is not complete. Resume at FR-7.11-006, then audit remaining 7.11
 before declaring P0.2 accepted.
@@ -226,6 +225,11 @@ Accepted notification findings that must be preserved:
   `GATE-7.11-004-NATIVE-MATRIXRTC-KEY-SESSION`. Widget-mediated to-device
   encrypt/queue + feedToDevice + encryption_keys capabilities; no product-
   owned native MatrixRTC key-session API.
+
+
+- FR-7.11-005: status **`partial`** under
+  `GATE-7.11-005-LOGOUT-WINDOW-CLOSE-HANGUP-CLEANUP`. Hangup/dispose pipeline
+  present; room nav retains session; logout/window-close lack explicit hangup.
 
 
 

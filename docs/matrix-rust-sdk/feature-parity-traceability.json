@@ -91864,9 +91864,7 @@
       "classification": "requirement-linked",
       "linked_requirement_ids": [
         "FR-7.11-001",
-        "FR-7.11-003",
-        "FR-7.11-004",
-        "FR-7.11-005"
+        "FR-7.11-003"
       ],
       "rationale": null,
       "p0_1_role": "production",
@@ -96432,7 +96430,6 @@
         "FR-7.8-006",
         "FR-7.8-007",
         "FR-7.8-008",
-        "FR-7.11-005",
         "FR-7.4-006"
       ],
       "rationale": null,
@@ -101839,8 +101836,7 @@
       "linked_requirement_ids": [
         "FR-7.11-001",
         "FR-7.11-003",
-        "FR-7.11-004",
-        "FR-7.11-005"
+        "FR-7.11-004"
       ],
       "cutover_disposition": "replace-deep-js-sdk-import-with-synara-dto-or-rust-projection"
     },
@@ -101855,8 +101851,7 @@
       "linked_requirement_ids": [
         "FR-7.11-001",
         "FR-7.11-003",
-        "FR-7.11-004",
-        "FR-7.11-005"
+        "FR-7.11-004"
       ],
       "cutover_disposition": "replace-deep-js-sdk-import-with-synara-dto-or-rust-projection"
     },
@@ -101871,8 +101866,7 @@
       "linked_requirement_ids": [
         "FR-7.11-001",
         "FR-7.11-003",
-        "FR-7.11-004",
-        "FR-7.11-005"
+        "FR-7.11-004"
       ],
       "cutover_disposition": "replace-deep-js-sdk-import-with-synara-dto-or-rust-projection"
     },
@@ -103133,8 +103127,7 @@
         "custom_raw_event_sends"
       ],
       "linked_requirement_ids": [
-        "FR-7.8-007",
-        "FR-7.11-005"
+        "FR-7.8-007"
       ],
       "cutover_disposition": "migrate-via-account-data-service-and-raw-content-extraction-tasks",
       "tasks": [
