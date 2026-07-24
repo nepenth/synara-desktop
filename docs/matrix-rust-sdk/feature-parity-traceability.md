@@ -4,7 +4,7 @@
 
 ## Correction pass status
 
-Limited rejected-review correction (`p0.2-correct-39-fr-7.9-013-store-corruption-detection-recovery`) for **FR-7.9-013** only: replace generic “via 4 files” / BackupRestore-primary / shallow AT with concrete **store-safety anomaly detection + non-destructive recovery guidance** evidence — `CryptoStoreContinuityFailureReason` classes; `CryptoStoreContinuityError` store-preserve + recovery-key guidance; `isCryptoAccountMismatchError` map without clear; `stopClient` preserve; ClientRoot store-intact / Retry Safety Check / explicit Sign Out; demote BackupRestore (key backup FR-7.9-006/009); honest **partial** (no true integrity_check / auto-repair); rewrite planned AT/MA for P0.7/P8.8/P13.2; honest rust_target `compile-shape-only-blocked-partial-product-safety-gate` (SC-083 + SC-061); SC alone / compile-only / raw HTTP / store-init-only (FR-7.9-001) / multi-account-wipe-only (FR-7.9-011) / continuity-only (FR-7.9-012) / key-backup-only / helper-only FAIL. Status remains `partial`. JSON and Markdown synchronized. Accepted corrections for **FR-7.8-001 through FR-7.8-009** and **FR-7.9-001..012** preserved. Prior corrections and accepted **7.1–7.3** preserved. **P0.2 is not complete.**
+Limited rejected-review correction (`p0.2-correct-40-fr-7.10-001-room-message-search-pagination`) for **FR-7.10-001** only: replace generic “via 3 files” / shallow “uses client.search” notes / `search` without next_batch evidence / generic AT-MA with concrete **room-scoped room_events search + next_batch pagination** evidence — `useMessageSearch` `mx.search({ body, next_batch })` limit=20 L105–108; `parseSearchResult` nextToken/highlights/`groupSearchResult`; `MessageSearch` `useInfiniteQuery` getNextPageParam/fetchNextPage scroll pagination + SearchInput; SearchResultGroup result chrome only; EXCLUDE Open (FR-7.10-004), filters (FR-7.10-003), global (FR-7.10-002); drop GAP-EVENT-CONTEXT as primary gap (product before/after 0); keep rust_target `typed-sdk-request-required-server-search` (SC-071); rewrite planned AT/MA for P6.8 (+P11.3) typed Client::send search path; SC alone / compile-only / raw HTTP / dual-backend / Open-only / filter-only / global-only / helper-only FAIL. Status remains `implemented`. JSON and Markdown synchronized. Accepted corrections for **FR-7.8-001 through FR-7.8-009** and **FR-7.9-001..013** (including **FR-7.9-011** sequential isolation) preserved. Prior corrections and accepted **7.1–7.3** preserved. **P0.2 is not complete.**
 
 ## Provenance
 
@@ -6549,48 +6549,58 @@ Limited rejected-review correction (`p0.2-correct-39-fr-7.9-013-store-corruption
 - **Text**: room message search and pagination;
 - **Lines**: 441–441
 - **Status**: `implemented`
-- **Behavior**: Current desktop implements this via 3 production matrix-js-sdk-related file(s); status=implemented.
-- **Notes**: Current desktop uses client.search for room message search (P0.1 searches category).
+- **Behavior**: Current desktop implements room-scoped Matrix server message search via client.search (room_events search_term + filter rooms, limit 20) with next_batch/nextToken pagination and results grouped by room_id. status=implemented.
+- **Notes**: Evidence (conservative): (1) ROOM SEARCH REQUEST: useMessageSearch.ts searchMessages builds ISearchRequestBody search_categories.room_events with search_term=term, order_by (default SearchOrderBy.Recent), filter { limit: 20, rooms, senders }, include_state false, event_context { before_limit: 0, after_limit: 0, include_profile: false } (L84–103). Empty term short-circuits without network (L78–82). (2) SEARCH CALL + NEXT_BATCH: mx.search({ body: requestBody, next_batch: nextBatch === '' ? undefined : nextBatch }) L105–108 — sole client.search call; empty initial pageParam becomes undefined next_batch. (3) RESPONSE PARSE: parseSearchResult L54–64 maps room_events.next_batch → nextToken, highlights, groupSearchResult(results) by result.room_id into ResultGroup[] (L29–51). (4) UI ROOM SCOPE: MessageSearch msgSearchParams L88–98 — when global !== 'true', rooms defaults to host-provided rooms list (room-scoped); RoomSidePanel RoomSearchPanel passes rooms={[room.roomId]} (L33–37); global true is FR-7.10-002. SearchInput L253–259 enters term. (5) PAGINATION UX: useInfiniteQuery L102–114 queryFn pageParam → searchMessages(pageParam); initialPageParam ''; getNextPageParam = lastPage.nextToken. Scroll pagination L227–236: when last virtual group visible and hasNextPage, fetchNextPage(); isFetchingNextPage shows Spinner L354–358. (6) EMPTY/ERROR/LOADING: no-term pending hero L280–289; zero-hit success warning 'No results found for "…"' L292–304; pending skeleton cards L306–313; error Critical box error.name/message L362–375. (7) RESULT CHROME: SearchResultGroup renders room header + items with highlights; Open chip → navigateRoom is FR-7.10-004 (not this FR). (8) DISTINCTIONS: filters UI FR-7.10-003; global FR-7.10-002; event-context open FR-7.10-004; user/directory FR-7.10-005; local vs server FR-7.10-006; cancel/stale FR-7.10-007. (9) No existing automated AT for search/pagination E2E. (10) Cutover P6.8 (+P11.3 React conversion): preserve room search + next_batch pagination via typed SC-071 Client::send search request path (not high-level search API, not raw /_matrix HTTP, not dual-backend/SDK selector). SC-071 alone / compile-only / raw HTTP / Open-only / filter-only / global-only / helper-only FAIL.
+- **Limits**: P0.1 method candidates are AST name hits unless marked source-inspected. Pagination is product orchestration of next_batch (no separate SDK page API beyond search next_batch). Product does not request server event context (before/after 0) — GAP-EVENT-CONTEXT is not a primary gap for this FR (Open/jump is FR-7.10-004). Sender/room/date/type filter UX is FR-7.10-003. Global search is FR-7.10-002. No E2E AT yet. SC-071 remains typed-sdk-request-required (no high-level Rust search API); cutover must use typed Client::send search + product IPC, not raw HTTP.
 - **UI**: `synara/src/app/features/message-search/MessageSearch.tsx`
-- **Owners**: `synara/src/app/features/message-search/useMessageSearch.ts`
+- **UI rationale**: MessageSearch is the product surface for room message search + pagination: SearchInput term entry; room-scoped msgSearchParams (defaultRooms when not global); useMessageSearch → useInfiniteQuery with getNextPageParam=lastPage.nextToken (server next_batch); scroll-triggered fetchNextPage when the last virtual group is visible; virtualized SearchResultGroup list with spinner while isFetchingNextPage; empty/error/loading UI. RoomSidePanel RoomSearchPanel is the canonical room-scoped entry (`rooms={[room.roomId]}`). SearchFilters global/sender/date/type are FR-7.10-002/003; Open navigateRoom is FR-7.10-004.
+- **Owners**: `synara/src/app/features/message-search/useMessageSearch.ts`, `synara/src/app/features/message-search/MessageSearch.tsx`
 - **Files**:
-  - `synara/src/app/features/message-search/MessageSearch.tsx` symbols=[] retained_m=0 retained_l=0
-  - `synara/src/app/features/message-search/SearchResultGroup.tsx` symbols=[] retained_m=0 retained_l=0
-  - `synara/src/app/features/message-search/useMessageSearch.ts` symbols=['search'] retained_m=1 retained_l=0
-    - method `search`:L105 — None
+  - `synara/src/app/features/message-search/useMessageSearch.ts` symbols=['search', 'searchMessages', 'parseSearchResult', 'groupSearchResult', 'next_batch', 'nextToken'] retained_m=1 retained_l=0
+    - method `search`:L105 — room-scoped server message search + next_batch pagination entry point (limit 20 room_events)
+    - note: room_events body L85–103 (search_term, order_by, filter.limit=20, rooms/senders, event_context 0/0); parseSearchResult nextToken L54–64; groupSearchResult by room_id L29–51
+  - `synara/src/app/features/message-search/MessageSearch.tsx` symbols=['useMessageSearch', 'useInfiniteQuery', 'getNextPageParam', 'fetchNextPage', 'hasNextPage', 'SearchInput'] retained_m=0 retained_l=0
+    - note: msgSearchParams room scope L88–98; useInfiniteQuery pageParam/nextToken L100–114; scroll fetchNextPage L227–236; SearchInput L253–259; empty/error/loading L280–375; getRoom L330 display-only EXCLUDE as sole search evidence
+  - `synara/src/app/features/message-search/SearchResultGroup.tsx` symbols=['SearchResultGroup', 'items', 'highlights'] retained_m=0 retained_l=0
+    - note: room-header + items list chrome L198; Open chip L297 is FR-7.10-004 EXCLUDE as sole primary
 - **Behavior-relevant methods (top-level)**:
-  - `search` `synara/src/app/features/message-search/useMessageSearch.ts`:L105 — None
+  - `search` `synara/src/app/features/message-search/useMessageSearch.ts`:L105 — room-scoped server message search + next_batch pagination (limit 20 room_events)
 - **Behavior-relevant listeners (top-level)**:
   - —
 - **Unfiltered linked candidates**: methods=2 listeners=0
-- **Rust**: `typed-sdk-request-required-server-search` caps=['SC-071'] gaps=['GAP-EVENT-CONTEXT']
+- **Rust**: `typed-sdk-request-required-server-search` caps=['SC-071'] gaps=[]
   - `SC-071` `typed-sdk-request-required` `Server-side room message search (/search) high-level API` https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/lib.rs#L67-L74
+  - Honest: SC-071 typed-sdk-request-required for server /search (search_events::v3 Client::send). No high-level Rust room-message search API. P0.3c probes cover typed request/response/criteria, Client::send, next_batch, filter limit. Cutover P6.8/P11.3 must preserve room-scoped search_term + filter.limit=20 + next_batch via typed path + product IPC — not raw /_matrix HTTP, not dual-backend. GAP-EVENT-CONTEXT is NOT a primary gap for this FR (product before/after 0; Open is FR-7.10-004). SC alone / compile-only / raw HTTP / Open-only / filter-only / global-only / helper-only FAIL.
 - **Tasks**: `P6.8`, `P11.3`
 - **Blockers**:
-  - (medium) typed-sdk-request-required: FR-7.10-001 requires typed SDK request route (not raw HTTP, not invented high-level API).
+  - (medium) typed-sdk-request-required: FR-7.10-001 requires typed SC-071 Client::send search path for room message search + next_batch pagination (not raw HTTP, not invented high-level search API, not dual-backend).
 - **Existing tests**:
   - _(none)_
 - **Planned** `AT-FR-7.10-001-001` task `P6.8` level `integration`
-  - Scenario: 7.10/FR-7.10-001: exercise 'room message search and pagination;' via owner `synara/src/app/features/message-search/useMessageSearch.ts` and UI `synara/src/app/features/message-search/MessageSearch.tsx`, then confirm Rust/IPC cutover task `P6.8` preserves observable behavior without raw Matrix runtime HTTP.
-  - Test target: None
+  - Scenario: Integration against disposable Synapse: (A) ROOM SEARCH — open MessageSearch with room-scoped rooms filter (not global); enter search_term; assert useMessageSearch/mx.search issues room_events search with filter.limit=20 and rooms bound to the room list; results render grouped by room_id via SearchResultGroup. (B) PAGINATION — with >20 matching events, assert response next_batch → nextToken; scroll/load more triggers fetchNextPage with next_batch on the subsequent search; additional groups append; spinner while isFetchingNextPage. (C) EMPTY — no matches shows no-results UI. (D) DISTINCTIONS — Open result alone (FR-7.10-004), filter-only (FR-7.10-003), global-only (FR-7.10-002), cancel/stale (FR-7.10-007) do not satisfy this FR. After cutover P6.8 (+P11.3), same observables via typed SC-071 Client::send search request path + product IPC — not raw /_matrix HTTP, not dual-backend/SDK selector, not invented high-level search API. SC-071 alone, compile-only, raw HTTP, Open-only, filter-only, global-only, helper/fixture-only FAIL.
+  - Test target: useMessageSearch mx.search room_events + next_batch/nextToken + groupSearchResult; MessageSearch useInfiniteQuery getNextPageParam/fetchNextPage + SearchInput + SearchResultGroup list; post-cutover typed SC-071 Client::send search + IPC (P6.8/P11.3)
   - Preconditions:
-    - Desktop app; room with searchable indexed history on Synapse
-    - Public room directory populated; second user for user search
-    - Linked owner path present in tree: synara/src/app/features/message-search/useMessageSearch.ts
-    - Primary UI/lifecycle surface: synara/src/app/features/message-search/MessageSearch.tsx
+    - Disposable Synapse with at least one joined room whose history is server-searchable and contains >20 matching messages for a known term.
+    - Named owners present: synara/src/app/features/message-search/useMessageSearch.ts and MessageSearch.tsx; result chrome SearchResultGroup.tsx.
+    - Harness can observe search request body (term, rooms, limit), next_batch on subsequent pages, grouped result UI, and page append.
+    - Do not accept global-only (FR-7.10-002), filter-only (FR-7.10-003), Open/jump-only (FR-7.10-004), cancel/stale-only (FR-7.10-007), or unit-only helpers as sole pass for this FR.
   - Actions:
-    1. Boot the appropriate harness for level=integration against disposable Synapse (or iOS notes if any).
-    2. Establish fixtures required by the clause list: room message search; pagination.
-    3. Open UI/lifecycle surface `synara/src/app/features/message-search/MessageSearch.tsx` (or follow ui_entry_points_rationale if no dedicated UI).
-    4. Step 1: perform the product action that implements «room message search» using current owner `synara/src/app/features/message-search/useMessageSearch.ts`.
-    5. Step 2: perform the product action that implements «pagination» using current owner `synara/src/app/features/message-search/useMessageSearch.ts`.
-    6. Issue search, paginate results, cancel in-flight query, and re-issue with different filters to catch stale results.
+    1. Boot integration harness against disposable Synapse. Do not use fixture-only mocks that skip product useMessageSearch/MessageSearch, dual-backend selectors, raw HTTP, or helper-only pass criteria.
+    2. ROOM SEARCH: open MessageSearch with room-scoped rooms (global not true); enter a term known to match room history; assert search enabled and results appear grouped by room.
+    3. REQUEST SHAPE: assert product path issues room_events search with search_term, filter.limit=20, rooms scoped (not unrestricted global unless explicitly testing FR-7.10-002).
+    4. PAGINATION: with >20 matches, assert first page has nextToken; scroll to last virtual group or otherwise trigger fetchNextPage; assert subsequent search includes next_batch and additional results append without replacing the first page.
+    5. EMPTY: search a term with no matches; assert no-results messaging.
+    6. After cutover P6.8 (+P11.3), repeat room search + next_batch pagination via typed Client::send search (SC-071) under Rust ownership + product IPC. Citing SC-071 alone, compile-only blocked, raw /_matrix HTTP, dual-backend/SDK selector, Open-only, filter-only, global-only, or helper/fixture-only is a FAIL.
   - Assertions:
-    - Each clause is observable: «room message search»; «pagination».
-    - State coordination remains through `synara/src/app/features/message-search/useMessageSearch.ts` (or its Rust/IPC successor after cutover), not ad-hoc dual writers.
-    - Behavior-relevant current JS method candidates exercised or replaced: search (AST candidates; not type-proven receivers).
-    - Rust mapping remains conservative: caps=[SC-071] gaps=[GAP-EVENT-CONTEXT]; compile-only blocked states are not treated as runtime pass.
-    - No new production matrix-js-sdk usage and no raw /\_matrix runtime HTTP unless dossier marks that exact behavior typed-sdk-request-required.
+    - ROOM SEARCH: room-scoped message search returns matching events for the term within the room filter (limit 20).
+    - NEXT_BATCH PAGINATION: first page exposes nextToken from room_events.next_batch; Load more / scroll fetchNextPage sends next_batch and appends further results.
+    - GROUPING: results are presented grouped by room_id (SearchResultGroup chrome).
+    - EVENT CONTEXT NOT REQUIRED: product does not require server event_context before/after for this FR (limits 0); Open navigation alone is FR-7.10-004.
+    - DISTINCTIONS: this FR ≠ FR-7.10-002 global; ≠ FR-7.10-003 filters; ≠ FR-7.10-004 Open; ≠ FR-7.10-005 user/directory; ≠ FR-7.10-006 local search; ≠ FR-7.10-007 cancel/stale.
+    - COORDINATION: search remains through useMessageSearch + MessageSearch (or Rust/IPC successors), not ad-hoc dual writers.
+    - CUTOVER: P6.8 (+P11.3) preserves room search + next_batch via typed SC-071 Client::send search path; SC alone / compile-only never product pass; no raw /_matrix runtime HTTP; no dual-backend/SDK selector.
+    - No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless the dossier marks that exact behavior typed-sdk-request-required.
+    - Global-only, filter-only, Open-only, cancel/stale-only, and helper unit tests alone are not accepted as sole pass criteria for this FR.
   - does_not_currently_exist: `True`
 - **Manual**: `MA-FR-7.10-001`
 
@@ -9314,22 +9324,30 @@ Limited rejected-review correction (`p0.2-correct-39-fr-7.9-013-store-corruption
 
 - Platforms: macOS, Linux
 - Preconditions:
-  - Desktop app; room with searchable indexed history on Synapse
-  - Public room directory populated; second user for user search
+  - Desktop app against disposable Synapse; at least one joined room with server-searchable history containing >20 messages matching a known term.
   - State owner available: synara/src/app/features/message-search/useMessageSearch.ts
-  - UI/lifecycle: synara/src/app/features/message-search/MessageSearch.tsx
-  - Current status baseline: implemented
+  - UI/lifecycle: synara/src/app/features/message-search/MessageSearch.tsx (result chrome SearchResultGroup.tsx)
+  - Room-scoped search path available (not only global); Current status baseline: implemented
 - Actions:
-  1. Launch Synara desktop on the target platform against disposable Synapse; use a clean or known fixture profile as required by «room message search and pagination;».
-  2. Identify state owner `synara/src/app/features/message-search/useMessageSearch.ts` and open `synara/src/app/features/message-search/MessageSearch.tsx`.
-  3. Action 1 — «room message search»: perform the minimal user/system steps that trigger this clause (use linked files under current_production_files if the entry point is indirect).
-  4. Action 2 — «pagination»: perform the minimal user/system steps that trigger this clause (use linked files under current_production_files if the entry point is indirect).
-  5. Run search, change filters, paginate, click a result to open event context, cancel a slow query and ensure UI does not apply stale results.
+  1. Launch Synara desktop on the target platform against disposable Synapse with a room-scoped MessageSearch surface (host rooms list; global not required for this FR).
+  2. ROOM SEARCH: enter a known term in SearchInput; confirm results appear for messages in the scoped room(s), grouped by room header via SearchResultGroup.
+  3. PAGINATION: with >20 matches, scroll to the end of the results list (or otherwise trigger load-more); confirm additional results load (fetchNextPage / next_batch) and a loading spinner appears while fetching; prior results remain visible.
+  4. EMPTY: search a term with no matches; confirm no-results messaging for that term.
+  5. DISTINCTIONS (negative for this FR alone): do not treat Open on a result (FR-7.10-004), filter-only changes (FR-7.10-003), global toggle alone (FR-7.10-002), or cancel/stale alone (FR-7.10-007) as satisfying room search + pagination.
+  6. After cutover P6.8 (+P11.3): repeat room search + next_batch pagination; confirm typed SC-071 Client::send search path (not raw /_matrix from the renderer, not dual-backend/SDK selector).
 - Expected:
-  - All clauses under «room message search and pagination;» produce the user-visible or system-observable success criteria without error toasts unrelated to intentional negative tests.
-  - Clause 1 «room message search» is satisfied on macOS, Linux with owner `synara/src/app/features/message-search/useMessageSearch.ts`.
-  - Clause 2 «pagination» is satisfied on macOS, Linux with owner `synara/src/app/features/message-search/useMessageSearch.ts`.
-  - No unexpected raw /\_matrix traffic from the app renderer for this flow on the post-cutover build.
+  - ROOM SEARCH: room-scoped message search returns matching events for the term within the room filter (server room_events search, product limit 20).
+  - NEXT_BATCH PAGINATION: further pages load via next_batch/nextToken when more results exist; UI appends groups and shows fetch spinner.
+  - GROUPING: results are grouped by room_id with SearchResultGroup chrome.
+  - Event-context Open is out of scope for pass of this FR (FR-7.10-004); product uses before_limit/after_limit 0 for search.
+  - No unexpected raw /\_matrix traffic from the app renderer for this flow on the post-cutover build; no dual-backend/SDK selector.
+  - SC-071 alone / compile-only / raw HTTP / Open-only / filter-only / global-only / helper-only do not pass this FR.
+- Clause breakdown:
+  - room-scoped room_events message search (search_term, rooms, limit 20)
+  - next_batch / nextToken pagination (useInfiniteQuery fetchNextPage)
+  - results grouped by room_id
+  - empty / error / loading UI states
+  - cutover P6.8 (+P11.3) typed SC-071 Client::send search; SC-only/raw HTTP/helper-only FAIL
 
 ### `MA-FR-7.10-002` (FR-7.10-002)
 
@@ -11559,21 +11577,25 @@ Limited rejected-review correction (`p0.2-correct-39-fr-7.9-013-store-corruption
 
 ### `AT-FR-7.10-001-001`
 
-- 7.10/FR-7.10-001: exercise 'room message search and pagination;' via owner `synara/src/app/features/message-search/useMessageSearch.ts` and UI `synara/src/app/features/message-search/MessageSearch.tsx`, then confirm Rust/IPC cutover task `P6.8` preserves observable behavior without raw Matrix runtime HTTP.
-- target: None
+- Integration against disposable Synapse: (A) ROOM SEARCH — open MessageSearch with room-scoped rooms filter (not global); enter search_term; assert useMessageSearch/mx.search issues room_events search with filter.limit=20 and rooms bound to the room list; results render grouped by room_id via SearchResultGroup. (B) PAGINATION — with >20 matching events, assert response next_batch → nextToken; scroll/load more triggers fetchNextPage with next_batch on the subsequent search; additional groups append; spinner while isFetchingNextPage. (C) EMPTY — no matches shows no-results UI. (D) DISTINCTIONS — Open result alone (FR-7.10-004), filter-only (FR-7.10-003), global-only (FR-7.10-002), cancel/stale (FR-7.10-007) do not satisfy this FR. After cutover P6.8 (+P11.3), same observables via typed SC-071 Client::send search request path + product IPC — not raw /_matrix HTTP, not dual-backend/SDK selector, not invented high-level search API. SC-071 alone, compile-only, raw HTTP, Open-only, filter-only, global-only, helper/fixture-only FAIL.
+- target: useMessageSearch mx.search room_events + next_batch/nextToken + groupSearchResult; MessageSearch useInfiniteQuery getNextPageParam/fetchNextPage + SearchInput + SearchResultGroup list; post-cutover typed SC-071 Client::send search + IPC (P6.8/P11.3)
 - actions:
-  1. Boot the appropriate harness for level=integration against disposable Synapse (or iOS notes if any).
-  2. Establish fixtures required by the clause list: room message search; pagination.
-  3. Open UI/lifecycle surface `synara/src/app/features/message-search/MessageSearch.tsx` (or follow ui_entry_points_rationale if no dedicated UI).
-  4. Step 1: perform the product action that implements «room message search» using current owner `synara/src/app/features/message-search/useMessageSearch.ts`.
-  5. Step 2: perform the product action that implements «pagination» using current owner `synara/src/app/features/message-search/useMessageSearch.ts`.
-  6. Issue search, paginate results, cancel in-flight query, and re-issue with different filters to catch stale results.
+  1. Boot integration harness against disposable Synapse. Do not use fixture-only mocks that skip product useMessageSearch/MessageSearch, dual-backend selectors, raw HTTP, or helper-only pass criteria.
+  2. ROOM SEARCH: open MessageSearch with room-scoped rooms (global not true); enter a term known to match room history; assert search enabled and results appear grouped by room.
+  3. REQUEST SHAPE: assert product path issues room_events search with search_term, filter.limit=20, rooms scoped (not unrestricted global unless explicitly testing FR-7.10-002).
+  4. PAGINATION: with >20 matches, assert first page has nextToken; scroll to last virtual group or otherwise trigger fetchNextPage; assert subsequent search includes next_batch and additional results append without replacing the first page.
+  5. EMPTY: search a term with no matches; assert no-results messaging.
+  6. After cutover P6.8 (+P11.3), repeat room search + next_batch pagination via typed Client::send search (SC-071) under Rust ownership + product IPC. Citing SC-071 alone, compile-only blocked, raw /_matrix HTTP, dual-backend/SDK selector, Open-only, filter-only, global-only, or helper/fixture-only is a FAIL.
 - assertions:
-  - Each clause is observable: «room message search»; «pagination».
-  - State coordination remains through `synara/src/app/features/message-search/useMessageSearch.ts` (or its Rust/IPC successor after cutover), not ad-hoc dual writers.
-  - Behavior-relevant current JS method candidates exercised or replaced: search (AST candidates; not type-proven receivers).
-  - Rust mapping remains conservative: caps=[SC-071] gaps=[GAP-EVENT-CONTEXT]; compile-only blocked states are not treated as runtime pass.
-  - No new production matrix-js-sdk usage and no raw /\_matrix runtime HTTP unless dossier marks that exact behavior typed-sdk-request-required.
+  - ROOM SEARCH: room-scoped message search returns matching events for the term within the room filter (limit 20).
+  - NEXT_BATCH PAGINATION: first page exposes nextToken from room_events.next_batch; Load more / scroll fetchNextPage sends next_batch and appends further results.
+  - GROUPING: results are presented grouped by room_id (SearchResultGroup chrome).
+  - EVENT CONTEXT NOT REQUIRED: product does not require server event_context before/after for this FR (limits 0); Open navigation alone is FR-7.10-004.
+  - DISTINCTIONS: this FR ≠ FR-7.10-002 global; ≠ FR-7.10-003 filters; ≠ FR-7.10-004 Open; ≠ FR-7.10-005 user/directory; ≠ FR-7.10-006 local search; ≠ FR-7.10-007 cancel/stale.
+  - COORDINATION: search remains through useMessageSearch + MessageSearch (or Rust/IPC successors), not ad-hoc dual writers.
+  - CUTOVER: P6.8 (+P11.3) preserves room search + next_batch via typed SC-071 Client::send search path; SC alone / compile-only never product pass; no raw /_matrix runtime HTTP; no dual-backend/SDK selector.
+  - No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless the dossier marks that exact behavior typed-sdk-request-required.
+  - Global-only, filter-only, Open-only, cancel/stale-only, and helper unit tests alone are not accepted as sole pass criteria for this FR.
 
 ### `AT-FR-7.10-002-001`
 
