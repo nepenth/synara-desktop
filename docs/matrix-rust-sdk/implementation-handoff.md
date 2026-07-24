@@ -37,8 +37,10 @@ without explicit user approval.
 - **Progress loop:** host scheduled task every **4 minutes**
   (ID `019f95928db7`) continues bounded FR audits; also daily durable
   orchestrator `9022c2f8-9b21-411a-acf9-a36c10515f72`
-- **Next writer task:** FR-7.9-011 (multiple accounts isolated stores), then
-  remaining shallow 7.9–7.11 rows (~18)
+- **Last accepted:** FR-7.9-010 (device deletion and UIA;
+  `p0.2-correct-36-fr-7.9-010-device-deletion-and-uia`)
+- **Next writer task:** FR-7.9-011 (multiple accounts with fully isolated
+  stores and keys), then remaining shallow 7.9–7.11 rows (~18)
 - No production Matrix Rust SDK replacement code accepted
 - **No open P0.2 PR yet** (open after P0.2 complete)
 
@@ -147,9 +149,13 @@ Accepted notification findings that must be preserved:
   `useKeyBackup.ts` (KeyBackupStatus / SessionsRemaining / Failed /
   DecryptionKeyCached) drive BackupRestore Connected/Disconnected/Syncing/
   failure/trust UI. Recovery setup is 006; LocalBackup files is 007.
-- FR-7.9-010: status `implemented`. Other-device multi-select
-  `deleteMultipleDevices` + ActionUIA Password/SSO; current session uses
-  LogoutDialog not multi-delete; OIDC external sessionEnd branch.
+- FR-7.9-010: status `implemented`. Other-device multi-select delete via
+  `OtherDevices` `mx.deleteMultipleDevices` + sticky Logout; 401 UIA via
+  `useUIAMatrixError` → `ActionUIA` Password/SSO; success
+  `refreshDeviceList`; OIDC path external `sessionEnd`. Current session uses
+  `DeviceLogoutBtn` (not multi-delete). Primary Rust gaps
+  GAP-DEVICE-NAMING-DELETE + GAP-UIA; SC-067 list-only secondary.
+  List ownership is 003; trust 004; SAS 005; recovery UIA 006.
 
 ## Branch and PR contract
 
