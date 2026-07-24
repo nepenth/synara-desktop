@@ -37,10 +37,9 @@ without explicit user approval.
 - **Progress loop:** host scheduled task every **4 minutes**
   (ID `019f95928db7`) continues bounded FR audits; also daily durable
   orchestrator `9022c2f8-9b21-411a-acf9-a36c10515f72`
-- **Last accepted:** FR-7.10-006 server vs experimental local search **implemented**
-  (`p0.2-correct-45`; server SC-071 adopted, SC-072 not adopted)
-- **Next writer task:** FR-7.10-007 (search cancellation and stale-result
-  rejection), then remaining 7.10–7.11 (~9)
+- **Last accepted:** FR-7.10-006 server-vs-local search decision (`p0.2-correct-45`)
+- **Next writer task:** FR-7.10-007 (search cancel/stale rejection), then 7.11
+  (~9 remaining shallow)
 
 - No production Matrix Rust SDK replacement code accepted
 - **No open P0.2 PR yet** (open after P0.2 complete)
