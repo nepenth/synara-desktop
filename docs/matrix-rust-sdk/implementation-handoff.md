@@ -28,7 +28,7 @@ without explicit user approval.
 **Session state (2026-07-24):**
 
 - Integration: `feature/matrix-rust-sdk-full-replacement` @ `80c8fa3` (P0.1+P0.3 merged)
-- Working branch: `matrix-rust/p0.2-parity-traceability` (tracks origin; no open P0.2 PR yet)
+- Working branch: `matrix-rust/p0.2-parity-traceability` (tracks origin; open P0.2 PR to integration after 008)
 - Ancestry: integration is ancestor of P0.2 branch
 - Checkpoint commits: `06d0f86` (traceability scaffold), `9c91e0f` (handoff)
 - **Accepted this session:**
@@ -37,10 +37,13 @@ without explicit user approval.
 - **Progress loop:** host scheduled task every **4 minutes**
   (ID `019f95928db7`) continues bounded FR audits; also daily durable
   orchestrator `9022c2f8-9b21-411a-acf9-a36c10515f72`
-- **Last accepted:** FR-7.11-007 experimental-widgets risk **partial**
-  (`p0.2-correct-53`)
-- **Next writer task:** FR-7.11-008 (widget contingency documentation), then
-  open P0.2 PR to integration after 008 accept
+- **Last accepted:** FR-7.11-008 widget contingency documentation
+  **not-currently-exposed** under `GATE-7.11-008-DOCUMENTED-CONTINGENCY-ARTIFACT`
+  (`p0.2-correct-54`); **sections 7.8–7.11 P0.2 quality audit complete**
+
+- **Next writer task:** Open/review P0.2 PR to `feature/matrix-rust-sdk-full-replacement`
+  (do not merge main). No further 7.10–7.11 shallow FR audits remain.
+
 
 - No production Matrix Rust SDK replacement code accepted
 - **No open P0.2 PR yet** (open after P0.2 complete)
@@ -50,11 +53,12 @@ Phase 0 evidence accepted before this handoff:
 - P0.1 SDK usage inventory is merged to the integration branch.
 - P0.3 exact Matrix Rust SDK 0.18.0 capability dossier is merged to the
   integration branch.
-- P0.2 branch carries accepted 7.8–7.9, FR-7.10-001..007, and FR-7.11-001..007 corrections (**FR-7.10-005**, **FR-7.10-007**,
-  **FR-7.11-003..007** remain partial by gate); ~1 shallow row remains in 7.11.
+- P0.2 branch carries accepted 7.8–7.9, FR-7.10-001..007, and FR-7.11-001..008 corrections (**FR-7.10-005**, **FR-7.10-007**,
+  **FR-7.11-003..007** remain partial by gate; **FR-7.11-008** NCE). **No shallow
+  7.10–7.11 rows remain.**
 
-P0.2 is not complete. Resume at FR-7.11-008, then audit remaining 7.11
-before declaring P0.2 accepted.
+P0.2 quality audit of sections 7.8–7.11 is complete (honest partial/NCE gates
+remain). Open PR to integration; do not merge main without user approval.
 
 Accepted notification findings that must be preserved:
 
@@ -243,6 +247,12 @@ Accepted notification findings that must be preserved:
   `GATE-7.11-007-EXPERIMENTAL-WIDGETS-RISK-ACCEPTANCE`. Plan/dossier risk language
   present (SC-082 blocked, P10.1, RISK-CALLS); no formal product acceptance artifact
   for pin 0.18.0 yet.
+
+
+- FR-7.11-008: status **`not-currently-exposed`** under
+  `GATE-7.11-008-DOCUMENTED-CONTINGENCY-ARTIFACT`. Plan §7.11 + P10.7 contingency
+  language present; formal contingency decision artifact not delivered. Must not
+  reintroduce permanent dual-backend without new user decision.
 
 
 
