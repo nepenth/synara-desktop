@@ -4,7 +4,7 @@
 
 ## Correction pass status
 
-Limited rejected-review correction (`p0.2-correct-37-fr-7.9-011-sequential-store-key-isolation`) for **FR-7.9-011** only: replace generic “via 2 files” / `notes=null` / wrong `getCrypto`+`initRustCrypto` crypto-boot methods with concrete **sequential multi-account store/key isolation** evidence — single-slot `FALLBACK_SESSION_KEYS` + `clearSessionLocalStorage`; `clearMatrixStoresForIdentityChange` / `shouldClearMatrixStoresBeforeInit` / last bootstrapped identity; fixed `MATRIX_LOCAL_STORE_NAMES` + `clearMatrixLocalStores`; `createMatrixClient` fixed DBs + `initClient` identity-clear wire-up; `ClientRoot` single `getActiveSession`→`initClient`; concurrent dual clients non-goal; demote `cryptoStoreContinuity`/`getCrypto` (FR-7.9-012) and `initRustCrypto` as sole primary (FR-7.9-001); rewrite planned AT/MA for Alice→Bob sequential isolation + cutover P2.2+P3.6+P8.8; honest rust_target `multi-account-store-isolation-compile-shape-only-blocked-for-product` SC-061+SC-083; SC alone / compile-only / raw HTTP / dual-backend / concurrent dual-client / continuity-only / logout-wipe-only / helper-only FAIL. Status remains **`implemented`** with sequential-isolation limits (not concurrent multi-account; supersedes prior partial demotion draft). JSON and Markdown synchronized. Accepted corrections for **FR-7.8-001 through FR-7.8-009** and **FR-7.9-001..010** preserved. Prior corrections and accepted **7.1–7.3** preserved. **P0.2 is not complete.**
+Limited rejected-review correction (`p0.2-correct-38-fr-7.9-012-store-continuity-upgrades-crashes`) for **FR-7.9-012** only: replace generic “via 2 files” / `notes=null` shallow AT with concrete **store continuity across upgrades and crashes** evidence — restored sessions **must not wipe** (`initClient` freshLogin gate); fixed-name IndexedDB reopen after quit/crash/upgrade (`initRustCrypto`); `assertCryptoStoreContinuity` (`getCrypto` + `getOwnDeviceKeys` + authoritative `downloadKeysForUsers`); `stopClient` without store delete on safety fail; ClientRoot store-intact continuity UI + Retry only for `server-query-incomplete`; rewrite planned AT/MA for restore / crash-relaunch / upgrade-reopen / negative preserve + cutover P2.2/P8.8/P13.2; honest rust_target `compile-shape-only-blocked-for-product` (SC-083 + SC-061); SC alone / compile-only / raw HTTP / store-init-only (FR-7.9-001) / multi-account-wipe-only (FR-7.9-011) / corruption-only (FR-7.9-013) / helper-only FAIL. Status remains `implemented`. JSON and Markdown synchronized. Accepted corrections for **FR-7.8-001 through FR-7.8-009** and **FR-7.9-001..011** preserved. Prior corrections and accepted **7.1–7.3** preserved. **P0.2 is not complete.**
 
 ## Provenance
 
@@ -14,7 +14,7 @@ Limited rejected-review correction (`p0.2-correct-37-fr-7.9-011-sequential-store
 
 ## Summary
 
-- FR 119 · files 220 · AT 119 · MA 119 · existing refs 47
+- FR 119 · files 220 · AT 119 · MA 119 · existing refs 48
 
 ### Status distribution
 
@@ -6409,47 +6409,63 @@ Limited rejected-review correction (`p0.2-correct-37-fr-7.9-011-sequential-store
 - **Text**: store continuity across upgrades and crashes;
 - **Lines**: 436–436
 - **Status**: `implemented`
-- **Behavior**: Current desktop implements this via 2 production matrix-js-sdk-related file(s); status=implemented.
+- **Behavior**: Current desktop implements store continuity across process quit/crash relaunch and app upgrades by reopening fixed-name IndexedDB sync+rust-crypto stores, asserting local device keys still match the homeserver device, and never wiping the crypto store on continuity failure or restored-session bootstrap. status=implemented.
+- **Notes**: Evidence (conservative): (1) DURABLE FIXED STORES: createMatrixClient (initMatrix.ts L172–181) always opens MATRIX_SYNC_STORE_NAME 'web-sync-store' and MATRIX_LEGACY_CRYPTO_STORE_NAME 'crypto-store'; matrixLocalStores.ts also names rust-crypto DBs matrix-js-sdk::matrix-sdk-crypto[+meta] opened by initRustCrypto. Same fixed names across app process restarts and product upgrades — IndexedDB data survives quit/crash when the profile remains. Current product is browser IndexedDB + matrix-js-sdk rust-crypto wasm, not native SQLite. (2) RESTORED NO WIPE: initClient L313–314 identityCleared = freshLogin ? clearMatrixStoresForIdentityChange(session) : false. Restored sessions never proactive-wipe (vs FR-7.9-011 multi-account sequential wipe). (3) REOPEN + CONTINUITY: startMatrixClient L235 store.startup → L241 initRustCrypto → L247–251 assertCryptoStoreContinuity. cryptoStoreContinuity.ts L47–93: getCrypto L59 → getOwnDeviceKeys L64 → downloadKeysForUsers L67 authoritative match or CryptoStoreContinuityError (message L19–23: store preserved). (4) PRESERVE ON FAILURE: startMatrixClient catch L269–281 mx.stopClient without destroy/delete of crypto stores. isCryptoAccountMismatchError L337–342 maps mismatch without clear. (5) ClientRoot UI L357–418: store still intact; Retry Safety Check only for server-query-incomplete; Sign Out warns permanent removal. (6) UPGRADES: no separate product version-upgrade migrator; continuity is reopen same fixed IndexedDB names + initRustCrypto + identity match. (7) CRASHES: process kill + relaunch restores via getActiveSession + initClient non-fresh path. (8) Tests initMatrix.test.ts unit/mocked only — not E2E crash/upgrade AT. (9) Cutover P2.2/P8.8/P13.2 must preserve restore no wipe, reopen durable store, identity continuity gate, store preserved on safety fail, ClientRoot non-destructive guidance via native encrypted SQLite under Rust ownership + lifecycle actor/IPC. SC alone / compile-only / raw HTTP / store-init-only (FR-7.9-001) / multi-account-wipe-only (FR-7.9-011) / corruption-only (FR-7.9-013) / helper-only FAIL.
 - **UI**: `synara/src/app/pages/client/ClientRoot.tsx`
+- **UI rationale**: ClientRoot sequences restored getActiveSession via initClient (no wipe) then startClient (L251–285); surfaces CryptoStoreContinuityError with store-intact messaging, Retry Safety Check only for server-query-incomplete, and explicit Sign Out that warns local encryption data deletion (L357–418). Does not own store construction or assertCryptoStoreContinuity logic.
 - **Owners**: `synara/src/client/cryptoStoreContinuity.ts`, `synara/src/client/initMatrix.ts`
 - **Files**:
-  - `synara/src/client/cryptoStoreContinuity.ts` symbols=['getCrypto'] retained_m=1 retained_l=0
-    - method `getCrypto`:L59 — None
-  - `synara/src/client/initMatrix.ts` symbols=['initRustCrypto'] retained_m=1 retained_l=0
-    - method `initRustCrypto`:L241 — None
+  - `synara/src/client/cryptoStoreContinuity.ts` symbols=['assertCryptoStoreContinuity', 'CryptoStoreContinuityError', 'canRetryCryptoStoreContinuityFailure', 'getCrypto'] retained_m=3 retained_l=0
+    - method `getCrypto`:L59 — continuity gate after store reopen; crypto-unavailable blocks without wipe
+    - method `getOwnDeviceKeys`:L64 — local identity keys from durable crypto store
+    - method `downloadKeysForUsers`:L67 — authoritative keys/query match after restore; failures preserve store
+    - note: module doc L41–45 after initRustCrypto before startClient; CryptoStoreContinuityError L19–23 store preserved; canRetry only server-query-incomplete
+  - `synara/src/client/initMatrix.ts` symbols=['initClient', 'initRustCrypto', 'assertCryptoStoreContinuity', 'stopClient'] retained_m=2 retained_l=0
+    - method `initRustCrypto`:L241 — reopens durable rust-crypto store after quit/crash/upgrade before continuity assert
+    - method `stopClient`:L274 — closes client on continuity failure without deleting IndexedDB crypto stores
+    - note: initClient L314 restored no-wipe gate; createMatrixClient L172–181 fixed store names; assertCryptoStoreContinuity call L247–251
 - **Behavior-relevant methods (top-level)**:
-  - `getCrypto` `synara/src/client/cryptoStoreContinuity.ts`:L59 — None
-  - `initRustCrypto` `synara/src/client/initMatrix.ts`:L241 — None
+  - `getCrypto` `synara/src/client/cryptoStoreContinuity.ts`:L59 — continuity gate after store reopen
+  - `getOwnDeviceKeys` `synara/src/client/cryptoStoreContinuity.ts`:L64 — local keys from durable store
+  - `downloadKeysForUsers` `synara/src/client/cryptoStoreContinuity.ts`:L67 — authoritative server key match
+  - `initRustCrypto` `synara/src/client/initMatrix.ts`:L241 — reopen durable store after quit/crash/upgrade
+  - `stopClient` `synara/src/client/initMatrix.ts`:L274 — preserve crypto store on safety failure
 - **Behavior-relevant listeners (top-level)**:
   - —
 - **Unfiltered linked candidates**: methods=16 listeners=2
 - **Rust**: `compile-shape-only-blocked-for-product` caps=['SC-083', 'SC-061'] gaps=[]
   - `SC-083` `blocked` `matrix_sdk::ClientBuilder::sqlite_store` https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/client/builder/mod.rs#L254-L261
   - `SC-061` `blocked` `matrix_sdk::encryption::Encryption` https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/encryption/mod.rs#L892
+  - Honest: SC-083 durable store reopen/migrate; SC-061 encryption/keys for continuity. Both compile-only blocked. Current product IndexedDB + rust-crypto wasm. Cutover P2.2/P8.8/P13.2 must preserve restore no wipe + reopen + identity gate + store preserve via native encrypted SQLite under Rust ownership + lifecycle actor; SC alone / raw HTTP / store-init-only / multi-account-wipe-only / corruption-only / helper-only FAIL.
 - **Tasks**: `P8.8`, `P2.2`, `P13.2`
 - **Existing tests**:
-  - _(none)_
+  - `synara/src/app/state/__tests__/initMatrix.test.ts` — unit/mocked continuity preserve only; not E2E crash/upgrade AT
 - **Planned** `AT-FR-7.9-012-001` task `P8.8` level `integration-e2e`
-  - Scenario: 7.9/FR-7.9-012: exercise 'store continuity across upgrades and crashes;' via owner `synara/src/client/cryptoStoreContinuity.ts` and UI `synara/src/app/pages/client/ClientRoot.tsx`, then confirm Rust/IPC cutover task `P8.8` preserves observable behavior without raw Matrix runtime HTTP.
-  - Test target: None
+  - Scenario: Integration-e2e against disposable Synapse: (A) RESTORED NO WIPE — cold-start restored session does not clear MATRIX_LOCAL_STORE_NAMES; initRustCrypto reopens existing crypto store; assertCryptoStoreContinuity matches. (B) CRASH/RELAUNCH — after E2EE activity, kill process and relaunch; session restores; encrypted history remains decryptable; stores not wiped. (C) UPGRADE/REOPEN — with fixed store names intact (simulating app upgrade leaving profile data), reopen + continuity succeeds without wipe. (D) NEGATIVE PRESERVE — force identity-key-mismatch or crypto-unavailable; assert stop without store delete; ClientRoot shows store-intact messaging; no auto sign-out wipe. (E) RETRY — server-query-incomplete offers Retry Safety Check; mismatch does not. After cutover P2.2/P8.8/P13.2, same observables via native encrypted SQLite under Rust ownership + lifecycle actor/IPC. SC-083/SC-061 alone, compile-only, raw /_matrix HTTP, store-init-order-only (FR-7.9-001), multi-account-wipe-only (FR-7.9-011), corruption-guidance-only (FR-7.9-013), helper/fixture-only FAIL.
+  - Test target: initClient restored no-wipe gate + startMatrixClient initRustCrypto reopen + assertCryptoStoreContinuity (getCrypto/getOwnDeviceKeys/downloadKeysForUsers) + stopClient preserve + ClientRoot continuity error UI; post-cutover Rust encrypted SQLite + lifecycle actor (P2.2/P8.8/P13.2)
   - Preconditions:
-    - Desktop app, E2EE-capable session; second device for verification
-    - Recovery key / backup fixtures; isolated multi-account profiles when testing isolation
-    - Linked owner path present in tree: synara/src/client/cryptoStoreContinuity.ts
-    - Primary UI/lifecycle surface: synara/src/app/pages/client/ClientRoot.tsx
+    - Disposable Synapse; desktop app with E2EE-capable restored-session fixture and ability to kill/relaunch process.
+    - Named owners present: synara/src/client/cryptoStoreContinuity.ts and synara/src/client/initMatrix.ts; UI ClientRoot.tsx.
+    - Harness can observe store wipe absence, continuity phase diagnostics, and encrypted room decrypt after relaunch.
+    - Do not accept store-before-sync order alone (FR-7.9-001), multi-account wipe alone (FR-7.9-011), corruption guidance alone (FR-7.9-013), or unit-only helper tests as sole pass for this FR.
   - Actions:
-    1. Boot the appropriate harness for level=integration-e2e against disposable Synapse (or iOS notes if any).
-    2. Establish fixtures required by the clause list: store continuity across upgrades; crashes.
-    3. Open UI/lifecycle surface `synara/src/app/pages/client/ClientRoot.tsx` (or follow ui_entry_points_rationale if no dedicated UI).
-    4. Step 1: perform the product action that implements «store continuity across upgrades» using current owner `synara/src/client/cryptoStoreContinuity.ts`.
-    5. Step 2: perform the product action that implements «crashes» using current owner `synara/src/client/cryptoStoreContinuity.ts`.
-    6. Force process restart and/or offline→online transition where lifecycle continuity is implied.
+    1. Boot integration harness against disposable Synapse. Do not use fixture-only mocks that skip product initClient/startMatrixClient continuity, dual-backend selectors, raw HTTP, or helper-only pass criteria.
+    2. RESTORED NO WIPE: cold-start previously bootstrapped encrypted session; assert clearMatrixStoresForIdentityChange not invoked; initRustCrypto reopens; assertCryptoStoreContinuity returns matched before productive sync.
+    3. CRASH/RELAUNCH: establish E2EE room activity; kill app process; relaunch; assert session restores, stores intact, encrypted messages decrypt, continuity passes.
+    4. UPGRADE/REOPEN: with profile IndexedDB/fixed store names retained (simulating binary upgrade), relaunch and assert continuity without wipe.
+    5. NEGATIVE PRESERVE: force identity-key-mismatch or crypto-unavailable; assert stopClient without store delete; ClientRoot store-intact + no auto wipe; Retry only for server-query-incomplete.
+    6. After cutover P2.2/P8.8/P13.2, repeat restore/crash/upgrade/negative observables via native encrypted SQLite under Rust ownership + product lifecycle actor/IPC. Citing SC-083 alone, SC-061 alone, compile-only blocked, raw /_matrix HTTP, dual-backend, store-init-only, multi-account-wipe-only, corruption-only, or helper/fixture-only is a FAIL.
   - Assertions:
-    - Each clause is observable: «store continuity across upgrades»; «crashes».
-    - State coordination remains through `synara/src/client/cryptoStoreContinuity.ts` (or its Rust/IPC successor after cutover), not ad-hoc dual writers.
-    - Behavior-relevant current JS method candidates exercised or replaced: getCrypto, initRustCrypto (AST candidates; not type-proven receivers).
-    - Rust mapping remains conservative: caps=[SC-083,SC-061] gaps=[none]; compile-only blocked states are not treated as runtime pass.
-    - No new production matrix-js-sdk usage and no raw /\_matrix runtime HTTP unless dossier marks that exact behavior typed-sdk-request-required.
+    - RESTORED NO WIPE: non-fresh restore does not clear crypto/sync stores.
+    - REOPEN + CONTINUITY: initRustCrypto reopens durable store; assertCryptoStoreContinuity (getCrypto + local keys + authoritative keys/query) matches before productive session success.
+    - CRASH/RELAUNCH: after kill+relaunch, encrypted history remains decryptable and stores are not wiped.
+    - UPGRADE/REOPEN: fixed-name stores survive app upgrade simulation; continuity succeeds without identity wipe.
+    - PRESERVE ON SAFETY FAIL: continuity failure stops client without deleting local crypto store; ClientRoot states store intact; explicit sign-out is the wipe path.
+    - RETRY POLICY: only server-query-incomplete offers Retry Safety Check; identity-key-mismatch does not auto-wipe.
+    - COORDINATION: continuity remains through cryptoStoreContinuity + initMatrix (or Rust/IPC successors), not ad-hoc dual writers.
+    - CUTOVER: P2.2/P8.8/P13.2 preserve continuity via native encrypted SQLite + lifecycle actor; SC alone / compile-only never product pass; no raw /_matrix runtime HTTP; no dual-backend/SDK selector.
+    - No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless the dossier marks that exact behavior typed-sdk-request-required.
+    - Store-init-order alone (FR-7.9-001), multi-account wipe alone (FR-7.9-011), corruption alone (FR-7.9-013), and helper unit tests alone are not accepted as sole pass criteria for this FR.
   - does_not_currently_exist: `True`
 - **Manual**: `MA-FR-7.9-012`
 
@@ -9228,23 +9244,25 @@ Limited rejected-review correction (`p0.2-correct-37-fr-7.9-011-sequential-store
 
 - Platforms: macOS, Linux
 - Preconditions:
-  - Desktop app, E2EE-capable session; second device for verification
-  - Recovery key / backup fixtures; isolated multi-account profiles when testing isolation
-  - State owner available: synara/src/client/cryptoStoreContinuity.ts
-  - UI/lifecycle: synara/src/app/pages/client/ClientRoot.tsx
-  - Current status baseline: implemented
+  - Disposable Synapse; desktop app with E2EE-capable restored-session fixture and process kill/relaunch capability.
+  - State owners available: synara/src/client/cryptoStoreContinuity.ts and synara/src/client/initMatrix.ts.
+  - Lifecycle surface: synara/src/app/pages/client/ClientRoot.tsx.
+  - Current status baseline: implemented (store continuity across upgrades and crashes via fixed-name reopen + continuity assert + no wipe on restore).
 - Actions:
-  1. Launch Synara desktop on the target platform against disposable Synapse; use a clean or known fixture profile as required by «store continuity across upgrades and crashes;».
-  2. Identify state owner `synara/src/client/cryptoStoreContinuity.ts` and open `synara/src/app/pages/client/ClientRoot.tsx`.
-  3. Action 1 — «store continuity across upgrades»: perform the minimal user/system steps that trigger this clause (use linked files under current_production_files if the entry point is indirect).
-  4. Action 2 — «crashes»: perform the minimal user/system steps that trigger this clause (use linked files under current_production_files if the entry point is indirect).
-  5. Fully quit the app (and kill if testing crash), relaunch, and re-check the same observable state.
-  6. Repeat critical path in an encrypted room / with a second device when the clause involves keys or verification.
+  1. Launch Synara desktop against disposable Synapse with a previously bootstrapped encrypted session (restored, not fresh-login).
+  2. Confirm cold start does not wipe stores; initRustCrypto reopens; continuity matches; encrypted room history decrypts.
+  3. Use an encrypted room, then fully quit or kill the app process; relaunch and re-confirm session restore, store intact, decryptability.
+  4. Optional upgrade simulation: relaunch after product restart with the same profile stores retained; confirm continuity without identity wipe.
+  5. Optional negative: induce continuity failure if fixture allows; confirm ClientRoot states local crypto store is intact; Retry Safety Check only for transient query failures; Sign Out is the explicit wipe path.
+  6. On a post-cutover build (P2.2/P8.8/P13.2), repeat restore/crash/upgrade continuity via native encrypted SQLite + lifecycle actor without raw /_matrix renderer HTTP.
 - Expected:
-  - All clauses under «store continuity across upgrades and crashes;» produce the user-visible or system-observable success criteria without error toasts unrelated to intentional negative tests.
-  - Clause 1 «store continuity across upgrades» is satisfied on macOS, Linux with owner `synara/src/client/cryptoStoreContinuity.ts`.
-  - Clause 2 «crashes» is satisfied on macOS, Linux with owner `synara/src/client/cryptoStoreContinuity.ts`.
-  - No unexpected raw /\_matrix traffic from the app renderer for this flow on the post-cutover build.
+  - RESTORED NO WIPE: non-fresh restore does not clear crypto/sync stores.
+  - CRASH/RELAUNCH: after kill+relaunch, encrypted history remains decryptable and stores are not wiped.
+  - UPGRADE/REOPEN: fixed-name stores survive upgrade simulation; continuity succeeds without wipe.
+  - PRESERVE ON SAFETY FAIL: continuity failure does not auto-delete the local crypto store; ClientRoot store-intact messaging.
+  - Clause «store continuity across upgrades and crashes» is satisfied on macOS, Linux with owners cryptoStoreContinuity.ts + initMatrix.ts.
+  - Post-cutover: same continuity via Rust encrypted SQLite + lifecycle actor; SC-083/SC-061 alone or raw /_matrix traffic never pass.
+  - Store-init-order alone (FR-7.9-001), multi-account wipe alone (FR-7.9-011), and corruption guidance alone (FR-7.9-013) do not close this FR.
 
 ### `MA-FR-7.9-013` (FR-7.9-013)
 
@@ -11469,21 +11487,26 @@ Limited rejected-review correction (`p0.2-correct-37-fr-7.9-011-sequential-store
 
 ### `AT-FR-7.9-012-001`
 
-- 7.9/FR-7.9-012: exercise 'store continuity across upgrades and crashes;' via owner `synara/src/client/cryptoStoreContinuity.ts` and UI `synara/src/app/pages/client/ClientRoot.tsx`, then confirm Rust/IPC cutover task `P8.8` preserves observable behavior without raw Matrix runtime HTTP.
-- target: None
+- Integration-e2e against disposable Synapse: (A) RESTORED NO WIPE — cold-start restored session does not clear MATRIX_LOCAL_STORE_NAMES; initRustCrypto reopens existing crypto store; assertCryptoStoreContinuity matches. (B) CRASH/RELAUNCH — after E2EE activity, kill process and relaunch; session restores; encrypted history remains decryptable; stores not wiped. (C) UPGRADE/REOPEN — with fixed store names intact (simulating app upgrade leaving profile data), reopen + continuity succeeds without wipe. (D) NEGATIVE PRESERVE — force identity-key-mismatch or crypto-unavailable; assert stop without store delete; ClientRoot shows store-intact messaging; no auto sign-out wipe. (E) RETRY — server-query-incomplete offers Retry Safety Check; mismatch does not. After cutover P2.2/P8.8/P13.2, same observables via native encrypted SQLite under Rust ownership + lifecycle actor/IPC. SC-083/SC-061 alone, compile-only, raw /_matrix HTTP, store-init-order-only (FR-7.9-001), multi-account-wipe-only (FR-7.9-011), corruption-guidance-only (FR-7.9-013), helper/fixture-only FAIL.
+- target: initClient restored no-wipe gate + startMatrixClient initRustCrypto reopen + assertCryptoStoreContinuity (getCrypto/getOwnDeviceKeys/downloadKeysForUsers) + stopClient preserve + ClientRoot continuity error UI; post-cutover Rust encrypted SQLite + lifecycle actor (P2.2/P8.8/P13.2)
 - actions:
-  1. Boot the appropriate harness for level=integration-e2e against disposable Synapse (or iOS notes if any).
-  2. Establish fixtures required by the clause list: store continuity across upgrades; crashes.
-  3. Open UI/lifecycle surface `synara/src/app/pages/client/ClientRoot.tsx` (or follow ui_entry_points_rationale if no dedicated UI).
-  4. Step 1: perform the product action that implements «store continuity across upgrades» using current owner `synara/src/client/cryptoStoreContinuity.ts`.
-  5. Step 2: perform the product action that implements «crashes» using current owner `synara/src/client/cryptoStoreContinuity.ts`.
-  6. Force process restart and/or offline→online transition where lifecycle continuity is implied.
+  1. Boot integration harness against disposable Synapse. Do not use fixture-only mocks that skip product initClient/startMatrixClient continuity, dual-backend selectors, raw HTTP, or helper-only pass criteria.
+  2. RESTORED NO WIPE: cold-start previously bootstrapped encrypted session; assert clearMatrixStoresForIdentityChange not invoked; initRustCrypto reopens; assertCryptoStoreContinuity returns matched before productive sync.
+  3. CRASH/RELAUNCH: establish E2EE room activity; kill app process; relaunch; assert session restores, stores intact, encrypted messages decrypt, continuity passes.
+  4. UPGRADE/REOPEN: with profile IndexedDB/fixed store names retained (simulating binary upgrade), relaunch and assert continuity without wipe.
+  5. NEGATIVE PRESERVE: force identity-key-mismatch or crypto-unavailable; assert stopClient without store delete; ClientRoot store-intact + no auto wipe; Retry only for server-query-incomplete.
+  6. After cutover P2.2/P8.8/P13.2, repeat restore/crash/upgrade/negative observables via native encrypted SQLite under Rust ownership + product lifecycle actor/IPC. Citing SC-083 alone, SC-061 alone, compile-only blocked, raw /_matrix HTTP, dual-backend, store-init-only, multi-account-wipe-only, corruption-only, or helper/fixture-only is a FAIL.
 - assertions:
-  - Each clause is observable: «store continuity across upgrades»; «crashes».
-  - State coordination remains through `synara/src/client/cryptoStoreContinuity.ts` (or its Rust/IPC successor after cutover), not ad-hoc dual writers.
-  - Behavior-relevant current JS method candidates exercised or replaced: getCrypto, initRustCrypto (AST candidates; not type-proven receivers).
-  - Rust mapping remains conservative: caps=[SC-083,SC-061] gaps=[none]; compile-only blocked states are not treated as runtime pass.
-  - No new production matrix-js-sdk usage and no raw /\_matrix runtime HTTP unless dossier marks that exact behavior typed-sdk-request-required.
+  - RESTORED NO WIPE: non-fresh restore does not clear crypto/sync stores.
+  - REOPEN + CONTINUITY: initRustCrypto reopens durable store; assertCryptoStoreContinuity (getCrypto + local keys + authoritative keys/query) matches before productive session success.
+  - CRASH/RELAUNCH: after kill+relaunch, encrypted history remains decryptable and stores are not wiped.
+  - UPGRADE/REOPEN: fixed-name stores survive app upgrade simulation; continuity succeeds without identity wipe.
+  - PRESERVE ON SAFETY FAIL: continuity failure stops client without deleting local crypto store; ClientRoot states store intact; explicit sign-out is the wipe path.
+  - RETRY POLICY: only server-query-incomplete offers Retry Safety Check; identity-key-mismatch does not auto-wipe.
+  - COORDINATION: continuity remains through cryptoStoreContinuity + initMatrix (or Rust/IPC successors), not ad-hoc dual writers.
+  - CUTOVER: P2.2/P8.8/P13.2 preserve continuity via native encrypted SQLite + lifecycle actor; SC alone / compile-only never product pass; no raw /_matrix runtime HTTP; no dual-backend/SDK selector.
+  - No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless the dossier marks that exact behavior typed-sdk-request-required.
+  - Store-init-order alone (FR-7.9-001), multi-account wipe alone (FR-7.9-011), corruption alone (FR-7.9-013), and helper unit tests alone are not accepted as sole pass criteria for this FR.
 
 ### `AT-FR-7.9-013-001`
 
