@@ -56552,148 +56552,6 @@
       "current_status": "implemented",
       "current_production_files": [
         {
-          "path": "synara/src/app/features/settings/notifications/AllMessages.tsx",
-          "bucket": "feature",
-          "categories": ["client_methods", "notifications_push_rules"],
-          "symbols_or_candidates": ["setPushRuleActions"],
-          "line_refs": [
-            {
-              "symbol": "setPushRuleActions",
-              "line": 67,
-              "kind": "method_candidate"
-            }
-          ],
-          "model_coupling": [],
-          "behavior_relevant_method_candidates": [
-            {
-              "name": "setPushRuleActions",
-              "line": 67,
-              "category": "notifications_push_rules",
-              "kind": "property_call_candidate",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            }
-          ],
-          "behavior_relevant_listener_candidates": []
-        },
-        {
-          "path": "synara/src/app/features/settings/notifications/KeywordMessages.tsx",
-          "bucket": "feature",
-          "categories": ["client_methods", "notifications_push_rules"],
-          "symbols_or_candidates": [
-            "addPushRule",
-            "deletePushRule",
-            "setPushRuleActions"
-          ],
-          "line_refs": [
-            {
-              "symbol": "addPushRule",
-              "line": 30,
-              "kind": "method_candidate"
-            },
-            {
-              "symbol": "deletePushRule",
-              "line": 114,
-              "kind": "method_candidate"
-            },
-            {
-              "symbol": "setPushRuleActions",
-              "line": 135,
-              "kind": "method_candidate"
-            }
-          ],
-          "model_coupling": [],
-          "behavior_relevant_method_candidates": [
-            {
-              "name": "addPushRule",
-              "line": 30,
-              "category": "notifications_push_rules",
-              "kind": "property_call_candidate",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            },
-            {
-              "name": "deletePushRule",
-              "line": 114,
-              "category": "notifications_push_rules",
-              "kind": "property_call_candidate",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            },
-            {
-              "name": "setPushRuleActions",
-              "line": 135,
-              "category": "notifications_push_rules",
-              "kind": "property_call_candidate",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            }
-          ],
-          "behavior_relevant_listener_candidates": []
-        },
-        {
-          "path": "synara/src/app/features/settings/notifications/NotificationModeSwitcher.tsx",
-          "bucket": "feature",
-          "categories": ["notifications_push_rules"],
-          "symbols_or_candidates": [],
-          "line_refs": [],
-          "model_coupling": [],
-          "behavior_relevant_method_candidates": [],
-          "behavior_relevant_listener_candidates": [],
-          "symbols_or_candidates_note": "No requirement-relevant method/listener candidates filtered from this file's P0.1 AST hits; file remains linked for structural/model ownership. See all_candidates_in_linked_files on the requirement."
-        },
-        {
-          "path": "synara/src/app/features/settings/notifications/SpecialMessages.tsx",
-          "bucket": "feature",
-          "categories": [
-            "client_methods",
-            "notifications_push_rules",
-            "uia_auth"
-          ],
-          "symbols_or_candidates": ["setPushRuleActions"],
-          "line_refs": [
-            {
-              "symbol": "setPushRuleActions",
-              "line": 106,
-              "kind": "method_candidate"
-            }
-          ],
-          "model_coupling": [],
-          "behavior_relevant_method_candidates": [
-            {
-              "name": "setPushRuleActions",
-              "line": 106,
-              "category": "notifications_push_rules",
-              "kind": "property_call_candidate",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            }
-          ],
-          "behavior_relevant_listener_candidates": []
-        },
-        {
-          "path": "synara/src/app/features/settings/notifications/SystemNotification.tsx",
-          "bucket": "feature",
-          "categories": [],
-          "symbols_or_candidates": [],
-          "line_refs": [],
-          "model_coupling": [],
-          "behavior_relevant_method_candidates": [],
-          "behavior_relevant_listener_candidates": [],
-          "symbols_or_candidates_note": "No requirement-relevant method/listener candidates filtered from this file's P0.1 AST hits; file remains linked for structural/model ownership. See all_candidates_in_linked_files on the requirement."
-        },
-        {
-          "path": "synara/src/app/pages/client/inbox/Notifications.tsx",
-          "bucket": "page",
-          "categories": [
-            "client_methods",
-            "room_methods",
-            "room_lists",
-            "timelines"
-          ],
-          "symbols_or_candidates": [],
-          "line_refs": [],
-          "model_coupling": ["Room"],
-          "behavior_relevant_method_candidates": [],
-          "behavior_relevant_listener_candidates": [],
-          "symbols_or_candidates_note": "No requirement-relevant method/listener candidates filtered from this file's P0.1 AST hits; file remains linked for structural/model ownership. See all_candidates_in_linked_files on the requirement."
-        },
-        {
           "path": "synara/src/app/state/room/roomToUnread.ts",
           "bucket": "state",
           "categories": [
@@ -56708,8 +56566,57 @@
             "receipts",
             "uia_auth"
           ],
-          "symbols_or_candidates": [],
+          "symbols_or_candidates": [
+            "isSpaceRoom",
+            "getUserId",
+            "getUserId",
+            "isSpaceRoom",
+            "isSpaceRoom",
+            "on:RoomEvent.Timeline",
+            "removeListener:RoomEvent.Timeline",
+            "on:RoomEvent.Receipt",
+            "removeListener:RoomEvent.Receipt",
+            "on:RoomEvent.MyMembership",
+            "removeListener:RoomEvent.MyMembership",
+            "on:RoomEvent.AccountData",
+            "removeListener:RoomEvent.AccountData"
+          ],
           "line_refs": [
+            {
+              "symbol": "isSpaceRoom",
+              "line": 219,
+              "kind": "method_candidate"
+            },
+            {
+              "symbol": "getUserId",
+              "line": 228,
+              "kind": "method_candidate"
+            },
+            {
+              "symbol": "getUserId",
+              "line": 239,
+              "kind": "method_candidate"
+            },
+            {
+              "symbol": "isSpaceRoom",
+              "line": 241,
+              "kind": "method_candidate"
+            },
+            {
+              "symbol": "isSpaceRoom",
+              "line": 287,
+              "kind": "method_candidate"
+            },
+            {
+              "symbol": "on:RoomEvent.Timeline",
+              "line": 231,
+              "kind": "listener_candidate"
+            },
+            {
+              "symbol": "removeListener:RoomEvent.Timeline",
+              "line": 233,
+              "kind": "listener_candidate"
+            },
             {
               "symbol": "on:RoomEvent.Receipt",
               "line": 257,
@@ -56719,124 +56626,391 @@
               "symbol": "removeListener:RoomEvent.Receipt",
               "line": 259,
               "kind": "listener_candidate"
+            },
+            {
+              "symbol": "on:RoomEvent.MyMembership",
+              "line": 279,
+              "kind": "listener_candidate"
+            },
+            {
+              "symbol": "removeListener:RoomEvent.MyMembership",
+              "line": 281,
+              "kind": "listener_candidate"
+            },
+            {
+              "symbol": "on:RoomEvent.AccountData",
+              "line": 304,
+              "kind": "listener_candidate"
+            },
+            {
+              "symbol": "removeListener:RoomEvent.AccountData",
+              "line": 306,
+              "kind": "listener_candidate"
             }
           ],
           "model_coupling": ["MatrixClient", "MatrixEvent", "Room"],
-          "behavior_relevant_method_candidates": [],
+          "behavior_relevant_method_candidates": [
+            {
+              "name": "isSpaceRoom",
+              "line": 219,
+              "category": "spaces",
+              "kind": "property_call_candidate",
+              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
+              "relevance_reason": "Timeline unread handler skips space rooms before PUT of room unread {highlight,total}."
+            },
+            {
+              "name": "getUserId",
+              "line": 228,
+              "category": "uia_auth",
+              "kind": "property_call_candidate",
+              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
+              "relevance_reason": "Timeline unread handler suppresses self-sent events before recompute via getUnreadInfo."
+            },
+            {
+              "name": "getUserId",
+              "line": 239,
+              "category": "uia_auth",
+              "kind": "property_call_candidate",
+              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
+              "relevance_reason": "Receipt handler identifies own receipts that clear/update room unread via shouldKeepRoomUnreadAfterReceipt."
+            },
+            {
+              "name": "isSpaceRoom",
+              "line": 241,
+              "category": "spaces",
+              "kind": "property_call_candidate",
+              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
+              "relevance_reason": "Receipt unread path skips space rooms."
+            },
+            {
+              "name": "isSpaceRoom",
+              "line": 287,
+              "category": "spaces",
+              "kind": "property_call_candidate",
+              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
+              "relevance_reason": "Marked-unread AccountData handler ignores spaces before PUT/DELETE of unread."
+            }
+          ],
           "behavior_relevant_listener_candidates": [
+            {
+              "event": "RoomEvent.Timeline",
+              "method": "on",
+              "line": 231,
+              "category": "timelines",
+              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
+              "relevance_reason": "Live notifiable timeline events recompute room unread/highlight for nav and platform badge inputs."
+            },
+            {
+              "event": "RoomEvent.Timeline",
+              "method": "removeListener",
+              "line": 233,
+              "category": "timelines",
+              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
+              "relevance_reason": "Unbinds Timeline unread listener on teardown."
+            },
             {
               "event": "RoomEvent.Receipt",
               "method": "on",
               "line": 257,
               "category": "receipts",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
+              "relevance_reason": "Own receipts clear or refresh room unread (shouldKeepRoomUnreadAfterReceipt) for badge maps."
             },
             {
               "event": "RoomEvent.Receipt",
               "method": "removeListener",
               "line": 259,
               "category": "receipts",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
+              "relevance_reason": "Unbinds Receipt unread listener on teardown."
+            },
+            {
+              "event": "RoomEvent.MyMembership",
+              "method": "on",
+              "line": 279,
+              "category": "room_lists",
+              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
+              "relevance_reason": "Leaving a room DELETEs its unread entry from the badge map."
+            },
+            {
+              "event": "RoomEvent.MyMembership",
+              "method": "removeListener",
+              "line": 281,
+              "category": "room_lists",
+              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
+              "relevance_reason": "Unbinds MyMembership unread listener on teardown."
+            },
+            {
+              "event": "RoomEvent.AccountData",
+              "method": "on",
+              "line": 304,
+              "category": "account_data",
+              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
+              "relevance_reason": "m.marked_unread (AccountDataEvent.MarkedUnread) toggles marked-unread badge state."
+            },
+            {
+              "event": "RoomEvent.AccountData",
+              "method": "removeListener",
+              "line": 306,
+              "category": "account_data",
+              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
+              "relevance_reason": "Unbinds marked-unread AccountData listener on teardown."
             }
           ]
         },
         {
-          "path": "synara/src/app/utils/notifications.ts",
+          "path": "synara/src/app/utils/room.ts",
           "bucket": "utility",
           "categories": [
             "client_methods",
             "room_methods",
+            "crypto_verification_recovery",
+            "authenticated_media",
             "account_data",
             "room_lists",
             "timelines",
+            "spaces",
             "receipts",
+            "notifications_push_rules",
             "uia_auth"
           ],
-          "symbols_or_candidates": ["sendReadReceipt"],
+          "symbols_or_candidates": ["getRooms", "isSpaceRoom"],
           "line_refs": [
             {
-              "symbol": "sendReadReceipt",
-              "line": 402,
+              "symbol": "getRooms",
+              "line": 261,
+              "kind": "method_candidate"
+            },
+            {
+              "symbol": "isSpaceRoom",
+              "line": 262,
               "kind": "method_candidate"
             }
           ],
-          "model_coupling": ["MatrixClient", "MatrixEvent", "Room"],
+          "model_coupling": [
+            "EventTimeline",
+            "MatrixClient",
+            "MatrixEvent",
+            "Room",
+            "RoomMember"
+          ],
           "behavior_relevant_method_candidates": [
             {
-              "name": "sendReadReceipt",
-              "line": 402,
-              "category": "receipts",
+              "name": "getRooms",
+              "line": 261,
+              "category": "room_lists",
               "kind": "property_call_candidate",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
+              "relevance_reason": "getUnreadInfos scans mx.getRooms() to seed roomToUnread RESET with per-room highlight/total from getUnreadInfo."
+            },
+            {
+              "name": "isSpaceRoom",
+              "line": 262,
+              "category": "spaces",
+              "kind": "property_call_candidate",
+              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
+              "relevance_reason": "getUnreadInfos skips space rooms so spaces are not leaf unread sources (parent roll-up is separate)."
             }
           ],
-          "behavior_relevant_listener_candidates": []
+          "behavior_relevant_listener_candidates": [],
+          "symbols_or_candidates_note": "getUnreadInfo (L250-258) and getUnreadInfos (L260-273) are product helpers (not P0.1 AST property-name rows for getUnreadNotificationCount) that supply {highlight,total} for roomToUnread PUT/RESET."
+        },
+        {
+          "path": "synara/src/app/pages/client/ClientNonUIFeatures.tsx",
+          "bucket": "page",
+          "categories": [
+            "client_methods",
+            "room_methods",
+            "event_emitters_listeners",
+            "sync_lifecycle",
+            "room_lists",
+            "timelines",
+            "spaces",
+            "uia_auth",
+            "custom_raw_event_sends"
+          ],
+          "symbols_or_candidates": [],
+          "line_refs": [],
+          "model_coupling": ["MatrixEvent", "Room"],
+          "behavior_relevant_method_candidates": [],
+          "behavior_relevant_listener_candidates": [],
+          "symbols_or_candidates_note": "Badge/tray application only for this FR: FaviconUpdater (L223-245) and PlatformBadgeAndTrayUpdater (L262-291) consume roomToUnreadAtom; not native notification generation (FR-7.8-004). Primary SDK method/listener candidates for MessageNotifications/InviteNotifications are excluded as non-badge."
+        },
+        {
+          "path": "synara/src/app/features/room-nav/RoomNavItem.tsx",
+          "bucket": "feature",
+          "categories": ["client_methods", "room_methods", "uia_auth"],
+          "symbols_or_candidates": [],
+          "line_refs": [],
+          "model_coupling": ["Room"],
+          "behavior_relevant_method_candidates": [],
+          "behavior_relevant_listener_candidates": [],
+          "symbols_or_candidates_note": "In-app UnreadBadge surface: useRoomUnread(room.roomId, roomToUnreadAtom) then UnreadBadge highlight={unread.highlight > 0} count={unread.total} (L265, L374-376). Mark-as-read/unread menu is secondary and must not dominate this FR."
+        },
+        {
+          "path": "synara/src/app/notifications/badgeSummary.ts",
+          "bucket": "utility",
+          "categories": [],
+          "symbols_or_candidates": [
+            "summarizeNotifications",
+            "summarizeBadgeCount",
+            "getBadgeCount"
+          ],
+          "line_refs": [],
+          "model_coupling": [],
+          "behavior_relevant_method_candidates": [],
+          "behavior_relevant_listener_candidates": [],
+          "symbols_or_candidates_note": "Non-P0.1 product pure functions. summarizeNotifications: when unread.highlight !== undefined count highlight path only else total; appBadgeCount=later+highlight+unread; inboxBadgeCount=later+invites+agentApprovals. Unit-tested only."
+        },
+        {
+          "path": "synara/src/app/platform/badge.ts",
+          "bucket": "utility",
+          "categories": [],
+          "symbols_or_candidates": [
+            "setPlatformBadgeCount",
+            "getPlatformNotificationSummary"
+          ],
+          "line_refs": [],
+          "model_coupling": [],
+          "behavior_relevant_method_candidates": [],
+          "behavior_relevant_listener_candidates": [],
+          "symbols_or_candidates_note": "Non-P0.1 platform bridge. getPlatformNotificationSummary wraps summarizeNotifications; setPlatformBadgeCount is setDesktopBadgeCount."
+        },
+        {
+          "path": "synara/src/app/components/unread-badge/UnreadBadge.tsx",
+          "bucket": "component",
+          "categories": [],
+          "symbols_or_candidates": ["UnreadBadge"],
+          "line_refs": [],
+          "model_coupling": [],
+          "behavior_relevant_method_candidates": [],
+          "behavior_relevant_listener_candidates": [],
+          "symbols_or_candidates_note": "Non-P0.1 presentational badge; highlight prop selects Success vs Secondary variant; count is millified when > 0."
+        },
+        {
+          "path": "synara/src/app/state/hooks/unread.ts",
+          "bucket": "state",
+          "categories": [],
+          "symbols_or_candidates": ["useRoomUnread", "useRoomsUnread"],
+          "line_refs": [],
+          "model_coupling": [],
+          "behavior_relevant_method_candidates": [],
+          "behavior_relevant_listener_candidates": [],
+          "symbols_or_candidates_note": "Non-P0.1 selectors over roomToUnreadAtom used by RoomNavItem and space/home roll-up UIs."
         }
       ],
-      "ui_entry_points": ["synara/src/app/features/room-nav/RoomNavItem.tsx"],
+      "ui_entry_points": [
+        "synara/src/app/features/room-nav/RoomNavItem.tsx",
+        "synara/src/app/pages/client/ClientNonUIFeatures.tsx"
+      ],
       "state_owners": [
         {
           "path": "synara/src/app/state/room/roomToUnread.ts",
-          "ownership_evidence": "Identified as coordination/state module for this behavior via path role (state/client/util service) and P0.1 categories/candidates; not merely a presentational component."
+          "ownership_evidence": "Primary unread map owner: roomToUnreadAtom + useBindRoomToUnreadAtom PUT/DELETE of {highlight,total,from} with parent/space roll-up; listeners Timeline/Receipt/MyMembership/AccountData(MarkedUnread); RESET on bind/sync/notification-prefs/SpaceChild."
         },
         {
-          "path": "synara/src/app/utils/notifications.ts",
-          "ownership_evidence": "Identified as coordination/state module for this behavior via path role (state/client/util service) and P0.1 categories/candidates; not merely a presentational component."
+          "path": "synara/src/app/notifications/badgeSummary.ts",
+          "ownership_evidence": "Product pure aggregation: summarizeNotifications produces appBadgeCount vs inboxBadgeCount; summarizeBadgeCount/getBadgeCount wrappers."
+        },
+        {
+          "path": "synara/src/app/platform/badge.ts",
+          "ownership_evidence": "Platform bridge: getPlatformNotificationSummary → summarizeNotifications; setPlatformBadgeCount → setDesktopBadgeCount."
+        },
+        {
+          "path": "synara/src/app/pages/client/ClientNonUIFeatures.tsx",
+          "ownership_evidence": "Platform badge/tray application: PlatformBadgeAndTrayUpdater applies setPlatformBadgeCount(summary.appBadgeCount) and tray state from roomToUnread + later + invites; FaviconUpdater is favicon-only. Not native notification generation."
+        },
+        {
+          "path": "synara/src/app/features/room-nav/RoomNavItem.tsx",
+          "ownership_evidence": "In-app UnreadBadge surface: useRoomUnread + UnreadBadge highlight vs total for each room nav item."
         }
       ],
       "current_js_sdk": {
         "behavior_relevant_method_candidates": [
           {
-            "path": "synara/src/app/features/settings/notifications/AllMessages.tsx",
-            "name": "setPushRuleActions",
-            "line": 67,
-            "category": "notifications_push_rules",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+            "path": "synara/src/app/state/room/roomToUnread.ts",
+            "name": "isSpaceRoom",
+            "line": 219,
+            "category": "spaces",
+            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
+            "relevance_reason": "Timeline unread handler skips space rooms before PUT of room unread {highlight,total}."
           },
           {
-            "path": "synara/src/app/features/settings/notifications/KeywordMessages.tsx",
-            "name": "addPushRule",
-            "line": 30,
-            "category": "notifications_push_rules",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+            "path": "synara/src/app/state/room/roomToUnread.ts",
+            "name": "getUserId",
+            "line": 228,
+            "category": "uia_auth",
+            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
+            "relevance_reason": "Timeline unread handler suppresses self-sent events before recompute via getUnreadInfo."
           },
           {
-            "path": "synara/src/app/features/settings/notifications/KeywordMessages.tsx",
-            "name": "deletePushRule",
-            "line": 114,
-            "category": "notifications_push_rules",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+            "path": "synara/src/app/state/room/roomToUnread.ts",
+            "name": "getUserId",
+            "line": 239,
+            "category": "uia_auth",
+            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
+            "relevance_reason": "Receipt handler identifies own receipts that clear/update room unread."
           },
           {
-            "path": "synara/src/app/features/settings/notifications/KeywordMessages.tsx",
-            "name": "setPushRuleActions",
-            "line": 135,
-            "category": "notifications_push_rules",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+            "path": "synara/src/app/state/room/roomToUnread.ts",
+            "name": "isSpaceRoom",
+            "line": 241,
+            "category": "spaces",
+            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
+            "relevance_reason": "Receipt unread path skips space rooms."
           },
           {
-            "path": "synara/src/app/features/settings/notifications/SpecialMessages.tsx",
-            "name": "setPushRuleActions",
-            "line": 106,
-            "category": "notifications_push_rules",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+            "path": "synara/src/app/state/room/roomToUnread.ts",
+            "name": "isSpaceRoom",
+            "line": 287,
+            "category": "spaces",
+            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
+            "relevance_reason": "Marked-unread AccountData handler ignores spaces."
           },
           {
-            "path": "synara/src/app/utils/notifications.ts",
-            "name": "sendReadReceipt",
-            "line": 402,
-            "category": "receipts",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+            "path": "synara/src/app/utils/room.ts",
+            "name": "getRooms",
+            "line": 261,
+            "category": "room_lists",
+            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
+            "relevance_reason": "getUnreadInfos scans mx.getRooms() to seed roomToUnread RESET with per-room highlight/total."
+          },
+          {
+            "path": "synara/src/app/utils/room.ts",
+            "name": "isSpaceRoom",
+            "line": 262,
+            "category": "spaces",
+            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
+            "relevance_reason": "getUnreadInfos skips space rooms as leaf unread sources."
           }
         ],
         "behavior_relevant_listener_candidates": [
+          {
+            "path": "synara/src/app/state/room/roomToUnread.ts",
+            "event": "RoomEvent.Timeline",
+            "method": "on",
+            "line": 231,
+            "category": "timelines",
+            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
+            "relevance_reason": "Live notifiable timeline events recompute room unread/highlight for nav and platform badge inputs."
+          },
+          {
+            "path": "synara/src/app/state/room/roomToUnread.ts",
+            "event": "RoomEvent.Timeline",
+            "method": "removeListener",
+            "line": 233,
+            "category": "timelines",
+            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
+            "relevance_reason": "Unbinds Timeline unread listener on teardown."
+          },
           {
             "path": "synara/src/app/state/room/roomToUnread.ts",
             "event": "RoomEvent.Receipt",
             "method": "on",
             "line": 257,
             "category": "receipts",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
+            "relevance_reason": "Own receipts clear or refresh room unread for badge maps."
           },
           {
             "path": "synara/src/app/state/room/roomToUnread.ts",
@@ -56844,54 +57018,51 @@
             "method": "removeListener",
             "line": 259,
             "category": "receipts",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
+            "relevance_reason": "Unbinds Receipt unread listener on teardown."
+          },
+          {
+            "path": "synara/src/app/state/room/roomToUnread.ts",
+            "event": "RoomEvent.MyMembership",
+            "method": "on",
+            "line": 279,
+            "category": "room_lists",
+            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
+            "relevance_reason": "Leaving a room DELETEs its unread entry from the badge map."
+          },
+          {
+            "path": "synara/src/app/state/room/roomToUnread.ts",
+            "event": "RoomEvent.MyMembership",
+            "method": "removeListener",
+            "line": 281,
+            "category": "room_lists",
+            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
+            "relevance_reason": "Unbinds MyMembership unread listener on teardown."
+          },
+          {
+            "path": "synara/src/app/state/room/roomToUnread.ts",
+            "event": "RoomEvent.AccountData",
+            "method": "on",
+            "line": 304,
+            "category": "account_data",
+            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
+            "relevance_reason": "m.marked_unread toggles marked-unread badge state."
+          },
+          {
+            "path": "synara/src/app/state/room/roomToUnread.ts",
+            "event": "RoomEvent.AccountData",
+            "method": "removeListener",
+            "line": 306,
+            "category": "account_data",
+            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
+            "relevance_reason": "Unbinds marked-unread AccountData listener on teardown."
           }
         ],
         "all_candidates_in_linked_files": {
-          "method_count": 22,
-          "listener_count": 8,
-          "note": "Unfiltered P0.1 AST candidates across linked production import files. Do not treat these as proven APIs for this requirement; use behavior_relevant_* fields.",
+          "method_count": 25,
+          "listener_count": 14,
+          "note": "Unfiltered P0.1 AST candidates across Matrix-importing linked production files (roomToUnread.ts, utils/room.ts, ClientNonUIFeatures.tsx, RoomNavItem.tsx). Non-import product files (badgeSummary.ts, platform/badge.ts, UnreadBadge.tsx, hooks/unread.ts) contribute no P0.1 AST rows. Do not treat these as proven APIs for this requirement; use behavior_relevant_* fields.",
           "methods_sample": [
-            {
-              "path": "synara/src/app/features/settings/notifications/AllMessages.tsx",
-              "name": "setPushRuleActions",
-              "line": 67
-            },
-            {
-              "path": "synara/src/app/features/settings/notifications/KeywordMessages.tsx",
-              "name": "addPushRule",
-              "line": 30
-            },
-            {
-              "path": "synara/src/app/features/settings/notifications/KeywordMessages.tsx",
-              "name": "deletePushRule",
-              "line": 114
-            },
-            {
-              "path": "synara/src/app/features/settings/notifications/KeywordMessages.tsx",
-              "name": "setPushRuleActions",
-              "line": 135
-            },
-            {
-              "path": "synara/src/app/features/settings/notifications/SpecialMessages.tsx",
-              "name": "setPushRuleActions",
-              "line": 106
-            },
-            {
-              "path": "synara/src/app/features/settings/notifications/SpecialMessages.tsx",
-              "name": "getUserId",
-              "line": 116
-            },
-            {
-              "path": "synara/src/app/pages/client/inbox/Notifications.tsx",
-              "name": "findEventById",
-              "line": 488
-            },
-            {
-              "path": "synara/src/app/pages/client/inbox/Notifications.tsx",
-              "name": "getRoom",
-              "line": 764
-            },
             {
               "path": "synara/src/app/state/room/roomToUnread.ts",
               "name": "isSpaceRoom",
@@ -56918,14 +57089,29 @@
               "line": 287
             },
             {
-              "path": "synara/src/app/utils/notifications.ts",
-              "name": "getAccountData",
-              "line": 71
+              "path": "synara/src/app/utils/room.ts",
+              "name": "getRooms",
+              "line": 261
             },
             {
-              "path": "synara/src/app/utils/notifications.ts",
-              "name": "setAccountData",
-              "line": 77
+              "path": "synara/src/app/utils/room.ts",
+              "name": "isSpaceRoom",
+              "line": 262
+            },
+            {
+              "path": "synara/src/app/utils/room.ts",
+              "name": "getRoomPushRule",
+              "line": 173
+            },
+            {
+              "path": "synara/src/app/features/room-nav/RoomNavItem.tsx",
+              "name": "getSafeUserId",
+              "line": 78
+            },
+            {
+              "path": "synara/src/app/features/room-nav/RoomNavItem.tsx",
+              "name": "getUserId",
+              "line": 267
             }
           ],
           "listeners_sample": [
@@ -56979,7 +57165,7 @@
             }
           ]
         },
-        "models": ["MatrixClient", "MatrixEvent", "Room"],
+        "models": ["MatrixClient", "MatrixEvent", "Room", "EventTimeline", "RoomMember"],
         "network_routes": [],
         "deep_imports": [
           {
@@ -56997,161 +57183,74 @@
             "cutover_disposition": "replace-deep-js-sdk-import-with-synara-dto-or-rust-projection"
           },
           {
-            "path": "synara/src/app/utils/notifications.ts",
-            "module": "matrix-js-sdk/lib/client",
-            "line": 1,
-            "named_imports": ["MatrixClient"],
+            "path": "synara/src/app/utils/room.ts",
+            "module": "matrix-js-sdk/lib/common-crypto/CryptoBackend",
+            "line": null,
+            "named_imports": [],
             "is_type_only": true,
             "linked_requirement_ids": [
-              "FR-7.2-005",
-              "FR-7.2-011",
-              "FR-7.7-003",
+              "FR-7.5-001",
+              "FR-7.5-002",
+              "FR-7.5-007",
+              "FR-7.6-008",
+              "FR-7.8-001",
+              "FR-7.8-002",
               "FR-7.8-004",
-              "FR-7.8-005",
-              "FR-7.8-006",
-              "FR-7.8-007",
-              "FR-7.8-008"
-            ],
-            "cutover_disposition": "replace-deep-js-sdk-import-with-synara-dto-or-rust-projection"
-          },
-          {
-            "path": "synara/src/app/utils/notifications.ts",
-            "module": "matrix-js-sdk/lib/@types/read_receipts",
-            "line": 2,
-            "named_imports": ["ReceiptType"],
-            "is_type_only": false,
-            "linked_requirement_ids": [
-              "FR-7.2-005",
-              "FR-7.2-011",
-              "FR-7.7-003",
-              "FR-7.8-004",
-              "FR-7.8-005",
-              "FR-7.8-006",
-              "FR-7.8-007",
-              "FR-7.8-008"
-            ],
-            "cutover_disposition": "replace-deep-js-sdk-import-with-synara-dto-or-rust-projection"
-          },
-          {
-            "path": "synara/src/app/utils/notifications.ts",
-            "module": "matrix-js-sdk/lib/models/event",
-            "line": 3,
-            "named_imports": ["MatrixEvent"],
-            "is_type_only": true,
-            "linked_requirement_ids": [
-              "FR-7.2-005",
-              "FR-7.2-011",
-              "FR-7.7-003",
-              "FR-7.8-004",
-              "FR-7.8-005",
-              "FR-7.8-006",
-              "FR-7.8-007",
-              "FR-7.8-008"
-            ],
-            "cutover_disposition": "replace-deep-js-sdk-import-with-synara-dto-or-rust-projection"
-          },
-          {
-            "path": "synara/src/app/utils/notifications.ts",
-            "module": "matrix-js-sdk/lib/models/room",
-            "line": 4,
-            "named_imports": ["Room"],
-            "is_type_only": true,
-            "linked_requirement_ids": [
-              "FR-7.2-005",
-              "FR-7.2-011",
-              "FR-7.7-003",
-              "FR-7.8-004",
-              "FR-7.8-005",
-              "FR-7.8-006",
-              "FR-7.8-007",
-              "FR-7.8-008"
-            ],
-            "cutover_disposition": "replace-deep-js-sdk-import-with-synara-dto-or-rust-projection"
-          },
-          {
-            "path": "synara/src/app/utils/notifications.ts",
-            "module": "matrix-js-sdk/lib/@types/event",
-            "line": 5,
-            "named_imports": ["EventType"],
-            "is_type_only": false,
-            "linked_requirement_ids": [
-              "FR-7.2-005",
-              "FR-7.2-011",
-              "FR-7.7-003",
-              "FR-7.8-004",
-              "FR-7.8-005",
-              "FR-7.8-006",
-              "FR-7.8-007",
-              "FR-7.8-008"
+              "FR-7.8-005"
             ],
             "cutover_disposition": "replace-deep-js-sdk-import-with-synara-dto-or-rust-projection"
           }
         ],
         "method_candidates": [
-          "setPushRuleActions",
-          "addPushRule",
-          "deletePushRule",
-          "setPushRuleActions",
-          "setPushRuleActions",
-          "sendReadReceipt"
+          "isSpaceRoom",
+          "getUserId",
+          "getUserId",
+          "isSpaceRoom",
+          "isSpaceRoom",
+          "getRooms",
+          "isSpaceRoom"
         ],
-        "listener_events": ["RoomEvent.Receipt"]
+        "listener_events": [
+          "RoomEvent.Timeline",
+          "RoomEvent.Receipt",
+          "RoomEvent.MyMembership",
+          "RoomEvent.AccountData"
+        ]
       },
       "current_behavior_and_limits": {
-        "summary": "Current desktop implements this via 8 production matrix-js-sdk-related file(s); status=implemented.",
-        "notes": null,
-        "limits": "P0.1 method candidates are AST name hits, not type-checked receiver proofs."
+        "summary": "Current desktop implements correct unread/badge summaries via roomToUnreadAtom + badgeSummary aggregation + RoomNavItem UnreadBadge + PlatformBadgeAndTrayUpdater platform badge/tray; status=implemented.",
+        "notes": "Evidence (conservative): (1) Room unread state owner synara/src/app/state/room/roomToUnread.ts: roomToUnreadAtom + useBindRoomToUnreadAtom; PUT/DELETE of {highlight,total,from} via getUnreadInfo/getUnreadInfos; putUnreadInfo/deleteUnreadInfo parent/space roll-up; listeners RoomEvent.Timeline on/remove L231/233 (recompute, skip spaces/mute/self), RoomEvent.Receipt L257/259 with shouldKeepRoomUnreadAfterReceipt (L124-129), RoomEvent.MyMembership L279/281 (leave DELETE), RoomEvent.AccountData for AccountDataEvent.MarkedUnread L304/306; RESET on bind L186-191, sync prepared/syncing L193-209, notification prefs L263-268, SpaceChild L310-323. (2) Badge aggregation pure functions synara/src/app/notifications/badgeSummary.ts: summarizeNotifications — when unread.highlight !== undefined add clamp(highlight) only (skip total for that entry), else add clamp(total); appBadgeCount = laterActiveCount + highlightCount + unreadCount; inboxBadgeCount = laterActiveCount + inviteCount + agentApprovalCount; summarizeBadgeCount/getBadgeCount wrappers; existing unit tests badgeSummary.test.ts only (not E2E UI/platform). Production roomToUnread values always include highlight so platform path typically sums highlights+later into appBadgeCount; nav still shows count=total. (3) Platform badge + tray application synara/src/app/pages/client/ClientNonUIFeatures.tsx PlatformBadgeAndTrayUpdater L262-291: getPlatformNotificationSummary({ unreadCounts: roomToUnread.values(), laterActiveCount, inviteCount }) then setPlatformBadgeCount(summary.appBadgeCount) and setPlatformTrayState(unreadCount/highlightCount/laterCount/notificationInboxCount/doNotDisturb); FaviconUpdater L223-245 uses roomToUnread total/highlight for favicon only. This is badge/summary application, not native OS notification generation (FR-7.8-004). Bridge: synara/src/app/platform/badge.ts. (4) In-app UnreadBadge UI synara/src/app/features/room-nav/RoomNavItem.tsx: useRoomUnread(room.roomId, roomToUnreadAtom) L265; UnreadBadge highlight={unread.highlight > 0} count={unread.total} L374-376; mark-as-read/unread is secondary. (5) Secondary helpers: getUnreadInfo/getUnreadInfos in synara/src/app/utils/room.ts L250-273; useRoomUnread in synara/src/app/state/hooks/unread.ts; UnreadBadge presentational component. (6) Explicit non-evidence: push-rule preference surfaces AllMessages/KeywordMessages/SpecialMessages/NotificationModeSwitcher; SystemNotification enablement; native generation InviteNotifications/MessageNotifications; sendReadReceipt-as-badge-owner; utils/notifications.ts inbox/list/receipt helpers; SC-057 alone. Existing badgeSummary unit tests and roomToUnread receipt-helper unit tests are not E2E badge/tray AT.",
+        "limits": "P0.1 method/listener candidates are AST name hits, not type-checked receiver proofs. Do not count generic SC-057 alone, compile-only blocked states, raw HTTP, push-rule settings UI, native notification generation, sendReadReceipt, or helper/fixture-only as closing unread/badge summaries. Cutover P9.3/P4.3 must preserve the same observables via Rust-owned unread/highlight + product badge aggregation / IPC badge DTO; SC IDs alone, raw /_matrix HTTP, push-rule settings UI, native gen path, and helper-only fail."
       },
       "p0_1_linkage": {
-        "categories": ["room_lists", "receipts"],
+        "categories": [
+          "room_lists",
+          "receipts",
+          "timelines",
+          "account_data",
+          "spaces",
+          "event_emitters_listeners"
+        ],
         "file_ledger_paths": [
-          "synara/src/app/features/settings/notifications/AllMessages.tsx",
-          "synara/src/app/features/settings/notifications/KeywordMessages.tsx",
-          "synara/src/app/features/settings/notifications/NotificationModeSwitcher.tsx",
-          "synara/src/app/features/settings/notifications/SpecialMessages.tsx",
-          "synara/src/app/features/settings/notifications/SystemNotification.tsx",
-          "synara/src/app/pages/client/inbox/Notifications.tsx",
           "synara/src/app/state/room/roomToUnread.ts",
-          "synara/src/app/utils/notifications.ts"
+          "synara/src/app/utils/room.ts",
+          "synara/src/app/pages/client/ClientNonUIFeatures.tsx",
+          "synara/src/app/features/room-nav/RoomNavItem.tsx"
         ]
       },
       "rust_target": {
-        "support_conclusion": "compile-shape-only-blocked-for-product",
-        "capability_ids": ["SC-057"],
+        "support_conclusion": "product-desktop-bridge-with-sdk-rules",
+        "capability_ids": [],
         "gap_ids": [],
-        "capabilities": [
-          {
-            "capability_id": "SC-057",
-            "api_path": "matrix_sdk::notification_settings::NotificationSettings",
-            "required_features": {
-              "requested_direct": [],
-              "resolved_on_matrix_sdk": ["e2e-encryption"],
-              "resolved_on_matrix_sdk_ui": [],
-              "notes": "e2e-encryption only via matrix-sdk-ui unification; not a direct request."
-            },
-            "final_state": "blocked",
-            "final": {
-              "final_state": "blocked",
-              "final_state_rationale": "E1+E2 present (stable API + compile probe). E3 semantic test, E4 live Synapse, and E5 UI acceptance are not present in P0.3; compile-only evidence is not product confirmation.",
-              "missing_gates": [
-                "semantic_or_integration_test",
-                "live_synapse_two_client",
-                "ui_acceptance"
-              ],
-              "section_5_evidence_present": ["E1", "E2"]
-            },
-            "source_url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/notification_settings/mod.rs#L81",
-            "p0_3b_evidence_status": "stable-api-probed",
-            "p0_3b_probe_id": "P0.3b-notification-settings-type",
-            "plan_section_7_area": "7.8-notifications"
-          }
-        ],
+        "capabilities": [],
         "gaps": [],
-        "notes": "Mappings use only accepted P0.3 capability/gap IDs. Compile probes establish API shape only; final dossier states remain blocked/typed/upstream until E3–E5 gates exist.",
+        "notes": "No accepted P0.3 SC is badge aggregation. Badge math (summarizeNotifications appBadgeCount/inboxBadgeCount) and platform application (setPlatformBadgeCount / tray) are product-owned over any SDK per-room unread/highlight counts. SC-057 NotificationSettings is push-rule/settings only and never passes as badge summarization — do not map this FR to SC-057 as primary. Per-room highlight/total inputs may come from Rust-owned room/unread projections under P4.3/P9.3 plus an IPC badge DTO; do not invent unread-count SC IDs. Compile-only blocked states, raw HTTP, push-rule UI, native gen, or helper-only never pass.",
         "distinctions_preserved": [
           "server typed search (SC-071) vs experimental local search (SC-072)",
           "widget plumbing (SC-082/GAP widget) vs call parity (membership write/key session gaps)",
-          "compile shape (E1/E2) vs runtime/UI parity (E3–E5 missing => blocked)"
+          "compile shape (E1/E2) vs runtime/UI parity (E3–E5 missing => blocked)",
+          "SC-057 push-rule/settings API vs product-owned badge aggregation and platform badge/tray application",
+          "native notification generation (FR-7.8-004) vs unread/badge summaries (FR-7.8-005)"
         ]
       },
       "implementation_tasks": [
@@ -57172,7 +57271,12 @@
         "existing": [
           {
             "path": "synara/src/app/notifications/__tests__/badgeSummary.test.ts",
-            "evidence": "badge summary unit coverage",
+            "evidence": "summarizeNotifications/summarizeBadgeCount/getBadgeCount unit coverage only (app vs inbox formulas, clamps); not E2E RoomNavItem or platform badge/tray",
+            "status": "existing-verified-path"
+          },
+          {
+            "path": "synara/src/app/state/room/__tests__/roomToUnread.test.ts",
+            "evidence": "shouldKeepRoomUnreadAfterReceipt unit cases only (live-tail clear vs marked-unread keep); not full map/listener integration",
             "status": "existing-verified-path"
           }
         ],
@@ -57184,33 +57288,45 @@
             "task_id": "P9.3",
             "phase": "Phase 9 — Notifications, push semantics, and deep links",
             "level": "integration",
-            "scenario": "7.8/FR-7.8-005: exercise 'correct unread/badge summaries;' via owner `synara/src/app/state/room/roomToUnread.ts` and UI `synara/src/app/features/room-nav/RoomNavItem.tsx`, then confirm Rust/IPC cutover task `P9.3` preserves observable behavior without raw Matrix runtime HTTP.",
+            "scenario": "Integration against disposable Synapse: roomToUnread map updates on timeline/receipt/membership/marked-unread with highlight vs total and parent/space roll-up; RoomNavItem UnreadBadge reflects highlight vs total; platform app badge/tray matches summarizeNotifications (later/invites as product applies) including independent highlight-only, total-only, later, invites, and clamp cases. After cutover P9.3/P4.3, same observables via Rust-owned unread/highlight + product badge aggregation / IPC badge DTO. No raw /_matrix HTTP; SC-057 alone fails; push-rule settings UI / native generation path / helper-only cannot substitute.",
             "preconditions": [
-              "Desktop app with notification permission granted (OS)",
-              "Rooms with distinct push-rule modes; backgrounded window fixture",
-              "Linked owner path present in tree: synara/src/app/state/room/roomToUnread.ts",
-              "Primary UI/lifecycle surface: synara/src/app/features/room-nav/RoomNavItem.tsx"
+              "Disposable Synapse; desktop app with platform badge/tray path available.",
+              "Named unread owner: synara/src/app/state/room/roomToUnread.ts (roomToUnreadAtom / useBindRoomToUnreadAtom).",
+              "Named UI: RoomNavItem UnreadBadge; ClientNonUIFeatures PlatformBadgeAndTrayUpdater / FaviconUpdater.",
+              "Named aggregation: badgeSummary.summarizeNotifications / platform getPlatformNotificationSummary + setPlatformBadgeCount.",
+              "Fixtures for highlight-bearing rooms, total-only (or highlight:0) rooms, later items, invites, parent/space hierarchy, leave/membership, marked-unread."
             ],
             "trigger_actions": [
-              "Boot the appropriate harness for level=integration against disposable Synapse (or iOS notes if any).",
-              "Establish fixtures required by the clause list: correct unread/badge summaries.",
-              "Open UI/lifecycle surface `synara/src/app/features/room-nav/RoomNavItem.tsx` (or follow ui_entry_points_rationale if no dedicated UI).",
-              "Step 1: perform the product action that implements «correct unread/badge summaries» using current owner `synara/src/app/state/room/roomToUnread.ts`."
+              "Boot the integration harness against disposable Synapse. Do not use fixture-only mocks that bypass product unread map, push-rule settings UI alone, native notification generation paths, alternate UI, helper-only harnesses, or raw HTTP.",
+              "ROOM MAP: inject live notifiable timeline events, own receipts (clear vs shouldKeepRoomUnreadAfterReceipt / marked-unread), leave membership, and m.marked_unread account data. Assert roomToUnread PUT/DELETE of {highlight,total,from} with parent/space roll-up when applicable.",
+              "NAV BADGE: open RoomNavItem for rooms with distinct highlight vs total; assert UnreadBadge highlight={highlight>0} and count={total}.",
+              "PLATFORM: with roomToUnread values + laterActiveCount + inviteCount, assert getPlatformNotificationSummary/setPlatformBadgeCount/tray match summarizeNotifications formulas (appBadgeCount vs inboxBadgeCount) including later and invites as product applies.",
+              "INDEPENDENT CASES: highlight-only rooms, total-only / highlight-undefined sources, later items, invites, and clamp/negative/fractional inputs; one case does not substitute for another.",
+              "After cutover tasks P9.3 and/or P4.3, repeat the same room-map, nav, and platform observables via Rust-owned unread/highlight + product badge aggregation / IPC badge DTO. Citing SC-057 alone, compile-only blocked states, raw /_matrix HTTP, push-rule settings UI (AllMessages/Keyword/Special/NotificationModeSwitcher), SystemNotification enablement, native generation (FR-7.8-004), sendReadReceipt-as-badge-owner, or helper/fixture-only is a FAIL."
             ],
             "assertions": [
-              "Each clause is observable: «correct unread/badge summaries».",
-              "State coordination remains through `synara/src/app/state/room/roomToUnread.ts` (or its Rust/IPC successor after cutover), not ad-hoc dual writers.",
-              "Behavior-relevant current JS method candidates exercised or replaced: setPushRuleActions, addPushRule, deletePushRule, setPushRuleActions, setPushRuleActions, sendReadReceipt (AST candidates; not type-proven receivers).",
-              "Behavior-relevant listener candidates observed or replaced: on:RoomEvent.Receipt, removeListener:RoomEvent.Receipt.",
-              "Rust mapping remains conservative: caps=[SC-057] gaps=[none]; compile-only blocked states are not treated as runtime pass.",
-              "No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless dossier marks that exact behavior typed-sdk-request-required."
+              "ROOM MAP: roomToUnread updates on timeline/receipt/membership/marked-unread with highlight vs total and parent/space roll-up correctness when product does roll-up.",
+              "NAV: RoomNavItem UnreadBadge reflects highlight vs total from useRoomUnread/roomToUnreadAtom.",
+              "PLATFORM: app badge and tray summary match summarizeNotifications including later/invites as product applies; distinct from native notification generation.",
+              "INDEPENDENT: highlight-only, total-only, later, invites, and clamp cases each pass; one does not substitute for another.",
+              "Rust/IPC cutover preserves same observables via Rust-owned unread/highlight + product badge aggregation / IPC badge DTO; SC-057 alone is rules/settings only and never passes as badge summarization; raw HTTP, push-rule UI, native gen, helper-only never pass.",
+              "No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless the dossier marks that exact behavior typed-sdk-request-required."
             ],
             "required_environment": [
-              "Desktop app with notification permission granted (OS)",
-              "Rooms with distinct push-rule modes; backgrounded window fixture"
+              "Disposable Synapse",
+              "Desktop app with platform badge/tray path",
+              "Rooms with highlight vs total distinction; later and invite fixtures; space parent hierarchy optional but required if roll-up is asserted"
             ],
             "does_not_currently_exist": true,
-            "clause_breakdown": ["correct unread/badge summaries"]
+            "clause_breakdown": [
+              "room unread map (timeline/receipt/membership/marked-unread; highlight vs total)",
+              "parent/space roll-up",
+              "RoomNavItem UnreadBadge highlight vs total",
+              "platform app badge / tray summarizeNotifications (later/invites)",
+              "independent highlight-only / total-only / later / invites / clamps",
+              "cutover Rust-owned unread/highlight + IPC badge DTO (no SC-057-only / raw HTTP / push-rule UI / native gen / helper-only)"
+            ],
+            "test_target": "roomToUnread + badgeSummary + RoomNavItem UnreadBadge + PlatformBadgeAndTrayUpdater/setPlatformBadgeCount; post-cutover Rust-owned unread/highlight + product badge aggregation / IPC badge DTO (P9.3/P4.3)"
           }
         ]
       },
@@ -78289,7 +78405,7 @@
       "constructor_candidates": [],
       "import_modules": ["matrix-js-sdk"],
       "classification": "requirement-linked",
-      "linked_requirement_ids": ["FR-7.2-004", "FR-7.2-005"],
+      "linked_requirement_ids": ["FR-7.2-004", "FR-7.2-005", "FR-7.8-005"],
       "rationale": null,
       "p0_1_role": "production",
       "desktop_runtime": true,
@@ -80313,7 +80429,6 @@
         "FR-7.7-007",
         "FR-7.8-001",
         "FR-7.8-003",
-        "FR-7.8-005",
         "FR-7.8-006",
         "FR-7.8-007",
         "FR-7.8-008"
@@ -80406,7 +80521,6 @@
         "FR-7.7-007",
         "FR-7.8-001",
         "FR-7.8-003",
-        "FR-7.8-005",
         "FR-7.8-006",
         "FR-7.8-007",
         "FR-7.8-008"
@@ -80460,7 +80574,6 @@
         "FR-7.7-007",
         "FR-7.8-001",
         "FR-7.8-002",
-        "FR-7.8-005",
         "FR-7.8-006",
         "FR-7.8-007",
         "FR-7.8-008"
@@ -80526,7 +80639,6 @@
         "FR-7.7-007",
         "FR-7.8-001",
         "FR-7.8-003",
-        "FR-7.8-005",
         "FR-7.8-006",
         "FR-7.8-007",
         "FR-7.8-008"
@@ -80584,7 +80696,6 @@
         "FR-7.7-003",
         "FR-7.7-007",
         "FR-7.8-004",
-        "FR-7.8-005",
         "FR-7.8-006",
         "FR-7.8-007",
         "FR-7.8-008"
@@ -84945,7 +85056,13 @@
       "constructor_candidates": [],
       "import_modules": ["matrix-js-sdk"],
       "classification": "requirement-linked",
-      "linked_requirement_ids": ["FR-7.8-004", "FR-7.8-007", "FR-7.11-005", "FR-7.4-006"],
+      "linked_requirement_ids": [
+        "FR-7.8-004",
+        "FR-7.8-005",
+        "FR-7.8-007",
+        "FR-7.11-005",
+        "FR-7.4-006"
+      ],
       "rationale": null,
       "p0_1_role": "production",
       "desktop_runtime": true,
@@ -85332,7 +85449,6 @@
         "FR-7.2-005",
         "FR-7.2-011",
         "FR-7.7-003",
-        "FR-7.8-005",
         "FR-7.8-006",
         "FR-7.8-007",
         "FR-7.8-008"
@@ -88024,7 +88140,6 @@
         "FR-7.2-005",
         "FR-7.2-011",
         "FR-7.7-003",
-        "FR-7.8-005",
         "FR-7.8-006",
         "FR-7.8-007",
         "FR-7.8-008"
@@ -88288,7 +88403,8 @@
         "FR-7.6-008",
         "FR-7.8-001",
         "FR-7.8-002",
-        "FR-7.8-004"
+        "FR-7.8-004",
+        "FR-7.8-005"
       ],
       "rationale": null,
       "p0_1_role": "production",
@@ -92535,7 +92651,7 @@
         "id": "ET-FR-7.8-005-01",
         "requirement_id": "FR-7.8-005",
         "path": "synara/src/app/notifications/__tests__/badgeSummary.test.ts",
-        "evidence": "badge summary unit coverage",
+        "evidence": "summarizeNotifications/summarizeBadgeCount/getBadgeCount unit coverage only (app vs inbox formulas, clamps); not E2E RoomNavItem or platform badge/tray",
         "cases": null,
         "kind": "existing",
         "status": "existing-verified-path"
@@ -94909,33 +95025,45 @@
         "task_id": "P9.3",
         "phase": "Phase 9 — Notifications, push semantics, and deep links",
         "level": "integration",
-        "scenario": "7.8/FR-7.8-005: exercise 'correct unread/badge summaries;' via owner `synara/src/app/state/room/roomToUnread.ts` and UI `synara/src/app/features/room-nav/RoomNavItem.tsx`, then confirm Rust/IPC cutover task `P9.3` preserves observable behavior without raw Matrix runtime HTTP.",
+        "scenario": "Integration against disposable Synapse: roomToUnread map updates on timeline/receipt/membership/marked-unread with highlight vs total and parent/space roll-up; RoomNavItem UnreadBadge reflects highlight vs total; platform app badge/tray matches summarizeNotifications (later/invites as product applies) including independent highlight-only, total-only, later, invites, and clamp cases. After cutover P9.3/P4.3, same observables via Rust-owned unread/highlight + product badge aggregation / IPC badge DTO. No raw /_matrix HTTP; SC-057 alone fails; push-rule settings UI / native generation path / helper-only cannot substitute.",
         "preconditions": [
-          "Desktop app with notification permission granted (OS)",
-          "Rooms with distinct push-rule modes; backgrounded window fixture",
-          "Linked owner path present in tree: synara/src/app/state/room/roomToUnread.ts",
-          "Primary UI/lifecycle surface: synara/src/app/features/room-nav/RoomNavItem.tsx"
+          "Disposable Synapse; desktop app with platform badge/tray path available.",
+          "Named unread owner: synara/src/app/state/room/roomToUnread.ts (roomToUnreadAtom / useBindRoomToUnreadAtom).",
+          "Named UI: RoomNavItem UnreadBadge; ClientNonUIFeatures PlatformBadgeAndTrayUpdater / FaviconUpdater.",
+          "Named aggregation: badgeSummary.summarizeNotifications / platform getPlatformNotificationSummary + setPlatformBadgeCount.",
+          "Fixtures for highlight-bearing rooms, total-only (or highlight:0) rooms, later items, invites, parent/space hierarchy, leave/membership, marked-unread."
         ],
         "trigger_actions": [
-          "Boot the appropriate harness for level=integration against disposable Synapse (or iOS notes if any).",
-          "Establish fixtures required by the clause list: correct unread/badge summaries.",
-          "Open UI/lifecycle surface `synara/src/app/features/room-nav/RoomNavItem.tsx` (or follow ui_entry_points_rationale if no dedicated UI).",
-          "Step 1: perform the product action that implements «correct unread/badge summaries» using current owner `synara/src/app/state/room/roomToUnread.ts`."
+          "Boot the integration harness against disposable Synapse. Do not use fixture-only mocks that bypass product unread map, push-rule settings UI alone, native notification generation paths, alternate UI, helper-only harnesses, or raw HTTP.",
+          "ROOM MAP: inject live notifiable timeline events, own receipts (clear vs shouldKeepRoomUnreadAfterReceipt / marked-unread), leave membership, and m.marked_unread account data. Assert roomToUnread PUT/DELETE of {highlight,total,from} with parent/space roll-up when applicable.",
+          "NAV BADGE: open RoomNavItem for rooms with distinct highlight vs total; assert UnreadBadge highlight={highlight>0} and count={total}.",
+          "PLATFORM: with roomToUnread values + laterActiveCount + inviteCount, assert getPlatformNotificationSummary/setPlatformBadgeCount/tray match summarizeNotifications formulas (appBadgeCount vs inboxBadgeCount) including later and invites as product applies.",
+          "INDEPENDENT CASES: highlight-only rooms, total-only / highlight-undefined sources, later items, invites, and clamp/negative/fractional inputs; one case does not substitute for another.",
+          "After cutover tasks P9.3 and/or P4.3, repeat the same room-map, nav, and platform observables via Rust-owned unread/highlight + product badge aggregation / IPC badge DTO. Citing SC-057 alone, compile-only blocked states, raw /_matrix HTTP, push-rule settings UI (AllMessages/Keyword/Special/NotificationModeSwitcher), SystemNotification enablement, native generation (FR-7.8-004), sendReadReceipt-as-badge-owner, or helper/fixture-only is a FAIL."
         ],
         "assertions": [
-          "Each clause is observable: «correct unread/badge summaries».",
-          "State coordination remains through `synara/src/app/state/room/roomToUnread.ts` (or its Rust/IPC successor after cutover), not ad-hoc dual writers.",
-          "Behavior-relevant current JS method candidates exercised or replaced: setPushRuleActions, addPushRule, deletePushRule, setPushRuleActions, setPushRuleActions, sendReadReceipt (AST candidates; not type-proven receivers).",
-          "Behavior-relevant listener candidates observed or replaced: on:RoomEvent.Receipt, removeListener:RoomEvent.Receipt.",
-          "Rust mapping remains conservative: caps=[SC-057] gaps=[none]; compile-only blocked states are not treated as runtime pass.",
-          "No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless dossier marks that exact behavior typed-sdk-request-required."
+          "ROOM MAP: roomToUnread updates on timeline/receipt/membership/marked-unread with highlight vs total and parent/space roll-up correctness when product does roll-up.",
+          "NAV: RoomNavItem UnreadBadge reflects highlight vs total from useRoomUnread/roomToUnreadAtom.",
+          "PLATFORM: app badge and tray summary match summarizeNotifications including later/invites as product applies; distinct from native notification generation.",
+          "INDEPENDENT: highlight-only, total-only, later, invites, and clamp cases each pass; one does not substitute for another.",
+          "Rust/IPC cutover preserves same observables via Rust-owned unread/highlight + product badge aggregation / IPC badge DTO; SC-057 alone is rules/settings only and never passes as badge summarization; raw HTTP, push-rule UI, native gen, helper-only never pass.",
+          "No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless the dossier marks that exact behavior typed-sdk-request-required."
         ],
         "required_environment": [
-          "Desktop app with notification permission granted (OS)",
-          "Rooms with distinct push-rule modes; backgrounded window fixture"
+          "Disposable Synapse",
+          "Desktop app with platform badge/tray path",
+          "Rooms with highlight vs total distinction; later and invite fixtures; space parent hierarchy optional but required if roll-up is asserted"
         ],
         "does_not_currently_exist": true,
-        "clause_breakdown": ["correct unread/badge summaries"]
+        "clause_breakdown": [
+          "room unread map (timeline/receipt/membership/marked-unread; highlight vs total)",
+          "parent/space roll-up",
+          "RoomNavItem UnreadBadge highlight vs total",
+          "platform app badge / tray summarizeNotifications (later/invites)",
+          "independent highlight-only / total-only / later / invites / clamps",
+          "cutover Rust-owned unread/highlight + IPC badge DTO (no SC-057-only / raw HTTP / push-rule UI / native gen / helper-only)"
+        ],
+        "test_target": "roomToUnread + badgeSummary + RoomNavItem UnreadBadge + PlatformBadgeAndTrayUpdater/setPlatformBadgeCount; post-cutover Rust-owned unread/highlight + product badge aggregation / IPC badge DTO (P9.3/P4.3)"
       },
       {
         "id": "AT-FR-7.8-006-001",
@@ -98115,23 +98243,35 @@
       "requirement_id": "FR-7.8-005",
       "platforms": ["macOS", "Linux"],
       "preconditions": [
-        "Desktop app with notification permission granted (OS)",
-        "Rooms with distinct push-rule modes; backgrounded window fixture",
-        "State owner available: synara/src/app/state/room/roomToUnread.ts",
-        "UI/lifecycle: synara/src/app/features/room-nav/RoomNavItem.tsx",
+        "Disposable Synapse; desktop app with platform badge/tray path available.",
+        "Named unread owner: roomToUnreadAtom / useBindRoomToUnreadAtom in synara/src/app/state/room/roomToUnread.ts.",
+        "Named UI: RoomNavItem UnreadBadge; ClientNonUIFeatures PlatformBadgeAndTrayUpdater.",
+        "Named aggregation: badgeSummary.summarizeNotifications; getPlatformNotificationSummary / setPlatformBadgeCount.",
         "Current status baseline: implemented"
       ],
       "actions": [
-        "Launch Synara desktop on the target platform against disposable Synapse; use a clean or known fixture profile as required by «correct unread/badge summaries;».",
-        "Identify state owner `synara/src/app/state/room/roomToUnread.ts` and open `synara/src/app/features/room-nav/RoomNavItem.tsx`.",
-        "Action 1 — «correct unread/badge summaries»: perform the minimal user/system steps that trigger this clause (use linked files under current_production_files if the entry point is indirect)."
+        "Launch Synara desktop against disposable Synapse with rooms that can produce highlight vs total unreads, later items, and invites.",
+        "ROOM MAP — receive live notifiable messages while not in the room; mark as read; leave a room; toggle marked-unread. Observe room nav badges and parent/space roll-up if applicable.",
+        "NAV BADGE — confirm RoomNavItem UnreadBadge uses highlight styling when highlight>0 and displays total count.",
+        "PLATFORM — observe OS/desktop app badge and tray counts track room unreads + later + invites per product summarizeNotifications formulas.",
+        "INDEPENDENT — exercise highlight-only rooms, non-highlight totals (as product supplies), later items, invites, and zero/clear cases.",
+        "After cutover P9.3/P4.3, repeat the same observables via Rust-owned unread/highlight + IPC badge DTO without raw /_matrix HTTP."
       ],
       "expected_results": [
-        "All clauses under «correct unread/badge summaries;» produce the user-visible or system-observable success criteria without error toasts unrelated to intentional negative tests.",
-        "Clause 1 «correct unread/badge summaries» is satisfied on macOS, Linux with owner `synara/src/app/state/room/roomToUnread.ts`.",
+        "Room unread map drives highlight vs total badges correctly on timeline/receipt/membership/marked-unread and parent roll-up when product does it.",
+        "RoomNavItem UnreadBadge reflects highlight vs total.",
+        "Platform app badge/tray matches summarizeNotifications (appBadgeCount vs inboxBadgeCount) including later/invites as product applies.",
+        "Push-rule settings UI, SystemNotification enablement, native notification generation, sendReadReceipt-as-badge-owner, helper/fixture-only, and generic SC-057 alone do not satisfy this FR.",
         "No unexpected raw /_matrix traffic from the app renderer for this flow on the post-cutover build."
       ],
-      "clause_breakdown": ["correct unread/badge summaries"]
+      "clause_breakdown": [
+        "room unread map (timeline/receipt/membership/marked-unread; highlight vs total)",
+        "parent/space roll-up",
+        "RoomNavItem UnreadBadge highlight vs total",
+        "platform app badge / tray summarizeNotifications (later/invites)",
+        "independent highlight-only / total-only / later / invites / clamps",
+        "cutover Rust-owned unread/highlight + IPC badge DTO"
+      ]
     },
     {
       "id": "MA-FR-7.8-006",
@@ -100330,6 +100470,17 @@
         "FR-7.8-004: current_status remains implemented. current_behavior_and_limits documents concrete SystemNotification enablement (Desktop Notifications permission + showNotifications; Notification Sound adjacent) and ClientNonUIFeatures generation: InviteNotifications (Invitation via showPlatformNotification/window.Notification on invite-count increase while SYNCING), MessageNotifications (RoomEvent.Timeline gates + showPlatformNotification with title/body/route), plus AgentApprovalNotifications/LaterReminderNotifications as additional native emitters. Platform bridge normalizeSystemNotificationRequest / showPlatformNotification documented. PlatformBadgeAndTrayUpdater/favicon explicitly not generation. Push-rule preference surfaces removed as primary owners/files.",
         "FR-7.8-004: retargeted behavior_relevant methods/listeners to getSyncState, isSpaceRoom, getUserId, findEventById, getRoomPushRule, RoomEvent.Timeline on MessageNotifications. Planned AT/MA require enablement, message path, invite path, independent suppression cases, and P9.2 cutover via Rust-owned notification candidate stream + desktop bridge. SC-057 alone, raw HTTP, push-rule settings UI, helper/fixture-only, badge/tray never pass. Existing tests reclassified as normalize-only / helper-only.",
         "Top-level automated_test_catalog AT-FR-7.8-004-001 is byte-identical to the requirement planned entry; manual_acceptance_catalog MA-FR-7.8-004 updated. file_coverage_ledger: removed FR-7.8-004 from AllMessages/KeywordMessages/SpecialMessages/NotificationModeSwitcher/inbox Notifications/utils/notifications; added FR-7.8-004 to ClientNonUIFeatures and utils/room.ts; SystemNotification retains FR-7.8-004. Status distribution unchanged (implemented 96, partial 22). Accepted corrections through FR-7.8-003 preserved. JSON and Markdown synchronized."
+      ]
+    },
+    {
+      "id": "p0.2-correct-23-fr-7.8-005-unread-badge-summaries",
+      "scope": "Rejected-review limited correction: FR-7.8-005 only — retarget correct unread/badge summaries from wrong push-rule preference linkage to roomToUnreadAtom + badgeSummary aggregation + RoomNavItem UnreadBadge + PlatformBadgeAndTrayUpdater/setPlatformBadgeCount; remove AllMessages/Keyword/Special/NotificationModeSwitcher/SystemNotification/inbox Notifications/utils/notifications as primary; rewrite planned AT/MA for room map/nav/platform/independent cases and P9.3/P4.3 Rust-owned unread/highlight + IPC badge DTO cutover; SC-057 is not badge aggregation",
+      "requirements_rewritten": ["FR-7.8-005"],
+      "not_claimed_complete": true,
+      "changes": [
+        "FR-7.8-005: current_status remains implemented. current_behavior_and_limits documents roomToUnreadAtom/useBindRoomToUnreadAtom PUT/DELETE with parent/space roll-up and listeners Timeline/Receipt/MyMembership/AccountData(MarkedUnread); badgeSummary summarizeNotifications appBadgeCount vs inboxBadgeCount formulas; RoomNavItem UnreadBadge highlight vs total; PlatformBadgeAndTrayUpdater getPlatformNotificationSummary/setPlatformBadgeCount/tray (not native generation). Push-rule preference surfaces and sendReadReceipt removed as primary owners/files.",
+        "FR-7.8-005: retargeted behavior_relevant methods/listeners to isSpaceRoom/getUserId on roomToUnread and getRooms/isSpaceRoom on getUnreadInfos; listeners Timeline/Receipt/MyMembership/AccountData. Planned AT/MA require room map, nav badge, platform summary, independent highlight/total/later/invites/clamps, and P9.3/P4.3 cutover via Rust-owned unread/highlight + product badge aggregation / IPC badge DTO. SC-057 alone, raw HTTP, push-rule UI, native gen, helper-only never pass. Existing tests reclassified as unit-only.",
+        "Top-level automated_test_catalog AT-FR-7.8-005-001 is byte-identical to the requirement planned entry; manual_acceptance_catalog MA-FR-7.8-005 updated. file_coverage_ledger: removed FR-7.8-005 from AllMessages/KeywordMessages/SpecialMessages/NotificationModeSwitcher/SystemNotification/inbox Notifications/utils/notifications; added FR-7.8-005 to ClientNonUIFeatures, RoomNavItem, utils/room.ts; roomToUnread retains FR-7.8-005. Status distribution unchanged (implemented 96, partial 22). Accepted corrections through FR-7.8-004 preserved. JSON and Markdown synchronized."
       ]
     }
   ]

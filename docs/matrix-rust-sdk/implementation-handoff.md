@@ -31,8 +31,12 @@ without explicit user approval.
 - Working branch: `matrix-rust/p0.2-parity-traceability` (tracks origin; no open P0.2 PR yet)
 - Ancestry: integration is ancestor of P0.2 branch
 - Checkpoint commits: `06d0f86` (traceability scaffold), `9c91e0f` (handoff)
-- **Accepted this session:** FR-7.8-004 (`p0.2-correct-22-fr-7.8-004-native-notification-generation`) after independent orchestrator review
-- **Next writer task:** FR-7.8-005 (unread/badge summaries), then remaining 7.8–7.11
+- **Accepted this session:**
+  - FR-7.8-004 (`p0.2-correct-22-...`) @ `67d0e31`
+  - FR-7.8-005 (`p0.2-correct-23-fr-7.8-005-unread-badge-summaries`) pending
+    commit after this handoff update
+- **Next writer task:** FR-7.8-006 (event resolution and deep-link routing),
+  then remaining 7.8–7.11
 - No production Matrix Rust SDK replacement code accepted
 
 Phase 0 evidence accepted before this handoff:
@@ -45,7 +49,7 @@ Phase 0 evidence accepted before this handoff:
   matrix and accepted corrections for FR-7.8-001 through FR-7.8-003.
   Handoff commit `9c91e0f` is also on the branch tip.
 
-P0.2 is not complete. Resume at FR-7.8-005, then audit all remaining 7.8–7.11
+P0.2 is not complete. Resume at FR-7.8-006, then audit all remaining 7.8–7.11
 requirements before declaring P0.2 accepted.
 
 Accepted notification findings that must be preserved:
@@ -68,6 +72,13 @@ Accepted notification findings that must be preserved:
   preference UIs, badge/tray/favicon, EmailNotification pusher, SC-057 alone,
   helper/fixture-only, and raw `/_matrix/` HTTP never pass. Cutover is P9.2
   Rust-owned notification candidate stream + desktop bridge.
+- FR-7.8-005: status `implemented`. Unread/badge summaries are owned by
+  `roomToUnreadAtom` (Timeline/Receipt/MyMembership/MarkedUnread listeners +
+  parent roll-up), `badgeSummary.summarizeNotifications` (`appBadgeCount` vs
+  `inboxBadgeCount`), `RoomNavItem` `UnreadBadge` (highlight vs total), and
+  `PlatformBadgeAndTrayUpdater` / `setPlatformBadgeCount`. SC-057 alone,
+  push-rule preference UI, native generation path, and helper-only never pass.
+  Cutover is P9.3/P4.3 Rust-owned unread/highlight + product badge/IPC DTO.
 
 ## Branch and PR contract
 
