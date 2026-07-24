@@ -37,9 +37,12 @@ without explicit user approval.
 - **Progress loop:** host scheduled task every **4 minutes**
   (ID `019f95928db7`) continues bounded FR audits; also daily durable
   orchestrator `9022c2f8-9b21-411a-acf9-a36c10515f72`
-- **Last accepted:** FR-7.11-006 CSP/origin **partial** (`p0.2-correct-52`)
-- **Next writer task:** FR-7.11-007 (experimental-widgets risk acceptance), then
-  FR-7.11-008 contingency
+- **Last accepted:** FR-7.11-007 experimental-widgets risk acceptance **partial** under
+  `GATE-7.11-007-EXPERIMENTAL-WIDGETS-RISK-ACCEPTANCE` (`p0.2-correct-53`)
+
+- **Next writer task:** FR-7.11-008 (contingency if experimental-widgets cannot meet call parity),
+  then P0.2 closeout / PR if 7.11 complete
+
 
 - No production Matrix Rust SDK replacement code accepted
 - **No open P0.2 PR yet** (open after P0.2 complete)
@@ -49,10 +52,10 @@ Phase 0 evidence accepted before this handoff:
 - P0.1 SDK usage inventory is merged to the integration branch.
 - P0.3 exact Matrix Rust SDK 0.18.0 capability dossier is merged to the
   integration branch.
-- P0.2 branch carries accepted 7.8–7.9, FR-7.10-001..007, and FR-7.11-001..006 corrections (**FR-7.10-005**, **FR-7.10-007**,
-  **FR-7.11-003..006** remain partial by gate); ~2 shallow rows remain in 7.11.
+- P0.2 branch carries accepted 7.8–7.9, FR-7.10-001..007, and FR-7.11-001..007 corrections (**FR-7.10-005**, **FR-7.10-007**,
+  **FR-7.11-003..007** remain partial by gate); ~1 shallow row remains in 7.11.
 
-P0.2 is not complete. Resume at FR-7.11-007, then audit remaining 7.11
+P0.2 is not complete. Resume at FR-7.11-008, then audit remaining 7.11
 before declaring P0.2 accepted.
 
 Accepted notification findings that must be preserved:
@@ -236,6 +239,12 @@ Accepted notification findings that must be preserved:
   `GATE-7.11-006-CSP-ORIGIN-HARDENING`. Tauri CSP + iframe sandbox + same-origin
   EC + parentUrl; residual: no HTML CSP meta, scripts+same-origin sandbox,
   broad connect-src, no strictOriginCheck.
+
+
+- FR-7.11-007: status **`partial`** under
+  `GATE-7.11-007-EXPERIMENTAL-WIDGETS-RISK-ACCEPTANCE`. Plan/dossier risk language
+  present (SC-082 blocked, P10.1, RISK-CALLS); no formal product acceptance artifact
+  for pin 0.18.0 yet.
 
 
 

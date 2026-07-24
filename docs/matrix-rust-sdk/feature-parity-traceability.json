@@ -83099,388 +83099,158 @@
       "current_status": "partial",
       "current_production_files": [
         {
-          "path": "synara/src/app/hooks/useCallEmbed.ts",
-          "bucket": "hook",
-          "categories": [
-            "client_methods",
-            "room_methods"
+          "path": "docs/matrix-rust-sdk/0.18.0-capability-dossier.md",
+          "bucket": "docs",
+          "categories": [],
+          "symbols_or_candidates": [
+            "SC-082 experimental-widgets",
+            "experimental_feature_risk_gate missing",
+            "RISK-CALLS",
+            "defer-with-blocking-risk"
           ],
-          "symbols_or_candidates": [],
-          "line_refs": [],
-          "model_coupling": [
-            "MatrixClient",
-            "Room"
+          "line_refs": [
+            {
+              "symbol": "SC-082 matrix_sdk::widget (experimental-widgets)",
+              "line": 316,
+              "kind": "product_helper",
+              "relevance_reason": "PRIMARY capability row blocked; experimental not accepted for production here."
+            },
+            {
+              "symbol": "SC-082 missing experimental_feature_risk_gate",
+              "line": 324,
+              "kind": "product_helper",
+              "relevance_reason": "Formal product risk acceptance gate not closed — primary residual for this FR."
+            },
+            {
+              "symbol": "SC-082 experimental not accepted for production",
+              "line": 319,
+              "kind": "product_helper",
+              "relevance_reason": "Dossier rationale: module existence does not imply Element Call product parity."
+            },
+            {
+              "symbol": "profile-experimental-widgets",
+              "line": 116,
+              "kind": "product_helper",
+              "relevance_reason": "Probe profile for experimental-widgets compile surface (E1/E2 only)."
+            }
           ],
+          "model_coupling": [],
           "behavior_relevant_method_candidates": [],
           "behavior_relevant_listener_candidates": [],
-          "symbols_or_candidates_note": "No requirement-relevant method/listener candidates filtered from this file's P0.1 AST hits; file remains linked for structural/model ownership. See all_candidates_in_linked_files on the requirement."
+          "symbols_or_candidates_note": "PRIMARY planning/dossier owner for SC-082 risk language and missing experimental_feature_risk_gate."
         },
         {
-          "path": "synara/src/app/plugins/call/CallEmbed.ts",
-          "bucket": "plugin",
-          "categories": [
-            "client_methods",
-            "room_methods",
-            "event_emitters_listeners",
-            "sync_lifecycle",
-            "room_lists",
-            "timelines",
-            "searches",
-            "uia_auth",
-            "client_events"
-          ],
+          "path": "docs/matrix-rust-sdk/0.18.0-feature-and-gap-analysis.md",
+          "bucket": "docs",
+          "categories": [],
           "symbols_or_candidates": [
-            "getDeviceId",
-            "search"
+            "experimental-widgets defer-with-blocking-risk",
+            "SC-082"
           ],
           "line_refs": [
             {
-              "symbol": "getDeviceId",
-              "line": 66,
-              "kind": "method_candidate"
+              "symbol": "experimental-widgets defer-with-blocking-risk",
+              "line": 430,
+              "kind": "product_helper",
+              "relevance_reason": "Feature decision: dedicated risk gate required; not Phase 1 minimum without acceptance."
             },
             {
-              "symbol": "search",
-              "line": 91,
-              "kind": "method_candidate"
+              "symbol": "experimental-widgets blocking call-track risk",
+              "line": 463,
+              "kind": "product_helper",
+              "relevance_reason": "Shapes only / not call parity without risk gate."
             },
             {
-              "symbol": "on:ClientEvent.ToDeviceEvent",
-              "line": 221,
-              "kind": "listener_candidate"
-            },
-            {
-              "symbol": "off:ClientEvent.ToDeviceEvent",
-              "line": 240,
-              "kind": "listener_candidate"
+              "symbol": "Call/widget end-to-end with experimental-widgets risk gate",
+              "line": 479,
+              "kind": "product_helper",
+              "relevance_reason": "Open residual for Phase 10 risk gate."
             }
           ],
-          "model_coupling": [
-            "MatrixClient",
-            "MatrixEvent",
-            "Room"
-          ],
-          "behavior_relevant_method_candidates": [
-            {
-              "name": "getDeviceId",
-              "line": 66,
-              "category": "uia_auth",
-              "kind": "property_call_candidate",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            },
-            {
-              "name": "search",
-              "line": 91,
-              "category": "searches",
-              "kind": "property_reference_candidate",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            }
-          ],
-          "behavior_relevant_listener_candidates": [
-            {
-              "event": "ClientEvent.ToDeviceEvent",
-              "method": "on",
-              "line": 221,
-              "category": "client_events",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            },
-            {
-              "event": "ClientEvent.ToDeviceEvent",
-              "method": "off",
-              "line": 240,
-              "category": "client_events",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            }
-          ]
+          "model_coupling": [],
+          "behavior_relevant_method_candidates": [],
+          "behavior_relevant_listener_candidates": [],
+          "symbols_or_candidates_note": "Feature/gap analysis decision language for experimental-widgets risk."
         },
         {
-          "path": "synara/src/app/plugins/call/CallWidgetDriver.ts",
-          "bucket": "plugin",
-          "categories": [
-            "client_methods",
-            "crypto_verification_recovery",
-            "authenticated_media",
-            "room_lists",
-            "timelines",
-            "searches",
-            "uia_auth",
-            "custom_raw_event_sends"
-          ],
+          "path": "docs/matrix-rust-sdk-full-replacement-plan.md",
+          "bucket": "docs",
+          "categories": [],
           "symbols_or_candidates": [
-            "getDeviceId",
-            "searchUserDirectory"
+            "§7.11 explicit risk acceptance clause",
+            "P10.1 Exact experimental-widget risk dossier",
+            "Phase 10 experimental API risk AC"
           ],
           "line_refs": [
             {
-              "symbol": "getDeviceId",
-              "line": 40,
-              "kind": "method_candidate"
+              "symbol": "§7.11 explicit risk acceptance for experimental-widgets at 0.18.0",
+              "line": 460,
+              "kind": "product_helper",
+              "relevance_reason": "Source plan clause for this FR."
             },
             {
-              "symbol": "searchUserDirectory",
-              "line": 297,
-              "kind": "method_candidate"
-            }
-          ],
-          "model_coupling": [
-            "MatrixClient",
-            "MatrixError",
-            "MatrixEvent"
-          ],
-          "behavior_relevant_method_candidates": [
-            {
-              "name": "getDeviceId",
-              "line": 40,
-              "category": "uia_auth",
-              "kind": "property_call_candidate",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+              "symbol": "P10.1 Exact experimental-widget risk dossier",
+              "line": 1099,
+              "kind": "product_helper",
+              "relevance_reason": "PRIMARY delivery task for formal risk acceptance artifact."
             },
             {
-              "name": "searchUserDirectory",
-              "line": 297,
-              "category": "searches",
-              "kind": "property_call_candidate",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+              "symbol": "Phase 10 AC Experimental API risk explicitly accepted",
+              "line": 1115,
+              "kind": "product_helper",
+              "relevance_reason": "Acceptance criteria: pinned version and tests required."
             }
           ],
-          "behavior_relevant_listener_candidates": []
+          "model_coupling": [],
+          "behavior_relevant_method_candidates": [],
+          "behavior_relevant_listener_candidates": [],
+          "symbols_or_candidates_note": "Authoritative program plan clauses for risk acceptance."
         }
       ],
       "ui_entry_points": [],
+      "ui_entry_points_rationale": "FR-7.11-007 is an explicit product/planning RISK ACCEPTANCE gate for enabling matrix-sdk experimental-widgets at pin 0.18.0 — not a user-facing control. No desktop settings screen owns this acceptance. Tracked via P10.1 (risk dossier) with adjacency P10.7 (contingency if widgets cannot meet call parity). EXCLUDE membership display (001); embed URL/capabilities/postMessage alone (002); join/leave (003); encryption keys (004); cleanup (005); CSP alone (006); contingency doc alone (008).",
       "state_owners": [
         {
-          "path": "synara/src/app/plugins/call/CallEmbed.ts",
-          "ownership_evidence": "Identified as coordination/state module for this behavior via path role (state/client/util service) and P0.1 categories/candidates; not merely a presentational component."
+          "path": "docs/matrix-rust-sdk-full-replacement-plan.md",
+          "ownership_evidence": "§7.11 clause + P10.1 + Phase 10 AC define required explicit risk acceptance."
+        },
+        {
+          "path": "docs/matrix-rust-sdk/0.18.0-capability-dossier.md",
+          "ownership_evidence": "SC-082 blocked + experimental_feature_risk_gate missing is the dossier residual this FR must close."
         }
       ],
       "current_js_sdk": {
-        "behavior_relevant_method_candidates": [
-          {
-            "path": "synara/src/app/plugins/call/CallEmbed.ts",
-            "name": "getDeviceId",
-            "line": 66,
-            "category": "uia_auth",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-          },
-          {
-            "path": "synara/src/app/plugins/call/CallEmbed.ts",
-            "name": "search",
-            "line": 91,
-            "category": "searches",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-          },
-          {
-            "path": "synara/src/app/plugins/call/CallWidgetDriver.ts",
-            "name": "getDeviceId",
-            "line": 40,
-            "category": "uia_auth",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-          },
-          {
-            "path": "synara/src/app/plugins/call/CallWidgetDriver.ts",
-            "name": "searchUserDirectory",
-            "line": 297,
-            "category": "searches",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-          }
-        ],
-        "behavior_relevant_listener_candidates": [
-          {
-            "path": "synara/src/app/plugins/call/CallEmbed.ts",
-            "event": "ClientEvent.ToDeviceEvent",
-            "method": "on",
-            "line": 221,
-            "category": "client_events",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-          },
-          {
-            "path": "synara/src/app/plugins/call/CallEmbed.ts",
-            "event": "ClientEvent.ToDeviceEvent",
-            "method": "off",
-            "line": 240,
-            "category": "client_events",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-          }
-        ],
+        "behavior_relevant_method_candidates": [],
+        "behavior_relevant_listener_candidates": [],
         "all_candidates_in_linked_files": {
-          "method_count": 20,
-          "listener_count": 10,
-          "note": "Unfiltered P0.1 AST candidates across linked production import files. Do not treat these as proven APIs for this requirement; use behavior_relevant_* fields.",
-          "methods_sample": [
-            {
-              "path": "synara/src/app/plugins/call/CallEmbed.ts",
-              "name": "getSafeUserId",
-              "line": 65
-            },
-            {
-              "path": "synara/src/app/plugins/call/CallEmbed.ts",
-              "name": "getDeviceId",
-              "line": 66
-            },
-            {
-              "path": "synara/src/app/plugins/call/CallEmbed.ts",
-              "name": "search",
-              "line": 91
-            },
-            {
-              "path": "synara/src/app/plugins/call/CallEmbed.ts",
-              "name": "getSafeUserId",
-              "line": 134
-            },
-            {
-              "path": "synara/src/app/plugins/call/CallEmbed.ts",
-              "name": "getRooms",
-              "line": 209
-            },
-            {
-              "path": "synara/src/app/plugins/call/CallEmbed.ts",
-              "name": "getRoom",
-              "line": 295
-            },
-            {
-              "path": "synara/src/app/plugins/call/CallEmbed.ts",
-              "name": "findEventById",
-              "line": 296
-            },
-            {
-              "path": "synara/src/app/plugins/call/CallEmbed.ts",
-              "name": "getRoom",
-              "line": 309
-            },
-            {
-              "path": "synara/src/app/plugins/call/CallEmbed.ts",
-              "name": "getRoom",
-              "line": 349
-            },
-            {
-              "path": "synara/src/app/plugins/call/CallWidgetDriver.ts",
-              "name": "getDeviceId",
-              "line": 40
-            },
-            {
-              "path": "synara/src/app/plugins/call/CallWidgetDriver.ts",
-              "name": "getSafeUserId",
-              "line": 43
-            },
-            {
-              "path": "synara/src/app/plugins/call/CallWidgetDriver.ts",
-              "name": "sendStateEvent",
-              "line": 64
-            },
-            {
-              "path": "synara/src/app/plugins/call/CallWidgetDriver.ts",
-              "name": "redactEvent",
-              "line": 72
-            },
-            {
-              "path": "synara/src/app/plugins/call/CallWidgetDriver.ts",
-              "name": "sendEvent",
-              "line": 74
-            },
-            {
-              "path": "synara/src/app/plugins/call/CallWidgetDriver.ts",
-              "name": "getCrypto",
-              "line": 157
-            }
-          ],
-          "listeners_sample": [
-            {
-              "path": "synara/src/app/plugins/call/CallEmbed.ts",
-              "event": "ClientEvent.Event",
-              "method": "on",
-              "line": 218
-            },
-            {
-              "path": "synara/src/app/plugins/call/CallEmbed.ts",
-              "event": "MatrixEventEvent.Decrypted",
-              "method": "on",
-              "line": 219
-            },
-            {
-              "path": "synara/src/app/plugins/call/CallEmbed.ts",
-              "event": "RoomStateEvent.Events",
-              "method": "on",
-              "line": 220
-            },
-            {
-              "path": "synara/src/app/plugins/call/CallEmbed.ts",
-              "event": "ClientEvent.ToDeviceEvent",
-              "method": "on",
-              "line": 221
-            },
-            {
-              "path": "synara/src/app/plugins/call/CallEmbed.ts",
-              "event": "ClientEvent.Event",
-              "method": "off",
-              "line": 237
-            },
-            {
-              "path": "synara/src/app/plugins/call/CallEmbed.ts",
-              "event": "MatrixEventEvent.Decrypted",
-              "method": "off",
-              "line": 238
-            },
-            {
-              "path": "synara/src/app/plugins/call/CallEmbed.ts",
-              "event": "RoomStateEvent.Events",
-              "method": "off",
-              "line": 239
-            },
-            {
-              "path": "synara/src/app/plugins/call/CallEmbed.ts",
-              "event": "ClientEvent.ToDeviceEvent",
-              "method": "off",
-              "line": 240
-            },
-            {
-              "path": "synara/src/app/plugins/call/CallEmbed.ts",
-              "event": "type",
-              "method": "on",
-              "line": 395
-            },
-            {
-              "path": "synara/src/app/plugins/call/CallEmbed.ts",
-              "event": "type",
-              "method": "off",
-              "line": 397
-            }
-          ]
+          "method_count": 0,
+          "listener_count": 0,
+          "note": "Planning/risk-gate FR; demoted CallEmbed/CallWidgetDriver AST false positives as non-acceptance evidence.",
+          "methods_sample": [],
+          "listeners_sample": []
         },
-        "models": [
-          "MatrixClient",
-          "MatrixError",
-          "MatrixEvent",
-          "Room"
-        ],
+        "models": [],
         "network_routes": [],
         "deep_imports": [],
-        "method_candidates": [
-          "getDeviceId",
-          "search",
-          "getDeviceId",
-          "searchUserDirectory"
-        ],
-        "listener_events": [
-          "ClientEvent.ToDeviceEvent"
-        ]
+        "method_candidates": [],
+        "listener_events": []
       },
       "current_behavior_and_limits": {
-        "summary": "Current desktop implements this via 3 production matrix-js-sdk-related file(s); status=partial.",
-        "notes": "Risk acceptance for experimental-widgets at 0.18.0 is a planning/product gate (P10.1), not a runtime feature toggle discovered as complete.",
-        "limits": "P0.1 method candidates are AST name hits, not type-checked receiver proofs."
+        "summary": "PARTIAL: product has dossier/plan RISK LANGUAGE for experimental-widgets at pin 0.18.0 but NO formalized explicit risk-acceptance document/gate that authorizes production enablement. Present: (1) plan §7.11 requires explicit risk acceptance; (2) P10.1 Exact experimental-widget risk dossier is the owning delivery task; (3) Phase 10 AC requires experimental API risk accepted with pinned version and tests; (4) dossier SC-082 final_state=blocked with missing gate experimental_feature_risk_gate; (5) feature decision defer-with-blocking-risk / not Phase 1 minimum; (6) RISK-CALLS critical. Absent: signed/approved product risk-acceptance record naming pin 0.18.0 (1c44fb66…), residual risks accepted, owner, expiry/review, and required tests. Current desktop calls use matrix-js-sdk Element Call embed — not Rust experimental-widgets. status=partial under GATE-7.11-007-EXPERIMENTAL-WIDGETS-RISK-ACCEPTANCE.",
+        "notes": "Evidence (conservative): (1) PRODUCT MEANING — FR-7.11-007 is EXPLICIT RISK ACCEPTANCE for enabling matrix-sdk feature experimental-widgets at SDK pin 0.18.0; NOT membership DISPLAY (001), NOT embed plumbing alone (002), NOT join/leave (003), NOT encryption keys (004), NOT cleanup (005), NOT CSP alone (006), NOT contingency if widgets fail (008/P10.7). (2) PLAN CLAUSE — matrix-rust-sdk-full-replacement-plan.md §7.11 L460: 'explicit risk acceptance for experimental-widgets at 0.18.0'. (3) PLAN TASK — P10.1 L1099 Exact experimental-widget risk dossier; Phase 10 AC L1115 Experimental API risk is explicitly accepted with a pinned version and tests. (4) DOSSIER SC-082 — 0.18.0-capability-dossier.md L316 matrix_sdk::widget (experimental-widgets) blocked; experimental not accepted for production; L324 missing_gates includes experimental_feature_risk_gate; E1/E2 only. (5) FEATURE DECISION — experimental-widgets defer-with-blocking-risk; not Phase 1 minimum; keep as blocking call-track risk. (6) RISK LEDGER — RISK-CALLS critical: experimental-widgets + MatrixRTC gaps; owner Phase 10 + experimental risk gate. (7) NO FORMAL ACCEPTANCE ARTIFACT — no product document that records decision-maker acceptance of residual experimental risk at pin 0.18.0 with tests; P10.1 not delivered. (8) DEMOTION — prior shallow row used CallEmbed getDeviceId/search/ToDeviceEvent as 'implementation' evidence; those are false AST / wrong-FR runtime hits. (9) Cutover: do not enable experimental-widgets in production feature set until P10.1 risk dossier + this gate close; compile-only SC-082 / embed-alone / claiming production-accepted FAIL.",
+        "limits": "Partial: risk identified and tracked (SC-082 blocked, defer-with-blocking-risk, RISK-CALLS, P10.1 planned) but explicit formal risk acceptance at pin 0.18.0 is not yet produced. Widget compile probes (E1/E2) are not acceptance. Contingency path is FR-7.11-008/P10.7, not this FR.",
+        "behavior_relevance_policy": "Exact-line source inspection for explicit experimental-widgets risk ACCEPTANCE only. RETAIN: plan §7.11 L460; P10.1 L1099; Phase 10 AC L1115; dossier SC-082 blocked + experimental_feature_risk_gate missing L316/L324; feature-and-gap defer-with-blocking-risk + RISK-CALLS. EXCLUDE as sole evidence: CallEmbed getDeviceId/search AST; ToDeviceEvent; embed-alone (002); CSP-alone (006); contingency-alone (008); compile-only SC-082; membership display/join/leave/keys/cleanup runtime FRs."
       },
       "p0_1_linkage": {
-        "categories": [
-          "matrixrtc_calls"
-        ],
+        "categories": [],
         "file_ledger_paths": [
-          "synara/src/app/hooks/useCallEmbed.ts",
-          "synara/src/app/plugins/call/CallEmbed.ts",
-          "synara/src/app/plugins/call/CallWidgetDriver.ts"
+          "docs/matrix-rust-sdk/0.18.0-capability-dossier.md",
+          "docs/matrix-rust-sdk/0.18.0-feature-and-gap-analysis.md",
+          "docs/matrix-rust-sdk-full-replacement-plan.md"
         ]
       },
       "rust_target": {
-        "support_conclusion": "confirmed-experimental-feature-gate-required",
+        "support_conclusion": "product-experimental-widgets-risk-acceptance-partial-gate-not-formalized",
         "capability_ids": [
           "SC-082"
         ],
@@ -83517,9 +83287,10 @@
                 "P0.3c-widget-to-device-event-filter-type"
               ],
               "final_state": "blocked",
-              "final_state_rationale": "experimental-widgets APIs compile-probed. Module existence does not imply Element Call product parity. Experimental not accepted for production here.",
+              "final_state_rationale": "experimental-widgets APIs compile-probed (E1/E2). SC-082 is the capability subject of FR-7.11-007 risk acceptance. Dossier states experimental not accepted for production; primary missing gate for this FR is experimental_feature_risk_gate. Module presence / compile probes alone never constitute explicit risk acceptance at pin 0.18.0.",
               "missing_gates": [
                 "experimental_feature_risk_gate",
+                "GATE-7.11-007-EXPERIMENTAL-WIDGETS-RISK-ACCEPTANCE",
                 "element_call_host_and_postmessage",
                 "live_call_parity",
                 "ui_acceptance"
@@ -83528,14 +83299,14 @@
                 "E1-experimental-api",
                 "E2-compile-probes"
               ],
-              "notes": "Do not infer call parity from widget module presence.",
+              "notes": "This FR owns closing experimental_feature_risk_gate via P10.1 risk dossier (pin, residuals, owner, tests). Other missing gates remain owned by FR-7.11-002+.",
               "cross_ref_gap_ids": [
                 "GAP-MATRIXRTC-WIDGET-CAPABILITY-PLUMBING",
                 "GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION"
               ],
               "cross_ref_rationale": {
-                "GAP-MATRIXRTC-WIDGET-CAPABILITY-PLUMBING": "Same experimental-widgets profile/surface: Capabilities, filters, virtual Element Call URL helpers are the SC-082 experimental API shape.",
-                "GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION": "SC-082 module existence does not close membership write or encryption-key session lifecycle; this gap records the remaining no-viable high-level public route."
+                "GAP-MATRIXRTC-WIDGET-CAPABILITY-PLUMBING": "SC-082 experimental API shape residual; risk acceptance must acknowledge widget plumbing ≠ call parity.",
+                "GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION": "Accepted residual for production risk record: no viable high-level public membership-write/key-session route at pin; not closed by enabling experimental-widgets alone."
               }
             },
             "source_url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/lib.rs#L64-L65",
@@ -83552,7 +83323,7 @@
             "final_state": "blocked",
             "final": {
               "final_state": "blocked",
-              "final_state_rationale": "Experimental API shape compile-probed; not accepted for production in this dossier. Risk gate and remaining product work required.",
+              "final_state_rationale": "Experimental API shape compile-probed; production use requires experimental_feature_risk_gate (this FR) plus host/postMessage/product work. Risk acceptance must document residuals — not claim plumbing closed.",
               "missing_gates": [
                 "experimental_feature_risk_gate",
                 "semantic_or_integration_test",
@@ -83575,29 +83346,29 @@
               "P0.3c-widget-to-device-event-filter-type",
               "P0.3c-widget-new-virtual-element-call"
             ],
-            "summary": "experimental-widgets Capabilities send/read filters and ToDeviceEventFilter enable capability negotiation that can include to-device types such as io.element.call.encryption_keys. This is capability plumbing only—not a high-level encryption-key session API and not membership write parity.",
-            "remaining_work": "Webview host, postMessage, actual membership events, key exchange runtime, UI."
+            "summary": "experimental-widgets Capabilities plumbing only. Risk acceptance (this FR) must state that plumbing ≠ membership write/key session/full call parity.",
+            "remaining_work": "P10.1 formal risk dossier accepting residuals at pin 0.18.0; then host/postMessage/product work under other 7.11 FRs — not claimed closed by this FR alone."
           }
         ],
-        "notes": "Mappings use only accepted P0.3 capability/gap IDs. Compile probes establish API shape only; final dossier states remain blocked/typed/upstream until E3–E5 gates exist.",
+        "notes": "Product PARTIAL: dossier/plan identify risk and require experimental_feature_risk_gate; formal acceptance document for pin 0.18.0 not delivered (P10.1 open). SC-082 alone / compile-only never equals risk acceptance. Cutover must not enable experimental-widgets without closed GATE-7.11-007. Contingency = FR-7.11-008/P10.7.",
         "distinctions_preserved": [
-          "server typed search (SC-071) vs experimental local search (SC-072)",
-          "widget plumbing (SC-082/GAP widget) vs call parity (membership write/key session gaps)",
-          "compile shape (E1/E2) vs runtime/UI parity (E3–E5 missing => blocked)"
+          "risk acceptance (this FR) vs embed plumbing (FR-7.11-002)",
+          "risk acceptance vs contingency if widgets fail (FR-7.11-008/P10.7)",
+          "SC-082 compile shape (E1/E2) vs formal experimental_feature_risk_gate"
         ]
       },
       "implementation_tasks": [
         {
           "task_id": "P10.1",
           "title": "Exact experimental-widget risk dossier",
-          "phase": "Phase 10 — Element Call and widget completion",
-          "scope_rationale": "Accepted plan task P10.1 covers this Section 7.11 behavior during Phase 10 — Element Call and widget completion."
+          "phase": "Phase 10 — Calls and widgets",
+          "scope_rationale": "Primary delivery for formal experimental-widgets risk acceptance at pin 0.18.0."
         },
         {
           "task_id": "P10.7",
-          "title": "Failure and upstream-gap decision gate",
-          "phase": "Phase 10 — Element Call and widget completion",
-          "scope_rationale": "Accepted plan task P10.7 covers this Section 7.11 behavior during Phase 10 — Element Call and widget completion."
+          "title": "Contingency if experimental-widgets cannot meet call parity",
+          "phase": "Phase 10 — Calls and widgets",
+          "scope_rationale": "Adjacent contingency path (FR-7.11-008), not a substitute for this risk-acceptance FR."
         }
       ],
       "automated_tests": {
@@ -83608,65 +83379,71 @@
             "requirement_id": "FR-7.11-007",
             "kind": "planned-required",
             "task_id": "P10.1",
-            "phase": "Phase 10 — Element Call and widget completion",
-            "level": "integration-e2e",
-            "scenario": "7.11/FR-7.11-007: exercise 'explicit risk acceptance for `experimental-widgets` at `0.18.0`;' via owner `synara/src/app/plugins/call/CallEmbed.ts` and UI `(no dedicated UI — see ui_entry_points_rationale)`, then confirm Rust/IPC cutover task `P10.1` preserves observable behavior without raw Matrix runtime HTTP.",
+            "phase": "Phase 10 — Calls and widgets",
+            "level": "planning-gate-review",
+            "scenario": "Planning-gate review for FR-7.11-007 experimental-widgets risk acceptance at pin 0.18.0: (A) PIN — acceptance record names matrix-rust-sdk pin 0.18.0 / 1c44fb66214667c6d00acaf72ab592493653708b and feature experimental-widgets. (B) DOSSIER BASELINE — SC-082 blocked E1/E2; missing experimental_feature_risk_gate pre-acceptance; defer-with-blocking-risk + RISK-CALLS critical acknowledged. (C) RESIDUALS ACCEPTED — widget plumbing ≠ call parity; GAP-MATRIXRTC-WIDGET-CAPABILITY-PLUMBING + GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION residuals listed; membership write/key session not claimed closed by enablement. (D) OWNER + TESTS — named owner; required tests (widget protocol / two-client Element Call smoke / encrypted call / teardown / CSP) referenced per Phase 10 AC. (E) ENABLEMENT RULE — experimental-widgets not in production feature set until this gate closes; compile-only SC-082 FAIL. (F) DISTINCTIONS — not 001–006 runtime alone, not 008 contingency alone. Cutover P10.1: formal acceptance artifact required; CallEmbed AST / embed-alone / raw HTTP / dual-backend FAIL.",
+            "test_target": "P10.1 experimental-widget risk dossier artifact + SC-082 experimental_feature_risk_gate closed at pin 0.18.0; Phase 10 AC 'Experimental API risk is explicitly accepted with a pinned version and tests'",
             "preconditions": [
-              "Desktop app with Element Call / widget config for the build",
-              "Room with MatrixRTC membership fixtures; two clients for join/leave",
-              "CSP-enabled production-like shell",
-              "Linked owner path present in tree: synara/src/app/plugins/call/CallEmbed.ts",
-              "Primary UI/lifecycle surface: (no dedicated UI — see ui_entry_points_rationale)"
+              "Capability dossier SC-082 and RISK-CALLS available as baseline (blocked / critical).",
+              "Plan §7.11 clause and P10.1 task present.",
+              "Do not accept: CallEmbed getDeviceId/search AST, ToDeviceEvent, embed-alone (002), CSP-alone (006), contingency-alone (008), compile-only SC-082, or claiming production-accepted without a formal acceptance record."
             ],
             "trigger_actions": [
-              "Boot the appropriate harness for level=integration-e2e against disposable Synapse (or iOS notes if any).",
-              "Establish fixtures required by the clause list: explicit risk acceptance for `experimental-widgets` at `0.18.0`.",
-              "Open UI/lifecycle surface `(no dedicated UI — see ui_entry_points_rationale)` (or follow ui_entry_points_rationale if no dedicated UI).",
-              "Step 1: perform the product action that implements «explicit risk acceptance for `experimental-widgets` at `0.18.0`» using current owner `synara/src/app/plugins/call/CallEmbed.ts`.",
-              "Start/stop embedded call/widget session; change room; logout; close window — confirm cleanup."
+              "Locate P10.1 risk dossier / acceptance artifact (or document absence → GATE fail).",
+              "PIN: assert record names experimental-widgets and pin 0.18.0 (1c44fb66…).",
+              "BASELINE: assert SC-082 missing experimental_feature_risk_gate is acknowledged as the gate being closed; defer-with-blocking-risk + RISK-CALLS residuals listed.",
+              "RESIDUALS: assert acceptance does not claim full call parity / membership write / key session closed solely by enabling experimental-widgets.",
+              "OWNER+TESTS: assert named decision owner and required Phase 10 tests referenced.",
+              "ENABLEMENT: assert production feature set does not enable experimental-widgets until gate closed; post-P10.1 enablement only with artifact present.",
+              "DISTINCTIONS: confirm this review is not 001–006 runtime AT and not 008 contingency alone."
             ],
             "assertions": [
-              "Each clause is observable: «explicit risk acceptance for `experimental-widgets` at `0.18.0`».",
-              "State coordination remains through `synara/src/app/plugins/call/CallEmbed.ts` (or its Rust/IPC successor after cutover), not ad-hoc dual writers.",
-              "Behavior-relevant current JS method candidates exercised or replaced: getDeviceId, search, getDeviceId, searchUserDirectory (AST candidates; not type-proven receivers).",
-              "Behavior-relevant listener candidates observed or replaced: on:ClientEvent.ToDeviceEvent, off:ClientEvent.ToDeviceEvent.",
-              "Rust mapping remains conservative: caps=[SC-082] gaps=[GAP-MATRIXRTC-WIDGET-CAPABILITY-PLUMBING]; compile-only blocked states are not treated as runtime pass.",
-              "No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless dossier marks that exact behavior typed-sdk-request-required.",
-              "Widget plumbing success is not recorded as full call parity if membership-write/key-session gaps remain."
+              "ACCEPTANCE ARTIFACT: formal risk acceptance / P10.1 dossier exists naming experimental-widgets at pin 0.18.0 (or GATE remains open / status partial).",
+              "PIN+FEATURE: pin and feature name match plan/dossier (0.18.0 / experimental-widgets).",
+              "RESIDUALS: accepted residuals include experimental status, widget plumbing ≠ call parity, membership-write/key-session gaps as applicable.",
+              "OWNER+TESTS: owner and required tests recorded per Phase 10 AC.",
+              "ENABLEMENT RULE: experimental-widgets not production-enabled without this gate; SC-082 compile-only never product pass.",
+              "DISTINCTIONS: this FR ≠ 001/002-alone/003/004/005/006/008.",
+              "COORDINATION: through plan P10.1 risk dossier + dossier SC-082 gate, not dual-backend feature flags.",
+              "CUTOVER: P10.1 under GATE-7.11-007-EXPERIMENTAL-WIDGETS-RISK-ACCEPTANCE; no raw /_matrix HTTP; no dual-backend.",
+              "No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless typed-sdk-request-required for that exact behavior."
             ],
             "required_environment": [
-              "Desktop app with Element Call / widget config for the build",
-              "Room with MatrixRTC membership fixtures; two clients for join/leave",
-              "CSP-enabled production-like shell"
+              "Plan + capability dossier available",
+              "P10.1 risk acceptance artifact path (or documented absence)"
             ],
             "does_not_currently_exist": true,
             "clause_breakdown": [
-              "explicit risk acceptance for `experimental-widgets` at `0.18.0`"
+              "plan §7.11 + P10.1 + Phase 10 AC require explicit risk acceptance",
+              "dossier SC-082 blocked with experimental_feature_risk_gate missing",
+              "no formal product risk-acceptance artifact at pin 0.18.0 yet",
+              "cutover P10.1; compile-only SC-082 FAIL"
             ]
           }
         ]
       },
       "manual_acceptance_id": "MA-FR-7.11-007",
-      "migration_cutover_disposition": "explicit-risk-acceptance-before-enabling-experimental-widgets",
+      "migration_cutover_disposition": "formal-risk-acceptance-before-enable-experimental-widgets",
       "missing_evidence_gates": [
-        "element_call_host_and_postmessage",
         "experimental_feature_risk_gate",
+        "element_call_host_and_postmessage",
         "live_call_parity",
-        "ui_acceptance"
+        "ui_acceptance",
+        "GATE-7.11-007-EXPERIMENTAL-WIDGETS-RISK-ACCEPTANCE"
       ],
       "security_privacy_lifecycle_concerns": [
-        "no-raw-matrix-http",
-        "experimental-widgets-risk"
+        "experimental-api-risk",
+        "no-raw-matrix-http"
       ],
       "traceability_status": "complete-conservative",
       "blockers": [
+        "GATE-7.11-007-EXPERIMENTAL-WIDGETS-RISK-ACCEPTANCE",
         {
           "severity": "high",
-          "kind": "experimental-widgets-and-call-parity",
-          "summary": "Call/widget path depends on experimental-widgets and MatrixRTC gaps; widget plumbing ≠ call parity."
+          "kind": "product-experimental-widgets-risk-acceptance-partial-gate-not-formalized",
+          "summary": "FR-7.11-007 product path is PARTIAL: plan §7.11 + P10.1 + Phase 10 AC require explicit risk acceptance for experimental-widgets at pin 0.18.0; dossier SC-082 is blocked with experimental_feature_risk_gate missing; feature decision is defer-with-blocking-risk / not Phase 1 minimum; RISK-CALLS critical. No formal product risk-acceptance document yet authorizes production enablement. Compile-only SC-082 / embed-alone / CallEmbed AST / raw HTTP / dual-backend / claiming production-accepted FAIL. Cutover P10.1 under GATE-7.11-007-EXPERIMENTAL-WIDGETS-RISK-ACCEPTANCE."
         }
-      ],
-      "ui_entry_points_rationale": "Intentionally empty: planning/risk/contingency gate rather than a user-facing control in the current desktop UI. Tracked via tasks P10.1/P10.7; no product screen solely owns this acceptance text."
+      ]
     },
     {
       "id": "FR-7.11-008",
@@ -109039,7 +108816,7 @@
         "requirement_id": "FR-7.11-007",
         "kind": "planned-required",
         "task_id": "P10.1",
-        "phase": "Phase 10 — Element Call and widget completion",
+        "phase": "Phase 10 — Calls and widgets",
         "level": "planning-gate-review",
         "scenario": "Planning-gate review for FR-7.11-007 experimental-widgets risk acceptance at pin 0.18.0: (A) PIN — acceptance record names matrix-rust-sdk pin 0.18.0 / 1c44fb66214667c6d00acaf72ab592493653708b and feature experimental-widgets. (B) DOSSIER BASELINE — SC-082 blocked E1/E2; missing experimental_feature_risk_gate pre-acceptance; defer-with-blocking-risk + RISK-CALLS critical acknowledged. (C) RESIDUALS ACCEPTED — widget plumbing ≠ call parity; GAP-MATRIXRTC-WIDGET-CAPABILITY-PLUMBING + GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION residuals listed; membership write/key session not claimed closed by enablement. (D) OWNER + TESTS — named owner; required tests (widget protocol / two-client Element Call smoke / encrypted call / teardown / CSP) referenced per Phase 10 AC. (E) ENABLEMENT RULE — experimental-widgets not in production feature set until this gate closes; compile-only SC-082 FAIL. (F) DISTINCTIONS — not 001–006 runtime alone, not 008 contingency alone. Cutover P10.1: formal acceptance artifact required; CallEmbed AST / embed-alone / raw HTTP / dual-backend FAIL.",
         "test_target": "P10.1 experimental-widget risk dossier artifact + SC-082 experimental_feature_risk_gate closed at pin 0.18.0; Phase 10 AC 'Experimental API risk is explicitly accepted with a pinned version and tests'",
@@ -109069,17 +108846,15 @@
           "No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless typed-sdk-request-required for that exact behavior."
         ],
         "required_environment": [
-          "P0.3 capability dossier + feature/gap analysis artifacts",
-          "Plan §7.11 / Phase 10 P10.1 task text",
-          "P10.1 risk dossier deliverable (when produced) or documented absence"
+          "Plan + capability dossier available",
+          "P10.1 risk acceptance artifact path (or documented absence)"
         ],
         "does_not_currently_exist": true,
         "clause_breakdown": [
-          "formal risk acceptance artifact for experimental-widgets at pin 0.18.0 (absent → partial)",
-          "SC-082 experimental_feature_risk_gate closed via P10.1",
-          "residuals accepted (plumbing ≠ call parity; write/key session gaps)",
-          "owner + tests per Phase 10 AC",
-          "enablement rule: no production experimental-widgets without gate"
+          "plan §7.11 + P10.1 + Phase 10 AC require explicit risk acceptance",
+          "dossier SC-082 blocked with experimental_feature_risk_gate missing",
+          "no formal product risk-acceptance artifact at pin 0.18.0 yet",
+          "cutover P10.1; compile-only SC-082 FAIL"
         ]
       },
       {
@@ -112721,32 +112496,22 @@
         "Linux"
       ],
       "preconditions": [
-        "Capability dossier SC-082 + RISK-CALLS and feature/gap experimental-widgets decision available as baseline.",
-        "Plan §7.11 risk-acceptance clause + P10.1 Exact experimental-widget risk dossier task available.",
-        "No dedicated UI (planning/risk gate); empty UI justified.",
-        "Current status baseline: partial under GATE-7.11-007-EXPERIMENTAL-WIDGETS-RISK-ACCEPTANCE."
+        "Plan §7.11 + P10.1 + capability dossier SC-082 available",
+        "Current status baseline: partial under GATE-7.11-007-EXPERIMENTAL-WIDGETS-RISK-ACCEPTANCE"
       ],
       "actions": [
-        "Locate formal P10.1 experimental-widget risk dossier / acceptance artifact (or document absence → gate open / partial).",
-        "Verify artifact names feature experimental-widgets and pin 0.18.0 (1c44fb66214667c6d00acaf72ab592493653708b).",
-        "Verify residuals accepted: experimental status; widget plumbing ≠ call parity; SC-082 blocked E1/E2 pre-acceptance; GAP-MATRIXRTC-WIDGET-CAPABILITY-PLUMBING and membership-write/key-session residuals not claimed closed by enablement alone.",
-        "Verify named decision owner and required Phase 10 tests (widget protocol / two-client smoke / encrypted call / teardown / CSP) are referenced.",
-        "Verify production feature set does not enable experimental-widgets without this gate closed; SC-082 compile-only is not acceptance.",
-        "Confirm distinctions: not 001–006 runtime alone; not 008 contingency alone; contingency path remains P10.7 if acceptance cannot authorize."
+        "Locate P10.1 experimental-widget risk dossier / formal acceptance artifact (or document absence).",
+        "PIN: confirm acceptance names experimental-widgets and matrix-rust-sdk 0.18.0 (1c44fb66…).",
+        "BASELINE: confirm SC-082 experimental_feature_risk_gate residual and RISK-CALLS critical are acknowledged.",
+        "RESIDUALS: confirm acceptance does not claim call parity / membership write / key session closed by enablement alone.",
+        "OWNER+TESTS: confirm named owner and Phase 10 tests referenced.",
+        "ENABLEMENT: confirm production does not enable experimental-widgets until gate closed.",
+        "DISTINCTIONS: not 001–006 runtime alone; not 008 contingency alone."
       ],
-      "expected_results": [
-        "Formal risk acceptance / P10.1 dossier exists for experimental-widgets at pin 0.18.0 OR status remains partial under GATE-7.11-007 (do not pass without artifact).",
-        "Pin + feature name match plan/dossier; residuals and owner/tests recorded per Phase 10 AC.",
-        "experimental_feature_risk_gate closed only when artifact authorizes production enablement; compile-only SC-082 FAIL.",
-        "Empty UI entry points justified: planning/risk gate, not a user-facing control; P10.1 primary, P10.7 adjacency for contingency.",
-        "No unexpected raw /_matrix traffic; no dual-backend call exception as substitute for this gate."
-      ],
-      "clause_breakdown": [
-        "formal risk acceptance artifact for experimental-widgets at pin 0.18.0",
-        "SC-082 experimental_feature_risk_gate via P10.1",
-        "residuals accepted (plumbing ≠ call parity)",
-        "owner + tests per Phase 10 AC",
-        "enablement rule: no production experimental-widgets without gate"
+      "expected": [
+        "Formal risk-acceptance artifact exists for experimental-widgets at pin 0.18.0, or status remains partial with GATE open.",
+        "SC-082 compile-only / embed-alone never treated as production risk acceptance.",
+        "No dual-backend / raw /_matrix HTTP as substitute."
       ]
     },
     {
@@ -112933,8 +112698,8 @@
       {
         "requirement_id": "FR-7.11-007",
         "severity": "high",
-        "kind": "experimental-widgets-and-call-parity",
-        "summary": "Call/widget path depends on experimental-widgets and MatrixRTC gaps; widget plumbing ≠ call parity."
+        "kind": "product-experimental-widgets-risk-acceptance-partial-gate-not-formalized",
+        "summary": "FR-7.11-007 product path is PARTIAL: plan §7.11 + P10.1 + Phase 10 AC require explicit risk acceptance for experimental-widgets at pin 0.18.0; dossier SC-082 is blocked with experimental_feature_risk_gate missing; feature decision is defer-with-blocking-risk / not Phase 1 minimum; RISK-CALLS critical. No formal product risk-acceptance document yet authorizes production enablement. Compile-only SC-082 / embed-alone / CallEmbed AST / raw HTTP / dual-backend / claiming production-accepted FAIL. Cutover P10.1 under GATE-7.11-007-EXPERIMENTAL-WIDGETS-RISK-ACCEPTANCE."
       },
       {
         "requirement_id": "FR-7.11-008",
@@ -114553,6 +114318,20 @@
         "FR-7.11-006: retargeted production_files to CallEmbed.ts, src-tauri/tauri.conf.json, synara/vite.config.js, synara/index.html residual (demoted useCallEmbed, CallWidgetDriver, utils, getDeviceId/search AST, ToDeviceEvent); source-inspected line_refs for getWidget/getIframe/CSP/packaging/no meta CSP.",
         "FR-7.11-006: rust_target product-csp-origin-restrictions-partial-shell-and-iframe caps=[SC-082 host residual] gaps=[GAP-MATRIXRTC-WIDGET-CAPABILITY-PLUMBING]; SC-082 alone never closes CSP; cutover P10.6 (+P13.5).",
         "FR-7.11-006: planned AT/MA rewritten as SHELL CSP + IFRAME SANDBOX + ORIGIN + STRICT ORIGIN residual + NO META CSP residual + DISTINCTIONS 001–005/007 + GATE fail-closed. Top-level AT/MA/risks/unresolved_planning_blockers updated. Accepted FR-7.8-001..009, FR-7.9-001..013 (011 partial), FR-7.10-001..007, FR-7.11-001..005 (003/004/005 partial under their gates) preserved. JSON and Markdown synchronized."
+      ]
+    },
+    {
+      "id": "p0.2-correct-53-fr-7.11-007-experimental-widgets-risk-acceptance",
+      "scope": "Rejected-review limited correction: FR-7.11-007 only — replace shallow notes (implemented via 3 files / getDeviceId-search false AST / ToDeviceEvent / generic e2e AT-MA) with concrete risk-gate evidence: plan §7.11 + P10.1 Exact experimental-widget risk dossier + Phase 10 AC; dossier SC-082 blocked with experimental_feature_risk_gate missing; defer-with-blocking-risk; RISK-CALLS critical; honest partial under GATE-7.11-007-EXPERIMENTAL-WIDGETS-RISK-ACCEPTANCE (formal acceptance not formalized); rust_target product-experimental-widgets-risk-acceptance-partial-gate-not-formalized caps=[SC-082] gaps=[GAP-MATRIXRTC-WIDGET-CAPABILITY-PLUMBING]",
+      "requirements_rewritten": [
+        "FR-7.11-007"
+      ],
+      "not_claimed_complete": true,
+      "changes": [
+        "FR-7.11-007: current_status remains partial under GATE-7.11-007-EXPERIMENTAL-WIDGETS-RISK-ACCEPTANCE. current_behavior_and_limits documents dossier/plan risk language present (SC-082 blocked, defer-with-blocking-risk, RISK-CALLS, P10.1 planned) but no formal product risk-acceptance artifact authorizing production enablement of experimental-widgets at pin 0.18.0; notes no longer shallow file-count/false AST.",
+        "FR-7.11-007: retargeted production_files to capability-dossier.md, feature-and-gap-analysis.md, matrix-rust-sdk-full-replacement-plan.md (demoted CallEmbed/useCallEmbed/CallWidgetDriver getDeviceId/search/ToDeviceEvent as non-risk-acceptance evidence).",
+        "FR-7.11-007: rust_target product-experimental-widgets-risk-acceptance-partial-gate-not-formalized caps=[SC-082] gaps=[GAP-MATRIXRTC-WIDGET-CAPABILITY-PLUMBING]; SC-082 compile-only never equals risk acceptance; cutover P10.1; contingency adjacency P10.7/FR-7.11-008.",
+        "FR-7.11-007: planned AT/MA rewritten as planning-gate-review (PIN + BASELINE + RESIDUALS + OWNER/TESTS + ENABLEMENT RULE + DISTINCTIONS 001–006/008) under GATE fail-closed. Top-level AT/MA/risks/unresolved_planning_blockers updated. Accepted FR-7.8-001..009, FR-7.9-001..013 (011 partial), FR-7.10-001..007, FR-7.11-001..006 (003/004/005/006 partial under their gates) preserved. JSON and Markdown synchronized."
       ]
     }
   ]
