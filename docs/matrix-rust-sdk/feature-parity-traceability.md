@@ -4,7 +4,7 @@
 
 ## Correction pass status
 
-Limited rejected-review correction (`p0.2-correct-40-fr-7.10-001-room-message-search-pagination`) for **FR-7.10-001** only: replace generic “via 3 files” / shallow “uses client.search” notes / `search` without next_batch evidence / generic AT-MA with concrete **room-scoped room_events search + next_batch pagination** evidence — `useMessageSearch` `mx.search({ body, next_batch })` limit=20 L105–108; `parseSearchResult` nextToken/highlights/`groupSearchResult`; `MessageSearch` `useInfiniteQuery` getNextPageParam/fetchNextPage scroll pagination + SearchInput; SearchResultGroup result chrome only; EXCLUDE Open (FR-7.10-004), filters (FR-7.10-003), global (FR-7.10-002); drop GAP-EVENT-CONTEXT as primary gap (product before/after 0); keep rust_target `typed-sdk-request-required-server-search` (SC-071); rewrite planned AT/MA for P6.8 (+P11.3) typed Client::send search path; SC alone / compile-only / raw HTTP / dual-backend / Open-only / filter-only / global-only / helper-only FAIL. Status remains `implemented`. JSON and Markdown synchronized. Accepted corrections for **FR-7.8-001 through FR-7.8-009** and **FR-7.9-001..013** (including **FR-7.9-011** sequential isolation) preserved. Prior corrections and accepted **7.1–7.3** preserved. **P0.2 is not complete.**
+Limited rejected-review correction (`p0.2-correct-41-fr-7.10-002-global-message-search`) for **FR-7.10-002** only: replace shallow notes (partial/product-dependent via broader Search UI) / wrong `features/search/Search.tsx` `getSafeUserId` primary / SC-071+SC-072 dual caps / generic AT-MA with concrete **global message search currently exposed** evidence — HomeSearch/SpaceSearch `allowGlobal`; SearchFilters Global chip; MessageSearch `global=true` → `rooms` undefined; `useMessageSearch` `mx.search` without room filter; EXCLUDE room-scoped (FR-7.10-001), filters (FR-7.10-003), Open (FR-7.10-004), user/directory Search.tsx (FR-7.10-005), SC-072 local (FR-7.10-006); honest rust_target `typed-sdk-request-required-server-search` (SC-071 only); status `partial` → `implemented` (currently exposed). JSON and Markdown synchronized. Accepted corrections for **FR-7.8-001 through FR-7.8-009**, **FR-7.9-001..013** (**FR-7.9-011** remains partial), and **FR-7.10-001** preserved. Prior corrections and accepted **7.1–7.3** preserved. **P0.2 is not complete.**
 
 ## Provenance
 
@@ -18,9 +18,9 @@ Limited rejected-review correction (`p0.2-correct-40-fr-7.10-001-room-message-se
 
 ### Status distribution
 
-- `implemented`: 96
+- `implemented`: 97
 - `not-currently-exposed`: 1
-- `partial`: 22
+- `partial`: 21
 
 ### 7.1–7.3 retained vs excluded
 
@@ -223,7 +223,7 @@ Limited rejected-review correction (`p0.2-correct-40-fr-7.10-001-room-message-se
 | `FR-7.9-012`  | `implemented`           | store continuity across upgrades and crashes;                            | `AT-FR-7.9-012-001`  | `MA-FR-7.9-012`  |
 | `FR-7.9-013`  | `partial`               | store corruption detection and non-destructive recovery guidance.        | `AT-FR-7.9-013-001`  | `MA-FR-7.9-013`  |
 | `FR-7.10-001` | `implemented`           | room message search and pagination;                                      | `AT-FR-7.10-001-001` | `MA-FR-7.10-001` |
-| `FR-7.10-002` | `partial`               | global message search if currently exposed;                              | `AT-FR-7.10-002-001` | `MA-FR-7.10-002` |
+| `FR-7.10-002` | `implemented`           | global message search if currently exposed;                              | `AT-FR-7.10-002-001` | `MA-FR-7.10-002` |
 | `FR-7.10-003` | `implemented`           | sender, room, date, and content filters used by the UI;                  | `AT-FR-7.10-003-001` | `MA-FR-7.10-003` |
 | `FR-7.10-004` | `implemented`           | event-context navigation from results;                                   | `AT-FR-7.10-004-001` | `MA-FR-7.10-004` |
 | `FR-7.10-005` | `implemented`           | user and public-room search;                                             | `AT-FR-7.10-005-001` | `MA-FR-7.10-005` |
@@ -6608,54 +6608,54 @@ Limited rejected-review correction (`p0.2-correct-40-fr-7.10-001-room-message-se
 
 - **Text**: global message search if currently exposed;
 - **Lines**: 442–442
-- **Status**: `partial`
-- **Behavior**: Current desktop implements this via 4 production matrix-js-sdk-related file(s); status=partial.
-- **Notes**: Global message search exposure is partial/product-dependent via message-search feature and broader Search UI; not claimed as fully separate global index.
-- **UI**: `synara/src/app/features/message-search/MessageSearch.tsx`, `synara/src/app/features/search/Search.tsx`
-- **Owners**: `synara/src/app/features/message-search/useMessageSearch.ts`
+- **Status**: `implemented`
+- **Behavior**: Current desktop exposes global message search: Home/Space Message Search routes mount MessageSearch with allowGlobal; Global chip sets URL global=true; msgSearchParams leaves rooms undefined; mx.search room_events runs without a rooms filter. status=implemented (currently exposed).
+- **Notes**: Evidence (conservative): (1) EXPOSURE GATE: plan clause is 'global message search if currently exposed' — product DOES expose it. HomeSearch L42–47 MessageSearch allowGlobal rooms={useHomeRooms()}; SpaceSearch L57–62 MessageSearch allowGlobal rooms={space children}. Router.tsx routes _SEARCH_PATH to HomeSearch/SpaceSearch. Home.tsx NavLink getHomeSearchPath 'Message Search' entry. (2) GLOBAL UI: SearchFilters L435–444 Global chip only when allowGlobal; onClick onGlobalChange(true). Default host chip L426–434 clears global. (3) SCOPE BINDING: MessageSearch msgSearchParams L88–98 — isGlobal = global==='true'; defaultRooms = isGlobal ? undefined : rooms; rooms: searchParamRooms ?? defaultRooms. handleGlobalChange L168–177 writes/clears URL global=true. When global, roomList=allRooms L263 (user may still narrow via rooms param chips — optional sub-filter, not required for global). (4) SEARCH WITHOUT ROOM FILTER: useMessageSearch filter { limit:20, rooms, senders } L93–97; rooms undefined → no room-list restriction on server room_events search; mx.search L105–108 same call as FR-7.10-001. (5) NON-GLOBAL ENTRY (adjacent): RoomSidePanel RoomSearchPanel MessageSearch rooms={[room.roomId]} WITHOUT allowGlobal — room-scoped only (FR-7.10-001). (6) EXCLUDE: features/search/Search.tsx is user/public-room directory modal (FR-7.10-005), not global message search — drop getSafeUserId as primary. Filters sender/date/type FR-7.10-003; Open FR-7.10-004; local SC-072 FR-7.10-006; cancel/stale FR-7.10-007. (7) No existing automated AT for global search E2E. (8) Cutover P6.8 (+P11.3): preserve global allowGlobal + global=true + rooms-undefined mx.search via typed SC-071 Client::send search path + product IPC — not raw /_matrix HTTP, not dual-backend, not experimental SC-072. SC-071 alone / compile-only / raw HTTP / room-scoped-only / filter-only / Open-only / directory-only / helper-only FAIL.
+- **Limits**: P0.1 method candidates are AST name hits unless marked source-inspected. Global search reuses the same server room_events search as room-scoped; 'global' means no product rooms filter (server may still restrict to searchable joined history). Optional rooms URL chips can re-narrow even under global=true — pure unrestricted search is global with no rooms param. RoomSidePanel never offers Global chip. No separate global index API. No E2E AT yet. SC-071 remains typed-sdk-request-required; do not map SC-072 experimental local search as current product path.
+- **UI**: `synara/src/app/pages/client/home/Search.tsx`, `synara/src/app/pages/client/space/Search.tsx`, `synara/src/app/features/message-search/MessageSearch.tsx`, `synara/src/app/features/message-search/SearchFilters.tsx`
+- **UI rationale**: Global message search is currently product-exposed. HomeSearch (pages/client/home/Search.tsx) mounts MessageSearch with allowGlobal and host rooms=useHomeRooms; SpaceSearch (pages/client/space/Search.tsx) mounts MessageSearch with allowGlobal and space child rooms. Router routes _SEARCH_PATH to HomeSearch/SpaceSearch. SearchFilters shows a Global chip when allowGlobal; selecting it sets URL global=true. MessageSearch maps global===true → rooms undefined → useMessageSearch/mx.search without room filter. RoomSidePanel RoomSearchPanel does NOT pass allowGlobal and binds rooms={[room.roomId]} — room-scoped only (FR-7.10-001), not a global entry. features/search/Search.tsx is the user/public-room directory modal (FR-7.10-005) — EXCLUDE as global message search evidence.
+- **Owners**: `synara/src/app/features/message-search/useMessageSearch.ts`, `synara/src/app/features/message-search/MessageSearch.tsx`
 - **Files**:
-  - `synara/src/app/features/message-search/MessageSearch.tsx` symbols=[] retained_m=0 retained_l=0
-  - `synara/src/app/features/message-search/SearchFilters.tsx` symbols=[] retained_m=0 retained_l=0
-  - `synara/src/app/features/message-search/useMessageSearch.ts` symbols=['search'] retained_m=1 retained_l=0
-    - method `search`:L105 — None
-  - `synara/src/app/features/search/Search.tsx` symbols=['getSafeUserId', 'getSafeUserId'] retained_m=2 retained_l=0
-    - method `getSafeUserId`:L266 — None
-    - method `getSafeUserId`:L468 — None
+  - `synara/src/app/features/message-search/useMessageSearch.ts` symbols=['search', 'filter.rooms optional/undefined'] retained_m=1 retained_l=0
+    - method `search`:L105 — Source-inspected product call site (exact-line) on mx from useMatrixClient(); matrix-js-sdk MatrixClient.search with ISearchRequestBody; rooms may be undefined for global scope.
+  - `synara/src/app/features/message-search/MessageSearch.tsx` symbols=['global URL param', 'isGlobal', 'defaultRooms undefined', 'handleGlobalChange', 'allowGlobal'] retained_m=0 retained_l=0
+  - `synara/src/app/features/message-search/SearchFilters.tsx` symbols=['allowGlobal', 'Global chip'] retained_m=0 retained_l=0
 - **Behavior-relevant methods (top-level)**:
-  - `search` `synara/src/app/features/message-search/useMessageSearch.ts`:L105 — None
-  - `getSafeUserId` `synara/src/app/features/search/Search.tsx`:L266 — None
-  - `getSafeUserId` `synara/src/app/features/search/Search.tsx`:L468 — None
+  - `search` `synara/src/app/features/message-search/useMessageSearch.ts`:L105 — Source-inspected product call site (exact-line) on mx from useMatrixClient(); matrix-js-sdk MatrixClient.search with ISearchRequestBody; rooms may be undefined for global scope.
 - **Behavior-relevant listeners (top-level)**:
   - —
-- **Unfiltered linked candidates**: methods=10 listeners=0
-- **Rust**: `typed-sdk-request-required-server-search` caps=['SC-071', 'SC-072'] gaps=[]
+- **Unfiltered linked candidates**: methods=6 listeners=0
+- **Rust**: `typed-sdk-request-required-server-search` caps=['SC-071'] gaps=[]
   - `SC-071` `typed-sdk-request-required` `Server-side room message search (/search) high-level API` https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/lib.rs#L67-L74
-  - `SC-072` `blocked` `matrix_sdk::message_search / search_index (experimental-search)` https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/lib.rs#L67-L74
-- **Tasks**: `P6.8`
+- **Tasks**: `P6.8`, `P11.3`
 - **Blockers**:
-  - (medium) typed-sdk-request-required: FR-7.10-002 requires typed SDK request route (not raw HTTP, not invented high-level API).
+  - (medium) typed-sdk-request-required: FR-7.10-002 requires typed SC-071 Client::send search path for global (rooms-unrestricted) message search (not raw HTTP, not invented high-level search API, not dual-backend, not SC-072 experimental local search).
 - **Existing tests**:
   - _(none)_
 - **Planned** `AT-FR-7.10-002-001` task `P6.8` level `integration`
-  - Scenario: 7.10/FR-7.10-002: exercise 'global message search if currently exposed;' via owner `synara/src/app/features/message-search/useMessageSearch.ts` and UI `synara/src/app/features/message-search/MessageSearch.tsx`, then confirm Rust/IPC cutover task `P6.8` preserves observable behavior without raw Matrix runtime HTTP.
-  - Test target: None
+  - Scenario: Integration against disposable Synapse: (A) EXPOSURE — open Home Message Search or Space Message Search (allowGlobal hosts); assert Global chip is visible. (B) GLOBAL SEARCH — enable Global (URL global=true); enter search_term known to match messages in more than one room outside the host default list if applicable; assert useMessageSearch/mx.search issues room_events search with rooms filter undefined/absent (not bound only to host rooms list); results may group across rooms. (C) SCOPE TOGGLE — clear Global back to host default; assert rooms re-bound to host list (room-scoped adjacency, not sole pass). (D) DISTINCTIONS — room-scoped-only without Global (FR-7.10-001), filter-only sender/date/type (FR-7.10-003), Open result alone (FR-7.10-004), user/directory Search modal alone (FR-7.10-005), cancel/stale (FR-7.10-007) do not satisfy this FR. After cutover P6.8 (+P11.3), same observables via typed SC-071 Client::send search request path + product IPC — not raw /_matrix HTTP, not dual-backend/SDK selector, not experimental SC-072, not invented high-level search API. SC-071 alone, compile-only, raw HTTP, room-scoped-only, filter-only, Open-only, directory-only, helper/fixture-only FAIL.
+  - Test target: HomeSearch/SpaceSearch allowGlobal; SearchFilters Global chip; MessageSearch global=true → rooms undefined; useMessageSearch mx.search without rooms filter; post-cutover typed SC-071 Client::send search + IPC (P6.8/P11.3)
   - Preconditions:
-    - Desktop app; room with searchable indexed history on Synapse
-    - Public room directory populated; second user for user search
-    - Linked owner path present in tree: synara/src/app/features/message-search/useMessageSearch.ts
-    - Primary UI/lifecycle surface: synara/src/app/features/message-search/MessageSearch.tsx
+    - Disposable Synapse with multiple joined rooms whose history is server-searchable; at least one term matching messages in a room outside a narrow host list when testing global vs host scope.
+    - Named owners present: useMessageSearch.ts, MessageSearch.tsx, SearchFilters.tsx; entry pages HomeSearch and/or SpaceSearch with allowGlobal.
+    - Harness can observe URL global=true, search request body rooms field (undefined/absent vs host list), and Global chip visibility.
+    - Do not accept room-scoped-only (FR-7.10-001), filter-only (FR-7.10-003), Open-only (FR-7.10-004), user/directory-only (FR-7.10-005), cancel/stale-only (FR-7.10-007), or unit-only helpers as sole pass for this FR.
   - Actions:
-    1. Boot the appropriate harness for level=integration against disposable Synapse (or iOS notes if any).
-    2. Establish fixtures required by the clause list: global message search if currently exposed.
-    3. Open UI/lifecycle surface `synara/src/app/features/message-search/MessageSearch.tsx` (or follow ui_entry_points_rationale if no dedicated UI).
-    4. Step 1: perform the product action that implements «global message search if currently exposed» using current owner `synara/src/app/features/message-search/useMessageSearch.ts`.
-    5. Issue search, paginate results, cancel in-flight query, and re-issue with different filters to catch stale results.
+    1. Boot integration harness against disposable Synapse. Do not use fixture-only mocks that skip product MessageSearch/allowGlobal path, dual-backend selectors, raw HTTP, or helper-only pass criteria.
+    2. EXPOSURE: open Home or Space Message Search route; assert allowGlobal surfaces Global chip.
+    3. GLOBAL SEARCH: select Global; enter a term; assert product path issues room_events search with rooms undefined/absent (not restricted to host default room list alone).
+    4. RESULTS: assert matching results render (may span multiple rooms); optional: confirm host-default-only scope would not include a cross-room hit that global does.
+    5. SCOPE TOGGLE: return to host default chip; assert rooms re-bound (documents distinction from FR-7.10-001 without substituting for this FR).
+    6. After cutover P6.8 (+P11.3), repeat global search via typed Client::send search (SC-071) under Rust ownership + product IPC. Citing SC-071 alone, compile-only blocked, raw /_matrix HTTP, dual-backend/SDK selector, SC-072 experimental, room-scoped-only, filter-only, Open-only, directory-only, or helper/fixture-only is a FAIL.
   - Assertions:
-    - Each clause is observable: «global message search if currently exposed».
-    - State coordination remains through `synara/src/app/features/message-search/useMessageSearch.ts` (or its Rust/IPC successor after cutover), not ad-hoc dual writers.
-    - Behavior-relevant current JS method candidates exercised or replaced: search, getSafeUserId, getSafeUserId (AST candidates; not type-proven receivers).
-    - Rust mapping remains conservative: caps=[SC-071,SC-072] gaps=[none]; compile-only blocked states are not treated as runtime pass.
-    - No new production matrix-js-sdk usage and no raw /\_matrix runtime HTTP unless dossier marks that exact behavior typed-sdk-request-required.
+    - EXPOSED: Global message search UI is reachable (allowGlobal + Global chip on Home/Space Message Search).
+    - GLOBAL REQUEST: with global=true and no rooms sub-filter, room_events search does not bind filter.rooms to the host-only room list (rooms undefined/absent).
+    - RESULTS: server search returns matching events under global scope; UI renders result groups.
+    - DISTINCTIONS: this FR ≠ FR-7.10-001 room-scoped; ≠ FR-7.10-003 filters beyond Global; ≠ FR-7.10-004 Open; ≠ FR-7.10-005 user/directory; ≠ FR-7.10-006 local search; ≠ FR-7.10-007 cancel/stale.
+    - COORDINATION: search remains through useMessageSearch + MessageSearch (or Rust/IPC successors), not ad-hoc dual writers.
+    - CUTOVER: P6.8 (+P11.3) preserves global scope via typed SC-071 Client::send search path; SC alone / compile-only never product pass; no raw /_matrix runtime HTTP; no dual-backend/SDK selector; no SC-072 substitution.
+    - No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless the dossier marks that exact behavior typed-sdk-request-required.
+    - Room-scoped-only, filter-only, Open-only, directory-only, cancel/stale-only, and helper unit tests alone are not accepted as sole pass criteria for this FR.
   - does_not_currently_exist: `True`
 - **Manual**: `MA-FR-7.10-002`
 
@@ -9353,20 +9353,27 @@ Limited rejected-review correction (`p0.2-correct-40-fr-7.10-001-room-message-se
 
 - Platforms: macOS, Linux
 - Preconditions:
-  - Desktop app; room with searchable indexed history on Synapse
-  - Public room directory populated; second user for user search
+  - Desktop app against disposable Synapse; multiple joined rooms with server-searchable history; known search term that can match outside a narrow host list.
   - State owner available: synara/src/app/features/message-search/useMessageSearch.ts
-  - UI/lifecycle: synara/src/app/features/message-search/MessageSearch.tsx
-  - Current status baseline: partial
+  - UI/lifecycle: Home Message Search or Space Message Search (allowGlobal), MessageSearch.tsx, SearchFilters.tsx
+  - Global path available (Global chip); Current status baseline: implemented (currently exposed)
 - Actions:
-  1. Launch Synara desktop on the target platform against disposable Synapse; use a clean or known fixture profile as required by «global message search if currently exposed;».
-  2. Identify state owner `synara/src/app/features/message-search/useMessageSearch.ts` and open `synara/src/app/features/message-search/MessageSearch.tsx`.
-  3. Action 1 — «global message search if currently exposed»: perform the minimal user/system steps that trigger this clause (use linked files under current_production_files if the entry point is indirect).
-  4. Run search, change filters, paginate, click a result to open event context, cancel a slow query and ensure UI does not apply stale results.
+  1. Launch Synara desktop on the target platform against disposable Synapse; open Home Message Search (or Space Message Search) via the Message Search nav entry.
+  2. EXPOSURE: confirm the Global chip is visible (allowGlobal host).
+  3. GLOBAL SEARCH: select Global; enter a known term in SearchInput; confirm results appear and may span rooms beyond the host default list; confirm request/scope uses global=true (rooms not forced to host-only list).
+  4. SCOPE TOGGLE: select the host default chip (e.g. Home / space name); confirm scope returns to host rooms list (room-scoped adjacency).
+  5. DISTINCTIONS (negative for this FR alone): do not treat room-scoped RoomSidePanel search without Global (FR-7.10-001), filter-only sender/date/type (FR-7.10-003), Open on a result (FR-7.10-004), user/directory Search modal (FR-7.10-005), or cancel/stale alone (FR-7.10-007) as satisfying global message search exposure.
+  6. After cutover P6.8 (+P11.3): repeat global search; confirm typed SC-071 Client::send search path (not raw /_matrix from the renderer, not dual-backend/SDK selector, not SC-072 experimental local search).
 - Expected:
-  - All clauses under «global message search if currently exposed;» produce the user-visible or system-observable success criteria without error toasts unrelated to intentional negative tests.
-  - Clause 1 «global message search if currently exposed» is satisfied on macOS, Linux with owner `synara/src/app/features/message-search/useMessageSearch.ts`.
-  - No unexpected raw /\_matrix traffic from the app renderer for this flow on the post-cutover build.
+  - EXPOSED: Global message search is reachable from Home/Space Message Search with Global chip.
+  - GLOBAL REQUEST: global=true leaves rooms unrestricted (undefined/absent) for server room_events search; results render.
+  - SCOPE TOGGLE: host default chip re-binds rooms list without removing Global availability.
+  - No unexpected raw /\_matrix traffic from the app renderer for this flow on the post-cutover build; no dual-backend/SDK selector.
+  - SC-071 alone / compile-only / raw HTTP / room-scoped-only / filter-only / Open-only / directory-only / SC-072 / helper-only do not pass this FR.
+- Clause breakdown:
+  - global message search currently exposed (Home/Space allowGlobal + Global chip)
+  - global=true → rooms undefined → mx.search without room filter
+  - cutover P6.8 (+P11.3) typed SC-071 Client::send search; SC-only/raw HTTP/SC-072/helper-only FAIL
 
 ### `MA-FR-7.10-003` (FR-7.10-003)
 
@@ -11599,20 +11606,24 @@ Limited rejected-review correction (`p0.2-correct-40-fr-7.10-001-room-message-se
 
 ### `AT-FR-7.10-002-001`
 
-- 7.10/FR-7.10-002: exercise 'global message search if currently exposed;' via owner `synara/src/app/features/message-search/useMessageSearch.ts` and UI `synara/src/app/features/message-search/MessageSearch.tsx`, then confirm Rust/IPC cutover task `P6.8` preserves observable behavior without raw Matrix runtime HTTP.
-- target: None
+- Integration against disposable Synapse: (A) EXPOSURE — open Home Message Search or Space Message Search (allowGlobal hosts); assert Global chip is visible. (B) GLOBAL SEARCH — enable Global (URL global=true); enter search_term known to match messages in more than one room outside the host default list if applicable; assert useMessageSearch/mx.search issues room_events search with rooms filter undefined/absent (not bound only to host rooms list); results may group across rooms. (C) SCOPE TOGGLE — clear Global back to host default; assert rooms re-bound to host list (room-scoped adjacency, not sole pass). (D) DISTINCTIONS — room-scoped-only without Global (FR-7.10-001), filter-only sender/date/type (FR-7.10-003), Open result alone (FR-7.10-004), user/directory Search modal alone (FR-7.10-005), cancel/stale (FR-7.10-007) do not satisfy this FR. After cutover P6.8 (+P11.3), same observables via typed SC-071 Client::send search request path + product IPC — not raw /_matrix HTTP, not dual-backend/SDK selector, not experimental SC-072, not invented high-level search API. SC-071 alone, compile-only, raw HTTP, room-scoped-only, filter-only, Open-only, directory-only, helper/fixture-only FAIL.
+- target: HomeSearch/SpaceSearch allowGlobal; SearchFilters Global chip; MessageSearch global=true → rooms undefined; useMessageSearch mx.search without rooms filter; post-cutover typed SC-071 Client::send search + IPC (P6.8/P11.3)
 - actions:
-  1. Boot the appropriate harness for level=integration against disposable Synapse (or iOS notes if any).
-  2. Establish fixtures required by the clause list: global message search if currently exposed.
-  3. Open UI/lifecycle surface `synara/src/app/features/message-search/MessageSearch.tsx` (or follow ui_entry_points_rationale if no dedicated UI).
-  4. Step 1: perform the product action that implements «global message search if currently exposed» using current owner `synara/src/app/features/message-search/useMessageSearch.ts`.
-  5. Issue search, paginate results, cancel in-flight query, and re-issue with different filters to catch stale results.
+  1. Boot integration harness against disposable Synapse. Do not use fixture-only mocks that skip product MessageSearch/allowGlobal path, dual-backend selectors, raw HTTP, or helper-only pass criteria.
+  2. EXPOSURE: open Home or Space Message Search route; assert allowGlobal surfaces Global chip.
+  3. GLOBAL SEARCH: select Global; enter a term; assert product path issues room_events search with rooms undefined/absent (not restricted to host default room list alone).
+  4. RESULTS: assert matching results render (may span multiple rooms); optional: confirm host-default-only scope would not include a cross-room hit that global does.
+  5. SCOPE TOGGLE: return to host default chip; assert rooms re-bound (documents distinction from FR-7.10-001 without substituting for this FR).
+  6. After cutover P6.8 (+P11.3), repeat global search via typed Client::send search (SC-071) under Rust ownership + product IPC. Citing SC-071 alone, compile-only blocked, raw /_matrix HTTP, dual-backend/SDK selector, SC-072 experimental, room-scoped-only, filter-only, Open-only, directory-only, or helper/fixture-only is a FAIL.
 - assertions:
-  - Each clause is observable: «global message search if currently exposed».
-  - State coordination remains through `synara/src/app/features/message-search/useMessageSearch.ts` (or its Rust/IPC successor after cutover), not ad-hoc dual writers.
-  - Behavior-relevant current JS method candidates exercised or replaced: search, getSafeUserId, getSafeUserId (AST candidates; not type-proven receivers).
-  - Rust mapping remains conservative: caps=[SC-071,SC-072] gaps=[none]; compile-only blocked states are not treated as runtime pass.
-  - No new production matrix-js-sdk usage and no raw /\_matrix runtime HTTP unless dossier marks that exact behavior typed-sdk-request-required.
+  - EXPOSED: Global message search UI is reachable (allowGlobal + Global chip on Home/Space Message Search).
+  - GLOBAL REQUEST: with global=true and no rooms sub-filter, room_events search does not bind filter.rooms to the host-only room list (rooms undefined/absent).
+  - RESULTS: server search returns matching events under global scope; UI renders result groups.
+  - DISTINCTIONS: this FR ≠ FR-7.10-001 room-scoped; ≠ FR-7.10-003 filters beyond Global; ≠ FR-7.10-004 Open; ≠ FR-7.10-005 user/directory; ≠ FR-7.10-006 local search; ≠ FR-7.10-007 cancel/stale.
+  - COORDINATION: search remains through useMessageSearch + MessageSearch (or Rust/IPC successors), not ad-hoc dual writers.
+  - CUTOVER: P6.8 (+P11.3) preserves global scope via typed SC-071 Client::send search path; SC alone / compile-only never product pass; no raw /_matrix runtime HTTP; no dual-backend/SDK selector; no SC-072 substitution.
+  - No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless the dossier marks that exact behavior typed-sdk-request-required.
+  - Room-scoped-only, filter-only, Open-only, directory-only, cancel/stale-only, and helper unit tests alone are not accepted as sole pass criteria for this FR.
 
 ### `AT-FR-7.10-003-001`
 
@@ -12012,7 +12023,7 @@ Limited rejected-review correction (`p0.2-correct-40-fr-7.10-001-room-message-se
 | `synara/src/app/features/room/reaction-viewer/ReactionViewer.tsx`              | `feature`          | `requirement-linked`           |   0 |   1 | `FR-7.3-008`,`FR-7.4-004`                                                                                                                                                                                                                 |
 | `synara/src/app/features/room/room-notes/RoomNotesPanel.tsx`                   | `feature`          | `requirement-linked`           |   0 |   0 | `FR-7.3-014`,`FR-7.3-015`,`FR-7.7-002`,`FR-7.7-008`,`FR-7.7-009`                                                                                                                                                                          |
 | `synara/src/app/features/room/room-pin-menu/RoomPinMenu.tsx`                   | `feature`          | `shared-matrix-infrastructure` |   0 |   2 | `FR-7.1-002`,`FR-7.2-001`,`FR-7.6-001`,`FR-7.3-001`,`FR-7.6-004`,`FR-7.1-006`,`FR-7.1-005`,`FR-7.3-014`,`FR-7.7-008`,`FR-7.2-008`                                                                                                         |
-| `synara/src/app/features/search/Search.tsx`                                    | `feature`          | `requirement-linked`           |   0 |   4 | `FR-7.6-006`,`FR-7.10-002`,`FR-7.10-005`                                                                                                                                                                                                  |
+| `synara/src/app/features/search/Search.tsx`                                    | `feature`          | `requirement-linked`           |   0 |   4 | `FR-7.6-006`,`FR-7.10-005`                                                                                                                                                                                                                |
 | `synara/src/app/features/settings/devices/DeviceTile.tsx`                      | `feature`          | `requirement-linked`           |   0 |   0 | `FR-7.7-007`,`FR-7.9-003`,`FR-7.9-010`                                                                                                                                                                                                    |
 | `synara/src/app/features/settings/devices/OtherDevices.tsx`                    | `feature`          | `requirement-linked`           |   0 |   2 | `FR-7.7-007`,`FR-7.9-003`,`FR-7.9-004`,`FR-7.9-010`                                                                                                                                                                                                    |
 | `synara/src/app/features/settings/devices/Verification.tsx`                    | `feature`          | `requirement-linked`           |   0 |   3 | `FR-7.7-007`,`FR-7.9-002`,`FR-7.9-004`,`FR-7.9-005`                                                                                                                                                                                       |
@@ -12151,7 +12162,7 @@ Limited rejected-review correction (`p0.2-correct-40-fr-7.10-001-room-message-se
 - `FR-7.4-006` typed-sdk-request-required: FR-7.4-006 requires typed SDK request route (not raw HTTP, not invented high-level API).
 - `FR-7.7-008` typed-sdk-request-required: FR-7.7-008 requires typed SDK request route (not raw HTTP, not invented high-level API).
 - `FR-7.10-001` typed-sdk-request-required: FR-7.10-001 requires typed SDK request route (not raw HTTP, not invented high-level API).
-- `FR-7.10-002` typed-sdk-request-required: FR-7.10-002 requires typed SDK request route (not raw HTTP, not invented high-level API).
+- `FR-7.10-002` typed-sdk-request-required: FR-7.10-002 requires typed SC-071 Client::send search path for global (rooms-unrestricted) message search (not raw HTTP, not invented high-level search API, not dual-backend, not SC-072 experimental local search).
 - `FR-7.10-003` typed-sdk-request-required: FR-7.10-003 requires typed SDK request route (not raw HTTP, not invented high-level API).
 - `FR-7.10-006` typed-sdk-request-required: FR-7.10-006 requires typed SDK request route (not raw HTTP, not invented high-level API).
 - `FR-7.10-007` typed-sdk-request-required: FR-7.10-007 requires typed SDK request route (not raw HTTP, not invented high-level API).
