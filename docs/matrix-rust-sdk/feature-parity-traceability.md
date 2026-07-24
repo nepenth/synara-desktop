@@ -18,9 +18,9 @@ Limited rejected-review correction (`p0.2-correct-38-fr-7.9-012-store-continuity
 
 ### Status distribution
 
-- `implemented`: 97
+- `implemented`: 96
 - `not-currently-exposed`: 1
-- `partial`: 21
+- `partial`: 22
 
 ### 7.1–7.3 retained vs excluded
 
@@ -219,7 +219,7 @@ Limited rejected-review correction (`p0.2-correct-38-fr-7.9-012-store-continuity
 | `FR-7.9-008`  | `implemented`           | undecryptable-event retry;                                               | `AT-FR-7.9-008-001`  | `MA-FR-7.9-008`  |
 | `FR-7.9-009`  | `implemented`           | key-backup state listeners;                                              | `AT-FR-7.9-009-001`  | `MA-FR-7.9-009`  |
 | `FR-7.9-010`  | `implemented`           | device deletion and UIA;                                                 | `AT-FR-7.9-010-001`  | `MA-FR-7.9-010`  |
-| `FR-7.9-011`  | `implemented`           | multiple accounts with fully isolated stores and keys;                   | `AT-FR-7.9-011-001`  | `MA-FR-7.9-011`  |
+| `FR-7.9-011`  | `partial`               | multiple accounts with fully isolated stores and keys;                   | `AT-FR-7.9-011-001`  | `MA-FR-7.9-011`  |
 | `FR-7.9-012`  | `implemented`           | store continuity across upgrades and crashes;                            | `AT-FR-7.9-012-001`  | `MA-FR-7.9-012`  |
 | `FR-7.9-013`  | `partial`               | store corruption detection and non-destructive recovery guidance.        | `AT-FR-7.9-013-001`  | `MA-FR-7.9-013`  |
 | `FR-7.10-001` | `implemented`           | room message search and pagination;                                      | `AT-FR-7.10-001-001` | `MA-FR-7.10-001` |
@@ -6339,8 +6339,8 @@ Limited rejected-review correction (`p0.2-correct-38-fr-7.9-012-store-continuity
 
 - **Text**: multiple accounts with fully isolated stores and keys;
 - **Lines**: 435–435
-- **Status**: `implemented`
-- **Behavior**: Product implements sequential multi-account store/key isolation under a single active session: fixed global IndexedDB Matrix store names (`MATRIX_LOCAL_STORE_NAMES`) are clear-and-replaced on identity change (fresh-login `clearMatrixStoresForIdentityChange` when last bootstrapped userId/deviceId differs) or logout (`clearPersistedSessions`); single-slot `FALLBACK_SESSION_KEYS` / `clearSessionLocalStorage` isolate session tokens; `ClientRoot` mounts one `getActiveSession`→`initClient`. Concurrent multi-account dual clients / parallel per-userId stores are a non-goal. status=implemented.
+- **Status**: `partial`
+- **Behavior**: Product implements sequential multi-account store/key isolation under a single active session: fixed global IndexedDB Matrix store names (`MATRIX_LOCAL_STORE_NAMES`) are clear-and-replaced on identity change (fresh-login `clearMatrixStoresForIdentityChange` when last bootstrapped userId/deviceId differs) or logout (`clearPersistedSessions`); single-slot `FALLBACK_SESSION_KEYS` / `clearSessionLocalStorage` isolate session tokens; `ClientRoot` mounts one `getActiveSession`→`initClient`. Concurrent multi-account dual clients / parallel per-userId stores are a non-goal. status=partial under sequential single-active isolation; concurrent multi-account fully isolated stores not product.
 - **Notes**: Evidence (conservative): (1) SINGLE-SESSION MODEL `sessions.ts` L1–12 Session shape; L29–35 `FALLBACK_SESSION_KEYS` single-slot keys; L68–74 Single-session fallback storage; L75–114 set/get/remove overwrite same keys; L168–175 `clearSessionLocalStorage` session keys only (settings preserved). (2) FIXED GLOBAL STORES `matrixLocalStores.ts` L1–10 `MATRIX_LOCAL_STORE_NAMES` = web-sync-store, crypto-store, matrix-js-sdk::matrix-sdk-crypto, matrix-js-sdk::matrix-sdk-crypto-meta — NOT per-userId parallel DBs; L38–40 `clearMatrixLocalStores`; L15–21 `isCryptoAccountMismatchError` fallback. (3) IDENTITY-CHANGE CLEAR `sessionPersistence.ts` L23–27 multi-account non-goal; L42–43 last bootstrapped identity; L220–229 `shouldClearMatrixStoresBeforeInit`; L236–246 `clearMatrixStoresForIdentityChange`; L492–523 `clearPersistedSessions` logout wipe (FR-7.1-010 adjacency). (4) INIT WIRE-UP `initMatrix.ts` L168–211 `createMatrixClient` fixed IndexedDBStore/IndexedDBCryptoStore + `createClient` L207; L302–346 `initClient` fresh-login clear then start; setLastBootstrapped on success. (5) SINGLE MOUNT `ClientRoot.tsx` L249–262 `getActiveSession`→`initClient`; sessionBootstrap `activeSession` singleton. (6) TESTS matrixLocalStores alice→bob proactive clear; sessionPersistence identity clear; sessions clearSessionLocalStorage; initMatrix fresh-login clear / restored no clear. (7) NON-EVIDENCE: getCrypto/assertCryptoStoreContinuity = FR-7.9-012; initRustCrypto order = FR-7.9-001; full logout wipe primary = FR-7.1-010; switch UX = FR-7.1-009; concurrent dual clients not product. (8) Cutover P2.2+P3.6+P8.8 via SC-061+SC-083 per-account store path + product single-session policy + IPC — not SC alone, not compile-only, not raw HTTP, not dual-backend, not concurrent dual-client claim, not continuity-only, not logout-wipe-only, not helper-only.
 - **Limits**: Product multi-account is sequential single-active-session isolation (clear fixed-name IndexedDB + single-slot keys), not concurrent dual Matrix clients or per-userId parallel store maps. `initClient` proactive clear only on pending fresh-login path; restored sessions must not clear stores. createClient is the retained JS SDK method; isolation primitives are product helpers. Rust SC-061+SC-083 compile-shape-only blocked (E3–E5 missing); compile-only ≠ pass.
 - **UI**: `synara/src/app/pages/client/ClientRoot.tsx`
