@@ -15,6 +15,26 @@ This remains a complete replacement program: desktop production must move from
 `matrix-js-sdk` to Matrix Rust SDK, not retain a selectable or permanent second
 backend. No production Matrix Rust SDK migration code has been accepted yet.
 
+### Orchestrator goal (persistent)
+
+**Objective:** Execute the Matrix Rust SDK replacement plan using bounded native
+sub-agent implementation tasks. Independently review and validate every change;
+only commit, push, open PRs, or merge accepted work. Never merge to `main`
+without explicit user approval.
+
+**Host task id:** `9022c2f8-9b21-411a-acf9-a36c10515f72`
+(`matrix-rust-sdk-replacement-orchestrator`, daily check-in)
+
+**Session state (2026-07-24):**
+
+- Integration: `feature/matrix-rust-sdk-full-replacement` @ `80c8fa3` (P0.1+P0.3 merged)
+- Working branch: `matrix-rust/p0.2-parity-traceability` (tracks origin; no open P0.2 PR yet)
+- Ancestry: integration is ancestor of P0.2 branch
+- Checkpoint commits: `06d0f86` (traceability scaffold), `9c91e0f` (handoff)
+- **Accepted this session:** FR-7.8-004 (`p0.2-correct-22-fr-7.8-004-native-notification-generation`) after independent orchestrator review
+- **Next writer task:** FR-7.8-005 (unread/badge summaries), then remaining 7.8–7.11
+- No production Matrix Rust SDK replacement code accepted
+
 Phase 0 evidence accepted before this handoff:
 
 - P0.1 SDK usage inventory is merged to the integration branch.
@@ -23,8 +43,9 @@ Phase 0 evidence accepted before this handoff:
 - P0.2 traceability checkpoint commit `06d0f86` is pushed on
   `matrix-rust/p0.2-parity-traceability`. It contains the full 119-requirement
   matrix and accepted corrections for FR-7.8-001 through FR-7.8-003.
+  Handoff commit `9c91e0f` is also on the branch tip.
 
-P0.2 is not complete. Resume at FR-7.8-004, then audit all remaining 7.8–7.11
+P0.2 is not complete. Resume at FR-7.8-005, then audit all remaining 7.8–7.11
 requirements before declaring P0.2 accepted.
 
 Accepted notification findings that must be preserved:
@@ -38,10 +59,15 @@ Accepted notification findings that must be preserved:
 - FR-7.8-003: status is `partial` under
   `GATE-7.8-003-INVITE-PREFERENCE`. Invite delivery is not a persistent,
   user-configurable invite-notification preference.
-- FR-7.8-004 is source-reviewed but not accepted. The next writer must use the
-  concrete SystemNotification and ClientNonUIFeatures native notification
-  evidence already recorded in the execution transcript, then provide both JSON
-  and Markdown synchronization for review.
+- FR-7.8-004: status `implemented`. Desktop native notification **generation**
+  is owned by `ClientNonUIFeatures` (`InviteNotifications`,
+  `MessageNotifications`, plus `AgentApprovalNotifications` /
+  `LaterReminderNotifications` emitters) with `SystemNotification` **enablement
+  only** (`showNotifications` + OS/browser permission) and platform bridge
+  `normalizeSystemNotificationRequest` / `showPlatformNotification`. Push-rule
+  preference UIs, badge/tray/favicon, EmailNotification pusher, SC-057 alone,
+  helper/fixture-only, and raw `/_matrix/` HTTP never pass. Cutover is P9.2
+  Rust-owned notification candidate stream + desktop bridge.
 
 ## Branch and PR contract
 

@@ -4,7 +4,7 @@
 
 ## Correction pass status
 
-Limited rejected-review correction (`p0.2-correct-21-fr-7.8-003-global-preferences-invite-boundary`) for **FR-7.8-003** only: status `partial` with `GATE-7.8-003-INVITE-PREFERENCE`; baseline documents Settings Notifications page mounts of AllMessagesNotifications/SpecialMessagesNotifications/KeywordMessagesNotifications; keyword content-specific create/delete/mode (Notify+highlight+pattern); five special mention modes (IsUserMention, ContainsDisplayName, ContainsUserName, IsRoomMention, AtRoomNotification with highlight semantics); four all-message defaults DM/EncryptedDM/Message/EncryptedMessage (shared with FR-7.8-001); invite delivery in ClientNonUIFeatures InviteNotifications is not a preference and no user-visible persistent invite preference exists; planned AT/MA require exact Settings sub-surfaces, independent invite-absence gate, future persist/reload/controls-invite/no-unrelated-rules condition, and typed Rust cutover/rejection language. JSON evidence is updated; Markdown is now synchronized after this edit. Accepted corrections through **FR-7.8-002** preserved. Prior corrections and accepted **7.1–7.3** preserved. **P0.2 is not complete.**
+Limited rejected-review correction (`p0.2-correct-22-fr-7.8-004-native-notification-generation`) for **FR-7.8-004** only: retarget desktop native notification generation from wrong push-rule preference linkage to concrete SystemNotification enablement + ClientNonUIFeatures InviteNotifications/MessageNotifications generation (plus AgentApprovalNotifications/LaterReminderNotifications emitters) + normalizeSystemNotificationRequest / showPlatformNotification platform bridge; remove AllMessages/KeywordMessages/SpecialMessages/NotificationModeSwitcher as primary owners/files; rewrite planned AT/MA for permission/message/invite/suppression paths and P9.2 Rust-owned candidate stream + desktop bridge cutover (no raw `/_matrix/` HTTP; SC IDs alone fail; push-rule settings UI cannot substitute; helper/fixture-only fails); SC-057 retained as rules/settings support only, not native OS notification generation. Status remains `implemented`. JSON and Markdown synchronized. Accepted corrections for **FR-7.8-001 through FR-7.8-003** preserved. Prior corrections and accepted **7.1–7.3** preserved. **P0.2 is not complete.**
 
 ## Provenance
 
@@ -5150,58 +5150,70 @@ Limited rejected-review correction (`p0.2-correct-21-fr-7.8-003-global-preferenc
 - **Text**: desktop native notification generation;
 - **Lines**: 416–416
 - **Status**: `implemented`
-- **Behavior**: Current desktop implements this via 7 production matrix-js-sdk-related file(s); status=implemented.
-- **UI**: `synara/src/app/features/settings/notifications/SystemNotification.tsx`
-- **Owners**: `synara/src/app/utils/notifications.ts`
+- **Behavior**: Current desktop implements native OS/browser notification generation through ClientNonUIFeatures (InviteNotifications, MessageNotifications, plus AgentApprovalNotifications and LaterReminderNotifications) with SystemNotification enablement (showNotifications + OS/browser permission) and platform bridge normalizeSystemNotificationRequest / showPlatformNotification; status=implemented.
+- **Notes**: Evidence (conservative): (1) Enablement UI synara/src/app/features/settings/notifications/SystemNotification.tsx owns Desktop Notifications control: supportsPlatformSystemNotifications / requestPlatformNotificationPermission or window.Notification.requestPermission; settingsAtom showNotifications switch (and Notification Sound isNotificationSounds). EmailNotification pusher path is adjacent and is not desktop native generation. (2) Generation owner synara/src/app/pages/client/ClientNonUIFeatures.tsx InviteNotifications: on invite count increase while mx.getSyncState()==='SYNCING', if showNotifications and permission, calls showPlatformNotification({ title: 'Invitation', body: ... }) or falls back to window.Notification (click → getInboxInvitesPath). (3) MessageNotifications: listens RoomEvent.Timeline (on L475 / removeListener L477); gates on SYNCING, not focused selected room / notifications inbox, live event, not space, isNotificationEvent, not Mute via getNotificationType, not self (getUserId), unread delta; then showPlatformNotification({ title: roomName, body: ..., route: buildDesktopNotificationRoomRoute(...) }) or window.Notification with click → navigateRoom. (4) AgentApprovalNotifications also emits showPlatformNotification for dangerous-command approval prompts (RoomEvent.Timeline L730/732; not a substitute for message/invite clauses). LaterReminderNotifications emits showPlatformNotification for due reminders. (5) Platform bridge: synara/src/app/platform/notifications.ts showPlatformNotification runs normalizeSystemNotificationRequest (synara/src/app/notifications/systemNotification.ts) bounding title/body/route/actions/privacy/sound, then showDesktopNotification. (6) Secondary helpers used by generation gates/routes: isNotificationEvent / getNotificationType (and getRoomPushRule inside getNotificationType) in synara/src/app/utils/room.ts; buildDesktopNotificationRoomRoute in synara/src/app/utils/desktop.ts. (7) Explicit non-evidence: PlatformBadgeAndTrayUpdater / favicon badge-tray updaters are NOT native notification generation. Push-rule preference surfaces AllMessages/KeywordMessages/SpecialMessages/NotificationModeSwitcher and inbox Notifications.tsx do not generate native OS notifications and are not primary owners for this FR. Existing tests systemNotification.test.ts exercise normalize only (not E2E generation); utils/__tests__/notifications.test.ts are candidate helpers only. Limits: P0.1 method/listener candidates are AST name hits, not type-checked receiver proofs. Do not count generic SC-057 alone, compile-only blocked states, raw HTTP, push-rule settings UI, helper/fixture-only, badge/tray, or EmailNotification pusher as closing native generation. Cutover P9.2 must preserve the same observables via Rust-owned notification candidate stream + desktop bridge; SC IDs alone, raw /_matrix HTTP, push-rule settings UI substitution, and helper/fixture-only fail.
+- **UI**: `synara/src/app/features/settings/notifications/SystemNotification.tsx` (enablement only), `synara/src/app/pages/client/ClientNonUIFeatures.tsx` (generation lifecycle; not Settings)
+- **Owners**: `synara/src/app/pages/client/ClientNonUIFeatures.tsx`, `synara/src/app/notifications/systemNotification.ts`, `synara/src/app/platform/notifications.ts`, `synara/src/app/features/settings/notifications/SystemNotification.tsx`
 - **Files**:
-  - `synara/src/app/features/settings/notifications/AllMessages.tsx` symbols=['setPushRuleActions'] retained_m=1 retained_l=0
-    - method `setPushRuleActions`:L67 — None
-  - `synara/src/app/features/settings/notifications/KeywordMessages.tsx` symbols=['addPushRule', 'deletePushRule', 'setPushRuleActions'] retained_m=3 retained_l=0
-    - method `addPushRule`:L30 — None
-    - method `deletePushRule`:L114 — None
-    - method `setPushRuleActions`:L135 — None
-  - `synara/src/app/features/settings/notifications/NotificationModeSwitcher.tsx` symbols=[] retained_m=0 retained_l=0
-  - `synara/src/app/features/settings/notifications/SpecialMessages.tsx` symbols=['setPushRuleActions'] retained_m=1 retained_l=0
-    - method `setPushRuleActions`:L106 — None
+  - `synara/src/app/pages/client/ClientNonUIFeatures.tsx` symbols=['getSyncState', 'getSyncState', 'getUserId', 'isSpaceRoom', 'findEventById', 'on:RoomEvent.Timeline', 'removeListener:RoomEvent.Timeline'] retained_m=5 retained_l=2
+    - method `getSyncState`:L335 — InviteNotifications requires SYNCING before emitting Invitation notification
+    - method `getSyncState`:L425 — MessageNotifications requires SYNCING before message native notification
+    - method `isSpaceRoom`:L430 — MessageNotifications skips space rooms
+    - method `getUserId`:L439 — MessageNotifications suppresses self-sent events
+    - method `findEventById`:L441 — MessageNotifications resolves thread-root open event id for route
+    - listener `on:RoomEvent.Timeline`:L475 — MessageNotifications subscribes for live notifiable timeline events
+    - listener `removeListener:RoomEvent.Timeline`:L477 — MessageNotifications teardown
   - `synara/src/app/features/settings/notifications/SystemNotification.tsx` symbols=[] retained_m=0 retained_l=0
-  - `synara/src/app/pages/client/inbox/Notifications.tsx` symbols=[] retained_m=0 retained_l=0
-  - `synara/src/app/utils/notifications.ts` symbols=['sendReadReceipt'] retained_m=1 retained_l=0
-    - method `sendReadReceipt`:L402 — None
+    - note: Enablement only (Desktop Notifications switch / permission request / showNotifications); does not generate native notifications
+  - `synara/src/app/notifications/systemNotification.ts` symbols=['normalizeSystemNotificationRequest'] retained_m=0 retained_l=0
+    - note: Non-P0.1 product helper; normalizeSystemNotificationRequest bounds title/body/route/actions/privacy/sound before platform show
+  - `synara/src/app/platform/notifications.ts` symbols=['showPlatformNotification'] retained_m=0 retained_l=0
+    - note: Non-P0.1 product bridge; showPlatformNotification normalizes then showDesktopNotification
+  - `synara/src/app/utils/room.ts` symbols=['getRoomPushRule'] retained_m=1 retained_l=0
+    - method `getRoomPushRule`:L173 — getNotificationType uses room push rule / muted override to gate Mute suppression
+  - `synara/src/app/utils/desktop.ts` symbols=['buildDesktopNotificationRoomRoute'] retained_m=0 retained_l=0
+    - note: Non-P0.1 route helper used by MessageNotifications / AgentApprovalNotifications / LaterReminderNotifications for notification route
 - **Behavior-relevant methods (top-level)**:
-  - `setPushRuleActions` `synara/src/app/features/settings/notifications/AllMessages.tsx`:L67 — None
-  - `addPushRule` `synara/src/app/features/settings/notifications/KeywordMessages.tsx`:L30 — None
-  - `deletePushRule` `synara/src/app/features/settings/notifications/KeywordMessages.tsx`:L114 — None
-  - `setPushRuleActions` `synara/src/app/features/settings/notifications/KeywordMessages.tsx`:L135 — None
-  - `setPushRuleActions` `synara/src/app/features/settings/notifications/SpecialMessages.tsx`:L106 — None
-  - `sendReadReceipt` `synara/src/app/utils/notifications.ts`:L402 — None
+  - `getSyncState` `synara/src/app/pages/client/ClientNonUIFeatures.tsx`:L335 — InviteNotifications requires SYNCING before emitting Invitation notification
+  - `getSyncState` `synara/src/app/pages/client/ClientNonUIFeatures.tsx`:L425 — MessageNotifications requires SYNCING before message native notification
+  - `isSpaceRoom` `synara/src/app/pages/client/ClientNonUIFeatures.tsx`:L430 — MessageNotifications skips space rooms
+  - `getUserId` `synara/src/app/pages/client/ClientNonUIFeatures.tsx`:L439 — MessageNotifications suppresses self-sent events
+  - `findEventById` `synara/src/app/pages/client/ClientNonUIFeatures.tsx`:L441 — MessageNotifications resolves thread-root open event id for route
+  - `getRoomPushRule` `synara/src/app/utils/room.ts`:L173 — getNotificationType uses room push rule / muted override to gate Mute suppression
 - **Behavior-relevant listeners (top-level)**:
-  - —
-- **Unfiltered linked candidates**: methods=17 listeners=0
+  - `on:RoomEvent.Timeline` `synara/src/app/pages/client/ClientNonUIFeatures.tsx`:L475 — MessageNotifications subscribes for live notifiable timeline events
+  - `removeListener:RoomEvent.Timeline` `synara/src/app/pages/client/ClientNonUIFeatures.tsx`:L477 — MessageNotifications teardown
+- **Unfiltered linked candidates**: methods=20 listeners=6
 - **Rust**: `product-desktop-bridge-with-sdk-rules` caps=['SC-057'] gaps=[]
   - `SC-057` `blocked` `matrix_sdk::notification_settings::NotificationSettings` https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/notification_settings/mod.rs#L81
+  - Cutover notes: SC-057 NotificationSettings is push-rule/settings support only and does not implement native OS desktop notification generation. Native generation requires the product desktop bridge (normalizeSystemNotificationRequest / showPlatformNotification / showDesktopNotification) plus event/unread/invite inputs and a Rust-owned notification candidate stream under P9.2. Generic SC-057 alone, compile-only blocked states, raw HTTP, push-rule settings UI, helper/fixture-only, or badge/tray never pass.
 - **Tasks**: `P9.2`, `P9.3`
 - **Existing tests**:
-  - `synara/src/app/notifications/__tests__/systemNotification.test.ts` — desktop system notification generation unit coverage
-  - `synara/src/app/utils/__tests__/notifications.test.ts` — notification candidate helpers
+  - `synara/src/app/notifications/__tests__/systemNotification.test.ts` — normalizeSystemNotificationRequest unit coverage only (title/body/route/actions/privacy/sound bounds); not E2E native generation
+  - `synara/src/app/utils/__tests__/notifications.test.ts` — notification candidate helpers only; not a substitute for product generation paths
 - **Planned** `AT-FR-7.8-004-001` task `P9.2` level `integration`
-  - Scenario: 7.8/FR-7.8-004: exercise 'desktop native notification generation;' via owner `synara/src/app/utils/notifications.ts` and UI `synara/src/app/features/settings/notifications/SystemNotification.tsx`, then confirm Rust/IPC cutover task `P9.2` preserves observable behavior without raw Matrix runtime HTTP.
-  - Test target: None
+  - Scenario: Integration against disposable Synapse: enable Desktop Notifications via SystemNotification (permission + showNotifications); exercise MessageNotifications live timeline notifiable event → platform or window notification with title/body/route when granted and room not focused/muted; exercise InviteNotifications new invite → Invitation notification while SYNCING; prove suppression when focused selected room / muted / self / not SYNCING / showNotifications off. After cutover P9.2, same observables via Rust-owned notification candidate stream + desktop bridge. No raw /_matrix HTTP; SC IDs alone fail; push-rule settings UI cannot substitute; helper/fixture-only fails.
+  - Test target: ClientNonUIFeatures InviteNotifications/MessageNotifications generation + SystemNotification enablement + platform bridge; post-cutover Rust-owned notification candidate stream + desktop bridge (P9.2)
   - Preconditions:
-    - Desktop app with notification permission granted (OS)
-    - Rooms with distinct push-rule modes; backgrounded window fixture
-    - Linked owner path present in tree: synara/src/app/utils/notifications.ts
-    - Primary UI/lifecycle surface: synara/src/app/features/settings/notifications/SystemNotification.tsx
+    - Disposable Synapse; desktop OS/browser notification permission path available.
+    - Named enablement surface: SystemNotification.tsx Desktop Notifications control (supportsPlatformSystemNotifications / requestPlatformNotificationPermission or window.Notification.requestPermission; settingsAtom showNotifications).
+    - Named generation owner: ClientNonUIFeatures InviteNotifications and MessageNotifications (showPlatformNotification or window.Notification).
+    - Rooms with distinct mute/non-mute notification types; focused selected room and backgrounded/unfocused fixtures available.
+    - AgentApprovalNotifications / LaterReminderNotifications may also emit native notifications; they do not substitute for message/invite clauses. Badge/tray and push-rule preference UI are not generation.
   - Actions:
-    1. Boot the appropriate harness for level=integration against disposable Synapse (or iOS notes if any).
-    2. Establish fixtures required by the clause list: desktop native notification generation.
-    3. Open UI/lifecycle surface `synara/src/app/features/settings/notifications/SystemNotification.tsx` (or follow ui_entry_points_rationale if no dedicated UI).
-    4. Step 1: perform the product action that implements «desktop native notification generation» using current owner `synara/src/app/utils/notifications.ts`.
+    1. Boot the integration harness against disposable Synapse. Do not use fixture-only mocks that bypass product generation, alternate UI, helper-only harnesses, renamed/equivalent controls, push-rule settings surfaces alone, or raw HTTP.
+    2. ENABLEMENT: through SystemNotification Desktop Notifications control, request/grant permission and set showNotifications true. Assert enablement state is product-owned (settingsAtom showNotifications), not a push-rule preference surface.
+    3. MESSAGE PATH: with showNotifications granted, room not muted, app not focused on that selected room / notifications inbox, and client SYNCING, inject/receive a live notifiable timeline event (isNotificationEvent). Assert MessageNotifications emits showPlatformNotification or window.Notification with title=roomName, body containing sender, and route from buildDesktopNotificationRoomRoute (or click navigates via navigateRoom).
+    4. INVITE PATH: while SYNCING and showNotifications granted, increase invite count. Assert InviteNotifications emits Invitation title/body via showPlatformNotification or window.Notification.
+    5. SUPPRESSION: independently prove no native notification when (a) focused selected room or notifications inbox selected with document focus; (b) room Mute via getNotificationType; (c) self-sent event; (d) mx.getSyncState() !== 'SYNCING'; (e) showNotifications off. One suppression case does not substitute for another.
+    6. After cutover task P9.2, repeat the same enablement/message/invite/suppression observables via Rust-owned notification candidate stream + desktop bridge. Citing generic SC-057 alone, compile-only blocked states, raw /_matrix HTTP, push-rule settings UI (AllMessages/Keyword/Special/NotificationModeSwitcher), helper/fixture-only, badge/tray, or EmailNotification pusher is a FAIL.
   - Assertions:
-    - Each clause is observable: «desktop native notification generation».
-    - State coordination remains through `synara/src/app/utils/notifications.ts` (or its Rust/IPC successor after cutover), not ad-hoc dual writers.
-    - Behavior-relevant current JS method candidates exercised or replaced: setPushRuleActions, addPushRule, deletePushRule, setPushRuleActions, setPushRuleActions, sendReadReceipt (AST candidates; not type-proven receivers).
-    - Rust mapping remains conservative: caps=[SC-057] gaps=[none]; compile-only blocked states are not treated as runtime pass.
-    - No new production matrix-js-sdk usage and no raw /\_matrix runtime HTTP unless dossier marks that exact behavior typed-sdk-request-required.
+    - ENABLEMENT: Desktop Notifications control grants permission path and showNotifications product setting; Settings generation claim fails (generation is ClientNonUIFeatures).
+    - MESSAGE: live notifiable timeline event produces platform or window notification with title/body/route when granted and not focused/muted; product path is MessageNotifications → showPlatformNotification/window.Notification.
+    - INVITE: new invite while SYNCING produces Invitation notification via InviteNotifications → showPlatformNotification/window.Notification.
+    - SUPPRESSION: focused selected room / muted / self / not SYNCING / showNotifications off each suppress native notification independently.
+    - Rust/IPC cutover preserves same observables via Rust-owned notification candidate stream + desktop bridge; SC-057 alone is rules/settings support only and never passes as native OS generation; raw HTTP, push-rule settings UI, helper/fixture-only, badge/tray never pass.
+    - No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless the dossier marks that exact behavior typed-sdk-request-required.
   - does_not_currently_exist: `True`
 - **Manual**: `MA-FR-7.8-004`
 
@@ -8646,19 +8658,23 @@ Limited rejected-review correction (`p0.2-correct-21-fr-7.8-003-global-preferenc
 
 - Platforms: macOS, Linux
 - Preconditions:
-  - Desktop app with notification permission granted (OS)
-  - Rooms with distinct push-rule modes; backgrounded window fixture
-  - State owner available: synara/src/app/utils/notifications.ts
-  - UI/lifecycle: synara/src/app/features/settings/notifications/SystemNotification.tsx
+  - Disposable Synapse; desktop OS/browser notification permission path available
+  - Named enablement: SystemNotification.tsx Desktop Notifications (permission + showNotifications)
+  - Named generation owner: ClientNonUIFeatures InviteNotifications and MessageNotifications
+  - Rooms with mute/non-mute types; focused selected room and backgrounded/unfocused fixtures
   - Current status baseline: implemented
 - Actions:
-  1. Launch Synara desktop on the target platform against disposable Synapse; use a clean or known fixture profile as required by «desktop native notification generation;».
-  2. Identify state owner `synara/src/app/utils/notifications.ts` and open `synara/src/app/features/settings/notifications/SystemNotification.tsx`.
-  3. Action 1 — «desktop native notification generation»: perform the minimal user/system steps that trigger this clause (use linked files under current_production_files if the entry point is indirect).
+  1. Launch Synara desktop on the target platform against disposable Synapse.
+  2. ENABLEMENT — through SystemNotification Desktop Notifications control, request/grant permission and set showNotifications true. Do not treat push-rule preference surfaces as generation.
+  3. MESSAGE — with showNotifications granted, room not muted, app not focused on that selected room / notifications inbox, client SYNCING: receive a live notifiable timeline event and observe platform or window notification (title/body/route or click → navigateRoom) from MessageNotifications.
+  4. INVITE — while SYNCING and showNotifications granted, receive a new invite and observe Invitation notification from InviteNotifications.
+  5. SUPPRESSION — independently verify no native notification when focused selected room / muted / self / not SYNCING / showNotifications off.
+  6. After cutover P9.2, repeat the same observables via Rust-owned notification candidate stream + desktop bridge without raw /_matrix HTTP.
 - Expected:
-  - All clauses under «desktop native notification generation;» produce the user-visible or system-observable success criteria without error toasts unrelated to intentional negative tests.
-  - Clause 1 «desktop native notification generation» is satisfied on macOS, Linux with owner `synara/src/app/utils/notifications.ts`.
-  - No unexpected raw /\_matrix traffic from the app renderer for this flow on the post-cutover build.
+  - Desktop Notifications enablement and ClientNonUIFeatures message/invite generation produce user-visible native notifications with title/body (and route where applicable).
+  - Suppression cases each independently prevent native notification.
+  - Push-rule settings UI, helper/fixture-only, badge/tray, EmailNotification pusher, and generic SC-057 alone do not satisfy this FR.
+  - No unexpected raw /_matrix traffic from the app renderer for this flow on the post-cutover build.
 
 ### `MA-FR-7.8-005` (FR-7.8-005)
 
@@ -10869,19 +10885,22 @@ Limited rejected-review correction (`p0.2-correct-21-fr-7.8-003-global-preferenc
 
 ### `AT-FR-7.8-004-001`
 
-- 7.8/FR-7.8-004: exercise 'desktop native notification generation;' via owner `synara/src/app/utils/notifications.ts` and UI `synara/src/app/features/settings/notifications/SystemNotification.tsx`, then confirm Rust/IPC cutover task `P9.2` preserves observable behavior without raw Matrix runtime HTTP.
-- target: None
+- Integration against disposable Synapse: enable Desktop Notifications via SystemNotification (permission + showNotifications); exercise MessageNotifications live timeline notifiable event → platform or window notification with title/body/route when granted and room not focused/muted; exercise InviteNotifications new invite → Invitation notification while SYNCING; prove suppression when focused selected room / muted / self / not SYNCING / showNotifications off. After cutover P9.2, same observables via Rust-owned notification candidate stream + desktop bridge. No raw /_matrix HTTP; SC IDs alone fail; push-rule settings UI cannot substitute; helper/fixture-only fails.
+- target: ClientNonUIFeatures InviteNotifications/MessageNotifications generation + SystemNotification enablement + platform bridge; post-cutover Rust-owned notification candidate stream + desktop bridge (P9.2)
 - actions:
-  1. Boot the appropriate harness for level=integration against disposable Synapse (or iOS notes if any).
-  2. Establish fixtures required by the clause list: desktop native notification generation.
-  3. Open UI/lifecycle surface `synara/src/app/features/settings/notifications/SystemNotification.tsx` (or follow ui_entry_points_rationale if no dedicated UI).
-  4. Step 1: perform the product action that implements «desktop native notification generation» using current owner `synara/src/app/utils/notifications.ts`.
+  1. Boot the integration harness against disposable Synapse. Do not use fixture-only mocks that bypass product generation, alternate UI, helper-only harnesses, renamed/equivalent controls, push-rule settings surfaces alone, or raw HTTP.
+  2. ENABLEMENT: through SystemNotification Desktop Notifications control, request/grant permission and set showNotifications true. Assert enablement state is product-owned (settingsAtom showNotifications), not a push-rule preference surface.
+  3. MESSAGE PATH: with showNotifications granted, room not muted, app not focused on that selected room / notifications inbox, and client SYNCING, inject/receive a live notifiable timeline event (isNotificationEvent). Assert MessageNotifications emits showPlatformNotification or window.Notification with title=roomName, body containing sender, and route from buildDesktopNotificationRoomRoute (or click navigates via navigateRoom).
+  4. INVITE PATH: while SYNCING and showNotifications granted, increase invite count. Assert InviteNotifications emits Invitation title/body via showPlatformNotification or window.Notification.
+  5. SUPPRESSION: independently prove no native notification when (a) focused selected room or notifications inbox selected with document focus; (b) room Mute via getNotificationType; (c) self-sent event; (d) mx.getSyncState() !== 'SYNCING'; (e) showNotifications off. One suppression case does not substitute for another.
+  6. After cutover task P9.2, repeat the same enablement/message/invite/suppression observables via Rust-owned notification candidate stream + desktop bridge. Citing generic SC-057 alone, compile-only blocked states, raw /_matrix HTTP, push-rule settings UI (AllMessages/Keyword/Special/NotificationModeSwitcher), helper/fixture-only, badge/tray, or EmailNotification pusher is a FAIL.
 - assertions:
-  - Each clause is observable: «desktop native notification generation».
-  - State coordination remains through `synara/src/app/utils/notifications.ts` (or its Rust/IPC successor after cutover), not ad-hoc dual writers.
-  - Behavior-relevant current JS method candidates exercised or replaced: setPushRuleActions, addPushRule, deletePushRule, setPushRuleActions, setPushRuleActions, sendReadReceipt (AST candidates; not type-proven receivers).
-  - Rust mapping remains conservative: caps=[SC-057] gaps=[none]; compile-only blocked states are not treated as runtime pass.
-  - No new production matrix-js-sdk usage and no raw /\_matrix runtime HTTP unless dossier marks that exact behavior typed-sdk-request-required.
+  - ENABLEMENT: Desktop Notifications control grants permission path and showNotifications product setting; Settings generation claim fails (generation is ClientNonUIFeatures).
+  - MESSAGE: live notifiable timeline event produces platform or window notification with title/body/route when granted and not focused/muted; product path is MessageNotifications → showPlatformNotification/window.Notification.
+  - INVITE: new invite while SYNCING produces Invitation notification via InviteNotifications → showPlatformNotification/window.Notification.
+  - SUPPRESSION: focused selected room / muted / self / not SYNCING / showNotifications off each suppress native notification independently.
+  - Rust/IPC cutover preserves same observables via Rust-owned notification candidate stream + desktop bridge; SC-057 alone is rules/settings support only and never passes as native OS generation; raw HTTP, push-rule settings UI, helper/fixture-only, badge/tray never pass.
+  - No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless the dossier marks that exact behavior typed-sdk-request-required.
 
 ### `AT-FR-7.8-005-001`
 
@@ -11528,8 +11547,8 @@ Limited rejected-review correction (`p0.2-correct-21-fr-7.8-003-global-preferenc
 - `ET-FR-7.7-009-01` `FR-7.7-009` `synara/src/app/contracts/__tests__/contractSchemas.test.ts` — Unit coverage of shared contract schema fixtures from named tests: Later, room notes, unread anchors, spaces/sidebar folders, agent cards/actions/approvals, routes, notification summary, room/event anchors, safe remote URL, settings compatibility. Logic-level schema validation only—not live iOS runtime.
 - `ET-FR-7.7-009-02` `FR-7.7-009` `synara/src/app/utils/__tests__/later.test.ts` — Unit coverage of Later normalize/persist helpers that exercise schema-sensitive fields (anchors only; strip legacy previews/malformed). Complements contract schema tests; not iOS device runs.
 - `ET-FR-7.7-009-03` `FR-7.7-009` `synara/src/app/utils/__tests__/roomNotes.test.ts` — Unit coverage of room-notes normalization of malformed account data and per-room item mutations that must stay fixture-compatible. Not live iOS.
-- `ET-FR-7.8-004-01` `FR-7.8-004` `synara/src/app/notifications/__tests__/systemNotification.test.ts` — desktop system notification generation unit coverage
-- `ET-FR-7.8-004-02` `FR-7.8-004` `synara/src/app/utils/__tests__/notifications.test.ts` — notification candidate helpers
+- `ET-FR-7.8-004-01` `FR-7.8-004` `synara/src/app/notifications/__tests__/systemNotification.test.ts` — normalizeSystemNotificationRequest unit coverage only (title/body/route/actions/privacy/sound bounds); not E2E native generation
+- `ET-FR-7.8-004-02` `FR-7.8-004` `synara/src/app/utils/__tests__/notifications.test.ts` — notification candidate helpers only; not a substitute for product generation paths
 - `ET-FR-7.8-005-01` `FR-7.8-005` `synara/src/app/notifications/__tests__/badgeSummary.test.ts` — badge summary unit coverage
 - `ET-FR-7.8-007-01` `FR-7.8-007` `synara/src/app/notifications/__tests__/systemNotification.test.ts` — suppression/focus-related notification behavior unit coverage where present
 - `ET-FR-7.8-009-01` `FR-7.8-009` `synara-ios/SynaraTests/PushServiceTests.swift` — Existing XCTest coverage: register after session+token; clear/unregister on logout; token rotation replace; no register without gateway; sparse route resolution; badge parsing; route payload variants.
@@ -11639,10 +11658,10 @@ Limited rejected-review correction (`p0.2-correct-21-fr-7.8-003-global-preferenc
 | `synara/src/app/features/settings/devices/OtherDevices.tsx`                    | `feature`          | `requirement-linked`           |   0 |   2 | `FR-7.7-007`,`FR-7.9-003`,`FR-7.9-010`                                                                                                                                                                                                    |
 | `synara/src/app/features/settings/devices/Verification.tsx`                    | `feature`          | `requirement-linked`           |   0 |   3 | `FR-7.7-007`,`FR-7.9-002`,`FR-7.9-004`,`FR-7.9-005`                                                                                                                                                                                       |
 | `synara/src/app/features/settings/emojis-stickers/GlobalPacks.tsx`             | `feature`          | `requirement-linked`           |   0 |   4 | `FR-7.7-005`,`FR-7.7-007`                                                                                                                                                                                                                 |
-| `synara/src/app/features/settings/notifications/AllMessages.tsx`               | `feature`          | `requirement-linked`           |   0 |   1 | `FR-7.2-005`,`FR-7.2-011`,`FR-7.3-007`,`FR-7.3-008`,`FR-7.3-009`,`FR-7.3-010`,`FR-7.3-014`,`FR-7.3-016`,`FR-7.4-004`,`FR-7.7-003`,`FR-7.7-007`,`FR-7.8-001`,`FR-7.8-003`,`FR-7.8-004`,`FR-7.8-005`,`FR-7.8-006`,`FR-7.8-007`,`FR-7.8-008` |
-| `synara/src/app/features/settings/notifications/KeywordMessages.tsx`           | `feature`          | `requirement-linked`           |   0 |   3 | `FR-7.2-005`,`FR-7.2-011`,`FR-7.3-007`,`FR-7.3-008`,`FR-7.3-009`,`FR-7.3-010`,`FR-7.3-014`,`FR-7.3-016`,`FR-7.4-004`,`FR-7.7-003`,`FR-7.7-007`,`FR-7.8-001`,`FR-7.8-003`,`FR-7.8-004`,`FR-7.8-005`,`FR-7.8-006`,`FR-7.8-007`,`FR-7.8-008` |
-| `synara/src/app/features/settings/notifications/NotificationModeSwitcher.tsx`  | `feature`          | `requirement-linked`           |   0 |   0 | `FR-7.2-005`,`FR-7.2-011`,`FR-7.7-003`,`FR-7.7-007`,`FR-7.8-001`,`FR-7.8-002`,`FR-7.8-004`,`FR-7.8-005`,`FR-7.8-006`,`FR-7.8-007`,`FR-7.8-008`                                                                                            |
-| `synara/src/app/features/settings/notifications/SpecialMessages.tsx`           | `feature`          | `requirement-linked`           |   0 |   2 | `FR-7.2-005`,`FR-7.2-011`,`FR-7.3-007`,`FR-7.3-008`,`FR-7.3-009`,`FR-7.3-010`,`FR-7.3-014`,`FR-7.3-016`,`FR-7.4-004`,`FR-7.7-003`,`FR-7.7-007`,`FR-7.8-001`,`FR-7.8-003`,`FR-7.8-004`,`FR-7.8-005`,`FR-7.8-006`,`FR-7.8-007`,`FR-7.8-008` |
+| `synara/src/app/features/settings/notifications/AllMessages.tsx`               | `feature`          | `requirement-linked`           |   0 |   1 | `FR-7.2-005`,`FR-7.2-011`,`FR-7.3-007`,`FR-7.3-008`,`FR-7.3-009`,`FR-7.3-010`,`FR-7.3-014`,`FR-7.3-016`,`FR-7.4-004`,`FR-7.7-003`,`FR-7.7-007`,`FR-7.8-001`,`FR-7.8-003`,`FR-7.8-005`,`FR-7.8-006`,`FR-7.8-007`,`FR-7.8-008` |
+| `synara/src/app/features/settings/notifications/KeywordMessages.tsx`           | `feature`          | `requirement-linked`           |   0 |   3 | `FR-7.2-005`,`FR-7.2-011`,`FR-7.3-007`,`FR-7.3-008`,`FR-7.3-009`,`FR-7.3-010`,`FR-7.3-014`,`FR-7.3-016`,`FR-7.4-004`,`FR-7.7-003`,`FR-7.7-007`,`FR-7.8-001`,`FR-7.8-003`,`FR-7.8-005`,`FR-7.8-006`,`FR-7.8-007`,`FR-7.8-008` |
+| `synara/src/app/features/settings/notifications/NotificationModeSwitcher.tsx`  | `feature`          | `requirement-linked`           |   0 |   0 | `FR-7.2-005`,`FR-7.2-011`,`FR-7.7-003`,`FR-7.7-007`,`FR-7.8-001`,`FR-7.8-002`,`FR-7.8-005`,`FR-7.8-006`,`FR-7.8-007`,`FR-7.8-008`                                                                                            |
+| `synara/src/app/features/settings/notifications/SpecialMessages.tsx`           | `feature`          | `requirement-linked`           |   0 |   2 | `FR-7.2-005`,`FR-7.2-011`,`FR-7.3-007`,`FR-7.3-008`,`FR-7.3-009`,`FR-7.3-010`,`FR-7.3-014`,`FR-7.3-016`,`FR-7.4-004`,`FR-7.7-003`,`FR-7.7-007`,`FR-7.8-001`,`FR-7.8-003`,`FR-7.8-005`,`FR-7.8-006`,`FR-7.8-007`,`FR-7.8-008` |
 | `synara/src/app/features/settings/notifications/SystemNotification.tsx`        | `feature`          | `requirement-linked`           |   0 |   0 | `FR-7.2-005`,`FR-7.2-011`,`FR-7.7-003`,`FR-7.7-007`,`FR-7.8-004`,`FR-7.8-005`,`FR-7.8-006`,`FR-7.8-007`,`FR-7.8-008`                                                                                                                      |
 | `synara/src/app/features/space-settings/SpaceSettings.tsx`                     | `feature`          | `requirement-linked`           |   0 |   0 | `FR-7.2-009`,`FR-7.7-007`                                                                                                                                                                                                                 |
 | `synara/src/app/hooks/types.ts`                                                | `hook`             | `shared-matrix-infrastructure` |   0 |   0 | `FR-7.2-001`,`FR-7.3-001`,`FR-7.6-004`                                                                                                                                                                                                    |
@@ -11712,12 +11731,12 @@ Limited rejected-review correction (`p0.2-correct-21-fr-7.8-003-global-preferenc
 | `synara/src/app/pages/auth/register/registerUtil.ts`                           | `page`             | `requirement-linked`           |   0 |   1 | `FR-7.1-001`,`FR-7.1-004`,`FR-7.1-006`                                                                                                                                                                                                    |
 | `synara/src/app/pages/auth/reset-password/PasswordResetForm.tsx`               | `page`             | `requirement-linked`           |   0 |   0 | `FR-7.1-001`,`FR-7.1-004`,`FR-7.1-006`                                                                                                                                                                                                    |
 | `synara/src/app/pages/auth/reset-password/resetPasswordUtil.ts`                | `page`             | `requirement-linked`           |   0 |   1 | `FR-7.1-001`,`FR-7.1-004`,`FR-7.1-006`                                                                                                                                                                                                    |
-| `synara/src/app/pages/client/ClientNonUIFeatures.tsx`                          | `page`             | `requirement-linked`           |   6 |  18 | `FR-7.8-007`,`FR-7.11-005`,`FR-7.4-006`                                                                                                                                                                                                   |
+| `synara/src/app/pages/client/ClientNonUIFeatures.tsx`                          | `page`             | `requirement-linked`           |   6 |  18 | `FR-7.8-004`,`FR-7.8-007`,`FR-7.11-005`,`FR-7.4-006`                                                                                                                                                                                       |
 | `synara/src/app/pages/client/ClientRoot.tsx`                                   | `page`             | `requirement-linked`           |   2 |   5 | `FR-7.1-007`,`FR-7.1-008`,`FR-7.1-012`,`FR-7.2-001`,`FR-7.2-002`,`FR-7.4-005`,`FR-7.5-005`,`FR-7.1-010`                                                                                                                                   |
 | `synara/src/app/pages/client/SyncStatus.tsx`                                   | `page`             | `requirement-linked`           |   0 |   0 | `FR-7.2-001`                                                                                                                                                                                                                              |
 | `synara/src/app/pages/client/explore/Server.tsx`                               | `page`             | `requirement-linked`           |   0 |   1 | `FR-7.6-006`,`FR-7.10-005`                                                                                                                                                                                                                |
 | `synara/src/app/pages/client/inbox/Invites.tsx`                                | `page`             | `requirement-linked`           |   0 |   7 | `FR-7.2-003`,`FR-7.6-001`                                                                                                                                                                                                                 |
-| `synara/src/app/pages/client/inbox/Notifications.tsx`                          | `page`             | `requirement-linked`           |   0 |   2 | `FR-7.2-005`,`FR-7.2-011`,`FR-7.7-003`,`FR-7.8-004`,`FR-7.8-005`,`FR-7.8-006`,`FR-7.8-007`,`FR-7.8-008`                                                                                                                                   |
+| `synara/src/app/pages/client/inbox/Notifications.tsx`                          | `page`             | `requirement-linked`           |   0 |   2 | `FR-7.2-005`,`FR-7.2-011`,`FR-7.7-003`,`FR-7.8-005`,`FR-7.8-006`,`FR-7.8-007`,`FR-7.8-008`                                                                                                                                               |
 | `synara/src/app/pages/client/sidebar/SpaceTabs.tsx`                            | `page`             | `requirement-linked`           |   0 |   7 | `FR-7.2-008`,`FR-7.7-007`                                                                                                                                                                                                                 |
 | `synara/src/app/pages/client/space/Space.tsx`                                  | `page`             | `requirement-linked`           |   0 |   7 | `FR-7.2-009`,`FR-7.6-001`                                                                                                                                                                                                                 |
 | `synara/src/app/pages/client/syncStatusCopy.ts`                                | `page`             | `requirement-linked`           |   0 |   0 | `FR-7.2-001`                                                                                                                                                                                                                              |
@@ -11748,9 +11767,9 @@ Limited rejected-review correction (`p0.2-correct-21-fr-7.8-003-global-preferenc
 | `synara/src/app/utils/matrix-crypto.ts`                                        | `utility`          | `requirement-linked`           |   0 |   0 | `FR-7.9-008`                                                                                                                                                                                                                              |
 | `synara/src/app/utils/matrix-uia.ts`                                           | `utility`          | `requirement-linked`           |   0 |   0 | `FR-7.1-006`                                                                                                                                                                                                                              |
 | `synara/src/app/utils/matrix.ts`                                               | `utility`          | `requirement-linked`           |   0 |   9 | `FR-7.3-007`,`FR-7.4-005`,`FR-7.4-007`,`FR-7.5-001`,`FR-7.5-003`,`FR-7.5-004`,`FR-7.5-007`,`FR-7.5-008`,`FR-7.5-011`,`FR-7.6-008`                                                                                                         |
-| `synara/src/app/utils/notifications.ts`                                        | `utility`          | `requirement-linked`           |   0 |   9 | `FR-7.2-005`,`FR-7.2-011`,`FR-7.7-003`,`FR-7.8-004`,`FR-7.8-005`,`FR-7.8-006`,`FR-7.8-007`,`FR-7.8-008`                                                                                                                                   |
+| `synara/src/app/utils/notifications.ts`                                        | `utility`          | `requirement-linked`           |   0 |   9 | `FR-7.2-005`,`FR-7.2-011`,`FR-7.7-003`,`FR-7.8-005`,`FR-7.8-006`,`FR-7.8-007`,`FR-7.8-008`                                                                                                                                               |
 | `synara/src/app/utils/polls.ts`                                                | `utility`          | `requirement-linked`           |   0 |   0 | `FR-7.3-011`,`FR-7.4-006`                                                                                                                                                                                                                 |
-| `synara/src/app/utils/room.ts`                                                 | `utility`          | `requirement-linked`           |   0 |  15 | `FR-7.5-001`,`FR-7.5-002`,`FR-7.5-007`,`FR-7.6-008`,`FR-7.8-001`,`FR-7.8-002`                                                                                                                                                             |
+| `synara/src/app/utils/room.ts`                                                 | `utility`          | `requirement-linked`           |   0 |  15 | `FR-7.5-001`,`FR-7.5-002`,`FR-7.5-007`,`FR-7.6-008`,`FR-7.8-001`,`FR-7.8-002`,`FR-7.8-004`                                                                                                                                                 |
 | `synara/src/app/utils/roomNotes.ts`                                            | `utility`          | `requirement-linked`           |   0 |   2 | `FR-7.3-014`,`FR-7.3-015`,`FR-7.7-002`,`FR-7.7-008`,`FR-7.7-009`                                                                                                                                                                          |
 | `synara/src/app/utils/sort.ts`                                                 | `utility`          | `requirement-linked`           |   0 |   4 | `FR-7.2-004`                                                                                                                                                                                                                              |
 | `synara/src/app/utils/syncLifecycle.ts`                                        | `utility`          | `requirement-linked`           |   0 |   0 | `FR-7.2-001`,`FR-7.2-002`,`FR-7.3-017`                                                                                                                                                                                                    |
