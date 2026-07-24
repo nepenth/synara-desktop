@@ -28,7 +28,7 @@ without explicit user approval.
 **Session state (2026-07-24):**
 
 - Integration: `feature/matrix-rust-sdk-full-replacement` @ `80c8fa3` (P0.1+P0.3 merged)
-- Working branch: `matrix-rust/p0.2-parity-traceability` (tracks origin; open P0.2 PR to integration after 008)
+- Working branch: `matrix-rust/p0.2-parity-traceability` (tracks origin; **P0.2 PR open**: https://github.com/nepenth/synara-desktop/pull/42 )
 - Ancestry: integration is ancestor of P0.2 branch
 - Checkpoint commits: `06d0f86` (traceability scaffold), `9c91e0f` (handoff)
 - **Accepted this session:**
@@ -45,7 +45,7 @@ without explicit user approval.
   full-matrix depth is required beyond the handoff resume scope
 
 - No production Matrix Rust SDK replacement code accepted
-- **No open P0.2 PR yet** (open after P0.2 complete)
+- **P0.2 PR open:** https://github.com/nepenth/synara-desktop/pull/42 → `feature/matrix-rust-sdk-full-replacement` (do not merge main)
 
 Phase 0 evidence accepted before this handoff:
 
