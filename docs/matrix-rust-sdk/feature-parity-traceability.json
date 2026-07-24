@@ -78740,7 +78740,6 @@
     },
     {
       "id": "FR-7.11-002",
-
       "origin": "plan-section-7",
       "section_id": "7.11",
       "plan_heading": "### 7.11 Calls and widgets",
@@ -78752,23 +78751,6 @@
       "current_status": "implemented",
       "current_production_files": [
         {
-          "path": "synara/src/app/hooks/useCallEmbed.ts",
-          "bucket": "hook",
-          "categories": [
-            "client_methods",
-            "room_methods"
-          ],
-          "symbols_or_candidates": [],
-          "line_refs": [],
-          "model_coupling": [
-            "MatrixClient",
-            "Room"
-          ],
-          "behavior_relevant_method_candidates": [],
-          "behavior_relevant_listener_candidates": [],
-          "symbols_or_candidates_note": "No requirement-relevant method/listener candidates filtered from this file's P0.1 AST hits; file remains linked for structural/model ownership. See all_candidates_in_linked_files on the requirement."
-        },
-        {
           "path": "synara/src/app/plugins/call/CallEmbed.ts",
           "bucket": "plugin",
           "categories": [
@@ -78778,73 +78760,246 @@
             "sync_lifecycle",
             "room_lists",
             "timelines",
-            "searches",
             "uia_auth",
-            "client_events"
+            "client_events",
+            "matrixrtc_calls"
           ],
           "symbols_or_candidates": [
+            "getIntent",
+            "getWidget",
+            "getIframe",
+            "ClientWidgetApi",
+            "CallWidgetDriver",
+            "setViewedRoomId",
+            "feedEvent",
+            "feedStateUpdate",
+            "feedToDevice",
+            "transport.send",
             "getDeviceId",
-            "search"
+            "getSafeUserId",
+            "ClientEvent.Event",
+            "MatrixEventEvent.Decrypted",
+            "RoomStateEvent.Events",
+            "ClientEvent.ToDeviceEvent",
+            "ElementWidgetActions.JoinCall"
           ],
           "line_refs": [
             {
-              "symbol": "getDeviceId",
-              "line": 66,
-              "kind": "method_candidate"
+              "symbol": "CallEmbed.getIntent",
+              "line": 51,
+              "kind": "product_helper",
+              "relevance_reason": "Maps dm+ongoing → ElementCallIntent (start_call / join_existing / *_dm) for widget URL intent param."
             },
             {
-              "symbol": "search",
-              "line": 91,
-              "kind": "method_candidate"
+              "symbol": "CallEmbed.getWidget URLSearchParams + element-call index.html",
+              "line": 59,
+              "kind": "product_helper",
+              "relevance_reason": "PRIMARY WIDGET URL GENERATION L59–106: builds URLSearchParams (widgetId, parentUrl, baseUrl=mx.baseUrl, roomId, userId, deviceId, intent, skipLobby, confineToRoom, appPrompt, perParticipantE2EE, lang, theme) and absolute URL to BASE_URL/public/element-call/index.html; wraps IWidget type m.call as matrix-widget-api Widget."
+            },
+            {
+              "symbol": "CallEmbed.getIframe sandbox+allow",
+              "line": 108,
+              "kind": "product_helper",
+              "relevance_reason": "Creates sandboxed iframe (allow-scripts/same-origin/…; allow microphone;camera;display-capture) with src=widget complete URL — host surface for postMessage."
+            },
+            {
+              "symbol": "constructor ClientWidgetApi + CallWidgetDriver",
+              "line": 133,
+              "kind": "product_helper",
+              "relevance_reason": "PRIMARY EMBED + POSTMESSAGE BRIDGE L133–139: append iframe; new CallWidgetDriver(mx, roomId); new ClientWidgetApi(widget, iframe, driver) — matrix-widget-api PostmessageTransport between host and Element Call."
+            },
+            {
+              "symbol": "listenAction DeviceMute",
+              "line": 152,
+              "kind": "product_helper",
+              "relevance_reason": "Subscribes widget action:io.element.device_mute for media-state postMessage from Element Call into CallControl."
+            },
+            {
+              "symbol": "start setViewedRoomId + JoinCall + event feed listeners",
+              "line": 199,
+              "kind": "product_helper",
+              "relevance_reason": "Locks widget to room; listens action:io.element.join; seeds readUpToMap; on ClientEvent.Event / MatrixEventEvent.Decrypted / RoomStateEvent.Events / ClientEvent.ToDeviceEvent to feed events into ClientWidgetApi."
+            },
+            {
+              "symbol": "on:ClientEvent.Event",
+              "line": 218,
+              "kind": "listener_candidate",
+              "relevance_reason": "Feeds room/timeline events into widget via feedEvent (postMessage bridge inbound)."
+            },
+            {
+              "symbol": "on:MatrixEventEvent.Decrypted",
+              "line": 219,
+              "kind": "listener_candidate",
+              "relevance_reason": "Re-feeds decrypted events into widget after late decryption."
+            },
+            {
+              "symbol": "on:RoomStateEvent.Events",
+              "line": 220,
+              "kind": "listener_candidate",
+              "relevance_reason": "feedStateUpdate into ClientWidgetApi for state events."
             },
             {
               "symbol": "on:ClientEvent.ToDeviceEvent",
               "line": 221,
-              "kind": "listener_candidate"
+              "kind": "listener_candidate",
+              "relevance_reason": "feedToDevice into ClientWidgetApi — to-device path of postMessage bridge (encryption keys adjacency to FR-7.11-004)."
+            },
+            {
+              "symbol": "off:ClientEvent.Event",
+              "line": 237,
+              "kind": "listener_candidate",
+              "relevance_reason": "dispose() listener cleanup for Event feed."
+            },
+            {
+              "symbol": "off:MatrixEventEvent.Decrypted",
+              "line": 238,
+              "kind": "listener_candidate",
+              "relevance_reason": "dispose() listener cleanup for Decrypted feed."
+            },
+            {
+              "symbol": "off:RoomStateEvent.Events",
+              "line": 239,
+              "kind": "listener_candidate",
+              "relevance_reason": "dispose() listener cleanup for state feed."
             },
             {
               "symbol": "off:ClientEvent.ToDeviceEvent",
               "line": 240,
-              "kind": "listener_candidate"
+              "kind": "listener_candidate",
+              "relevance_reason": "dispose() listener cleanup for to-device feed."
+            },
+            {
+              "symbol": "hangup transport.send HangupCall",
+              "line": 179,
+              "kind": "product_helper",
+              "relevance_reason": "Outbound host→widget postMessage im.vector.hangup via call.transport.send."
+            },
+            {
+              "symbol": "setTheme WidgetApiToWidgetAction.ThemeChange",
+              "line": 173,
+              "kind": "product_helper",
+              "relevance_reason": "Outbound ThemeChange postMessage to Element Call."
+            },
+            {
+              "symbol": "getSafeUserId widget URL",
+              "line": 65,
+              "kind": "method_candidate",
+              "relevance_reason": "mx.getSafeUserId() into widget URL userId / creatorUserId."
+            },
+            {
+              "symbol": "getDeviceId widget URL",
+              "line": 66,
+              "kind": "method_candidate",
+              "relevance_reason": "mx.getDeviceId() into widget URL deviceId param."
+            },
+            {
+              "symbol": "widgetUrl.search = params",
+              "line": 91,
+              "kind": "product_helper",
+              "relevance_reason": "EXCLUDED AS search API: URLSearchParams assignment to widgetUrl.search — NOT matrix-js-sdk Client.search (false P0.1 AST hit)."
             }
           ],
           "model_coupling": [
             "MatrixClient",
             "MatrixEvent",
-            "Room"
+            "Room",
+            "ClientWidgetApi",
+            "Widget",
+            "WidgetDriver"
           ],
           "behavior_relevant_method_candidates": [
             {
-              "name": "getDeviceId",
-              "line": 66,
-              "category": "uia_auth",
+              "name": "getSafeUserId",
+              "line": 65,
+              "category": "client_methods",
               "kind": "property_call_candidate",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+              "confidence": "Source-inspected: mx.getSafeUserId for widget URL userId.",
+              "relevance_reason": "Widget URL generation identity param."
             },
             {
-              "name": "search",
-              "line": 91,
-              "category": "searches",
-              "kind": "property_reference_candidate",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+              "name": "getDeviceId",
+              "line": 66,
+              "category": "client_methods",
+              "kind": "property_call_candidate",
+              "confidence": "Source-inspected: mx.getDeviceId for widget URL deviceId.",
+              "relevance_reason": "Widget URL generation device param."
+            },
+            {
+              "name": "getSafeUserId",
+              "line": 134,
+              "category": "client_methods",
+              "kind": "property_call_candidate",
+              "confidence": "Source-inspected: currentUserId for widget.getCompleteUrl.",
+              "relevance_reason": "Completes iframe src URL for embed startup."
             }
           ],
           "behavior_relevant_listener_candidates": [
+            {
+              "event": "ClientEvent.Event",
+              "method": "on",
+              "line": 218,
+              "category": "client_events",
+              "confidence": "Source-inspected event feed into ClientWidgetApi.",
+              "relevance_reason": "postMessage bridge: host events → widget."
+            },
+            {
+              "event": "MatrixEventEvent.Decrypted",
+              "method": "on",
+              "line": 219,
+              "category": "client_events",
+              "confidence": "Source-inspected decrypt re-feed.",
+              "relevance_reason": "postMessage bridge after decryption."
+            },
+            {
+              "event": "RoomStateEvent.Events",
+              "method": "on",
+              "line": 220,
+              "category": "client_events",
+              "confidence": "Source-inspected state feed.",
+              "relevance_reason": "postMessage bridge: state → widget."
+            },
             {
               "event": "ClientEvent.ToDeviceEvent",
               "method": "on",
               "line": 221,
               "category": "client_events",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+              "confidence": "Source-inspected to-device feed.",
+              "relevance_reason": "postMessage bridge: to-device → widget."
+            },
+            {
+              "event": "ClientEvent.Event",
+              "method": "off",
+              "line": 237,
+              "category": "client_events",
+              "confidence": "Source-inspected dispose cleanup.",
+              "relevance_reason": "Listener lifecycle for event feed."
+            },
+            {
+              "event": "MatrixEventEvent.Decrypted",
+              "method": "off",
+              "line": 238,
+              "category": "client_events",
+              "confidence": "Source-inspected dispose cleanup.",
+              "relevance_reason": "Listener lifecycle for decrypt feed."
+            },
+            {
+              "event": "RoomStateEvent.Events",
+              "method": "off",
+              "line": 239,
+              "category": "client_events",
+              "confidence": "Source-inspected dispose cleanup.",
+              "relevance_reason": "Listener lifecycle for state feed."
             },
             {
               "event": "ClientEvent.ToDeviceEvent",
               "method": "off",
               "line": 240,
               "category": "client_events",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+              "confidence": "Source-inspected dispose cleanup.",
+              "relevance_reason": "Listener lifecycle for to-device feed."
             }
-          ]
+          ],
+          "symbols_or_candidates_note": "PRIMARY owner for FR-7.11-002: Element Call embed startup (iframe + ClientWidgetApi), widget URL generation (getWidget), and host↔iframe postMessage bridge (feed*/transport.send). EXCLUDE as sole evidence: membership DISPLAY (001); join/leave write semantics (003); encryption-key session (004); session cleanup ownership alone (005); CSP policy alone (006); experimental risk acceptance alone (007); via-servers; matrix Client.search false hit on widgetUrl.search."
         },
         {
           "path": "synara/src/app/plugins/call/CallWidgetDriver.ts",
@@ -78857,126 +79012,531 @@
             "timelines",
             "searches",
             "uia_auth",
-            "custom_raw_event_sends"
+            "custom_raw_event_sends",
+            "matrixrtc_calls"
           ],
           "symbols_or_candidates": [
-            "getDeviceId",
-            "searchUserDirectory"
+            "getCallCapabilities",
+            "validateCapabilities",
+            "sendEvent",
+            "sendToDevice",
+            "readRoomTimeline",
+            "readRoomState",
+            "askOpenID",
+            "getDeviceId"
           ],
           "line_refs": [
             {
-              "symbol": "getDeviceId",
-              "line": 40,
-              "kind": "method_candidate"
+              "symbol": "constructor getCallCapabilities allowedCapabilities",
+              "line": 36,
+              "kind": "product_helper",
+              "relevance_reason": "PRIMARY CAPABILITIES L36–44: deviceId required; allowedCapabilities = getCallCapabilities(roomId, userId, deviceId)."
             },
             {
-              "symbol": "searchUserDirectory",
-              "line": 297,
-              "kind": "method_candidate"
+              "symbol": "validateCapabilities filter requested∩allowed",
+              "line": 46,
+              "kind": "product_helper",
+              "relevance_reason": "Capability negotiation: only capabilities in allowed set are granted to the widget."
+            },
+            {
+              "symbol": "sendEvent sendStateEvent/sendEvent/redactEvent",
+              "line": 51,
+              "kind": "product_helper",
+              "relevance_reason": "Widget→Matrix send path invoked via widget API (postMessage-driven driver)."
+            },
+            {
+              "symbol": "sendToDevice encrypt+queueToDevice",
+              "line": 149,
+              "kind": "product_helper",
+              "relevance_reason": "Widget→Matrix to-device path (includes call crypto types when requested); encryption-key session semantics are FR-7.11-004."
+            },
+            {
+              "symbol": "getDeviceId",
+              "line": 40,
+              "kind": "method_candidate",
+              "relevance_reason": "Device ID required to build call member state-key capabilities."
             }
           ],
           "model_coupling": [
             "MatrixClient",
             "MatrixError",
-            "MatrixEvent"
+            "MatrixEvent",
+            "WidgetDriver"
           ],
           "behavior_relevant_method_candidates": [
             {
               "name": "getDeviceId",
               "line": 40,
-              "category": "uia_auth",
+              "category": "client_methods",
               "kind": "property_call_candidate",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+              "confidence": "Source-inspected: mx.getDeviceId required for CallWidgetDriver capability set.",
+              "relevance_reason": "Capabilities require device-scoped m.call.member state keys."
             },
             {
-              "name": "searchUserDirectory",
-              "line": 297,
-              "category": "searches",
+              "name": "getSafeUserId",
+              "line": 43,
+              "category": "client_methods",
               "kind": "property_call_candidate",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+              "confidence": "Source-inspected: userId into getCallCapabilities.",
+              "relevance_reason": "Capability set is user+device+room scoped."
+            },
+            {
+              "name": "sendStateEvent",
+              "line": 64,
+              "category": "custom_raw_event_sends",
+              "kind": "property_call_candidate",
+              "confidence": "Source-inspected driver sendEvent state branch.",
+              "relevance_reason": "postMessage bridge: widget send → client.sendStateEvent."
+            },
+            {
+              "name": "sendEvent",
+              "line": 74,
+              "category": "custom_raw_event_sends",
+              "kind": "property_call_candidate",
+              "confidence": "Source-inspected driver sendEvent timeline branch.",
+              "relevance_reason": "postMessage bridge: widget send → client.sendEvent."
+            },
+            {
+              "name": "sendToDevice",
+              "line": 149,
+              "category": "custom_raw_event_sends",
+              "kind": "property_call_candidate",
+              "confidence": "Source-inspected CallWidgetDriver.sendToDevice.",
+              "relevance_reason": "postMessage bridge to-device egress (product path); key-session lifecycle is FR-7.11-004."
             }
           ],
-          "behavior_relevant_listener_candidates": []
+          "behavior_relevant_listener_candidates": [],
+          "symbols_or_candidates_note": "WidgetDriver for Element Call: capability policy + Matrix client methods behind ClientWidgetApi. searchUserDirectory/getMediaConfig retained only as driver surface adjacency — not primary clauses of this FR."
         },
         {
           "path": "synara/src/app/plugins/call/utils.ts",
           "bucket": "plugin",
-          "categories": [],
-          "symbols_or_candidates": [],
-          "line_refs": [],
+          "categories": [
+            "matrixrtc_calls"
+          ],
+          "symbols_or_candidates": [
+            "getCallCapabilities",
+            "MatrixCapabilities",
+            "WidgetEventCapability",
+            "io.element.call.encryption_keys",
+            "org.matrix.msc3401.call.member"
+          ],
+          "line_refs": [
+            {
+              "symbol": "getCallCapabilities Set",
+              "line": 9,
+              "kind": "product_helper",
+              "relevance_reason": "PRIMARY CAPABILITY SET L9–118: Screenshots, AlwaysOnScreen, MSC3846TurnServers, MSC4157 delayed events, msc2762 timeline/state room scope, receive RoomMember/msc3401.call/RoomEncryption/RoomName/RoomCreate, send+receive msc3401.call.member state keys (user/device variants), rtc.notification, room events (encryption_keys, reactions, decline), to-device call/* crypto types."
+            }
+          ],
           "model_coupling": [],
           "behavior_relevant_method_candidates": [],
           "behavior_relevant_listener_candidates": [],
-          "symbols_or_candidates_note": "No requirement-relevant method/listener candidates filtered from this file's P0.1 AST hits; file remains linked for structural/model ownership. See all_candidates_in_linked_files on the requirement."
+          "symbols_or_candidates_note": "Capability catalog for CallWidgetDriver.validateCapabilities. Encryption-keys type presence ≠ FR-7.11-004 session lifecycle ownership."
         },
         {
-          "path": "synara/src/app/plugins/via-servers.ts",
-          "bucket": "plugin",
+          "path": "synara/src/app/hooks/useCallEmbed.ts",
+          "bucket": "hook",
           "categories": [
-            "room_methods"
+            "client_methods",
+            "room_methods",
+            "matrixrtc_calls"
           ],
-          "symbols_or_candidates": [],
-          "line_refs": [],
+          "symbols_or_candidates": [
+            "createCallEmbed",
+            "useCallStart",
+            "getRoomSession",
+            "getIntent",
+            "getWidget",
+            "CallEmbed",
+            "callEmbedAtom"
+          ],
+          "line_refs": [
+            {
+              "symbol": "createCallEmbed getRoomSession+getIntent+getWidget+new CallEmbed",
+              "line": 38,
+              "kind": "product_helper",
+              "relevance_reason": "STARTUP FACTORY L38–56: mx.matrixRTC.getRoomSession(room) for ongoing memberships.length; CallEmbed.getIntent; CallEmbed.getWidget; optional CallControlState from prefs; new CallEmbed(mx, room, widget, container, controlState)."
+            },
+            {
+              "symbol": "useCallStart setCallEmbed",
+              "line": 58,
+              "kind": "product_helper",
+              "relevance_reason": "UI entry: startCall(room, pref) requires callEmbedRef container; createCallEmbed; setCallEmbed(atom) — triggers embed ownership."
+            },
+            {
+              "symbol": "getRoomSession ongoing intent adjacency",
+              "line": 46,
+              "kind": "method_candidate",
+              "relevance_reason": "Uses memberships.length only to choose join_existing vs start_call intent for URL — NOT FR-7.11-001 membership DISPLAY ownership."
+            }
+          ],
+          "model_coupling": [
+            "MatrixClient",
+            "Room"
+          ],
+          "behavior_relevant_method_candidates": [
+            {
+              "name": "getRoomSession",
+              "line": 46,
+              "category": "matrixrtc_calls",
+              "kind": "property_call_candidate",
+              "confidence": "Source-inspected: mx.matrixRTC.getRoomSession(room) for ongoing flag into getIntent.",
+              "relevance_reason": "Widget URL intent selection (start vs join), not membership list display."
+            }
+          ],
+          "behavior_relevant_listener_candidates": [],
+          "symbols_or_candidates_note": "Embed lifecycle factory + startCall. EXCLUDE as sole evidence for membership display (001)."
+        },
+        {
+          "path": "synara/src/app/state/callEmbed.ts",
+          "bucket": "state",
+          "categories": [],
+          "symbols_or_candidates": [
+            "callEmbedAtom",
+            "dispose previous"
+          ],
+          "line_refs": [
+            {
+              "symbol": "callEmbedAtom setter dispose prev",
+              "line": 6,
+              "kind": "product_helper",
+              "relevance_reason": "Single active CallEmbed owner: replacing embed disposes previous (call.stop + iframe remove) L12–14."
+            }
+          ],
+          "model_coupling": [],
+          "behavior_relevant_method_candidates": [],
+          "behavior_relevant_listener_candidates": [],
+          "symbols_or_candidates_note": "Jotai ownership for active embed instance. Full session cleanup product path is FR-7.11-005."
+        },
+        {
+          "path": "synara/src/app/components/CallEmbedProvider.tsx",
+          "bucket": "component",
+          "categories": [],
+          "symbols_or_candidates": [
+            "data-call-embed-container",
+            "useCallHangupEvent",
+            "useCallJoined",
+            "CallEmbedRefContextProvider"
+          ],
+          "line_refs": [
+            {
+              "symbol": "data-call-embed-container ref",
+              "line": 51,
+              "kind": "product_helper",
+              "relevance_reason": "Fixed-position host container where createCallEmbed appends the Element Call iframe."
+            },
+            {
+              "symbol": "useCallHangupEvent clear atom",
+              "line": 21,
+              "kind": "product_helper",
+              "relevance_reason": "On im.vector.hangup widget action, setCallEmbed(undefined) → dispose prior embed."
+            }
+          ],
+          "model_coupling": [],
+          "behavior_relevant_method_candidates": [],
+          "behavior_relevant_listener_candidates": [],
+          "symbols_or_candidates_note": "Router-level provider for embed ref + visibility when joined in selected room."
+        },
+        {
+          "path": "synara/src/app/features/room/Room.tsx",
+          "bucket": "feature",
+          "categories": [],
+          "symbols_or_candidates": [
+            "isCallRoom",
+            "CallView"
+          ],
+          "line_refs": [
+            {
+              "symbol": "room.isCallRoom CallView mount",
+              "line": 48,
+              "kind": "product_helper",
+              "relevance_reason": "Call rooms mount CallView (L69–74) instead of chat RoomView — product shell for embedded Element Call UI."
+            },
+            {
+              "symbol": "CallView render",
+              "line": 73,
+              "kind": "product_helper",
+              "relevance_reason": "Primary room shell embeds CallView for call rooms."
+            }
+          ],
           "model_coupling": [
             "Room"
           ],
           "behavior_relevant_method_candidates": [],
           "behavior_relevant_listener_candidates": [],
-          "symbols_or_candidates_note": "No requirement-relevant method/listener candidates filtered from this file's P0.1 AST hits; file remains linked for structural/model ownership. See all_candidates_in_linked_files on the requirement."
+          "symbols_or_candidates_note": "RoomView.tsx is chat timeline for non-call rooms — NOT the Element Call embed host. Correct UI entry is Room.tsx → CallView."
+        },
+        {
+          "path": "synara/src/app/features/call/CallView.tsx",
+          "bucket": "feature",
+          "categories": [],
+          "symbols_or_candidates": [
+            "CallPrescreen",
+            "useCallEmbedPlacementSync",
+            "useCallJoined",
+            "CallControls"
+          ],
+          "line_refs": [
+            {
+              "symbol": "useCallEmbedPlacementSync",
+              "line": 133,
+              "kind": "product_helper",
+              "relevance_reason": "Positions fixed call-embed-container over CallJoined viewport."
+            },
+            {
+              "symbol": "CallPrescreen vs CallJoined",
+              "line": 147,
+              "kind": "product_helper",
+              "relevance_reason": "Pre-join shows Join UI; joined shows embed placement surface + CallControls."
+            }
+          ],
+          "model_coupling": [],
+          "behavior_relevant_method_candidates": [],
+          "behavior_relevant_listener_candidates": [],
+          "symbols_or_candidates_note": "Call room UI host for embed. Membership Live cards on CallPrescreen are FR-7.11-001 adjacency."
+        },
+        {
+          "path": "synara/src/app/features/call/PrescreenControls.tsx",
+          "bucket": "feature",
+          "categories": [],
+          "symbols_or_candidates": [
+            "useCallStart",
+            "Join button startCall"
+          ],
+          "line_refs": [
+            {
+              "symbol": "Join onClick startCall",
+              "line": 52,
+              "kind": "product_helper",
+              "relevance_reason": "PRIMARY USER STARTUP: Join button → startCall(room, prefs) → createCallEmbed → CallEmbed embed."
+            }
+          ],
+          "model_coupling": [],
+          "behavior_relevant_method_candidates": [],
+          "behavior_relevant_listener_candidates": [],
+          "symbols_or_candidates_note": "Primary Join control for embedded Element Call startup."
+        },
+        {
+          "path": "synara/src/app/plugins/call/CallControl.ts",
+          "bucket": "plugin",
+          "categories": [],
+          "symbols_or_candidates": [
+            "transport.send DeviceMute",
+            "ElementWidgetActions"
+          ],
+          "line_refs": [
+            {
+              "symbol": "setMediaState transport.send DeviceMute",
+              "line": 128,
+              "kind": "product_helper",
+              "relevance_reason": "Outbound postMessage io.element.device_mute via ClientWidgetApi.transport.send for mic/video control."
+            }
+          ],
+          "model_coupling": [
+            "ClientWidgetApi"
+          ],
+          "behavior_relevant_method_candidates": [],
+          "behavior_relevant_listener_candidates": [],
+          "symbols_or_candidates_note": "Host control surface using the same postMessage transport as embed."
+        },
+        {
+          "path": "synara/src/app/plugins/call/types.ts",
+          "bucket": "plugin",
+          "categories": [],
+          "symbols_or_candidates": [
+            "ElementCallIntent",
+            "ElementWidgetActions"
+          ],
+          "line_refs": [
+            {
+              "symbol": "ElementCallIntent enum",
+              "line": 1,
+              "kind": "product_helper",
+              "relevance_reason": "Intent strings used in widget URL (start_call, join_existing, DM variants)."
+            },
+            {
+              "symbol": "ElementWidgetActions JoinCall HangupCall DeviceMute",
+              "line": 20,
+              "kind": "product_helper",
+              "relevance_reason": "Widget action names for join/hangup/mute postMessage actions."
+            }
+          ],
+          "model_coupling": [],
+          "behavior_relevant_method_candidates": [],
+          "behavior_relevant_listener_candidates": [],
+          "symbols_or_candidates_note": "Shared Element Call widget action/intent constants."
         }
       ],
       "ui_entry_points": [
-        "synara/src/app/features/room/RoomView.tsx"
+        "synara/src/app/features/call/PrescreenControls.tsx",
+        "synara/src/app/features/call/CallView.tsx",
+        "synara/src/app/features/room/Room.tsx",
+        "synara/src/app/components/CallEmbedProvider.tsx",
+        "synara/src/app/features/room-nav/RoomNavItem.tsx"
       ],
+      "ui_entry_points_rationale": "FR-7.11-002 is Element Call EMBED plumbing (startup iframe, widget URL, capabilities, postMessage). Primary: (1) Room.tsx isCallRoom → CallView; (2) PrescreenControls Join → useCallStart/createCallEmbed; (3) CallEmbedProvider data-call-embed-container hosts iframe; (4) CallView placement when joined; (5) RoomNavItem startCall adjacency. EXCLUDE RoomView.tsx chat timeline as sole embed host (non-call rooms). EXCLUDE membership Live chips alone (001), hangup/leave product semantics alone (003), encryption-key session alone (004), CSP alone (006).",
       "state_owners": [
         {
           "path": "synara/src/app/plugins/call/CallEmbed.ts",
-          "ownership_evidence": "Identified as coordination/state module for this behavior via path role (state/client/util service) and P0.1 categories/candidates; not merely a presentational component."
+          "ownership_evidence": "PRIMARY: getWidget URL generation; getIframe+ClientWidgetApi+CallWidgetDriver embed; feed*/transport postMessage bridge; JoinCall/DeviceMute/Hangup actions."
+        },
+        {
+          "path": "synara/src/app/plugins/call/CallWidgetDriver.ts",
+          "ownership_evidence": "PRIMARY: getCallCapabilities + validateCapabilities; WidgetDriver Matrix send/read/to-device behind the postMessage API."
+        },
+        {
+          "path": "synara/src/app/plugins/call/utils.ts",
+          "ownership_evidence": "PRIMARY: getCallCapabilities capability set catalog."
+        },
+        {
+          "path": "synara/src/app/hooks/useCallEmbed.ts",
+          "ownership_evidence": "createCallEmbed factory + useCallStart → callEmbedAtom."
         },
         {
           "path": "synara/src/app/state/callEmbed.ts",
-          "ownership_evidence": "Identified as coordination/state module for this behavior via path role (state/client/util service) and P0.1 categories/candidates; not merely a presentational component."
+          "ownership_evidence": "Single active CallEmbed atom; dispose previous on replace."
         }
       ],
       "current_js_sdk": {
+        "behavior_relevance_policy": "Exact-line source inspection for embedded Element Call STARTUP, widget URL generation, capability policy, and iframe postMessage bridge. RETAIN: CallEmbed.getWidget/getIframe/ClientWidgetApi+CallWidgetDriver; getCallCapabilities/validateCapabilities; createCallEmbed/useCallStart; event feed listeners (Event/Decrypted/RoomState/ToDevice); transport.send Hangup/Theme/DeviceMute; Join/PrescreenControls. EXCLUDE as sole evidence: widgetUrl.search false Client.search hit; membership DISPLAY (001); join/leave write product (003); encryption-key session lifecycle (004); cleanup alone (005); CSP alone (006); experimental risk acceptance alone (007); via-servers; Client::rtc_foci FOCI wiring (product path does not call rtc_foci); dual-backend/SDK selector/raw /_matrix HTTP.",
         "behavior_relevant_method_candidates": [
+          {
+            "path": "synara/src/app/plugins/call/CallEmbed.ts",
+            "name": "getSafeUserId",
+            "line": 65,
+            "category": "client_methods",
+            "confidence": "Source-inspected widget URL userId.",
+            "relevance_reason": "Widget URL generation identity."
+          },
           {
             "path": "synara/src/app/plugins/call/CallEmbed.ts",
             "name": "getDeviceId",
             "line": 66,
-            "category": "uia_auth",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+            "category": "client_methods",
+            "confidence": "Source-inspected widget URL deviceId.",
+            "relevance_reason": "Widget URL generation device."
           },
           {
             "path": "synara/src/app/plugins/call/CallEmbed.ts",
-            "name": "search",
-            "line": 91,
-            "category": "searches",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+            "name": "getSafeUserId",
+            "line": 134,
+            "category": "client_methods",
+            "confidence": "Source-inspected getCompleteUrl currentUserId.",
+            "relevance_reason": "Iframe src completion for embed startup."
           },
           {
             "path": "synara/src/app/plugins/call/CallWidgetDriver.ts",
             "name": "getDeviceId",
             "line": 40,
-            "category": "uia_auth",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+            "category": "client_methods",
+            "confidence": "Source-inspected capability construction.",
+            "relevance_reason": "Capabilities require device-scoped call.member keys."
           },
           {
             "path": "synara/src/app/plugins/call/CallWidgetDriver.ts",
-            "name": "searchUserDirectory",
-            "line": 297,
-            "category": "searches",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+            "name": "getSafeUserId",
+            "line": 43,
+            "category": "client_methods",
+            "confidence": "Source-inspected getCallCapabilities userId.",
+            "relevance_reason": "Capability set user scope."
+          },
+          {
+            "path": "synara/src/app/plugins/call/CallWidgetDriver.ts",
+            "name": "sendStateEvent",
+            "line": 64,
+            "category": "custom_raw_event_sends",
+            "confidence": "Source-inspected driver send path.",
+            "relevance_reason": "postMessage bridge widget→Matrix state send."
+          },
+          {
+            "path": "synara/src/app/plugins/call/CallWidgetDriver.ts",
+            "name": "sendEvent",
+            "line": 74,
+            "category": "custom_raw_event_sends",
+            "confidence": "Source-inspected driver send path.",
+            "relevance_reason": "postMessage bridge widget→Matrix timeline send."
+          },
+          {
+            "path": "synara/src/app/plugins/call/CallWidgetDriver.ts",
+            "name": "sendToDevice",
+            "line": 149,
+            "category": "custom_raw_event_sends",
+            "confidence": "Source-inspected driver to-device path.",
+            "relevance_reason": "postMessage bridge widget→Matrix to-device."
+          },
+          {
+            "path": "synara/src/app/hooks/useCallEmbed.ts",
+            "name": "getRoomSession",
+            "line": 46,
+            "category": "matrixrtc_calls",
+            "confidence": "Source-inspected ongoing intent for getWidget.",
+            "relevance_reason": "Widget URL intent (start vs join) only — not membership display."
           }
         ],
         "behavior_relevant_listener_candidates": [
+          {
+            "path": "synara/src/app/plugins/call/CallEmbed.ts",
+            "event": "ClientEvent.Event",
+            "method": "on",
+            "line": 218,
+            "category": "client_events",
+            "confidence": "Source-inspected feedEvent path.",
+            "relevance_reason": "postMessage bridge host→widget events."
+          },
+          {
+            "path": "synara/src/app/plugins/call/CallEmbed.ts",
+            "event": "MatrixEventEvent.Decrypted",
+            "method": "on",
+            "line": 219,
+            "category": "client_events",
+            "confidence": "Source-inspected decrypt re-feed.",
+            "relevance_reason": "postMessage bridge after decryption."
+          },
+          {
+            "path": "synara/src/app/plugins/call/CallEmbed.ts",
+            "event": "RoomStateEvent.Events",
+            "method": "on",
+            "line": 220,
+            "category": "client_events",
+            "confidence": "Source-inspected feedStateUpdate.",
+            "relevance_reason": "postMessage bridge state→widget."
+          },
           {
             "path": "synara/src/app/plugins/call/CallEmbed.ts",
             "event": "ClientEvent.ToDeviceEvent",
             "method": "on",
             "line": 221,
             "category": "client_events",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+            "confidence": "Source-inspected feedToDevice.",
+            "relevance_reason": "postMessage bridge to-device→widget."
+          },
+          {
+            "path": "synara/src/app/plugins/call/CallEmbed.ts",
+            "event": "ClientEvent.Event",
+            "method": "off",
+            "line": 237,
+            "category": "client_events",
+            "confidence": "Source-inspected dispose cleanup.",
+            "relevance_reason": "Listener lifecycle."
+          },
+          {
+            "path": "synara/src/app/plugins/call/CallEmbed.ts",
+            "event": "MatrixEventEvent.Decrypted",
+            "method": "off",
+            "line": 238,
+            "category": "client_events",
+            "confidence": "Source-inspected dispose cleanup.",
+            "relevance_reason": "Listener lifecycle."
+          },
+          {
+            "path": "synara/src/app/plugins/call/CallEmbed.ts",
+            "event": "RoomStateEvent.Events",
+            "method": "off",
+            "line": 239,
+            "category": "client_events",
+            "confidence": "Source-inspected dispose cleanup.",
+            "relevance_reason": "Listener lifecycle."
           },
           {
             "path": "synara/src/app/plugins/call/CallEmbed.ts",
@@ -78984,13 +79544,14 @@
             "method": "off",
             "line": 240,
             "category": "client_events",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+            "confidence": "Source-inspected dispose cleanup.",
+            "relevance_reason": "Listener lifecycle."
           }
         ],
         "all_candidates_in_linked_files": {
           "method_count": 20,
           "listener_count": 10,
-          "note": "Unfiltered P0.1 AST candidates across linked production import files. Do not treat these as proven APIs for this requirement; use behavior_relevant_* fields.",
+          "note": "Unfiltered P0.1 AST candidates across prior linked import files. Do not treat as proven APIs; use behavior_relevant_* (source-inspected). Notably widgetUrl.search is NOT Client.search.",
           "methods_sample": [
             {
               "path": "synara/src/app/plugins/call/CallEmbed.ts",
@@ -79008,44 +79569,9 @@
               "line": 91
             },
             {
-              "path": "synara/src/app/plugins/call/CallEmbed.ts",
-              "name": "getSafeUserId",
-              "line": 134
-            },
-            {
-              "path": "synara/src/app/plugins/call/CallEmbed.ts",
-              "name": "getRooms",
-              "line": 209
-            },
-            {
-              "path": "synara/src/app/plugins/call/CallEmbed.ts",
-              "name": "getRoom",
-              "line": 295
-            },
-            {
-              "path": "synara/src/app/plugins/call/CallEmbed.ts",
-              "name": "findEventById",
-              "line": 296
-            },
-            {
-              "path": "synara/src/app/plugins/call/CallEmbed.ts",
-              "name": "getRoom",
-              "line": 309
-            },
-            {
-              "path": "synara/src/app/plugins/call/CallEmbed.ts",
-              "name": "getRoom",
-              "line": 349
-            },
-            {
               "path": "synara/src/app/plugins/call/CallWidgetDriver.ts",
               "name": "getDeviceId",
               "line": 40
-            },
-            {
-              "path": "synara/src/app/plugins/call/CallWidgetDriver.ts",
-              "name": "getSafeUserId",
-              "line": 43
             },
             {
               "path": "synara/src/app/plugins/call/CallWidgetDriver.ts",
@@ -79054,18 +79580,18 @@
             },
             {
               "path": "synara/src/app/plugins/call/CallWidgetDriver.ts",
-              "name": "redactEvent",
-              "line": 72
-            },
-            {
-              "path": "synara/src/app/plugins/call/CallWidgetDriver.ts",
               "name": "sendEvent",
               "line": 74
             },
             {
               "path": "synara/src/app/plugins/call/CallWidgetDriver.ts",
-              "name": "getCrypto",
-              "line": 157
+              "name": "sendToDevice",
+              "line": 149
+            },
+            {
+              "path": "synara/src/app/hooks/useCallEmbed.ts",
+              "name": "getRoomSession",
+              "line": 46
             }
           ],
           "listeners_sample": [
@@ -79095,39 +79621,9 @@
             },
             {
               "path": "synara/src/app/plugins/call/CallEmbed.ts",
-              "event": "ClientEvent.Event",
-              "method": "off",
-              "line": 237
-            },
-            {
-              "path": "synara/src/app/plugins/call/CallEmbed.ts",
-              "event": "MatrixEventEvent.Decrypted",
-              "method": "off",
-              "line": 238
-            },
-            {
-              "path": "synara/src/app/plugins/call/CallEmbed.ts",
-              "event": "RoomStateEvent.Events",
-              "method": "off",
-              "line": 239
-            },
-            {
-              "path": "synara/src/app/plugins/call/CallEmbed.ts",
               "event": "ClientEvent.ToDeviceEvent",
               "method": "off",
               "line": 240
-            },
-            {
-              "path": "synara/src/app/plugins/call/CallEmbed.ts",
-              "event": "type",
-              "method": "on",
-              "line": 395
-            },
-            {
-              "path": "synara/src/app/plugins/call/CallEmbed.ts",
-              "event": "type",
-              "method": "off",
-              "line": 397
             }
           ]
         },
@@ -79135,40 +79631,59 @@
           "MatrixClient",
           "MatrixError",
           "MatrixEvent",
-          "Room"
+          "Room",
+          "ClientWidgetApi",
+          "Widget",
+          "WidgetDriver"
         ],
         "network_routes": [],
         "deep_imports": [],
         "method_candidates": [
+          "getSafeUserId",
           "getDeviceId",
-          "search",
+          "getSafeUserId",
           "getDeviceId",
-          "searchUserDirectory"
+          "getSafeUserId",
+          "sendStateEvent",
+          "sendEvent",
+          "sendToDevice",
+          "getRoomSession"
         ],
         "listener_events": [
+          "ClientEvent.Event",
+          "MatrixEventEvent.Decrypted",
+          "RoomStateEvent.Events",
           "ClientEvent.ToDeviceEvent"
         ]
       },
       "current_behavior_and_limits": {
-        "summary": "Current desktop implements this via 5 production matrix-js-sdk-related file(s); status=implemented.",
-        "notes": "Preserve distinction: widget plumbing != full call parity.",
-        "limits": "P0.1 method candidates are AST name hits, not type-checked receiver proofs."
+        "summary": "IMPLEMENTED: Synara embeds Element Call via sandboxed iframe + matrix-widget-api ClientWidgetApi (PostmessageTransport), generates widget URL to /public/element-call/index.html with room/user/device/intent params, negotiates capabilities via CallWidgetDriver.validateCapabilities(getCallCapabilities), and bridges Matrix events/to-device/sends through CallWidgetDriver. status=implemented.",
+        "notes": "Evidence (conservative): (1) PRODUCT MEANING — FR-7.11-002 is embedded Element Call STARTUP + widget URL + capabilities + postMessage bridge; NOT membership DISPLAY (001), NOT join/leave write product (003), NOT encryption-key session (004), NOT cleanup alone (005), NOT CSP alone (006), NOT experimental risk acceptance alone (007). (2) STARTUP PATH — Room.tsx L48 isCallRoom → L73 CallView; PrescreenControls L52 Join → useCallStart L64–72 → createCallEmbed L38–56 (getRoomSession for ongoing, getIntent, getWidget, new CallEmbed); CallEmbedProvider L51–61 data-call-embed-container hosts iframe; vite copies @element-hq/element-call-embedded → public/element-call. (3) WIDGET URL — CallEmbed.getWidget L59–106: URLSearchParams widgetId/parentUrl/baseUrl/roomId/userId/deviceId/intent/skipLobby/confineToRoom/appPrompt/perParticipantE2EE/lang/theme; URL BASE_URL/public/element-call/index.html; IWidget type m.call; getIframe L108–124 sandbox+allow; constructor L133–135 getCompleteUrl into iframe.src. EXCLUDE widgetUrl.search L91 as Client.search (false AST). (4) CAPABILITIES — utils.getCallCapabilities L9–118; CallWidgetDriver ctor L36–44 allowed set; validateCapabilities L46–48 intersection. (5) POSTMESSAGE BRIDGE — ClientWidgetApi(widget, iframe, CallWidgetDriver) L138–139 (matrix-widget-api PostmessageTransport); start L199–221 setViewedRoomId + JoinCall + Event/Decrypted/RoomState/ToDevice feeds; feedEvent/feedStateUpdate/feedToDevice; outbound hangup L179, setTheme L173–176, CallControl DeviceMute L128–129; driver sendEvent/sendToDevice for widget→Matrix. (6) OWNERSHIP — callEmbedAtom disposes previous L12–14; hangup clears atom CallEmbedProvider L21–25. (7) ADJACENCY EXCLUDED AS SOLE EVIDENCE — RoomView.tsx is chat for non-call rooms; via-servers unused by call plugin; Live membership UI is 001; encryption_keys capability type ≠ 004 session; FOCI Client::rtc_foci not called on this product path. (8) No existing automated AT. (9) Cutover P10.2/P10.3 (+P10.1 risk): replace js-sdk+matrix-widget-api embed with SC-082 experimental-widgets (WidgetDriver/Settings/virtual Element Call URL helpers) via IPC — experimental; gates element_call_host_and_postmessage + experimental_feature_risk_gate remain; compile-only E1/E2 never product pass; membership-write/key-session gaps remain outside this FR; widget plumbing ≠ full call parity. SC-082 alone / FOCI alone / raw HTTP / dual-backend FAIL.",
+        "limits": "P0.1 method candidates are AST name hits unless marked source-inspected. Product status is implemented for embed/URL/capabilities/postMessage on matrix-js-sdk + matrix-widget-api + embedded Element Call assets. Rust pin SC-082 experimental-widgets is blocked (E1/E2 only; experimental not accepted for production without risk gate). GAP-MATRIXRTC-WIDGET-CAPABILITY-PLUMBING is capability plumbing only. GAP-MATRIXRTC-FOCI is residual adjacency (product path does not wire Client::rtc_foci). No E2E AT yet."
       },
       "p0_1_linkage": {
         "categories": [
           "matrixrtc_calls",
-          "client_methods"
+          "client_methods",
+          "client_events",
+          "custom_raw_event_sends"
         ],
         "file_ledger_paths": [
-          "synara/src/app/hooks/useCallEmbed.ts",
           "synara/src/app/plugins/call/CallEmbed.ts",
           "synara/src/app/plugins/call/CallWidgetDriver.ts",
           "synara/src/app/plugins/call/utils.ts",
-          "synara/src/app/plugins/via-servers.ts"
+          "synara/src/app/hooks/useCallEmbed.ts",
+          "synara/src/app/state/callEmbed.ts",
+          "synara/src/app/components/CallEmbedProvider.tsx",
+          "synara/src/app/features/room/Room.tsx",
+          "synara/src/app/features/call/CallView.tsx",
+          "synara/src/app/features/call/PrescreenControls.tsx",
+          "synara/src/app/plugins/call/CallControl.ts",
+          "synara/src/app/plugins/call/types.ts"
         ]
       },
       "rust_target": {
-        "support_conclusion": "experimental-widgets-plumbing-not-call-parity",
+        "support_conclusion": "product-element-call-embed-sc082-experimental-widgets-not-call-parity",
         "capability_ids": [
           "SC-082"
         ],
@@ -79206,25 +79721,26 @@
                 "P0.3c-widget-to-device-event-filter-type"
               ],
               "final_state": "blocked",
-              "final_state_rationale": "experimental-widgets APIs compile-probed. Module existence does not imply Element Call product parity. Experimental not accepted for production here.",
+              "final_state_rationale": "experimental-widgets APIs compile-probed (E1/E2). Module existence does not imply Element Call product embed parity (iframe host, postMessage, URL policy, capability negotiation). Experimental not accepted for production without experimental_feature_risk_gate + element_call_host_and_postmessage.",
               "missing_gates": [
                 "experimental_feature_risk_gate",
                 "element_call_host_and_postmessage",
                 "live_call_parity",
-                "ui_acceptance"
+                "ui_acceptance",
+                "semantic_or_integration_test"
               ],
               "section_5_evidence_present": [
                 "E1-experimental-api",
                 "E2-compile-probes"
               ],
-              "notes": "Do not infer call parity from widget module presence.",
+              "notes": "PRIMARY rust surface for this FR. Cutover P10.2/P10.3 maps product CallEmbed/CallWidgetDriver/getWidget to SC-082 WidgetDriver/Settings/virtual Element Call helpers + product host/postMessage. Do not infer full call parity (membership write/key session) from widget module presence.",
               "cross_ref_gap_ids": [
                 "GAP-MATRIXRTC-WIDGET-CAPABILITY-PLUMBING",
                 "GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION"
               ],
               "cross_ref_rationale": {
-                "GAP-MATRIXRTC-WIDGET-CAPABILITY-PLUMBING": "Same experimental-widgets profile/surface: Capabilities, filters, virtual Element Call URL helpers are the SC-082 experimental API shape.",
-                "GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION": "SC-082 module existence does not close membership write or encryption-key session lifecycle; this gap records the remaining no-viable high-level public route."
+                "GAP-MATRIXRTC-WIDGET-CAPABILITY-PLUMBING": "Same experimental-widgets profile: Capabilities, filters, virtual Element Call URL helpers are the SC-082 experimental API shape for this FR's capability + URL clauses.",
+                "GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION": "SC-082 module existence does not close membership write or encryption-key session lifecycle (FR-7.11-003/004); listed only as distinction residual."
               }
             },
             "source_url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/lib.rs#L64-L65",
@@ -79241,9 +79757,10 @@
             "final_state": "blocked",
             "final": {
               "final_state": "blocked",
-              "final_state_rationale": "Experimental API shape compile-probed; not accepted for production in this dossier. Risk gate and remaining product work required.",
+              "final_state_rationale": "Experimental API shape compile-probed; not accepted for production in this dossier. Risk gate, host/postMessage, and remaining product work required.",
               "missing_gates": [
                 "experimental_feature_risk_gate",
+                "element_call_host_and_postmessage",
                 "semantic_or_integration_test",
                 "ui_acceptance"
               ],
@@ -79264,8 +79781,8 @@
               "P0.3c-widget-to-device-event-filter-type",
               "P0.3c-widget-new-virtual-element-call"
             ],
-            "summary": "experimental-widgets Capabilities send/read filters and ToDeviceEventFilter enable capability negotiation that can include to-device types such as io.element.call.encryption_keys. This is capability plumbing only—not a high-level encryption-key session API and not membership write parity.",
-            "remaining_work": "Webview host, postMessage, actual membership events, key exchange runtime, UI."
+            "summary": "experimental-widgets Capabilities send/read filters and ToDeviceEventFilter enable capability negotiation (including to-device types such as io.element.call.encryption_keys). This is capability plumbing only—not a high-level encryption-key session API and not membership write parity.",
+            "remaining_work": "Webview/iframe host, postMessage bridge parity with CallEmbed/ClientWidgetApi, capability policy parity with getCallCapabilities, UI acceptance."
           },
           {
             "gap_id": "GAP-MATRIXRTC-FOCI",
@@ -79274,7 +79791,7 @@
             "final_state": "blocked",
             "final": {
               "final_state": "blocked",
-              "final_state_rationale": "Stable API entry points compile-probed in P0.3c. E3/E4/E5 not present; remaining semantic/runtime work recorded on the gap row.",
+              "final_state_rationale": "Stable API Client::rtc_foci compile-probed (E1/E2). E3–E5 missing. Residual dossier adjacency only — product Element Call embed path does not call rtc_foci today.",
               "missing_gates": [
                 "semantic_or_integration_test",
                 "live_synapse_two_client",
@@ -79293,15 +79810,22 @@
             "probe_ids": [
               "P0.3c-client-rtc-foci"
             ],
-            "summary": "Client::rtc_foci returns well-known RTC foci transports. Does not implement call join or key exchange.",
-            "remaining_work": "Wire foci into call frontend selection."
+            "summary": "Client::rtc_foci returns well-known RTC foci transports. Does not implement call join, key exchange, widget URL generation, or postMessage host. Residual dossier-justified adjacency for Element Call hosting; NOT a substitute for SC-082 embed path.",
+            "remaining_work": "Wire foci into call frontend selection if product requires it; FOCI alone never passes FR-7.11-002 embed clauses."
           }
         ],
-        "notes": "Mappings use only accepted P0.3 capability/gap IDs. Compile probes establish API shape only; final dossier states remain blocked/typed/upstream until E3–E5 gates exist.",
+        "notes": "Honest rust_target for FR-7.11-002: product-element-call-embed-sc082-experimental-widgets-not-call-parity (family: experimental-widgets-plumbing-not-call-parity). Product EMBED is implemented on matrix-js-sdk + matrix-widget-api + @element-hq/element-call-embedded. Rust primary is SC-082 experimental-widgets (blocked E1/E2; experimental). Primary gap GAP-MATRIXRTC-WIDGET-CAPABILITY-PLUMBING. GAP-MATRIXRTC-FOCI kept as residual dossier-justified adjacency — product embed path does not call Client::rtc_foci (FOCI alone never product pass). Cutover P10.2 (driver+capabilities) + P10.3 (postMessage host) + P10.1 (risk dossier; distinguish FR-7.11-007 explicit acceptance). Compile-only / SC-082 alone without host/postMessage / FOCI alone / raw HTTP / dual-backend / claiming full call parity FAIL.",
         "distinctions_preserved": [
-          "server typed search (SC-071) vs experimental local search (SC-072)",
-          "widget plumbing (SC-082/GAP widget) vs call parity (membership write/key session gaps)",
-          "compile shape (E1/E2) vs runtime/UI parity (E3–E5 missing => blocked)"
+          "widget EMBED plumbing (this FR / SC-082) vs membership DISPLAY (FR-7.11-001 / GAP-MATRIXRTC-MEMBERSHIP-PRESENCE)",
+          "widget plumbing vs join/leave write (FR-7.11-003 / GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION)",
+          "widget plumbing vs encryption-key session (FR-7.11-004)",
+          "widget plumbing vs session cleanup (FR-7.11-005)",
+          "widget plumbing vs CSP/origin (FR-7.11-006)",
+          "widget plumbing vs experimental risk acceptance dossier (FR-7.11-007)",
+          "SC-082 primary for this FR vs FOCI residual (not product-wired on embed path)",
+          "widgetUrl.search URLSearchParams vs matrix Client.search false AST",
+          "compile shape (E1/E2) vs runtime/UI parity (E3–E5 missing => blocked)",
+          "typed/product IPC host vs raw /_matrix HTTP or dual-backend/SDK selector"
         ]
       },
       "implementation_tasks": [
@@ -79309,19 +79833,19 @@
           "task_id": "P10.2",
           "title": "Rust widget driver and capability policy",
           "phase": "Phase 10 — Element Call and widget completion",
-          "scope_rationale": "Accepted plan task P10.2 covers this Section 7.11 behavior during Phase 10 — Element Call and widget completion."
+          "scope_rationale": "Accepted plan task P10.2: map CallWidgetDriver + getCallCapabilities/validateCapabilities to SC-082 WidgetDriver/Capabilities under experimental-widgets; preserve capability policy and driver send/read surfaces."
         },
         {
           "task_id": "P10.3",
           "title": "Element Call postMessage transport bridge",
           "phase": "Phase 10 — Element Call and widget completion",
-          "scope_rationale": "Accepted plan task P10.3 covers this Section 7.11 behavior during Phase 10 — Element Call and widget completion."
+          "scope_rationale": "Accepted plan task P10.3: replace ClientWidgetApi/PostmessageTransport host with product IPC + SC-082 widget messaging while preserving feed*/transport.send observables."
         },
         {
           "task_id": "P10.1",
           "title": "Exact experimental-widget risk dossier",
           "phase": "Phase 10 — Element Call and widget completion",
-          "scope_rationale": "Accepted plan task P10.1 covers this Section 7.11 behavior during Phase 10 — Element Call and widget completion."
+          "scope_rationale": "Accepted plan task P10.1: experimental_feature_risk_gate for SC-082 production use (FR-7.11-007 adjacency; required missing gate for this FR cutover)."
         }
       ],
       "automated_tests": {
@@ -79334,44 +79858,42 @@
             "task_id": "P10.2",
             "phase": "Phase 10 — Element Call and widget completion",
             "level": "integration-e2e",
-            "scenario": "7.11/FR-7.11-002: exercise 'embedded Element Call startup, widget URL generation, capabilities, and postMessage transport;' via owner `synara/src/app/plugins/call/CallEmbed.ts` and UI `synara/src/app/features/room/RoomView.tsx`, then confirm Rust/IPC cutover task `P10.2` preserves observable behavior without raw Matrix runtime HTTP.",
+            "scenario": "Integration against disposable Synapse (call room + Element Call assets): (A) STARTUP — Join via PrescreenControls creates CallEmbed; iframe under data-call-embed-container with /public/element-call/index.html. (B) WIDGET URL — assert query params roomId/userId/deviceId/intent/baseUrl/widgetId/parentUrl; exclude Client.search false hit. (C) CAPABILITIES — CallWidgetDriver.validateCapabilities grants only getCallCapabilities set. (D) POSTMESSAGE — ClientWidgetApi bridge: host Event/State/ToDevice feeds; outbound Hangup/DeviceMute/Theme; widget sendEvent/sendToDevice via driver. (E) DISTINCTIONS — not 001 membership display, 003 write, 004 key session, 005 cleanup alone, 006 CSP alone, 007 risk alone; FOCI not required for this FR. Cutover P10.2/P10.3 (+P10.1): SC-082 experimental-widgets + host/postMessage; compile-only / SC-082 alone without host / raw HTTP / dual-backend / full call parity claim FAIL.",
+            "test_target": "CallEmbed.getWidget/getIframe/ClientWidgetApi; CallWidgetDriver.validateCapabilities+getCallCapabilities; createCallEmbed/useCallStart; PrescreenControls Join; CallEmbedProvider container; post-cutover P10.2/P10.3 SC-082 + host/postMessage",
             "preconditions": [
-              "Desktop app with Element Call / widget config for the build",
-              "Room with MatrixRTC membership fixtures; two clients for join/leave",
-              "CSP-enabled production-like shell",
-              "Linked owner path present in tree: synara/src/app/plugins/call/CallEmbed.ts",
-              "Primary UI/lifecycle surface: synara/src/app/features/room/RoomView.tsx"
+              "Disposable Synapse; call room (isCallRoom); Element Call embedded assets present (public/element-call).",
+              "Named owners: CallEmbed.ts, CallWidgetDriver.ts, utils.getCallCapabilities, useCallEmbed.createCallEmbed, CallEmbedProvider, PrescreenControls/CallView/Room.tsx.",
+              "Do not accept membership-display-only (001), write-only (003), keys-only (004), cleanup-only (005), CSP-only (006), risk-dossier-only (007), FOCI alone, compile-only, or RoomView.tsx chat shell as sole embed host."
             ],
             "trigger_actions": [
-              "Boot the appropriate harness for level=integration-e2e against disposable Synapse (or iOS notes if any).",
-              "Establish fixtures required by the clause list: embedded Element Call startup; widget URL generation; capabilities; postMessage transport.",
-              "Open UI/lifecycle surface `synara/src/app/features/room/RoomView.tsx` (or follow ui_entry_points_rationale if no dedicated UI).",
-              "Step 1: perform the product action that implements «embedded Element Call startup» using current owner `synara/src/app/plugins/call/CallEmbed.ts`.",
-              "Step 2: perform the product action that implements «widget URL generation» using current owner `synara/src/app/plugins/call/CallEmbed.ts`.",
-              "Step 3: perform the product action that implements «capabilities» using current owner `synara/src/app/plugins/call/CallEmbed.ts`.",
-              "Step 4: perform the product action that implements «postMessage transport» using current owner `synara/src/app/plugins/call/CallEmbed.ts`.",
-              "Start/stop embedded call/widget session; change room; logout; close window — confirm cleanup."
+              "Boot integration harness against disposable Synapse with Element Call assets.",
+              "STARTUP: open call room; click Join; assert CallEmbed created, iframe src under element-call/index.html, container data-call-embed-container present.",
+              "WIDGET URL: assert URL params include roomId, userId, deviceId, intent, baseUrl, widgetId, parentUrl, skipLobby, confineToRoom.",
+              "CAPABILITIES: assert validateCapabilities intersection with getCallCapabilities (e.g. msc3401.call.member, MSC3846TurnServers, encryption_keys room event type present in set).",
+              "POSTMESSAGE: after join, assert host feeds events into widget API and hangup/device_mute transport.send path works; dispose/hangup removes iframe.",
+              "After cutover P10.2/P10.3 (+P10.1 risk), repeat via SC-082 + product host/postMessage IPC; SC-082 alone without host / compile-only / raw HTTP / dual-backend FAIL."
             ],
             "assertions": [
-              "Each clause is observable: «embedded Element Call startup»; «widget URL generation»; «capabilities»; «postMessage transport».",
-              "State coordination remains through `synara/src/app/plugins/call/CallEmbed.ts` (or its Rust/IPC successor after cutover), not ad-hoc dual writers.",
-              "Behavior-relevant current JS method candidates exercised or replaced: getDeviceId, search, getDeviceId, searchUserDirectory (AST candidates; not type-proven receivers).",
-              "Behavior-relevant listener candidates observed or replaced: on:ClientEvent.ToDeviceEvent, off:ClientEvent.ToDeviceEvent.",
-              "Rust mapping remains conservative: caps=[SC-082] gaps=[GAP-MATRIXRTC-WIDGET-CAPABILITY-PLUMBING,GAP-MATRIXRTC-FOCI]; compile-only blocked states are not treated as runtime pass.",
-              "No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless dossier marks that exact behavior typed-sdk-request-required.",
-              "Widget plumbing success is not recorded as full call parity if membership-write/key-session gaps remain."
+              "STARTUP: sandboxed Element Call iframe hosted; CallEmbed + ClientWidgetApi (or Rust/IPC successor) active.",
+              "WIDGET URL: complete URL points at embedded Element Call with required identity/room/intent params.",
+              "CAPABILITIES: only allowed capabilities granted; policy owned by getCallCapabilities/CallWidgetDriver (or successor).",
+              "POSTMESSAGE: bidirectional bridge (host feed + transport.send + driver send/read) observable.",
+              "DISTINCTIONS: this FR ≠ 001/003/004/005/006/007; ≠ FOCI alone; ≠ Client.search.",
+              "COORDINATION: through CallEmbed/callEmbedAtom or Rust/IPC successor, not dual-backend.",
+              "CUTOVER: P10.2/P10.3 (+P10.1) under SC-082 + GAP-MATRIXRTC-WIDGET-CAPABILITY-PLUMBING; compile-only never product pass; widget plumbing ≠ full call parity; no raw /_matrix HTTP.",
+              "No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless typed-sdk-request-required for that exact behavior."
             ],
             "required_environment": [
-              "Desktop app with Element Call / widget config for the build",
-              "Room with MatrixRTC membership fixtures; two clients for join/leave",
-              "CSP-enabled production-like shell"
+              "Disposable Synapse; call room; Element Call embedded assets",
+              "Product surfaces: CallEmbed, CallWidgetDriver, utils, useCallEmbed, CallEmbedProvider, PrescreenControls/CallView/Room"
             ],
             "does_not_currently_exist": true,
             "clause_breakdown": [
-              "embedded Element Call startup",
-              "widget URL generation",
-              "capabilities",
-              "postMessage transport"
+              "embedded Element Call startup (iframe + CallEmbed + createCallEmbed)",
+              "widget URL generation (getWidget → /public/element-call/index.html + params)",
+              "capabilities (getCallCapabilities + validateCapabilities)",
+              "postMessage transport (ClientWidgetApi/PostmessageTransport + feed*/transport.send + driver)",
+              "cutover P10.2/P10.3 (+P10.1) SC-082 experimental-widgets; compile-only/FOCI alone FAIL"
             ]
           }
         ]
@@ -79381,19 +79903,24 @@
       "missing_evidence_gates": [
         "element_call_host_and_postmessage",
         "experimental_feature_risk_gate",
+        "semantic_or_integration_test",
         "live_call_parity",
         "ui_acceptance"
       ],
       "security_privacy_lifecycle_concerns": [
         "no-raw-matrix-http",
-        "experimental-widgets-risk"
+        "experimental-widgets-risk",
+        "iframe-sandbox-and-origin",
+        "no-dual-backend-widget-selector",
+        "widget-plumbing-not-full-call-parity"
       ],
       "traceability_status": "complete-conservative",
       "blockers": [
+        "GATE-7.11-002-EXPERIMENTAL-WIDGETS-HOST-POSTMESSAGE",
         {
           "severity": "high",
-          "kind": "experimental-widgets-and-call-parity",
-          "summary": "Call/widget path depends on experimental-widgets and MatrixRTC gaps; widget plumbing ≠ call parity."
+          "kind": "experimental-widgets-sc082-host-postmessage-not-call-parity",
+          "summary": "FR-7.11-002 product embed is implemented via matrix-js-sdk + matrix-widget-api ClientWidgetApi + CallEmbed/CallWidgetDriver + embedded Element Call assets. Cutover P10.2/P10.3 (+P10.1) under SC-082 experimental-widgets + GAP-MATRIXRTC-WIDGET-CAPABILITY-PLUMBING: E1/E2 only; element_call_host_and_postmessage + experimental_feature_risk_gate missing. Widget plumbing ≠ membership write/key session/full call parity. Compile-only / SC-082 alone without host / FOCI alone / raw HTTP / dual-backend FAIL."
         }
       ]
     },
@@ -97241,10 +97768,9 @@
         "FR-7.6-001",
         "FR-7.6-004",
         "FR-7.7-005",
-        "FR-7.11-002",
         "FR-7.4-002"
       ],
-      "rationale": "Production matrix-js-sdk import file without exclusive Section 7 user-behavior owner after path/category matching; classified as shared Matrix infrastructure (bucket=plugin, categories=['room_methods'], models=['Room']). Linked to supporting requirements that depend on this plumbing. Not treated as dead.",
+      "rationale": "Production matrix-js-sdk import file without exclusive Section 7 user-behavior owner after path/category matching; classified as shared Matrix infrastructure (bucket=plugin, categories=['room_methods'], models=['Room']). Linked to supporting requirements that depend on this plumbing. Not treated as dead. Demoted from FR-7.11-002 (Element Call embed URL path does not use via-servers).",
       "p0_1_role": "production",
       "desktop_runtime": true,
       "imports": [
@@ -108347,44 +108873,42 @@
         "task_id": "P10.2",
         "phase": "Phase 10 — Element Call and widget completion",
         "level": "integration-e2e",
-        "scenario": "7.11/FR-7.11-002: exercise 'embedded Element Call startup, widget URL generation, capabilities, and postMessage transport;' via owner `synara/src/app/plugins/call/CallEmbed.ts` and UI `synara/src/app/features/room/RoomView.tsx`, then confirm Rust/IPC cutover task `P10.2` preserves observable behavior without raw Matrix runtime HTTP.",
+        "scenario": "Integration against disposable Synapse (call room + Element Call assets): (A) STARTUP — Join via PrescreenControls creates CallEmbed; iframe under data-call-embed-container with /public/element-call/index.html. (B) WIDGET URL — assert query params roomId/userId/deviceId/intent/baseUrl/widgetId/parentUrl; exclude Client.search false hit. (C) CAPABILITIES — CallWidgetDriver.validateCapabilities grants only getCallCapabilities set. (D) POSTMESSAGE — ClientWidgetApi bridge: host Event/State/ToDevice feeds; outbound Hangup/DeviceMute/Theme; widget sendEvent/sendToDevice via driver. (E) DISTINCTIONS — not 001 membership display, 003 write, 004 key session, 005 cleanup alone, 006 CSP alone, 007 risk alone; FOCI not required for this FR. Cutover P10.2/P10.3 (+P10.1): SC-082 experimental-widgets + host/postMessage; compile-only / SC-082 alone without host / raw HTTP / dual-backend / full call parity claim FAIL.",
+        "test_target": "CallEmbed.getWidget/getIframe/ClientWidgetApi; CallWidgetDriver.validateCapabilities+getCallCapabilities; createCallEmbed/useCallStart; PrescreenControls Join; CallEmbedProvider container; post-cutover P10.2/P10.3 SC-082 + host/postMessage",
         "preconditions": [
-          "Desktop app with Element Call / widget config for the build",
-          "Room with MatrixRTC membership fixtures; two clients for join/leave",
-          "CSP-enabled production-like shell",
-          "Linked owner path present in tree: synara/src/app/plugins/call/CallEmbed.ts",
-          "Primary UI/lifecycle surface: synara/src/app/features/room/RoomView.tsx"
+          "Disposable Synapse; call room (isCallRoom); Element Call embedded assets present (public/element-call).",
+          "Named owners: CallEmbed.ts, CallWidgetDriver.ts, utils.getCallCapabilities, useCallEmbed.createCallEmbed, CallEmbedProvider, PrescreenControls/CallView/Room.tsx.",
+          "Do not accept membership-display-only (001), write-only (003), keys-only (004), cleanup-only (005), CSP-only (006), risk-dossier-only (007), FOCI alone, compile-only, or RoomView.tsx chat shell as sole embed host."
         ],
         "trigger_actions": [
-          "Boot the appropriate harness for level=integration-e2e against disposable Synapse (or iOS notes if any).",
-          "Establish fixtures required by the clause list: embedded Element Call startup; widget URL generation; capabilities; postMessage transport.",
-          "Open UI/lifecycle surface `synara/src/app/features/room/RoomView.tsx` (or follow ui_entry_points_rationale if no dedicated UI).",
-          "Step 1: perform the product action that implements «embedded Element Call startup» using current owner `synara/src/app/plugins/call/CallEmbed.ts`.",
-          "Step 2: perform the product action that implements «widget URL generation» using current owner `synara/src/app/plugins/call/CallEmbed.ts`.",
-          "Step 3: perform the product action that implements «capabilities» using current owner `synara/src/app/plugins/call/CallEmbed.ts`.",
-          "Step 4: perform the product action that implements «postMessage transport» using current owner `synara/src/app/plugins/call/CallEmbed.ts`.",
-          "Start/stop embedded call/widget session; change room; logout; close window — confirm cleanup."
+          "Boot integration harness against disposable Synapse with Element Call assets.",
+          "STARTUP: open call room; click Join; assert CallEmbed created, iframe src under element-call/index.html, container data-call-embed-container present.",
+          "WIDGET URL: assert URL params include roomId, userId, deviceId, intent, baseUrl, widgetId, parentUrl, skipLobby, confineToRoom.",
+          "CAPABILITIES: assert validateCapabilities intersection with getCallCapabilities (e.g. msc3401.call.member, MSC3846TurnServers, encryption_keys room event type present in set).",
+          "POSTMESSAGE: after join, assert host feeds events into widget API and hangup/device_mute transport.send path works; dispose/hangup removes iframe.",
+          "After cutover P10.2/P10.3 (+P10.1 risk), repeat via SC-082 + product host/postMessage IPC; SC-082 alone without host / compile-only / raw HTTP / dual-backend FAIL."
         ],
         "assertions": [
-          "Each clause is observable: «embedded Element Call startup»; «widget URL generation»; «capabilities»; «postMessage transport».",
-          "State coordination remains through `synara/src/app/plugins/call/CallEmbed.ts` (or its Rust/IPC successor after cutover), not ad-hoc dual writers.",
-          "Behavior-relevant current JS method candidates exercised or replaced: getDeviceId, search, getDeviceId, searchUserDirectory (AST candidates; not type-proven receivers).",
-          "Behavior-relevant listener candidates observed or replaced: on:ClientEvent.ToDeviceEvent, off:ClientEvent.ToDeviceEvent.",
-          "Rust mapping remains conservative: caps=[SC-082] gaps=[GAP-MATRIXRTC-WIDGET-CAPABILITY-PLUMBING,GAP-MATRIXRTC-FOCI]; compile-only blocked states are not treated as runtime pass.",
-          "No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless dossier marks that exact behavior typed-sdk-request-required.",
-          "Widget plumbing success is not recorded as full call parity if membership-write/key-session gaps remain."
+          "STARTUP: sandboxed Element Call iframe hosted; CallEmbed + ClientWidgetApi (or Rust/IPC successor) active.",
+          "WIDGET URL: complete URL points at embedded Element Call with required identity/room/intent params.",
+          "CAPABILITIES: only allowed capabilities granted; policy owned by getCallCapabilities/CallWidgetDriver (or successor).",
+          "POSTMESSAGE: bidirectional bridge (host feed + transport.send + driver send/read) observable.",
+          "DISTINCTIONS: this FR ≠ 001/003/004/005/006/007; ≠ FOCI alone; ≠ Client.search.",
+          "COORDINATION: through CallEmbed/callEmbedAtom or Rust/IPC successor, not dual-backend.",
+          "CUTOVER: P10.2/P10.3 (+P10.1) under SC-082 + GAP-MATRIXRTC-WIDGET-CAPABILITY-PLUMBING; compile-only never product pass; widget plumbing ≠ full call parity; no raw /_matrix HTTP.",
+          "No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless typed-sdk-request-required for that exact behavior."
         ],
         "required_environment": [
-          "Desktop app with Element Call / widget config for the build",
-          "Room with MatrixRTC membership fixtures; two clients for join/leave",
-          "CSP-enabled production-like shell"
+          "Disposable Synapse; call room; Element Call embedded assets",
+          "Product surfaces: CallEmbed, CallWidgetDriver, utils, useCallEmbed, CallEmbedProvider, PrescreenControls/CallView/Room"
         ],
         "does_not_currently_exist": true,
         "clause_breakdown": [
-          "embedded Element Call startup",
-          "widget URL generation",
-          "capabilities",
-          "postMessage transport"
+          "embedded Element Call startup (iframe + CallEmbed + createCallEmbed)",
+          "widget URL generation (getWidget → /public/element-call/index.html + params)",
+          "capabilities (getCallCapabilities + validateCapabilities)",
+          "postMessage transport (ClientWidgetApi/PostmessageTransport + feed*/transport.send + driver)",
+          "cutover P10.2/P10.3 (+P10.1) SC-082 experimental-widgets; compile-only/FOCI alone FAIL"
         ]
       },
       {
@@ -112049,29 +112573,27 @@
         "Linux"
       ],
       "preconditions": [
-        "Desktop app with Element Call / widget config for the build",
-        "Room with MatrixRTC membership fixtures; two clients for join/leave",
-        "CSP-enabled production-like shell",
-        "State owner available: synara/src/app/plugins/call/CallEmbed.ts",
-        "UI/lifecycle: synara/src/app/features/room/RoomView.tsx",
-        "Current status baseline: implemented"
+        "Disposable Synapse; call room (isCallRoom); Element Call embedded assets (public/element-call).",
+        "State owners: CallEmbed.ts (getWidget/ClientWidgetApi), CallWidgetDriver.ts + utils.getCallCapabilities, useCallEmbed.createCallEmbed, callEmbedAtom.",
+        "UI: Room.tsx → CallView; PrescreenControls Join; CallEmbedProvider data-call-embed-container (not RoomView.tsx chat shell as sole host).",
+        "Current status baseline: implemented (product embeds Element Call via matrix-widget-api postMessage bridge)."
       ],
       "actions": [
-        "Launch Synara desktop on the target platform against disposable Synapse; use a clean or known fixture profile as required by «embedded Element Call startup, widget URL generation, capabilities, and postMessage transport;».",
-        "Identify state owner `synara/src/app/plugins/call/CallEmbed.ts` and open `synara/src/app/features/room/RoomView.tsx`.",
-        "Action 1 — «embedded Element Call startup»: perform the minimal user/system steps that trigger this clause (use linked files under current_production_files if the entry point is indirect).",
-        "Action 2 — «widget URL generation»: perform the minimal user/system steps that trigger this clause (use linked files under current_production_files if the entry point is indirect).",
-        "Action 3 — «capabilities»: perform the minimal user/system steps that trigger this clause (use linked files under current_production_files if the entry point is indirect).",
-        "Action 4 — «postMessage transport»: perform the minimal user/system steps that trigger this clause (use linked files under current_production_files if the entry point is indirect).",
-        "Join call/widget, verify membership UI, leave/decline as applicable, switch rooms, and close window; confirm sessions clean up."
+        "Launch Synara desktop on the target platform against disposable Synapse with Element Call assets present.",
+        "STARTUP: open a call room; click Join; observe sandboxed Element Call iframe under the fixed call-embed container.",
+        "WIDGET URL: inspect iframe src — /public/element-call/index.html with roomId/userId/deviceId/intent/baseUrl/widgetId/parentUrl (and related flags).",
+        "CAPABILITIES: confirm call proceeds with negotiated capabilities (driver allows only getCallCapabilities set).",
+        "POSTMESSAGE: mute/hangup host controls affect the embedded call; hangup/dispose removes the embed without orphan iframe.",
+        "DISTINCTIONS: do not treat membership Live display alone (001), join/leave write alone (003), key session alone (004), cleanup alone (005), CSP alone (006), or risk dossier alone (007) as passing this embed FR.",
+        "On post-cutover build: repeat embed/URL/capabilities/postMessage via SC-082 experimental-widgets + product host IPC; no raw /_matrix HTTP; no dual-backend; SC-082 alone without host/postMessage is not product pass."
       ],
       "expected_results": [
-        "All clauses under «embedded Element Call startup, widget URL generation, capabilities, and postMessage transport;» produce the user-visible or system-observable success criteria without error toasts unrelated to intentional negative tests.",
-        "Clause 1 «embedded Element Call startup» is satisfied on macOS, Linux with owner `synara/src/app/plugins/call/CallEmbed.ts`.",
-        "Clause 2 «widget URL generation» is satisfied on macOS, Linux with owner `synara/src/app/plugins/call/CallEmbed.ts`.",
-        "Clause 3 «capabilities» is satisfied on macOS, Linux with owner `synara/src/app/plugins/call/CallEmbed.ts`.",
-        "Clause 4 «postMessage transport» is satisfied on macOS, Linux with owner `synara/src/app/plugins/call/CallEmbed.ts`.",
-        "No unexpected raw /_matrix traffic from the app renderer for this flow on the post-cutover build."
+        "EMBED STARTUP: Element Call iframe hosted and CallEmbed active after Join.",
+        "WIDGET URL: complete URL targets embedded Element Call with required params.",
+        "CAPABILITIES: capability negotiation limited to product allow-list.",
+        "POSTMESSAGE: bidirectional host↔widget messaging works for feeds and control actions.",
+        "DISTINCTIONS: 001/003–007 alone do not pass this FR; FOCI alone does not pass.",
+        "Post-cutover: same embed observables without raw /_matrix runtime HTTP or dual-backend; widget plumbing ≠ full call parity."
       ],
       "clause_breakdown": [
         "embedded Element Call startup",
@@ -112327,8 +112849,8 @@
     {
       "requirement_id": "FR-7.11-002",
       "severity": "high",
-      "kind": "experimental-widgets-and-call-parity",
-      "summary": "Call/widget path depends on experimental-widgets and MatrixRTC gaps; widget plumbing ≠ call parity."
+      "kind": "experimental-widgets-sc082-host-postmessage-not-call-parity",
+      "summary": "FR-7.11-002 product embed is implemented via matrix-js-sdk + matrix-widget-api ClientWidgetApi + CallEmbed/CallWidgetDriver + embedded Element Call assets. Cutover P10.2/P10.3 (+P10.1) under SC-082 experimental-widgets + GAP-MATRIXRTC-WIDGET-CAPABILITY-PLUMBING: E1/E2 only; element_call_host_and_postmessage + experimental_feature_risk_gate missing. Widget plumbing ≠ membership write/key session/full call parity. Compile-only / SC-082 alone without host / FOCI alone / raw HTTP / dual-backend FAIL."
     },
     {
       "requirement_id": "FR-7.11-003",
@@ -112411,8 +112933,8 @@
       {
         "requirement_id": "FR-7.11-002",
         "severity": "high",
-        "kind": "experimental-widgets-and-call-parity",
-        "summary": "Call/widget path depends on experimental-widgets and MatrixRTC gaps; widget plumbing ≠ call parity."
+        "kind": "experimental-widgets-sc082-host-postmessage-not-call-parity",
+        "summary": "FR-7.11-002 product embed is implemented via matrix-js-sdk + matrix-widget-api ClientWidgetApi + CallEmbed/CallWidgetDriver + embedded Element Call assets. Cutover P10.2/P10.3 (+P10.1) under SC-082 experimental-widgets + GAP-MATRIXRTC-WIDGET-CAPABILITY-PLUMBING: E1/E2 only; element_call_host_and_postmessage + experimental_feature_risk_gate missing. Widget plumbing ≠ membership write/key session/full call parity. Compile-only / SC-082 alone without host / FOCI alone / raw HTTP / dual-backend FAIL."
       },
       {
         "requirement_id": "FR-7.11-003",
@@ -114004,6 +114526,20 @@
         "FR-7.11-001: retargeted owners/files to useCall.ts + CallStatus/LiveChip/MemberGlance + CallView/CallMemberCard + RoomNavItem; removed CallRoomName/useCallEmbed/callEmbed as sole ownership; source-inspected line_refs and getRoomSession method candidate; listeners retained as MembershipsChanged/SessionStarted/Ended.",
         "FR-7.11-001: rust_target product-matrixrtc-membership-display-gap-presence-boolean-only caps=[] gaps=[GAP-MATRIXRTC-MEMBERSHIP-PRESENCE]; removed SC-082 as primary (widget ≠ membership display); GATE-7.11-001-FULL-MEMBERSHIP-LIST-PROJECTION for list beyond boolean has_active_room_call.",
         "FR-7.11-001: planned AT/MA rewritten as MEMBERSHIP LIST + LIVE SURFACES + UPDATES + DISTINCTIONS from 002–007; cutover P10.4 (+P11.3); SC-082 alone, boolean alone, compile-only, raw HTTP, dual-backend FAIL. Top-level AT/MA/blockers updated. Accepted FR-7.8-001..009, FR-7.9-001..013 (011 partial), FR-7.10-001..007 (005/007 partial) preserved. JSON and Markdown synchronized."
+      ]
+    },
+    {
+      "id": "p0.2-correct-48-fr-7.11-002-element-call-widget-embed",
+      "scope": "Rejected-review limited correction: FR-7.11-002 only — replace shallow file-count notes / false Client.search AST / RoomView.tsx mis-UI / generic AT-MA with concrete Element Call embed evidence: CallEmbed getWidget+iframe+ClientWidgetApi; CallWidgetDriver validateCapabilities+getCallCapabilities; createCallEmbed/useCallStart; postMessage feed*/transport.send; honest rust_target product-element-call-embed-sc082-experimental-widgets-not-call-parity caps=[SC-082] gaps=[GAP-MATRIXRTC-WIDGET-CAPABILITY-PLUMBING]; FOCI not primary; status remains implemented",
+      "requirements_rewritten": [
+        "FR-7.11-002"
+      ],
+      "not_claimed_complete": true,
+      "changes": [
+        "FR-7.11-002: current_status remains implemented. current_behavior_and_limits documents concrete embed startup, widget URL, capabilities, and postMessage bridge; notes no longer shallow file-count one-liner.",
+        "FR-7.11-002: retargeted UI to Room.tsx→CallView/PrescreenControls/CallEmbedProvider (not RoomView.tsx chat shell); removed via-servers; excluded widgetUrl.search as Client.search false AST; source-inspected line_refs for getWidget/ClientWidgetApi/getCallCapabilities/validateCapabilities/feed*/transport.send.",
+        "FR-7.11-002: rust_target product-element-call-embed-sc082-experimental-widgets-not-call-parity caps=[SC-082] gaps=[GAP-MATRIXRTC-WIDGET-CAPABILITY-PLUMBING, GAP-MATRIXRTC-FOCI residual]; FOCI not product-wired / alone never pass; GATE-7.11-002-EXPERIMENTAL-WIDGETS-HOST-POSTMESSAGE for host/postMessage + experimental risk.",
+        "FR-7.11-002: planned AT/MA rewritten as STARTUP + WIDGET URL + CAPABILITIES + POSTMESSAGE + DISTINCTIONS from 001/003–007; cutover P10.2/P10.3 (+P10.1); SC-082 alone without host, FOCI alone, compile-only, raw HTTP, dual-backend, full call parity claim FAIL. Top-level AT/MA/blockers updated. Accepted FR-7.8-001..009, FR-7.9-001..013 (011 partial), FR-7.10-001..007, FR-7.11-001 preserved. JSON and Markdown synchronized."
       ]
     }
   ]
