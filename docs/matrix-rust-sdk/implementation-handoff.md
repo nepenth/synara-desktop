@@ -157,14 +157,15 @@ Accepted notification findings that must be preserved:
   `DeviceLogoutBtn` (not multi-delete). Primary Rust gaps
   GAP-DEVICE-NAMING-DELETE + GAP-UIA; SC-067 list-only secondary.
   List ownership is 003; trust 004; SAS 005; recovery UIA 006.
-- FR-7.9-011: status `implemented` (sequential isolation, not concurrent
-  multi-account). Single active session: fixed `MATRIX_LOCAL_STORE_NAMES`
-  clear-and-replace via `clearMatrixStoresForIdentityChange` on fresh-login
-  identity mismatch; single-slot `FALLBACK_SESSION_KEYS` /
-  `clearSessionLocalStorage`; `ClientRoot` `getActiveSession`→`initClient`.
-  Concurrent dual clients / per-userId parallel stores are non-goals.
-  Continuity is FR-7.9-012; logout wipe FR-7.1-010; crypto boot FR-7.9-001.
-  Cutover P2.2+P3.6+P8.8 SC-061+SC-083 compile-shape-only.
+- FR-7.9-011: status **`partial`** under
+  `GATE-7.9-011-CONCURRENT-MULTI-ACCOUNT-STORES`. Sequential single-active
+  isolation only: fixed `MATRIX_LOCAL_STORE_NAMES` clear-and-replace via
+  `clearMatrixStoresForIdentityChange` on fresh-login identity mismatch;
+  single-slot `FALLBACK_SESSION_KEYS` / `clearSessionLocalStorage`;
+  `ClientRoot` one `getActiveSession`→`initClient`. Concurrent dual clients /
+  per-userId parallel stores are product non-goals (plan text “fully isolated
+  multi-account stores” not met). Continuity is FR-7.9-012; logout wipe
+  FR-7.1-010; crypto boot FR-7.9-001.
 - FR-7.9-012: status `implemented`. Restored sessions must not wipe stores
   (`initClient` freshLogin gate); reopen fixed IndexedDB + `initRustCrypto`;
   `assertCryptoStoreContinuity` (`getCrypto`/`getOwnDeviceKeys`/
