@@ -4,7 +4,7 @@
 
 ## Correction pass status
 
-Limited rejected-review correction (`p0.2-correct-24-fr-7.8-006-event-resolution-deep-link-routing`) for **FR-7.8-006** only: retarget event resolution and deep-link routing from wrong push-rule preference linkage to buildDesktopNotificationRoomRoute + normalizeSystemNotificationRequest/showPlatformNotification route pass-through + useRoomNavigate.navigateRoom open (Message/Agent/Later routes; Invite distinct inbox invites path) + inbox Notifications Open with thread-root openEventId + timelineOpening event focus; remove AllMessages/KeywordMessages/SpecialMessages/NotificationModeSwitcher/SystemNotification/utils/notifications as primary owners/files; rewrite planned AT/MA for message room+event open (incl. thread-root), invite inbox path, inbox list open, normalize reject external/unsupported/oversized, and P9.4/P4.8 Rust-owned event identity + Synara route DTOs cutover (no raw `/_matrix/` HTTP; SC-032/SC-022 alone fail; push-rule UI / badge-only / generation-only / helper-only cannot substitute). Status remains `implemented`. JSON and Markdown synchronized. Accepted corrections for **FR-7.8-001 through FR-7.8-005** preserved. Prior corrections and accepted **7.1–7.3** preserved. **P0.2 is not complete.**
+Limited rejected-review correction (`p0.2-correct-25-fr-7.8-007-notification-suppression-focus`) for **FR-7.8-007** only: retarget notification suppression for active/focused contexts from wrong push-rule preference linkage and weak utils/notifications.ts owner to ClientNonUIFeatures MessageNotifications focus/sync/mute/self/showNotifications gates (`document.hasFocus` + selected room / notifications inbox; SYNCING; Mute via getNotificationType; self; showNotifications; unreadEqual) with SystemNotification/tray DND enablement and utils/room Mute helper; document Invite has no focused-room gate; rewrite planned AT/MA for independent suppression cases and P9.3 product focus + Rust candidate stream cutover (no raw `/_matrix/` HTTP; SC-057 alone fails; push-rule UI / badge-only / generation-only / helper-only cannot substitute). Status remains `implemented`. JSON and Markdown synchronized. Accepted corrections for **FR-7.8-001 through FR-7.8-006** preserved. Prior corrections and accepted **7.1–7.3** preserved. **P0.2 is not complete.**
 
 ## Provenance
 
@@ -5389,58 +5389,69 @@ Limited rejected-review correction (`p0.2-correct-24-fr-7.8-006-event-resolution
 - **Text**: notification suppression for active/focused contexts;
 - **Lines**: 419–419
 - **Status**: `implemented`
-- **Behavior**: Current desktop implements this via 8 production matrix-js-sdk-related file(s); status=implemented.
-- **UI**: `synara/src/app/features/settings/notifications/SystemNotification.tsx`
-- **Owners**: `synara/src/app/utils/notifications.ts`
+- **Behavior**: Current desktop implements notification suppression for active/focused contexts via MessageNotifications gates in ClientNonUIFeatures (document.hasFocus + selected room or notifications inbox; SYNCING; Mute; self; showNotifications; unread delta) with SystemNotification/tray DND showNotifications enablement; Invite/Agent/Later use showNotifications (and Invite SYNCING) without inventing focus gates; status=implemented.
+- **Notes**: Evidence (conservative): (1) Primary suppression owner `synara/src/app/pages/client/ClientNonUIFeatures.tsx` MessageNotifications (`RoomEvent.Timeline` on L475 / removeListener L477). Generation path is FR-7.8-004; this FR owns the gates that prevent native OS/browser notifications for active/focused contexts and related suppressors. Message timeline handler gates (in order): `mx.getSyncState() !== 'SYNCING'` early-return L425; `document.hasFocus() && (selectedRoomId === room?.roomId || notificationSelected)` early-return L426 where `selectedRoomId = useSelectedRoom()` and `notificationSelected = useInboxNotificationsSelected()`; `!room` / `!data.liveEvent` / `room.isSpaceRoom()` / `!isNotificationEvent(mEvent)` / `getNotificationType(mx, room.roomId) === NotificationType.Mute` return L427–435 (`getNotificationType` in utils/room.ts L170–188 uses `getRoomPushRule` L173 or muted override); self-sent skip `mEvent.getSender() === mx.getUserId()` L439; `detectAgentApprovalPrompt` content skip L440; unread total===0 L446; `unreadEqual` no-op L447–451; only then if `showNotifications` + permission emit native L454–468. (2) InviteNotifications: requires invite-count increase and `mx.getSyncState()==='SYNCING'` L335 plus `showNotifications` + permission L337–338. Explicit: Invite has **no** `document.hasFocus` / selected-room / notifications-inbox focus gate — invite is not room-timeline; do not invent a focus gate. (3) AgentApprovalNotifications: `showNotifications` + permission L698–700; space/self skips; no selected-room focus gate. LaterReminderNotifications: `showNotifications` + permission L819–821; no focus gate. (4) Global enablement / DND-ish secondary: SystemNotification Desktop Notifications switch binds `settingsAtom showNotifications` L98, L163–167. TrayDoNotDisturbSync L248–259 flips `showNotifications`. PlatformBadgeAndTrayUpdater tray `doNotDisturb: !showNotifications` L286 is indicator only (badge math FR-7.8-005). (5) Explicit non-evidence: push-rule preference UIs (except Mute type as MessageNotifications gate); badge/tray counts (FR-7.8-005); route/deep-link (FR-7.8-006); mere generation success without focus gates (FR-7.8-004); utils/notifications.ts sendReadReceipt; SC-057 alone; helper/fixture/compile-only. Existing systemNotification.test.ts is normalize unit only — not E2E focus/suppression AT. Cutover P9.3: product focus + Rust candidate stream; SC alone / raw HTTP / push-rule UI / helper-only FAIL.
+- **UI**: `synara/src/app/pages/client/ClientNonUIFeatures.tsx` (suppression lifecycle), `synara/src/app/features/settings/notifications/SystemNotification.tsx` (showNotifications enablement only)
+- **Owners**: `synara/src/app/pages/client/ClientNonUIFeatures.tsx`, `synara/src/app/features/settings/notifications/SystemNotification.tsx`, `synara/src/app/utils/room.ts`
 - **Files**:
-  - `synara/src/app/features/settings/notifications/AllMessages.tsx` symbols=['setPushRuleActions'] retained_m=1 retained_l=0
-    - method `setPushRuleActions`:L67 — None
-  - `synara/src/app/features/settings/notifications/KeywordMessages.tsx` symbols=['addPushRule', 'deletePushRule', 'setPushRuleActions'] retained_m=3 retained_l=0
-    - method `addPushRule`:L30 — None
-    - method `deletePushRule`:L114 — None
-    - method `setPushRuleActions`:L135 — None
-  - `synara/src/app/features/settings/notifications/NotificationModeSwitcher.tsx` symbols=[] retained_m=0 retained_l=0
-  - `synara/src/app/features/settings/notifications/SpecialMessages.tsx` symbols=['setPushRuleActions'] retained_m=1 retained_l=0
-    - method `setPushRuleActions`:L106 — None
+  - `synara/src/app/pages/client/ClientNonUIFeatures.tsx` symbols=['getSyncState', 'getSyncState', 'isSpaceRoom', 'getUserId', 'on:RoomEvent.Timeline', 'removeListener:RoomEvent.Timeline'] retained_m=4 retained_l=2
+    - method `getSyncState`:L335 — InviteNotifications requires SYNCING (no focus gate on invite)
+    - method `getSyncState`:L425 — MessageNotifications not-SYNCING suppression
+    - method `isSpaceRoom`:L430 — MessageNotifications skips space rooms
+    - method `getUserId`:L439 — MessageNotifications self-sent suppression
+    - listener `on:RoomEvent.Timeline`:L475 — MessageNotifications focus/suppression gate handler
+    - listener `removeListener:RoomEvent.Timeline`:L477 — MessageNotifications teardown
+    - note: Product focus L426 document.hasFocus + useSelectedRoom L368 / useInboxNotificationsSelected L367; Mute L432; showNotifications L455; TrayDoNotDisturbSync L248–259
   - `synara/src/app/features/settings/notifications/SystemNotification.tsx` symbols=[] retained_m=0 retained_l=0
-  - `synara/src/app/pages/client/ClientNonUIFeatures.tsx` symbols=[] retained_m=0 retained_l=0
-  - `synara/src/app/pages/client/inbox/Notifications.tsx` symbols=[] retained_m=0 retained_l=0
-  - `synara/src/app/utils/notifications.ts` symbols=['sendReadReceipt'] retained_m=1 retained_l=0
-    - method `sendReadReceipt`:L402 — None
+    - note: Enablement only (Desktop Notifications switch / permission / showNotifications); does not implement document.hasFocus focus logic
+  - `synara/src/app/utils/room.ts` symbols=['getRoomPushRule'] retained_m=1 retained_l=0
+    - method `getRoomPushRule`:L173 — getNotificationType Mute classification for MessageNotifications Mute gate
 - **Behavior-relevant methods (top-level)**:
-  - `setPushRuleActions` `synara/src/app/features/settings/notifications/AllMessages.tsx`:L67 — None
-  - `addPushRule` `synara/src/app/features/settings/notifications/KeywordMessages.tsx`:L30 — None
-  - `deletePushRule` `synara/src/app/features/settings/notifications/KeywordMessages.tsx`:L114 — None
-  - `setPushRuleActions` `synara/src/app/features/settings/notifications/KeywordMessages.tsx`:L135 — None
-  - `setPushRuleActions` `synara/src/app/features/settings/notifications/SpecialMessages.tsx`:L106 — None
-  - `sendReadReceipt` `synara/src/app/utils/notifications.ts`:L402 — None
+  - `getSyncState` `synara/src/app/pages/client/ClientNonUIFeatures.tsx`:L335 — InviteNotifications SYNCING gate (no focus gate on invite)
+  - `getSyncState` `synara/src/app/pages/client/ClientNonUIFeatures.tsx`:L425 — MessageNotifications not-SYNCING suppression
+  - `isSpaceRoom` `synara/src/app/pages/client/ClientNonUIFeatures.tsx`:L430 — MessageNotifications skips space rooms
+  - `getUserId` `synara/src/app/pages/client/ClientNonUIFeatures.tsx`:L439 — MessageNotifications self-sent suppression
+  - `getRoomPushRule` `synara/src/app/utils/room.ts`:L173 — Mute classification input for MessageNotifications Mute gate
 - **Behavior-relevant listeners (top-level)**:
-  - —
-- **Unfiltered linked candidates**: methods=35 listeners=6
-- **Rust**: `product-desktop-bridge` caps=['SC-057'] gaps=[]
+  - `on:RoomEvent.Timeline` `synara/src/app/pages/client/ClientNonUIFeatures.tsx`:L475 — MessageNotifications focus/suppression gate handler
+  - `removeListener:RoomEvent.Timeline` `synara/src/app/pages/client/ClientNonUIFeatures.tsx`:L477 — MessageNotifications teardown
+- **Unfiltered linked candidates**: methods=25 listeners=6
+- **Rust**: `product-desktop-bridge-with-focus-and-candidate-stream` caps=['SC-057'] gaps=[]
   - `SC-057` `blocked` `matrix_sdk::notification_settings::NotificationSettings` https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/notification_settings/mod.rs#L81
+  - Cutover notes: rust_target is product focus + notification candidate stream under P9.3. Do not claim NotificationSettings implements focus suppression. SC-057 may relate only to push-rule/Mute-type settings adjacent to Mute gates; document.hasFocus, useSelectedRoom, useInboxNotificationsSelected, and showNotifications are product-owned. SC alone, raw HTTP, push-rule UI, helper-only never pass.
 - **Tasks**: `P9.3`
 - **Existing tests**:
-  - `synara/src/app/notifications/__tests__/systemNotification.test.ts` — suppression/focus-related notification behavior unit coverage where present
+  - `synara/src/app/notifications/__tests__/systemNotification.test.ts` — normalizeSystemNotificationRequest unit coverage only; not E2E focus/suppression AT for MessageNotifications gates
 - **Planned** `AT-FR-7.8-007-001` task `P9.3` level `integration`
-  - Scenario: 7.8/FR-7.8-007: exercise 'notification suppression for active/focused contexts;' via owner `synara/src/app/utils/notifications.ts` and UI `synara/src/app/features/settings/notifications/SystemNotification.tsx`, then confirm Rust/IPC cutover task `P9.3` preserves observable behavior without raw Matrix runtime HTTP.
-  - Test target: None
+  - Scenario: Integration against disposable Synapse: independently prove MessageNotifications suppression cases — (1) focused selected room + document.hasFocus → no message native notification; (2) notifications inbox selected + document.hasFocus → no message native notification; (3) showNotifications off → no generation; (4) not SYNCING → no generation; (5) mute room (getNotificationType Mute) → no message notification; (6) self-sent → no message notification. Document InviteNotifications has SYNCING + showNotifications gates but no focused-room gate. After cutover P9.3, same focus/suppression observables via Rust-owned notification candidate stream + product focus state. No raw /_matrix HTTP; SC-057 alone fails; push-rule settings UI / badge-only / generation-only / helper-only cannot substitute.
+  - Test target: ClientNonUIFeatures MessageNotifications focus/sync/mute/self/showNotifications gates + SystemNotification/tray showNotifications enablement + getNotificationType Mute; post-cutover Rust-owned notification candidate stream + product focus state (P9.3)
   - Preconditions:
-    - Desktop app with notification permission granted (OS)
-    - Rooms with distinct push-rule modes; backgrounded window fixture
-    - Linked owner path present in tree: synara/src/app/utils/notifications.ts
-    - Primary UI/lifecycle surface: synara/src/app/features/settings/notifications/SystemNotification.tsx
+    - Disposable Synapse; desktop app with OS/browser notification permission path and showNotifications control.
+    - Named suppression owner: ClientNonUIFeatures MessageNotifications (RoomEvent.Timeline handler gates at L425–468).
+    - Named focus state: useSelectedRoom + useInboxNotificationsSelected + document.hasFocus.
+    - Named enablement: SystemNotification Desktop Notifications / settingsAtom showNotifications; TrayDoNotDisturbSync may flip showNotifications.
+    - Named Mute helper: getNotificationType / getRoomPushRule in utils/room.ts.
+    - Fixtures: focused selected room; notifications inbox selected; backgrounded/unfocused; muted room; self-sent event; non-SYNCING client; showNotifications off/on.
+    - Invite/Agent/Later paths may have showNotifications (and Invite SYNCING) gates without inventing focus gates for them.
   - Actions:
-    1. Boot the appropriate harness for level=integration against disposable Synapse (or iOS notes if any).
-    2. Establish fixtures required by the clause list: notification suppression for active/focused contexts.
-    3. Open UI/lifecycle surface `synara/src/app/features/settings/notifications/SystemNotification.tsx` (or follow ui_entry_points_rationale if no dedicated UI).
-    4. Step 1: perform the product action that implements «notification suppression for active/focused contexts» using current owner `synara/src/app/utils/notifications.ts`.
+    1. Boot the integration harness against disposable Synapse. Do not use fixture-only mocks that bypass product MessageNotifications gates, push-rule settings UI alone, badge/tray alone, generation-without-suppression cases alone, alternate UI, helper-only harnesses, or raw HTTP.
+    2. FOCUSED SELECTED ROOM: with showNotifications on, room not muted, client SYNCING, document.hasFocus true and selectedRoomId === event roomId, inject a live notifiable timeline event. Assert no message native notification (showPlatformNotification / window.Notification).
+    3. NOTIFICATIONS INBOX FOCUSED: with document.hasFocus true and useInboxNotificationsSelected true (notifications inbox path), inject a live notifiable event for a room that is not necessarily the selected room. Assert no message native notification.
+    4. SHOW NOTIFICATIONS OFF: set showNotifications false (SystemNotification switch or tray DND flip). Inject notifiable event with app unfocused. Assert no native generation.
+    5. NOT SYNCING: with app unfocused and showNotifications on, arrange mx.getSyncState() !== 'SYNCING'. Inject notifiable event. Assert no generation.
+    6. MUTE ROOM: with app unfocused and showNotifications on, room with getNotificationType Mute, inject notifiable event. Assert no message notification.
+    7. SELF-SENT: with app unfocused and showNotifications on, emit self-sent notifiable event (sender === mx.getUserId()). Assert no message notification.
+    8. After cutover task P9.3, repeat the same independent focus/suppression observables via Rust-owned notification candidate stream + product focus state. Citing SC-057 alone, compile-only blocked states, raw /_matrix HTTP, push-rule settings UI (AllMessages/Keyword/Special/NotificationModeSwitcher), badge-only (FR-7.8-005), generation success path without focus gates (FR-7.8-004 alone), or helper/fixture-only is a FAIL.
   - Assertions:
-    - Each clause is observable: «notification suppression for active/focused contexts».
-    - State coordination remains through `synara/src/app/utils/notifications.ts` (or its Rust/IPC successor after cutover), not ad-hoc dual writers.
-    - Behavior-relevant current JS method candidates exercised or replaced: setPushRuleActions, addPushRule, deletePushRule, setPushRuleActions, setPushRuleActions, sendReadReceipt (AST candidates; not type-proven receivers).
-    - Rust mapping remains conservative: caps=[SC-057] gaps=[none]; compile-only blocked states are not treated as runtime pass.
-    - No new production matrix-js-sdk usage and no raw /\_matrix runtime HTTP unless dossier marks that exact behavior typed-sdk-request-required.
+    - FOCUSED SELECTED ROOM + document.hasFocus: no message native notification.
+    - NOTIFICATIONS INBOX SELECTED + document.hasFocus: no message native notification.
+    - showNotifications off: no generation across product notification paths that gate on it.
+    - not SYNCING: no MessageNotifications (and InviteNotifications) generation.
+    - Mute room: no message native notification.
+    - Self-sent: no message native notification.
+    - InviteNotifications documents SYNCING + showNotifications without a focused-room gate (do not invent).
+    - Rust/IPC cutover preserves same focus/suppression observables via Rust candidate stream + product focus state; SC-057 NotificationSettings alone never implements focus suppression; raw HTTP, push-rule UI, badge-only, generation-only, helper-only never pass.
+    - No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless the dossier marks that exact behavior typed-sdk-request-required.
   - does_not_currently_exist: `True`
 - **Manual**: `MA-FR-7.8-007`
 
@@ -8766,19 +8777,27 @@ Limited rejected-review correction (`p0.2-correct-24-fr-7.8-006-event-resolution
 
 - Platforms: macOS, Linux
 - Preconditions:
-  - Desktop app with notification permission granted (OS)
-  - Rooms with distinct push-rule modes; backgrounded window fixture
-  - State owner available: synara/src/app/utils/notifications.ts
-  - UI/lifecycle: synara/src/app/features/settings/notifications/SystemNotification.tsx
+  - Disposable Synapse; desktop app with notification permission and showNotifications control.
+  - Named suppression owner: ClientNonUIFeatures MessageNotifications focus/sync/mute/self gates.
+  - Named enablement: SystemNotification Desktop Notifications / tray DND showNotifications.
+  - Fixtures for focused selected room, notifications inbox selected, backgrounded app, muted room, self-sent event, non-SYNCING if observable.
   - Current status baseline: implemented
 - Actions:
-  1. Launch Synara desktop on the target platform against disposable Synapse; use a clean or known fixture profile as required by «notification suppression for active/focused contexts;».
-  2. Identify state owner `synara/src/app/utils/notifications.ts` and open `synara/src/app/features/settings/notifications/SystemNotification.tsx`.
-  3. Action 1 — «notification suppression for active/focused contexts»: perform the minimal user/system steps that trigger this clause (use linked files under current_production_files if the entry point is indirect).
+  1. Launch Synara desktop on the target platform against disposable Synapse with Desktop Notifications enabled.
+  2. FOCUSED ROOM — select a room, keep the window focused; have another user send a notifiable message in that room; confirm no native desktop notification appears.
+  3. NOTIFICATIONS INBOX — open Notification Messages inbox with the window focused; receive a notifiable message in some room; confirm no native message notification.
+  4. SHOW OFF — turn Desktop Notifications / showNotifications off (or tray DND); receive a notifiable event while unfocused; confirm no native notification.
+  5. MUTE — mute a room; while unfocused, receive a notifiable message in that room; confirm no message notification.
+  6. SELF — while unfocused with notifications on, send a message from the same account; confirm no self-notification.
+  7. After cutover P9.3, repeat the same independent focus/suppression observables via Rust-owned notification candidate stream + product focus state without raw /_matrix HTTP.
 - Expected:
-  - All clauses under «notification suppression for active/focused contexts;» produce the user-visible or system-observable success criteria without error toasts unrelated to intentional negative tests.
-  - Clause 1 «notification suppression for active/focused contexts» is satisfied on macOS, Linux with owner `synara/src/app/utils/notifications.ts`.
-  - No unexpected raw /\_matrix traffic from the app renderer for this flow on the post-cutover build.
+  - Focused selected room + document focus suppresses message native notifications.
+  - Notifications inbox selected + focus suppresses message native notifications.
+  - showNotifications off suppresses generation.
+  - Muted rooms and self-sent events suppress message notifications.
+  - Invite path is not falsely claimed to use a focused-room gate; SYNCING + showNotifications still apply where product does.
+  - Push-rule settings UI, badge-only, generation-only without focus gates, SC-057 alone, and helper/fixture-only do not satisfy this FR.
+  - No unexpected raw /_matrix traffic from the app renderer for this flow on the post-cutover build.
 
 ### `MA-FR-7.8-008` (FR-7.8-008)
 
@@ -10994,19 +11013,27 @@ Limited rejected-review correction (`p0.2-correct-24-fr-7.8-006-event-resolution
 
 ### `AT-FR-7.8-007-001`
 
-- 7.8/FR-7.8-007: exercise 'notification suppression for active/focused contexts;' via owner `synara/src/app/utils/notifications.ts` and UI `synara/src/app/features/settings/notifications/SystemNotification.tsx`, then confirm Rust/IPC cutover task `P9.3` preserves observable behavior without raw Matrix runtime HTTP.
-- target: None
+- Integration against disposable Synapse: independently prove MessageNotifications suppression cases — (1) focused selected room + document.hasFocus → no message native notification; (2) notifications inbox selected + document.hasFocus → no message native notification; (3) showNotifications off → no generation; (4) not SYNCING → no generation; (5) mute room (getNotificationType Mute) → no message notification; (6) self-sent → no message notification. Document InviteNotifications has SYNCING + showNotifications gates but no focused-room gate. After cutover P9.3, same focus/suppression observables via Rust-owned notification candidate stream + product focus state. No raw /_matrix HTTP; SC-057 alone fails; push-rule UI / badge-only / generation-only / helper-only cannot substitute.
+- target: ClientNonUIFeatures MessageNotifications focus/sync/mute/self/showNotifications gates + SystemNotification/tray showNotifications enablement + getNotificationType Mute; post-cutover Rust-owned notification candidate stream + product focus state (P9.3)
 - actions:
-  1. Boot the appropriate harness for level=integration against disposable Synapse (or iOS notes if any).
-  2. Establish fixtures required by the clause list: notification suppression for active/focused contexts.
-  3. Open UI/lifecycle surface `synara/src/app/features/settings/notifications/SystemNotification.tsx` (or follow ui_entry_points_rationale if no dedicated UI).
-  4. Step 1: perform the product action that implements «notification suppression for active/focused contexts» using current owner `synara/src/app/utils/notifications.ts`.
+  1. Boot the integration harness against disposable Synapse. Do not use fixture-only mocks that bypass product MessageNotifications gates, push-rule settings UI alone, badge/tray alone, generation-without-suppression cases alone, alternate UI, helper-only harnesses, or raw HTTP.
+  2. FOCUSED SELECTED ROOM: with showNotifications on, room not muted, client SYNCING, document.hasFocus true and selectedRoomId === event roomId, inject a live notifiable timeline event. Assert no message native notification (showPlatformNotification / window.Notification).
+  3. NOTIFICATIONS INBOX FOCUSED: with document.hasFocus true and useInboxNotificationsSelected true (notifications inbox path), inject a live notifiable event for a room that is not necessarily the selected room. Assert no message native notification.
+  4. SHOW NOTIFICATIONS OFF: set showNotifications false (SystemNotification switch or tray DND flip). Inject notifiable event with app unfocused. Assert no native generation.
+  5. NOT SYNCING: with app unfocused and showNotifications on, arrange mx.getSyncState() !== 'SYNCING'. Inject notifiable event. Assert no generation.
+  6. MUTE ROOM: with app unfocused and showNotifications on, room with getNotificationType Mute, inject notifiable event. Assert no message notification.
+  7. SELF-SENT: with app unfocused and showNotifications on, emit self-sent notifiable event (sender === mx.getUserId()). Assert no message notification.
+  8. After cutover task P9.3, repeat the same independent focus/suppression observables via Rust-owned notification candidate stream + product focus state. Citing SC-057 alone, compile-only blocked states, raw /_matrix HTTP, push-rule settings UI (AllMessages/Keyword/Special/NotificationModeSwitcher), badge-only (FR-7.8-005), generation success path without focus gates (FR-7.8-004 alone), or helper/fixture-only is a FAIL.
 - assertions:
-  - Each clause is observable: «notification suppression for active/focused contexts».
-  - State coordination remains through `synara/src/app/utils/notifications.ts` (or its Rust/IPC successor after cutover), not ad-hoc dual writers.
-  - Behavior-relevant current JS method candidates exercised or replaced: setPushRuleActions, addPushRule, deletePushRule, setPushRuleActions, setPushRuleActions, sendReadReceipt (AST candidates; not type-proven receivers).
-  - Rust mapping remains conservative: caps=[SC-057] gaps=[none]; compile-only blocked states are not treated as runtime pass.
-  - No new production matrix-js-sdk usage and no raw /\_matrix runtime HTTP unless dossier marks that exact behavior typed-sdk-request-required.
+  - FOCUSED SELECTED ROOM + document.hasFocus: no message native notification.
+  - NOTIFICATIONS INBOX SELECTED + document.hasFocus: no message native notification.
+  - showNotifications off: no generation across product notification paths that gate on it.
+  - not SYNCING: no MessageNotifications (and InviteNotifications) generation.
+  - Mute room: no message native notification.
+  - Self-sent: no message native notification.
+  - InviteNotifications documents SYNCING + showNotifications without a focused-room gate (do not invent).
+  - Rust/IPC cutover preserves same focus/suppression observables via Rust candidate stream + product focus state; SC-057 NotificationSettings alone never implements focus suppression; raw HTTP, push-rule UI, badge-only, generation-only, helper-only never pass.
+  - No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless the dossier marks that exact behavior typed-sdk-request-required.
 
 ### `AT-FR-7.8-008-001`
 
@@ -11608,7 +11635,7 @@ Limited rejected-review correction (`p0.2-correct-24-fr-7.8-006-event-resolution
 - `ET-FR-7.8-005-01` `FR-7.8-005` `synara/src/app/notifications/__tests__/badgeSummary.test.ts` — summarizeNotifications/summarizeBadgeCount/getBadgeCount unit coverage only (app vs inbox formulas, clamps); not E2E RoomNavItem or platform badge/tray
 - `ET-FR-7.8-006-01` `FR-7.8-006` `synara/src/app/notifications/__tests__/systemNotification.test.ts` — normalizeSystemNotificationRequest route reject/accept unit only; not E2E notification click navigation
 - `ET-FR-7.8-006-02` `FR-7.8-006` `synara/src/app/utils/__tests__/desktop.test.ts` — buildDesktopNotificationRoomRoute encode unit only; not E2E platform click open
-- `ET-FR-7.8-007-01` `FR-7.8-007` `synara/src/app/notifications/__tests__/systemNotification.test.ts` — suppression/focus-related notification behavior unit coverage where present
+- `ET-FR-7.8-007-01` `FR-7.8-007` `synara/src/app/notifications/__tests__/systemNotification.test.ts` — normalizeSystemNotificationRequest unit coverage only; not E2E focus/suppression AT for MessageNotifications gates
 - `ET-FR-7.8-009-01` `FR-7.8-009` `synara-ios/SynaraTests/PushServiceTests.swift` — Existing XCTest coverage: register after session+token; clear/unregister on logout; token rotation replace; no register without gateway; sparse route resolution; badge parsing; route payload variants.
 - `ET-FR-7.8-009-02` `FR-7.8-009` `synara-ios/SynaraTests/NotificationPermissionCoordinatorTests.swift` — Existing XCTest coverage for first-sign-in permission prompt coordinating authorization + push registration begin.
 - `ET-FR-7.9-001-01` `FR-7.9-001` `synara/src/app/state/__tests__/initMatrix.test.ts` — client/crypto init path unit coverage
@@ -11716,10 +11743,10 @@ Limited rejected-review correction (`p0.2-correct-24-fr-7.8-006-event-resolution
 | `synara/src/app/features/settings/devices/OtherDevices.tsx`                    | `feature`          | `requirement-linked`           |   0 |   2 | `FR-7.7-007`,`FR-7.9-003`,`FR-7.9-010`                                                                                                                                                                                                    |
 | `synara/src/app/features/settings/devices/Verification.tsx`                    | `feature`          | `requirement-linked`           |   0 |   3 | `FR-7.7-007`,`FR-7.9-002`,`FR-7.9-004`,`FR-7.9-005`                                                                                                                                                                                       |
 | `synara/src/app/features/settings/emojis-stickers/GlobalPacks.tsx`             | `feature`          | `requirement-linked`           |   0 |   4 | `FR-7.7-005`,`FR-7.7-007`                                                                                                                                                                                                                 |
-| `synara/src/app/features/settings/notifications/AllMessages.tsx`               | `feature`          | `requirement-linked`           |   0 |   1 | `FR-7.2-005`,`FR-7.2-011`,`FR-7.3-007`,`FR-7.3-008`,`FR-7.3-009`,`FR-7.3-010`,`FR-7.3-014`,`FR-7.3-016`,`FR-7.4-004`,`FR-7.7-003`,`FR-7.7-007`,`FR-7.8-001`,`FR-7.8-003`,`FR-7.8-007`,`FR-7.8-008` |
-| `synara/src/app/features/settings/notifications/KeywordMessages.tsx`           | `feature`          | `requirement-linked`           |   0 |   3 | `FR-7.2-005`,`FR-7.2-011`,`FR-7.3-007`,`FR-7.3-008`,`FR-7.3-009`,`FR-7.3-010`,`FR-7.3-014`,`FR-7.3-016`,`FR-7.4-004`,`FR-7.7-003`,`FR-7.7-007`,`FR-7.8-001`,`FR-7.8-003`,`FR-7.8-007`,`FR-7.8-008` |
-| `synara/src/app/features/settings/notifications/NotificationModeSwitcher.tsx`  | `feature`          | `requirement-linked`           |   0 |   0 | `FR-7.2-005`,`FR-7.2-011`,`FR-7.7-003`,`FR-7.7-007`,`FR-7.8-001`,`FR-7.8-002`,`FR-7.8-007`,`FR-7.8-008`                                                                                            |
-| `synara/src/app/features/settings/notifications/SpecialMessages.tsx`           | `feature`          | `requirement-linked`           |   0 |   2 | `FR-7.2-005`,`FR-7.2-011`,`FR-7.3-007`,`FR-7.3-008`,`FR-7.3-009`,`FR-7.3-010`,`FR-7.3-014`,`FR-7.3-016`,`FR-7.4-004`,`FR-7.7-003`,`FR-7.7-007`,`FR-7.8-001`,`FR-7.8-003`,`FR-7.8-007`,`FR-7.8-008` |
+| `synara/src/app/features/settings/notifications/AllMessages.tsx`               | `feature`          | `requirement-linked`           |   0 |   1 | `FR-7.2-005`,`FR-7.2-011`,`FR-7.3-007`,`FR-7.3-008`,`FR-7.3-009`,`FR-7.3-010`,`FR-7.3-014`,`FR-7.3-016`,`FR-7.4-004`,`FR-7.7-003`,`FR-7.7-007`,`FR-7.8-001`,`FR-7.8-003`,`FR-7.8-008` |
+| `synara/src/app/features/settings/notifications/KeywordMessages.tsx`           | `feature`          | `requirement-linked`           |   0 |   3 | `FR-7.2-005`,`FR-7.2-011`,`FR-7.3-007`,`FR-7.3-008`,`FR-7.3-009`,`FR-7.3-010`,`FR-7.3-014`,`FR-7.3-016`,`FR-7.4-004`,`FR-7.7-003`,`FR-7.7-007`,`FR-7.8-001`,`FR-7.8-003`,`FR-7.8-008` |
+| `synara/src/app/features/settings/notifications/NotificationModeSwitcher.tsx`  | `feature`          | `requirement-linked`           |   0 |   0 | `FR-7.2-005`,`FR-7.2-011`,`FR-7.7-003`,`FR-7.7-007`,`FR-7.8-001`,`FR-7.8-002`,`FR-7.8-008`                                                                                            |
+| `synara/src/app/features/settings/notifications/SpecialMessages.tsx`           | `feature`          | `requirement-linked`           |   0 |   2 | `FR-7.2-005`,`FR-7.2-011`,`FR-7.3-007`,`FR-7.3-008`,`FR-7.3-009`,`FR-7.3-010`,`FR-7.3-014`,`FR-7.3-016`,`FR-7.4-004`,`FR-7.7-003`,`FR-7.7-007`,`FR-7.8-001`,`FR-7.8-003`,`FR-7.8-008` |
 | `synara/src/app/features/settings/notifications/SystemNotification.tsx`        | `feature`          | `requirement-linked`           |   0 |   0 | `FR-7.2-005`,`FR-7.2-011`,`FR-7.7-003`,`FR-7.7-007`,`FR-7.8-004`,`FR-7.8-007`,`FR-7.8-008`                                                                                                                      |
 | `synara/src/app/features/space-settings/SpaceSettings.tsx`                     | `feature`          | `requirement-linked`           |   0 |   0 | `FR-7.2-009`,`FR-7.7-007`                                                                                                                                                                                                                 |
 | `synara/src/app/hooks/types.ts`                                                | `hook`             | `shared-matrix-infrastructure` |   0 |   0 | `FR-7.2-001`,`FR-7.3-001`,`FR-7.6-004`                                                                                                                                                                                                    |
@@ -11794,7 +11821,7 @@ Limited rejected-review correction (`p0.2-correct-24-fr-7.8-006-event-resolution
 | `synara/src/app/pages/client/SyncStatus.tsx`                                   | `page`             | `requirement-linked`           |   0 |   0 | `FR-7.2-001`                                                                                                                                                                                                                              |
 | `synara/src/app/pages/client/explore/Server.tsx`                               | `page`             | `requirement-linked`           |   0 |   1 | `FR-7.6-006`,`FR-7.10-005`                                                                                                                                                                                                                |
 | `synara/src/app/pages/client/inbox/Invites.tsx`                                | `page`             | `requirement-linked`           |   0 |   7 | `FR-7.2-003`,`FR-7.6-001`                                                                                                                                                                                                                 |
-| `synara/src/app/pages/client/inbox/Notifications.tsx`                          | `page`             | `requirement-linked`           |   0 |   2 | `FR-7.2-005`,`FR-7.2-011`,`FR-7.7-003`,`FR-7.8-006`,`FR-7.8-007`,`FR-7.8-008`                                                                                                                                               |
+| `synara/src/app/pages/client/inbox/Notifications.tsx`                          | `page`             | `requirement-linked`           |   0 |   2 | `FR-7.2-005`,`FR-7.2-011`,`FR-7.7-003`,`FR-7.8-006`,`FR-7.8-008`                                                                                                                                               |
 | `synara/src/app/pages/client/sidebar/SpaceTabs.tsx`                            | `page`             | `requirement-linked`           |   0 |   7 | `FR-7.2-008`,`FR-7.7-007`                                                                                                                                                                                                                 |
 | `synara/src/app/pages/client/space/Space.tsx`                                  | `page`             | `requirement-linked`           |   0 |   7 | `FR-7.2-009`,`FR-7.6-001`                                                                                                                                                                                                                 |
 | `synara/src/app/pages/client/syncStatusCopy.ts`                                | `page`             | `requirement-linked`           |   0 |   0 | `FR-7.2-001`                                                                                                                                                                                                                              |
@@ -11825,9 +11852,9 @@ Limited rejected-review correction (`p0.2-correct-24-fr-7.8-006-event-resolution
 | `synara/src/app/utils/matrix-crypto.ts`                                        | `utility`          | `requirement-linked`           |   0 |   0 | `FR-7.9-008`                                                                                                                                                                                                                              |
 | `synara/src/app/utils/matrix-uia.ts`                                           | `utility`          | `requirement-linked`           |   0 |   0 | `FR-7.1-006`                                                                                                                                                                                                                              |
 | `synara/src/app/utils/matrix.ts`                                               | `utility`          | `requirement-linked`           |   0 |   9 | `FR-7.3-007`,`FR-7.4-005`,`FR-7.4-007`,`FR-7.5-001`,`FR-7.5-003`,`FR-7.5-004`,`FR-7.5-007`,`FR-7.5-008`,`FR-7.5-011`,`FR-7.6-008`                                                                                                         |
-| `synara/src/app/utils/notifications.ts`                                        | `utility`          | `requirement-linked`           |   0 |   9 | `FR-7.2-005`,`FR-7.2-011`,`FR-7.7-003`,`FR-7.8-007`,`FR-7.8-008`                                                                                                                                               |
+| `synara/src/app/utils/notifications.ts`                                        | `utility`          | `requirement-linked`           |   0 |   9 | `FR-7.2-005`,`FR-7.2-011`,`FR-7.7-003`,`FR-7.8-008`                                                                                                                                               |
 | `synara/src/app/utils/polls.ts`                                                | `utility`          | `requirement-linked`           |   0 |   0 | `FR-7.3-011`,`FR-7.4-006`                                                                                                                                                                                                                 |
-| `synara/src/app/utils/room.ts`                                                 | `utility`          | `requirement-linked`           |   0 |  15 | `FR-7.5-001`,`FR-7.5-002`,`FR-7.5-007`,`FR-7.6-008`,`FR-7.8-001`,`FR-7.8-002`,`FR-7.8-004`,`FR-7.8-005`,`FR-7.8-006`                                                                                                                                                 |
+| `synara/src/app/utils/room.ts`                                                 | `utility`          | `requirement-linked`           |   0 |  15 | `FR-7.5-001`,`FR-7.5-002`,`FR-7.5-007`,`FR-7.6-008`,`FR-7.8-001`,`FR-7.8-002`,`FR-7.8-004`,`FR-7.8-005`,`FR-7.8-006`,`FR-7.8-007`                                                                                                                                                 |
 | `synara/src/app/utils/roomNotes.ts`                                            | `utility`          | `requirement-linked`           |   0 |   2 | `FR-7.3-014`,`FR-7.3-015`,`FR-7.7-002`,`FR-7.7-008`,`FR-7.7-009`                                                                                                                                                                          |
 | `synara/src/app/utils/sort.ts`                                                 | `utility`          | `requirement-linked`           |   0 |   4 | `FR-7.2-004`                                                                                                                                                                                                                              |
 | `synara/src/app/utils/syncLifecycle.ts`                                        | `utility`          | `requirement-linked`           |   0 |   0 | `FR-7.2-001`,`FR-7.2-002`,`FR-7.3-017`                                                                                                                                                                                                    |

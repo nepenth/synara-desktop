@@ -57994,136 +57994,9 @@
       "section_id": "7.8",
       "plan_heading": "### 7.8 Notifications",
       "normalized_text": "notification suppression for active/focused contexts;",
-
       "plan_line_range": [419, 419],
       "current_status": "implemented",
       "current_production_files": [
-        {
-          "path": "synara/src/app/features/settings/notifications/AllMessages.tsx",
-          "bucket": "feature",
-          "categories": ["client_methods", "notifications_push_rules"],
-          "symbols_or_candidates": ["setPushRuleActions"],
-          "line_refs": [
-            {
-              "symbol": "setPushRuleActions",
-              "line": 67,
-              "kind": "method_candidate"
-            }
-          ],
-          "model_coupling": [],
-          "behavior_relevant_method_candidates": [
-            {
-              "name": "setPushRuleActions",
-              "line": 67,
-              "category": "notifications_push_rules",
-              "kind": "property_call_candidate",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            }
-          ],
-          "behavior_relevant_listener_candidates": []
-        },
-        {
-          "path": "synara/src/app/features/settings/notifications/KeywordMessages.tsx",
-          "bucket": "feature",
-          "categories": ["client_methods", "notifications_push_rules"],
-          "symbols_or_candidates": [
-            "addPushRule",
-            "deletePushRule",
-            "setPushRuleActions"
-          ],
-          "line_refs": [
-            {
-              "symbol": "addPushRule",
-              "line": 30,
-              "kind": "method_candidate"
-            },
-            {
-              "symbol": "deletePushRule",
-              "line": 114,
-              "kind": "method_candidate"
-            },
-            {
-              "symbol": "setPushRuleActions",
-              "line": 135,
-              "kind": "method_candidate"
-            }
-          ],
-          "model_coupling": [],
-          "behavior_relevant_method_candidates": [
-            {
-              "name": "addPushRule",
-              "line": 30,
-              "category": "notifications_push_rules",
-              "kind": "property_call_candidate",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            },
-            {
-              "name": "deletePushRule",
-              "line": 114,
-              "category": "notifications_push_rules",
-              "kind": "property_call_candidate",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            },
-            {
-              "name": "setPushRuleActions",
-              "line": 135,
-              "category": "notifications_push_rules",
-              "kind": "property_call_candidate",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            }
-          ],
-          "behavior_relevant_listener_candidates": []
-        },
-        {
-          "path": "synara/src/app/features/settings/notifications/NotificationModeSwitcher.tsx",
-          "bucket": "feature",
-          "categories": ["notifications_push_rules"],
-          "symbols_or_candidates": [],
-          "line_refs": [],
-          "model_coupling": [],
-          "behavior_relevant_method_candidates": [],
-          "behavior_relevant_listener_candidates": [],
-          "symbols_or_candidates_note": "No requirement-relevant method/listener candidates filtered from this file's P0.1 AST hits; file remains linked for structural/model ownership. See all_candidates_in_linked_files on the requirement."
-        },
-        {
-          "path": "synara/src/app/features/settings/notifications/SpecialMessages.tsx",
-          "bucket": "feature",
-          "categories": [
-            "client_methods",
-            "notifications_push_rules",
-            "uia_auth"
-          ],
-          "symbols_or_candidates": ["setPushRuleActions"],
-          "line_refs": [
-            {
-              "symbol": "setPushRuleActions",
-              "line": 106,
-              "kind": "method_candidate"
-            }
-          ],
-          "model_coupling": [],
-          "behavior_relevant_method_candidates": [
-            {
-              "name": "setPushRuleActions",
-              "line": 106,
-              "category": "notifications_push_rules",
-              "kind": "property_call_candidate",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            }
-          ],
-          "behavior_relevant_listener_candidates": []
-        },
-        {
-          "path": "synara/src/app/features/settings/notifications/SystemNotification.tsx",
-          "bucket": "feature",
-          "categories": [],
-          "symbols_or_candidates": [],
-          "line_refs": [],
-          "model_coupling": [],
-          "behavior_relevant_method_candidates": [],
-          "behavior_relevant_listener_candidates": [],
-          "symbols_or_candidates_note": "No requirement-relevant method/listener candidates filtered from this file's P0.1 AST hits; file remains linked for structural/model ownership. See all_candidates_in_linked_files on the requirement."
-        },
         {
           "path": "synara/src/app/pages/client/ClientNonUIFeatures.tsx",
           "bucket": "page",
@@ -58138,167 +58011,243 @@
             "uia_auth",
             "custom_raw_event_sends"
           ],
-          "symbols_or_candidates": [],
-          "line_refs": [],
-          "model_coupling": ["MatrixEvent", "Room"],
-          "behavior_relevant_method_candidates": [],
-          "behavior_relevant_listener_candidates": [],
-          "symbols_or_candidates_note": "No requirement-relevant method/listener candidates filtered from this file's P0.1 AST hits; file remains linked for structural/model ownership. See all_candidates_in_linked_files on the requirement."
-        },
-        {
-          "path": "synara/src/app/pages/client/inbox/Notifications.tsx",
-          "bucket": "page",
-          "categories": [
-            "client_methods",
-            "room_methods",
-            "room_lists",
-            "timelines"
+          "symbols_or_candidates": [
+            "getSyncState",
+            "getSyncState",
+            "isSpaceRoom",
+            "getUserId",
+            "on:RoomEvent.Timeline",
+            "removeListener:RoomEvent.Timeline"
           ],
-          "symbols_or_candidates": [],
-          "line_refs": [],
-          "model_coupling": ["Room"],
-          "behavior_relevant_method_candidates": [],
-          "behavior_relevant_listener_candidates": [],
-          "symbols_or_candidates_note": "No requirement-relevant method/listener candidates filtered from this file's P0.1 AST hits; file remains linked for structural/model ownership. See all_candidates_in_linked_files on the requirement."
+          "line_refs": [
+            {
+              "symbol": "getSyncState",
+              "line": 335,
+              "kind": "method_candidate"
+            },
+            {
+              "symbol": "getSyncState",
+              "line": 425,
+              "kind": "method_candidate"
+            },
+            {
+              "symbol": "isSpaceRoom",
+              "line": 430,
+              "kind": "method_candidate"
+            },
+            {
+              "symbol": "getUserId",
+              "line": 439,
+              "kind": "method_candidate"
+            },
+            {
+              "symbol": "on:RoomEvent.Timeline",
+              "line": 475,
+              "kind": "listener_candidate"
+            },
+            {
+              "symbol": "removeListener:RoomEvent.Timeline",
+              "line": 477,
+              "kind": "listener_candidate"
+            }
+          ],
+          "model_coupling": ["MatrixEvent", "Room"],
+          "behavior_relevant_method_candidates": [
+            {
+              "name": "getSyncState",
+              "line": 335,
+              "category": "sync_lifecycle",
+              "kind": "property_call_candidate",
+              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
+              "relevance_reason": "InviteNotifications requires SYNCING before Invitation notify; no focused-room gate on invite path."
+            },
+            {
+              "name": "getSyncState",
+              "line": 425,
+              "category": "sync_lifecycle",
+              "kind": "property_call_candidate",
+              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
+              "relevance_reason": "MessageNotifications early-returns when not SYNCING (suppression case)."
+            },
+            {
+              "name": "isSpaceRoom",
+              "line": 430,
+              "category": "spaces",
+              "kind": "property_call_candidate",
+              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
+              "relevance_reason": "MessageNotifications skips space rooms before native notify."
+            },
+            {
+              "name": "getUserId",
+              "line": 439,
+              "category": "uia_auth",
+              "kind": "property_call_candidate",
+              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
+              "relevance_reason": "MessageNotifications suppresses self-sent events (sender === mx.getUserId())."
+            }
+          ],
+          "behavior_relevant_listener_candidates": [
+            {
+              "event": "RoomEvent.Timeline",
+              "method": "on",
+              "line": 475,
+              "category": "timelines",
+              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
+              "relevance_reason": "MessageNotifications subscribes; handler applies focus/sync/mute/self/showNotifications gates."
+            },
+            {
+              "event": "RoomEvent.Timeline",
+              "method": "removeListener",
+              "line": 477,
+              "category": "timelines",
+              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
+              "relevance_reason": "MessageNotifications teardown."
+            }
+          ],
+          "symbols_or_candidates_note": "Primary focus/suppression owner. MessageNotifications L417-488: getSyncState!==SYNCING L425; document.hasFocus && (selectedRoomId===room.roomId || notificationSelected) L426; space/isNotificationEvent/Mute L427-435; self L439; agent-approval skip L440; unreadEqual L447-451; showNotifications L454-468. Product focus hooks useSelectedRoom L368 / useInboxNotificationsSelected L367 (not P0.1 AST method candidates). InviteNotifications L335-340: SYNCING + showNotifications only — no focus gate. AgentApproval L698 / LaterReminder L819: showNotifications gates without inventing focus gates. TrayDoNotDisturbSync L248-259 flips showNotifications; PlatformBadgeAndTrayUpdater doNotDisturb L286 is tray indicator only."
         },
         {
-          "path": "synara/src/app/utils/notifications.ts",
+          "path": "synara/src/app/features/settings/notifications/SystemNotification.tsx",
+          "bucket": "feature",
+          "categories": [],
+          "symbols_or_candidates": [],
+          "line_refs": [],
+          "model_coupling": [],
+          "behavior_relevant_method_candidates": [],
+          "behavior_relevant_listener_candidates": [],
+          "symbols_or_candidates_note": "Secondary enablement only: Desktop Notifications Switch / permission request binds settingsAtom showNotifications (L98, L163-167). When off, all generation paths that gate on showNotifications suppress. Does not implement document.hasFocus / selected-room focus logic."
+        },
+        {
+          "path": "synara/src/app/utils/room.ts",
           "bucket": "utility",
           "categories": [
             "client_methods",
             "room_methods",
+            "crypto_verification_recovery",
+            "authenticated_media",
             "account_data",
             "room_lists",
             "timelines",
+            "spaces",
             "receipts",
+            "notifications_push_rules",
             "uia_auth"
           ],
-          "symbols_or_candidates": ["sendReadReceipt"],
+          "symbols_or_candidates": ["getRoomPushRule"],
           "line_refs": [
             {
-              "symbol": "sendReadReceipt",
-              "line": 402,
+              "symbol": "getRoomPushRule",
+              "line": 173,
               "kind": "method_candidate"
             }
           ],
-          "model_coupling": ["MatrixClient", "MatrixEvent", "Room"],
+          "model_coupling": [
+            "EventTimeline",
+            "MatrixClient",
+            "MatrixEvent",
+            "Room",
+            "RoomMember"
+          ],
           "behavior_relevant_method_candidates": [
             {
-              "name": "sendReadReceipt",
-              "line": 402,
-              "category": "receipts",
+              "name": "getRoomPushRule",
+              "line": 173,
+              "category": "notifications_push_rules",
               "kind": "property_call_candidate",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
+              "relevance_reason": "getNotificationType uses getRoomPushRule / muted override so MessageNotifications can suppress Mute rooms."
             }
           ],
-          "behavior_relevant_listener_candidates": []
+          "behavior_relevant_listener_candidates": [],
+          "symbols_or_candidates_note": "getNotificationType L170-188 and isNotificationEvent L197-208 are product helpers used as MessageNotifications suppression gates (Mute / notifiable event). Not push-rule preference UI."
         }
       ],
       "ui_entry_points": [
+        "synara/src/app/pages/client/ClientNonUIFeatures.tsx",
         "synara/src/app/features/settings/notifications/SystemNotification.tsx"
       ],
       "state_owners": [
         {
-          "path": "synara/src/app/utils/notifications.ts",
-          "ownership_evidence": "Identified as coordination/state module for this behavior via path role (state/client/util service) and P0.1 categories/candidates; not merely a presentational component."
+          "path": "synara/src/app/pages/client/ClientNonUIFeatures.tsx",
+          "ownership_evidence": "Primary focus/suppression owner: MessageNotifications timeline handler applies document.hasFocus + selected room / notifications inbox, SYNCING, Mute, self, showNotifications, unreadEqual gates. Invite/Agent/Later document accurate non-focus showNotifications/SYNCING gates."
+        },
+        {
+          "path": "synara/src/app/features/settings/notifications/SystemNotification.tsx",
+          "ownership_evidence": "Global showNotifications enablement (Desktop Notifications switch / permission); off state is a suppression gate for all gated generation paths."
+        },
+        {
+          "path": "synara/src/app/utils/room.ts",
+          "ownership_evidence": "getNotificationType/getRoomPushRule supply Mute classification used as MessageNotifications suppression gate."
         }
       ],
       "current_js_sdk": {
         "behavior_relevant_method_candidates": [
           {
-            "path": "synara/src/app/features/settings/notifications/AllMessages.tsx",
-            "name": "setPushRuleActions",
-            "line": 67,
-            "category": "notifications_push_rules",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+            "path": "synara/src/app/pages/client/ClientNonUIFeatures.tsx",
+            "name": "getSyncState",
+            "line": 335,
+            "category": "sync_lifecycle",
+            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
+            "relevance_reason": "InviteNotifications SYNCING gate (no focus gate on invite)."
           },
           {
-            "path": "synara/src/app/features/settings/notifications/KeywordMessages.tsx",
-            "name": "addPushRule",
-            "line": 30,
-            "category": "notifications_push_rules",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+            "path": "synara/src/app/pages/client/ClientNonUIFeatures.tsx",
+            "name": "getSyncState",
+            "line": 425,
+            "category": "sync_lifecycle",
+            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
+            "relevance_reason": "MessageNotifications not-SYNCING suppression."
           },
           {
-            "path": "synara/src/app/features/settings/notifications/KeywordMessages.tsx",
-            "name": "deletePushRule",
-            "line": 114,
-            "category": "notifications_push_rules",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+            "path": "synara/src/app/pages/client/ClientNonUIFeatures.tsx",
+            "name": "isSpaceRoom",
+            "line": 430,
+            "category": "spaces",
+            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
+            "relevance_reason": "MessageNotifications skips space rooms."
           },
           {
-            "path": "synara/src/app/features/settings/notifications/KeywordMessages.tsx",
-            "name": "setPushRuleActions",
-            "line": 135,
-            "category": "notifications_push_rules",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+            "path": "synara/src/app/pages/client/ClientNonUIFeatures.tsx",
+            "name": "getUserId",
+            "line": 439,
+            "category": "uia_auth",
+            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
+            "relevance_reason": "MessageNotifications self-sent suppression."
           },
           {
-            "path": "synara/src/app/features/settings/notifications/SpecialMessages.tsx",
-            "name": "setPushRuleActions",
-            "line": 106,
+            "path": "synara/src/app/utils/room.ts",
+            "name": "getRoomPushRule",
+            "line": 173,
             "category": "notifications_push_rules",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-          },
-          {
-            "path": "synara/src/app/utils/notifications.ts",
-            "name": "sendReadReceipt",
-            "line": 402,
-            "category": "receipts",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
+            "relevance_reason": "Mute classification input for MessageNotifications Mute gate."
           }
         ],
-        "behavior_relevant_listener_candidates": [],
+        "behavior_relevant_listener_candidates": [
+          {
+            "path": "synara/src/app/pages/client/ClientNonUIFeatures.tsx",
+            "event": "RoomEvent.Timeline",
+            "method": "on",
+            "line": 475,
+            "category": "timelines",
+            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
+            "relevance_reason": "MessageNotifications focus/suppression gate handler subscription."
+          },
+          {
+            "path": "synara/src/app/pages/client/ClientNonUIFeatures.tsx",
+            "event": "RoomEvent.Timeline",
+            "method": "removeListener",
+            "line": 477,
+            "category": "timelines",
+            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
+            "relevance_reason": "MessageNotifications teardown."
+          }
+        ],
         "all_candidates_in_linked_files": {
-          "method_count": 35,
+          "method_count": 25,
           "listener_count": 6,
-          "note": "Unfiltered P0.1 AST candidates across linked production import files. Do not treat these as proven APIs for this requirement; use behavior_relevant_* fields.",
+          "note": "Unfiltered P0.1 AST candidates across P0.1-linked production import files (ClientNonUIFeatures, room.ts). Do not treat these as proven APIs for this requirement; use behavior_relevant_* fields. Push-rule preference files and utils/notifications.ts are not linked for this FR. document.hasFocus / useSelectedRoom / useInboxNotificationsSelected / showNotifications are product focus/enablement state outside AST method candidate rows.",
           "methods_sample": [
-            {
-              "path": "synara/src/app/features/settings/notifications/AllMessages.tsx",
-              "name": "setPushRuleActions",
-              "line": 67
-            },
-            {
-              "path": "synara/src/app/features/settings/notifications/KeywordMessages.tsx",
-              "name": "addPushRule",
-              "line": 30
-            },
-            {
-              "path": "synara/src/app/features/settings/notifications/KeywordMessages.tsx",
-              "name": "deletePushRule",
-              "line": 114
-            },
-            {
-              "path": "synara/src/app/features/settings/notifications/KeywordMessages.tsx",
-              "name": "setPushRuleActions",
-              "line": 135
-            },
-            {
-              "path": "synara/src/app/features/settings/notifications/SpecialMessages.tsx",
-              "name": "setPushRuleActions",
-              "line": 106
-            },
-            {
-              "path": "synara/src/app/features/settings/notifications/SpecialMessages.tsx",
-              "name": "getUserId",
-              "line": 116
-            },
-            {
-              "path": "synara/src/app/pages/client/ClientNonUIFeatures.tsx",
-              "name": "getRoom",
-              "line": 87
-            },
-            {
-              "path": "synara/src/app/pages/client/ClientNonUIFeatures.tsx",
-              "name": "findEventById",
-              "line": 88
-            },
-            {
-              "path": "synara/src/app/pages/client/ClientNonUIFeatures.tsx",
-              "name": "getUnfilteredTimelineSet",
-              "line": 105
-            },
             {
               "path": "synara/src/app/pages/client/ClientNonUIFeatures.tsx",
               "name": "getSyncState",
@@ -58320,14 +58269,9 @@
               "line": 439
             },
             {
-              "path": "synara/src/app/pages/client/ClientNonUIFeatures.tsx",
-              "name": "findEventById",
-              "line": 441
-            },
-            {
-              "path": "synara/src/app/pages/client/ClientNonUIFeatures.tsx",
-              "name": "getRoom",
-              "line": 610
+              "path": "synara/src/app/utils/room.ts",
+              "name": "getRoomPushRule",
+              "line": 173
             }
           ],
           "listeners_sample": [
@@ -58342,157 +58286,70 @@
               "event": "RoomEvent.Timeline",
               "method": "removeListener",
               "line": 477
-            },
-            {
-              "path": "synara/src/app/pages/client/ClientNonUIFeatures.tsx",
-              "event": "RoomEvent.Timeline",
-              "method": "on",
-              "line": 730
-            },
-            {
-              "path": "synara/src/app/pages/client/ClientNonUIFeatures.tsx",
-              "event": "RoomEvent.Timeline",
-              "method": "removeListener",
-              "line": 732
-            },
-            {
-              "path": "synara/src/app/pages/client/ClientNonUIFeatures.tsx",
-              "event": "ClientEvent.Sync",
-              "method": "on",
-              "line": 752
-            },
-            {
-              "path": "synara/src/app/pages/client/ClientNonUIFeatures.tsx",
-              "event": "ClientEvent.Sync",
-              "method": "removeListener",
-              "line": 755
             }
           ]
         },
-        "models": ["MatrixClient", "MatrixEvent", "Room"],
+        "models": [
+          "EventTimeline",
+          "MatrixClient",
+          "MatrixEvent",
+          "Room",
+          "RoomMember"
+        ],
         "network_routes": [],
         "deep_imports": [
           {
-            "path": "synara/src/app/utils/notifications.ts",
-            "module": "matrix-js-sdk/lib/client",
-            "line": 1,
-            "named_imports": ["MatrixClient"],
+            "path": "synara/src/app/utils/room.ts",
+            "module": "matrix-js-sdk/lib/common-crypto/CryptoBackend",
+            "line": null,
+            "named_imports": [],
             "is_type_only": true,
             "linked_requirement_ids": [
-              "FR-7.2-005",
-              "FR-7.2-011",
-              "FR-7.7-003",
+              "FR-7.5-001",
+              "FR-7.5-002",
+              "FR-7.5-007",
+              "FR-7.6-008",
+              "FR-7.8-001",
+              "FR-7.8-002",
               "FR-7.8-004",
               "FR-7.8-005",
               "FR-7.8-006",
-              "FR-7.8-007",
-              "FR-7.8-008"
-            ],
-            "cutover_disposition": "replace-deep-js-sdk-import-with-synara-dto-or-rust-projection"
-          },
-          {
-            "path": "synara/src/app/utils/notifications.ts",
-            "module": "matrix-js-sdk/lib/@types/read_receipts",
-            "line": 2,
-            "named_imports": ["ReceiptType"],
-            "is_type_only": false,
-            "linked_requirement_ids": [
-              "FR-7.2-005",
-              "FR-7.2-011",
-              "FR-7.7-003",
-              "FR-7.8-004",
-              "FR-7.8-005",
-              "FR-7.8-006",
-              "FR-7.8-007",
-              "FR-7.8-008"
-            ],
-            "cutover_disposition": "replace-deep-js-sdk-import-with-synara-dto-or-rust-projection"
-          },
-          {
-            "path": "synara/src/app/utils/notifications.ts",
-            "module": "matrix-js-sdk/lib/models/event",
-            "line": 3,
-            "named_imports": ["MatrixEvent"],
-            "is_type_only": true,
-            "linked_requirement_ids": [
-              "FR-7.2-005",
-              "FR-7.2-011",
-              "FR-7.7-003",
-              "FR-7.8-004",
-              "FR-7.8-005",
-              "FR-7.8-006",
-              "FR-7.8-007",
-              "FR-7.8-008"
-            ],
-            "cutover_disposition": "replace-deep-js-sdk-import-with-synara-dto-or-rust-projection"
-          },
-          {
-            "path": "synara/src/app/utils/notifications.ts",
-            "module": "matrix-js-sdk/lib/models/room",
-            "line": 4,
-            "named_imports": ["Room"],
-            "is_type_only": true,
-            "linked_requirement_ids": [
-              "FR-7.2-005",
-              "FR-7.2-011",
-              "FR-7.7-003",
-              "FR-7.8-004",
-              "FR-7.8-005",
-              "FR-7.8-006",
-              "FR-7.8-007",
-              "FR-7.8-008"
-            ],
-            "cutover_disposition": "replace-deep-js-sdk-import-with-synara-dto-or-rust-projection"
-          },
-          {
-            "path": "synara/src/app/utils/notifications.ts",
-            "module": "matrix-js-sdk/lib/@types/event",
-            "line": 5,
-            "named_imports": ["EventType"],
-            "is_type_only": false,
-            "linked_requirement_ids": [
-              "FR-7.2-005",
-              "FR-7.2-011",
-              "FR-7.7-003",
-              "FR-7.8-004",
-              "FR-7.8-005",
-              "FR-7.8-006",
-              "FR-7.8-007",
-              "FR-7.8-008"
+              "FR-7.8-007"
             ],
             "cutover_disposition": "replace-deep-js-sdk-import-with-synara-dto-or-rust-projection"
           }
         ],
         "method_candidates": [
-          "setPushRuleActions",
-          "addPushRule",
-          "deletePushRule",
-          "setPushRuleActions",
-          "setPushRuleActions",
-          "sendReadReceipt"
+          "getSyncState",
+          "getSyncState",
+          "isSpaceRoom",
+          "getUserId",
+          "getRoomPushRule"
         ],
-        "listener_events": []
+        "listener_events": ["RoomEvent.Timeline"]
       },
       "current_behavior_and_limits": {
-        "summary": "Current desktop implements this via 8 production matrix-js-sdk-related file(s); status=implemented.",
-        "notes": null,
-        "limits": "P0.1 method candidates are AST name hits, not type-checked receiver proofs."
+        "summary": "Current desktop implements notification suppression for active/focused contexts via MessageNotifications gates in ClientNonUIFeatures (document.hasFocus + selected room or notifications inbox; SYNCING; Mute; self; showNotifications; unread delta) with SystemNotification/tray DND showNotifications enablement; Invite/Agent/Later use showNotifications (and Invite SYNCING) without inventing focus gates; status=implemented.",
+        "notes": "Evidence (conservative): (1) Primary suppression owner synara/src/app/pages/client/ClientNonUIFeatures.tsx MessageNotifications (RoomEvent.Timeline on L475 / removeListener L477). Generation path is FR-7.8-004; this FR owns the gates that prevent native OS/browser notifications for active/focused contexts and related suppressors. Message timeline handler gates (in order): mx.getSyncState() !== 'SYNCING' early-return L425; document.hasFocus() && (selectedRoomId === room?.roomId || notificationSelected) early-return L426 where selectedRoomId = useSelectedRoom() (hooks/router/useSelectedRoom.ts) and notificationSelected = useInboxNotificationsSelected() (hooks/router/useInbox.ts match on getInboxNotificationsPath); !room / !data.liveEvent / room.isSpaceRoom() / !isNotificationEvent(mEvent) / getNotificationType(mx, room.roomId) === NotificationType.Mute return L427-435 (getNotificationType in utils/room.ts L170-188 uses getRoomPushRule L173 or muted override findMutedRule); self-sent skip mEvent.getSender() === mx.getUserId() L439; detectAgentApprovalPrompt content skip L440 (agent path owns approval notifications); unread total===0 L446; unreadEqual(cached, current) no-op L447-451 (unreadEqual/unreadInfoToUnread in roomToUnread.ts L53-57, L102+); only then if showNotifications && (supportsPlatformSystemNotifications() || notificationPermission('granted')) emit native L454-468. (2) InviteNotifications L294-355: requires invites.length increase and mx.getSyncState()==='SYNCING' L335 plus showNotifications + permission L337-338 before Invitation notify. Explicit: Invite has NO document.hasFocus / selected-room / notifications-inbox focus gate — invite is not room-timeline; do not invent a focus gate. (3) AgentApprovalNotifications L498-765: showNotifications + permission before native L698-700; space skip L685; self skip L686; no document.hasFocus selected-room gate (differs from MessageNotifications). LaterReminderNotifications L767-846: showNotifications + permission L819-821; no focus gate. (4) Global enablement / DND-ish secondary: SystemNotification.tsx Desktop Notifications Switch binds settingsAtom showNotifications L98, L163-167 (permission Enable path sets true L126/131). TrayDoNotDisturbSync L248-259 subscribePlatformTrayDndToggle flips showNotifications (tray DND). PlatformBadgeAndTrayUpdater sets tray doNotDisturb: !showNotifications L286 — tray DND indicator only (badge math is FR-7.8-005). (5) Explicit non-evidence: push-rule preference UIs AllMessages/KeywordMessages/SpecialMessages/NotificationModeSwitcher (except Mute type as MessageNotifications suppression gate via getNotificationType); badge/tray counts (FR-7.8-005); route/deep-link open (FR-7.8-006); mere generation success without focus gates (FR-7.8-004 owns generation); utils/notifications.ts sendReadReceipt/inbox helpers; SC-057 alone; helper/fixture/compile-only. Existing systemNotification.test.ts is normalize unit only — not E2E focus/suppression AT. Limits: P0.1 method/listener candidates are AST name hits, not type-checked receiver proofs. document.hasFocus / useSelectedRoom / useInboxNotificationsSelected / showNotifications are product focus/enablement state, not SDK NotificationSettings APIs. Cutover P9.3 must preserve the same focus/suppression observables via Rust-owned notification candidate stream + product focus state; SC alone, raw /_matrix HTTP, push-rule settings UI, helper-only never pass.",
+        "limits": "P0.1 method/listener candidates are AST name hits, not type-checked receiver proofs. Do not count push-rule preference UI (except Mute as a MessageNotifications gate), badge-only (FR-7.8-005), route/deep-link (FR-7.8-006), generation-without-suppression (FR-7.8-004 alone), SC-057 alone, compile-only blocked states, raw /_matrix HTTP, or helper/fixture-only as closing focus/suppression. SC-057 NotificationSettings does not implement document focus / selected-room / inbox-selected suppression. Cutover P9.3: product focus + Rust candidate stream; SC alone / raw HTTP / push-rule UI / helper-only FAIL."
       },
       "p0_1_linkage": {
-        "categories": ["notifications_push_rules"],
+        "categories": [
+          "event_emitters_listeners",
+          "sync_lifecycle",
+          "timelines",
+          "notifications_push_rules",
+          "spaces",
+          "uia_auth"
+        ],
         "file_ledger_paths": [
-          "synara/src/app/features/settings/notifications/AllMessages.tsx",
-          "synara/src/app/features/settings/notifications/KeywordMessages.tsx",
-          "synara/src/app/features/settings/notifications/NotificationModeSwitcher.tsx",
-          "synara/src/app/features/settings/notifications/SpecialMessages.tsx",
-          "synara/src/app/features/settings/notifications/SystemNotification.tsx",
           "synara/src/app/pages/client/ClientNonUIFeatures.tsx",
-          "synara/src/app/pages/client/inbox/Notifications.tsx",
-          "synara/src/app/utils/notifications.ts"
+          "synara/src/app/features/settings/notifications/SystemNotification.tsx",
+          "synara/src/app/utils/room.ts"
         ]
       },
       "rust_target": {
-        "support_conclusion": "product-desktop-bridge",
+        "support_conclusion": "product-desktop-bridge-with-focus-and-candidate-stream",
         "capability_ids": ["SC-057"],
         "gap_ids": [],
         "capabilities": [
@@ -58503,12 +58360,12 @@
               "requested_direct": [],
               "resolved_on_matrix_sdk": ["e2e-encryption"],
               "resolved_on_matrix_sdk_ui": [],
-              "notes": "e2e-encryption only via matrix-sdk-ui unification; not a direct request."
+              "notes": "e2e-encryption only via matrix-sdk-ui unification; not a direct request. SC-057 is push-rule/settings support only; it does not implement document.hasFocus / selected-room / inbox-selected focus suppression."
             },
             "final_state": "blocked",
             "final": {
               "final_state": "blocked",
-              "final_state_rationale": "E1+E2 present (stable API + compile probe). E3 semantic test, E4 live Synapse, and E5 UI acceptance are not present in P0.3; compile-only evidence is not product confirmation.",
+              "final_state_rationale": "E1+E2 present (stable API + compile probe). E3 semantic test, E4 live Synapse, and E5 UI acceptance are not present in P0.3; compile-only evidence is not product confirmation. Even when unblocked, NotificationSettings alone cannot satisfy product focus suppression; Mute-type classification may relate to room notification mode APIs but focus/selected-context gates are product-owned.",
               "missing_gates": [
                 "semantic_or_integration_test",
                 "live_synapse_two_client",
@@ -58523,11 +58380,16 @@
           }
         ],
         "gaps": [],
-        "notes": "Mappings use only accepted P0.3 capability/gap IDs. Compile probes establish API shape only; final dossier states remain blocked/typed/upstream until E3–E5 gates exist.",
+        "notes": "Mappings use only accepted P0.3 capability/gap IDs. rust_target is product focus + notification candidate stream under P9.3. Do not claim NotificationSettings implements focus suppression. SC-057 may relate only to push-rule/Mute-type settings adjacent to Mute suppression gates; document.hasFocus, useSelectedRoom, useInboxNotificationsSelected, and showNotifications are product-owned. Compile-only blocked states, SC alone, raw HTTP, push-rule settings UI, helper-only never pass. Do not invent focus-suppression SC IDs.",
         "distinctions_preserved": [
           "server typed search (SC-071) vs experimental local search (SC-072)",
           "widget plumbing (SC-082/GAP widget) vs call parity (membership write/key session gaps)",
-          "compile shape (E1/E2) vs runtime/UI parity (E3–E5 missing => blocked)"
+          "compile shape (E1/E2) vs runtime/UI parity (E3–E5 missing => blocked)",
+          "SC-057 push-rule/settings API vs product focus/suppression gates",
+          "native notification generation (FR-7.8-004) vs focus/suppression (FR-7.8-007)",
+          "unread/badge summaries (FR-7.8-005) vs native notification suppression",
+          "event resolution/deep-link routing (FR-7.8-006) vs focus/suppression",
+          "InviteNotifications has no focused-room gate vs MessageNotifications focus gate"
         ]
       },
       "implementation_tasks": [
@@ -58542,7 +58404,7 @@
         "existing": [
           {
             "path": "synara/src/app/notifications/__tests__/systemNotification.test.ts",
-            "evidence": "suppression/focus-related notification behavior unit coverage where present",
+            "evidence": "normalizeSystemNotificationRequest unit coverage only; not E2E focus/suppression AT for MessageNotifications gates",
             "status": "existing-verified-path"
           }
         ],
@@ -58554,34 +58416,52 @@
             "task_id": "P9.3",
             "phase": "Phase 9 — Notifications, push semantics, and deep links",
             "level": "integration",
-            "scenario": "7.8/FR-7.8-007: exercise 'notification suppression for active/focused contexts;' via owner `synara/src/app/utils/notifications.ts` and UI `synara/src/app/features/settings/notifications/SystemNotification.tsx`, then confirm Rust/IPC cutover task `P9.3` preserves observable behavior without raw Matrix runtime HTTP.",
+            "scenario": "Integration against disposable Synapse: independently prove MessageNotifications suppression cases — (1) focused selected room + document.hasFocus → no message native notification; (2) notifications inbox selected + document.hasFocus → no message native notification; (3) showNotifications off → no generation; (4) not SYNCING → no generation; (5) mute room (getNotificationType Mute) → no message notification; (6) self-sent → no message notification. Document InviteNotifications has SYNCING + showNotifications gates but no focused-room gate. After cutover P9.3, same focus/suppression observables via Rust-owned notification candidate stream + product focus state. No raw /_matrix HTTP; SC-057 alone fails; push-rule settings UI / badge-only / generation-only / helper-only cannot substitute.",
             "preconditions": [
-              "Desktop app with notification permission granted (OS)",
-              "Rooms with distinct push-rule modes; backgrounded window fixture",
-              "Linked owner path present in tree: synara/src/app/utils/notifications.ts",
-              "Primary UI/lifecycle surface: synara/src/app/features/settings/notifications/SystemNotification.tsx"
+              "Disposable Synapse; desktop app with OS/browser notification permission path and showNotifications control.",
+              "Named suppression owner: ClientNonUIFeatures MessageNotifications (RoomEvent.Timeline handler gates at L425–468).",
+              "Named focus state: useSelectedRoom + useInboxNotificationsSelected + document.hasFocus.",
+              "Named enablement: SystemNotification Desktop Notifications / settingsAtom showNotifications; TrayDoNotDisturbSync may flip showNotifications.",
+              "Named Mute helper: getNotificationType / getRoomPushRule in utils/room.ts.",
+              "Fixtures: focused selected room; notifications inbox selected; backgrounded/unfocused; muted room; self-sent event; non-SYNCING client; showNotifications off/on.",
+              "Invite/Agent/Later paths may have showNotifications (and Invite SYNCING) gates without inventing focus gates for them."
             ],
             "trigger_actions": [
-              "Boot the appropriate harness for level=integration against disposable Synapse (or iOS notes if any).",
-              "Establish fixtures required by the clause list: notification suppression for active/focused contexts.",
-              "Open UI/lifecycle surface `synara/src/app/features/settings/notifications/SystemNotification.tsx` (or follow ui_entry_points_rationale if no dedicated UI).",
-              "Step 1: perform the product action that implements «notification suppression for active/focused contexts» using current owner `synara/src/app/utils/notifications.ts`."
+              "Boot the integration harness against disposable Synapse. Do not use fixture-only mocks that bypass product MessageNotifications gates, push-rule settings UI alone, badge/tray alone, generation-without-suppression cases alone, alternate UI, helper-only harnesses, or raw HTTP.",
+              "FOCUSED SELECTED ROOM: with showNotifications on, room not muted, client SYNCING, document.hasFocus true and selectedRoomId === event roomId, inject a live notifiable timeline event. Assert no message native notification (showPlatformNotification / window.Notification).",
+              "NOTIFICATIONS INBOX FOCUSED: with document.hasFocus true and useInboxNotificationsSelected true (notifications inbox path), inject a live notifiable event for a room that is not necessarily the selected room. Assert no message native notification.",
+              "SHOW NOTIFICATIONS OFF: set showNotifications false (SystemNotification switch or tray DND flip). Inject notifiable event with app unfocused. Assert no native generation.",
+              "NOT SYNCING: with app unfocused and showNotifications on, arrange mx.getSyncState() !== 'SYNCING'. Inject notifiable event. Assert no generation.",
+              "MUTE ROOM: with app unfocused and showNotifications on, room with getNotificationType Mute, inject notifiable event. Assert no message notification.",
+              "SELF-SENT: with app unfocused and showNotifications on, emit self-sent notifiable event (sender === mx.getUserId()). Assert no message notification.",
+              "After cutover task P9.3, repeat the same independent focus/suppression observables via Rust-owned notification candidate stream + product focus state. Citing SC-057 alone, compile-only blocked states, raw /_matrix HTTP, push-rule settings UI (AllMessages/Keyword/Special/NotificationModeSwitcher), badge-only (FR-7.8-005), generation success path without focus gates (FR-7.8-004 alone), or helper/fixture-only is a FAIL."
             ],
             "assertions": [
-              "Each clause is observable: «notification suppression for active/focused contexts».",
-              "State coordination remains through `synara/src/app/utils/notifications.ts` (or its Rust/IPC successor after cutover), not ad-hoc dual writers.",
-              "Behavior-relevant current JS method candidates exercised or replaced: setPushRuleActions, addPushRule, deletePushRule, setPushRuleActions, setPushRuleActions, sendReadReceipt (AST candidates; not type-proven receivers).",
-              "Rust mapping remains conservative: caps=[SC-057] gaps=[none]; compile-only blocked states are not treated as runtime pass.",
-              "No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless dossier marks that exact behavior typed-sdk-request-required."
+              "FOCUSED SELECTED ROOM + document.hasFocus: no message native notification.",
+              "NOTIFICATIONS INBOX SELECTED + document.hasFocus: no message native notification.",
+              "showNotifications off: no generation across product notification paths that gate on it.",
+              "not SYNCING: no MessageNotifications (and InviteNotifications) generation.",
+              "Mute room: no message native notification.",
+              "Self-sent: no message native notification.",
+              "InviteNotifications documents SYNCING + showNotifications without a focused-room gate (do not invent).",
+              "Rust/IPC cutover preserves same focus/suppression observables via Rust candidate stream + product focus state; SC-057 NotificationSettings alone never implements focus suppression; raw HTTP, push-rule UI, badge-only, generation-only, helper-only never pass.",
+              "No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless the dossier marks that exact behavior typed-sdk-request-required."
             ],
             "required_environment": [
-              "Desktop app with notification permission granted (OS)",
-              "Rooms with distinct push-rule modes; backgrounded window fixture"
+              "Disposable Synapse",
+              "Desktop app with focus, selected-room, notifications-inbox, mute, and showNotifications fixtures"
             ],
             "does_not_currently_exist": true,
             "clause_breakdown": [
-              "notification suppression for active/focused contexts"
-            ]
+              "focused selected room + document.hasFocus → suppress message native notification",
+              "notifications inbox selected + focus → suppress message native notification",
+              "showNotifications off → no generation",
+              "not SYNCING → no generation",
+              "mute room → no message notification",
+              "self-sent → no message notification",
+              "cutover P9.3: product focus + Rust candidate stream (no SC-only / raw HTTP / push-rule UI / helper-only)"
+            ],
+            "test_target": "ClientNonUIFeatures MessageNotifications focus/sync/mute/self/showNotifications gates + SystemNotification/tray showNotifications enablement + getNotificationType Mute; post-cutover Rust-owned notification candidate stream + product focus state (P9.3)"
           }
         ]
       },
@@ -80425,7 +80305,6 @@
         "FR-7.7-007",
         "FR-7.8-001",
         "FR-7.8-003",
-        "FR-7.8-007",
         "FR-7.8-008"
       ],
       "rationale": null,
@@ -80516,7 +80395,6 @@
         "FR-7.7-007",
         "FR-7.8-001",
         "FR-7.8-003",
-        "FR-7.8-007",
         "FR-7.8-008"
       ],
       "rationale": null,
@@ -80568,7 +80446,6 @@
         "FR-7.7-007",
         "FR-7.8-001",
         "FR-7.8-002",
-        "FR-7.8-007",
         "FR-7.8-008"
       ],
       "rationale": null,
@@ -80632,7 +80509,6 @@
         "FR-7.7-007",
         "FR-7.8-001",
         "FR-7.8-003",
-        "FR-7.8-007",
         "FR-7.8-008"
       ],
       "rationale": null,
@@ -85442,7 +85318,6 @@
         "FR-7.2-011",
         "FR-7.7-003",
         "FR-7.8-006",
-        "FR-7.8-007",
         "FR-7.8-008"
       ],
       "rationale": null,
@@ -88132,7 +88007,6 @@
         "FR-7.2-005",
         "FR-7.2-011",
         "FR-7.7-003",
-        "FR-7.8-007",
         "FR-7.8-008"
       ],
       "rationale": null,
@@ -88396,7 +88270,8 @@
         "FR-7.8-002",
         "FR-7.8-004",
         "FR-7.8-005",
-        "FR-7.8-006"
+        "FR-7.8-006",
+        "FR-7.8-007"
       ],
       "rationale": null,
       "p0_1_role": "production",
@@ -92637,7 +92512,7 @@
         "id": "ET-FR-7.8-007-01",
         "requirement_id": "FR-7.8-007",
         "path": "synara/src/app/notifications/__tests__/systemNotification.test.ts",
-        "evidence": "suppression/focus-related notification behavior unit coverage where present",
+        "evidence": "normalizeSystemNotificationRequest unit coverage only; not E2E focus/suppression AT for MessageNotifications gates",
         "cases": null,
         "kind": "existing",
         "status": "existing-verified-path"
@@ -95096,34 +94971,52 @@
         "task_id": "P9.3",
         "phase": "Phase 9 — Notifications, push semantics, and deep links",
         "level": "integration",
-        "scenario": "7.8/FR-7.8-007: exercise 'notification suppression for active/focused contexts;' via owner `synara/src/app/utils/notifications.ts` and UI `synara/src/app/features/settings/notifications/SystemNotification.tsx`, then confirm Rust/IPC cutover task `P9.3` preserves observable behavior without raw Matrix runtime HTTP.",
+        "scenario": "Integration against disposable Synapse: independently prove MessageNotifications suppression cases — (1) focused selected room + document.hasFocus → no message native notification; (2) notifications inbox selected + document.hasFocus → no message native notification; (3) showNotifications off → no generation; (4) not SYNCING → no generation; (5) mute room (getNotificationType Mute) → no message notification; (6) self-sent → no message notification. Document InviteNotifications has SYNCING + showNotifications gates but no focused-room gate. After cutover P9.3, same focus/suppression observables via Rust-owned notification candidate stream + product focus state. No raw /_matrix HTTP; SC-057 alone fails; push-rule settings UI / badge-only / generation-only / helper-only cannot substitute.",
         "preconditions": [
-          "Desktop app with notification permission granted (OS)",
-          "Rooms with distinct push-rule modes; backgrounded window fixture",
-          "Linked owner path present in tree: synara/src/app/utils/notifications.ts",
-          "Primary UI/lifecycle surface: synara/src/app/features/settings/notifications/SystemNotification.tsx"
+          "Disposable Synapse; desktop app with OS/browser notification permission path and showNotifications control.",
+          "Named suppression owner: ClientNonUIFeatures MessageNotifications (RoomEvent.Timeline handler gates at L425–468).",
+          "Named focus state: useSelectedRoom + useInboxNotificationsSelected + document.hasFocus.",
+          "Named enablement: SystemNotification Desktop Notifications / settingsAtom showNotifications; TrayDoNotDisturbSync may flip showNotifications.",
+          "Named Mute helper: getNotificationType / getRoomPushRule in utils/room.ts.",
+          "Fixtures: focused selected room; notifications inbox selected; backgrounded/unfocused; muted room; self-sent event; non-SYNCING client; showNotifications off/on.",
+          "Invite/Agent/Later paths may have showNotifications (and Invite SYNCING) gates without inventing focus gates for them."
         ],
         "trigger_actions": [
-          "Boot the appropriate harness for level=integration against disposable Synapse (or iOS notes if any).",
-          "Establish fixtures required by the clause list: notification suppression for active/focused contexts.",
-          "Open UI/lifecycle surface `synara/src/app/features/settings/notifications/SystemNotification.tsx` (or follow ui_entry_points_rationale if no dedicated UI).",
-          "Step 1: perform the product action that implements «notification suppression for active/focused contexts» using current owner `synara/src/app/utils/notifications.ts`."
+          "Boot the integration harness against disposable Synapse. Do not use fixture-only mocks that bypass product MessageNotifications gates, push-rule settings UI alone, badge/tray alone, generation-without-suppression cases alone, alternate UI, helper-only harnesses, or raw HTTP.",
+          "FOCUSED SELECTED ROOM: with showNotifications on, room not muted, client SYNCING, document.hasFocus true and selectedRoomId === event roomId, inject a live notifiable timeline event. Assert no message native notification (showPlatformNotification / window.Notification).",
+          "NOTIFICATIONS INBOX FOCUSED: with document.hasFocus true and useInboxNotificationsSelected true (notifications inbox path), inject a live notifiable event for a room that is not necessarily the selected room. Assert no message native notification.",
+          "SHOW NOTIFICATIONS OFF: set showNotifications false (SystemNotification switch or tray DND flip). Inject notifiable event with app unfocused. Assert no native generation.",
+          "NOT SYNCING: with app unfocused and showNotifications on, arrange mx.getSyncState() !== 'SYNCING'. Inject notifiable event. Assert no generation.",
+          "MUTE ROOM: with app unfocused and showNotifications on, room with getNotificationType Mute, inject notifiable event. Assert no message notification.",
+          "SELF-SENT: with app unfocused and showNotifications on, emit self-sent notifiable event (sender === mx.getUserId()). Assert no message notification.",
+          "After cutover task P9.3, repeat the same independent focus/suppression observables via Rust-owned notification candidate stream + product focus state. Citing SC-057 alone, compile-only blocked states, raw /_matrix HTTP, push-rule settings UI (AllMessages/Keyword/Special/NotificationModeSwitcher), badge-only (FR-7.8-005), generation success path without focus gates (FR-7.8-004 alone), or helper/fixture-only is a FAIL."
         ],
         "assertions": [
-          "Each clause is observable: «notification suppression for active/focused contexts».",
-          "State coordination remains through `synara/src/app/utils/notifications.ts` (or its Rust/IPC successor after cutover), not ad-hoc dual writers.",
-          "Behavior-relevant current JS method candidates exercised or replaced: setPushRuleActions, addPushRule, deletePushRule, setPushRuleActions, setPushRuleActions, sendReadReceipt (AST candidates; not type-proven receivers).",
-          "Rust mapping remains conservative: caps=[SC-057] gaps=[none]; compile-only blocked states are not treated as runtime pass.",
-          "No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless dossier marks that exact behavior typed-sdk-request-required."
+          "FOCUSED SELECTED ROOM + document.hasFocus: no message native notification.",
+          "NOTIFICATIONS INBOX SELECTED + document.hasFocus: no message native notification.",
+          "showNotifications off: no generation across product notification paths that gate on it.",
+          "not SYNCING: no MessageNotifications (and InviteNotifications) generation.",
+          "Mute room: no message native notification.",
+          "Self-sent: no message native notification.",
+          "InviteNotifications documents SYNCING + showNotifications without a focused-room gate (do not invent).",
+          "Rust/IPC cutover preserves same focus/suppression observables via Rust candidate stream + product focus state; SC-057 NotificationSettings alone never implements focus suppression; raw HTTP, push-rule UI, badge-only, generation-only, helper-only never pass.",
+          "No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless the dossier marks that exact behavior typed-sdk-request-required."
         ],
         "required_environment": [
-          "Desktop app with notification permission granted (OS)",
-          "Rooms with distinct push-rule modes; backgrounded window fixture"
+          "Disposable Synapse",
+          "Desktop app with focus, selected-room, notifications-inbox, mute, and showNotifications fixtures"
         ],
         "does_not_currently_exist": true,
         "clause_breakdown": [
-          "notification suppression for active/focused contexts"
-        ]
+          "focused selected room + document.hasFocus → suppress message native notification",
+          "notifications inbox selected + focus → suppress message native notification",
+          "showNotifications off → no generation",
+          "not SYNCING → no generation",
+          "mute room → no message notification",
+          "self-sent → no message notification",
+          "cutover P9.3: product focus + Rust candidate stream (no SC-only / raw HTTP / push-rule UI / helper-only)"
+        ],
+        "test_target": "ClientNonUIFeatures MessageNotifications focus/sync/mute/self/showNotifications gates + SystemNotification/tray showNotifications enablement + getNotificationType Mute; post-cutover Rust-owned notification candidate stream + product focus state (P9.3)"
       },
       {
         "id": "AT-FR-7.8-008-001",
@@ -98302,24 +98195,38 @@
       "requirement_id": "FR-7.8-007",
       "platforms": ["macOS", "Linux"],
       "preconditions": [
-        "Desktop app with notification permission granted (OS)",
-        "Rooms with distinct push-rule modes; backgrounded window fixture",
-        "State owner available: synara/src/app/utils/notifications.ts",
-        "UI/lifecycle: synara/src/app/features/settings/notifications/SystemNotification.tsx",
+        "Disposable Synapse; desktop app with notification permission and showNotifications control.",
+        "Named suppression owner: ClientNonUIFeatures MessageNotifications focus/sync/mute/self gates.",
+        "Named enablement: SystemNotification Desktop Notifications / tray DND showNotifications.",
+        "Fixtures for focused selected room, notifications inbox selected, backgrounded app, muted room, self-sent event, non-SYNCING if observable.",
         "Current status baseline: implemented"
       ],
       "actions": [
-        "Launch Synara desktop on the target platform against disposable Synapse; use a clean or known fixture profile as required by «notification suppression for active/focused contexts;».",
-        "Identify state owner `synara/src/app/utils/notifications.ts` and open `synara/src/app/features/settings/notifications/SystemNotification.tsx`.",
-        "Action 1 — «notification suppression for active/focused contexts»: perform the minimal user/system steps that trigger this clause (use linked files under current_production_files if the entry point is indirect)."
+        "Launch Synara desktop on the target platform against disposable Synapse with Desktop Notifications enabled.",
+        "FOCUSED ROOM — select a room, keep the window focused; have another user send a notifiable message in that room; confirm no native desktop notification appears.",
+        "NOTIFICATIONS INBOX — open Notification Messages inbox with the window focused; receive a notifiable message in some room; confirm no native message notification.",
+        "SHOW OFF — turn Desktop Notifications / showNotifications off (or tray DND); receive a notifiable event while unfocused; confirm no native notification.",
+        "MUTE — mute a room; while unfocused, receive a notifiable message in that room; confirm no message notification.",
+        "SELF — while unfocused with notifications on, send a message from the same account; confirm no self-notification.",
+        "After cutover P9.3, repeat the same independent focus/suppression observables via Rust-owned notification candidate stream + product focus state without raw /_matrix HTTP."
       ],
       "expected_results": [
-        "All clauses under «notification suppression for active/focused contexts;» produce the user-visible or system-observable success criteria without error toasts unrelated to intentional negative tests.",
-        "Clause 1 «notification suppression for active/focused contexts» is satisfied on macOS, Linux with owner `synara/src/app/utils/notifications.ts`.",
+        "Focused selected room + document focus suppresses message native notifications.",
+        "Notifications inbox selected + focus suppresses message native notifications.",
+        "showNotifications off suppresses generation.",
+        "Muted rooms and self-sent events suppress message notifications.",
+        "Invite path is not falsely claimed to use a focused-room gate; SYNCING + showNotifications still apply where product does.",
+        "Push-rule settings UI, badge-only, generation-only without focus gates, SC-057 alone, and helper/fixture-only do not satisfy this FR.",
         "No unexpected raw /_matrix traffic from the app renderer for this flow on the post-cutover build."
       ],
       "clause_breakdown": [
-        "notification suppression for active/focused contexts"
+        "focused selected room + document.hasFocus suppress",
+        "notifications inbox selected + focus suppress",
+        "showNotifications off suppress",
+        "not SYNCING suppress",
+        "mute room suppress",
+        "self-sent suppress",
+        "cutover product focus + Rust candidate stream"
       ]
     },
     {
@@ -100491,6 +100398,17 @@
         "FR-7.8-006: current_status remains implemented. current_behavior_and_limits documents route construction (buildDesktopNotificationRoomRoute/sanitizeDesktopNotificationRoute), normalizeSystemNotificationRequest/normalizeSynaraRoute internal-only validation, showPlatformNotification route pass-through and PLATFORM_NOTIFICATION_ACTION_EVENT, ClientNonUIFeatures Message/Agent/Later route attach + navigateRoom open and Invite getInboxInvitesPath distinct class, useRoomNavigate.navigateRoom, inbox Notifications Open with getThreadRootEventId/findEventById, timelineOpening event focus. Push-rule preference surfaces and sendReadReceipt removed as primary owners/files.",
         "FR-7.8-006: retargeted behavior_relevant methods to findEventById/getRoom on ClientNonUIFeatures and Notifications for openEventId/room resolution; no setPushRuleActions/addPushRule/deletePushRule/sendReadReceipt. Planned AT/MA require message room+event open (incl. thread-root), invite inbox path, inbox list open, normalize reject, and P9.4/P4.8 cutover via Rust-owned event identity + Synara route DTOs. SC-032/SC-022 alone, raw HTTP, push-rule UI, badge-only, generation-only, helper-only never pass. Existing tests reclassified as normalize/route-builder/helper unit-only.",
         "Top-level automated_test_catalog AT-FR-7.8-006-001 is byte-identical to the requirement planned entry; manual_acceptance_catalog MA-FR-7.8-006 updated. file_coverage_ledger: removed FR-7.8-006 from AllMessages/KeywordMessages/SpecialMessages/NotificationModeSwitcher/SystemNotification/utils/notifications; retained/added FR-7.8-006 on ClientNonUIFeatures, inbox Notifications, utils/room.ts, timelineOpening. Status distribution unchanged (implemented 96, partial 22). Accepted corrections through FR-7.8-005 preserved. JSON and Markdown synchronized."
+      ]
+    },
+    {
+      "id": "p0.2-correct-25-fr-7.8-007-notification-suppression-focus",
+      "scope": "Rejected-review limited correction: FR-7.8-007 only — retarget notification suppression for active/focused contexts from wrong push-rule preference linkage and weak utils/notifications.ts owner to ClientNonUIFeatures MessageNotifications focus/sync/mute/self/showNotifications gates (document.hasFocus + selected room / notifications inbox; SYNCING; Mute via getNotificationType; self; showNotifications; unreadEqual) with SystemNotification/tray DND enablement and utils/room Mute helper; document Invite has no focus gate; rewrite planned AT/MA for independent suppression cases and P9.3 product focus + Rust candidate stream cutover; SC-057 does not implement focus suppression",
+      "requirements_rewritten": ["FR-7.8-007"],
+      "not_claimed_complete": true,
+      "changes": [
+        "FR-7.8-007: current_status remains implemented. current_behavior_and_limits documents MessageNotifications gates (document.hasFocus + selectedRoomId/notificationSelected L426; getSyncState L425; Mute L432; self L439; showNotifications L455; unreadEqual L447–451), Invite SYNCING+showNotifications without focus gate, Agent/Later showNotifications-only, SystemNotification and TrayDoNotDisturbSync showNotifications enablement. Push-rule preference surfaces and sendReadReceipt removed as primary owners/files.",
+        "FR-7.8-007: retargeted behavior_relevant methods to getSyncState/isSpaceRoom/getUserId on ClientNonUIFeatures and getRoomPushRule on utils/room.ts; listeners RoomEvent.Timeline on/remove. Planned AT/MA require independent cases: focused selected room, notifications inbox focus, showNotifications off, not SYNCING, mute, self-sent, and P9.3 cutover via product focus + Rust candidate stream. SC-057 alone, raw HTTP, push-rule UI, badge-only, generation-only, helper-only never pass. Existing systemNotification.test.ts reclassified as normalize unit-only.",
+        "Top-level automated_test_catalog AT-FR-7.8-007-001 is byte-identical to the requirement planned entry; manual_acceptance_catalog MA-FR-7.8-007 updated. file_coverage_ledger: removed FR-7.8-007 from AllMessages/KeywordMessages/SpecialMessages/NotificationModeSwitcher/inbox Notifications/utils/notifications; retained/added FR-7.8-007 on ClientNonUIFeatures, SystemNotification, utils/room.ts. Status distribution unchanged (implemented 96, partial 22). Accepted corrections through FR-7.8-006 preserved. JSON and Markdown synchronized."
       ]
     }
   ]
