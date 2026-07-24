@@ -37,10 +37,11 @@ without explicit user approval.
 - **Progress loop:** host scheduled task every **4 minutes**
   (ID `019f95928db7`) continues bounded FR audits; also daily durable
   orchestrator `9022c2f8-9b21-411a-acf9-a36c10515f72`
-- **Last accepted:** FR-7.9-013 store corruption detection **partial**
-  (`p0.2-correct-39`)
-- **Next writer task:** FR-7.10-001 (room message search and pagination), then
-  remaining shallow 7.10–7.11 rows (~15)
+- **Last accepted:** FR-7.10-001 room message search + pagination
+  (`p0.2-correct-40`)
+- **Next writer task:** FR-7.10-002 (global message search if exposed), then
+  remaining 7.10–7.11 (~14)
+
 - No production Matrix Rust SDK replacement code accepted
 - **No open P0.2 PR yet** (open after P0.2 complete)
 
@@ -52,7 +53,7 @@ Phase 0 evidence accepted before this handoff:
 - P0.2 branch carries accepted 7.8–7.9 corrections; ~15 shallow rows remain
   in 7.10–7.11.
 
-P0.2 is not complete. Resume at FR-7.10-001, then audit remaining 7.10–7.11
+P0.2 is not complete. Resume at FR-7.10-002, then audit remaining 7.10–7.11
 before declaring P0.2 accepted.
 
 Accepted notification findings that must be preserved:
@@ -176,6 +177,10 @@ Accepted notification findings that must be preserved:
 - FR-7.9-013: status **`partial`**. Continuity anomaly detection +
   non-destructive ClientRoot guidance; no true corruption integrity scan or
   automatic non-destructive repair.
+- FR-7.10-001: status `implemented`. Room-scoped `mx.search` room_events
+  search_term + filter.rooms limit 20; `next_batch`/`nextToken` infinite query
+  pagination; MessageSearch/useMessageSearch. Global search is 002.
+
 
 ## Branch and PR contract
 
