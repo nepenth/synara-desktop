@@ -4,7 +4,7 @@
 
 ## Correction pass status
 
-Limited rejected-review correction (`p0.2-correct-49-fr-7.11-003-call-join-leave-decline-member-status`) for **FR-7.11-003** only: replace shallow notes (file-count / LiveChip-as-sole-UI / useCall.ts-as-sole-owner / generic AT-MA) with concrete **call join/leave/decline + member status** evidence — `useCallStart`/`createCallEmbed` Join; `CallEmbed.hangup` + End UI; `useCallJoined`/`JoinCall`; decline = `org.matrix.msc4310.rtc.decline` capability-only (no product call-decline UI); member status via `useCallJoined` + `MembershipsChanged` after actions (DISPLAY ownership remains FR-7.11-001); honest **partial** (join via embed + hangup without product-owned MatrixRTC membership write APIs; widget-driven `msc3401.call.member` via `sendStateEvent`); rust_target `product-call-join-leave-via-embed-hangup-partial-matrixrtc-write-upstream` caps=[SC-082] gaps=[GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION, GAP-MATRIXRTC-MEMBERSHIP-PRESENCE]; rewrite AT/MA for P10.5 (+P10.4). JSON and Markdown synchronized. Accepted corrections for **FR-7.8-001 through FR-7.8-009**, **FR-7.9-001..013** (**FR-7.9-011** remains partial), **FR-7.10-001..007**, **FR-7.11-001..002** preserved. Prior corrections and accepted **7.1–7.3** preserved. **P0.2 is not complete.**
+Limited rejected-review correction (`p0.2-correct-50-fr-7.11-004-call-encryption-key-flow`) for **FR-7.11-004** only: replace shallow notes (null notes / getDeviceId-search-searchUserDirectory false AST / useCall membership listeners / generic AT-MA) with concrete **encryption-key to-device and room-event FLOW** evidence — `CallWidgetDriver.sendToDevice` (`encryptToDeviceMessages`+`queueToDevice`); `sendEvent` for `io.element.call.encryption_keys`; `CallEmbed` `ToDeviceEvent`→`feedToDevice`; `Event`/`Decrypted`→`feedEvent`; `getCallCapabilities` room+to-device `encryption_keys`/`CallEncryptionKeysPrefix`; honest **partial** (widget-mediated host bridge without product-owned native MatrixRTC key-session API); rust_target `product-widget-to-device-key-bridge-partial-matrixrtc-key-session-upstream` caps=[SC-082] gaps=[GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION]; rewrite AT/MA for P10.5. JSON and Markdown synchronized. Accepted corrections for **FR-7.8-001 through FR-7.8-009**, **FR-7.9-001..013** (**FR-7.9-011** remains partial), **FR-7.10-001..007**, **FR-7.11-001..003** (003 remains partial under its write gate) preserved. Prior corrections and accepted **7.1–7.3** preserved. **P0.2 is not complete.**
 
 ## Provenance
 
@@ -7305,76 +7305,81 @@ Limited rejected-review correction (`p0.2-correct-49-fr-7.11-003-call-join-leave
 - **Text**: encryption-key to-device/event flow required by Element Call;
 - **Lines**: 455–455
 - **Status**: `partial`
-- **Behavior**: Current desktop implements this via 4 production matrix-js-sdk-related file(s); status=partial.
+- **Behavior**: PARTIAL: Synara implements Element Call encryption-key to-device and room-event FLOW as a widget-mediated bridge — outbound CallWidgetDriver.sendToDevice (encryptToDeviceMessages+queueToDevice or clear queueToDevice) and sendEvent for capability-allowed types including io.element.call.encryption_keys; inbound CallEmbed ClientEvent.ToDeviceEvent → decrypt → feedToDevice plus Event/Decrypted → feedEvent; capabilities grant send/receive for io.element.call.encryption_keys and EventType.CallEncryptionKeysPrefix (and related call to-device types). Product does NOT implement a high-level native MatrixRTC encryption-key session API of its own. status=partial.
+- **Notes**: Evidence (conservative): (1) PRODUCT MEANING — FR-7.11-004 is encryption-key to-device/event FLOW required by Element Call; NOT membership DISPLAY (001), NOT embed URL/capabilities/postMessage alone (002), NOT join/leave write product (003), NOT cleanup alone (005), NOT CSP (006), NOT experimental risk acceptance alone (007). Product path is widget-mediated: Element Call owns key-session logic inside the embed; Synara host bridges encrypt/queue to-device, room encryption_keys events, and inbound feeds. (2) OUTBOUND TO-DEVICE — CallWidgetDriver.sendToDevice L149–198: if encrypted, getCrypto L157 (throw if missing) → batch by content → crypto.encryptToDeviceMessages L177–181 → client.queueToDevice L183; else clear queueToDevice L187–196. Used for CallEncryptionKeysPrefix and related call to-device types when the widget requests send. (3) OUTBOUND ROOM EVENT — sendEvent L51–82: non-state path client.sendEvent L74 for types including io.element.call.encryption_keys when capability-allowed. (4) INBOUND TO-DEVICE — CallEmbed.start L221 on ClientEvent.ToDeviceEvent; onToDeviceEvent L283–287 decryptEventIfNeeded, skip isDecryptionFailure, feedToDevice(effectiveEvent, isEncrypted) into ClientWidgetApi; off L240 on dispose. (5) INBOUND ROOM/STATE FEED — L218 Event → onEvent L266–268 decrypt+feedEvent; L219 Decrypted → feedEvent; L220 RoomState; feedEvent L353–388 call.feedEvent for encryption_keys room events. (6) CAPABILITIES — utils.getCallCapabilities L88–98 forRoomEvent Send+Receive io.element.call.encryption_keys; L100–115 forToDeviceEvent Send+Receive CallInvite…CallEncryptionKeysPrefix (EventType.CallEncryptionKeysPrefix). CallWidgetDriver ctor L43 loads allowed set; validateCapabilities filters. (7) EXCLUDE — useCall membership SessionStarted/MembershipsChanged (001/003); useCallEmbed join/embed alone (002/003); getDeviceId alone; searchUserDirectory; widgetUrl.search false Client.search AST; hangup/cleanup alone (003/005). (8) KEY-SESSION HONESTY — product does not implement high-level native MatrixRTC encryption-key session lifecycle API; residual GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION / upstream. SC-082 experimental-widgets is host residual (driver under widget embed) — SC-082 alone does not close key session. (9) No existing automated AT. (10) Cutover P10.5: preserve encrypt/queue to-device + feed inbound + encryption_keys event path via Rust/IPC approved path under SC-082 embed residual + GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION primary residual; compile-only / SC-082 alone / embed alone / raw HTTP / dual-backend / claiming native MatrixRTC key-session closed FAIL.
+- **Limits**: P0.1 method candidates are AST name hits unless marked source-inspected. Product status is partial: widget-mediated encrypt/queue to-device + feedToDevice + encryption_keys room event bridge present; no product-owned high-level MatrixRTC key-session API. Rust pin: GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION upstream-change-required (no viable high-level public key-session route); SC-082 experimental-widgets blocked E1/E2 for widget host residual only. No E2E AT yet.
 - **UI**: `synara/src/app/plugins/call/CallEmbed.ts`
-- **Owners**: `synara/src/app/plugins/call/CallWidgetDriver.ts`
+- **UI rationale**: FR-7.11-004 is encryption-key to-device/event FLOW for Element Call — product path is widget-mediated (no dedicated key-session UI). Primary host surface: CallEmbed (iframe + ClientWidgetApi) where outbound goes through CallWidgetDriver.sendToDevice/sendEvent and inbound ToDeviceEvent/Event feeds feedToDevice/feedEvent. EXCLUDE membership Live chips alone (001). EXCLUDE embed URL/startup alone (002). EXCLUDE join/leave alone (003). EXCLUDE cleanup alone (005). EXCLUDE CSP (006). EXCLUDE experimental risk alone (007).
+- **Owners**: `synara/src/app/plugins/call/CallWidgetDriver.ts`, `synara/src/app/plugins/call/CallEmbed.ts`, `synara/src/app/plugins/call/utils.ts`
 - **Files**:
-  - `synara/src/app/hooks/useCall.ts` symbols=[] retained_m=0 retained_l=8
-    - listener `on:MatrixRTCSessionManagerEvents.SessionStarted`:L25 — None
-    - listener `on:MatrixRTCSessionManagerEvents.SessionEnded`:L26 — None
-    - listener `off:MatrixRTCSessionManagerEvents.SessionStarted`:L28 — None
-    - listener `off:MatrixRTCSessionManagerEvents.SessionEnded`:L29 — None
-    - listener `on:MatrixRTCSessionEvent.MembershipsChanged`:L46 — None
-    - listener `removeListener:MatrixRTCSessionEvent.MembershipsChanged`:L48 — None
-    - listener `on:MatrixRTCSessionEvent.MembershipsChanged`:L57 — None
-    - listener `removeListener:MatrixRTCSessionEvent.MembershipsChanged`:L59 — None
-  - `synara/src/app/hooks/useCallEmbed.ts` symbols=[] retained_m=0 retained_l=0
-  - `synara/src/app/plugins/call/CallEmbed.ts` symbols=['getDeviceId', 'search'] retained_m=2 retained_l=2
-    - method `getDeviceId`:L66 — None
-    - method `search`:L91 — None
-    - listener `on:ClientEvent.ToDeviceEvent`:L221 — None
-    - listener `off:ClientEvent.ToDeviceEvent`:L240 — None
-  - `synara/src/app/plugins/call/CallWidgetDriver.ts` symbols=['getDeviceId', 'searchUserDirectory'] retained_m=2 retained_l=0
-    - method `getDeviceId`:L40 — None
-    - method `searchUserDirectory`:L297 — None
+  - `synara/src/app/plugins/call/CallWidgetDriver.ts` symbols=['sendToDevice', 'encryptToDeviceMessages', 'queueToDevice', 'getCrypto', 'sendEvent', 'getCallCapabilities'] retained_m=4 retained_l=0
+    - line `sendToDevice encrypted+clear`:L149 — PRIMARY OUTBOUND TO-DEVICE L149–198.
+    - method `getCrypto`:L157 — encrypted path requires crypto.
+    - method `encryptToDeviceMessages`:L177 — outbound encrypt for call keys.
+    - method `queueToDevice`:L183 — outbound transport (encrypted + clear L187).
+    - method `sendEvent`:L74 — room-event encryption_keys path.
+    - line `getCallCapabilities ctor`:L43 — allowed capabilities include encryption_keys.
+  - `synara/src/app/plugins/call/CallEmbed.ts` symbols=['onToDeviceEvent', 'feedToDevice', 'feedEvent', 'ClientEvent.ToDeviceEvent'] retained_m=3 retained_l=4
+    - listener `on:ClientEvent.ToDeviceEvent`:L221 — PRIMARY INBOUND TO-DEVICE LISTEN.
+    - listener `off:ClientEvent.ToDeviceEvent`:L240 — dispose.
+    - line `onToDeviceEvent decrypt+feedToDevice`:L283 — PRIMARY INBOUND L283–287.
+    - listener `on:ClientEvent.Event`:L218 — room timeline feed including encryption_keys.
+    - listener `on:MatrixEventEvent.Decrypted`:L219 — encrypted room key re-feed.
+    - method `decryptEventIfNeeded`:L284 — inbound decrypt before feed.
+    - method `feedToDevice`:L286 — inbound to-device into ClientWidgetApi.
+    - method `feedEvent`:L383 — inbound room encryption_keys into widget.
+  - `synara/src/app/plugins/call/utils.ts` symbols=['getCallCapabilities', 'io.element.call.encryption_keys', 'EventType.CallEncryptionKeysPrefix'] retained_m=0 retained_l=0
+    - line `io.element.call.encryption_keys room send+receive`:L88 — CAPABILITIES ROOM L88–98.
+    - line `CallEncryptionKeysPrefix to-device send+receive`:L100 — CAPABILITIES TO-DEVICE L100–115.
+    - line `getCallCapabilities`:L9 — capability catalog.
 - **Behavior-relevant methods (top-level)**:
-  - `getDeviceId` `synara/src/app/plugins/call/CallEmbed.ts`:L66 — None
-  - `search` `synara/src/app/plugins/call/CallEmbed.ts`:L91 — None
-  - `getDeviceId` `synara/src/app/plugins/call/CallWidgetDriver.ts`:L40 — None
-  - `searchUserDirectory` `synara/src/app/plugins/call/CallWidgetDriver.ts`:L297 — None
+  - `getCrypto` `synara/src/app/plugins/call/CallWidgetDriver.ts`:L157 — Encrypted outbound to-device for call keys.
+  - `encryptToDeviceMessages` `synara/src/app/plugins/call/CallWidgetDriver.ts`:L177 — Outbound encrypt for CallEncryptionKeysPrefix.
+  - `queueToDevice` `synara/src/app/plugins/call/CallWidgetDriver.ts`:L183 — Outbound to-device transport.
+  - `sendEvent` `synara/src/app/plugins/call/CallWidgetDriver.ts`:L74 — Outbound io.element.call.encryption_keys room event.
+  - `decryptEventIfNeeded` `synara/src/app/plugins/call/CallEmbed.ts`:L284 — Inbound to-device decrypt.
+  - `feedToDevice` `synara/src/app/plugins/call/CallEmbed.ts`:L286 — Inbound to-device delivery to Element Call.
+  - `feedEvent` `synara/src/app/plugins/call/CallEmbed.ts`:L383 — Inbound encryption_keys room event delivery.
 - **Behavior-relevant listeners (top-level)**:
-  - `on:MatrixRTCSessionManagerEvents.SessionStarted` `synara/src/app/hooks/useCall.ts`:L25 — None
-  - `on:MatrixRTCSessionManagerEvents.SessionEnded` `synara/src/app/hooks/useCall.ts`:L26 — None
-  - `off:MatrixRTCSessionManagerEvents.SessionStarted` `synara/src/app/hooks/useCall.ts`:L28 — None
-  - `off:MatrixRTCSessionManagerEvents.SessionEnded` `synara/src/app/hooks/useCall.ts`:L29 — None
-  - `on:MatrixRTCSessionEvent.MembershipsChanged` `synara/src/app/hooks/useCall.ts`:L46 — None
-  - `removeListener:MatrixRTCSessionEvent.MembershipsChanged` `synara/src/app/hooks/useCall.ts`:L48 — None
-  - `on:MatrixRTCSessionEvent.MembershipsChanged` `synara/src/app/hooks/useCall.ts`:L57 — None
-  - `removeListener:MatrixRTCSessionEvent.MembershipsChanged` `synara/src/app/hooks/useCall.ts`:L59 — None
-  - `on:ClientEvent.ToDeviceEvent` `synara/src/app/plugins/call/CallEmbed.ts`:L221 — None
-  - `off:ClientEvent.ToDeviceEvent` `synara/src/app/plugins/call/CallEmbed.ts`:L240 — None
-- **Unfiltered linked candidates**: methods=20 listeners=18
-- **Rust**: `upstream-change-required-for-key-session` caps=['SC-082'] gaps=['GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION']
+  - `on:ClientEvent.ToDeviceEvent` `synara/src/app/plugins/call/CallEmbed.ts`:L221 — Inbound CallEncryptionKeysPrefix / call to-device.
+  - `off:ClientEvent.ToDeviceEvent` `synara/src/app/plugins/call/CallEmbed.ts`:L240 — Listener cleanup.
+  - `on:ClientEvent.Event` `synara/src/app/plugins/call/CallEmbed.ts`:L218 — Inbound room encryption_keys path.
+  - `on:MatrixEventEvent.Decrypted` `synara/src/app/plugins/call/CallEmbed.ts`:L219 — Encrypted room encryption_keys after decrypt.
+- **Unfiltered linked candidates**: methods=18 listeners=8
+- **Rust**: `product-widget-to-device-key-bridge-partial-matrixrtc-key-session-upstream` caps=['SC-082'] gaps=['GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION']
   - `SC-082` `blocked` `matrix_sdk::widget (experimental-widgets)` https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/lib.rs#L64-L65
+  - `GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION` `upstream-change-required` `no viable high-level public MatrixRTC key-session API; product widget bridge is not that API`
+- Honest: rust_target for FR-7.11-004: product-widget-to-device-key-bridge-partial-matrixrtc-key-session-upstream. Product implements PARTIAL widget-mediated encryption-key to-device and room-event bridge (CallWidgetDriver.sendToDevice encrypt+queue; sendEvent encryption_keys; CallEmbed feedToDevice/feedEvent; capabilities). Product does NOT own high-level MatrixRTC encryption-key session lifecycle. Primary residual GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION. SC-082 is host residual only — SC-082 alone never closes key session. Cutover P10.5. Compile-only / SC-082 alone / embed alone / raw HTTP / dual-backend / full key-session-closed claim FAIL.
 - **Tasks**: `P10.5`
 - **Blockers**:
-  - (high) upstream-change-required: FR-7.11-004 depends on upstream-change-required gap(s): ['GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION']
-  - (high) experimental-widgets-and-call-parity: Call/widget path depends on experimental-widgets and MatrixRTC gaps; widget plumbing ≠ call parity.
+  - GATE-7.11-004-NATIVE-MATRIXRTC-KEY-SESSION
+  - (high) product-widget-to-device-key-bridge-partial-matrixrtc-key-session-upstream: FR-7.11-004 product path is PARTIAL: Element Call encryption-key to-device/event FLOW is widget-mediated — outbound CallWidgetDriver.sendToDevice (getCrypto+encryptToDeviceMessages+queueToDevice or clear queueToDevice) and sendEvent for io.element.call.encryption_keys; inbound CallEmbed ClientEvent.ToDeviceEvent → decrypt → feedToDevice and Event/Decrypted → feedEvent; capabilities grant encryption_keys + CallEncryptionKeysPrefix. Synara does not implement a high-level native MatrixRTC encryption-key session API. Cutover P10.5 under GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION (primary residual / upstream-change-required) + SC-082 experimental-widgets host residual only. Compile-only / SC-082 alone / embed alone / raw HTTP / dual-backend / claiming native MatrixRTC key-session closed FAIL.
 - **Existing tests**:
   - _(none)_
 - **Planned** `AT-FR-7.11-004-001` task `P10.5` level `integration-e2e`
-  - Scenario: 7.11/FR-7.11-004: exercise 'encryption-key to-device/event flow required by Element Call;' via owner `synara/src/app/plugins/call/CallWidgetDriver.ts` and UI `synara/src/app/plugins/call/CallEmbed.ts`, then confirm Rust/IPC cutover task `P10.5` preserves observable behavior without raw Matrix runtime HTTP.
-  - Test target: None
+  - Scenario: Integration against disposable Synapse (two clients, E2EE call room + Element Call assets): (A) OUTBOUND encrypted to-device — Element Call widget requests sendToDevice for CallEncryptionKeysPrefix; CallWidgetDriver encrypted path uses getCrypto + encryptToDeviceMessages + queueToDevice (clear path uses queueToDevice). (B) INBOUND to-device — peer key/call to-device arrives; CallEmbed ClientEvent.ToDeviceEvent → decryptEventIfNeeded → feedToDevice into ClientWidgetApi. (C) CAPABILITIES — getCallCapabilities grants send+receive io.element.call.encryption_keys room events and forToDeviceEvent CallEncryptionKeysPrefix; widget may sendEvent encryption_keys via driver. (D) DISTINCTIONS — not 001/002/003/005/006/007 alone; not getDeviceId/searchUserDirectory/widgetUrl.search alone. (E) GATE — native MatrixRTC key-session residual remains; fail-closed if claimed closed without evidence. Cutover P10.5: preserve encrypt/queue to-device + feed inbound + encryption_keys event path via Rust/IPC; SC-082 alone / compile-only / raw HTTP / dual-backend / key-session-closed claim FAIL.
+  - Test target: CallWidgetDriver.sendToDevice (encrypt+queue / clear queue); sendEvent encryption_keys; CallEmbed onToDeviceEvent+feedToDevice; Event/Decrypted feedEvent; getCallCapabilities encryption_keys + CallEncryptionKeysPrefix; post-cutover P10.5
   - Preconditions:
-    - Desktop app with Element Call / widget config for the build
-    - Room with MatrixRTC membership fixtures; two clients for join/leave
-    - CSP-enabled production-like shell
-    - Linked owner path present in tree: synara/src/app/plugins/call/CallWidgetDriver.ts
-    - Primary UI/lifecycle surface: synara/src/app/plugins/call/CallEmbed.ts
+    - Disposable Synapse; two clients; E2EE-capable call room with Element Call embedded assets.
+    - Named owners: CallWidgetDriver sendToDevice/sendEvent, CallEmbed ToDeviceEvent/feedToDevice/feedEvent, utils getCallCapabilities encryption_keys + CallEncryptionKeysPrefix.
+    - Do not accept: membership-display-only (001), embed-URL-only (002), join/leave-only (003), cleanup-only (005), getDeviceId alone, searchUserDirectory, widgetUrl.search false AST, SC-082 alone, compile-only, or claiming native MatrixRTC key-session API closed.
   - Actions:
-    1. Boot the appropriate harness for level=integration-e2e against disposable Synapse (or iOS notes if any).
-    2. Establish fixtures required by the clause list: encryption-key to-device/event flow required by Element Call.
-    3. Open UI/lifecycle surface `synara/src/app/plugins/call/CallEmbed.ts` (or follow ui_entry_points_rationale if no dedicated UI).
-    4. Step 1: perform the product action that implements «encryption-key to-device/event flow required by Element Call» using current owner `synara/src/app/plugins/call/CallWidgetDriver.ts`.
-    5. Start/stop embedded call/widget session; change room; logout; close window — confirm cleanup.
+    1. Boot integration harness against disposable Synapse with two clients, E2EE, and Element Call assets.
+    2. OUTBOUND: join call on Client A+B so Element Call exchanges keys; assert widget sendToDevice path exercises encryptToDeviceMessages+queueToDevice (or observe queueToDevice for clear types) for CallEncryptionKeysPrefix/call crypto types.
+    3. INBOUND: assert peer to-device is received on host ClientEvent.ToDeviceEvent, decrypted, and feedToDevice delivers into ClientWidgetApi.
+    4. ROOM EVENT: assert io.element.call.encryption_keys capability present; if widget emits room encryption_keys, sendEvent outbound and Event/feedEvent inbound paths are available.
+    5. CAPABILITIES: inspect getCallCapabilities for encryption_keys send/receive and CallEncryptionKeysPrefix to-device send/receive.
+    6. After cutover P10.5, preserve encrypt/queue to-device + feed inbound + encryption_keys event observables via product IPC; SC-082 alone / key-session closed claim without evidence / raw HTTP / dual-backend FAIL.
   - Assertions:
-    - Each clause is observable: «encryption-key to-device/event flow required by Element Call».
-    - State coordination remains through `synara/src/app/plugins/call/CallWidgetDriver.ts` (or its Rust/IPC successor after cutover), not ad-hoc dual writers.
-    - Behavior-relevant current JS method candidates exercised or replaced: getDeviceId, search, getDeviceId, searchUserDirectory (AST candidates; not type-proven receivers).
-    - Behavior-relevant listener candidates observed or replaced: on:MatrixRTCSessionManagerEvents.SessionStarted, on:MatrixRTCSessionManagerEvents.SessionEnded, off:MatrixRTCSessionManagerEvents.SessionStarted, off:MatrixRTCSessionManagerEvents.SessionEnded, on:MatrixRTCSessionEvent.MembershipsChanged, removeListener:MatrixRTCSessionEvent.MembershipsChanged.
-    - Rust mapping remains conservative: caps=[SC-082] gaps=[GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION]; compile-only blocked states are not treated as runtime pass.
-    - No new production matrix-js-sdk usage and no raw /\_matrix runtime HTTP unless dossier marks that exact behavior typed-sdk-request-required.
-    - Widget plumbing success is not recorded as full call parity if membership-write/key-session gaps remain.
+    - OUTBOUND: encrypted to-device from widget path uses CallWidgetDriver sendToDevice → encryptToDeviceMessages + queueToDevice (clear uses queueToDevice); not raw /\_matrix from renderer.
+    - INBOUND: ToDeviceEvent → decrypt → feedToDevice into widget; decryption failures not fed.
+    - CAPABILITIES: io.element.call.encryption_keys room send+receive and CallEncryptionKeysPrefix to-device send+receive present.
+    - ROOM EVENT: sendEvent/feedEvent path available for encryption_keys under capabilities.
+    - DISTINCTIONS: this FR ≠ 001/002/003/005/006/007 alone; ≠ getDeviceId/searchUserDirectory/widgetUrl.search alone.
+    - COORDINATION: through CallWidgetDriver/CallEmbed/utils (or Rust/IPC successor), not dual-backend.
+    - GATE: GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION key-session residual remains; product bridge ≠ native MatrixRTC key-session API closed.
+    - CUTOVER: P10.5 under GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION (+ SC-082 host residual); compile-only never product pass; no raw /\_matrix HTTP.
+    - No new production matrix-js-sdk usage and no raw /\_matrix runtime HTTP unless typed-sdk-request-required for that exact behavior.
   - does_not_currently_exist: `True`
 - **Manual**: `MA-FR-7.11-004`
 
@@ -9746,21 +9751,25 @@ Limited rejected-review correction (`p0.2-correct-49-fr-7.11-003-call-join-leave
 - Platforms: macOS, Linux
 - Preconditions:
   - Desktop app with Element Call / widget config for the build
-  - Room with MatrixRTC membership fixtures; two clients for join/leave
-  - CSP-enabled production-like shell
-  - State owner available: synara/src/app/plugins/call/CallWidgetDriver.ts
-  - UI/lifecycle: synara/src/app/plugins/call/CallEmbed.ts
-  - Current status baseline: partial
+  - E2EE-capable call room; two clients for key exchange
+  - Element Call embedded assets present
+  - State owners: CallWidgetDriver.ts (sendToDevice encrypt+queue / sendEvent), CallEmbed.ts (ToDeviceEvent→feedToDevice, Event→feedEvent), utils.ts (encryption_keys + CallEncryptionKeysPrefix)
+  - UI/lifecycle host: CallEmbed (widget-mediated; no dedicated key-session UI)
+  - Current status baseline: partial (widget bridge present; no native MatrixRTC key-session API)
 - Actions:
-  1. Launch Synara desktop on the target platform against disposable Synapse; use a clean or known fixture profile as required by «encryption-key to-device/event flow required by Element Call;».
-  2. Identify state owner `synara/src/app/plugins/call/CallWidgetDriver.ts` and open `synara/src/app/plugins/call/CallEmbed.ts`.
-  3. Action 1 — «encryption-key to-device/event flow required by Element Call»: perform the minimal user/system steps that trigger this clause (use linked files under current_production_files if the entry point is indirect).
-  4. Repeat critical path in an encrypted room / with a second device when the clause involves keys or verification.
-  5. Join call/widget, verify membership UI, leave/decline as applicable, switch rooms, and close window; confirm sessions clean up.
+  1. Launch Synara desktop on the target platform against disposable Synapse with a second client and E2EE call room.
+  2. Join Element Call on both clients so encryption-key / call to-device exchange is required.
+  3. OUTBOUND: confirm call proceeds with key exchange; host path uses CallWidgetDriver sendToDevice (encrypted encrypt+queue when required) rather than raw /\_matrix from renderer.
+  4. INBOUND: confirm peer key/call to-device is accepted by local Element Call (host feedToDevice after decrypt).
+  5. CAPABILITIES residual: encryption_keys room events and CallEncryptionKeysPrefix to-device are capability-allowed.
+  6. Post-cutover: same encrypt/queue + feed + encryption_keys observables without raw /\_matrix or dual-backend; do not claim native MatrixRTC key-session closed without evidence.
 - Expected:
-  - All clauses under «encryption-key to-device/event flow required by Element Call;» produce the user-visible or system-observable success criteria without error toasts unrelated to intentional negative tests.
-  - Clause 1 «encryption-key to-device/event flow required by Element Call» is satisfied on macOS, Linux with owner `synara/src/app/plugins/call/CallWidgetDriver.ts`.
-  - No unexpected raw /\_matrix traffic from the app renderer for this flow on the post-cutover build.
+  - OUTBOUND: widget-driven encrypted to-device (and/or clear queueToDevice) and optional encryption_keys room send via CallWidgetDriver.
+  - INBOUND: ToDeviceEvent decrypt + feedToDevice; room Event/feedEvent for encryption_keys when used.
+  - CAPABILITIES: io.element.call.encryption_keys + CallEncryptionKeysPrefix send/receive available to the widget.
+  - DISTINCTIONS: 001 display alone / 002 embed alone / 003 join-leave alone / 005 cleanup alone do not pass this FR.
+  - GATE: product bridge ≠ native MatrixRTC key-session API; GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION residual remains unless closed with evidence.
+  - Post-cutover: same observables; SC-082 alone never closes key session; no raw /\_matrix; no dual-backend.
 
 ### `MA-FR-7.11-005` (FR-7.11-005)
 
@@ -11986,22 +11995,25 @@ Limited rejected-review correction (`p0.2-correct-49-fr-7.11-003-call-join-leave
 
 ### `AT-FR-7.11-004-001`
 
-- 7.11/FR-7.11-004: exercise 'encryption-key to-device/event flow required by Element Call;' via owner `synara/src/app/plugins/call/CallWidgetDriver.ts` and UI `synara/src/app/plugins/call/CallEmbed.ts`, then confirm Rust/IPC cutover task `P10.5` preserves observable behavior without raw Matrix runtime HTTP.
-- target: None
+- Integration against disposable Synapse (two clients, E2EE call room + Element Call assets): (A) OUTBOUND encrypted to-device — sendToDevice encrypt+queue (or clear queue); (B) INBOUND — ToDeviceEvent → decrypt → feedToDevice; (C) CAPABILITIES — encryption_keys + CallEncryptionKeysPrefix; room sendEvent/feedEvent path; (D) DISTINCTIONS — not 001/002/003/005–007 alone; (E) GATE — native key-session residual fail-closed. Cutover P10.5 preserve encrypt/queue + feed + encryption_keys via Rust/IPC; SC-082 alone / compile-only / raw HTTP / dual-backend / key-session-closed claim FAIL.
+- target: CallWidgetDriver.sendToDevice (encrypt+queue / clear queue); sendEvent encryption_keys; CallEmbed onToDeviceEvent+feedToDevice; Event/Decrypted feedEvent; getCallCapabilities encryption_keys + CallEncryptionKeysPrefix; post-cutover P10.5
 - actions:
-  1. Boot the appropriate harness for level=integration-e2e against disposable Synapse (or iOS notes if any).
-  2. Establish fixtures required by the clause list: encryption-key to-device/event flow required by Element Call.
-  3. Open UI/lifecycle surface `synara/src/app/plugins/call/CallEmbed.ts` (or follow ui_entry_points_rationale if no dedicated UI).
-  4. Step 1: perform the product action that implements «encryption-key to-device/event flow required by Element Call» using current owner `synara/src/app/plugins/call/CallWidgetDriver.ts`.
-  5. Start/stop embedded call/widget session; change room; logout; close window — confirm cleanup.
+  1. Boot integration harness against disposable Synapse with two clients, E2EE, and Element Call assets.
+  2. OUTBOUND: join call on both clients; assert sendToDevice encrypt+queue (or clear queue) for CallEncryptionKeysPrefix/call crypto types.
+  3. INBOUND: assert ToDeviceEvent decrypt + feedToDevice into ClientWidgetApi.
+  4. ROOM EVENT: assert encryption_keys capability; sendEvent/feedEvent path available.
+  5. CAPABILITIES: inspect getCallCapabilities for encryption_keys + CallEncryptionKeysPrefix.
+  6. After cutover P10.5, repeat via product IPC; SC-082 alone / key-session closed claim without evidence / raw HTTP / dual-backend FAIL.
 - assertions:
-  - Each clause is observable: «encryption-key to-device/event flow required by Element Call».
-  - State coordination remains through `synara/src/app/plugins/call/CallWidgetDriver.ts` (or its Rust/IPC successor after cutover), not ad-hoc dual writers.
-  - Behavior-relevant current JS method candidates exercised or replaced: getDeviceId, search, getDeviceId, searchUserDirectory (AST candidates; not type-proven receivers).
-  - Behavior-relevant listener candidates observed or replaced: on:MatrixRTCSessionManagerEvents.SessionStarted, on:MatrixRTCSessionManagerEvents.SessionEnded, off:MatrixRTCSessionManagerEvents.SessionStarted, off:MatrixRTCSessionManagerEvents.SessionEnded, on:MatrixRTCSessionEvent.MembershipsChanged, removeListener:MatrixRTCSessionEvent.MembershipsChanged.
-  - Rust mapping remains conservative: caps=[SC-082] gaps=[GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION]; compile-only blocked states are not treated as runtime pass.
-  - No new production matrix-js-sdk usage and no raw /\_matrix runtime HTTP unless dossier marks that exact behavior typed-sdk-request-required.
-  - Widget plumbing success is not recorded as full call parity if membership-write/key-session gaps remain.
+  - OUTBOUND: sendToDevice → encryptToDeviceMessages + queueToDevice (clear uses queueToDevice); not raw /\_matrix from renderer.
+  - INBOUND: ToDeviceEvent → decrypt → feedToDevice; decryption failures not fed.
+  - CAPABILITIES: encryption_keys room send+receive and CallEncryptionKeysPrefix to-device send+receive present.
+  - ROOM EVENT: sendEvent/feedEvent path available for encryption_keys under capabilities.
+  - DISTINCTIONS: this FR ≠ 001/002/003/005/006/007 alone; ≠ getDeviceId/searchUserDirectory alone.
+  - COORDINATION: through CallWidgetDriver/CallEmbed/utils or Rust/IPC successor, not dual-backend.
+  - GATE: GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION residual remains; product bridge ≠ native key-session closed.
+  - CUTOVER: P10.5 under GAP key-session residual (+ SC-082 host residual); compile-only never product pass; no raw /\_matrix HTTP.
+  - No new production matrix-js-sdk usage and no raw /\_matrix runtime HTTP unless typed-sdk-request-required for that exact behavior.
 
 ### `AT-FR-7.11-005-001`
 
@@ -12249,8 +12261,8 @@ Limited rejected-review correction (`p0.2-correct-49-fr-7.11-003-call-join-leave
 | `synara/src/app/hooks/useAccountDataCallback.ts`                               | `hook`             | `shared-matrix-infrastructure` |   2 |   0 | `FR-7.1-002`,`FR-7.2-001`,`FR-7.6-001`,`FR-7.3-002`,`FR-7.2-002`,`FR-7.2-006`,`FR-7.3-001`,`FR-7.6-004`,`FR-7.1-008`,`FR-7.9-002`                                                                                                                      |
 | `synara/src/app/hooks/useAuthFlows.ts`                                         | `hook`             | `requirement-linked`           |   0 |   0 | `FR-7.1-005`                                                                                                                                                                                                                              |
 | `synara/src/app/hooks/useAuthMetadata.ts`                                      | `hook`             | `requirement-linked`           |   0 |   0 | `FR-7.1-013`                                                                                                                                                                                                                              |
-| `synara/src/app/hooks/useCall.ts`                                              | `hook`             | `requirement-linked`           |   8 |   0 | `FR-7.11-001`,`FR-7.11-003`,`FR-7.11-004`,`FR-7.11-005`                                                                                                                                                                                   |
-| `synara/src/app/hooks/useCallEmbed.ts`                                         | `hook`             | `requirement-linked`           |   1 |   0 | `FR-7.11-002`,`FR-7.11-003`,`FR-7.11-004`,`FR-7.11-005`,`FR-7.11-006`,`FR-7.11-007`,`FR-7.11-008`                                                                                                                                         |
+| `synara/src/app/hooks/useCall.ts`                                              | `hook`             | `requirement-linked`           |   8 |   0 | `FR-7.11-001`,`FR-7.11-003`,`FR-7.11-005`                                                                                                                                                                                                |
+| `synara/src/app/hooks/useCallEmbed.ts`                                         | `hook`             | `requirement-linked`           |   1 |   0 | `FR-7.11-002`,`FR-7.11-003`,`FR-7.11-005`,`FR-7.11-006`,`FR-7.11-007`,`FR-7.11-008`                                                                                                                                                      |
 | `synara/src/app/hooks/useCapabilities.ts`                                      | `hook`             | `requirement-linked`           |   0 |   0 | `FR-7.1-013`                                                                                                                                                                                                                              |
 | `synara/src/app/hooks/useCommands.ts`                                          | `hook`             | `requirement-linked`           |   0 |  16 | `FR-7.4-010`,`FR-7.6-001`                                                                                                                                                                                                                 |
 | `synara/src/app/hooks/useDeviceList.ts`                                        | `hook`             | `requirement-linked`           |   2 |   3 | `FR-7.9-003`,`FR-7.9-004`,`FR-7.9-010`                                                                                                                                                                                                                 |
@@ -12323,7 +12335,7 @@ Limited rejected-review correction (`p0.2-correct-49-fr-7.11-003-call-join-leave
 | `synara/src/app/pages/client/syncStatusCopy.ts`                                | `page`             | `requirement-linked`           |   0 |   0 | `FR-7.2-001`                                                                                                                                                                                                                              |
 | `synara/src/app/plugins/call/CallEmbed.ts`                                     | `plugin`           | `requirement-linked`           |   3 |   8 | `FR-7.11-002`,`FR-7.11-003`,`FR-7.11-004`,`FR-7.11-005`,`FR-7.11-006`,`FR-7.11-007`,`FR-7.11-008`                                                                                                                                         |
 | `synara/src/app/plugins/call/CallWidgetDriver.ts`                              | `plugin`           | `requirement-linked`           |   5 |   0 | `FR-7.3-007`,`FR-7.4-005`,`FR-7.4-007`,`FR-7.5-001`,`FR-7.5-003`,`FR-7.5-004`,`FR-7.5-008`,`FR-7.5-011`,`FR-7.6-006`,`FR-7.10-005`,`FR-7.11-002`,`FR-7.11-003`,`FR-7.11-004`,`FR-7.11-006`,`FR-7.11-007`,`FR-7.11-008`                    |
-| `synara/src/app/plugins/call/utils.ts`                                         | `plugin`           | `requirement-linked`           |   0 |   0 | `FR-7.11-002`,`FR-7.11-003`,`FR-7.11-006`                                                                                                                                                                                                 |
+| `synara/src/app/plugins/call/utils.ts`                                         | `plugin`           | `requirement-linked`           |   0 |   0 | `FR-7.11-002`,`FR-7.11-003`,`FR-7.11-004`,`FR-7.11-006`                                                                                                                                                                                    |
 | `synara/src/app/plugins/custom-emoji/ImagePack.ts`                             | `plugin`           | `requirement-linked`           |   0 |   0 | `FR-7.7-005`,`FR-7.7-008`,`FR-7.7-009`                                                                                                                                                                                                    |
 | `synara/src/app/plugins/custom-emoji/utils.ts`                                 | `plugin`           | `requirement-linked`           |   0 |   2 | `FR-7.7-005`,`FR-7.7-008`                                                                                                                                                                                                                 |
 | `synara/src/app/plugins/react-custom-html-parser.tsx`                          | `plugin`           | `requirement-linked`           |   0 |   4 | `FR-7.7-008`                                                                                                                                                                                                                              |
@@ -12380,8 +12392,7 @@ Limited rejected-review correction (`p0.2-correct-49-fr-7.11-003-call-join-leave
 - `FR-7.11-001` gap-matrixrtc-membership-presence-list-projection: FR-7.11-001 product display is implemented via matrix-js-sdk MatrixRTCSession.memberships. Cutover P10.4 (+P11.3) under GAP-MATRIXRTC-MEMBERSHIP-PRESENCE: Room::has_active_room_call is boolean presence only (E1/E2; E3–E5 missing) — not full membership list. Product must project list equivalent; SC-082 is NOT primary for this FR. Compile-only / SC-082 alone / raw HTTP / dual-backend FAIL.
 - `FR-7.11-002` experimental-widgets-sc082-host-postmessage-not-call-parity: FR-7.11-002 product embed is implemented via matrix-js-sdk + matrix-widget-api ClientWidgetApi + CallEmbed/CallWidgetDriver + embedded Element Call assets. Cutover P10.2/P10.3 (+P10.1) under SC-082 experimental-widgets + GAP-MATRIXRTC-WIDGET-CAPABILITY-PLUMBING: E1/E2 only; element_call_host_and_postmessage + experimental_feature_risk_gate missing. Widget plumbing ≠ membership write/key session/full call parity. Compile-only / SC-082 alone without host / FOCI alone / raw HTTP / dual-backend FAIL.
 - `FR-7.11-003` product-join-leave-via-embed-hangup-partial-matrixrtc-write-upstream: FR-7.11-003 product path is PARTIAL: join via useCallStart/createCallEmbed + JoinCall; leave via hangup + End UI; decline capability-only; member status via useCallJoined + MembershipsChanged. No high-level MatrixRTCSession join/leave write APIs on product; widget-driven m.call.member via driver. Cutover P10.5 (+P10.4) under GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION + SC-082 + GAP-MATRIXRTC-MEMBERSHIP-PRESENCE residual. Compile-only / SC-082 alone / embed alone / raw HTTP / dual-backend / full write-closed claim FAIL.
-- `FR-7.11-004` upstream-change-required: FR-7.11-004 depends on upstream-change-required gap(s): ['GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION']
-- `FR-7.11-004` experimental-widgets-and-call-parity: Call/widget path depends on experimental-widgets and MatrixRTC gaps; widget plumbing ≠ call parity.
+- `FR-7.11-004` product-widget-to-device-key-bridge-partial-matrixrtc-key-session-upstream: FR-7.11-004 product path is PARTIAL: Element Call encryption-key to-device/event FLOW is widget-mediated — outbound CallWidgetDriver.sendToDevice (getCrypto+encryptToDeviceMessages+queueToDevice or clear queueToDevice) and sendEvent for io.element.call.encryption_keys; inbound CallEmbed ClientEvent.ToDeviceEvent → decrypt → feedToDevice and Event/Decrypted → feedEvent; capabilities grant encryption_keys + CallEncryptionKeysPrefix. Synara does not implement a high-level native MatrixRTC encryption-key session API. Cutover P10.5 under GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION (primary residual) + SC-082 host residual only. Compile-only / SC-082 alone / embed alone / raw HTTP / dual-backend / claiming native MatrixRTC key-session closed FAIL.
 - `FR-7.11-005` experimental-widgets-and-call-parity: Call/widget path depends on experimental-widgets and MatrixRTC gaps; widget plumbing ≠ call parity.
 - `FR-7.11-006` experimental-widgets-and-call-parity: Call/widget path depends on experimental-widgets and MatrixRTC gaps; widget plumbing ≠ call parity.
 - `FR-7.11-007` experimental-widgets-and-call-parity: Call/widget path depends on experimental-widgets and MatrixRTC gaps; widget plumbing ≠ call parity.
