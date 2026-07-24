@@ -59814,47 +59814,114 @@
       "current_status": "implemented",
       "current_production_files": [
         {
-          "path": "synara/src/app/components/DeviceVerification.tsx",
-          "bucket": "component",
-          "categories": [
-            "client_methods",
-            "crypto_verification_recovery",
-            "uia_auth"
+          "path": "synara/src/app/hooks/useCrossSigning.ts",
+          "bucket": "hook",
+          "categories": ["crypto_verification_recovery"],
+          "symbols_or_candidates": ["useCrossSigningActive"],
+          "line_refs": [
+            {
+              "symbol": "useCrossSigningActive",
+              "line": 4,
+              "kind": "product_status_owner",
+              "relevance_reason": "useCrossSigningActive returns !!m.cross_signing.master account data content — product cross-signing active flag (not CryptoApi.getCrossSigningStatus)."
+            }
           ],
+          "model_coupling": [],
+          "behavior_relevant_method_candidates": [],
+          "behavior_relevant_listener_candidates": [],
+          "symbols_or_candidates_note": "Primary product status owner. L4-8: useAccountData(AccountDataEvent.CrossSigningMaster) then !!content. File does not import matrix-js-sdk directly (not in 220 P0.1 production-import ledger). No getCrossSigningStatus call."
+        },
+        {
+          "path": "synara/src/app/hooks/useAccountDataCallback.ts",
+          "bucket": "hook",
+          "categories": ["client_events", "event_emitters_listeners"],
           "symbols_or_candidates": [
-            "getCrypto",
-            "getVerificationRequestsToDeviceInProgress"
+            "on:ClientEvent.AccountData",
+            "removeListener:ClientEvent.AccountData"
           ],
           "line_refs": [
             {
-              "symbol": "getCrypto",
-              "line": 395,
-              "kind": "method_candidate"
+              "symbol": "on:ClientEvent.AccountData",
+              "line": 9,
+              "kind": "listener_candidate",
+              "relevance_reason": "Registers ClientEvent.AccountData so useCrossSigningActive refreshes when m.cross_signing.master is published after bootstrap."
             },
             {
-              "symbol": "getVerificationRequestsToDeviceInProgress",
-              "line": 395,
-              "kind": "method_candidate"
+              "symbol": "removeListener:ClientEvent.AccountData",
+              "line": 11,
+              "kind": "listener_candidate",
+              "relevance_reason": "Cleanup removes AccountData listener on unmount."
             }
           ],
-          "model_coupling": ["VerificationRequest"],
+          "model_coupling": ["MatrixClient"],
+          "behavior_relevant_method_candidates": [],
+          "behavior_relevant_listener_candidates": [
+            {
+              "event": "ClientEvent.AccountData",
+              "method": "on",
+              "line": 9,
+              "category": "client_events",
+              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
+              "relevance_reason": "Feeds useAccountData → useCrossSigningActive when cross-signing master account data arrives/changes."
+            },
+            {
+              "event": "ClientEvent.AccountData",
+              "method": "removeListener",
+              "line": 11,
+              "category": "client_events",
+              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
+              "relevance_reason": "Listener cleanup for AccountData-driven cross-signing active status."
+            }
+          ],
+          "symbols_or_candidates_note": "Shared account-data plumbing used by useCrossSigningActive. getAccountData seed lives in useAccountData.ts L7 (local hook)."
+        },
+        {
+          "path": "synara/src/app/utils/matrix-crypto.ts",
+          "bucket": "utility",
+          "categories": ["crypto_verification_recovery"],
+          "symbols_or_candidates": ["getDeviceVerificationStatus"],
+          "line_refs": [
+            {
+              "symbol": "getDeviceVerificationStatus",
+              "line": 8,
+              "kind": "method_candidate",
+              "relevance_reason": "verifiedDevice awaits api.getDeviceVerificationStatus then returns status.crossSigningVerified — device-level cross-signing verification status."
+            }
+          ],
+          "model_coupling": ["CryptoApi"],
           "behavior_relevant_method_candidates": [
             {
-              "name": "getCrypto",
-              "line": 395,
+              "name": "getDeviceVerificationStatus",
+              "line": 8,
               "category": "crypto_verification_recovery",
               "kind": "property_call_candidate",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            },
-            {
-              "name": "getVerificationRequestsToDeviceInProgress",
-              "line": 395,
-              "category": "crypto_verification_recovery",
-              "kind": "property_call_candidate",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+              "confidence": "Source-inspected product call site (exact-line); may be absent from P0.1 AST method inventory.",
+              "relevance_reason": "verifiedDevice L8-12: getDeviceVerificationStatus; null status => null (Unsupported upstream); else status.crossSigningVerified boolean."
             }
           ],
-          "behavior_relevant_listener_candidates": []
+          "behavior_relevant_listener_candidates": [],
+          "symbols_or_candidates_note": "Device-level cross-signing verification status helper. P0.1 AST methodCandidates empty; getDeviceVerificationStatus retained from exact-line source inspection."
+        },
+        {
+          "path": "synara/src/app/hooks/useDeviceVerificationStatus.ts",
+          "bucket": "hook",
+          "categories": ["crypto_verification_recovery"],
+          "symbols_or_candidates": [
+            "useDeviceVerificationStatus",
+            "useDeviceVerificationDetect"
+          ],
+          "line_refs": [
+            {
+              "symbol": "useDeviceVerificationDetect",
+              "line": 16,
+              "kind": "product_status_hook",
+              "relevance_reason": "Maps verifiedDevice(crypto,userId,deviceId) to VerificationStatus Verified/Unverified/Unsupported/Unknown; refreshes on DevicesUpdated."
+            }
+          ],
+          "model_coupling": ["CryptoApi"],
+          "behavior_relevant_method_candidates": [],
+          "behavior_relevant_listener_candidates": [],
+          "symbols_or_candidates_note": "Projects matrix-crypto verifiedDevice (crossSigningVerified) into VerificationStatus for Devices badge, UnverifiedTab, LogoutDialog. Refresh uses useDeviceListChange (DevicesUpdated) — device-list ownership remains FR-7.9-003."
         },
         {
           "path": "synara/src/app/components/DeviceVerificationSetup.tsx",
@@ -59875,27 +59942,32 @@
             {
               "symbol": "getCrypto",
               "line": 139,
-              "kind": "method_candidate"
+              "kind": "method_candidate",
+              "relevance_reason": "Setup path requires crypto before secret storage + cross-signing bootstrap."
             },
             {
               "symbol": "createRecoveryKeyFromPassphrase",
               "line": 142,
-              "kind": "method_candidate"
+              "kind": "method_candidate",
+              "relevance_reason": "Recovery key material created before bootstrapSecretStorage/bootstrapCrossSigning."
             },
             {
               "symbol": "bootstrapSecretStorage",
               "line": 148,
-              "kind": "method_candidate"
+              "kind": "method_candidate",
+              "relevance_reason": "setupNewSecretStorage:true before bootstrapCrossSigning in Enable path."
             },
             {
               "symbol": "bootstrapCrossSigning",
               "line": 153,
-              "kind": "method_candidate"
+              "kind": "method_candidate",
+              "relevance_reason": "setupNewCrossSigning:true + authUploadDeviceSigningKeys establishes cross-signing (status inactive→active)."
             },
             {
               "symbol": "resetKeyBackup",
               "line": 158,
-              "kind": "method_candidate"
+              "kind": "method_candidate",
+              "relevance_reason": "Completes Enable setup after new cross-signing."
             }
           ],
           "model_coupling": ["MatrixError"],
@@ -59905,49 +59977,44 @@
               "line": 139,
               "category": "crypto_verification_recovery",
               "kind": "property_call_candidate",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
+              "relevance_reason": "SetupVerification requires mx.getCrypto() before bootstrap pipeline."
             },
             {
               "name": "createRecoveryKeyFromPassphrase",
               "line": 142,
               "category": "crypto_verification_recovery",
               "kind": "property_call_candidate",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
+              "relevance_reason": "Recovery key for secret storage that backs cross-signing recovery."
             },
             {
               "name": "bootstrapSecretStorage",
               "line": 148,
               "category": "crypto_verification_recovery",
               "kind": "property_call_candidate",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
+              "relevance_reason": "bootstrapSecretStorage({setupNewSecretStorage:true}) immediately before bootstrapCrossSigning on Enable."
             },
             {
               "name": "bootstrapCrossSigning",
               "line": 153,
               "category": "crypto_verification_recovery",
               "kind": "property_call_candidate",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
+              "relevance_reason": "bootstrapCrossSigning({authUploadDeviceSigningKeys, setupNewCrossSigning:true}) is the product enable transition for cross-signing status."
             },
             {
               "name": "resetKeyBackup",
               "line": 158,
               "category": "crypto_verification_recovery",
               "kind": "property_call_candidate",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
+              "relevance_reason": "resetKeyBackup after new cross-signing in SetupVerification pipeline."
             }
           ],
-          "behavior_relevant_listener_candidates": []
-        },
-        {
-          "path": "synara/src/app/components/DeviceVerificationStatus.ts",
-          "bucket": "component",
-          "categories": ["crypto_verification_recovery"],
-          "symbols_or_candidates": [],
-          "line_refs": [],
-          "model_coupling": ["CryptoApi"],
-          "behavior_relevant_method_candidates": [],
           "behavior_relevant_listener_candidates": [],
-          "symbols_or_candidates_note": "No requirement-relevant method/listener candidates filtered from this file's P0.1 AST hits; file remains linked for structural/model ownership. See all_candidates_in_linked_files on the requirement."
+          "symbols_or_candidates_note": "Enable + in-app Reset re-setup owner. DeviceVerificationReset reuses SetupVerification after permanent-reset warning. UIA authUploadDeviceSigningKeys L103-134 gates device-signing keys upload during bootstrapCrossSigning."
         },
         {
           "path": "synara/src/app/features/settings/devices/Verification.tsx",
@@ -59958,146 +60025,210 @@
             "uia_auth"
           ],
           "symbols_or_candidates": [
-            "requestOwnUserVerification",
-            "requestDeviceVerification"
+            "EnableVerification",
+            "VerificationStatusBadge",
+            "DeviceVerificationOptions"
           ],
           "line_refs": [
             {
-              "symbol": "requestOwnUserVerification",
-              "line": 124,
-              "kind": "method_candidate"
+              "symbol": "EnableVerification",
+              "line": 276,
+              "kind": "product_ui",
+              "relevance_reason": "Enable button opens DeviceVerificationSetup when cross-signing inactive (visible prop from Devices)."
             },
             {
-              "symbol": "requestDeviceVerification",
-              "line": 230,
-              "kind": "method_candidate"
+              "symbol": "VerificationStatusBadge",
+              "line": 44,
+              "kind": "product_ui",
+              "relevance_reason": "Renders Spinner/Unverified/N Unverified/Verified from VerificationStatus + otherUnverifiedCount when cross-signing active."
+            },
+            {
+              "symbol": "DeviceVerificationOptions",
+              "line": 309,
+              "kind": "product_ui",
+              "relevance_reason": "Reset menu: account_management_uri action org.matrix.cross_signing_reset or DeviceVerificationReset re-setup."
             }
           ],
           "model_coupling": ["CryptoApi", "VerificationRequest"],
-          "behavior_relevant_method_candidates": [
-            {
-              "name": "requestOwnUserVerification",
-              "line": 124,
-              "category": "crypto_verification_recovery",
-              "kind": "property_call_candidate",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            },
-            {
-              "name": "requestDeviceVerification",
-              "line": 230,
-              "category": "crypto_verification_recovery",
-              "kind": "property_call_candidate",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            }
-          ],
-          "behavior_relevant_listener_candidates": []
+          "behavior_relevant_method_candidates": [],
+          "behavior_relevant_listener_candidates": [],
+          "symbols_or_candidates_note": "UI chrome for cross-signing status: Enable when inactive; badge+options when active; Reset path. requestOwnUserVerification L124 and requestDeviceVerification L230 are verification actions (FR-7.9-004/005) — excluded from behavior_relevant for this FR."
         },
         {
-          "path": "synara/src/app/hooks/useDeviceVerificationStatus.ts",
-          "bucket": "hook",
+          "path": "synara/src/app/features/settings/devices/Devices.tsx",
+          "bucket": "feature",
+          "categories": ["crypto_verification_recovery"],
+          "symbols_or_candidates": [
+            "useCrossSigningActive",
+            "useDeviceVerificationStatus"
+          ],
+          "line_refs": [
+            {
+              "symbol": "useCrossSigningActive",
+              "line": 45,
+              "kind": "product_ui",
+              "relevance_reason": "Primary Settings Devices security tile gates Enable vs badge/options and verify/other-device visibility on crossSigningActive."
+            }
+          ],
+          "model_coupling": [],
+          "behavior_relevant_method_candidates": [],
+          "behavior_relevant_listener_candidates": [],
+          "symbols_or_candidates_note": "Primary UI surface. L45-109 Security/Device Verification tile; L131-155 current/other device actions gated on active + VerificationStatus. No direct matrix-js-sdk import (not in 220 P0.1 production-import ledger)."
+        },
+        {
+          "path": "synara/src/app/pages/client/sidebar/UnverifiedTab.tsx",
+          "bucket": "page",
+          "categories": ["crypto_verification_recovery"],
+          "symbols_or_candidates": ["useCrossSigningActive"],
+          "line_refs": [
+            {
+              "symbol": "useCrossSigningActive",
+              "line": 89,
+              "kind": "product_ui",
+              "relevance_reason": "UnverifiedTab returns null when !crossSigningActive — unverified-device banner requires cross-signing set up."
+            }
+          ],
+          "model_coupling": [],
+          "behavior_relevant_method_candidates": [],
+          "behavior_relevant_listener_candidates": [],
+          "symbols_or_candidates_note": "Sidebar consumer of cross-signing active status. Not a P0.1 production-import row."
+        },
+        {
+          "path": "synara/src/app/components/LogoutDialog.tsx",
+          "bucket": "component",
+          "categories": ["crypto_verification_recovery"],
+          "symbols_or_candidates": [
+            "useCrossSigningActive",
+            "useDeviceVerificationStatus"
+          ],
+          "line_refs": [
+            {
+              "symbol": "useCrossSigningActive",
+              "line": 20,
+              "kind": "product_ui",
+              "relevance_reason": "Logout warning branches on crossSigningActive vs Unverified when encrypted rooms exist."
+            }
+          ],
+          "model_coupling": [],
+          "behavior_relevant_method_candidates": [],
+          "behavior_relevant_listener_candidates": [],
+          "symbols_or_candidates_note": "Logout consumer of cross-signing active + device verification status. Not a P0.1 production-import row."
+        },
+        {
+          "path": "synara/src/app/components/DeviceVerificationStatus.ts",
+          "bucket": "component",
           "categories": ["crypto_verification_recovery"],
           "symbols_or_candidates": [],
           "line_refs": [],
           "model_coupling": ["CryptoApi"],
           "behavior_relevant_method_candidates": [],
           "behavior_relevant_listener_candidates": [],
-          "symbols_or_candidates_note": "No requirement-relevant method/listener candidates filtered from this file's P0.1 AST hits; file remains linked for structural/model ownership. See all_candidates_in_linked_files on the requirement."
+          "symbols_or_candidates_note": "Thin render-prop wrapper around useDeviceVerificationStatus for OtherDevices tiles. Structural link only; status logic lives in useDeviceVerificationStatus + matrix-crypto."
         }
       ],
-      "ui_entry_points": ["synara/src/app/components/DeviceVerification.tsx"],
+      "ui_entry_points": [
+        "synara/src/app/features/settings/devices/Devices.tsx",
+        "synara/src/app/pages/client/sidebar/UnverifiedTab.tsx",
+        "synara/src/app/components/LogoutDialog.tsx"
+      ],
+      "ui_entry_points_rationale": "Devices.tsx is the Settings → Devices security surface that gates Enable vs VerificationStatusBadge/options on useCrossSigningActive. UnverifiedTab is the sidebar banner gated on active cross-signing. LogoutDialog warns based on active + device verification when encrypted rooms exist. DeviceVerification.tsx is SAS ceremony UI (FR-7.9-004/005), not the cross-signing status owner — removed as primary UI.",
       "state_owners": [
         {
-          "path": "synara/src/client/initMatrix.ts",
-          "ownership_evidence": "Identified as coordination/state module for this behavior via path role (state/client/util service) and P0.1 categories/candidates; not merely a presentational component."
+          "path": "synara/src/app/hooks/useCrossSigning.ts",
+          "ownership_evidence": "Owns useCrossSigningActive: product cross-signing active boolean from m.cross_signing.master account data content presence."
+        },
+        {
+          "path": "synara/src/app/utils/matrix-crypto.ts",
+          "ownership_evidence": "Owns verifiedDevice: getDeviceVerificationStatus → crossSigningVerified device-level cross-signing verification status."
+        },
+        {
+          "path": "synara/src/app/components/DeviceVerificationSetup.tsx",
+          "ownership_evidence": "Owns Enable/Reset setup pipeline bootstrapCrossSigning(setupNewCrossSigning:true) that transitions status inactive→active."
         }
       ],
       "current_js_sdk": {
         "behavior_relevant_method_candidates": [
           {
-            "path": "synara/src/app/components/DeviceVerification.tsx",
-            "name": "getCrypto",
-            "line": 395,
+            "path": "synara/src/app/utils/matrix-crypto.ts",
+            "name": "getDeviceVerificationStatus",
+            "line": 8,
             "category": "crypto_verification_recovery",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-          },
-          {
-            "path": "synara/src/app/components/DeviceVerification.tsx",
-            "name": "getVerificationRequestsToDeviceInProgress",
-            "line": 395,
-            "category": "crypto_verification_recovery",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+            "kind": "property_call_candidate",
+            "confidence": "Source-inspected product call site (exact-line); may be absent from P0.1 AST method inventory.",
+            "relevance_reason": "verifiedDevice reads status.crossSigningVerified for device cross-signing verification status."
           },
           {
             "path": "synara/src/app/components/DeviceVerificationSetup.tsx",
             "name": "getCrypto",
             "line": 139,
             "category": "crypto_verification_recovery",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+            "kind": "property_call_candidate",
+            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
+            "relevance_reason": "Setup requires crypto before bootstrapCrossSigning."
           },
           {
             "path": "synara/src/app/components/DeviceVerificationSetup.tsx",
             "name": "createRecoveryKeyFromPassphrase",
             "line": 142,
             "category": "crypto_verification_recovery",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+            "kind": "property_call_candidate",
+            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
+            "relevance_reason": "Recovery key created in Enable pipeline before secret storage + cross-signing bootstrap."
           },
           {
             "path": "synara/src/app/components/DeviceVerificationSetup.tsx",
             "name": "bootstrapSecretStorage",
             "line": 148,
             "category": "crypto_verification_recovery",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+            "kind": "property_call_candidate",
+            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
+            "relevance_reason": "setupNewSecretStorage before bootstrapCrossSigning on Enable."
           },
           {
             "path": "synara/src/app/components/DeviceVerificationSetup.tsx",
             "name": "bootstrapCrossSigning",
             "line": 153,
             "category": "crypto_verification_recovery",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+            "kind": "property_call_candidate",
+            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
+            "relevance_reason": "setupNewCrossSigning:true is the product enable transition for cross-signing status."
           },
           {
             "path": "synara/src/app/components/DeviceVerificationSetup.tsx",
             "name": "resetKeyBackup",
             "line": 158,
             "category": "crypto_verification_recovery",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-          },
-          {
-            "path": "synara/src/app/features/settings/devices/Verification.tsx",
-            "name": "requestOwnUserVerification",
-            "line": 124,
-            "category": "crypto_verification_recovery",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-          },
-          {
-            "path": "synara/src/app/features/settings/devices/Verification.tsx",
-            "name": "requestDeviceVerification",
-            "line": 230,
-            "category": "crypto_verification_recovery",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+            "kind": "property_call_candidate",
+            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
+            "relevance_reason": "Completes Enable setup after new cross-signing."
           }
         ],
-        "behavior_relevant_listener_candidates": [],
+        "behavior_relevant_listener_candidates": [
+          {
+            "path": "synara/src/app/hooks/useAccountDataCallback.ts",
+            "event": "ClientEvent.AccountData",
+            "method": "on",
+            "line": 9,
+            "category": "client_events",
+            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
+            "relevance_reason": "AccountData drives useCrossSigningActive refresh when m.cross_signing.master is published."
+          },
+          {
+            "path": "synara/src/app/hooks/useAccountDataCallback.ts",
+            "event": "ClientEvent.AccountData",
+            "method": "removeListener",
+            "line": 11,
+            "category": "client_events",
+            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
+            "relevance_reason": "Cleanup for AccountData-driven active status."
+          }
+        ],
+        "behavior_relevance_policy": "Exact-line source inspection: retain active-status (account data), device crossSigningVerified status, and bootstrapCrossSigning enable/reset pipeline. Exclude SAS ceremony DeviceVerification.tsx and requestOwnUserVerification/requestDeviceVerification/getVerificationRequestsToDeviceInProgress (FR-7.9-004/005). Exclude initMatrix as status owner. ManualVerification bootstrapCrossSigning documented in notes (file not P0.1 import row).",
         "all_candidates_in_linked_files": {
-          "method_count": 11,
-          "listener_count": 0,
-          "note": "Unfiltered P0.1 AST candidates across linked production import files. Do not treat these as proven APIs for this requirement; use behavior_relevant_* fields.",
+          "method_count": 8,
+          "listener_count": 2,
+          "note": "Unfiltered P0.1 AST candidates across linked production-import files only. Product-only paths useCrossSigning/Devices/UnverifiedTab/LogoutDialog may add zero AST methods. Do not treat samples as proven APIs; use behavior_relevant_* fields.",
           "methods_sample": [
-            {
-              "path": "synara/src/app/components/DeviceVerification.tsx",
-              "name": "getCrypto",
-              "line": 395
-            },
-            {
-              "path": "synara/src/app/components/DeviceVerification.tsx",
-              "name": "getSafeUserId",
-              "line": 395
-            },
-            {
-              "path": "synara/src/app/components/DeviceVerification.tsx",
-              "name": "getVerificationRequestsToDeviceInProgress",
-              "line": 395
-            },
             {
               "path": "synara/src/app/components/DeviceVerificationSetup.tsx",
               "name": "getCrypto",
@@ -60139,34 +60270,43 @@
               "line": 230
             }
           ],
-          "listeners_sample": []
+          "listeners_sample": [
+            {
+              "path": "synara/src/app/hooks/useAccountDataCallback.ts",
+              "event": "ClientEvent.AccountData",
+              "method": "on",
+              "line": 9
+            },
+            {
+              "path": "synara/src/app/hooks/useAccountDataCallback.ts",
+              "event": "ClientEvent.AccountData",
+              "method": "removeListener",
+              "line": 11
+            }
+          ]
         },
-        "models": ["CryptoApi", "MatrixError", "VerificationRequest"],
+        "models": [
+          "CryptoApi",
+          "MatrixClient",
+          "MatrixError",
+          "VerificationRequest"
+        ],
         "network_routes": [],
         "deep_imports": [
           {
-            "path": "synara/src/app/components/DeviceVerification.tsx",
+            "path": "synara/src/app/utils/matrix-crypto.ts",
             "module": "matrix-js-sdk/lib/crypto-api",
             "line": 1,
-            "named_imports": [
-              "ShowSasCallbacks",
-              "VerificationPhase",
-              "VerificationRequest",
-              "Verifier"
-            ],
+            "named_imports": ["CryptoApi"],
             "is_type_only": false,
-            "linked_requirement_ids": [
-              "FR-7.9-002",
-              "FR-7.9-004",
-              "FR-7.9-005"
-            ],
+            "linked_requirement_ids": ["FR-7.9-002", "FR-7.9-008"],
             "cutover_disposition": "replace-deep-js-sdk-import-with-synara-dto-or-rust-projection"
           },
           {
-            "path": "synara/src/app/components/DeviceVerification.tsx",
-            "module": "matrix-js-sdk/lib/types",
-            "line": 8,
-            "named_imports": ["VerificationMethod"],
+            "path": "synara/src/app/hooks/useDeviceVerificationStatus.ts",
+            "module": "matrix-js-sdk/lib/crypto-api",
+            "line": 2,
+            "named_imports": ["CryptoApi"],
             "is_type_only": false,
             "linked_requirement_ids": [
               "FR-7.9-002",
@@ -60201,52 +60341,37 @@
               "FR-7.9-005"
             ],
             "cutover_disposition": "replace-deep-js-sdk-import-with-synara-dto-or-rust-projection"
-          },
-          {
-            "path": "synara/src/app/hooks/useDeviceVerificationStatus.ts",
-            "module": "matrix-js-sdk/lib/crypto-api",
-            "line": 2,
-            "named_imports": ["CryptoApi"],
-            "is_type_only": false,
-            "linked_requirement_ids": [
-              "FR-7.9-002",
-              "FR-7.9-004",
-              "FR-7.9-005"
-            ],
-            "cutover_disposition": "replace-deep-js-sdk-import-with-synara-dto-or-rust-projection"
           }
         ],
         "method_candidates": [
-          "getCrypto",
-          "getVerificationRequestsToDeviceInProgress",
+          "getDeviceVerificationStatus",
           "getCrypto",
           "createRecoveryKeyFromPassphrase",
           "bootstrapSecretStorage",
           "bootstrapCrossSigning",
-          "resetKeyBackup",
-          "requestOwnUserVerification",
-          "requestDeviceVerification"
+          "resetKeyBackup"
         ],
-        "listener_events": []
+        "listener_events": ["ClientEvent.AccountData"]
       },
       "current_behavior_and_limits": {
-        "summary": "Current desktop implements this via 5 production matrix-js-sdk-related file(s); status=implemented.",
-        "notes": null,
-        "limits": "P0.1 method candidates are AST name hits, not type-checked receiver proofs."
+        "summary": "Current desktop implements cross-signing status as: (a) active flag useCrossSigningActive via account data m.cross_signing.master presence (not JS getCrossSigningStatus); (b) device crossSigningVerified via getDeviceVerificationStatus for Verified/Unverified/Unsupported badges; (c) Settings Devices Enable vs status UI, UnverifiedTab banner, LogoutDialog warnings gated on active; (d) bootstrapCrossSigning establish/reset paths. status=implemented.",
+        "notes": "Evidence (conservative): (1) Cross-signing ACTIVE flag is product-local, not JS CryptoApi.getCrossSigningStatus: useCrossSigning.ts useCrossSigningActive L4-8 reads useAccountData(AccountDataEvent.CrossSigningMaster='m.cross_signing.master') and returns !!content — presence of master secret account data means cross-signing is set up. accountData.ts L19-21 also names m.cross_signing.self / m.cross_signing.user; product active-gate only checks master. (2) Account-data observation: useAccountData.ts L5-21 seeds mx.getAccountData(eventType) L7 and refreshes via useAccountDataCallback on ClientEvent.AccountData when type matches; useAccountDataCallback.ts L9-12 on/removeListener ClientEvent.AccountData. After bootstrap publishes m.cross_signing.master, active consumers re-render without process restart. (3) Primary Settings UI Devices.tsx L45 crossSigningActive=useCrossSigningActive(); L100 EnableVerification visible={!crossSigningActive} (setup when inactive); L101-108 when active show VerificationStatusBadge + DeviceVerificationOptions; L131-138 VerifyCurrentDeviceTile only when active && Unverified; L153-155 other-device verification only when active && current Verified. (4) Sidebar UnverifiedTab.tsx L89-93: entire UnverifiedIndicator is null when !crossSigningActive — unverified-device banner requires cross-signing set up. (5) LogoutDialog.tsx L20-65: with encrypted rooms, if crossSigningActive and device Unverified warn verify-before-logout; if !crossSigningActive warn enable device verification or export. (6) Device-level cross-signing verification status (distinct from active flag; shared with FR-7.9-004/005): matrix-crypto.ts verifiedDevice L3-13 calls api.getDeviceVerificationStatus(userId,deviceId) L8 and returns status.crossSigningVerified L12 (null=>Unsupported). useDeviceVerificationStatus.ts maps to VerificationStatus Unknown/Unverified/Verified/Unsupported via useDeviceVerificationDetect L16-51; refreshes on DevicesUpdated through useDeviceListChange L41-50. DeviceVerificationStatus.ts is thin children-render wrapper. Verification.tsx VerificationStatusBadge L44-74 shows Spinner/Unverified/N Unverified/Verified. (7) Status transitions — enable: EnableVerification L276-306 opens DeviceVerificationSetup; SetupVerification L136-163 getCrypto L139 → createRecoveryKeyFromPassphrase L142 → bootstrapSecretStorage setupNewSecretStorage L148-151 → bootstrapCrossSigning({authUploadDeviceSigningKeys, setupNewCrossSigning:true}) L153-156 → resetKeyBackup L158; UIA via authUploadDeviceSigningKeys L103-134 for device-signing keys upload. (8) Manual restore path ManualVerification.tsx verifyAndRestoreBackup L132-145: storePrivateKey then bootstrapCrossSigning({}) L141 then bootstrapSecretStorage then loadSessionBackupPrivateKeyFromSecretStorage — establishes local cross-signing for this device from recovery key without setupNew. (9) Reset: DeviceVerificationOptions L309-338 Reset menu; if authMetadata open external account_management_uri with org.matrix.cross_signing_reset (useAccountManagement.ts L11); else DeviceVerificationReset L322-374 re-runs SetupVerification (same bootstrapCrossSigning setupNewCrossSigning path) after permanent-reset warning L358-365. (10) Non-evidence: product never calls CryptoApi.getCrossSigningStatus; useUserTrustStatusChange (CryptoEvent.UserTrustStatusChanged) is defined but has no production consumers; DeviceVerification.tsx SAS ceremony and requestOwnUserVerification/requestDeviceVerification/getVerificationRequestsToDeviceInProgress are FR-7.9-004/005 verification flows, not this status FR; initMatrix.ts is not the cross-signing status owner (that was a wrong primary linkage). (11) Cutover P8.4 Cross-signing and identity state + P8.1 security-state projection must preserve: inactive→Enable, active→badge/options, UnverifiedTab gated on active, logout warnings, bootstrap/reset transitions, device crossSigningVerified projection via Rust ownership/IPC — SC-064 alone, compile-only blocked, raw /_matrix HTTP, dual-backend/SDK selector, or helper/fixture-only FAIL.",
+        "limits": "P0.1 method/listener candidates are AST name hits, not type-checked receiver proofs. Product does not call matrix-js-sdk getCrossSigningStatus; active status is account-data presence. useCrossSigning.ts / Devices.tsx / UnverifiedTab.tsx / LogoutDialog.tsx / ManualVerification.tsx are product surfaces that may lack direct matrix-js-sdk imports (not all appear in the 220 P0.1 production-import ledger). SC-064 remains compile-shape-only blocked (E3–E5 missing). Device verification ceremony (SAS/requestOwnUserVerification) is FR-7.9-004/005, not this FR. Do not count SC-064 alone, raw /_matrix HTTP, helper-only harnesses, or unused UserTrustStatusChanged hook as closing this FR."
       },
       "p0_1_linkage": {
-        "categories": ["crypto_verification_recovery"],
+        "categories": ["crypto_verification_recovery", "client_events"],
         "file_ledger_paths": [
-          "synara/src/app/components/DeviceVerification.tsx",
+          "synara/src/app/hooks/useAccountDataCallback.ts",
+          "synara/src/app/utils/matrix-crypto.ts",
+          "synara/src/app/hooks/useDeviceVerificationStatus.ts",
           "synara/src/app/components/DeviceVerificationSetup.tsx",
-          "synara/src/app/components/DeviceVerificationStatus.ts",
           "synara/src/app/features/settings/devices/Verification.tsx",
-          "synara/src/app/hooks/useDeviceVerificationStatus.ts"
+          "synara/src/app/components/DeviceVerificationStatus.ts"
         ]
       },
       "rust_target": {
         "support_conclusion": "compile-shape-only-blocked-for-product",
-        "capability_ids": ["SC-064"],
+        "capability_ids": ["SC-064", "SC-061", "SC-062"],
         "gap_ids": [],
         "capabilities": [
           {
@@ -60273,14 +60398,68 @@
             "p0_3b_evidence_status": "stable-api-probed",
             "p0_3b_probe_id": "P0.3b-encryption-cross-signing-status",
             "plan_section_7_area": "7.9-devices-e2ee-verification-and-recovery"
+          },
+          {
+            "capability_id": "SC-061",
+            "api_path": "matrix_sdk::encryption::Encryption",
+            "required_features": {
+              "requested_direct": [],
+              "resolved_on_matrix_sdk": ["e2e-encryption"],
+              "resolved_on_matrix_sdk_ui": [],
+              "notes": "API is feature-gated by e2e-encryption, which is resolved in this probe graph via UI unification."
+            },
+            "final_state": "blocked",
+            "final": {
+              "final_state": "blocked",
+              "final_state_rationale": "E1+E2 present (stable API + compile probe). E3 semantic test, E4 live Synapse, and E5 UI acceptance are not present in P0.3; compile-only evidence is not product confirmation.",
+              "missing_gates": [
+                "semantic_or_integration_test",
+                "live_synapse_two_client",
+                "ui_acceptance"
+              ],
+              "section_5_evidence_present": ["E1", "E2"]
+            },
+            "source_url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/encryption/mod.rs#L892",
+            "p0_3b_evidence_status": "stable-api-probed",
+            "p0_3b_probe_id": "P0.3b-encryption-type",
+            "plan_section_7_area": "7.9-devices-e2ee-verification-and-recovery"
+          },
+          {
+            "capability_id": "SC-062",
+            "api_path": "matrix_sdk::Client::encryption() -> Encryption",
+            "required_features": {
+              "requested_direct": [],
+              "resolved_on_matrix_sdk": ["e2e-encryption"],
+              "resolved_on_matrix_sdk_ui": [],
+              "notes": "API is feature-gated by e2e-encryption, which is resolved in this probe graph via UI unification."
+            },
+            "final_state": "blocked",
+            "final": {
+              "final_state": "blocked",
+              "final_state_rationale": "E1+E2 present (stable API + compile probe). E3 semantic test, E4 live Synapse, and E5 UI acceptance are not present in P0.3; compile-only evidence is not product confirmation.",
+              "missing_gates": [
+                "semantic_or_integration_test",
+                "live_synapse_two_client",
+                "ui_acceptance"
+              ],
+              "section_5_evidence_present": ["E1", "E2"]
+            },
+            "source_url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/client/mod.rs#L794",
+            "p0_3b_evidence_status": "stable-api-probed",
+            "p0_3b_probe_id": "P0.3b-client-encryption",
+            "plan_section_7_area": "7.9-devices-e2ee-verification-and-recovery"
           }
         ],
         "gaps": [],
-        "notes": "Mappings use only accepted P0.3 capability/gap IDs. Compile probes establish API shape only; final dossier states remain blocked/typed/upstream until E3–E5 gates exist.",
+        "notes": "Honest rust_target for FR-7.9-002: SC-064 Encryption::cross_signing_status is the dossier-backed analogue to product cross-signing status projection (current product uses m.cross_signing.master account-data presence + getDeviceVerificationStatus.crossSigningVerified, not JS getCrossSigningStatus). SC-061/SC-062 are the Encryption surface / Client::encryption() accessor needed to reach status APIs. All remain final_state=blocked (compile-shape only; E3–E5 missing) — compile-only never passes product acceptance. No separate P0.3 capability ID is claimed for bootstrap_cross_signing; Enable/bootstrap remains product pipeline under P8.4 with SC-064 status projection. Cutover under P8.4 (cross-signing and identity state) and P8.1 (crypto readiness/security-state projection) must preserve inactive/active UI gates, device verified projection, and bootstrap/reset transitions via Rust ownership + IPC — not SC IDs alone, not dual-backend/SDK selector, not unapproved raw /_matrix HTTP, not helper-only harnesses.",
         "distinctions_preserved": [
-          "server typed search (SC-071) vs experimental local search (SC-072)",
-          "widget plumbing (SC-082/GAP widget) vs call parity (membership write/key session gaps)",
-          "compile shape (E1/E2) vs runtime/UI parity (E3–E5 missing => blocked)"
+          "compile shape (E1/E2) vs runtime/UI parity (E3–E5 missing => blocked)",
+          "product active flag (m.cross_signing.master account data) vs Rust SC-064 cross_signing_status structured status",
+          "device crossSigningVerified (getDeviceVerificationStatus) vs cross-signing set-up active flag",
+          "FR-7.9-002 status projection vs FR-7.9-004/005 verification ceremony (SAS/requestOwnUserVerification)",
+          "bootstrapCrossSigning enable/reset transitions vs ongoing verification request UI (DeviceVerification.tsx)",
+          "SC-064 API shape vs product Settings Devices / UnverifiedTab / LogoutDialog observables",
+          "unused useUserTrustStatusChange (UserTrustStatusChanged) vs production status paths"
         ]
       },
       "implementation_tasks": [
@@ -60288,13 +60467,13 @@
           "task_id": "P8.4",
           "title": "Cross-signing and identity state",
           "phase": "Phase 8 — E2EE, devices, verification, backup, and recovery",
-          "scope_rationale": "Accepted plan task P8.4 covers this Section 7.9 behavior during Phase 8 — E2EE, devices, verification, backup, and recovery."
+          "scope_rationale": "Accepted plan task P8.4 covers cross-signing/identity state projection and cutover for this Section 7.9 cross-signing status behavior."
         },
         {
           "task_id": "P8.1",
           "title": "Crypto readiness and security-state projection",
           "phase": "Phase 8 — E2EE, devices, verification, backup, and recovery",
-          "scope_rationale": "Accepted plan task P8.1 covers this Section 7.9 behavior during Phase 8 — E2EE, devices, verification, backup, and recovery."
+          "scope_rationale": "Accepted plan task P8.1 covers security-state projection that must publish cross-signing active/device trust status to Settings Devices / UnverifiedTab / logout consumers after cutover."
         }
       ],
       "automated_tests": {
@@ -60307,33 +60486,47 @@
             "task_id": "P8.4",
             "phase": "Phase 8 — E2EE, devices, verification, backup, and recovery",
             "level": "integration-e2e",
-            "scenario": "7.9/FR-7.9-002: exercise 'cross-signing status;' via owner `synara/src/client/initMatrix.ts` and UI `synara/src/app/components/DeviceVerification.tsx`, then confirm Rust/IPC cutover task `P8.4` preserves observable behavior without raw Matrix runtime HTTP.",
+            "scenario": "Integration-e2e against disposable Synapse: cross-signing inactive session shows Settings → Devices Enable (not verified badge); after Enable/setup bootstrapCrossSigning+secret storage, m.cross_signing.master is present and useCrossSigningActive becomes true — Devices shows VerificationStatusBadge, UnverifiedTab may appear when devices are unverified, logout warning path switches. Device status uses getDeviceVerificationStatus.crossSigningVerified (Verified/Unverified/Unsupported). Reset/bootstrap paths transition status as product implements. After cutover P8.4/P8.1 same observables via Rust cross_signing_status / identity projection + IPC; SC-064 alone, compile-only blocked states, raw /_matrix HTTP, dual-backend, or helper/fixture-only FAIL.",
+            "test_target": "useCrossSigningActive (m.cross_signing.master) + Devices Enable/badge gating + UnverifiedTab/LogoutDialog consumers + DeviceVerificationSetup/ManualVerification bootstrapCrossSigning + matrix-crypto getDeviceVerificationStatus.crossSigningVerified; post-cutover SC-064 Encryption::cross_signing_status + security-state projection under P8.4/P8.1",
             "preconditions": [
-              "Desktop app, E2EE-capable session; second device for verification",
-              "Recovery key / backup fixtures; isolated multi-account profiles when testing isolation",
-              "Linked owner path present in tree: synara/src/client/initMatrix.ts",
-              "Primary UI/lifecycle surface: synara/src/app/components/DeviceVerification.tsx"
+              "Disposable Synapse; desktop app with E2EE-capable session fixtures: (A) no cross-signing / no m.cross_signing.master; (B) cross-signing active with verified current device; (C) cross-signing active with unverified current or other devices.",
+              "Named product surfaces present: useCrossSigning.ts, Devices.tsx Settings Devices page, DeviceVerificationSetup.tsx Enable path, matrix-crypto.ts / useDeviceVerificationStatus.ts.",
+              "Recovery key / passphrase fixtures for manual bootstrap/reset where exercised.",
+              "Harness can observe UI (Enable vs badge, UnverifiedTab presence) and account-data/crypto status after setup without bypassing product Enable/bootstrap."
             ],
             "trigger_actions": [
-              "Boot the appropriate harness for level=integration-e2e against disposable Synapse (or iOS notes if any).",
-              "Establish fixtures required by the clause list: cross-signing status.",
-              "Open UI/lifecycle surface `synara/src/app/components/DeviceVerification.tsx` (or follow ui_entry_points_rationale if no dedicated UI).",
-              "Step 1: perform the product action that implements «cross-signing status» using current owner `synara/src/client/initMatrix.ts`.",
-              "Force process restart and/or offline→online transition where lifecycle continuity is implied."
+              "Boot integration harness against disposable Synapse. Do not use fixture-only mocks that skip product useCrossSigningActive / bootstrapCrossSigning, dual-backend selectors, raw HTTP, or helper-only pass criteria.",
+              "INACTIVE: cold-start session without m.cross_signing.master. Open Settings → Devices. Assert EnableVerification visible and VerificationStatusBadge / DeviceVerificationOptions not shown as the active path. Assert UnverifiedTab renders null. Optionally open Logout with an encrypted room and assert enable-verification/export warning path.",
+              "ENABLE/BOOTSTRAP: from Devices, press Enable and complete DeviceVerificationSetup (passphrase optional). Observe bootstrapSecretStorage → bootstrapCrossSigning(setupNewCrossSigning:true) → resetKeyBackup (UIA if required). After success, assert m.cross_signing.master present / useCrossSigningActive true; Devices shows status badge path; Enable hidden.",
+              "DEVICE STATUS: with cross-signing active, assert current-device VerificationStatus from getDeviceVerificationStatus.crossSigningVerified (Verified vs Unverified vs Unsupported). For Unverified current device, VerifyCurrentDeviceTile appears; UnverifiedTab indicator may show. After verification (covered primarily by FR-7.9-004/005), badge transitions without requiring process restart when account/device crypto state updates.",
+              "MANUAL/RESET (as product implements): with recovery key, ManualVerification bootstrapCrossSigning({}) path can establish local status; Reset menu either opens org.matrix.cross_signing_reset account management URI or DeviceVerificationReset re-setup — assert permanent-reset warning and post-reset status re-setup path.",
+              "PROCESS RESTART: relaunch active-cross-signing session; re-assert active flag and badge path from restored account data / crypto store without re-Enable.",
+              "After cutover P8.4/P8.1, repeat inactive/active/bootstrap/device-status/restart observables via Rust Encryption::cross_signing_status (SC-064) and/or identity/account-data projection under product lifecycle actor/IPC. Citing SC-064 alone, compile-only blocked states, raw /_matrix HTTP, dual-backend/SDK selector, or helper/fixture-only is a FAIL."
             ],
             "assertions": [
-              "Each clause is observable: «cross-signing status».",
-              "State coordination remains through `synara/src/client/initMatrix.ts` (or its Rust/IPC successor after cutover), not ad-hoc dual writers.",
-              "Behavior-relevant current JS method candidates exercised or replaced: getCrypto, getVerificationRequestsToDeviceInProgress, getCrypto, createRecoveryKeyFromPassphrase, bootstrapSecretStorage, bootstrapCrossSigning, resetKeyBackup, requestOwnUserVerification (AST candidates; not type-proven receivers).",
-              "Rust mapping remains conservative: caps=[SC-064] gaps=[none]; compile-only blocked states are not treated as runtime pass.",
-              "No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless dossier marks that exact behavior typed-sdk-request-required."
+              "INACTIVE: without m.cross_signing.master, Devices shows Enable; UnverifiedTab is not shown; product treats cross-signing as inactive.",
+              "ACTIVE: after successful setup/bootstrap, cross-signing active; Devices shows VerificationStatusBadge path; Enable hidden.",
+              "DEVICE STATUS: Verified/Unverified/Unsupported reflects getDeviceVerificationStatus.crossSigningVerified (or Rust successor projection), not SC IDs alone.",
+              "BOOTSTRAP: Enable path runs bootstrapCrossSigning with setupNewCrossSigning as product implements; ManualVerification may bootstrap without setupNew.",
+              "RESET: reset path is either account-management crossSigningReset URI or in-app re-setup with permanent-reset warning.",
+              "CUTOVER: P8.4/P8.1 preserve inactive/active/device-status/bootstrap observables via Rust ownership + IPC; SC-064 compile-only never passes product acceptance; no raw /_matrix runtime HTTP; no dual-backend/SDK selector.",
+              "No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless the dossier marks that exact behavior typed-sdk-request-required.",
+              "Cross-signing private material / recovery key not leaked to unintended rooms/logs."
             ],
             "required_environment": [
-              "Desktop app, E2EE-capable session; second device for verification",
-              "Recovery key / backup fixtures; isolated multi-account profiles when testing isolation"
+              "Disposable Synapse",
+              "Desktop app with inactive and active cross-signing session fixtures",
+              "Recovery key fixture for manual/reset paths when exercised"
             ],
             "does_not_currently_exist": true,
-            "clause_breakdown": ["cross-signing status"]
+            "clause_breakdown": [
+              "cross-signing active flag via m.cross_signing.master / useCrossSigningActive",
+              "Settings Devices Enable when inactive vs badge/options when active",
+              "UnverifiedTab and LogoutDialog gated on active status",
+              "device crossSigningVerified via getDeviceVerificationStatus",
+              "bootstrapCrossSigning enable/manual/reset transitions",
+              "cutover P8.4/P8.1 Rust cross_signing_status + security-state projection; SC-only/raw HTTP/helper-only FAIL"
+            ]
           }
         ]
       },
@@ -60346,7 +60539,9 @@
       ],
       "security_privacy_lifecycle_concerns": [
         "token-and-store-isolation",
-        "no-raw-matrix-http"
+        "no-raw-matrix-http",
+        "cross-signing-private-material-not-logged",
+        "recovery-key-handling"
       ],
       "traceability_status": "complete-conservative",
       "blockers": []
@@ -74513,7 +74708,7 @@
         "matrix-js-sdk/lib/types"
       ],
       "classification": "requirement-linked",
-      "linked_requirement_ids": ["FR-7.9-002", "FR-7.9-004", "FR-7.9-005"],
+      "linked_requirement_ids": ["FR-7.9-004", "FR-7.9-005"],
       "rationale": null,
       "p0_1_role": "production",
       "desktop_runtime": true,
@@ -80593,7 +80788,8 @@
         "FR-7.2-006",
         "FR-7.3-001",
         "FR-7.6-004",
-        "FR-7.1-008"
+        "FR-7.1-008",
+        "FR-7.9-002"
       ],
       "rationale": "Production matrix-js-sdk import file without exclusive Section 7 user-behavior owner after path/category matching; classified as shared Matrix infrastructure (bucket=hook, categories=['client_methods', 'event_emitters_listeners', 'sync_lifecycle', 'client_events'], models=['MatrixClient']). Linked to supporting requirements that depend on this plumbing. Not treated as dead.",
       "p0_1_role": "production",
@@ -87592,7 +87788,7 @@
       "constructor_candidates": [],
       "import_modules": ["matrix-js-sdk/lib/crypto-api"],
       "classification": "requirement-linked",
-      "linked_requirement_ids": ["FR-7.9-008"],
+      "linked_requirement_ids": ["FR-7.9-002", "FR-7.9-008"],
       "rationale": null,
       "p0_1_role": "production",
       "desktop_runtime": true,
@@ -89361,7 +89557,7 @@
         "Verifier"
       ],
       "is_type_only": false,
-      "linked_requirement_ids": ["FR-7.9-002", "FR-7.9-004", "FR-7.9-005"],
+      "linked_requirement_ids": ["FR-7.9-004", "FR-7.9-005"],
       "cutover_disposition": "replace-deep-js-sdk-import-with-synara-dto-or-rust-projection"
     },
     {
@@ -89370,7 +89566,7 @@
       "line": 8,
       "named_imports": ["VerificationMethod"],
       "is_type_only": false,
-      "linked_requirement_ids": ["FR-7.9-002", "FR-7.9-004", "FR-7.9-005"],
+      "linked_requirement_ids": ["FR-7.9-004", "FR-7.9-005"],
       "cutover_disposition": "replace-deep-js-sdk-import-with-synara-dto-or-rust-projection"
     },
     {
@@ -90073,7 +90269,7 @@
       "line": 1,
       "named_imports": ["CryptoApi"],
       "is_type_only": false,
-      "linked_requirement_ids": ["FR-7.9-008"],
+      "linked_requirement_ids": ["FR-7.9-002", "FR-7.9-008"],
       "cutover_disposition": "replace-deep-js-sdk-import-with-synara-dto-or-rust-projection"
     },
     {
@@ -95059,33 +95255,47 @@
         "task_id": "P8.4",
         "phase": "Phase 8 — E2EE, devices, verification, backup, and recovery",
         "level": "integration-e2e",
-        "scenario": "7.9/FR-7.9-002: exercise 'cross-signing status;' via owner `synara/src/client/initMatrix.ts` and UI `synara/src/app/components/DeviceVerification.tsx`, then confirm Rust/IPC cutover task `P8.4` preserves observable behavior without raw Matrix runtime HTTP.",
+        "scenario": "Integration-e2e against disposable Synapse: cross-signing inactive session shows Settings → Devices Enable (not verified badge); after Enable/setup bootstrapCrossSigning+secret storage, m.cross_signing.master is present and useCrossSigningActive becomes true — Devices shows VerificationStatusBadge, UnverifiedTab may appear when devices are unverified, logout warning path switches. Device status uses getDeviceVerificationStatus.crossSigningVerified (Verified/Unverified/Unsupported). Reset/bootstrap paths transition status as product implements. After cutover P8.4/P8.1 same observables via Rust cross_signing_status / identity projection + IPC; SC-064 alone, compile-only blocked states, raw /_matrix HTTP, dual-backend, or helper/fixture-only FAIL.",
+        "test_target": "useCrossSigningActive (m.cross_signing.master) + Devices Enable/badge gating + UnverifiedTab/LogoutDialog consumers + DeviceVerificationSetup/ManualVerification bootstrapCrossSigning + matrix-crypto getDeviceVerificationStatus.crossSigningVerified; post-cutover SC-064 Encryption::cross_signing_status + security-state projection under P8.4/P8.1",
         "preconditions": [
-          "Desktop app, E2EE-capable session; second device for verification",
-          "Recovery key / backup fixtures; isolated multi-account profiles when testing isolation",
-          "Linked owner path present in tree: synara/src/client/initMatrix.ts",
-          "Primary UI/lifecycle surface: synara/src/app/components/DeviceVerification.tsx"
+          "Disposable Synapse; desktop app with E2EE-capable session fixtures: (A) no cross-signing / no m.cross_signing.master; (B) cross-signing active with verified current device; (C) cross-signing active with unverified current or other devices.",
+          "Named product surfaces present: useCrossSigning.ts, Devices.tsx Settings Devices page, DeviceVerificationSetup.tsx Enable path, matrix-crypto.ts / useDeviceVerificationStatus.ts.",
+          "Recovery key / passphrase fixtures for manual bootstrap/reset where exercised.",
+          "Harness can observe UI (Enable vs badge, UnverifiedTab presence) and account-data/crypto status after setup without bypassing product Enable/bootstrap."
         ],
         "trigger_actions": [
-          "Boot the appropriate harness for level=integration-e2e against disposable Synapse (or iOS notes if any).",
-          "Establish fixtures required by the clause list: cross-signing status.",
-          "Open UI/lifecycle surface `synara/src/app/components/DeviceVerification.tsx` (or follow ui_entry_points_rationale if no dedicated UI).",
-          "Step 1: perform the product action that implements «cross-signing status» using current owner `synara/src/client/initMatrix.ts`.",
-          "Force process restart and/or offline→online transition where lifecycle continuity is implied."
+          "Boot integration harness against disposable Synapse. Do not use fixture-only mocks that skip product useCrossSigningActive / bootstrapCrossSigning, dual-backend selectors, raw HTTP, or helper-only pass criteria.",
+          "INACTIVE: cold-start session without m.cross_signing.master. Open Settings → Devices. Assert EnableVerification visible and VerificationStatusBadge / DeviceVerificationOptions not shown as the active path. Assert UnverifiedTab renders null. Optionally open Logout with an encrypted room and assert enable-verification/export warning path.",
+          "ENABLE/BOOTSTRAP: from Devices, press Enable and complete DeviceVerificationSetup (passphrase optional). Observe bootstrapSecretStorage → bootstrapCrossSigning(setupNewCrossSigning:true) → resetKeyBackup (UIA if required). After success, assert m.cross_signing.master present / useCrossSigningActive true; Devices shows status badge path; Enable hidden.",
+          "DEVICE STATUS: with cross-signing active, assert current-device VerificationStatus from getDeviceVerificationStatus.crossSigningVerified (Verified vs Unverified vs Unsupported). For Unverified current device, VerifyCurrentDeviceTile appears; UnverifiedTab indicator may show. After verification (covered primarily by FR-7.9-004/005), badge transitions without requiring process restart when account/device crypto state updates.",
+          "MANUAL/RESET (as product implements): with recovery key, ManualVerification bootstrapCrossSigning({}) path can establish local status; Reset menu either opens org.matrix.cross_signing_reset account management URI or DeviceVerificationReset re-setup — assert permanent-reset warning and post-reset status re-setup path.",
+          "PROCESS RESTART: relaunch active-cross-signing session; re-assert active flag and badge path from restored account data / crypto store without re-Enable.",
+          "After cutover P8.4/P8.1, repeat inactive/active/bootstrap/device-status/restart observables via Rust Encryption::cross_signing_status (SC-064) and/or identity/account-data projection under product lifecycle actor/IPC. Citing SC-064 alone, compile-only blocked states, raw /_matrix HTTP, dual-backend/SDK selector, or helper/fixture-only is a FAIL."
         ],
         "assertions": [
-          "Each clause is observable: «cross-signing status».",
-          "State coordination remains through `synara/src/client/initMatrix.ts` (or its Rust/IPC successor after cutover), not ad-hoc dual writers.",
-          "Behavior-relevant current JS method candidates exercised or replaced: getCrypto, getVerificationRequestsToDeviceInProgress, getCrypto, createRecoveryKeyFromPassphrase, bootstrapSecretStorage, bootstrapCrossSigning, resetKeyBackup, requestOwnUserVerification (AST candidates; not type-proven receivers).",
-          "Rust mapping remains conservative: caps=[SC-064] gaps=[none]; compile-only blocked states are not treated as runtime pass.",
-          "No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless dossier marks that exact behavior typed-sdk-request-required."
+          "INACTIVE: without m.cross_signing.master, Devices shows Enable; UnverifiedTab is not shown; product treats cross-signing as inactive.",
+          "ACTIVE: after successful setup/bootstrap, cross-signing active; Devices shows VerificationStatusBadge path; Enable hidden.",
+          "DEVICE STATUS: Verified/Unverified/Unsupported reflects getDeviceVerificationStatus.crossSigningVerified (or Rust successor projection), not SC IDs alone.",
+          "BOOTSTRAP: Enable path runs bootstrapCrossSigning with setupNewCrossSigning as product implements; ManualVerification may bootstrap without setupNew.",
+          "RESET: reset path is either account-management crossSigningReset URI or in-app re-setup with permanent-reset warning.",
+          "CUTOVER: P8.4/P8.1 preserve inactive/active/device-status/bootstrap observables via Rust ownership + IPC; SC-064 compile-only never passes product acceptance; no raw /_matrix runtime HTTP; no dual-backend/SDK selector.",
+          "No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless the dossier marks that exact behavior typed-sdk-request-required.",
+          "Cross-signing private material / recovery key not leaked to unintended rooms/logs."
         ],
         "required_environment": [
-          "Desktop app, E2EE-capable session; second device for verification",
-          "Recovery key / backup fixtures; isolated multi-account profiles when testing isolation"
+          "Disposable Synapse",
+          "Desktop app with inactive and active cross-signing session fixtures",
+          "Recovery key fixture for manual/reset paths when exercised"
         ],
         "does_not_currently_exist": true,
-        "clause_breakdown": ["cross-signing status"]
+        "clause_breakdown": [
+          "cross-signing active flag via m.cross_signing.master / useCrossSigningActive",
+          "Settings Devices Enable when inactive vs badge/options when active",
+          "UnverifiedTab and LogoutDialog gated on active status",
+          "device crossSigningVerified via getDeviceVerificationStatus",
+          "bootstrapCrossSigning enable/manual/reset transitions",
+          "cutover P8.4/P8.1 Rust cross_signing_status + security-state projection; SC-only/raw HTTP/helper-only FAIL"
+        ]
       },
       {
         "id": "AT-FR-7.9-003-001",
@@ -98262,24 +98472,36 @@
       "requirement_id": "FR-7.9-002",
       "platforms": ["macOS", "Linux"],
       "preconditions": [
-        "Desktop app, E2EE-capable session; second device for verification",
-        "Recovery key / backup fixtures; isolated multi-account profiles when testing isolation",
-        "State owner available: synara/src/client/initMatrix.ts",
-        "UI/lifecycle: synara/src/app/components/DeviceVerification.tsx",
+        "Disposable Synapse; desktop app with E2EE-capable session.",
+        "Fixture A: no cross-signing (no m.cross_signing.master). Fixture B: cross-signing active.",
+        "State owner: useCrossSigningActive (useCrossSigning.ts) via account data; bootstrap via DeviceVerificationSetup.",
+        "UI: Settings → Devices (Devices.tsx); optional UnverifiedTab / LogoutDialog.",
         "Current status baseline: implemented"
       ],
       "actions": [
-        "Launch Synara desktop on the target platform against disposable Synapse; use a clean or known fixture profile as required by «cross-signing status;».",
-        "Identify state owner `synara/src/client/initMatrix.ts` and open `synara/src/app/components/DeviceVerification.tsx`.",
-        "Action 1 — «cross-signing status»: perform the minimal user/system steps that trigger this clause (use linked files under current_production_files if the entry point is indirect).",
-        "Repeat critical path in an encrypted room / with a second device when the clause involves keys or verification."
+        "Launch Synara desktop against disposable Synapse with Fixture A (inactive cross-signing).",
+        "Open Settings → Devices. Confirm Enable is shown for Device Verification and the verified badge path is not shown as active.",
+        "Confirm sidebar UnverifiedTab is not shown while cross-signing is inactive.",
+        "Complete Enable / DeviceVerificationSetup (create recovery key). Confirm after success Devices shows status badge/options path and Enable is gone.",
+        "With Fixture B or post-setup session: confirm VerificationStatusBadge reflects Verified or Unverified for the current device; if Unverified, confirm verify prompt; confirm UnverifiedTab can appear when applicable.",
+        "Optional: open Logout with an encrypted room and confirm warning text differs for inactive vs active+unverified as product implements.",
+        "Optional: exercise Reset menu (account-management URI or in-app reset warning) without claiming full multi-device recovery parity beyond status transition.",
+        "On a post-cutover build (P8.4/P8.1), repeat inactive/active/badge observables without raw /_matrix renderer HTTP; SC-064 alone must not be accepted as pass."
       ],
       "expected_results": [
-        "All clauses under «cross-signing status;» produce the user-visible or system-observable success criteria without error toasts unrelated to intentional negative tests.",
-        "Clause 1 «cross-signing status» is satisfied on macOS, Linux with owner `synara/src/client/initMatrix.ts`.",
-        "No unexpected raw /_matrix traffic from the app renderer for this flow on the post-cutover build."
+        "Cross-signing inactive: Enable visible; UnverifiedTab hidden; logout may warn to enable verification/export when encrypted rooms exist.",
+        "Cross-signing active after setup: m.cross_signing.master present; Devices shows badge/options; Enable hidden.",
+        "Device Verified/Unverified/Unsupported status is user-visible and consistent with crypto crossSigningVerified projection.",
+        "Clause «cross-signing status» is satisfied on macOS, Linux with owner useCrossSigning.ts + Devices UI + bootstrap setup path.",
+        "Post-cutover: same observables via Rust ownership/IPC; no unexpected raw /_matrix traffic; SC-064 compile-only is not a product pass."
       ],
-      "clause_breakdown": ["cross-signing status"]
+      "clause_breakdown": [
+        "cross-signing active vs inactive status",
+        "Settings Devices Enable vs badge",
+        "device crossSigningVerified status display",
+        "bootstrap/reset transitions",
+        "UnverifiedTab/LogoutDialog consumers"
+      ]
     },
     {
       "id": "MA-FR-7.9-003",
@@ -100379,6 +100601,17 @@
         "FR-7.9-001: current_status remains implemented. current_behavior_and_limits documents exact order: createMatrixClient IndexedDBStore+IndexedDBCryptoStore; startMatrixClient store.startup → initRustCrypto → assertCryptoStoreContinuity → ready-to-start without sync; product startClient is sole productive mx.startClient; fresh-login post-start continuity does not skip pre-start crypto init; ClientRoot sequences initClient then startClient and gates until PREPARED / continuity error; failure paths stopClient without deleting crypto store. notes no longer null.",
         "FR-7.9-001: retargeted behavior_relevant methods/listeners to initRustCrypto L241, getCrypto L59, startClient L455, getSyncState L358, stopClient L274/L486, ClientEvent.Sync on L389 / removeListener L378 with occurrence-specific relevance_reason. Ownership evidence concrete; ui_entry_points_rationale for ClientRoot lifecycle only.",
         "FR-7.9-001: planned AT/MA require restore+login encrypted store init before productive sync, continuity failure blocks ready-to-start and preserves store, cutover P2.2/P2.3/P8.1/P8.8 via native encrypted SQLite + lifecycle actor; SC-061/SC-062/SC-083 alone, compile-only, raw HTTP, helper/fixture-only FAIL. rust_target remains compile-shape-only-blocked-for-product with honest IndexedDB+wasm current vs native SQLite cutover notes. Top-level automated_test_catalog AT-FR-7.9-001-001 is byte-identical to the requirement planned entry; manual_acceptance_catalog MA-FR-7.9-001 updated; ET-FR-7.9-001-01 evidence reclassified unit-only. Status distribution unchanged (implemented 96, partial 22). Accepted corrections for FR-7.8-001 through FR-7.8-009 preserved. JSON and Markdown synchronized."
+      ]
+    },
+    {
+      "id": "p0.2-correct-28-fr-7.9-002-cross-signing-status",
+      "scope": "Rejected-review limited correction: FR-7.9-002 only — replace generic via-5-files notes=null shallow AT with concrete cross-signing status evidence: useCrossSigningActive via m.cross_signing.master account data; Devices Enable vs badge gating; UnverifiedTab/LogoutDialog consumers; getDeviceVerificationStatus.crossSigningVerified; bootstrapCrossSigning enable/reset; remove wrong primary initMatrix/DeviceVerification SAS linkages; rewrite AT/MA for P8.4/P8.1 cutover; honest rust_target SC-064/SC-061/SC-062 compile-only blocked",
+      "requirements_rewritten": ["FR-7.9-002"],
+      "not_claimed_complete": true,
+      "changes": [
+        "FR-7.9-002: current_status remains implemented. current_behavior_and_limits documents active flag (useCrossSigningActive / m.cross_signing.master), device crossSigningVerified, Devices Enable vs badge, UnverifiedTab/LogoutDialog gates, bootstrapCrossSigning enable/manual/reset; notes no longer null. Wrong owners initMatrix + primary UI DeviceVerification SAS removed.",
+        "FR-7.9-002: retargeted behavior_relevant methods/listeners to getDeviceVerificationStatus, bootstrapCrossSigning pipeline (getCrypto/createRecoveryKeyFromPassphrase/bootstrapSecretStorage/resetKeyBackup), ClientEvent.AccountData on/removeListener. Excluded requestOwnUserVerification/requestDeviceVerification/getVerificationRequestsToDeviceInProgress as FR-7.9-004/005.",
+        "FR-7.9-002: planned AT/MA require inactive Enable, post-bootstrap active badge, device Verified/Unverified, cutover P8.4/P8.1 via Rust SC-064 projection; SC-064 alone, compile-only, raw HTTP, helper/fixture-only FAIL. rust_target SC-064/SC-061/SC-062 compile-shape-only-blocked-for-product. Top-level AT-FR-7.9-002-001 and MA-FR-7.9-002 updated byte-aligned. File ledger: remove FR-7.9-002 from DeviceVerification.tsx; add to matrix-crypto.ts and useAccountDataCallback.ts. Status distribution unchanged. Accepted FR-7.8-001 through FR-7.8-009 and FR-7.9-001 preserved. JSON and Markdown synchronized."
       ]
     }
   ]
