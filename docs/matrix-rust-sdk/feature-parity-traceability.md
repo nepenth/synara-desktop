@@ -4,7 +4,7 @@
 
 ## Correction pass status
 
-Limited rejected-review correction (`p0.2-correct-38-fr-7.9-012-store-continuity-upgrades-crashes`) for **FR-7.9-012** only: replace generic “via 2 files” / `notes=null` shallow AT with concrete **store continuity across upgrades and crashes** evidence — restored sessions **must not wipe** (`initClient` freshLogin gate); fixed-name IndexedDB reopen after quit/crash/upgrade (`initRustCrypto`); `assertCryptoStoreContinuity` (`getCrypto` + `getOwnDeviceKeys` + authoritative `downloadKeysForUsers`); `stopClient` without store delete on safety fail; ClientRoot store-intact continuity UI + Retry only for `server-query-incomplete`; rewrite planned AT/MA for restore / crash-relaunch / upgrade-reopen / negative preserve + cutover P2.2/P8.8/P13.2; honest rust_target `compile-shape-only-blocked-for-product` (SC-083 + SC-061); SC alone / compile-only / raw HTTP / store-init-only (FR-7.9-001) / multi-account-wipe-only (FR-7.9-011) / corruption-only (FR-7.9-013) / helper-only FAIL. Status remains `implemented`. JSON and Markdown synchronized. Accepted corrections for **FR-7.8-001 through FR-7.8-009** and **FR-7.9-001..011** preserved. Prior corrections and accepted **7.1–7.3** preserved. **P0.2 is not complete.**
+Limited rejected-review correction (`p0.2-correct-39-fr-7.9-013-store-corruption-detection-recovery`) for **FR-7.9-013** only: replace generic “via 4 files” / BackupRestore-primary / shallow AT with concrete **store-safety anomaly detection + non-destructive recovery guidance** evidence — `CryptoStoreContinuityFailureReason` classes; `CryptoStoreContinuityError` store-preserve + recovery-key guidance; `isCryptoAccountMismatchError` map without clear; `stopClient` preserve; ClientRoot store-intact / Retry Safety Check / explicit Sign Out; demote BackupRestore (key backup FR-7.9-006/009); honest **partial** (no true integrity_check / auto-repair); rewrite planned AT/MA for P0.7/P8.8/P13.2; honest rust_target `compile-shape-only-blocked-partial-product-safety-gate` (SC-083 + SC-061); SC alone / compile-only / raw HTTP / store-init-only (FR-7.9-001) / multi-account-wipe-only (FR-7.9-011) / continuity-only (FR-7.9-012) / key-backup-only / helper-only FAIL. Status remains `partial`. JSON and Markdown synchronized. Accepted corrections for **FR-7.8-001 through FR-7.8-009** and **FR-7.9-001..012** preserved. Prior corrections and accepted **7.1–7.3** preserved. **P0.2 is not complete.**
 
 ## Provenance
 
@@ -14,7 +14,7 @@ Limited rejected-review correction (`p0.2-correct-38-fr-7.9-012-store-continuity
 
 ## Summary
 
-- FR 119 · files 220 · AT 119 · MA 119 · existing refs 48
+- FR 119 · files 220 · AT 119 · MA 119 · existing refs 50
 
 ### Status distribution
 
@@ -6474,50 +6474,73 @@ Limited rejected-review correction (`p0.2-correct-38-fr-7.9-012-store-continuity
 - **Text**: store corruption detection and non-destructive recovery guidance.
 - **Lines**: 437–437
 - **Status**: `partial`
-- **Behavior**: Current desktop implements this via 4 production matrix-js-sdk-related file(s); status=partial.
-- **Notes**: Corruption detection/non-destructive guidance is partial product UX; full recovery guidance is a migration UX concern (P0.7/P8.8).
-- **UI**: `synara/src/app/components/BackupRestore.tsx`
-- **Owners**: `synara/src/client/cryptoStoreContinuity.ts`
+- **Behavior**: Current desktop implements partial store-safety anomaly detection (identity/crypto continuity failures + rust account mismatch) with non-destructive ClientRoot recovery guidance (store intact, retry only for query incomplete, explicit destructive sign-out). True store corruption integrity detection and automatic non-destructive repair are not product. status=partial.
+- **Notes**: Evidence (conservative): (1) DETECTED ANOMALIES (not integrity_check): cryptoStoreContinuity.ts CryptoStoreContinuityFailureReason L4–9: crypto-unavailable, server-device-missing, server-keys-missing, identity-key-mismatch, server-query-incomplete. assertCryptoStoreContinuity L47–93: getCrypto L59 → getOwnDeviceKeys L64 → downloadKeysForUsers L67 authoritative match or throw. isCryptoAccountMismatchError (matrixLocalStores.ts L12–21) detects rust message "the account in the store doesn't match the account in the constructor"; initMatrix initClient L337–342 maps to identity-key-mismatch without clear. (2) NON-DESTRUCTIVE GUIDANCE: CryptoStoreContinuityError message L19–23 — store preserved; do not sign out unless trusted client / recovery key tested. ClientRoot L358–410: store still intact; confirm recovery key/key backup before sign-out; Retry Safety Check only if canRetry (server-query-incomplete L30–31); button "Sign Out and Delete Local Encryption Data" is explicit wipe. startMatrixClient catch L269–281 stopClient without destroy/delete (comment L270–273). (3) NOT PRESENT / GAPS: no PRAGMA integrity_check / checksum / bit-rot scanner; no product string labeled "store corruption"; no automatic non-destructive repair/rebuild/migrate of damaged store; no recovery-key test wizard launched from this error UI (text-only guidance); BackupRestore.tsx is key-backup restore (FR-7.9-006/009) — not this FR; clearCacheAndReload deletes sync cache only. (4) DISTINCTIONS: FR-7.9-012 = continuity across upgrades/crashes (restore no wipe + reopen); FR-7.9-011 = multi-account sequential wipe; this FR = detection of store-safety anomalies + non-destructive recovery guidance (partial). (5) Tests: initMatrix.test.ts unit continuity/mismatch/retry; matrixLocalStores.test.ts isCryptoAccountMismatchError — unit only, not E2E corruption AT. (6) Cutover P0.7/P8.8/P13.2 must preserve non-destructive-on-fail + improve true corruption detection/repair UX under native encrypted SQLite (SC-083) + encryption (SC-061) + product lifecycle actor/IPC. SC alone / compile-only / raw HTTP / store-init-only / multi-account-wipe-only / continuity-only / key-backup-only / helper-only FAIL.
+- **Limits**: Honest partial: product detects crypto/identity safety anomalies and preserves store with guidance; it does not implement true store corruption integrity detection or non-destructive automatic recovery/repair. No E2E AT for forced corrupted DB. SC-083/SC-061 compile-shape-only blocked. clearCacheAndReload and logout are destructive paths (sync cache / session wipe) adjacent only. Do not count BackupRestore key-backup UI, FR-7.9-012 continuity alone, or FR-7.9-011 wipe alone as closing this FR.
+- **UI**: `synara/src/app/pages/client/ClientRoot.tsx`
+- **UI rationale**: ClientRoot is the product surface for store-safety detection UX: continuityError (L358–364), store-intact messaging (L391–398), Retry Safety Check only for server-query-incomplete (L399–405), and explicit Sign Out and Delete Local Encryption Data (L406–410). BackupRestore.tsx is key-backup restore (FR-7.9-006/009) — demoted; not store corruption recovery.
+- **Owners**: `synara/src/client/cryptoStoreContinuity.ts`, `synara/src/client/initMatrix.ts`, `synara/src/client/matrixLocalStores.ts`
 - **Files**:
-  - `synara/src/app/components/BackupRestore.tsx` symbols=[] retained_m=0 retained_l=0
-  - `synara/src/app/state/backupRestore.ts` symbols=[] retained_m=0 retained_l=0
-  - `synara/src/client/cryptoStoreContinuity.ts` symbols=['getCrypto'] retained_m=1 retained_l=0
-    - method `getCrypto`:L59 — None
-  - `synara/src/client/initMatrix.ts` symbols=['initRustCrypto'] retained_m=1 retained_l=0
-    - method `initRustCrypto`:L241 — None
+  - `synara/src/client/cryptoStoreContinuity.ts` symbols=['CryptoStoreContinuityError', 'CryptoStoreContinuityFailureReason', 'canRetryCryptoStoreContinuityFailure', 'assertCryptoStoreContinuity', 'getCrypto'] retained_m=3 retained_l=0
+    - method `getCrypto`:L59 — crypto-unavailable detection without wipe
+    - method `getOwnDeviceKeys`:L64 — local identity keys for mismatch detection
+    - method `downloadKeysForUsers`:L67 — authoritative keys/query; failures preserve store
+    - note: failure reasons L4–9; error store-preserve + recovery guidance L19–23; canRetry only server-query-incomplete L30–31
+  - `synara/src/client/matrixLocalStores.ts` symbols=['isCryptoAccountMismatchError', 'MATRIX_LOCAL_STORE_NAMES'] retained_m=0 retained_l=0
+    - isCryptoAccountMismatchError L15 — rust account mismatch detector
+    - MATRIX_LOCAL_STORE_NAMES L5 — fixed IndexedDB names (wipe only via explicit clear, not detection)
+  - `synara/src/client/initMatrix.ts` symbols=['initRustCrypto', 'assertCryptoStoreContinuity', 'stopClient', 'isCryptoAccountMismatchError'] retained_m=2 retained_l=0
+    - method `initRustCrypto`:L241 — crypto store open/reopen before safety assert
+    - method `stopClient`:L274 — non-destructive close preserves crypto store on safety failure
+    - note: assertCryptoStoreContinuity call L247; mismatch map L337–342 without clear
+  - `synara/src/app/pages/client/ClientRoot.tsx` symbols=['CryptoStoreContinuityError', 'canRetryCryptoStoreContinuityFailure', 'performLogout'] retained_m=0 retained_l=0
+    - continuityError L358; store-intact L391; Retry Safety Check L399; Sign Out and Delete Local Encryption Data L406
 - **Behavior-relevant methods (top-level)**:
-  - `getCrypto` `synara/src/client/cryptoStoreContinuity.ts`:L59 — None
-  - `initRustCrypto` `synara/src/client/initMatrix.ts`:L241 — None
+  - `getCrypto` `synara/src/client/cryptoStoreContinuity.ts`:L59 — crypto-unavailable detection without wipe
+  - `getOwnDeviceKeys` `synara/src/client/cryptoStoreContinuity.ts`:L64 — local keys for mismatch detection
+  - `downloadKeysForUsers` `synara/src/client/cryptoStoreContinuity.ts`:L67 — authoritative server key match
+  - `initRustCrypto` `synara/src/client/initMatrix.ts`:L241 — crypto store open/reopen before safety assert
+  - `stopClient` `synara/src/client/initMatrix.ts`:L274 — non-destructive close on safety failure
 - **Behavior-relevant listeners (top-level)**:
   - —
 - **Unfiltered linked candidates**: methods=16 listeners=2
-- **Rust**: `product-ux-and-store-api` caps=['SC-061', 'SC-083'] gaps=[]
-  - `SC-061` `blocked` `matrix_sdk::encryption::Encryption` https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/encryption/mod.rs#L892
+- **Rust**: `compile-shape-only-blocked-partial-product-safety-gate` caps=['SC-083', 'SC-061'] gaps=[]
   - `SC-083` `blocked` `matrix_sdk::ClientBuilder::sqlite_store` https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/client/builder/mod.rs#L254-L261
+  - `SC-061` `blocked` `matrix_sdk::encryption::Encryption` https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/encryption/mod.rs#L892
+  - Honest: SC-083 durable store substrate for future integrity/corruption handling; SC-061 encryption keys for safety-anomaly detection. Both compile-only blocked. Current product IndexedDB + rust-crypto wasm safety gate + ClientRoot non-destructive guidance — partial vs full corruption detection/repair. Cutover P0.7/P8.8/P13.2 must preserve non-destructive-on-fail via native encrypted SQLite + lifecycle actor; SC alone / raw HTTP / store-init-only / multi-account-wipe-only / continuity-only / key-backup-only / helper-only FAIL.
 - **Tasks**: `P8.8`, `P13.2`, `P0.7`
+- **Blockers**:
+  - (medium) product-capability-gap: store-safety anomaly detection + non-destructive guidance only; true corruption integrity detection and automatic non-destructive repair not implemented (status=partial).
 - **Existing tests**:
-  - _(none)_
+  - `synara/src/app/state/__tests__/initMatrix.test.ts` — unit/mocked safety detection + non-destructive path; not E2E corruption AT
+  - `synara/src/app/matrix/__tests__/matrixLocalStores.test.ts` — unit isCryptoAccountMismatchError only
 - **Planned** `AT-FR-7.9-013-001` task `P8.8` level `integration-e2e`
-  - Scenario: 7.9/FR-7.9-013: exercise 'store corruption detection and non-destructive recovery guidance.' via owner `synara/src/client/cryptoStoreContinuity.ts` and UI `synara/src/app/components/BackupRestore.tsx`, then confirm Rust/IPC cutover task `P8.8` preserves observable behavior without raw Matrix runtime HTTP.
-  - Test target: None
+  - Scenario: Integration-e2e against disposable Synapse: (A) DETECT identity-key-mismatch or crypto-unavailable via assertCryptoStoreContinuity / isCryptoAccountMismatchError map — product surfaces CryptoStoreContinuityError without deleting MATRIX_LOCAL_STORE_NAMES. (B) GUIDANCE — ClientRoot shows store-intact messaging and recovery-key/key-backup warning before any wipe; error text states store preserved. (C) RETRY — server-query-incomplete offers Retry Safety Check and does not wipe; mismatch does not offer retry and does not wipe. (D) DESTRUCTIVE BOUNDARY — only explicit Sign Out and Delete Local Encryption Data / logout clears crypto stores; detection path never auto-wipes. (E) NEGATIVE — BackupRestore key-backup UI alone does not satisfy this FR; continuity restore-success alone (FR-7.9-012) does not; multi-account wipe alone (FR-7.9-011) does not. After cutover P0.7/P8.8/P13.2, same non-destructive-on-fail observables plus any true integrity/repair path via native encrypted SQLite under Rust ownership + lifecycle actor/IPC. SC-083/SC-061 alone, compile-only, raw /_matrix HTTP, store-init-only (FR-7.9-001), multi-account-wipe-only (FR-7.9-011), continuity-only (FR-7.9-012), key-backup-only, helper/fixture-only FAIL.
+  - Test target: assertCryptoStoreContinuity + CryptoStoreContinuityError guidance + isCryptoAccountMismatchError map + stopClient preserve + ClientRoot store-intact / Retry / explicit Sign Out; post-cutover Rust encrypted SQLite integrity/recovery + lifecycle actor (P0.7/P8.8/P13.2)
   - Preconditions:
-    - Desktop app, E2EE-capable session; second device for verification
-    - Recovery key / backup fixtures; isolated multi-account profiles when testing isolation
-    - Linked owner path present in tree: synara/src/client/cryptoStoreContinuity.ts
-    - Primary UI/lifecycle surface: synara/src/app/components/BackupRestore.tsx
+    - Disposable Synapse; desktop app with E2EE-capable session fixture; ability to force identity-key-mismatch, crypto-unavailable, and server-query-incomplete.
+    - Named owners present: cryptoStoreContinuity.ts, matrixLocalStores.ts, initMatrix.ts; UI ClientRoot.tsx (not BackupRestore as primary).
+    - Harness can observe store wipe absence, ClientRoot guidance copy, and Retry button presence/absence by reason.
+    - Do not accept store-before-sync order alone (FR-7.9-001), multi-account wipe alone (FR-7.9-011), continuity restore alone (FR-7.9-012), key-backup BackupRestore alone (FR-7.9-006/009), or unit-only helper tests as sole pass for this FR.
   - Actions:
-    1. Boot the appropriate harness for level=integration-e2e against disposable Synapse (or iOS notes if any).
-    2. Establish fixtures required by the clause list: store corruption detection; non-destructive recovery guidance.
-    3. Open UI/lifecycle surface `synara/src/app/components/BackupRestore.tsx` (or follow ui_entry_points_rationale if no dedicated UI).
-    4. Step 1: perform the product action that implements «store corruption detection» using current owner `synara/src/client/cryptoStoreContinuity.ts`.
-    5. Step 2: perform the product action that implements «non-destructive recovery guidance» using current owner `synara/src/client/cryptoStoreContinuity.ts`.
-    6. Force process restart and/or offline→online transition where lifecycle continuity is implied.
+    1. Boot integration harness against disposable Synapse. Do not use fixture-only mocks that skip product assertCryptoStoreContinuity/ClientRoot guidance, dual-backend selectors, raw HTTP, or helper-only pass criteria.
+    2. DETECT mismatch: force identity-key-mismatch (or isCryptoAccountMismatchError path); assert CryptoStoreContinuityError thrown; MATRIX_LOCAL_STORE_NAMES not deleted; stopClient without store destroy.
+    3. DETECT crypto-unavailable: force getCrypto null after init path; assert blocked startup without wipe.
+    4. GUIDANCE: assert ClientRoot shows store-intact text + recovery key/key backup warning; error message includes store preserved / do not sign out unless recovery available.
+    5. RETRY: force server-query-incomplete; assert Retry Safety Check offered and no wipe; force mismatch; assert Retry not offered and no wipe.
+    6. DESTRUCTIVE BOUNDARY: only explicit Sign Out and Delete Local Encryption Data clears local encryption data; detection never auto sign-out wipe.
+    7. After cutover P0.7/P8.8/P13.2, repeat detection + non-destructive guidance (+ integrity/repair if product adds it) via native encrypted SQLite under Rust ownership + lifecycle actor/IPC. Citing SC-083 alone, SC-061 alone, compile-only blocked, raw /_matrix HTTP, dual-backend, store-init-only, multi-account-wipe-only, continuity-only, key-backup-only, or helper/fixture-only is a FAIL.
   - Assertions:
-    - Each clause is observable: «store corruption detection»; «non-destructive recovery guidance».
-    - State coordination remains through `synara/src/client/cryptoStoreContinuity.ts` (or its Rust/IPC successor after cutover), not ad-hoc dual writers.
-    - Behavior-relevant current JS method candidates exercised or replaced: getCrypto, initRustCrypto (AST candidates; not type-proven receivers).
-    - Rust mapping remains conservative: caps=[SC-061,SC-083] gaps=[none]; compile-only blocked states are not treated as runtime pass.
-    - No new production matrix-js-sdk usage and no raw /\_matrix runtime HTTP unless dossier marks that exact behavior typed-sdk-request-required.
+    - DETECTION: identity-key-mismatch, crypto-unavailable, server-query-incomplete (and mapped account mismatch) are detected without auto-deleting crypto stores.
+    - NON-DESTRUCTIVE GUIDANCE: ClientRoot store-intact + recovery-key/key-backup warning; CryptoStoreContinuityError states store preserved.
+    - RETRY POLICY: only server-query-incomplete offers Retry Safety Check; mismatch does not auto-wipe.
+    - DESTRUCTIVE BOUNDARY: wipe only via explicit Sign Out / logout path; never automatic on detection.
+    - DISTINCTIONS: this FR ≠ FR-7.9-012 continuity restore; ≠ FR-7.9-011 multi-account wipe; ≠ FR-7.9-001 store-init-order; ≠ BackupRestore key-backup (FR-7.9-006/009).
+    - HONEST PARTIAL: true integrity_check/bit-rot scanner and automatic non-destructive repair remain cutover gaps unless product implements them under P0.7/P8.8/P13.2.
+    - COORDINATION: detection/guidance through cryptoStoreContinuity + initMatrix + ClientRoot (or Rust/IPC successors), not ad-hoc dual writers.
+    - CUTOVER: P0.7/P8.8/P13.2 preserve non-destructive-on-fail via native encrypted SQLite + lifecycle actor; SC alone / compile-only never product pass; no raw /_matrix runtime HTTP; no dual-backend/SDK selector.
+    - No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless the dossier marks that exact behavior typed-sdk-request-required.
+    - Store-init-order alone (FR-7.9-001), multi-account wipe alone (FR-7.9-011), continuity alone (FR-7.9-012), key-backup alone, and helper unit tests alone are not accepted as sole pass criteria for this FR.
   - does_not_currently_exist: `True`
 - **Manual**: `MA-FR-7.9-013`
 
@@ -9268,21 +9291,23 @@ Limited rejected-review correction (`p0.2-correct-38-fr-7.9-012-store-continuity
 
 - Platforms: macOS, Linux
 - Preconditions:
-  - Desktop app, E2EE-capable session; second device for verification
-  - Recovery key / backup fixtures; isolated multi-account profiles when testing isolation
-  - State owner available: synara/src/client/cryptoStoreContinuity.ts
-  - UI/lifecycle: synara/src/app/components/BackupRestore.tsx
-  - Current status baseline: partial
+  - Disposable Synapse; desktop app with E2EE session; ability to force identity-key-mismatch, crypto-unavailable, and server-query-incomplete.
+  - Owners present: cryptoStoreContinuity.ts, matrixLocalStores.ts, initMatrix.ts; UI ClientRoot.tsx (not BackupRestore as primary).
+  - Current status baseline: partial (safety-anomaly detection + non-destructive guidance; no true integrity_check/repair).
 - Actions:
-  1. Launch Synara desktop on the target platform against disposable Synapse; use a clean or known fixture profile as required by «store corruption detection and non-destructive recovery guidance.».
-  2. Identify state owner `synara/src/client/cryptoStoreContinuity.ts` and open `synara/src/app/components/BackupRestore.tsx`.
-  3. Action 1 — «store corruption detection»: perform the minimal user/system steps that trigger this clause (use linked files under current_production_files if the entry point is indirect).
-  4. Action 2 — «non-destructive recovery guidance»: perform the minimal user/system steps that trigger this clause (use linked files under current_production_files if the entry point is indirect).
-  5. Repeat critical path in an encrypted room / with a second device when the clause involves keys or verification.
+  1. Launch Synara desktop on the target platform against disposable Synapse with a known encrypted-session fixture.
+  2. DETECT: force identity-key-mismatch (or crypto account mismatch path); observe CryptoStoreContinuityError without store wipe.
+  3. GUIDANCE: on ClientRoot error splash, confirm store-intact messaging and recovery-key/key-backup warning before sign-out.
+  4. RETRY: force server-query-incomplete; confirm Retry Safety Check is offered and does not wipe; force mismatch; confirm Retry is not offered and store still intact.
+  5. DESTRUCTIVE BOUNDARY: only choose Sign Out and Delete Local Encryption Data when intentionally wiping; confirm detection path never auto-wipes.
+  6. NEGATIVE: do not treat BackupRestore key-backup UI, FR-7.9-012 restore-success alone, or FR-7.9-011 multi-account wipe alone as closing this FR.
 - Expected:
-  - All clauses under «store corruption detection and non-destructive recovery guidance.» produce the user-visible or system-observable success criteria without error toasts unrelated to intentional negative tests.
-  - Clause 1 «store corruption detection» is satisfied on macOS, Linux with owner `synara/src/client/cryptoStoreContinuity.ts`.
-  - Clause 2 «non-destructive recovery guidance» is satisfied on macOS, Linux with owner `synara/src/client/cryptoStoreContinuity.ts`.
+  - DETECTION: safety anomalies surface as CryptoStoreContinuityError without auto-deleting MATRIX_LOCAL_STORE_NAMES.
+  - NON-DESTRUCTIVE GUIDANCE: ClientRoot shows store still intact + recovery key/key backup warning; error text states store preserved.
+  - RETRY POLICY: only server-query-incomplete offers Retry Safety Check; mismatch preserves store without auto wipe.
+  - DESTRUCTIVE BOUNDARY: wipe only via explicit Sign Out / logout; never automatic on detection.
+  - DISTINCTIONS: this FR ≠ FR-7.9-012 continuity; ≠ FR-7.9-011 multi-account wipe; ≠ BackupRestore key-backup (FR-7.9-006/009).
+  - HONEST PARTIAL: true integrity_check/bit-rot and automatic non-destructive repair remain gaps unless cutover P0.7/P8.8/P13.2 adds them.
   - No unexpected raw /\_matrix traffic from the app renderer for this flow on the post-cutover build.
 
 ### `MA-FR-7.10-001` (FR-7.10-001)
@@ -11510,21 +11535,27 @@ Limited rejected-review correction (`p0.2-correct-38-fr-7.9-012-store-continuity
 
 ### `AT-FR-7.9-013-001`
 
-- 7.9/FR-7.9-013: exercise 'store corruption detection and non-destructive recovery guidance.' via owner `synara/src/client/cryptoStoreContinuity.ts` and UI `synara/src/app/components/BackupRestore.tsx`, then confirm Rust/IPC cutover task `P8.8` preserves observable behavior without raw Matrix runtime HTTP.
-- target: None
+- Integration-e2e against disposable Synapse: (A) DETECT identity-key-mismatch or crypto-unavailable via assertCryptoStoreContinuity / isCryptoAccountMismatchError map — product surfaces CryptoStoreContinuityError without deleting MATRIX_LOCAL_STORE_NAMES. (B) GUIDANCE — ClientRoot shows store-intact messaging and recovery-key/key-backup warning before any wipe; error text states store preserved. (C) RETRY — server-query-incomplete offers Retry Safety Check and does not wipe; mismatch does not offer retry and does not wipe. (D) DESTRUCTIVE BOUNDARY — only explicit Sign Out and Delete Local Encryption Data / logout clears crypto stores; detection path never auto-wipes. (E) NEGATIVE — BackupRestore key-backup UI alone does not satisfy this FR; continuity restore-success alone (FR-7.9-012) does not; multi-account wipe alone (FR-7.9-011) does not. After cutover P0.7/P8.8/P13.2, same non-destructive-on-fail observables plus any true integrity/repair path via native encrypted SQLite under Rust ownership + lifecycle actor/IPC. SC-083/SC-061 alone, compile-only, raw /_matrix HTTP, store-init-only (FR-7.9-001), multi-account-wipe-only (FR-7.9-011), continuity-only (FR-7.9-012), key-backup-only, helper/fixture-only FAIL.
+- target: assertCryptoStoreContinuity + CryptoStoreContinuityError guidance + isCryptoAccountMismatchError map + stopClient preserve + ClientRoot store-intact / Retry / explicit Sign Out; post-cutover Rust encrypted SQLite integrity/recovery + lifecycle actor (P0.7/P8.8/P13.2)
 - actions:
-  1. Boot the appropriate harness for level=integration-e2e against disposable Synapse (or iOS notes if any).
-  2. Establish fixtures required by the clause list: store corruption detection; non-destructive recovery guidance.
-  3. Open UI/lifecycle surface `synara/src/app/components/BackupRestore.tsx` (or follow ui_entry_points_rationale if no dedicated UI).
-  4. Step 1: perform the product action that implements «store corruption detection» using current owner `synara/src/client/cryptoStoreContinuity.ts`.
-  5. Step 2: perform the product action that implements «non-destructive recovery guidance» using current owner `synara/src/client/cryptoStoreContinuity.ts`.
-  6. Force process restart and/or offline→online transition where lifecycle continuity is implied.
+  1. Boot integration harness against disposable Synapse. Do not use fixture-only mocks that skip product assertCryptoStoreContinuity/ClientRoot guidance, dual-backend selectors, raw HTTP, or helper-only pass criteria.
+  2. DETECT mismatch: force identity-key-mismatch (or isCryptoAccountMismatchError path); assert CryptoStoreContinuityError thrown; MATRIX_LOCAL_STORE_NAMES not deleted; stopClient without store destroy.
+  3. DETECT crypto-unavailable: force getCrypto null after init path; assert blocked startup without wipe.
+  4. GUIDANCE: assert ClientRoot shows store-intact text + recovery key/key backup warning; error message includes store preserved / do not sign out unless recovery available.
+  5. RETRY: force server-query-incomplete; assert Retry Safety Check offered and no wipe; force mismatch; assert Retry not offered and no wipe.
+  6. DESTRUCTIVE BOUNDARY: only explicit Sign Out and Delete Local Encryption Data clears local encryption data; detection never auto sign-out wipe.
+  7. After cutover P0.7/P8.8/P13.2, repeat detection + non-destructive guidance (+ integrity/repair if product adds it) via native encrypted SQLite under Rust ownership + lifecycle actor/IPC. Citing SC-083 alone, SC-061 alone, compile-only blocked, raw /_matrix HTTP, dual-backend, store-init-only, multi-account-wipe-only, continuity-only, key-backup-only, or helper/fixture-only is a FAIL.
 - assertions:
-  - Each clause is observable: «store corruption detection»; «non-destructive recovery guidance».
-  - State coordination remains through `synara/src/client/cryptoStoreContinuity.ts` (or its Rust/IPC successor after cutover), not ad-hoc dual writers.
-  - Behavior-relevant current JS method candidates exercised or replaced: getCrypto, initRustCrypto (AST candidates; not type-proven receivers).
-  - Rust mapping remains conservative: caps=[SC-061,SC-083] gaps=[none]; compile-only blocked states are not treated as runtime pass.
-  - No new production matrix-js-sdk usage and no raw /\_matrix runtime HTTP unless dossier marks that exact behavior typed-sdk-request-required.
+  - DETECTION: identity-key-mismatch, crypto-unavailable, server-query-incomplete (and mapped account mismatch) are detected without auto-deleting crypto stores.
+  - NON-DESTRUCTIVE GUIDANCE: ClientRoot store-intact + recovery-key/key-backup warning; CryptoStoreContinuityError states store preserved.
+  - RETRY POLICY: only server-query-incomplete offers Retry Safety Check; mismatch does not auto-wipe.
+  - DESTRUCTIVE BOUNDARY: wipe only via explicit Sign Out / logout path; never automatic on detection.
+  - DISTINCTIONS: this FR ≠ FR-7.9-012 continuity restore; ≠ FR-7.9-011 multi-account wipe; ≠ FR-7.9-001 store-init-order; ≠ BackupRestore key-backup (FR-7.9-006/009).
+  - HONEST PARTIAL: true integrity_check/bit-rot scanner and automatic non-destructive repair remain cutover gaps unless product implements them under P0.7/P8.8/P13.2.
+  - COORDINATION: detection/guidance through cryptoStoreContinuity + initMatrix + ClientRoot (or Rust/IPC successors), not ad-hoc dual writers.
+  - CUTOVER: P0.7/P8.8/P13.2 preserve non-destructive-on-fail via native encrypted SQLite + lifecycle actor; SC alone / compile-only never product pass; no raw /_matrix runtime HTTP; no dual-backend/SDK selector.
+  - No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless the dossier marks that exact behavior typed-sdk-request-required.
+  - Store-init-order alone (FR-7.9-001), multi-account wipe alone (FR-7.9-011), continuity alone (FR-7.9-012), key-backup alone, and helper unit tests alone are not accepted as sole pass criteria for this FR.
 
 ### `AT-FR-7.10-001-001`
 
@@ -11859,6 +11890,9 @@ Limited rejected-review correction (`p0.2-correct-38-fr-7.9-012-store-continuity
 - `ET-FR-7.9-011-02` `FR-7.9-011` `synara/src/app/state/__tests__/sessionPersistence.test.ts` — Unit: shouldClearMatrixStoresBeforeInit + clearMatrixStoresForIdentityChange identity mismatch only — not multi-account e2e
 - `ET-FR-7.9-011-03` `FR-7.9-011` `synara/src/app/state/__tests__/sessions.test.ts` — Unit: single-slot fallback session + clearSessionLocalStorage session keys only — not multi-account concurrent stores
 - `ET-FR-7.9-011-04` `FR-7.9-011` `synara/src/app/state/__tests__/initMatrix.test.ts` — Unit: initClient clear on fresh login identity path; no clear on restored crypto mismatch — not multi-account e2e
+- `ET-FR-7.9-012-01` `FR-7.9-012` `synara/src/app/state/__tests__/initMatrix.test.ts` — Unit/mocked continuity preserve coverage: restored sessions must not clear stores; match/mismatch/query-incomplete; canRetry only for server-query-incomplete; post-start stop without wipe. Not E2E crash/upgrade AT.
+- `ET-FR-7.9-013-01` `FR-7.9-013` `synara/src/app/state/__tests__/initMatrix.test.ts` — Unit/mocked store-safety detection + non-destructive path: assertCryptoStoreContinuity mismatch/query-incomplete without deletion; canRetry only server-query-incomplete; post-start stop without wipe; mismatch map without clear. Not E2E corruption integrity AT.
+- `ET-FR-7.9-013-02` `FR-7.9-013` `synara/src/app/matrix/__tests__/matrixLocalStores.test.ts` — Unit: isCryptoAccountMismatchError detects rust crypto account mismatch string; ignores unrelated failures. Store-state anomaly detector only — not integrity_check E2E.
 - `ET-FR-7.10-003-01` `FR-7.10-003` `synara/src/app/utils/__tests__/messageSearchFilters.test.ts` — search filter helper unit coverage
 
 ## File ledger (220)
@@ -11868,7 +11902,7 @@ Limited rejected-review correction (`p0.2-correct-38-fr-7.9-012-store-continuity
 | `synara/src/app/components/AccountDataEditor.tsx`                              | `component`        | `requirement-linked`           |   0 |   0 | `FR-7.4-002`                                                                                                                                                                                                                              |
 | `synara/src/app/components/ActionUIA.tsx`                                      | `component`        | `requirement-linked`           |   0 |   1 | `FR-7.1-006`,`FR-7.9-010`                                                                                                                                                                                                                 |
 | `synara/src/app/components/AuthFlowsLoader.tsx`                                | `component`        | `requirement-linked`           |   0 |   2 | `FR-7.1-001`,`FR-7.1-005`,`FR-7.1-006`                                                                                                                                                                                                    |
-| `synara/src/app/components/BackupRestore.tsx`                                  | `component`        | `requirement-linked`           |   0 |   0 | `FR-7.9-006`,`FR-7.9-009`,`FR-7.9-013`                                                                                                                                                                                                    |
+| `synara/src/app/components/BackupRestore.tsx`                                  | `component`        | `requirement-linked`           |   0 |   0 | `FR-7.9-006`,`FR-7.9-009`                                                                                                                                                                                                                 |
 | `synara/src/app/components/CapabilitiesLoader.tsx`                             | `component`        | `requirement-linked`           |   0 |   1 | `FR-7.1-013`                                                                                                                                                                                                                              |
 | `synara/src/app/components/DeviceVerification.tsx`                             | `component`        | `requirement-linked`           |   0 |   3 | `FR-7.9-005`                                                                                                                                                                                                    |
 | `synara/src/app/components/DeviceVerificationSetup.tsx`                        | `component`        | `requirement-linked`           |   0 |   5 | `FR-7.9-002`,`FR-7.9-006`                                                                                                                                                                                       |
@@ -12035,7 +12069,7 @@ Limited rejected-review correction (`p0.2-correct-38-fr-7.9-012-store-continuity
 | `synara/src/app/pages/auth/reset-password/PasswordResetForm.tsx`               | `page`             | `requirement-linked`           |   0 |   0 | `FR-7.1-001`,`FR-7.1-004`,`FR-7.1-006`                                                                                                                                                                                                    |
 | `synara/src/app/pages/auth/reset-password/resetPasswordUtil.ts`                | `page`             | `requirement-linked`           |   0 |   1 | `FR-7.1-001`,`FR-7.1-004`,`FR-7.1-006`                                                                                                                                                                                                    |
 | `synara/src/app/pages/client/ClientNonUIFeatures.tsx`                          | `page`             | `requirement-linked`           |   6 |  18 | `FR-7.8-004`,`FR-7.8-005`,`FR-7.8-006`,`FR-7.8-007`,`FR-7.8-008`,`FR-7.11-005`,`FR-7.4-006`                                                                                                                                                                                       |
-| `synara/src/app/pages/client/ClientRoot.tsx`                                   | `page`             | `requirement-linked`           |   2 |   5 | `FR-7.1-007`,`FR-7.1-008`,`FR-7.1-012`,`FR-7.2-001`,`FR-7.2-002`,`FR-7.4-005`,`FR-7.5-005`,`FR-7.1-010`                                                                                                                                   |
+| `synara/src/app/pages/client/ClientRoot.tsx`                                   | `page`             | `requirement-linked`           |   2 |   5 | `FR-7.1-007`,`FR-7.1-008`,`FR-7.1-012`,`FR-7.2-001`,`FR-7.2-002`,`FR-7.4-005`,`FR-7.5-005`,`FR-7.1-010`,`FR-7.9-012`,`FR-7.9-013`                                                                                                         |
 | `synara/src/app/pages/client/SyncStatus.tsx`                                   | `page`             | `requirement-linked`           |   0 |   0 | `FR-7.2-001`                                                                                                                                                                                                                              |
 | `synara/src/app/pages/client/explore/Server.tsx`                               | `page`             | `requirement-linked`           |   0 |   1 | `FR-7.6-006`,`FR-7.10-005`                                                                                                                                                                                                                |
 | `synara/src/app/pages/client/inbox/Invites.tsx`                                | `page`             | `requirement-linked`           |   0 |   7 | `FR-7.2-003`,`FR-7.6-001`                                                                                                                                                                                                                 |
@@ -12051,7 +12085,7 @@ Limited rejected-review correction (`p0.2-correct-38-fr-7.9-012-store-continuity
 | `synara/src/app/plugins/react-custom-html-parser.tsx`                          | `plugin`           | `requirement-linked`           |   0 |   4 | `FR-7.7-008`                                                                                                                                                                                                                              |
 | `synara/src/app/plugins/recent-emoji.ts`                                       | `plugin`           | `requirement-linked`           |   0 |   1 | `FR-7.7-006`,`FR-7.7-007`                                                                                                                                                                                                                 |
 | `synara/src/app/plugins/via-servers.ts`                                        | `plugin`           | `shared-matrix-infrastructure` |   0 |   0 | `FR-7.3-001`,`FR-7.6-001`,`FR-7.6-004`,`FR-7.7-005`,`FR-7.11-002`,`FR-7.4-002`                                                                                                                                                            |
-| `synara/src/app/state/backupRestore.ts`                                        | `state`            | `requirement-linked`           |   0 |   0 | `FR-7.9-006`,`FR-7.9-013`                                                                                                                                                                                                                 |
+| `synara/src/app/state/backupRestore.ts`                                        | `state`            | `requirement-linked`           |   0 |   0 | `FR-7.9-006`,`FR-7.9-009`                                                                                                                                                                                                                 |
 | `synara/src/app/state/hooks/inviteList.ts`                                     | `state`            | `requirement-linked`           |   0 |   7 | `FR-7.2-003`                                                                                                                                                                                                                              |
 | `synara/src/app/state/hooks/roomList.ts`                                       | `state`            | `requirement-linked`           |   0 |  13 | `FR-7.2-003`                                                                                                                                                                                                                              |
 | `synara/src/app/state/hooks/useBindAtoms.ts`                                   | `state`            | `requirement-linked`           |   0 |   0 | `FR-7.1-009`                                                                                                                                                                                                                              |

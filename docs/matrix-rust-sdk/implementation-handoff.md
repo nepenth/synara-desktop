@@ -33,15 +33,14 @@ without explicit user approval.
 - Checkpoint commits: `06d0f86` (traceability scaffold), `9c91e0f` (handoff)
 - **Accepted this session:**
   - FR-7.8-004 through FR-7.8-009 (section 7.8 complete for P0.2 audit)
-  - FR-7.9-001 through FR-7.9-012
+  - FR-7.9-001 through FR-7.9-013 (**section 7.9 complete** for P0.2 audit)
 - **Progress loop:** host scheduled task every **4 minutes**
   (ID `019f95928db7`) continues bounded FR audits; also daily durable
   orchestrator `9022c2f8-9b21-411a-acf9-a36c10515f72`
-- **Last accepted:** FR-7.9-012 (store continuity across upgrades and crashes;
-  `p0.2-correct-38-fr-7.9-012-store-continuity-upgrades-crashes`)
-- **Next writer task:** FR-7.9-013 (store corruption detection and
-  non-destructive recovery guidance), then remaining shallow 7.9–7.11 rows
-  (~16)
+- **Last accepted:** FR-7.9-013 store corruption detection **partial**
+  (`p0.2-correct-39`)
+- **Next writer task:** FR-7.10-001 (room message search and pagination), then
+  remaining shallow 7.10–7.11 rows (~15)
 - No production Matrix Rust SDK replacement code accepted
 - **No open P0.2 PR yet** (open after P0.2 complete)
 
@@ -50,10 +49,10 @@ Phase 0 evidence accepted before this handoff:
 - P0.1 SDK usage inventory is merged to the integration branch.
 - P0.3 exact Matrix Rust SDK 0.18.0 capability dossier is merged to the
   integration branch.
-- P0.2 branch carries accepted 7.8–7.9.012 corrections; ~16 shallow rows remain
-  in 7.9–7.11.
+- P0.2 branch carries accepted 7.8–7.9 corrections; ~15 shallow rows remain
+  in 7.10–7.11.
 
-P0.2 is not complete. Resume at FR-7.9-013, then audit remaining 7.9–7.11
+P0.2 is not complete. Resume at FR-7.10-001, then audit remaining 7.10–7.11
 before declaring P0.2 accepted.
 
 Accepted notification findings that must be preserved:
@@ -174,6 +173,9 @@ Accepted notification findings that must be preserved:
   Upgrades = reopen same fixed names (no separate migrator). Store-init order
   is FR-7.9-001; multi-account wipe FR-7.9-011; corruption FR-7.9-013.
   Cutover P2.2/P8.8/P13.2 SC-083+SC-061 compile-shape-only.
+- FR-7.9-013: status **`partial`**. Continuity anomaly detection +
+  non-destructive ClientRoot guidance; no true corruption integrity scan or
+  automatic non-destructive repair.
 
 ## Branch and PR contract
 
