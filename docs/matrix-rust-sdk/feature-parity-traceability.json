@@ -81127,242 +81127,64 @@
       "current_status": "partial",
       "current_production_files": [
         {
-          "path": "synara/src/app/hooks/useCall.ts",
-          "bucket": "hook",
-          "categories": [
-            "room_methods",
-            "event_emitters_listeners",
-            "matrixrtc_calls"
-          ],
-          "symbols_or_candidates": [],
-          "line_refs": [
-            {
-              "symbol": "on:MatrixRTCSessionManagerEvents.SessionStarted",
-              "line": 25,
-              "kind": "listener_candidate"
-            },
-            {
-              "symbol": "on:MatrixRTCSessionManagerEvents.SessionEnded",
-              "line": 26,
-              "kind": "listener_candidate"
-            },
-            {
-              "symbol": "off:MatrixRTCSessionManagerEvents.SessionStarted",
-              "line": 28,
-              "kind": "listener_candidate"
-            },
-            {
-              "symbol": "off:MatrixRTCSessionManagerEvents.SessionEnded",
-              "line": 29,
-              "kind": "listener_candidate"
-            },
-            {
-              "symbol": "on:MatrixRTCSessionEvent.MembershipsChanged",
-              "line": 46,
-              "kind": "listener_candidate"
-            },
-            {
-              "symbol": "removeListener:MatrixRTCSessionEvent.MembershipsChanged",
-              "line": 48,
-              "kind": "listener_candidate"
-            },
-            {
-              "symbol": "on:MatrixRTCSessionEvent.MembershipsChanged",
-              "line": 57,
-              "kind": "listener_candidate"
-            },
-            {
-              "symbol": "removeListener:MatrixRTCSessionEvent.MembershipsChanged",
-              "line": 59,
-              "kind": "listener_candidate"
-            }
-          ],
-          "model_coupling": [
-            "CallMembership",
-            "Room"
-          ],
-          "behavior_relevant_method_candidates": [],
-          "behavior_relevant_listener_candidates": [
-            {
-              "event": "MatrixRTCSessionManagerEvents.SessionStarted",
-              "method": "on",
-              "line": 25,
-              "category": "matrixrtc_calls",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            },
-            {
-              "event": "MatrixRTCSessionManagerEvents.SessionEnded",
-              "method": "on",
-              "line": 26,
-              "category": "matrixrtc_calls",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            },
-            {
-              "event": "MatrixRTCSessionManagerEvents.SessionStarted",
-              "method": "off",
-              "line": 28,
-              "category": "matrixrtc_calls",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            },
-            {
-              "event": "MatrixRTCSessionManagerEvents.SessionEnded",
-              "method": "off",
-              "line": 29,
-              "category": "matrixrtc_calls",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            },
-            {
-              "event": "MatrixRTCSessionEvent.MembershipsChanged",
-              "method": "on",
-              "line": 46,
-              "category": "matrixrtc_calls",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            },
-            {
-              "event": "MatrixRTCSessionEvent.MembershipsChanged",
-              "method": "removeListener",
-              "line": 48,
-              "category": "matrixrtc_calls",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            },
-            {
-              "event": "MatrixRTCSessionEvent.MembershipsChanged",
-              "method": "on",
-              "line": 57,
-              "category": "matrixrtc_calls",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            },
-            {
-              "event": "MatrixRTCSessionEvent.MembershipsChanged",
-              "method": "removeListener",
-              "line": 59,
-              "category": "matrixrtc_calls",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            }
-          ]
-        },
-        {
-          "path": "synara/src/app/hooks/useCallEmbed.ts",
-          "bucket": "hook",
-          "categories": [
-            "client_methods",
-            "room_methods"
-          ],
-          "symbols_or_candidates": [],
-          "line_refs": [],
-          "model_coupling": [
-            "MatrixClient",
-            "Room"
-          ],
-          "behavior_relevant_method_candidates": [],
-          "behavior_relevant_listener_candidates": [],
-          "symbols_or_candidates_note": "No requirement-relevant method/listener candidates filtered from this file's P0.1 AST hits; file remains linked for structural/model ownership. See all_candidates_in_linked_files on the requirement."
-        },
-        {
-          "path": "synara/src/app/plugins/call/CallEmbed.ts",
-          "bucket": "plugin",
-          "categories": [
-            "client_methods",
-            "room_methods",
-            "event_emitters_listeners",
-            "sync_lifecycle",
-            "room_lists",
-            "timelines",
-            "searches",
-            "uia_auth",
-            "client_events"
-          ],
-          "symbols_or_candidates": [
-            "getDeviceId",
-            "search"
-          ],
-          "line_refs": [
-            {
-              "symbol": "getDeviceId",
-              "line": 66,
-              "kind": "method_candidate"
-            },
-            {
-              "symbol": "search",
-              "line": 91,
-              "kind": "method_candidate"
-            },
-            {
-              "symbol": "on:ClientEvent.ToDeviceEvent",
-              "line": 221,
-              "kind": "listener_candidate"
-            },
-            {
-              "symbol": "off:ClientEvent.ToDeviceEvent",
-              "line": 240,
-              "kind": "listener_candidate"
-            }
-          ],
-          "model_coupling": [
-            "MatrixClient",
-            "MatrixEvent",
-            "Room"
-          ],
-          "behavior_relevant_method_candidates": [
-            {
-              "name": "getDeviceId",
-              "line": 66,
-              "category": "uia_auth",
-              "kind": "property_call_candidate",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            },
-            {
-              "name": "search",
-              "line": 91,
-              "category": "searches",
-              "kind": "property_reference_candidate",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            }
-          ],
-          "behavior_relevant_listener_candidates": [
-            {
-              "event": "ClientEvent.ToDeviceEvent",
-              "method": "on",
-              "line": 221,
-              "category": "client_events",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            },
-            {
-              "event": "ClientEvent.ToDeviceEvent",
-              "method": "off",
-              "line": 240,
-              "category": "client_events",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            }
-          ]
-        },
-        {
           "path": "synara/src/app/plugins/call/CallWidgetDriver.ts",
           "bucket": "plugin",
           "categories": [
             "client_methods",
             "crypto_verification_recovery",
-            "authenticated_media",
-            "room_lists",
-            "timelines",
-            "searches",
-            "uia_auth",
-            "custom_raw_event_sends"
+            "custom_raw_event_sends",
+            "matrixrtc_calls"
           ],
           "symbols_or_candidates": [
-            "getDeviceId",
-            "searchUserDirectory"
+            "sendToDevice",
+            "encryptToDeviceMessages",
+            "queueToDevice",
+            "getCrypto",
+            "sendEvent",
+            "getCallCapabilities"
           ],
           "line_refs": [
             {
-              "symbol": "getDeviceId",
-              "line": 40,
-              "kind": "method_candidate"
+              "symbol": "sendToDevice encrypted+clear",
+              "line": 149,
+              "kind": "product_helper",
+              "relevance_reason": "PRIMARY OUTBOUND TO-DEVICE L149–198: widget-driven sendToDevice(eventType, encrypted, contentMap). Encrypted path: getCrypto → encryptToDeviceMessages → queueToDevice; clear path: queueToDevice batch. This is the host bridge Element Call uses for CallEncryptionKeysPrefix and related call to-device types."
             },
             {
-              "symbol": "searchUserDirectory",
-              "line": 297,
-              "kind": "method_candidate"
+              "symbol": "getCrypto encrypt path",
+              "line": 157,
+              "kind": "method_candidate",
+              "relevance_reason": "Encrypted to-device requires client.getCrypto(); throws if E2EE not enabled."
+            },
+            {
+              "symbol": "encryptToDeviceMessages",
+              "line": 177,
+              "kind": "method_candidate",
+              "relevance_reason": "crypto.encryptToDeviceMessages(eventType, recipients, content) then queueToDevice(batch) — product encrypt path for widget key/call to-device payloads."
+            },
+            {
+              "symbol": "queueToDevice encrypted",
+              "line": 183,
+              "kind": "method_candidate",
+              "relevance_reason": "Outbound encrypted batch queued after encryptToDeviceMessages."
+            },
+            {
+              "symbol": "queueToDevice clear",
+              "line": 187,
+              "kind": "method_candidate",
+              "relevance_reason": "Outbound clear to-device path (encrypted=false)."
+            },
+            {
+              "symbol": "sendEvent room events",
+              "line": 51,
+              "kind": "product_helper",
+              "relevance_reason": "OUTBOUND ROOM EVENT L51–82: widget sendEvent for allowed room/timeline types including io.element.call.encryption_keys (capability-gated). Not state membership write (003)."
+            },
+            {
+              "symbol": "getCallCapabilities ctor",
+              "line": 43,
+              "kind": "product_helper",
+              "relevance_reason": "allowedCapabilities from getCallCapabilities — grants encryption_keys + CallEncryptionKeysPrefix among call types."
             }
           ],
           "model_coupling": [
@@ -81372,135 +81194,300 @@
           ],
           "behavior_relevant_method_candidates": [
             {
-              "name": "getDeviceId",
-              "line": 40,
-              "category": "uia_auth",
+              "name": "getCrypto",
+              "line": 157,
+              "category": "crypto_verification_recovery",
               "kind": "property_call_candidate",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+              "confidence": "Source-inspected: client.getCrypto() on encrypted sendToDevice path.",
+              "relevance_reason": "Encrypted to-device key/call payload path requires crypto API."
             },
             {
-              "name": "searchUserDirectory",
-              "line": 297,
-              "category": "searches",
+              "name": "encryptToDeviceMessages",
+              "line": 177,
+              "category": "crypto_verification_recovery",
               "kind": "property_call_candidate",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+              "confidence": "Source-inspected: crypto.encryptToDeviceMessages for widget outbound encrypted to-device.",
+              "relevance_reason": "Outbound encryption for Element Call key/call to-device types."
+            },
+            {
+              "name": "queueToDevice",
+              "line": 183,
+              "category": "client_methods",
+              "kind": "property_call_candidate",
+              "confidence": "Source-inspected: client.queueToDevice after encrypt and on clear path L187.",
+              "relevance_reason": "Outbound to-device transport for encryption-key / call signaling."
+            },
+            {
+              "name": "sendEvent",
+              "line": 74,
+              "category": "custom_raw_event_sends",
+              "kind": "property_call_candidate",
+              "confidence": "Source-inspected: client.sendEvent for non-state room events (encryption_keys room event path).",
+              "relevance_reason": "Outbound io.element.call.encryption_keys room-event send via widget driver."
             }
           ],
-          "behavior_relevant_listener_candidates": []
+          "behavior_relevant_listener_candidates": [],
+          "symbols_or_candidates_note": "PRIMARY OUTBOUND owner for FR-7.11-004: sendToDevice (encrypt+queue) and sendEvent for encryption_keys. EXCLUDE as sole: getDeviceId alone, searchUserDirectory (FR-7.10-005 adjacency), membership DISPLAY (001), embed URL alone (002), join/leave alone (003)."
+        },
+        {
+          "path": "synara/src/app/plugins/call/CallEmbed.ts",
+          "bucket": "plugin",
+          "categories": [
+            "client_methods",
+            "event_emitters_listeners",
+            "client_events",
+            "matrixrtc_calls"
+          ],
+          "symbols_or_candidates": [
+            "onToDeviceEvent",
+            "feedToDevice",
+            "feedEvent",
+            "ClientEvent.ToDeviceEvent",
+            "ClientEvent.Event",
+            "MatrixEventEvent.Decrypted",
+            "decryptEventIfNeeded"
+          ],
+          "line_refs": [
+            {
+              "symbol": "on:ClientEvent.ToDeviceEvent",
+              "line": 221,
+              "kind": "listener_candidate",
+              "relevance_reason": "PRIMARY INBOUND TO-DEVICE LISTEN L221: attach ClientEvent.ToDeviceEvent → onToDeviceEvent for CallEncryptionKeysPrefix and related call to-device."
+            },
+            {
+              "symbol": "off:ClientEvent.ToDeviceEvent",
+              "line": 240,
+              "kind": "listener_candidate",
+              "relevance_reason": "Dispose detaches ToDeviceEvent listener."
+            },
+            {
+              "symbol": "onToDeviceEvent decrypt+feedToDevice",
+              "line": 283,
+              "kind": "product_helper",
+              "relevance_reason": "PRIMARY INBOUND L283–287: decryptEventIfNeeded; skip decryption failure; call.feedToDevice(effectiveEvent, isEncrypted) into ClientWidgetApi."
+            },
+            {
+              "symbol": "on:ClientEvent.Event",
+              "line": 218,
+              "kind": "listener_candidate",
+              "relevance_reason": "Room timeline event feed including io.element.call.encryption_keys room events → onEvent → feedEvent."
+            },
+            {
+              "symbol": "on:MatrixEventEvent.Decrypted",
+              "line": 219,
+              "kind": "listener_candidate",
+              "relevance_reason": "Decrypted room events re-fed to widget (encrypted encryption_keys path)."
+            },
+            {
+              "symbol": "on:RoomStateEvent.Events",
+              "line": 220,
+              "kind": "listener_candidate",
+              "relevance_reason": "State feed adjacency (RoomEncryption etc.); encryption_keys is room timeline event primary, not state."
+            },
+            {
+              "symbol": "onEvent decrypt+feedEvent",
+              "line": 266,
+              "kind": "product_helper",
+              "relevance_reason": "INBOUND ROOM EVENT L266–268: decryptEventIfNeeded + feedEvent for allowed room events including encryption_keys."
+            },
+            {
+              "symbol": "feedEvent ClientWidgetApi",
+              "line": 353,
+              "kind": "product_helper",
+              "relevance_reason": "feedEvent L353–388 → call.feedEvent(raw) into ClientWidgetApi (room encryption_keys receive path)."
+            }
+          ],
+          "model_coupling": [
+            "MatrixClient",
+            "MatrixEvent",
+            "Room"
+          ],
+          "behavior_relevant_method_candidates": [
+            {
+              "name": "decryptEventIfNeeded",
+              "line": 284,
+              "category": "crypto_verification_recovery",
+              "kind": "property_call_candidate",
+              "confidence": "Source-inspected: mx.decryptEventIfNeeded before feedToDevice.",
+              "relevance_reason": "Inbound to-device decrypt before widget feed."
+            },
+            {
+              "name": "feedToDevice",
+              "line": 286,
+              "category": "client_methods",
+              "kind": "property_call_candidate",
+              "confidence": "Source-inspected: ClientWidgetApi.feedToDevice after decrypt.",
+              "relevance_reason": "Inbound to-device (CallEncryptionKeysPrefix) delivery into Element Call widget."
+            },
+            {
+              "name": "feedEvent",
+              "line": 383,
+              "category": "client_methods",
+              "kind": "property_call_candidate",
+              "confidence": "Source-inspected: ClientWidgetApi.feedEvent for room timeline including encryption_keys.",
+              "relevance_reason": "Inbound io.element.call.encryption_keys room-event delivery into widget."
+            }
+          ],
+          "behavior_relevant_listener_candidates": [
+            {
+              "event": "ClientEvent.ToDeviceEvent",
+              "method": "on",
+              "line": 221,
+              "category": "client_events",
+              "confidence": "Source-inspected: mx.on(ClientEvent.ToDeviceEvent, onToDeviceEvent).",
+              "relevance_reason": "Inbound encrypted/clear to-device key/call flow."
+            },
+            {
+              "event": "ClientEvent.ToDeviceEvent",
+              "method": "off",
+              "line": 240,
+              "category": "client_events",
+              "confidence": "Source-inspected: dispose off ToDeviceEvent.",
+              "relevance_reason": "Listener cleanup for to-device feed."
+            },
+            {
+              "event": "ClientEvent.Event",
+              "method": "on",
+              "line": 218,
+              "category": "client_events",
+              "confidence": "Source-inspected: mx.on(ClientEvent.Event, onEvent) room feed path.",
+              "relevance_reason": "Room event path for encryption_keys receive."
+            },
+            {
+              "event": "MatrixEventEvent.Decrypted",
+              "method": "on",
+              "line": 219,
+              "category": "client_events",
+              "confidence": "Source-inspected: Decrypted re-feed to widget.",
+              "relevance_reason": "Encrypted room encryption_keys after decrypt."
+            }
+          ],
+          "symbols_or_candidates_note": "PRIMARY INBOUND owner for FR-7.11-004: ToDeviceEvent → onToDeviceEvent → feedToDevice; Event/Decrypted → feedEvent for encryption_keys. EXCLUDE as sole: getDeviceId, widgetUrl.search false Client.search AST, membership DISPLAY (001), embed URL alone (002), join/leave alone (003), dispose-only cleanup (005)."
+        },
+        {
+          "path": "synara/src/app/plugins/call/utils.ts",
+          "bucket": "plugin",
+          "categories": [
+            "matrixrtc_calls"
+          ],
+          "symbols_or_candidates": [
+            "getCallCapabilities",
+            "io.element.call.encryption_keys",
+            "EventType.CallEncryptionKeysPrefix"
+          ],
+          "line_refs": [
+            {
+              "symbol": "io.element.call.encryption_keys room send+receive",
+              "line": 88,
+              "kind": "product_helper",
+              "relevance_reason": "CAPABILITIES ROOM L88–98: forRoomEvent Send+Receive for io.element.call.encryption_keys (and rageshake/reactions/decline siblings)."
+            },
+            {
+              "symbol": "CallEncryptionKeysPrefix to-device send+receive",
+              "line": 100,
+              "kind": "product_helper",
+              "relevance_reason": "CAPABILITIES TO-DEVICE L100–115: forToDeviceEvent Send+Receive for CallInvite…CallEncryptionKeysPrefix (EventType.CallEncryptionKeysPrefix) — grants widget outbound/inbound key to-device types."
+            },
+            {
+              "symbol": "getCallCapabilities",
+              "line": 9,
+              "kind": "product_helper",
+              "relevance_reason": "Capability catalog consumed by CallWidgetDriver.validateCapabilities."
+            }
+          ],
+          "model_coupling": [],
+          "behavior_relevant_method_candidates": [],
+          "behavior_relevant_listener_candidates": [],
+          "symbols_or_candidates_note": "PRIMARY CAPABILITY catalog for encryption_keys room events + CallEncryptionKeysPrefix to-device. Capability grant ≠ high-level MatrixRTC key-session lifecycle ownership (residual GAP)."
         }
       ],
       "ui_entry_points": [
         "synara/src/app/plugins/call/CallEmbed.ts"
       ],
+      "ui_entry_points_rationale": "FR-7.11-004 is encryption-key to-device/event FLOW for Element Call — product path is widget-mediated (no dedicated key-session UI). Primary host surface: CallEmbed (iframe + ClientWidgetApi) where outbound goes through CallWidgetDriver.sendToDevice/sendEvent and inbound ToDeviceEvent/Event feeds feedToDevice/feedEvent. EXCLUDE membership Live chips alone (001). EXCLUDE embed URL/startup alone (002). EXCLUDE join/leave alone (003). EXCLUDE cleanup alone (005). EXCLUDE CSP (006). EXCLUDE experimental risk alone (007).",
       "state_owners": [
         {
           "path": "synara/src/app/plugins/call/CallWidgetDriver.ts",
-          "ownership_evidence": "Identified as coordination/state module for this behavior via path role (state/client/util service) and P0.1 categories/candidates; not merely a presentational component."
+          "ownership_evidence": "PRIMARY OUTBOUND: sendToDevice encrypt+queue path and sendEvent for allowed room events including io.element.call.encryption_keys."
+        },
+        {
+          "path": "synara/src/app/plugins/call/CallEmbed.ts",
+          "ownership_evidence": "PRIMARY INBOUND: ClientEvent.ToDeviceEvent → onToDeviceEvent → feedToDevice; ClientEvent.Event/Decrypted → feedEvent for encryption_keys room events."
+        },
+        {
+          "path": "synara/src/app/plugins/call/utils.ts",
+          "ownership_evidence": "PRIMARY CAPABILITIES: getCallCapabilities grants send/receive io.element.call.encryption_keys and to-device CallEncryptionKeysPrefix."
         }
       ],
       "current_js_sdk": {
+        "behavior_relevance_policy": "Exact-line source inspection for Element Call encryption-key to-device and room-event FLOW only. RETAIN: CallWidgetDriver.sendToDevice (encryptToDeviceMessages+queueToDevice / clear queueToDevice); sendEvent for io.element.call.encryption_keys; CallEmbed ToDeviceEvent→onToDeviceEvent→feedToDevice; Event/Decrypted→feedEvent; getCallCapabilities encryption_keys + CallEncryptionKeysPrefix. EXCLUDE as sole evidence: membership DISPLAY (001); embed URL/startup alone (002); join/leave write alone (003); cleanup alone (005); CSP (006); experimental risk alone (007); useCall membership display hooks; getDeviceId alone; searchUserDirectory; widgetUrl.search false Client.search AST; dual-backend/SDK selector/raw /_matrix HTTP; claiming product-owned high-level MatrixRTC key-session API.",
         "behavior_relevant_method_candidates": [
           {
-            "path": "synara/src/app/plugins/call/CallEmbed.ts",
-            "name": "getDeviceId",
-            "line": 66,
-            "category": "uia_auth",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-          },
-          {
-            "path": "synara/src/app/plugins/call/CallEmbed.ts",
-            "name": "search",
-            "line": 91,
-            "category": "searches",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+            "path": "synara/src/app/plugins/call/CallWidgetDriver.ts",
+            "name": "getCrypto",
+            "line": 157,
+            "category": "crypto_verification_recovery",
+            "confidence": "Source-inspected: client.getCrypto() on encrypted sendToDevice path.",
+            "relevance_reason": "Encrypted outbound to-device for call keys."
           },
           {
             "path": "synara/src/app/plugins/call/CallWidgetDriver.ts",
-            "name": "getDeviceId",
-            "line": 40,
-            "category": "uia_auth",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+            "name": "encryptToDeviceMessages",
+            "line": 177,
+            "category": "crypto_verification_recovery",
+            "confidence": "Source-inspected: crypto.encryptToDeviceMessages for widget outbound.",
+            "relevance_reason": "Outbound encrypt for CallEncryptionKeysPrefix / call to-device."
           },
           {
             "path": "synara/src/app/plugins/call/CallWidgetDriver.ts",
-            "name": "searchUserDirectory",
-            "line": 297,
-            "category": "searches",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+            "name": "queueToDevice",
+            "line": 183,
+            "category": "client_methods",
+            "confidence": "Source-inspected: queueToDevice after encrypt (L183) and clear path (L187).",
+            "relevance_reason": "Outbound to-device transport."
+          },
+          {
+            "path": "synara/src/app/plugins/call/CallWidgetDriver.ts",
+            "name": "sendEvent",
+            "line": 74,
+            "category": "custom_raw_event_sends",
+            "confidence": "Source-inspected: client.sendEvent for room timeline events including encryption_keys.",
+            "relevance_reason": "Outbound io.element.call.encryption_keys room event."
+          },
+          {
+            "path": "synara/src/app/plugins/call/CallEmbed.ts",
+            "name": "decryptEventIfNeeded",
+            "line": 284,
+            "category": "crypto_verification_recovery",
+            "confidence": "Source-inspected: decrypt before feedToDevice.",
+            "relevance_reason": "Inbound to-device decrypt."
+          },
+          {
+            "path": "synara/src/app/plugins/call/CallEmbed.ts",
+            "name": "feedToDevice",
+            "line": 286,
+            "category": "client_methods",
+            "confidence": "Source-inspected: ClientWidgetApi.feedToDevice.",
+            "relevance_reason": "Inbound to-device delivery to Element Call."
+          },
+          {
+            "path": "synara/src/app/plugins/call/CallEmbed.ts",
+            "name": "feedEvent",
+            "line": 383,
+            "category": "client_methods",
+            "confidence": "Source-inspected: ClientWidgetApi.feedEvent.",
+            "relevance_reason": "Inbound encryption_keys room event delivery to Element Call."
           }
         ],
         "behavior_relevant_listener_candidates": [
-          {
-            "path": "synara/src/app/hooks/useCall.ts",
-            "event": "MatrixRTCSessionManagerEvents.SessionStarted",
-            "method": "on",
-            "line": 25,
-            "category": "matrixrtc_calls",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-          },
-          {
-            "path": "synara/src/app/hooks/useCall.ts",
-            "event": "MatrixRTCSessionManagerEvents.SessionEnded",
-            "method": "on",
-            "line": 26,
-            "category": "matrixrtc_calls",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-          },
-          {
-            "path": "synara/src/app/hooks/useCall.ts",
-            "event": "MatrixRTCSessionManagerEvents.SessionStarted",
-            "method": "off",
-            "line": 28,
-            "category": "matrixrtc_calls",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-          },
-          {
-            "path": "synara/src/app/hooks/useCall.ts",
-            "event": "MatrixRTCSessionManagerEvents.SessionEnded",
-            "method": "off",
-            "line": 29,
-            "category": "matrixrtc_calls",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-          },
-          {
-            "path": "synara/src/app/hooks/useCall.ts",
-            "event": "MatrixRTCSessionEvent.MembershipsChanged",
-            "method": "on",
-            "line": 46,
-            "category": "matrixrtc_calls",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-          },
-          {
-            "path": "synara/src/app/hooks/useCall.ts",
-            "event": "MatrixRTCSessionEvent.MembershipsChanged",
-            "method": "removeListener",
-            "line": 48,
-            "category": "matrixrtc_calls",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-          },
-          {
-            "path": "synara/src/app/hooks/useCall.ts",
-            "event": "MatrixRTCSessionEvent.MembershipsChanged",
-            "method": "on",
-            "line": 57,
-            "category": "matrixrtc_calls",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-          },
-          {
-            "path": "synara/src/app/hooks/useCall.ts",
-            "event": "MatrixRTCSessionEvent.MembershipsChanged",
-            "method": "removeListener",
-            "line": 59,
-            "category": "matrixrtc_calls",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-          },
           {
             "path": "synara/src/app/plugins/call/CallEmbed.ts",
             "event": "ClientEvent.ToDeviceEvent",
             "method": "on",
             "line": 221,
             "category": "client_events",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+            "confidence": "Source-inspected: inbound to-device feed attach.",
+            "relevance_reason": "Inbound CallEncryptionKeysPrefix / call to-device."
           },
           {
             "path": "synara/src/app/plugins/call/CallEmbed.ts",
@@ -81508,78 +81495,52 @@
             "method": "off",
             "line": 240,
             "category": "client_events",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+            "confidence": "Source-inspected: dispose detach.",
+            "relevance_reason": "Listener cleanup."
+          },
+          {
+            "path": "synara/src/app/plugins/call/CallEmbed.ts",
+            "event": "ClientEvent.Event",
+            "method": "on",
+            "line": 218,
+            "category": "client_events",
+            "confidence": "Source-inspected: room event feed including encryption_keys.",
+            "relevance_reason": "Inbound room encryption_keys path."
+          },
+          {
+            "path": "synara/src/app/plugins/call/CallEmbed.ts",
+            "event": "MatrixEventEvent.Decrypted",
+            "method": "on",
+            "line": 219,
+            "category": "client_events",
+            "confidence": "Source-inspected: re-feed after decrypt.",
+            "relevance_reason": "Encrypted room encryption_keys after decrypt."
           }
         ],
         "all_candidates_in_linked_files": {
-          "method_count": 20,
-          "listener_count": 18,
-          "note": "Unfiltered P0.1 AST candidates across linked production import files. Do not treat these as proven APIs for this requirement; use behavior_relevant_* fields.",
+          "method_count": 18,
+          "listener_count": 8,
+          "note": "Unfiltered P0.1 AST candidates across linked production files (CallWidgetDriver, CallEmbed, utils). Do not treat these as proven APIs for this requirement; use behavior_relevant_* fields.",
           "methods_sample": [
             {
-              "path": "synara/src/app/plugins/call/CallEmbed.ts",
-              "name": "getSafeUserId",
-              "line": 65
-            },
-            {
-              "path": "synara/src/app/plugins/call/CallEmbed.ts",
-              "name": "getDeviceId",
-              "line": 66
-            },
-            {
-              "path": "synara/src/app/plugins/call/CallEmbed.ts",
-              "name": "search",
-              "line": 91
-            },
-            {
-              "path": "synara/src/app/plugins/call/CallEmbed.ts",
-              "name": "getSafeUserId",
-              "line": 134
-            },
-            {
-              "path": "synara/src/app/plugins/call/CallEmbed.ts",
-              "name": "getRooms",
-              "line": 209
-            },
-            {
-              "path": "synara/src/app/plugins/call/CallEmbed.ts",
-              "name": "getRoom",
-              "line": 295
-            },
-            {
-              "path": "synara/src/app/plugins/call/CallEmbed.ts",
-              "name": "findEventById",
-              "line": 296
-            },
-            {
-              "path": "synara/src/app/plugins/call/CallEmbed.ts",
-              "name": "getRoom",
-              "line": 309
-            },
-            {
-              "path": "synara/src/app/plugins/call/CallEmbed.ts",
-              "name": "getRoom",
-              "line": 349
+              "path": "synara/src/app/plugins/call/CallWidgetDriver.ts",
+              "name": "sendToDevice",
+              "line": 149
             },
             {
               "path": "synara/src/app/plugins/call/CallWidgetDriver.ts",
-              "name": "getDeviceId",
-              "line": 40
+              "name": "getCrypto",
+              "line": 157
             },
             {
               "path": "synara/src/app/plugins/call/CallWidgetDriver.ts",
-              "name": "getSafeUserId",
-              "line": 43
+              "name": "encryptToDeviceMessages",
+              "line": 177
             },
             {
               "path": "synara/src/app/plugins/call/CallWidgetDriver.ts",
-              "name": "sendStateEvent",
-              "line": 64
-            },
-            {
-              "path": "synara/src/app/plugins/call/CallWidgetDriver.ts",
-              "name": "redactEvent",
-              "line": 72
+              "name": "queueToDevice",
+              "line": 183
             },
             {
               "path": "synara/src/app/plugins/call/CallWidgetDriver.ts",
@@ -81587,60 +81548,32 @@
               "line": 74
             },
             {
+              "path": "synara/src/app/plugins/call/CallEmbed.ts",
+              "name": "decryptEventIfNeeded",
+              "line": 284
+            },
+            {
+              "path": "synara/src/app/plugins/call/CallEmbed.ts",
+              "name": "feedToDevice",
+              "line": 286
+            },
+            {
+              "path": "synara/src/app/plugins/call/CallEmbed.ts",
+              "name": "feedEvent",
+              "line": 383
+            },
+            {
               "path": "synara/src/app/plugins/call/CallWidgetDriver.ts",
-              "name": "getCrypto",
-              "line": 157
+              "name": "searchUserDirectory",
+              "line": 297
+            },
+            {
+              "path": "synara/src/app/plugins/call/CallEmbed.ts",
+              "name": "getDeviceId",
+              "line": 66
             }
           ],
           "listeners_sample": [
-            {
-              "path": "synara/src/app/hooks/useCall.ts",
-              "event": "MatrixRTCSessionManagerEvents.SessionStarted",
-              "method": "on",
-              "line": 25
-            },
-            {
-              "path": "synara/src/app/hooks/useCall.ts",
-              "event": "MatrixRTCSessionManagerEvents.SessionEnded",
-              "method": "on",
-              "line": 26
-            },
-            {
-              "path": "synara/src/app/hooks/useCall.ts",
-              "event": "MatrixRTCSessionManagerEvents.SessionStarted",
-              "method": "off",
-              "line": 28
-            },
-            {
-              "path": "synara/src/app/hooks/useCall.ts",
-              "event": "MatrixRTCSessionManagerEvents.SessionEnded",
-              "method": "off",
-              "line": 29
-            },
-            {
-              "path": "synara/src/app/hooks/useCall.ts",
-              "event": "MatrixRTCSessionEvent.MembershipsChanged",
-              "method": "on",
-              "line": 46
-            },
-            {
-              "path": "synara/src/app/hooks/useCall.ts",
-              "event": "MatrixRTCSessionEvent.MembershipsChanged",
-              "method": "removeListener",
-              "line": 48
-            },
-            {
-              "path": "synara/src/app/hooks/useCall.ts",
-              "event": "MatrixRTCSessionEvent.MembershipsChanged",
-              "method": "on",
-              "line": 57
-            },
-            {
-              "path": "synara/src/app/hooks/useCall.ts",
-              "event": "MatrixRTCSessionEvent.MembershipsChanged",
-              "method": "removeListener",
-              "line": 59
-            },
             {
               "path": "synara/src/app/plugins/call/CallEmbed.ts",
               "event": "ClientEvent.Event",
@@ -81667,115 +81600,57 @@
             },
             {
               "path": "synara/src/app/plugins/call/CallEmbed.ts",
-              "event": "ClientEvent.Event",
+              "event": "ClientEvent.ToDeviceEvent",
               "method": "off",
-              "line": 237
-            },
-            {
-              "path": "synara/src/app/plugins/call/CallEmbed.ts",
-              "event": "MatrixEventEvent.Decrypted",
-              "method": "off",
-              "line": 238
-            },
-            {
-              "path": "synara/src/app/plugins/call/CallEmbed.ts",
-              "event": "RoomStateEvent.Events",
-              "method": "off",
-              "line": 239
+              "line": 240
             }
           ]
         },
         "models": [
-          "CallMembership",
           "MatrixClient",
           "MatrixError",
           "MatrixEvent",
           "Room"
         ],
         "network_routes": [],
-        "deep_imports": [
-          {
-            "path": "synara/src/app/hooks/useCall.ts",
-            "module": "matrix-js-sdk/lib/matrixrtc/MatrixRTCSession",
-            "line": 2,
-            "named_imports": [
-              "MatrixRTCSession",
-              "MatrixRTCSessionEvent"
-            ],
-            "is_type_only": false,
-            "linked_requirement_ids": [
-              "FR-7.11-001",
-              "FR-7.11-003",
-              "FR-7.11-004",
-              "FR-7.11-005"
-            ],
-            "cutover_disposition": "replace-deep-js-sdk-import-with-synara-dto-or-rust-projection"
-          },
-          {
-            "path": "synara/src/app/hooks/useCall.ts",
-            "module": "matrix-js-sdk/lib/matrixrtc/CallMembership",
-            "line": 6,
-            "named_imports": [
-              "CallMembership"
-            ],
-            "is_type_only": false,
-            "linked_requirement_ids": [
-              "FR-7.11-001",
-              "FR-7.11-003",
-              "FR-7.11-004",
-              "FR-7.11-005"
-            ],
-            "cutover_disposition": "replace-deep-js-sdk-import-with-synara-dto-or-rust-projection"
-          },
-          {
-            "path": "synara/src/app/hooks/useCall.ts",
-            "module": "matrix-js-sdk/lib/matrixrtc/MatrixRTCSessionManager",
-            "line": 8,
-            "named_imports": [
-              "MatrixRTCSessionManagerEvents"
-            ],
-            "is_type_only": false,
-            "linked_requirement_ids": [
-              "FR-7.11-001",
-              "FR-7.11-003",
-              "FR-7.11-004",
-              "FR-7.11-005"
-            ],
-            "cutover_disposition": "replace-deep-js-sdk-import-with-synara-dto-or-rust-projection"
-          }
-        ],
+        "deep_imports": [],
         "method_candidates": [
-          "getDeviceId",
-          "search",
-          "getDeviceId",
-          "searchUserDirectory"
+          "getCrypto",
+          "encryptToDeviceMessages",
+          "queueToDevice",
+          "sendEvent",
+          "decryptEventIfNeeded",
+          "feedToDevice",
+          "feedEvent"
         ],
         "listener_events": [
           "ClientEvent.ToDeviceEvent",
-          "MatrixRTCSessionEvent.MembershipsChanged",
-          "MatrixRTCSessionManagerEvents.SessionEnded",
-          "MatrixRTCSessionManagerEvents.SessionStarted"
+          "ClientEvent.Event",
+          "MatrixEventEvent.Decrypted"
         ]
       },
       "current_behavior_and_limits": {
-        "summary": "Current desktop implements this via 4 production matrix-js-sdk-related file(s); status=partial.",
-        "notes": null,
-        "limits": "P0.1 method candidates are AST name hits, not type-checked receiver proofs."
+        "summary": "PARTIAL: Synara implements Element Call encryption-key to-device and room-event FLOW as a widget-mediated bridge — outbound CallWidgetDriver.sendToDevice (encryptToDeviceMessages+queueToDevice or clear queueToDevice) and sendEvent for capability-allowed types including io.element.call.encryption_keys; inbound CallEmbed ClientEvent.ToDeviceEvent → decrypt → feedToDevice plus Event/Decrypted → feedEvent; capabilities grant send/receive for io.element.call.encryption_keys and EventType.CallEncryptionKeysPrefix (and related call to-device types). Product does NOT implement a high-level native MatrixRTC encryption-key session API of its own. status=partial.",
+        "notes": "Evidence (conservative): (1) PRODUCT MEANING — FR-7.11-004 is encryption-key to-device/event FLOW required by Element Call; NOT membership DISPLAY (001), NOT embed URL/capabilities/postMessage alone (002), NOT join/leave write product (003), NOT cleanup alone (005), NOT CSP (006), NOT experimental risk acceptance alone (007). Product path is widget-mediated: Element Call owns key-session logic inside the embed; Synara host bridges encrypt/queue to-device, room encryption_keys events, and inbound feeds. (2) OUTBOUND TO-DEVICE — CallWidgetDriver.sendToDevice L149–198: if encrypted, getCrypto L157 (throw if missing) → batch by content → crypto.encryptToDeviceMessages L177–181 → client.queueToDevice L183; else clear queueToDevice L187–196. Used for CallEncryptionKeysPrefix and related call to-device types when the widget requests send. (3) OUTBOUND ROOM EVENT — sendEvent L51–82: non-state path client.sendEvent L74 for types including io.element.call.encryption_keys when capability-allowed. (4) INBOUND TO-DEVICE — CallEmbed.start L221 on ClientEvent.ToDeviceEvent; onToDeviceEvent L283–287 decryptEventIfNeeded, skip isDecryptionFailure, feedToDevice(effectiveEvent, isEncrypted) into ClientWidgetApi; off L240 on dispose. (5) INBOUND ROOM/STATE FEED — L218 Event → onEvent L266–268 decrypt+feedEvent; L219 Decrypted → feedEvent; L220 RoomState; feedEvent L353–388 call.feedEvent for encryption_keys room events. (6) CAPABILITIES — utils.getCallCapabilities L88–98 forRoomEvent Send+Receive io.element.call.encryption_keys; L100–115 forToDeviceEvent Send+Receive CallInvite…CallEncryptionKeysPrefix (EventType.CallEncryptionKeysPrefix). CallWidgetDriver ctor L43 loads allowed set; validateCapabilities filters. (7) EXCLUDE — useCall membership SessionStarted/MembershipsChanged (001/003); useCallEmbed join/embed alone (002/003); getDeviceId alone; searchUserDirectory; widgetUrl.search false Client.search AST; hangup/cleanup alone (003/005). (8) KEY-SESSION HONESTY — product does not implement high-level native MatrixRTC encryption-key session lifecycle API; residual GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION / upstream. SC-082 experimental-widgets is host residual (driver under widget embed) — SC-082 alone does not close key session. (9) No existing automated AT. (10) Cutover P10.5: preserve encrypt/queue to-device + feed inbound + encryption_keys event path via Rust/IPC approved path under SC-082 embed residual + GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION primary residual; compile-only / SC-082 alone / embed alone / raw HTTP / dual-backend / claiming native MatrixRTC key-session closed FAIL.",
+        "limits": "P0.1 method candidates are AST name hits unless marked source-inspected. Product status is partial: widget-mediated encrypt/queue to-device + feedToDevice + encryption_keys room event bridge present; no product-owned high-level MatrixRTC key-session API. Rust pin: GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION upstream-change-required (no viable high-level public key-session route); SC-082 experimental-widgets blocked E1/E2 for widget host residual only. No E2E AT yet."
       },
       "p0_1_linkage": {
         "categories": [
           "matrixrtc_calls",
-          "crypto_verification_recovery"
+          "crypto_verification_recovery",
+          "client_methods",
+          "custom_raw_event_sends",
+          "event_emitters_listeners",
+          "client_events"
         ],
         "file_ledger_paths": [
-          "synara/src/app/hooks/useCall.ts",
-          "synara/src/app/hooks/useCallEmbed.ts",
+          "synara/src/app/plugins/call/CallWidgetDriver.ts",
           "synara/src/app/plugins/call/CallEmbed.ts",
-          "synara/src/app/plugins/call/CallWidgetDriver.ts"
+          "synara/src/app/plugins/call/utils.ts"
         ]
       },
       "rust_target": {
-        "support_conclusion": "upstream-change-required-for-key-session",
+        "support_conclusion": "product-widget-to-device-key-bridge-partial-matrixrtc-key-session-upstream",
         "capability_ids": [
           "SC-082"
         ],
@@ -81812,7 +81687,7 @@
                 "P0.3c-widget-to-device-event-filter-type"
               ],
               "final_state": "blocked",
-              "final_state_rationale": "experimental-widgets APIs compile-probed. Module existence does not imply Element Call product parity. Experimental not accepted for production here.",
+              "final_state_rationale": "experimental-widgets APIs compile-probed. Module existence does not imply Element Call product parity or encryption-key session lifecycle. SC-082 is host residual for the widget embed path where CallWidgetDriver runs — not sole closer for key session.",
               "missing_gates": [
                 "experimental_feature_risk_gate",
                 "element_call_host_and_postmessage",
@@ -81823,14 +81698,14 @@
                 "E1-experimental-api",
                 "E2-compile-probes"
               ],
-              "notes": "Do not infer call parity from widget module presence.",
+              "notes": "Do not infer key-session parity from widget module presence. SC-082 alone never closes GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION key-session residual.",
               "cross_ref_gap_ids": [
                 "GAP-MATRIXRTC-WIDGET-CAPABILITY-PLUMBING",
                 "GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION"
               ],
               "cross_ref_rationale": {
-                "GAP-MATRIXRTC-WIDGET-CAPABILITY-PLUMBING": "Same experimental-widgets profile/surface: Capabilities, filters, virtual Element Call URL helpers are the SC-082 experimental API shape.",
-                "GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION": "SC-082 module existence does not close membership write or encryption-key session lifecycle; this gap records the remaining no-viable high-level public route."
+                "GAP-MATRIXRTC-WIDGET-CAPABILITY-PLUMBING": "Same experimental-widgets profile/surface: Capabilities, filters, virtual Element Call URL helpers are the SC-082 experimental API shape; to-device filters are host residual adjacency.",
+                "GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION": "SC-082 module existence does not close encryption-key session lifecycle; this gap is the primary residual for FR-7.11-004 key-session clause."
               }
             },
             "source_url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/lib.rs#L64-L65",
@@ -81847,7 +81722,7 @@
             "final_state": "upstream-change-required",
             "final": {
               "final_state": "upstream-change-required",
-              "final_state_rationale": "Accepted P0.3c evidence: no viable high-level public route for MatrixRTC membership write + encryption-key session lifecycle at this pin.",
+              "final_state_rationale": "Accepted P0.3c evidence: no viable high-level public route for MatrixRTC membership write + encryption-key session lifecycle at this pin. Product widget bridge (encrypt/queue to-device + feed + encryption_keys events) does not constitute a native high-level key-session API.",
               "missing_gates": [
                 "upstream_or_product_session_api",
                 "live_call_parity",
@@ -81863,15 +81738,20 @@
               "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/widget/capabilities.rs#L332"
             ],
             "probe_ids": [],
-            "summary": "At this pin there is no stable high-level public MatrixRTC session API for membership writes (join/leave m.call.member state) or end-to-end encryption-key exchange lifecycle. Presence reads and experimental widget capability plumbing do not constitute that route. No compiling probe is claimed for a nonexistent high-level API.",
-            "remaining_work": "Either product implementation via experimental widgets + raw/state sends with risk gate, or upstream high-level MatrixRTC session API."
+            "summary": "At this pin there is no stable high-level public MatrixRTC session API for membership writes or end-to-end encryption-key exchange lifecycle. Product implements a widget-mediated encrypt/queue + feed bridge for Element Call; that bridge is not a native MatrixRTC key-session API. Presence reads and experimental widget capability plumbing do not constitute that route.",
+            "remaining_work": "Preserve product to-device/event bridge under cutover; true key-session lifecycle requires upstream high-level MatrixRTC session API or explicit product session ownership with risk gate. SC-082 alone never closes this residual."
           }
         ],
-        "notes": "Mappings use only accepted P0.3 capability/gap IDs. Compile probes establish API shape only; final dossier states remain blocked/typed/upstream until E3–E5 gates exist.",
+        "notes": "Honest rust_target for FR-7.11-004: product-widget-to-device-key-bridge-partial-matrixrtc-key-session-upstream. Product implements PARTIAL widget-mediated encryption-key to-device and room-event bridge (CallWidgetDriver.sendToDevice encrypt+queue; sendEvent encryption_keys; CallEmbed feedToDevice/feedEvent; capabilities). Product does NOT own high-level MatrixRTC encryption-key session lifecycle. Primary residual GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION (upstream-change-required). SC-082 experimental-widgets is host residual only (driver under embed) — SC-082 alone never closes key session. Cutover P10.5 must preserve encrypt/queue to-device + inbound feed + encryption_keys event path via Rust/IPC approved path; no dual-backend / raw /_matrix HTTP. Compile-only / SC-082 alone / embed alone / full key-session-closed claim FAIL.",
         "distinctions_preserved": [
-          "server typed search (SC-071) vs experimental local search (SC-072)",
-          "widget plumbing (SC-082/GAP widget) vs call parity (membership write/key session gaps)",
-          "compile shape (E1/E2) vs runtime/UI parity (E3–E5 missing => blocked)"
+          "encryption-key to-device/event bridge (this FR) vs membership DISPLAY (FR-7.11-001)",
+          "key flow vs embed URL/capabilities/postMessage alone (FR-7.11-002)",
+          "key flow vs join/leave write (FR-7.11-003 shares GAP write/key row but different clause)",
+          "widget-mediated encrypt/queue+feed bridge vs high-level native MatrixRTC key-session API (absent)",
+          "SC-082 host residual vs key-session residual closed",
+          "key flow vs session cleanup alone (FR-7.11-005)",
+          "compile shape (E1/E2) vs runtime/UI parity (E3–E5 missing)",
+          "typed/product IPC vs raw /_matrix HTTP or dual-backend"
         ]
       },
       "implementation_tasks": [
@@ -81879,7 +81759,7 @@
           "task_id": "P10.5",
           "title": "Join, leave, decline, encryption keys, and cleanup",
           "phase": "Phase 10 — Element Call and widget completion",
-          "scope_rationale": "Accepted plan task P10.5 covers this Section 7.11 behavior during Phase 10 — Element Call and widget completion."
+          "scope_rationale": "Accepted plan task P10.5 covers encryption keys for Section 7.11; this FR owns encryption-key to-device/event flow (join/leave→003, cleanup→005)."
         }
       ],
       "automated_tests": {
@@ -81892,38 +81772,43 @@
             "task_id": "P10.5",
             "phase": "Phase 10 — Element Call and widget completion",
             "level": "integration-e2e",
-            "scenario": "7.11/FR-7.11-004: exercise 'encryption-key to-device/event flow required by Element Call;' via owner `synara/src/app/plugins/call/CallWidgetDriver.ts` and UI `synara/src/app/plugins/call/CallEmbed.ts`, then confirm Rust/IPC cutover task `P10.5` preserves observable behavior without raw Matrix runtime HTTP.",
+            "scenario": "Integration against disposable Synapse (two clients, E2EE call room + Element Call assets): (A) OUTBOUND encrypted to-device — Element Call widget requests sendToDevice for CallEncryptionKeysPrefix (or related call crypto type); CallWidgetDriver encrypted path uses getCrypto + encryptToDeviceMessages + queueToDevice (clear path uses queueToDevice). (B) INBOUND to-device — peer key/call to-device arrives; CallEmbed ClientEvent.ToDeviceEvent → decryptEventIfNeeded → feedToDevice into ClientWidgetApi. (C) CAPABILITIES — getCallCapabilities grants send+receive io.element.call.encryption_keys room events and forToDeviceEvent CallEncryptionKeysPrefix; widget may sendEvent encryption_keys via driver. (D) DISTINCTIONS — not 001 membership display, 002 embed alone, 003 join/leave alone, 005 cleanup alone, 006 CSP, 007 risk alone; not getDeviceId/searchUserDirectory/widgetUrl.search alone. (E) GATE — native MatrixRTC key-session residual remains; fail-closed if claimed closed without evidence. Cutover P10.5: preserve encrypt/queue to-device + feed inbound + encryption_keys event path via Rust/IPC; SC-082 alone / compile-only / raw HTTP / dual-backend / key-session-closed claim FAIL.",
+            "test_target": "CallWidgetDriver.sendToDevice (encrypt+queue / clear queue); sendEvent encryption_keys; CallEmbed onToDeviceEvent+feedToDevice; Event/Decrypted feedEvent; getCallCapabilities encryption_keys + CallEncryptionKeysPrefix; post-cutover P10.5",
             "preconditions": [
-              "Desktop app with Element Call / widget config for the build",
-              "Room with MatrixRTC membership fixtures; two clients for join/leave",
-              "CSP-enabled production-like shell",
-              "Linked owner path present in tree: synara/src/app/plugins/call/CallWidgetDriver.ts",
-              "Primary UI/lifecycle surface: synara/src/app/plugins/call/CallEmbed.ts"
+              "Disposable Synapse; two clients; E2EE-capable call room with Element Call embedded assets.",
+              "Named owners: CallWidgetDriver sendToDevice/sendEvent, CallEmbed ToDeviceEvent/feedToDevice/feedEvent, utils getCallCapabilities encryption_keys + CallEncryptionKeysPrefix.",
+              "Do not accept: membership-display-only (001), embed-URL-only (002), join/leave-only (003), cleanup-only (005), getDeviceId alone, searchUserDirectory, widgetUrl.search false AST, SC-082 alone, compile-only, or claiming native MatrixRTC key-session API closed."
             ],
             "trigger_actions": [
-              "Boot the appropriate harness for level=integration-e2e against disposable Synapse (or iOS notes if any).",
-              "Establish fixtures required by the clause list: encryption-key to-device/event flow required by Element Call.",
-              "Open UI/lifecycle surface `synara/src/app/plugins/call/CallEmbed.ts` (or follow ui_entry_points_rationale if no dedicated UI).",
-              "Step 1: perform the product action that implements «encryption-key to-device/event flow required by Element Call» using current owner `synara/src/app/plugins/call/CallWidgetDriver.ts`.",
-              "Start/stop embedded call/widget session; change room; logout; close window — confirm cleanup."
+              "Boot integration harness against disposable Synapse with two clients, E2EE, and Element Call assets.",
+              "OUTBOUND: join call on Client A+B so Element Call exchanges keys; assert widget sendToDevice path exercises encryptToDeviceMessages+queueToDevice (or observe queueToDevice for clear types) for CallEncryptionKeysPrefix/call crypto types.",
+              "INBOUND: assert peer to-device is received on host ClientEvent.ToDeviceEvent, decrypted, and feedToDevice delivers into ClientWidgetApi (call continues / keys accepted).",
+              "ROOM EVENT: assert io.element.call.encryption_keys capability present; if widget emits room encryption_keys, sendEvent outbound and Event/feedEvent inbound paths are available.",
+              "CAPABILITIES: inspect getCallCapabilities for encryption_keys send/receive and CallEncryptionKeysPrefix to-device send/receive.",
+              "After cutover P10.5, preserve encrypt/queue to-device + feed inbound + encryption_keys event observables via product IPC; SC-082 alone / key-session closed claim without evidence / raw HTTP / dual-backend FAIL."
             ],
             "assertions": [
-              "Each clause is observable: «encryption-key to-device/event flow required by Element Call».",
-              "State coordination remains through `synara/src/app/plugins/call/CallWidgetDriver.ts` (or its Rust/IPC successor after cutover), not ad-hoc dual writers.",
-              "Behavior-relevant current JS method candidates exercised or replaced: getDeviceId, search, getDeviceId, searchUserDirectory (AST candidates; not type-proven receivers).",
-              "Behavior-relevant listener candidates observed or replaced: on:MatrixRTCSessionManagerEvents.SessionStarted, on:MatrixRTCSessionManagerEvents.SessionEnded, off:MatrixRTCSessionManagerEvents.SessionStarted, off:MatrixRTCSessionManagerEvents.SessionEnded, on:MatrixRTCSessionEvent.MembershipsChanged, removeListener:MatrixRTCSessionEvent.MembershipsChanged.",
-              "Rust mapping remains conservative: caps=[SC-082] gaps=[GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION]; compile-only blocked states are not treated as runtime pass.",
-              "No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless dossier marks that exact behavior typed-sdk-request-required.",
-              "Widget plumbing success is not recorded as full call parity if membership-write/key-session gaps remain."
+              "OUTBOUND: encrypted to-device from widget path uses CallWidgetDriver sendToDevice → encryptToDeviceMessages + queueToDevice (clear uses queueToDevice); not raw /_matrix from renderer.",
+              "INBOUND: ToDeviceEvent → decrypt → feedToDevice into widget; decryption failures not fed.",
+              "CAPABILITIES: io.element.call.encryption_keys room send+receive and CallEncryptionKeysPrefix to-device send+receive present.",
+              "ROOM EVENT: sendEvent/feedEvent path available for encryption_keys under capabilities.",
+              "DISTINCTIONS: this FR ≠ 001/002/003/005/006/007 alone; ≠ getDeviceId/searchUserDirectory/widgetUrl.search alone.",
+              "COORDINATION: through CallWidgetDriver/CallEmbed/utils (or Rust/IPC successor), not dual-backend.",
+              "GATE: GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION key-session residual remains; product bridge ≠ native MatrixRTC key-session API closed.",
+              "CUTOVER: P10.5 under GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION (+ SC-082 host residual); compile-only never product pass; no raw /_matrix HTTP.",
+              "No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless typed-sdk-request-required for that exact behavior."
             ],
             "required_environment": [
-              "Desktop app with Element Call / widget config for the build",
-              "Room with MatrixRTC membership fixtures; two clients for join/leave",
-              "CSP-enabled production-like shell"
+              "Disposable Synapse; two clients; E2EE call room; Element Call embedded assets",
+              "Product surfaces: CallWidgetDriver, CallEmbed, utils getCallCapabilities"
             ],
             "does_not_currently_exist": true,
             "clause_breakdown": [
-              "encryption-key to-device/event flow required by Element Call"
+              "outbound encrypted to-device (sendToDevice encrypt+queue)",
+              "inbound to-device feed after decrypt (feedToDevice)",
+              "capabilities encryption_keys + CallEncryptionKeysPrefix",
+              "room-event encryption_keys send/feed path",
+              "cutover P10.5; partial without native MatrixRTC key-session API"
             ]
           }
         ]
@@ -81931,26 +81816,29 @@
       "manual_acceptance_id": "MA-FR-7.11-004",
       "migration_cutover_disposition": "replace-js-sdk-with-rust-via-ipc",
       "missing_evidence_gates": [
+        "upstream_or_product_session_api",
+        "live_call_parity",
+        "live_synapse_two_client",
+        "semantic_or_integration_test",
+        "ui_acceptance",
         "element_call_host_and_postmessage",
         "experimental_feature_risk_gate",
-        "live_call_parity",
-        "ui_acceptance"
+        "GATE-7.11-004-NATIVE-MATRIXRTC-KEY-SESSION"
       ],
       "security_privacy_lifecycle_concerns": [
         "no-raw-matrix-http",
-        "experimental-widgets-risk"
+        "experimental-widgets-risk",
+        "no-dual-backend-call-key-flow-selector",
+        "widget-key-bridge-not-native-matrixrtc-key-session-api",
+        "e2ee-to-device-key-material"
       ],
       "traceability_status": "complete-conservative",
       "blockers": [
+        "GATE-7.11-004-NATIVE-MATRIXRTC-KEY-SESSION",
         {
           "severity": "high",
-          "kind": "upstream-change-required",
-          "summary": "FR-7.11-004 depends on upstream-change-required gap(s): ['GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION']"
-        },
-        {
-          "severity": "high",
-          "kind": "experimental-widgets-and-call-parity",
-          "summary": "Call/widget path depends on experimental-widgets and MatrixRTC gaps; widget plumbing ≠ call parity."
+          "kind": "product-widget-to-device-key-bridge-partial-matrixrtc-key-session-upstream",
+          "summary": "FR-7.11-004 product path is PARTIAL: Element Call encryption-key to-device/event FLOW is widget-mediated — outbound CallWidgetDriver.sendToDevice (getCrypto+encryptToDeviceMessages+queueToDevice or clear queueToDevice) and sendEvent for io.element.call.encryption_keys; inbound CallEmbed ClientEvent.ToDeviceEvent → decrypt → feedToDevice and Event/Decrypted → feedEvent; capabilities grant encryption_keys + CallEncryptionKeysPrefix. Synara does not implement a high-level native MatrixRTC encryption-key session API. Cutover P10.5 under GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION (primary residual / upstream-change-required) + SC-082 experimental-widgets host residual only. Compile-only / SC-082 alone / embed alone / raw HTTP / dual-backend / claiming native MatrixRTC key-session closed FAIL."
         }
       ]
     },
@@ -109189,38 +109077,43 @@
         "task_id": "P10.5",
         "phase": "Phase 10 — Element Call and widget completion",
         "level": "integration-e2e",
-        "scenario": "7.11/FR-7.11-004: exercise 'encryption-key to-device/event flow required by Element Call;' via owner `synara/src/app/plugins/call/CallWidgetDriver.ts` and UI `synara/src/app/plugins/call/CallEmbed.ts`, then confirm Rust/IPC cutover task `P10.5` preserves observable behavior without raw Matrix runtime HTTP.",
+        "scenario": "Integration against disposable Synapse (two clients, E2EE call room + Element Call assets): (A) OUTBOUND encrypted to-device — Element Call widget requests sendToDevice for CallEncryptionKeysPrefix (or related call crypto type); CallWidgetDriver encrypted path uses getCrypto + encryptToDeviceMessages + queueToDevice (clear path uses queueToDevice). (B) INBOUND to-device — peer key/call to-device arrives; CallEmbed ClientEvent.ToDeviceEvent → decryptEventIfNeeded → feedToDevice into ClientWidgetApi. (C) CAPABILITIES — getCallCapabilities grants send+receive io.element.call.encryption_keys room events and forToDeviceEvent CallEncryptionKeysPrefix; widget may sendEvent encryption_keys via driver. (D) DISTINCTIONS — not 001 membership display, 002 embed alone, 003 join/leave alone, 005 cleanup alone, 006 CSP, 007 risk alone; not getDeviceId/searchUserDirectory/widgetUrl.search alone. (E) GATE — native MatrixRTC key-session residual remains; fail-closed if claimed closed without evidence. Cutover P10.5: preserve encrypt/queue to-device + feed inbound + encryption_keys event path via Rust/IPC; SC-082 alone / compile-only / raw HTTP / dual-backend / key-session-closed claim FAIL.",
+        "test_target": "CallWidgetDriver.sendToDevice (encrypt+queue / clear queue); sendEvent encryption_keys; CallEmbed onToDeviceEvent+feedToDevice; Event/Decrypted feedEvent; getCallCapabilities encryption_keys + CallEncryptionKeysPrefix; post-cutover P10.5",
         "preconditions": [
-          "Desktop app with Element Call / widget config for the build",
-          "Room with MatrixRTC membership fixtures; two clients for join/leave",
-          "CSP-enabled production-like shell",
-          "Linked owner path present in tree: synara/src/app/plugins/call/CallWidgetDriver.ts",
-          "Primary UI/lifecycle surface: synara/src/app/plugins/call/CallEmbed.ts"
+          "Disposable Synapse; two clients; E2EE-capable call room with Element Call embedded assets.",
+          "Named owners: CallWidgetDriver sendToDevice/sendEvent, CallEmbed ToDeviceEvent/feedToDevice/feedEvent, utils getCallCapabilities encryption_keys + CallEncryptionKeysPrefix.",
+          "Do not accept: membership-display-only (001), embed-URL-only (002), join/leave-only (003), cleanup-only (005), getDeviceId alone, searchUserDirectory, widgetUrl.search false AST, SC-082 alone, compile-only, or claiming native MatrixRTC key-session API closed."
         ],
         "trigger_actions": [
-          "Boot the appropriate harness for level=integration-e2e against disposable Synapse (or iOS notes if any).",
-          "Establish fixtures required by the clause list: encryption-key to-device/event flow required by Element Call.",
-          "Open UI/lifecycle surface `synara/src/app/plugins/call/CallEmbed.ts` (or follow ui_entry_points_rationale if no dedicated UI).",
-          "Step 1: perform the product action that implements «encryption-key to-device/event flow required by Element Call» using current owner `synara/src/app/plugins/call/CallWidgetDriver.ts`.",
-          "Start/stop embedded call/widget session; change room; logout; close window — confirm cleanup."
+          "Boot integration harness against disposable Synapse with two clients, E2EE, and Element Call assets.",
+          "OUTBOUND: join call on Client A+B so Element Call exchanges keys; assert widget sendToDevice path exercises encryptToDeviceMessages+queueToDevice (or observe queueToDevice for clear types) for CallEncryptionKeysPrefix/call crypto types.",
+          "INBOUND: assert peer to-device is received on host ClientEvent.ToDeviceEvent, decrypted, and feedToDevice delivers into ClientWidgetApi (call continues / keys accepted).",
+          "ROOM EVENT: assert io.element.call.encryption_keys capability present; if widget emits room encryption_keys, sendEvent outbound and Event/feedEvent inbound paths are available.",
+          "CAPABILITIES: inspect getCallCapabilities for encryption_keys send/receive and CallEncryptionKeysPrefix to-device send/receive.",
+          "After cutover P10.5, preserve encrypt/queue to-device + feed inbound + encryption_keys event observables via product IPC; SC-082 alone / key-session closed claim without evidence / raw HTTP / dual-backend FAIL."
         ],
         "assertions": [
-          "Each clause is observable: «encryption-key to-device/event flow required by Element Call».",
-          "State coordination remains through `synara/src/app/plugins/call/CallWidgetDriver.ts` (or its Rust/IPC successor after cutover), not ad-hoc dual writers.",
-          "Behavior-relevant current JS method candidates exercised or replaced: getDeviceId, search, getDeviceId, searchUserDirectory (AST candidates; not type-proven receivers).",
-          "Behavior-relevant listener candidates observed or replaced: on:MatrixRTCSessionManagerEvents.SessionStarted, on:MatrixRTCSessionManagerEvents.SessionEnded, off:MatrixRTCSessionManagerEvents.SessionStarted, off:MatrixRTCSessionManagerEvents.SessionEnded, on:MatrixRTCSessionEvent.MembershipsChanged, removeListener:MatrixRTCSessionEvent.MembershipsChanged.",
-          "Rust mapping remains conservative: caps=[SC-082] gaps=[GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION]; compile-only blocked states are not treated as runtime pass.",
-          "No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless dossier marks that exact behavior typed-sdk-request-required.",
-          "Widget plumbing success is not recorded as full call parity if membership-write/key-session gaps remain."
+          "OUTBOUND: encrypted to-device from widget path uses CallWidgetDriver sendToDevice → encryptToDeviceMessages + queueToDevice (clear uses queueToDevice); not raw /_matrix from renderer.",
+          "INBOUND: ToDeviceEvent → decrypt → feedToDevice into widget; decryption failures not fed.",
+          "CAPABILITIES: io.element.call.encryption_keys room send+receive and CallEncryptionKeysPrefix to-device send+receive present.",
+          "ROOM EVENT: sendEvent/feedEvent path available for encryption_keys under capabilities.",
+          "DISTINCTIONS: this FR ≠ 001/002/003/005/006/007 alone; ≠ getDeviceId/searchUserDirectory/widgetUrl.search alone.",
+          "COORDINATION: through CallWidgetDriver/CallEmbed/utils (or Rust/IPC successor), not dual-backend.",
+          "GATE: GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION key-session residual remains; product bridge ≠ native MatrixRTC key-session API closed.",
+          "CUTOVER: P10.5 under GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION (+ SC-082 host residual); compile-only never product pass; no raw /_matrix HTTP.",
+          "No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless typed-sdk-request-required for that exact behavior."
         ],
         "required_environment": [
-          "Desktop app with Element Call / widget config for the build",
-          "Room with MatrixRTC membership fixtures; two clients for join/leave",
-          "CSP-enabled production-like shell"
+          "Disposable Synapse; two clients; E2EE call room; Element Call embedded assets",
+          "Product surfaces: CallWidgetDriver, CallEmbed, utils getCallCapabilities"
         ],
         "does_not_currently_exist": true,
         "clause_breakdown": [
-          "encryption-key to-device/event flow required by Element Call"
+          "outbound encrypted to-device (sendToDevice encrypt+queue)",
+          "inbound to-device feed after decrypt (feedToDevice)",
+          "capabilities encryption_keys + CallEncryptionKeysPrefix",
+          "room-event encryption_keys send/feed path",
+          "cutover P10.5; partial without native MatrixRTC key-session API"
         ]
       },
       {
@@ -112877,26 +112770,33 @@
       ],
       "preconditions": [
         "Desktop app with Element Call / widget config for the build",
-        "Room with MatrixRTC membership fixtures; two clients for join/leave",
-        "CSP-enabled production-like shell",
-        "State owner available: synara/src/app/plugins/call/CallWidgetDriver.ts",
-        "UI/lifecycle: synara/src/app/plugins/call/CallEmbed.ts",
-        "Current status baseline: partial"
+        "E2EE-capable call room; two clients for key exchange",
+        "Element Call embedded assets present",
+        "State owners: CallWidgetDriver.ts (sendToDevice encrypt+queue / sendEvent), CallEmbed.ts (ToDeviceEvent→feedToDevice, Event→feedEvent), utils.ts (encryption_keys + CallEncryptionKeysPrefix capabilities)",
+        "UI/lifecycle host: CallEmbed (widget-mediated; no dedicated key-session UI)",
+        "Current status baseline: partial (widget bridge present; no native MatrixRTC key-session API)"
       ],
       "actions": [
-        "Launch Synara desktop on the target platform against disposable Synapse; use a clean or known fixture profile as required by «encryption-key to-device/event flow required by Element Call;».",
-        "Identify state owner `synara/src/app/plugins/call/CallWidgetDriver.ts` and open `synara/src/app/plugins/call/CallEmbed.ts`.",
-        "Action 1 — «encryption-key to-device/event flow required by Element Call»: perform the minimal user/system steps that trigger this clause (use linked files under current_production_files if the entry point is indirect).",
-        "Repeat critical path in an encrypted room / with a second device when the clause involves keys or verification.",
-        "Join call/widget, verify membership UI, leave/decline as applicable, switch rooms, and close window; confirm sessions clean up."
+        "Launch Synara desktop on the target platform against disposable Synapse with a second client and E2EE call room.",
+        "Join Element Call on both clients so encryption-key / call to-device exchange is required.",
+        "OUTBOUND: confirm call proceeds with key exchange; host path uses CallWidgetDriver sendToDevice (encrypted encrypt+queue when required) rather than raw /_matrix from renderer.",
+        "INBOUND: confirm peer key/call to-device is accepted by local Element Call (host feedToDevice after decrypt).",
+        "CAPABILITIES residual: encryption_keys room events and CallEncryptionKeysPrefix to-device are capability-allowed (inspect or observe call crypto).",
+        "Post-cutover: same encrypt/queue + feed + encryption_keys observables without raw /_matrix or dual-backend; do not claim native MatrixRTC key-session closed without evidence."
       ],
       "expected_results": [
-        "All clauses under «encryption-key to-device/event flow required by Element Call;» produce the user-visible or system-observable success criteria without error toasts unrelated to intentional negative tests.",
-        "Clause 1 «encryption-key to-device/event flow required by Element Call» is satisfied on macOS, Linux with owner `synara/src/app/plugins/call/CallWidgetDriver.ts`.",
-        "No unexpected raw /_matrix traffic from the app renderer for this flow on the post-cutover build."
+        "OUTBOUND: widget-driven encrypted to-device (and/or clear queueToDevice) and optional encryption_keys room send via CallWidgetDriver.",
+        "INBOUND: ToDeviceEvent decrypt + feedToDevice; room Event/feedEvent for encryption_keys when used.",
+        "CAPABILITIES: io.element.call.encryption_keys + CallEncryptionKeysPrefix send/receive available to the widget.",
+        "DISTINCTIONS: 001 display alone / 002 embed alone / 003 join-leave alone / 005 cleanup alone do not pass this FR.",
+        "GATE: product bridge ≠ native MatrixRTC key-session API; GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION residual remains unless closed with evidence.",
+        "Post-cutover: same observables; SC-082 alone never closes key session; no raw /_matrix; no dual-backend."
       ],
       "clause_breakdown": [
-        "encryption-key to-device/event flow required by Element Call"
+        "outbound encrypted to-device (sendToDevice encrypt+queue)",
+        "inbound to-device feed after decrypt (feedToDevice)",
+        "capabilities encryption_keys + CallEncryptionKeysPrefix",
+        "room-event encryption_keys send/feed path"
       ]
     },
     {
@@ -113094,14 +112994,8 @@
     {
       "requirement_id": "FR-7.11-004",
       "severity": "high",
-      "kind": "upstream-change-required",
-      "summary": "FR-7.11-004 depends on upstream-change-required gap(s): ['GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION']"
-    },
-    {
-      "requirement_id": "FR-7.11-004",
-      "severity": "high",
-      "kind": "experimental-widgets-and-call-parity",
-      "summary": "Call/widget path depends on experimental-widgets and MatrixRTC gaps; widget plumbing ≠ call parity."
+      "kind": "product-widget-to-device-key-bridge-partial-matrixrtc-key-session-upstream",
+      "summary": "FR-7.11-004 product path is PARTIAL: Element Call encryption-key to-device/event FLOW is widget-mediated — outbound CallWidgetDriver.sendToDevice (getCrypto+encryptToDeviceMessages+queueToDevice or clear queueToDevice) and sendEvent for io.element.call.encryption_keys; inbound CallEmbed ClientEvent.ToDeviceEvent → decrypt → feedToDevice and Event/Decrypted → feedEvent; capabilities grant encryption_keys + CallEncryptionKeysPrefix. Synara does not implement a high-level native MatrixRTC encryption-key session API. Cutover P10.5 under GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION (primary residual / upstream-change-required) + SC-082 experimental-widgets host residual only. Compile-only / SC-082 alone / embed alone / raw HTTP / dual-backend / claiming native MatrixRTC key-session closed FAIL."
     },
     {
       "requirement_id": "FR-7.11-005",
@@ -113171,14 +113065,8 @@
       {
         "requirement_id": "FR-7.11-004",
         "severity": "high",
-        "kind": "upstream-change-required",
-        "summary": "FR-7.11-004 depends on upstream-change-required gap(s): ['GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION']"
-      },
-      {
-        "requirement_id": "FR-7.11-004",
-        "severity": "high",
-        "kind": "experimental-widgets-and-call-parity",
-        "summary": "Call/widget path depends on experimental-widgets and MatrixRTC gaps; widget plumbing ≠ call parity."
+        "kind": "product-widget-to-device-key-bridge-partial-matrixrtc-key-session-upstream",
+        "summary": "FR-7.11-004 product path is PARTIAL: Element Call encryption-key to-device/event FLOW is widget-mediated — outbound CallWidgetDriver.sendToDevice (getCrypto+encryptToDeviceMessages+queueToDevice or clear queueToDevice) and sendEvent for io.element.call.encryption_keys; inbound CallEmbed ClientEvent.ToDeviceEvent → decrypt → feedToDevice and Event/Decrypted → feedEvent; capabilities grant encryption_keys + CallEncryptionKeysPrefix. Synara does not implement a high-level native MatrixRTC encryption-key session API. Cutover P10.5 under GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION (primary residual / upstream-change-required) + SC-082 experimental-widgets host residual only. Compile-only / SC-082 alone / embed alone / raw HTTP / dual-backend / claiming native MatrixRTC key-session closed FAIL."
       },
       {
         "requirement_id": "FR-7.11-005",
@@ -114773,6 +114661,20 @@
         "FR-7.11-003: retargeted owners/UI to useCallEmbed/CallEmbed/CallControls/PrescreenControls/CallStatus (not LiveChip-alone display or useCall.ts sole owner); excluded room-invite Decline; excluded embed-alone (002) and display-alone (001).",
         "FR-7.11-003: rust_target product-call-join-leave-via-embed-hangup-partial-matrixrtc-write-upstream caps=[SC-082] gaps=[GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION, GAP-MATRIXRTC-MEMBERSHIP-PRESENCE]; GATE-7.11-003-NATIVE-OR-PRODUCT-MEMBERSHIP-WRITE; SC-082 alone / embed alone / full write-closed claim FAIL.",
         "FR-7.11-003: planned AT/MA rewritten as JOIN + LEAVE/HANGUP + DECLINE (capability residual) + MEMBER STATUS + DISTINCTIONS; cutover P10.5 (+P10.4). Top-level AT/MA/blockers updated. Accepted FR-7.8-001..009, FR-7.9-001..013 (011 partial), FR-7.10-001..007, FR-7.11-001..002 preserved. JSON and Markdown synchronized."
+      ]
+    },
+    {
+      "id": "p0.2-correct-50-fr-7.11-004-call-encryption-key-flow",
+      "scope": "Rejected-review limited correction: FR-7.11-004 only — replace shallow notes (null notes / getDeviceId-search-searchUserDirectory false AST / useCall membership listeners / generic AT-MA) with concrete encryption-key to-device and room-event flow evidence: CallWidgetDriver.sendToDevice encryptToDeviceMessages+queueToDevice; sendEvent encryption_keys; CallEmbed ToDeviceEvent→feedToDevice; Event/Decrypted feedEvent; getCallCapabilities io.element.call.encryption_keys + CallEncryptionKeysPrefix; honest partial (widget bridge without native MatrixRTC key-session API); rust_target product-widget-to-device-key-bridge-partial-matrixrtc-key-session-upstream caps=[SC-082] gaps=[GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION]",
+      "requirements_rewritten": [
+        "FR-7.11-004"
+      ],
+      "not_claimed_complete": true,
+      "changes": [
+        "FR-7.11-004: current_status remains partial. current_behavior_and_limits documents widget-mediated outbound encrypt/queue to-device + sendEvent encryption_keys, inbound decrypt+feedToDevice/feedEvent, and capabilities; notes no longer null/shallow file-count.",
+        "FR-7.11-004: retargeted production_files to CallWidgetDriver/CallEmbed/utils (demoted useCall membership hooks and false getDeviceId/search/searchUserDirectory AST); source-inspected line_refs for sendToDevice/encrypt/queue/feedToDevice/encryption_keys capabilities.",
+        "FR-7.11-004: rust_target product-widget-to-device-key-bridge-partial-matrixrtc-key-session-upstream caps=[SC-082 host residual] gaps=[GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION primary]; GATE-7.11-004-NATIVE-MATRIXRTC-KEY-SESSION; SC-082 alone never closes key session.",
+        "FR-7.11-004: planned AT/MA rewritten as OUTBOUND + INBOUND + CAPABILITIES + DISTINCTIONS 001–003/005–007 + GATE fail-closed; cutover P10.5. Top-level AT/MA/blockers updated. Accepted FR-7.8-001..009, FR-7.9-001..013 (011 partial), FR-7.10-001..007, FR-7.11-001..003 (003 partial under its write gate) preserved. JSON and Markdown synchronized."
       ]
     }
   ]
