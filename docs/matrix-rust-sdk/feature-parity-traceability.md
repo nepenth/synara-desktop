@@ -4,7 +4,7 @@
 
 ## Correction pass status
 
-Limited rejected-review correction (`p0.2-correct-33-fr-7.9-007-room-key-import-export`) for **FR-7.9-007** only: replace wrong BackupRestore/useKeyBackup/backupRestore owners and `partial`/`conditional-product-ui` with concrete retained **LocalBackup** room-key file import/export evidence — Settings → Devices mounts `LocalBackup`; Export Messages Data `exportRoomKeysAsJson` + `encryptMegolmKeyFile` → `synara-keys.txt`; Import Messages Data file pick + `decryptMegolmKeyFile` + `importRoomKeysAsJson`; `cryptE2ERoomKeys.js` helper; exclude FR-7.9-006 server key backup; rewrite planned AT/MA for product observables + cutover P8.6; honest rust_target SC-061 `Encryption::export_room_keys`/`import_room_keys` compile-only blocked (not SC-066/GAP-RECOVERY-BACKUP); SC-061 alone / SC-066 / server-backup-only / raw HTTP / dual-backend / helper-only FAIL. Status `partial` → `implemented` (UI retained). JSON and Markdown synchronized. Accepted corrections for **FR-7.8-001 through FR-7.8-009** and **FR-7.9-001..006** preserved. Prior corrections and accepted **7.1–7.3** preserved. **P0.2 is not complete.**
+Limited rejected-review correction (`p0.2-correct-34-fr-7.9-008-undecryptable-event-retry`) for **FR-7.9-008** only: replace wrong `matrix-crypto.ts` / `useRoomEventReaders` owners and shallow AT with concrete **automatic UTD retry** evidence — `room.ts` `decryptAllTimelineEvent` + `attemptDecryption(..., { isRetry: true })`; `RoomTimeline` pagination `hasEncryptionStateEvent` gate; `EncryptedContent` `MatrixEventEvent.Decrypted` re-render; `useRoomEvent` per-event `attemptDecryption`; `MessageNotDecryptedContent` / `MessageBadEncryptedContent` / `MBadEncrypted`; no dedicated Retry button; exclude FR-7.3-009 presentation-only, FR-7.9-006/007 key acquisition, FR-7.9-002/004 `verifiedDevice`; rewrite planned AT/MA for product observables + cutover P8.7+P5.10; honest rust_target SC-061 `utd-retry-compile-shape-only-blocked-for-product`; SC-061 alone / presentation-only / room-key-file-only / server-backup-only / raw HTTP / dual-backend / helper-only FAIL. Status remains `implemented`. JSON and Markdown synchronized. Accepted corrections for **FR-7.8-001 through FR-7.8-009** and **FR-7.9-001..007** preserved. Prior corrections and accepted **7.1–7.3** preserved. **P0.2 is not complete.**
 
 ## Provenance
 
@@ -6130,47 +6130,69 @@ Limited rejected-review correction (`p0.2-correct-33-fr-7.9-007-room-key-import-
 - **Text**: undecryptable-event retry;
 - **Lines**: 432–432
 - **Status**: `implemented`
-- **Behavior**: Current desktop implements this via 4 production matrix-js-sdk-related file(s); status=implemented.
-- **UI**: `synara/src/app/features/room/message/EncryptedContent.tsx`
-- **Owners**: `synara/src/app/utils/matrix-crypto.ts`
+- **Behavior**: Product implements automatic undecryptable-event retry (no dedicated Retry button): encrypted-room pagination runs `decryptAllTimelineEvent` → `attemptDecryption(..., { isRetry: true })`; `EncryptedContent` re-renders on `MatrixEventEvent.Decrypted`; `useRoomEvent` attempts decrypt on `fetchRoomEvent`; UI shows `MessageNotDecryptedContent` while pending and `MessageBadEncryptedContent`/`MBadEncrypted` for `m.bad.encrypted`. status=implemented.
+- **Notes**: Evidence (conservative): (1) RETRY BULK `room.ts` `decryptAllTimelineEvent` L401–410: `getCrypto` L402; filter `isEncrypted` L406; `attemptDecryption(crypto, { isRetry: true })` L408. (2) RETRY TRIGGER `RoomTimeline` pagination L524–530: after `paginateEventTimeline`, if `room.hasEncryptionStateEvent()` then `decryptAllTimelineEvent` L529. (3) UI LIFECYCLE `EncryptedContent` L10–24: `mEvent.on(MatrixEventEvent.Decrypted)` L18; still encrypted → `MessageNotDecryptedContent` L3029. (4) PER-EVENT `useRoomEvent` L21–22 `attemptDecryption`. (5) PERMANENT UTD `MessageBadEncryptedContent` L34–38; `MBadEncrypted` L33–38; `RenderMessageContent` L272–273. (6) NON-EVIDENCE: `matrix-crypto.ts` is `verifiedDevice` only (FR-7.9-002/004); `useRoomEventReaders` receipts (FR-7.3-005); LocalBackup FR-7.9-007; server backup FR-7.9-006; presentation taxonomy alone FR-7.3-009; no product Retry/Request-keys button. (7) Cutover P8.7+P5.10 via Rust crypto+timeline + product UX + IPC; SC-061 alone / compile-only / raw HTTP / dual-backend / room-key-file-only / server-backup-only / presentation-only FAIL.
+- **Limits**: Product retry is automatic — no manual retry control. SC-061 is Encryption type probe only; no separate SC for `attemptDecryption`/timeline UTD re-emit. SC-061 compile-shape-only blocked (E3–E5 missing).
+- **UI**: `synara/src/app/features/room/RoomTimeline.tsx`, `synara/src/app/features/room/message/EncryptedContent.tsx`, `synara/src/app/components/message/content/FallbackContent.tsx`, `synara/src/app/components/RenderMessageContent.tsx`
+- **UI rationale**: RoomTimeline mounts EncryptedContent for `m.room.encrypted` and shows MessageNotDecryptedContent while still encrypted; after Decrypted or successful attemptDecryption, plaintext or permanent UTD. No dedicated Retry button. Presentation taxonomy alone is FR-7.3-009.
+- **Owners**: `synara/src/app/utils/room.ts`, `synara/src/app/features/room/message/EncryptedContent.tsx`, `synara/src/app/hooks/useRoomEvent.ts`
 - **Files**:
-  - `synara/src/app/features/room/message/EncryptedContent.tsx` symbols=[] retained_m=0 retained_l=0
-  - `synara/src/app/hooks/useRoomEvent.ts` symbols=['getCrypto', 'getCrypto'] retained_m=2 retained_l=0
-    - method `getCrypto`:L21 — None
-    - method `getCrypto`:L22 — None
-  - `synara/src/app/hooks/useRoomEventReaders.ts` symbols=[] retained_m=0 retained_l=0
-  - `synara/src/app/utils/matrix-crypto.ts` symbols=[] retained_m=0 retained_l=0
+  - `synara/src/app/utils/room.ts` symbols=['decryptAllTimelineEvent','getCrypto','attemptDecryption','isEncrypted'] retained_m=2 retained_l=0
+    - method `getCrypto`:L402 — Bulk decrypt retry crypto gate
+    - method `attemptDecryption`:L408 — Primary UTD retry with `{ isRetry: true }`
+  - `synara/src/app/features/room/RoomTimeline.tsx` symbols=['decryptAllTimelineEvent','EncryptedContent','MessageNotDecryptedContent'] retained_m=2 retained_l=0
+    - method `hasEncryptionStateEvent`:L528 — Encrypted-room gate
+    - method `decryptAllTimelineEvent`:L529 — Pagination bulk retry trigger
+  - `synara/src/app/features/room/message/EncryptedContent.tsx` symbols=['EncryptedContent','MatrixEventEvent.Decrypted'] retained_m=0 retained_l=2
+    - listener `on:MatrixEventEvent.Decrypted`:L18 — Re-render after decrypt/retry success
+    - listener `removeListener:MatrixEventEvent.Decrypted`:L20 — Cleanup
+  - `synara/src/app/hooks/useRoomEvent.ts` symbols=['getCrypto','attemptDecryption','isEncrypted'] retained_m=2 retained_l=0
+    - method `getCrypto`:L21 — Per-event fetch crypto gate
+    - method `attemptDecryption`:L22 — Per-event decrypt on fetchRoomEvent
+  - `synara/src/app/components/message/content/FallbackContent.tsx` symbols=['MessageBadEncryptedContent','MessageNotDecryptedContent'] retained_m=0 retained_l=0
+  - `synara/src/app/components/message/MsgTypeRenderers.tsx` symbols=['MBadEncrypted'] retained_m=0 retained_l=0
+  - `synara/src/app/components/RenderMessageContent.tsx` symbols=['MBadEncrypted','m.bad.encrypted'] retained_m=0 retained_l=0
 - **Behavior-relevant methods (top-level)**:
-  - `getCrypto` `synara/src/app/hooks/useRoomEvent.ts`:L21 — None
-  - `getCrypto` `synara/src/app/hooks/useRoomEvent.ts`:L22 — None
+  - `getCrypto` `synara/src/app/utils/room.ts`:L402 — Bulk decrypt retry crypto gate
+  - `attemptDecryption` `synara/src/app/utils/room.ts`:L408 — Primary UTD retry `{ isRetry: true }`
+  - `hasEncryptionStateEvent` `synara/src/app/features/room/RoomTimeline.tsx`:L528 — Encrypted-room gate
+  - `decryptAllTimelineEvent` `synara/src/app/features/room/RoomTimeline.tsx`:L529 — Pagination bulk retry
+  - `getCrypto` `synara/src/app/hooks/useRoomEvent.ts`:L21 — Per-event fetch crypto gate
+  - `attemptDecryption` `synara/src/app/hooks/useRoomEvent.ts`:L22 — Per-event decrypt attempt
 - **Behavior-relevant listeners (top-level)**:
-  - —
-- **Unfiltered linked candidates**: methods=4 listeners=10
-- **Rust**: `compile-shape-only-blocked-for-product` caps=['SC-061'] gaps=[]
+  - `on:MatrixEventEvent.Decrypted` `synara/src/app/features/room/message/EncryptedContent.tsx`:L18 — Re-render on decrypt
+  - `removeListener:MatrixEventEvent.Decrypted` `synara/src/app/features/room/message/EncryptedContent.tsx`:L20 — Cleanup
+- **Unfiltered linked candidates**: methods=4 listeners=10 (original P0.1 subset; primary retry surfaces source-inspected)
+- **Rust**: `utd-retry-compile-shape-only-blocked-for-product` caps=['SC-061'] gaps=[]
   - `SC-061` `blocked` `matrix_sdk::encryption::Encryption` https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/encryption/mod.rs#L892
+  - Honest: SC-061 Encryption compile-shape only. Product UTD retry maps to timeline/crypto re-decrypt + IPC DTO updates (P5.10+P8.7). Do **not** map to SC-066/GAP-RECOVERY-BACKUP (FR-7.9-006) or export/import_room_keys (FR-7.9-007). SC-061 alone / compile-only / presentation-only FAIL.
 - **Tasks**: `P8.7`, `P5.10`
 - **Existing tests**:
   - _(none)_
 - **Planned** `AT-FR-7.9-008-001` task `P8.7` level `integration-e2e`
-  - Scenario: 7.9/FR-7.9-008: exercise 'undecryptable-event retry;' via owner `synara/src/app/utils/matrix-crypto.ts` and UI `synara/src/app/features/room/message/EncryptedContent.tsx`, then confirm Rust/IPC cutover task `P8.7` preserves observable behavior without raw Matrix runtime HTTP.
-  - Test target: None
+  - Scenario: Integration-e2e against disposable Synapse with an E2EE room: (A) PENDING UTD — create/fixture messages that remain encrypted on receiver (missing megolm keys); assert timeline shows MessageNotDecryptedContent ('This message is not decrypted yet') or product-equivalent pending state via EncryptedContent. (B) RETRY SUCCESS — after room keys become available (key forward, backup restore FR-7.9-006 path as fixture only, or second-device history), assert decrypt path runs (pagination decryptAllTimelineEvent/attemptDecryption isRetry and/or SDK decrypt + Decrypted) and UI re-renders plaintext body without process restart. (C) PERMANENT UTD — for events that remain undecryptable, assert MessageBadEncryptedContent / MBadEncrypted ('Unable to decrypt message') via m.bad.encrypted. (D) PAGINATION RETRY — paginate encrypted history and assert RoomTimeline invokes decryptAllTimelineEvent for hasEncryptionStateEvent rooms. After cutover P8.7+P5.10 same observables via Rust crypto+timeline ownership + product UX + IPC DTO; SC-061 alone, compile-only blocked, raw /\_matrix HTTP, dual-backend, room-key-file-only (FR-7.9-007), server-backup-restore-only (FR-7.9-006), presentation-only (FR-7.3-009), or helper/fixture-only FAIL.
+  - Test target: decryptAllTimelineEvent (room.ts); RoomTimeline pagination encrypted decrypt; EncryptedContent Decrypted listener; useRoomEvent attemptDecryption; MessageNotDecryptedContent / MessageBadEncryptedContent / MBadEncrypted; post-cutover P8.7+P5.10 Rust timeline UTD→decrypted DTO
   - Preconditions:
-    - Desktop app, E2EE-capable session; second device for verification
-    - Recovery key / backup fixtures; isolated multi-account profiles when testing isolation
-    - Linked owner path present in tree: synara/src/app/utils/matrix-crypto.ts
-    - Primary UI/lifecycle surface: synara/src/app/features/room/message/EncryptedContent.tsx
+    - Disposable Synapse; two E2EE-capable sessions (or controlled missing-key fixture) in an encrypted room.
+    - Named product surfaces present: room.ts decryptAllTimelineEvent, RoomTimeline EncryptedContent+MessageNotDecryptedContent, useRoomEvent attemptDecryption, FallbackContent/MsgTypeRenderers/RenderMessageContent UTD strings.
+    - Harness can observe pending not-decrypted UI, post-key plaintext re-render, permanent unable-to-decrypt, and encrypted-room pagination decrypt trigger; does not bypass product path with dual-backend/raw HTTP/helper-only pass criteria.
+    - Do not accept LocalBackup room-key file alone (FR-7.9-007), BackupRestore server restore alone (FR-7.9-006), SAS alone (FR-7.9-005), or encrypted/UTD presentation taxonomy alone (FR-7.3-009) as sole pass for this FR.
   - Actions:
-    1. Boot the appropriate harness for level=integration-e2e against disposable Synapse (or iOS notes if any).
-    2. Establish fixtures required by the clause list: undecryptable-event retry.
-    3. Open UI/lifecycle surface `synara/src/app/features/room/message/EncryptedContent.tsx` (or follow ui_entry_points_rationale if no dedicated UI).
-    4. Step 1: perform the product action that implements «undecryptable-event retry» using current owner `synara/src/app/utils/matrix-crypto.ts`.
-    5. Force process restart and/or offline→online transition where lifecycle continuity is implied.
+    1. Boot integration harness against disposable Synapse. Do not use fixture-only mocks that skip product EncryptedContent/RoomTimeline decrypt paths, dual-backend selectors, raw HTTP, or helper-only pass criteria.
+    2. PENDING: Arrange encrypted events without room keys on the under-test session; open room timeline; assert MessageNotDecryptedContent (or product-equivalent pending UTD) is visible for those events.
+    3. RETRY SUCCESS: Make room keys available to the session (key share / restore fixture). Trigger history load or pagination if needed. Assert EncryptedContent re-renders plaintext (Decrypted path) without requiring a dedicated Retry button click.
+    4. PAGINATION: On encrypted room with hasEncryptionStateEvent, paginate timeline; assert decryptAllTimelineEvent / attemptDecryption isRetry path is exercised for encrypted events (or product-equivalent bulk re-decrypt after cutover).
+    5. PERMANENT UTD: For events that remain undecryptable, assert MessageBadEncryptedContent / MBadEncrypted presentation.
+    6. After cutover P8.7+P5.10, repeat pending → decrypted and permanent UTD observables via Rust crypto+timeline ownership + IPC DTO. Citing SC-061 alone, compile-only, raw /\_matrix HTTP, dual-backend/SDK selector, room-key-file-only, server-backup-only, presentation-only, or helper/fixture-only is a FAIL.
   - Assertions:
-    - Each clause is observable: «undecryptable-event retry».
-    - State coordination remains through `synara/src/app/utils/matrix-crypto.ts` (or its Rust/IPC successor after cutover), not ad-hoc dual writers.
-    - Behavior-relevant current JS method candidates exercised or replaced: getCrypto, getCrypto (AST candidates; not type-proven receivers).
-    - Rust mapping remains conservative: caps=[SC-061] gaps=[none]; compile-only blocked states are not treated as runtime pass.
-    - No new production matrix-js-sdk usage and no raw /\_matrix runtime HTTP unless dossier marks that exact behavior typed-sdk-request-required.
+    - PENDING: encrypted events without keys show not-yet-decrypted UI (MessageNotDecryptedContent or equivalent) via EncryptedContent.
+    - RETRY: when keys become available, events re-decrypt and UI updates to plaintext without a dedicated product Retry button (automatic path).
+    - PAGINATION: encrypted-room pagination triggers bulk re-decrypt (decryptAllTimelineEvent / isRetry) or Rust/IPC successor.
+    - PERMANENT UTD: m.bad.encrypted / MessageBadEncryptedContent remains for permanently undecryptable events.
+    - COORDINATION: retry remains through room.ts decryptAllTimelineEvent + EncryptedContent Decrypted + useRoomEvent attemptDecryption (or Rust/IPC successors), not ad-hoc dual writers.
+    - CUTOVER: P8.7+P5.10 preserve pending/retry-success/permanent-UTD observables via Rust ownership + IPC DTO; SC-061 compile-only never product pass; no SC-066/GAP-RECOVERY-BACKUP as sole mapping; no raw /\_matrix runtime HTTP; no dual-backend/SDK selector.
+    - No new production matrix-js-sdk usage and no raw /\_matrix runtime HTTP unless the dossier marks that exact behavior typed-sdk-request-required.
+    - Room-key file import alone (FR-7.9-007), server backup restore alone (FR-7.9-006), SAS alone (FR-7.9-005), and presentation-only (FR-7.3-009) are not accepted as sole pass criteria for this FR.
   - does_not_currently_exist: `True`
 - **Manual**: `MA-FR-7.9-008`
 
@@ -9067,21 +9089,24 @@ Limited rejected-review correction (`p0.2-correct-33-fr-7.9-007-room-key-import-
 
 - Platforms: macOS, Linux
 - Preconditions:
-  - Desktop app, E2EE-capable session; second device for verification
-  - Recovery key / backup fixtures; isolated multi-account profiles when testing isolation
-  - State owner available: synara/src/app/utils/matrix-crypto.ts
-  - UI/lifecycle: synara/src/app/features/room/message/EncryptedContent.tsx
-  - Current status baseline: implemented
+  - Desktop app against disposable Synapse; two E2EE sessions (or missing-key fixture) in an encrypted room.
+  - Product surfaces available: room.ts decryptAllTimelineEvent, RoomTimeline EncryptedContent + MessageNotDecryptedContent, useRoomEvent attemptDecryption, FallbackContent/MBadEncrypted UTD strings.
+  - UI/lifecycle: encrypted room timeline with pending/permanent UTD presentation; no dedicated Retry button expected.
+  - Current status baseline: implemented (automatic retry)
 - Actions:
-  1. Launch Synara desktop on the target platform against disposable Synapse; use a clean or known fixture profile as required by «undecryptable-event retry;».
-  2. Identify state owner `synara/src/app/utils/matrix-crypto.ts` and open `synara/src/app/features/room/message/EncryptedContent.tsx`.
-  3. Action 1 — «undecryptable-event retry»: perform the minimal user/system steps that trigger this clause (use linked files under current_production_files if the entry point is indirect).
-  4. Disable network for ≥10s, re-enable, and re-check sync/timeline/send queue observables.
-  5. Repeat critical path in an encrypted room / with a second device when the clause involves keys or verification.
+  1. Launch Synara desktop on the target platform against disposable Synapse with an E2EE profile in an encrypted room.
+  2. PENDING: Withhold room keys for some encrypted messages on the under-test session; open the room; confirm MessageNotDecryptedContent ('This message is not decrypted yet') or product-equivalent pending UI via EncryptedContent.
+  3. RETRY SUCCESS: Supply room keys (key share or restore fixture). Paginate or wait for decrypt; confirm plaintext body replaces pending UTD without clicking a Retry button.
+  4. PAGINATION: Scroll/load older encrypted history; confirm bulk re-decrypt path for encrypted rooms (decryptAllTimelineEvent / isRetry or post-cutover equivalent).
+  5. PERMANENT UTD: Confirm events that remain undecryptable show MessageBadEncryptedContent / MBadEncrypted ('Unable to decrypt message').
+  6. Confirm LocalBackup file import alone (FR-7.9-007), server BackupRestore alone (FR-7.9-006), and presentation taxonomy alone (FR-7.3-009) are not used as sole pass for this FR.
 - Expected:
-  - All clauses under «undecryptable-event retry;» produce the user-visible or system-observable success criteria without error toasts unrelated to intentional negative tests.
-  - Clause 1 «undecryptable-event retry» is satisfied on macOS, Linux with owner `synara/src/app/utils/matrix-crypto.ts`.
+  - Pending encrypted events show not-yet-decrypted UI; successful key availability updates to plaintext automatically.
+  - Encrypted-room pagination exercises bulk re-decrypt (decryptAllTimelineEvent attemptDecryption isRetry or Rust/IPC successor under P8.7+P5.10).
+  - Permanent UTD presents Unable to decrypt message for m.bad.encrypted.
   - No unexpected raw /\_matrix traffic from the app renderer for this flow on the post-cutover build.
+  - Room-key file import alone (FR-7.9-007), server backup restore alone (FR-7.9-006), SAS alone (FR-7.9-005), and presentation-only (FR-7.3-009) do not close this FR.
+  - Clauses pending UTD, automatic retry, permanent UTD, and cutover observables satisfied on macOS and Linux via room.ts + EncryptedContent + RoomTimeline (or Rust/IPC successors under P8.7+P5.10).
 
 ### `MA-FR-7.9-009` (FR-7.9-009)
 
@@ -11298,20 +11323,24 @@ Limited rejected-review correction (`p0.2-correct-33-fr-7.9-007-room-key-import-
 
 ### `AT-FR-7.9-008-001`
 
-- 7.9/FR-7.9-008: exercise 'undecryptable-event retry;' via owner `synara/src/app/utils/matrix-crypto.ts` and UI `synara/src/app/features/room/message/EncryptedContent.tsx`, then confirm Rust/IPC cutover task `P8.7` preserves observable behavior without raw Matrix runtime HTTP.
-- target: None
+- Integration-e2e against disposable Synapse with an E2EE room: (A) PENDING UTD — create/fixture messages that remain encrypted on receiver (missing megolm keys); assert timeline shows MessageNotDecryptedContent ('This message is not decrypted yet') or product-equivalent pending state via EncryptedContent. (B) RETRY SUCCESS — after room keys become available (key forward, backup restore FR-7.9-006 path as fixture only, or second-device history), assert decrypt path runs (pagination decryptAllTimelineEvent/attemptDecryption isRetry and/or SDK decrypt + Decrypted) and UI re-renders plaintext body without process restart. (C) PERMANENT UTD — for events that remain undecryptable, assert MessageBadEncryptedContent / MBadEncrypted ('Unable to decrypt message') via m.bad.encrypted. (D) PAGINATION RETRY — paginate encrypted history and assert RoomTimeline invokes decryptAllTimelineEvent for hasEncryptionStateEvent rooms. After cutover P8.7+P5.10 same observables via Rust crypto+timeline ownership + product UX + IPC DTO; SC-061 alone, compile-only blocked, raw /\_matrix HTTP, dual-backend, room-key-file-only (FR-7.9-007), server-backup-restore-only (FR-7.9-006), presentation-only (FR-7.3-009), or helper/fixture-only FAIL.
+- target: decryptAllTimelineEvent (room.ts); RoomTimeline pagination encrypted decrypt; EncryptedContent Decrypted listener; useRoomEvent attemptDecryption; MessageNotDecryptedContent / MessageBadEncryptedContent / MBadEncrypted; post-cutover P8.7+P5.10 Rust timeline UTD→decrypted DTO
 - actions:
-  1. Boot the appropriate harness for level=integration-e2e against disposable Synapse (or iOS notes if any).
-  2. Establish fixtures required by the clause list: undecryptable-event retry.
-  3. Open UI/lifecycle surface `synara/src/app/features/room/message/EncryptedContent.tsx` (or follow ui_entry_points_rationale if no dedicated UI).
-  4. Step 1: perform the product action that implements «undecryptable-event retry» using current owner `synara/src/app/utils/matrix-crypto.ts`.
-  5. Force process restart and/or offline→online transition where lifecycle continuity is implied.
+  1. Boot integration harness against disposable Synapse. Do not use fixture-only mocks that skip product EncryptedContent/RoomTimeline decrypt paths, dual-backend selectors, raw HTTP, or helper-only pass criteria.
+  2. PENDING: Arrange encrypted events without room keys on the under-test session; open room timeline; assert MessageNotDecryptedContent (or product-equivalent pending UTD) is visible for those events.
+  3. RETRY SUCCESS: Make room keys available to the session (key share / restore fixture). Trigger history load or pagination if needed. Assert EncryptedContent re-renders plaintext (Decrypted path) without requiring a dedicated Retry button click.
+  4. PAGINATION: On encrypted room with hasEncryptionStateEvent, paginate timeline; assert decryptAllTimelineEvent / attemptDecryption isRetry path is exercised for encrypted events (or product-equivalent bulk re-decrypt after cutover).
+  5. PERMANENT UTD: For events that remain undecryptable, assert MessageBadEncryptedContent / MBadEncrypted presentation.
+  6. After cutover P8.7+P5.10, repeat pending → decrypted and permanent UTD observables via Rust crypto+timeline ownership + IPC DTO. Citing SC-061 alone, compile-only, raw /\_matrix HTTP, dual-backend/SDK selector, room-key-file-only, server-backup-only, presentation-only, or helper/fixture-only is a FAIL.
 - assertions:
-  - Each clause is observable: «undecryptable-event retry».
-  - State coordination remains through `synara/src/app/utils/matrix-crypto.ts` (or its Rust/IPC successor after cutover), not ad-hoc dual writers.
-  - Behavior-relevant current JS method candidates exercised or replaced: getCrypto, getCrypto (AST candidates; not type-proven receivers).
-  - Rust mapping remains conservative: caps=[SC-061] gaps=[none]; compile-only blocked states are not treated as runtime pass.
-  - No new production matrix-js-sdk usage and no raw /\_matrix runtime HTTP unless dossier marks that exact behavior typed-sdk-request-required.
+  - PENDING: encrypted events without keys show not-yet-decrypted UI (MessageNotDecryptedContent or equivalent) via EncryptedContent.
+  - RETRY: when keys become available, events re-decrypt and UI updates to plaintext without a dedicated product Retry button (automatic path).
+  - PAGINATION: encrypted-room pagination triggers bulk re-decrypt (decryptAllTimelineEvent / isRetry) or Rust/IPC successor.
+  - PERMANENT UTD: m.bad.encrypted / MessageBadEncryptedContent remains for permanently undecryptable events.
+  - COORDINATION: retry remains through room.ts decryptAllTimelineEvent + EncryptedContent Decrypted + useRoomEvent attemptDecryption (or Rust/IPC successors), not ad-hoc dual writers.
+  - CUTOVER: P8.7+P5.10 preserve pending/retry-success/permanent-UTD observables via Rust ownership + IPC DTO; SC-061 compile-only never product pass; no SC-066/GAP-RECOVERY-BACKUP as sole mapping; no raw /\_matrix runtime HTTP; no dual-backend/SDK selector.
+  - No new production matrix-js-sdk usage and no raw /\_matrix runtime HTTP unless the dossier marks that exact behavior typed-sdk-request-required.
+  - Room-key file import alone (FR-7.9-007), server backup restore alone (FR-7.9-006), SAS alone (FR-7.9-005), and presentation-only (FR-7.3-009) are not accepted as sole pass criteria for this FR.
 
 ### `AT-FR-7.9-009-001`
 
@@ -11817,7 +11846,7 @@ Limited rejected-review correction (`p0.2-correct-33-fr-7.9-007-room-key-import-
 | `synara/src/app/features/room/MembersDrawer.tsx`                               | `feature`          | `requirement-linked`           |   0 |   0 | `FR-7.6-004`,`FR-7.6-005`                                                                                                                                                                                                                 |
 | `synara/src/app/features/room/RoomInput.tsx`                                   | `feature`          | `requirement-linked`           |   0 |  14 | `FR-7.3-007`,`FR-7.3-008`,`FR-7.3-009`,`FR-7.3-010`,`FR-7.3-014`,`FR-7.3-016`,`FR-7.4-001`,`FR-7.4-003`,`FR-7.4-004`,`FR-7.4-005`,`FR-7.4-006`,`FR-7.4-007`,`FR-7.5-003`,`FR-7.5-004`,`FR-7.5-006`,`FR-7.5-008`,`FR-7.5-011`,`FR-7.3-011` |
 | `synara/src/app/features/room/RoomSidePanel.tsx`                               | `feature`          | `shared-matrix-infrastructure` |   0 |   0 | `FR-7.3-001`,`FR-7.6-001`,`FR-7.6-004`,`FR-7.2-008`                                                                                                                                                                                       |
-| `synara/src/app/features/room/RoomTimeline.tsx`                                | `feature`          | `requirement-linked`           |  12 |  38 | `FR-7.2-012`,`FR-7.3-001`,`FR-7.3-002`,`FR-7.3-003`,`FR-7.3-004`,`FR-7.3-005`,`FR-7.3-006`,`FR-7.3-007`,`FR-7.3-012`,`FR-7.3-014`,`FR-7.3-015`,`FR-7.3-016`,`FR-7.3-017`,`FR-7.4-007`,`FR-7.2-011`,`FR-7.3-008`,`FR-7.3-009`,`FR-7.3-010` |
+| `synara/src/app/features/room/RoomTimeline.tsx`                                | `feature`          | `requirement-linked`           |  12 |  38 | `FR-7.2-012`,`FR-7.3-001`,`FR-7.3-002`,`FR-7.3-003`,`FR-7.3-004`,`FR-7.3-005`,`FR-7.3-006`,`FR-7.3-007`,`FR-7.3-012`,`FR-7.3-014`,`FR-7.3-015`,`FR-7.3-016`,`FR-7.3-017`,`FR-7.4-007`,`FR-7.2-011`,`FR-7.3-008`,`FR-7.3-009`,`FR-7.3-010`,`FR-7.9-008` |
 | `synara/src/app/features/room/RoomView.tsx`                                    | `feature`          | `requirement-linked`           |   0 |   1 | `FR-7.2-012`,`FR-7.3-001`,`FR-7.3-012`                                                                                                                                                                                                    |
 | `synara/src/app/features/room/RoomViewFollowing.tsx`                           | `feature`          | `requirement-linked`           |   0 |   1 | `FR-7.2-012`,`FR-7.3-001`,`FR-7.3-012`                                                                                                                                                                                                    |
 | `synara/src/app/features/room/RoomViewHeader.tsx`                              | `feature`          | `requirement-linked`           |   0 |   1 | `FR-7.2-012`,`FR-7.3-001`,`FR-7.3-012`                                                                                                                                                                                                    |
@@ -11879,7 +11908,7 @@ Limited rejected-review correction (`p0.2-correct-33-fr-7.9-007-room-key-import-
 | `synara/src/app/hooks/useRoomCreators.ts`                                      | `hook`             | `shared-matrix-infrastructure` |   0 |   1 | `FR-7.1-002`,`FR-7.2-001`,`FR-7.6-001`,`FR-7.3-001`,`FR-7.6-004`,`FR-7.2-003`,`FR-7.2-004`,`FR-7.1-008`                                                                                                                                   |
 | `synara/src/app/hooks/useRoomDirectoryVisibility.ts`                           | `hook`             | `shared-matrix-infrastructure` |   0 |   0 | `FR-7.2-001`,`FR-7.3-001`,`FR-7.6-004`                                                                                                                                                                                                    |
 | `synara/src/app/hooks/useRoomEvent.ts`                                         | `hook`             | `requirement-linked`           |   0 |   3 | `FR-7.3-002`,`FR-7.3-009`,`FR-7.9-008`                                                                                                                                                                                                    |
-| `synara/src/app/hooks/useRoomEventReaders.ts`                                  | `hook`             | `requirement-linked`           |   8 |   1 | `FR-7.3-002`,`FR-7.3-005`,`FR-7.3-009`,`FR-7.3-013`,`FR-7.9-008`                                                                                                                                                                          |
+| `synara/src/app/hooks/useRoomEventReaders.ts`                                  | `hook`             | `requirement-linked`           |   8 |   1 | `FR-7.3-002`,`FR-7.3-005`,`FR-7.3-009`,`FR-7.3-013`                                                                                                                                                                                       |
 | `synara/src/app/hooks/useRoomLatestRenderedEvent.ts`                           | `hook`             | `shared-matrix-infrastructure` |   6 |   0 | `FR-7.3-001`,`FR-7.6-001`,`FR-7.6-004`,`FR-7.2-001`,`FR-7.3-002`                                                                                                                                                                          |
 | `synara/src/app/hooks/useRoomMembers.ts`                                       | `hook`             | `requirement-linked`           |   4 |   1 | `FR-7.3-016`,`FR-7.6-004`,`FR-7.6-005`                                                                                                                                                                                                    |
 | `synara/src/app/hooks/useRoomMeta.ts`                                          | `hook`             | `requirement-linked`           |   2 |   0 | `FR-7.2-007`                                                                                                                                                                                                                              |
@@ -11942,12 +11971,12 @@ Limited rejected-review correction (`p0.2-correct-33-fr-7.9-007-room-key-import-
 | `synara/src/app/state/upload.ts`                                               | `state`            | `requirement-linked`           |   0 |   0 | `FR-7.3-007`,`FR-7.4-005`,`FR-7.4-007`,`FR-7.5-003`,`FR-7.5-004`,`FR-7.5-008`,`FR-7.5-011`                                                                                                                                                |
 | `synara/src/app/utils/forward.ts`                                              | `utility`          | `requirement-linked`           |   0 |   1 | `FR-7.4-011`                                                                                                                                                                                                                              |
 | `synara/src/app/utils/later.ts`                                                | `utility`          | `requirement-linked`           |   0 |   2 | `FR-7.2-011`,`FR-7.3-014`,`FR-7.3-015`,`FR-7.7-001`,`FR-7.7-008`,`FR-7.7-009`                                                                                                                                                             |
-| `synara/src/app/utils/matrix-crypto.ts`                                        | `utility`          | `requirement-linked`           |   0 |   0 | `FR-7.9-002`,`FR-7.9-004`,`FR-7.9-008`                                                                                                                                                                                                                              |
+| `synara/src/app/utils/matrix-crypto.ts`                                        | `utility`          | `requirement-linked`           |   0 |   0 | `FR-7.9-002`,`FR-7.9-004`                                                                                                                                                                                                                                          |
 | `synara/src/app/utils/matrix-uia.ts`                                           | `utility`          | `requirement-linked`           |   0 |   0 | `FR-7.1-006`                                                                                                                                                                                                                              |
 | `synara/src/app/utils/matrix.ts`                                               | `utility`          | `requirement-linked`           |   0 |   9 | `FR-7.3-007`,`FR-7.4-005`,`FR-7.4-007`,`FR-7.5-001`,`FR-7.5-003`,`FR-7.5-004`,`FR-7.5-007`,`FR-7.5-008`,`FR-7.5-011`,`FR-7.6-008`                                                                                                         |
 | `synara/src/app/utils/notifications.ts`                                        | `utility`          | `requirement-linked`           |   0 |   9 | `FR-7.2-005`,`FR-7.2-011`,`FR-7.7-003`                                                                                                                                               |
 | `synara/src/app/utils/polls.ts`                                                | `utility`          | `requirement-linked`           |   0 |   0 | `FR-7.3-011`,`FR-7.4-006`                                                                                                                                                                                                                 |
-| `synara/src/app/utils/room.ts`                                                 | `utility`          | `requirement-linked`           |   0 |  15 | `FR-7.5-001`,`FR-7.5-002`,`FR-7.5-007`,`FR-7.6-008`,`FR-7.8-001`,`FR-7.8-002`,`FR-7.8-004`,`FR-7.8-005`,`FR-7.8-006`,`FR-7.8-007`                                                                                                                                                 |
+| `synara/src/app/utils/room.ts`                                                 | `utility`          | `requirement-linked`           |   0 |  15 | `FR-7.5-001`,`FR-7.5-002`,`FR-7.5-007`,`FR-7.6-008`,`FR-7.8-001`,`FR-7.8-002`,`FR-7.8-004`,`FR-7.8-005`,`FR-7.8-006`,`FR-7.8-007`,`FR-7.9-008`                                                                                                                                  |
 | `synara/src/app/utils/roomNotes.ts`                                            | `utility`          | `requirement-linked`           |   0 |   2 | `FR-7.3-014`,`FR-7.3-015`,`FR-7.7-002`,`FR-7.7-008`,`FR-7.7-009`                                                                                                                                                                          |
 | `synara/src/app/utils/sort.ts`                                                 | `utility`          | `requirement-linked`           |   0 |   4 | `FR-7.2-004`                                                                                                                                                                                                                              |
 | `synara/src/app/utils/syncLifecycle.ts`                                        | `utility`          | `requirement-linked`           |   0 |   0 | `FR-7.2-001`,`FR-7.2-002`,`FR-7.3-017`                                                                                                                                                                                                    |
