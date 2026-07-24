@@ -49,8 +49,8 @@ Phase 0 evidence accepted before this handoff:
 - P0.1 SDK usage inventory is merged to the integration branch.
 - P0.3 exact Matrix Rust SDK 0.18.0 capability dossier is merged to the
   integration branch.
-- P0.2 branch carries accepted 7.8–7.9 and FR-7.10-001..003 corrections;
-  ~12 shallow rows remain in 7.10–7.11.
+- P0.2 branch carries accepted 7.8–7.9 and FR-7.10-001..004 corrections;
+  ~11 shallow rows remain in 7.10–7.11.
 
 P0.2 is not complete. Resume at FR-7.10-005, then audit remaining 7.10–7.11
 before declaring P0.2 accepted.
