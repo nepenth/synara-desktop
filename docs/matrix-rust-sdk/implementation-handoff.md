@@ -33,9 +33,10 @@ without explicit user approval.
 - Checkpoint commits: `06d0f86` (traceability scaffold), `9c91e0f` (handoff)
 - **Accepted this session:**
   - FR-7.8-004 through FR-7.8-009 (section 7.8 complete for P0.2 audit)
-  - FR-7.9-001 (`p0.2-correct-27-...`) pending commit after this handoff update
-- **Next writer task:** FR-7.9-002 (cross-signing status), then remaining
-  shallow 7.9–7.11 rows (~27)
+  - FR-7.9-001 @ `db944b3`
+  - FR-7.9-002 (`p0.2-correct-28-...`) pending commit after this handoff update
+- **Next writer task:** FR-7.9-003 (own-device and other-device lists), then
+  remaining shallow 7.9–7.11 rows (~26)
 - No production Matrix Rust SDK replacement code accepted
 - **No open P0.2 PR yet** (open after P0.2 complete or batch checkpoint)
 
@@ -47,7 +48,7 @@ Phase 0 evidence accepted before this handoff:
 - P0.2 branch carries accepted 7.8 corrections through FR-7.8-009 and
   continuing 7.9+ audits.
 
-P0.2 is not complete. Resume at FR-7.9-002, then audit remaining 7.9–7.11
+P0.2 is not complete. Resume at FR-7.9-003, then audit remaining 7.9–7.11
 before declaring P0.2 accepted.
 
 Accepted notification findings that must be preserved:
@@ -106,6 +107,12 @@ Accepted notification findings that must be preserved:
   (`initMatrix.ts` + `cryptoStoreContinuity.ts` + ClientRoot). Current product
   is browser IndexedDB + rust-crypto wasm; cutover is native encrypted SQLite
   under Rust. SC-061/062/083 compile-only blocked states are not runtime pass.
+- FR-7.9-002: status `implemented`. Cross-signing active flag is
+  `useCrossSigningActive` via `m.cross_signing.master` account-data presence
+  (not JS `getCrossSigningStatus`); device `crossSigningVerified` via
+  `getDeviceVerificationStatus`; Devices/UnverifiedTab/Logout gated on active;
+  bootstrap/reset via `bootstrapCrossSigning`. Ceremony SAS is FR-7.9-005.
+  SC-064/061/062 compile-only are not runtime pass.
 
 ## Branch and PR contract
 
