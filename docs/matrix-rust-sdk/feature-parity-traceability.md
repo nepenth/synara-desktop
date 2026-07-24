@@ -7480,8 +7480,8 @@ Limited rejected-review correction (`p0.2-correct-52-fr-7.11-006-csp-and-origin-
 - **Notes**: Evidence (conservative): (1) PRODUCT MEANING — FR-7.11-006 is CSP and origin restrictions for Element Call embed host; NOT membership DISPLAY (001), NOT embed URL/capabilities alone (002), NOT join/leave (003), NOT encryption keys (004), NOT session cleanup (005), NOT experimental-widgets risk acceptance alone (007). (2) SHELL CSP — src-tauri/tauri.conf.json L56 app.security.csp: default-src 'self'; frame-src 'self' blob:; form-action 'none'; base-uri 'none'; object-src 'none'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src 'self' blob: ipc: ws: wss: http: https: http://ipc.localhost; img-src/media-src allow http: https: among others. (3) IFRAME SANDBOX — CallEmbed.getIframe L108–124: sandbox allow-forms/scripts/same-origin/popups/modals/downloads; allow microphone;camera;display-capture;autoplay;clipboard-write. LIMIT: scripts+same-origin sandbox residual. (4) ORIGIN — getWidget L67–90: parentUrl=window.location.origin; widget URL same-origin /public/element-call/index.html; vite.config.js L17–18 copies @element-hq/element-call-embedded. (5) POSTMESSAGE — ClientWidgetApi L139 sets dependency targetOrigin=widget.origin; strictOriginCheck defaults false and product does not enable it. (6) NO META CSP — synara/index.html and element-call dist/index.html lack Content-Security-Policy meta (desktop relies on Tauri CSP injection). (7) EXCLUDE getDeviceId; false search AST; ToDeviceEvent; CallWidgetDriver searchUserDirectory; utils capabilities. (8) No existing automated AT. (9) Cutover P10.6 (+P13.5): preserve shell CSP + iframe sandbox + same-origin packaging; harden connect-src/origin checks/postMessage strictOrigin; SC-082 residual for host/postMessage only — SC-082 alone never closes product CSP.
 - **Limits**: Partial: shell CSP + iframe sandbox + same-origin embed present; broad connect-src/media/img; no CSP meta; sandbox scripts+same-origin residual; strictOriginCheck not product-enabled; no security AT. Rust: product shell/host ownership; SC-082 experimental-widgets blocked E1/E2 residual only — not a CSP API.
 - **UI**: `synara/src/app/plugins/call/CallEmbed.ts`
-- **UI rationale**: FR-7.11-006 is CSP and origin restrictions for Element Call embed — not a dedicated settings screen. Product surfaces: CallEmbed.getIframe sandbox/allow; getWidget parentUrl + same-origin /public/element-call URL; Tauri app.security.csp (shell). EXCLUDE membership display (001); embed URL/capabilities alone without CSP (002); join/leave (003); encryption keys (004); cleanup (005); experimental risk acceptance alone (007).
-- **Owners**: `synara/src/app/plugins/call/CallEmbed.ts`, `src-tauri/tauri.conf.json`, `synara/vite.config.js`
+- **UI rationale**: FR-7.11-006 is CSP and origin restrictions for Element Call embed — not a dedicated settings screen. Product surfaces: CallEmbed.getIframe sandbox/allow; getWidget parentUrl + same-origin /public/element-call URL; Tauri app.security.csp (shell); index.html document CSP residual. EXCLUDE membership display (001); embed URL/capabilities alone without CSP (002); join/leave (003); encryption keys (004); cleanup (005); experimental risk acceptance alone (007).
+- **Owners**: `synara/src/app/plugins/call/CallEmbed.ts`, `src-tauri/tauri.conf.json`, `synara/vite.config.js`, `synara/index.html`
 - **Files**:
   - `synara/src/app/plugins/call/CallEmbed.ts` symbols=['getWidget parentUrl+same-origin URL', 'getIframe sandbox+allow', 'ClientWidgetApi construct'] retained_m=2 retained_l=0
     - line `clientOrigin window.location.origin`:L67 — ORIGIN clientOrigin for parentUrl.
@@ -7496,6 +7496,8 @@ Limited rejected-review correction (`p0.2-correct-52-fr-7.11-006-csp-and-origin-
     - line `app.security.csp`:L56 — PRIMARY shell CSP (frame-src 'self' blob:).
   - `synara/vite.config.js` symbols=['viteStaticCopy element-call-embedded'] retained_m=0 retained_l=0
     - line `element-call-embedded → public/element-call`:L17 — same-origin packaging.
+  - `synara/index.html` symbols=['no Content-Security-Policy meta'] retained_m=0 retained_l=0
+    - line `no Content-Security-Policy meta (residual)`:L1 — DOCUMENT CSP residual (desktop relies on Tauri CSP).
 - **Behavior-relevant methods (top-level)**:
   - `getWidget` `synara/src/app/plugins/call/CallEmbed.ts`:L59 — Origin/URL construction for CSP-aligned embed.
   - `getIframe` `synara/src/app/plugins/call/CallEmbed.ts`:L108 — Primary iframe sandbox restriction.
@@ -9822,14 +9824,14 @@ Limited rejected-review correction (`p0.2-correct-52-fr-7.11-006-csp-and-origin-
   - Desktop production-like shell with Tauri CSP enabled.
   - Element Call embedded assets under public/element-call (vite packaging).
   - Call room fixture sufficient to open CallEmbed iframe.
-  - State owners available: CallEmbed.ts, src-tauri/tauri.conf.json, synara/vite.config.js.
+  - State owners available: CallEmbed.ts, src-tauri/tauri.conf.json, synara/vite.config.js, synara/index.html residual.
   - Current status baseline: partial under GATE-7.11-006-CSP-ORIGIN-HARDENING.
 - Actions:
   1. Launch Synara desktop production-like build on the target platform with Element Call assets present.
   2. SHELL CSP: confirm Tauri app.security.csp is in effect (frame-src 'self' among directives); note connect-src residual breadth.
   3. IFRAME SANDBOX: join/start embedded call; inspect Call Embed iframe sandbox and allow attributes.
   4. ORIGIN: confirm iframe src is same-origin /public/element-call path and widget parentUrl matches client origin.
-  5. Document residuals: no CSP meta on shell/embed HTML; sandbox scripts+same-origin; strictOriginCheck not product-enabled.
+  5. Document residuals: no Content-Security-Policy meta on synara/index.html (and element-call HTML); sandbox scripts+same-origin; strictOriginCheck not product-enabled.
   6. Do not accept membership-display-only, embed-URL-only, join/leave-only, keys-only, cleanup-only, or SC-082 alone as CSP pass.
 - Expected:
   - SHELL CSP present with frame-src 'self' (or equivalent); residual connect-src breadth documented (not claimed fully hardened).
