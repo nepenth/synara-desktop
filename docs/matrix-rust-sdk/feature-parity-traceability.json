@@ -63636,7 +63636,6 @@
             "is_type_only": false,
             "linked_requirement_ids": [
               "FR-7.9-006",
-              "FR-7.9-007",
               "FR-7.9-009",
               "FR-7.9-013"
             ],
@@ -63668,7 +63667,6 @@
             "is_type_only": false,
             "linked_requirement_ids": [
               "FR-7.9-006",
-              "FR-7.9-007",
               "FR-7.9-009"
             ],
             "cutover_disposition": "replace-deep-js-sdk-import-with-synara-dto-or-rust-projection"
@@ -63684,7 +63682,6 @@
             "is_type_only": false,
             "linked_requirement_ids": [
               "FR-7.9-006",
-              "FR-7.9-007",
               "FR-7.9-009",
               "FR-7.9-013"
             ],
@@ -63927,430 +63924,272 @@
     },
     {
       "id": "FR-7.9-007",
-
       "origin": "plan-section-7",
       "section_id": "7.9",
       "plan_heading": "### 7.9 Devices, E2EE, verification, and recovery",
       "normalized_text": "room-key import/export if retained by product UI;",
       "plan_line_range": [431, 431],
-      "current_status": "partial",
+      "current_status": "implemented",
       "current_production_files": [
         {
-          "path": "synara/src/app/components/BackupRestore.tsx",
-          "bucket": "component",
+          "path": "synara/src/app/features/settings/devices/LocalBackup.tsx",
+          "bucket": "feature",
           "categories": ["crypto_verification_recovery"],
-          "symbols_or_candidates": [],
-          "line_refs": [],
-          "model_coupling": ["CryptoApi"],
-          "behavior_relevant_method_candidates": [],
-          "behavior_relevant_listener_candidates": [],
-          "symbols_or_candidates_note": "No requirement-relevant method/listener candidates filtered from this file's P0.1 AST hits; file remains linked for structural/model ownership. See all_candidates_in_linked_files on the requirement."
-        },
-        {
-          "path": "synara/src/app/hooks/useKeyBackup.ts",
-          "bucket": "hook",
-          "categories": [
-            "client_methods",
-            "event_emitters_listeners",
-            "crypto_verification_recovery"
-          ],
           "symbols_or_candidates": [
-            "getActiveSessionBackupVersion",
-            "isKeyBackupTrusted"
+            "LocalBackup",
+            "ExportKeys",
+            "ExportKeysTile",
+            "ImportKeys",
+            "ImportKeysTile",
+            "exportRoomKeysAsJson",
+            "importRoomKeysAsJson",
+            "encryptMegolmKeyFile",
+            "decryptMegolmKeyFile"
           ],
           "line_refs": [
             {
-              "symbol": "getActiveSessionBackupVersion",
-              "line": 30,
-              "kind": "method_candidate"
+              "symbol": "exportRoomKeysAsJson",
+              "line": 24,
+              "kind": "method_candidate",
+              "relevance_reason": "ExportKeys: crypto.exportRoomKeysAsJson() dumps room keys as JSON before password-protecting the file."
             },
             {
-              "symbol": "isKeyBackupTrusted",
-              "line": 144,
-              "kind": "method_candidate"
+              "symbol": "encryptMegolmKeyFile",
+              "line": 26,
+              "kind": "product_helper",
+              "relevance_reason": "Product Megolm export encryption (PBKDF2/AES-CTR/HMAC) over keysJSON with user password before download."
             },
             {
-              "symbol": "on:CryptoEvent.KeyBackupStatus",
-              "line": 18,
-              "kind": "listener_candidate"
+              "symbol": "FileSaver.saveAs",
+              "line": 31,
+              "kind": "product_ui",
+              "relevance_reason": "Downloads encrypted blob as synara-keys.txt (text/plain)."
             },
             {
-              "symbol": "removeListener:CryptoEvent.KeyBackupStatus",
-              "line": 20,
-              "kind": "listener_candidate"
+              "symbol": "decryptMegolmKeyFile",
+              "line": 173,
+              "kind": "product_helper",
+              "relevance_reason": "ImportKeys: decrypts password-protected key file arrayBuffer to keys JSON string."
             },
             {
-              "symbol": "on:CryptoEvent.KeyBackupSessionsRemaining",
-              "line": 48,
-              "kind": "listener_candidate"
+              "symbol": "importRoomKeysAsJson",
+              "line": 175,
+              "kind": "method_candidate",
+              "relevance_reason": "ImportKeys: crypto.importRoomKeysAsJson(keys) loads decrypted room keys into the local crypto store."
             },
             {
-              "symbol": "removeListener:CryptoEvent.KeyBackupSessionsRemaining",
-              "line": 50,
-              "kind": "listener_candidate"
+              "symbol": "ExportKeysTile",
+              "line": 124,
+              "kind": "product_ui",
+              "relevance_reason": "Export Messages Data expandable tile with New Password / Confirm Password / Export."
             },
             {
-              "symbol": "on:CryptoEvent.KeyBackupFailed",
-              "line": 61,
-              "kind": "listener_candidate"
+              "symbol": "ImportKeysTile",
+              "line": 248,
+              "kind": "product_ui",
+              "relevance_reason": "Import Messages Data tile: file picker (text/plain) then Password / Decrypt."
             },
             {
-              "symbol": "removeListener:CryptoEvent.KeyBackupFailed",
-              "line": 63,
-              "kind": "listener_candidate"
-            },
-            {
-              "symbol": "on:CryptoEvent.KeyBackupDecryptionKeyCached",
-              "line": 74,
-              "kind": "listener_candidate"
-            },
-            {
-              "symbol": "removeListener:CryptoEvent.KeyBackupDecryptionKeyCached",
-              "line": 76,
-              "kind": "listener_candidate"
+              "symbol": "LocalBackup",
+              "line": 303,
+              "kind": "product_ui",
+              "relevance_reason": "Section heading Local Backup; hosts ExportKeysTile + ImportKeysTile SequenceCards."
             }
           ],
-          "model_coupling": ["CryptoApi"],
+          "model_coupling": [],
           "behavior_relevant_method_candidates": [
             {
-              "name": "getActiveSessionBackupVersion",
-              "line": 30,
+              "name": "getCrypto",
+              "line": 22,
               "category": "crypto_verification_recovery",
               "kind": "property_call_candidate",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+              "confidence": "Source-inspected product call site (exact-line); mx from useMatrixClient — not a P0.1 AST hit on this path (file not in 220 import ledger).",
+              "relevance_reason": "Crypto gate before exportRoomKeysAsJson; throws if crypto module missing."
             },
             {
-              "name": "isKeyBackupTrusted",
-              "line": 144,
+              "name": "exportRoomKeysAsJson",
+              "line": 24,
               "category": "crypto_verification_recovery",
               "kind": "property_call_candidate",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+              "confidence": "Source-inspected product call site (exact-line); CryptoApi method on mx.getCrypto().",
+              "relevance_reason": "Room-key export: serializes local room keys to JSON for file backup."
+            },
+            {
+              "name": "getCrypto",
+              "line": 169,
+              "category": "crypto_verification_recovery",
+              "kind": "property_call_candidate",
+              "confidence": "Source-inspected product call site (exact-line); import path crypto gate.",
+              "relevance_reason": "Crypto gate before importRoomKeysAsJson."
+            },
+            {
+              "name": "importRoomKeysAsJson",
+              "line": 175,
+              "category": "crypto_verification_recovery",
+              "kind": "property_call_candidate",
+              "confidence": "Source-inspected product call site (exact-line); CryptoApi method on mx.getCrypto().",
+              "relevance_reason": "Room-key import: loads decrypted keys JSON into local crypto store."
             }
           ],
-          "behavior_relevant_listener_candidates": [
-            {
-              "event": "CryptoEvent.KeyBackupStatus",
-              "method": "on",
-              "line": 18,
-              "category": "crypto_verification_recovery",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            },
-            {
-              "event": "CryptoEvent.KeyBackupStatus",
-              "method": "removeListener",
-              "line": 20,
-              "category": "crypto_verification_recovery",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            },
-            {
-              "event": "CryptoEvent.KeyBackupSessionsRemaining",
-              "method": "on",
-              "line": 48,
-              "category": "crypto_verification_recovery",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            },
-            {
-              "event": "CryptoEvent.KeyBackupSessionsRemaining",
-              "method": "removeListener",
-              "line": 50,
-              "category": "crypto_verification_recovery",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            },
-            {
-              "event": "CryptoEvent.KeyBackupFailed",
-              "method": "on",
-              "line": 61,
-              "category": "crypto_verification_recovery",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            },
-            {
-              "event": "CryptoEvent.KeyBackupFailed",
-              "method": "removeListener",
-              "line": 63,
-              "category": "crypto_verification_recovery",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            },
-            {
-              "event": "CryptoEvent.KeyBackupDecryptionKeyCached",
-              "method": "on",
-              "line": 74,
-              "category": "crypto_verification_recovery",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            },
-            {
-              "event": "CryptoEvent.KeyBackupDecryptionKeyCached",
-              "method": "removeListener",
-              "line": 76,
-              "category": "crypto_verification_recovery",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            }
-          ]
+          "behavior_relevant_listener_candidates": [],
+          "symbols_or_candidates_note": "Primary retained product UI for local room-key file import/export. Not in P0.1 220 production-import ledger (no direct matrix-js-sdk import; uses useMatrixClient + CryptoApi methods). Server key backup BackupRestore is FR-7.9-006."
         },
         {
-          "path": "synara/src/app/state/backupRestore.ts",
-          "bucket": "state",
+          "path": "synara/src/app/features/settings/devices/Devices.tsx",
+          "bucket": "feature",
           "categories": ["crypto_verification_recovery"],
-          "symbols_or_candidates": [],
-          "line_refs": [],
+          "symbols_or_candidates": ["LocalBackup"],
+          "line_refs": [
+            {
+              "symbol": "LocalBackup",
+              "line": 158,
+              "kind": "product_ui",
+              "relevance_reason": "Settings → Devices page mounts <LocalBackup /> unconditionally after current/other device sections."
+            }
+          ],
           "model_coupling": [],
           "behavior_relevant_method_candidates": [],
           "behavior_relevant_listener_candidates": [],
-          "symbols_or_candidates_note": "No requirement-relevant method/listener candidates filtered from this file's P0.1 AST hits; file remains linked for structural/model ownership. See all_candidates_in_linked_files on the requirement."
+          "symbols_or_candidates_note": "UI host for LocalBackup. BackupRestoreTile (L140–141 when Verified) is server backup FR-7.9-006 — not this FR."
+        },
+        {
+          "path": "synara/src/util/cryptE2ERoomKeys.js",
+          "bucket": "util",
+          "categories": ["crypto_verification_recovery"],
+          "symbols_or_candidates": [
+            "encryptMegolmKeyFile",
+            "decryptMegolmKeyFile"
+          ],
+          "line_refs": [
+            {
+              "symbol": "encryptMegolmKeyFile",
+              "line": 1,
+              "kind": "product_helper",
+              "relevance_reason": "Megolm export file encryption helper (matrix-react-sdk MegolmExportEncryption lineage); used by ExportKeys."
+            },
+            {
+              "symbol": "decryptMegolmKeyFile",
+              "line": 1,
+              "kind": "product_helper",
+              "relevance_reason": "Megolm export file decryption helper; used by ImportKeys before importRoomKeysAsJson."
+            }
+          ],
+          "model_coupling": [],
+          "behavior_relevant_method_candidates": [],
+          "behavior_relevant_listener_candidates": [],
+          "symbols_or_candidates_note": "Password-based file wrap format only — not matrix-js-sdk and not server key backup. Not in P0.1 import ledger."
         }
       ],
-      "ui_entry_points": ["synara/src/app/components/BackupRestore.tsx"],
+      "ui_entry_points": [
+        "synara/src/app/features/settings/devices/LocalBackup.tsx",
+        "synara/src/app/features/settings/devices/Devices.tsx"
+      ],
+      "ui_entry_points_rationale": "Settings → Devices mounts LocalBackup (Export Messages Data + Import Messages Data). Product retains room-key file import/export UI. Distinct from BackupRestoreTile Encryption Backup server restore (FR-7.9-006) also on Devices when Verified.",
       "state_owners": [
         {
-          "path": "synara/src/app/state/backupRestore.ts",
-          "ownership_evidence": "Identified as coordination/state module for this behavior via path role (state/client/util service) and P0.1 categories/candidates; not merely a presentational component."
+          "path": "synara/src/app/features/settings/devices/LocalBackup.tsx",
+          "ownership_evidence": "Owns export/import async flows: getCrypto → exportRoomKeysAsJson/importRoomKeysAsJson + encryptMegolmKeyFile/decryptMegolmKeyFile + FileSaver/file picker. No separate jotai state owner for this FR."
+        },
+        {
+          "path": "synara/src/util/cryptE2ERoomKeys.js",
+          "ownership_evidence": "Password-protected Megolm key file encrypt/decrypt used exclusively by LocalBackup export/import."
         }
       ],
       "current_js_sdk": {
         "behavior_relevant_method_candidates": [
           {
-            "path": "synara/src/app/hooks/useKeyBackup.ts",
-            "name": "getActiveSessionBackupVersion",
-            "line": 30,
+            "path": "synara/src/app/features/settings/devices/LocalBackup.tsx",
+            "name": "getCrypto",
+            "line": 22,
             "category": "crypto_verification_recovery",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+            "confidence": "Source-inspected product call site (exact-line); file not in P0.1 220 import ledger.",
+            "relevance_reason": "Export path crypto gate."
           },
           {
-            "path": "synara/src/app/hooks/useKeyBackup.ts",
-            "name": "isKeyBackupTrusted",
-            "line": 144,
+            "path": "synara/src/app/features/settings/devices/LocalBackup.tsx",
+            "name": "exportRoomKeysAsJson",
+            "line": 24,
             "category": "crypto_verification_recovery",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+            "confidence": "Source-inspected product call site (exact-line); CryptoApi method.",
+            "relevance_reason": "Room-key export serialization."
+          },
+          {
+            "path": "synara/src/app/features/settings/devices/LocalBackup.tsx",
+            "name": "getCrypto",
+            "line": 169,
+            "category": "crypto_verification_recovery",
+            "confidence": "Source-inspected product call site (exact-line).",
+            "relevance_reason": "Import path crypto gate."
+          },
+          {
+            "path": "synara/src/app/features/settings/devices/LocalBackup.tsx",
+            "name": "importRoomKeysAsJson",
+            "line": 175,
+            "category": "crypto_verification_recovery",
+            "confidence": "Source-inspected product call site (exact-line); CryptoApi method.",
+            "relevance_reason": "Room-key import into local store."
           }
         ],
-        "behavior_relevant_listener_candidates": [
-          {
-            "path": "synara/src/app/hooks/useKeyBackup.ts",
-            "event": "CryptoEvent.KeyBackupStatus",
-            "method": "on",
-            "line": 18,
-            "category": "crypto_verification_recovery",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-          },
-          {
-            "path": "synara/src/app/hooks/useKeyBackup.ts",
-            "event": "CryptoEvent.KeyBackupStatus",
-            "method": "removeListener",
-            "line": 20,
-            "category": "crypto_verification_recovery",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-          },
-          {
-            "path": "synara/src/app/hooks/useKeyBackup.ts",
-            "event": "CryptoEvent.KeyBackupSessionsRemaining",
-            "method": "on",
-            "line": 48,
-            "category": "crypto_verification_recovery",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-          },
-          {
-            "path": "synara/src/app/hooks/useKeyBackup.ts",
-            "event": "CryptoEvent.KeyBackupSessionsRemaining",
-            "method": "removeListener",
-            "line": 50,
-            "category": "crypto_verification_recovery",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-          },
-          {
-            "path": "synara/src/app/hooks/useKeyBackup.ts",
-            "event": "CryptoEvent.KeyBackupFailed",
-            "method": "on",
-            "line": 61,
-            "category": "crypto_verification_recovery",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-          },
-          {
-            "path": "synara/src/app/hooks/useKeyBackup.ts",
-            "event": "CryptoEvent.KeyBackupFailed",
-            "method": "removeListener",
-            "line": 63,
-            "category": "crypto_verification_recovery",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-          },
-          {
-            "path": "synara/src/app/hooks/useKeyBackup.ts",
-            "event": "CryptoEvent.KeyBackupDecryptionKeyCached",
-            "method": "on",
-            "line": 74,
-            "category": "crypto_verification_recovery",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-          },
-          {
-            "path": "synara/src/app/hooks/useKeyBackup.ts",
-            "event": "CryptoEvent.KeyBackupDecryptionKeyCached",
-            "method": "removeListener",
-            "line": 76,
-            "category": "crypto_verification_recovery",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-          }
-        ],
+        "behavior_relevant_listener_candidates": [],
         "all_candidates_in_linked_files": {
-          "method_count": 2,
-          "listener_count": 8,
-          "note": "Unfiltered P0.1 AST candidates across linked production import files. Do not treat these as proven APIs for this requirement; use behavior_relevant_* fields.",
-          "methods_sample": [
-            {
-              "path": "synara/src/app/hooks/useKeyBackup.ts",
-              "name": "getActiveSessionBackupVersion",
-              "line": 30
-            },
-            {
-              "path": "synara/src/app/hooks/useKeyBackup.ts",
-              "name": "isKeyBackupTrusted",
-              "line": 144
-            }
-          ],
-          "listeners_sample": [
-            {
-              "path": "synara/src/app/hooks/useKeyBackup.ts",
-              "event": "CryptoEvent.KeyBackupStatus",
-              "method": "on",
-              "line": 18
-            },
-            {
-              "path": "synara/src/app/hooks/useKeyBackup.ts",
-              "event": "CryptoEvent.KeyBackupStatus",
-              "method": "removeListener",
-              "line": 20
-            },
-            {
-              "path": "synara/src/app/hooks/useKeyBackup.ts",
-              "event": "CryptoEvent.KeyBackupSessionsRemaining",
-              "method": "on",
-              "line": 48
-            },
-            {
-              "path": "synara/src/app/hooks/useKeyBackup.ts",
-              "event": "CryptoEvent.KeyBackupSessionsRemaining",
-              "method": "removeListener",
-              "line": 50
-            },
-            {
-              "path": "synara/src/app/hooks/useKeyBackup.ts",
-              "event": "CryptoEvent.KeyBackupFailed",
-              "method": "on",
-              "line": 61
-            },
-            {
-              "path": "synara/src/app/hooks/useKeyBackup.ts",
-              "event": "CryptoEvent.KeyBackupFailed",
-              "method": "removeListener",
-              "line": 63
-            },
-            {
-              "path": "synara/src/app/hooks/useKeyBackup.ts",
-              "event": "CryptoEvent.KeyBackupDecryptionKeyCached",
-              "method": "on",
-              "line": 74
-            },
-            {
-              "path": "synara/src/app/hooks/useKeyBackup.ts",
-              "event": "CryptoEvent.KeyBackupDecryptionKeyCached",
-              "method": "removeListener",
-              "line": 76
-            }
-          ]
+          "method_count": 0,
+          "listener_count": 0,
+          "note": "Primary product surfaces LocalBackup.tsx / Devices.tsx / cryptE2ERoomKeys.js are not in the 220 P0.1 production-import ledger (no direct matrix-js-sdk import AST inventory). Behavior-relevant methods are source-inspected, not P0.1 AST hits. Do not attach useKeyBackup KeyBackup* or backupRestore ImportRoomKeyStage candidates — those are server key backup (FR-7.9-006/009).",
+          "methods_sample": [],
+          "listeners_sample": []
         },
         "models": ["CryptoApi"],
         "network_routes": [],
-        "deep_imports": [
-          {
-            "path": "synara/src/app/components/BackupRestore.tsx",
-            "module": "matrix-js-sdk/lib/crypto-api",
-            "line": 3,
-            "named_imports": ["CryptoApi", "KeyBackupInfo"],
-            "is_type_only": false,
-            "linked_requirement_ids": [
-              "FR-7.9-006",
-              "FR-7.9-007",
-              "FR-7.9-009",
-              "FR-7.9-013"
-            ],
-            "cutover_disposition": "replace-deep-js-sdk-import-with-synara-dto-or-rust-projection"
-          },
-          {
-            "path": "synara/src/app/hooks/useKeyBackup.ts",
-            "module": "matrix-js-sdk/lib/crypto-api",
-            "line": 1,
-            "named_imports": [
-              "BackupTrustInfo",
-              "CryptoApi",
-              "CryptoEvent",
-              "CryptoEventHandlerMap",
-              "KeyBackupInfo"
-            ],
-            "is_type_only": false,
-            "linked_requirement_ids": [
-              "FR-7.9-006",
-              "FR-7.9-007",
-              "FR-7.9-009"
-            ],
-            "cutover_disposition": "replace-deep-js-sdk-import-with-synara-dto-or-rust-projection"
-          },
-          {
-            "path": "synara/src/app/state/backupRestore.ts",
-            "module": "matrix-js-sdk/lib/crypto-api",
-            "line": 2,
-            "named_imports": [
-              "ImportRoomKeyProgressData",
-              "ImportRoomKeyStage"
-            ],
-            "is_type_only": false,
-            "linked_requirement_ids": [
-              "FR-7.9-006",
-              "FR-7.9-007",
-              "FR-7.9-009",
-              "FR-7.9-013"
-            ],
-            "cutover_disposition": "replace-deep-js-sdk-import-with-synara-dto-or-rust-projection"
-          }
-        ],
+        "deep_imports": [],
         "method_candidates": [
-          "getActiveSessionBackupVersion",
-          "isKeyBackupTrusted"
+          "getCrypto",
+          "exportRoomKeysAsJson",
+          "importRoomKeysAsJson"
         ],
-        "listener_events": [
-          "CryptoEvent.KeyBackupDecryptionKeyCached",
-          "CryptoEvent.KeyBackupFailed",
-          "CryptoEvent.KeyBackupSessionsRemaining",
-          "CryptoEvent.KeyBackupStatus"
-        ]
+        "listener_events": [],
+        "behavior_relevance_policy": "Exact-line source inspection for retained room-key file import/export UI: retain LocalBackup ExportKeys (exportRoomKeysAsJson + encryptMegolmKeyFile + FileSaver synara-keys.txt) and ImportKeys (file picker + decryptMegolmKeyFile + importRoomKeysAsJson); Devices.tsx LocalBackup mount. Exclude BackupRestore restoreKeyBackup / useKeyBackup KeyBackup* listeners / backupRestoreProgressAtom ImportRoomKeyStage (server key backup FR-7.9-006/009). Exclude recovery setup/key (FR-7.9-006), cross-signing status (FR-7.9-002), SAS (FR-7.9-005)."
       },
       "current_behavior_and_limits": {
-        "summary": "Current desktop implements this via 3 production matrix-js-sdk-related file(s); status=partial.",
-        "notes": "Room-key import/export retained only if product UI keeps it; BackupRestore/secret storage paths present—confirm UI retention in P8.6.",
-        "limits": "P0.1 method candidates are AST name hits, not type-checked receiver proofs."
+        "summary": "Product retains room-key file import/export UI: Settings → Devices → Local Backup. Export Messages Data: password + confirm → getCrypto → exportRoomKeysAsJson → encryptMegolmKeyFile → download synara-keys.txt. Import Messages Data: pick text/plain file → password → decryptMegolmKeyFile → importRoomKeysAsJson. status=implemented (UI retained).",
+        "notes": "Evidence (conservative): (1) RETAINED UI Devices.tsx L9 import LocalBackup; L158 <LocalBackup /> always mounted under Settings Devices (after current/other device sections; independent of verification). (2) EXPORT LocalBackup ExportKeys L15–122: getCrypto L22–23 throws if missing; exportRoomKeysAsJson L24; encryptMegolmKeyFile(keysJSON, password) L26; Blob text/plain L28–30; FileSaver.saveAs(blob, 'synara-keys.txt') L31. ExportKeysTile L124–156 title Export Messages Data / Expand-Collapse; form New Password + Confirm Password + Export button L99–112. (3) IMPORT ImportKeysTile L248–301 Import Messages Data; useFilePicker pickFile('text/plain') L282; when file set shows ImportKeys L162–246: file.arrayBuffer L172; decryptMegolmKeyFile(arrayBuffer, password) L173; importRoomKeysAsJson(keys) L175; Decrypt button L223–236; onDone clears file L183–186 / L252–254. (4) HELPER cryptE2ERoomKeys.js encryptMegolmKeyFile/decryptMegolmKeyFile (PBKDF2-SHA512 + AES-CTR + HMAC-SHA256; matrix-react-sdk MegolmExportEncryption lineage). (5) NON-EVIDENCE / OTHER FRs: BackupRestoreTile restoreKeyBackup + useKeyBackup KeyBackup* + backupRestoreProgressAtom ImportRoomKeyStage map server key backup restore progress (FR-7.9-006/009) — not local file import/export. Recovery setup/key (FR-7.9-006). Cross-signing status (FR-7.9-002). SAS (FR-7.9-005). (6) No existing automated e2e for LocalBackup. (7) Cutover P8.6 must preserve export+import file UX via Rust Encryption::export_room_keys / import_room_keys (under SC-061 Encryption; non-wasm) + product password UI + IPC/file path; SC-061 alone, SC-066 backups, GAP-RECOVERY-BACKUP, compile-only blocked, raw /_matrix HTTP, dual-backend, or server-backup-restore-only FAIL.",
+        "limits": "LocalBackup/Devices/cryptE2ERoomKeys not in P0.1 220 production-import ledger — methods are source-inspected, not AST inventory hits. Product export path is exportRoomKeysAsJson + separate encryptMegolmKeyFile; Rust Encryption::export_room_keys(path, passphrase, predicate) combines export+passphrase encryption to a path (non-wasm only) — format/interop and desktop file-picker integration remain cutover work. importRoomKeysAsJson vs Encryption::import_room_keys(path, passphrase) same shape difference. No progress UI on local file import (server restore progress atom is FR-7.9-006). SC-061 is compile-shape-only blocked (E3–E5 missing); export_room_keys/import_room_keys were not separate SC probe IDs. Do not count SC-066 Backups, GAP-RECOVERY-BACKUP, server restore, recovery setup, cross-signing, or SAS as closing this FR."
       },
       "p0_1_linkage": {
         "categories": ["crypto_verification_recovery"],
-        "file_ledger_paths": [
+        "file_ledger_paths": [],
+        "product_surfaces_not_in_p0_1_import_ledger": [
+          "synara/src/app/features/settings/devices/LocalBackup.tsx",
+          "synara/src/app/features/settings/devices/Devices.tsx",
+          "synara/src/util/cryptE2ERoomKeys.js"
+        ],
+        "excluded_wrong_prior_owners": [
           "synara/src/app/components/BackupRestore.tsx",
           "synara/src/app/hooks/useKeyBackup.ts",
           "synara/src/app/state/backupRestore.ts"
         ]
       },
       "rust_target": {
-        "support_conclusion": "conditional-product-ui",
-        "capability_ids": ["SC-061", "SC-066"],
-        "gap_ids": ["GAP-RECOVERY-BACKUP"],
+        "support_conclusion": "room-key-file-export-import-compile-shape-only-blocked-for-product",
+        "capability_ids": ["SC-061"],
+        "gap_ids": [],
         "capabilities": [
           {
             "capability_id": "SC-061",
             "api_path": "matrix_sdk::encryption::Encryption",
+            "product_relevant_methods": [
+              "matrix_sdk::encryption::Encryption::export_room_keys",
+              "matrix_sdk::encryption::Encryption::import_room_keys"
+            ],
             "required_features": {
               "requested_direct": [],
               "resolved_on_matrix_sdk": ["e2e-encryption"],
               "resolved_on_matrix_sdk_ui": [],
-              "notes": "API is feature-gated by e2e-encryption, which is resolved in this probe graph via UI unification."
+              "notes": "export_room_keys and import_room_keys are public on Encryption under e2e-encryption; available on non-target_family=wasm only. SC-061 probes Encryption type shape (P0.3b-encryption-type), not these methods as separate SC IDs."
             },
             "final_state": "blocked",
             "final": {
               "final_state": "blocked",
-              "final_state_rationale": "E1+E2 present (stable API + compile probe). E3 semantic test, E4 live Synapse, and E5 UI acceptance are not present in P0.3; compile-only evidence is not product confirmation.",
+              "final_state_rationale": "E1+E2 present for Encryption type (stable API + compile probe). export_room_keys (docs.rs/source ~L1620) and import_room_keys (~L1682) are public stable APIs at pin 1c44fb66214667c6d00acaf72ab592493653708b but were not separately SC-probed. E3 semantic test, E4 live Synapse, and E5 UI acceptance are not present in P0.3; compile-only evidence is not product confirmation. Product password UI, file picker/save dialog, and Megolm export format interop remain product-layer work under P8.6.",
               "missing_gates": [
                 "semantic_or_integration_test",
                 "live_synapse_two_client",
@@ -64359,72 +64198,25 @@
               "section_5_evidence_present": ["E1", "E2"]
             },
             "source_url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/encryption/mod.rs#L892",
+            "method_source_urls": [
+              "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/encryption/mod.rs#L1620",
+              "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/encryption/mod.rs#L1682"
+            ],
             "p0_3b_evidence_status": "stable-api-probed",
             "p0_3b_probe_id": "P0.3b-encryption-type",
             "plan_section_7_area": "7.9-devices-e2ee-verification-and-recovery"
-          },
-          {
-            "capability_id": "SC-066",
-            "api_path": "matrix_sdk::encryption::Encryption::backups() -> Backups",
-            "required_features": {
-              "requested_direct": [],
-              "resolved_on_matrix_sdk": ["e2e-encryption"],
-              "resolved_on_matrix_sdk_ui": [],
-              "notes": "API is feature-gated by e2e-encryption, which is resolved in this probe graph via UI unification."
-            },
-            "final_state": "blocked",
-            "final": {
-              "final_state": "blocked",
-              "final_state_rationale": "E1+E2 present (stable API + compile probe). E3 semantic test, E4 live Synapse, and E5 UI acceptance are not present in P0.3; compile-only evidence is not product confirmation.",
-              "missing_gates": [
-                "semantic_or_integration_test",
-                "live_synapse_two_client",
-                "ui_acceptance"
-              ],
-              "section_5_evidence_present": ["E1", "E2"]
-            },
-            "source_url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/encryption/mod.rs#L1791",
-            "p0_3b_evidence_status": "stable-api-probed",
-            "p0_3b_probe_id": "P0.3b-encryption-backups",
-            "plan_section_7_area": "7.9-devices-e2ee-verification-and-recovery"
           }
         ],
-        "gaps": [
-          {
-            "gap_id": "GAP-RECOVERY-BACKUP",
-            "topic": "Recovery and backup lifecycle",
-            "route_class": "stable-api",
-            "final_state": "blocked",
-            "final": {
-              "final_state": "blocked",
-              "final_state_rationale": "Stable API entry points compile-probed in P0.3c. E3/E4/E5 not present; remaining semantic/runtime work recorded on the gap row.",
-              "missing_gates": [
-                "semantic_or_integration_test",
-                "live_synapse_two_client",
-                "ui_acceptance",
-                "remaining_semantic_runtime_work"
-              ],
-              "section_5_evidence_present": ["E1", "E2"]
-            },
-            "p0_3c_evidence_status": "stable-api-probed",
-            "source_urls": [
-              "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/encryption/recovery/mod.rs#L235",
-              "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/encryption/backups/mod.rs#L97"
-            ],
-            "probe_ids": [
-              "P0.3c-recovery-enable",
-              "P0.3c-recovery-recover",
-              "P0.3c-backups-create"
-            ],
-            "summary": "Recovery::{enable,recover}; Backups::create under encryption (e2e-encryption). Lifecycle is broader than these entry points.",
-            "remaining_work": "Full recovery UX, backup steady-state, secret storage, reset with UIA."
-          }
-        ],
-        "notes": "Mappings use only accepted P0.3 capability/gap IDs. Compile probes establish API shape only; final dossier states remain blocked/typed/upstream until E3–E5 gates exist.",
+        "gaps": [],
+        "notes": "Honest rust_target for FR-7.9-007: product retains LocalBackup room-key file import/export. Rust cutover maps to Encryption::export_room_keys(path, passphrase, predicate) and Encryption::import_room_keys(path, passphrase) under SC-061 Encryption (e2e-encryption, non-wasm). Do NOT map this FR to SC-066 Encryption::backups() or GAP-RECOVERY-BACKUP — those are server key backup / recovery lifecycle (FR-7.9-006). SC-061 remains final_state=blocked (E3–E5 missing). Cutover under P8.6 must preserve: (a) Export Messages Data password-protected file download; (b) Import Messages Data file pick + password decrypt + load keys; via Rust ownership + product UX + IPC/file DTO — not SC-061 alone, not SC-066, not dual-backend/SDK selector, not unapproved raw /_matrix HTTP, not server-backup-restore-only, not helper-only.",
         "distinctions_preserved": [
-          "server typed search (SC-071) vs experimental local search (SC-072)",
-          "widget plumbing (SC-082/GAP widget) vs call parity (membership write/key session gaps)",
-          "compile shape (E1/E2) vs runtime/UI parity (E3–E5 missing => blocked)"
+          "compile shape (E1/E2) vs runtime/UI parity (E3–E5 missing => blocked)",
+          "local room-key file import/export (this FR) vs server key backup restore (FR-7.9-006)",
+          "LocalBackup UI retained vs recovery setup/key/enablement (FR-7.9-006)",
+          "SC-061 Encryption::export_room_keys/import_room_keys vs SC-066 Backups handle",
+          "product exportRoomKeysAsJson+encryptMegolmKeyFile vs Rust path+passphrase combined API",
+          "no dedicated SC probe for export/import_room_keys methods (umbrella SC-061 only)",
+          "no dual-backend/SDK selector; no unapproved raw /_matrix HTTP"
         ]
       },
       "implementation_tasks": [
@@ -64432,7 +64224,7 @@
           "task_id": "P8.6",
           "title": "Room-key import/export if retained",
           "phase": "Phase 8 — E2EE, devices, verification, backup, and recovery",
-          "scope_rationale": "Accepted plan task P8.6 covers this Section 7.9 behavior during Phase 8 — E2EE, devices, verification, backup, and recovery."
+          "scope_rationale": "Accepted plan task P8.6 covers retained LocalBackup room-key file import/export cutover for this Section 7.9 behavior. Product UI is retained — cutover must preserve export+import observables, not drop them."
         }
       ],
       "automated_tests": {
@@ -64445,35 +64237,41 @@
             "task_id": "P8.6",
             "phase": "Phase 8 — E2EE, devices, verification, backup, and recovery",
             "level": "integration-e2e",
-            "scenario": "7.9/FR-7.9-007: exercise 'room-key import/export if retained by product UI;' via owner `synara/src/app/state/backupRestore.ts` and UI `synara/src/app/components/BackupRestore.tsx`, then confirm Rust/IPC cutover task `P8.6` preserves observable behavior without raw Matrix runtime HTTP.",
+            "scenario": "Integration-e2e against disposable Synapse with an E2EE session that holds room keys: (A) EXPORT — Settings → Devices → Local Backup → Export Messages Data Expand → set matching New Password/Confirm Password → Export; assert getCrypto → exportRoomKeysAsJson → encryptMegolmKeyFile path produces downloadable synara-keys.txt (or product-equivalent encrypted file). (B) IMPORT — on a second session or after clearing local room keys for a known encrypted room, Settings → Devices → Local Backup → Import Messages Data → pick the exported file → enter password → Decrypt; assert decryptMegolmKeyFile → importRoomKeysAsJson loads keys and previously undecryptable history becomes decryptable. After cutover P8.6 same observables via Rust Encryption::export_room_keys / import_room_keys (SC-061) + product LocalBackup UX + IPC/file DTO; SC-061 alone, SC-066 backups, GAP-RECOVERY-BACKUP, compile-only blocked, raw /_matrix HTTP, dual-backend, server-backup-restore-only (FR-7.9-006), or helper/fixture-only FAIL.",
+            "test_target": "LocalBackup ExportKeys/ImportKeys; Devices LocalBackup mount; cryptE2ERoomKeys encrypt/decrypt; post-cutover Encryption::export_room_keys/import_room_keys under P8.6",
             "preconditions": [
-              "Desktop app, E2EE-capable session; second device for verification",
-              "Recovery key / backup fixtures; isolated multi-account profiles when testing isolation",
-              "Linked owner path present in tree: synara/src/app/state/backupRestore.ts",
-              "Primary UI/lifecycle surface: synara/src/app/components/BackupRestore.tsx"
+              "Disposable Synapse; E2EE-capable desktop session with at least one encrypted room and local room keys to export.",
+              "Named product surfaces present: LocalBackup.tsx (Export Messages Data + Import Messages Data), Devices.tsx mounts LocalBackup, cryptE2ERoomKeys.js encryptMegolmKeyFile/decryptMegolmKeyFile.",
+              "Harness can observe file download (synara-keys.txt or equivalent), file pick + decrypt success, and post-import decryptability of history; does not bypass product LocalBackup with dual-backend/raw HTTP/helper-only pass criteria.",
+              "Do not accept BackupRestore server restore alone (FR-7.9-006), KeyBackup listeners alone (FR-7.9-009), cross-signing badge alone (FR-7.9-002), or SAS alone (FR-7.9-005) as sole pass for this FR."
             ],
             "trigger_actions": [
-              "Boot the appropriate harness for level=integration-e2e against disposable Synapse (or iOS notes if any).",
-              "Establish fixtures required by the clause list: room-key import/export if retained by product UI.",
-              "Open UI/lifecycle surface `synara/src/app/components/BackupRestore.tsx` (or follow ui_entry_points_rationale if no dedicated UI).",
-              "Step 1: perform the product action that implements «room-key import/export if retained by product UI» using current owner `synara/src/app/state/backupRestore.ts`.",
-              "Force process restart and/or offline→online transition where lifecycle continuity is implied."
+              "Boot integration harness against disposable Synapse. Do not use fixture-only mocks that skip product LocalBackup, dual-backend selectors, raw HTTP, or helper-only pass criteria.",
+              "EXPORT: Open Settings → Devices → Local Backup → Export Messages Data Expand. Enter matching passwords; click Export. Assert exportRoomKeysAsJson + encryptMegolmKeyFile + file download (synara-keys.txt) without error.",
+              "IMPORT: On a second same-user session without the exported room keys (or after wiping local keys for the fixture room), open Local Backup → Import Messages Data → Import pick file → enter password → Decrypt. Assert importRoomKeysAsJson succeeds.",
+              "OBSERVABLE: Confirm encrypted history in the fixture room decrypts after import (or product-equivalent key-presence observable).",
+              "After cutover P8.6, repeat export and import observables via Rust Encryption::export_room_keys / import_room_keys under product LocalBackup lifecycle actor/IPC. Citing SC-061 alone, SC-066, GAP-RECOVERY-BACKUP, compile-only, raw /_matrix HTTP, dual-backend/SDK selector, server-backup-only, or helper/fixture-only is a FAIL."
             ],
             "assertions": [
-              "Each clause is observable: «room-key import/export if retained by product UI».",
-              "State coordination remains through `synara/src/app/state/backupRestore.ts` (or its Rust/IPC successor after cutover), not ad-hoc dual writers.",
-              "Behavior-relevant current JS method candidates exercised or replaced: getActiveSessionBackupVersion, isKeyBackupTrusted (AST candidates; not type-proven receivers).",
-              "Behavior-relevant listener candidates observed or replaced: on:CryptoEvent.KeyBackupStatus, removeListener:CryptoEvent.KeyBackupStatus, on:CryptoEvent.KeyBackupSessionsRemaining, removeListener:CryptoEvent.KeyBackupSessionsRemaining, on:CryptoEvent.KeyBackupFailed, removeListener:CryptoEvent.KeyBackupFailed.",
-              "Rust mapping remains conservative: caps=[SC-061,SC-066] gaps=[GAP-RECOVERY-BACKUP]; compile-only blocked states are not treated as runtime pass.",
-              "No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless dossier marks that exact behavior typed-sdk-request-required."
+              "RETAINED UI: Local Backup Export Messages Data and Import Messages Data are present under Settings → Devices.",
+              "EXPORT: password-protected export produces a downloadable encrypted key file via exportRoomKeysAsJson + encryptMegolmKeyFile (or Rust/IPC successor).",
+              "IMPORT: password decrypt + importRoomKeysAsJson (or Rust/IPC successor) loads keys from the exported file.",
+              "POST-IMPORT: fixture encrypted history becomes decryptable (or equivalent product success signal).",
+              "COORDINATION: export/import remain through LocalBackup + cryptE2ERoomKeys (or Rust/IPC successors), not ad-hoc dual writers.",
+              "CUTOVER: P8.6 preserves export+import observables via Rust Encryption::export_room_keys/import_room_keys + product UX + IPC; SC-061 compile-only never product pass; no SC-066/GAP-RECOVERY-BACKUP as sole mapping; no raw /_matrix runtime HTTP; no dual-backend/SDK selector.",
+              "No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless the dossier marks that exact behavior typed-sdk-request-required.",
+              "Server key backup restore alone (FR-7.9-006), KeyBackup listeners alone (FR-7.9-009), cross-signing alone (FR-7.9-002), SAS alone (FR-7.9-005), and helper unit tests alone are not accepted as sole pass criteria for this FR."
             ],
             "required_environment": [
-              "Desktop app, E2EE-capable session; second device for verification",
-              "Recovery key / backup fixtures; isolated multi-account profiles when testing isolation"
+              "Disposable Synapse",
+              "E2EE-capable desktop session with room keys; second same-user session or key-wipe path for import",
+              "Filesystem access for export download and import file pick"
             ],
             "does_not_currently_exist": true,
             "clause_breakdown": [
-              "room-key import/export if retained by product UI"
+              "room-key export retained UI (Export Messages Data → exportRoomKeysAsJson + password file)",
+              "room-key import retained UI (Import Messages Data → decrypt + importRoomKeysAsJson)",
+              "cutover P8.6 Rust export_room_keys/import_room_keys + product UX + IPC; SC-only/raw HTTP/server-backup-only FAIL"
             ]
           }
         ]
@@ -64487,7 +64285,8 @@
       ],
       "security_privacy_lifecycle_concerns": [
         "token-and-store-isolation",
-        "no-raw-matrix-http"
+        "no-raw-matrix-http",
+        "room-key-export-file-password-protection"
       ],
       "traceability_status": "complete-conservative",
       "blockers": []
@@ -65187,7 +64986,6 @@
             "is_type_only": false,
             "linked_requirement_ids": [
               "FR-7.9-006",
-              "FR-7.9-007",
               "FR-7.9-009",
               "FR-7.9-013"
             ],
@@ -65207,7 +65005,6 @@
             "is_type_only": false,
             "linked_requirement_ids": [
               "FR-7.9-006",
-              "FR-7.9-007",
               "FR-7.9-009"
             ],
             "cutover_disposition": "replace-deep-js-sdk-import-with-synara-dto-or-rust-projection"
@@ -65223,7 +65020,6 @@
             "is_type_only": false,
             "linked_requirement_ids": [
               "FR-7.9-006",
-              "FR-7.9-007",
               "FR-7.9-009",
               "FR-7.9-013"
             ],
@@ -66902,7 +66698,6 @@
             "is_type_only": false,
             "linked_requirement_ids": [
               "FR-7.9-006",
-              "FR-7.9-007",
               "FR-7.9-009",
               "FR-7.9-013"
             ],
@@ -66919,7 +66714,6 @@
             "is_type_only": false,
             "linked_requirement_ids": [
               "FR-7.9-006",
-              "FR-7.9-007",
               "FR-7.9-009",
               "FR-7.9-013"
             ],
@@ -74824,7 +74618,6 @@
       "classification": "requirement-linked",
       "linked_requirement_ids": [
         "FR-7.9-006",
-        "FR-7.9-007",
         "FR-7.9-009",
         "FR-7.9-013"
       ],
@@ -81907,7 +81700,7 @@
       "constructor_candidates": [],
       "import_modules": ["matrix-js-sdk/lib/crypto-api"],
       "classification": "requirement-linked",
-      "linked_requirement_ids": ["FR-7.9-006", "FR-7.9-007", "FR-7.9-009"],
+      "linked_requirement_ids": ["FR-7.9-006", "FR-7.9-009"],
       "rationale": null,
       "p0_1_role": "production",
       "desktop_runtime": true,
@@ -86598,7 +86391,6 @@
       "classification": "requirement-linked",
       "linked_requirement_ids": [
         "FR-7.9-006",
-        "FR-7.9-007",
         "FR-7.9-009",
         "FR-7.9-013"
       ],
@@ -89769,7 +89561,6 @@
       "is_type_only": false,
       "linked_requirement_ids": [
         "FR-7.9-006",
-        "FR-7.9-007",
         "FR-7.9-009",
         "FR-7.9-013"
       ],
@@ -90244,7 +90035,7 @@
         "KeyBackupInfo"
       ],
       "is_type_only": false,
-      "linked_requirement_ids": ["FR-7.9-006", "FR-7.9-007", "FR-7.9-009"],
+      "linked_requirement_ids": ["FR-7.9-006", "FR-7.9-009"],
       "cutover_disposition": "replace-deep-js-sdk-import-with-synara-dto-or-rust-projection"
     },
     {
@@ -90397,7 +90188,6 @@
       "is_type_only": false,
       "linked_requirement_ids": [
         "FR-7.9-006",
-        "FR-7.9-007",
         "FR-7.9-009",
         "FR-7.9-013"
       ],
@@ -95737,34 +95527,42 @@
         "task_id": "P8.6",
         "phase": "Phase 8 — E2EE, devices, verification, backup, and recovery",
         "level": "integration-e2e",
-        "scenario": "7.9/FR-7.9-007: exercise 'room-key import/export if retained by product UI;' via owner `synara/src/app/state/backupRestore.ts` and UI `synara/src/app/components/BackupRestore.tsx`, then confirm Rust/IPC cutover task `P8.6` preserves observable behavior without raw Matrix runtime HTTP.",
+        "scenario": "Integration-e2e against disposable Synapse with an E2EE session that holds room keys: (A) EXPORT — Settings → Devices → Local Backup → Export Messages Data Expand → set matching New Password/Confirm Password → Export; assert getCrypto → exportRoomKeysAsJson → encryptMegolmKeyFile path produces downloadable synara-keys.txt (or product-equivalent encrypted file). (B) IMPORT — on a second session or after clearing local room keys for a known encrypted room, Settings → Devices → Local Backup → Import Messages Data → pick the exported file → enter password → Decrypt; assert decryptMegolmKeyFile → importRoomKeysAsJson loads keys and previously undecryptable history becomes decryptable. After cutover P8.6 same observables via Rust Encryption::export_room_keys / import_room_keys (SC-061) + product LocalBackup UX + IPC/file DTO; SC-061 alone, SC-066 backups, GAP-RECOVERY-BACKUP, compile-only blocked, raw /_matrix HTTP, dual-backend, server-backup-restore-only (FR-7.9-006), or helper/fixture-only FAIL.",
+        "test_target": "LocalBackup ExportKeys/ImportKeys; Devices LocalBackup mount; cryptE2ERoomKeys encrypt/decrypt; post-cutover Encryption::export_room_keys/import_room_keys under P8.6",
         "preconditions": [
-          "Desktop app, E2EE-capable session; second device for verification",
-          "Recovery key / backup fixtures; isolated multi-account profiles when testing isolation",
-          "Linked owner path present in tree: synara/src/app/state/backupRestore.ts",
-          "Primary UI/lifecycle surface: synara/src/app/components/BackupRestore.tsx"
+          "Disposable Synapse; E2EE-capable desktop session with at least one encrypted room and local room keys to export.",
+          "Named product surfaces present: LocalBackup.tsx (Export Messages Data + Import Messages Data), Devices.tsx mounts LocalBackup, cryptE2ERoomKeys.js encryptMegolmKeyFile/decryptMegolmKeyFile.",
+          "Harness can observe file download (synara-keys.txt or equivalent), file pick + decrypt success, and post-import decryptability of history; does not bypass product LocalBackup with dual-backend/raw HTTP/helper-only pass criteria.",
+          "Do not accept BackupRestore server restore alone (FR-7.9-006), KeyBackup listeners alone (FR-7.9-009), cross-signing badge alone (FR-7.9-002), or SAS alone (FR-7.9-005) as sole pass for this FR."
         ],
         "trigger_actions": [
-          "Boot the appropriate harness for level=integration-e2e against disposable Synapse (or iOS notes if any).",
-          "Establish fixtures required by the clause list: room-key import/export if retained by product UI.",
-          "Open UI/lifecycle surface `synara/src/app/components/BackupRestore.tsx` (or follow ui_entry_points_rationale if no dedicated UI).",
-          "Step 1: perform the product action that implements «room-key import/export if retained by product UI» using current owner `synara/src/app/state/backupRestore.ts`.",
-          "Force process restart and/or offline→online transition where lifecycle continuity is implied."
+          "Boot integration harness against disposable Synapse. Do not use fixture-only mocks that skip product LocalBackup, dual-backend selectors, raw HTTP, or helper-only pass criteria.",
+          "EXPORT: Open Settings → Devices → Local Backup → Export Messages Data Expand. Enter matching passwords; click Export. Assert exportRoomKeysAsJson + encryptMegolmKeyFile + file download (synara-keys.txt) without error.",
+          "IMPORT: On a second same-user session without the exported room keys (or after wiping local keys for the fixture room), open Local Backup → Import Messages Data → Import pick file → enter password → Decrypt. Assert importRoomKeysAsJson succeeds.",
+          "OBSERVABLE: Confirm encrypted history in the fixture room decrypts after import (or product-equivalent key-presence observable).",
+          "After cutover P8.6, repeat export and import observables via Rust Encryption::export_room_keys / import_room_keys under product LocalBackup lifecycle actor/IPC. Citing SC-061 alone, SC-066, GAP-RECOVERY-BACKUP, compile-only, raw /_matrix HTTP, dual-backend/SDK selector, server-backup-only, or helper/fixture-only is a FAIL."
         ],
         "assertions": [
-          "Each clause is observable: «room-key import/export if retained by product UI».",
-          "State coordination remains through `synara/src/app/state/backupRestore.ts` (or its Rust/IPC successor after cutover), not ad-hoc dual writers.",
-          "Behavior-relevant current JS method candidates exercised or replaced: getActiveSessionBackupVersion, isKeyBackupTrusted (AST candidates; not type-proven receivers).",
-          "Behavior-relevant listener candidates observed or replaced: on:CryptoEvent.KeyBackupStatus, removeListener:CryptoEvent.KeyBackupStatus, on:CryptoEvent.KeyBackupSessionsRemaining, removeListener:CryptoEvent.KeyBackupSessionsRemaining, on:CryptoEvent.KeyBackupFailed, removeListener:CryptoEvent.KeyBackupFailed.",
-          "Rust mapping remains conservative: caps=[SC-061,SC-066] gaps=[GAP-RECOVERY-BACKUP]; compile-only blocked states are not treated as runtime pass.",
-          "No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless dossier marks that exact behavior typed-sdk-request-required."
+          "RETAINED UI: Local Backup Export Messages Data and Import Messages Data are present under Settings → Devices.",
+          "EXPORT: password-protected export produces a downloadable encrypted key file via exportRoomKeysAsJson + encryptMegolmKeyFile (or Rust/IPC successor).",
+          "IMPORT: password decrypt + importRoomKeysAsJson (or Rust/IPC successor) loads keys from the exported file.",
+          "POST-IMPORT: fixture encrypted history becomes decryptable (or equivalent product success signal).",
+          "COORDINATION: export/import remain through LocalBackup + cryptE2ERoomKeys (or Rust/IPC successors), not ad-hoc dual writers.",
+          "CUTOVER: P8.6 preserves export+import observables via Rust Encryption::export_room_keys/import_room_keys + product UX + IPC; SC-061 compile-only never product pass; no SC-066/GAP-RECOVERY-BACKUP as sole mapping; no raw /_matrix runtime HTTP; no dual-backend/SDK selector.",
+          "No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless the dossier marks that exact behavior typed-sdk-request-required.",
+          "Server key backup restore alone (FR-7.9-006), KeyBackup listeners alone (FR-7.9-009), cross-signing alone (FR-7.9-002), SAS alone (FR-7.9-005), and helper unit tests alone are not accepted as sole pass criteria for this FR."
         ],
         "required_environment": [
-          "Desktop app, E2EE-capable session; second device for verification",
-          "Recovery key / backup fixtures; isolated multi-account profiles when testing isolation"
+          "Disposable Synapse",
+          "E2EE-capable desktop session with room keys; second same-user session or key-wipe path for import",
+          "Filesystem access for export download and import file pick"
         ],
         "does_not_currently_exist": true,
-        "clause_breakdown": ["room-key import/export if retained by product UI"]
+        "clause_breakdown": [
+          "room-key export retained UI (Export Messages Data → exportRoomKeysAsJson + password file)",
+          "room-key import retained UI (Import Messages Data → decrypt + importRoomKeysAsJson)",
+          "cutover P8.6 Rust export_room_keys/import_room_keys + product UX + IPC; SC-only/raw HTTP/server-backup-only FAIL"
+        ]
       },
       {
         "id": "AT-FR-7.9-008-001",
@@ -98923,24 +98721,31 @@
       "requirement_id": "FR-7.9-007",
       "platforms": ["macOS", "Linux"],
       "preconditions": [
-        "Desktop app, E2EE-capable session; second device for verification",
-        "Recovery key / backup fixtures; isolated multi-account profiles when testing isolation",
-        "State owner available: synara/src/app/state/backupRestore.ts",
-        "UI/lifecycle: synara/src/app/components/BackupRestore.tsx",
-        "Current status baseline: partial"
+        "Desktop app against disposable Synapse; E2EE session with at least one encrypted room and local room keys.",
+        "Product surfaces available: LocalBackup.tsx, Devices.tsx LocalBackup mount, cryptE2ERoomKeys.js.",
+        "UI/lifecycle: Settings → Devices → Local Backup (Export Messages Data + Import Messages Data).",
+        "Current status baseline: implemented (UI retained)"
       ],
       "actions": [
-        "Launch Synara desktop on the target platform against disposable Synapse; use a clean or known fixture profile as required by «room-key import/export if retained by product UI;».",
-        "Identify state owner `synara/src/app/state/backupRestore.ts` and open `synara/src/app/components/BackupRestore.tsx`.",
-        "Action 1 — «room-key import/export if retained by product UI»: perform the minimal user/system steps that trigger this clause (use linked files under current_production_files if the entry point is indirect).",
-        "Repeat critical path in an encrypted room / with a second device when the clause involves keys or verification."
+        "Launch Synara desktop on the target platform against disposable Synapse with an E2EE profile that has room keys.",
+        "EXPORT: Open Settings → Devices → Local Backup → Export Messages Data Expand; set matching New Password and Confirm Password; click Export; confirm synara-keys.txt (or product-equivalent) download succeeds.",
+        "IMPORT: On a second same-user session (or after losing local room keys for the fixture room), open Local Backup → Import Messages Data → Import; pick the exported file; enter password; click Decrypt.",
+        "Confirm previously undecryptable history in the fixture encrypted room becomes decryptable after import.",
+        "Confirm Encryption Backup Restore Backup (server path FR-7.9-006) is not used as the sole pass for this FR; LocalBackup file import/export is the retained surface under test."
       ],
       "expected_results": [
-        "All clauses under «room-key import/export if retained by product UI;» produce the user-visible or system-observable success criteria without error toasts unrelated to intentional negative tests.",
-        "Clause 1 «room-key import/export if retained by product UI» is satisfied on macOS, Linux with owner `synara/src/app/state/backupRestore.ts`.",
-        "No unexpected raw /_matrix traffic from the app renderer for this flow on the post-cutover build."
+        "Local Backup Export Messages Data and Import Messages Data are visible and operable under Settings → Devices.",
+        "Export produces a password-protected key file via exportRoomKeysAsJson + encryptMegolmKeyFile (or Rust/IPC successor under P8.6).",
+        "Import decrypts the file and loads keys via importRoomKeysAsJson (or Rust/IPC successor); history decryptability improves accordingly.",
+        "No unexpected raw /_matrix traffic from the app renderer for this flow on the post-cutover build.",
+        "Server key backup restore alone (FR-7.9-006), KeyBackup listeners alone (FR-7.9-009), cross-signing alone (FR-7.9-002), and SAS alone (FR-7.9-005) do not close this FR.",
+        "Clauses room-key export and room-key import (retained product UI) satisfied on macOS and Linux via LocalBackup (or Rust/IPC successors under P8.6)."
       ],
-      "clause_breakdown": ["room-key import/export if retained by product UI"]
+      "clause_breakdown": [
+        "room-key export retained UI (Export Messages Data)",
+        "room-key import retained UI (Import Messages Data)",
+        "cutover P8.6 preserves both via Rust export_room_keys/import_room_keys + product UX"
+      ]
     },
     {
       "id": "MA-FR-7.9-008",
@@ -99732,9 +99537,9 @@
     "planned_required_automated_tests": 119,
     "manual_acceptance_cases": 119,
     "status_distribution": {
-      "implemented": 96,
+      "implemented": 97,
       "not-currently-exposed": 1,
-      "partial": 22
+      "partial": 21
     },
     "shared_matrix_infrastructure_files": 20,
     "requirement_linked_files": 200,
@@ -100955,6 +100760,17 @@
         "FR-7.9-006: current_status remains implemented. current_behavior_and_limits documents recovery setup pipeline, recovery key display/entry, backup enablement via resetKeyBackup + Connected status, manual+auto restore with progress, DeviceVerificationReset/trust repair paths; notes no longer null. Wrong sole-owner backupRestore.ts for setup demoted; DeviceVerificationSetup and secretStorageKeys elevated.",
         "FR-7.9-006: retargeted behavior_relevant methods/listeners to createRecoveryKeyFromPassphrase, bootstrapSecretStorage, resetKeyBackup, decodeRecoveryKey/deriveRecoveryKeyFromPassphrase/checkKey, loadSessionBackupPrivateKeyFromSecretStorage, restoreKeyBackup, getActiveSessionBackupVersion/getKeyBackupInfo/isKeyBackupTrusted; KeyBackup* listeners. Excluded bootstrapCrossSigning as sole evidence (FR-7.9-002), SAS ceremony (FR-7.9-005), LocalBackup room-key file import/export (FR-7.9-007).",
         "FR-7.9-006: planned AT/MA require setup+key display, enablement Connected, unlock+restore, repair reset/trust, cutover P8.5 via Rust SC-065/SC-066 + GAP-RECOVERY-BACKUP + product UX + IPC; SC alone, compile-only, raw HTTP, dual-backend, status-only, SAS-only, room-key-file-only, helper-only FAIL. rust_target gap-recovery-backup-compile-shape-only-blocked-for-product. Top-level AT-FR-7.9-006-001 and MA-FR-7.9-006 updated byte-aligned; secretStorageKeys unit test listed existing-unit-only. Status distribution unchanged. Accepted FR-7.8-001 through FR-7.8-009 and FR-7.9-001..005 preserved. JSON and Markdown synchronized."
+      ]
+    },
+    {
+      "id": "p0.2-correct-33-fr-7.9-007-room-key-import-export",
+      "scope": "Rejected-review limited correction: FR-7.9-007 only — replace wrong BackupRestore/useKeyBackup/backupRestore owners and conditional-product-ui status with concrete retained LocalBackup room-key file import/export evidence: Devices.tsx mounts LocalBackup; ExportKeys exportRoomKeysAsJson+encryptMegolmKeyFile+synara-keys.txt; ImportKeys file pick+decryptMegolmKeyFile+importRoomKeysAsJson; cryptE2ERoomKeys helper; exclude FR-7.9-006 server backup; rewrite AT/MA for P8.6; honest rust_target SC-061 Encryption::export_room_keys/import_room_keys compile-only blocked (not SC-066/GAP-RECOVERY-BACKUP)",
+      "requirements_rewritten": ["FR-7.9-007"],
+      "not_claimed_complete": true,
+      "changes": [
+        "FR-7.9-007: current_status partial → implemented (product retains UI). current_behavior_and_limits documents LocalBackup Export Messages Data and Import Messages Data under Settings Devices; notes no longer partial/conditional. Wrong owners BackupRestore.tsx, useKeyBackup.ts, backupRestore.ts demoted/excluded; LocalBackup.tsx, Devices.tsx, cryptE2ERoomKeys.js elevated as product surfaces not in P0.1 220 import ledger.",
+        "FR-7.9-007: retargeted behavior_relevant methods to getCrypto, exportRoomKeysAsJson, importRoomKeysAsJson (source-inspected). Listeners empty (no KeyBackup*). Excluded restoreKeyBackup/KeyBackup* (FR-7.9-006/009), recovery setup (FR-7.9-006), cross-signing (FR-7.9-002), SAS (FR-7.9-005).",
+        "FR-7.9-007: planned AT/MA require export file download + import decryptability, cutover P8.6 via Rust Encryption::export_room_keys/import_room_keys (SC-061) + product UX + IPC; SC-061 alone, SC-066, GAP-RECOVERY-BACKUP, compile-only, raw HTTP, dual-backend, server-backup-only, helper-only FAIL. rust_target room-key-file-export-import-compile-shape-only-blocked-for-product. Top-level AT-FR-7.9-007-001 and MA-FR-7.9-007 updated byte-aligned. file_coverage_ledger/deep_import_ledger: removed FR-7.9-007 from BackupRestore/useKeyBackup/backupRestore. Summary status_distribution recomputed (implemented 97, partial 21). Accepted FR-7.8-001 through FR-7.8-009 and FR-7.9-001..006 preserved. JSON and Markdown synchronized."
       ]
     }
   ]
