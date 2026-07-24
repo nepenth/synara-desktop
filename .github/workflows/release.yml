@@ -65,8 +65,10 @@ jobs:
           node-version-file: .node-version
           package-manager-cache: false
 
-      - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable 2026-07-22
+      - name: Install Rust 1.93
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # pinned action; toolchain 1.93
+        with:
+          toolchain: 1.93
 
       - name: Install Linux Tauri dependencies
         run: |
@@ -219,8 +221,10 @@ jobs:
           node-version-file: .node-version
           package-manager-cache: false
 
-      - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable 2026-07-22
+      - name: Install Rust 1.93
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # pinned action; toolchain 1.93
+        with:
+          toolchain: 1.93
 
       - name: Install Linux Tauri dependencies
         run: |
@@ -337,9 +341,10 @@ jobs:
           node-version-file: .node-version
           package-manager-cache: false
 
-      - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable 2026-07-22
+      - name: Install Rust 1.93
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # pinned action; toolchain 1.93
         with:
+          toolchain: 1.93
           targets: aarch64-apple-darwin,x86_64-apple-darwin
 
       - name: Install desktop dependencies

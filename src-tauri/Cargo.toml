@@ -9,7 +9,7 @@ license = "AGPL-3.0-only"
 repository = "https://github.com/nepenth/synara-desktop"
 default-run = "synara"
 edition = "2021"
-rust-version = "1.77.2"
+rust-version = "1.93"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
