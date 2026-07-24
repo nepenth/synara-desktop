@@ -37,12 +37,10 @@ without explicit user approval.
 - **Progress loop:** host scheduled task every **4 minutes**
   (ID `019f95928db7`) continues bounded FR audits; also daily durable
   orchestrator `9022c2f8-9b21-411a-acf9-a36c10515f72`
-- **Last accepted:** FR-7.11-007 experimental-widgets risk acceptance **partial** under
-  `GATE-7.11-007-EXPERIMENTAL-WIDGETS-RISK-ACCEPTANCE` (`p0.2-correct-53`)
-
-- **Next writer task:** FR-7.11-008 (contingency if experimental-widgets cannot meet call parity),
-  then P0.2 closeout / PR if 7.11 complete
-
+- **Last accepted:** FR-7.11-007 experimental-widgets risk **partial**
+  (`p0.2-correct-53`)
+- **Next writer task:** FR-7.11-008 (widget contingency documentation), then
+  open P0.2 PR to integration after 008 accept
 
 - No production Matrix Rust SDK replacement code accepted
 - **No open P0.2 PR yet** (open after P0.2 complete)
