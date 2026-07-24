@@ -37,10 +37,10 @@ without explicit user approval.
 - **Progress loop:** host scheduled task every **4 minutes**
   (ID `019f95928db7`) continues bounded FR audits; also daily durable
   orchestrator `9022c2f8-9b21-411a-acf9-a36c10515f72`
-- **Last accepted:** FR-7.10-002 global message search **implemented**
-  (`p0.2-correct-41`; previously partial)
-- **Next writer task:** FR-7.10-003 (sender/room/date/content filters), then
-  remaining 7.10–7.11 (~13)
+- **Last accepted:** FR-7.10-003 sender/room/date/content filters **implemented**
+  (`p0.2-correct-42`; two-layer server+client evidence)
+- **Next writer task:** FR-7.10-004 (event-context navigation from results), then
+  remaining 7.10–7.11 (~12)
 
 - No production Matrix Rust SDK replacement code accepted
 - **No open P0.2 PR yet** (open after P0.2 complete)
@@ -50,10 +50,10 @@ Phase 0 evidence accepted before this handoff:
 - P0.1 SDK usage inventory is merged to the integration branch.
 - P0.3 exact Matrix Rust SDK 0.18.0 capability dossier is merged to the
   integration branch.
-- P0.2 branch carries accepted 7.8–7.9 corrections; ~15 shallow rows remain
-  in 7.10–7.11.
+- P0.2 branch carries accepted 7.8–7.9 and FR-7.10-001..003 corrections;
+  ~12 shallow rows remain in 7.10–7.11.
 
-P0.2 is not complete. Resume at FR-7.10-003, then audit remaining 7.10–7.11
+P0.2 is not complete. Resume at FR-7.10-004, then audit remaining 7.10–7.11
 before declaring P0.2 accepted.
 
 Accepted notification findings that must be preserved:
@@ -183,6 +183,11 @@ Accepted notification findings that must be preserved:
 - FR-7.10-002: status `implemented`. Home/Space Message Search
   `allowGlobal` + Global chip → `rooms` undefined → `mx.search` without room filter.
   SC-071 only (not SC-072 local). Room-scoped is 001.
+- FR-7.10-003: status `implemented`. Two-layer Message Search filters: server
+  `filter.rooms`/`filter.senders`/`search_term`/`order_by` via
+  `useMessageSearch`/`mx.search`; client type + from/to via
+  `filterMessageSearchGroups` / `messageSearchFilters`; SearchFilters
+  multi-room/type/sender/date UI. Global is 002; room-scoped default is 001.
 
 
 ## Branch and PR contract

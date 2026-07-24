@@ -75577,34 +75577,6 @@
       "current_status": "implemented",
       "current_production_files": [
         {
-          "path": "synara/src/app/features/message-search/MessageSearch.tsx",
-          "bucket": "feature",
-          "categories": [
-            "client_methods",
-            "room_lists"
-          ],
-          "symbols_or_candidates": [],
-          "line_refs": [],
-          "model_coupling": [],
-          "behavior_relevant_method_candidates": [],
-          "behavior_relevant_listener_candidates": [],
-          "symbols_or_candidates_note": "No requirement-relevant method/listener candidates filtered from this file's P0.1 AST hits; file remains linked for structural/model ownership. See all_candidates_in_linked_files on the requirement."
-        },
-        {
-          "path": "synara/src/app/features/message-search/SearchFilters.tsx",
-          "bucket": "feature",
-          "categories": [
-            "client_methods",
-            "room_lists"
-          ],
-          "symbols_or_candidates": [],
-          "line_refs": [],
-          "model_coupling": [],
-          "behavior_relevant_method_candidates": [],
-          "behavior_relevant_listener_candidates": [],
-          "symbols_or_candidates_note": "No requirement-relevant method/listener candidates filtered from this file's P0.1 AST hits; file remains linked for structural/model ownership. See all_candidates_in_linked_files on the requirement."
-        },
-        {
           "path": "synara/src/app/features/message-search/useMessageSearch.ts",
           "bucket": "feature",
           "categories": [
@@ -75612,13 +75584,30 @@
             "searches"
           ],
           "symbols_or_candidates": [
-            "search"
+            "search",
+            "filter.rooms",
+            "filter.senders",
+            "search_term",
+            "order_by"
           ],
           "line_refs": [
             {
+              "symbol": "MessageSearchParams term/order/rooms/senders only",
+              "line": 66,
+              "kind": "product_helper",
+              "relevance_reason": "MessageSearchParams carries term, order, rooms, senders only \u2014 type/from/to are NOT server search params (client-side post-filter)."
+            },
+            {
+              "symbol": "room_events filter rooms+senders + search_term + order_by",
+              "line": 85,
+              "kind": "product_helper",
+              "relevance_reason": "ISearchRequestBody search_categories.room_events builds filter { limit, rooms, senders }, search_term, order_by \u2014 server-side sender/room filters and content search_term."
+            },
+            {
               "symbol": "search",
               "line": 105,
-              "kind": "method_candidate"
+              "kind": "method_candidate",
+              "relevance_reason": "mx.search({ body: requestBody, next_batch }) \u2014 sole Matrix client room_events search call; body includes filter.rooms, filter.senders, search_term, order_by from MessageSearchParams."
             }
           ],
           "model_coupling": [],
@@ -75628,19 +75617,247 @@
               "line": 105,
               "category": "searches",
               "kind": "property_call_candidate",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+              "confidence": "Source-inspected product call site (exact-line) on mx from useMatrixClient(); matrix-js-sdk MatrixClient.search with ISearchRequestBody carrying filter.rooms, filter.senders, search_term, order_by.",
+              "relevance_reason": "Server-side sender/room (filter) and content (search_term) filters for Message Search; type/date filters are NOT applied here."
             }
           ],
-          "behavior_relevant_listener_candidates": []
+          "behavior_relevant_listener_candidates": [],
+          "symbols_or_candidates_note": "Primary server-filter owner: useMessageSearch builds room_events body with filter.rooms, filter.senders, search_term, order_by and calls mx.search. MessageSearchParams does NOT include type/from/to. EXCLUDE as sole evidence: room-scoped default without multi-room chips (FR-7.10-001), Global chip alone (FR-7.10-002), Open navigateRoom (FR-7.10-004), user/directory Search.tsx (FR-7.10-005), SC-072 local (FR-7.10-006), cancel/stale (FR-7.10-007)."
+        },
+        {
+          "path": "synara/src/app/features/message-search/MessageSearch.tsx",
+          "bucket": "feature",
+          "categories": [
+            "client_methods",
+            "room_lists"
+          ],
+          "symbols_or_candidates": [
+            "URL rooms/senders/type/from/to/order",
+            "msgSearchParams rooms+senders",
+            "filterMessageSearchGroups type/from/to",
+            "handleSelectedRoomsChange",
+            "handleSendersChange",
+            "handleTypeChange",
+            "handleDateRangeChange",
+            "handleOrderChange"
+          ],
+          "line_refs": [
+            {
+              "symbol": "useSearchPathSearchParams rooms/senders/type/from/to/order/global",
+              "line": 28,
+              "kind": "product_helper",
+              "relevance_reason": "Reads URL search params: rooms, senders, type, from, to, order, global, term \u2014 filter state for Message Search UI."
+            },
+            {
+              "symbol": "searchParamRooms decode rooms URL",
+              "line": 72,
+              "kind": "product_helper",
+              "relevance_reason": "Decodes rooms URL param into joined-room IDs for multi-room chip selection (this FR's room filter, not host default alone)."
+            },
+            {
+              "symbol": "searchParamsSenders decode senders URL",
+              "line": 81,
+              "kind": "product_helper",
+              "relevance_reason": "Decodes senders URL param into Matrix user IDs for server filter.senders."
+            },
+            {
+              "symbol": "msgSearchParams term/order/rooms/senders (no type/from/to)",
+              "line": 88,
+              "kind": "product_helper",
+              "relevance_reason": "Builds MessageSearchParams with term, order, rooms, senders only \u2014 type/from/to stay off the server request and are applied client-side after pages flatten."
+            },
+            {
+              "symbol": "filterMessageSearchGroups type/fromDate/toDate",
+              "line": 117,
+              "kind": "product_helper",
+              "relevance_reason": "After rawGroups flatten, filterMessageSearchGroups applies client-side type + fromDate/toDate filters from URL params \u2014 date and type content-category filters are NOT server search body fields."
+            },
+            {
+              "symbol": "handleSelectedRoomsChange writes rooms URL",
+              "line": 158,
+              "kind": "product_helper",
+              "relevance_reason": "Writes/clears rooms URL param from multi-room chip selection \u2014 room filter used by the UI (distinct from host default room-scoped FR-7.10-001)."
+            },
+            {
+              "symbol": "handleOrderChange writes order URL",
+              "line": 179,
+              "kind": "product_helper",
+              "relevance_reason": "Writes order URL param (Recent vs Relevance/SearchOrderBy.Rank) \u2014 server order_by adjacency for filter UX."
+            },
+            {
+              "symbol": "handleTypeChange writes type URL",
+              "line": 189,
+              "kind": "product_helper",
+              "relevance_reason": "Writes/clears type URL param (all/media/files/audio/links/polls) \u2014 client-side content-category filter."
+            },
+            {
+              "symbol": "handleSendersChange writes senders URL",
+              "line": 199,
+              "kind": "product_helper",
+              "relevance_reason": "Writes/clears senders URL param from sender form \u2014 server filter.senders."
+            },
+            {
+              "symbol": "handleDateRangeChange writes from/to URL",
+              "line": 209,
+              "kind": "product_helper",
+              "relevance_reason": "Writes/clears from and to URL date params \u2014 client-side date-range filter via filterMessageSearchGroups."
+            },
+            {
+              "symbol": "SearchFilters filter props wiring",
+              "line": 260,
+              "kind": "product_helper",
+              "relevance_reason": "Passes selectedRooms, senders, type, fromDate, toDate, order and their change handlers into SearchFilters \u2014 product UX for all four plan clauses."
+            }
+          ],
+          "model_coupling": [
+            "Room"
+          ],
+          "behavior_relevant_method_candidates": [],
+          "behavior_relevant_listener_candidates": [],
+          "symbols_or_candidates_note": "Primary UI/lifecycle for filters: URL params rooms/senders/type/from/to/order; handlers write params; msgSearchParams binds rooms+senders to server request; filterMessageSearchGroups applies type+date client-side. Global chip/handleGlobalChange is FR-7.10-002 \u2014 EXCLUDE as sole primary. Open navigateRoom is FR-7.10-004. Room-scoped host default without multi-room chips is FR-7.10-001."
+        },
+        {
+          "path": "synara/src/app/features/message-search/SearchFilters.tsx",
+          "bucket": "feature",
+          "categories": [
+            "client_methods",
+            "room_lists"
+          ],
+          "symbols_or_candidates": [
+            "SelectRoomButton",
+            "type filter chips",
+            "OrderButton",
+            "sender form + parseSenderFilter",
+            "date from/to form"
+          ],
+          "line_refs": [
+            {
+              "symbol": "OrderButton Recent/Relevance",
+              "line": 52,
+              "kind": "product_helper",
+              "relevance_reason": "Order chip menu: Recent (default) vs Relevance (SearchOrderBy.Rank) \u2014 order_by server adjacency for filter UX."
+            },
+            {
+              "symbol": "SelectRoomButton multi-room chips",
+              "line": 134,
+              "kind": "product_helper",
+              "relevance_reason": "Room multi-select popout with Save/Deselect All \u2014 multi-room chip selection that becomes filter.rooms (this FR's room filter)."
+            },
+            {
+              "symbol": "SearchFiltersProps rooms/type/senders/from/to/order",
+              "line": 333,
+              "kind": "product_helper",
+              "relevance_reason": "Props for selectedRooms, type, senders, fromDate, toDate, order and change handlers \u2014 filter UI surface."
+            },
+            {
+              "symbol": "typeFilters All/Media/Files/Audio/Links/Polls",
+              "line": 395,
+              "kind": "product_helper",
+              "relevance_reason": "MessageSearchTypeFilter chips (All/Media/Files/Audio/Links/Polls) \u2014 client-side content-category half of content filters."
+            },
+            {
+              "symbol": "handleSenderSubmit parseSenderFilter",
+              "line": 404,
+              "kind": "product_helper",
+              "relevance_reason": "Sender form submit calls parseSenderFilter(senderText) \u2192 onSendersChange \u2014 server filter.senders path."
+            },
+            {
+              "symbol": "handleDateSubmit onDateRangeChange",
+              "line": 412,
+              "kind": "product_helper",
+              "relevance_reason": "Date form Apply dates calls onDateRangeChange(fromText, toText) \u2014 client-side from/to date filter."
+            },
+            {
+              "symbol": "selected room chips + SelectRoomButton render",
+              "line": 452,
+              "kind": "product_helper",
+              "relevance_reason": "Renders selected room chips (remove) + SelectRoomButton for multi-room filter selection."
+            },
+            {
+              "symbol": "type chip map + OrderButton",
+              "line": 477,
+              "kind": "product_helper",
+              "relevance_reason": "Renders type filter chips and OrderButton \u2014 content-category + order controls."
+            },
+            {
+              "symbol": "sender form Input + Apply/Clear",
+              "line": 495,
+              "kind": "product_helper",
+              "relevance_reason": "Sender filter form with datalist suggestions, Apply, Clear \u2014 UI for filter.senders."
+            },
+            {
+              "symbol": "date from/to form Apply dates/Clear dates",
+              "line": 534,
+              "kind": "product_helper",
+              "relevance_reason": "From/To date inputs with Apply dates / Clear dates \u2014 UI for client-side date range."
+            }
+          ],
+          "model_coupling": [],
+          "behavior_relevant_method_candidates": [],
+          "behavior_relevant_listener_candidates": [],
+          "symbols_or_candidates_note": "Primary filter UI: room multi-select chips, type chips, OrderButton, sender form (parseSenderFilter), date from/to form. Global chip (allowGlobal L435\u2013444) is FR-7.10-002 \u2014 EXCLUDE as sole primary for this FR. getRoom/getRooms are room-select/display helpers."
+        },
+        {
+          "path": "synara/src/app/utils/messageSearchFilters.ts",
+          "bucket": "utils",
+          "categories": [
+            "searches"
+          ],
+          "symbols_or_candidates": [
+            "parseSenderFilter",
+            "isMessageSearchResultForType",
+            "isMessageSearchResultInDateRange",
+            "filterMessageSearchGroups"
+          ],
+          "line_refs": [
+            {
+              "symbol": "parseSenderFilter",
+              "line": 43,
+              "kind": "product_helper",
+              "relevance_reason": "Normalizes comma-separated Matrix IDs for sender filter; used by SearchFilters handleSenderSubmit before URL/senders binding."
+            },
+            {
+              "symbol": "isMessageSearchResultForType",
+              "line": 52,
+              "kind": "product_helper",
+              "relevance_reason": "Client-side content-category match (Media/Files/Audio/Links/Polls via msgtype/url/poll content) \u2014 not server filter field."
+            },
+            {
+              "symbol": "isMessageSearchResultInDateRange",
+              "line": 83,
+              "kind": "product_helper",
+              "relevance_reason": "Client-side inclusive day bounds on origin_server_ts for fromDate/toDate \u2014 not server filter field."
+            },
+            {
+              "symbol": "filterMessageSearchGroups",
+              "line": 98,
+              "kind": "product_helper",
+              "relevance_reason": "Applies type + date filters to ResultGroup items after server pages flatten; drops empty groups \u2014 product-layer client post-filter."
+            }
+          ],
+          "model_coupling": [],
+          "behavior_relevant_method_candidates": [],
+          "behavior_relevant_listener_candidates": [],
+          "symbols_or_candidates_note": "Client-side filter helpers only (type/date + parseSenderFilter). Does not call mx.search. Unit-tested by messageSearchFilters.test.ts \u2014 unit evidence is not integration pass alone."
         }
       ],
       "ui_entry_points": [
-        "synara/src/app/features/message-search/SearchFilters.tsx"
+        "synara/src/app/features/message-search/SearchFilters.tsx",
+        "synara/src/app/features/message-search/MessageSearch.tsx"
       ],
+      "ui_entry_points_rationale": "SearchFilters is the product filter chrome for Message Search: multi-room SelectRoomButton + chips, type chips (All/Media/Files/Audio/Links/Polls), OrderButton (Recent/Relevance), sender form (parseSenderFilter), date from/to form. MessageSearch owns URL params (rooms, senders, type, from, to, order), writes them via handlers, binds rooms+senders into MessageSearchParams for useMessageSearch server body, and applies type+from+to via filterMessageSearchGroups after results flatten. Global chip is FR-7.10-002 (exclude as sole primary). Host default room-scoped without multi-room chip selection is FR-7.10-001. Open navigateRoom is FR-7.10-004. features/search/Search.tsx user/directory is FR-7.10-005.",
       "state_owners": [
         {
           "path": "synara/src/app/features/message-search/useMessageSearch.ts",
-          "ownership_evidence": "Identified as coordination/state module for this behavior via path role (state/client/util service) and P0.1 categories/candidates; not merely a presentational component."
+          "ownership_evidence": "Owns room_events search request body and mx.search({ body, next_batch }). Server filters: filter.rooms, filter.senders, search_term, order_by. Does not receive type/from/to."
+        },
+        {
+          "path": "synara/src/app/features/message-search/MessageSearch.tsx",
+          "ownership_evidence": "Owns URL filter params and handlers (rooms/senders/type/from/to/order); msgSearchParams rooms+senders binding; filterMessageSearchGroups client post-filter for type+date. Does not call mx.search directly."
+        },
+        {
+          "path": "synara/src/app/utils/messageSearchFilters.ts",
+          "ownership_evidence": "Owns client-side type/date filter helpers and parseSenderFilter; applied by MessageSearch after pages flatten."
         }
       ],
       "current_js_sdk": {
@@ -75650,14 +75867,16 @@
             "name": "search",
             "line": 105,
             "category": "searches",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+            "kind": "property_call_candidate",
+            "confidence": "Source-inspected product call site (exact-line) on mx from useMatrixClient(); matrix-js-sdk MatrixClient.search with ISearchRequestBody carrying filter.rooms, filter.senders, search_term, order_by.",
+            "relevance_reason": "Server-side sender/room (filter) and content (search_term) filters for Message Search; type/date filters are NOT applied here."
           }
         ],
         "behavior_relevant_listener_candidates": [],
         "all_candidates_in_linked_files": {
           "method_count": 6,
           "listener_count": 0,
-          "note": "Unfiltered P0.1 AST candidates across linked production import files. Do not treat these as proven APIs for this requirement; use behavior_relevant_* fields.",
+          "note": "Unfiltered P0.1 AST candidates across linked production files useMessageSearch.ts + MessageSearch.tsx + SearchFilters.tsx. messageSearchFilters.ts is product helper (no matrix-js-sdk import). Do not treat AST candidates as proven APIs; use behavior_relevant_* fields. getRoom/getRooms are display/room-select helpers \u2014 not primary filter evidence.",
           "methods_sample": [
             {
               "path": "synara/src/app/features/message-search/MessageSearch.tsx",
@@ -75692,18 +75911,21 @@
           ],
           "listeners_sample": []
         },
-        "models": [],
+        "models": [
+          "Room"
+        ],
         "network_routes": [],
         "deep_imports": [],
         "method_candidates": [
           "search"
         ],
-        "listener_events": []
+        "listener_events": [],
+        "behavior_relevance_policy": "Exact-line source inspection for sender/room/date/content filters used by Message Search UI. TWO LAYERS \u2014 do not claim all filters are server-side. RETAIN: (A) Server via useMessageSearch ISearchRequestBody filter.rooms, filter.senders, search_term, order_by + mx.search; MessageSearchParams term/order/rooms/senders only. (B) Client post-filter via messageSearchFilters isMessageSearchResultForType / isMessageSearchResultInDateRange / filterMessageSearchGroups applied in MessageSearch after pages flatten for type + fromDate/toDate. SearchFilters UI: multi-room chips, type chips, OrderButton, sender form+parseSenderFilter, date from/to form. MessageSearch URL handlers for rooms/senders/type/from/to/order. Content filters = (1) search_term server content match + (2) type content-category chips client-side. EXCLUDE as sole evidence: Global chip alone (FR-7.10-002); room-scoped host default without multi-room chip selection (FR-7.10-001); Open navigateRoom (FR-7.10-004); features/search/Search.tsx user/directory (FR-7.10-005); SC-072 local search (FR-7.10-006); cancel/stale (FR-7.10-007); getRoom display-only; dual-backend/SDK selector/raw /_matrix HTTP; SC-071 compile/probe alone as product pass; unit-only messageSearchFilters.test.ts as sole integration pass."
       },
       "current_behavior_and_limits": {
-        "summary": "Current desktop implements this via 3 production matrix-js-sdk-related file(s); status=implemented.",
-        "notes": null,
-        "limits": "P0.1 method candidates are AST name hits, not type-checked receiver proofs."
+        "summary": "Current desktop implements Message Search sender/room/date/content filters used by the UI across two layers: (A) server-side filter.rooms, filter.senders, search_term, order_by via useMessageSearch/mx.search; (B) client-side type + from/to date post-filters via filterMessageSearchGroups after results flatten. SearchFilters exposes multi-room chips, type chips, OrderButton, sender form, date forms. status=implemented.",
+        "notes": "Evidence (conservative): (1) TWO LAYERS \u2014 do not claim all filters are server-side. Server (A): useMessageSearch L66\u201371 MessageSearchParams = term/order/rooms/senders only (NOT type/from/to); L85\u2013103 ISearchRequestBody room_events filter { limit, rooms, senders }, search_term, order_by; L105\u2013108 mx.search({ body, next_batch }). Client (B): MessageSearch L117\u2013125 filterMessageSearchGroups(rawGroups, { type, fromDate, toDate }) after pages flatten; helpers in messageSearchFilters.ts isMessageSearchResultForType L52\u201381, isMessageSearchResultInDateRange L83\u201396, filterMessageSearchGroups L98\u2013114. (2) URL PARAMS: MessageSearch useSearchPathSearchParams L28\u201341 rooms, senders, type, from, to, order, global, term. Handlers write params: handleSelectedRoomsChange L158\u2013167, handleOrderChange L179\u2013188, handleTypeChange L189\u2013198, handleSendersChange L199\u2013208, handleDateRangeChange L209\u2013222. (3) SENDER: SearchFilters sender form L495\u2013533; handleSenderSubmit L404\u2013407 parseSenderFilter(senderText) \u2192 onSendersChange; parseSenderFilter L43\u201350; URL senders \u2192 msgSearchParams.senders \u2192 filter.senders server. (4) ROOM: multi-room SelectRoomButton L134\u2013331 + selected chips L452\u2013475; URL rooms \u2192 searchParamRooms L72\u201380 \u2192 msgSearchParams.rooms \u2192 filter.rooms. DISTINGUISH from FR-7.10-001 host default rooms list without multi-room chip selection; DISTINGUISH Global chip (FR-7.10-002) which leaves rooms undefined. (5) DATE: SearchFilters from/to date form L534\u2013573; handleDateSubmit L412\u2013415 onDateRangeChange; client-only isMessageSearchResultInDateRange on origin_server_ts inclusive day bounds \u2014 NOT in search body. (6) CONTENT filters (two halves): (6a) server search_term content match (SearchInput term \u2192 search_term); (6b) client type chips All/Media/Files/Audio/Links/Polls L395\u2013402, L477\u2013491 \u2192 URL type \u2192 isMessageSearchResultForType (msgtype/url/poll content). OrderButton L52\u2013117 / L492 is order_by adjacency (Recent/Relevance). (7) EXCLUDE: Global chip alone FR-7.10-002; room-scoped default without filter UI FR-7.10-001; Open navigateRoom FR-7.10-004; user/directory Search.tsx FR-7.10-005; SC-072 local FR-7.10-006; cancel/stale FR-7.10-007. (8) Existing unit: messageSearchFilters.test.ts covers parseSenderFilter, type match, date range, filterMessageSearchGroups \u2014 unit evidence not integration pass alone. No E2E AT yet. (9) Cutover P6.8 (+P11.3): typed SC-071 Client::send search for server filters (rooms/senders/search_term/order_by) + product IPC MUST preserve client type/date filters in product layer (not only server search body); no raw /_matrix HTTP, dual-backend, SDK selector, invented high-level Rust search filter APIs. SC-071 alone / compile-only / raw HTTP / room-scoped-only / global-only / Open-only / directory-only / helper-unit-only FAIL.",
+        "limits": "P0.1 method candidates are AST name hits unless marked source-inspected. Architecture honesty: sender + multi-room + search_term + order_by are server-side via room_events search body; type (Media/Files/Audio/Links/Polls) and from/to date are client-side post-filters on already-fetched pages \u2014 date/type may miss matches outside the current server result pages and do not shrink the server query. Multi-room chips re-narrow filter.rooms; host default rooms without chips is FR-7.10-001. Global chip is FR-7.10-002. No server-side type or date filter in product body today. No E2E AT yet. SC-071 remains typed-sdk-request-required for server search only; client type/date must stay product-side at cutover. Do not invent high-level Rust search filter APIs. Do not add SC-072."
       },
       "p0_1_linkage": {
         "categories": [
@@ -75749,7 +75971,7 @@
                 "P0.3c-typed-search-filter-limit-fields"
               ],
               "final_state": "typed-sdk-request-required",
-              "final_state_rationale": "No high-level stable room-message search API. P0.3c proves typed search_events::v3 via Client::send. Still lacks E3/E4/E5; residual product path is typed SDK transport.",
+              "final_state_rationale": "No high-level stable room-message search API. P0.3c proves typed search_events::v3 via Client::send including filter fields. Server filter path for this FR is filter.rooms/senders + search_term + order_by on that typed request. Client type/date filters are product-layer post-filters and must be preserved in IPC/product cutover, not invented as high-level Rust search filter APIs. Still lacks E3/E4/E5.",
               "missing_gates": [
                 "semantic_or_integration_test",
                 "live_synapse_two_client",
@@ -75767,11 +75989,17 @@
           }
         ],
         "gaps": [],
-        "notes": "Mappings use only accepted P0.3 capability/gap IDs. Compile probes establish API shape only; final dossier states remain blocked/typed/upstream until E3\u2013E5 gates exist.",
+        "notes": "Honest rust_target for FR-7.10-003: SC-071 only (typed-sdk-request-required server /search) \u2014 same family as FR-7.10-001/002. Server filters (rooms/senders/search_term/order_by) cut over via typed Client::send search path. Type and date client filters are product-side (filterMessageSearchGroups) and MUST be preserved in cutover IPC/product layer, not only in the server search body. Do not invent high-level Rust search filter APIs. Do not add SC-072 (experimental local search is FR-7.10-006). Cutover P6.8 (+P11.3) must preserve all four clauses via typed path + product IPC, not raw /_matrix HTTP, not dual-backend/SDK selector. SC-071 alone / compile-only / raw HTTP / room-scoped-only / global-only / Open-only / directory-only / helper-unit-only FAIL.",
         "distinctions_preserved": [
-          "server typed search (SC-071) vs experimental local search (SC-072)",
-          "widget plumbing (SC-082/GAP widget) vs call parity (membership write/key session gaps)",
-          "compile shape (E1/E2) vs runtime/UI parity (E3\u2013E5 missing => blocked)"
+          "sender/room/date/content filters used by the UI (this FR) vs room-scoped search+pagination (FR-7.10-001)",
+          "filters (this FR) vs global scope toggle (FR-7.10-002 / Global chip alone)",
+          "server filters (rooms/senders/search_term/order_by via SC-071) vs client post-filters (type/date product layer)",
+          "content filters = search_term (server) + type chips (client) vs local search SC-072 (FR-7.10-006)",
+          "filters (this FR) vs event-context Open/jump (FR-7.10-004)",
+          "message-search filters (this FR) vs user and public-room directory search (FR-7.10-005)",
+          "filters (this FR) vs cancel/stale-result rejection (FR-7.10-007)",
+          "typed Client::send search path vs raw /_matrix HTTP or dual-backend/SDK selector",
+          "compile shape (E1/E2 typed probes) vs runtime/UI parity (E3\u2013E5 missing)"
         ]
       },
       "implementation_tasks": [
@@ -75779,14 +76007,20 @@
           "task_id": "P6.8",
           "title": "Message, user, and room-directory search",
           "phase": "Phase 6 \u2014 Sending, room operations, account data, and search",
-          "scope_rationale": "Accepted plan task P6.8 covers this Section 7.10 behavior during Phase 6 \u2014 Sending, room operations, account data, and search."
+          "scope_rationale": "Accepted plan task P6.8 covers Message Search server filters (rooms/senders/search_term/order_by) via typed SC-071 search request path and product filter UX during Phase 6."
+        },
+        {
+          "task_id": "P11.3",
+          "title": "Convert components/features/pages by domain",
+          "phase": "Phase 11 \u2014 React conversion and atomic desktop cutover",
+          "scope_rationale": "Accepted plan task P11.3 covers MessageSearch / SearchFilters / messageSearchFilters React conversion and atomic cutover for Section 7.10 filter UI including client type/date post-filters."
         }
       ],
       "automated_tests": {
         "existing": [
           {
             "path": "synara/src/app/utils/__tests__/messageSearchFilters.test.ts",
-            "evidence": "search filter helper unit coverage",
+            "evidence": "Unit coverage for parseSenderFilter, isMessageSearchResultForType, isMessageSearchResultInDateRange, filterMessageSearchGroups \u2014 client helper evidence only; not integration pass alone.",
             "status": "existing-verified-path"
           }
         ],
@@ -75798,39 +76032,45 @@
             "task_id": "P6.8",
             "phase": "Phase 6 \u2014 Sending, room operations, account data, and search",
             "level": "integration",
-            "scenario": "7.10/FR-7.10-003: exercise 'sender, room, date, and content filters used by the UI;' via owner `synara/src/app/features/message-search/useMessageSearch.ts` and UI `synara/src/app/features/message-search/SearchFilters.tsx`, then confirm Rust/IPC cutover task `P6.8` preserves observable behavior without raw Matrix runtime HTTP.",
+            "scenario": "Integration against disposable Synapse: (A) SENDER \u2014 set senders via SearchFilters sender form / URL senders param; enter search_term; assert useMessageSearch/mx.search room_events body includes filter.senders. (B) ROOM \u2014 select multi-room chips (SelectRoomButton) / rooms URL param; assert request filter.rooms is the narrowed selected list (not only host default without chip selection). (C) DATE \u2014 set from/to via date form / URL; assert client filterMessageSearchGroups date-range post-filter on results (not server body from/to). (D) CONTENT/TYPE \u2014 type chips (Media/Files/Audio/Links/Polls) \u2192 client type filter on results; search_term remains server content match. (E) DISTINCTIONS \u2014 room-scoped default without multi-room chips (FR-7.10-001), Global chip alone (FR-7.10-002), Open result alone (FR-7.10-004), user/directory Search modal alone (FR-7.10-005), local SC-072 (FR-7.10-006), cancel/stale (FR-7.10-007) do not satisfy this FR. After cutover P6.8 (+P11.3), same observables via typed SC-071 Client::send search for server filters + product IPC preserves client type/date filters \u2014 not raw /_matrix HTTP, not dual-backend/SDK selector, not invented high-level Rust search filter APIs. SC-071 alone, compile-only, raw HTTP, room-scoped-only, global-only, Open-only, directory-only, helper-unit-only FAIL.",
+            "test_target": "SearchFilters sender/room/type/date/order UI; MessageSearch URL params + handlers; useMessageSearch filter.rooms/senders/search_term; filterMessageSearchGroups client type/date; post-cutover typed SC-071 Client::send search + product IPC (P6.8/P11.3)",
             "preconditions": [
-              "Desktop app; room with searchable indexed history on Synapse",
-              "Public room directory populated; second user for user search",
-              "Linked owner path present in tree: synara/src/app/features/message-search/useMessageSearch.ts",
-              "Primary UI/lifecycle surface: synara/src/app/features/message-search/SearchFilters.tsx"
+              "Disposable Synapse with multiple joined rooms and multi-sender searchable history; known term matching events that can be narrowed by sender, room, type, and date.",
+              "Named owners present: useMessageSearch.ts, MessageSearch.tsx, SearchFilters.tsx, messageSearchFilters.ts.",
+              "Harness can observe search request body filter.rooms/filter.senders/search_term and client post-filter of results by type/from/to.",
+              "Do not accept room-scoped-only (FR-7.10-001), global-only (FR-7.10-002), Open-only (FR-7.10-004), user/directory-only (FR-7.10-005), cancel/stale-only (FR-7.10-007), or unit-only messageSearchFilters.test.ts as sole pass for this FR."
             ],
             "trigger_actions": [
-              "Boot the appropriate harness for level=integration against disposable Synapse (or iOS notes if any).",
-              "Establish fixtures required by the clause list: sender; room; date; content filters used by the UI.",
-              "Open UI/lifecycle surface `synara/src/app/features/message-search/SearchFilters.tsx` (or follow ui_entry_points_rationale if no dedicated UI).",
-              "Step 1: perform the product action that implements \u00absender\u00bb using current owner `synara/src/app/features/message-search/useMessageSearch.ts`.",
-              "Step 2: perform the product action that implements \u00abroom\u00bb using current owner `synara/src/app/features/message-search/useMessageSearch.ts`.",
-              "Step 3: perform the product action that implements \u00abdate\u00bb using current owner `synara/src/app/features/message-search/useMessageSearch.ts`.",
-              "Step 4: perform the product action that implements \u00abcontent filters used by the UI\u00bb using current owner `synara/src/app/features/message-search/useMessageSearch.ts`."
+              "Boot integration harness against disposable Synapse. Do not use fixture-only mocks that skip product MessageSearch/SearchFilters path, dual-backend selectors, raw HTTP, or helper-only pass criteria.",
+              "SENDER: open Message Search; apply sender filter (form or URL senders); enter term; assert room_events search body includes filter.senders for the applied IDs.",
+              "ROOM: select one or more rooms via SelectRoomButton/chips; assert filter.rooms matches the selected list (multi-room chip selection, not host-default-only).",
+              "DATE: set from and/or to dates; assert displayed groups are constrained by isMessageSearchResultInDateRange / filterMessageSearchGroups (client post-filter; from/to not required in server body).",
+              "CONTENT/TYPE: select a non-All type chip (e.g. Media or Files); assert results are filtered by isMessageSearchResultForType; confirm search_term still drives server content match.",
+              "ORDER (adjacency): toggle Recent vs Relevance; assert order_by reflects the selection on subsequent search.",
+              "After cutover P6.8 (+P11.3), repeat server filters via typed Client::send search (SC-071) under Rust ownership + product IPC, and confirm client type/date filters still apply in the product layer. Citing SC-071 alone, compile-only blocked, raw /_matrix HTTP, dual-backend/SDK selector, invented high-level search filter API, room-scoped-only, global-only, Open-only, directory-only, or helper-unit-only is a FAIL."
             ],
             "assertions": [
-              "Each clause is observable: \u00absender\u00bb; \u00abroom\u00bb; \u00abdate\u00bb; \u00abcontent filters used by the UI\u00bb.",
-              "State coordination remains through `synara/src/app/features/message-search/useMessageSearch.ts` (or its Rust/IPC successor after cutover), not ad-hoc dual writers.",
-              "Behavior-relevant current JS method candidates exercised or replaced: search (AST candidates; not type-proven receivers).",
-              "Rust mapping remains conservative: caps=[SC-071] gaps=[none]; compile-only blocked states are not treated as runtime pass.",
-              "No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless dossier marks that exact behavior typed-sdk-request-required."
+              "SENDER: filter.senders present on room_events search body when senders UI/param set.",
+              "ROOM: filter.rooms reflects multi-room chip selection / rooms URL param (distinct from host-default-only FR-7.10-001 and rooms-undefined FR-7.10-002).",
+              "DATE: from/to constrain displayed results via client filterMessageSearchGroups date range.",
+              "CONTENT: search_term server content match + type chips client content-category filter both work when used by the UI.",
+              "DISTINCTIONS: this FR \u2260 FR-7.10-001 room-scoped default; \u2260 FR-7.10-002 Global alone; \u2260 FR-7.10-004 Open; \u2260 FR-7.10-005 user/directory; \u2260 FR-7.10-006 local search; \u2260 FR-7.10-007 cancel/stale.",
+              "COORDINATION: server filters through useMessageSearch + MessageSearch; client type/date through messageSearchFilters/filterMessageSearchGroups (or Rust/IPC + product successors), not ad-hoc dual writers.",
+              "CUTOVER: P6.8 (+P11.3) preserves server filters via typed SC-071 Client::send search path AND product-layer type/date filters; SC alone / compile-only never product pass; no raw /_matrix runtime HTTP; no dual-backend/SDK selector; no invented high-level Rust search filter APIs; no SC-072 substitution.",
+              "No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless the dossier marks that exact behavior typed-sdk-request-required.",
+              "Room-scoped-only, global-only, Open-only, directory-only, cancel/stale-only, and messageSearchFilters unit tests alone are not accepted as sole pass criteria for this FR."
             ],
             "required_environment": [
-              "Desktop app; room with searchable indexed history on Synapse",
-              "Public room directory populated; second user for user search"
+              "Disposable Synapse; multi-room multi-sender searchable history with type/date-distinguishable events",
+              "Product surfaces: MessageSearch.tsx, SearchFilters.tsx, useMessageSearch.ts, messageSearchFilters.ts"
             ],
             "does_not_currently_exist": true,
             "clause_breakdown": [
-              "sender",
-              "room",
-              "date",
-              "content filters used by the UI"
+              "sender filter (UI/URL \u2192 filter.senders server)",
+              "room filter (multi-room chips/URL \u2192 filter.rooms server)",
+              "date filter (from/to UI/URL \u2192 client filterMessageSearchGroups)",
+              "content filters (search_term server + type chips client)",
+              "cutover P6.8 (+P11.3) typed SC-071 server filters + product type/date; SC-only/raw HTTP/helper-only FAIL"
             ]
           }
         ]
@@ -75850,10 +76090,11 @@
         {
           "severity": "medium",
           "kind": "typed-sdk-request-required",
-          "summary": "FR-7.10-003 requires typed SDK request route (not raw HTTP, not invented high-level API)."
+          "summary": "FR-7.10-003 requires typed SC-071 Client::send search path for server senders/rooms/search_term filters plus product-layer preservation of client type/date filters (not raw HTTP, not invented high-level search filter API, not dual-backend)."
         }
       ]
     },
+
     {
       "id": "FR-7.10-004",
       "origin": "plan-section-7",
@@ -103717,7 +103958,7 @@
         "id": "ET-FR-7.10-003-01",
         "requirement_id": "FR-7.10-003",
         "path": "synara/src/app/utils/__tests__/messageSearchFilters.test.ts",
-        "evidence": "search filter helper unit coverage",
+        "evidence": "Unit coverage for parseSenderFilter, isMessageSearchResultForType, isMessageSearchResultInDateRange, filterMessageSearchGroups \u2014 client helper evidence only; not integration pass alone.",
         "cases": null,
         "kind": "existing",
         "status": "existing-verified-path"
@@ -107322,39 +107563,45 @@
         "task_id": "P6.8",
         "phase": "Phase 6 \u2014 Sending, room operations, account data, and search",
         "level": "integration",
-        "scenario": "7.10/FR-7.10-003: exercise 'sender, room, date, and content filters used by the UI;' via owner `synara/src/app/features/message-search/useMessageSearch.ts` and UI `synara/src/app/features/message-search/SearchFilters.tsx`, then confirm Rust/IPC cutover task `P6.8` preserves observable behavior without raw Matrix runtime HTTP.",
+        "scenario": "Integration against disposable Synapse: (A) SENDER \u2014 set senders via SearchFilters sender form / URL senders param; enter search_term; assert useMessageSearch/mx.search room_events body includes filter.senders. (B) ROOM \u2014 select multi-room chips (SelectRoomButton) / rooms URL param; assert request filter.rooms is the narrowed selected list (not only host default without chip selection). (C) DATE \u2014 set from/to via date form / URL; assert client filterMessageSearchGroups date-range post-filter on results (not server body from/to). (D) CONTENT/TYPE \u2014 type chips (Media/Files/Audio/Links/Polls) \u2192 client type filter on results; search_term remains server content match. (E) DISTINCTIONS \u2014 room-scoped default without multi-room chips (FR-7.10-001), Global chip alone (FR-7.10-002), Open result alone (FR-7.10-004), user/directory Search modal alone (FR-7.10-005), local SC-072 (FR-7.10-006), cancel/stale (FR-7.10-007) do not satisfy this FR. After cutover P6.8 (+P11.3), same observables via typed SC-071 Client::send search for server filters + product IPC preserves client type/date filters \u2014 not raw /_matrix HTTP, not dual-backend/SDK selector, not invented high-level Rust search filter APIs. SC-071 alone, compile-only, raw HTTP, room-scoped-only, global-only, Open-only, directory-only, helper-unit-only FAIL.",
+        "test_target": "SearchFilters sender/room/type/date/order UI; MessageSearch URL params + handlers; useMessageSearch filter.rooms/senders/search_term; filterMessageSearchGroups client type/date; post-cutover typed SC-071 Client::send search + product IPC (P6.8/P11.3)",
         "preconditions": [
-          "Desktop app; room with searchable indexed history on Synapse",
-          "Public room directory populated; second user for user search",
-          "Linked owner path present in tree: synara/src/app/features/message-search/useMessageSearch.ts",
-          "Primary UI/lifecycle surface: synara/src/app/features/message-search/SearchFilters.tsx"
+          "Disposable Synapse with multiple joined rooms and multi-sender searchable history; known term matching events that can be narrowed by sender, room, type, and date.",
+          "Named owners present: useMessageSearch.ts, MessageSearch.tsx, SearchFilters.tsx, messageSearchFilters.ts.",
+          "Harness can observe search request body filter.rooms/filter.senders/search_term and client post-filter of results by type/from/to.",
+          "Do not accept room-scoped-only (FR-7.10-001), global-only (FR-7.10-002), Open-only (FR-7.10-004), user/directory-only (FR-7.10-005), cancel/stale-only (FR-7.10-007), or unit-only messageSearchFilters.test.ts as sole pass for this FR."
         ],
         "trigger_actions": [
-          "Boot the appropriate harness for level=integration against disposable Synapse (or iOS notes if any).",
-          "Establish fixtures required by the clause list: sender; room; date; content filters used by the UI.",
-          "Open UI/lifecycle surface `synara/src/app/features/message-search/SearchFilters.tsx` (or follow ui_entry_points_rationale if no dedicated UI).",
-          "Step 1: perform the product action that implements \u00absender\u00bb using current owner `synara/src/app/features/message-search/useMessageSearch.ts`.",
-          "Step 2: perform the product action that implements \u00abroom\u00bb using current owner `synara/src/app/features/message-search/useMessageSearch.ts`.",
-          "Step 3: perform the product action that implements \u00abdate\u00bb using current owner `synara/src/app/features/message-search/useMessageSearch.ts`.",
-          "Step 4: perform the product action that implements \u00abcontent filters used by the UI\u00bb using current owner `synara/src/app/features/message-search/useMessageSearch.ts`."
+          "Boot integration harness against disposable Synapse. Do not use fixture-only mocks that skip product MessageSearch/SearchFilters path, dual-backend selectors, raw HTTP, or helper-only pass criteria.",
+          "SENDER: open Message Search; apply sender filter (form or URL senders); enter term; assert room_events search body includes filter.senders for the applied IDs.",
+          "ROOM: select one or more rooms via SelectRoomButton/chips; assert filter.rooms matches the selected list (multi-room chip selection, not host-default-only).",
+          "DATE: set from and/or to dates; assert displayed groups are constrained by isMessageSearchResultInDateRange / filterMessageSearchGroups (client post-filter; from/to not required in server body).",
+          "CONTENT/TYPE: select a non-All type chip (e.g. Media or Files); assert results are filtered by isMessageSearchResultForType; confirm search_term still drives server content match.",
+          "ORDER (adjacency): toggle Recent vs Relevance; assert order_by reflects the selection on subsequent search.",
+          "After cutover P6.8 (+P11.3), repeat server filters via typed Client::send search (SC-071) under Rust ownership + product IPC, and confirm client type/date filters still apply in the product layer. Citing SC-071 alone, compile-only blocked, raw /_matrix HTTP, dual-backend/SDK selector, invented high-level search filter API, room-scoped-only, global-only, Open-only, directory-only, or helper-unit-only is a FAIL."
         ],
         "assertions": [
-          "Each clause is observable: \u00absender\u00bb; \u00abroom\u00bb; \u00abdate\u00bb; \u00abcontent filters used by the UI\u00bb.",
-          "State coordination remains through `synara/src/app/features/message-search/useMessageSearch.ts` (or its Rust/IPC successor after cutover), not ad-hoc dual writers.",
-          "Behavior-relevant current JS method candidates exercised or replaced: search (AST candidates; not type-proven receivers).",
-          "Rust mapping remains conservative: caps=[SC-071] gaps=[none]; compile-only blocked states are not treated as runtime pass.",
-          "No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless dossier marks that exact behavior typed-sdk-request-required."
+          "SENDER: filter.senders present on room_events search body when senders UI/param set.",
+          "ROOM: filter.rooms reflects multi-room chip selection / rooms URL param (distinct from host-default-only FR-7.10-001 and rooms-undefined FR-7.10-002).",
+          "DATE: from/to constrain displayed results via client filterMessageSearchGroups date range.",
+          "CONTENT: search_term server content match + type chips client content-category filter both work when used by the UI.",
+          "DISTINCTIONS: this FR \u2260 FR-7.10-001 room-scoped default; \u2260 FR-7.10-002 Global alone; \u2260 FR-7.10-004 Open; \u2260 FR-7.10-005 user/directory; \u2260 FR-7.10-006 local search; \u2260 FR-7.10-007 cancel/stale.",
+          "COORDINATION: server filters through useMessageSearch + MessageSearch; client type/date through messageSearchFilters/filterMessageSearchGroups (or Rust/IPC + product successors), not ad-hoc dual writers.",
+          "CUTOVER: P6.8 (+P11.3) preserves server filters via typed SC-071 Client::send search path AND product-layer type/date filters; SC alone / compile-only never product pass; no raw /_matrix runtime HTTP; no dual-backend/SDK selector; no invented high-level Rust search filter APIs; no SC-072 substitution.",
+          "No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless the dossier marks that exact behavior typed-sdk-request-required.",
+          "Room-scoped-only, global-only, Open-only, directory-only, cancel/stale-only, and messageSearchFilters unit tests alone are not accepted as sole pass criteria for this FR."
         ],
         "required_environment": [
-          "Desktop app; room with searchable indexed history on Synapse",
-          "Public room directory populated; second user for user search"
+          "Disposable Synapse; multi-room multi-sender searchable history with type/date-distinguishable events",
+          "Product surfaces: MessageSearch.tsx, SearchFilters.tsx, useMessageSearch.ts, messageSearchFilters.ts"
         ],
         "does_not_currently_exist": true,
         "clause_breakdown": [
-          "sender",
-          "room",
-          "date",
-          "content filters used by the UI"
+          "sender filter (UI/URL \u2192 filter.senders server)",
+          "room filter (multi-room chips/URL \u2192 filter.rooms server)",
+          "date filter (from/to UI/URL \u2192 client filterMessageSearchGroups)",
+          "content filters (search_term server + type chips client)",
+          "cutover P6.8 (+P11.3) typed SC-071 server filters + product type/date; SC-only/raw HTTP/helper-only FAIL"
         ]
       },
       {
@@ -111046,34 +111293,34 @@
         "Linux"
       ],
       "preconditions": [
-        "Desktop app; room with searchable indexed history on Synapse",
-        "Public room directory populated; second user for user search",
-        "State owner available: synara/src/app/features/message-search/useMessageSearch.ts",
-        "UI/lifecycle: synara/src/app/features/message-search/SearchFilters.tsx",
-        "Current status baseline: implemented"
+        "Desktop app against disposable Synapse; multi-room multi-sender searchable history with events distinguishable by type and date.",
+        "State owners available: synara/src/app/features/message-search/useMessageSearch.ts, MessageSearch.tsx, messageSearchFilters.ts",
+        "UI/lifecycle: MessageSearch.tsx + SearchFilters.tsx (sender form, multi-room chips, type chips, date from/to, OrderButton)",
+        "Current status baseline: implemented (all four clauses product-used)"
       ],
       "actions": [
-        "Launch Synara desktop on the target platform against disposable Synapse; use a clean or known fixture profile as required by \u00absender, room, date, and content filters used by the UI;\u00bb.",
-        "Identify state owner `synara/src/app/features/message-search/useMessageSearch.ts` and open `synara/src/app/features/message-search/SearchFilters.tsx`.",
-        "Action 1 \u2014 \u00absender\u00bb: perform the minimal user/system steps that trigger this clause (use linked files under current_production_files if the entry point is indirect).",
-        "Action 2 \u2014 \u00abroom\u00bb: perform the minimal user/system steps that trigger this clause (use linked files under current_production_files if the entry point is indirect).",
-        "Action 3 \u2014 \u00abdate\u00bb: perform the minimal user/system steps that trigger this clause (use linked files under current_production_files if the entry point is indirect).",
-        "Action 4 \u2014 \u00abcontent filters used by the UI\u00bb: perform the minimal user/system steps that trigger this clause (use linked files under current_production_files if the entry point is indirect).",
-        "Run search, change filters, paginate, click a result to open event context, cancel a slow query and ensure UI does not apply stale results."
+        "Launch Synara desktop on the target platform against disposable Synapse; open Message Search (Home/Space or room search panel).",
+        "SENDER: enter one or more Matrix IDs in the Sender form; Apply; enter a known term; confirm results are restricted to those senders (filter.senders on search body).",
+        "ROOM: use Select Rooms to pick a subset of rooms; Save; confirm results are limited to selected rooms (filter.rooms narrowed list, not only host default without chips).",
+        "DATE: set From and/or To dates; Apply dates; confirm only events in the inclusive day range remain visible (client post-filter).",
+        "CONTENT/TYPE: select a non-All type chip (e.g. Media or Files); confirm only matching content categories remain; confirm search_term still drives content match from the server.",
+        "DISTINCTIONS (negative for this FR alone): do not treat room-scoped host default without multi-room chips (FR-7.10-001), Global chip alone (FR-7.10-002), Open on a result (FR-7.10-004), user/directory Search modal (FR-7.10-005), or cancel/stale alone (FR-7.10-007) as satisfying filters used by the UI.",
+        "After cutover P6.8 (+P11.3): repeat sender/room server filters + type/date client filters; confirm typed SC-071 Client::send search path for server filters and product-layer type/date preservation (not raw /_matrix from the renderer, not dual-backend/SDK selector, not invented high-level Rust search filter APIs)."
       ],
       "expected_results": [
-        "All clauses under \u00absender, room, date, and content filters used by the UI;\u00bb produce the user-visible or system-observable success criteria without error toasts unrelated to intentional negative tests.",
-        "Clause 1 \u00absender\u00bb is satisfied on macOS, Linux with owner `synara/src/app/features/message-search/useMessageSearch.ts`.",
-        "Clause 2 \u00abroom\u00bb is satisfied on macOS, Linux with owner `synara/src/app/features/message-search/useMessageSearch.ts`.",
-        "Clause 3 \u00abdate\u00bb is satisfied on macOS, Linux with owner `synara/src/app/features/message-search/useMessageSearch.ts`.",
-        "Clause 4 \u00abcontent filters used by the UI\u00bb is satisfied on macOS, Linux with owner `synara/src/app/features/message-search/useMessageSearch.ts`.",
-        "No unexpected raw /_matrix traffic from the app renderer for this flow on the post-cutover build."
+        "SENDER: sender filter used by the UI reaches filter.senders on the room_events search body; results reflect senders.",
+        "ROOM: multi-room chip selection reaches filter.rooms; results reflect selected rooms.",
+        "DATE: from/to constrain displayed results via client filterMessageSearchGroups (not required on server body).",
+        "CONTENT: search_term server content match + type chips client content-category filter both work when used by the UI.",
+        "No unexpected raw /_matrix traffic from the app renderer for this flow on the post-cutover build; no dual-backend/SDK selector.",
+        "SC-071 alone / compile-only / raw HTTP / room-scoped-only / global-only / Open-only / directory-only / helper-unit-only do not pass this FR."
       ],
       "clause_breakdown": [
-        "sender",
-        "room",
-        "date",
-        "content filters used by the UI"
+        "sender filter (UI/URL \u2192 filter.senders server)",
+        "room filter (multi-room chips/URL \u2192 filter.rooms server)",
+        "date filter (from/to UI/URL \u2192 client filterMessageSearchGroups)",
+        "content filters (search_term server + type chips client)",
+        "cutover P6.8 (+P11.3) typed SC-071 server filters + product type/date; SC-only/raw HTTP/helper-only FAIL"
       ]
     },
     {
@@ -111492,7 +111739,7 @@
       "requirement_id": "FR-7.10-003",
       "severity": "medium",
       "kind": "typed-sdk-request-required",
-      "summary": "FR-7.10-003 requires typed SDK request route (not raw HTTP, not invented high-level API)."
+      "summary": "FR-7.10-003 requires typed SC-071 Client::send search path for server senders/rooms/search_term filters plus product-layer preservation of client type/date filters (not raw HTTP, not invented high-level search filter API, not dual-backend)."
     },
     {
       "requirement_id": "FR-7.10-006",
@@ -113111,6 +113358,19 @@
         "FR-7.10-002: current_status partial \u2192 implemented (global message search is currently product-exposed). current_behavior_and_limits documents Home/Space allowGlobal entry, Global chip, global=true \u2192 rooms undefined, mx.search without room filter; notes no longer shallow partial/product-dependent.",
         "FR-7.10-002: retargeted owners to useMessageSearch.ts + MessageSearch.tsx + SearchFilters.tsx; demoted/excluded features/search/Search.tsx (FR-7.10-005 user/directory). Behavior-relevant method: search L105 with rooms-undefined global relevance. EXCLUDE Open/filters/room-scoped/cancel as sole evidence. Dropped SC-072 from capability_ids (experimental local is FR-7.10-006).",
         "FR-7.10-002: planned AT/MA require Global chip exposure, global search without rooms filter, scope toggle distinction; cutover P6.8 (+P11.3) via typed SC-071 Client::send search; SC alone, compile-only, raw HTTP, dual-backend, room-scoped-only, filter-only, Open-only, directory-only, SC-072, helper-only FAIL. rust_target typed-sdk-request-required-server-search SC-071 only. Top-level AT-FR-7.10-002-001 and MA-FR-7.10-002 updated byte-aligned. file_coverage_ledger: removed FR-7.10-002 from features/search/Search.tsx. Status distribution recomputed (implemented 97, partial 21). Accepted FR-7.8-001 through FR-7.8-009, FR-7.9-001..013 (011 remains partial), and FR-7.10-001 preserved. JSON and Markdown synchronized."
+      ]
+    },
+    {
+      "id": "p0.2-correct-42-fr-7.10-003-search-filters",
+      "scope": "Rejected-review limited correction: FR-7.10-003 only \u2014 replace shallow notes (via 3 production files / empty line_refs on SearchFilters/MessageSearch / generic AT-MA) with concrete sender/room/date/content filter evidence: TWO LAYERS server (filter.rooms/senders/search_term/order_by via useMessageSearch mx.search) + client (type + from/to via filterMessageSearchGroups); SearchFilters multi-room/type/sender/date/OrderButton UI; MessageSearch URL handlers; messageSearchFilters helpers; EXCLUDE Global (FR-7.10-002), room-scoped default (FR-7.10-001), Open (FR-7.10-004), directory (FR-7.10-005), SC-072 (FR-7.10-006), cancel (FR-7.10-007); keep rust_target typed-sdk-request-required-server-search SC-071 only + product type/date preservation note; status remains implemented",
+      "requirements_rewritten": [
+        "FR-7.10-003"
+      ],
+      "not_claimed_complete": true,
+      "changes": [
+        "FR-7.10-003: current_status remains implemented. current_behavior_and_limits documents two-layer filters (server rooms/senders/search_term/order_by + client type/date); notes no longer generic via-3-files; null notes replaced.",
+        "FR-7.10-003: retargeted owners to useMessageSearch.ts + MessageSearch.tsx + SearchFilters.tsx + messageSearchFilters.ts. Behavior-relevant method: search L105 with filter.rooms/senders/search_term relevance. Concrete line_refs for URL params, handlers, SelectRoomButton, type chips, sender form, date form, filterMessageSearchGroups. EXCLUDE Global/room-scoped-default/Open/directory/local/cancel as sole evidence.",
+        "FR-7.10-003: planned AT/MA require SENDER filter.senders, ROOM multi-room filter.rooms, DATE client date range, CONTENT search_term+type chips; cutover P6.8 (+P11.3) typed SC-071 server filters + product type/date; SC alone, compile-only, raw HTTP, dual-backend, room-scoped-only, global-only, Open-only, directory-only, helper-unit-only FAIL. rust_target remains typed-sdk-request-required-server-search SC-071 only (no SC-072; no invented high-level Rust search filter APIs). Top-level AT-FR-7.10-003-001 and MA-FR-7.10-003 updated byte-aligned. Existing messageSearchFilters.test.ts retained as unit evidence only. Status distribution unchanged (implemented 97, partial 21). Accepted FR-7.8-001 through FR-7.8-009, FR-7.9-001..013 (011 remains partial), FR-7.10-001, and FR-7.10-002 preserved. JSON and Markdown synchronized."
       ]
     }
   ]
