@@ -25,39 +25,33 @@ without explicit user approval.
 **Host task id:** `9022c2f8-9b21-411a-acf9-a36c10515f72`
 (`matrix-rust-sdk-replacement-orchestrator`, daily check-in)
 
-**Session state (2026-07-24):**
+**Session state (2026-07-24, post-P0.2 merge):**
 
-- Integration: `feature/matrix-rust-sdk-full-replacement` @ `80c8fa3` (P0.1+P0.3 merged)
-- Working branch: `matrix-rust/p0.2-parity-traceability` (tracks origin; **P0.2 PR open**: https://github.com/nepenth/synara-desktop/pull/42 )
-- Ancestry: integration is ancestor of P0.2 branch
-- Checkpoint commits: `06d0f86` (traceability scaffold), `9c91e0f` (handoff)
-- **Accepted this session:**
-  - FR-7.8-004 through FR-7.8-009 (section 7.8 complete for P0.2 audit)
-  - FR-7.9-001 through FR-7.9-013 (**section 7.9 complete** for P0.2 audit)
-- **Progress loop:** host scheduled task every **4 minutes**
-  (ID `019f95928db7`) continues bounded FR audits; also daily durable
-  orchestrator `9022c2f8-9b21-411a-acf9-a36c10515f72`
-- **Last accepted:** FR-7.11-008 widget contingency **not-currently-exposed**
-  (`p0.2-correct-54`)
-- **P0.2 quality audit of §7.8–7.11: COMPLETE**
-- **Next:** open task PR → `feature/matrix-rust-sdk-full-replacement` (not main);
-  remaining shallow scaffold notes for §7.1–7.7 may need a later pass if
-  full-matrix depth is required beyond the handoff resume scope
+- **Integration:** `feature/matrix-rust-sdk-full-replacement` @ `339d367`
+  (P0.1 + P0.3 + **P0.2** merged)
+- **P0.2 PR:** https://github.com/nepenth/synara-desktop/pull/42 — **MERGED**
+  into integration (docs-only). **Never merge to `main` without explicit user
+  approval.**
+- **P0.2 quality audit of §7.8–7.11:** COMPLETE (source-line evidence; honest
+  partial/NCE gates retained; zero shallow rows remaining in 7.8–7.11)
+- **Optional later:** §7.1–7.7 scaffold rows may still have shallow notes if a
+  full-matrix depth pass is desired beyond the handoff resume scope
+- **Progress loop:** 4-minute scheduler `019f95928db7` (retarget to Phase 0
+  remaining); daily durable orchestrator `9022c2f8-9b21-411a-acf9-a36c10515f72`
+- **No production Matrix Rust SDK replacement code accepted yet**
 
-- No production Matrix Rust SDK replacement code accepted
-- **P0.2 PR open:** https://github.com/nepenth/synara-desktop/pull/42 → `feature/matrix-rust-sdk-full-replacement` (do not merge main)
+Phase 0 evidence accepted:
 
-Phase 0 evidence accepted before this handoff:
+- P0.1 SDK usage inventory — merged
+- P0.3 exact Matrix Rust SDK 0.18.0 capability dossier — merged
+- P0.2 feature-parity traceability (§7.8–7.11 quality audit) — **merged**
 
-- P0.1 SDK usage inventory is merged to the integration branch.
-- P0.3 exact Matrix Rust SDK 0.18.0 capability dossier is merged to the
-  integration branch.
-- P0.2 branch carries accepted 7.8–7.9, FR-7.10-001..007, and FR-7.11-001..008 corrections (**FR-7.10-005**, **FR-7.10-007**,
-  **FR-7.11-003..007** remain partial by gate; **FR-7.11-008** NCE). **No shallow
-  7.10–7.11 rows remain.**
+**Next program work (Phase 0 remaining):**
 
-P0.2 quality audit of sections 7.8–7.11 is complete (honest partial/NCE gates
-remain). Open PR to integration; do not merge main without user approval.
+1. **P0.4** Swift/Rust version provenance  
+2. **P0.5** Toolchain compatibility (Rust 1.93)  
+3. **P0.6** Performance baseline  
+4. **P0.7** Migration UX
 
 Accepted notification findings that must be preserved:
 
