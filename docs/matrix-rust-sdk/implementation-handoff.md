@@ -37,9 +37,9 @@ without explicit user approval.
 - **Progress loop:** host scheduled task every **4 minutes**
   (ID `019f95928db7`) continues bounded FR audits; also daily durable
   orchestrator `9022c2f8-9b21-411a-acf9-a36c10515f72`
-- **Last accepted:** FR-7.11-002 Element Call widget embed (`p0.2-correct-48`)
-- **Next writer task:** FR-7.11-003 (call join/leave/decline), then remaining
-  7.11 (~6 FRs)
+- **Last accepted:** FR-7.11-003 call join/leave **partial** (`p0.2-correct-49`)
+- **Next writer task:** FR-7.11-004 (call encryption-key flow), then remaining
+  7.11 (~5 FRs)
 
 - No production Matrix Rust SDK replacement code accepted
 - **No open P0.2 PR yet** (open after P0.2 complete)
@@ -53,7 +53,7 @@ Phase 0 evidence accepted before this handoff:
   corrections (**FR-7.10-005** and **FR-7.10-007** remain partial by gate);
   ~6 shallow rows remain in 7.11.
 
-P0.2 is not complete. Resume at FR-7.11-003, then audit remaining 7.11
+P0.2 is not complete. Resume at FR-7.11-004, then audit remaining 7.11
 before declaring P0.2 accepted.
 
 Accepted notification findings that must be preserved:

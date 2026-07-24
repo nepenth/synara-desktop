@@ -79937,185 +79937,71 @@
       "current_status": "partial",
       "current_production_files": [
         {
-          "path": "synara/src/app/features/call-status/LiveChip.tsx",
-          "bucket": "feature",
-          "categories": [
-            "room_methods",
-            "matrixrtc_calls"
-          ],
-          "symbols_or_candidates": [],
-          "line_refs": [],
-          "model_coupling": [
-            "CallMembership",
-            "Room"
-          ],
-          "behavior_relevant_method_candidates": [],
-          "behavior_relevant_listener_candidates": [],
-          "symbols_or_candidates_note": "No requirement-relevant method/listener candidates filtered from this file's P0.1 AST hits; file remains linked for structural/model ownership. See all_candidates_in_linked_files on the requirement."
-        },
-        {
-          "path": "synara/src/app/features/call-status/MemberGlance.tsx",
-          "bucket": "feature",
-          "categories": [
-            "room_methods",
-            "matrixrtc_calls"
-          ],
-          "symbols_or_candidates": [],
-          "line_refs": [],
-          "model_coupling": [
-            "CallMembership",
-            "Room"
-          ],
-          "behavior_relevant_method_candidates": [],
-          "behavior_relevant_listener_candidates": [],
-          "symbols_or_candidates_note": "No requirement-relevant method/listener candidates filtered from this file's P0.1 AST hits; file remains linked for structural/model ownership. See all_candidates_in_linked_files on the requirement."
-        },
-        {
-          "path": "synara/src/app/features/call-status/MemberSpeaking.tsx",
-          "bucket": "feature",
-          "categories": [
-            "room_methods"
-          ],
-          "symbols_or_candidates": [],
-          "line_refs": [],
-          "model_coupling": [
-            "Room"
-          ],
-          "behavior_relevant_method_candidates": [],
-          "behavior_relevant_listener_candidates": [],
-          "symbols_or_candidates_note": "No requirement-relevant method/listener candidates filtered from this file's P0.1 AST hits; file remains linked for structural/model ownership. See all_candidates_in_linked_files on the requirement."
-        },
-        {
-          "path": "synara/src/app/hooks/useCall.ts",
-          "bucket": "hook",
-          "categories": [
-            "room_methods",
-            "event_emitters_listeners",
-            "matrixrtc_calls"
-          ],
-          "symbols_or_candidates": [],
-          "line_refs": [
-            {
-              "symbol": "on:MatrixRTCSessionManagerEvents.SessionStarted",
-              "line": 25,
-              "kind": "listener_candidate"
-            },
-            {
-              "symbol": "on:MatrixRTCSessionManagerEvents.SessionEnded",
-              "line": 26,
-              "kind": "listener_candidate"
-            },
-            {
-              "symbol": "off:MatrixRTCSessionManagerEvents.SessionStarted",
-              "line": 28,
-              "kind": "listener_candidate"
-            },
-            {
-              "symbol": "off:MatrixRTCSessionManagerEvents.SessionEnded",
-              "line": 29,
-              "kind": "listener_candidate"
-            },
-            {
-              "symbol": "on:MatrixRTCSessionEvent.MembershipsChanged",
-              "line": 46,
-              "kind": "listener_candidate"
-            },
-            {
-              "symbol": "removeListener:MatrixRTCSessionEvent.MembershipsChanged",
-              "line": 48,
-              "kind": "listener_candidate"
-            },
-            {
-              "symbol": "on:MatrixRTCSessionEvent.MembershipsChanged",
-              "line": 57,
-              "kind": "listener_candidate"
-            },
-            {
-              "symbol": "removeListener:MatrixRTCSessionEvent.MembershipsChanged",
-              "line": 59,
-              "kind": "listener_candidate"
-            }
-          ],
-          "model_coupling": [
-            "CallMembership",
-            "Room"
-          ],
-          "behavior_relevant_method_candidates": [],
-          "behavior_relevant_listener_candidates": [
-            {
-              "event": "MatrixRTCSessionManagerEvents.SessionStarted",
-              "method": "on",
-              "line": 25,
-              "category": "matrixrtc_calls",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            },
-            {
-              "event": "MatrixRTCSessionManagerEvents.SessionEnded",
-              "method": "on",
-              "line": 26,
-              "category": "matrixrtc_calls",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            },
-            {
-              "event": "MatrixRTCSessionManagerEvents.SessionStarted",
-              "method": "off",
-              "line": 28,
-              "category": "matrixrtc_calls",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            },
-            {
-              "event": "MatrixRTCSessionManagerEvents.SessionEnded",
-              "method": "off",
-              "line": 29,
-              "category": "matrixrtc_calls",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            },
-            {
-              "event": "MatrixRTCSessionEvent.MembershipsChanged",
-              "method": "on",
-              "line": 46,
-              "category": "matrixrtc_calls",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            },
-            {
-              "event": "MatrixRTCSessionEvent.MembershipsChanged",
-              "method": "removeListener",
-              "line": 48,
-              "category": "matrixrtc_calls",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            },
-            {
-              "event": "MatrixRTCSessionEvent.MembershipsChanged",
-              "method": "on",
-              "line": 57,
-              "category": "matrixrtc_calls",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            },
-            {
-              "event": "MatrixRTCSessionEvent.MembershipsChanged",
-              "method": "removeListener",
-              "line": 59,
-              "category": "matrixrtc_calls",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            }
-          ]
-        },
-        {
           "path": "synara/src/app/hooks/useCallEmbed.ts",
           "bucket": "hook",
           "categories": [
             "client_methods",
-            "room_methods"
+            "room_methods",
+            "matrixrtc_calls"
           ],
-          "symbols_or_candidates": [],
-          "line_refs": [],
+          "symbols_or_candidates": [
+            "createCallEmbed",
+            "useCallStart",
+            "useCallJoined",
+            "useCallHangupEvent",
+            "ElementWidgetActions.JoinCall",
+            "ElementWidgetActions.HangupCall",
+            "getRoomSession",
+            "getIntent"
+          ],
+          "line_refs": [
+            {
+              "symbol": "createCallEmbed getRoomSession+getIntent+new CallEmbed",
+              "line": 38,
+              "kind": "product_helper",
+              "relevance_reason": "JOIN FACTORY L38–56: getRoomSession; ongoing=memberships.length>0 → getIntent (start vs join_existing); new CallEmbed into container."
+            },
+            {
+              "symbol": "useCallStart setCallEmbed",
+              "line": 58,
+              "kind": "product_helper",
+              "relevance_reason": "PRIMARY JOIN ENTRY L58–77: startCall(room, pref) → createCallEmbed → setCallEmbed(atom). Product join action (not MatrixRTCSession.join API)."
+            },
+            {
+              "symbol": "useCallJoined JoinCall",
+              "line": 80,
+              "kind": "product_helper",
+              "relevance_reason": "MEMBER STATUS / JOIN ACK L80–97: listens ElementWidgetActions.JoinCall → joined=true; clears when embed undefined."
+            },
+            {
+              "symbol": "useCallHangupEvent HangupCall",
+              "line": 100,
+              "kind": "product_helper",
+              "relevance_reason": "LEAVE/HANGUP LISTENER L100–102: ElementWidgetActions.HangupCall callback (provider clears atom)."
+            },
+            {
+              "symbol": "getRoomSession ongoing intent",
+              "line": 46,
+              "kind": "method_candidate",
+              "relevance_reason": "memberships.length chooses join_existing vs start_call intent for join URL — write path still widget-owned."
+            }
+          ],
           "model_coupling": [
             "MatrixClient",
             "Room"
           ],
-          "behavior_relevant_method_candidates": [],
+          "behavior_relevant_method_candidates": [
+            {
+              "name": "getRoomSession",
+              "line": 46,
+              "category": "matrixrtc_calls",
+              "kind": "property_call_candidate",
+              "confidence": "Source-inspected: mx.matrixRTC.getRoomSession(room) for ongoing intent on join.",
+              "relevance_reason": "Join intent selection (start vs join_existing), not native membership write."
+            }
+          ],
           "behavior_relevant_listener_candidates": [],
-          "symbols_or_candidates_note": "No requirement-relevant method/listener candidates filtered from this file's P0.1 AST hits; file remains linked for structural/model ownership. See all_candidates_in_linked_files on the requirement."
+          "symbols_or_candidates_note": "PRIMARY join/joined/hangup hooks for FR-7.11-003. EXCLUDE as sole: embed URL/capabilities (002), membership list DISPLAY ownership (001), encryption-key session (004), dispose-only cleanup (005)."
         },
         {
           "path": "synara/src/app/plugins/call/CallEmbed.ts",
@@ -80124,37 +80010,48 @@
             "client_methods",
             "room_methods",
             "event_emitters_listeners",
-            "sync_lifecycle",
-            "room_lists",
-            "timelines",
-            "searches",
-            "uia_auth",
-            "client_events"
+            "client_events",
+            "matrixrtc_calls"
           ],
           "symbols_or_candidates": [
-            "getDeviceId",
-            "search"
+            "hangup",
+            "onCallJoined",
+            "joined",
+            "ElementWidgetActions.JoinCall",
+            "ElementWidgetActions.HangupCall",
+            "getIntent",
+            "transport.send"
           ],
           "line_refs": [
             {
-              "symbol": "getDeviceId",
-              "line": 66,
-              "kind": "method_candidate"
+              "symbol": "CallEmbed.getIntent start/join",
+              "line": 51,
+              "kind": "product_helper",
+              "relevance_reason": "JOIN INTENT L51–57: ongoing → JoinExisting / JoinExistingDM else StartCall / StartCallDM."
             },
             {
-              "symbol": "search",
-              "line": 91,
-              "kind": "method_candidate"
+              "symbol": "CallEmbed.hangup transport.send HangupCall",
+              "line": 179,
+              "kind": "product_helper",
+              "relevance_reason": "PRIMARY LEAVE L179–180: call.transport.send(ElementWidgetActions.HangupCall, {}). Product hangup — not MatrixRTCSession.leaveMembership."
             },
             {
-              "symbol": "on:ClientEvent.ToDeviceEvent",
-              "line": 221,
-              "kind": "listener_candidate"
+              "symbol": "start listenAction JoinCall",
+              "line": 199,
+              "kind": "product_helper",
+              "relevance_reason": "JOIN LISTEN L199–204: listenAction(JoinCall, onCallJoined)."
             },
             {
-              "symbol": "off:ClientEvent.ToDeviceEvent",
-              "line": 240,
-              "kind": "listener_candidate"
+              "symbol": "onCallJoined joined=true",
+              "line": 247,
+              "kind": "product_helper",
+              "relevance_reason": "JOIN ACK L247–251: this.joined=true; applyStyles hides incall_leave; control.startObserving."
+            },
+            {
+              "symbol": "joined field",
+              "line": 39,
+              "kind": "product_helper",
+              "relevance_reason": "Local join status flag consumed by useCallJoined seed."
             }
           ],
           "model_coupling": [
@@ -80162,66 +80059,104 @@
             "MatrixEvent",
             "Room"
           ],
-          "behavior_relevant_method_candidates": [
+          "behavior_relevant_method_candidates": [],
+          "behavior_relevant_listener_candidates": [],
+          "symbols_or_candidates_note": "PRIMARY hangup + JoinCall ack. EXCLUDE getWidget/ClientWidgetApi alone as sole embed (002); ToDevice feed alone as keys (004); dispose alone as cleanup (005); widgetUrl.search false Client.search."
+        },
+        {
+          "path": "synara/src/app/plugins/call/types.ts",
+          "bucket": "plugin",
+          "categories": [
+            "matrixrtc_calls"
+          ],
+          "symbols_or_candidates": [
+            "ElementCallIntent",
+            "ElementWidgetActions.JoinCall",
+            "ElementWidgetActions.HangupCall"
+          ],
+          "line_refs": [
             {
-              "name": "getDeviceId",
-              "line": 66,
-              "category": "uia_auth",
-              "kind": "property_call_candidate",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+              "symbol": "ElementCallIntent enum",
+              "line": 1,
+              "kind": "product_helper",
+              "relevance_reason": "Join intent strings: start_call / join_existing / DM variants."
             },
             {
-              "name": "search",
-              "line": 91,
-              "category": "searches",
-              "kind": "property_reference_candidate",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+              "symbol": "ElementWidgetActions JoinCall HangupCall",
+              "line": 20,
+              "kind": "product_helper",
+              "relevance_reason": "io.element.join and im.vector.hangup action names for join ack and leave."
             }
           ],
-          "behavior_relevant_listener_candidates": [
+          "model_coupling": [],
+          "behavior_relevant_method_candidates": [],
+          "behavior_relevant_listener_candidates": [],
+          "symbols_or_candidates_note": "Join/hangup action constants for FR-7.11-003."
+        },
+        {
+          "path": "synara/src/app/plugins/call/utils.ts",
+          "bucket": "plugin",
+          "categories": [
+            "matrixrtc_calls"
+          ],
+          "symbols_or_candidates": [
+            "getCallCapabilities",
+            "org.matrix.msc3401.call.member",
+            "org.matrix.msc4310.rtc.decline",
+            "EventType.CallReject",
+            "EventType.CallHangup"
+          ],
+          "line_refs": [
             {
-              "event": "ClientEvent.ToDeviceEvent",
-              "method": "on",
-              "line": 221,
-              "category": "client_events",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+              "symbol": "msc3401.call.member send state keys",
+              "line": 37,
+              "kind": "product_helper",
+              "relevance_reason": "MEMBERSHIP WRITE CAPABILITY L37–71: widget may send org.matrix.msc3401.call.member state (user/device key variants) — write path is widget-driven via driver, not product MatrixRTCSession API."
             },
             {
-              "event": "ClientEvent.ToDeviceEvent",
-              "method": "off",
-              "line": 240,
-              "category": "client_events",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+              "symbol": "org.matrix.msc4310.rtc.decline room event",
+              "line": 94,
+              "kind": "product_helper",
+              "relevance_reason": "DECLINE CAPABILITY ONLY L88–98: send+receive org.matrix.msc4310.rtc.decline. No Synara call-decline UI found."
+            },
+            {
+              "symbol": "CallHangup CallReject to-device",
+              "line": 100,
+              "kind": "product_helper",
+              "relevance_reason": "To-device CallHangup/CallReject capabilities support widget leave/reject signaling (adjacency)."
             }
-          ]
+          ],
+          "model_coupling": [],
+          "behavior_relevant_method_candidates": [],
+          "behavior_relevant_listener_candidates": [],
+          "symbols_or_candidates_note": "Capability catalog for membership write (widget) and decline allow-list. EXCLUDE encryption_keys type alone as FR-7.11-004 session ownership."
         },
         {
           "path": "synara/src/app/plugins/call/CallWidgetDriver.ts",
           "bucket": "plugin",
           "categories": [
             "client_methods",
-            "crypto_verification_recovery",
-            "authenticated_media",
-            "room_lists",
-            "timelines",
-            "searches",
-            "uia_auth",
-            "custom_raw_event_sends"
+            "custom_raw_event_sends",
+            "matrixrtc_calls"
           ],
           "symbols_or_candidates": [
+            "sendStateEvent",
+            "sendEvent",
             "getDeviceId",
-            "searchUserDirectory"
+            "getCallCapabilities"
           ],
           "line_refs": [
             {
-              "symbol": "getDeviceId",
-              "line": 40,
-              "kind": "method_candidate"
+              "symbol": "sendStateEvent widget membership write path",
+              "line": 64,
+              "kind": "method_candidate",
+              "relevance_reason": "Widget→Matrix state send used for msc3401.call.member membership writes from Element Call — product-mediated but not high-level MatrixRTCSession join/leave API."
             },
             {
-              "symbol": "searchUserDirectory",
-              "line": 297,
-              "kind": "method_candidate"
+              "symbol": "getDeviceId capability device scope",
+              "line": 40,
+              "kind": "method_candidate",
+              "relevance_reason": "Device-scoped call.member state keys for membership write capabilities."
             }
           ],
           "model_coupling": [
@@ -80233,105 +80168,398 @@
             {
               "name": "getDeviceId",
               "line": 40,
-              "category": "uia_auth",
+              "category": "client_methods",
               "kind": "property_call_candidate",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+              "confidence": "Source-inspected: mx.getDeviceId for call.member capability keys.",
+              "relevance_reason": "Membership write capability device scope."
             },
             {
-              "name": "searchUserDirectory",
-              "line": 297,
-              "category": "searches",
+              "name": "getSafeUserId",
+              "line": 43,
+              "category": "client_methods",
               "kind": "property_call_candidate",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+              "confidence": "Source-inspected: userId into getCallCapabilities.",
+              "relevance_reason": "Membership write capability user scope."
+            },
+            {
+              "name": "sendStateEvent",
+              "line": 64,
+              "category": "custom_raw_event_sends",
+              "kind": "property_call_candidate",
+              "confidence": "Source-inspected driver sendEvent state branch.",
+              "relevance_reason": "Widget-driven m.call.member membership write path."
             }
           ],
-          "behavior_relevant_listener_candidates": []
-        }
-      ],
-      "ui_entry_points": [
-        "synara/src/app/features/call-status/LiveChip.tsx"
-      ],
-      "state_owners": [
+          "behavior_relevant_listener_candidates": [],
+          "symbols_or_candidates_note": "Driver send path for widget membership writes. EXCLUDE as sole: capability negotiation/embed (002); encryption to-device session lifecycle (004)."
+        },
+        {
+          "path": "synara/src/app/features/call/PrescreenControls.tsx",
+          "bucket": "feature",
+          "categories": [
+            "matrixrtc_calls"
+          ],
+          "symbols_or_candidates": [
+            "useCallStart",
+            "Join",
+            "joining"
+          ],
+          "line_refs": [
+            {
+              "symbol": "Join onClick startCall",
+              "line": 52,
+              "kind": "product_helper",
+              "relevance_reason": "PRIMARY JOIN UI: Button Join → startCall(room, prefs); joining spinner while embed active and !callJoined."
+            },
+            {
+              "symbol": "joining state",
+              "line": 22,
+              "kind": "product_helper",
+              "relevance_reason": "Join-in-progress status: callEmbed.roomId match && !callJoined."
+            }
+          ],
+          "model_coupling": [],
+          "behavior_relevant_method_candidates": [],
+          "behavior_relevant_listener_candidates": [],
+          "symbols_or_candidates_note": "Primary Join control for call join clause."
+        },
+        {
+          "path": "synara/src/app/features/call/CallControls.tsx",
+          "bucket": "feature",
+          "categories": [
+            "matrixrtc_calls"
+          ],
+          "symbols_or_candidates": [
+            "hangup",
+            "callEmbed.hangup",
+            "End"
+          ],
+          "line_refs": [
+            {
+              "symbol": "hangup useAsyncCallback callEmbed.hangup",
+              "line": 74,
+              "kind": "product_helper",
+              "relevance_reason": "PRIMARY LEAVE UI (in-call bar): hangup → callEmbed.hangup(); End button L186."
+            },
+            {
+              "symbol": "End button onClick hangup",
+              "line": 186,
+              "kind": "product_helper",
+              "relevance_reason": "User-visible leave control."
+            }
+          ],
+          "model_coupling": [],
+          "behavior_relevant_method_candidates": [],
+          "behavior_relevant_listener_candidates": [],
+          "symbols_or_candidates_note": "Joined-call End hangup control."
+        },
+        {
+          "path": "synara/src/app/features/call-status/CallControl.tsx",
+          "bucket": "feature",
+          "categories": [
+            "matrixrtc_calls"
+          ],
+          "symbols_or_candidates": [
+            "hangup",
+            "handleHangup",
+            "callJoined"
+          ],
+          "line_refs": [
+            {
+              "symbol": "hangup useAsyncCallback",
+              "line": 161,
+              "kind": "product_helper",
+              "relevance_reason": "Status-bar hangup: callEmbed.hangup()."
+            },
+            {
+              "symbol": "handleHangup clear or hangup",
+              "line": 167,
+              "kind": "product_helper",
+              "relevance_reason": "If !callJoined clear atom; else hangup(). Leave path for status bar End chip."
+            }
+          ],
+          "model_coupling": [],
+          "behavior_relevant_method_candidates": [],
+          "behavior_relevant_listener_candidates": [],
+          "symbols_or_candidates_note": "Call-status leave control gated by callJoined."
+        },
+        {
+          "path": "synara/src/app/features/call/CallView.tsx",
+          "bucket": "feature",
+          "categories": [
+            "matrixrtc_calls",
+            "room_methods"
+          ],
+          "symbols_or_candidates": [
+            "useCallJoined",
+            "canJoin",
+            "GroupCallMemberPrefix",
+            "CallPrescreen",
+            "CallJoined"
+          ],
+          "line_refs": [
+            {
+              "symbol": "canJoin GroupCallMemberPrefix permission",
+              "line": 71,
+              "kind": "product_helper",
+              "relevance_reason": "Join gate: permissions.event(GroupCallMemberPrefix) && (livekit || hasParticipant)."
+            },
+            {
+              "symbol": "currentJoined useCallJoined",
+              "line": 136,
+              "kind": "product_helper",
+              "relevance_reason": "MEMBER STATUS: switches CallPrescreen vs CallJoined+CallControls based on join state."
+            }
+          ],
+          "model_coupling": [
+            "Room"
+          ],
+          "behavior_relevant_method_candidates": [],
+          "behavior_relevant_listener_candidates": [],
+          "symbols_or_candidates_note": "Join permission + joined surface switch. EXCLUDE CallMemberRenderer alone as pure DISPLAY (001)."
+        },
+        {
+          "path": "synara/src/app/components/CallEmbedProvider.tsx",
+          "bucket": "component",
+          "categories": [
+            "matrixrtc_calls"
+          ],
+          "symbols_or_candidates": [
+            "useCallHangupEvent",
+            "useCallJoined",
+            "setCallEmbed"
+          ],
+          "line_refs": [
+            {
+              "symbol": "useCallHangupEvent clear atom",
+              "line": 21,
+              "kind": "product_helper",
+              "relevance_reason": "LEAVE COMPLETION: HangupCall → setCallEmbed(undefined) (dispose via atom)."
+            },
+            {
+              "symbol": "useCallJoined callVisible",
+              "line": 37,
+              "kind": "product_helper",
+              "relevance_reason": "Joined status gates embed visibility."
+            }
+          ],
+          "model_coupling": [],
+          "behavior_relevant_method_candidates": [],
+          "behavior_relevant_listener_candidates": [],
+          "symbols_or_candidates_note": "Hangup→clear embed ownership for leave completion."
+        },
+        {
+          "path": "synara/src/app/features/call-status/CallStatus.tsx",
+          "bucket": "feature",
+          "categories": [
+            "matrixrtc_calls"
+          ],
+          "symbols_or_candidates": [
+            "useCallJoined",
+            "useCallMembers",
+            "memberVisible",
+            "CallControl"
+          ],
+          "line_refs": [
+            {
+              "symbol": "callJoined useCallJoined",
+              "line": 27,
+              "kind": "product_helper",
+              "relevance_reason": "MEMBER STATUS: local join flag."
+            },
+            {
+              "symbol": "memberVisible callJoined && members",
+              "line": 32,
+              "kind": "product_helper",
+              "relevance_reason": "MEMBER STATUS after join: shows LiveChip/MemberGlance only when joined with memberships."
+            },
+            {
+              "symbol": "CallControl callJoined",
+              "line": 77,
+              "kind": "product_helper",
+              "relevance_reason": "Leave/media controls gated by join status."
+            }
+          ],
+          "model_coupling": [
+            "CallMembership",
+            "Room"
+          ],
+          "behavior_relevant_method_candidates": [],
+          "behavior_relevant_listener_candidates": [],
+          "symbols_or_candidates_note": "Joined member status shell. LiveChip/MemberGlance list DISPLAY ownership remains FR-7.11-001."
+        },
         {
           "path": "synara/src/app/hooks/useCall.ts",
-          "ownership_evidence": "Identified as coordination/state module for this behavior via path role (state/client/util service) and P0.1 categories/candidates; not merely a presentational component."
+          "bucket": "hook",
+          "categories": [
+            "room_methods",
+            "event_emitters_listeners",
+            "matrixrtc_calls"
+          ],
+          "symbols_or_candidates": [
+            "useCallMembers",
+            "MatrixRTCSessionEvent.MembershipsChanged",
+            "useCallSession"
+          ],
+          "line_refs": [
+            {
+              "symbol": "useCallMembers MembershipsChanged",
+              "line": 36,
+              "kind": "product_helper",
+              "relevance_reason": "MEMBER STATUS UPDATES after join/leave: session.memberships + MembershipsChanged. DISPLAY ownership primary FR-7.11-001; retained here for status-after-action clause."
+            },
+            {
+              "symbol": "on:MatrixRTCSessionEvent.MembershipsChanged",
+              "line": 46,
+              "kind": "listener_candidate",
+              "relevance_reason": "Live membership status update after peer/local join/leave."
+            },
+            {
+              "symbol": "removeListener:MatrixRTCSessionEvent.MembershipsChanged",
+              "line": 48,
+              "kind": "listener_candidate",
+              "relevance_reason": "Listener lifecycle."
+            }
+          ],
+          "model_coupling": [
+            "CallMembership",
+            "Room"
+          ],
+          "behavior_relevant_method_candidates": [],
+          "behavior_relevant_listener_candidates": [
+            {
+              "event": "MatrixRTCSessionEvent.MembershipsChanged",
+              "method": "on",
+              "line": 46,
+              "category": "matrixrtc_calls",
+              "confidence": "Source-inspected: session.on MembershipsChanged updates memberships for status.",
+              "relevance_reason": "Member status updates after join/leave actions."
+            },
+            {
+              "event": "MatrixRTCSessionEvent.MembershipsChanged",
+              "method": "removeListener",
+              "line": 48,
+              "category": "matrixrtc_calls",
+              "confidence": "Source-inspected cleanup.",
+              "relevance_reason": "Listener lifecycle."
+            },
+            {
+              "event": "MatrixRTCSessionEvent.MembershipsChanged",
+              "method": "on",
+              "line": 57,
+              "category": "matrixrtc_calls",
+              "confidence": "Source-inspected useCallMembersChange.",
+              "relevance_reason": "Membership change callback surface (e.g. sound sync adjacency)."
+            },
+            {
+              "event": "MatrixRTCSessionEvent.MembershipsChanged",
+              "method": "removeListener",
+              "line": 59,
+              "category": "matrixrtc_calls",
+              "confidence": "Source-inspected cleanup.",
+              "relevance_reason": "Listener lifecycle."
+            }
+          ],
+          "symbols_or_candidates_note": "Member status updates after join/leave. EXCLUDE as sole evidence of membership DISPLAY ownership (that is FR-7.11-001)."
         },
         {
           "path": "synara/src/app/state/callEmbed.ts",
-          "ownership_evidence": "Identified as coordination/state module for this behavior via path role (state/client/util service) and P0.1 categories/candidates; not merely a presentational component."
+          "bucket": "state",
+          "categories": [],
+          "symbols_or_candidates": [
+            "callEmbedAtom",
+            "dispose previous"
+          ],
+          "line_refs": [
+            {
+              "symbol": "callEmbedAtom setter dispose prev",
+              "line": 6,
+              "kind": "product_helper",
+              "relevance_reason": "Single active CallEmbed; hangup clear + replace dispose previous (leave completion adjacency to 005)."
+            }
+          ],
+          "model_coupling": [],
+          "behavior_relevant_method_candidates": [],
+          "behavior_relevant_listener_candidates": [],
+          "symbols_or_candidates_note": "Active embed ownership for join start and leave clear."
+        }
+      ],
+      "ui_entry_points": [
+        "synara/src/app/features/call/PrescreenControls.tsx",
+        "synara/src/app/features/call/CallControls.tsx",
+        "synara/src/app/features/call-status/CallControl.tsx",
+        "synara/src/app/features/call/CallView.tsx",
+        "synara/src/app/features/call-status/CallStatus.tsx",
+        "synara/src/app/components/CallEmbedProvider.tsx"
+      ],
+      "ui_entry_points_rationale": "FR-7.11-003 is call JOIN/LEAVE/DECLINE actions + member status after those actions. Primary: (1) PrescreenControls Join → useCallStart; (2) CallControls End + call-status CallControl hangup; (3) CallView join permission/joined switch; (4) CallStatus callJoined/memberVisible; (5) CallEmbedProvider hangup clear. EXCLUDE LiveChip alone as pure DISPLAY (001). EXCLUDE embed URL/capability/postMessage alone (002). EXCLUDE room-invite Invites.tsx Decline (room leave, not call decline). EXCLUDE encryption-key session (004), cleanup-only (005).",
+      "state_owners": [
+        {
+          "path": "synara/src/app/hooks/useCallEmbed.ts",
+          "ownership_evidence": "PRIMARY: useCallStart join entry; useCallJoined join status; useCallHangupEvent leave listener."
+        },
+        {
+          "path": "synara/src/app/plugins/call/CallEmbed.ts",
+          "ownership_evidence": "PRIMARY: hangup() leave postMessage; JoinCall → onCallJoined; joined flag."
+        },
+        {
+          "path": "synara/src/app/state/callEmbed.ts",
+          "ownership_evidence": "Active CallEmbed atom; hangup clear + dispose previous."
+        },
+        {
+          "path": "synara/src/app/hooks/useCall.ts",
+          "ownership_evidence": "MembershipsChanged member status updates after join/leave (DISPLAY ownership remains 001)."
+        },
+        {
+          "path": "synara/src/app/plugins/call/utils.ts",
+          "ownership_evidence": "msc3401.call.member send + msc4310.rtc.decline capability catalog for widget write/decline."
         }
       ],
       "current_js_sdk": {
+        "behavior_relevance_policy": "Exact-line source inspection for call JOIN/LEAVE/DECLINE product actions and member status after those actions. RETAIN: useCallStart/createCallEmbed; useCallJoined JoinCall; CallEmbed.hangup HangupCall; CallControls/call-status End; getCallCapabilities msc3401.call.member send + msc4310.rtc.decline; CallWidgetDriver.sendStateEvent membership write path; MembershipsChanged status updates; CallStatus callJoined/memberVisible. EXCLUDE as sole evidence: membership list DISPLAY ownership (001); embed URL/capabilities/postMessage alone (002); encryption_keys session (004); dispose/cleanup alone (005); CSP (006); experimental risk alone (007); room-invite Decline (Invites.tsx mx.leave); widgetUrl.search false Client.search; dual-backend/raw /_matrix HTTP.",
         "behavior_relevant_method_candidates": [
           {
-            "path": "synara/src/app/plugins/call/CallEmbed.ts",
-            "name": "getDeviceId",
-            "line": 66,
-            "category": "uia_auth",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-          },
-          {
-            "path": "synara/src/app/plugins/call/CallEmbed.ts",
-            "name": "search",
-            "line": 91,
-            "category": "searches",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+            "path": "synara/src/app/hooks/useCallEmbed.ts",
+            "name": "getRoomSession",
+            "line": 46,
+            "category": "matrixrtc_calls",
+            "confidence": "Source-inspected: ongoing intent for join URL.",
+            "relevance_reason": "Join intent (start vs join_existing)."
           },
           {
             "path": "synara/src/app/plugins/call/CallWidgetDriver.ts",
             "name": "getDeviceId",
             "line": 40,
-            "category": "uia_auth",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+            "category": "client_methods",
+            "confidence": "Source-inspected capability construction.",
+            "relevance_reason": "Device-scoped m.call.member write capability keys."
           },
           {
             "path": "synara/src/app/plugins/call/CallWidgetDriver.ts",
-            "name": "searchUserDirectory",
-            "line": 297,
-            "category": "searches",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+            "name": "getSafeUserId",
+            "line": 43,
+            "category": "client_methods",
+            "confidence": "Source-inspected getCallCapabilities userId.",
+            "relevance_reason": "User-scoped membership write capabilities."
+          },
+          {
+            "path": "synara/src/app/plugins/call/CallWidgetDriver.ts",
+            "name": "sendStateEvent",
+            "line": 64,
+            "category": "custom_raw_event_sends",
+            "confidence": "Source-inspected driver state send.",
+            "relevance_reason": "Widget-driven membership write path (not product MatrixRTCSession join/leave API)."
           }
         ],
         "behavior_relevant_listener_candidates": [
-          {
-            "path": "synara/src/app/hooks/useCall.ts",
-            "event": "MatrixRTCSessionManagerEvents.SessionStarted",
-            "method": "on",
-            "line": 25,
-            "category": "matrixrtc_calls",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-          },
-          {
-            "path": "synara/src/app/hooks/useCall.ts",
-            "event": "MatrixRTCSessionManagerEvents.SessionEnded",
-            "method": "on",
-            "line": 26,
-            "category": "matrixrtc_calls",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-          },
-          {
-            "path": "synara/src/app/hooks/useCall.ts",
-            "event": "MatrixRTCSessionManagerEvents.SessionStarted",
-            "method": "off",
-            "line": 28,
-            "category": "matrixrtc_calls",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-          },
-          {
-            "path": "synara/src/app/hooks/useCall.ts",
-            "event": "MatrixRTCSessionManagerEvents.SessionEnded",
-            "method": "off",
-            "line": 29,
-            "category": "matrixrtc_calls",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-          },
           {
             "path": "synara/src/app/hooks/useCall.ts",
             "event": "MatrixRTCSessionEvent.MembershipsChanged",
             "method": "on",
             "line": 46,
             "category": "matrixrtc_calls",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+            "confidence": "Source-inspected membership status updates.",
+            "relevance_reason": "Member status after join/leave."
           },
           {
             "path": "synara/src/app/hooks/useCall.ts",
@@ -80339,7 +80567,8 @@
             "method": "removeListener",
             "line": 48,
             "category": "matrixrtc_calls",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+            "confidence": "Source-inspected cleanup.",
+            "relevance_reason": "Listener lifecycle."
           },
           {
             "path": "synara/src/app/hooks/useCall.ts",
@@ -80347,7 +80576,8 @@
             "method": "on",
             "line": 57,
             "category": "matrixrtc_calls",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+            "confidence": "Source-inspected useCallMembersChange.",
+            "relevance_reason": "Membership change consumers."
           },
           {
             "path": "synara/src/app/hooks/useCall.ts",
@@ -80355,29 +80585,14 @@
             "method": "removeListener",
             "line": 59,
             "category": "matrixrtc_calls",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-          },
-          {
-            "path": "synara/src/app/plugins/call/CallEmbed.ts",
-            "event": "ClientEvent.ToDeviceEvent",
-            "method": "on",
-            "line": 221,
-            "category": "client_events",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-          },
-          {
-            "path": "synara/src/app/plugins/call/CallEmbed.ts",
-            "event": "ClientEvent.ToDeviceEvent",
-            "method": "off",
-            "line": 240,
-            "category": "client_events",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+            "confidence": "Source-inspected cleanup.",
+            "relevance_reason": "Listener lifecycle."
           }
         ],
         "all_candidates_in_linked_files": {
           "method_count": 20,
           "listener_count": 18,
-          "note": "Unfiltered P0.1 AST candidates across linked production import files. Do not treat these as proven APIs for this requirement; use behavior_relevant_* fields.",
+          "note": "Unfiltered P0.1 AST candidates across prior linked import files. Prefer behavior_relevant_* (source-inspected). Exclude widgetUrl.search false Client.search and searchUserDirectory as join/leave evidence.",
           "methods_sample": [
             {
               "path": "synara/src/app/plugins/call/CallEmbed.ts",
@@ -80636,40 +80851,44 @@
           }
         ],
         "method_candidates": [
+          "getRoomSession",
           "getDeviceId",
-          "search",
-          "getDeviceId",
-          "searchUserDirectory"
+          "getSafeUserId",
+          "sendStateEvent"
         ],
         "listener_events": [
-          "ClientEvent.ToDeviceEvent",
-          "MatrixRTCSessionEvent.MembershipsChanged",
-          "MatrixRTCSessionManagerEvents.SessionEnded",
-          "MatrixRTCSessionManagerEvents.SessionStarted"
+          "MatrixRTCSessionEvent.MembershipsChanged"
         ]
       },
       "current_behavior_and_limits": {
-        "summary": "Current desktop implements this via 8 production matrix-js-sdk-related file(s); status=partial.",
-        "notes": "Join/leave/decline and member status partially product-wired; membership write/key session is upstream-change-required per P0.3 gap.",
-        "limits": "P0.1 method candidates are AST name hits, not type-checked receiver proofs."
+        "summary": "PARTIAL: Synara implements call join via useCallStart/createCallEmbed + ElementWidgetActions.JoinCall ack (CallEmbed.joined / useCallJoined); leave/hangup via CallEmbed.hangup() transport.send(im.vector.hangup) + End UI + hangup clear atom; decline is capability allow-list only (org.matrix.msc4310.rtc.decline) without dedicated product call-decline UI; member status after join/leave via useCallJoined + MembershipsChanged (list DISPLAY ownership remains FR-7.11-001). No product-owned high-level MatrixRTCSession join/leave membership write APIs — writes are widget-driven through CallWidgetDriver.sendStateEvent. status=partial.",
+        "notes": "Evidence (conservative): (1) PRODUCT MEANING — FR-7.11-003 is call JOIN/LEAVE/DECLINE actions and member status after those actions; NOT membership list DISPLAY ownership (001), NOT embed URL/capabilities/postMessage alone (002), NOT encryption-key session (004), NOT cleanup alone (005), NOT CSP (006), NOT experimental risk alone (007). (2) JOIN — PrescreenControls L52 Join → useCallStart L64–72 → createCallEmbed L38–56 (getRoomSession ongoing, getIntent start/join_existing, new CallEmbed); CallEmbed.start L203 listenAction JoinCall → onCallJoined L247 joined=true; useCallJoined L80–88; CallView L136–147 switches joined surface; canJoin L71 GroupCallMemberPrefix permission. (3) LEAVE/HANGUP — CallControls L74–76/L186 End → callEmbed.hangup L179–180 transport.send HangupCall; call-status CallControl L161–172 handleHangup; useCallHangupEvent + CallEmbedProvider L21–25 setCallEmbed(undefined); callEmbedAtom dispose prev L12–14. (4) DECLINE — utils.getCallCapabilities L94 msc4310.rtc.decline send/receive + CallReject to-device L105; NO dedicated Synara call-decline UI (Invites.tsx Decline is room mx.leave — EXCLUDE). Partial clause. (5) MEMBER STATUS — useCallJoined; CallStatus L27–32 memberVisible=callJoined&&members; MembershipsChanged useCall L46–48 for status after peer/local join/leave; LiveChip/MemberGlance remain 001 DISPLAY surfaces consumed when joined. (6) WRITE PATH HONESTY — product does not call MatrixRTCSession join/leave membership write APIs; widget may send msc3401.call.member via driver sendStateEvent L64 under capabilities L37–71. P0.3 GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION: no stable high-level public MatrixRTC membership write API on Rust pin. (7) No existing automated AT. (8) Cutover P10.5 (+P10.4 status projection): preserve join/leave/hangup/status via product IPC under SC-082 experimental-widgets embed path + GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION residual + GAP-MATRIXRTC-MEMBERSHIP-PRESENCE residual; compile-only / SC-082 alone / embed alone / raw HTTP / dual-backend / claiming full native membership write closed FAIL.",
+        "limits": "P0.1 method candidates are AST name hits unless marked source-inspected. Product status is partial: join via embed + hangup leave without product-owned MatrixRTC membership write APIs; decline capability-only. Rust pin: GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION upstream-change-required (no viable high-level public write route); SC-082 experimental-widgets blocked E1/E2 for embed path; GAP-MATRIXRTC-MEMBERSHIP-PRESENCE boolean presence residual for status list projection. No E2E AT yet."
       },
       "p0_1_linkage": {
         "categories": [
-          "matrixrtc_calls"
+          "matrixrtc_calls",
+          "client_methods",
+          "custom_raw_event_sends",
+          "event_emitters_listeners"
         ],
         "file_ledger_paths": [
-          "synara/src/app/features/call-status/CallRoomName.tsx",
-          "synara/src/app/features/call-status/LiveChip.tsx",
-          "synara/src/app/features/call-status/MemberGlance.tsx",
-          "synara/src/app/features/call-status/MemberSpeaking.tsx",
-          "synara/src/app/hooks/useCall.ts",
           "synara/src/app/hooks/useCallEmbed.ts",
           "synara/src/app/plugins/call/CallEmbed.ts",
-          "synara/src/app/plugins/call/CallWidgetDriver.ts"
+          "synara/src/app/plugins/call/utils.ts",
+          "synara/src/app/plugins/call/CallWidgetDriver.ts",
+          "synara/src/app/hooks/useCall.ts",
+          "synara/src/app/features/call/PrescreenControls.tsx",
+          "synara/src/app/features/call/CallControls.tsx",
+          "synara/src/app/features/call-status/CallControl.tsx",
+          "synara/src/app/features/call/CallView.tsx",
+          "synara/src/app/components/CallEmbedProvider.tsx",
+          "synara/src/app/features/call-status/CallStatus.tsx",
+          "synara/src/app/state/callEmbed.ts"
         ]
       },
       "rust_target": {
-        "support_conclusion": "upstream-change-required-for-write-path",
+        "support_conclusion": "product-call-join-leave-via-embed-hangup-partial-matrixrtc-write-upstream",
         "capability_ids": [
           "SC-082"
         ],
@@ -80788,14 +81007,19 @@
               "P0.3c-room-has-active-room-call"
             ],
             "summary": "Room::has_active_room_call (via BaseRoom Deref) exposes active room-call membership presence. Does NOT provide membership writes, join/leave, or encryption-key exchange.",
-            "remaining_work": "Product UI for live membership display; write path separate."
+            "remaining_work": "Product UI for live membership display must project list equivalent to MatrixRTCSession.memberships; boolean presence alone is insufficient. Write path separate (this FR / GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION)."
           }
         ],
-        "notes": "Mappings use only accepted P0.3 capability/gap IDs. Compile probes establish API shape only; final dossier states remain blocked/typed/upstream until E3–E5 gates exist.",
+        "notes": "Honest rust_target for FR-7.11-003: product-call-join-leave-via-embed-hangup-partial-matrixrtc-write-upstream. Product join/leave is PARTIAL via Element Call embed actions (JoinCall/HangupCall) + hangup UI; membership writes are widget-driven (CallWidgetDriver.sendStateEvent + msc3401.call.member capabilities), not a product-owned high-level MatrixRTCSession join/leave API. Decline is capability allow-list only. Member status uses useCallJoined + MembershipsChanged (DISPLAY ownership 001). Primary gap GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION (upstream-change-required / no viable high-level public write route at pin). SC-082 experimental-widgets is embed-path adjacency (blocked E1/E2), not proof of membership-write parity. GAP-MATRIXRTC-MEMBERSHIP-PRESENCE residual for status list projection (boolean has_active_room_call alone insufficient). Cutover P10.5 (+P10.4). Compile-only / SC-082 alone / embed alone / raw HTTP / dual-backend / full write-closed claim FAIL.",
         "distinctions_preserved": [
-          "server typed search (SC-071) vs experimental local search (SC-072)",
-          "widget plumbing (SC-082/GAP widget) vs call parity (membership write/key session gaps)",
-          "compile shape (E1/E2) vs runtime/UI parity (E3–E5 missing => blocked)"
+          "join/leave product actions (this FR) vs membership DISPLAY ownership (FR-7.11-001)",
+          "join/leave vs embed URL/capabilities/postMessage alone (FR-7.11-002)",
+          "widget-driven m.call.member send vs high-level MatrixRTCSession join/leave write API (absent on product + Rust pin)",
+          "decline capability allow-list vs dedicated product call-decline UI (missing) vs room-invite Decline",
+          "hangup leave vs session cleanup ownership alone (FR-7.11-005)",
+          "membership write gap vs encryption-key session (FR-7.11-004 shares GAP write/key row but different clause)",
+          "compile shape (E1/E2) vs runtime/UI parity (E3–E5 missing)",
+          "typed/product IPC vs raw /_matrix HTTP or dual-backend"
         ]
       },
       "implementation_tasks": [
@@ -80803,13 +81027,13 @@
           "task_id": "P10.5",
           "title": "Join, leave, decline, encryption keys, and cleanup",
           "phase": "Phase 10 — Element Call and widget completion",
-          "scope_rationale": "Accepted plan task P10.5 covers this Section 7.11 behavior during Phase 10 — Element Call and widget completion."
+          "scope_rationale": "Accepted plan task P10.5 covers join/leave/decline and related call session actions for Section 7.11; this FR owns join/leave/decline + member status after actions (keys→004, cleanup→005)."
         },
         {
           "task_id": "P10.4",
           "title": "MatrixRTC membership/call-state projection",
           "phase": "Phase 10 — Element Call and widget completion",
-          "scope_rationale": "Accepted plan task P10.4 covers this Section 7.11 behavior during Phase 10 — Element Call and widget completion."
+          "scope_rationale": "Member status after join/leave requires membership/call-state projection under GAP-MATRIXRTC-MEMBERSHIP-PRESENCE (list beyond boolean)."
         }
       ],
       "automated_tests": {
@@ -80822,40 +81046,42 @@
             "task_id": "P10.5",
             "phase": "Phase 10 — Element Call and widget completion",
             "level": "integration-e2e",
-            "scenario": "7.11/FR-7.11-003: exercise 'call join/leave/decline and member status;' via owner `synara/src/app/hooks/useCall.ts` and UI `synara/src/app/features/call-status/LiveChip.tsx`, then confirm Rust/IPC cutover task `P10.5` preserves observable behavior without raw Matrix runtime HTTP.",
+            "scenario": "Integration against disposable Synapse (two clients, call room + Element Call assets): (A) JOIN — PrescreenControls Join → useCallStart/createCallEmbed; widget intent start_call vs join_existing; io.element.join sets CallEmbed.joined / useCallJoined true; msc3401.call.member send capabilities available to widget. (B) LEAVE/HANGUP — CallControls/Call-status CallControl End → CallEmbed.hangup() transport.send(im.vector.hangup); useCallHangupEvent clears callEmbedAtom. (C) DECLINE — assert org.matrix.msc4310.rtc.decline + CallReject capability allow-list only; no dedicated Synara call-decline UI (do not pass on room-invite Decline alone). (D) MEMBER STATUS — after join/leave, useCallJoined + MembershipsChanged drive callJoined/memberVisible and status bar; distinguish DISPLAY ownership FR-7.11-001. (E) DISTINCTIONS — not 001 display alone, 002 embed alone, 004 keys, 005 cleanup alone, 006 CSP, 007 risk. Cutover P10.5 (+P10.4 status projection): product join/leave via embed hangup is partial — no native MatrixRTC membership write API; GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION remains; SC-082 alone / embed alone / compile-only / raw HTTP / dual-backend / full write claim FAIL.",
+            "test_target": "useCallStart/useCallJoined/useCallHangupEvent; CallEmbed.hangup+onCallJoined; PrescreenControls Join; CallControls/Call-status End hangup; getCallCapabilities msc3401.call.member + msc4310.rtc.decline; MembershipsChanged status after join/leave; post-cutover P10.5 (+P10.4)",
             "preconditions": [
-              "Desktop app with Element Call / widget config for the build",
-              "Room with MatrixRTC membership fixtures; two clients for join/leave",
-              "CSP-enabled production-like shell",
-              "Linked owner path present in tree: synara/src/app/hooks/useCall.ts",
-              "Primary UI/lifecycle surface: synara/src/app/features/call-status/LiveChip.tsx"
+              "Disposable Synapse; two clients; call room with Element Call embedded assets.",
+              "Named owners: useCallEmbed (start/joined/hangup), CallEmbed hangup/JoinCall, CallControls + call-status CallControl, utils decline capability, CallWidgetDriver sendStateEvent path for widget membership writes.",
+              "Do not accept: membership-display-only (001), embed-URL-only (002), encryption-keys-only (004), cleanup-only (005), room-invite Decline as call decline, SC-082 alone, compile-only, or claiming native MatrixRTC join/leave write API closed."
             ],
             "trigger_actions": [
-              "Boot the appropriate harness for level=integration-e2e against disposable Synapse (or iOS notes if any).",
-              "Establish fixtures required by the clause list: call join/leave/decline; member status.",
-              "Open UI/lifecycle surface `synara/src/app/features/call-status/LiveChip.tsx` (or follow ui_entry_points_rationale if no dedicated UI).",
-              "Step 1: perform the product action that implements «call join/leave/decline» using current owner `synara/src/app/hooks/useCall.ts`.",
-              "Step 2: perform the product action that implements «member status» using current owner `synara/src/app/hooks/useCall.ts`.",
-              "Start/stop embedded call/widget session; change room; logout; close window — confirm cleanup."
+              "Boot integration harness against disposable Synapse with two clients and Element Call assets.",
+              "JOIN: Client A opens call room; click Join; assert CallEmbed created; after widget JoinCall, useCallJoined true and CallEmbed.joined true.",
+              "MEMBER STATUS: with A joined, assert CallStatus memberVisible/LiveChip or CallView joined surface; Client B joins; MembershipsChanged updates membership list/status.",
+              "LEAVE: Client A clicks End; assert hangup() sends im.vector.hangup; hangup event clears callEmbedAtom; membership status updates for remaining participants.",
+              "DECLINE: inspect getCallCapabilities for org.matrix.msc4310.rtc.decline send/receive; assert no dedicated Synara call-decline UI path (partial).",
+              "After cutover P10.5 (+P10.4), preserve join/leave/hangup/status observables via product IPC; SC-082 alone / write-gap closed claim without evidence / raw HTTP / dual-backend FAIL."
             ],
             "assertions": [
-              "Each clause is observable: «call join/leave/decline»; «member status».",
-              "State coordination remains through `synara/src/app/hooks/useCall.ts` (or its Rust/IPC successor after cutover), not ad-hoc dual writers.",
-              "Behavior-relevant current JS method candidates exercised or replaced: getDeviceId, search, getDeviceId, searchUserDirectory (AST candidates; not type-proven receivers).",
-              "Behavior-relevant listener candidates observed or replaced: on:MatrixRTCSessionManagerEvents.SessionStarted, on:MatrixRTCSessionManagerEvents.SessionEnded, off:MatrixRTCSessionManagerEvents.SessionStarted, off:MatrixRTCSessionManagerEvents.SessionEnded, on:MatrixRTCSessionEvent.MembershipsChanged, removeListener:MatrixRTCSessionEvent.MembershipsChanged.",
-              "Rust mapping remains conservative: caps=[SC-082] gaps=[GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION,GAP-MATRIXRTC-MEMBERSHIP-PRESENCE]; compile-only blocked states are not treated as runtime pass.",
-              "No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless dossier marks that exact behavior typed-sdk-request-required.",
-              "Widget plumbing success is not recorded as full call parity if membership-write/key-session gaps remain."
+              "JOIN: product path creates embed and observes io.element.join; widget may write m.call.member via driver — product does not own high-level MatrixRTCSession join API.",
+              "LEAVE: hangup postMessage + atom clear observable; widget-side leave write is not a product-native MatrixRTC leave API.",
+              "DECLINE: capability allow-list present; dedicated product call-decline UI absent (partial clause).",
+              "MEMBER STATUS: useCallJoined + MembershipsChanged status after join/leave; list DISPLAY ownership remains FR-7.11-001.",
+              "DISTINCTIONS: this FR ≠ 001/002/004/005/006/007 alone; ≠ room-invite Decline.",
+              "COORDINATION: through useCallEmbed/CallEmbed/callEmbedAtom (and useCall for status) or Rust/IPC successor, not dual-backend.",
+              "CUTOVER: P10.5 under GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION (+P10.4 presence/status); product remains partial without native membership write APIs; compile-only never product pass; no raw /_matrix HTTP.",
+              "No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless typed-sdk-request-required for that exact behavior."
             ],
             "required_environment": [
-              "Desktop app with Element Call / widget config for the build",
-              "Room with MatrixRTC membership fixtures; two clients for join/leave",
-              "CSP-enabled production-like shell"
+              "Disposable Synapse; two clients; call room; Element Call embedded assets",
+              "Product surfaces: useCallEmbed, CallEmbed, CallControls, call-status CallControl, CallEmbedProvider, PrescreenControls/CallView, utils capabilities"
             ],
             "does_not_currently_exist": true,
             "clause_breakdown": [
-              "call join/leave/decline",
-              "member status"
+              "call join (useCallStart + JoinCall + widget membership write path)",
+              "call leave/hangup (CallEmbed.hangup + End UI + hangup clear atom)",
+              "call decline (capability allow-list only; no dedicated product UI)",
+              "member status after join/leave (useCallJoined + MembershipsChanged; display ownership 001)",
+              "cutover P10.5 (+P10.4); partial without native MatrixRTC membership write APIs"
             ]
           }
         ]
@@ -80863,26 +81089,28 @@
       "manual_acceptance_id": "MA-FR-7.11-003",
       "migration_cutover_disposition": "replace-js-sdk-with-rust-via-ipc",
       "missing_evidence_gates": [
+        "upstream_or_product_session_api",
+        "live_call_parity",
+        "live_synapse_two_client",
+        "semantic_or_integration_test",
+        "ui_acceptance",
         "element_call_host_and_postmessage",
         "experimental_feature_risk_gate",
-        "live_call_parity",
-        "ui_acceptance"
+        "GATE-7.11-003-NATIVE-OR-PRODUCT-MEMBERSHIP-WRITE"
       ],
       "security_privacy_lifecycle_concerns": [
         "no-raw-matrix-http",
-        "experimental-widgets-risk"
+        "experimental-widgets-risk",
+        "no-dual-backend-call-join-leave-selector",
+        "widget-membership-write-not-native-matrixrtc-session-api"
       ],
       "traceability_status": "complete-conservative",
       "blockers": [
+        "GATE-7.11-003-NATIVE-OR-PRODUCT-MEMBERSHIP-WRITE",
         {
           "severity": "high",
-          "kind": "upstream-change-required",
-          "summary": "FR-7.11-003 depends on upstream-change-required gap(s): ['GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION', 'GAP-MATRIXRTC-MEMBERSHIP-PRESENCE']"
-        },
-        {
-          "severity": "high",
-          "kind": "experimental-widgets-and-call-parity",
-          "summary": "Call/widget path depends on experimental-widgets and MatrixRTC gaps; widget plumbing ≠ call parity."
+          "kind": "product-join-leave-via-embed-hangup-partial-matrixrtc-write-upstream",
+          "summary": "FR-7.11-003 product path is PARTIAL: join via useCallStart/createCallEmbed + ElementWidgetActions.JoinCall; leave via CallEmbed.hangup (im.vector.hangup) + End UI; decline is getCallCapabilities org.matrix.msc4310.rtc.decline allow-list only (no dedicated Synara call-decline UI); member status via useCallJoined + MembershipsChanged after join/leave (DISPLAY ownership remains FR-7.11-001). Synara does not call high-level matrix-js-sdk MatrixRTCSession join/leave membership write APIs — membership writes go through Element Call widget + CallWidgetDriver sendStateEvent for msc3401.call.member. Cutover P10.5 (+P10.4) under GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION (upstream-change-required / no viable high-level public write route at pin) + SC-082 experimental-widgets for embed path + GAP-MATRIXRTC-MEMBERSHIP-PRESENCE residual for status projection. Compile-only / SC-082 alone / embed alone / raw HTTP / dual-backend / claiming full native MatrixRTC join/leave write closed FAIL."
         }
       ]
     },
@@ -86865,11 +87093,9 @@
       "import_modules": [
         "matrix-js-sdk"
       ],
-      "classification": "requirement-linked",
-      "linked_requirement_ids": [
-        "FR-7.11-003"
-      ],
-      "rationale": null,
+      "classification": "shared-matrix-infrastructure",
+      "linked_requirement_ids": [],
+      "rationale": "Call room title only; not join/leave/decline actions (FR-7.11-003) and not membership DISPLAY ownership (FR-7.11-001). Demoted from exclusive FR-7.11-003 link after rejected-review correction.",
       "p0_1_role": "production",
       "desktop_runtime": true,
       "imports": [
@@ -87033,10 +87259,9 @@
       "classification": "requirement-linked",
       "linked_requirement_ids": [
         "FR-7.6-004",
-        "FR-7.6-005",
-        "FR-7.11-003"
+        "FR-7.6-005"
       ],
-      "rationale": null,
+      "rationale": "Speaking indicators; not join/leave/decline actions (FR-7.11-003 removed after rejected-review correction).",
       "p0_1_role": "production",
       "desktop_runtime": true,
       "imports": [
@@ -97487,6 +97712,7 @@
       "classification": "requirement-linked",
       "linked_requirement_ids": [
         "FR-7.11-002",
+        "FR-7.11-003",
         "FR-7.11-006"
       ],
       "rationale": null,
@@ -108918,40 +109144,42 @@
         "task_id": "P10.5",
         "phase": "Phase 10 — Element Call and widget completion",
         "level": "integration-e2e",
-        "scenario": "7.11/FR-7.11-003: exercise 'call join/leave/decline and member status;' via owner `synara/src/app/hooks/useCall.ts` and UI `synara/src/app/features/call-status/LiveChip.tsx`, then confirm Rust/IPC cutover task `P10.5` preserves observable behavior without raw Matrix runtime HTTP.",
+        "scenario": "Integration against disposable Synapse (two clients, call room + Element Call assets): (A) JOIN — PrescreenControls Join → useCallStart/createCallEmbed; widget intent start_call vs join_existing; io.element.join sets CallEmbed.joined / useCallJoined true; msc3401.call.member send capabilities available to widget. (B) LEAVE/HANGUP — CallControls/Call-status CallControl End → CallEmbed.hangup() transport.send(im.vector.hangup); useCallHangupEvent clears callEmbedAtom. (C) DECLINE — assert org.matrix.msc4310.rtc.decline + CallReject capability allow-list only; no dedicated Synara call-decline UI (do not pass on room-invite Decline alone). (D) MEMBER STATUS — after join/leave, useCallJoined + MembershipsChanged drive callJoined/memberVisible and status bar; distinguish DISPLAY ownership FR-7.11-001. (E) DISTINCTIONS — not 001 display alone, 002 embed alone, 004 keys, 005 cleanup alone, 006 CSP, 007 risk. Cutover P10.5 (+P10.4 status projection): product join/leave via embed hangup is partial — no native MatrixRTC membership write API; GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION remains; SC-082 alone / embed alone / compile-only / raw HTTP / dual-backend / full write claim FAIL.",
+        "test_target": "useCallStart/useCallJoined/useCallHangupEvent; CallEmbed.hangup+onCallJoined; PrescreenControls Join; CallControls/Call-status End hangup; getCallCapabilities msc3401.call.member + msc4310.rtc.decline; MembershipsChanged status after join/leave; post-cutover P10.5 (+P10.4)",
         "preconditions": [
-          "Desktop app with Element Call / widget config for the build",
-          "Room with MatrixRTC membership fixtures; two clients for join/leave",
-          "CSP-enabled production-like shell",
-          "Linked owner path present in tree: synara/src/app/hooks/useCall.ts",
-          "Primary UI/lifecycle surface: synara/src/app/features/call-status/LiveChip.tsx"
+          "Disposable Synapse; two clients; call room with Element Call embedded assets.",
+          "Named owners: useCallEmbed (start/joined/hangup), CallEmbed hangup/JoinCall, CallControls + call-status CallControl, utils decline capability, CallWidgetDriver sendStateEvent path for widget membership writes.",
+          "Do not accept: membership-display-only (001), embed-URL-only (002), encryption-keys-only (004), cleanup-only (005), room-invite Decline as call decline, SC-082 alone, compile-only, or claiming native MatrixRTC join/leave write API closed."
         ],
         "trigger_actions": [
-          "Boot the appropriate harness for level=integration-e2e against disposable Synapse (or iOS notes if any).",
-          "Establish fixtures required by the clause list: call join/leave/decline; member status.",
-          "Open UI/lifecycle surface `synara/src/app/features/call-status/LiveChip.tsx` (or follow ui_entry_points_rationale if no dedicated UI).",
-          "Step 1: perform the product action that implements «call join/leave/decline» using current owner `synara/src/app/hooks/useCall.ts`.",
-          "Step 2: perform the product action that implements «member status» using current owner `synara/src/app/hooks/useCall.ts`.",
-          "Start/stop embedded call/widget session; change room; logout; close window — confirm cleanup."
+          "Boot integration harness against disposable Synapse with two clients and Element Call assets.",
+          "JOIN: Client A opens call room; click Join; assert CallEmbed created; after widget JoinCall, useCallJoined true and CallEmbed.joined true.",
+          "MEMBER STATUS: with A joined, assert CallStatus memberVisible/LiveChip or CallView joined surface; Client B joins; MembershipsChanged updates membership list/status.",
+          "LEAVE: Client A clicks End; assert hangup() sends im.vector.hangup; hangup event clears callEmbedAtom; membership status updates for remaining participants.",
+          "DECLINE: inspect getCallCapabilities for org.matrix.msc4310.rtc.decline send/receive; assert no dedicated Synara call-decline UI path (partial).",
+          "After cutover P10.5 (+P10.4), preserve join/leave/hangup/status observables via product IPC; SC-082 alone / write-gap closed claim without evidence / raw HTTP / dual-backend FAIL."
         ],
         "assertions": [
-          "Each clause is observable: «call join/leave/decline»; «member status».",
-          "State coordination remains through `synara/src/app/hooks/useCall.ts` (or its Rust/IPC successor after cutover), not ad-hoc dual writers.",
-          "Behavior-relevant current JS method candidates exercised or replaced: getDeviceId, search, getDeviceId, searchUserDirectory (AST candidates; not type-proven receivers).",
-          "Behavior-relevant listener candidates observed or replaced: on:MatrixRTCSessionManagerEvents.SessionStarted, on:MatrixRTCSessionManagerEvents.SessionEnded, off:MatrixRTCSessionManagerEvents.SessionStarted, off:MatrixRTCSessionManagerEvents.SessionEnded, on:MatrixRTCSessionEvent.MembershipsChanged, removeListener:MatrixRTCSessionEvent.MembershipsChanged.",
-          "Rust mapping remains conservative: caps=[SC-082] gaps=[GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION,GAP-MATRIXRTC-MEMBERSHIP-PRESENCE]; compile-only blocked states are not treated as runtime pass.",
-          "No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless dossier marks that exact behavior typed-sdk-request-required.",
-          "Widget plumbing success is not recorded as full call parity if membership-write/key-session gaps remain."
+          "JOIN: product path creates embed and observes io.element.join; widget may write m.call.member via driver — product does not own high-level MatrixRTCSession join API.",
+          "LEAVE: hangup postMessage + atom clear observable; widget-side leave write is not a product-native MatrixRTC leave API.",
+          "DECLINE: capability allow-list present; dedicated product call-decline UI absent (partial clause).",
+          "MEMBER STATUS: useCallJoined + MembershipsChanged status after join/leave; list DISPLAY ownership remains FR-7.11-001.",
+          "DISTINCTIONS: this FR ≠ 001/002/004/005/006/007 alone; ≠ room-invite Decline.",
+          "COORDINATION: through useCallEmbed/CallEmbed/callEmbedAtom (and useCall for status) or Rust/IPC successor, not dual-backend.",
+          "CUTOVER: P10.5 under GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION (+P10.4 presence/status); product remains partial without native membership write APIs; compile-only never product pass; no raw /_matrix HTTP.",
+          "No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless typed-sdk-request-required for that exact behavior."
         ],
         "required_environment": [
-          "Desktop app with Element Call / widget config for the build",
-          "Room with MatrixRTC membership fixtures; two clients for join/leave",
-          "CSP-enabled production-like shell"
+          "Disposable Synapse; two clients; call room; Element Call embedded assets",
+          "Product surfaces: useCallEmbed, CallEmbed, CallControls, call-status CallControl, CallEmbedProvider, PrescreenControls/CallView, utils capabilities"
         ],
         "does_not_currently_exist": true,
         "clause_breakdown": [
-          "call join/leave/decline",
-          "member status"
+          "call join (useCallStart + JoinCall + widget membership write path)",
+          "call leave/hangup (CallEmbed.hangup + End UI + hangup clear atom)",
+          "call decline (capability allow-list only; no dedicated product UI)",
+          "member status after join/leave (useCallJoined + MembershipsChanged; display ownership 001)",
+          "cutover P10.5 (+P10.4); partial without native MatrixRTC membership write APIs"
         ]
       },
       {
@@ -112612,27 +112840,32 @@
       "preconditions": [
         "Desktop app with Element Call / widget config for the build",
         "Room with MatrixRTC membership fixtures; two clients for join/leave",
-        "CSP-enabled production-like shell",
-        "State owner available: synara/src/app/hooks/useCall.ts",
-        "UI/lifecycle: synara/src/app/features/call-status/LiveChip.tsx",
-        "Current status baseline: partial"
+        "Element Call embedded assets present",
+        "State owners: useCallEmbed.ts (join/joined/hangup), CallEmbed.ts (hangup/JoinCall), callEmbedAtom",
+        "UI: PrescreenControls Join, CallControls/call-status End hangup, CallStatus memberVisible",
+        "Current status baseline: partial (join via embed + hangup; no native MatrixRTC membership write APIs; decline capability-only)"
       ],
       "actions": [
-        "Launch Synara desktop on the target platform against disposable Synapse; use a clean or known fixture profile as required by «call join/leave/decline and member status;».",
-        "Identify state owner `synara/src/app/hooks/useCall.ts` and open `synara/src/app/features/call-status/LiveChip.tsx`.",
-        "Action 1 — «call join/leave/decline»: perform the minimal user/system steps that trigger this clause (use linked files under current_production_files if the entry point is indirect).",
-        "Action 2 — «member status»: perform the minimal user/system steps that trigger this clause (use linked files under current_production_files if the entry point is indirect).",
-        "Join call/widget, verify membership UI, leave/decline as applicable, switch rooms, and close window; confirm sessions clean up."
+        "Launch Synara desktop on the target platform against disposable Synapse with a second client available.",
+        "JOIN: open call room; click Join; wait for Element Call join; confirm callJoined/joined controls and member status appear.",
+        "MEMBER STATUS: with peer in call, confirm Live/member status updates; distinguish from pure pre-join DISPLAY (001).",
+        "LEAVE: click End; confirm hangup, embed cleared, and peer membership status updates.",
+        "DECLINE: confirm no dedicated call-decline control in Synara shell; decline is widget/capability residual (partial).",
+        "Post-cutover: same join/leave/status observables without raw /_matrix runtime HTTP or dual-backend; do not claim write-gap closed without evidence."
       ],
       "expected_results": [
-        "All clauses under «call join/leave/decline and member status;» produce the user-visible or system-observable success criteria without error toasts unrelated to intentional negative tests.",
-        "Clause 1 «call join/leave/decline» is satisfied on macOS, Linux with owner `synara/src/app/hooks/useCall.ts`.",
-        "Clause 2 «member status» is satisfied on macOS, Linux with owner `synara/src/app/hooks/useCall.ts`.",
-        "No unexpected raw /_matrix traffic from the app renderer for this flow on the post-cutover build."
+        "JOIN: embed starts and JoinCall marks local joined; call UI enters joined state.",
+        "LEAVE/HANGUP: End triggers hangup postMessage and clears active embed; leave membership write may be widget-side only.",
+        "DECLINE: partial — capability allow-list only; no product call-decline UI required for pass of this clause alone.",
+        "MEMBER STATUS: join/leave changes reflected via useCallJoined and membership status surfaces.",
+        "DISTINCTIONS: 001 display alone / 002 embed alone / 004 keys / 005 cleanup alone do not pass this FR.",
+        "Post-cutover: same observables; GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION residual unless closed; no raw /_matrix; widget plumbing ≠ full membership-write parity."
       ],
       "clause_breakdown": [
-        "call join/leave/decline",
-        "member status"
+        "call join",
+        "call leave/hangup",
+        "call decline (capability residual)",
+        "member status after join/leave"
       ]
     },
     {
@@ -112855,15 +113088,8 @@
     {
       "requirement_id": "FR-7.11-003",
       "severity": "high",
-      "kind": "upstream-change-required",
-      "summary": "FR-7.11-003 depends on upstream-change-required gap(s): ['GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION', 'GAP-MATRIXRTC-MEMBERSHIP-PRESENCE']"
-    },
-
-    {
-      "requirement_id": "FR-7.11-003",
-      "severity": "high",
-      "kind": "experimental-widgets-and-call-parity",
-      "summary": "Call/widget path depends on experimental-widgets and MatrixRTC gaps; widget plumbing ≠ call parity."
+      "kind": "product-join-leave-via-embed-hangup-partial-matrixrtc-write-upstream",
+      "summary": "FR-7.11-003 product path is PARTIAL: join via useCallStart/createCallEmbed + ElementWidgetActions.JoinCall; leave via CallEmbed.hangup (im.vector.hangup) + End UI; decline is getCallCapabilities org.matrix.msc4310.rtc.decline allow-list only (no dedicated Synara call-decline UI); member status via useCallJoined + MembershipsChanged after join/leave (DISPLAY ownership remains FR-7.11-001). Synara does not call high-level matrix-js-sdk MatrixRTCSession join/leave membership write APIs — membership writes go through Element Call widget + CallWidgetDriver sendStateEvent for msc3401.call.member. Cutover P10.5 (+P10.4) under GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION (upstream-change-required / no viable high-level public write route at pin) + SC-082 experimental-widgets for embed path + GAP-MATRIXRTC-MEMBERSHIP-PRESENCE residual for status projection. Compile-only / SC-082 alone / embed alone / raw HTTP / dual-backend / claiming full native MatrixRTC join/leave write closed FAIL."
     },
     {
       "requirement_id": "FR-7.11-004",
@@ -112939,15 +113165,8 @@
       {
         "requirement_id": "FR-7.11-003",
         "severity": "high",
-        "kind": "upstream-change-required",
-        "summary": "FR-7.11-003 depends on upstream-change-required gap(s): ['GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION', 'GAP-MATRIXRTC-MEMBERSHIP-PRESENCE']"
-      },
-
-      {
-        "requirement_id": "FR-7.11-003",
-        "severity": "high",
-        "kind": "experimental-widgets-and-call-parity",
-        "summary": "Call/widget path depends on experimental-widgets and MatrixRTC gaps; widget plumbing ≠ call parity."
+        "kind": "product-join-leave-via-embed-hangup-partial-matrixrtc-write-upstream",
+        "summary": "FR-7.11-003 product path is PARTIAL: join via useCallStart/createCallEmbed + ElementWidgetActions.JoinCall; leave via CallEmbed.hangup (im.vector.hangup) + End UI; decline is getCallCapabilities org.matrix.msc4310.rtc.decline allow-list only (no dedicated Synara call-decline UI); member status via useCallJoined + MembershipsChanged after join/leave (DISPLAY ownership remains FR-7.11-001). Synara does not call high-level matrix-js-sdk MatrixRTCSession join/leave membership write APIs — membership writes go through Element Call widget + CallWidgetDriver sendStateEvent for msc3401.call.member. Cutover P10.5 (+P10.4) under GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION (upstream-change-required / no viable high-level public write route at pin) + SC-082 experimental-widgets for embed path + GAP-MATRIXRTC-MEMBERSHIP-PRESENCE residual for status projection. Compile-only / SC-082 alone / embed alone / raw HTTP / dual-backend / claiming full native MatrixRTC join/leave write closed FAIL."
       },
       {
         "requirement_id": "FR-7.11-004",
@@ -114540,6 +114759,20 @@
         "FR-7.11-002: retargeted UI to Room.tsx→CallView/PrescreenControls/CallEmbedProvider (not RoomView.tsx chat shell); removed via-servers; excluded widgetUrl.search as Client.search false AST; source-inspected line_refs for getWidget/ClientWidgetApi/getCallCapabilities/validateCapabilities/feed*/transport.send.",
         "FR-7.11-002: rust_target product-element-call-embed-sc082-experimental-widgets-not-call-parity caps=[SC-082] gaps=[GAP-MATRIXRTC-WIDGET-CAPABILITY-PLUMBING, GAP-MATRIXRTC-FOCI residual]; FOCI not product-wired / alone never pass; GATE-7.11-002-EXPERIMENTAL-WIDGETS-HOST-POSTMESSAGE for host/postMessage + experimental risk.",
         "FR-7.11-002: planned AT/MA rewritten as STARTUP + WIDGET URL + CAPABILITIES + POSTMESSAGE + DISTINCTIONS from 001/003–007; cutover P10.2/P10.3 (+P10.1); SC-082 alone without host, FOCI alone, compile-only, raw HTTP, dual-backend, full call parity claim FAIL. Top-level AT/MA/blockers updated. Accepted FR-7.8-001..009, FR-7.9-001..013 (011 partial), FR-7.10-001..007, FR-7.11-001 preserved. JSON and Markdown synchronized."
+      ]
+    },
+    {
+      "id": "p0.2-correct-49-fr-7.11-003-call-join-leave-decline-member-status",
+      "scope": "Rejected-review limited correction: FR-7.11-003 only — replace shallow notes (file-count / LiveChip-as-UI / useCall.ts-as-sole-owner / generic AT-MA) with concrete join/leave/decline + member status evidence: useCallStart Join; CallEmbed.hangup HangupCall; useCallJoined; decline capability-only msc4310.rtc.decline; MembershipsChanged status after actions; honest partial (embed join+hangup without native MatrixRTC membership write APIs); rust_target product-call-join-leave-via-embed-hangup-partial-matrixrtc-write-upstream caps=[SC-082] gaps=[GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION, GAP-MATRIXRTC-MEMBERSHIP-PRESENCE]",
+      "requirements_rewritten": [
+        "FR-7.11-003"
+      ],
+      "not_claimed_complete": true,
+      "changes": [
+        "FR-7.11-003: current_status remains partial. current_behavior_and_limits documents join via embed+JoinCall, leave via hangup+End UI, decline capability-only, member status via useCallJoined+MembershipsChanged; notes no longer shallow file-count one-liner.",
+        "FR-7.11-003: retargeted owners/UI to useCallEmbed/CallEmbed/CallControls/PrescreenControls/CallStatus (not LiveChip-alone display or useCall.ts sole owner); excluded room-invite Decline; excluded embed-alone (002) and display-alone (001).",
+        "FR-7.11-003: rust_target product-call-join-leave-via-embed-hangup-partial-matrixrtc-write-upstream caps=[SC-082] gaps=[GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION, GAP-MATRIXRTC-MEMBERSHIP-PRESENCE]; GATE-7.11-003-NATIVE-OR-PRODUCT-MEMBERSHIP-WRITE; SC-082 alone / embed alone / full write-closed claim FAIL.",
+        "FR-7.11-003: planned AT/MA rewritten as JOIN + LEAVE/HANGUP + DECLINE (capability residual) + MEMBER STATUS + DISTINCTIONS; cutover P10.5 (+P10.4). Top-level AT/MA/blockers updated. Accepted FR-7.8-001..009, FR-7.9-001..013 (011 partial), FR-7.10-001..007, FR-7.11-001..002 preserved. JSON and Markdown synchronized."
       ]
     }
   ]
