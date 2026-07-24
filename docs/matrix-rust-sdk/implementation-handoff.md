@@ -35,9 +35,12 @@ without explicit user approval.
   - FR-7.8-004 @ `67d0e31`
   - FR-7.8-005 @ `48ee30f`
   - FR-7.8-006 @ `e170487`
-  - FR-7.8-007 (`p0.2-correct-25-...`) pending commit after this handoff update
-- **Next writer task:** FR-7.8-008 (privacy-safe encrypted notification
-  behavior), then FR-7.8-009 and remaining 7.9–7.11
+  - FR-7.8-007 @ `8db0bde`
+  - FR-7.8-008 (`p0.2-correct-26-...`) pending commit after this handoff update
+  - FR-7.8-009 accepted as-is after orchestrator source review (iOS
+    PushService/setPusher evidence already concrete; no rewrite required)
+- **Next writer task:** FR-7.9-001 (encrypted store initialization before
+  sync), then remaining 7.9–7.11 shallow rows
 - No production Matrix Rust SDK replacement code accepted
 
 Phase 0 evidence accepted before this handoff:
@@ -50,8 +53,8 @@ Phase 0 evidence accepted before this handoff:
   matrix and accepted corrections for FR-7.8-001 through FR-7.8-003.
   Handoff commit `9c91e0f` is also on the branch tip.
 
-P0.2 is not complete. Resume at FR-7.8-008, then audit all remaining 7.8–7.11
-requirements before declaring P0.2 accepted.
+P0.2 is not complete. Section 7.8 accepted through FR-7.8-009. Resume at
+FR-7.9-001, then audit remaining 7.9–7.11 before declaring P0.2 accepted.
 
 Accepted notification findings that must be preserved:
 
@@ -94,6 +97,15 @@ Accepted notification findings that must be preserved:
   with SystemNotification/tray DND enablement; Invite has SYNCING +
   showNotifications without a focused-room gate (do not invent). Cutover P9.3
   via Rust candidate stream + product focus state; SC-057 alone never passes.
+- FR-7.8-008: status `partial` under `GATE-7.8-008-ENCRYPTED-PRIVATE-MODE`.
+  Message/Invite/Later OS bodies avoid event plaintext/ciphertext; AgentApproval
+  may disclose `commandPreview`; `privacy:'private'` is never set by generation
+  and is dropped before `desktop_notify`. Cutover must not dump decrypted content
+  into OS notifications without a privacy gate.
+- FR-7.8-009: status `implemented` (iOS). `SynaraPushService` +
+  `MatrixRustSDKService.setPusher`/`deletePusher` (SDK-owned); resolveRoute
+  including sparse event-id fallback; Settings registration UI; existing XCTest
+  baseline. SC-057/SC-058 are not pusher CRUD. Desktop APNs pusher N/A.
 
 ## Branch and PR contract
 
