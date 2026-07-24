@@ -82651,402 +82651,211 @@
       "current_status": "partial",
       "current_production_files": [
         {
-          "path": "synara/src/app/hooks/useCallEmbed.ts",
-          "bucket": "hook",
-          "categories": [
-            "client_methods",
-            "room_methods"
-          ],
-          "symbols_or_candidates": [],
-          "line_refs": [],
-          "model_coupling": [
-            "MatrixClient",
-            "Room"
-          ],
-          "behavior_relevant_method_candidates": [],
-          "behavior_relevant_listener_candidates": [],
-          "symbols_or_candidates_note": "No requirement-relevant method/listener candidates filtered from this file's P0.1 AST hits; file remains linked for structural/model ownership. See all_candidates_in_linked_files on the requirement."
-        },
-        {
           "path": "synara/src/app/plugins/call/CallEmbed.ts",
           "bucket": "plugin",
           "categories": [
-            "client_methods",
-            "room_methods",
-            "event_emitters_listeners",
-            "sync_lifecycle",
-            "room_lists",
-            "timelines",
-            "searches",
-            "uia_auth",
-            "client_events"
+            "matrixrtc_calls",
+            "client_methods"
           ],
           "symbols_or_candidates": [
-            "getDeviceId",
-            "search"
+            "getWidget parentUrl+same-origin URL",
+            "getIframe sandbox+allow",
+            "ClientWidgetApi construct"
           ],
           "line_refs": [
             {
-              "symbol": "getDeviceId",
-              "line": 66,
-              "kind": "method_candidate"
+              "symbol": "clientOrigin window.location.origin",
+              "line": 67,
+              "kind": "product_helper",
+              "relevance_reason": "ORIGIN: clientOrigin = window.location.origin used as parentUrl for Element Call embed params."
             },
             {
-              "symbol": "search",
-              "line": 91,
-              "kind": "method_candidate"
+              "symbol": "parentUrl clientOrigin",
+              "line": 72,
+              "kind": "product_helper",
+              "relevance_reason": "ORIGIN RESTRICTION surface L72: URLSearchParams parentUrl=clientOrigin so widget knows parent origin."
             },
             {
-              "symbol": "on:ClientEvent.ToDeviceEvent",
-              "line": 221,
-              "kind": "listener_candidate"
+              "symbol": "widgetUrl same-origin element-call",
+              "line": 87,
+              "kind": "product_helper",
+              "relevance_reason": "SAME-ORIGIN WIDGET URL L87–90: new URL(BASE_URL/public/element-call/index.html, window.location.origin) — not a third-party Element Call host; enables frame-src 'self' and widget.origin == parent origin."
             },
             {
-              "symbol": "off:ClientEvent.ToDeviceEvent",
-              "line": 240,
-              "kind": "listener_candidate"
+              "symbol": "getIframe sandbox attribute",
+              "line": 112,
+              "kind": "product_helper",
+              "relevance_reason": "IFRAME SANDBOX L112–115: sandbox='allow-forms allow-scripts allow-same-origin allow-popups allow-modals allow-downloads'. LIMIT: allow-scripts+allow-same-origin weakens sandbox isolation (classic residual)."
+            },
+            {
+              "symbol": "iframe.allow media permissions",
+              "line": 116,
+              "kind": "product_helper",
+              "relevance_reason": "Permissions policy allow list for call media: microphone; camera; display-capture; autoplay; clipboard-write."
+            },
+            {
+              "symbol": "ClientWidgetApi(widget, iframe, driver)",
+              "line": 139,
+              "kind": "product_helper",
+              "relevance_reason": "HOST BRIDGE L133–139: getIframe(completeUrl) + ClientWidgetApi. Dependency sets transport.targetOrigin=widget.origin (same-origin); product does NOT set transport.strictOriginCheck=true (inbound origin residual)."
             }
           ],
           "model_coupling": [
             "MatrixClient",
-            "MatrixEvent",
             "Room"
           ],
           "behavior_relevant_method_candidates": [
             {
-              "name": "getDeviceId",
-              "line": 66,
-              "category": "uia_auth",
+              "name": "getWidget",
+              "line": 59,
+              "category": "matrixrtc_calls",
               "kind": "property_call_candidate",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+              "confidence": "Source-inspected: static getWidget builds same-origin Element Call URL + parentUrl origin param.",
+              "relevance_reason": "Origin/URL construction owner for embed CSP alignment (frame-src 'self')."
             },
             {
-              "name": "search",
-              "line": 91,
-              "category": "searches",
-              "kind": "property_reference_candidate",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+              "name": "getIframe",
+              "line": 108,
+              "category": "matrixrtc_calls",
+              "kind": "property_call_candidate",
+              "confidence": "Source-inspected: static getIframe applies sandbox + allow attributes.",
+              "relevance_reason": "Primary product iframe sandbox restriction for Element Call embed."
             }
           ],
-          "behavior_relevant_listener_candidates": [
-            {
-              "event": "ClientEvent.ToDeviceEvent",
-              "method": "on",
-              "line": 221,
-              "category": "client_events",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            },
-            {
-              "event": "ClientEvent.ToDeviceEvent",
-              "method": "off",
-              "line": 240,
-              "category": "client_events",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            }
-          ]
+          "behavior_relevant_listener_candidates": [],
+          "symbols_or_candidates_note": "PRIMARY product CSP/origin owner for Element Call iframe sandbox + parentUrl + same-origin widget URL + ClientWidgetApi host. EXCLUDE getDeviceId (device param only), widgetUrl.search false Client.search AST, ToDeviceEvent listeners (keys=004), hangup/dispose (005), capabilities-only utils (002)."
         },
         {
-          "path": "synara/src/app/plugins/call/CallWidgetDriver.ts",
-          "bucket": "plugin",
+          "path": "src-tauri/tauri.conf.json",
+          "bucket": "shell-security",
           "categories": [
-            "client_methods",
-            "crypto_verification_recovery",
-            "authenticated_media",
-            "room_lists",
-            "timelines",
-            "searches",
-            "uia_auth",
-            "custom_raw_event_sends"
+            "matrixrtc_calls"
           ],
           "symbols_or_candidates": [
-            "getDeviceId",
-            "searchUserDirectory"
+            "app.security.csp"
           ],
           "line_refs": [
             {
-              "symbol": "getDeviceId",
-              "line": 40,
-              "kind": "method_candidate"
-            },
-            {
-              "symbol": "searchUserDirectory",
-              "line": 297,
-              "kind": "method_candidate"
+              "symbol": "app.security.csp",
+              "line": 56,
+              "kind": "product_helper",
+              "relevance_reason": "PRIMARY SHELL CSP L56: Tauri injects Content-Security-Policy for the desktop webview. Includes default-src 'self'; frame-src 'self' blob:; form-action 'none'; base-uri 'none'; object-src 'none'. LIMIT: connect-src permits broad http: https: ws: wss:; img-src/media-src allow http: https:; script-src includes 'wasm-unsafe-eval'. Not Element Call-specific meta CSP."
             }
           ],
-          "model_coupling": [
-            "MatrixClient",
-            "MatrixError",
-            "MatrixEvent"
-          ],
-          "behavior_relevant_method_candidates": [
-            {
-              "name": "getDeviceId",
-              "line": 40,
-              "category": "uia_auth",
-              "kind": "property_call_candidate",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            },
-            {
-              "name": "searchUserDirectory",
-              "line": 297,
-              "category": "searches",
-              "kind": "property_call_candidate",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            }
-          ],
-          "behavior_relevant_listener_candidates": []
-        },
-        {
-          "path": "synara/src/app/plugins/call/utils.ts",
-          "bucket": "plugin",
-          "categories": [],
-          "symbols_or_candidates": [],
-          "line_refs": [],
           "model_coupling": [],
           "behavior_relevant_method_candidates": [],
           "behavior_relevant_listener_candidates": [],
-          "symbols_or_candidates_note": "No requirement-relevant method/listener candidates filtered from this file's P0.1 AST hits; file remains linked for structural/model ownership. See all_candidates_in_linked_files on the requirement."
+          "symbols_or_candidates_note": "PRIMARY desktop shell CSP owner. Product CSP is Tauri-config, not matrix-js-sdk."
+        },
+        {
+          "path": "synara/vite.config.js",
+          "bucket": "build",
+          "categories": [
+            "matrixrtc_calls"
+          ],
+          "symbols_or_candidates": [
+            "viteStaticCopy element-call-embedded"
+          ],
+          "line_refs": [
+            {
+              "symbol": "element-call-embedded → public/element-call",
+              "line": 17,
+              "kind": "product_helper",
+              "relevance_reason": "SAME-ORIGIN PACKAGING L17–18: copies @element-hq/element-call-embedded/dist/* to public/element-call so CallEmbed can load under window.location.origin (matches frame-src 'self')."
+            }
+          ],
+          "model_coupling": [],
+          "behavior_relevant_method_candidates": [],
+          "behavior_relevant_listener_candidates": [],
+          "symbols_or_candidates_note": "Build-time same-origin packaging enabling CSP frame-src 'self' for Element Call assets."
         }
       ],
       "ui_entry_points": [
         "synara/src/app/plugins/call/CallEmbed.ts"
       ],
+      "ui_entry_points_rationale": "FR-7.11-006 is CSP and origin restrictions for Element Call embed — not a dedicated settings screen. Product surfaces: CallEmbed.getIframe sandbox/allow; getWidget parentUrl + same-origin /public/element-call URL; Tauri app.security.csp (shell). EXCLUDE membership display (001); embed URL/capabilities alone without CSP (002); join/leave (003); encryption keys (004); cleanup (005); experimental risk acceptance alone (007).",
       "state_owners": [
         {
           "path": "synara/src/app/plugins/call/CallEmbed.ts",
-          "ownership_evidence": "Identified as coordination/state module for this behavior via path role (state/client/util service) and P0.1 categories/candidates; not merely a presentational component."
+          "ownership_evidence": "PRIMARY product owner: iframe sandbox attributes, parentUrl origin param, same-origin Element Call widget URL, ClientWidgetApi host construction."
+        },
+        {
+          "path": "src-tauri/tauri.conf.json",
+          "ownership_evidence": "PRIMARY shell CSP: app.security.csp string applied to desktop webview (frame-src 'self' blob: among other directives)."
+        },
+        {
+          "path": "synara/vite.config.js",
+          "ownership_evidence": "Build packaging of element-call-embedded into public/element-call for same-origin load under frame-src 'self'."
         }
       ],
       "current_js_sdk": {
+        "behavior_relevance_policy": "Exact-line source inspection for CSP and origin restrictions only. RETAIN: CallEmbed.getWidget parentUrl=window.location.origin + same-origin /public/element-call URL; CallEmbed.getIframe sandbox+allow; ClientWidgetApi construct (dependency targetOrigin=widget.origin); Tauri app.security.csp frame-src 'self'; vite static-copy same-origin packaging. EXCLUDE as sole evidence: membership DISPLAY (001); embed URL/capabilities alone without CSP (002); join/leave (003); encryption-key ToDeviceEvent (004); cleanup dispose (005); experimental risk alone (007); getDeviceId; widgetUrl.search false Client.search AST; CallWidgetDriver searchUserDirectory; utils getCallCapabilities; dual-backend/raw /_matrix HTTP. Dependency residual: matrix-widget-api PostmessageTransport.strictOriginCheck defaults false and is not product-enabled.",
         "behavior_relevant_method_candidates": [
           {
             "path": "synara/src/app/plugins/call/CallEmbed.ts",
-            "name": "getDeviceId",
-            "line": 66,
-            "category": "uia_auth",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+            "name": "getWidget",
+            "line": 59,
+            "category": "matrixrtc_calls",
+            "confidence": "Source-inspected: getWidget parentUrl + same-origin element-call URL.",
+            "relevance_reason": "Origin/URL construction for CSP-aligned embed."
           },
           {
             "path": "synara/src/app/plugins/call/CallEmbed.ts",
-            "name": "search",
-            "line": 91,
-            "category": "searches",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-          },
-          {
-            "path": "synara/src/app/plugins/call/CallWidgetDriver.ts",
-            "name": "getDeviceId",
-            "line": 40,
-            "category": "uia_auth",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-          },
-          {
-            "path": "synara/src/app/plugins/call/CallWidgetDriver.ts",
-            "name": "searchUserDirectory",
-            "line": 297,
-            "category": "searches",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+            "name": "getIframe",
+            "line": 108,
+            "category": "matrixrtc_calls",
+            "confidence": "Source-inspected: getIframe sets sandbox and allow attributes.",
+            "relevance_reason": "Primary iframe sandbox restriction."
           }
         ],
-        "behavior_relevant_listener_candidates": [
-          {
-            "path": "synara/src/app/plugins/call/CallEmbed.ts",
-            "event": "ClientEvent.ToDeviceEvent",
-            "method": "on",
-            "line": 221,
-            "category": "client_events",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-          },
-          {
-            "path": "synara/src/app/plugins/call/CallEmbed.ts",
-            "event": "ClientEvent.ToDeviceEvent",
-            "method": "off",
-            "line": 240,
-            "category": "client_events",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-          }
-        ],
+        "behavior_relevant_listener_candidates": [],
         "all_candidates_in_linked_files": {
-          "method_count": 20,
-          "listener_count": 10,
-          "note": "Unfiltered P0.1 AST candidates across linked production import files. Do not treat these as proven APIs for this requirement; use behavior_relevant_* fields.",
+          "method_count": 2,
+          "listener_count": 0,
+          "note": "CSP/origin owners only; demoted getDeviceId/search AST, ToDeviceEvent listeners, CallWidgetDriver search/capabilities as non-CSP evidence. Prefer behavior_relevant_* source-inspected fields.",
           "methods_sample": [
             {
               "path": "synara/src/app/plugins/call/CallEmbed.ts",
-              "name": "getSafeUserId",
-              "line": 65
+              "name": "getWidget",
+              "line": 59
             },
             {
               "path": "synara/src/app/plugins/call/CallEmbed.ts",
-              "name": "getDeviceId",
-              "line": 66
-            },
-            {
-              "path": "synara/src/app/plugins/call/CallEmbed.ts",
-              "name": "search",
-              "line": 91
-            },
-            {
-              "path": "synara/src/app/plugins/call/CallEmbed.ts",
-              "name": "getSafeUserId",
-              "line": 134
-            },
-            {
-              "path": "synara/src/app/plugins/call/CallEmbed.ts",
-              "name": "getRooms",
-              "line": 209
-            },
-            {
-              "path": "synara/src/app/plugins/call/CallEmbed.ts",
-              "name": "getRoom",
-              "line": 295
-            },
-            {
-              "path": "synara/src/app/plugins/call/CallEmbed.ts",
-              "name": "findEventById",
-              "line": 296
-            },
-            {
-              "path": "synara/src/app/plugins/call/CallEmbed.ts",
-              "name": "getRoom",
-              "line": 309
-            },
-            {
-              "path": "synara/src/app/plugins/call/CallEmbed.ts",
-              "name": "getRoom",
-              "line": 349
-            },
-            {
-              "path": "synara/src/app/plugins/call/CallWidgetDriver.ts",
-              "name": "getDeviceId",
-              "line": 40
-            },
-            {
-              "path": "synara/src/app/plugins/call/CallWidgetDriver.ts",
-              "name": "getSafeUserId",
-              "line": 43
-            },
-            {
-              "path": "synara/src/app/plugins/call/CallWidgetDriver.ts",
-              "name": "sendStateEvent",
-              "line": 64
-            },
-            {
-              "path": "synara/src/app/plugins/call/CallWidgetDriver.ts",
-              "name": "redactEvent",
-              "line": 72
-            },
-            {
-              "path": "synara/src/app/plugins/call/CallWidgetDriver.ts",
-              "name": "sendEvent",
-              "line": 74
-            },
-            {
-              "path": "synara/src/app/plugins/call/CallWidgetDriver.ts",
-              "name": "getCrypto",
-              "line": 157
+              "name": "getIframe",
+              "line": 108
             }
           ],
-          "listeners_sample": [
-            {
-              "path": "synara/src/app/plugins/call/CallEmbed.ts",
-              "event": "ClientEvent.Event",
-              "method": "on",
-              "line": 218
-            },
-            {
-              "path": "synara/src/app/plugins/call/CallEmbed.ts",
-              "event": "MatrixEventEvent.Decrypted",
-              "method": "on",
-              "line": 219
-            },
-            {
-              "path": "synara/src/app/plugins/call/CallEmbed.ts",
-              "event": "RoomStateEvent.Events",
-              "method": "on",
-              "line": 220
-            },
-            {
-              "path": "synara/src/app/plugins/call/CallEmbed.ts",
-              "event": "ClientEvent.ToDeviceEvent",
-              "method": "on",
-              "line": 221
-            },
-            {
-              "path": "synara/src/app/plugins/call/CallEmbed.ts",
-              "event": "ClientEvent.Event",
-              "method": "off",
-              "line": 237
-            },
-            {
-              "path": "synara/src/app/plugins/call/CallEmbed.ts",
-              "event": "MatrixEventEvent.Decrypted",
-              "method": "off",
-              "line": 238
-            },
-            {
-              "path": "synara/src/app/plugins/call/CallEmbed.ts",
-              "event": "RoomStateEvent.Events",
-              "method": "off",
-              "line": 239
-            },
-            {
-              "path": "synara/src/app/plugins/call/CallEmbed.ts",
-              "event": "ClientEvent.ToDeviceEvent",
-              "method": "off",
-              "line": 240
-            },
-            {
-              "path": "synara/src/app/plugins/call/CallEmbed.ts",
-              "event": "type",
-              "method": "on",
-              "line": 395
-            },
-            {
-              "path": "synara/src/app/plugins/call/CallEmbed.ts",
-              "event": "type",
-              "method": "off",
-              "line": 397
-            }
-          ]
+          "listeners_sample": []
         },
         "models": [
           "MatrixClient",
-          "MatrixError",
-          "MatrixEvent",
           "Room"
         ],
         "network_routes": [],
         "deep_imports": [],
         "method_candidates": [
-          "getDeviceId",
-          "search",
-          "getDeviceId",
-          "searchUserDirectory"
+          "getWidget",
+          "getIframe"
         ],
-        "listener_events": [
-          "ClientEvent.ToDeviceEvent"
-        ]
+        "listener_events": []
       },
       "current_behavior_and_limits": {
-        "summary": "Current desktop implements this via 4 production matrix-js-sdk-related file(s); status=partial.",
-        "notes": "CSP/origin restrictions are app shell + widget bridge concerns; hardening task P10.6.",
-        "limits": "P0.1 method candidates are AST name hits, not type-checked receiver proofs."
+        "summary": "PARTIAL: product implements Element Call embed CSP/origin baseline — (1) Tauri shell CSP with frame-src 'self' blob: (and other directives); (2) CallEmbed.getIframe sandbox + media allow list; (3) same-origin widget URL via vite-copied /public/element-call + parentUrl=window.location.origin; (4) ClientWidgetApi outbound postMessage targetOrigin=widget.origin (dependency). Residuals: connect-src/media-src/img-src permit broad http(s); no CSP meta on synara/index.html or element-call index.html; sandbox allow-scripts+allow-same-origin weakens isolation; product does not enable PostmessageTransport.strictOriginCheck; no automated CSP/origin security AT. status=partial under GATE-7.11-006-CSP-ORIGIN-HARDENING.",
+        "notes": "Evidence (conservative): (1) PRODUCT MEANING — FR-7.11-006 is CSP and origin restrictions for Element Call embed host; NOT membership DISPLAY (001), NOT embed URL/capabilities alone (002), NOT join/leave (003), NOT encryption keys (004), NOT session cleanup (005), NOT experimental-widgets risk acceptance alone (007). (2) SHELL CSP — src-tauri/tauri.conf.json L56 app.security.csp: default-src 'self'; frame-src 'self' blob:; form-action 'none'; base-uri 'none'; object-src 'none'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src 'self' blob: ipc: ws: wss: http: https: http://ipc.localhost; img-src/media-src allow http: https: among others. (3) IFRAME SANDBOX — CallEmbed.getIframe L108–124: sandbox allow-forms/scripts/same-origin/popups/modals/downloads; allow microphone;camera;display-capture;autoplay;clipboard-write. LIMIT: scripts+same-origin sandbox residual. (4) ORIGIN — getWidget L67–90: parentUrl=window.location.origin; widget URL same-origin /public/element-call/index.html; vite.config.js L17–18 copies @element-hq/element-call-embedded. (5) POSTMESSAGE — ClientWidgetApi L139 sets dependency targetOrigin=widget.origin; strictOriginCheck defaults false and product does not enable it. (6) NO META CSP — synara/index.html and element-call dist/index.html lack Content-Security-Policy meta (desktop relies on Tauri CSP injection). (7) EXCLUDE getDeviceId; false search AST; ToDeviceEvent; CallWidgetDriver searchUserDirectory; utils capabilities. (8) No existing automated AT. (9) Cutover P10.6 (+P13.5): preserve shell CSP + iframe sandbox + same-origin packaging; harden connect-src/origin checks/postMessage strictOrigin; SC-082 residual for host/postMessage only — SC-082 alone never closes product CSP.",
+        "limits": "Partial: shell CSP + iframe sandbox + same-origin embed present; broad connect-src/media/img; no CSP meta; sandbox scripts+same-origin residual; strictOriginCheck not product-enabled; no security AT. Rust: product shell/host ownership; SC-082 experimental-widgets blocked E1/E2 residual only — not a CSP API."
       },
       "p0_1_linkage": {
         "categories": [
           "matrixrtc_calls"
         ],
         "file_ledger_paths": [
-          "synara/src/app/hooks/useCallEmbed.ts",
           "synara/src/app/plugins/call/CallEmbed.ts",
-          "synara/src/app/plugins/call/CallWidgetDriver.ts",
-          "synara/src/app/plugins/call/utils.ts"
+          "src-tauri/tauri.conf.json",
+          "synara/vite.config.js"
         ]
       },
       "rust_target": {
-        "support_conclusion": "product-csp-with-widget-driver",
+        "support_conclusion": "product-csp-origin-restrictions-partial-shell-and-iframe",
         "capability_ids": [
           "SC-082"
         ],
@@ -83083,25 +82892,25 @@
                 "P0.3c-widget-to-device-event-filter-type"
               ],
               "final_state": "blocked",
-              "final_state_rationale": "experimental-widgets APIs compile-probed. Module existence does not imply Element Call product parity. Experimental not accepted for production here.",
+              "final_state_rationale": "experimental-widgets APIs compile-probed. SC-082 is host/postMessage residual for Element Call webview origin bridge only — NOT a product CSP/origin-hardening API and does not close Tauri CSP, iframe sandbox, or strictOriginCheck gates.",
               "missing_gates": [
                 "experimental_feature_risk_gate",
                 "element_call_host_and_postmessage",
                 "live_call_parity",
-                "ui_acceptance"
+                "ui_acceptance",
+                "product_csp_origin_hardening",
+                "product_postmessage_strict_origin_check"
               ],
               "section_5_evidence_present": [
                 "E1-experimental-api",
                 "E2-compile-probes"
               ],
-              "notes": "Do not infer call parity from widget module presence.",
+              "notes": "CSP/origin ownership is product shell (Tauri CSP) + CallEmbed iframe/host, not SC-082 alone.",
               "cross_ref_gap_ids": [
-                "GAP-MATRIXRTC-WIDGET-CAPABILITY-PLUMBING",
-                "GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION"
+                "GAP-MATRIXRTC-WIDGET-CAPABILITY-PLUMBING"
               ],
               "cross_ref_rationale": {
-                "GAP-MATRIXRTC-WIDGET-CAPABILITY-PLUMBING": "Same experimental-widgets profile/surface: Capabilities, filters, virtual Element Call URL helpers are the SC-082 experimental API shape.",
-                "GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION": "SC-082 module existence does not close membership write or encryption-key session lifecycle; this gap records the remaining no-viable high-level public route."
+                "GAP-MATRIXRTC-WIDGET-CAPABILITY-PLUMBING": "Widget host residual for postMessage origin bridge during embed; not a CSP policy API."
               }
             },
             "source_url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/lib.rs#L64-L65",
@@ -83118,7 +82927,7 @@
             "final_state": "blocked",
             "final": {
               "final_state": "blocked",
-              "final_state_rationale": "Experimental API shape compile-probed; not accepted for production in this dossier. Risk gate and remaining product work required.",
+              "final_state_rationale": "Experimental API shape compile-probed; residual for widget host/postMessage origin during embed only. Product CSP/origin hardening gaps (connect-src breadth, strictOriginCheck, CSP meta/policy review) are product shell work under P10.6/P13.5, not closed by SC-082.",
               "missing_gates": [
                 "experimental_feature_risk_gate",
                 "semantic_or_integration_test",
@@ -83141,15 +82950,21 @@
               "P0.3c-widget-to-device-event-filter-type",
               "P0.3c-widget-new-virtual-element-call"
             ],
-            "summary": "experimental-widgets Capabilities send/read filters and ToDeviceEventFilter enable capability negotiation that can include to-device types such as io.element.call.encryption_keys. This is capability plumbing only—not a high-level encryption-key session API and not membership write parity.",
-            "remaining_work": "Webview host, postMessage, actual membership events, key exchange runtime, UI."
+            "summary": "Widget host residual for postMessage origin bridge of Element Call embed. Not a high-level CSP policy API; does not implement Tauri CSP or iframe sandbox hardening.",
+            "remaining_work": "Product CSP/origin hardening (P10.6); security review (P13.5); postMessage strict origin; narrower connect-src; preserve same-origin packaging + sandbox baseline."
           }
         ],
-        "notes": "Mappings use only accepted P0.3 capability/gap IDs. Compile probes establish API shape only; final dossier states remain blocked/typed/upstream until E3–E5 gates exist.",
+        "notes": "Honest rust_target for FR-7.11-006: product-csp-origin-restrictions-partial-shell-and-iframe. Product PARTIAL: Tauri CSP + iframe sandbox + same-origin element-call packaging + parentUrl present; residuals on connect-src breadth, no CSP meta, sandbox scripts+same-origin, strictOriginCheck off, no security AT. SC-082 is host residual only — SC-082 alone never closes CSP. Cutover P10.6 (+P13.5). Compile-only / SC-082 alone / embed-URL-alone / capabilities-alone / raw HTTP / dual-backend FAIL.",
         "distinctions_preserved": [
-          "server typed search (SC-071) vs experimental local search (SC-072)",
-          "widget plumbing (SC-082/GAP widget) vs call parity (membership write/key session gaps)",
-          "compile shape (E1/E2) vs runtime/UI parity (E3–E5 missing => blocked)"
+          "CSP/origin (this FR) vs membership DISPLAY (FR-7.11-001)",
+          "CSP/origin vs embed URL/capabilities alone (FR-7.11-002)",
+          "CSP/origin vs join/leave (FR-7.11-003)",
+          "CSP/origin vs encryption-key flow (FR-7.11-004)",
+          "CSP/origin vs session cleanup (FR-7.11-005)",
+          "shell CSP + iframe sandbox present vs hardening residuals (connect-src, strictOriginCheck, CSP meta)",
+          "product shell/host vs SC-082 experimental-widgets alone",
+          "compile shape (E1/E2) vs runtime/UI/security parity (E3–E5 missing)",
+          "typed/product IPC vs raw /_matrix HTTP or dual-backend"
         ]
       },
       "implementation_tasks": [
@@ -83157,13 +82972,13 @@
           "task_id": "P10.6",
           "title": "CSP/origin/permission hardening",
           "phase": "Phase 10 — Element Call and widget completion",
-          "scope_rationale": "Accepted plan task P10.6 covers this Section 7.11 behavior during Phase 10 — Element Call and widget completion."
+          "scope_rationale": "Accepted plan task P10.6 is primary for Section 7.11 CSP and origin restrictions hardening while preserving embed sandbox + same-origin packaging."
         },
         {
           "task_id": "P13.5",
           "title": "Security/privacy review and dependency audit",
           "phase": "Phase 13 — Reliability, performance, security, and packaging qualification",
-          "scope_rationale": "Accepted plan task P13.5 covers this Section 7.11 behavior during Phase 13 — Reliability, performance, security, and packaging qualification."
+          "scope_rationale": "Accepted plan task P13.5 covers security/privacy review of shell CSP, iframe sandbox, and postMessage origin policy for Element Call."
         }
       ],
       "automated_tests": {
@@ -83176,40 +82991,43 @@
             "task_id": "P10.6",
             "phase": "Phase 10 — Element Call and widget completion",
             "level": "integration-security",
-            "scenario": "7.11/FR-7.11-006: exercise 'CSP and origin restrictions;' via owner `synara/src/app/plugins/call/CallEmbed.ts` and UI `synara/src/app/plugins/call/CallEmbed.ts`, then confirm Rust/IPC cutover task `P10.6` preserves observable behavior without raw Matrix runtime HTTP.",
+            "scenario": "Integration-security against production-like desktop shell + Element Call assets: (A) SHELL CSP — assert Tauri app.security.csp is applied (frame-src 'self' blob: among directives); document connect-src breadth residual. (B) IFRAME SANDBOX — start call embed; assert CallEmbed.getIframe sandbox tokens and allow media list present; document allow-scripts+allow-same-origin residual. (C) ORIGIN — assert widget URL is same-origin /public/element-call (vite packaging) and parentUrl equals window.location.origin; assert ClientWidgetApi outbound targetOrigin is widget.origin (dependency). (D) STRICT ORIGIN residual — product does not enable PostmessageTransport.strictOriginCheck; GATE until product enables or documents equivalent. (E) NO META CSP residual — synara/index.html and element-call index.html lack CSP meta (desktop relies on Tauri). (F) DISTINCTIONS — not 001/002-alone/003/004/005/007. Cutover P10.6 (+P13.5): preserve CSP+sandbox+same-origin; harden residuals; SC-082 alone / compile-only / raw HTTP / dual-backend FAIL.",
+            "test_target": "CallEmbed.getIframe sandbox+allow; CallEmbed.getWidget parentUrl+same-origin URL; src-tauri/tauri.conf.json app.security.csp; vite element-call packaging; post-cutover P10.6 (+P13.5) product host origin policy",
             "preconditions": [
-              "Desktop app with Element Call / widget config for the build",
-              "Room with MatrixRTC membership fixtures; two clients for join/leave",
-              "CSP-enabled production-like shell",
-              "Linked owner path present in tree: synara/src/app/plugins/call/CallEmbed.ts",
-              "Primary UI/lifecycle surface: synara/src/app/plugins/call/CallEmbed.ts"
+              "Desktop production-like shell with Element Call embedded assets (public/element-call).",
+              "Named owners: CallEmbed getIframe/getWidget, tauri.conf.json CSP, vite.config.js packaging.",
+              "Do not accept: membership-display-only (001), embed-URL/capabilities-only without CSP evidence (002), join/leave (003), keys (004), cleanup (005), getDeviceId/search AST, SC-082 alone, compile-only, or claiming connect-src/strictOrigin/meta CSP closed without evidence."
             ],
             "trigger_actions": [
-              "Boot the appropriate harness for level=integration-security against disposable Synapse (or iOS notes if any).",
-              "Establish fixtures required by the clause list: CSP; origin restrictions.",
-              "Open UI/lifecycle surface `synara/src/app/plugins/call/CallEmbed.ts` (or follow ui_entry_points_rationale if no dedicated UI).",
-              "Step 1: perform the product action that implements «CSP» using current owner `synara/src/app/plugins/call/CallEmbed.ts`.",
-              "Step 2: perform the product action that implements «origin restrictions» using current owner `synara/src/app/plugins/call/CallEmbed.ts`.",
-              "Start/stop embedded call/widget session; change room; logout; close window — confirm cleanup."
+              "Boot desktop production-like shell with Element Call assets present under public/element-call.",
+              "SHELL CSP: inspect/assert Tauri CSP string includes frame-src 'self' (or equivalent enforced policy); record connect-src residual.",
+              "IFRAME SANDBOX: start embedded call; assert iframe sandbox attribute contains expected tokens and allow media list; record scripts+same-origin residual.",
+              "ORIGIN: assert iframe src is same-origin element-call path and widget params include parentUrl=window.location.origin; assert outbound postMessage target is widget.origin.",
+              "STRICT ORIGIN residual: assert product does not set strictOriginCheck true today; post-cutover require strict inbound origin or documented equivalent.",
+              "After cutover P10.6 (+P13.5), preserve shell CSP + sandbox + same-origin packaging; close hardening gates via product shell/host; SC-082 alone / compile-only / raw HTTP / dual-backend FAIL."
             ],
             "assertions": [
-              "Each clause is observable: «CSP»; «origin restrictions».",
-              "State coordination remains through `synara/src/app/plugins/call/CallEmbed.ts` (or its Rust/IPC successor after cutover), not ad-hoc dual writers.",
-              "Behavior-relevant current JS method candidates exercised or replaced: getDeviceId, search, getDeviceId, searchUserDirectory (AST candidates; not type-proven receivers).",
-              "Behavior-relevant listener candidates observed or replaced: on:ClientEvent.ToDeviceEvent, off:ClientEvent.ToDeviceEvent.",
-              "Rust mapping remains conservative: caps=[SC-082] gaps=[GAP-MATRIXRTC-WIDGET-CAPABILITY-PLUMBING]; compile-only blocked states are not treated as runtime pass.",
-              "No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless dossier marks that exact behavior typed-sdk-request-required.",
-              "Widget plumbing success is not recorded as full call parity if membership-write/key-session gaps remain."
+              "SHELL CSP: Tauri CSP present with frame-src 'self' (or equivalent); residual connect-src breadth documented until hardened.",
+              "IFRAME SANDBOX: CallEmbed iframe has sandbox + allow; scripts+same-origin residual documented until policy change.",
+              "ORIGIN: widget URL same-origin under /public/element-call; parentUrl equals client origin; outbound targetOrigin=widget.origin.",
+              "STRICT ORIGIN: product does not currently enable strictOriginCheck; GATE until enabled/documented.",
+              "DISTINCTIONS: this FR ≠ 001/002-alone/003/004/005/007.",
+              "COORDINATION: through CallEmbed + Tauri shell CSP (or Rust/IPC successor host), not dual-backend.",
+              "CUTOVER: P10.6 under product CSP/origin (+P13.5); SC-082 residual only; compile-only never product pass; no raw /_matrix HTTP.",
+              "No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless typed-sdk-request-required for that exact behavior."
             ],
             "required_environment": [
-              "Desktop app with Element Call / widget config for the build",
-              "Room with MatrixRTC membership fixtures; two clients for join/leave",
-              "CSP-enabled production-like shell"
+              "Desktop production-like shell with Tauri CSP",
+              "Element Call embedded assets under public/element-call",
+              "Call room fixture sufficient to instantiate CallEmbed iframe"
             ],
             "does_not_currently_exist": true,
             "clause_breakdown": [
-              "CSP",
-              "origin restrictions"
+              "shell CSP present (partial breadth residual)",
+              "iframe sandbox + allow present (scripts+same-origin residual)",
+              "same-origin widget URL + parentUrl origin",
+              "postMessage targetOrigin=widget.origin; strictOriginCheck residual",
+              "no CSP meta residual; cutover P10.6 (+P13.5)"
             ]
           }
         ]
@@ -83217,21 +83035,31 @@
       "manual_acceptance_id": "MA-FR-7.11-006",
       "migration_cutover_disposition": "replace-js-sdk-with-rust-via-ipc",
       "missing_evidence_gates": [
+        "product_csp_origin_hardening",
+        "product_postmessage_strict_origin_check",
+        "product_csp_meta_or_documented_tauri_only_policy",
+        "narrow_connect_src_for_call_shell",
+        "semantic_or_integration_test",
+        "ui_acceptance",
         "element_call_host_and_postmessage",
         "experimental_feature_risk_gate",
-        "live_call_parity",
-        "ui_acceptance"
+        "GATE-7.11-006-CSP-ORIGIN-HARDENING"
       ],
       "security_privacy_lifecycle_concerns": [
         "no-raw-matrix-http",
-        "experimental-widgets-risk"
+        "experimental-widgets-risk",
+        "no-dual-backend-csp-selector",
+        "iframe-sandbox-scripts-same-origin-residual",
+        "broad-connect-src-residual",
+        "postmessage-strict-origin-check-not-enabled"
       ],
       "traceability_status": "complete-conservative",
       "blockers": [
+        "GATE-7.11-006-CSP-ORIGIN-HARDENING",
         {
           "severity": "high",
-          "kind": "experimental-widgets-and-call-parity",
-          "summary": "Call/widget path depends on experimental-widgets and MatrixRTC gaps; widget plumbing ≠ call parity."
+          "kind": "product-csp-origin-restrictions-partial-shell-and-iframe",
+          "summary": "FR-7.11-006 product path is PARTIAL: Tauri app.security.csp (frame-src 'self' blob:) + CallEmbed.getIframe sandbox/allow + same-origin /public/element-call packaging + parentUrl=window.location.origin + ClientWidgetApi targetOrigin=widget.origin present. Residuals: broad connect-src/media/img; no CSP meta on shell/embed HTML; sandbox allow-scripts+allow-same-origin; product does not enable PostmessageTransport.strictOriginCheck; no automated security AT. Cutover P10.6 (+P13.5) under product shell/host; SC-082 residual only. Compile-only / SC-082 alone / embed-URL-alone / capabilities-alone / raw HTTP / dual-backend FAIL."
         }
       ]
     },
@@ -109144,40 +108972,43 @@
         "task_id": "P10.6",
         "phase": "Phase 10 — Element Call and widget completion",
         "level": "integration-security",
-        "scenario": "7.11/FR-7.11-006: exercise 'CSP and origin restrictions;' via owner `synara/src/app/plugins/call/CallEmbed.ts` and UI `synara/src/app/plugins/call/CallEmbed.ts`, then confirm Rust/IPC cutover task `P10.6` preserves observable behavior without raw Matrix runtime HTTP.",
+        "scenario": "Integration-security against production-like desktop shell + Element Call assets: (A) SHELL CSP — assert Tauri app.security.csp is applied (frame-src 'self' blob: among directives); document connect-src breadth residual. (B) IFRAME SANDBOX — start call embed; assert CallEmbed.getIframe sandbox tokens and allow media list present; document allow-scripts+allow-same-origin residual. (C) ORIGIN — assert widget URL is same-origin /public/element-call (vite packaging) and parentUrl equals window.location.origin; assert ClientWidgetApi outbound targetOrigin is widget.origin (dependency). (D) STRICT ORIGIN residual — product does not enable PostmessageTransport.strictOriginCheck; GATE until product enables or documents equivalent. (E) NO META CSP residual — synara/index.html and element-call index.html lack CSP meta (desktop relies on Tauri). (F) DISTINCTIONS — not 001/002-alone/003/004/005/007. Cutover P10.6 (+P13.5): preserve CSP+sandbox+same-origin; harden residuals; SC-082 alone / compile-only / raw HTTP / dual-backend FAIL.",
+        "test_target": "CallEmbed.getIframe sandbox+allow; CallEmbed.getWidget parentUrl+same-origin URL; src-tauri/tauri.conf.json app.security.csp; vite element-call packaging; post-cutover P10.6 (+P13.5) product host origin policy",
         "preconditions": [
-          "Desktop app with Element Call / widget config for the build",
-          "Room with MatrixRTC membership fixtures; two clients for join/leave",
-          "CSP-enabled production-like shell",
-          "Linked owner path present in tree: synara/src/app/plugins/call/CallEmbed.ts",
-          "Primary UI/lifecycle surface: synara/src/app/plugins/call/CallEmbed.ts"
+          "Desktop production-like shell with Element Call embedded assets (public/element-call).",
+          "Named owners: CallEmbed getIframe/getWidget, tauri.conf.json CSP, vite.config.js packaging.",
+          "Do not accept: membership-display-only (001), embed-URL/capabilities-only without CSP evidence (002), join/leave (003), keys (004), cleanup (005), getDeviceId/search AST, SC-082 alone, compile-only, or claiming connect-src/strictOrigin/meta CSP closed without evidence."
         ],
         "trigger_actions": [
-          "Boot the appropriate harness for level=integration-security against disposable Synapse (or iOS notes if any).",
-          "Establish fixtures required by the clause list: CSP; origin restrictions.",
-          "Open UI/lifecycle surface `synara/src/app/plugins/call/CallEmbed.ts` (or follow ui_entry_points_rationale if no dedicated UI).",
-          "Step 1: perform the product action that implements «CSP» using current owner `synara/src/app/plugins/call/CallEmbed.ts`.",
-          "Step 2: perform the product action that implements «origin restrictions» using current owner `synara/src/app/plugins/call/CallEmbed.ts`.",
-          "Start/stop embedded call/widget session; change room; logout; close window — confirm cleanup."
+          "Boot desktop production-like shell with Element Call assets present under public/element-call.",
+          "SHELL CSP: inspect/assert Tauri CSP string includes frame-src 'self' (or equivalent enforced policy); record connect-src residual.",
+          "IFRAME SANDBOX: start embedded call; assert iframe sandbox attribute contains expected tokens and allow media list; record scripts+same-origin residual.",
+          "ORIGIN: assert iframe src is same-origin element-call path and widget params include parentUrl=window.location.origin; assert outbound postMessage target is widget.origin.",
+          "STRICT ORIGIN residual: assert product does not set strictOriginCheck true today; post-cutover require strict inbound origin or documented equivalent.",
+          "After cutover P10.6 (+P13.5), preserve shell CSP + sandbox + same-origin packaging; close hardening gates via product shell/host; SC-082 alone / compile-only / raw HTTP / dual-backend FAIL."
         ],
         "assertions": [
-          "Each clause is observable: «CSP»; «origin restrictions».",
-          "State coordination remains through `synara/src/app/plugins/call/CallEmbed.ts` (or its Rust/IPC successor after cutover), not ad-hoc dual writers.",
-          "Behavior-relevant current JS method candidates exercised or replaced: getDeviceId, search, getDeviceId, searchUserDirectory (AST candidates; not type-proven receivers).",
-          "Behavior-relevant listener candidates observed or replaced: on:ClientEvent.ToDeviceEvent, off:ClientEvent.ToDeviceEvent.",
-          "Rust mapping remains conservative: caps=[SC-082] gaps=[GAP-MATRIXRTC-WIDGET-CAPABILITY-PLUMBING]; compile-only blocked states are not treated as runtime pass.",
-          "No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless dossier marks that exact behavior typed-sdk-request-required.",
-          "Widget plumbing success is not recorded as full call parity if membership-write/key-session gaps remain."
+          "SHELL CSP: Tauri CSP present with frame-src 'self' (or equivalent); residual connect-src breadth documented until hardened.",
+          "IFRAME SANDBOX: CallEmbed iframe has sandbox + allow; scripts+same-origin residual documented until policy change.",
+          "ORIGIN: widget URL same-origin under /public/element-call; parentUrl equals client origin; outbound targetOrigin=widget.origin.",
+          "STRICT ORIGIN: product does not currently enable strictOriginCheck; GATE until enabled/documented.",
+          "DISTINCTIONS: this FR ≠ 001/002-alone/003/004/005/007.",
+          "COORDINATION: through CallEmbed + Tauri shell CSP (or Rust/IPC successor host), not dual-backend.",
+          "CUTOVER: P10.6 under product CSP/origin (+P13.5); SC-082 residual only; compile-only never product pass; no raw /_matrix HTTP.",
+          "No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless typed-sdk-request-required for that exact behavior."
         ],
         "required_environment": [
-          "Desktop app with Element Call / widget config for the build",
-          "Room with MatrixRTC membership fixtures; two clients for join/leave",
-          "CSP-enabled production-like shell"
+          "Desktop production-like shell with Tauri CSP",
+          "Element Call embedded assets under public/element-call",
+          "Call room fixture sufficient to instantiate CallEmbed iframe"
         ],
         "does_not_currently_exist": true,
         "clause_breakdown": [
-          "CSP",
-          "origin restrictions"
+          "shell CSP present (partial breadth residual)",
+          "iframe sandbox + allow present (scripts+same-origin residual)",
+          "same-origin widget URL + parentUrl origin",
+          "postMessage targetOrigin=widget.origin; strictOriginCheck residual",
+          "no CSP meta residual; cutover P10.6 (+P13.5)"
         ]
       },
       {
@@ -112823,29 +112654,33 @@
         "Linux"
       ],
       "preconditions": [
-        "Desktop app with Element Call / widget config for the build",
-        "Room with MatrixRTC membership fixtures; two clients for join/leave",
-        "CSP-enabled production-like shell",
-        "State owner available: synara/src/app/plugins/call/CallEmbed.ts",
-        "UI/lifecycle: synara/src/app/plugins/call/CallEmbed.ts",
-        "Current status baseline: partial"
+        "Desktop production-like shell with Tauri CSP enabled.",
+        "Element Call embedded assets under public/element-call (vite packaging).",
+        "Call room fixture sufficient to open CallEmbed iframe.",
+        "State owners available: CallEmbed.ts, src-tauri/tauri.conf.json, synara/vite.config.js.",
+        "Current status baseline: partial under GATE-7.11-006-CSP-ORIGIN-HARDENING."
       ],
       "actions": [
-        "Launch Synara desktop on the target platform against disposable Synapse; use a clean or known fixture profile as required by «CSP and origin restrictions;».",
-        "Identify state owner `synara/src/app/plugins/call/CallEmbed.ts` and open `synara/src/app/plugins/call/CallEmbed.ts`.",
-        "Action 1 — «CSP»: perform the minimal user/system steps that trigger this clause (use linked files under current_production_files if the entry point is indirect).",
-        "Action 2 — «origin restrictions»: perform the minimal user/system steps that trigger this clause (use linked files under current_production_files if the entry point is indirect).",
-        "Join call/widget, verify membership UI, leave/decline as applicable, switch rooms, and close window; confirm sessions clean up."
+        "Launch Synara desktop production-like build on the target platform with Element Call assets present.",
+        "SHELL CSP: confirm Tauri app.security.csp is in effect (frame-src 'self' among directives); note connect-src residual breadth.",
+        "IFRAME SANDBOX: join/start embedded call; inspect Call Embed iframe sandbox and allow attributes.",
+        "ORIGIN: confirm iframe src is same-origin /public/element-call path and widget parentUrl matches client origin.",
+        "Document residuals: no CSP meta on shell/embed HTML; sandbox scripts+same-origin; strictOriginCheck not product-enabled.",
+        "Do not accept membership-display-only, embed-URL-only, join/leave-only, keys-only, cleanup-only, or SC-082 alone as CSP pass."
       ],
       "expected_results": [
-        "All clauses under «CSP and origin restrictions;» produce the user-visible or system-observable success criteria without error toasts unrelated to intentional negative tests.",
-        "Clause 1 «CSP» is satisfied on macOS, Linux with owner `synara/src/app/plugins/call/CallEmbed.ts`.",
-        "Clause 2 «origin restrictions» is satisfied on macOS, Linux with owner `synara/src/app/plugins/call/CallEmbed.ts`.",
-        "No unexpected raw /_matrix traffic from the app renderer for this flow on the post-cutover build."
+        "SHELL CSP present with frame-src 'self' (or equivalent); residual connect-src breadth documented (not claimed fully hardened).",
+        "CallEmbed iframe has sandbox + media allow list; scripts+same-origin residual documented.",
+        "Widget loads same-origin under /public/element-call with parentUrl=client origin.",
+        "Outbound widget postMessage uses widget.origin target; product does not claim strict inbound origin check closed today.",
+        "DISTINCTIONS: not 001/002-alone/003/004/005/007; cutover P10.6 (+P13.5); no unexpected raw /_matrix traffic from renderer for this flow on post-cutover build."
       ],
       "clause_breakdown": [
-        "CSP",
-        "origin restrictions"
+        "shell CSP present (partial breadth residual)",
+        "iframe sandbox + allow present (scripts+same-origin residual)",
+        "same-origin widget URL + parentUrl origin",
+        "postMessage targetOrigin=widget.origin; strictOriginCheck residual",
+        "no CSP meta residual; cutover P10.6 (+P13.5)"
       ]
     },
     {
@@ -112986,8 +112821,8 @@
     {
       "requirement_id": "FR-7.11-006",
       "severity": "high",
-      "kind": "experimental-widgets-and-call-parity",
-      "summary": "Call/widget path depends on experimental-widgets and MatrixRTC gaps; widget plumbing ≠ call parity."
+      "kind": "product-csp-origin-restrictions-partial-shell-and-iframe",
+      "summary": "FR-7.11-006 product path is PARTIAL: Tauri CSP (frame-src 'self') + CallEmbed iframe sandbox/allow + same-origin element-call packaging + parentUrl origin present. Residuals: broad connect-src; no CSP meta; sandbox scripts+same-origin; strictOriginCheck not product-enabled; no security AT. Cutover P10.6 (+P13.5); SC-082 residual only. Compile-only / SC-082 alone / embed-URL-alone / raw HTTP FAIL."
     },
     {
       "requirement_id": "FR-7.11-007",
@@ -113057,8 +112892,8 @@
       {
         "requirement_id": "FR-7.11-006",
         "severity": "high",
-        "kind": "experimental-widgets-and-call-parity",
-        "summary": "Call/widget path depends on experimental-widgets and MatrixRTC gaps; widget plumbing ≠ call parity."
+        "kind": "product-csp-origin-restrictions-partial-shell-and-iframe",
+        "summary": "FR-7.11-006 product path is PARTIAL: Tauri CSP (frame-src 'self') + CallEmbed iframe sandbox/allow + same-origin element-call packaging + parentUrl origin present. Residuals: broad connect-src; no CSP meta; sandbox scripts+same-origin; strictOriginCheck not product-enabled; no security AT. Cutover P10.6 (+P13.5); SC-082 residual only. Compile-only / SC-082 alone / embed-URL-alone / raw HTTP FAIL."
       },
       {
         "requirement_id": "FR-7.11-007",
@@ -114669,6 +114504,20 @@
         "FR-7.11-005: retargeted production_files to callEmbed.ts, CallEmbed.ts, CallEmbedProvider.tsx, useCallEmbed.ts, CallControl.tsx, CallControls.tsx, initMatrix.ts (demoted useCall membership hooks, ClientNonUIFeatures, getDeviceId/search AST); source-inspected line_refs for dispose/hangup/clear/room-visible/performLogout.",
         "FR-7.11-005: rust_target product-call-session-cleanup-partial-lifecycle-hooks caps=[SC-082 host residual] gaps=[GAP-MATRIXRTC-WIDGET-CAPABILITY-PLUMBING]; SC-082 alone never closes cleanup; cutover P10.5 (+P2.6/P3.8).",
         "FR-7.11-005: planned AT/MA rewritten as HANGUP DISPOSE + ROOM CHANGE residual + LOGOUT residual + WINDOW CLOSE residual + DISTINCTIONS 001–004/006–007 + GATE fail-closed. Top-level AT/MA/blockers/summary (implemented 95 / partial 23) updated. Accepted FR-7.8-001..009, FR-7.9-001..013 (011 partial), FR-7.10-001..007, FR-7.11-001..004 (003/004 partial under their gates) preserved. JSON and Markdown synchronized."
+      ]
+    },
+    {
+      "id": "p0.2-correct-52-fr-7.11-006-csp-and-origin-restrictions",
+      "scope": "Rejected-review limited correction: FR-7.11-006 only — replace shallow notes (implemented via 4 files / null notes / getDeviceId-search false AST / ToDeviceEvent listeners / generic AT-MA) with concrete CSP and origin evidence: Tauri app.security.csp frame-src 'self'; CallEmbed.getIframe sandbox+allow; getWidget parentUrl+same-origin /public/element-call; vite element-call packaging; ClientWidgetApi targetOrigin residual; honest partial under GATE-7.11-006-CSP-ORIGIN-HARDENING; rust_target product-csp-origin-restrictions-partial-shell-and-iframe caps=[SC-082] gaps=[GAP-MATRIXRTC-WIDGET-CAPABILITY-PLUMBING]",
+      "requirements_rewritten": [
+        "FR-7.11-006"
+      ],
+      "not_claimed_complete": true,
+      "changes": [
+        "FR-7.11-006: current_status remains partial under GATE-7.11-006-CSP-ORIGIN-HARDENING. current_behavior_and_limits documents shell CSP + iframe sandbox + same-origin packaging + parentUrl present; residuals on connect-src breadth, no CSP meta, sandbox scripts+same-origin, strictOriginCheck off, no security AT; notes no longer shallow file-count/null.",
+        "FR-7.11-006: retargeted production_files to CallEmbed.ts, src-tauri/tauri.conf.json, synara/vite.config.js (demoted useCallEmbed, CallWidgetDriver, utils, getDeviceId/search AST, ToDeviceEvent); source-inspected line_refs for getWidget/getIframe/CSP/packaging.",
+        "FR-7.11-006: rust_target product-csp-origin-restrictions-partial-shell-and-iframe caps=[SC-082 host residual] gaps=[GAP-MATRIXRTC-WIDGET-CAPABILITY-PLUMBING]; SC-082 alone never closes CSP; cutover P10.6 (+P13.5).",
+        "FR-7.11-006: planned AT/MA rewritten as SHELL CSP + IFRAME SANDBOX + ORIGIN + STRICT ORIGIN residual + NO META CSP residual + DISTINCTIONS 001–005/007 + GATE fail-closed. Top-level AT/MA/risks/unresolved_planning_blockers updated. Accepted FR-7.8-001..009, FR-7.9-001..013 (011 partial), FR-7.10-001..007, FR-7.11-001..005 (003/004/005 partial under their gates) preserved. JSON and Markdown synchronized."
       ]
     }
   ]
