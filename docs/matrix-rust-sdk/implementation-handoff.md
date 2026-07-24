@@ -34,9 +34,10 @@ without explicit user approval.
 - **Accepted this session:**
   - FR-7.8-004 @ `67d0e31`
   - FR-7.8-005 @ `48ee30f`
-  - FR-7.8-006 (`p0.2-correct-24-...`) pending commit after this handoff update
-- **Next writer task:** FR-7.8-007 (notification suppression for
-  active/focused contexts), then remaining 7.8–7.11
+  - FR-7.8-006 @ `e170487`
+  - FR-7.8-007 (`p0.2-correct-25-...`) pending commit after this handoff update
+- **Next writer task:** FR-7.8-008 (privacy-safe encrypted notification
+  behavior), then FR-7.8-009 and remaining 7.9–7.11
 - No production Matrix Rust SDK replacement code accepted
 
 Phase 0 evidence accepted before this handoff:
@@ -49,7 +50,7 @@ Phase 0 evidence accepted before this handoff:
   matrix and accepted corrections for FR-7.8-001 through FR-7.8-003.
   Handoff commit `9c91e0f` is also on the branch tip.
 
-P0.2 is not complete. Resume at FR-7.8-007, then audit all remaining 7.8–7.11
+P0.2 is not complete. Resume at FR-7.8-008, then audit all remaining 7.8–7.11
 requirements before declaring P0.2 accepted.
 
 Accepted notification findings that must be preserved:
@@ -87,6 +88,12 @@ Accepted notification findings that must be preserved:
   `timelineOpening` focuses event context. SC-032/SC-022 alone, push-rule UI,
   badge-only, generation-only, and helper-only never pass. Cutover is P9.4/P4.8
   Rust-owned event identity + Synara route DTOs.
+- FR-7.8-007: status `implemented`. Focus/suppression owned by
+  MessageNotifications gates (`document.hasFocus` + selected room or
+  notifications inbox; SYNCING; Mute; self; showNotifications; unread delta)
+  with SystemNotification/tray DND enablement; Invite has SYNCING +
+  showNotifications without a focused-room gate (do not invent). Cutover P9.3
+  via Rust candidate stream + product focus state; SC-057 alone never passes.
 
 ## Branch and PR contract
 
