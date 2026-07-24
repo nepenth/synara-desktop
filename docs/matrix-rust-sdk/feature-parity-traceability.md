@@ -4,7 +4,7 @@
 
 ## Correction pass status
 
-Limited rejected-review correction (`p0.2-correct-50-fr-7.11-004-call-encryption-key-flow`) for **FR-7.11-004** only: replace shallow notes (null notes / getDeviceId-search-searchUserDirectory false AST / useCall membership listeners / generic AT-MA) with concrete **encryption-key to-device and room-event FLOW** evidence — `CallWidgetDriver.sendToDevice` (`encryptToDeviceMessages`+`queueToDevice`); `sendEvent` for `io.element.call.encryption_keys`; `CallEmbed` `ToDeviceEvent`→`feedToDevice`; `Event`/`Decrypted`→`feedEvent`; `getCallCapabilities` room+to-device `encryption_keys`/`CallEncryptionKeysPrefix`; honest **partial** (widget-mediated host bridge without product-owned native MatrixRTC key-session API); rust_target `product-widget-to-device-key-bridge-partial-matrixrtc-key-session-upstream` caps=[SC-082] gaps=[GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION]; rewrite AT/MA for P10.5. JSON and Markdown synchronized. Accepted corrections for **FR-7.8-001 through FR-7.8-009**, **FR-7.9-001..013** (**FR-7.9-011** remains partial), **FR-7.10-001..007**, **FR-7.11-001..003** (003 remains partial under its write gate) preserved. Prior corrections and accepted **7.1–7.3** preserved. **P0.2 is not complete.**
+Limited rejected-review correction (`p0.2-correct-51-fr-7.11-005-call-session-cleanup`) for **FR-7.11-005** only: replace shallow notes (implemented via 4 files / null notes / getDeviceId-search false AST / useCall membership listeners / generic AT-MA) with concrete **session cleanup** evidence — `callEmbedAtom` dispose-on-write; `CallEmbed.dispose` (`call.stop`, iframe remove, disposables, `mx.off`, clear maps); hangup→`CallEmbedProvider` `setCallEmbed(undefined)`; `CallControl`/`CallControls` End; room-nav retain honesty (`callVisible` hide only); `performLogout` without hangup; no `beforeunload` hangup; honest **partial** under `GATE-7.11-005-LOGOUT-WINDOW-CLOSE-HANGUP-CLEANUP`; rust_target `product-call-session-cleanup-partial-lifecycle-hooks` caps=[SC-082] gaps=[GAP-MATRIXRTC-WIDGET-CAPABILITY-PLUMBING]; rewrite AT/MA for P10.5 (+P2.6/P3.8). JSON and Markdown synchronized. Accepted corrections for **FR-7.8-001 through FR-7.8-009**, **FR-7.9-001..013** (**FR-7.9-011** remains partial), **FR-7.10-001..007**, **FR-7.11-001..004** (003/004 remain partial under their gates) preserved. Prior corrections and accepted **7.1–7.3** preserved. **P0.2 is not complete.**
 
 ## Provenance
 
@@ -18,9 +18,9 @@ Limited rejected-review correction (`p0.2-correct-50-fr-7.11-004-call-encryption
 
 ### Status distribution
 
-- `implemented`: 96
+- `implemented`: 95
 - `not-currently-exposed`: 1
-- `partial`: 22
+- `partial`: 23
 
 ### 7.1–7.3 retained vs excluded
 
@@ -233,7 +233,7 @@ Limited rejected-review correction (`p0.2-correct-50-fr-7.11-004-call-encryption
 | `FR-7.11-002` | `implemented`           | embedded Element Call startup, widget URL generation, capabilities, a... | `AT-FR-7.11-002-001` | `MA-FR-7.11-002` |
 | `FR-7.11-003` | `partial`               | call join/leave/decline and member status;                               | `AT-FR-7.11-003-001` | `MA-FR-7.11-003` |
 | `FR-7.11-004` | `partial`               | encryption-key to-device/event flow required by Element Call;            | `AT-FR-7.11-004-001` | `MA-FR-7.11-004` |
-| `FR-7.11-005` | `implemented`           | session cleanup on room change, logout, and window close;                | `AT-FR-7.11-005-001` | `MA-FR-7.11-005` |
+| `FR-7.11-005` | `partial`               | session cleanup on room change, logout, and window close;                | `AT-FR-7.11-005-001` | `MA-FR-7.11-005` |
 | `FR-7.11-006` | `partial`               | CSP and origin restrictions;                                             | `AT-FR-7.11-006-001` | `MA-FR-7.11-006` |
 | `FR-7.11-007` | `partial`               | explicit risk acceptance for `experimental-widgets` at `0.18.0`;         | `AT-FR-7.11-007-001` | `MA-FR-7.11-007` |
 | `FR-7.11-008` | `not-currently-exposed` | a documented contingency if upstream widget behavior cannot meet curr... | `AT-FR-7.11-008-001` | `MA-FR-7.11-008` |
@@ -7387,74 +7387,87 @@ Limited rejected-review correction (`p0.2-correct-50-fr-7.11-004-call-encryption
 
 - **Text**: session cleanup on room change, logout, and window close;
 - **Lines**: 456–456
-- **Status**: `implemented`
-- **Behavior**: Current desktop implements this via 4 production matrix-js-sdk-related file(s); status=implemented.
-- **UI**: `synara/src/app/plugins/call/CallEmbed.ts`
-- **Owners**: `synara/src/app/state/callEmbed.ts`
+- **Status**: `partial`
+- **Behavior**: PARTIAL: product implements explicit call-session dispose pipeline (callEmbedAtom dispose-on-write → CallEmbed.dispose: widget stop, iframe remove, control dispose, intended listener offs, map clear) wired from hangup End UI and HangupCall event clear. Room navigation does NOT dispose (visibility hide + CallStatus retain; Join disabled while other-room call active). Logout performLogout stopClient+reload has NO explicit hangup/dispose. Window close has NO beforeunload/pagehide hangup/dispose. status=partial.
+- **Notes**: Evidence (conservative): (1) PRODUCT MEANING — FR-7.11-005 is session CLEANUP on room change, logout, and window close; NOT membership DISPLAY (001), NOT embed URL alone (002), NOT join/leave alone (003), NOT encryption-key alone (004), NOT CSP (006), NOT experimental risk alone (007). (2) DISPOSE GATE — callEmbed.ts L6–17 callEmbedAtom: prevCallEmbed.dispose() L12–14 then set. (3) DISPOSE BODY — CallEmbed.dispose L229–245: disposables offs L230–232; call.stop L233; removeChild iframe L234; control.dispose L235; mx.off Event/Decrypted/RoomState/ToDeviceEvent L237–240; clear maps L243–244. LIMIT: off uses .bind(this) so may not detach same handlers as start() L218–221. (4) HANGUP→CLEAR — hangup L179–180; CallEmbedProvider L21–25 useCallHangupEvent → setCallEmbed(undefined); call-status CallControl L167–172; CallControls L74–76/L186 End hangup. (5) ROOM CHANGE — CallEmbedProvider L45 callVisible hides when selectedRoom!==callEmbed.roomId; does NOT dispose. CallStatusRenderer keeps status bar. PrescreenControls L19–24 inOtherCall disables Join; RoomNavItem L311–313 if callEmbed return — no auto cleanup on room nav. (6) LOGOUT — performLogout L521–542 stopClient/logout/clear/reload; no CallEmbed hangup/dispose. (7) WINDOW CLOSE — no beforeunload/pagehide hangup/dispose found. (8) EXCLUDE useCall membership listeners; getDeviceId; search AST. (9) No existing automated AT. (10) Cutover P10.5 (+P2.6/P3.8): preserve dispose pipeline; add explicit hangup/dispose on logout and window close; decide room-nav policy; SC-082 host residual only.
+- **Limits**: Partial: hangup/clear dispose path present; room-nav retain-by-design; logout/window-close lack explicit call cleanup; dispose listener off bind residual. Rust: product lifecycle ownership; SC-082 experimental-widgets blocked E1/E2 residual only — not a cleanup API.
+- **UI**: `synara/src/app/features/call-status/CallControl.tsx`, `synara/src/app/features/call/CallControls.tsx`, `synara/src/app/components/CallEmbedProvider.tsx`
+- **UI rationale**: FR-7.11-005 is session CLEANUP on room change / logout / window close. Primary UI: call-status CallControl End (clear/hangup), CallControls End hangup, CallEmbedProvider hangup→atom clear and room-nav hide-without-dispose. EXCLUDE membership Live chips (001); embed URL alone (002); join/leave alone (003); encryption-key alone (004); CSP (006).
+- **Owners**: `synara/src/app/state/callEmbed.ts`, `synara/src/app/plugins/call/CallEmbed.ts`, `synara/src/app/components/CallEmbedProvider.tsx`, `synara/src/client/initMatrix.ts`
 - **Files**:
-  - `synara/src/app/hooks/useCall.ts` symbols=[] retained_m=0 retained_l=8
-    - listener `on:MatrixRTCSessionManagerEvents.SessionStarted`:L25 — None
-    - listener `on:MatrixRTCSessionManagerEvents.SessionEnded`:L26 — None
-    - listener `off:MatrixRTCSessionManagerEvents.SessionStarted`:L28 — None
-    - listener `off:MatrixRTCSessionManagerEvents.SessionEnded`:L29 — None
-    - listener `on:MatrixRTCSessionEvent.MembershipsChanged`:L46 — None
-    - listener `removeListener:MatrixRTCSessionEvent.MembershipsChanged`:L48 — None
-    - listener `on:MatrixRTCSessionEvent.MembershipsChanged`:L57 — None
-    - listener `removeListener:MatrixRTCSessionEvent.MembershipsChanged`:L59 — None
-  - `synara/src/app/hooks/useCallEmbed.ts` symbols=[] retained_m=0 retained_l=0
-  - `synara/src/app/pages/client/ClientNonUIFeatures.tsx` symbols=[] retained_m=0 retained_l=0
-  - `synara/src/app/plugins/call/CallEmbed.ts` symbols=['getDeviceId', 'search'] retained_m=2 retained_l=2
-    - method `getDeviceId`:L66 — None
-    - method `search`:L91 — None
-    - listener `on:ClientEvent.ToDeviceEvent`:L221 — None
-    - listener `off:ClientEvent.ToDeviceEvent`:L240 — None
+  - `synara/src/app/state/callEmbed.ts` symbols=['callEmbedAtom', 'prevCallEmbed.dispose'] retained_m=1 retained_l=0
+    - line `callEmbedAtom setter dispose prev`:L6 — PRIMARY dispose-on-write L6–17.
+    - method `dispose`:L13 — prevCallEmbed.dispose() on atom write.
+  - `synara/src/app/plugins/call/CallEmbed.ts` symbols=['hangup', 'dispose', 'disposables', 'call.stop', 'control.dispose'] retained_m=3 retained_l=4
+    - method `hangup`:L179 — transport.send HangupCall.
+    - method `dispose`:L229 — PRIMARY DISPOSE L229–245.
+    - method `stop`:L233 — ClientWidgetApi stop.
+    - listener `off:ClientEvent.Event`:L237 — dispose (bind residual).
+    - listener `off:MatrixEventEvent.Decrypted`:L238 — dispose (bind residual).
+    - listener `off:RoomStateEvent.Events`:L239 — dispose (bind residual).
+    - listener `off:ClientEvent.ToDeviceEvent`:L240 — dispose (bind residual).
+  - `synara/src/app/components/CallEmbedProvider.tsx` symbols=['useCallHangupEvent', 'setCallEmbed(undefined)', 'callVisible room match'] retained_m=0 retained_l=0
+    - line `useCallHangupEvent clear atom`:L21 — hangup → setCallEmbed(undefined).
+    - line `callVisible selectedRoom match hide only`:L45 — room-nav hide without dispose.
+  - `synara/src/app/hooks/useCallEmbed.ts` symbols=['useCallStart setCallEmbed', 'useCallHangupEvent'] retained_m=0 retained_l=0
+    - line `useCallStart setCallEmbed`:L72 — replace path (UI blocks second start).
+    - line `useCallHangupEvent`:L100 — HangupCall wire.
+  - `synara/src/app/features/call-status/CallControl.tsx` symbols=['handleHangup', 'setCallEmbed(undefined)', 'callEmbed.hangup'] retained_m=1 retained_l=0
+    - line `handleHangup not-joined clear`:L167 — !joined clear else hangup.
+    - method `hangup`:L162 — End hangup when joined.
+  - `synara/src/app/features/call/CallControls.tsx` symbols=['callEmbed.hangup', 'End button'] retained_m=1 retained_l=0
+    - method `hangup`:L75 — End hangup callback.
+    - line `End hangup onClick`:L186 — in-call End.
+  - `synara/src/client/initMatrix.ts` symbols=['performLogout', 'stopClient', 'logout', 'reload'] retained_m=2 retained_l=0
+    - line `performLogout`:L521 — LOGOUT residual no hangup/dispose.
+    - method `stopClient`:L528 — stops client without call hangup.
+    - method `logout`:L530 — server logout.
 - **Behavior-relevant methods (top-level)**:
-  - `getDeviceId` `synara/src/app/plugins/call/CallEmbed.ts`:L66 — None
-  - `search` `synara/src/app/plugins/call/CallEmbed.ts`:L91 — None
+  - `dispose` `synara/src/app/state/callEmbed.ts`:L13 — Central dispose gate.
+  - `hangup` `synara/src/app/plugins/call/CallEmbed.ts`:L179 — Hangup signal before atom-clear dispose.
+  - `dispose` `synara/src/app/plugins/call/CallEmbed.ts`:L229 — Concrete session teardown.
+  - `stop` `synara/src/app/plugins/call/CallEmbed.ts`:L233 — Stop ClientWidgetApi on dispose.
+  - `stopClient` `synara/src/client/initMatrix.ts`:L528 — Logout residual without CallEmbed hangup.
+  - `logout` `synara/src/client/initMatrix.ts`:L530 — Server logout; not call-session cleanup.
 - **Behavior-relevant listeners (top-level)**:
-  - `on:MatrixRTCSessionManagerEvents.SessionStarted` `synara/src/app/hooks/useCall.ts`:L25 — None
-  - `on:MatrixRTCSessionManagerEvents.SessionEnded` `synara/src/app/hooks/useCall.ts`:L26 — None
-  - `off:MatrixRTCSessionManagerEvents.SessionStarted` `synara/src/app/hooks/useCall.ts`:L28 — None
-  - `off:MatrixRTCSessionManagerEvents.SessionEnded` `synara/src/app/hooks/useCall.ts`:L29 — None
-  - `on:MatrixRTCSessionEvent.MembershipsChanged` `synara/src/app/hooks/useCall.ts`:L46 — None
-  - `removeListener:MatrixRTCSessionEvent.MembershipsChanged` `synara/src/app/hooks/useCall.ts`:L48 — None
-  - `on:MatrixRTCSessionEvent.MembershipsChanged` `synara/src/app/hooks/useCall.ts`:L57 — None
-  - `removeListener:MatrixRTCSessionEvent.MembershipsChanged` `synara/src/app/hooks/useCall.ts`:L59 — None
-  - `on:ClientEvent.ToDeviceEvent` `synara/src/app/plugins/call/CallEmbed.ts`:L221 — None
-  - `off:ClientEvent.ToDeviceEvent` `synara/src/app/plugins/call/CallEmbed.ts`:L240 — None
-- **Unfiltered linked candidates**: methods=27 listeners=24
-- **Rust**: `product-lifecycle-with-experimental-widgets` caps=['SC-082'] gaps=['GAP-MATRIXRTC-WIDGET-CAPABILITY-PLUMBING']
+  - `off:ClientEvent.Event` `synara/src/app/plugins/call/CallEmbed.ts`:L237 — Listener cleanup on dispose.
+  - `off:MatrixEventEvent.Decrypted` `synara/src/app/plugins/call/CallEmbed.ts`:L238 — Listener cleanup on dispose.
+  - `off:RoomStateEvent.Events` `synara/src/app/plugins/call/CallEmbed.ts`:L239 — Listener cleanup on dispose.
+  - `off:ClientEvent.ToDeviceEvent` `synara/src/app/plugins/call/CallEmbed.ts`:L240 — Listener cleanup on dispose.
+- **Unfiltered linked candidates**: methods=12 listeners=8
+- **Rust**: `product-call-session-cleanup-partial-lifecycle-hooks` caps=['SC-082'] gaps=['GAP-MATRIXRTC-WIDGET-CAPABILITY-PLUMBING']
   - `SC-082` `blocked` `matrix_sdk::widget (experimental-widgets)` https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/lib.rs#L64-L65
+  - `GAP-MATRIXRTC-WIDGET-CAPABILITY-PLUMBING` `blocked` `widget host residual for dispose/stop; not a cleanup lifecycle API`
+- Honest: rust_target for FR-7.11-005: product-call-session-cleanup-partial-lifecycle-hooks. Product PARTIAL: dispose pipeline + hangup clear present; room-nav retains session; logout/window-close lack explicit hangup/dispose. SC-082 is host residual only — SC-082 alone never closes cleanup. Cutover P10.5 (+P2.6/P3.8). Compile-only / SC-082 alone / embed alone / hangup-leave-alone as full cleanup / raw HTTP / dual-backend FAIL.
 - **Tasks**: `P10.5`, `P2.6`, `P3.8`
 - **Blockers**:
-  - (high) experimental-widgets-and-call-parity: Call/widget path depends on experimental-widgets and MatrixRTC gaps; widget plumbing ≠ call parity.
+  - GATE-7.11-005-LOGOUT-WINDOW-CLOSE-HANGUP-CLEANUP
+  - (high) product-call-session-cleanup-partial-lifecycle-hooks: FR-7.11-005 product path is PARTIAL: hangup/clear dispose pipeline is implemented (callEmbedAtom dispose-on-write → CallEmbed.dispose stops widget, removes iframe, drains disposables/intended offs; CallEmbedProvider hangup→setCallEmbed(undefined); CallControl/CallControls End). Room navigation retains session (callVisible hide only; Join blocked while other-room call). Logout performLogout has no CallEmbed hangup/dispose before stopClient/reload. Window close has no beforeunload hangup/dispose. dispose() off(.bind(this)) residual. Cutover P10.5 (+P2.6/P3.8) under product lifecycle; SC-082 host residual only. Compile-only / SC-082 alone / embed alone / hangup-leave-alone as full three-clause cleanup / raw HTTP / dual-backend FAIL.
 - **Existing tests**:
   - _(none)_
 - **Planned** `AT-FR-7.11-005-001` task `P10.5` level `integration-e2e`
-  - Scenario: 7.11/FR-7.11-005: exercise 'session cleanup on room change, logout, and window close;' via owner `synara/src/app/state/callEmbed.ts` and UI `synara/src/app/plugins/call/CallEmbed.ts`, then confirm Rust/IPC cutover task `P10.5` preserves observable behavior without raw Matrix runtime HTTP.
-  - Test target: None
+  - Scenario: Integration against disposable Synapse (two clients, call room + Element Call assets): (A) HANGUP DISPOSE — join call; End → hangup() im.vector.hangup; HangupCall clears callEmbedAtom; CallEmbed.dispose stops widget, removes iframe, drains disposables. (B) ROOM CHANGE — while joined, navigate to another room; assert session RETAINED (CallStatus) and iframe hidden (callVisible) without dispose; Join disabled when inOtherCall / RoomNavItem if callEmbed. Residual: room-nav does not auto-cleanup. (C) LOGOUT residual — with active call, performLogout; current product has no hangup/setCallEmbed before stopClient/reload (GATE); post-cutover require explicit hangup/dispose before wipe. (D) WINDOW CLOSE residual — no beforeunload hangup; GATE until product hook. (E) DISTINCTIONS — not 001/002/003-leave-alone/004/006/007. Cutover P10.5 (+P2.6/P3.8): preserve dispose pipeline; close logout/window-close hangup gates; SC-082 alone / compile-only / raw HTTP / dual-backend FAIL.
+  - Test target: callEmbedAtom dispose-on-write; CallEmbed.dispose+hangup; CallEmbedProvider hangup clear + callVisible; CallControl/CallControls End; performLogout honesty; post-cutover P10.5 (+P2.6/P3.8)
   - Preconditions:
-    - Desktop app with Element Call / widget config for the build
-    - Room with MatrixRTC membership fixtures; two clients for join/leave
-    - CSP-enabled production-like shell
-    - Linked owner path present in tree: synara/src/app/state/callEmbed.ts
-    - Primary UI/lifecycle surface: synara/src/app/plugins/call/CallEmbed.ts
+    - Disposable Synapse; two clients; call room with Element Call embedded assets.
+    - Named owners: callEmbed.ts atom dispose, CallEmbed dispose/hangup, CallEmbedProvider hangup clear, CallControl/CallControls End, initMatrix performLogout residual.
+    - Do not accept: membership-display-only (001), embed-URL-only (002), hangup-leave-only as full three-clause cleanup (003), keys-only (004), getDeviceId/search AST, SC-082 alone, compile-only, or claiming room-nav/logout/window-close hangup closed without evidence.
   - Actions:
-    1. Boot the appropriate harness for level=integration-e2e against disposable Synapse (or iOS notes if any).
-    2. Establish fixtures required by the clause list: session cleanup on room change; logout; window close.
-    3. Open UI/lifecycle surface `synara/src/app/plugins/call/CallEmbed.ts` (or follow ui_entry_points_rationale if no dedicated UI).
-    4. Step 1: perform the product action that implements «session cleanup on room change» using current owner `synara/src/app/state/callEmbed.ts`.
-    5. Step 2: perform the product action that implements «logout» using current owner `synara/src/app/state/callEmbed.ts`.
-    6. Step 3: perform the product action that implements «window close» using current owner `synara/src/app/state/callEmbed.ts`.
-    7. Start/stop embedded call/widget session; change room; logout; close window — confirm cleanup.
+    1. Boot integration harness against disposable Synapse with two clients and Element Call assets.
+    2. HANGUP DISPOSE: join call; click End; assert hangup send + atom cleared + dispose ran (iframe removed / no active callEmbed).
+    3. ROOM CHANGE: join call; navigate to different room; assert CallStatus still shows call and atom not cleared; Join in other room disabled while call active.
+    4. LOGOUT residual: with active call, logout; document current stopClient+reload without hangup; post-cutover assert hangup/dispose before wipe.
+    5. WINDOW CLOSE residual: assert no product beforeunload hangup today; post-cutover assert hangup/dispose on close.
+    6. After cutover P10.5 (+P2.6/P3.8), preserve dispose pipeline and close logout/window-close gates via product IPC; SC-082 alone / compile-only / raw HTTP / dual-backend FAIL.
   - Assertions:
-    - Each clause is observable: «session cleanup on room change»; «logout»; «window close».
-    - State coordination remains through `synara/src/app/state/callEmbed.ts` (or its Rust/IPC successor after cutover), not ad-hoc dual writers.
-    - Behavior-relevant current JS method candidates exercised or replaced: getDeviceId, search (AST candidates; not type-proven receivers).
-    - Behavior-relevant listener candidates observed or replaced: on:MatrixRTCSessionManagerEvents.SessionStarted, on:MatrixRTCSessionManagerEvents.SessionEnded, off:MatrixRTCSessionManagerEvents.SessionStarted, off:MatrixRTCSessionManagerEvents.SessionEnded, on:MatrixRTCSessionEvent.MembershipsChanged, removeListener:MatrixRTCSessionEvent.MembershipsChanged.
-    - Rust mapping remains conservative: caps=[SC-082] gaps=[GAP-MATRIXRTC-WIDGET-CAPABILITY-PLUMBING]; compile-only blocked states are not treated as runtime pass.
-    - No new production matrix-js-sdk usage and no raw /\_matrix runtime HTTP unless dossier marks that exact behavior typed-sdk-request-required.
-    - Widget plumbing success is not recorded as full call parity if membership-write/key-session gaps remain.
+    - HANGUP DISPOSE: setCallEmbed(undefined) or hangup event → dispose: call.stop, iframe removed, disposables drained.
+    - ROOM CHANGE: navigation alone does not dispose (retain+hide); residual until product policy adds auto-cleanup.
+    - LOGOUT: current performLogout lacks CallEmbed hangup/dispose; GATE until explicit cleanup before stopClient/reload.
+    - WINDOW CLOSE: no beforeunload hangup path; GATE until product hook.
+    - DISTINCTIONS: this FR ≠ 001/002/003-alone/004/006/007; hangup leave ownership still 003 for join/leave clause.
+    - COORDINATION: through callEmbedAtom/CallEmbed/CallEmbedProvider (or Rust/IPC successor), not dual-backend.
+    - CUTOVER: P10.5 under product lifecycle (+P2.6/P3.8); SC-082 residual only; compile-only never product pass; no raw /\_matrix HTTP.
+    - No new production matrix-js-sdk usage and no raw /\_matrix runtime HTTP unless typed-sdk-request-required for that exact behavior.
   - does_not_currently_exist: `True`
 - **Manual**: `MA-FR-7.11-005`
 
@@ -9778,21 +9791,24 @@ Limited rejected-review correction (`p0.2-correct-50-fr-7.11-004-call-encryption
   - Desktop app with Element Call / widget config for the build
   - Room with MatrixRTC membership fixtures; two clients for join/leave
   - CSP-enabled production-like shell
-  - State owner available: synara/src/app/state/callEmbed.ts
-  - UI/lifecycle: synara/src/app/plugins/call/CallEmbed.ts
-  - Current status baseline: implemented
+  - State owner: synara/src/app/state/callEmbed.ts callEmbedAtom dispose-on-write
+  - Dispose owner: synara/src/app/plugins/call/CallEmbed.ts dispose/hangup
+  - Hangup wire: CallEmbedProvider + CallControl/CallControls End
+  - Logout residual owner: synara/src/client/initMatrix.ts performLogout
+  - Current status baseline: partial under GATE-7.11-005-LOGOUT-WINDOW-CLOSE-HANGUP-CLEANUP
 - Actions:
-  1. Launch Synara desktop on the target platform against disposable Synapse; use a clean or known fixture profile as required by «session cleanup on room change, logout, and window close;».
-  2. Identify state owner `synara/src/app/state/callEmbed.ts` and open `synara/src/app/plugins/call/CallEmbed.ts`.
-  3. Action 1 — «session cleanup on room change»: perform the minimal user/system steps that trigger this clause (use linked files under current_production_files if the entry point is indirect).
-  4. Action 2 — «logout»: perform the minimal user/system steps that trigger this clause (use linked files under current_production_files if the entry point is indirect).
-  5. Action 3 — «window close»: perform the minimal user/system steps that trigger this clause (use linked files under current_production_files if the entry point is indirect).
-  6. Join call/widget, verify membership UI, leave/decline as applicable, switch rooms, and close window; confirm sessions clean up.
+  1. Launch Synara desktop against disposable Synapse with Element Call assets.
+  2. HANGUP DISPOSE: join a call; click End; confirm hangup and callEmbed cleared (no iframe/status).
+  3. ROOM CHANGE: join a call; navigate to another room; confirm CallStatus retains session and iframe hidden without dispose; Join disabled while other-room call active.
+  4. LOGOUT residual: with active call, logout; document current stopClient+reload without hangup; do not pass full clause until explicit hangup/dispose exists.
+  5. WINDOW CLOSE residual: with active call, close window; document no beforeunload hangup; do not pass full clause until product hook exists.
+  6. After cutover P10.5 (+P2.6/P3.8), re-run hangup dispose, room-nav policy, logout hangup, window-close hangup via product IPC; SC-082 alone / raw HTTP / dual-backend FAIL.
 - Expected:
-  - All clauses under «session cleanup on room change, logout, and window close;» produce the user-visible or system-observable success criteria without error toasts unrelated to intentional negative tests.
-  - Clause 1 «session cleanup on room change» is satisfied on macOS, Linux with owner `synara/src/app/state/callEmbed.ts`.
-  - Clause 2 «logout» is satisfied on macOS, Linux with owner `synara/src/app/state/callEmbed.ts`.
-  - Clause 3 «window close» is satisfied on macOS, Linux with owner `synara/src/app/state/callEmbed.ts`.
+  - HANGUP DISPOSE path works: End → hangup and/or setCallEmbed(undefined) → CallEmbed.dispose (widget stop, iframe remove).
+  - ROOM CHANGE currently retains session (status bar) and does not auto-dispose — residual or documented retain policy.
+  - LOGOUT currently lacks explicit CallEmbed hangup/dispose before reload — residual GATE.
+  - WINDOW CLOSE currently lacks beforeunload hangup/dispose — residual GATE.
+  - DISTINCTIONS: not 001 display alone, 002 embed alone, 003 leave alone, 004 keys alone.
   - No unexpected raw /\_matrix traffic from the app renderer for this flow on the post-cutover build.
 
 ### `MA-FR-7.11-006` (FR-7.11-006)
@@ -12017,24 +12033,24 @@ Limited rejected-review correction (`p0.2-correct-50-fr-7.11-004-call-encryption
 
 ### `AT-FR-7.11-005-001`
 
-- 7.11/FR-7.11-005: exercise 'session cleanup on room change, logout, and window close;' via owner `synara/src/app/state/callEmbed.ts` and UI `synara/src/app/plugins/call/CallEmbed.ts`, then confirm Rust/IPC cutover task `P10.5` preserves observable behavior without raw Matrix runtime HTTP.
-- target: None
+- Integration against disposable Synapse (two clients, call room + Element Call assets): (A) HANGUP DISPOSE — join call; End → hangup() im.vector.hangup; HangupCall clears callEmbedAtom; CallEmbed.dispose stops widget, removes iframe, drains disposables. (B) ROOM CHANGE — while joined, navigate to another room; assert session RETAINED (CallStatus) and iframe hidden (callVisible) without dispose; Join disabled when inOtherCall / RoomNavItem if callEmbed. Residual: room-nav does not auto-cleanup. (C) LOGOUT residual — with active call, performLogout; current product has no hangup/setCallEmbed before stopClient/reload (GATE); post-cutover require explicit hangup/dispose before wipe. (D) WINDOW CLOSE residual — no beforeunload hangup; GATE until product hook. (E) DISTINCTIONS — not 001/002/003-leave-alone/004/006/007. Cutover P10.5 (+P2.6/P3.8): preserve dispose pipeline; close logout/window-close hangup gates; SC-082 alone / compile-only / raw HTTP / dual-backend FAIL.
+- target: callEmbedAtom dispose-on-write; CallEmbed.dispose+hangup; CallEmbedProvider hangup clear + callVisible; CallControl/CallControls End; performLogout honesty; post-cutover P10.5 (+P2.6/P3.8)
 - actions:
-  1. Boot the appropriate harness for level=integration-e2e against disposable Synapse (or iOS notes if any).
-  2. Establish fixtures required by the clause list: session cleanup on room change; logout; window close.
-  3. Open UI/lifecycle surface `synara/src/app/plugins/call/CallEmbed.ts` (or follow ui_entry_points_rationale if no dedicated UI).
-  4. Step 1: perform the product action that implements «session cleanup on room change» using current owner `synara/src/app/state/callEmbed.ts`.
-  5. Step 2: perform the product action that implements «logout» using current owner `synara/src/app/state/callEmbed.ts`.
-  6. Step 3: perform the product action that implements «window close» using current owner `synara/src/app/state/callEmbed.ts`.
-  7. Start/stop embedded call/widget session; change room; logout; close window — confirm cleanup.
+  1. Boot integration harness against disposable Synapse with two clients and Element Call assets.
+  2. HANGUP DISPOSE: join call; click End; assert hangup send + atom cleared + dispose ran (iframe removed / no active callEmbed).
+  3. ROOM CHANGE: join call; navigate to different room; assert CallStatus still shows call and atom not cleared; Join in other room disabled while call active.
+  4. LOGOUT residual: with active call, logout; document current stopClient+reload without hangup; post-cutover assert hangup/dispose before wipe.
+  5. WINDOW CLOSE residual: assert no product beforeunload hangup today; post-cutover assert hangup/dispose on close.
+  6. After cutover P10.5 (+P2.6/P3.8), preserve dispose pipeline and close logout/window-close gates via product IPC; SC-082 alone / compile-only / raw HTTP / dual-backend FAIL.
 - assertions:
-  - Each clause is observable: «session cleanup on room change»; «logout»; «window close».
-  - State coordination remains through `synara/src/app/state/callEmbed.ts` (or its Rust/IPC successor after cutover), not ad-hoc dual writers.
-  - Behavior-relevant current JS method candidates exercised or replaced: getDeviceId, search (AST candidates; not type-proven receivers).
-  - Behavior-relevant listener candidates observed or replaced: on:MatrixRTCSessionManagerEvents.SessionStarted, on:MatrixRTCSessionManagerEvents.SessionEnded, off:MatrixRTCSessionManagerEvents.SessionStarted, off:MatrixRTCSessionManagerEvents.SessionEnded, on:MatrixRTCSessionEvent.MembershipsChanged, removeListener:MatrixRTCSessionEvent.MembershipsChanged.
-  - Rust mapping remains conservative: caps=[SC-082] gaps=[GAP-MATRIXRTC-WIDGET-CAPABILITY-PLUMBING]; compile-only blocked states are not treated as runtime pass.
-  - No new production matrix-js-sdk usage and no raw /\_matrix runtime HTTP unless dossier marks that exact behavior typed-sdk-request-required.
-  - Widget plumbing success is not recorded as full call parity if membership-write/key-session gaps remain.
+  - HANGUP DISPOSE: setCallEmbed(undefined) or hangup event → dispose: call.stop, iframe removed, disposables drained.
+  - ROOM CHANGE: navigation alone does not dispose (retain+hide); residual until product policy adds auto-cleanup.
+  - LOGOUT: current performLogout lacks CallEmbed hangup/dispose; GATE until explicit cleanup before stopClient/reload.
+  - WINDOW CLOSE: no beforeunload hangup path; GATE until product hook.
+  - DISTINCTIONS: this FR ≠ 001/002/003-alone/004/006/007; hangup leave ownership still 003 for join/leave clause.
+  - COORDINATION: through callEmbedAtom/CallEmbed/CallEmbedProvider (or Rust/IPC successor), not dual-backend.
+  - CUTOVER: P10.5 under product lifecycle (+P2.6/P3.8); SC-082 residual only; compile-only never product pass; no raw /\_matrix HTTP.
+  - No new production matrix-js-sdk usage and no raw /\_matrix runtime HTTP unless typed-sdk-request-required for that exact behavior.
 
 ### `AT-FR-7.11-006-001`
 
@@ -12393,7 +12409,7 @@ Limited rejected-review correction (`p0.2-correct-50-fr-7.11-004-call-encryption
 - `FR-7.11-002` experimental-widgets-sc082-host-postmessage-not-call-parity: FR-7.11-002 product embed is implemented via matrix-js-sdk + matrix-widget-api ClientWidgetApi + CallEmbed/CallWidgetDriver + embedded Element Call assets. Cutover P10.2/P10.3 (+P10.1) under SC-082 experimental-widgets + GAP-MATRIXRTC-WIDGET-CAPABILITY-PLUMBING: E1/E2 only; element_call_host_and_postmessage + experimental_feature_risk_gate missing. Widget plumbing ≠ membership write/key session/full call parity. Compile-only / SC-082 alone without host / FOCI alone / raw HTTP / dual-backend FAIL.
 - `FR-7.11-003` product-join-leave-via-embed-hangup-partial-matrixrtc-write-upstream: FR-7.11-003 product path is PARTIAL: join via useCallStart/createCallEmbed + JoinCall; leave via hangup + End UI; decline capability-only; member status via useCallJoined + MembershipsChanged. No high-level MatrixRTCSession join/leave write APIs on product; widget-driven m.call.member via driver. Cutover P10.5 (+P10.4) under GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION + SC-082 + GAP-MATRIXRTC-MEMBERSHIP-PRESENCE residual. Compile-only / SC-082 alone / embed alone / raw HTTP / dual-backend / full write-closed claim FAIL.
 - `FR-7.11-004` product-widget-to-device-key-bridge-partial-matrixrtc-key-session-upstream: FR-7.11-004 product path is PARTIAL: Element Call encryption-key to-device/event FLOW is widget-mediated — outbound CallWidgetDriver.sendToDevice (getCrypto+encryptToDeviceMessages+queueToDevice or clear queueToDevice) and sendEvent for io.element.call.encryption_keys; inbound CallEmbed ClientEvent.ToDeviceEvent → decrypt → feedToDevice and Event/Decrypted → feedEvent; capabilities grant encryption_keys + CallEncryptionKeysPrefix. Synara does not implement a high-level native MatrixRTC encryption-key session API. Cutover P10.5 under GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION (primary residual) + SC-082 host residual only. Compile-only / SC-082 alone / embed alone / raw HTTP / dual-backend / claiming native MatrixRTC key-session closed FAIL.
-- `FR-7.11-005` experimental-widgets-and-call-parity: Call/widget path depends on experimental-widgets and MatrixRTC gaps; widget plumbing ≠ call parity.
+- `FR-7.11-005` product-call-session-cleanup-partial-lifecycle-hooks: FR-7.11-005 product path is PARTIAL: hangup/clear dispose pipeline present (callEmbedAtom → CallEmbed.dispose; CallEmbedProvider hangup clear; End UI). Room-nav retains session; logout/window-close lack explicit hangup/dispose. Cutover P10.5 (+P2.6/P3.8); SC-082 residual only. Compile-only / SC-082 alone / hangup-leave-alone as full cleanup / raw HTTP FAIL.
 - `FR-7.11-006` experimental-widgets-and-call-parity: Call/widget path depends on experimental-widgets and MatrixRTC gaps; widget plumbing ≠ call parity.
 - `FR-7.11-007` experimental-widgets-and-call-parity: Call/widget path depends on experimental-widgets and MatrixRTC gaps; widget plumbing ≠ call parity.
 - `FR-7.11-008` upstream-change-required: FR-7.11-008 depends on upstream-change-required gap(s): ['GAP-MATRIXRTC-MEMBERSHIP-WRITE-AND-KEY-SESSION', 'GAP-MATRIXRTC-WIDGET-CAPABILITY-PLUMBING']
