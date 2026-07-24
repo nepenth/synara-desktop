@@ -4,7 +4,7 @@
 
 ## Correction pass status
 
-Limited rejected-review correction (`p0.2-correct-34-fr-7.9-008-undecryptable-event-retry`) for **FR-7.9-008** only: replace wrong `matrix-crypto.ts` / `useRoomEventReaders` owners and shallow AT with concrete **automatic UTD retry** evidence — `room.ts` `decryptAllTimelineEvent` + `attemptDecryption(..., { isRetry: true })`; `RoomTimeline` pagination `hasEncryptionStateEvent` gate; `EncryptedContent` `MatrixEventEvent.Decrypted` re-render; `useRoomEvent` per-event `attemptDecryption`; `MessageNotDecryptedContent` / `MessageBadEncryptedContent` / `MBadEncrypted`; no dedicated Retry button; exclude FR-7.3-009 presentation-only, FR-7.9-006/007 key acquisition, FR-7.9-002/004 `verifiedDevice`; rewrite planned AT/MA for product observables + cutover P8.7+P5.10; honest rust_target SC-061 `utd-retry-compile-shape-only-blocked-for-product`; SC-061 alone / presentation-only / room-key-file-only / server-backup-only / raw HTTP / dual-backend / helper-only FAIL. Status remains `implemented`. JSON and Markdown synchronized. Accepted corrections for **FR-7.8-001 through FR-7.8-009** and **FR-7.9-001..007** preserved. Prior corrections and accepted **7.1–7.3** preserved. **P0.2 is not complete.**
+Limited rejected-review correction (`p0.2-correct-35-fr-7.9-009-key-backup-state-listeners`) for **FR-7.9-009** only: replace generic “via 3 files” / `notes=null` / shallow AT with concrete **key-backup state listener** evidence — `useKeyBackup.ts` `CryptoEvent.KeyBackupStatus` / `KeyBackupSessionsRemaining` / `KeyBackupFailed` / `KeyBackupDecryptionKeyCached`; `getActiveSessionBackupVersion` Connected seed; `getKeyBackupInfo`; `isKeyBackupTrusted`; `BackupRestoreTile` Connected/Disconnected/Syncing(n)/failure/trust UI; Devices Verified mount; demote `backupRestore.ts` progress atom to FR-7.9-006; exclude recovery setup/restore (FR-7.9-006) and room-key file (FR-7.9-007); rewrite planned AT/MA for product observables + cutover P8.5; honest rust_target SC-066 + GAP-RECOVERY-BACKUP `key-backup-state-listeners-compile-shape-only-blocked-for-product` (SC-065 recovery setup is not primary); SC alone / compile-only / raw HTTP / dual-backend / setup-only / restore-only / file-only / helper-only FAIL. Status remains `implemented`. JSON and Markdown synchronized. Accepted corrections for **FR-7.8-001 through FR-7.8-009** and **FR-7.9-001..008** preserved. Prior corrections and accepted **7.1–7.3** preserved. **P0.2 is not complete.**
 
 ## Provenance
 
@@ -6201,62 +6201,74 @@ Limited rejected-review correction (`p0.2-correct-34-fr-7.9-008-undecryptable-ev
 - **Text**: key-backup state listeners;
 - **Lines**: 433–433
 - **Status**: `implemented`
-- **Behavior**: Current desktop implements this via 3 production matrix-js-sdk-related file(s); status=implemented.
-- **UI**: `synara/src/app/components/BackupRestore.tsx`
-- **Owners**: `synara/src/app/hooks/useKeyBackup.ts`
+- **Behavior**: Product implements key-backup state listeners: useKeyBackup.ts subscribes to CryptoEvent.KeyBackupStatus, KeyBackupSessionsRemaining, KeyBackupFailed, and KeyBackupDecryptionKeyCached; BackupRestoreTile reacts with Connected/Disconnected, Syncing(n), failure text, no-server-backup, and BackupTrustInfo. status=implemented.
+- **Notes**: Evidence (conservative): (1) STATUS LISTENER useKeyBackupStatusChange L12–22: mx.on/removeListener CryptoEvent.KeyBackupStatus. useKeyBackupStatus L25–39: initial getActiveSessionBackupVersion L30 → boolean (typeof v === 'string'); listener setStatus. (2) SESSIONS REMAINING useKeyBackupSessionsRemainingChange L42–52: on KeyBackupSessionsRemaining. (3) FAILED useKeyBackupFailedChange L55–66: on KeyBackupFailed. (4) DECRYPTION KEY CACHED useKeyBackupDecryptionKeyCached L68–78: on KeyBackupDecryptionKeyCached (trust refetch in useKeyBackupTrust L157; auto-restore consumer useRestoreBackupOnVerification is FR-7.9-006). (5) SYNC COMPOSITION useKeyBackupSync L81–101: remaining count clears failure; failure string clears remaining. (6) INFO useKeyBackupInfo L104–133: getKeyBackupInfo L109; refetch on KeyBackupStatus and when remainingCount===0. (7) TRUST useKeyBackupTrust L136–159: isKeyBackupTrusted L144; refetch on KeyBackupStatus + KeyBackupDecryptionKeyCached. (8) UI REACTION BackupRestore.tsx BackupStatus L37–49 Connected/Disconnected; BackupSyncing L54–62 Syncing(count); BackupRestoreTile L143–145 wires status/info/sync; after-slot L174–178 remaining===0 ? BackupStatus : BackupSyncing; syncFailure L247–251; No backup present L252–256 when !enabled && info===null; BackupTrustInfo L257–259 when !failure && !enabled && info; trust strings L112–129 matchesDecryptionKey/trusted. Devices.tsx L141 mounts tile when Verified. (9) NON-EVIDENCE: restoreKeyBackup L155 + backupRestoreProgressAtom progress = FR-7.9-006 restore; DeviceVerificationSetup recovery setup/resetKeyBackup = FR-7.9-006; LocalBackup export/import = FR-7.9-007; SAS FR-7.9-005; cross-signing FR-7.9-002; UTD retry FR-7.9-008. backupRestore.ts progress atom demoted (restore, not state listeners). (10) Cutover P8.5 via Rust SC-066 Backups + GAP-RECOVERY-BACKUP backup steady-state + product listener-equivalent IPC DTO; SC-066 alone / SC-065 recovery setup alone / compile-only / raw HTTP / dual-backend / recovery-setup-only / restore-action-only / room-key-file-only FAIL.
+- **Limits**: P0.1 method/listener candidates are AST name hits, not type-checked receiver proofs. getKeyBackupInfo is source-inspected beyond original AST method sample. Product has no separate backup-state settings page beyond Encryption Backup tile. Rust SC-066 is Encryption::backups() handle only; backup steady-state event stream is under GAP-RECOVERY-BACKUP remaining_work. SC-065 Encryption::recovery() is recovery setup/recover (FR-7.9-006), not this FR's primary mapping. SC-066/GAP remain compile-shape-only blocked (E3–E5 missing). Do not count SC-066 alone, recovery setup alone (FR-7.9-006), restore action alone (FR-7.9-006), room-key file alone (FR-7.9-007), raw /\_matrix HTTP, or dual-backend as closing this FR.
+- **UI**: `synara/src/app/components/BackupRestore.tsx`, `synara/src/app/features/settings/devices/Devices.tsx`
+- **UI rationale**: Settings → Devices mounts BackupRestoreTile when current device is Verified (Devices.tsx L141). BackupRestoreTile after-slot shows Connected/Disconnected (BackupStatus) or Syncing(n) (BackupSyncing) from useKeyBackupStatus + useKeyBackupSync; body shows KeyBackupFailed string, No backup present on server!, and BackupTrustInfo. Restore Backup button and restore progress are FR-7.9-006; this FR owns listener-driven status/sync/trust/failure observables only.
+- **Owners**: `synara/src/app/hooks/useKeyBackup.ts`, `synara/src/app/components/BackupRestore.tsx`
 - **Files**:
-  - `synara/src/app/components/BackupRestore.tsx` symbols=[] retained_m=0 retained_l=0
-  - `synara/src/app/hooks/useKeyBackup.ts` symbols=['getActiveSessionBackupVersion', 'isKeyBackupTrusted'] retained_m=2 retained_l=8
-    - method `getActiveSessionBackupVersion`:L30 — None
-    - method `isKeyBackupTrusted`:L144 — None
-    - listener `on:CryptoEvent.KeyBackupStatus`:L18 — None
-    - listener `removeListener:CryptoEvent.KeyBackupStatus`:L20 — None
-    - listener `on:CryptoEvent.KeyBackupSessionsRemaining`:L48 — None
-    - listener `removeListener:CryptoEvent.KeyBackupSessionsRemaining`:L50 — None
-    - listener `on:CryptoEvent.KeyBackupFailed`:L61 — None
-    - listener `removeListener:CryptoEvent.KeyBackupFailed`:L63 — None
-    - listener `on:CryptoEvent.KeyBackupDecryptionKeyCached`:L74 — None
-    - listener `removeListener:CryptoEvent.KeyBackupDecryptionKeyCached`:L76 — None
-  - `synara/src/app/state/backupRestore.ts` symbols=[] retained_m=0 retained_l=0
+  - `synara/src/app/hooks/useKeyBackup.ts` symbols=['useKeyBackupStatus','useKeyBackupSync','useKeyBackupInfo','useKeyBackupTrust','getActiveSessionBackupVersion','getKeyBackupInfo','isKeyBackupTrusted'] retained_m=3 retained_l=8
+    - method `getActiveSessionBackupVersion`:L30 — Connected/Disconnected seed (typeof version === string)
+    - method `getKeyBackupInfo`:L109 — Server backup version/count; refetch on status + remaining===0
+    - method `isKeyBackupTrusted`:L144 — Trust diagnostics for BackupTrustInfo
+    - listener `on:CryptoEvent.KeyBackupStatus`:L18 — Enablement status push
+    - listener `removeListener:CryptoEvent.KeyBackupStatus`:L20 — Cleanup
+    - listener `on:CryptoEvent.KeyBackupSessionsRemaining`:L48 — Syncing(n) remaining count
+    - listener `removeListener:CryptoEvent.KeyBackupSessionsRemaining`:L50 — Cleanup
+    - listener `on:CryptoEvent.KeyBackupFailed`:L61 — Sync failure string
+    - listener `removeListener:CryptoEvent.KeyBackupFailed`:L63 — Cleanup
+    - listener `on:CryptoEvent.KeyBackupDecryptionKeyCached`:L74 — Trust refetch (auto-restore = FR-7.9-006)
+    - listener `removeListener:CryptoEvent.KeyBackupDecryptionKeyCached`:L76 — Cleanup
+  - `synara/src/app/components/BackupRestore.tsx` symbols=['BackupRestoreTile','BackupStatus','BackupSyncing','BackupTrustInfo'] retained_m=0 retained_l=0
+    - UI Connected/Disconnected (L37–49), Syncing(count) (L54–62), after-slot branch L174–178, syncFailure L247–251, no-backup L252–256, BackupTrustInfo L257–259
+  - `synara/src/app/features/settings/devices/Devices.tsx` symbols=['BackupRestoreTile'] retained_m=0 retained_l=0
+    - Mounts BackupRestoreTile when Verified (L141)
 - **Behavior-relevant methods (top-level)**:
-  - `getActiveSessionBackupVersion` `synara/src/app/hooks/useKeyBackup.ts`:L30 — None
-  - `isKeyBackupTrusted` `synara/src/app/hooks/useKeyBackup.ts`:L144 — None
+  - `getActiveSessionBackupVersion` `synara/src/app/hooks/useKeyBackup.ts`:L30 — Connected/Disconnected seed
+  - `getKeyBackupInfo` `synara/src/app/hooks/useKeyBackup.ts`:L109 — Server backup info
+  - `isKeyBackupTrusted` `synara/src/app/hooks/useKeyBackup.ts`:L144 — Trust diagnostics
 - **Behavior-relevant listeners (top-level)**:
-  - `on:CryptoEvent.KeyBackupStatus` `synara/src/app/hooks/useKeyBackup.ts`:L18 — None
-  - `removeListener:CryptoEvent.KeyBackupStatus` `synara/src/app/hooks/useKeyBackup.ts`:L20 — None
-  - `on:CryptoEvent.KeyBackupSessionsRemaining` `synara/src/app/hooks/useKeyBackup.ts`:L48 — None
-  - `removeListener:CryptoEvent.KeyBackupSessionsRemaining` `synara/src/app/hooks/useKeyBackup.ts`:L50 — None
-  - `on:CryptoEvent.KeyBackupFailed` `synara/src/app/hooks/useKeyBackup.ts`:L61 — None
-  - `removeListener:CryptoEvent.KeyBackupFailed` `synara/src/app/hooks/useKeyBackup.ts`:L63 — None
-  - `on:CryptoEvent.KeyBackupDecryptionKeyCached` `synara/src/app/hooks/useKeyBackup.ts`:L74 — None
-  - `removeListener:CryptoEvent.KeyBackupDecryptionKeyCached` `synara/src/app/hooks/useKeyBackup.ts`:L76 — None
-- **Unfiltered linked candidates**: methods=2 listeners=8
-- **Rust**: `gap-recovery-backup` caps=['SC-066'] gaps=['GAP-RECOVERY-BACKUP']
+  - `on:CryptoEvent.KeyBackupStatus` `synara/src/app/hooks/useKeyBackup.ts`:L18 — Enablement status
+  - `removeListener:CryptoEvent.KeyBackupStatus` `synara/src/app/hooks/useKeyBackup.ts`:L20 — Cleanup
+  - `on:CryptoEvent.KeyBackupSessionsRemaining` `synara/src/app/hooks/useKeyBackup.ts`:L48 — Syncing remaining
+  - `removeListener:CryptoEvent.KeyBackupSessionsRemaining` `synara/src/app/hooks/useKeyBackup.ts`:L50 — Cleanup
+  - `on:CryptoEvent.KeyBackupFailed` `synara/src/app/hooks/useKeyBackup.ts`:L61 — Failure string
+  - `removeListener:CryptoEvent.KeyBackupFailed` `synara/src/app/hooks/useKeyBackup.ts`:L63 — Cleanup
+  - `on:CryptoEvent.KeyBackupDecryptionKeyCached` `synara/src/app/hooks/useKeyBackup.ts`:L74 — Trust refetch
+  - `removeListener:CryptoEvent.KeyBackupDecryptionKeyCached` `synara/src/app/hooks/useKeyBackup.ts`:L76 — Cleanup
+- **Unfiltered linked candidates**: methods=2 listeners=8 (original P0.1; getKeyBackupInfo source-inspected beyond sample)
+- **Rust**: `key-backup-state-listeners-compile-shape-only-blocked-for-product` caps=['SC-066'] gaps=['GAP-RECOVERY-BACKUP']
   - `SC-066` `blocked` `matrix_sdk::encryption::Encryption::backups() -> Backups` https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/encryption/mod.rs#L1791
+  - Honest: SC-066 Backups compile-shape only; product needs continuous backup state projection (status/sync/trust/failure). SC-065 Recovery is setup/recover (FR-7.9-006), not this FR's primary mapping. Do **not** map sole pass to SC-066 alone, SC-065 alone, recovery-setup/restore-only (FR-7.9-006), or room-key-file (FR-7.9-007).
 - **Tasks**: `P8.5`
 - **Existing tests**:
   - _(none)_
 - **Planned** `AT-FR-7.9-009-001` task `P8.5` level `integration-e2e`
-  - Scenario: 7.9/FR-7.9-009: exercise 'key-backup state listeners;' via owner `synara/src/app/hooks/useKeyBackup.ts` and UI `synara/src/app/components/BackupRestore.tsx`, then confirm Rust/IPC cutover task `P8.5` preserves observable behavior without raw Matrix runtime HTTP.
-  - Test target: None
+  - Scenario: Integration-e2e against disposable Synapse with an E2EE session that has server key backup available: (A) CONNECTED — on a Verified session with active session backup version, open Settings → Devices → Encryption Backup and assert Connected badge via getActiveSessionBackupVersion / KeyBackupStatus (or product-equivalent). (B) DISCONNECTED / NO BACKUP — when no active session backup version and/or server info null, assert Disconnected and/or 'No backup present on server!'. (C) SYNCING — when KeyBackupSessionsRemaining emits count > 0 (or product-equivalent remaining upload sessions), assert Syncing(n) replaces Connected/Disconnected until remaining returns to 0. (D) FAILED — when KeyBackupFailed emits a failure string, assert critical failure text and remaining cleared. (E) TRUST — when backup present on server but session backup disabled/untrusted, assert BackupTrustInfo matchesDecryptionKey and trusted signature (or critical negatives) update via isKeyBackupTrusted after KeyBackupStatus / KeyBackupDecryptionKeyCached without process restart. After cutover P8.5 same Connected/Disconnected/Syncing/failure/trust observables via Rust SC-066 + GAP-RECOVERY-BACKUP backup steady-state + product UX + IPC DTO; SC-066 alone, compile-only blocked, raw /\_matrix HTTP, dual-backend, recovery-setup/restore-action-only (FR-7.9-006), room-key-file-only (FR-7.9-007), or helper/fixture-only FAIL.
+  - Test target: useKeyBackup KeyBackupStatus/SessionsRemaining/Failed/DecryptionKeyCached listeners; getActiveSessionBackupVersion/getKeyBackupInfo/isKeyBackupTrusted; BackupRestoreTile Connected/Disconnected/Syncing/failure/trust UI; Devices Verified mount; post-cutover P8.5 SC-066 + GAP-RECOVERY-BACKUP steady-state DTO
   - Preconditions:
-    - Desktop app, E2EE-capable session; second device for verification
-    - Recovery key / backup fixtures; isolated multi-account profiles when testing isolation
-    - Linked owner path present in tree: synara/src/app/hooks/useKeyBackup.ts
-    - Primary UI/lifecycle surface: synara/src/app/components/BackupRestore.tsx
+    - Disposable Synapse; E2EE-capable desktop session; ability to observe Encrypted Backup tile under Settings → Devices when current device is Verified.
+    - Named product surfaces present: useKeyBackup.ts (all KeyBackup* hooks), BackupRestore.tsx BackupRestoreTile, Devices.tsx Verified mount of BackupRestoreTile.
+    - Harness can drive or observe backup enablement status changes, sessions-remaining > 0, KeyBackupFailed string, and trust refetch without process restart; does not bypass product BackupRestoreTile with dual-backend/raw HTTP/helper-only pass criteria.
+    - Do not accept recovery setup/resetKeyBackup/restoreKeyBackup alone (FR-7.9-006), LocalBackup room-key file alone (FR-7.9-007), cross-signing badge alone (FR-7.9-002), or SAS alone (FR-7.9-005) as sole pass for this FR.
   - Actions:
-    1. Boot the appropriate harness for level=integration-e2e against disposable Synapse (or iOS notes if any).
-    2. Establish fixtures required by the clause list: key-backup state listeners.
-    3. Open UI/lifecycle surface `synara/src/app/components/BackupRestore.tsx` (or follow ui_entry_points_rationale if no dedicated UI).
-    4. Step 1: perform the product action that implements «key-backup state listeners» using current owner `synara/src/app/hooks/useKeyBackup.ts`.
-    5. Force process restart and/or offline→online transition where lifecycle continuity is implied.
+    1. Boot integration harness against disposable Synapse. Do not use fixture-only mocks that skip product useKeyBackup listeners + BackupRestoreTile, dual-backend selectors, raw HTTP, or helper-only pass criteria.
+    2. CONNECTED: With Verified current device and active session backup version, open Settings → Devices; assert Encryption Backup shows Connected (Success badge) and Backup Details version/count when available.
+    3. SYNCING: Arrange or simulate KeyBackupSessionsRemaining with count > 0; assert Syncing(count) UI; when remaining returns to 0, assert Connected/Disconnected branch returns.
+    4. FAILED: Arrange or simulate KeyBackupFailed with a string; assert critical failure text appears and remaining is cleared.
+    5. DISCONNECTED / TRUST: With server backup info present but session backup not active (or untrusted), assert Disconnected and BackupTrustInfo trusted/matchesDecryptionKey messages (or critical negatives) without requiring process restart.
+    6. After cutover P8.5, repeat Connected/Disconnected/Syncing/failure/trust observables via Rust Backups ownership + product tile + IPC DTO. Citing SC-066 alone, compile-only, raw /\_matrix HTTP, dual-backend/SDK selector, recovery-setup/restore-only, room-key-file-only, or helper/fixture-only is a FAIL.
   - Assertions:
-    - Each clause is observable: «key-backup state listeners».
-    - State coordination remains through `synara/src/app/hooks/useKeyBackup.ts` (or its Rust/IPC successor after cutover), not ad-hoc dual writers.
-    - Behavior-relevant current JS method candidates exercised or replaced: getActiveSessionBackupVersion, isKeyBackupTrusted (AST candidates; not type-proven receivers).
-    - Behavior-relevant listener candidates observed or replaced: on:CryptoEvent.KeyBackupStatus, removeListener:CryptoEvent.KeyBackupStatus, on:CryptoEvent.KeyBackupSessionsRemaining, removeListener:CryptoEvent.KeyBackupSessionsRemaining, on:CryptoEvent.KeyBackupFailed, removeListener:CryptoEvent.KeyBackupFailed.
-    - Rust mapping remains conservative: caps=[SC-066] gaps=[GAP-RECOVERY-BACKUP]; compile-only blocked states are not treated as runtime pass.
-    - No new production matrix-js-sdk usage and no raw /\_matrix runtime HTTP unless dossier marks that exact behavior typed-sdk-request-required.
+    - CONNECTED/DISCONNECTED: Encryption Backup status badge reflects active session backup version (Connected vs Disconnected) and updates via KeyBackupStatus without process restart.
+    - SYNCING: when sessions remaining > 0, UI shows Syncing(n); when remaining returns to 0, status badge branch resumes.
+    - FAILED: KeyBackupFailed string is shown as critical text; remaining sessions cleared.
+    - TRUST: BackupTrustInfo (or product-equivalent) reflects isKeyBackupTrusted matchesDecryptionKey and trusted signature when backup info present and session backup not enabled.
+    - INFO: Backup Details version/count track getKeyBackupInfo refreshes after status/sync completion.
+    - COORDINATION: listener state remains through useKeyBackup.ts (or Rust/IPC successor), not ad-hoc dual writers; BackupRestoreTile remains the primary UI reaction surface.
+    - CUTOVER: P8.5 preserves Connected/Disconnected/Syncing/failure/trust observables via Rust ownership + IPC DTO; SC-066/GAP compile-only never product pass; no raw /\_matrix runtime HTTP; no dual-backend/SDK selector.
+    - No new production matrix-js-sdk usage and no raw /\_matrix runtime HTTP unless the dossier marks that exact behavior typed-sdk-request-required.
+    - Recovery setup/restore alone (FR-7.9-006), room-key file import/export alone (FR-7.9-007), cross-signing alone (FR-7.9-002), SAS alone (FR-7.9-005), and helper unit tests alone are not accepted as sole pass criteria for this FR.
   - does_not_currently_exist: `True`
 - **Manual**: `MA-FR-7.9-009`
 
@@ -9112,20 +9124,27 @@ Limited rejected-review correction (`p0.2-correct-34-fr-7.9-008-undecryptable-ev
 
 - Platforms: macOS, Linux
 - Preconditions:
-  - Desktop app, E2EE-capable session; second device for verification
-  - Recovery key / backup fixtures; isolated multi-account profiles when testing isolation
-  - State owner available: synara/src/app/hooks/useKeyBackup.ts
-  - UI/lifecycle: synara/src/app/components/BackupRestore.tsx
+  - Disposable Synapse; E2EE-capable desktop session; current device can reach Verified so Encryption Backup tile mounts.
+  - State owner available: synara/src/app/hooks/useKeyBackup.ts (KeyBackup* listeners).
+  - UI/lifecycle: synara/src/app/components/BackupRestore.tsx BackupRestoreTile; Devices.tsx Verified mount.
+  - Ability to observe Connected/Disconnected, Syncing(n), failure text, and trust messages without process restart.
   - Current status baseline: implemented
 - Actions:
-  1. Launch Synara desktop on the target platform against disposable Synapse; use a clean or known fixture profile as required by «key-backup state listeners;».
-  2. Identify state owner `synara/src/app/hooks/useKeyBackup.ts` and open `synara/src/app/components/BackupRestore.tsx`.
-  3. Action 1 — «key-backup state listeners»: perform the minimal user/system steps that trigger this clause (use linked files under current_production_files if the entry point is indirect).
-  4. Repeat critical path in an encrypted room / with a second device when the clause involves keys or verification.
+  1. Launch Synara desktop on the target platform against disposable Synapse with an E2EE session that has or can obtain server key backup.
+  2. Open Settings → Devices with a Verified current device so BackupRestoreTile (Encryption Backup) is visible.
+  3. CONNECTED/DISCONNECTED: Observe Connected when active session backup version is set; Disconnected (and No backup present on server! when info null) otherwise. Prefer a real enablement/status transition if available rather than process restart alone.
+  4. SYNCING: During backup upload or when sessions remain, observe Syncing(count) replace the status badge until remaining returns to 0.
+  5. FAILED: If a backup sync failure occurs (or is induced in a controlled fixture), confirm critical failure text from KeyBackupFailed path.
+  6. TRUST: When server backup exists but session backup is not active/trusted, open tile body and confirm BackupTrustInfo trusted decryption key / signature messages (success or critical).
+  7. Confirm recovery setup/restore button alone (FR-7.9-006) and LocalBackup file import alone (FR-7.9-007) are not used as sole pass for this FR.
 - Expected:
-  - All clauses under «key-backup state listeners;» produce the user-visible or system-observable success criteria without error toasts unrelated to intentional negative tests.
-  - Clause 1 «key-backup state listeners» is satisfied on macOS, Linux with owner `synara/src/app/hooks/useKeyBackup.ts`.
+  - Connected/Disconnected badge tracks active session backup version via KeyBackupStatus without requiring process restart for status changes.
+  - Syncing(n) appears when sessions remaining > 0 and clears when remaining returns to 0.
+  - KeyBackupFailed string is visible as critical text when emitted; remaining cleared.
+  - BackupTrustInfo (or product-equivalent) reflects decryption-key match and signature trust when applicable.
   - No unexpected raw /\_matrix traffic from the app renderer for this flow on the post-cutover build.
+  - Recovery setup/restore alone (FR-7.9-006), room-key file alone (FR-7.9-007), SAS alone (FR-7.9-005), and cross-signing alone (FR-7.9-002) do not close this FR.
+  - Clauses Connected/Disconnected, Syncing, failure, trust, and cutover observables satisfied on macOS and Linux via useKeyBackup + BackupRestoreTile (or Rust/IPC successors under P8.5).
 
 ### `MA-FR-7.9-010` (FR-7.9-010)
 
@@ -11344,21 +11363,25 @@ Limited rejected-review correction (`p0.2-correct-34-fr-7.9-008-undecryptable-ev
 
 ### `AT-FR-7.9-009-001`
 
-- 7.9/FR-7.9-009: exercise 'key-backup state listeners;' via owner `synara/src/app/hooks/useKeyBackup.ts` and UI `synara/src/app/components/BackupRestore.tsx`, then confirm Rust/IPC cutover task `P8.5` preserves observable behavior without raw Matrix runtime HTTP.
-- target: None
+- Integration-e2e against disposable Synapse with an E2EE session that has server key backup available: (A) CONNECTED — on a Verified session with active session backup version, open Settings → Devices → Encryption Backup and assert Connected badge via getActiveSessionBackupVersion / KeyBackupStatus (or product-equivalent). (B) DISCONNECTED / NO BACKUP — when no active session backup version and/or server info null, assert Disconnected and/or 'No backup present on server!'. (C) SYNCING — when KeyBackupSessionsRemaining emits count > 0 (or product-equivalent remaining upload sessions), assert Syncing(n) replaces Connected/Disconnected until remaining returns to 0. (D) FAILED — when KeyBackupFailed emits a failure string, assert critical failure text and remaining cleared. (E) TRUST — when backup present on server but session backup disabled/untrusted, assert BackupTrustInfo matchesDecryptionKey and trusted signature (or critical negatives) update via isKeyBackupTrusted after KeyBackupStatus / KeyBackupDecryptionKeyCached without process restart. After cutover P8.5 same Connected/Disconnected/Syncing/failure/trust observables via Rust SC-066 + GAP-RECOVERY-BACKUP backup steady-state + product UX + IPC DTO; SC-066 alone, compile-only blocked, raw /\_matrix HTTP, dual-backend, recovery-setup/restore-action-only (FR-7.9-006), room-key-file-only (FR-7.9-007), or helper/fixture-only FAIL.
+- target: useKeyBackup KeyBackupStatus/SessionsRemaining/Failed/DecryptionKeyCached listeners; getActiveSessionBackupVersion/getKeyBackupInfo/isKeyBackupTrusted; BackupRestoreTile Connected/Disconnected/Syncing/failure/trust UI; Devices Verified mount; post-cutover P8.5 SC-066 + GAP-RECOVERY-BACKUP steady-state DTO
 - actions:
-  1. Boot the appropriate harness for level=integration-e2e against disposable Synapse (or iOS notes if any).
-  2. Establish fixtures required by the clause list: key-backup state listeners.
-  3. Open UI/lifecycle surface `synara/src/app/components/BackupRestore.tsx` (or follow ui_entry_points_rationale if no dedicated UI).
-  4. Step 1: perform the product action that implements «key-backup state listeners» using current owner `synara/src/app/hooks/useKeyBackup.ts`.
-  5. Force process restart and/or offline→online transition where lifecycle continuity is implied.
+  1. Boot integration harness against disposable Synapse. Do not use fixture-only mocks that skip product useKeyBackup listeners + BackupRestoreTile, dual-backend selectors, raw HTTP, or helper-only pass criteria.
+  2. CONNECTED: With Verified current device and active session backup version, open Settings → Devices; assert Encryption Backup shows Connected (Success badge) and Backup Details version/count when available.
+  3. SYNCING: Arrange or simulate KeyBackupSessionsRemaining with count > 0; assert Syncing(count) UI; when remaining returns to 0, assert Connected/Disconnected branch returns.
+  4. FAILED: Arrange or simulate KeyBackupFailed with a string; assert critical failure text appears and remaining is cleared.
+  5. DISCONNECTED / TRUST: With server backup info present but session backup not active (or untrusted), assert Disconnected and BackupTrustInfo trusted/matchesDecryptionKey messages (or critical negatives) without requiring process restart.
+  6. After cutover P8.5, repeat Connected/Disconnected/Syncing/failure/trust observables via Rust Backups ownership + product tile + IPC DTO. Citing SC-066 alone, compile-only, raw /\_matrix HTTP, dual-backend/SDK selector, recovery-setup/restore-only, room-key-file-only, or helper/fixture-only is a FAIL.
 - assertions:
-  - Each clause is observable: «key-backup state listeners».
-  - State coordination remains through `synara/src/app/hooks/useKeyBackup.ts` (or its Rust/IPC successor after cutover), not ad-hoc dual writers.
-  - Behavior-relevant current JS method candidates exercised or replaced: getActiveSessionBackupVersion, isKeyBackupTrusted (AST candidates; not type-proven receivers).
-  - Behavior-relevant listener candidates observed or replaced: on:CryptoEvent.KeyBackupStatus, removeListener:CryptoEvent.KeyBackupStatus, on:CryptoEvent.KeyBackupSessionsRemaining, removeListener:CryptoEvent.KeyBackupSessionsRemaining, on:CryptoEvent.KeyBackupFailed, removeListener:CryptoEvent.KeyBackupFailed.
-  - Rust mapping remains conservative: caps=[SC-066] gaps=[GAP-RECOVERY-BACKUP]; compile-only blocked states are not treated as runtime pass.
-  - No new production matrix-js-sdk usage and no raw /\_matrix runtime HTTP unless dossier marks that exact behavior typed-sdk-request-required.
+  - CONNECTED/DISCONNECTED: Encryption Backup status badge reflects active session backup version (Connected vs Disconnected) and updates via KeyBackupStatus without process restart.
+  - SYNCING: when sessions remaining > 0, UI shows Syncing(n); when remaining returns to 0, status badge branch resumes.
+  - FAILED: KeyBackupFailed string is shown as critical text; remaining sessions cleared.
+  - TRUST: BackupTrustInfo (or product-equivalent) reflects isKeyBackupTrusted matchesDecryptionKey and trusted signature when backup info present and session backup not enabled.
+  - INFO: Backup Details version/count track getKeyBackupInfo refreshes after status/sync completion.
+  - COORDINATION: listener state remains through useKeyBackup.ts (or Rust/IPC successor), not ad-hoc dual writers; BackupRestoreTile remains the primary UI reaction surface.
+  - CUTOVER: P8.5 preserves Connected/Disconnected/Syncing/failure/trust observables via Rust ownership + IPC DTO; SC-066/GAP compile-only never product pass; no raw /\_matrix runtime HTTP; no dual-backend/SDK selector.
+  - No new production matrix-js-sdk usage and no raw /\_matrix runtime HTTP unless the dossier marks that exact behavior typed-sdk-request-required.
+  - Recovery setup/restore alone (FR-7.9-006), room-key file import/export alone (FR-7.9-007), cross-signing alone (FR-7.9-002), SAS alone (FR-7.9-005), and helper unit tests alone are not accepted as sole pass criteria for this FR.
 
 ### `AT-FR-7.9-010-001`
 
@@ -11955,7 +11978,7 @@ Limited rejected-review correction (`p0.2-correct-34-fr-7.9-008-undecryptable-ev
 | `synara/src/app/plugins/react-custom-html-parser.tsx`                          | `plugin`           | `requirement-linked`           |   0 |   4 | `FR-7.7-008`                                                                                                                                                                                                                              |
 | `synara/src/app/plugins/recent-emoji.ts`                                       | `plugin`           | `requirement-linked`           |   0 |   1 | `FR-7.7-006`,`FR-7.7-007`                                                                                                                                                                                                                 |
 | `synara/src/app/plugins/via-servers.ts`                                        | `plugin`           | `shared-matrix-infrastructure` |   0 |   0 | `FR-7.3-001`,`FR-7.6-001`,`FR-7.6-004`,`FR-7.7-005`,`FR-7.11-002`,`FR-7.4-002`                                                                                                                                                            |
-| `synara/src/app/state/backupRestore.ts`                                        | `state`            | `requirement-linked`           |   0 |   0 | `FR-7.9-006`,`FR-7.9-009`,`FR-7.9-013`                                                                                                                                                                                                    |
+| `synara/src/app/state/backupRestore.ts`                                        | `state`            | `requirement-linked`           |   0 |   0 | `FR-7.9-006`,`FR-7.9-013`                                                                                                                                                                                                                 |
 | `synara/src/app/state/hooks/inviteList.ts`                                     | `state`            | `requirement-linked`           |   0 |   7 | `FR-7.2-003`                                                                                                                                                                                                                              |
 | `synara/src/app/state/hooks/roomList.ts`                                       | `state`            | `requirement-linked`           |   0 |  13 | `FR-7.2-003`                                                                                                                                                                                                                              |
 | `synara/src/app/state/hooks/useBindAtoms.ts`                                   | `state`            | `requirement-linked`           |   0 |   0 | `FR-7.1-009`                                                                                                                                                                                                                              |
