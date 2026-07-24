@@ -4,7 +4,7 @@
 
 ## Correction pass status
 
-Limited rejected-review correction (`p0.2-correct-25-fr-7.8-007-notification-suppression-focus`) for **FR-7.8-007** only: retarget notification suppression for active/focused contexts from wrong push-rule preference linkage and weak utils/notifications.ts owner to ClientNonUIFeatures MessageNotifications focus/sync/mute/self/showNotifications gates (`document.hasFocus` + selected room / notifications inbox; SYNCING; Mute via getNotificationType; self; showNotifications; unreadEqual) with SystemNotification/tray DND enablement and utils/room Mute helper; document Invite has no focused-room gate; rewrite planned AT/MA for independent suppression cases and P9.3 product focus + Rust candidate stream cutover (no raw `/_matrix/` HTTP; SC-057 alone fails; push-rule UI / badge-only / generation-only / helper-only cannot substitute). Status remains `implemented`. JSON and Markdown synchronized. Accepted corrections for **FR-7.8-001 through FR-7.8-006** preserved. Prior corrections and accepted **7.1–7.3** preserved. **P0.2 is not complete.**
+Limited rejected-review correction (`p0.2-correct-26-fr-7.8-008-privacy-safe-encrypted-notifications`) for **FR-7.8-008** only: retarget privacy-safe encrypted notification behavior from wrong push-rule preference linkage / EncryptedContent timeline / utils/notifications sendReadReceipt owner to ClientNonUIFeatures OS notification body content (Message room+sender redaction; Invite count-only; Later generic due; AgentApproval optional commandPreview disclosure) + SystemNotificationPrivacy DTO + platform/desktop privacy drop; keep status `partial` under `GATE-7.8-008-ENCRYPTED-PRIVATE-MODE` (privacy enum never applied by generation; dropped before desktop_notify; encrypted rooms not treated differently); rewrite planned AT/MA; honest rust_target without claiming SC-057/SC-061 implement OS privacy redaction; cutover must not dump decrypted content into OS notifications without a privacy gate (no raw `/_matrix/` HTTP). JSON and Markdown synchronized. Accepted corrections for **FR-7.8-001 through FR-7.8-007** preserved. Prior corrections and accepted **7.1–7.3** preserved. **P0.2 is not complete.**
 
 ## Provenance
 
@@ -5460,61 +5460,62 @@ Limited rejected-review correction (`p0.2-correct-25-fr-7.8-007-notification-sup
 - **Text**: privacy-safe encrypted notification behavior;
 - **Lines**: 420–420
 - **Status**: `partial`
-- **Behavior**: Current desktop implements this via 8 production matrix-js-sdk-related file(s); status=partial.
-- **Notes**: Encrypted notification privacy behavior is product+crypto sensitive; full privacy review remains a gate.
-- **UI**: `synara/src/app/features/settings/notifications/SystemNotification.tsx`
-- **Owners**: `synara/src/app/utils/notifications.ts`
+- **Behavior**: Current desktop partially implements privacy-safe encrypted notification behavior via product-owned OS notification body redaction on Message/Invite/Later paths (no event plaintext or ciphertext in OS bodies) while privacy:'private' is never set by generation and is dropped before desktop_notify; encrypted rooms are not treated differently; AgentApproval may disclose commandPreview; status=partial under GATE-7.8-008-ENCRYPTED-PRIVATE-MODE.
+- **Notes**: Evidence (conservative): (1) MessageNotifications OS body `ClientNonUIFeatures.tsx` L385–388 (platform) / L393–396 (window.Notification): title=roomName, body=`New inbox notification from ${username}` with username from getMemberDisplayName/getMxIdLocalPart/sender L465 — does not include event plaintext body, decrypted content, or ciphertext. Same template for encrypted and unencrypted rooms (no isEncrypted branch). (2) InviteNotifications L308–317: title='Invitation', body=`You have ${count} new invitation request.` — count only. (3) LaterReminderNotifications L782–825: title='Reminder', body fixed 'A saved reminder is due.' — no saved event text. (4) AgentApprovalNotifications L526: notificationBody may append commandPreview; OS body `${roomName}: ${notificationBody}` L531/L547; commandPreview from detectAgentApprovalPrompt(mEvent.getContent()) L692–708 / `agentApprovals.ts` L480–517 — deliberate approval disclosure, not arbitrary room-message dumping. (5) SystemNotificationPrivacy type `'standard' | 'private'` `systemNotification.ts` L3; normalize defaults privacy to 'standard' L97; preserves explicit private in DTO only. (6) Generation paths never pass privacy:'private' (production TS). showPlatformNotification L31–37 omits privacy/sound when calling showDesktopNotification. DesktopNotificationPayload L232–238 has no privacy field; showDesktopNotification L961–992 / desktop_notify never receives privacy. platform.test.ts proves desktop_notify args lack privacy even when request had privacy:'private'. (7) Explicit non-evidence: EncryptedContent.tsx timeline decryption rendering; push-rule preference UIs; utils/notifications.ts sendReadReceipt/inbox helpers; SystemNotification.tsx enablement-only. (8) iOS note (secondary): SynaraMatrixEventPreviewComposer returns nil for m.room.encrypted; lockScreenMessagePreviews preference exists — desktop is primary. (9) Existing tests: systemNotification.test.ts normalize privacy unit only; platform.test.ts privacy strip; no E2E encrypted-room OS body AT. Cutover P9.5/P13.5 must not regress into dumping decrypted event content into OS notifications without a privacy gate; SC-057/SC-061 alone never implement OS body redaction; raw /_matrix HTTP never passes.
+- **UI**: `synara/src/app/pages/client/ClientNonUIFeatures.tsx` (OS body content lifecycle; no dedicated privacy-redaction settings control)
+- **UI rationale**: No dedicated Settings privacy-redaction control for OS notification bodies. Privacy behavior is owned by native generation body strings in ClientNonUIFeatures. SystemNotification.tsx is enablement-only and is not the FR owner.
+- **Owners**: `synara/src/app/pages/client/ClientNonUIFeatures.tsx`, `synara/src/app/notifications/systemNotification.ts`, `synara/src/app/platform/notifications.ts`, `synara/src/app/utils/desktop.ts`, `synara/src/app/utils/agentApprovals.ts`
 - **Files**:
-  - `synara/src/app/features/room/message/EncryptedContent.tsx` symbols=[] retained_m=0 retained_l=0
-  - `synara/src/app/features/settings/notifications/AllMessages.tsx` symbols=['setPushRuleActions'] retained_m=1 retained_l=0
-    - method `setPushRuleActions`:L67 — None
-  - `synara/src/app/features/settings/notifications/KeywordMessages.tsx` symbols=['addPushRule', 'deletePushRule', 'setPushRuleActions'] retained_m=3 retained_l=0
-    - method `addPushRule`:L30 — None
-    - method `deletePushRule`:L114 — None
-    - method `setPushRuleActions`:L135 — None
-  - `synara/src/app/features/settings/notifications/NotificationModeSwitcher.tsx` symbols=[] retained_m=0 retained_l=0
-  - `synara/src/app/features/settings/notifications/SpecialMessages.tsx` symbols=['setPushRuleActions'] retained_m=1 retained_l=0
-    - method `setPushRuleActions`:L106 — None
-  - `synara/src/app/features/settings/notifications/SystemNotification.tsx` symbols=[] retained_m=0 retained_l=0
-  - `synara/src/app/pages/client/inbox/Notifications.tsx` symbols=[] retained_m=0 retained_l=0
-  - `synara/src/app/utils/notifications.ts` symbols=['sendReadReceipt'] retained_m=1 retained_l=0
-    - method `sendReadReceipt`:L402 — None
+  - `synara/src/app/pages/client/ClientNonUIFeatures.tsx` symbols=['on:RoomEvent.Timeline', 'removeListener:RoomEvent.Timeline'] retained_m=0 retained_l=2
+    - listener `on:RoomEvent.Timeline`:L475 — MessageNotifications path that emits product-redacted message OS bodies
+    - listener `removeListener:RoomEvent.Timeline`:L477 — MessageNotifications teardown
+    - note: Message body L385–396 room+sender only; Invite L308–317 count-only; Later L782–825 generic due; Agent L526–547 may include commandPreview; no privacy:'private' / isEncrypted branch
+  - `synara/src/app/notifications/systemNotification.ts` symbols=['SystemNotificationPrivacy', 'normalizeSystemNotificationRequest'] retained_m=0 retained_l=0
+    - note: Non-P0.1; privacy type L3; default standard L97; does not redact title/body when private
+  - `synara/src/app/platform/notifications.ts` symbols=['showPlatformNotification'] retained_m=0 retained_l=0
+    - note: Non-P0.1; drops privacy/sound before showDesktopNotification L31–37
+  - `synara/src/app/utils/desktop.ts` symbols=['DesktopNotificationPayload', 'showDesktopNotification'] retained_m=0 retained_l=0
+    - note: Non-P0.1; payload L232–238 has no privacy field; desktop_notify L989–991
+  - `synara/src/app/utils/agentApprovals.ts` symbols=['detectAgentApprovalPrompt', 'commandPreview'] retained_m=0 retained_l=0
+    - note: Non-P0.1; commandPreview extraction L480–517 for AgentApproval OS disclosure
 - **Behavior-relevant methods (top-level)**:
-  - `setPushRuleActions` `synara/src/app/features/settings/notifications/AllMessages.tsx`:L67 — None
-  - `addPushRule` `synara/src/app/features/settings/notifications/KeywordMessages.tsx`:L30 — None
-  - `deletePushRule` `synara/src/app/features/settings/notifications/KeywordMessages.tsx`:L114 — None
-  - `setPushRuleActions` `synara/src/app/features/settings/notifications/KeywordMessages.tsx`:L135 — None
-  - `setPushRuleActions` `synara/src/app/features/settings/notifications/SpecialMessages.tsx`:L106 — None
-  - `sendReadReceipt` `synara/src/app/utils/notifications.ts`:L402 — None
-- **Behavior-relevant listeners (top-level)**:
   - —
-- **Unfiltered linked candidates**: methods=17 listeners=2
-- **Rust**: `policy-and-sdk` caps=['SC-057', 'SC-061'] gaps=[]
-  - `SC-057` `blocked` `matrix_sdk::notification_settings::NotificationSettings` https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/notification_settings/mod.rs#L81
-  - `SC-061` `blocked` `matrix_sdk::encryption::Encryption` https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/encryption/mod.rs#L892
+- **Behavior-relevant listeners (top-level)**:
+  - `on:RoomEvent.Timeline` `synara/src/app/pages/client/ClientNonUIFeatures.tsx`:L475 — MessageNotifications product-redacted body path
+  - `removeListener:RoomEvent.Timeline` `synara/src/app/pages/client/ClientNonUIFeatures.tsx`:L477 — MessageNotifications teardown
+- **Unfiltered linked candidates**: methods=25 listeners=6
+- **Rust**: `product-owned-os-notification-body-redaction-with-open-private-mode-gate` caps=[] gaps=[]
+  - Honest: OS notification body privacy is product-owned. Do not map SC-057 NotificationSettings or SC-061 Encryption as OS privacy redaction. Cutover P9.5 must preserve Message/Invite/Later redaction, must not dump decrypted content without a privacy gate, must account for AgentApproval commandPreview, no raw `/_matrix` HTTP. GATE-7.8-008-ENCRYPTED-PRIVATE-MODE remains open.
 - **Tasks**: `P9.5`, `P13.5`
+- **Blockers**: `GATE-7.8-008-ENCRYPTED-PRIVATE-MODE`
 - **Existing tests**:
-  - _(none)_
+  - `synara/src/app/notifications/__tests__/systemNotification.test.ts` — normalize privacy unit only (default standard; preserves private); not E2E OS body AT
+  - `synara/src/app/platform/__tests__/platform.test.ts` — showPlatformNotification with privacy:'private' yields desktop_notify without privacy field
 - **Planned** `AT-FR-7.8-008-001` task `P9.5` level `integration-security`
-  - Scenario: 7.8/FR-7.8-008: exercise 'privacy-safe encrypted notification behavior;' via owner `synara/src/app/utils/notifications.ts` and UI `synara/src/app/features/settings/notifications/SystemNotification.tsx`, then confirm Rust/IPC cutover task `P9.5` preserves observable behavior without raw Matrix runtime HTTP.
-  - Test target: None
+  - Scenario: Integration-security against disposable Synapse: assert desktop Message OS notifications (encrypted and clear rooms) use product-redacted bodies (room name + sender display only; no event plaintext and no ciphertext); Invite uses count-only body; Later uses generic due body; document AgentApproval may include commandPreview; assert privacy:'private' is not applied by generation and is not delivered to desktop_notify today (GATE-7.8-008-ENCRYPTED-PRIVATE-MODE open). After cutover P9.5, same body-redaction observables via product privacy policy + Rust candidate stream / IPC notification DTO — cutover must not dump decrypted content into OS notifications without a privacy gate; SC-057/SC-061 alone fail; no raw /_matrix HTTP.
+  - Test target: ClientNonUIFeatures Message/Invite/Agent/Later OS bodies + SystemNotificationPrivacy normalize + showPlatformNotification/showDesktopNotification privacy drop; post-cutover product privacy policy + Rust candidate stream / IPC notification DTO (P9.5); GATE-7.8-008-ENCRYPTED-PRIVATE-MODE
   - Preconditions:
-    - Desktop app with notification permission granted (OS)
-    - Rooms with distinct push-rule modes; backgrounded window fixture
-    - Linked owner path present in tree: synara/src/app/utils/notifications.ts
-    - Primary UI/lifecycle surface: synara/src/app/features/settings/notifications/SystemNotification.tsx
+    - Disposable Synapse; desktop app with OS/browser notification permission and showNotifications on; app backgrounded/unfocused so MessageNotifications can generate.
+    - Named body owner: ClientNonUIFeatures MessageNotifications / InviteNotifications / AgentApprovalNotifications / LaterReminderNotifications.
+    - Named privacy DTO/bridge: systemNotification.ts SystemNotificationPrivacy + normalize; platform/notifications.ts showPlatformNotification; desktop.ts DesktopNotificationPayload / showDesktopNotification.
+    - Fixtures: encrypted room notifiable message; clear room notifiable message; invite count increase; later reminder due; agent approval prompt with commandPreview.
+    - GATE-7.8-008-ENCRYPTED-PRIVATE-MODE remains open until private mode is applied end-to-end for encrypted (or user-configured) notification content.
   - Actions:
-    1. Boot the appropriate harness for level=integration-security against disposable Synapse (or iOS notes if any).
-    2. Establish fixtures required by the clause list: privacy-safe encrypted notification behavior.
-    3. Open UI/lifecycle surface `synara/src/app/features/settings/notifications/SystemNotification.tsx` (or follow ui_entry_points_rationale if no dedicated UI).
-    4. Step 1: perform the product action that implements «privacy-safe encrypted notification behavior» using current owner `synara/src/app/utils/notifications.ts`.
+    1. Boot the integration harness against disposable Synapse. Do not use fixture-only mocks that bypass product generation body construction, push-rule settings UI alone, badge/tray alone, EncryptedContent timeline rendering, alternate UI, helper-only harnesses, or raw HTTP.
+    2. MESSAGE BODY (clear + encrypted): with showNotifications on and app unfocused, inject live notifiable timeline events in a clear room and an encrypted room. Capture showPlatformNotification / window.Notification title+body. Assert body is `New inbox notification from ${username}` (or equivalent product template) with title=roomName; assert event plaintext body and ciphertext are absent from title and body for both rooms.
+    3. INVITE BODY: increase invite count while SYNCING; assert Invitation notification body is count-only (`You have N new invitation request.`) without room/event content.
+    4. LATER BODY: due reminder; assert body is generic 'A saved reminder is due.' without saved event text.
+    5. AGENT APPROVAL DISCLOSURE: inject approval prompt with commandPreview; assert OS body may include commandPreview (document as known disclosure); do not treat commandPreview presence as a message-body redaction failure.
+    6. PRIVATE MODE GAP: assert generation paths do not set privacy:'private'; assert showPlatformNotification → desktop_notify payload omits privacy (current product). Record incomplete under GATE-7.8-008-ENCRYPTED-PRIVATE-MODE until private mode is applied for encrypted-room (or user-configured) OS content.
+    7. After cutover tasks P9.5 (and P13.5 review as applicable), repeat body-redaction observables via product privacy policy + Rust-owned notification candidate stream / IPC DTO. Citing SC-057/SC-061 alone, compile-only blocked states, raw /_matrix HTTP, push-rule settings UI, EncryptedContent timeline rendering, badge-only, generation without body assertions, or helper/fixture-only is a FAIL. Dumping decrypted event content into OS notifications without a privacy gate is a FAIL.
   - Assertions:
-    - Each clause is observable: «privacy-safe encrypted notification behavior».
-    - State coordination remains through `synara/src/app/utils/notifications.ts` (or its Rust/IPC successor after cutover), not ad-hoc dual writers.
-    - Behavior-relevant current JS method candidates exercised or replaced: setPushRuleActions, addPushRule, deletePushRule, setPushRuleActions, setPushRuleActions, sendReadReceipt (AST candidates; not type-proven receivers).
-    - Rust mapping remains conservative: caps=[SC-057,SC-061] gaps=[none]; compile-only blocked states are not treated as runtime pass.
-    - No new production matrix-js-sdk usage and no raw /\_matrix runtime HTTP unless dossier marks that exact behavior typed-sdk-request-required.
-    - Encrypted payloads are not leaked to unintended rooms/logs/disk.
+    - MESSAGE: no event plaintext and no ciphertext in Message OS notification title/body as currently implemented; room name + sender display only; same for encrypted and clear rooms under current product.
+    - INVITE: count-only body; no event content.
+    - LATER: generic due body; no saved event text.
+    - AGENT APPROVAL: commandPreview may appear in OS body when present; documented disclosure, not silent regression.
+    - PRIVATE MODE: privacy enum may normalize to 'private' in unit tests but generation does not set it and desktop delivery drops it; GATE-7.8-008-ENCRYPTED-PRIVATE-MODE remains open.
+    - CUTOVER: must preserve Message/Invite/Later redaction; must not start dumping decrypted content into OS notifications without a privacy gate; no raw /_matrix runtime HTTP; SC-057 NotificationSettings and SC-061 Encryption alone never implement OS privacy redaction.
+    - No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless the dossier marks that exact behavior typed-sdk-request-required.
   - does_not_currently_exist: `True`
 - **Manual**: `MA-FR-7.8-008`
 
@@ -8803,21 +8804,27 @@ Limited rejected-review correction (`p0.2-correct-25-fr-7.8-007-notification-sup
 
 - Platforms: macOS, Linux
 - Preconditions:
-  - Desktop app with notification permission granted (OS)
-  - Rooms with distinct push-rule modes; backgrounded window fixture
-  - State owner available: synara/src/app/utils/notifications.ts
-  - UI/lifecycle: synara/src/app/features/settings/notifications/SystemNotification.tsx
-  - Current status baseline: partial
+  - Desktop app with OS notification permission granted and showNotifications enabled
+  - Disposable Synapse with a clear room and an encrypted room; second user/device to send notifiable events
+  - App backgrounded/unfocused so MessageNotifications can generate
+  - Named body owner: ClientNonUIFeatures Message/Invite/Agent/Later notification paths
+  - Named privacy bridge: systemNotification.ts / platform/notifications.ts / desktop.ts
+  - Current status baseline: partial under GATE-7.8-008-ENCRYPTED-PRIVATE-MODE
 - Actions:
-  1. Launch Synara desktop on the target platform against disposable Synapse; use a clean or known fixture profile as required by «privacy-safe encrypted notification behavior;».
-  2. Identify state owner `synara/src/app/utils/notifications.ts` and open `synara/src/app/features/settings/notifications/SystemNotification.tsx`.
-  3. Action 1 — «privacy-safe encrypted notification behavior»: perform the minimal user/system steps that trigger this clause (use linked files under current_production_files if the entry point is indirect).
-  4. Repeat critical path in an encrypted room / with a second device when the clause involves keys or verification.
+  1. Launch Synara desktop on the target platform against disposable Synapse with notification permission granted and showNotifications on; background the window.
+  2. MESSAGE (clear + encrypted): from a second user, send notifiable messages in a clear room and an encrypted room. Observe OS/browser notification title and body for each.
+  3. INVITE: create a new invite to the local user; observe Invitation notification body.
+  4. LATER: create a due later reminder; observe Reminder notification body.
+  5. AGENT APPROVAL (if fixture available): trigger an approval prompt with a dangerous command; observe whether commandPreview appears in the OS body.
+  6. PRIVATE MODE GAP: confirm product has no user control that sets privacy:'private' for encrypted-room OS notifications end-to-end; record open under GATE-7.8-008-ENCRYPTED-PRIVATE-MODE.
+  7. On a post-cutover build (P9.5), repeat message/invite/later body checks; fail if decrypted event content appears in OS notifications without a privacy gate or if raw /_matrix HTTP is used.
 - Expected:
-  - All clauses under «privacy-safe encrypted notification behavior;» produce the user-visible or system-observable success criteria without error toasts unrelated to intentional negative tests.
-  - Clause 1 «privacy-safe encrypted notification behavior» is satisfied on macOS, Linux with owner `synara/src/app/utils/notifications.ts`.
-  - No unexpected raw /\_matrix traffic from the app renderer for this flow on the post-cutover build.
-  - Notification/OS surfaces do not reveal encrypted message bodies beyond product privacy policy.
+  - MESSAGE: OS notification title is room name and body is `New inbox notification from ${username}` (or product-equivalent); event plaintext and ciphertext are absent for both encrypted and clear rooms under current product.
+  - INVITE: body is count-only (`You have N new invitation request.`); no room/event content.
+  - LATER: body is generic `A saved reminder is due.`; no saved event text.
+  - AGENT APPROVAL: commandPreview may appear when product includes it; documented disclosure, not a silent message-body leak.
+  - PRIVATE MODE: GATE-7.8-008-ENCRYPTED-PRIVATE-MODE remains open until private mode is applied end-to-end; privacy DTO field alone is not a pass.
+  - Cutover preserves Message/Invite/Later redaction; does not dump decrypted content into OS notifications without a privacy gate; SC-057/SC-061 alone never implement OS privacy redaction; no unexpected raw /_matrix traffic from the app renderer.
 
 ### `MA-FR-7.8-009` (FR-7.8-009)
 
@@ -11037,20 +11044,24 @@ Limited rejected-review correction (`p0.2-correct-25-fr-7.8-007-notification-sup
 
 ### `AT-FR-7.8-008-001`
 
-- 7.8/FR-7.8-008: exercise 'privacy-safe encrypted notification behavior;' via owner `synara/src/app/utils/notifications.ts` and UI `synara/src/app/features/settings/notifications/SystemNotification.tsx`, then confirm Rust/IPC cutover task `P9.5` preserves observable behavior without raw Matrix runtime HTTP.
-- target: None
+- Integration-security against disposable Synapse: assert desktop Message OS notifications (encrypted and clear rooms) use product-redacted bodies (room name + sender display only; no event plaintext and no ciphertext); Invite uses count-only body; Later uses generic due body; document AgentApproval may include commandPreview; assert privacy:'private' is not applied by generation and is not delivered to desktop_notify today (GATE-7.8-008-ENCRYPTED-PRIVATE-MODE open). After cutover P9.5, same body-redaction observables via product privacy policy + Rust candidate stream / IPC notification DTO — cutover must not dump decrypted content into OS notifications without a privacy gate; SC-057/SC-061 alone fail; no raw /_matrix HTTP.
+- target: ClientNonUIFeatures Message/Invite/Agent/Later OS bodies + SystemNotificationPrivacy normalize + showPlatformNotification/showDesktopNotification privacy drop; post-cutover product privacy policy + Rust candidate stream / IPC notification DTO (P9.5); GATE-7.8-008-ENCRYPTED-PRIVATE-MODE
 - actions:
-  1. Boot the appropriate harness for level=integration-security against disposable Synapse (or iOS notes if any).
-  2. Establish fixtures required by the clause list: privacy-safe encrypted notification behavior.
-  3. Open UI/lifecycle surface `synara/src/app/features/settings/notifications/SystemNotification.tsx` (or follow ui_entry_points_rationale if no dedicated UI).
-  4. Step 1: perform the product action that implements «privacy-safe encrypted notification behavior» using current owner `synara/src/app/utils/notifications.ts`.
+  1. Boot the integration harness against disposable Synapse. Do not use fixture-only mocks that bypass product generation body construction, push-rule settings UI alone, badge/tray alone, EncryptedContent timeline rendering, alternate UI, helper-only harnesses, or raw HTTP.
+  2. MESSAGE BODY (clear + encrypted): with showNotifications on and app unfocused, inject live notifiable timeline events in a clear room and an encrypted room. Capture showPlatformNotification / window.Notification title+body. Assert body is `New inbox notification from ${username}` (or equivalent product template) with title=roomName; assert event plaintext body and ciphertext are absent from title and body for both rooms.
+  3. INVITE BODY: increase invite count while SYNCING; assert Invitation notification body is count-only (`You have N new invitation request.`) without room/event content.
+  4. LATER BODY: due reminder; assert body is generic 'A saved reminder is due.' without saved event text.
+  5. AGENT APPROVAL DISCLOSURE: inject approval prompt with commandPreview; assert OS body may include commandPreview (document as known disclosure); do not treat commandPreview presence as a message-body redaction failure.
+  6. PRIVATE MODE GAP: assert generation paths do not set privacy:'private'; assert showPlatformNotification → desktop_notify payload omits privacy (current product). Record incomplete under GATE-7.8-008-ENCRYPTED-PRIVATE-MODE until private mode is applied for encrypted-room (or user-configured) OS content.
+  7. After cutover tasks P9.5 (and P13.5 review as applicable), repeat body-redaction observables via product privacy policy + Rust-owned notification candidate stream / IPC DTO. Citing SC-057/SC-061 alone, compile-only blocked states, raw /_matrix HTTP, push-rule settings UI, EncryptedContent timeline rendering, badge-only, generation without body assertions, or helper/fixture-only is a FAIL. Dumping decrypted event content into OS notifications without a privacy gate is a FAIL.
 - assertions:
-  - Each clause is observable: «privacy-safe encrypted notification behavior».
-  - State coordination remains through `synara/src/app/utils/notifications.ts` (or its Rust/IPC successor after cutover), not ad-hoc dual writers.
-  - Behavior-relevant current JS method candidates exercised or replaced: setPushRuleActions, addPushRule, deletePushRule, setPushRuleActions, setPushRuleActions, sendReadReceipt (AST candidates; not type-proven receivers).
-  - Rust mapping remains conservative: caps=[SC-057,SC-061] gaps=[none]; compile-only blocked states are not treated as runtime pass.
-  - No new production matrix-js-sdk usage and no raw /\_matrix runtime HTTP unless dossier marks that exact behavior typed-sdk-request-required.
-  - Encrypted payloads are not leaked to unintended rooms/logs/disk.
+  - MESSAGE: no event plaintext and no ciphertext in Message OS notification title/body as currently implemented; room name + sender display only; same for encrypted and clear rooms under current product.
+  - INVITE: count-only body; no event content.
+  - LATER: generic due body; no saved event text.
+  - AGENT APPROVAL: commandPreview may appear in OS body when present; documented disclosure, not silent regression.
+  - PRIVATE MODE: privacy enum may normalize to 'private' in unit tests but generation does not set it and desktop delivery drops it; GATE-7.8-008-ENCRYPTED-PRIVATE-MODE remains open.
+  - CUTOVER: must preserve Message/Invite/Later redaction; must not start dumping decrypted content into OS notifications without a privacy gate; no raw /_matrix runtime HTTP; SC-057 NotificationSettings and SC-061 Encryption alone never implement OS privacy redaction.
+  - No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless the dossier marks that exact behavior typed-sdk-request-required.
 
 ### `AT-FR-7.8-009-001`
 
@@ -11730,7 +11741,7 @@ Limited rejected-review correction (`p0.2-correct-25-fr-7.8-007-notification-sup
 | `synara/src/app/features/room/RoomViewHeader.tsx`                              | `feature`          | `requirement-linked`           |   0 |   1 | `FR-7.2-012`,`FR-7.3-001`,`FR-7.3-012`                                                                                                                                                                                                    |
 | `synara/src/app/features/room/RoomViewTyping.tsx`                              | `feature`          | `requirement-linked`           |   0 |   1 | `FR-7.2-012`,`FR-7.2-013`,`FR-7.3-001`,`FR-7.3-012`,`FR-7.4-008`                                                                                                                                                                          |
 | `synara/src/app/features/room/jump-to-time/JumpToTime.tsx`                     | `feature`          | `requirement-linked`           |   0 |   0 | `FR-7.3-003`,`FR-7.3-004`,`FR-7.10-004`                                                                                                                                                                                                   |
-| `synara/src/app/features/room/message/EncryptedContent.tsx`                    | `feature`          | `requirement-linked`           |   2 |   0 | `FR-7.3-007`,`FR-7.3-008`,`FR-7.3-009`,`FR-7.3-010`,`FR-7.3-014`,`FR-7.3-016`,`FR-7.4-004`,`FR-7.5-002`,`FR-7.5-011`,`FR-7.8-008`,`FR-7.9-008`                                                                                            |
+| `synara/src/app/features/room/message/EncryptedContent.tsx`                    | `feature`          | `requirement-linked`           |   2 |   0 | `FR-7.3-007`,`FR-7.3-008`,`FR-7.3-009`,`FR-7.3-010`,`FR-7.3-014`,`FR-7.3-016`,`FR-7.4-004`,`FR-7.5-002`,`FR-7.5-011`,`FR-7.9-008`                                                                                            |
 | `synara/src/app/features/room/message/Message.tsx`                             | `feature`          | `requirement-linked`           |   0 |   9 | `FR-7.3-007`,`FR-7.3-008`,`FR-7.3-009`,`FR-7.3-010`,`FR-7.3-014`,`FR-7.3-016`,`FR-7.4-004`                                                                                                                                                |
 | `synara/src/app/features/room/message/MessageEditor.tsx`                       | `feature`          | `requirement-linked`           |   0 |   1 | `FR-7.3-007`,`FR-7.3-008`,`FR-7.3-009`,`FR-7.3-010`,`FR-7.3-014`,`FR-7.3-016`,`FR-7.4-002`,`FR-7.4-003`,`FR-7.4-004`                                                                                                                      |
 | `synara/src/app/features/room/message/Reactions.tsx`                           | `feature`          | `requirement-linked`           |   0 |   1 | `FR-7.3-007`,`FR-7.3-008`,`FR-7.3-009`,`FR-7.3-010`,`FR-7.3-014`,`FR-7.3-016`,`FR-7.4-004`                                                                                                                                                |
@@ -11743,11 +11754,11 @@ Limited rejected-review correction (`p0.2-correct-25-fr-7.8-007-notification-sup
 | `synara/src/app/features/settings/devices/OtherDevices.tsx`                    | `feature`          | `requirement-linked`           |   0 |   2 | `FR-7.7-007`,`FR-7.9-003`,`FR-7.9-010`                                                                                                                                                                                                    |
 | `synara/src/app/features/settings/devices/Verification.tsx`                    | `feature`          | `requirement-linked`           |   0 |   3 | `FR-7.7-007`,`FR-7.9-002`,`FR-7.9-004`,`FR-7.9-005`                                                                                                                                                                                       |
 | `synara/src/app/features/settings/emojis-stickers/GlobalPacks.tsx`             | `feature`          | `requirement-linked`           |   0 |   4 | `FR-7.7-005`,`FR-7.7-007`                                                                                                                                                                                                                 |
-| `synara/src/app/features/settings/notifications/AllMessages.tsx`               | `feature`          | `requirement-linked`           |   0 |   1 | `FR-7.2-005`,`FR-7.2-011`,`FR-7.3-007`,`FR-7.3-008`,`FR-7.3-009`,`FR-7.3-010`,`FR-7.3-014`,`FR-7.3-016`,`FR-7.4-004`,`FR-7.7-003`,`FR-7.7-007`,`FR-7.8-001`,`FR-7.8-003`,`FR-7.8-008` |
-| `synara/src/app/features/settings/notifications/KeywordMessages.tsx`           | `feature`          | `requirement-linked`           |   0 |   3 | `FR-7.2-005`,`FR-7.2-011`,`FR-7.3-007`,`FR-7.3-008`,`FR-7.3-009`,`FR-7.3-010`,`FR-7.3-014`,`FR-7.3-016`,`FR-7.4-004`,`FR-7.7-003`,`FR-7.7-007`,`FR-7.8-001`,`FR-7.8-003`,`FR-7.8-008` |
-| `synara/src/app/features/settings/notifications/NotificationModeSwitcher.tsx`  | `feature`          | `requirement-linked`           |   0 |   0 | `FR-7.2-005`,`FR-7.2-011`,`FR-7.7-003`,`FR-7.7-007`,`FR-7.8-001`,`FR-7.8-002`,`FR-7.8-008`                                                                                            |
-| `synara/src/app/features/settings/notifications/SpecialMessages.tsx`           | `feature`          | `requirement-linked`           |   0 |   2 | `FR-7.2-005`,`FR-7.2-011`,`FR-7.3-007`,`FR-7.3-008`,`FR-7.3-009`,`FR-7.3-010`,`FR-7.3-014`,`FR-7.3-016`,`FR-7.4-004`,`FR-7.7-003`,`FR-7.7-007`,`FR-7.8-001`,`FR-7.8-003`,`FR-7.8-008` |
-| `synara/src/app/features/settings/notifications/SystemNotification.tsx`        | `feature`          | `requirement-linked`           |   0 |   0 | `FR-7.2-005`,`FR-7.2-011`,`FR-7.7-003`,`FR-7.7-007`,`FR-7.8-004`,`FR-7.8-007`,`FR-7.8-008`                                                                                                                      |
+| `synara/src/app/features/settings/notifications/AllMessages.tsx`               | `feature`          | `requirement-linked`           |   0 |   1 | `FR-7.2-005`,`FR-7.2-011`,`FR-7.3-007`,`FR-7.3-008`,`FR-7.3-009`,`FR-7.3-010`,`FR-7.3-014`,`FR-7.3-016`,`FR-7.4-004`,`FR-7.7-003`,`FR-7.7-007`,`FR-7.8-001`,`FR-7.8-003` |
+| `synara/src/app/features/settings/notifications/KeywordMessages.tsx`           | `feature`          | `requirement-linked`           |   0 |   3 | `FR-7.2-005`,`FR-7.2-011`,`FR-7.3-007`,`FR-7.3-008`,`FR-7.3-009`,`FR-7.3-010`,`FR-7.3-014`,`FR-7.3-016`,`FR-7.4-004`,`FR-7.7-003`,`FR-7.7-007`,`FR-7.8-001`,`FR-7.8-003` |
+| `synara/src/app/features/settings/notifications/NotificationModeSwitcher.tsx`  | `feature`          | `requirement-linked`           |   0 |   0 | `FR-7.2-005`,`FR-7.2-011`,`FR-7.7-003`,`FR-7.7-007`,`FR-7.8-001`,`FR-7.8-002`                                                                                            |
+| `synara/src/app/features/settings/notifications/SpecialMessages.tsx`           | `feature`          | `requirement-linked`           |   0 |   2 | `FR-7.2-005`,`FR-7.2-011`,`FR-7.3-007`,`FR-7.3-008`,`FR-7.3-009`,`FR-7.3-010`,`FR-7.3-014`,`FR-7.3-016`,`FR-7.4-004`,`FR-7.7-003`,`FR-7.7-007`,`FR-7.8-001`,`FR-7.8-003` |
+| `synara/src/app/features/settings/notifications/SystemNotification.tsx`        | `feature`          | `requirement-linked`           |   0 |   0 | `FR-7.2-005`,`FR-7.2-011`,`FR-7.7-003`,`FR-7.7-007`,`FR-7.8-004`,`FR-7.8-007`                                                                                                                      |
 | `synara/src/app/features/space-settings/SpaceSettings.tsx`                     | `feature`          | `requirement-linked`           |   0 |   0 | `FR-7.2-009`,`FR-7.7-007`                                                                                                                                                                                                                 |
 | `synara/src/app/hooks/types.ts`                                                | `hook`             | `shared-matrix-infrastructure` |   0 |   0 | `FR-7.2-001`,`FR-7.3-001`,`FR-7.6-004`                                                                                                                                                                                                    |
 | `synara/src/app/hooks/useAccountDataCallback.ts`                               | `hook`             | `shared-matrix-infrastructure` |   2 |   0 | `FR-7.1-002`,`FR-7.2-001`,`FR-7.6-001`,`FR-7.3-002`,`FR-7.2-002`,`FR-7.2-006`,`FR-7.3-001`,`FR-7.6-004`,`FR-7.1-008`                                                                                                                      |
@@ -11816,12 +11827,12 @@ Limited rejected-review correction (`p0.2-correct-25-fr-7.8-007-notification-sup
 | `synara/src/app/pages/auth/register/registerUtil.ts`                           | `page`             | `requirement-linked`           |   0 |   1 | `FR-7.1-001`,`FR-7.1-004`,`FR-7.1-006`                                                                                                                                                                                                    |
 | `synara/src/app/pages/auth/reset-password/PasswordResetForm.tsx`               | `page`             | `requirement-linked`           |   0 |   0 | `FR-7.1-001`,`FR-7.1-004`,`FR-7.1-006`                                                                                                                                                                                                    |
 | `synara/src/app/pages/auth/reset-password/resetPasswordUtil.ts`                | `page`             | `requirement-linked`           |   0 |   1 | `FR-7.1-001`,`FR-7.1-004`,`FR-7.1-006`                                                                                                                                                                                                    |
-| `synara/src/app/pages/client/ClientNonUIFeatures.tsx`                          | `page`             | `requirement-linked`           |   6 |  18 | `FR-7.8-004`,`FR-7.8-005`,`FR-7.8-006`,`FR-7.8-007`,`FR-7.11-005`,`FR-7.4-006`                                                                                                                                                                                       |
+| `synara/src/app/pages/client/ClientNonUIFeatures.tsx`                          | `page`             | `requirement-linked`           |   6 |  18 | `FR-7.8-004`,`FR-7.8-005`,`FR-7.8-006`,`FR-7.8-007`,`FR-7.8-008`,`FR-7.11-005`,`FR-7.4-006`                                                                                                                                                                                       |
 | `synara/src/app/pages/client/ClientRoot.tsx`                                   | `page`             | `requirement-linked`           |   2 |   5 | `FR-7.1-007`,`FR-7.1-008`,`FR-7.1-012`,`FR-7.2-001`,`FR-7.2-002`,`FR-7.4-005`,`FR-7.5-005`,`FR-7.1-010`                                                                                                                                   |
 | `synara/src/app/pages/client/SyncStatus.tsx`                                   | `page`             | `requirement-linked`           |   0 |   0 | `FR-7.2-001`                                                                                                                                                                                                                              |
 | `synara/src/app/pages/client/explore/Server.tsx`                               | `page`             | `requirement-linked`           |   0 |   1 | `FR-7.6-006`,`FR-7.10-005`                                                                                                                                                                                                                |
 | `synara/src/app/pages/client/inbox/Invites.tsx`                                | `page`             | `requirement-linked`           |   0 |   7 | `FR-7.2-003`,`FR-7.6-001`                                                                                                                                                                                                                 |
-| `synara/src/app/pages/client/inbox/Notifications.tsx`                          | `page`             | `requirement-linked`           |   0 |   2 | `FR-7.2-005`,`FR-7.2-011`,`FR-7.7-003`,`FR-7.8-006`,`FR-7.8-008`                                                                                                                                               |
+| `synara/src/app/pages/client/inbox/Notifications.tsx`                          | `page`             | `requirement-linked`           |   0 |   2 | `FR-7.2-005`,`FR-7.2-011`,`FR-7.7-003`,`FR-7.8-006`                                                                                                                                               |
 | `synara/src/app/pages/client/sidebar/SpaceTabs.tsx`                            | `page`             | `requirement-linked`           |   0 |   7 | `FR-7.2-008`,`FR-7.7-007`                                                                                                                                                                                                                 |
 | `synara/src/app/pages/client/space/Space.tsx`                                  | `page`             | `requirement-linked`           |   0 |   7 | `FR-7.2-009`,`FR-7.6-001`                                                                                                                                                                                                                 |
 | `synara/src/app/pages/client/syncStatusCopy.ts`                                | `page`             | `requirement-linked`           |   0 |   0 | `FR-7.2-001`                                                                                                                                                                                                                              |
@@ -11852,7 +11863,7 @@ Limited rejected-review correction (`p0.2-correct-25-fr-7.8-007-notification-sup
 | `synara/src/app/utils/matrix-crypto.ts`                                        | `utility`          | `requirement-linked`           |   0 |   0 | `FR-7.9-008`                                                                                                                                                                                                                              |
 | `synara/src/app/utils/matrix-uia.ts`                                           | `utility`          | `requirement-linked`           |   0 |   0 | `FR-7.1-006`                                                                                                                                                                                                                              |
 | `synara/src/app/utils/matrix.ts`                                               | `utility`          | `requirement-linked`           |   0 |   9 | `FR-7.3-007`,`FR-7.4-005`,`FR-7.4-007`,`FR-7.5-001`,`FR-7.5-003`,`FR-7.5-004`,`FR-7.5-007`,`FR-7.5-008`,`FR-7.5-011`,`FR-7.6-008`                                                                                                         |
-| `synara/src/app/utils/notifications.ts`                                        | `utility`          | `requirement-linked`           |   0 |   9 | `FR-7.2-005`,`FR-7.2-011`,`FR-7.7-003`,`FR-7.8-008`                                                                                                                                               |
+| `synara/src/app/utils/notifications.ts`                                        | `utility`          | `requirement-linked`           |   0 |   9 | `FR-7.2-005`,`FR-7.2-011`,`FR-7.7-003`                                                                                                                                               |
 | `synara/src/app/utils/polls.ts`                                                | `utility`          | `requirement-linked`           |   0 |   0 | `FR-7.3-011`,`FR-7.4-006`                                                                                                                                                                                                                 |
 | `synara/src/app/utils/room.ts`                                                 | `utility`          | `requirement-linked`           |   0 |  15 | `FR-7.5-001`,`FR-7.5-002`,`FR-7.5-007`,`FR-7.6-008`,`FR-7.8-001`,`FR-7.8-002`,`FR-7.8-004`,`FR-7.8-005`,`FR-7.8-006`,`FR-7.8-007`                                                                                                                                                 |
 | `synara/src/app/utils/roomNotes.ts`                                            | `utility`          | `requirement-linked`           |   0 |   2 | `FR-7.3-014`,`FR-7.3-015`,`FR-7.7-002`,`FR-7.7-008`,`FR-7.7-009`                                                                                                                                                                          |

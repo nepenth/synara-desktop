@@ -11412,8 +11412,7 @@
               "FR-7.8-004",
               "FR-7.8-005",
               "FR-7.8-006",
-              "FR-7.8-007",
-              "FR-7.8-008"
+              "FR-7.8-007"
             ],
             "cutover_disposition": "replace-deep-js-sdk-import-with-synara-dto-or-rust-projection"
           },
@@ -11430,8 +11429,7 @@
               "FR-7.8-004",
               "FR-7.8-005",
               "FR-7.8-006",
-              "FR-7.8-007",
-              "FR-7.8-008"
+              "FR-7.8-007"
             ],
             "cutover_disposition": "replace-deep-js-sdk-import-with-synara-dto-or-rust-projection"
           },
@@ -11448,8 +11446,7 @@
               "FR-7.8-004",
               "FR-7.8-005",
               "FR-7.8-006",
-              "FR-7.8-007",
-              "FR-7.8-008"
+              "FR-7.8-007"
             ],
             "cutover_disposition": "replace-deep-js-sdk-import-with-synara-dto-or-rust-projection"
           },
@@ -11466,8 +11463,7 @@
               "FR-7.8-004",
               "FR-7.8-005",
               "FR-7.8-006",
-              "FR-7.8-007",
-              "FR-7.8-008"
+              "FR-7.8-007"
             ],
             "cutover_disposition": "replace-deep-js-sdk-import-with-synara-dto-or-rust-projection"
           },
@@ -11484,8 +11480,7 @@
               "FR-7.8-004",
               "FR-7.8-005",
               "FR-7.8-006",
-              "FR-7.8-007",
-              "FR-7.8-008"
+              "FR-7.8-007"
             ],
             "cutover_disposition": "replace-deep-js-sdk-import-with-synara-dto-or-rust-projection"
           }
@@ -15441,8 +15436,7 @@
               "FR-7.8-004",
               "FR-7.8-005",
               "FR-7.8-006",
-              "FR-7.8-007",
-              "FR-7.8-008"
+              "FR-7.8-007"
             ],
             "cutover_disposition": "replace-deep-js-sdk-import-with-synara-dto-or-rust-projection"
           },
@@ -15459,8 +15453,7 @@
               "FR-7.8-004",
               "FR-7.8-005",
               "FR-7.8-006",
-              "FR-7.8-007",
-              "FR-7.8-008"
+              "FR-7.8-007"
             ],
             "cutover_disposition": "replace-deep-js-sdk-import-with-synara-dto-or-rust-projection"
           },
@@ -15477,8 +15470,7 @@
               "FR-7.8-004",
               "FR-7.8-005",
               "FR-7.8-006",
-              "FR-7.8-007",
-              "FR-7.8-008"
+              "FR-7.8-007"
             ],
             "cutover_disposition": "replace-deep-js-sdk-import-with-synara-dto-or-rust-projection"
           },
@@ -15495,8 +15487,7 @@
               "FR-7.8-004",
               "FR-7.8-005",
               "FR-7.8-006",
-              "FR-7.8-007",
-              "FR-7.8-008"
+              "FR-7.8-007"
             ],
             "cutover_disposition": "replace-deep-js-sdk-import-with-synara-dto-or-rust-projection"
           },
@@ -15513,8 +15504,7 @@
               "FR-7.8-004",
               "FR-7.8-005",
               "FR-7.8-006",
-              "FR-7.8-007",
-              "FR-7.8-008"
+              "FR-7.8-007"
             ],
             "cutover_disposition": "replace-deep-js-sdk-import-with-synara-dto-or-rust-projection"
           },
@@ -50782,8 +50772,7 @@
               "FR-7.8-004",
               "FR-7.8-005",
               "FR-7.8-006",
-              "FR-7.8-007",
-              "FR-7.8-008"
+              "FR-7.8-007"
             ],
             "cutover_disposition": "replace-deep-js-sdk-import-with-synara-dto-or-rust-projection"
           },
@@ -50800,8 +50789,7 @@
               "FR-7.8-004",
               "FR-7.8-005",
               "FR-7.8-006",
-              "FR-7.8-007",
-              "FR-7.8-008"
+              "FR-7.8-007"
             ],
             "cutover_disposition": "replace-deep-js-sdk-import-with-synara-dto-or-rust-projection"
           },
@@ -50818,8 +50806,7 @@
               "FR-7.8-004",
               "FR-7.8-005",
               "FR-7.8-006",
-              "FR-7.8-007",
-              "FR-7.8-008"
+              "FR-7.8-007"
             ],
             "cutover_disposition": "replace-deep-js-sdk-import-with-synara-dto-or-rust-projection"
           },
@@ -50836,8 +50823,7 @@
               "FR-7.8-004",
               "FR-7.8-005",
               "FR-7.8-006",
-              "FR-7.8-007",
-              "FR-7.8-008"
+              "FR-7.8-007"
             ],
             "cutover_disposition": "replace-deep-js-sdk-import-with-synara-dto-or-rust-projection"
           },
@@ -50854,8 +50840,7 @@
               "FR-7.8-004",
               "FR-7.8-005",
               "FR-7.8-006",
-              "FR-7.8-007",
-              "FR-7.8-008"
+              "FR-7.8-007"
             ],
             "cutover_disposition": "replace-deep-js-sdk-import-with-synara-dto-or-rust-projection"
           },
@@ -58486,529 +58471,238 @@
       "current_status": "partial",
       "current_production_files": [
         {
-          "path": "synara/src/app/features/room/message/EncryptedContent.tsx",
-          "bucket": "feature",
-          "categories": ["event_emitters_listeners", "timelines"],
-          "symbols_or_candidates": [],
-          "line_refs": [],
-          "model_coupling": ["MatrixEvent"],
-          "behavior_relevant_method_candidates": [],
-          "behavior_relevant_listener_candidates": [],
-          "symbols_or_candidates_note": "No requirement-relevant method/listener candidates filtered from this file's P0.1 AST hits; file remains linked for structural/model ownership. See all_candidates_in_linked_files on the requirement."
-        },
-        {
-          "path": "synara/src/app/features/settings/notifications/AllMessages.tsx",
-          "bucket": "feature",
-          "categories": ["client_methods", "notifications_push_rules"],
-          "symbols_or_candidates": ["setPushRuleActions"],
-          "line_refs": [
-            {
-              "symbol": "setPushRuleActions",
-              "line": 67,
-              "kind": "method_candidate"
-            }
-          ],
-          "model_coupling": [],
-          "behavior_relevant_method_candidates": [
-            {
-              "name": "setPushRuleActions",
-              "line": 67,
-              "category": "notifications_push_rules",
-              "kind": "property_call_candidate",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            }
-          ],
-          "behavior_relevant_listener_candidates": []
-        },
-        {
-          "path": "synara/src/app/features/settings/notifications/KeywordMessages.tsx",
-          "bucket": "feature",
-          "categories": ["client_methods", "notifications_push_rules"],
-          "symbols_or_candidates": [
-            "addPushRule",
-            "deletePushRule",
-            "setPushRuleActions"
-          ],
-          "line_refs": [
-            {
-              "symbol": "addPushRule",
-              "line": 30,
-              "kind": "method_candidate"
-            },
-            {
-              "symbol": "deletePushRule",
-              "line": 114,
-              "kind": "method_candidate"
-            },
-            {
-              "symbol": "setPushRuleActions",
-              "line": 135,
-              "kind": "method_candidate"
-            }
-          ],
-          "model_coupling": [],
-          "behavior_relevant_method_candidates": [
-            {
-              "name": "addPushRule",
-              "line": 30,
-              "category": "notifications_push_rules",
-              "kind": "property_call_candidate",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            },
-            {
-              "name": "deletePushRule",
-              "line": 114,
-              "category": "notifications_push_rules",
-              "kind": "property_call_candidate",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            },
-            {
-              "name": "setPushRuleActions",
-              "line": 135,
-              "category": "notifications_push_rules",
-              "kind": "property_call_candidate",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            }
-          ],
-          "behavior_relevant_listener_candidates": []
-        },
-        {
-          "path": "synara/src/app/features/settings/notifications/NotificationModeSwitcher.tsx",
-          "bucket": "feature",
-          "categories": ["notifications_push_rules"],
-          "symbols_or_candidates": [],
-          "line_refs": [],
-          "model_coupling": [],
-          "behavior_relevant_method_candidates": [],
-          "behavior_relevant_listener_candidates": [],
-          "symbols_or_candidates_note": "No requirement-relevant method/listener candidates filtered from this file's P0.1 AST hits; file remains linked for structural/model ownership. See all_candidates_in_linked_files on the requirement."
-        },
-        {
-          "path": "synara/src/app/features/settings/notifications/SpecialMessages.tsx",
-          "bucket": "feature",
-          "categories": [
-            "client_methods",
-            "notifications_push_rules",
-            "uia_auth"
-          ],
-          "symbols_or_candidates": ["setPushRuleActions"],
-          "line_refs": [
-            {
-              "symbol": "setPushRuleActions",
-              "line": 106,
-              "kind": "method_candidate"
-            }
-          ],
-          "model_coupling": [],
-          "behavior_relevant_method_candidates": [
-            {
-              "name": "setPushRuleActions",
-              "line": 106,
-              "category": "notifications_push_rules",
-              "kind": "property_call_candidate",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-            }
-          ],
-          "behavior_relevant_listener_candidates": []
-        },
-        {
-          "path": "synara/src/app/features/settings/notifications/SystemNotification.tsx",
-          "bucket": "feature",
-          "categories": [],
-          "symbols_or_candidates": [],
-          "line_refs": [],
-          "model_coupling": [],
-          "behavior_relevant_method_candidates": [],
-          "behavior_relevant_listener_candidates": [],
-          "symbols_or_candidates_note": "No requirement-relevant method/listener candidates filtered from this file's P0.1 AST hits; file remains linked for structural/model ownership. See all_candidates_in_linked_files on the requirement."
-        },
-        {
-          "path": "synara/src/app/pages/client/inbox/Notifications.tsx",
+          "path": "synara/src/app/pages/client/ClientNonUIFeatures.tsx",
           "bucket": "page",
           "categories": [
             "client_methods",
             "room_methods",
-            "room_lists",
-            "timelines"
-          ],
-          "symbols_or_candidates": [],
-          "line_refs": [],
-          "model_coupling": ["Room"],
-          "behavior_relevant_method_candidates": [],
-          "behavior_relevant_listener_candidates": [],
-          "symbols_or_candidates_note": "No requirement-relevant method/listener candidates filtered from this file's P0.1 AST hits; file remains linked for structural/model ownership. See all_candidates_in_linked_files on the requirement."
-        },
-        {
-          "path": "synara/src/app/utils/notifications.ts",
-          "bucket": "utility",
-          "categories": [
-            "client_methods",
-            "room_methods",
-            "account_data",
+            "event_emitters_listeners",
+            "sync_lifecycle",
             "room_lists",
             "timelines",
-            "receipts",
-            "uia_auth"
+            "spaces",
+            "uia_auth",
+            "custom_raw_event_sends"
           ],
-          "symbols_or_candidates": ["sendReadReceipt"],
+          "symbols_or_candidates": [
+            "on:RoomEvent.Timeline",
+            "removeListener:RoomEvent.Timeline"
+          ],
           "line_refs": [
             {
-              "symbol": "sendReadReceipt",
-              "line": 402,
-              "kind": "method_candidate"
-            }
-          ],
-          "model_coupling": ["MatrixClient", "MatrixEvent", "Room"],
-          "behavior_relevant_method_candidates": [
+              "symbol": "on:RoomEvent.Timeline",
+              "line": 475,
+              "kind": "listener_candidate"
+            },
             {
-              "name": "sendReadReceipt",
-              "line": 402,
-              "category": "receipts",
-              "kind": "property_call_candidate",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+              "symbol": "removeListener:RoomEvent.Timeline",
+              "line": 477,
+              "kind": "listener_candidate"
             }
           ],
-          "behavior_relevant_listener_candidates": []
+          "model_coupling": ["MatrixEvent", "Room"],
+          "behavior_relevant_method_candidates": [],
+          "behavior_relevant_listener_candidates": [
+            {
+              "event": "RoomEvent.Timeline",
+              "method": "on",
+              "line": 475,
+              "category": "timelines",
+              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
+              "relevance_reason": "MessageNotifications timeline subscription that emits OS notifications with product-redacted bodies (room name + sender display name only; no event plaintext/ciphertext)."
+            },
+            {
+              "event": "RoomEvent.Timeline",
+              "method": "removeListener",
+              "line": 477,
+              "category": "timelines",
+              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
+              "relevance_reason": "MessageNotifications teardown for the privacy-relevant message notification path."
+            }
+          ],
+          "symbols_or_candidates_note": "Primary desktop OS-notification body owner. MessageNotifications notify L385-388 / L393-396: title=roomName, body=`New inbox notification from ${username}` — username from getMemberDisplayName/getMxIdLocalPart/sender only; does not pass mEvent.getBody/getContent plaintext or ciphertext. InviteNotifications L308-317: title='Invitation', body=`You have ${count} new invitation request.` LaterReminderNotifications L782-825: title='Reminder', body='A saved reminder is due.' AgentApprovalNotifications L526-531 / L544-547 / L701-708: body may append commandPreview (`${body}\\n${commandPreview}`) then `${roomName}: ${notificationBody}` — intentional approval disclosure, not message-body redaction. No isEncrypted / privacy:'private' branch on any path. Generation (FR-7.8-004) / focus (FR-7.8-007) / routing (FR-7.8-006) adjacent."
+        },
+        {
+          "path": "synara/src/app/notifications/systemNotification.ts",
+          "bucket": "utility",
+          "categories": [],
+          "symbols_or_candidates": [
+            "SystemNotificationPrivacy",
+            "normalizeSystemNotificationRequest"
+          ],
+          "line_refs": [],
+          "model_coupling": [],
+          "behavior_relevant_method_candidates": [],
+          "behavior_relevant_listener_candidates": [],
+          "symbols_or_candidates_note": "Non-P0.1 product type+normalize. SystemNotificationPrivacy = 'standard' | 'private' (L3). SystemNotificationRequest.privacy optional (L23). normalizeSystemNotificationRequest defaults privacy to 'standard' (L97) and preserves explicit 'private' in the normalized DTO only. Does not redact title/body when privacy is private — redaction would be a downstream consumer responsibility that is currently missing on desktop."
+        },
+        {
+          "path": "synara/src/app/platform/notifications.ts",
+          "bucket": "utility",
+          "categories": [],
+          "symbols_or_candidates": ["showPlatformNotification"],
+          "line_refs": [],
+          "model_coupling": [],
+          "behavior_relevant_method_candidates": [],
+          "behavior_relevant_listener_candidates": [],
+          "symbols_or_candidates_note": "Non-P0.1 product bridge. showPlatformNotification L25-37 normalizes then calls showDesktopNotification with only title/body/route/actions/actionContext — privacy and sound fields are dropped and never reach Tauri desktop_notify."
+        },
+        {
+          "path": "synara/src/app/utils/desktop.ts",
+          "bucket": "utility",
+          "categories": [],
+          "symbols_or_candidates": [
+            "DesktopNotificationPayload",
+            "showDesktopNotification"
+          ],
+          "line_refs": [],
+          "model_coupling": [],
+          "behavior_relevant_method_candidates": [],
+          "behavior_relevant_listener_candidates": [],
+          "symbols_or_candidates_note": "Non-P0.1 desktop IPC. DesktopNotificationPayload L232-238 has title/body/route/actions/actionContext only — no privacy field. showDesktopNotification L961-992 invokes desktop_notify with that payload shape. private mode cannot affect OS presentation via this path today."
+        },
+        {
+          "path": "synara/src/app/utils/agentApprovals.ts",
+          "bucket": "utility",
+          "categories": [],
+          "symbols_or_candidates": [
+            "detectAgentApprovalPrompt",
+            "commandPreview"
+          ],
+          "line_refs": [],
+          "model_coupling": [],
+          "behavior_relevant_method_candidates": [],
+          "behavior_relevant_listener_candidates": [],
+          "symbols_or_candidates_note": "Non-P0.1 product helper. detectAgentApprovalPrompt / extractCommandPreview produce commandPreview from event content body (L480-517). AgentApprovalNotifications appends that preview into OS notification body — privacy disclosure to document, not message-timeline encrypted-body dumping."
         }
       ],
       "ui_entry_points": [
-        "synara/src/app/features/settings/notifications/SystemNotification.tsx"
+        "synara/src/app/pages/client/ClientNonUIFeatures.tsx"
       ],
+      "ui_entry_points_rationale": "No dedicated Settings privacy-redaction control for OS notification bodies. Privacy behavior is owned by native generation body strings in ClientNonUIFeatures (Message/Invite/Agent/Later). SystemNotification.tsx is enablement-only (showNotifications) and is not a privacy redaction UI — do not treat it as the FR owner.",
       "state_owners": [
         {
-          "path": "synara/src/app/utils/notifications.ts",
-          "ownership_evidence": "Identified as coordination/state module for this behavior via path role (state/client/util service) and P0.1 categories/candidates; not merely a presentational component."
+          "path": "synara/src/app/pages/client/ClientNonUIFeatures.tsx",
+          "ownership_evidence": "Primary owner of OS notification title/body content for Message (room name + sender only), Invite (count only), Later (generic due text), and AgentApproval (may include commandPreview)."
+        },
+        {
+          "path": "synara/src/app/notifications/systemNotification.ts",
+          "ownership_evidence": "Defines SystemNotificationPrivacy and normalizes privacy default; does not implement encrypted-room private mode application."
+        },
+        {
+          "path": "synara/src/app/platform/notifications.ts",
+          "ownership_evidence": "Platform bridge that drops privacy before desktop_notify — evidence that private mode is not applied on desktop delivery."
+        },
+        {
+          "path": "synara/src/app/utils/desktop.ts",
+          "ownership_evidence": "DesktopNotificationPayload / showDesktopNotification IPC surface has no privacy field."
+        },
+        {
+          "path": "synara/src/app/utils/agentApprovals.ts",
+          "ownership_evidence": "commandPreview extraction source for AgentApprovalNotifications OS body disclosure."
         }
       ],
       "current_js_sdk": {
-        "behavior_relevant_method_candidates": [
+        "behavior_relevant_method_candidates": [],
+        "behavior_relevant_listener_candidates": [
           {
-            "path": "synara/src/app/features/settings/notifications/AllMessages.tsx",
-            "name": "setPushRuleActions",
-            "line": 67,
-            "category": "notifications_push_rules",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+            "path": "synara/src/app/pages/client/ClientNonUIFeatures.tsx",
+            "event": "RoomEvent.Timeline",
+            "method": "on",
+            "line": 475,
+            "category": "timelines",
+            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
+            "relevance_reason": "MessageNotifications path that emits product-redacted message OS notification bodies."
           },
           {
-            "path": "synara/src/app/features/settings/notifications/KeywordMessages.tsx",
-            "name": "addPushRule",
-            "line": 30,
-            "category": "notifications_push_rules",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-          },
-          {
-            "path": "synara/src/app/features/settings/notifications/KeywordMessages.tsx",
-            "name": "deletePushRule",
-            "line": 114,
-            "category": "notifications_push_rules",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-          },
-          {
-            "path": "synara/src/app/features/settings/notifications/KeywordMessages.tsx",
-            "name": "setPushRuleActions",
-            "line": 135,
-            "category": "notifications_push_rules",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-          },
-          {
-            "path": "synara/src/app/features/settings/notifications/SpecialMessages.tsx",
-            "name": "setPushRuleActions",
-            "line": 106,
-            "category": "notifications_push_rules",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-          },
-          {
-            "path": "synara/src/app/utils/notifications.ts",
-            "name": "sendReadReceipt",
-            "line": 402,
-            "category": "receipts",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+            "path": "synara/src/app/pages/client/ClientNonUIFeatures.tsx",
+            "event": "RoomEvent.Timeline",
+            "method": "removeListener",
+            "line": 477,
+            "category": "timelines",
+            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
+            "relevance_reason": "MessageNotifications teardown."
           }
         ],
-        "behavior_relevant_listener_candidates": [],
         "all_candidates_in_linked_files": {
-          "method_count": 17,
-          "listener_count": 2,
-          "note": "Unfiltered P0.1 AST candidates across linked production import files. Do not treat these as proven APIs for this requirement; use behavior_relevant_* fields.",
+          "method_count": 25,
+          "listener_count": 6,
+          "note": "Unfiltered P0.1 AST candidates across P0.1-linked production import file ClientNonUIFeatures.tsx only. Product privacy body strings, SystemNotificationPrivacy, platform drop of privacy, and DesktopNotificationPayload shape are non-P0.1. Do not treat AST samples as proven privacy APIs; use behavior_relevant_* and current_behavior_and_limits.",
           "methods_sample": [
             {
-              "path": "synara/src/app/features/settings/notifications/AllMessages.tsx",
-              "name": "setPushRuleActions",
-              "line": 67
+              "path": "synara/src/app/pages/client/ClientNonUIFeatures.tsx",
+              "name": "getSyncState",
+              "line": 425
             },
             {
-              "path": "synara/src/app/features/settings/notifications/KeywordMessages.tsx",
-              "name": "addPushRule",
-              "line": 30
+              "path": "synara/src/app/pages/client/ClientNonUIFeatures.tsx",
+              "name": "isSpaceRoom",
+              "line": 430
             },
             {
-              "path": "synara/src/app/features/settings/notifications/KeywordMessages.tsx",
-              "name": "deletePushRule",
-              "line": 114
-            },
-            {
-              "path": "synara/src/app/features/settings/notifications/KeywordMessages.tsx",
-              "name": "setPushRuleActions",
-              "line": 135
-            },
-            {
-              "path": "synara/src/app/features/settings/notifications/SpecialMessages.tsx",
-              "name": "setPushRuleActions",
-              "line": 106
-            },
-            {
-              "path": "synara/src/app/features/settings/notifications/SpecialMessages.tsx",
+              "path": "synara/src/app/pages/client/ClientNonUIFeatures.tsx",
               "name": "getUserId",
-              "line": 116
+              "line": 439
             },
             {
-              "path": "synara/src/app/pages/client/inbox/Notifications.tsx",
+              "path": "synara/src/app/pages/client/ClientNonUIFeatures.tsx",
               "name": "findEventById",
-              "line": 488
-            },
-            {
-              "path": "synara/src/app/pages/client/inbox/Notifications.tsx",
-              "name": "getRoom",
-              "line": 764
-            },
-            {
-              "path": "synara/src/app/utils/notifications.ts",
-              "name": "getAccountData",
-              "line": 71
-            },
-            {
-              "path": "synara/src/app/utils/notifications.ts",
-              "name": "setAccountData",
-              "line": 77
-            },
-            {
-              "path": "synara/src/app/utils/notifications.ts",
-              "name": "setRoomAccountData",
-              "line": 105
-            },
-            {
-              "path": "synara/src/app/utils/notifications.ts",
-              "name": "setRoomReadMarkers",
-              "line": 196
-            },
-            {
-              "path": "synara/src/app/utils/notifications.ts",
-              "name": "getUserId",
-              "line": 377
-            },
-            {
-              "path": "synara/src/app/utils/notifications.ts",
-              "name": "getAccountData",
-              "line": 383
-            },
-            {
-              "path": "synara/src/app/utils/notifications.ts",
-              "name": "sendReadReceipt",
-              "line": 402
+              "line": 441
             }
           ],
           "listeners_sample": [
             {
-              "path": "synara/src/app/features/room/message/EncryptedContent.tsx",
-              "event": "MatrixEventEvent.Decrypted",
+              "path": "synara/src/app/pages/client/ClientNonUIFeatures.tsx",
+              "event": "RoomEvent.Timeline",
               "method": "on",
-              "line": 18
+              "line": 475
             },
             {
-              "path": "synara/src/app/features/room/message/EncryptedContent.tsx",
-              "event": "MatrixEventEvent.Decrypted",
+              "path": "synara/src/app/pages/client/ClientNonUIFeatures.tsx",
+              "event": "RoomEvent.Timeline",
               "method": "removeListener",
-              "line": 20
+              "line": 477
             }
           ]
         },
-        "models": ["MatrixClient", "MatrixEvent", "Room"],
+        "models": ["MatrixEvent", "Room"],
         "network_routes": [],
-        "deep_imports": [
-          {
-            "path": "synara/src/app/utils/notifications.ts",
-            "module": "matrix-js-sdk/lib/client",
-            "line": 1,
-            "named_imports": ["MatrixClient"],
-            "is_type_only": true,
-            "linked_requirement_ids": [
-              "FR-7.2-005",
-              "FR-7.2-011",
-              "FR-7.7-003",
-              "FR-7.8-004",
-              "FR-7.8-005",
-              "FR-7.8-006",
-              "FR-7.8-007",
-              "FR-7.8-008"
-            ],
-            "cutover_disposition": "replace-deep-js-sdk-import-with-synara-dto-or-rust-projection"
-          },
-          {
-            "path": "synara/src/app/utils/notifications.ts",
-            "module": "matrix-js-sdk/lib/@types/read_receipts",
-            "line": 2,
-            "named_imports": ["ReceiptType"],
-            "is_type_only": false,
-            "linked_requirement_ids": [
-              "FR-7.2-005",
-              "FR-7.2-011",
-              "FR-7.7-003",
-              "FR-7.8-004",
-              "FR-7.8-005",
-              "FR-7.8-006",
-              "FR-7.8-007",
-              "FR-7.8-008"
-            ],
-            "cutover_disposition": "replace-deep-js-sdk-import-with-synara-dto-or-rust-projection"
-          },
-          {
-            "path": "synara/src/app/utils/notifications.ts",
-            "module": "matrix-js-sdk/lib/models/event",
-            "line": 3,
-            "named_imports": ["MatrixEvent"],
-            "is_type_only": true,
-            "linked_requirement_ids": [
-              "FR-7.2-005",
-              "FR-7.2-011",
-              "FR-7.7-003",
-              "FR-7.8-004",
-              "FR-7.8-005",
-              "FR-7.8-006",
-              "FR-7.8-007",
-              "FR-7.8-008"
-            ],
-            "cutover_disposition": "replace-deep-js-sdk-import-with-synara-dto-or-rust-projection"
-          },
-          {
-            "path": "synara/src/app/utils/notifications.ts",
-            "module": "matrix-js-sdk/lib/models/room",
-            "line": 4,
-            "named_imports": ["Room"],
-            "is_type_only": true,
-            "linked_requirement_ids": [
-              "FR-7.2-005",
-              "FR-7.2-011",
-              "FR-7.7-003",
-              "FR-7.8-004",
-              "FR-7.8-005",
-              "FR-7.8-006",
-              "FR-7.8-007",
-              "FR-7.8-008"
-            ],
-            "cutover_disposition": "replace-deep-js-sdk-import-with-synara-dto-or-rust-projection"
-          },
-          {
-            "path": "synara/src/app/utils/notifications.ts",
-            "module": "matrix-js-sdk/lib/@types/event",
-            "line": 5,
-            "named_imports": ["EventType"],
-            "is_type_only": false,
-            "linked_requirement_ids": [
-              "FR-7.2-005",
-              "FR-7.2-011",
-              "FR-7.7-003",
-              "FR-7.8-004",
-              "FR-7.8-005",
-              "FR-7.8-006",
-              "FR-7.8-007",
-              "FR-7.8-008"
-            ],
-            "cutover_disposition": "replace-deep-js-sdk-import-with-synara-dto-or-rust-projection"
-          }
-        ],
-        "method_candidates": [
-          "setPushRuleActions",
-          "addPushRule",
-          "deletePushRule",
-          "setPushRuleActions",
-          "setPushRuleActions",
-          "sendReadReceipt"
-        ],
-        "listener_events": []
+        "deep_imports": [],
+        "method_candidates": [],
+        "listener_events": ["RoomEvent.Timeline"]
       },
       "current_behavior_and_limits": {
-        "summary": "Current desktop implements this via 8 production matrix-js-sdk-related file(s); status=partial.",
-        "notes": "Encrypted notification privacy behavior is product+crypto sensitive; full privacy review remains a gate.",
-        "limits": "P0.1 method candidates are AST name hits, not type-checked receiver proofs."
+        "summary": "Current desktop partially implements privacy-safe encrypted notification behavior via product-owned OS notification body redaction on Message/Invite/Later paths (no event plaintext or ciphertext in OS bodies) while privacy:'private' is never set by generation and is dropped before desktop_notify; encrypted rooms are not treated differently; AgentApproval may disclose commandPreview; status=partial under GATE-7.8-008-ENCRYPTED-PRIVATE-MODE.",
+        "notes": "Evidence (conservative): (1) MessageNotifications OS body L385-388 (platform) / L393-396 (window.Notification): title=roomName, body=`New inbox notification from ${username}` with username from getMemberDisplayName(room, sender) ?? getMxIdLocalPart(sender) ?? sender L465 — does not include mEvent plaintext body, decrypted content, or ciphertext. Same template for encrypted and unencrypted rooms (no isEncrypted branch). (2) InviteNotifications L308-317: title='Invitation', body=`You have ${count} new invitation request.` — count only. (3) LaterReminderNotifications L782-825: title='Reminder', body fixed 'A saved reminder is due.' — no saved event text. (4) AgentApprovalNotifications L526: notificationBody = commandPreview ? `${body}\\n${commandPreview}` : body; OS body `${roomName}: ${notificationBody}` L531/L547; commandPreview from detectAgentApprovalPrompt(mEvent.getContent()) L692-708 / agentApprovals.ts L480-517. This is a deliberate approval disclosure path that can surface command text in OS notifications — document honestly; not the same as dumping arbitrary room message plaintext. (5) SystemNotificationPrivacy type 'standard'|'private' systemNotification.ts L3; request field L23; normalize defaults privacy:'standard' L97 and preserves explicit private L71-85 of systemNotification.test.ts. (6) Generation paths never pass privacy:'private' (repo production TS: only tests set privacy:'private'). showPlatformNotification L31-37 omits privacy/sound when calling showDesktopNotification. DesktopNotificationPayload L232-238 has no privacy field; showDesktopNotification L961-992 / desktop_notify never receives privacy. platform.test.ts 'platform notifications normalize shared requests before desktop delivery' asserts desktop_notify args lack privacy even when request had privacy:'private'. (7) Explicit non-evidence: EncryptedContent.tsx is timeline decryption rendering (MatrixEventEvent.Decrypted), not OS notification privacy. Push-rule preference UIs (AllMessages/Keyword/Special/NotificationModeSwitcher) and utils/notifications.ts sendReadReceipt/inbox helpers do not own OS body redaction. SystemNotification.tsx is showNotifications enablement only. (8) iOS note (secondary): SynaraMatrixEventPreviewComposer.preview returns nil for eventType m.room.encrypted (SynaraNotificationPreviewSupport.swift L123-125); lockScreenMessagePreviews preference exists — desktop remains primary for this FR. (9) Existing tests: systemNotification.test.ts normalize privacy unit only; platform.test.ts proves privacy strip on desktop path; no E2E encrypted-room OS body AT. Cutover P9.5/P13.5 must not regress into dumping decrypted event content into OS notifications without a privacy gate; SC-057/SC-061 alone never implement OS body redaction; raw /_matrix HTTP never passes.",
+        "limits": "P0.1 method/listener candidates are AST name hits, not type-checked receiver proofs. Partial because: (a) privacy enum exists but private mode is never applied by generation and is stripped before Tauri notify; (b) encrypted rooms are not treated differently from cleartext rooms for OS body content; (c) AgentApproval commandPreview can disclose command text. Implemented partial privacy: Message/Invite/Later deliberately avoid event plaintext/ciphertext in OS bodies (sender/room name or generic text only). GATE-7.8-008-ENCRYPTED-PRIVATE-MODE remains open until encrypted-room (or user-configured) private mode is applied end-to-end so OS surfaces hide sensitive fields consistently, and cutover does not start dumping decrypted content. Do not count push-rule UI, EncryptedContent timeline rendering, badge-only, generation-without-body-assertion, SC-057/SC-061 alone, compile-only, raw HTTP, or helper/fixture-only as closing this FR."
       },
       "p0_1_linkage": {
         "categories": [
-          "notifications_push_rules",
-          "crypto_verification_recovery"
+          "event_emitters_listeners",
+          "timelines"
         ],
         "file_ledger_paths": [
-          "synara/src/app/features/room/message/EncryptedContent.tsx",
-          "synara/src/app/features/settings/notifications/AllMessages.tsx",
-          "synara/src/app/features/settings/notifications/KeywordMessages.tsx",
-          "synara/src/app/features/settings/notifications/NotificationModeSwitcher.tsx",
-          "synara/src/app/features/settings/notifications/SpecialMessages.tsx",
-          "synara/src/app/features/settings/notifications/SystemNotification.tsx",
-          "synara/src/app/pages/client/inbox/Notifications.tsx",
-          "synara/src/app/utils/notifications.ts"
+          "synara/src/app/pages/client/ClientNonUIFeatures.tsx"
         ]
       },
       "rust_target": {
-        "support_conclusion": "policy-and-sdk",
-        "capability_ids": ["SC-057", "SC-061"],
+        "support_conclusion": "product-owned-os-notification-body-redaction-with-open-private-mode-gate",
+        "capability_ids": [],
         "gap_ids": [],
-        "capabilities": [
-          {
-            "capability_id": "SC-057",
-            "api_path": "matrix_sdk::notification_settings::NotificationSettings",
-            "required_features": {
-              "requested_direct": [],
-              "resolved_on_matrix_sdk": ["e2e-encryption"],
-              "resolved_on_matrix_sdk_ui": [],
-              "notes": "e2e-encryption only via matrix-sdk-ui unification; not a direct request."
-            },
-            "final_state": "blocked",
-            "final": {
-              "final_state": "blocked",
-              "final_state_rationale": "E1+E2 present (stable API + compile probe). E3 semantic test, E4 live Synapse, and E5 UI acceptance are not present in P0.3; compile-only evidence is not product confirmation.",
-              "missing_gates": [
-                "semantic_or_integration_test",
-                "live_synapse_two_client",
-                "ui_acceptance"
-              ],
-              "section_5_evidence_present": ["E1", "E2"]
-            },
-            "source_url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/notification_settings/mod.rs#L81",
-            "p0_3b_evidence_status": "stable-api-probed",
-            "p0_3b_probe_id": "P0.3b-notification-settings-type",
-            "plan_section_7_area": "7.8-notifications"
-          },
-          {
-            "capability_id": "SC-061",
-            "api_path": "matrix_sdk::encryption::Encryption",
-            "required_features": {
-              "requested_direct": [],
-              "resolved_on_matrix_sdk": ["e2e-encryption"],
-              "resolved_on_matrix_sdk_ui": [],
-              "notes": "API is feature-gated by e2e-encryption, which is resolved in this probe graph via UI unification."
-            },
-            "final_state": "blocked",
-            "final": {
-              "final_state": "blocked",
-              "final_state_rationale": "E1+E2 present (stable API + compile probe). E3 semantic test, E4 live Synapse, and E5 UI acceptance are not present in P0.3; compile-only evidence is not product confirmation.",
-              "missing_gates": [
-                "semantic_or_integration_test",
-                "live_synapse_two_client",
-                "ui_acceptance"
-              ],
-              "section_5_evidence_present": ["E1", "E2"]
-            },
-            "source_url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/encryption/mod.rs#L892",
-            "p0_3b_evidence_status": "stable-api-probed",
-            "p0_3b_probe_id": "P0.3b-encryption-type",
-            "plan_section_7_area": "7.9-devices-e2ee-verification-and-recovery"
-          }
-        ],
+        "capabilities": [],
         "gaps": [],
-        "notes": "Mappings use only accepted P0.3 capability/gap IDs. Compile probes establish API shape only; final dossier states remain blocked/typed/upstream until E3–E5 gates exist.",
+        "notes": "Honest rust_target: OS notification body privacy is product-owned (ClientNonUIFeatures body templates + SystemNotificationPrivacy DTO + platform/desktop bridge). Do not map SC-057 matrix_sdk::notification_settings::NotificationSettings or SC-061 matrix_sdk::encryption::Encryption as implementers of OS privacy redaction — NotificationSettings is room push-rule/mode settings; Encryption is crypto API surface. Cutover under P9.5 must preserve current Message/Invite/Later body redaction (no event plaintext/ciphertext in message OS notifications), must not start dumping decrypted content into OS notifications without a privacy gate, must account for AgentApproval commandPreview disclosure, and must not use raw /_matrix HTTP. Private-mode end-to-end application for encrypted rooms remains GATE-7.8-008-ENCRYPTED-PRIVATE-MODE (product+IPC, not SC alone). Compile-only blocked SC states never pass.",
         "distinctions_preserved": [
           "server typed search (SC-071) vs experimental local search (SC-072)",
           "widget plumbing (SC-082/GAP widget) vs call parity (membership write/key session gaps)",
-          "compile shape (E1/E2) vs runtime/UI parity (E3–E5 missing => blocked)"
+          "compile shape (E1/E2) vs runtime/UI parity (E3–E5 missing => blocked)",
+          "SC-057 NotificationSettings push-rule/mode API vs product OS notification body redaction",
+          "SC-061 Encryption crypto API vs product OS notification privacy",
+          "Message/Invite/Later body redaction (no event plaintext/ciphertext) vs AgentApproval commandPreview disclosure",
+          "SystemNotificationPrivacy DTO field vs desktop_notify delivery (privacy currently dropped)",
+          "EncryptedContent timeline rendering vs OS notification privacy",
+          "native generation (FR-7.8-004) vs privacy body content (FR-7.8-008)",
+          "focus/suppression (FR-7.8-007) vs privacy body content"
         ]
       },
       "implementation_tasks": [
@@ -59022,11 +58716,22 @@
           "task_id": "P13.5",
           "title": "Security/privacy review and dependency audit",
           "phase": "Phase 13 — Reliability, performance, security, and packaging qualification",
-          "scope_rationale": "Accepted plan task P13.5 covers this Section 7.8 behavior during Phase 13 — Reliability, performance, security, and packaging qualification."
+          "scope_rationale": "Accepted plan task P13.5 covers privacy review for encrypted notification surfaces during Phase 13 — Reliability, performance, security, and packaging qualification."
         }
       ],
       "automated_tests": {
-        "existing": [],
+        "existing": [
+          {
+            "path": "synara/src/app/notifications/__tests__/systemNotification.test.ts",
+            "evidence": "normalizeSystemNotificationRequest unit coverage including default privacy:'standard' and preserve privacy:'private'; does not assert OS delivery or encrypted-room body redaction",
+            "status": "existing-verified-path"
+          },
+          {
+            "path": "synara/src/app/platform/__tests__/platform.test.ts",
+            "evidence": "showPlatformNotification with privacy:'private' yields desktop_notify payload without privacy field (privacy stripped before IPC)",
+            "status": "existing-verified-path"
+          }
+        ],
         "planned_required": [
           {
             "id": "AT-FR-7.8-008-001",
@@ -59035,49 +58740,66 @@
             "task_id": "P9.5",
             "phase": "Phase 9 — Notifications, push semantics, and deep links",
             "level": "integration-security",
-            "scenario": "7.8/FR-7.8-008: exercise 'privacy-safe encrypted notification behavior;' via owner `synara/src/app/utils/notifications.ts` and UI `synara/src/app/features/settings/notifications/SystemNotification.tsx`, then confirm Rust/IPC cutover task `P9.5` preserves observable behavior without raw Matrix runtime HTTP.",
+            "scenario": "Integration-security against disposable Synapse: assert desktop Message OS notifications (encrypted and clear rooms) use product-redacted bodies (room name + sender display only; no event plaintext and no ciphertext); Invite uses count-only body; Later uses generic due body; document AgentApproval may include commandPreview; assert privacy:'private' is not applied by generation and is not delivered to desktop_notify today (GATE-7.8-008-ENCRYPTED-PRIVATE-MODE open). After cutover P9.5, same body-redaction observables via product privacy policy + Rust candidate stream / IPC notification DTO — cutover must not dump decrypted content into OS notifications without a privacy gate; SC-057/SC-061 alone fail; no raw /_matrix HTTP.",
             "preconditions": [
-              "Desktop app with notification permission granted (OS)",
-              "Rooms with distinct push-rule modes; backgrounded window fixture",
-              "Linked owner path present in tree: synara/src/app/utils/notifications.ts",
-              "Primary UI/lifecycle surface: synara/src/app/features/settings/notifications/SystemNotification.tsx"
+              "Disposable Synapse; desktop app with OS/browser notification permission and showNotifications on; app backgrounded/unfocused so MessageNotifications can generate.",
+              "Named body owner: ClientNonUIFeatures MessageNotifications / InviteNotifications / AgentApprovalNotifications / LaterReminderNotifications.",
+              "Named privacy DTO/bridge: systemNotification.ts SystemNotificationPrivacy + normalize; platform/notifications.ts showPlatformNotification; desktop.ts DesktopNotificationPayload / showDesktopNotification.",
+              "Fixtures: encrypted room notifiable message; clear room notifiable message; invite count increase; later reminder due; agent approval prompt with commandPreview.",
+              "GATE-7.8-008-ENCRYPTED-PRIVATE-MODE remains open until private mode is applied end-to-end for encrypted (or user-configured) notification content."
             ],
             "trigger_actions": [
-              "Boot the appropriate harness for level=integration-security against disposable Synapse (or iOS notes if any).",
-              "Establish fixtures required by the clause list: privacy-safe encrypted notification behavior.",
-              "Open UI/lifecycle surface `synara/src/app/features/settings/notifications/SystemNotification.tsx` (or follow ui_entry_points_rationale if no dedicated UI).",
-              "Step 1: perform the product action that implements «privacy-safe encrypted notification behavior» using current owner `synara/src/app/utils/notifications.ts`."
+              "Boot the integration harness against disposable Synapse. Do not use fixture-only mocks that bypass product generation body construction, push-rule settings UI alone, badge/tray alone, EncryptedContent timeline rendering, alternate UI, helper-only harnesses, or raw HTTP.",
+              "MESSAGE BODY (clear + encrypted): with showNotifications on and app unfocused, inject live notifiable timeline events in a clear room and an encrypted room. Capture showPlatformNotification / window.Notification title+body. Assert body is `New inbox notification from ${username}` (or equivalent product template) with title=roomName; assert event plaintext body and ciphertext are absent from title and body for both rooms.",
+              "INVITE BODY: increase invite count while SYNCING; assert Invitation notification body is count-only (`You have N new invitation request.`) without room/event content.",
+              "LATER BODY: due reminder; assert body is generic 'A saved reminder is due.' without saved event text.",
+              "AGENT APPROVAL DISCLOSURE: inject approval prompt with commandPreview; assert OS body may include commandPreview (document as known disclosure); do not treat commandPreview presence as a message-body redaction failure.",
+              "PRIVATE MODE GAP: assert generation paths do not set privacy:'private'; assert showPlatformNotification → desktop_notify payload omits privacy (current product). Record incomplete under GATE-7.8-008-ENCRYPTED-PRIVATE-MODE until private mode is applied for encrypted-room (or user-configured) OS content.",
+              "After cutover tasks P9.5 (and P13.5 review as applicable), repeat body-redaction observables via product privacy policy + Rust-owned notification candidate stream / IPC DTO. Citing SC-057/SC-061 alone, compile-only blocked states, raw /_matrix HTTP, push-rule settings UI, EncryptedContent timeline rendering, badge-only, generation without body assertions, or helper/fixture-only is a FAIL. Dumping decrypted event content into OS notifications without a privacy gate is a FAIL."
             ],
             "assertions": [
-              "Each clause is observable: «privacy-safe encrypted notification behavior».",
-              "State coordination remains through `synara/src/app/utils/notifications.ts` (or its Rust/IPC successor after cutover), not ad-hoc dual writers.",
-              "Behavior-relevant current JS method candidates exercised or replaced: setPushRuleActions, addPushRule, deletePushRule, setPushRuleActions, setPushRuleActions, sendReadReceipt (AST candidates; not type-proven receivers).",
-              "Rust mapping remains conservative: caps=[SC-057,SC-061] gaps=[none]; compile-only blocked states are not treated as runtime pass.",
-              "No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless dossier marks that exact behavior typed-sdk-request-required.",
-              "Encrypted payloads are not leaked to unintended rooms/logs/disk."
+              "MESSAGE: no event plaintext and no ciphertext in Message OS notification title/body as currently implemented; room name + sender display only; same for encrypted and clear rooms under current product.",
+              "INVITE: count-only body; no event content.",
+              "LATER: generic due body; no saved event text.",
+              "AGENT APPROVAL: commandPreview may appear in OS body when present; documented disclosure, not silent regression.",
+              "PRIVATE MODE: privacy enum may normalize to 'private' in unit tests but generation does not set it and desktop delivery drops it; GATE-7.8-008-ENCRYPTED-PRIVATE-MODE remains open.",
+              "CUTOVER: must preserve Message/Invite/Later redaction; must not start dumping decrypted content into OS notifications without a privacy gate; no raw /_matrix runtime HTTP; SC-057 NotificationSettings and SC-061 Encryption alone never implement OS privacy redaction.",
+              "No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless the dossier marks that exact behavior typed-sdk-request-required."
             ],
             "required_environment": [
-              "Desktop app with notification permission granted (OS)",
-              "Rooms with distinct push-rule modes; backgrounded window fixture"
+              "Disposable Synapse",
+              "Desktop app with notification permission and encrypted + clear room fixtures"
             ],
             "does_not_currently_exist": true,
-            "clause_breakdown": ["privacy-safe encrypted notification behavior"]
+            "clause_breakdown": [
+              "message OS body redaction (no event plaintext/ciphertext; room+sender only)",
+              "invite count-only body",
+              "later generic due body",
+              "agent approval commandPreview disclosure (documented)",
+              "private mode not applied / dropped on desktop (GATE-7.8-008-ENCRYPTED-PRIVATE-MODE)",
+              "cutover must not dump decrypted content without privacy gate; no SC-only / raw HTTP"
+            ],
+            "test_target": "ClientNonUIFeatures Message/Invite/Agent/Later OS bodies + SystemNotificationPrivacy normalize + showPlatformNotification/showDesktopNotification privacy drop; post-cutover product privacy policy + Rust candidate stream / IPC notification DTO (P9.5); GATE-7.8-008-ENCRYPTED-PRIVATE-MODE"
           }
         ]
       },
       "manual_acceptance_id": "MA-FR-7.8-008",
       "migration_cutover_disposition": "replace-js-sdk-with-rust-via-ipc",
       "missing_evidence_gates": [
+        "GATE-7.8-008-ENCRYPTED-PRIVATE-MODE",
         "live_synapse_two_client",
         "semantic_or_integration_test",
         "ui_acceptance"
       ],
       "security_privacy_lifecycle_concerns": [
         "encrypted-notification-privacy",
+        "os-notification-body-redaction",
+        "agent-approval-command-preview-disclosure",
+        "privacy-private-mode-not-applied",
         "no-raw-matrix-http"
       ],
       "traceability_status": "complete-conservative",
-      "blockers": []
+      "blockers": ["GATE-7.8-008-ENCRYPTED-PRIVATE-MODE"]
     },
     {
       "id": "FR-7.8-009",
@@ -79384,7 +79106,6 @@
         "FR-7.4-004",
         "FR-7.5-002",
         "FR-7.5-011",
-        "FR-7.8-008",
         "FR-7.9-008"
       ],
       "rationale": null,
@@ -80304,8 +80025,7 @@
         "FR-7.7-003",
         "FR-7.7-007",
         "FR-7.8-001",
-        "FR-7.8-003",
-        "FR-7.8-008"
+        "FR-7.8-003"
       ],
       "rationale": null,
       "p0_1_role": "production",
@@ -80394,8 +80114,7 @@
         "FR-7.7-003",
         "FR-7.7-007",
         "FR-7.8-001",
-        "FR-7.8-003",
-        "FR-7.8-008"
+        "FR-7.8-003"
       ],
       "rationale": null,
       "p0_1_role": "production",
@@ -80445,8 +80164,7 @@
         "FR-7.7-003",
         "FR-7.7-007",
         "FR-7.8-001",
-        "FR-7.8-002",
-        "FR-7.8-008"
+        "FR-7.8-002"
       ],
       "rationale": null,
       "p0_1_role": "production",
@@ -80508,8 +80226,7 @@
         "FR-7.7-003",
         "FR-7.7-007",
         "FR-7.8-001",
-        "FR-7.8-003",
-        "FR-7.8-008"
+        "FR-7.8-003"
       ],
       "rationale": null,
       "p0_1_role": "production",
@@ -80564,8 +80281,7 @@
         "FR-7.7-003",
         "FR-7.7-007",
         "FR-7.8-004",
-        "FR-7.8-007",
-        "FR-7.8-008"
+        "FR-7.8-007"
       ],
       "rationale": null,
       "p0_1_role": "production",
@@ -84928,6 +84644,7 @@
         "FR-7.8-005",
         "FR-7.8-006",
         "FR-7.8-007",
+        "FR-7.8-008",
         "FR-7.11-005",
         "FR-7.4-006"
       ],
@@ -85317,8 +85034,7 @@
         "FR-7.2-005",
         "FR-7.2-011",
         "FR-7.7-003",
-        "FR-7.8-006",
-        "FR-7.8-008"
+        "FR-7.8-006"
       ],
       "rationale": null,
       "p0_1_role": "production",
@@ -88006,8 +87722,7 @@
       "linked_requirement_ids": [
         "FR-7.2-005",
         "FR-7.2-011",
-        "FR-7.7-003",
-        "FR-7.8-008"
+        "FR-7.7-003"
       ],
       "rationale": null,
       "p0_1_role": "production",
@@ -90187,9 +89902,7 @@
       "linked_requirement_ids": [
         "FR-7.2-005",
         "FR-7.2-011",
-        "FR-7.7-003",
-        "FR-7.8-007",
-        "FR-7.8-008"
+        "FR-7.7-003"
       ],
       "cutover_disposition": "replace-deep-js-sdk-import-with-synara-dto-or-rust-projection"
     },
@@ -90202,9 +89915,7 @@
       "linked_requirement_ids": [
         "FR-7.2-005",
         "FR-7.2-011",
-        "FR-7.7-003",
-        "FR-7.8-007",
-        "FR-7.8-008"
+        "FR-7.7-003"
       ],
       "cutover_disposition": "replace-deep-js-sdk-import-with-synara-dto-or-rust-projection"
     },
@@ -90217,9 +89928,7 @@
       "linked_requirement_ids": [
         "FR-7.2-005",
         "FR-7.2-011",
-        "FR-7.7-003",
-        "FR-7.8-007",
-        "FR-7.8-008"
+        "FR-7.7-003"
       ],
       "cutover_disposition": "replace-deep-js-sdk-import-with-synara-dto-or-rust-projection"
     },
@@ -90232,9 +89941,7 @@
       "linked_requirement_ids": [
         "FR-7.2-005",
         "FR-7.2-011",
-        "FR-7.7-003",
-        "FR-7.8-007",
-        "FR-7.8-008"
+        "FR-7.7-003"
       ],
       "cutover_disposition": "replace-deep-js-sdk-import-with-synara-dto-or-rust-projection"
     },
@@ -90247,9 +89954,7 @@
       "linked_requirement_ids": [
         "FR-7.2-005",
         "FR-7.2-011",
-        "FR-7.7-003",
-        "FR-7.8-007",
-        "FR-7.8-008"
+        "FR-7.7-003"
       ],
       "cutover_disposition": "replace-deep-js-sdk-import-with-synara-dto-or-rust-projection"
     },
@@ -90960,9 +90665,7 @@
       "linked_requirement_ids": [
         "FR-7.2-005",
         "FR-7.2-011",
-        "FR-7.7-003",
-        "FR-7.8-007",
-        "FR-7.8-008"
+        "FR-7.7-003"
       ],
       "cutover_disposition": "migrate-via-account-data-service-and-raw-content-extraction-tasks",
       "tasks": ["P6.7", "P5.9", "P12.6"],
@@ -95025,33 +94728,46 @@
         "task_id": "P9.5",
         "phase": "Phase 9 — Notifications, push semantics, and deep links",
         "level": "integration-security",
-        "scenario": "7.8/FR-7.8-008: exercise 'privacy-safe encrypted notification behavior;' via owner `synara/src/app/utils/notifications.ts` and UI `synara/src/app/features/settings/notifications/SystemNotification.tsx`, then confirm Rust/IPC cutover task `P9.5` preserves observable behavior without raw Matrix runtime HTTP.",
+        "scenario": "Integration-security against disposable Synapse: assert desktop Message OS notifications (encrypted and clear rooms) use product-redacted bodies (room name + sender display only; no event plaintext and no ciphertext); Invite uses count-only body; Later uses generic due body; document AgentApproval may include commandPreview; assert privacy:'private' is not applied by generation and is not delivered to desktop_notify today (GATE-7.8-008-ENCRYPTED-PRIVATE-MODE open). After cutover P9.5, same body-redaction observables via product privacy policy + Rust candidate stream / IPC notification DTO — cutover must not dump decrypted content into OS notifications without a privacy gate; SC-057/SC-061 alone fail; no raw /_matrix HTTP.",
         "preconditions": [
-          "Desktop app with notification permission granted (OS)",
-          "Rooms with distinct push-rule modes; backgrounded window fixture",
-          "Linked owner path present in tree: synara/src/app/utils/notifications.ts",
-          "Primary UI/lifecycle surface: synara/src/app/features/settings/notifications/SystemNotification.tsx"
+          "Disposable Synapse; desktop app with OS/browser notification permission and showNotifications on; app backgrounded/unfocused so MessageNotifications can generate.",
+          "Named body owner: ClientNonUIFeatures MessageNotifications / InviteNotifications / AgentApprovalNotifications / LaterReminderNotifications.",
+          "Named privacy DTO/bridge: systemNotification.ts SystemNotificationPrivacy + normalize; platform/notifications.ts showPlatformNotification; desktop.ts DesktopNotificationPayload / showDesktopNotification.",
+          "Fixtures: encrypted room notifiable message; clear room notifiable message; invite count increase; later reminder due; agent approval prompt with commandPreview.",
+          "GATE-7.8-008-ENCRYPTED-PRIVATE-MODE remains open until private mode is applied end-to-end for encrypted (or user-configured) notification content."
         ],
         "trigger_actions": [
-          "Boot the appropriate harness for level=integration-security against disposable Synapse (or iOS notes if any).",
-          "Establish fixtures required by the clause list: privacy-safe encrypted notification behavior.",
-          "Open UI/lifecycle surface `synara/src/app/features/settings/notifications/SystemNotification.tsx` (or follow ui_entry_points_rationale if no dedicated UI).",
-          "Step 1: perform the product action that implements «privacy-safe encrypted notification behavior» using current owner `synara/src/app/utils/notifications.ts`."
+          "Boot the integration harness against disposable Synapse. Do not use fixture-only mocks that bypass product generation body construction, push-rule settings UI alone, badge/tray alone, EncryptedContent timeline rendering, alternate UI, helper-only harnesses, or raw HTTP.",
+          "MESSAGE BODY (clear + encrypted): with showNotifications on and app unfocused, inject live notifiable timeline events in a clear room and an encrypted room. Capture showPlatformNotification / window.Notification title+body. Assert body is `New inbox notification from ${username}` (or equivalent product template) with title=roomName; assert event plaintext body and ciphertext are absent from title and body for both rooms.",
+          "INVITE BODY: increase invite count while SYNCING; assert Invitation notification body is count-only (`You have N new invitation request.`) without room/event content.",
+          "LATER BODY: due reminder; assert body is generic 'A saved reminder is due.' without saved event text.",
+          "AGENT APPROVAL DISCLOSURE: inject approval prompt with commandPreview; assert OS body may include commandPreview (document as known disclosure); do not treat commandPreview presence as a message-body redaction failure.",
+          "PRIVATE MODE GAP: assert generation paths do not set privacy:'private'; assert showPlatformNotification → desktop_notify payload omits privacy (current product). Record incomplete under GATE-7.8-008-ENCRYPTED-PRIVATE-MODE until private mode is applied for encrypted-room (or user-configured) OS content.",
+          "After cutover tasks P9.5 (and P13.5 review as applicable), repeat body-redaction observables via product privacy policy + Rust-owned notification candidate stream / IPC DTO. Citing SC-057/SC-061 alone, compile-only blocked states, raw /_matrix HTTP, push-rule settings UI, EncryptedContent timeline rendering, badge-only, generation without body assertions, or helper/fixture-only is a FAIL. Dumping decrypted event content into OS notifications without a privacy gate is a FAIL."
         ],
         "assertions": [
-          "Each clause is observable: «privacy-safe encrypted notification behavior».",
-          "State coordination remains through `synara/src/app/utils/notifications.ts` (or its Rust/IPC successor after cutover), not ad-hoc dual writers.",
-          "Behavior-relevant current JS method candidates exercised or replaced: setPushRuleActions, addPushRule, deletePushRule, setPushRuleActions, setPushRuleActions, sendReadReceipt (AST candidates; not type-proven receivers).",
-          "Rust mapping remains conservative: caps=[SC-057,SC-061] gaps=[none]; compile-only blocked states are not treated as runtime pass.",
-          "No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless dossier marks that exact behavior typed-sdk-request-required.",
-          "Encrypted payloads are not leaked to unintended rooms/logs/disk."
+          "MESSAGE: no event plaintext and no ciphertext in Message OS notification title/body as currently implemented; room name + sender display only; same for encrypted and clear rooms under current product.",
+          "INVITE: count-only body; no event content.",
+          "LATER: generic due body; no saved event text.",
+          "AGENT APPROVAL: commandPreview may appear in OS body when present; documented disclosure, not silent regression.",
+          "PRIVATE MODE: privacy enum may normalize to 'private' in unit tests but generation does not set it and desktop delivery drops it; GATE-7.8-008-ENCRYPTED-PRIVATE-MODE remains open.",
+          "CUTOVER: must preserve Message/Invite/Later redaction; must not start dumping decrypted content into OS notifications without a privacy gate; no raw /_matrix runtime HTTP; SC-057 NotificationSettings and SC-061 Encryption alone never implement OS privacy redaction.",
+          "No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless the dossier marks that exact behavior typed-sdk-request-required."
         ],
         "required_environment": [
-          "Desktop app with notification permission granted (OS)",
-          "Rooms with distinct push-rule modes; backgrounded window fixture"
+          "Disposable Synapse",
+          "Desktop app with notification permission and encrypted + clear room fixtures"
         ],
         "does_not_currently_exist": true,
-        "clause_breakdown": ["privacy-safe encrypted notification behavior"]
+        "clause_breakdown": [
+          "message OS body redaction (no event plaintext/ciphertext; room+sender only)",
+          "invite count-only body",
+          "later generic due body",
+          "agent approval commandPreview disclosure (documented)",
+          "private mode not applied / dropped on desktop (GATE-7.8-008-ENCRYPTED-PRIVATE-MODE)",
+          "cutover must not dump decrypted content without privacy gate; no SC-only / raw HTTP"
+        ],
+        "test_target": "ClientNonUIFeatures Message/Invite/Agent/Later OS bodies + SystemNotificationPrivacy normalize + showPlatformNotification/showDesktopNotification privacy drop; post-cutover product privacy policy + Rust candidate stream / IPC notification DTO (P9.5); GATE-7.8-008-ENCRYPTED-PRIVATE-MODE"
       },
       {
         "id": "AT-FR-7.8-009-001",
@@ -98234,25 +97950,38 @@
       "requirement_id": "FR-7.8-008",
       "platforms": ["macOS", "Linux"],
       "preconditions": [
-        "Desktop app with notification permission granted (OS)",
-        "Rooms with distinct push-rule modes; backgrounded window fixture",
-        "State owner available: synara/src/app/utils/notifications.ts",
-        "UI/lifecycle: synara/src/app/features/settings/notifications/SystemNotification.tsx",
-        "Current status baseline: partial"
+        "Desktop app with OS notification permission granted and showNotifications enabled",
+        "Disposable Synapse with a clear room and an encrypted room; second user/device to send notifiable events",
+        "App backgrounded/unfocused so MessageNotifications can generate",
+        "Named body owner: ClientNonUIFeatures Message/Invite/Agent/Later notification paths",
+        "Named privacy bridge: systemNotification.ts / platform/notifications.ts / desktop.ts",
+        "Current status baseline: partial under GATE-7.8-008-ENCRYPTED-PRIVATE-MODE"
       ],
       "actions": [
-        "Launch Synara desktop on the target platform against disposable Synapse; use a clean or known fixture profile as required by «privacy-safe encrypted notification behavior;».",
-        "Identify state owner `synara/src/app/utils/notifications.ts` and open `synara/src/app/features/settings/notifications/SystemNotification.tsx`.",
-        "Action 1 — «privacy-safe encrypted notification behavior»: perform the minimal user/system steps that trigger this clause (use linked files under current_production_files if the entry point is indirect).",
-        "Repeat critical path in an encrypted room / with a second device when the clause involves keys or verification."
+        "Launch Synara desktop on the target platform against disposable Synapse with notification permission granted and showNotifications on; background the window.",
+        "MESSAGE (clear + encrypted): from a second user, send notifiable messages in a clear room and an encrypted room. Observe OS/browser notification title and body for each.",
+        "INVITE: create a new invite to the local user; observe Invitation notification body.",
+        "LATER: create a due later reminder; observe Reminder notification body.",
+        "AGENT APPROVAL (if fixture available): trigger an approval prompt with a dangerous command; observe whether commandPreview appears in the OS body.",
+        "PRIVATE MODE GAP: confirm product has no user control that sets privacy:'private' for encrypted-room OS notifications end-to-end; record open under GATE-7.8-008-ENCRYPTED-PRIVATE-MODE.",
+        "On a post-cutover build (P9.5), repeat message/invite/later body checks; fail if decrypted event content appears in OS notifications without a privacy gate or if raw /_matrix HTTP is used."
       ],
       "expected_results": [
-        "All clauses under «privacy-safe encrypted notification behavior;» produce the user-visible or system-observable success criteria without error toasts unrelated to intentional negative tests.",
-        "Clause 1 «privacy-safe encrypted notification behavior» is satisfied on macOS, Linux with owner `synara/src/app/utils/notifications.ts`.",
-        "No unexpected raw /_matrix traffic from the app renderer for this flow on the post-cutover build.",
-        "Notification/OS surfaces do not reveal encrypted message bodies beyond product privacy policy."
+        "MESSAGE: OS notification title is room name and body is `New inbox notification from ${username}` (or product-equivalent); event plaintext and ciphertext are absent for both encrypted and clear rooms under current product.",
+        "INVITE: body is count-only (`You have N new invitation request.`); no room/event content.",
+        "LATER: body is generic `A saved reminder is due.`; no saved event text.",
+        "AGENT APPROVAL: commandPreview may appear when product includes it; documented disclosure, not a silent message-body leak.",
+        "PRIVATE MODE: GATE-7.8-008-ENCRYPTED-PRIVATE-MODE remains open until private mode is applied end-to-end; privacy DTO field alone is not a pass.",
+        "Cutover preserves Message/Invite/Later redaction; does not dump decrypted content into OS notifications without a privacy gate; SC-057/SC-061 alone never implement OS privacy redaction; no unexpected raw /_matrix traffic from the app renderer."
       ],
-      "clause_breakdown": ["privacy-safe encrypted notification behavior"]
+      "clause_breakdown": [
+        "message OS body redaction (no event plaintext/ciphertext)",
+        "invite count-only body",
+        "later generic due body",
+        "agent approval commandPreview disclosure",
+        "GATE-7.8-008-ENCRYPTED-PRIVATE-MODE open",
+        "cutover no decrypted dump / no raw HTTP"
+      ]
     },
     {
       "id": "MA-FR-7.8-009",
@@ -100409,6 +100138,17 @@
         "FR-7.8-007: current_status remains implemented. current_behavior_and_limits documents MessageNotifications gates (document.hasFocus + selectedRoomId/notificationSelected L426; getSyncState L425; Mute L432; self L439; showNotifications L455; unreadEqual L447–451), Invite SYNCING+showNotifications without focus gate, Agent/Later showNotifications-only, SystemNotification and TrayDoNotDisturbSync showNotifications enablement. Push-rule preference surfaces and sendReadReceipt removed as primary owners/files.",
         "FR-7.8-007: retargeted behavior_relevant methods to getSyncState/isSpaceRoom/getUserId on ClientNonUIFeatures and getRoomPushRule on utils/room.ts; listeners RoomEvent.Timeline on/remove. Planned AT/MA require independent cases: focused selected room, notifications inbox focus, showNotifications off, not SYNCING, mute, self-sent, and P9.3 cutover via product focus + Rust candidate stream. SC-057 alone, raw HTTP, push-rule UI, badge-only, generation-only, helper-only never pass. Existing systemNotification.test.ts reclassified as normalize unit-only.",
         "Top-level automated_test_catalog AT-FR-7.8-007-001 is byte-identical to the requirement planned entry; manual_acceptance_catalog MA-FR-7.8-007 updated. file_coverage_ledger: removed FR-7.8-007 from AllMessages/KeywordMessages/SpecialMessages/NotificationModeSwitcher/inbox Notifications/utils/notifications; retained/added FR-7.8-007 on ClientNonUIFeatures, SystemNotification, utils/room.ts. Status distribution unchanged (implemented 96, partial 22). Accepted corrections through FR-7.8-006 preserved. JSON and Markdown synchronized."
+      ]
+    },
+    {
+      "id": "p0.2-correct-26-fr-7.8-008-privacy-safe-encrypted-notifications",
+      "scope": "Rejected-review limited correction: FR-7.8-008 only — retarget privacy-safe encrypted notification behavior from wrong push-rule preference linkage / EncryptedContent timeline / utils/notifications sendReadReceipt owner to ClientNonUIFeatures OS notification body content + SystemNotificationPrivacy DTO + platform/desktop privacy drop; document Message/Invite/Later redaction vs AgentApproval commandPreview disclosure; keep status partial under GATE-7.8-008-ENCRYPTED-PRIVATE-MODE; rewrite planned AT/MA; honest rust_target without claiming SC-057/SC-061 implement OS privacy redaction",
+      "requirements_rewritten": ["FR-7.8-008"],
+      "not_claimed_complete": true,
+      "changes": [
+        "FR-7.8-008: current_status remains partial. current_behavior_and_limits documents MessageNotifications body `New inbox notification from ${username}` (room name title; no event plaintext/ciphertext), Invite count-only body, Later generic due body, AgentApproval optional commandPreview disclosure, SystemNotificationPrivacy standard|private normalize-only, showPlatformNotification dropping privacy before desktop_notify, DesktopNotificationPayload without privacy field, no encrypted-room branch, EncryptedContent non-evidence, push-rule UI non-evidence.",
+        "FR-7.8-008: retargeted owners/files to ClientNonUIFeatures, systemNotification.ts, platform/notifications.ts, desktop.ts, agentApprovals.ts. Planned AT/MA assert no event plaintext/ciphertext in message OS notifications, private mode gap under GATE-7.8-008-ENCRYPTED-PRIVATE-MODE, agent commandPreview disclosure, and cutover must not dump decrypted content without privacy gate; no raw HTTP; SC-057/SC-061 alone never pass. rust_target support_conclusion=product-owned-os-notification-body-redaction-with-open-private-mode-gate with empty capability_ids.",
+        "Top-level automated_test_catalog AT-FR-7.8-008-001 is byte-identical to the requirement planned entry; manual_acceptance_catalog MA-FR-7.8-008 updated. file_coverage_ledger: removed FR-7.8-008 from EncryptedContent/AllMessages/KeywordMessages/SpecialMessages/NotificationModeSwitcher/SystemNotification/inbox Notifications/utils/notifications; added FR-7.8-008 on ClientNonUIFeatures. deep_import_catalog: removed FR-7.8-008 from utils/notifications deep imports. Status distribution unchanged (implemented 96, partial 22). Accepted corrections through FR-7.8-007 preserved. JSON and Markdown synchronized."
       ]
     }
   ]
