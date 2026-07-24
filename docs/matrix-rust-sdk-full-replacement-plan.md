@@ -2,9 +2,11 @@
 
 Date: 2026-07-23
 
-Status: approved direction; implementation not started
+Status: approved direction; Phase 0 evidence work in progress; production SDK replacement not started
 
 Integration branch: `feature/matrix-rust-sdk-full-replacement`
+
+Current execution record: [`docs/matrix-rust-sdk/implementation-handoff.md`](matrix-rust-sdk/implementation-handoff.md)
 
 Target upstream release: `matrix-sdk-0.18.0`
 
@@ -1461,11 +1463,12 @@ does not answer a material design question.
 
 ## 18. Immediate next actions
 
-1. Commit this plan on the integration branch without including unrelated local
-   changes.
-2. Push the integration branch and open a planning-only draft PR if desired.
-3. Execute Phase 0 as independent reviewed task PRs.
-4. Do not add Matrix Rust SDK production dependencies until the Rust 1.93/Tauri
+1. Use the execution handoff record to finish the remaining P0.2 traceability
+   review, starting at FR-7.8-004; do not rewrite already accepted FR-7.8-001
+   through FR-7.8-003 without new contrary source evidence.
+2. Open a task PR into the integration branch for each accepted Phase 0 unit;
+   never target `main` until the final program gate.
+3. Do not add Matrix Rust SDK production dependencies until the Rust 1.93/Tauri
    compatibility and exact capability gates are accepted.
-5. Re-estimate delivery only after the Phase 0 traceability matrix and call/widget
+4. Re-estimate delivery only after the Phase 0 traceability matrix and call/widget
    proof expose the true remaining work.
