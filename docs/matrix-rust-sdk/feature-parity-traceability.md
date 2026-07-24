@@ -4,7 +4,7 @@
 
 ## Correction pass status
 
-Limited rejected-review correction (`p0.2-correct-30-fr-7.9-004-device-trust-verification-state`) for **FR-7.9-004** only: replace generic “via 9 files” / notes=null / methods mixing SAS ceremony+bootstrap with concrete device trust/verification state evidence — `getDeviceVerificationStatus.crossSigningVerified` via `verifiedDevice`; `VerificationStatus` Unknown/Unverified/Verified/Unsupported; `useDeviceVerificationStatus`/`useUnverifiedDeviceCount`; `VerificationStatusBadge`; Devices/OtherDevices/UnverifiedTab/LogoutDialog surfaces; wired `CryptoEvent.DevicesUpdated` refresh; unused `useUserTrustStatusChange` documented; demote SAS ceremony methods to non-primary (FR-7.9-005); rewrite planned AT/MA for verified vs unverified display + cutover P8.2/P8.4; honest rust_target SC-063/SC-064 compile-only blocked; SC IDs alone / raw HTTP / SAS-only / helper-only FAIL. JSON and Markdown synchronized. Accepted corrections for **FR-7.8-001 through FR-7.8-009** and **FR-7.9-001..003** preserved. Prior corrections and accepted **7.1–7.3** preserved. **P0.2 is not complete.**
+Limited rejected-review correction (`p0.2-correct-31-fr-7.9-005-sas-verification-request-inbox`) for **FR-7.9-005** only: replace generic “via 8 files” / notes=null / methods mixing bootstrap+status with concrete SAS ceremony + request inbox evidence — `ensureVerificationRequestInbox` early-install + `CryptoEvent.VerificationRequestReceived`; `ReceiveSelfDeviceVerification`; `requestOwnUserVerification`/`requestDeviceVerification`; phase machine `accept`/`startVerification(Sas)`/`verify`/`ShowSas` confirm-mismatch/`cancel`; unused `useVerificationRequestReceived` and `ShowReciprocateQr` documented; exclude FR-7.9-002/003/004; rewrite planned AT/MA for two-client inbox+ceremony + cutover P8.3; honest rust_target SC-084 + GAP-SAS-VERIFICATION compile-only blocked; SC IDs alone / raw HTTP / trust-badge-only / device-list-only / helper-only FAIL. JSON and Markdown synchronized. Accepted corrections for **FR-7.8-001 through FR-7.8-009** and **FR-7.9-001..004** preserved. Prior corrections and accepted **7.1–7.3** preserved. **P0.2 is not complete.**
 
 ## Provenance
 
@@ -5877,88 +5877,86 @@ Limited rejected-review correction (`p0.2-correct-30-fr-7.9-004-device-trust-ver
 - **Text**: SAS verification and request inbox behavior;
 - **Lines**: 429–429
 - **Status**: `implemented`
-- **Behavior**: Current desktop implements this via 8 production matrix-js-sdk-related file(s); status=implemented.
-- **UI**: `synara/src/app/components/DeviceVerification.tsx`, `synara/src/app/features/settings/devices/Verification.tsx`
-- **Owners**: `synara/src/client/verificationRequestInbox.ts`
+- **Behavior**: Current desktop implements SAS verification and request inbox as: (1) client-scoped self-verification inbox installed before startClient that queues `CryptoEvent.VerificationRequestReceived` and hydrates `getVerificationRequestsToDeviceInProgress`; (2) `ReceiveSelfDeviceVerification` presenting inbound queue head; (3) Settings Devices outbound `requestOwnUserVerification` / `requestDeviceVerification` opening `DeviceVerification`; (4) phase-driven SAS emoji ceremony (accept → startVerification(Sas) → ShowSas confirm/mismatch → Done/Cancelled). status=implemented.
+- **Notes**: Evidence (conservative): (1) Inbox `verificationRequestInbox.ts` `ensureVerificationRequestInbox` L37–69: self-only merge/dedupe L18–29; `VerificationRequestReceived` L66; early-install comment L32–35. (2) `initMatrix.ts` L262–263 installs inbox before ready-to-start. (3) `ReceiveSelfDeviceVerification` L386–415 hydrates in-progress + presents `requests[0]`; Router L163 mount. (4) Outbound `requestOwnUserVerification` L124 / `requestDeviceVerification` L230 → `DeviceVerification` L194/L267. (5) Ceremony L301–383: Requested accept L326; Ready `startVerification(Sas)` L328; Started `verifier.verify` L230; CompareEmoji confirm/mismatch L149–210; Done/Cancelled; exit `request.cancel` via helpers. (6) Wired hooks: Change/ShowSas/Cancel; unused `useVerificationRequestReceived` and `ShowReciprocateQr`. (7) Non-evidence: trust badge (FR-7.9-004), bootstrap Enable (FR-7.9-002), device list (FR-7.9-003). (8) Cutover P8.3 via Rust GAP-SAS/SC-084 + product inbox + IPC; SC-only / raw HTTP / status-only / helper-only FAIL.
+- **UI**: `synara/src/app/components/DeviceVerification.tsx`, `synara/src/app/features/settings/devices/Verification.tsx`, `synara/src/app/pages/Router.tsx`
+- **UI rationale**: DeviceVerification owns SAS ceremony + ReceiveSelfDeviceVerification. Verification.tsx starts outbound own/other requests. Router mounts inbound surface. Status badge is FR-7.9-004; Enable/Reset is FR-7.9-002; device list is FR-7.9-003.
+- **Owners**: `synara/src/client/verificationRequestInbox.ts`, `synara/src/app/components/DeviceVerification.tsx`
 - **Files**:
-  - `synara/src/app/components/DeviceVerification.tsx` symbols=['getCrypto', 'getVerificationRequestsToDeviceInProgress'] retained_m=2 retained_l=0
-    - method `getCrypto`:L395 — None
-    - method `getVerificationRequestsToDeviceInProgress`:L395 — None
-  - `synara/src/app/components/DeviceVerificationSetup.tsx` symbols=['getCrypto', 'createRecoveryKeyFromPassphrase', 'bootstrapSecretStorage', 'bootstrapCrossSigning', 'resetKeyBackup'] retained_m=5 retained_l=0
-    - method `getCrypto`:L139 — None
-    - method `createRecoveryKeyFromPassphrase`:L142 — None
-    - method `bootstrapSecretStorage`:L148 — None
-    - method `bootstrapCrossSigning`:L153 — None
-    - method `resetKeyBackup`:L158 — None
-  - `synara/src/app/components/DeviceVerificationStatus.ts` symbols=[] retained_m=0 retained_l=0
+  - `synara/src/client/verificationRequestInbox.ts` symbols=['ensureVerificationRequestInbox', 'mergeSelfVerificationRequests', 'on:CryptoEvent.VerificationRequestReceived'] retained_m=0 retained_l=1
+    - listener `on:CryptoEvent.VerificationRequestReceived`:L66 — primary wired inbox intake
+  - `synara/src/app/components/DeviceVerification.tsx` symbols=['DeviceVerification', 'ReceiveSelfDeviceVerification', 'getVerificationRequestsToDeviceInProgress', 'accept', 'startVerification', 'verify'] retained_m=5 retained_l=0
+    - method `getCrypto`:L395 — crypto access for in-progress hydrate
+    - method `getVerificationRequestsToDeviceInProgress`:L395 — hydrate mid-flight requests
+    - method `accept`:L326 — inbound Requested accept
+    - method `startVerification`:L328 — initiator Ready SAS start
+    - method `verify`:L230 — SAS emoji ceremony
   - `synara/src/app/features/settings/devices/Verification.tsx` symbols=['requestOwnUserVerification', 'requestDeviceVerification'] retained_m=2 retained_l=0
-    - method `requestOwnUserVerification`:L124 — None
-    - method `requestDeviceVerification`:L230 — None
-  - `synara/src/app/hooks/useDeviceVerificationStatus.ts` symbols=[] retained_m=0 retained_l=0
-  - `synara/src/app/hooks/useVerificationRequest.ts` symbols=[] retained_m=0 retained_l=10
-    - listener `on:CryptoEvent.VerificationRequestReceived`:L21 — None
-    - listener `removeListener:CryptoEvent.VerificationRequestReceived`:L23 — None
-    - listener `on:VerificationRequestEvent.Change`:L33 — None
-    - listener `removeListener:VerificationRequestEvent.Change`:L35 — None
-    - listener `on:VerifierEvent.Cancel`:L58 — None
-    - listener `removeListener:VerifierEvent.Cancel`:L60 — None
-    - listener `on:VerifierEvent.ShowSas`:L70 — None
-    - listener `removeListener:VerifierEvent.ShowSas`:L76 — None
-    - listener `on:VerifierEvent.ShowReciprocateQr`:L86 — None
-    - listener `removeListener:VerifierEvent.ShowReciprocateQr`:L88 — None
-  - `synara/src/app/utils/verification.ts` symbols=[] retained_m=0 retained_l=0
-  - `synara/src/client/verificationRequestInbox.ts` symbols=[] retained_m=0 retained_l=1
-    - listener `on:CryptoEvent.VerificationRequestReceived`:L66 — None
+    - method `requestOwnUserVerification`:L124 — outbound own-user start
+    - method `requestDeviceVerification`:L230 — outbound other-device start
+  - `synara/src/app/hooks/useVerificationRequest.ts` symbols=['useVerificationRequestPhase', 'useVerifierShowSas', 'useVerifierCancel'] retained_m=0 retained_l=6
+    - listener `on:VerificationRequestEvent.Change`:L33 — phase projection
+    - listener `removeListener:VerificationRequestEvent.Change`:L35 — cleanup
+    - listener `on:VerifierEvent.ShowSas`:L70 — emoji callbacks
+    - listener `removeListener:VerifierEvent.ShowSas`:L76 — cleanup
+    - listener `on:VerifierEvent.Cancel`:L58 — verifier cancel
+    - listener `removeListener:VerifierEvent.Cancel`:L60 — cleanup
+    - note: L21 VerificationRequestReceived hook unused; L86 ShowReciprocateQr unused
+  - `synara/src/app/utils/verification.ts` symbols=['getInitialSasCallbacks', 'cancelVerificationRequestForExit'] retained_m=2 retained_l=0
+    - method `getShowSasCallbacks`:L9 — seed existing SAS callbacks
+    - method `cancel`:L19 — request.cancel on non-terminal exit
+  - `synara/src/client/initMatrix.ts` symbols=['ensureVerificationRequestInbox'] retained_m=0 retained_l=0
+    - note: L263 early inbox install after crypto continuity, before ready-to-start
 - **Behavior-relevant methods (top-level)**:
-  - `getCrypto` `synara/src/app/components/DeviceVerification.tsx`:L395 — None
-  - `getVerificationRequestsToDeviceInProgress` `synara/src/app/components/DeviceVerification.tsx`:L395 — None
-  - `getCrypto` `synara/src/app/components/DeviceVerificationSetup.tsx`:L139 — None
-  - `createRecoveryKeyFromPassphrase` `synara/src/app/components/DeviceVerificationSetup.tsx`:L142 — None
-  - `bootstrapSecretStorage` `synara/src/app/components/DeviceVerificationSetup.tsx`:L148 — None
-  - `bootstrapCrossSigning` `synara/src/app/components/DeviceVerificationSetup.tsx`:L153 — None
-  - `resetKeyBackup` `synara/src/app/components/DeviceVerificationSetup.tsx`:L158 — None
-  - `requestOwnUserVerification` `synara/src/app/features/settings/devices/Verification.tsx`:L124 — None
-  - `requestDeviceVerification` `synara/src/app/features/settings/devices/Verification.tsx`:L230 — None
+  - `requestOwnUserVerification` `synara/src/app/features/settings/devices/Verification.tsx`:L124 — outbound own-user start
+  - `requestDeviceVerification` `synara/src/app/features/settings/devices/Verification.tsx`:L230 — outbound other-device start
+  - `getCrypto` `synara/src/app/components/DeviceVerification.tsx`:L395 — crypto for hydrate
+  - `getVerificationRequestsToDeviceInProgress` `synara/src/app/components/DeviceVerification.tsx`:L395 — inbox hydrate
+  - `accept` `synara/src/app/components/DeviceVerification.tsx`:L326 — inbound accept
+  - `startVerification` `synara/src/app/components/DeviceVerification.tsx`:L328 — start SAS
+  - `verify` `synara/src/app/components/DeviceVerification.tsx`:L230 — verifier.verify
+  - `cancel` `synara/src/app/utils/verification.ts`:L19 — request.cancel on exit
+  - `getShowSasCallbacks` `synara/src/app/utils/verification.ts`:L9 — seed emoji callbacks
 - **Behavior-relevant listeners (top-level)**:
-  - `on:CryptoEvent.VerificationRequestReceived` `synara/src/app/hooks/useVerificationRequest.ts`:L21 — None
-  - `removeListener:CryptoEvent.VerificationRequestReceived` `synara/src/app/hooks/useVerificationRequest.ts`:L23 — None
-  - `on:VerificationRequestEvent.Change` `synara/src/app/hooks/useVerificationRequest.ts`:L33 — None
-  - `removeListener:VerificationRequestEvent.Change` `synara/src/app/hooks/useVerificationRequest.ts`:L35 — None
-  - `on:VerifierEvent.Cancel` `synara/src/app/hooks/useVerificationRequest.ts`:L58 — None
-  - `removeListener:VerifierEvent.Cancel` `synara/src/app/hooks/useVerificationRequest.ts`:L60 — None
-  - `on:VerifierEvent.ShowSas` `synara/src/app/hooks/useVerificationRequest.ts`:L70 — None
-  - `removeListener:VerifierEvent.ShowSas` `synara/src/app/hooks/useVerificationRequest.ts`:L76 — None
-  - `on:VerifierEvent.ShowReciprocateQr` `synara/src/app/hooks/useVerificationRequest.ts`:L86 — None
-  - `removeListener:VerifierEvent.ShowReciprocateQr` `synara/src/app/hooks/useVerificationRequest.ts`:L88 — None
-  - `on:CryptoEvent.VerificationRequestReceived` `synara/src/client/verificationRequestInbox.ts`:L66 — None
-- **Unfiltered linked candidates**: methods=11 listeners=11
-- **Rust**: `gap-sas` caps=['SC-084'] gaps=['GAP-SAS-VERIFICATION']
+  - `on:CryptoEvent.VerificationRequestReceived` `synara/src/client/verificationRequestInbox.ts`:L66 — primary inbox intake
+  - `on:VerificationRequestEvent.Change` `synara/src/app/hooks/useVerificationRequest.ts`:L33 — phase projection
+  - `removeListener:VerificationRequestEvent.Change` `synara/src/app/hooks/useVerificationRequest.ts`:L35 — cleanup
+  - `on:VerifierEvent.ShowSas` `synara/src/app/hooks/useVerificationRequest.ts`:L70 — emoji
+  - `removeListener:VerifierEvent.ShowSas` `synara/src/app/hooks/useVerificationRequest.ts`:L76 — cleanup
+  - `on:VerifierEvent.Cancel` `synara/src/app/hooks/useVerificationRequest.ts`:L58 — cancel
+  - `removeListener:VerifierEvent.Cancel` `synara/src/app/hooks/useVerificationRequest.ts`:L60 — cleanup
+- **Unfiltered linked candidates**: methods=6 listeners=11
+- **Rust**: `gap-sas-compile-shape-only-blocked-for-product` caps=['SC-084'] gaps=['GAP-SAS-VERIFICATION']
   - `SC-084` `blocked` `matrix_sdk::encryption::Encryption::get_verification_request` https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/encryption/mod.rs#L1062-L1070
+  - Honest: SC-084 is lookup only (not product inbox). GAP-SAS covers accept/cancel/start_sas/confirm/request_verification compile shapes; no dedicated push inbox stream. Product owns early-install queue + phase UI + emoji. Both compile-only blocked. Cutover P8.3 via Rust ownership+IPC; SC IDs alone / raw HTTP / trust-badge-only / device-list-only / helper-only FAIL.
 - **Tasks**: `P8.3`
 - **Existing tests**:
-  - `synara/src/app/utils/__tests__/verification.test.ts` — SAS/verification helper unit coverage
+  - `synara/src/app/utils/__tests__/verification.test.ts` — Unit-only: inbox merge/dedupe/early-queue, cancel-on-exit, phaseFromVerifierCancellation, getInitialSasCallbacks — not two-client SAS e2e
 - **Planned** `AT-FR-7.9-005-001` task `P8.3` level `integration-e2e`
-  - Scenario: 7.9/FR-7.9-005: exercise 'SAS verification and request inbox behavior;' via owner `synara/src/client/verificationRequestInbox.ts` and UI `synara/src/app/components/DeviceVerification.tsx`, then confirm Rust/IPC cutover task `P8.3` preserves observable behavior without raw Matrix runtime HTTP.
-  - Test target: None
+  - Scenario: Integration-e2e against disposable Synapse with two clients/sessions: (A) inbound self-device verification request is queued by ensureVerificationRequestInbox (CryptoEvent.VerificationRequestReceived, early-install before startClient) and presented by ReceiveSelfDeviceVerification; (B) outbound Verify from Another Device uses requestOwnUserVerification and Verify on other device uses requestDeviceVerification, each opening DeviceVerification; (C) SAS emoji ceremony progresses Requested→Ready→Started with ShowSas emoji compare (confirm match completes Done; mismatch/cancel yields Cancelled) including accept/startVerification(Sas)/verifier.verify/request.cancel paths. After cutover P8.3 same observables via Rust GAP-SAS-VERIFICATION / SC-084 shapes + product inbox ownership + IPC DTO; SC-084 alone, compile-only blocked, raw /\_matrix HTTP, dual-backend, trust-badge-only (FR-7.9-004), device-list-only (FR-7.9-003), bootstrap-only (FR-7.9-002), or helper/fixture-only FAIL.
+  - Test target: verificationRequestInbox (VerificationRequestReceived + hydrate/dismiss) + ReceiveSelfDeviceVerification + DeviceVerification SAS ceremony + Verification.tsx requestOwnUserVerification/requestDeviceVerification; post-cutover GAP-SAS-VERIFICATION/SC-084 under P8.3
   - Preconditions:
-    - Desktop app, E2EE-capable session; second device for verification
-    - Recovery key / backup fixtures; isolated multi-account profiles when testing isolation
-    - Linked owner path present in tree: synara/src/client/verificationRequestInbox.ts
-    - Primary UI/lifecycle surface: synara/src/app/components/DeviceVerification.tsx
+    - Disposable Synapse; two desktop sessions for the same Matrix user (device A and device B) with E2EE/crypto initialized; cross-signing active so Devices verification tiles are shown (Enable path is FR-7.9-002).
+    - Named product surfaces present: verificationRequestInbox.ts, DeviceVerification.tsx (ceremony + ReceiveSelfDeviceVerification), Verification.tsx VerifyCurrentDeviceTile/VerifyOtherDeviceTile, useVerificationRequest.ts, verification.ts; Router mounts ReceiveSelfDeviceVerification.
+    - Harness can observe Device Verification dialog phases (Accept / Waiting / emoji compare / Done / Cancelled), inbox presentation without process restart, and does not bypass product inbox or ceremony with dual-backend/raw HTTP/helper-only pass criteria.
+    - Optional: in-progress request hydrate via getVerificationRequestsToDeviceInProgress when UI mounts after request already exists.
   - Actions:
-    1. Boot the appropriate harness for level=integration-e2e against disposable Synapse (or iOS notes if any).
-    2. Establish fixtures required by the clause list: SAS verification; request inbox behavior.
-    3. Open UI/lifecycle surface `synara/src/app/components/DeviceVerification.tsx` (or follow ui_entry_points_rationale if no dedicated UI).
-    4. Step 1: perform the product action that implements «SAS verification» using current owner `synara/src/client/verificationRequestInbox.ts`.
-    5. Step 2: perform the product action that implements «request inbox behavior» using current owner `synara/src/client/verificationRequestInbox.ts`.
-    6. Force process restart and/or offline→online transition where lifecycle continuity is implied.
+    1. Boot integration harness against disposable Synapse with two same-user sessions. Do not use fixture-only mocks that skip product inbox/ceremony, dual-backend selectors, raw HTTP, or helper-only pass criteria.
+    2. INBOUND INBOX: From device A start verification toward B (or B starts own-user verification so A receives to-device request). On receiving device assert ensureVerificationRequestInbox queued the self-verification request (VerificationRequestReceived) and ReceiveSelfDeviceVerification shows Device Verification dialog without requiring Settings navigation. Confirm early-install path: request received around first sync is not dropped before UI subscribe; hydrate in-progress requests on mount.
+    3. OUTBOUND OWN: On unverified current device open Settings → Devices → Verify from Another Device (requestOwnUserVerification). Assert DeviceVerification opens; other verified device can accept.
+    4. OUTBOUND OTHER: From verified current device on OtherDevices Unverified tile press Verify (requestDeviceVerification). Assert DeviceVerification opens for that deviceId.
+    5. SAS CEREMONY COMPLETE: Progress phases — Requested (Accept on inbound or wait on initiator), Ready (startVerification Sas on initiator), Started (emoji list via ShowSas/getShowSasCallbacks). Press They Match on both sides; assert Done «Your device is verified» and exit dismisses/clears ceremony UI. Optionally assert subsequent trust display (FR-7.9-004) but do not use badge alone as pass.
+    6. SAS CANCEL/MISMATCH: Repeat with Do not Match or dialog close cancel (request.cancel when non-terminal); assert Cancelled UI and request leaves active queue (dismiss on exit).
+    7. After cutover P8.3, repeat inbound inbox, outbound starts, complete, and cancel observables via Rust verification request/SAS APIs under product lifecycle actor/IPC DTOs. Citing SC-084 alone, GAP compile-only, raw /\_matrix HTTP, dual-backend/SDK selector, trust-badge-only, device-list-only, bootstrap-only, or helper/fixture-only is a FAIL.
   - Assertions:
-    - Each clause is observable: «SAS verification»; «request inbox behavior».
-    - State coordination remains through `synara/src/client/verificationRequestInbox.ts` (or its Rust/IPC successor after cutover), not ad-hoc dual writers.
-    - Behavior-relevant current JS method candidates exercised or replaced: getCrypto, getVerificationRequestsToDeviceInProgress, getCrypto, createRecoveryKeyFromPassphrase, bootstrapSecretStorage, bootstrapCrossSigning, resetKeyBackup, requestOwnUserVerification (AST candidates; not type-proven receivers).
-    - Behavior-relevant listener candidates observed or replaced: on:CryptoEvent.VerificationRequestReceived, removeListener:CryptoEvent.VerificationRequestReceived, on:VerificationRequestEvent.Change, removeListener:VerificationRequestEvent.Change, on:VerifierEvent.Cancel, removeListener:VerifierEvent.Cancel.
-    - Rust mapping remains conservative: caps=[SC-084] gaps=[GAP-SAS-VERIFICATION]; compile-only blocked states are not treated as runtime pass.
-    - No new production matrix-js-sdk usage and no raw /\_matrix runtime HTTP unless dossier marks that exact behavior typed-sdk-request-required.
+    - INBOX: inbound self-verification requests appear via verificationRequestInbox (VerificationRequestReceived + optional getVerificationRequestsToDeviceInProgress hydrate) and ReceiveSelfDeviceVerification without dropping early first-sync requests.
+    - OUTBOUND: requestOwnUserVerification and requestDeviceVerification open DeviceVerification ceremony UI.
+    - SAS COMPLETE: phase machine reaches Done after emoji confirm on both sides (accept/startVerification/verify/ShowSas confirm).
+    - SAS CANCEL: cancel or mismatch yields Cancelled; non-terminal exit calls request.cancel before dismiss.
+    - COORDINATION: inbox + ceremony state remain through verificationRequestInbox / DeviceVerification (or Rust/IPC successors), not ad-hoc dual writers.
+    - CUTOVER: P8.3 preserves inbox+ceremony observables via Rust ownership + IPC DTO; SC-084/GAP compile-only never product pass; no raw /\_matrix runtime HTTP; no dual-backend/SDK selector.
+    - No new production matrix-js-sdk usage and no raw /\_matrix runtime HTTP unless the dossier marks that exact behavior typed-sdk-request-required.
+    - Trust badge/status alone (FR-7.9-004), device list alone (FR-7.9-003), bootstrapCrossSigning alone (FR-7.9-002), unused ShowReciprocateQr, and helper unit tests alone are not accepted as sole pass criteria for this FR.
   - does_not_currently_exist: `True`
 - **Manual**: `MA-FR-7.9-005`
 
@@ -8981,22 +8979,25 @@ Limited rejected-review correction (`p0.2-correct-30-fr-7.9-004-device-trust-ver
 
 - Platforms: macOS, Linux
 - Preconditions:
-  - Desktop app, E2EE-capable session; second device for verification
-  - Recovery key / backup fixtures; isolated multi-account profiles when testing isolation
-  - State owner available: synara/src/client/verificationRequestInbox.ts
-  - UI/lifecycle: synara/src/app/components/DeviceVerification.tsx
+  - Desktop app against disposable Synapse; two same-user sessions (device A and B) with E2EE/crypto initialized and cross-signing active so Settings Devices verification tiles show.
+  - State owner available: synara/src/client/verificationRequestInbox.ts (early-installed via initMatrix before startClient).
+  - UI/lifecycle: DeviceVerification.tsx ceremony + ReceiveSelfDeviceVerification (Router); Verification.tsx VerifyCurrentDeviceTile/VerifyOtherDeviceTile.
   - Current status baseline: implemented
 - Actions:
-  1. Launch Synara desktop on the target platform against disposable Synapse; use a clean or known fixture profile as required by «SAS verification and request inbox behavior;».
-  2. Identify state owner `synara/src/client/verificationRequestInbox.ts` and open `synara/src/app/components/DeviceVerification.tsx`.
-  3. Action 1 — «SAS verification»: perform the minimal user/system steps that trigger this clause (use linked files under current_production_files if the entry point is indirect).
-  4. Action 2 — «request inbox behavior»: perform the minimal user/system steps that trigger this clause (use linked files under current_production_files if the entry point is indirect).
-  5. Repeat critical path in an encrypted room / with a second device when the clause involves keys or verification.
+  1. Launch two Synara desktop sessions for the same account against disposable Synapse.
+  2. INBOUND INBOX: Start a self-device verification so the peer session receives a request. Confirm ReceiveSelfDeviceVerification presents Device Verification without requiring navigation; confirm request is not lost if received near first sync/splash.
+  3. OUTBOUND OWN: On an Unverified current device open Settings → Devices → Verify from Another Device; confirm DeviceVerification opens (requestOwnUserVerification).
+  4. OUTBOUND OTHER: From a Verified current device press Verify on another Unverified own session; confirm DeviceVerification opens (requestDeviceVerification).
+  5. SAS COMPLETE: Accept on inbound side; complete emoji comparison with They Match on both devices; confirm Done «Your device is verified» and dialog exit.
+  6. SAS CANCEL: Start another verification and cancel via close or Do not Match; confirm Cancelled and dialog close without crash.
+  7. Optional: confirm trust badge later updates (FR-7.9-004) but do not use badge alone as pass for this FR.
 - Expected:
-  - All clauses under «SAS verification and request inbox behavior;» produce the user-visible or system-observable success criteria without error toasts unrelated to intentional negative tests.
-  - Clause 1 «SAS verification» is satisfied on macOS, Linux with owner `synara/src/client/verificationRequestInbox.ts`.
-  - Clause 2 «request inbox behavior» is satisfied on macOS, Linux with owner `synara/src/client/verificationRequestInbox.ts`.
+  - Inbound self-verification requests appear via the product inbox and ReceiveSelfDeviceVerification.
+  - Outbound own-user and other-device verification starts open the SAS ceremony dialog.
+  - Matching emoji confirms reaches Done; cancel/mismatch reaches Cancelled with request.cancel for non-terminal exit.
   - No unexpected raw /\_matrix traffic from the app renderer for this flow on the post-cutover build.
+  - Trust badge alone, device list alone, bootstrap Enable alone, and helper unit tests alone do not close this FR.
+  - Clause «SAS verification» and «request inbox behavior» satisfied on macOS and Linux via DeviceVerification + verificationRequestInbox (or Rust/IPC successors under P8.3).
 
 ### `MA-FR-7.9-006` (FR-7.9-006)
 
@@ -11215,22 +11216,25 @@ Limited rejected-review correction (`p0.2-correct-30-fr-7.9-004-device-trust-ver
 
 ### `AT-FR-7.9-005-001`
 
-- 7.9/FR-7.9-005: exercise 'SAS verification and request inbox behavior;' via owner `synara/src/client/verificationRequestInbox.ts` and UI `synara/src/app/components/DeviceVerification.tsx`, then confirm Rust/IPC cutover task `P8.3` preserves observable behavior without raw Matrix runtime HTTP.
-- target: None
+- Integration-e2e against disposable Synapse with two clients/sessions: (A) inbound self-device verification request is queued by ensureVerificationRequestInbox (CryptoEvent.VerificationRequestReceived, early-install before startClient) and presented by ReceiveSelfDeviceVerification; (B) outbound Verify from Another Device uses requestOwnUserVerification and Verify on other device uses requestDeviceVerification, each opening DeviceVerification; (C) SAS emoji ceremony progresses Requested→Ready→Started with ShowSas emoji compare (confirm match completes Done; mismatch/cancel yields Cancelled) including accept/startVerification(Sas)/verifier.verify/request.cancel paths. After cutover P8.3 same observables via Rust GAP-SAS-VERIFICATION / SC-084 shapes + product inbox ownership + IPC DTO; SC-084 alone, compile-only blocked, raw /\_matrix HTTP, dual-backend, trust-badge-only (FR-7.9-004), device-list-only (FR-7.9-003), bootstrap-only (FR-7.9-002), or helper/fixture-only FAIL.
+- target: verificationRequestInbox (VerificationRequestReceived + hydrate/dismiss) + ReceiveSelfDeviceVerification + DeviceVerification SAS ceremony + Verification.tsx requestOwnUserVerification/requestDeviceVerification; post-cutover GAP-SAS-VERIFICATION/SC-084 under P8.3
 - actions:
-  1. Boot the appropriate harness for level=integration-e2e against disposable Synapse (or iOS notes if any).
-  2. Establish fixtures required by the clause list: SAS verification; request inbox behavior.
-  3. Open UI/lifecycle surface `synara/src/app/components/DeviceVerification.tsx` (or follow ui_entry_points_rationale if no dedicated UI).
-  4. Step 1: perform the product action that implements «SAS verification» using current owner `synara/src/client/verificationRequestInbox.ts`.
-  5. Step 2: perform the product action that implements «request inbox behavior» using current owner `synara/src/client/verificationRequestInbox.ts`.
-  6. Force process restart and/or offline→online transition where lifecycle continuity is implied.
+  1. Boot integration harness against disposable Synapse with two same-user sessions. Do not use fixture-only mocks that skip product inbox/ceremony, dual-backend selectors, raw HTTP, or helper-only pass criteria.
+  2. INBOUND INBOX: From device A start verification toward B (or B starts own-user verification so A receives to-device request). On receiving device assert ensureVerificationRequestInbox queued the self-verification request (VerificationRequestReceived) and ReceiveSelfDeviceVerification shows Device Verification dialog without requiring Settings navigation. Confirm early-install path: request received around first sync is not dropped before UI subscribe; hydrate in-progress requests on mount.
+  3. OUTBOUND OWN: On unverified current device open Settings → Devices → Verify from Another Device (requestOwnUserVerification). Assert DeviceVerification opens; other verified device can accept.
+  4. OUTBOUND OTHER: From verified current device on OtherDevices Unverified tile press Verify (requestDeviceVerification). Assert DeviceVerification opens for that deviceId.
+  5. SAS CEREMONY COMPLETE: Progress phases — Requested (Accept on inbound or wait on initiator), Ready (startVerification Sas on initiator), Started (emoji list via ShowSas/getShowSasCallbacks). Press They Match on both sides; assert Done «Your device is verified» and exit dismisses/clears ceremony UI. Optionally assert subsequent trust display (FR-7.9-004) but do not use badge alone as pass.
+  6. SAS CANCEL/MISMATCH: Repeat with Do not Match or dialog close cancel (request.cancel when non-terminal); assert Cancelled UI and request leaves active queue (dismiss on exit).
+  7. After cutover P8.3, repeat inbound inbox, outbound starts, complete, and cancel observables via Rust verification request/SAS APIs under product lifecycle actor/IPC DTOs. Citing SC-084 alone, GAP compile-only, raw /\_matrix HTTP, dual-backend/SDK selector, trust-badge-only, device-list-only, bootstrap-only, or helper/fixture-only is a FAIL.
 - assertions:
-  - Each clause is observable: «SAS verification»; «request inbox behavior».
-  - State coordination remains through `synara/src/client/verificationRequestInbox.ts` (or its Rust/IPC successor after cutover), not ad-hoc dual writers.
-  - Behavior-relevant current JS method candidates exercised or replaced: getCrypto, getVerificationRequestsToDeviceInProgress, getCrypto, createRecoveryKeyFromPassphrase, bootstrapSecretStorage, bootstrapCrossSigning, resetKeyBackup, requestOwnUserVerification (AST candidates; not type-proven receivers).
-  - Behavior-relevant listener candidates observed or replaced: on:CryptoEvent.VerificationRequestReceived, removeListener:CryptoEvent.VerificationRequestReceived, on:VerificationRequestEvent.Change, removeListener:VerificationRequestEvent.Change, on:VerifierEvent.Cancel, removeListener:VerifierEvent.Cancel.
-  - Rust mapping remains conservative: caps=[SC-084] gaps=[GAP-SAS-VERIFICATION]; compile-only blocked states are not treated as runtime pass.
-  - No new production matrix-js-sdk usage and no raw /\_matrix runtime HTTP unless dossier marks that exact behavior typed-sdk-request-required.
+  - INBOX: inbound self-verification requests appear via verificationRequestInbox (VerificationRequestReceived + optional getVerificationRequestsToDeviceInProgress hydrate) and ReceiveSelfDeviceVerification without dropping early first-sync requests.
+  - OUTBOUND: requestOwnUserVerification and requestDeviceVerification open DeviceVerification ceremony UI.
+  - SAS COMPLETE: phase machine reaches Done after emoji confirm on both sides (accept/startVerification/verify/ShowSas confirm).
+  - SAS CANCEL: cancel or mismatch yields Cancelled; non-terminal exit calls request.cancel before dismiss.
+  - COORDINATION: inbox + ceremony state remain through verificationRequestInbox / DeviceVerification (or Rust/IPC successors), not ad-hoc dual writers.
+  - CUTOVER: P8.3 preserves inbox+ceremony observables via Rust ownership + IPC DTO; SC-084/GAP compile-only never product pass; no raw /\_matrix runtime HTTP; no dual-backend/SDK selector.
+  - No new production matrix-js-sdk usage and no raw /\_matrix runtime HTTP unless the dossier marks that exact behavior typed-sdk-request-required.
+  - Trust badge/status alone (FR-7.9-004), device list alone (FR-7.9-003), bootstrapCrossSigning alone (FR-7.9-002), unused ShowReciprocateQr, and helper unit tests alone are not accepted as sole pass criteria for this FR.
 
 ### `AT-FR-7.9-006-001`
 
@@ -11707,7 +11711,7 @@ Limited rejected-review correction (`p0.2-correct-30-fr-7.9-004-device-trust-ver
 - `ET-FR-7.8-009-01` `FR-7.8-009` `synara-ios/SynaraTests/PushServiceTests.swift` — Existing XCTest coverage: register after session+token; clear/unregister on logout; token rotation replace; no register without gateway; sparse route resolution; badge parsing; route payload variants.
 - `ET-FR-7.8-009-02` `FR-7.8-009` `synara-ios/SynaraTests/NotificationPermissionCoordinatorTests.swift` — Existing XCTest coverage for first-sign-in permission prompt coordinating authorization + push registration begin.
 - `ET-FR-7.9-001-01` `FR-7.9-001` `synara/src/app/state/__tests__/initMatrix.test.ts` — unit/mocked initClient/continuity/startClient failure paths only; not E2E store-before-sync order AT
-- `ET-FR-7.9-005-01` `FR-7.9-005` `synara/src/app/utils/__tests__/verification.test.ts` — SAS/verification helper unit coverage
+- `ET-FR-7.9-005-01` `FR-7.9-005` `synara/src/app/utils/__tests__/verification.test.ts` — Unit-only: inbox merge/dedupe/early-queue, cancel-on-exit, phaseFromVerifierCancellation, getInitialSasCallbacks — not two-client SAS e2e
 - `ET-FR-7.9-011-01` `FR-7.9-011` `synara/src/app/state/__tests__/sessions.test.ts` — multi-session isolation bookkeeping
 - `ET-FR-7.10-003-01` `FR-7.10-003` `synara/src/app/utils/__tests__/messageSearchFilters.test.ts` — search filter helper unit coverage
 
@@ -11721,7 +11725,7 @@ Limited rejected-review correction (`p0.2-correct-30-fr-7.9-004-device-trust-ver
 | `synara/src/app/components/BackupRestore.tsx`                                  | `component`        | `requirement-linked`           |   0 |   0 | `FR-7.9-006`,`FR-7.9-007`,`FR-7.9-009`,`FR-7.9-013`                                                                                                                                                                                       |
 | `synara/src/app/components/CapabilitiesLoader.tsx`                             | `component`        | `requirement-linked`           |   0 |   1 | `FR-7.1-013`                                                                                                                                                                                                                              |
 | `synara/src/app/components/DeviceVerification.tsx`                             | `component`        | `requirement-linked`           |   0 |   3 | `FR-7.9-005`                                                                                                                                                                                                    |
-| `synara/src/app/components/DeviceVerificationSetup.tsx`                        | `component`        | `requirement-linked`           |   0 |   5 | `FR-7.9-002`,`FR-7.9-005`,`FR-7.9-006`                                                                                                                                                                                       |
+| `synara/src/app/components/DeviceVerificationSetup.tsx`                        | `component`        | `requirement-linked`           |   0 |   5 | `FR-7.9-002`,`FR-7.9-006`                                                                                                                                                                                       |
 | `synara/src/app/components/DeviceVerificationStatus.ts`                        | `component`        | `requirement-linked`           |   0 |   0 | `FR-7.9-002`,`FR-7.9-004`                                                                                                                                                                                                    |
 | `synara/src/app/components/JoinRulesSwitcher.tsx`                              | `component`        | `requirement-linked`           |   0 |   0 | `FR-7.6-002`                                                                                                                                                                                                                              |
 | `synara/src/app/components/RenderMessageContent.tsx`                           | `component`        | `requirement-linked`           |   0 |   0 | `FR-7.3-007`,`FR-7.3-008`,`FR-7.3-009`,`FR-7.3-010`,`FR-7.3-014`,`FR-7.3-016`,`FR-7.4-004`,`FR-7.4-006`,`FR-7.5-005`                                                                                                                      |
@@ -11932,7 +11936,7 @@ Limited rejected-review correction (`p0.2-correct-30-fr-7.9-004-device-trust-ver
 | `synara/src/app/utils/timelineOpening.ts`                                      | `utility`          | `requirement-linked`           |   0 |   5 | `FR-7.2-011`,`FR-7.3-001`,`FR-7.3-004`,`FR-7.3-005`,`FR-7.7-003`,`FR-7.7-004`,`FR-7.8-006`,`FR-7.10-004`                                                                                                                                  |
 | `synara/src/app/utils/verification.ts`                                         | `utility`          | `requirement-linked`           |   0 |   0 | `FR-7.9-005`                                                                                                                                                                                                                 |
 | `synara/src/client/cryptoStoreContinuity.ts`                                   | `client-lifecycle` | `requirement-linked`           |   0 |   1 | `FR-7.9-001`,`FR-7.9-011`,`FR-7.9-012`,`FR-7.9-013`                                                                                                                                                                                       |
-| `synara/src/client/initMatrix.ts`                                              | `client-lifecycle` | `requirement-linked`           |   2 |  15 | `FR-7.1-007`,`FR-7.1-008`,`FR-7.1-009`,`FR-7.1-010`,`FR-7.1-011`,`FR-7.1-012`,`FR-7.2-001`,`FR-7.5-001`,`FR-7.6-008`,`FR-7.9-001`,`FR-7.9-011`,`FR-7.9-012`,`FR-7.9-013`                                                                  |
+| `synara/src/client/initMatrix.ts`                                              | `client-lifecycle` | `requirement-linked`           |   2 |  15 | `FR-7.1-007`,`FR-7.1-008`,`FR-7.1-009`,`FR-7.1-010`,`FR-7.1-011`,`FR-7.1-012`,`FR-7.2-001`,`FR-7.5-001`,`FR-7.6-008`,`FR-7.9-001`,`FR-7.9-005`,`FR-7.9-011`,`FR-7.9-012`,`FR-7.9-013`                                                                  |
 | `synara/src/client/verificationRequestInbox.ts`                                | `client-lifecycle` | `requirement-linked`           |   1 |   0 | `FR-7.9-005`                                                                                                                                                                                                                 |
 | `synara/src/types/matrix/common.ts`                                            | `shared-type`      | `shared-matrix-infrastructure` |   0 |   0 | `FR-7.1-001`,`FR-7.3-001`,`FR-7.6-004`                                                                                                                                                                                                    |
 

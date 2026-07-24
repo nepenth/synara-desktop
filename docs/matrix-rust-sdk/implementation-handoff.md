@@ -33,9 +33,9 @@ without explicit user approval.
 - Checkpoint commits: `06d0f86` (traceability scaffold), `9c91e0f` (handoff)
 - **Accepted this session:**
   - FR-7.8-004 through FR-7.8-009 (section 7.8 complete for P0.2 audit)
-  - FR-7.9-001 through FR-7.9-003
-  - FR-7.9-004 (`p0.2-correct-30-...`) pending commit after this handoff update
-- **Next writer task:** FR-7.9-005 (SAS verification and request inbox), then
+  - FR-7.9-001 through FR-7.9-004
+  - FR-7.9-005 (`p0.2-correct-31-...`) pending commit after this handoff update
+- **Next writer task:** FR-7.9-006 (recovery setup/backup/restore), then
   remaining shallow 7.9–7.11 rows
 - No production Matrix Rust SDK replacement code accepted
 - **No open P0.2 PR yet** (open after P0.2 complete or batch checkpoint)
@@ -45,9 +45,9 @@ Phase 0 evidence accepted before this handoff:
 - P0.1 SDK usage inventory is merged to the integration branch.
 - P0.3 exact Matrix Rust SDK 0.18.0 capability dossier is merged to the
   integration branch.
-- P0.2 branch carries accepted 7.8–7.9.004 corrections and continuing 7.9+ audits.
+- P0.2 branch carries accepted 7.8–7.9.005 corrections and continuing 7.9+ audits.
 
-P0.2 is not complete. Resume at FR-7.9-005, then audit remaining 7.9–7.11
+P0.2 is not complete. Resume at FR-7.9-006, then audit remaining 7.9–7.11
 before declaring P0.2 accepted.
 
 Accepted notification findings that must be preserved:
@@ -122,6 +122,12 @@ Accepted notification findings that must be preserved:
   VerificationStatus badges on Devices/OtherDevices/UnverifiedTab/Logout;
   refresh via DevicesUpdated. SAS ceremony is FR-7.9-005; list is FR-7.9-003.
   SC-063/064 compile-only ≠ product pass.
+- FR-7.9-005: status `implemented`. SAS + request inbox:
+  `verificationRequestInbox` (install before startClient) queues
+  VerificationRequestReceived; ReceiveSelfDeviceVerification presents inbound;
+  requestOwnUserVerification / requestDeviceVerification outbound; DeviceVerification
+  SAS accept/start/verify/cancel. Trust status is 004; device list is 003.
+  SC-084 + GAP-SAS compile-only ≠ product pass.
 
 ## Branch and PR contract
 
