@@ -4,7 +4,7 @@
 
 ## Correction pass status
 
-Limited rejected-review correction (`p0.2-correct-31-fr-7.9-005-sas-verification-request-inbox`) for **FR-7.9-005** only: replace generic “via 8 files” / notes=null / methods mixing bootstrap+status with concrete SAS ceremony + request inbox evidence — `ensureVerificationRequestInbox` early-install + `CryptoEvent.VerificationRequestReceived`; `ReceiveSelfDeviceVerification`; `requestOwnUserVerification`/`requestDeviceVerification`; phase machine `accept`/`startVerification(Sas)`/`verify`/`ShowSas` confirm-mismatch/`cancel`; unused `useVerificationRequestReceived` and `ShowReciprocateQr` documented; exclude FR-7.9-002/003/004; rewrite planned AT/MA for two-client inbox+ceremony + cutover P8.3; honest rust_target SC-084 + GAP-SAS-VERIFICATION compile-only blocked; SC IDs alone / raw HTTP / trust-badge-only / device-list-only / helper-only FAIL. JSON and Markdown synchronized. Accepted corrections for **FR-7.8-001 through FR-7.8-009** and **FR-7.9-001..004** preserved. Prior corrections and accepted **7.1–7.3** preserved. **P0.2 is not complete.**
+Limited rejected-review correction (`p0.2-correct-32-fr-7.9-006-recovery-setup-backup-restore`) for **FR-7.9-006** only: replace generic “via 5 files” / notes=null / shallow AT with concrete recovery setup, recovery key, backup enablement, restore, and repair evidence — `DeviceVerificationSetup` `createRecoveryKeyFromPassphrase` → `bootstrapSecretStorage(setupNew)` → `resetKeyBackup` + `RecoveryKeyDisplay` + `DeviceVerificationReset`; `SecretStorage` `decodeRecoveryKey`/`deriveRecoveryKeyFromPassphrase`/`checkKey`; `ManualVerification` `storePrivateKey` + `loadSessionBackupPrivateKeyFromSecretStorage`; `BackupRestoreTile` `restoreKeyBackup` + trust/status; `useKeyBackup` listeners; `backupRestoreProgressAtom`; `AutoRestoreBackupOnVerification`; exclude FR-7.9-002/005/007; rewrite planned AT/MA for product observables + cutover P8.5; honest rust_target SC-065/SC-066 + GAP-RECOVERY-BACKUP compile-only blocked; SC IDs alone / raw HTTP / dual-backend / status-only / SAS-only / room-key-file-only / helper-only FAIL. JSON and Markdown synchronized. Accepted corrections for **FR-7.8-001 through FR-7.8-009** and **FR-7.9-001..005** preserved. Prior corrections and accepted **7.1–7.3** preserved. **P0.2 is not complete.**
 
 ## Provenance
 
@@ -14,7 +14,7 @@ Limited rejected-review correction (`p0.2-correct-31-fr-7.9-005-sas-verification
 
 ## Summary
 
-- FR 119 · files 220 · AT 119 · MA 119 · existing refs 44
+- FR 119 · files 220 · AT 119 · MA 119 · existing refs 45
 
 ### Status distribution
 
@@ -5965,79 +5965,104 @@ Limited rejected-review correction (`p0.2-correct-31-fr-7.9-005-sas-verification
 - **Text**: recovery setup, recovery key, backup enablement, restore, and repair;
 - **Lines**: 430–430
 - **Status**: `implemented`
-- **Behavior**: Current desktop implements this via 5 production matrix-js-sdk-related file(s); status=implemented.
-- **UI**: `synara/src/app/components/BackupRestore.tsx`, `synara/src/app/components/SecretStorage.tsx`
-- **Owners**: `synara/src/app/state/backupRestore.ts`
+- **Behavior**: Current desktop implements recovery setup, recovery key, backup enablement, restore, and repair as: (1) Settings Devices Enable opens DeviceVerificationSetup — createRecoveryKeyFromPassphrase → clearSecretStorageKeys → bootstrapSecretStorage(setupNewSecretStorage) → bootstrapCrossSigning(setupNew; shared FR-7.9-002) → resetKeyBackup, then RecoveryKeyDisplay show/copy/download; (2) ManualVerificationTile recovery key/passphrase entry via SecretStorage decode/derive+checkKey, storePrivateKey, bootstrapSecretStorage({}), loadSessionBackupPrivateKeyFromSecretStorage; (3) BackupRestoreTile Encryption Backup status Connected/Disconnected/Syncing, server info, BackupTrustInfo, manual restoreKeyBackup with progress; (4) AutoRestoreBackupOnVerification (Router) restores on KeyBackupDecryptionKeyCached; (5) DeviceVerificationReset permanent-reset warning re-runs SetupVerification as repair. status=implemented.
+- **Notes**: Evidence (conservative): (1) SETUP DeviceVerificationSetup L136–163 createRecoveryKeyFromPassphrase → bootstrapSecretStorage(setupNew) → resetKeyBackup; RecoveryKeyDisplay L230–281 copy/download; EnableVerification opens setup. (2) KEY ENTRY SecretStorage decode/derive+checkKey; ManualVerification storePrivateKey + loadSessionBackupPrivateKeyFromSecretStorage. (3) ENABLEMENT = resetKeyBackup + getActiveSessionBackupVersion Connected; Devices mounts BackupRestoreTile when Verified. (4) RESTORE manual L155 + auto useRestoreBackupOnVerification L17; progress atom L35–69. (5) REPAIR DeviceVerificationReset re-setup + BackupTrustInfo + KeyBackupFailed; no dedicated Repair button. (6) Non-evidence: cross-signing status alone (FR-7.9-002), SAS (FR-7.9-005), LocalBackup room-key file (FR-7.9-007). (7) Cutover P8.5 via Rust SC-065/SC-066 + GAP-RECOVERY-BACKUP + product UX + IPC; SC-only / raw HTTP / helper-only FAIL.
+- **UI**: `synara/src/app/components/DeviceVerificationSetup.tsx`, `synara/src/app/components/BackupRestore.tsx`, `synara/src/app/components/SecretStorage.tsx`, `synara/src/app/components/ManualVerification.tsx`, `synara/src/app/features/settings/devices/Devices.tsx`, `synara/src/app/features/settings/devices/Verification.tsx`, `synara/src/app/pages/Router.tsx`
+- **UI rationale**: DeviceVerificationSetup owns recovery setup, recovery-key display, and DeviceVerificationReset repair re-setup. BackupRestoreTile owns Encryption Backup status/restore. SecretStorage + ManualVerification own recovery key entry and backup key load. Router mounts AutoRestoreBackupOnVerification. Cross-signing badges alone FR-7.9-002; SAS FR-7.9-005; LocalBackup room-key import/export FR-7.9-007.
+- **Owners**: `synara/src/app/state/backupRestore.ts`, `synara/src/app/components/DeviceVerificationSetup.tsx`, `synara/src/client/secretStorageKeys.js`
 - **Files**:
-  - `synara/src/app/components/BackupRestore.tsx` symbols=[] retained_m=0 retained_l=0
-  - `synara/src/app/components/DeviceVerificationSetup.tsx` symbols=['getCrypto', 'createRecoveryKeyFromPassphrase', 'bootstrapSecretStorage', 'bootstrapCrossSigning', 'resetKeyBackup'] retained_m=5 retained_l=0
-    - method `getCrypto`:L139 — None
-    - method `createRecoveryKeyFromPassphrase`:L142 — None
-    - method `bootstrapSecretStorage`:L148 — None
-    - method `bootstrapCrossSigning`:L153 — None
-    - method `resetKeyBackup`:L158 — None
-  - `synara/src/app/components/SecretStorage.tsx` symbols=[] retained_m=0 retained_l=0
-  - `synara/src/app/hooks/useKeyBackup.ts` symbols=['getActiveSessionBackupVersion', 'isKeyBackupTrusted'] retained_m=2 retained_l=8
-    - method `getActiveSessionBackupVersion`:L30 — None
-    - method `isKeyBackupTrusted`:L144 — None
-    - listener `on:CryptoEvent.KeyBackupStatus`:L18 — None
-    - listener `removeListener:CryptoEvent.KeyBackupStatus`:L20 — None
-    - listener `on:CryptoEvent.KeyBackupSessionsRemaining`:L48 — None
-    - listener `removeListener:CryptoEvent.KeyBackupSessionsRemaining`:L50 — None
-    - listener `on:CryptoEvent.KeyBackupFailed`:L61 — None
-    - listener `removeListener:CryptoEvent.KeyBackupFailed`:L63 — None
-    - listener `on:CryptoEvent.KeyBackupDecryptionKeyCached`:L74 — None
-    - listener `removeListener:CryptoEvent.KeyBackupDecryptionKeyCached`:L76 — None
-  - `synara/src/app/state/backupRestore.ts` symbols=[] retained_m=0 retained_l=0
+  - `synara/src/app/components/DeviceVerificationSetup.tsx` symbols=['SetupVerification', 'RecoveryKeyDisplay', 'DeviceVerificationSetup', 'DeviceVerificationReset', 'createRecoveryKeyFromPassphrase', 'bootstrapSecretStorage', 'resetKeyBackup'] retained_m=4 retained_l=0
+    - method `getCrypto`:L139 — crypto gate for setup
+    - method `createRecoveryKeyFromPassphrase`:L142 — recovery key material
+    - method `bootstrapSecretStorage`:L148 — setupNewSecretStorage
+    - method `resetKeyBackup`:L158 — backup enablement
+    - note: bootstrapCrossSigning L153 co-pipeline with FR-7.9-002; RecoveryKeyDisplay L230; DeviceVerificationReset L322
+  - `synara/src/app/components/SecretStorage.tsx` symbols=['SecretStorageRecoveryKey', 'SecretStorageRecoveryPassphrase', 'decodeRecoveryKey', 'deriveRecoveryKeyFromPassphrase', 'checkKey'] retained_m=3 retained_l=0
+    - method `deriveRecoveryKeyFromPassphrase`:L35 — passphrase → key
+    - method `decodeRecoveryKey`:L132 — encoded key decode
+    - method `checkKey`:L134 — validate against secret storage
+  - `synara/src/app/components/ManualVerification.tsx` symbols=['ManualVerificationTile', 'storePrivateKey', 'bootstrapSecretStorage', 'loadSessionBackupPrivateKeyFromSecretStorage'] retained_m=3 retained_l=0
+    - method `getCrypto`:L134 — crypto gate for unlock
+    - method `bootstrapSecretStorage`:L142 — open existing secret storage
+    - method `loadSessionBackupPrivateKeyFromSecretStorage`:L144 — load backup key
+  - `synara/src/app/components/BackupRestore.tsx` symbols=['BackupRestoreTile', 'BackupTrustInfo', 'AutoRestoreBackupOnVerification', 'restoreKeyBackup'] retained_m=1 retained_l=0
+    - method `restoreKeyBackup`:L155 — manual restore with progress
+  - `synara/src/app/hooks/useKeyBackup.ts` symbols=['getActiveSessionBackupVersion', 'getKeyBackupInfo', 'isKeyBackupTrusted'] retained_m=3 retained_l=8
+    - method `getActiveSessionBackupVersion`:L30 — Connected seed
+    - method `getKeyBackupInfo`:L109 — server backup details
+    - method `isKeyBackupTrusted`:L144 — trust diagnostics
+    - listener `on:CryptoEvent.KeyBackupStatus`:L18 — enablement status
+    - listener `removeListener:CryptoEvent.KeyBackupStatus`:L20 — cleanup
+    - listener `on:CryptoEvent.KeyBackupSessionsRemaining`:L48 — sync remaining
+    - listener `removeListener:CryptoEvent.KeyBackupSessionsRemaining`:L50 — cleanup
+    - listener `on:CryptoEvent.KeyBackupFailed`:L61 — sync failure
+    - listener `removeListener:CryptoEvent.KeyBackupFailed`:L63 — cleanup
+    - listener `on:CryptoEvent.KeyBackupDecryptionKeyCached`:L74 — auto-restore/trust
+    - listener `removeListener:CryptoEvent.KeyBackupDecryptionKeyCached`:L76 — cleanup
+  - `synara/src/app/state/backupRestore.ts` symbols=['backupRestoreProgressAtom', 'BackupProgressStatus'] retained_m=0 retained_l=0
+    - note: L35–69 progress atom for restore UI
+  - `synara/src/app/hooks/useRestoreBackupOnVerification.ts` symbols=['useRestoreBackupOnVerification', 'restoreKeyBackup'] retained_m=2 retained_l=0
+    - method `getCrypto`:L14 — auto-restore gate
+    - method `restoreKeyBackup`:L17 — auto restore on key cached
+  - `synara/src/client/secretStorageKeys.js` symbols=['storePrivateKey', 'clearSecretStorageKeys', 'cryptoCallbacks'] retained_m=0 retained_l=0
+    - note: L3/L18/L22 key cache + getSecretStorageKey callback
 - **Behavior-relevant methods (top-level)**:
-  - `getCrypto` `synara/src/app/components/DeviceVerificationSetup.tsx`:L139 — None
-  - `createRecoveryKeyFromPassphrase` `synara/src/app/components/DeviceVerificationSetup.tsx`:L142 — None
-  - `bootstrapSecretStorage` `synara/src/app/components/DeviceVerificationSetup.tsx`:L148 — None
-  - `bootstrapCrossSigning` `synara/src/app/components/DeviceVerificationSetup.tsx`:L153 — None
-  - `resetKeyBackup` `synara/src/app/components/DeviceVerificationSetup.tsx`:L158 — None
-  - `getActiveSessionBackupVersion` `synara/src/app/hooks/useKeyBackup.ts`:L30 — None
-  - `isKeyBackupTrusted` `synara/src/app/hooks/useKeyBackup.ts`:L144 — None
+  - `getCrypto` `synara/src/app/components/DeviceVerificationSetup.tsx`:L139 — setup crypto gate
+  - `createRecoveryKeyFromPassphrase` `synara/src/app/components/DeviceVerificationSetup.tsx`:L142 — recovery key material
+  - `bootstrapSecretStorage` `synara/src/app/components/DeviceVerificationSetup.tsx`:L148 — setupNew secret storage
+  - `resetKeyBackup` `synara/src/app/components/DeviceVerificationSetup.tsx`:L158 — backup enablement
+  - `deriveRecoveryKeyFromPassphrase` `synara/src/app/components/SecretStorage.tsx`:L35 — passphrase derive
+  - `decodeRecoveryKey` `synara/src/app/components/SecretStorage.tsx`:L132 — key decode
+  - `checkKey` `synara/src/app/components/SecretStorage.tsx`:L134 — validate recovery key
+  - `bootstrapSecretStorage` `synara/src/app/components/ManualVerification.tsx`:L142 — open existing SS
+  - `loadSessionBackupPrivateKeyFromSecretStorage` `synara/src/app/components/ManualVerification.tsx`:L144 — load backup key
+  - `restoreKeyBackup` `synara/src/app/components/BackupRestore.tsx`:L155 — manual restore
+  - `restoreKeyBackup` `synara/src/app/hooks/useRestoreBackupOnVerification.ts`:L17 — auto restore
+  - `getActiveSessionBackupVersion` `synara/src/app/hooks/useKeyBackup.ts`:L30 — Connected status
+  - `getKeyBackupInfo` `synara/src/app/hooks/useKeyBackup.ts`:L109 — server info
+  - `isKeyBackupTrusted` `synara/src/app/hooks/useKeyBackup.ts`:L144 — trust diagnostics
 - **Behavior-relevant listeners (top-level)**:
-  - `on:CryptoEvent.KeyBackupStatus` `synara/src/app/hooks/useKeyBackup.ts`:L18 — None
-  - `removeListener:CryptoEvent.KeyBackupStatus` `synara/src/app/hooks/useKeyBackup.ts`:L20 — None
-  - `on:CryptoEvent.KeyBackupSessionsRemaining` `synara/src/app/hooks/useKeyBackup.ts`:L48 — None
-  - `removeListener:CryptoEvent.KeyBackupSessionsRemaining` `synara/src/app/hooks/useKeyBackup.ts`:L50 — None
-  - `on:CryptoEvent.KeyBackupFailed` `synara/src/app/hooks/useKeyBackup.ts`:L61 — None
-  - `removeListener:CryptoEvent.KeyBackupFailed` `synara/src/app/hooks/useKeyBackup.ts`:L63 — None
-  - `on:CryptoEvent.KeyBackupDecryptionKeyCached` `synara/src/app/hooks/useKeyBackup.ts`:L74 — None
-  - `removeListener:CryptoEvent.KeyBackupDecryptionKeyCached` `synara/src/app/hooks/useKeyBackup.ts`:L76 — None
+  - `on:CryptoEvent.KeyBackupStatus` `synara/src/app/hooks/useKeyBackup.ts`:L18 — enablement
+  - `removeListener:CryptoEvent.KeyBackupStatus` `synara/src/app/hooks/useKeyBackup.ts`:L20 — cleanup
+  - `on:CryptoEvent.KeyBackupSessionsRemaining` `synara/src/app/hooks/useKeyBackup.ts`:L48 — sync remaining
+  - `removeListener:CryptoEvent.KeyBackupSessionsRemaining` `synara/src/app/hooks/useKeyBackup.ts`:L50 — cleanup
+  - `on:CryptoEvent.KeyBackupFailed` `synara/src/app/hooks/useKeyBackup.ts`:L61 — sync failure
+  - `removeListener:CryptoEvent.KeyBackupFailed` `synara/src/app/hooks/useKeyBackup.ts`:L63 — cleanup
+  - `on:CryptoEvent.KeyBackupDecryptionKeyCached` `synara/src/app/hooks/useKeyBackup.ts`:L74 — auto-restore/trust
+  - `removeListener:CryptoEvent.KeyBackupDecryptionKeyCached` `synara/src/app/hooks/useKeyBackup.ts`:L76 — cleanup
 - **Unfiltered linked candidates**: methods=7 listeners=8
-- **Rust**: `gap-recovery-backup` caps=['SC-065', 'SC-066'] gaps=['GAP-RECOVERY-BACKUP']
+- **Rust**: `gap-recovery-backup-compile-shape-only-blocked-for-product` caps=['SC-065', 'SC-066'] gaps=['GAP-RECOVERY-BACKUP']
   - `SC-065` `blocked` `matrix_sdk::encryption::Encryption::recovery() -> Recovery` https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/encryption/mod.rs#L1796
   - `SC-066` `blocked` `matrix_sdk::encryption::Encryption::backups() -> Backups` https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/encryption/mod.rs#L1791
+  - Honest: SC-065/SC-066 are compile-shape handles only. GAP-RECOVERY-BACKUP covers Recovery::{enable,recover} and Backups::create; remaining_work = full recovery UX, secret storage cache, backup steady-state, restore progress/auto-restore, reset with UIA. Product owns key display/entry, progress atom, auto-restore, DeviceVerificationReset. Both SC and GAP blocked (E3–E5 missing). Cutover P8.5 via Rust ownership+IPC; SC IDs alone / raw HTTP / dual-backend / status-only / SAS-only / room-key-file-only / helper-only FAIL.
 - **Tasks**: `P8.5`, `P8.1`
 - **Existing tests**:
-  - _(none)_
+  - `synara/src/app/matrix/__tests__/secretStorageKeys.test.ts` — Unit-only: storePrivateKey + clearSecretStorageKeys cache behavior — not recovery setup/backup restore e2e
 - **Planned** `AT-FR-7.9-006-001` task `P8.5` level `integration-e2e`
-  - Scenario: 7.9/FR-7.9-006: exercise 'recovery setup, recovery key, backup enablement, restore, and repair;' via owner `synara/src/app/state/backupRestore.ts` and UI `synara/src/app/components/BackupRestore.tsx`, then confirm Rust/IPC cutover task `P8.5` preserves observable behavior without raw Matrix runtime HTTP.
-  - Test target: None
+  - Scenario: Integration-e2e against disposable Synapse: (A) recovery setup via Settings Devices Enable runs createRecoveryKeyFromPassphrase → bootstrapSecretStorage(setupNew) → resetKeyBackup and shows RecoveryKeyDisplay copy/download; (B) backup enablement observable as Encryption Backup Connected (getActiveSessionBackupVersion) after setup; (C) second session unlocks with recovery key via ManualVerification (decodeRecoveryKey/checkKey → storePrivateKey → bootstrapSecretStorage → loadSessionBackupPrivateKeyFromSecretStorage) then manual and/or auto restoreKeyBackup with progress (backupRestoreProgressAtom / KeyBackupDecryptionKeyCached); (D) repair path DeviceVerificationReset permanent warning re-setup and/or BackupTrustInfo when backup present but untrusted/disconnected. After cutover P8.5 same observables via Rust SC-065/SC-066 + GAP-RECOVERY-BACKUP shapes + product UX + IPC DTO; SC IDs alone, compile-only blocked, raw /\_matrix HTTP, dual-backend, cross-signing-status-only (FR-7.9-002), SAS-only (FR-7.9-005), room-key-file-only (FR-7.9-007), or helper/fixture-only FAIL.
+  - Test target: DeviceVerificationSetup recovery setup+key display+resetKeyBackup; SecretStorage/ManualVerification recovery unlock+loadSessionBackupPrivateKeyFromSecretStorage; BackupRestoreTile status+restore; useKeyBackup listeners; backupRestoreProgressAtom; AutoRestoreBackupOnVerification; post-cutover SC-065/SC-066 + GAP-RECOVERY-BACKUP under P8.5
   - Preconditions:
-    - Desktop app, E2EE-capable session; second device for verification
-    - Recovery key / backup fixtures; isolated multi-account profiles when testing isolation
-    - Linked owner path present in tree: synara/src/app/state/backupRestore.ts
-    - Primary UI/lifecycle surface: synara/src/app/components/BackupRestore.tsx
+    - Disposable Synapse; at least one E2EE desktop session without recovery/backup for setup path; second same-user session for recovery unlock + restore.
+    - Named product surfaces present: DeviceVerificationSetup.tsx, SecretStorage.tsx, ManualVerification.tsx, BackupRestore.tsx, useKeyBackup.ts, backupRestore.ts, useRestoreBackupOnVerification.ts, secretStorageKeys.js; Devices mounts BackupRestoreTile when Verified; Router mounts AutoRestoreBackupOnVerification.
+    - Harness can observe Recovery Key dialog (show/copy/download), Encryption Backup Connected/Disconnected/Syncing and Restore progress, Manual Verify recovery key entry success, and does not bypass product paths with dual-backend/raw HTTP/helper-only pass criteria.
+    - Do not accept cross-signing badge alone (FR-7.9-002), SAS ceremony alone (FR-7.9-005), or LocalBackup room-key file import/export alone (FR-7.9-007) as sole pass for this FR.
   - Actions:
-    1. Boot the appropriate harness for level=integration-e2e against disposable Synapse (or iOS notes if any).
-    2. Establish fixtures required by the clause list: recovery setup; recovery key; backup enablement; restore; repair.
-    3. Open UI/lifecycle surface `synara/src/app/components/BackupRestore.tsx` (or follow ui_entry_points_rationale if no dedicated UI).
-    4. Step 1: perform the product action that implements «recovery setup» using current owner `synara/src/app/state/backupRestore.ts`.
-    5. Step 2: perform the product action that implements «recovery key» using current owner `synara/src/app/state/backupRestore.ts`.
-    6. Step 3: perform the product action that implements «backup enablement» using current owner `synara/src/app/state/backupRestore.ts`.
-    7. Step 4: perform the product action that implements «restore» using current owner `synara/src/app/state/backupRestore.ts`.
-    8. Step 5: perform the product action that implements «repair» using current owner `synara/src/app/state/backupRestore.ts`.
-    9. Force process restart and/or offline→online transition where lifecycle continuity is implied.
+    1. Boot integration harness against disposable Synapse. Do not use fixture-only mocks that skip product DeviceVerificationSetup/BackupRestore/ManualVerification, dual-backend selectors, raw HTTP, or helper-only pass criteria.
+    2. RECOVERY SETUP + KEY: On session without recovery, open Settings → Devices → Enable. Complete SetupVerification (optional passphrase). Assert createRecoveryKeyFromPassphrase → bootstrapSecretStorage(setupNew) → resetKeyBackup path; RecoveryKeyDisplay shows key; exercise Show, Copy, Download.
+    3. BACKUP ENABLEMENT: After setup, open Devices with Verified current device; assert Encryption Backup tile Connected (or transitions to Connected) via getActiveSessionBackupVersion / KeyBackupStatus; Backup Details version/count populated when available.
+    4. RECOVERY UNLOCK + RESTORE: On a second session (or after clearing local backup keys), use Verify Manually with recovery key (or passphrase). Assert checkKey success, loadSessionBackupPrivateKeyFromSecretStorage, then Restore Backup and/or auto-restore on KeyBackupDecryptionKeyCached with Fetching/Loading progress to Done.
+    5. REPAIR: From Devices options open Reset Device Verification; assert permanent-reset warning; complete re-setup producing new recovery key and resetKeyBackup. Optionally observe BackupTrustInfo critical messages when backup exists but decryption key/signature untrusted, and KeyBackupFailed sync failure display.
+    6. After cutover P8.5, repeat setup, key display, enablement status, unlock+restore, and repair observables via Rust Recovery/Backups APIs under product lifecycle actor/IPC DTOs. Citing SC-065/SC-066 alone, GAP compile-only, raw /\_matrix HTTP, dual-backend/SDK selector, cross-signing-status-only, SAS-only, room-key-file-only, or helper/fixture-only is a FAIL.
   - Assertions:
-    - Each clause is observable: «recovery setup»; «recovery key»; «backup enablement»; «restore»; «repair».
-    - State coordination remains through `synara/src/app/state/backupRestore.ts` (or its Rust/IPC successor after cutover), not ad-hoc dual writers.
-    - Behavior-relevant current JS method candidates exercised or replaced: getCrypto, createRecoveryKeyFromPassphrase, bootstrapSecretStorage, bootstrapCrossSigning, resetKeyBackup, getActiveSessionBackupVersion, isKeyBackupTrusted (AST candidates; not type-proven receivers).
-    - Behavior-relevant listener candidates observed or replaced: on:CryptoEvent.KeyBackupStatus, removeListener:CryptoEvent.KeyBackupStatus, on:CryptoEvent.KeyBackupSessionsRemaining, removeListener:CryptoEvent.KeyBackupSessionsRemaining, on:CryptoEvent.KeyBackupFailed, removeListener:CryptoEvent.KeyBackupFailed.
-    - Rust mapping remains conservative: caps=[SC-065,SC-066] gaps=[GAP-RECOVERY-BACKUP]; compile-only blocked states are not treated as runtime pass.
-    - No new production matrix-js-sdk usage and no raw /\_matrix runtime HTTP unless dossier marks that exact behavior typed-sdk-request-required.
+    - SETUP: Enable path creates recovery key, bootstraps secret storage with setupNew, and calls resetKeyBackup; RecoveryKeyDisplay is shown with copy/download.
+    - ENABLEMENT: Encryption Backup status reflects active session backup version (Connected) after enablement; status updates via KeyBackupStatus without requiring process restart.
+    - UNLOCK: Manual recovery key/passphrase validates via checkKey; loadSessionBackupPrivateKeyFromSecretStorage succeeds.
+    - RESTORE: manual restoreKeyBackup and/or auto-restore on KeyBackupDecryptionKeyCached reports progress through backupRestoreProgressAtom stages to Done (or product-equivalent success).
+    - REPAIR: DeviceVerificationReset re-setup path and/or trust/sync diagnostics are observable; no requirement for a separate Repair Backup button label.
+    - COORDINATION: restore progress remains through backupRestoreProgressAtom (or Rust/IPC successor); secret-storage key cache through secretStorageKeys (or successor), not ad-hoc dual writers.
+    - CUTOVER: P8.5 preserves setup/key/enablement/restore/repair observables via Rust ownership + IPC DTO; SC-065/SC-066/GAP compile-only never product pass; no raw /\_matrix runtime HTTP; no dual-backend/SDK selector.
+    - No new production matrix-js-sdk usage and no raw /\_matrix runtime HTTP unless the dossier marks that exact behavior typed-sdk-request-required.
+    - Cross-signing status alone (FR-7.9-002), SAS ceremony alone (FR-7.9-005), room-key import/export alone (FR-7.9-007), and helper unit tests alone are not accepted as sole pass criteria for this FR.
   - does_not_currently_exist: `True`
 - **Manual**: `MA-FR-7.9-006`
 
@@ -9003,28 +9028,25 @@ Limited rejected-review correction (`p0.2-correct-31-fr-7.9-005-sas-verification
 
 - Platforms: macOS, Linux
 - Preconditions:
-  - Desktop app, E2EE-capable session; second device for verification
-  - Recovery key / backup fixtures; isolated multi-account profiles when testing isolation
-  - State owner available: synara/src/app/state/backupRestore.ts
-  - UI/lifecycle: synara/src/app/components/BackupRestore.tsx
+  - Desktop app against disposable Synapse; E2EE session without recovery for setup, plus second same-user session for unlock/restore.
+  - State owners available: DeviceVerificationSetup.tsx (setup/key/reset), backupRestore.ts (restore progress), secretStorageKeys.js (key cache).
+  - UI/lifecycle: Settings Devices Enable/Reset; RecoveryKeyDisplay; ManualVerification recovery key entry; BackupRestoreTile; Router AutoRestoreBackupOnVerification.
   - Current status baseline: implemented
 - Actions:
-  1. Launch Synara desktop on the target platform against disposable Synapse; use a clean or known fixture profile as required by «recovery setup, recovery key, backup enablement, restore, and repair;».
-  2. Identify state owner `synara/src/app/state/backupRestore.ts` and open `synara/src/app/components/BackupRestore.tsx`.
-  3. Action 1 — «recovery setup»: perform the minimal user/system steps that trigger this clause (use linked files under current_production_files if the entry point is indirect).
-  4. Action 2 — «recovery key»: perform the minimal user/system steps that trigger this clause (use linked files under current_production_files if the entry point is indirect).
-  5. Action 3 — «backup enablement»: perform the minimal user/system steps that trigger this clause (use linked files under current_production_files if the entry point is indirect).
-  6. Action 4 — «restore»: perform the minimal user/system steps that trigger this clause (use linked files under current_production_files if the entry point is indirect).
-  7. Action 5 — «repair»: perform the minimal user/system steps that trigger this clause (use linked files under current_production_files if the entry point is indirect).
-  8. Repeat critical path in an encrypted room / with a second device when the clause involves keys or verification.
+  1. Launch Synara desktop on the target platform against disposable Synapse with a clean profile (no recovery/backup).
+  2. RECOVERY SETUP + KEY: Settings → Devices → Enable; complete optional passphrase; confirm Recovery Key dialog with Show/Copy/Download after setup.
+  3. BACKUP ENABLEMENT: After current device is Verified, confirm Encryption Backup tile shows Connected (or becomes Connected) and Backup Details expose version/keys when available.
+  4. UNLOCK + RESTORE: On a second session (or after losing local backup keys), use Verify Manually with the recovery key; confirm Device verified; trigger Restore Backup and/or allow auto-restore after key cache; confirm restore progress completes.
+  5. REPAIR: From Device Verification options open Reset; read permanent-reset warning; complete re-setup to a new recovery key. Observe trust/sync critical messages when backup is present but untrusted/disconnected if fixtures allow.
+  6. Confirm SAS ceremony alone, cross-signing badge alone, and LocalBackup room-key file import/export alone are not used as sole pass for this FR.
 - Expected:
-  - All clauses under «recovery setup, recovery key, backup enablement, restore, and repair;» produce the user-visible or system-observable success criteria without error toasts unrelated to intentional negative tests.
-  - Clause 1 «recovery setup» is satisfied on macOS, Linux with owner `synara/src/app/state/backupRestore.ts`.
-  - Clause 2 «recovery key» is satisfied on macOS, Linux with owner `synara/src/app/state/backupRestore.ts`.
-  - Clause 3 «backup enablement» is satisfied on macOS, Linux with owner `synara/src/app/state/backupRestore.ts`.
-  - Clause 4 «restore» is satisfied on macOS, Linux with owner `synara/src/app/state/backupRestore.ts`.
-  - Clause 5 «repair» is satisfied on macOS, Linux with owner `synara/src/app/state/backupRestore.ts`.
+  - Recovery setup produces a recovery key and enables server key backup (resetKeyBackup path).
+  - Recovery key is displayable (show/copy/download) and usable for manual unlock on another session.
+  - Encryption Backup Connected status and restore (manual and/or auto) are observable with progress.
+  - Repair/reset re-setup path and/or trust diagnostics are available without requiring a separate Repair Backup button label.
   - No unexpected raw /\_matrix traffic from the app renderer for this flow on the post-cutover build.
+  - Cross-signing status alone (FR-7.9-002), SAS alone (FR-7.9-005), and room-key import/export alone (FR-7.9-007) do not close this FR.
+  - Clauses recovery setup, recovery key, backup enablement, restore, and repair satisfied on macOS and Linux via DeviceVerificationSetup + BackupRestore + ManualVerification (or Rust/IPC successors under P8.5).
 
 ### `MA-FR-7.9-007` (FR-7.9-007)
 
@@ -11238,25 +11260,25 @@ Limited rejected-review correction (`p0.2-correct-31-fr-7.9-005-sas-verification
 
 ### `AT-FR-7.9-006-001`
 
-- 7.9/FR-7.9-006: exercise 'recovery setup, recovery key, backup enablement, restore, and repair;' via owner `synara/src/app/state/backupRestore.ts` and UI `synara/src/app/components/BackupRestore.tsx`, then confirm Rust/IPC cutover task `P8.5` preserves observable behavior without raw Matrix runtime HTTP.
-- target: None
+- Integration-e2e against disposable Synapse: (A) recovery setup via Settings Devices Enable runs createRecoveryKeyFromPassphrase → bootstrapSecretStorage(setupNew) → resetKeyBackup and shows RecoveryKeyDisplay copy/download; (B) backup enablement observable as Encryption Backup Connected (getActiveSessionBackupVersion) after setup; (C) second session unlocks with recovery key via ManualVerification (decodeRecoveryKey/checkKey → storePrivateKey → bootstrapSecretStorage → loadSessionBackupPrivateKeyFromSecretStorage) then manual and/or auto restoreKeyBackup with progress (backupRestoreProgressAtom / KeyBackupDecryptionKeyCached); (D) repair path DeviceVerificationReset permanent warning re-setup and/or BackupTrustInfo when backup present but untrusted/disconnected. After cutover P8.5 same observables via Rust SC-065/SC-066 + GAP-RECOVERY-BACKUP shapes + product UX + IPC DTO; SC IDs alone, compile-only blocked, raw /\_matrix HTTP, dual-backend, cross-signing-status-only (FR-7.9-002), SAS-only (FR-7.9-005), room-key-file-only (FR-7.9-007), or helper/fixture-only FAIL.
+- target: DeviceVerificationSetup recovery setup+key display+resetKeyBackup; SecretStorage/ManualVerification recovery unlock+loadSessionBackupPrivateKeyFromSecretStorage; BackupRestoreTile status+restore; useKeyBackup listeners; backupRestoreProgressAtom; AutoRestoreBackupOnVerification; post-cutover SC-065/SC-066 + GAP-RECOVERY-BACKUP under P8.5
 - actions:
-  1. Boot the appropriate harness for level=integration-e2e against disposable Synapse (or iOS notes if any).
-  2. Establish fixtures required by the clause list: recovery setup; recovery key; backup enablement; restore; repair.
-  3. Open UI/lifecycle surface `synara/src/app/components/BackupRestore.tsx` (or follow ui_entry_points_rationale if no dedicated UI).
-  4. Step 1: perform the product action that implements «recovery setup» using current owner `synara/src/app/state/backupRestore.ts`.
-  5. Step 2: perform the product action that implements «recovery key» using current owner `synara/src/app/state/backupRestore.ts`.
-  6. Step 3: perform the product action that implements «backup enablement» using current owner `synara/src/app/state/backupRestore.ts`.
-  7. Step 4: perform the product action that implements «restore» using current owner `synara/src/app/state/backupRestore.ts`.
-  8. Step 5: perform the product action that implements «repair» using current owner `synara/src/app/state/backupRestore.ts`.
-  9. Force process restart and/or offline→online transition where lifecycle continuity is implied.
+  1. Boot integration harness against disposable Synapse. Do not use fixture-only mocks that skip product DeviceVerificationSetup/BackupRestore/ManualVerification, dual-backend selectors, raw HTTP, or helper-only pass criteria.
+  2. RECOVERY SETUP + KEY: On session without recovery, open Settings → Devices → Enable. Complete SetupVerification (optional passphrase). Assert createRecoveryKeyFromPassphrase → bootstrapSecretStorage(setupNew) → resetKeyBackup path; RecoveryKeyDisplay shows key; exercise Show, Copy, Download.
+  3. BACKUP ENABLEMENT: After setup, open Devices with Verified current device; assert Encryption Backup tile Connected (or transitions to Connected) via getActiveSessionBackupVersion / KeyBackupStatus; Backup Details version/count populated when available.
+  4. RECOVERY UNLOCK + RESTORE: On a second session (or after clearing local backup keys), use Verify Manually with recovery key (or passphrase). Assert checkKey success, loadSessionBackupPrivateKeyFromSecretStorage, then Restore Backup and/or auto-restore on KeyBackupDecryptionKeyCached with Fetching/Loading progress to Done.
+  5. REPAIR: From Devices options open Reset Device Verification; assert permanent-reset warning; complete re-setup producing new recovery key and resetKeyBackup. Optionally observe BackupTrustInfo critical messages when backup exists but decryption key/signature untrusted, and KeyBackupFailed sync failure display.
+  6. After cutover P8.5, repeat setup, key display, enablement status, unlock+restore, and repair observables via Rust Recovery/Backups APIs under product lifecycle actor/IPC DTOs. Citing SC-065/SC-066 alone, GAP compile-only, raw /\_matrix HTTP, dual-backend/SDK selector, cross-signing-status-only, SAS-only, room-key-file-only, or helper/fixture-only is a FAIL.
 - assertions:
-  - Each clause is observable: «recovery setup»; «recovery key»; «backup enablement»; «restore»; «repair».
-  - State coordination remains through `synara/src/app/state/backupRestore.ts` (or its Rust/IPC successor after cutover), not ad-hoc dual writers.
-  - Behavior-relevant current JS method candidates exercised or replaced: getCrypto, createRecoveryKeyFromPassphrase, bootstrapSecretStorage, bootstrapCrossSigning, resetKeyBackup, getActiveSessionBackupVersion, isKeyBackupTrusted (AST candidates; not type-proven receivers).
-  - Behavior-relevant listener candidates observed or replaced: on:CryptoEvent.KeyBackupStatus, removeListener:CryptoEvent.KeyBackupStatus, on:CryptoEvent.KeyBackupSessionsRemaining, removeListener:CryptoEvent.KeyBackupSessionsRemaining, on:CryptoEvent.KeyBackupFailed, removeListener:CryptoEvent.KeyBackupFailed.
-  - Rust mapping remains conservative: caps=[SC-065,SC-066] gaps=[GAP-RECOVERY-BACKUP]; compile-only blocked states are not treated as runtime pass.
-  - No new production matrix-js-sdk usage and no raw /\_matrix runtime HTTP unless dossier marks that exact behavior typed-sdk-request-required.
+  - SETUP: Enable path creates recovery key, bootstraps secret storage with setupNew, and calls resetKeyBackup; RecoveryKeyDisplay is shown with copy/download.
+  - ENABLEMENT: Encryption Backup status reflects active session backup version (Connected) after enablement; status updates via KeyBackupStatus without requiring process restart.
+  - UNLOCK: Manual recovery key/passphrase validates via checkKey; loadSessionBackupPrivateKeyFromSecretStorage succeeds.
+  - RESTORE: manual restoreKeyBackup and/or auto-restore on KeyBackupDecryptionKeyCached reports progress through backupRestoreProgressAtom stages to Done (or product-equivalent success).
+  - REPAIR: DeviceVerificationReset re-setup path and/or trust/sync diagnostics are observable; no requirement for a separate Repair Backup button label.
+  - COORDINATION: restore progress remains through backupRestoreProgressAtom (or Rust/IPC successor); secret-storage key cache through secretStorageKeys (or successor), not ad-hoc dual writers.
+  - CUTOVER: P8.5 preserves setup/key/enablement/restore/repair observables via Rust ownership + IPC DTO; SC-065/SC-066/GAP compile-only never product pass; no raw /\_matrix runtime HTTP; no dual-backend/SDK selector.
+  - No new production matrix-js-sdk usage and no raw /\_matrix runtime HTTP unless the dossier marks that exact behavior typed-sdk-request-required.
+  - Cross-signing status alone (FR-7.9-002), SAS ceremony alone (FR-7.9-005), room-key import/export alone (FR-7.9-007), and helper unit tests alone are not accepted as sole pass criteria for this FR.
 
 ### `AT-FR-7.9-007-001`
 
@@ -11712,6 +11734,7 @@ Limited rejected-review correction (`p0.2-correct-31-fr-7.9-005-sas-verification
 - `ET-FR-7.8-009-02` `FR-7.8-009` `synara-ios/SynaraTests/NotificationPermissionCoordinatorTests.swift` — Existing XCTest coverage for first-sign-in permission prompt coordinating authorization + push registration begin.
 - `ET-FR-7.9-001-01` `FR-7.9-001` `synara/src/app/state/__tests__/initMatrix.test.ts` — unit/mocked initClient/continuity/startClient failure paths only; not E2E store-before-sync order AT
 - `ET-FR-7.9-005-01` `FR-7.9-005` `synara/src/app/utils/__tests__/verification.test.ts` — Unit-only: inbox merge/dedupe/early-queue, cancel-on-exit, phaseFromVerifierCancellation, getInitialSasCallbacks — not two-client SAS e2e
+- `ET-FR-7.9-006-01` `FR-7.9-006` `synara/src/app/matrix/__tests__/secretStorageKeys.test.ts` — Unit-only: storePrivateKey + clearSecretStorageKeys cache behavior — not recovery setup/backup restore e2e
 - `ET-FR-7.9-011-01` `FR-7.9-011` `synara/src/app/state/__tests__/sessions.test.ts` — multi-session isolation bookkeeping
 - `ET-FR-7.10-003-01` `FR-7.10-003` `synara/src/app/utils/__tests__/messageSearchFilters.test.ts` — search filter helper unit coverage
 
