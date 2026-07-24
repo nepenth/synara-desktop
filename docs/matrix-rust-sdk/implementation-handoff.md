@@ -32,11 +32,11 @@ without explicit user approval.
 - Ancestry: integration is ancestor of P0.2 branch
 - Checkpoint commits: `06d0f86` (traceability scaffold), `9c91e0f` (handoff)
 - **Accepted this session:**
-  - FR-7.8-004 (`p0.2-correct-22-...`) @ `67d0e31`
-  - FR-7.8-005 (`p0.2-correct-23-fr-7.8-005-unread-badge-summaries`) pending
-    commit after this handoff update
-- **Next writer task:** FR-7.8-006 (event resolution and deep-link routing),
-  then remaining 7.8–7.11
+  - FR-7.8-004 @ `67d0e31`
+  - FR-7.8-005 @ `48ee30f`
+  - FR-7.8-006 (`p0.2-correct-24-...`) pending commit after this handoff update
+- **Next writer task:** FR-7.8-007 (notification suppression for
+  active/focused contexts), then remaining 7.8–7.11
 - No production Matrix Rust SDK replacement code accepted
 
 Phase 0 evidence accepted before this handoff:
@@ -49,7 +49,7 @@ Phase 0 evidence accepted before this handoff:
   matrix and accepted corrections for FR-7.8-001 through FR-7.8-003.
   Handoff commit `9c91e0f` is also on the branch tip.
 
-P0.2 is not complete. Resume at FR-7.8-006, then audit all remaining 7.8–7.11
+P0.2 is not complete. Resume at FR-7.8-007, then audit all remaining 7.8–7.11
 requirements before declaring P0.2 accepted.
 
 Accepted notification findings that must be preserved:
@@ -79,6 +79,14 @@ Accepted notification findings that must be preserved:
   `PlatformBadgeAndTrayUpdater` / `setPlatformBadgeCount`. SC-057 alone,
   push-rule preference UI, native generation path, and helper-only never pass.
   Cutover is P9.3/P4.3 Rust-owned unread/highlight + product badge/IPC DTO.
+- FR-7.8-006: status `implemented`. Event resolution and deep-link routing use
+  `buildDesktopNotificationRoomRoute` + `normalizeSystemNotificationRequest` /
+  platform route pass-through + `navigateRoom` open (message/agent/later);
+  invite notifications use distinct `getInboxInvitesPath`; inbox list Open uses
+  `navigateRoom(roomId, openEventId)` with thread-root resolution;
+  `timelineOpening` focuses event context. SC-032/SC-022 alone, push-rule UI,
+  badge-only, generation-only, and helper-only never pass. Cutover is P9.4/P4.8
+  Rust-owned event identity + Synara route DTOs.
 
 ## Branch and PR contract
 
