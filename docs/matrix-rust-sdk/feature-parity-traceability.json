@@ -75197,36 +75197,8 @@
         442,
         442
       ],
-      "current_status": "partial",
+      "current_status": "implemented",
       "current_production_files": [
-        {
-          "path": "synara/src/app/features/message-search/MessageSearch.tsx",
-          "bucket": "feature",
-          "categories": [
-            "client_methods",
-            "room_lists"
-          ],
-          "symbols_or_candidates": [],
-          "line_refs": [],
-          "model_coupling": [],
-          "behavior_relevant_method_candidates": [],
-          "behavior_relevant_listener_candidates": [],
-          "symbols_or_candidates_note": "No requirement-relevant method/listener candidates filtered from this file's P0.1 AST hits; file remains linked for structural/model ownership. See all_candidates_in_linked_files on the requirement."
-        },
-        {
-          "path": "synara/src/app/features/message-search/SearchFilters.tsx",
-          "bucket": "feature",
-          "categories": [
-            "client_methods",
-            "room_lists"
-          ],
-          "symbols_or_candidates": [],
-          "line_refs": [],
-          "model_coupling": [],
-          "behavior_relevant_method_candidates": [],
-          "behavior_relevant_listener_candidates": [],
-          "symbols_or_candidates_note": "No requirement-relevant method/listener candidates filtered from this file's P0.1 AST hits; file remains linked for structural/model ownership. See all_candidates_in_linked_files on the requirement."
-        },
         {
           "path": "synara/src/app/features/message-search/useMessageSearch.ts",
           "bucket": "feature",
@@ -75235,13 +75207,21 @@
             "searches"
           ],
           "symbols_or_candidates": [
-            "search"
+            "search",
+            "filter.rooms optional/undefined"
           ],
           "line_refs": [
             {
+              "symbol": "room_events filter rooms optional (undefined = no room filter)",
+              "line": 93,
+              "kind": "product_helper",
+              "relevance_reason": "ISearchRequestBody filter.rooms is passed through from MessageSearchParams.rooms; when global scope leaves rooms undefined, the server room_events search is not room-list restricted (global message search)."
+            },
+            {
               "symbol": "search",
               "line": 105,
-              "kind": "method_candidate"
+              "kind": "method_candidate",
+              "relevance_reason": "mx.search({ body: requestBody, next_batch }) \u2014 sole Matrix client room_events search call; same transport as room-scoped FR-7.10-001, but global path omits rooms filter."
             }
           ],
           "model_coupling": [],
@@ -75251,66 +75231,112 @@
               "line": 105,
               "category": "searches",
               "kind": "property_call_candidate",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+              "confidence": "Source-inspected product call site (exact-line) on mx from useMatrixClient(); matrix-js-sdk MatrixClient.search with ISearchRequestBody; rooms may be undefined for global scope.",
+              "relevance_reason": "Global server message search entry point when filter.rooms is undefined (no room-list restriction)."
             }
           ],
-          "behavior_relevant_listener_candidates": []
+          "behavior_relevant_listener_candidates": [],
+          "symbols_or_candidates_note": "Primary search owner: useMessageSearch builds room_events search body and calls mx.search. For this FR, the global path is rooms undefined in filter (not a host room list). EXCLUDE as sole evidence: room-scoped default rooms (FR-7.10-001), sender/date/type filters UI (FR-7.10-003), Open navigation (FR-7.10-004), cancel/stale (FR-7.10-007), experimental local search (FR-7.10-006/SC-072)."
         },
         {
-          "path": "synara/src/app/features/search/Search.tsx",
+          "path": "synara/src/app/features/message-search/MessageSearch.tsx",
           "bucket": "feature",
           "categories": [
             "client_methods",
-            "room_methods",
-            "spaces",
-            "uia_auth"
+            "room_lists"
           ],
           "symbols_or_candidates": [
-            "getSafeUserId",
-            "getSafeUserId"
+            "global URL param",
+            "isGlobal",
+            "defaultRooms undefined",
+            "handleGlobalChange",
+            "allowGlobal"
           ],
           "line_refs": [
             {
-              "symbol": "getSafeUserId",
-              "line": 266,
-              "kind": "method_candidate"
+              "symbol": "global searchParams key",
+              "line": 31,
+              "kind": "product_helper",
+              "relevance_reason": "Reads URL search param global for scope toggle state."
             },
             {
-              "symbol": "getSafeUserId",
-              "line": 468,
-              "kind": "method_candidate"
+              "symbol": "msgSearchParams isGlobal \u2192 rooms undefined",
+              "line": 88,
+              "kind": "product_helper",
+              "relevance_reason": "isGlobal = searchPathSearchParams.global === 'true'; defaultRooms = isGlobal ? undefined : rooms \u2014 global path leaves rooms unbound so mx.search has no room filter."
+            },
+            {
+              "symbol": "handleGlobalChange writes global=true",
+              "line": 168,
+              "kind": "product_helper",
+              "relevance_reason": "Sets URL param global=true when user enables Global scope; clears global when switching back to host default scope."
+            },
+            {
+              "symbol": "SearchFilters allowGlobal + global props",
+              "line": 260,
+              "kind": "product_helper",
+              "relevance_reason": "Passes allowGlobal, global flag, roomList (allRooms when global), and onGlobalChange into SearchFilters \u2014 product UX for global scope."
+            },
+            {
+              "symbol": "getRoom for SearchResultGroup header",
+              "line": 330,
+              "kind": "method_candidate",
+              "relevance_reason": "mx.getRoom(group.roomId) only resolves room model for result-group chrome \u2014 display-only; NOT primary global-scope evidence."
             }
           ],
           "model_coupling": [
             "Room"
           ],
-          "behavior_relevant_method_candidates": [
+          "behavior_relevant_method_candidates": [],
+          "behavior_relevant_listener_candidates": [],
+          "symbols_or_candidates_note": "Primary UI/lifecycle for global scope: global URL param, isGlobal \u2192 rooms undefined, handleGlobalChange, allowGlobal prop to SearchFilters. Room-scoped default rooms when not global is FR-7.10-001. getRoom display-only. Open navigateRoom is FR-7.10-004."
+        },
+        {
+          "path": "synara/src/app/features/message-search/SearchFilters.tsx",
+          "bucket": "feature",
+          "categories": [
+            "client_methods",
+            "room_lists"
+          ],
+          "symbols_or_candidates": [
+            "allowGlobal",
+            "Global chip"
+          ],
+          "line_refs": [
             {
-              "name": "getSafeUserId",
-              "line": 266,
-              "category": "uia_auth",
-              "kind": "property_call_candidate",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+              "symbol": "Global chip gated by allowGlobal",
+              "line": 435,
+              "kind": "product_helper",
+              "relevance_reason": "When allowGlobal is true, renders Global chip; onClick onGlobalChange(true) \u2014 product-exposed global message search toggle."
             },
             {
-              "name": "getSafeUserId",
-              "line": 468,
-              "category": "uia_auth",
-              "kind": "property_call_candidate",
-              "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+              "symbol": "default scope chip clears global",
+              "line": 426,
+              "kind": "product_helper",
+              "relevance_reason": "Host default scope chip (defaultRoomsFilterName) calls onGlobalChange() without true \u2014 returns to non-global host room list scope."
             }
           ],
-          "behavior_relevant_listener_candidates": []
+          "model_coupling": [],
+          "behavior_relevant_method_candidates": [],
+          "behavior_relevant_listener_candidates": [],
+          "symbols_or_candidates_note": "Global chip UI only for this FR. Sender/room/date/type filter controls are FR-7.10-003 \u2014 EXCLUDE as sole primary for global exposure. getRoom/getRooms are room-select/display helpers for filter chips, not global-scope evidence."
         }
       ],
       "ui_entry_points": [
+        "synara/src/app/pages/client/home/Search.tsx",
+        "synara/src/app/pages/client/space/Search.tsx",
         "synara/src/app/features/message-search/MessageSearch.tsx",
-        "synara/src/app/features/search/Search.tsx"
+        "synara/src/app/features/message-search/SearchFilters.tsx"
       ],
+      "ui_entry_points_rationale": "Global message search is currently product-exposed. HomeSearch (pages/client/home/Search.tsx) mounts MessageSearch with allowGlobal and host rooms=useHomeRooms; SpaceSearch (pages/client/space/Search.tsx) mounts MessageSearch with allowGlobal and space child rooms. Router routes _SEARCH_PATH to HomeSearch/SpaceSearch. SearchFilters shows a Global chip when allowGlobal; selecting it sets URL global=true. MessageSearch maps global===true \u2192 rooms undefined \u2192 useMessageSearch/mx.search without room filter. RoomSidePanel RoomSearchPanel does NOT pass allowGlobal and binds rooms={[room.roomId]} \u2014 room-scoped only (FR-7.10-001), not a global entry. features/search/Search.tsx is the user/public-room directory modal (FR-7.10-005) \u2014 EXCLUDE as global message search evidence.",
       "state_owners": [
         {
           "path": "synara/src/app/features/message-search/useMessageSearch.ts",
-          "ownership_evidence": "Identified as coordination/state module for this behavior via path role (state/client/util service) and P0.1 categories/candidates; not merely a presentational component."
+          "ownership_evidence": "Owns room_events search request body and mx.search({ body, next_batch }). Global scope is rooms undefined in filter (no host room list restriction); same owner as room-scoped FR-7.10-001 with different rooms binding."
+        },
+        {
+          "path": "synara/src/app/features/message-search/MessageSearch.tsx",
+          "ownership_evidence": "Owns global URL param \u2192 isGlobal \u2192 defaultRooms undefined, handleGlobalChange, allowGlobal prop plumbing to SearchFilters. Does not call mx.search directly."
         }
       ],
       "current_js_sdk": {
@@ -75320,28 +75346,16 @@
             "name": "search",
             "line": 105,
             "category": "searches",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-          },
-          {
-            "path": "synara/src/app/features/search/Search.tsx",
-            "name": "getSafeUserId",
-            "line": 266,
-            "category": "uia_auth",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
-          },
-          {
-            "path": "synara/src/app/features/search/Search.tsx",
-            "name": "getSafeUserId",
-            "line": 468,
-            "category": "uia_auth",
-            "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model."
+            "kind": "property_call_candidate",
+            "confidence": "Source-inspected product call site (exact-line) on mx from useMatrixClient(); matrix-js-sdk MatrixClient.search with ISearchRequestBody; rooms may be undefined for global scope.",
+            "relevance_reason": "Global server message search entry point when filter.rooms is undefined (no room-list restriction)."
           }
         ],
         "behavior_relevant_listener_candidates": [],
         "all_candidates_in_linked_files": {
-          "method_count": 10,
+          "method_count": 6,
           "listener_count": 0,
-          "note": "Unfiltered P0.1 AST candidates across linked production import files. Do not treat these as proven APIs for this requirement; use behavior_relevant_* fields.",
+          "note": "Unfiltered P0.1 AST candidates across linked production files useMessageSearch.ts + MessageSearch.tsx + SearchFilters.tsx. Do not treat these as proven APIs for this requirement; use behavior_relevant_* fields. getRoom/getRooms are display/room-select helpers \u2014 not primary global-scope evidence. features/search/Search.tsx getSafeUserId/isSpaceRoom excluded (FR-7.10-005 user/directory modal).",
           "methods_sample": [
             {
               "path": "synara/src/app/features/message-search/MessageSearch.tsx",
@@ -75372,26 +75386,6 @@
               "path": "synara/src/app/features/message-search/useMessageSearch.ts",
               "name": "search",
               "line": 105
-            },
-            {
-              "path": "synara/src/app/features/search/Search.tsx",
-              "name": "getSafeUserId",
-              "line": 266
-            },
-            {
-              "path": "synara/src/app/features/search/Search.tsx",
-              "name": "getSafeUserId",
-              "line": 468
-            },
-            {
-              "path": "synara/src/app/features/search/Search.tsx",
-              "name": "isSpaceRoom",
-              "line": 490
-            },
-            {
-              "path": "synara/src/app/features/search/Search.tsx",
-              "name": "isSpaceRoom",
-              "line": 521
             }
           ],
           "listeners_sample": []
@@ -75402,16 +75396,15 @@
         "network_routes": [],
         "deep_imports": [],
         "method_candidates": [
-          "search",
-          "getSafeUserId",
-          "getSafeUserId"
+          "search"
         ],
-        "listener_events": []
+        "listener_events": [],
+        "behavior_relevance_policy": "Exact-line source inspection for global message search exposure only. RETAIN: HomeSearch/SpaceSearch allowGlobal entry routes; SearchFilters Global chip (allowGlobal); MessageSearch global===true \u2192 rooms undefined; useMessageSearch mx.search with filter.rooms undefined. EXCLUDE as sole evidence: room-scoped default rooms / RoomSidePanel rooms={[room.roomId]} (FR-7.10-001); sender/room/date/type filter UI beyond Global chip (FR-7.10-003); Open navigateRoom (FR-7.10-004); features/search/Search.tsx user/directory modal (FR-7.10-005); experimental local search SC-072 (FR-7.10-006); cancel/stale (FR-7.10-007); getRoom display-only; dual-backend/SDK selector/raw /_matrix HTTP; SC-071 compile/probe alone as product pass without typed Client::send search path + product UX."
       },
       "current_behavior_and_limits": {
-        "summary": "Current desktop implements this via 4 production matrix-js-sdk-related file(s); status=partial.",
-        "notes": "Global message search exposure is partial/product-dependent via message-search feature and broader Search UI; not claimed as fully separate global index.",
-        "limits": "P0.1 method candidates are AST name hits, not type-checked receiver proofs."
+        "summary": "Current desktop exposes global message search: Home/Space Message Search routes mount MessageSearch with allowGlobal; Global chip sets URL global=true; msgSearchParams leaves rooms undefined; mx.search room_events runs without a rooms filter. status=implemented (currently exposed).",
+        "notes": "Evidence (conservative): (1) EXPOSURE GATE: plan clause is 'global message search if currently exposed' \u2014 product DOES expose it. HomeSearch L42\u201347 MessageSearch allowGlobal rooms={useHomeRooms()}; SpaceSearch L57\u201362 MessageSearch allowGlobal rooms={space children}. Router.tsx routes _SEARCH_PATH to HomeSearch/SpaceSearch. Home.tsx NavLink getHomeSearchPath 'Message Search' entry. (2) GLOBAL UI: SearchFilters L435\u2013444 Global chip only when allowGlobal; onClick onGlobalChange(true). Default host chip L426\u2013434 clears global. (3) SCOPE BINDING: MessageSearch msgSearchParams L88\u201398 \u2014 isGlobal = global==='true'; defaultRooms = isGlobal ? undefined : rooms; rooms: searchParamRooms ?? defaultRooms. handleGlobalChange L168\u2013177 writes/clears URL global=true. When global, roomList=allRooms L263 (user may still narrow via rooms param chips \u2014 optional sub-filter, not required for global). (4) SEARCH WITHOUT ROOM FILTER: useMessageSearch filter { limit:20, rooms, senders } L93\u201397; rooms undefined \u2192 no room-list restriction on server room_events search; mx.search L105\u2013108 same call as FR-7.10-001. (5) NON-GLOBAL ENTRY (adjacent): RoomSidePanel RoomSearchPanel MessageSearch rooms={[room.roomId]} WITHOUT allowGlobal \u2014 room-scoped only (FR-7.10-001). (6) EXCLUDE: features/search/Search.tsx is user/public-room directory modal (FR-7.10-005), not global message search \u2014 drop getSafeUserId as primary. Filters sender/date/type FR-7.10-003; Open FR-7.10-004; local SC-072 FR-7.10-006; cancel/stale FR-7.10-007. (7) No existing automated AT for global search E2E. (8) Cutover P6.8 (+P11.3): preserve global allowGlobal + global=true + rooms-undefined mx.search via typed SC-071 Client::send search path + product IPC \u2014 not raw /_matrix HTTP, not dual-backend, not experimental SC-072. SC-071 alone / compile-only / raw HTTP / room-scoped-only / filter-only / Open-only / directory-only / helper-only FAIL.",
+        "limits": "P0.1 method candidates are AST name hits unless marked source-inspected. Global search reuses the same server room_events search as room-scoped; 'global' means no product rooms filter (server may still restrict to searchable joined history). Optional rooms URL chips can re-narrow even under global=true \u2014 pure unrestricted search is global with no rooms param. RoomSidePanel never offers Global chip. No separate global index API. No E2E AT yet. SC-071 remains typed-sdk-request-required; do not map SC-072 experimental local search as current product path."
       },
       "p0_1_linkage": {
         "categories": [
@@ -75420,15 +75413,13 @@
         "file_ledger_paths": [
           "synara/src/app/features/message-search/MessageSearch.tsx",
           "synara/src/app/features/message-search/SearchFilters.tsx",
-          "synara/src/app/features/message-search/useMessageSearch.ts",
-          "synara/src/app/features/search/Search.tsx"
+          "synara/src/app/features/message-search/useMessageSearch.ts"
         ]
       },
       "rust_target": {
         "support_conclusion": "typed-sdk-request-required-server-search",
         "capability_ids": [
-          "SC-071",
-          "SC-072"
+          "SC-071"
         ],
         "gap_ids": [],
         "capabilities": [
@@ -75458,7 +75449,7 @@
                 "P0.3c-typed-search-filter-limit-fields"
               ],
               "final_state": "typed-sdk-request-required",
-              "final_state_rationale": "No high-level stable room-message search API. P0.3c proves typed search_events::v3 via Client::send. Still lacks E3/E4/E5; residual product path is typed SDK transport.",
+              "final_state_rationale": "No high-level stable room-message search API. P0.3c proves typed search_events::v3 via Client::send including filter fields. Global product path is the same typed search without rooms filter restriction. Still lacks E3/E4/E5; residual product path is typed SDK transport for global (rooms-unrestricted) server search.",
               "missing_gates": [
                 "semantic_or_integration_test",
                 "live_synapse_two_client",
@@ -75473,58 +75464,19 @@
             "p0_3b_evidence_status": "deferred-to-p0.3c",
             "p0_3b_probe_id": null,
             "plan_section_7_area": "7.10-search"
-          },
-          {
-            "capability_id": "SC-072",
-            "api_path": "matrix_sdk::message_search / search_index (experimental-search)",
-            "required_features": {
-              "requested_direct": [],
-              "required_feature_absent": "experimental-search",
-              "resolved_on_matrix_sdk": [
-                "e2e-encryption"
-              ],
-              "resolved_on_matrix_sdk_ui": []
-            },
-            "final_state": "blocked",
-            "final": {
-              "p0_3c_resolution_id": "SC-072",
-              "p0_3c_route_class": "experimental-api",
-              "p0_3c_evidence_status": "experimental-api-probed",
-              "p0_3c_profile": "profile-experimental-search",
-              "p0_3c_probe_ids": [
-                "P0.3c-search-index-type",
-                "P0.3c-search-index-store-kind-type",
-                "P0.3c-client-search-index",
-                "P0.3c-client-builder-search-index-store",
-                "P0.3c-room-search-local-index",
-                "P0.3c-client-search-messages"
-              ],
-              "final_state": "blocked",
-              "final_state_rationale": "Experimental local index API is compile-probed but rejected for Phase 1 minimum; distinct from server typed search. Not production-accepted experimental.",
-              "missing_gates": [
-                "experimental_feature_risk_gate",
-                "semantic_or_integration_test",
-                "live_synapse_two_client",
-                "ui_acceptance"
-              ],
-              "section_5_evidence_present": [
-                "E1-experimental-api",
-                "E2-compile-probes"
-              ],
-              "notes": "Do not substitute experimental-search for SC-071 typed server search."
-            },
-            "source_url": "https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/lib.rs#L67-L74",
-            "p0_3b_evidence_status": "deferred-to-p0.3c",
-            "p0_3b_probe_id": null,
-            "plan_section_7_area": "7.10-search"
           }
         ],
         "gaps": [],
-        "notes": "Mappings use only accepted P0.3 capability/gap IDs. Compile probes establish API shape only; final dossier states remain blocked/typed/upstream until E3\u2013E5 gates exist.",
+        "notes": "Honest rust_target for FR-7.10-002: SC-071 only (typed-sdk-request-required server /search). Drop SC-072 \u2014 experimental local search_index is FR-7.10-006, not current global product path. Global exposure is product UI (allowGlobal + global=true + rooms undefined) over the same SC-071 typed Client::send search path as room-scoped FR-7.10-001. Cutover P6.8 (+P11.3) must preserve Global chip/URL scope and unrestricted rooms filter via typed path + product IPC, not raw /_matrix HTTP, not dual-backend/SDK selector, not invented high-level search API. SC-071 alone / compile-only / raw HTTP / room-scoped-only / filter-only / Open-only / directory-only / helper-only FAIL.",
         "distinctions_preserved": [
-          "server typed search (SC-071) vs experimental local search (SC-072)",
-          "widget plumbing (SC-082/GAP widget) vs call parity (membership write/key session gaps)",
-          "compile shape (E1/E2) vs runtime/UI parity (E3\u2013E5 missing => blocked)"
+          "global message search currently exposed (this FR / SC-071 rooms-unrestricted) vs room-scoped search (FR-7.10-001)",
+          "server typed search (SC-071) vs experimental local search (SC-072 / FR-7.10-006)",
+          "global scope toggle (this FR) vs sender/room/date/content filters UI (FR-7.10-003)",
+          "global search (this FR) vs event-context Open/jump (FR-7.10-004)",
+          "global message search (this FR) vs user and public-room directory search (FR-7.10-005 / features/search/Search.tsx)",
+          "global search (this FR) vs cancel/stale-result rejection (FR-7.10-007)",
+          "typed Client::send search path vs raw /_matrix HTTP or dual-backend/SDK selector",
+          "compile shape (E1/E2 typed probes) vs runtime/UI parity (E3\u2013E5 missing)"
         ]
       },
       "implementation_tasks": [
@@ -75532,7 +75484,13 @@
           "task_id": "P6.8",
           "title": "Message, user, and room-directory search",
           "phase": "Phase 6 \u2014 Sending, room operations, account data, and search",
-          "scope_rationale": "Accepted plan task P6.8 covers this Section 7.10 behavior during Phase 6 \u2014 Sending, room operations, account data, and search."
+          "scope_rationale": "Accepted plan task P6.8 covers global message search (rooms-unrestricted server search) via typed SC-071 search request path during Phase 6."
+        },
+        {
+          "task_id": "P11.3",
+          "title": "Convert components/features/pages by domain",
+          "phase": "Phase 11 \u2014 React conversion and atomic desktop cutover",
+          "scope_rationale": "Accepted plan task P11.3 covers MessageSearch / SearchFilters / HomeSearch / SpaceSearch React conversion and atomic cutover for Section 7.10 global search UI."
         }
       ],
       "automated_tests": {
@@ -75545,34 +75503,44 @@
             "task_id": "P6.8",
             "phase": "Phase 6 \u2014 Sending, room operations, account data, and search",
             "level": "integration",
-            "scenario": "7.10/FR-7.10-002: exercise 'global message search if currently exposed;' via owner `synara/src/app/features/message-search/useMessageSearch.ts` and UI `synara/src/app/features/message-search/MessageSearch.tsx`, then confirm Rust/IPC cutover task `P6.8` preserves observable behavior without raw Matrix runtime HTTP.",
+            "scenario": "Integration against disposable Synapse: (A) EXPOSURE \u2014 open Home Message Search or Space Message Search (allowGlobal hosts); assert Global chip is visible. (B) GLOBAL SEARCH \u2014 enable Global (URL global=true); enter search_term known to match messages in more than one room outside the host default list if applicable; assert useMessageSearch/mx.search issues room_events search with rooms filter undefined/absent (not bound only to host rooms list); results may group across rooms. (C) PAGINATION UNDER GLOBAL \u2014 with enough matches, next_batch/nextToken fetchNextPage still works with rooms omitted. (D) SCOPE TOGGLE \u2014 clear Global back to host default; assert rooms re-bound to host list (room-scoped adjacency, not sole pass). (E) DISTINCTIONS \u2014 room-scoped-only without Global (FR-7.10-001), filter-only sender/date/type (FR-7.10-003), Open result alone (FR-7.10-004), user/directory Search modal alone (FR-7.10-005), cancel/stale (FR-7.10-007) do not satisfy this FR. After cutover P6.8 (+P11.3), same observables via typed SC-071 Client::send search request path + product IPC \u2014 not raw /_matrix HTTP, not dual-backend/SDK selector, not experimental SC-072, not invented high-level search API. SC-071 alone, compile-only, raw HTTP, room-scoped-only, filter-only, Open-only, directory-only, helper/fixture-only FAIL.",
+            "test_target": "HomeSearch/SpaceSearch allowGlobal; SearchFilters Global chip; MessageSearch global=true \u2192 rooms undefined; useMessageSearch mx.search without rooms filter; post-cutover typed SC-071 Client::send search + IPC (P6.8/P11.3)",
             "preconditions": [
-              "Desktop app; room with searchable indexed history on Synapse",
-              "Public room directory populated; second user for user search",
-              "Linked owner path present in tree: synara/src/app/features/message-search/useMessageSearch.ts",
-              "Primary UI/lifecycle surface: synara/src/app/features/message-search/MessageSearch.tsx"
+              "Disposable Synapse with multiple joined rooms whose history is server-searchable; at least one term matching messages in a room outside a narrow host list when testing global vs host scope.",
+              "Named owners present: useMessageSearch.ts, MessageSearch.tsx, SearchFilters.tsx; entry pages HomeSearch and/or SpaceSearch with allowGlobal.",
+              "Harness can observe URL global=true, search request body rooms field (undefined/absent vs host list), and Global chip visibility.",
+              "Do not accept room-scoped-only (FR-7.10-001), filter-only (FR-7.10-003), Open-only (FR-7.10-004), user/directory-only (FR-7.10-005), cancel/stale-only (FR-7.10-007), or unit-only helpers as sole pass for this FR."
             ],
             "trigger_actions": [
-              "Boot the appropriate harness for level=integration against disposable Synapse (or iOS notes if any).",
-              "Establish fixtures required by the clause list: global message search if currently exposed.",
-              "Open UI/lifecycle surface `synara/src/app/features/message-search/MessageSearch.tsx` (or follow ui_entry_points_rationale if no dedicated UI).",
-              "Step 1: perform the product action that implements \u00abglobal message search if currently exposed\u00bb using current owner `synara/src/app/features/message-search/useMessageSearch.ts`.",
-              "Issue search, paginate results, cancel in-flight query, and re-issue with different filters to catch stale results."
+              "Boot integration harness against disposable Synapse. Do not use fixture-only mocks that skip product MessageSearch/allowGlobal path, dual-backend selectors, raw HTTP, or helper-only pass criteria.",
+              "EXPOSURE: open Home or Space Message Search route; assert allowGlobal surfaces Global chip.",
+              "GLOBAL SEARCH: select Global; enter a term; assert product path issues room_events search with rooms undefined/absent (not restricted to host default room list alone).",
+              "RESULTS: assert matching results render (may span multiple rooms); optional: confirm host-default-only scope would not include a cross-room hit that global does.",
+              "SCOPE TOGGLE: return to host default chip; assert rooms re-bound (documents distinction from FR-7.10-001 without substituting for this FR).",
+              "PAGINATION UNDER GLOBAL: with enough global matches, assert next_batch/nextToken fetchNextPage still appends results while rooms remain undefined/absent.",
+              "After cutover P6.8 (+P11.3), repeat global search + pagination via typed Client::send search (SC-071) under Rust ownership + product IPC. Citing SC-071 alone, compile-only blocked, raw /_matrix HTTP, dual-backend/SDK selector, SC-072 experimental, room-scoped-only, filter-only, Open-only, directory-only, or helper/fixture-only is a FAIL."
             ],
             "assertions": [
-              "Each clause is observable: \u00abglobal message search if currently exposed\u00bb.",
-              "State coordination remains through `synara/src/app/features/message-search/useMessageSearch.ts` (or its Rust/IPC successor after cutover), not ad-hoc dual writers.",
-              "Behavior-relevant current JS method candidates exercised or replaced: search, getSafeUserId, getSafeUserId (AST candidates; not type-proven receivers).",
-              "Rust mapping remains conservative: caps=[SC-071,SC-072] gaps=[none]; compile-only blocked states are not treated as runtime pass.",
-              "No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless dossier marks that exact behavior typed-sdk-request-required."
+              "EXPOSED: Global message search UI is reachable (allowGlobal + Global chip on Home/Space Message Search).",
+              "GLOBAL REQUEST: with global=true and no rooms sub-filter, room_events search does not bind filter.rooms to the host-only room list (rooms undefined/absent).",
+              "RESULTS: server search returns matching events under global scope; UI renders result groups.",
+              "PAGINATION UNDER GLOBAL: next_batch/nextToken pagination still functions with rooms omitted.",
+              "DISTINCTIONS: this FR \u2260 FR-7.10-001 room-scoped; \u2260 FR-7.10-003 filters beyond Global; \u2260 FR-7.10-004 Open; \u2260 FR-7.10-005 user/directory; \u2260 FR-7.10-006 local search; \u2260 FR-7.10-007 cancel/stale.",
+              "COORDINATION: search remains through useMessageSearch + MessageSearch (or Rust/IPC successors), not ad-hoc dual writers.",
+              "CUTOVER: P6.8 (+P11.3) preserves global scope via typed SC-071 Client::send search path; SC alone / compile-only never product pass; no raw /_matrix runtime HTTP; no dual-backend/SDK selector; no SC-072 substitution.",
+              "No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless the dossier marks that exact behavior typed-sdk-request-required.",
+              "Room-scoped-only, filter-only, Open-only, directory-only, cancel/stale-only, and helper unit tests alone are not accepted as sole pass criteria for this FR."
             ],
             "required_environment": [
-              "Desktop app; room with searchable indexed history on Synapse",
-              "Public room directory populated; second user for user search"
+              "Disposable Synapse; multiple joined rooms with server-searchable matching messages",
+              "Product surfaces: HomeSearch/SpaceSearch allowGlobal, MessageSearch.tsx, SearchFilters.tsx, useMessageSearch.ts"
             ],
             "does_not_currently_exist": true,
             "clause_breakdown": [
-              "global message search if currently exposed"
+              "global message search currently exposed (Home/Space allowGlobal + Global chip)",
+              "global=true \u2192 rooms undefined \u2192 mx.search without room filter",
+              "next_batch pagination still works under global scope",
+              "cutover P6.8 (+P11.3) typed SC-071 Client::send search; SC-only/raw HTTP/SC-072/helper-only FAIL"
             ]
           }
         ]
@@ -75580,7 +75548,6 @@
       "manual_acceptance_id": "MA-FR-7.10-002",
       "migration_cutover_disposition": "replace-js-sdk-with-rust-via-ipc",
       "missing_evidence_gates": [
-        "experimental_feature_risk_gate",
         "live_synapse_two_client",
         "semantic_or_integration_test",
         "ui_acceptance"
@@ -75593,7 +75560,7 @@
         {
           "severity": "medium",
           "kind": "typed-sdk-request-required",
-          "summary": "FR-7.10-002 requires typed SDK request route (not raw HTTP, not invented high-level API)."
+          "summary": "FR-7.10-002 requires typed SC-071 Client::send search path for global (rooms-unrestricted) message search (not raw HTTP, not invented high-level search API, not dual-backend, not SC-072 experimental local search)."
         }
       ]
     },
@@ -89540,7 +89507,6 @@
       "classification": "requirement-linked",
       "linked_requirement_ids": [
         "FR-7.6-006",
-        "FR-7.10-002",
         "FR-7.10-005"
       ],
       "rationale": null,
@@ -107309,34 +107275,44 @@
         "task_id": "P6.8",
         "phase": "Phase 6 \u2014 Sending, room operations, account data, and search",
         "level": "integration",
-        "scenario": "7.10/FR-7.10-002: exercise 'global message search if currently exposed;' via owner `synara/src/app/features/message-search/useMessageSearch.ts` and UI `synara/src/app/features/message-search/MessageSearch.tsx`, then confirm Rust/IPC cutover task `P6.8` preserves observable behavior without raw Matrix runtime HTTP.",
+        "scenario": "Integration against disposable Synapse: (A) EXPOSURE \u2014 open Home Message Search or Space Message Search (allowGlobal hosts); assert Global chip is visible. (B) GLOBAL SEARCH \u2014 enable Global (URL global=true); enter search_term known to match messages in more than one room outside the host default list if applicable; assert useMessageSearch/mx.search issues room_events search with rooms filter undefined/absent (not bound only to host rooms list); results may group across rooms. (C) SCOPE TOGGLE \u2014 clear Global back to host default; assert rooms re-bound to host list (room-scoped adjacency, not sole pass). (D) DISTINCTIONS \u2014 room-scoped-only without Global (FR-7.10-001), filter-only sender/date/type (FR-7.10-003), Open result alone (FR-7.10-004), user/directory Search modal alone (FR-7.10-005), cancel/stale (FR-7.10-007) do not satisfy this FR. After cutover P6.8 (+P11.3), same observables via typed SC-071 Client::send search request path + product IPC \u2014 not raw /_matrix HTTP, not dual-backend/SDK selector, not experimental SC-072, not invented high-level search API. SC-071 alone, compile-only, raw HTTP, room-scoped-only, filter-only, Open-only, directory-only, helper/fixture-only FAIL.",
+        "test_target": "HomeSearch/SpaceSearch allowGlobal; SearchFilters Global chip; MessageSearch global=true \u2192 rooms undefined; useMessageSearch mx.search without rooms filter; post-cutover typed SC-071 Client::send search + IPC (P6.8/P11.3)",
         "preconditions": [
-          "Desktop app; room with searchable indexed history on Synapse",
-          "Public room directory populated; second user for user search",
-          "Linked owner path present in tree: synara/src/app/features/message-search/useMessageSearch.ts",
-          "Primary UI/lifecycle surface: synara/src/app/features/message-search/MessageSearch.tsx"
+          "Disposable Synapse with multiple joined rooms whose history is server-searchable; at least one term matching messages in a room outside a narrow host list when testing global vs host scope.",
+          "Named owners present: useMessageSearch.ts, MessageSearch.tsx, SearchFilters.tsx; entry pages HomeSearch and/or SpaceSearch with allowGlobal.",
+          "Harness can observe URL global=true, search request body rooms field (undefined/absent vs host list), and Global chip visibility.",
+          "Do not accept room-scoped-only (FR-7.10-001), filter-only (FR-7.10-003), Open-only (FR-7.10-004), user/directory-only (FR-7.10-005), cancel/stale-only (FR-7.10-007), or unit-only helpers as sole pass for this FR."
         ],
         "trigger_actions": [
-          "Boot the appropriate harness for level=integration against disposable Synapse (or iOS notes if any).",
-          "Establish fixtures required by the clause list: global message search if currently exposed.",
-          "Open UI/lifecycle surface `synara/src/app/features/message-search/MessageSearch.tsx` (or follow ui_entry_points_rationale if no dedicated UI).",
-          "Step 1: perform the product action that implements \u00abglobal message search if currently exposed\u00bb using current owner `synara/src/app/features/message-search/useMessageSearch.ts`.",
-          "Issue search, paginate results, cancel in-flight query, and re-issue with different filters to catch stale results."
+          "Boot integration harness against disposable Synapse. Do not use fixture-only mocks that skip product MessageSearch/allowGlobal path, dual-backend selectors, raw HTTP, or helper-only pass criteria.",
+          "EXPOSURE: open Home or Space Message Search route; assert allowGlobal surfaces Global chip.",
+          "GLOBAL SEARCH: select Global; enter a term; assert product path issues room_events search with rooms undefined/absent (not restricted to host default room list alone).",
+          "RESULTS: assert matching results render (may span multiple rooms); optional: confirm host-default-only scope would not include a cross-room hit that global does.",
+          "SCOPE TOGGLE: return to host default chip; assert rooms re-bound (documents distinction from FR-7.10-001 without substituting for this FR).",
+          "PAGINATION UNDER GLOBAL: with enough global matches, assert next_batch/nextToken fetchNextPage still appends results while rooms remain undefined/absent.",
+          "After cutover P6.8 (+P11.3), repeat global search + pagination via typed Client::send search (SC-071) under Rust ownership + product IPC. Citing SC-071 alone, compile-only blocked, raw /_matrix HTTP, dual-backend/SDK selector, SC-072 experimental, room-scoped-only, filter-only, Open-only, directory-only, or helper/fixture-only is a FAIL."
         ],
         "assertions": [
-          "Each clause is observable: \u00abglobal message search if currently exposed\u00bb.",
-          "State coordination remains through `synara/src/app/features/message-search/useMessageSearch.ts` (or its Rust/IPC successor after cutover), not ad-hoc dual writers.",
-          "Behavior-relevant current JS method candidates exercised or replaced: search, getSafeUserId, getSafeUserId (AST candidates; not type-proven receivers).",
-          "Rust mapping remains conservative: caps=[SC-071,SC-072] gaps=[none]; compile-only blocked states are not treated as runtime pass.",
-          "No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless dossier marks that exact behavior typed-sdk-request-required."
+          "EXPOSED: Global message search UI is reachable (allowGlobal + Global chip on Home/Space Message Search).",
+          "GLOBAL REQUEST: with global=true and no rooms sub-filter, room_events search does not bind filter.rooms to the host-only room list (rooms undefined/absent).",
+          "RESULTS: server search returns matching events under global scope; UI renders result groups.",
+          "PAGINATION UNDER GLOBAL: next_batch/nextToken pagination still functions with rooms omitted.",
+          "DISTINCTIONS: this FR \u2260 FR-7.10-001 room-scoped; \u2260 FR-7.10-003 filters beyond Global; \u2260 FR-7.10-004 Open; \u2260 FR-7.10-005 user/directory; \u2260 FR-7.10-006 local search; \u2260 FR-7.10-007 cancel/stale.",
+          "COORDINATION: search remains through useMessageSearch + MessageSearch (or Rust/IPC successors), not ad-hoc dual writers.",
+          "CUTOVER: P6.8 (+P11.3) preserves global scope via typed SC-071 Client::send search path; SC alone / compile-only never product pass; no raw /_matrix runtime HTTP; no dual-backend/SDK selector; no SC-072 substitution.",
+          "No new production matrix-js-sdk usage and no raw /_matrix runtime HTTP unless the dossier marks that exact behavior typed-sdk-request-required.",
+          "Room-scoped-only, filter-only, Open-only, directory-only, cancel/stale-only, and helper unit tests alone are not accepted as sole pass criteria for this FR."
         ],
         "required_environment": [
-          "Desktop app; room with searchable indexed history on Synapse",
-          "Public room directory populated; second user for user search"
+          "Disposable Synapse; multiple joined rooms with server-searchable matching messages",
+          "Product surfaces: HomeSearch/SpaceSearch allowGlobal, MessageSearch.tsx, SearchFilters.tsx, useMessageSearch.ts"
         ],
         "does_not_currently_exist": true,
         "clause_breakdown": [
-          "global message search if currently exposed"
+          "global message search currently exposed (Home/Space allowGlobal + Global chip)",
+          "global=true \u2192 rooms undefined \u2192 mx.search without room filter",
+          "next_batch pagination still works under global scope",
+          "cutover P6.8 (+P11.3) typed SC-071 Client::send search; SC-only/raw HTTP/SC-072/helper-only FAIL"
         ]
       },
       {
@@ -111033,25 +111009,33 @@
         "Linux"
       ],
       "preconditions": [
-        "Desktop app; room with searchable indexed history on Synapse",
-        "Public room directory populated; second user for user search",
+        "Desktop app against disposable Synapse; multiple joined rooms with server-searchable history; known search term that can match outside a narrow host list.",
         "State owner available: synara/src/app/features/message-search/useMessageSearch.ts",
-        "UI/lifecycle: synara/src/app/features/message-search/MessageSearch.tsx",
-        "Current status baseline: partial"
+        "UI/lifecycle: Home Message Search or Space Message Search (allowGlobal), MessageSearch.tsx, SearchFilters.tsx",
+        "Global path available (Global chip); Current status baseline: implemented (currently exposed)"
       ],
       "actions": [
-        "Launch Synara desktop on the target platform against disposable Synapse; use a clean or known fixture profile as required by \u00abglobal message search if currently exposed;\u00bb.",
-        "Identify state owner `synara/src/app/features/message-search/useMessageSearch.ts` and open `synara/src/app/features/message-search/MessageSearch.tsx`.",
-        "Action 1 \u2014 \u00abglobal message search if currently exposed\u00bb: perform the minimal user/system steps that trigger this clause (use linked files under current_production_files if the entry point is indirect).",
-        "Run search, change filters, paginate, click a result to open event context, cancel a slow query and ensure UI does not apply stale results."
+        "Launch Synara desktop on the target platform against disposable Synapse; open Home Message Search (or Space Message Search) via the Message Search nav entry.",
+        "EXPOSURE: confirm the Global chip is visible (allowGlobal host).",
+        "GLOBAL SEARCH: select Global; enter a known term in SearchInput; confirm results appear and may span rooms beyond the host default list; confirm request/scope uses global=true (rooms not forced to host-only list).",
+        "PAGINATION UNDER GLOBAL: with enough matches, scroll/load more; confirm additional results load via next_batch while still in Global scope.",
+        "SCOPE TOGGLE: select the host default chip (e.g. Home / space name); confirm scope returns to host rooms list (room-scoped adjacency).",
+        "DISTINCTIONS (negative for this FR alone): do not treat room-scoped RoomSidePanel search without Global (FR-7.10-001), filter-only sender/date/type (FR-7.10-003), Open on a result (FR-7.10-004), user/directory Search modal (FR-7.10-005), or cancel/stale alone (FR-7.10-007) as satisfying global message search exposure.",
+        "After cutover P6.8 (+P11.3): repeat global search + pagination; confirm typed SC-071 Client::send search path (not raw /_matrix from the renderer, not dual-backend/SDK selector, not SC-072 experimental local search)."
       ],
       "expected_results": [
-        "All clauses under \u00abglobal message search if currently exposed;\u00bb produce the user-visible or system-observable success criteria without error toasts unrelated to intentional negative tests.",
-        "Clause 1 \u00abglobal message search if currently exposed\u00bb is satisfied on macOS, Linux with owner `synara/src/app/features/message-search/useMessageSearch.ts`.",
-        "No unexpected raw /_matrix traffic from the app renderer for this flow on the post-cutover build."
+        "EXPOSED: Global message search is reachable from Home/Space Message Search with Global chip.",
+        "GLOBAL REQUEST: global=true leaves rooms unrestricted (undefined/absent) for server room_events search; results render.",
+        "PAGINATION UNDER GLOBAL: further pages load via next_batch/nextToken under Global scope when more results exist.",
+        "SCOPE TOGGLE: host default chip re-binds rooms list without removing Global availability.",
+        "No unexpected raw /_matrix traffic from the app renderer for this flow on the post-cutover build; no dual-backend/SDK selector.",
+        "SC-071 alone / compile-only / raw HTTP / room-scoped-only / filter-only / Open-only / directory-only / SC-072 / helper-only do not pass this FR."
       ],
       "clause_breakdown": [
-        "global message search if currently exposed"
+        "global message search currently exposed (Home/Space allowGlobal + Global chip)",
+        "global=true \u2192 rooms undefined \u2192 mx.search without room filter",
+        "next_batch pagination still works under global scope",
+        "cutover P6.8 (+P11.3) typed SC-071 Client::send search; SC-only/raw HTTP/SC-072/helper-only FAIL"
       ]
     },
     {
@@ -111502,7 +111486,7 @@
       "requirement_id": "FR-7.10-002",
       "severity": "medium",
       "kind": "typed-sdk-request-required",
-      "summary": "FR-7.10-002 requires typed SDK request route (not raw HTTP, not invented high-level API)."
+      "summary": "FR-7.10-002 requires typed SC-071 Client::send search path for global (rooms-unrestricted) message search (not raw HTTP, not invented high-level search API, not dual-backend, not SC-072 experimental local search)."
     },
     {
       "requirement_id": "FR-7.10-003",
@@ -111687,8 +111671,8 @@
     "planned_required_automated_tests": 119,
     "manual_acceptance_cases": 119,
     "status_distribution": {
-      "implemented": 96,
-      "partial": 22,
+      "implemented": 97,
+      "partial": 21,
       "not-currently-exposed": 1
     },
     "shared_matrix_infrastructure_files": 20,
@@ -113114,6 +113098,19 @@
         "FR-7.10-001: current_status remains implemented. current_behavior_and_limits documents room-scoped room_events search (search_term, rooms, limit 20), mx.search next_batch, parse nextToken/group by room_id, MessageSearch useInfiniteQuery scroll pagination; notes no longer generic via-3-files.",
         "FR-7.10-001: retargeted owners to useMessageSearch.ts + MessageSearch.tsx; SearchResultGroup as result list chrome only. Behavior-relevant method: search L105 with next_batch relevance. EXCLUDE getRoom display-only; Open/filters/global/cancel as sole evidence. Dropped GAP-EVENT-CONTEXT from gap_ids (product event_context 0/0; Open is FR-7.10-004).",
         "FR-7.10-001: planned AT/MA require room search, next_batch pagination, grouping, empty UI; cutover P6.8 (+P11.3) via typed SC-071 Client::send search; SC alone, compile-only, raw HTTP, dual-backend, Open-only, filter-only, global-only, helper-only FAIL. rust_target remains typed-sdk-request-required-server-search. Top-level AT-FR-7.10-001-001 and MA-FR-7.10-001 updated byte-aligned. Notes include empty/error/loading line evidence + RoomSidePanel rooms={[room.roomId]} room-scope entry. Status distribution unchanged (implemented 96, partial 22). Accepted FR-7.8-001 through FR-7.8-009 and FR-7.9-001..013 (incl FR-7.9-011 sequential isolation) preserved. JSON and Markdown synchronized."
+      ]
+    },
+    {
+      "id": "p0.2-correct-41-fr-7.10-002-global-message-search",
+      "scope": "Rejected-review limited correction: FR-7.10-002 only \u2014 replace shallow notes (partial/product-dependent via broader Search UI) / wrong features/search/Search.tsx getSafeUserId primary / SC-071+SC-072 dual caps / generic AT-MA with concrete global exposure evidence: HomeSearch/SpaceSearch allowGlobal; SearchFilters Global chip; MessageSearch global=true \u2192 rooms undefined; useMessageSearch mx.search without room filter; EXCLUDE room-scoped (FR-7.10-001), filters (FR-7.10-003), Open (FR-7.10-004), user/directory Search.tsx (FR-7.10-005), SC-072 local (FR-7.10-006); honest rust_target SC-071 only; status partial \u2192 implemented (currently exposed)",
+      "requirements_rewritten": [
+        "FR-7.10-002"
+      ],
+      "not_claimed_complete": true,
+      "changes": [
+        "FR-7.10-002: current_status partial \u2192 implemented (global message search is currently product-exposed). current_behavior_and_limits documents Home/Space allowGlobal entry, Global chip, global=true \u2192 rooms undefined, mx.search without room filter; notes no longer shallow partial/product-dependent.",
+        "FR-7.10-002: retargeted owners to useMessageSearch.ts + MessageSearch.tsx + SearchFilters.tsx; demoted/excluded features/search/Search.tsx (FR-7.10-005 user/directory). Behavior-relevant method: search L105 with rooms-undefined global relevance. EXCLUDE Open/filters/room-scoped/cancel as sole evidence. Dropped SC-072 from capability_ids (experimental local is FR-7.10-006).",
+        "FR-7.10-002: planned AT/MA require Global chip exposure, global search without rooms filter, scope toggle distinction; cutover P6.8 (+P11.3) via typed SC-071 Client::send search; SC alone, compile-only, raw HTTP, dual-backend, room-scoped-only, filter-only, Open-only, directory-only, SC-072, helper-only FAIL. rust_target typed-sdk-request-required-server-search SC-071 only. Top-level AT-FR-7.10-002-001 and MA-FR-7.10-002 updated byte-aligned. file_coverage_ledger: removed FR-7.10-002 from features/search/Search.tsx. Status distribution recomputed (implemented 97, partial 21). Accepted FR-7.8-001 through FR-7.8-009, FR-7.9-001..013 (011 remains partial), and FR-7.10-001 preserved. JSON and Markdown synchronized."
       ]
     }
   ]
