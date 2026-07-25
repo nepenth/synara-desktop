@@ -1,0 +1,77 @@
+{
+  "task_id": "P2.3",
+  "title": "SDK client builder",
+  "date": "2026-07-25",
+  "status": "implemented",
+  "base_branch": "feature/matrix-rust-sdk-full-replacement",
+  "base_sha": "0ac4e04",
+  "work_branch": "matrix-rust/p2.3-sdk-client-builder",
+  "human_doc": "docs/matrix-rust-sdk/p2.3-sdk-client-builder.md",
+  "production_posture": {
+    "production_client_session_started": false,
+    "production_login": false,
+    "production_sync": false,
+    "dual_backend": false,
+    "tauri_commands_for_matrix": false,
+    "matrix_sdk_client_builder": true,
+    "unauthenticated_client_open_only": true,
+    "exercised_by": "unit_tests_and_harness_factory_only"
+  },
+  "artifacts": {
+    "rust_module": "src-tauri/src/matrix/client_builder/",
+    "mod_wire": "src-tauri/src/matrix/mod.rs",
+    "design_note": "docs/matrix-rust-sdk/p2.3-sdk-client-builder.md",
+    "cargo_features": ["sqlite", "bundled-sqlite"]
+  },
+  "config_surface": {
+    "homeserver_mode_default": "explicit_url",
+    "ssl_verification_required": true,
+    "default_request_timeout_secs": 30,
+    "default_retry_limit": 3,
+    "user_agent_template": "Synara-Desktop/{crate_version} (matrix-sdk/0.18.0)",
+    "store_state_path": "StorePaths.state_dir",
+    "store_cache_path": "StorePaths.cache_dir",
+    "store_passphrase": "optional hex(StoreKeyMaterial)"
+  },
+  "approved_features": ["sqlite", "bundled-sqlite"],
+  "forbidden_features": [
+    "experimental-search",
+    "experimental-widgets",
+    "experimental-encrypted-state-events",
+    "experimental-element-recent-emojis",
+    "experimental-push-secrets",
+    "experimental-send-custom-to-device",
+    "automatic-room-key-forwarding",
+    "indexeddb",
+    "js",
+    "uniffi"
+  ],
+  "sole_builder_site": "src-tauri/src/matrix/client_builder/open.rs::build_unauthenticated_client",
+  "guardrail_delta": {
+    "client_builder_allow_path": "src-tauri/src/matrix/client_builder/",
+    "login_sync_still_banned_everywhere_under_matrix": true
+  },
+  "invariants": [
+    "ssl_verification_always_on_for_product_config",
+    "plan_json_has_no_secrets",
+    "ensure_dirs_create_only",
+    "no_login_or_sync_in_builder_module",
+    "two_accounts_distinct_store_paths"
+  ],
+  "residuals": [
+    { "id": "async-supervisor-open", "waitsFor": "P2.4 / P3.x" },
+    { "id": "media-store-path", "waitsFor": "later store task" },
+    { "id": "homeserver-discovery", "waitsFor": "P3.1" },
+    { "id": "login-restore", "waitsFor": "Phase 3" },
+    { "id": "destructive-wipe", "waitsFor": "P2.6" }
+  ],
+  "decisions_respected": [
+    "D-NO-DUAL-BACKEND",
+    "D-TOKEN-CONTINUITY"
+  ],
+  "validation": [
+    "cargo test --locked matrix::client_builder",
+    "cargo test --locked matrix::",
+    "npm run check:matrix-rust-guardrails"
+  ]
+}

@@ -5,7 +5,9 @@
 //! must not invent a second owner or dual-backend selector.
 //!
 //! **Harness / unit tests only until cutover.** No Tauri command registration,
-//! no production login/sync loop, no `matrix_sdk::Client` builder (P2.3).
+//! no production login/sync loop. Live `Client::builder` lives only under
+//! `matrix/client_builder/` (P2.3 unauthenticated open); login/sync remain
+//! forbidden under all `matrix/` non-test modules.
 //!
 //! Authoritative design note: `docs/matrix-rust-sdk/p2.1-matrix-supervisor-actor.md`
 //!
@@ -22,9 +24,13 @@ mod handle;
 mod state;
 mod transition;
 
-pub use actor::{MatrixSupervisor, SupervisorSnapshot};
+pub use actor::{
+    harness_login_ready, harness_restore_ready, MatrixSupervisor, SupervisorSnapshot,
+};
 pub use error::{SupervisorError, TransitionError};
-pub use handle::{ClientFactory, ClientHandle, NullClientFactory, TestClientHandle};
+pub use handle::{
+    ClientFactory, ClientHandle, FactoryError, NullClientFactory, TestClientHandle,
+};
 pub use state::{SupervisorState, SupervisorEvent};
 pub use transition::{SupervisorCommand, TransitionEffect};
 

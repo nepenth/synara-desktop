@@ -30,11 +30,18 @@ tauri-plugin-clipboard-manager = "2"
 tauri-plugin-notification = "2"
 tauri-plugin-opener = "2"
 url = "2"
-# P1.2: Matrix Rust SDK exact pin (program: matrix-sdk-0.18.0 @ 1c44fb66…).
-# default-features=false; minimum approved set. No production Client session yet.
+# P1.2 + P2.3: Matrix Rust SDK exact pin (program: matrix-sdk-0.18.0 @ 1c44fb66…).
+# default-features=false; approved features only (sqlite + bundled-sqlite for desktop stores).
 # matrix-sdk-ui transitively enables matrix-sdk/e2e-encryption via feature unification.
-matrix-sdk = { version = "=0.18.0", default-features = false }
+# No production login/sync loop yet — client builder opens unauthenticated clients only.
+matrix-sdk = { version = "=0.18.0", default-features = false, features = [
+  "sqlite",
+  "bundled-sqlite",
+] }
 matrix-sdk-ui = { version = "=0.18.0", default-features = false }
+# Runtime for Matrix client open/drop (also used by matrix-sdk). Kept direct so
+# SdkClientHandle can shut down SQLite pools outside an ambient async context.
+tokio = { version = "1", features = ["rt", "rt-multi-thread", "macros", "time"] }
 
 [features]
 # by default Tauri runs in production mode
