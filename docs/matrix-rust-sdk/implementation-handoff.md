@@ -25,18 +25,17 @@ without explicit user approval.
 **Host task id:** `9022c2f8-9b21-411a-acf9-a36c10515f72`
 (`matrix-rust-sdk-replacement-orchestrator`, daily check-in)
 
-**Session state (2026-07-24, P1.5 IN PROGRESS):**
+**Session state (2026-07-25, P1.5 MERGED — next P1.6):**
 
 - **Integration tip:** `feature/matrix-rust-sdk-full-replacement` @
-  `c2009072cbe5685947287267ecd8678126b7b19e`
-  (Phase 0 complete + **P1.1**–**P1.4** **MERGED**; tip:
-  `docs(matrix): record P1.4 merge; advance handoff to P1.5`)
-- **Active work:** **P1.5 IN PROGRESS** — IPC protocol contract tests expansion
-  on branch `matrix-rust/p1.5-ipc-contract-tests` (serialization round trips,
-  unknown variants, invalid payloads, bounds, sequence gaps, stale generations,
-  schema compatibility; design note `p1.5-ipc-contract-tests.md` + shared
-  fixtures). **No** production login/sync; **no** dual-backend; **no** Matrix
-  production Tauri commands; JS client remains sole runtime backend.
+  `48f71619c118ce4cf215c2d81794174a362d78c3`
+  (Phase 0 complete + **P1.1**–**P1.5** **MERGED**; tip:
+  `feat(matrix): merge P1.5 IPC protocol contract tests`)
+- **Active work:** next **P1.6** — Architectural CI guardrails (prohibit new
+  JS SDK imports, deepening direct-client access, raw Matrix runtime HTTP,
+  unversioned Matrix IPC, SDK types in DTO/IPC modules). **No** production
+  login/sync; **no** dual-backend; **no** Matrix production Tauri commands; JS
+  client remains sole runtime backend.
 - **P0.2 PR:** https://github.com/nepenth/synara-desktop/pull/42 — **MERGED**
   into integration (docs-only). **Never merge to `main` without explicit user
   approval.**
@@ -106,13 +105,14 @@ without explicit user approval.
   `cargo test --locked matrix` 41 ok; TS matrix-dto 23 ok; no `matrix_sdk` in
   DTO modules; no tokens/media bytes on wire; no production Matrix Tauri
   commands; P1.3 IPC left independent. **No** production login/sync.
-- **P1.5:** **IN PROGRESS** on `matrix-rust/p1.5-ipc-contract-tests`. Expanded
-  IPC protocol contract tests (Rust `contract_tests.rs` + TS
-  `matrixIpcContract.test.ts`), additional shared fixtures under
-  `docs/matrix-rust-sdk/ipc/fixtures/`, bounds helpers, design note
-  `p1.5-ipc-contract-tests.md` + `.json`. **No** production login/sync; **no**
-  dual-backend; **no** SDK wire types; **no** new production Tauri Matrix
-  commands. Residuals to **P1.6**: architectural CI guardrails.
+- **P1.5:** **MERGED** into integration (PR #54). Expanded IPC protocol
+  contract tests (Rust `contract_tests.rs` + `tests.rs`; TS
+  `matrixIpcContract.test.ts` + `matrixIpc.test.ts`), shared fixtures +
+  `schema_catalog_v1.json`, bounds helpers, envelope payload-object guard,
+  design note `p1.5-ipc-contract-tests.md` + `.json`. Independent review:
+  `cargo test --locked matrix::ipc` 54 ok; TS matrix-ipc 48 ok; no
+  `matrix_sdk` in IPC modules; no production Matrix Tauri commands; no
+  dual-backend. **No** production login/sync.
 - **Optional later:** §7.1–7.7 scaffold rows may still have shallow notes if a
   full-matrix depth pass is desired beyond the handoff resume scope
 - **Progress loop:** 4-minute scheduler `019f95928db7` (session-recurring);
@@ -146,13 +146,12 @@ Phase 1 progress:
   no production login/sync; no SDK wire types
 - P1.4 Synara domain DTOs (15 families) — **merged** (PR #52); contracts
   only; no SDK object graph; no production login/sync
-- P1.5 IPC protocol contract tests — **IN PROGRESS** (work branch
-  `matrix-rust/p1.5-ipc-contract-tests`; PR open for orchestrator review)
+- P1.5 IPC protocol contract tests — **merged** (PR #54); contracts only;
+  no production login/sync; no dual-backend
 
 **Next program work:**
 
-1. **P1.5** complete (merge after orchestrator review) then **P1.6**
-   Architectural CI guardrails
+1. **P1.6** Architectural CI guardrails
 2. Phase 2 (after Phase 1 complete) — Rust client lifecycle / secure storage
    harnesses (still no dual production backend)
 
