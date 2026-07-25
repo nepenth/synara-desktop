@@ -12,6 +12,7 @@
     "build:pacman-repo": "scripts/build-pacman-repo.sh",
     "audit:matrix-public": "node scripts/audit-matrix-public.mjs",
     "check:matrix-boundaries": "node scripts/check-matrix-boundaries.mjs",
+    "check:matrix-rust-guardrails": "node scripts/matrix-rust-p1.6-guardrails.mjs && node scripts/check-matrix-rust-sdk-guardrails.mjs",
     "inventory:matrix-sdk-usage": "node scripts/inventory-matrix-sdk-usage.mjs --write",
     "check:matrix-sdk-usage": "node scripts/inventory-matrix-sdk-usage.mjs --check",
     "check:quality-gates": "node scripts/check-quality-gates.mjs && node scripts/check-workflow-policy.mjs",
