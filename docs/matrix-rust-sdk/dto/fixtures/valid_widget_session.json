@@ -1,0 +1,8 @@
+{
+  "widgetId": "element-call-1",
+  "roomId": "!room:example.org",
+  "kind": "element_call",
+  "state": "active",
+  "url": "https://call.element.io/room/#?roomId=!room:example.org",
+  "hasActiveCall": true
+}

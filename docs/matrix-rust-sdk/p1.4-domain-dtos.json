@@ -1,0 +1,129 @@
+{
+  "taskId": "P1.4",
+  "title": "Synara domain DTOs",
+  "date": "2026-07-24",
+  "baseBranch": "feature/matrix-rust-sdk-full-replacement",
+  "baseSha": "9e8ce02",
+  "workBranch": "matrix-rust/p1.4-domain-dtos",
+  "artifacts": {
+    "designNote": "docs/matrix-rust-sdk/p1.4-domain-dtos.md",
+    "fixtures": "docs/matrix-rust-sdk/dto/fixtures/",
+    "fixtureReadme": "docs/matrix-rust-sdk/dto/README.md",
+    "rustModule": "src-tauri/src/matrix/dto/",
+    "typescriptModule": "synara/src/app/features/matrix-dto/",
+    "transportUnchanged": {
+      "rust": "src-tauri/src/matrix/ipc/",
+      "typescript": "synara/src/app/features/matrix-ipc/"
+    }
+  },
+  "dtoFamilies": [
+    "session",
+    "room_summary",
+    "member",
+    "timeline_item",
+    "relation",
+    "receipt",
+    "typing",
+    "upload",
+    "media",
+    "security",
+    "notification",
+    "search",
+    "space",
+    "thread",
+    "widget"
+  ],
+  "primaryTypes": {
+    "session": "SessionSnapshot",
+    "room_summary": "RoomSummary",
+    "member": "RoomMember",
+    "timeline_item": "TimelineItem",
+    "relation": "RelationRef",
+    "receipt": "Receipt",
+    "typing": "TypingSnapshot",
+    "upload": "UploadJob",
+    "media": "MediaHandle",
+    "security": "SecurityStatus",
+    "notification": "NotificationCandidate",
+    "search": "SearchResult",
+    "space": "SpaceSummary",
+    "thread": "ThreadSummary",
+    "widget": "WidgetSession"
+  },
+  "timelineItemKinds": [
+    "message",
+    "state",
+    "membership",
+    "reaction_summary",
+    "redacted",
+    "encrypted_unavailable",
+    "date_separator",
+    "read_marker",
+    "other"
+  ],
+  "sessionLifecycles": [
+    "empty",
+    "opening",
+    "authenticating",
+    "restoring",
+    "syncing",
+    "ready",
+    "stopping",
+    "logged_out",
+    "failed",
+    "wiping"
+  ],
+  "wireConventions": {
+    "fieldNames": "camelCase",
+    "enumDiscriminators": "snake_case",
+    "timelineTag": "kind"
+  },
+  "constraints": {
+    "noMatrixSdkInDtoModules": true,
+    "noRumaTypesInDtoModules": true,
+    "noAccessTokenOnWire": true,
+    "noRefreshTokenOnWire": true,
+    "noMediaBytesOverJsonIpc": true,
+    "noProductionLoginSync": true,
+    "noMatrixProductTauriCommands": true,
+    "noDualBackend": true,
+    "frontendRuntimeStillMatrixJsSdkOnly": true,
+    "notJsSdkObjectGraphClone": true
+  },
+  "policyConstants": {
+    "MATRIX_DTO_MARKER": "matrix-domain-dtos-p1.4",
+    "FORBID_MEDIA_BYTES_OVER_JSON_IPC": true
+  },
+  "fixtures": [
+    "valid_session.json",
+    "valid_room_summary.json",
+    "valid_member.json",
+    "valid_timeline_item_message.json",
+    "valid_timeline_item_state.json",
+    "valid_relation_reaction.json",
+    "valid_receipt.json",
+    "valid_typing.json",
+    "valid_upload.json",
+    "valid_media_handle.json",
+    "valid_security_status.json",
+    "valid_notification_candidate.json",
+    "valid_search_result.json",
+    "valid_space_summary.json",
+    "valid_thread_summary.json",
+    "valid_widget_session.json"
+  ],
+  "outOfScope": [
+    "production_login_sync_client",
+    "tauri_matrix_product_commands",
+    "frontend_cutover_from_matrix_js_sdk",
+    "dual_backend_selector",
+    "p1.5_expanded_contract_tests",
+    "p1.6_ci_guardrails",
+    "sdk_to_dto_live_mapping"
+  ],
+  "residuals": {
+    "P1.5": "Expanded IPC contract suite",
+    "P1.6": "Architectural CI guardrails",
+    "Phase2+": "Supervisor + SDK to DTO mapping; typed stream bodies"
+  }
+}
