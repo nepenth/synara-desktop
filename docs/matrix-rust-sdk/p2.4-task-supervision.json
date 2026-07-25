@@ -1,7 +1,7 @@
 {
   "task_id": "P2.4",
   "title": "Task supervision and cancellation",
-  "date": "2026-07-24",
+  "date": "2026-07-25",
   "status": "implemented",
   "base_branch": "feature/matrix-rust-sdk-full-replacement",
   "base_sha": "05cc500",
@@ -13,79 +13,74 @@
     "production_sync": false,
     "dual_backend": false,
     "tauri_commands_for_matrix": false,
-    "task_supervisor": true,
-    "exercised_by": "unit_tests_and_harness_futures_only"
+    "task_supervision_registry": true,
+    "exercised_by": "unit_tests_and_harness_only"
   },
   "artifacts": {
     "rust_module": "src-tauri/src/matrix/tasks/",
     "mod_wire": "src-tauri/src/matrix/mod.rs",
     "design_note": "docs/matrix-rust-sdk/p2.4-task-supervision.md",
-    "files": [
-      "src-tauri/src/matrix/tasks/mod.rs",
-      "src-tauri/src/matrix/tasks/kind.rs",
-      "src-tauri/src/matrix/tasks/error.rs",
-      "src-tauri/src/matrix/tasks/registry.rs",
-      "src-tauri/src/matrix/tasks/bridge.rs",
-      "src-tauri/src/matrix/tasks/tests.rs"
-    ]
+    "lifecycle_pointer": "src-tauri/src/matrix/supervisor/mod.rs"
   },
   "task_kinds": ["sync", "listener", "upload", "search", "generic"],
   "api_surface": {
-    "TaskSupervisor": [
-      "new",
-      "live_generation",
-      "set_live_generation",
-      "bump_generation",
+    "types": [
+      "TaskId",
+      "TaskKind",
+      "TaskInfo",
+      "TaskRunState",
+      "TaskOutcome",
+      "TaskError",
+      "TaskSupervisor"
+    ],
+    "ops": [
       "register",
       "spawn",
       "cancel",
-      "cancel_generation",
-      "cancel_all",
       "join",
       "cancel_and_join",
+      "cancel_generation",
+      "cancel_all",
       "retire_generation",
       "retire_stale",
       "shutdown_all",
       "accept_result",
-      "accept_task_result"
+      "accept_task_result",
+      "bump_generation",
+      "set_live_generation"
     ],
-    "bridge": [
-      "follow_supervisor_generation",
-      "mirror_generation"
-    ]
+    "bridge": ["follow_supervisor_generation", "mirror_generation"]
   },
   "invariants": [
-    "spawn_and_register_only_accept_live_generation",
+    "spawn_and_register_require_live_generation",
     "accept_result_refuses_stale_generation",
-    "cancel_is_idempotent",
-    "retire_stale_cancels_and_joins_old_generation_tasks",
-    "shutdown_all_leaves_empty_registry",
-    "no_production_login_or_sync",
-    "no_dual_backend"
+    "cancel_is_idempotent_for_terminal_tasks",
+    "retire_stale_cancels_and_joins_non_live_generation",
+    "shutdown_all_empties_registry",
+    "no_secrets_in_errors_or_task_info"
   ],
-  "tests": [
-    "race_cancel_long_running_task",
-    "double_cancel_spawned_task_then_join",
-    "double_cancel_is_idempotent_placeholder",
-    "stale_generation_isolation_refuses_results_and_spawn",
-    "leak_free_open_close_cycles",
-    "follow_supervisor_generation_on_logout",
-    "follow_supervisor_generation_on_wipe",
-    "fail_reopen_bumps_and_retires_via_follow"
-  ],
+  "composition": {
+    "lifecycle_actor": "matrix::supervisor::MatrixSupervisor (pure/sync)",
+    "after_generation_bump": "tasks::follow_supervisor_generation"
+  },
   "residuals": [
-    { "id": "diagnostics-health", "waitsFor": "P2.5" },
-    { "id": "destructive-lifecycle-io", "waitsFor": "P2.6" },
-    { "id": "production-sync-listener-loops", "waitsFor": "Phase 3-4" },
-    { "id": "cooperative-cancel-tokens", "waitsFor": "later if needed" },
-    { "id": "async-supervisor-open", "waitsFor": "P3.x" }
+    { "id": "product-sync-listener-futures", "waitsFor": "Phase 3+" },
+    { "id": "product-upload-search-cancel-ipc", "waitsFor": "later phases" },
+    { "id": "diagnostics-counters-export", "waitsFor": "P2.5" },
+    { "id": "destructive-wipe-coordination", "waitsFor": "P2.6" }
   ],
   "decisions_respected": [
-    "D-NO-DUAL-BACKEND"
+    "D-NO-DUAL-BACKEND",
+    "D-TOKEN-CONTINUITY"
   ],
   "validation": [
     "cargo test --locked matrix::tasks",
     "cargo test --locked matrix::",
     "npm run check:matrix-rust-guardrails"
-  ]
+  ],
+  "validation_results": {
+    "matrix_tasks_tests": 17,
+    "matrix_filter_tests": 135,
+    "guardrails": "pass"
+  }
 }
