@@ -1,0 +1,100 @@
+{
+  "task_id": "P3.1",
+  "title": "Discovery and login-flow service",
+  "date": "2026-07-25",
+  "status": "implemented",
+  "base_branch": "feature/matrix-rust-sdk-full-replacement",
+  "base_sha": "d90a49e",
+  "work_branch": "matrix-rust/p3.1-discovery-login-flow",
+  "human_doc": "docs/matrix-rust-sdk/p3.1-discovery-login-flow.md",
+  "fr_ids": ["FR-7.1-001", "FR-7.1-005"],
+  "production_posture": {
+    "production_client_session_started": false,
+    "production_login": false,
+    "production_sync": false,
+    "dual_backend": false,
+    "tauri_commands_for_matrix": false,
+    "discovery_login_flow_harness": true,
+    "live_sdk_adapter": false,
+    "exercised_by": "unit_tests_with_mock_transports_only"
+  },
+  "artifacts": {
+    "rust_module": "src-tauri/src/matrix/auth/",
+    "mod_wire": "src-tauri/src/matrix/mod.rs",
+    "design_note": "docs/matrix-rust-sdk/p3.1-discovery-login-flow.md"
+  },
+  "module_files": [
+    "input.rs",
+    "error.rs",
+    "discovery.rs",
+    "login_flow.rs",
+    "client_config.rs",
+    "tests.rs",
+    "mod.rs"
+  ],
+  "api_surface": {
+    "types": [
+      "AuthError",
+      "DiscoveryInput",
+      "DiscoveryInputKind",
+      "NormalizedHomeserverUrl",
+      "NormalizedServerName",
+      "WellKnownClientConfig",
+      "DiscoveryResult",
+      "LoginFlowKind",
+      "LoginFlow",
+      "SsoIdentityProvider",
+      "LoginFlowDiscoveryResult",
+      "MockDiscoveryTransport",
+      "MockLoginFlowTransport"
+    ],
+    "ops": [
+      "normalize_homeserver_url",
+      "normalize_server_name",
+      "parse_discovery_input",
+      "discover_homeserver",
+      "discover_login_flows",
+      "discover_homeserver_and_login_flows",
+      "map_matrix_login_types",
+      "identity_with_discovered_homeserver",
+      "homeserver_url_for_client_builder"
+    ],
+    "traits": ["DiscoveryTransport", "LoginFlowTransport"]
+  },
+  "product_parity": {
+    "well_known_success": "used_well_known=true, base_url from m.homeserver",
+    "well_known_404_ignore": "AuthError::WellKnownNotFound → https://{server_name}",
+    "connectivity_no_silent_fallback": true,
+    "login_flow_kinds": [
+      "m.login.password",
+      "m.login.token",
+      "m.login.sso",
+      "m.login.application_service",
+      "unknown_preserved"
+    ]
+  },
+  "invariants": [
+    "no_tokens_or_passwords_in_errors",
+    "no_login_username_login_token_restore_or_sync",
+    "no_client_builder_outside_client_builder_module",
+    "no_dual_backend",
+    "no_production_matrix_tauri_commands",
+    "mock_transports_for_unit_tests"
+  ],
+  "residuals": [
+    {
+      "id": "live-sdk-well-known-and-get-login-types-adapter",
+      "waitsFor": "P3.1 residual / P3.2 prep"
+    },
+    { "id": "password-token-login", "waitsFor": "P3.2" },
+    { "id": "sso-oauth-callback", "waitsFor": "P3.3" },
+    { "id": "server-versions-product-surface", "waitsFor": "FR-7.1-013 / later" },
+    { "id": "production-tauri-matrix-commands", "waitsFor": "Phase 11" }
+  ],
+  "decisions_respected": ["D-NO-DUAL-BACKEND", "D-TOKEN-CONTINUITY"],
+  "validation": [
+    "cargo test --locked matrix::auth",
+    "cargo test --locked matrix::",
+    "npm run check:matrix-rust-guardrails"
+  ]
+}

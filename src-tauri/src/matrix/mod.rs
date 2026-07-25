@@ -8,9 +8,11 @@
 //! P2.4: Task supervision and cancellation (generation-stamped async work).
 //! P2.5: Privacy-filtered diagnostics and health model.
 //! P2.6: Destructive lifecycle (logout, local wipe, failed-store recovery).
+//! P3.1: Discovery and login-flow service (harness; no login execution).
 //! No production login/sync loop or Tauri command registration lives here yet.
 //! No dual-backend selector. Product runtime remains matrix-js-sdk.
 
+pub mod auth;
 pub mod client_builder;
 pub mod diagnostics;
 pub mod dto;
@@ -20,13 +22,13 @@ pub mod store;
 pub mod supervisor;
 pub mod tasks;
 
-// Keep schema/DTO/supervisor/store/client_builder/tasks/diagnostics/lifecycle
+// Keep schema/DTO/supervisor/store/client_builder/tasks/diagnostics/lifecycle/auth
 // symbols resolved in non-test builds (avoids dead-strip until production
 // consumers land later).
 const _: fn() -> &'static str = matrix_ipc_schema_markers;
 
 /// Touch Matrix IPC + domain DTO + supervisor + store + client-builder + tasks
-/// + diagnostics + lifecycle paths so foundations remain linked.
+/// + diagnostics + lifecycle + auth paths so foundations remain linked.
 /// Returns a static marker only — no login/sync loop or Tauri Matrix commands.
 pub fn matrix_ipc_schema_markers() -> &'static str {
     let _version = ipc::MATRIX_IPC_PROTOCOL_VERSION;
@@ -45,6 +47,7 @@ pub fn matrix_ipc_schema_markers() -> &'static str {
     let _tasks = tasks::matrix_tasks_markers();
     let _diagnostics = diagnostics::matrix_diagnostics_markers();
     let _lifecycle = lifecycle::matrix_lifecycle_markers();
+    let _auth = auth::matrix_auth_markers();
     debug_assert_eq!(_version, 1);
     debug_assert!(_kinds > 0);
     debug_assert!(_errors > 0);
@@ -61,5 +64,6 @@ pub fn matrix_ipc_schema_markers() -> &'static str {
     debug_assert_eq!(_tasks, tasks::MATRIX_TASKS_MARKER);
     debug_assert_eq!(_diagnostics, diagnostics::MATRIX_DIAGNOSTICS_MARKER);
     debug_assert_eq!(_lifecycle, lifecycle::MATRIX_LIFECYCLE_MARKER);
-    "matrix-ipc-protocol-v1+domain-dtos-p1.4+supervisor-p2.1+store-p2.2+client-builder-p2.3+tasks-p2.4+diagnostics-p2.5+lifecycle-p2.6"
+    debug_assert_eq!(_auth, auth::MATRIX_AUTH_MARKER);
+    "matrix-ipc-protocol-v1+domain-dtos-p1.4+supervisor-p2.1+store-p2.2+client-builder-p2.3+tasks-p2.4+diagnostics-p2.5+lifecycle-p2.6+auth-p3.1"
 }
