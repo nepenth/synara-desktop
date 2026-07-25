@@ -1,6 +1,6 @@
 # Matrix Rust SDK Replacement — Execution Handoff
 
-Last updated: 2026-07-25
+Last updated: 2026-07-24
 
 Authoritative program plan: [`../matrix-rust-sdk-full-replacement-plan.md`](../matrix-rust-sdk-full-replacement-plan.md)
 
@@ -25,16 +25,18 @@ without explicit user approval.
 **Host task id:** `9022c2f8-9b21-411a-acf9-a36c10515f72`
 (`matrix-rust-sdk-replacement-orchestrator`, daily check-in)
 
-**Session state (2026-07-25, P1.6 MERGED — Phase 1 complete; next Phase 2):**
+**Session state (2026-07-24, P2.1 IN PROGRESS — Phase 2 started):**
 
 - **Integration tip:** `feature/matrix-rust-sdk-full-replacement` @
-  `acfad5142c0638694ed6501392916af0a1666dc4`
-  (Phase 0 complete + **P1.1**–**P1.6** **MERGED**; tip:
-  `chore(matrix): merge P1.6 architectural CI guardrails`)
-- **Active work:** next **Phase 2** — Rust client lifecycle / secure storage
-  harnesses (still no dual production backend; no production login/sync until
-  plan says so). **No** dual-backend; **no** Matrix production Tauri commands
-  yet; JS client remains sole runtime backend.
+  `319f7c1` (Phase 0 complete + **P1.1**–**P1.6** **MERGED**; tip includes
+  P1.6 residuals doc fix). Phase 1 complete.
+- **Active work:** **P2.1 — Matrix supervisor actor** — **IN PROGRESS** on
+  branch `matrix-rust/p2.1-matrix-supervisor-actor`. Pure lifecycle state
+  machine + session-generation isolation under `src-tauri/src/matrix/supervisor/`
+  (harness/unit tests only). **No** live `matrix_sdk::Client` handle (deferred
+  to P2.3); **no** dual-backend; **no** Matrix production Tauri commands; JS
+  client remains sole runtime backend. Design note:
+  `p2.1-matrix-supervisor-actor.md` + `.json`.
 - **P0.2 PR:** https://github.com/nepenth/synara-desktop/pull/42 — **MERGED**
   into integration (docs-only). **Never merge to `main` without explicit user
   approval.**
@@ -119,13 +121,21 @@ without explicit user approval.
   commands); allowlist `p1.6-js-sdk-import-allowlist.json`; prohibited fixtures;
   wired into `check:matrix-boundaries` + CI. Independent review: unit tests 26
   ok; live guardrails PASS. **No** production login/sync; **no** dual-backend.
+- **P2.1:** **IN PROGRESS** on `matrix-rust/p2.1-matrix-supervisor-actor`.
+  Pure supervisor actor foundation: states empty/opening/authenticating/
+  restoring/syncing/ready/stopping/logged_out/failed/wiping; generation bump
+  on logout/wipe/stop-complete/failed reset-open; unit tests for legal/illegal
+  transitions. **No** SDK Client handle (P2.3); **no** production login/sync;
+  **no** dual-backend; **no** Matrix Tauri commands. Artifacts:
+  `src-tauri/src/matrix/supervisor/`, `p2.1-matrix-supervisor-actor.md` +
+  `.json`.
 - **Optional later:** §7.1–7.7 scaffold rows may still have shallow notes if a
   full-matrix depth pass is desired beyond the handoff resume scope
 - **Progress loop:** 4-minute scheduler `019f95928db7` (session-recurring);
   keep pipeline advancing one bounded task per fire
 - **No production Matrix Rust SDK client/sync/login code accepted yet**
-  (P1.2 crates + link smoke; P1.3–P1.5 contracts; P1.6 CI guardrails; does not
-  start a second client)
+  (P1.2 crates + link smoke; P1.3–P1.5 contracts; P1.6 CI guardrails; P2.1
+  pure supervisor only — does not start a second client)
 
 Phase 0 evidence accepted (complete):
 
@@ -157,9 +167,19 @@ Phase 1 progress:
 - P1.6 architectural CI guardrails — **merged** (PR #56); allowlist freeze +
   wire/dual-backend/Tauri bans; no production login/sync
 
+Phase 2 progress:
+
+- P2.1 Matrix supervisor actor — **IN PROGRESS** (pure state machine +
+  generation isolation; Client handle deferred to P2.3)
+- P2.2 Store paths and encryption keys — not started
+- P2.3 SDK client builder — not started
+- P2.4 Task supervision and cancellation — not started
+- P2.5 Diagnostics and health model — not started
+- P2.6 Destructive lifecycle operations — not started
+
 **Next program work:**
 
-1. **Phase 2** — Rust client lifecycle / secure storage harnesses (still no
+1. Finish review/merge of **P2.1**, then **P2.2** store paths/keys (still no
    dual production backend; no production Matrix Tauri commands until planned)
 2. Continue sole-owner cutover path (no dual-backend selector)
 
