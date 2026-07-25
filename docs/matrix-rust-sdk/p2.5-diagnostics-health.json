@@ -1,0 +1,157 @@
+{
+  "task_id": "P2.5",
+  "title": "Diagnostics and health model",
+  "date": "2026-07-25",
+  "status": "implemented",
+  "base_branch": "feature/matrix-rust-sdk-full-replacement",
+  "base_sha": "7f6e1d2",
+  "work_branch": "matrix-rust/p2.5-diagnostics-health",
+  "human_doc": "docs/matrix-rust-sdk/p2.5-diagnostics-health.md",
+  "production_posture": {
+    "production_client_session_started": false,
+    "production_login": false,
+    "production_sync": false,
+    "dual_backend": false,
+    "tauri_commands_for_matrix": false,
+    "diagnostics_health_model": true,
+    "desktop_record_diagnostic_bridged": false,
+    "exercised_by": "unit_tests_and_harness_only"
+  },
+  "artifacts": {
+    "rust_module": "src-tauri/src/matrix/diagnostics/",
+    "mod_wire": "src-tauri/src/matrix/mod.rs",
+    "design_note": "docs/matrix-rust-sdk/p2.5-diagnostics-health.md"
+  },
+  "health_slices": [
+    "lifecycle",
+    "sync",
+    "queue",
+    "store",
+    "tasks",
+    "errors"
+  ],
+  "api_surface": {
+    "types": [
+      "MatrixHealthSnapshot",
+      "MatrixMetrics",
+      "LifecycleHealth",
+      "SyncHealth",
+      "SyncPhase",
+      "QueueHealth",
+      "StoreHealth",
+      "StoreHealthStatus",
+      "TaskHealth",
+      "TaskKindCounts",
+      "ErrorHealth",
+      "CategoryCount",
+      "DesktopCompatibleDiagnostic"
+    ],
+    "ops": [
+      "observe_supervisor",
+      "observe_supervisor_snapshot",
+      "observe_tasks",
+      "set_sync_phase",
+      "record_sync_recovery_request",
+      "record_sync_duration_ms",
+      "observe_queue_depth",
+      "record_queue_dropped",
+      "record_queue_coalesced",
+      "set_store_status",
+      "set_store_readiness",
+      "record_store_open_failure",
+      "record_error",
+      "snapshot",
+      "project_health_to_desktop",
+      "redact_text",
+      "safe_diagnostic_label",
+      "json_contains_forbidden_content"
+    ]
+  },
+  "desktop_compat": {
+    "category": "session",
+    "events": [
+      "session.lifecycle",
+      "sync.metrics",
+      "matrix-store.health",
+      "matrix-client.health-snapshot"
+    ],
+    "number_fields": [
+      "generation",
+      "queueDepth",
+      "coalescedCount",
+      "eventCount",
+      "retryCount",
+      "waiterCount",
+      "totalSize",
+      "durationMs"
+    ],
+    "boolean_fields": [
+      "hasSession",
+      "success",
+      "available",
+      "nativeStoreConfigured",
+      "nativeStoreAvailable",
+      "nativeStoreError"
+    ],
+    "label_fields": [
+      "phase",
+      "status",
+      "backend",
+      "errorType",
+      "reason",
+      "syncState",
+      "persistence",
+      "queueState"
+    ]
+  },
+  "privacy": {
+    "forbids": [
+      "access_token",
+      "refresh_token",
+      "recovery_key",
+      "store_key",
+      "mxid",
+      "room_id",
+      "event_id",
+      "homeserver_url",
+      "message_body",
+      "ciphertext",
+      "absolute_paths"
+    ],
+    "unsafe_diagnostic_id_dropped": true,
+    "redaction_fixture_tests": true
+  },
+  "invariants": [
+    "counts_and_enums_only_on_health_wire",
+    "unsafe_diagnostic_ids_dropped",
+    "desktop_projection_allowlisted_fields_only",
+    "redaction_fixtures_prove_secret_absence",
+    "no_dual_backend",
+    "no_production_login_sync",
+    "no_matrix_tauri_commands"
+  ],
+  "composition": {
+    "supervisor": "matrix::supervisor::MatrixSupervisor (observe_supervisor)",
+    "tasks": "matrix::tasks::TaskSupervisor (observe_tasks / TaskHealth::from_supervisor)"
+  },
+  "residuals": [
+    { "id": "live-desktop-record-diagnostic-bridge", "waitsFor": "product diagnostics wiring" },
+    { "id": "real-sync-phase-from-sdk", "waitsFor": "Phase 3+" },
+    { "id": "real-queue-depths-from-streams", "waitsFor": "Phase 4+" },
+    { "id": "destructive-wipe-health-reset", "waitsFor": "P2.6" }
+  ],
+  "decisions_respected": [
+    "D-NO-DUAL-BACKEND",
+    "D-TOKEN-CONTINUITY"
+  ],
+  "validation": [
+    "cargo test --locked matrix::diagnostics",
+    "cargo test --locked matrix::",
+    "npm run check:matrix-rust-guardrails"
+  ],
+  "validation_results": {
+    "matrix_diagnostics_tests": 12,
+    "matrix_filter_tests": 147,
+    "guardrails": "pass"
+  }
+}
