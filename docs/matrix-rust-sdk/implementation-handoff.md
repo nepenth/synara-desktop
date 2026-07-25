@@ -25,17 +25,16 @@ without explicit user approval.
 **Host task id:** `9022c2f8-9b21-411a-acf9-a36c10515f72`
 (`matrix-rust-sdk-replacement-orchestrator`, daily check-in)
 
-**Session state (2026-07-25, P1.5 MERGED — next P1.6):**
+**Session state (2026-07-25, P1.6 MERGED — Phase 1 complete; next Phase 2):**
 
 - **Integration tip:** `feature/matrix-rust-sdk-full-replacement` @
-  `48f71619c118ce4cf215c2d81794174a362d78c3`
-  (Phase 0 complete + **P1.1**–**P1.5** **MERGED**; tip:
-  `feat(matrix): merge P1.5 IPC protocol contract tests`)
-- **Active work:** next **P1.6** — Architectural CI guardrails (prohibit new
-  JS SDK imports, deepening direct-client access, raw Matrix runtime HTTP,
-  unversioned Matrix IPC, SDK types in DTO/IPC modules). **No** production
-  login/sync; **no** dual-backend; **no** Matrix production Tauri commands; JS
-  client remains sole runtime backend.
+  `acfad5142c0638694ed6501392916af0a1666dc4`
+  (Phase 0 complete + **P1.1**–**P1.6** **MERGED**; tip:
+  `chore(matrix): merge P1.6 architectural CI guardrails`)
+- **Active work:** next **Phase 2** — Rust client lifecycle / secure storage
+  harnesses (still no dual production backend; no production login/sync until
+  plan says so). **No** dual-backend; **no** Matrix production Tauri commands
+  yet; JS client remains sole runtime backend.
 - **P0.2 PR:** https://github.com/nepenth/synara-desktop/pull/42 — **MERGED**
   into integration (docs-only). **Never merge to `main` without explicit user
   approval.**
@@ -113,13 +112,20 @@ without explicit user approval.
   `cargo test --locked matrix::ipc` 54 ok; TS matrix-ipc 48 ok; no
   `matrix_sdk` in IPC modules; no production Matrix Tauri commands; no
   dual-backend. **No** production login/sync.
+- **P1.6:** **MERGED** into integration (PR #56). Architectural CI guardrails:
+  `matrix-rust-p1.6-guardrails.mjs` (JS SDK import allowlist freeze, wire-module
+  SDK bans, raw HTTP, versioned IPC) + `check-matrix-rust-sdk-guardrails.mjs`
+  (dual-backend ban, no production Client under matrix/, no matrix_* Tauri
+  commands); allowlist `p1.6-js-sdk-import-allowlist.json`; prohibited fixtures;
+  wired into `check:matrix-boundaries` + CI. Independent review: unit tests 26
+  ok; live guardrails PASS. **No** production login/sync; **no** dual-backend.
 - **Optional later:** §7.1–7.7 scaffold rows may still have shallow notes if a
   full-matrix depth pass is desired beyond the handoff resume scope
 - **Progress loop:** 4-minute scheduler `019f95928db7` (session-recurring);
   keep pipeline advancing one bounded task per fire
 - **No production Matrix Rust SDK client/sync/login code accepted yet**
-  (P1.2 crates + link smoke; P1.3 IPC + P1.4 DTOs + P1.5 contract tests only;
-  does not start a second client)
+  (P1.2 crates + link smoke; P1.3–P1.5 contracts; P1.6 CI guardrails; does not
+  start a second client)
 
 Phase 0 evidence accepted (complete):
 
@@ -148,12 +154,14 @@ Phase 1 progress:
   only; no SDK object graph; no production login/sync
 - P1.5 IPC protocol contract tests — **merged** (PR #54); contracts only;
   no production login/sync; no dual-backend
+- P1.6 architectural CI guardrails — **merged** (PR #56); allowlist freeze +
+  wire/dual-backend/Tauri bans; no production login/sync
 
 **Next program work:**
 
-1. **P1.6** Architectural CI guardrails
-2. Phase 2 (after Phase 1 complete) — Rust client lifecycle / secure storage
-   harnesses (still no dual production backend)
+1. **Phase 2** — Rust client lifecycle / secure storage harnesses (still no
+   dual production backend; no production Matrix Tauri commands until planned)
+2. Continue sole-owner cutover path (no dual-backend selector)
 
 Accepted notification findings that must be preserved:
 
