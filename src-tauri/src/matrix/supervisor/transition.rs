@@ -189,14 +189,17 @@ pub fn resolve(
             },
         )),
 
-        // --- Fail from any non-terminal non-wiping active state ---
+        // --- Fail from active states including wipe I/O failure (P2.6) ---
+        // Wiping is included so a failed exact-target wipe does not complete
+        // the wipe epoch and never auto-deletes further data.
         (
             S::Opening
             | S::Authenticating
             | S::Restoring
             | S::Syncing
             | S::Ready
-            | S::Stopping,
+            | S::Stopping
+            | S::Wiping,
             C::Fail,
         ) => Ok((
             S::Failed,
@@ -223,8 +226,9 @@ pub fn resolve(
         (S::Ready, C::BeginOpen | C::BeginAuthenticate | C::BeginRestore) => {
             Err(illegal("stop or wipe before opening another session"))
         }
-        (S::Wiping, c) if c != C::CompleteWipe => {
-            Err(illegal("wipe in progress; only CompleteWipe is allowed"))
+        (S::Wiping, c) if c != C::CompleteWipe && c != C::Fail => {
+            // Fail is matched earlier (P2.6 wipe I/O failure path).
+            Err(illegal("wipe in progress; only CompleteWipe or Fail is allowed"))
         }
         (S::LoggedOut, C::CompleteLogout) => Err(illegal("already logged out")),
         (S::Empty, C::CompleteWipe | C::BeginWipe) => {
