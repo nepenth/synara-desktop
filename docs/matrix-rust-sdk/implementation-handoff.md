@@ -25,17 +25,19 @@ without explicit user approval.
 **Host task id:** `9022c2f8-9b21-411a-acf9-a36c10515f72`
 (`matrix-rust-sdk-replacement-orchestrator`, daily check-in)
 
-**Session state (2026-07-25, P2.1 MERGED — next P2.2):**
+**Session state (2026-07-25, P2.2 MERGED — next P2.3):**
 
 - **Integration tip:** `feature/matrix-rust-sdk-full-replacement` @
-  `b90a8b4c62f494cff759570ac58a682333e86f3a`
-  (Phase 0 + Phase 1 complete + **P2.1 MERGED**; tip:
-  `feat(matrix): merge P2.1 Matrix supervisor actor foundation`)
-- **Active work:** next **P2.2 — Store paths and encryption keys** (per-account
-  path derivation, native keyring integration, permissions, serialization,
-  collision tests). **No** live production login/sync; **no** dual-backend;
+  `18ce120` (Phase 0–1 complete + **P2.1**/**P2.2 MERGED**; tip:
+  `feat(matrix): merge P2.2 store paths and encryption-key foundation`)
+- **Active work:** next **P2.3 — SDK client builder** (homeserver, proxy/network
+  policy, user agent, stores, crypto, timeouts, approved features) under
+  harnesses only. **No** live production login/sync; **no** dual-backend;
   **no** Matrix production Tauri commands; JS client remains sole runtime
   backend.
+- **P2.2:** **MERGED** into integration (PR #61). Per-account store paths +
+  encryption-key vault foundation under `src-tauri/src/matrix/store/`; 14 unit
+  tests; design note `p2.2-store-paths-keys.md` + `.json`.
 - **P0.2 PR:** https://github.com/nepenth/synara-desktop/pull/42 — **MERGED**
   into integration (docs-only). **Never merge to `main` without explicit user
   approval.**
@@ -170,17 +172,17 @@ Phase 2 progress:
 
 - P2.1 Matrix supervisor actor — **merged** (PR #59); pure state machine +
   generation isolation; Client handle deferred to P2.3
-- P2.2 Store paths and encryption keys — **next**
-- P2.3 SDK client builder — not started
+- P2.2 Store paths and encryption keys — **merged** (PR #61); per-account paths
+  + key vault foundation; live keyring Entry deferred
+- P2.3 SDK client builder — **next**
 - P2.4 Task supervision and cancellation — not started
 - P2.5 Diagnostics and health model — not started
 - P2.6 Destructive lifecycle operations — not started
 
 **Next program work:**
 
-1. **P2.2** store paths and encryption keys (per-account path derivation,
-   keyring, permissions, collision tests; still no dual production backend;
-   no production Matrix Tauri commands until planned)
+1. **P2.3** SDK client builder (harnesses only; still no dual production
+   backend; no production Matrix Tauri commands until planned)
 2. Continue sole-owner cutover path (no dual-backend selector)
 
 Accepted notification findings that must be preserved:
