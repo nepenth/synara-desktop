@@ -18,6 +18,8 @@ mod desktop_shortcuts;
 mod desktop_spellcheck;
 mod desktop_tray;
 mod desktop_url;
+// P1.2: compile-only Matrix Rust SDK linkage; no production client session.
+mod matrix_sdk_link_smoke;
 #[cfg(target_os = "macos")]
 mod menu;
 
