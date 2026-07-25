@@ -14,7 +14,6 @@
     "dual_backend": false,
     "tauri_commands_for_matrix": false,
     "diagnostics_health_model": true,
-    "desktop_record_diagnostic_bridged": false,
     "exercised_by": "unit_tests_and_harness_only"
   },
   "artifacts": {
@@ -22,13 +21,13 @@
     "mod_wire": "src-tauri/src/matrix/mod.rs",
     "design_note": "docs/matrix-rust-sdk/p2.5-diagnostics-health.md"
   },
-  "health_slices": [
-    "lifecycle",
-    "sync",
-    "queue",
-    "store",
-    "tasks",
-    "errors"
+  "module_files": [
+    "health.rs",
+    "metrics.rs",
+    "desktop_compat.rs",
+    "redact.rs",
+    "tests.rs",
+    "mod.rs"
   ],
   "api_surface": {
     "types": [
@@ -36,14 +35,14 @@
       "MatrixMetrics",
       "LifecycleHealth",
       "SyncHealth",
-      "SyncPhase",
       "QueueHealth",
       "StoreHealth",
-      "StoreHealthStatus",
       "TaskHealth",
       "TaskKindCounts",
       "ErrorHealth",
       "CategoryCount",
+      "SyncPhase",
+      "StoreHealthStatus",
       "DesktopCompatibleDiagnostic"
     ],
     "ops": [
@@ -61,84 +60,90 @@
       "record_store_open_failure",
       "record_error",
       "snapshot",
-      "project_health_to_desktop",
+      "project_health_to_desktop"
+    ],
+    "redact": [
+      "looks_like_secret",
+      "looks_like_matrix_id",
+      "looks_like_url",
       "redact_text",
       "safe_diagnostic_label",
+      "is_forbidden_field_key",
       "json_contains_forbidden_content"
     ]
   },
-  "desktop_compat": {
-    "category": "session",
-    "events": [
-      "session.lifecycle",
-      "sync.metrics",
-      "matrix-store.health",
-      "matrix-client.health-snapshot"
+  "metric_surface": {
+    "lifecycle": [
+      "state",
+      "session_generation",
+      "has_client",
+      "live_handles",
+      "installed_total",
+      "shutdown_total",
+      "last_failure_category",
+      "last_failure_diagnostic_id"
     ],
-    "number_fields": [
-      "generation",
-      "queueDepth",
-      "coalescedCount",
-      "eventCount",
-      "retryCount",
-      "waiterCount",
-      "totalSize",
-      "durationMs"
-    ],
-    "boolean_fields": [
-      "hasSession",
-      "success",
-      "available",
-      "nativeStoreConfigured",
-      "nativeStoreAvailable",
-      "nativeStoreError"
-    ],
-    "label_fields": [
+    "sync": [
       "phase",
-      "status",
-      "backend",
-      "errorType",
-      "reason",
-      "syncState",
-      "persistence",
-      "queueState"
-    ]
-  },
-  "privacy": {
-    "forbids": [
-      "access_token",
-      "refresh_token",
-      "recovery_key",
-      "store_key",
-      "mxid",
-      "room_id",
-      "event_id",
-      "homeserver_url",
-      "message_body",
-      "ciphertext",
-      "absolute_paths"
+      "transition_count",
+      "recovery_requests",
+      "last_duration_ms"
     ],
-    "unsafe_diagnostic_id_dropped": true,
-    "redaction_fixture_tests": true
+    "queue": ["depth", "max_depth", "soft_max", "dropped", "coalesced"],
+    "store": [
+      "status",
+      "state_ready",
+      "crypto_ready",
+      "cache_ready",
+      "media_ready",
+      "open_failures"
+    ],
+    "tasks": [
+      "live_generation",
+      "registered",
+      "running",
+      "spawned_total",
+      "joined_total",
+      "cancelled_requests",
+      "registered_by_kind"
+    ],
+    "errors": ["total", "by_category", "last_diagnostic_id", "last_category"]
   },
+  "desktop_events": [
+    "session.lifecycle",
+    "sync.metrics",
+    "matrix-store.health",
+    "matrix-client.health-snapshot"
+  ],
+  "privacy_invariants": [
+    "no_tokens",
+    "no_recovery_secrets",
+    "no_store_keys",
+    "no_event_plaintext",
+    "no_media_bytes",
+    "no_raw_push_payloads",
+    "no_mxids_or_homeserver_urls_in_free_form",
+    "diagnostic_ids_must_pass_safe_label",
+    "redaction_fixtures_prove_absence"
+  ],
   "invariants": [
-    "counts_and_enums_only_on_health_wire",
-    "unsafe_diagnostic_ids_dropped",
-    "desktop_projection_allowlisted_fields_only",
-    "redaction_fixtures_prove_secret_absence",
-    "no_dual_backend",
-    "no_production_login_sync",
-    "no_matrix_tauri_commands"
+    "unsafe_diagnostic_ids_are_dropped",
+    "desktop_projection_uses_allowlisted_fields_only",
+    "snapshot_json_has_no_forbidden_content",
+    "no_production_matrix_tauri_commands",
+    "no_dual_backend"
   ],
   "composition": {
-    "supervisor": "matrix::supervisor::MatrixSupervisor (observe_supervisor)",
-    "tasks": "matrix::tasks::TaskSupervisor (observe_tasks / TaskHealth::from_supervisor)"
+    "lifecycle_actor": "matrix::supervisor::MatrixSupervisor via observe_supervisor",
+    "task_registry": "matrix::tasks::TaskSupervisor via observe_tasks",
+    "desktop_logging": "project_health_to_desktop → future desktop_record_diagnostic"
   },
   "residuals": [
-    { "id": "live-desktop-record-diagnostic-bridge", "waitsFor": "product diagnostics wiring" },
-    { "id": "real-sync-phase-from-sdk", "waitsFor": "Phase 3+" },
-    { "id": "real-queue-depths-from-streams", "waitsFor": "Phase 4+" },
-    { "id": "destructive-wipe-health-reset", "waitsFor": "P2.6" }
+    { "id": "wire-metrics-into-live-actor-transitions", "waitsFor": "later phases / cutover" },
+    { "id": "runtime-desktop-record-diagnostic", "waitsFor": "cutover / P13.8" },
+    { "id": "product-sync-phase-from-sync-service", "waitsFor": "Phase 4+" },
+    { "id": "destructive-wipe-diagnostics-coordination", "waitsFor": "P2.6" },
+    { "id": "support-runbook-health-fields", "waitsFor": "P13.8" }
   ],
   "decisions_respected": [
     "D-NO-DUAL-BACKEND",

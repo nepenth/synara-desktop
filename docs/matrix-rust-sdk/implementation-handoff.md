@@ -25,17 +25,17 @@ without explicit user approval.
 **Host task id:** `9022c2f8-9b21-411a-acf9-a36c10515f72`
 (`matrix-rust-sdk-replacement-orchestrator`, daily check-in)
 
-**Session state (2026-07-25, P2.4 MERGED — next P2.5):**
+**Session state (2026-07-25, P2.5 IN PROGRESS):**
 
 - **Integration tip:** `feature/matrix-rust-sdk-full-replacement` @
-  `46450ec43c4cd61eb81a7629858394483b18dcf5`
-  (Phase 0–1 complete + **P2.1**–**P2.4 MERGED**; tip:
-  `feat(matrix): merge P2.4 task supervision and cancellation`)
-- **Active work:** next **P2.5 — Diagnostics and health model**
-  (privacy-filtered lifecycle, sync, queue, store, and error metrics compatible
-  with desktop diagnostics). **No** production login/sync UI cutover; **no**
-  dual-backend; **no** Matrix production Tauri commands; JS client remains sole
-  runtime backend.
+  `7f6e1d2b18c41cedb8ae88be529bdef679434bda`
+  (Phase 0–1 complete + **P2.1**–**P2.4 MERGED**; tip records P2.5 next)
+- **Active work:** **P2.5 — Diagnostics and health model** **IN PROGRESS**
+  on `matrix-rust/p2.5-diagnostics-health` (privacy-filtered lifecycle, sync,
+  queue, store, task, and error metrics; secret-redaction fixtures; desktop
+  projection). **No** production login/sync UI cutover; **no** dual-backend;
+  **no** Matrix production Tauri commands; JS client remains sole runtime
+  backend.
 - **P2.2:** **MERGED** into integration (PR #61). Per-account store paths +
   encryption-key vault foundation under `src-tauri/src/matrix/store/`; 14 unit
   tests; design note `p2.2-store-paths-keys.md` + `.json`.
@@ -136,13 +136,18 @@ without explicit user approval.
   generation-stamped spawn/cancel/join; `retire_stale` / `shutdown_all`;
   bridge `follow_supervisor_generation`). Independent review: `matrix::`
   **135** PASS; guardrails PASS. Design: `p2.4-task-supervision.md` + `.json`.
+- **P2.5:** **IN PROGRESS** on `matrix-rust/p2.5-diagnostics-health`. Privacy-
+  filtered health model under `src-tauri/src/matrix/diagnostics/`
+  (`MatrixMetrics` + `MatrixHealthSnapshot` + desktop projection + redaction
+  fixtures). Local: `matrix::` **147** PASS; guardrails PASS. Design:
+  `p2.5-diagnostics-health.md` + `.json`.
 - **Optional later:** §7.1–7.7 scaffold rows may still have shallow notes if a
   full-matrix depth pass is desired beyond the handoff resume scope
 - **Progress loop:** 4-minute scheduler `019f95928db7` (session-recurring);
   keep pipeline advancing one bounded task per fire
 - **No production Matrix login/sync accepted yet** (P1.2–P1.6 foundation;
-  P2.1–P2.4 harness lifecycle/store/builder/tasks only — does not start a
-  second product sync loop)
+  P2.1–P2.5 harness lifecycle/store/builder/tasks/diagnostics only — does not
+  start a second product sync loop)
 
 Phase 0 evidence accepted (complete):
 
@@ -184,12 +189,13 @@ Phase 2 progress:
   sole `Client::builder` site under `matrix/client_builder/`
 - P2.4 Task supervision and cancellation — **merged** (PR #65);
   `TaskSupervisor` + generation isolation under `matrix/tasks/`
-- P2.5 Diagnostics and health model — **next**
+- P2.5 Diagnostics and health model — **IN PROGRESS**
+  (`matrix-rust/p2.5-diagnostics-health`)
 - P2.6 Destructive lifecycle operations — not started
 
 **Next program work:**
 
-1. **P2.5** diagnostics and health model (privacy-filtered metrics)
+1. **P2.5** complete review/merge of diagnostics and health model
 2. **P2.6** destructive lifecycle operations
 3. Continue sole-owner cutover path (no dual-backend selector)
 
