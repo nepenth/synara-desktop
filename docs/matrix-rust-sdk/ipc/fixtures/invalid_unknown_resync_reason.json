@@ -1,0 +1,11 @@
+{
+  "protocolVersion": 1,
+  "sessionGeneration": 1,
+  "streamId": "stream-1",
+  "sequence": 0,
+  "kind": "resync_required",
+  "payload": {
+    "streamId": "stream-1",
+    "reason": "not_a_resync_reason"
+  }
+}

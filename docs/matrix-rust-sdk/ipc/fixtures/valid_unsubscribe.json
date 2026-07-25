@@ -1,0 +1,11 @@
+{
+  "protocolVersion": 1,
+  "sessionGeneration": 1,
+  "streamId": "stream-room-list-1",
+  "sequence": 0,
+  "requestId": "req-unsub-1",
+  "kind": "unsubscribe",
+  "payload": {
+    "streamId": "stream-room-list-1"
+  }
+}
