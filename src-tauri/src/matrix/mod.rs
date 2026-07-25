@@ -2,18 +2,20 @@
 //!
 //! P1.3: versioned IPC schema foundation.
 //! P1.4: Synara-owned domain DTOs (product projections for IPC bodies).
+//! P2.1: Matrix supervisor actor foundation (pure lifecycle + generation).
 //! No production Client session, login, sync, or Tauri command registration
-//! lives here yet.
+//! lives here yet. No dual-backend selector.
 
 pub mod dto;
 pub mod ipc;
+pub mod supervisor;
 
-// Keep schema/DTO symbols resolved in non-test builds (avoids dead-strip until
-// production consumers land in later phases).
+// Keep schema/DTO/supervisor symbols resolved in non-test builds (avoids
+// dead-strip until production consumers land in later phases).
 const _: fn() -> &'static str = matrix_ipc_schema_markers;
 
-/// Touch Matrix IPC + domain DTO paths so foundations remain linked.
-/// Returns a static marker only — no Client, network, or Tauri commands.
+/// Touch Matrix IPC + domain DTO + supervisor paths so foundations remain linked.
+/// Returns a static marker only — no Client builder, network, or Tauri commands.
 pub fn matrix_ipc_schema_markers() -> &'static str {
     let _version = ipc::MATRIX_IPC_PROTOCOL_VERSION;
     let _kinds = ipc::MATRIX_IPC_KINDS.len();
@@ -25,6 +27,7 @@ pub fn matrix_ipc_schema_markers() -> &'static str {
     let _dto_forbid = dto::FORBID_MEDIA_BYTES_OVER_JSON_IPC;
     let _lifecycles = dto::SessionLifecycle::ALL.len();
     let _memberships = dto::Membership::ALL.len();
+    let _supervisor = supervisor::matrix_supervisor_markers();
     debug_assert_eq!(_version, 1);
     debug_assert!(_kinds > 0);
     debug_assert!(_errors > 0);
@@ -35,5 +38,6 @@ pub fn matrix_ipc_schema_markers() -> &'static str {
     debug_assert!(_lifecycles > 0);
     debug_assert!(_memberships > 0);
     debug_assert_eq!(_dto, "matrix-domain-dtos-p1.4");
-    "matrix-ipc-protocol-v1+domain-dtos-p1.4"
+    debug_assert_eq!(_supervisor, supervisor::MATRIX_SUPERVISOR_MARKER);
+    "matrix-ipc-protocol-v1+domain-dtos-p1.4+supervisor-p2.1"
 }

@@ -1,0 +1,77 @@
+{
+  "taskId": "P2.1",
+  "title": "Matrix supervisor actor",
+  "date": "2026-07-24",
+  "status": "in_progress",
+  "baseBranch": "feature/matrix-rust-sdk-full-replacement",
+  "baseSha": "319f7c1",
+  "workBranch": "matrix-rust/p2.1-matrix-supervisor-actor",
+  "artifacts": {
+    "designNote": "docs/matrix-rust-sdk/p2.1-matrix-supervisor-actor.md",
+    "rustModule": "src-tauri/src/matrix/supervisor/",
+    "unitTests": "src-tauri/src/matrix/supervisor/tests.rs",
+    "crateWire": "src-tauri/src/matrix/mod.rs"
+  },
+  "states": [
+    "empty",
+    "opening",
+    "authenticating",
+    "restoring",
+    "syncing",
+    "ready",
+    "stopping",
+    "logged_out",
+    "failed",
+    "wiping"
+  ],
+  "stateSource": "dto::SessionLifecycle",
+  "commands": [
+    "BeginOpen",
+    "BeginAuthenticate",
+    "BeginRestore",
+    "InstallClient",
+    "BeginSync",
+    "MarkReady",
+    "BeginStop",
+    "CompleteLogout",
+    "BeginWipe",
+    "CompleteWipe",
+    "Fail",
+    "ResetEmpty"
+  ],
+  "generationBumpOn": [
+    "BeginOpen",
+    "CompleteLogout",
+    "CompleteWipe"
+  ],
+  "publishAllowedStates": ["syncing", "ready"],
+  "soleConstructionPath": "MatrixSupervisor::apply_with_factory(InstallClient, ClientFactory)",
+  "clientHandle": {
+    "type": "opaque trait ClientHandle",
+    "realSdkClient": "deferred-to-P2.3",
+    "defaultFactory": "NullClientFactory (refuses)",
+    "testFactories": ["TestClientFactory", "FailingClientFactory"]
+  },
+  "deferred": {
+    "sdkClientBuilder": "P2.3",
+    "storePathsKeys": "P2.2",
+    "taskSupervision": "P2.4",
+    "diagnosticsHealth": "P2.5",
+    "destructiveLifecycleIo": "P2.6",
+    "productionTauriCommands": "Phase 3+",
+    "frontendCutover": "later cutover phases"
+  },
+  "constraints": [
+    "no-dual-backend",
+    "no-production-client-login-sync",
+    "no-matrix-product-tauri-commands",
+    "no-sdk-types-in-dto-ipc",
+    "harness-and-unit-tests-only",
+    "D-NO-DUAL-BACKEND",
+    "D-LOGOUT-WIPE-distinct"
+  ],
+  "validation": [
+    "cargo test --locked matrix::",
+    "npm run check:matrix-rust-guardrails"
+  ]
+}
