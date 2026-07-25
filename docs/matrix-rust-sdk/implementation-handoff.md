@@ -1,6 +1,6 @@
 # Matrix Rust SDK Replacement — Execution Handoff
 
-Last updated: 2026-07-24
+Last updated: 2026-07-25
 
 Authoritative program plan: [`../matrix-rust-sdk-full-replacement-plan.md`](../matrix-rust-sdk-full-replacement-plan.md)
 
@@ -25,18 +25,15 @@ without explicit user approval.
 **Host task id:** `9022c2f8-9b21-411a-acf9-a36c10515f72`
 (`matrix-rust-sdk-replacement-orchestrator`, daily check-in)
 
-**Session state (2026-07-24, Phase 3 — P3.1 IN PROGRESS):**
+**Session state (2026-07-25, Phase 3 — P3.1 MERGED; next P3.2):**
 
 - **Integration tip:** `feature/matrix-rust-sdk-full-replacement` @
-  `d90a49e8e217baabae87c6ee9f77584ed093410b`
-  (Phase 0–1 complete + **Phase 2 P2.1–P2.6 MERGED**; tip:
-  `docs(matrix): record P2.6 merge; Phase 2 complete; advance to Phase 3`)
-- **Active work:** **P3.1 — Discovery and login-flow service** **IN PROGRESS**
-  on branch `matrix-rust/p3.1-discovery-login-flow` (harness foundation under
-  `src-tauri/src/matrix/auth/`; mock transports; **no** password/token login
-  execution). Harness/foundation continues; **no** dual-backend; **no**
-  production Matrix Tauri cutover commands yet; JS client remains sole product
-  runtime backend.
+  `a46861ad0ed7d31f93599478a735daddf2c6c915`
+  (Phase 0–2 complete + **P3.1 MERGED**; tip:
+  `feat(matrix): P3.1 discovery and login-flow service (#72)`)
+- **Active work:** next **P3.2 — Password/token login and device naming**
+  (harness only; no dual-backend; no production Matrix Tauri cutover commands;
+  JS client remains sole product runtime backend).
 - **P2.2:** **MERGED** into integration (PR #61). Per-account store paths +
   encryption-key vault foundation under `src-tauri/src/matrix/store/`; 14 unit
   tests; design note `p2.2-store-paths-keys.md` + `.json`.
@@ -147,6 +144,12 @@ without explicit user approval.
   store failures never auto-delete). Independent review: `matrix::lifecycle`
   **17** PASS; guardrails PASS. Design: `p2.6-destructive-lifecycle.md` +
   `.json`. **Phase 2 complete.**
+- **P3.1:** **MERGED** into integration (PR #72). Discovery + login-flow
+  service under `src-tauri/src/matrix/auth/` (mockable transports; product
+  well-known 404 IGNORE fallback; Synara domain login-flow types; no login
+  execution). Independent review: `matrix::auth` **24** PASS; `matrix::`
+  **189** PASS; guardrails PASS. Design: `p3.1-discovery-login-flow.md` +
+  `.json`. Residual: live SDK well-known / `get_login_types` adapter deferred.
 - **Optional later:** §7.1–7.7 scaffold rows may still have shallow notes if a
   full-matrix depth pass is desired beyond the handoff resume scope
 - **Progress loop:** 4-minute scheduler `019f95928db7` (session-recurring);
@@ -203,15 +206,14 @@ Phase 2 progress:
 
 Phase 3 progress:
 
-- P3.1 Discovery and login-flow service — **IN PROGRESS** (work branch
-  `matrix-rust/p3.1-discovery-login-flow`); design
-  `p3.1-discovery-login-flow.md` + `.json`; module `matrix/auth/` with
-  `DiscoveryTransport` / `LoginFlowTransport` mocks; no login execution
+- P3.1 Discovery and login-flow service — **merged** (PR #72); mockable
+  discovery + login-flow harness under `matrix/auth/`; product 404 IGNORE
+  fallback; design `p3.1-discovery-login-flow.md` + `.json`; no login execution
 
 **Next program work:**
 
-1. **Complete/merge P3.1** (discovery + login-flow harness), then **P3.2**
-   password/token login and device naming (still harness; no dual-backend)
+1. **P3.2** password/token login and device naming (harness only; no
+   dual-backend; no production Matrix Tauri cutover)
 2. Continue sole-owner cutover path (no dual-backend selector)
 
 Accepted notification findings that must be preserved:
