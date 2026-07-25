@@ -1,0 +1,21 @@
+{
+  "roomId": "!room:example.org",
+  "name": "General",
+  "canonicalAlias": "#general:example.org",
+  "avatarUrl": "mxc://example.org/room1",
+  "membership": "join",
+  "isDirect": false,
+  "isEncrypted": true,
+  "joinRule": "invite",
+  "unreadCount": 2,
+  "highlightCount": 1,
+  "markedUnread": false,
+  "notificationMode": "mentions",
+  "lastActivityTs": 1720000000000,
+  "heroes": [
+    {
+      "userId": "@bob:example.org",
+      "displayName": "Bob"
+    }
+  ]
+}

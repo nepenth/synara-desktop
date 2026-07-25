@@ -1,0 +1,9 @@
+{
+  "uploadId": "upload-1",
+  "roomId": "!room:example.org",
+  "fileName": "photo.jpg",
+  "mimeType": "image/jpeg",
+  "sizeBytes": 102400,
+  "state": "uploading",
+  "progress01": 0.42
+}
