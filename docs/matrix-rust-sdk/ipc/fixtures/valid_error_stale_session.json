@@ -1,0 +1,11 @@
+{
+  "protocolVersion": 1,
+  "sessionGeneration": 2,
+  "sequence": 0,
+  "kind": "error",
+  "payload": {
+    "category": "stale_session_generation",
+    "message": "Envelope generation does not match live session",
+    "diagnosticId": "mxipc-stale-gen-0001"
+  }
+}

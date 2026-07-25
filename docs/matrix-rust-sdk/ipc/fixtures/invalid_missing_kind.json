@@ -1,0 +1,8 @@
+{
+  "protocolVersion": 1,
+  "sessionGeneration": 1,
+  "sequence": 0,
+  "payload": {
+    "clientProtocolVersion": 1
+  }
+}
