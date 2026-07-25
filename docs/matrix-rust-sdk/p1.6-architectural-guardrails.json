@@ -1,0 +1,42 @@
+{
+  "taskId": "P1.6",
+  "title": "Architectural CI guardrails",
+  "date": "2026-07-25",
+  "baseBranch": "feature/matrix-rust-sdk-full-replacement",
+  "baseSha": "7e54fd3",
+  "workBranch": "matrix-rust/p1.6-architectural-guardrails",
+  "artifacts": {
+    "designNote": "docs/matrix-rust-sdk/p1.6-architectural-guardrails.md",
+    "script": "scripts/check-matrix-rust-sdk-guardrails.mjs",
+    "unitTests": "scripts/__tests__/check-matrix-rust-sdk-guardrails.test.mjs",
+    "legacyBoundaryCheck": "scripts/check-matrix-boundaries.mjs",
+    "npmScripts": [
+      "check:matrix-rust-guardrails",
+      "check:matrix-boundaries"
+    ],
+    "ciWorkflow": ".github/workflows/ci.yml"
+  },
+  "rules": [
+    "no-sdk-types-in-dto-ipc",
+    "no-js-sdk-in-greenfield-contracts",
+    "no-raw-matrix-http-in-contracts",
+    "no-deepening-direct-client-in-contracts",
+    "no-production-matrix-client-in-matrix-module",
+    "no-dual-backend-selector",
+    "versioned-matrix-ipc",
+    "no-matrix-product-tauri-commands"
+  ],
+  "allowed": [
+    "product_matrix_js_sdk_outside_greenfield",
+    "matrix_sdk_link_smoke_outside_dto_ipc",
+    "doc_comments_mentioning_sdk_names",
+    "legacy_desktop_rest_exceptions"
+  ],
+  "outOfScope": [
+    "production_login_sync_client",
+    "removing_matrix_js_sdk_product_usage",
+    "phase_2_supervisor",
+    "merge_to_main"
+  ],
+  "productRuntimeRemains": "matrix-js-sdk"
+}
