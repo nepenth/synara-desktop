@@ -1,0 +1,13 @@
+{
+  "protocolVersion": 1,
+  "sessionGeneration": 1,
+  "streamId": "stream-room-list-1",
+  "sequence": 0,
+  "requestId": "req-sub-1",
+  "kind": "subscribe",
+  "payload": {
+    "topic": "room_list",
+    "streamId": "stream-room-list-1",
+    "params": {}
+  }
+}

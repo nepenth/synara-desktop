@@ -1,0 +1,9 @@
+{
+  "protocolVersion": 1,
+  "sessionGeneration": 1,
+  "sequence": 0,
+  "kind": "future_experimental_kind",
+  "payload": {
+    "anything": true
+  }
+}
