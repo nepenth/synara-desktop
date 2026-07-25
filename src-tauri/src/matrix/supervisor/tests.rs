@@ -233,9 +233,21 @@ fn wipe_blocks_other_commands() {
     harness_login_ready(&mut s, &factory).unwrap();
     s.apply(SupervisorCommand::BeginWipe).unwrap();
     assert!(s.apply(SupervisorCommand::BeginStop).is_err());
-    assert!(s.apply(SupervisorCommand::Fail).is_err());
     assert!(s.apply(SupervisorCommand::BeginOpen).is_err());
+    // P2.6: Fail is legal from Wiping so failed wipe I/O can exit without
+    // CompleteWipe (no auto-delete completion).
+    s.apply(SupervisorCommand::Fail).unwrap();
+    assert_eq!(s.state(), SupervisorState::Failed);
+}
+
+#[test]
+fn wipe_complete_after_begin_reaches_empty() {
+    let mut s = MatrixSupervisor::new();
+    let factory = TestClientFactory::new();
+    harness_login_ready(&mut s, &factory).unwrap();
+    s.apply(SupervisorCommand::BeginWipe).unwrap();
     s.apply(SupervisorCommand::CompleteWipe).unwrap();
+    assert_eq!(s.state(), SupervisorState::Empty);
 }
 
 #[test]
