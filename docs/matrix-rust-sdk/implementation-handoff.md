@@ -25,18 +25,15 @@ without explicit user approval.
 **Host task id:** `9022c2f8-9b21-411a-acf9-a36c10515f72`
 (`matrix-rust-sdk-replacement-orchestrator`, daily check-in)
 
-**Session state (2026-07-24, P1.3 IN PROGRESS — P1.2 MERGED):**
+**Session state (2026-07-25, P1.3 MERGED — next P1.4):**
 
 - **Integration tip:** `feature/matrix-rust-sdk-full-replacement` @
-  `ac752602d2f0734d8041ffbdcd217c339b38a4c3`
-  (Phase 0 complete + **P1.1** PR #48 + **P1.2** PR #49 **MERGED**)
-- **Active work:** **P1.3 IN PROGRESS** on branch
-  `matrix-rust/p1.3-matrix-ipc-schemas` — versioned Matrix IPC schemas
-  (envelope, stream lifecycle, errors, pure protocol helpers) with
-  fixture-checked Rust + TypeScript representations. Artifacts:
-  `p1.3-matrix-ipc-schemas.md` + `.json`; fixtures under
-  `docs/matrix-rust-sdk/ipc/fixtures/`; Rust `src-tauri/src/matrix/ipc/`;
-  TS `synara/src/app/features/matrix-ipc/`. **No** production login/sync;
+  `8a62b8e09e22514caa3a3515a3ff1060632b005c`
+  (Phase 0 complete + **P1.1**–**P1.3** **MERGED**; tip:
+  `feat(matrix): merge P1.3 versioned Matrix IPC schema foundation`)
+- **Active work:** next **P1.4** — Synara domain DTOs (session, room summary,
+  member, timeline item, relation, receipt, typing, upload, media, security,
+  notification, search, space, thread, widget). **No** production login/sync;
   **no** dual-backend; **no** Matrix production Tauri commands; JS client
   remains sole runtime backend.
 - **P0.2 PR:** https://github.com/nepenth/synara-desktop/pull/42 — **MERGED**
@@ -91,13 +88,21 @@ without explicit user approval.
   `cargo check/test --locked` PASS (102 tests) on rustc 1.93.1; transitive
   `matrix-sdk/e2e-encryption` via `matrix-sdk-ui` documented; frontend still
   `matrix-js-sdk@42.0.0`. **No** production login/sync; **no** dual-backend.
+- **P1.3:** **MERGED** into integration (PR #50). Versioned Matrix IPC
+  foundation: envelope (`protocolVersion`/`sessionGeneration`/`sequence`/
+  kinds), 13 control kinds, 21 error categories (§6.4), stream lifecycle +
+  sequence helpers, policy constants, shared JSON fixtures, parallel Rust
+  (`src-tauri/src/matrix/ipc/`) + TypeScript (`synara/.../matrix-ipc/`).
+  Independent review: matrix IPC unit tests PASS; `cargo test --locked`
+  matrix filter 21 ok; no `matrix_sdk` in IPC modules; no production Matrix
+  Tauri commands; no dual-backend. Domain DTO bodies deferred to **P1.4**.
 - **Optional later:** §7.1–7.7 scaffold rows may still have shallow notes if a
   full-matrix depth pass is desired beyond the handoff resume scope
-- **Progress loop:** 4-minute scheduler `019f95928db7`; daily durable
-  orchestrator `9022c2f8-9b21-411a-acf9-a36c10515f72`
+- **Progress loop:** 4-minute scheduler `019f95928db7` (session-recurring);
+  keep pipeline advancing one bounded task per fire
 - **No production Matrix Rust SDK client/sync/login code accepted yet**
-  (P1.2 crates + link smoke only; IPC schemas are P1.3; does not start a
-  second client)
+  (P1.2 crates + link smoke; P1.3 IPC contracts only; does not start a second
+  client)
 
 Phase 0 evidence accepted (complete):
 
@@ -120,14 +125,16 @@ Phase 1 progress:
 - P1.2 exact Matrix Rust SDK deps (`matrix-sdk` / `matrix-sdk-ui` `=0.18.0`)
   + feature rationale / license review — **merged** (PR #49); no production
   login/sync
+- P1.3 versioned Matrix IPC schemas — **merged** (PR #50); contracts only;
+  no production login/sync; no SDK wire types
 
 **Next program work:**
 
-1. **P1.3** versioned Matrix IPC schemas — **in progress** (envelope, stream
-   lifecycle, errors; fixture-checked Rust + TypeScript; no SDK types on wire)
-2. **P1.4** Synara domain DTOs (after P1.3 merge)
-3. **P1.5** IPC protocol contract tests expansion
-4. **P1.6** Architectural CI guardrails
+1. **P1.4** Synara domain DTOs (session, room summary, member, timeline item,
+   relation, receipt, typing, upload, media, security, notification, search,
+   space, thread, widget) — no SDK object graph in DTO modules
+2. **P1.5** IPC protocol contract tests expansion
+3. **P1.6** Architectural CI guardrails
 
 Accepted notification findings that must be preserved:
 
