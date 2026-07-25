@@ -151,7 +151,7 @@ test("fails on raw /_matrix/ HTTP in contract surface", () => {
   }
 });
 
-test("fails on production Client construction under matrix/", () => {
+test("fails on production Client construction under matrix/ outside client_builder/", () => {
   const { root, files } = makeTree({
     "src-tauri/src/matrix/session.rs":
       "fn open() { let _ = Client::builder(); }\n",
@@ -166,6 +166,43 @@ test("fails on production Client construction under matrix/", () => {
     assert.ok(
       result.violations.some(
         (v) => v.rule === "no-production-matrix-client-in-matrix-module"
+      ),
+      formatFail(result)
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("allows Client::builder under matrix/client_builder/ but bans login/sync", () => {
+  const { root, files } = makeTree({
+    "src-tauri/src/matrix/client_builder/open.rs":
+      "fn open() { let _ = Client::builder().homeserver_url(\"https://example.org\"); }\n",
+    "src-tauri/src/matrix/client_builder/evil.rs":
+      "fn login(c: Client) { let _ = c.matrix_auth().login_username(\"a\", \"b\"); }\n",
+    "src-tauri/src/matrix/ipc/version.rs":
+      "pub const MATRIX_IPC_PROTOCOL_VERSION: u32 = 1;\n",
+    "synara/src/app/features/matrix-ipc/version.ts":
+      "export const MATRIX_IPC_PROTOCOL_VERSION = 1 as const;\n",
+  });
+  try {
+    const result = runGuardrails({ root, files });
+    assert.equal(result.ok, false, formatFail(result));
+    // login under client_builder must fail
+    assert.ok(
+      result.violations.some(
+        (v) =>
+          v.rule === "no-production-matrix-client-in-matrix-module" &&
+          v.path.includes("evil.rs")
+      ),
+      formatFail(result)
+    );
+    // builder-only construction under client_builder/open.rs must not be the reason
+    assert.ok(
+      !result.violations.some(
+        (v) =>
+          v.rule === "no-production-matrix-client-in-matrix-module" &&
+          v.path.includes("open.rs")
       ),
       formatFail(result)
     );
