@@ -25,16 +25,16 @@ without explicit user approval.
 **Host task id:** `9022c2f8-9b21-411a-acf9-a36c10515f72`
 (`matrix-rust-sdk-replacement-orchestrator`, daily check-in)
 
-**Session state (2026-07-24, P1.2 IN PROGRESS — PR open for review):**
+**Session state (2026-07-25, P1.2 MERGED — next P1.3):**
 
 - **Integration tip:** `feature/matrix-rust-sdk-full-replacement` @
-  `585409a54ec89faeb387ad5b395a3e39ae7a0713`
-  (Phase 0 complete + **P1.1 MERGED** — PR #48; tip message includes
-  `chore(matrix): merge P1.1 Rust 1.93 toolchain pin`)
-- **Active work:** **P1.2** — exact `matrix-sdk` / `matrix-sdk-ui` `=0.18.0`
-  production deps + feature rationale / license review — **PR open, not
-  merged**. Work branch `matrix-rust/p1.2-exact-sdk-deps`. No login/sync; no
-  dual-backend; JS client remains sole runtime backend.
+  `9fb1b1299407cfc2ee576444ba3f7c2cb216a93d`
+  (Phase 0 complete + **P1.1** PR #48 + **P1.2** PR #49 **MERGED**; tip:
+  `chore(matrix): merge P1.2 exact matrix-sdk 0.18.0 dependencies`)
+- **Active work:** next **P1.3** — versioned Matrix IPC schemas (envelope,
+  commands/responses/snapshots/deltas/errors/stream lifecycle) with
+  fixture-checked Rust + TypeScript representations. **No** production
+  login/sync; **no** dual-backend; JS client remains sole runtime backend.
 - **P0.2 PR:** https://github.com/nepenth/synara-desktop/pull/42 — **MERGED**
   into integration (docs-only). **Never merge to `main` without explicit user
   approval.**
@@ -79,22 +79,21 @@ without explicit user approval.
   prerequisite note. Local independent review: `cargo check/test --locked`
   PASS on rustc 1.93.1 (101 tests). Clippy `-D warnings` residual is
   pre-existing product lints (out of P1.1 scope).
-- **P1.2:** **IN PROGRESS** (branch `matrix-rust/p1.2-exact-sdk-deps`). Exact
-  `matrix-sdk` / `matrix-sdk-ui` `=0.18.0` with `default-features = false` in
-  production `src-tauri`; compile-only `matrix_sdk_link_smoke` (no Client
+- **P1.2:** **MERGED** into integration (PR #49). Exact `matrix-sdk` /
+  `matrix-sdk-ui` `=0.18.0` with `default-features = false` in production
+  `src-tauri`; compile-only `matrix_sdk_link_smoke` (type-path only, no Client
   session); rationale + license/security review:
-  `p1.2-sdk-dependency-rationale.md` + `.json`. Local validation:
-  `cargo check/test --locked` PASS (102 tests). Transitive
-  `matrix-sdk/e2e-encryption` via `matrix-sdk-ui` documented. **No**
-  production login/sync; **no** dual-backend; frontend still
-  `matrix-js-sdk@42.0.0`. Leave PR for orchestrator review — do not merge to
-  `main`.
+  `p1.2-sdk-dependency-rationale.md` + `.json`. Independent review:
+  `cargo check/test --locked` PASS (102 tests) on rustc 1.93.1; transitive
+  `matrix-sdk/e2e-encryption` via `matrix-sdk-ui` documented; frontend still
+  `matrix-js-sdk@42.0.0`. **No** production login/sync; **no** dual-backend.
 - **Optional later:** §7.1–7.7 scaffold rows may still have shallow notes if a
   full-matrix depth pass is desired beyond the handoff resume scope
 - **Progress loop:** 4-minute scheduler `019f95928db7`; daily durable
   orchestrator `9022c2f8-9b21-411a-acf9-a36c10515f72`
 - **No production Matrix Rust SDK client/sync/login code accepted yet**
-  (P1.2 adds crates + link smoke only; does not start a second client)
+  (P1.2 crates + link smoke only; IPC schemas are P1.3; does not start a
+  second client)
 
 Phase 0 evidence accepted (complete):
 
@@ -115,13 +114,14 @@ Phase 1 progress:
 
 - P1.1 permanent Rust 1.93 toolchain pin — **merged** (PR #48)
 - P1.2 exact Matrix Rust SDK deps (`matrix-sdk` / `matrix-sdk-ui` `=0.18.0`)
-  + feature rationale / license review — **in progress (PR open)**; no
-  production login/sync
+  + feature rationale / license review — **merged** (PR #49); no production
+  login/sync
 
 **Next program work:**
 
-1. **P1.2** orchestrator review/merge into integration (not `main`)
-2. **P1.3** versioned Matrix IPC schemas
+1. **P1.3** versioned Matrix IPC schemas (envelope, stream lifecycle, errors;
+   fixture-checked Rust + TypeScript; no SDK types on wire)
+2. **P1.4** Synara domain DTOs
 
 Accepted notification findings that must be preserved:
 
