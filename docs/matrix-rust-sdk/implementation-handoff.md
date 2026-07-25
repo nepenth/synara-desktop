@@ -25,18 +25,17 @@ without explicit user approval.
 **Host task id:** `9022c2f8-9b21-411a-acf9-a36c10515f72`
 (`matrix-rust-sdk-replacement-orchestrator`, daily check-in)
 
-**Session state (2026-07-24, P2.1 IN PROGRESS — Phase 2 started):**
+**Session state (2026-07-25, P2.1 MERGED — next P2.2):**
 
 - **Integration tip:** `feature/matrix-rust-sdk-full-replacement` @
-  `319f7c1` (Phase 0 complete + **P1.1**–**P1.6** **MERGED**; tip includes
-  P1.6 residuals doc fix). Phase 1 complete.
-- **Active work:** **P2.1 — Matrix supervisor actor** — **IN PROGRESS** on
-  branch `matrix-rust/p2.1-matrix-supervisor-actor`. Pure lifecycle state
-  machine + session-generation isolation under `src-tauri/src/matrix/supervisor/`
-  (harness/unit tests only). **No** live `matrix_sdk::Client` handle (deferred
-  to P2.3); **no** dual-backend; **no** Matrix production Tauri commands; JS
-  client remains sole runtime backend. Design note:
-  `p2.1-matrix-supervisor-actor.md` + `.json`.
+  `b90a8b4c62f494cff759570ac58a682333e86f3a`
+  (Phase 0 + Phase 1 complete + **P2.1 MERGED**; tip:
+  `feat(matrix): merge P2.1 Matrix supervisor actor foundation`)
+- **Active work:** next **P2.2 — Store paths and encryption keys** (per-account
+  path derivation, native keyring integration, permissions, serialization,
+  collision tests). **No** live production login/sync; **no** dual-backend;
+  **no** Matrix production Tauri commands; JS client remains sole runtime
+  backend.
 - **P0.2 PR:** https://github.com/nepenth/synara-desktop/pull/42 — **MERGED**
   into integration (docs-only). **Never merge to `main` without explicit user
   approval.**
@@ -121,21 +120,21 @@ without explicit user approval.
   commands); allowlist `p1.6-js-sdk-import-allowlist.json`; prohibited fixtures;
   wired into `check:matrix-boundaries` + CI. Independent review: unit tests 26
   ok; live guardrails PASS. **No** production login/sync; **no** dual-backend.
-- **P2.1:** **IN PROGRESS** on `matrix-rust/p2.1-matrix-supervisor-actor`.
-  Pure supervisor actor foundation: states empty/opening/authenticating/
-  restoring/syncing/ready/stopping/logged_out/failed/wiping; generation bump
-  on logout/wipe/stop-complete/failed reset-open; unit tests for legal/illegal
-  transitions. **No** SDK Client handle (P2.3); **no** production login/sync;
-  **no** dual-backend; **no** Matrix Tauri commands. Artifacts:
-  `src-tauri/src/matrix/supervisor/`, `p2.1-matrix-supervisor-actor.md` +
-  `.json`.
+- **P2.1:** **MERGED** into integration (PR #59). Pure supervisor actor
+  foundation under `src-tauri/src/matrix/supervisor/`: states empty/opening/
+  authenticating/restoring/syncing/ready/stopping/logged_out/failed/wiping;
+  generation bumps on open/logout/wipe; sole `ClientHandle` install path via
+  abstract factory (Null/Test stubs — **no** live `matrix_sdk::Client`); unit
+  tests 18 ok; independent review `matrix::supervisor` 18 PASS + guardrails
+  PASS. **No** production login/sync; **no** dual-backend; **no** Matrix Tauri
+  commands. Design: `p2.1-matrix-supervisor-actor.md` + `.json`.
 - **Optional later:** §7.1–7.7 scaffold rows may still have shallow notes if a
   full-matrix depth pass is desired beyond the handoff resume scope
 - **Progress loop:** 4-minute scheduler `019f95928db7` (session-recurring);
   keep pipeline advancing one bounded task per fire
 - **No production Matrix Rust SDK client/sync/login code accepted yet**
-  (P1.2 crates + link smoke; P1.3–P1.5 contracts; P1.6 CI guardrails; P2.1
-  pure supervisor only — does not start a second client)
+  (P1.2 crates + link smoke; P1.3–P1.5 contracts; P1.6 CI guardrails; P2.1 pure
+  supervisor only — does not start a second client)
 
 Phase 0 evidence accepted (complete):
 
@@ -169,9 +168,9 @@ Phase 1 progress:
 
 Phase 2 progress:
 
-- P2.1 Matrix supervisor actor — **IN PROGRESS** (pure state machine +
-  generation isolation; Client handle deferred to P2.3)
-- P2.2 Store paths and encryption keys — not started
+- P2.1 Matrix supervisor actor — **merged** (PR #59); pure state machine +
+  generation isolation; Client handle deferred to P2.3
+- P2.2 Store paths and encryption keys — **next**
 - P2.3 SDK client builder — not started
 - P2.4 Task supervision and cancellation — not started
 - P2.5 Diagnostics and health model — not started
@@ -179,8 +178,9 @@ Phase 2 progress:
 
 **Next program work:**
 
-1. Finish review/merge of **P2.1**, then **P2.2** store paths/keys (still no
-   dual production backend; no production Matrix Tauri commands until planned)
+1. **P2.2** store paths and encryption keys (per-account path derivation,
+   keyring, permissions, collision tests; still no dual production backend;
+   no production Matrix Tauri commands until planned)
 2. Continue sole-owner cutover path (no dual-backend selector)
 
 Accepted notification findings that must be preserved:
