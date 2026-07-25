@@ -1,0 +1,55 @@
+{
+  "task_id": "P2.2",
+  "title": "Store paths and encryption keys",
+  "date": "2026-07-25",
+  "status": "implemented",
+  "base_branch": "feature/matrix-rust-sdk-full-replacement",
+  "base_sha": "51f93b5",
+  "work_branch": "matrix-rust/p2.2-store-paths-keys",
+  "human_doc": "docs/matrix-rust-sdk/p2.2-store-paths-keys.md",
+  "production_posture": {
+    "production_client_session_started": false,
+    "production_login": false,
+    "production_sync": false,
+    "dual_backend": false,
+    "tauri_commands_for_matrix": false,
+    "matrix_sdk_client_builder": false,
+    "live_keyring_store_key_entry": false,
+    "exercised_by": "unit_tests_and_link_markers_only"
+  },
+  "artifacts": {
+    "rust_module": "src-tauri/src/matrix/store/",
+    "mod_wire": "src-tauri/src/matrix/mod.rs",
+    "design_note": "docs/matrix-rust-sdk/p2.2-store-paths-keys.md"
+  },
+  "path_layout": {
+    "root_segment": "matrix",
+    "account_segment": "{sanitized_localpart}_{fnv1a64_hex}",
+    "subdirs": ["state", "crypto", "cache", "media"],
+    "unix_mode": "0o700"
+  },
+  "key_material": {
+    "length_bytes": 32,
+    "source": "getrandom",
+    "service": "com.whylandcreative.synara.desktop.matrix-store-key",
+    "account_prefix": "store-key:",
+    "vault_test_impl": "InMemoryStoreKeyVault"
+  },
+  "invariants": [
+    "two_accounts_distinct_paths_and_key_ids",
+    "same_identity_stable_derivation",
+    "ensure_dirs_does_not_wipe",
+    "layout_json_has_no_secrets",
+    "store_key_service_distinct_from_session_credential"
+  ],
+  "residuals": [
+    { "id": "live-keyring-entry", "waitsFor": "P3.5 / production session" },
+    { "id": "sdk-client-builder", "waitsFor": "P2.3" },
+    { "id": "destructive-wipe", "waitsFor": "P2.6" }
+  ],
+  "decisions_respected": [
+    "D-NO-DUAL-BACKEND",
+    "D-ACCOUNT-SWITCH",
+    "D-TOKEN-CONTINUITY"
+  ]
+}
