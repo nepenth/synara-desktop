@@ -1,0 +1,18 @@
+{
+  "roomId": "!space:example.org",
+  "name": "Team Space",
+  "avatarUrl": "mxc://example.org/space1",
+  "children": [
+    {
+      "roomId": "!room:example.org",
+      "order": "a",
+      "suggested": true
+    },
+    {
+      "roomId": "!room2:example.org",
+      "order": "b",
+      "suggested": false
+    }
+  ],
+  "parentRoomIds": []
+}
