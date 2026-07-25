@@ -1,6 +1,6 @@
 # Matrix Rust SDK Replacement — Execution Handoff
 
-Last updated: 2026-07-25
+Last updated: 2026-07-24
 
 Authoritative program plan: [`../matrix-rust-sdk-full-replacement-plan.md`](../matrix-rust-sdk-full-replacement-plan.md)
 
@@ -25,16 +25,21 @@ without explicit user approval.
 **Host task id:** `9022c2f8-9b21-411a-acf9-a36c10515f72`
 (`matrix-rust-sdk-replacement-orchestrator`, daily check-in)
 
-**Session state (2026-07-25, P2.5 MERGED — next P2.6):**
+**Session state (2026-07-24, P2.6 IN PROGRESS — final Phase 2 task):**
 
 - **Integration tip:** `feature/matrix-rust-sdk-full-replacement` @
-  `87466a89b211972b40643bfbfa052d986da7af85`
+  `603b58f12065c34a8932c45fc76153c3eb989ad3`
   (Phase 0–1 complete + **P2.1**–**P2.5 MERGED**; tip:
-  `feat(matrix): P2.5 diagnostics and health model (#67)`)
-- **Active work:** next **P2.6 — Destructive lifecycle operations**
-  (logout, local wipe, failed-store recovery, exact-target safeguards).
-  **No** production login/sync UI cutover; **no** dual-backend; **no** Matrix
-  production Tauri commands; JS client remains sole runtime backend.
+  `docs(matrix): record P2.5 merge; advance handoff to P2.6 (#68)`)
+- **Active work:** **P2.6 — Destructive lifecycle operations**
+  **IN PROGRESS** on `matrix-rust/p2.6-destructive-lifecycle`
+  (logout, exact-target local wipe, failed-store recovery, no auto-delete).
+  Module: `src-tauri/src/matrix/lifecycle/`; design
+  `p2.6-destructive-lifecycle.md` + `.json`. Local validation: `matrix::`
+  **165** PASS (`lifecycle` 17); guardrails PASS. PR targeting integration
+  for independent review. **No** production login/sync UI cutover;
+  **no** dual-backend; **no** Matrix production Tauri commands; JS client
+  remains sole runtime backend.
 - **P2.2:** **MERGED** into integration (PR #61). Per-account store paths +
   encryption-key vault foundation under `src-tauri/src/matrix/store/`; 14 unit
   tests; design note `p2.2-store-paths-keys.md` + `.json`.
@@ -140,13 +145,18 @@ without explicit user approval.
   `MatrixHealthSnapshot` + desktop projection + redaction fixtures; P2.4 task
   counters exported). Independent review: `matrix::` **147** PASS; guardrails
   PASS. Design: `p2.5-diagnostics-health.md` + `.json`.
+- **P2.6:** **IN PROGRESS** on `matrix-rust/p2.6-destructive-lifecycle`.
+  Destructive lifecycle under `src-tauri/src/matrix/lifecycle/` (logout
+  orchestration, exact-target wipe, store-failure recovery without auto-delete,
+  session-material harness vault). Independent review: `matrix::` **164** PASS;
+  guardrails PASS. Design: `p2.6-destructive-lifecycle.md` + `.json`.
 - **Optional later:** §7.1–7.7 scaffold rows may still have shallow notes if a
   full-matrix depth pass is desired beyond the handoff resume scope
 - **Progress loop:** 4-minute scheduler `019f95928db7` (session-recurring);
   keep pipeline advancing one bounded task per fire
 - **No production Matrix login/sync accepted yet** (P1.2–P1.6 foundation;
-  P2.1–P2.5 harness lifecycle/store/builder/tasks/diagnostics only — does not
-  start a second product sync loop)
+  P2.1–P2.6 harness lifecycle/store/builder/tasks/diagnostics/wipe only — does
+  not start a second product sync loop)
 
 Phase 0 evidence accepted (complete):
 
@@ -190,14 +200,15 @@ Phase 2 progress:
   `TaskSupervisor` + generation isolation under `matrix/tasks/`
 - P2.5 Diagnostics and health model — **merged** (PR #67);
   privacy-filtered metrics + desktop projection under `matrix/diagnostics/`
-- P2.6 Destructive lifecycle operations — **next**
+- P2.6 Destructive lifecycle operations — **IN PROGRESS**
+  (`matrix-rust/p2.6-destructive-lifecycle`); logout + exact-target wipe +
+  non-destructive store-failure recovery under `matrix/lifecycle/`
 
 **Next program work:**
 
-1. **P2.6** destructive lifecycle operations (logout, local wipe, failed-store
-   recovery, exact-target safeguards)
-2. Phase 2 acceptance / continue sole-owner cutover path (no dual-backend
-   selector)
+1. **P2.6** merge into integration (after independent review) — completes Phase 2
+2. Phase 3 authentication / legacy-session transition (**P3.1+**); sole-owner
+   cutover path remains (no dual-backend selector)
 
 Accepted notification findings that must be preserved:
 
