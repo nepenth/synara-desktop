@@ -25,16 +25,18 @@ without explicit user approval.
 **Host task id:** `9022c2f8-9b21-411a-acf9-a36c10515f72`
 (`matrix-rust-sdk-replacement-orchestrator`, daily check-in)
 
-**Session state (2026-07-25, Phase 2 COMPLETE — next Phase 3):**
+**Session state (2026-07-24, Phase 3 — P3.1 IN PROGRESS):**
 
 - **Integration tip:** `feature/matrix-rust-sdk-full-replacement` @
-  `9ca3d9ea8ba24de0d0ec41a1fac7a57f3c0b09bf`
+  `d90a49e8e217baabae87c6ee9f77584ed093410b`
   (Phase 0–1 complete + **Phase 2 P2.1–P2.6 MERGED**; tip:
-  `feat(matrix): merge P2.6 destructive lifecycle operations`)
-- **Active work:** next **Phase 3 — Authentication and legacy-session
-  transition** (start with P3.1 discovery and login-flow service). Harness/
-  foundation continues; **no** dual-backend; **no** production Matrix Tauri
-  cutover commands yet; JS client remains sole product runtime backend.
+  `docs(matrix): record P2.6 merge; Phase 2 complete; advance to Phase 3`)
+- **Active work:** **P3.1 — Discovery and login-flow service** **IN PROGRESS**
+  on branch `matrix-rust/p3.1-discovery-login-flow` (harness foundation under
+  `src-tauri/src/matrix/auth/`; mock transports; **no** password/token login
+  execution). Harness/foundation continues; **no** dual-backend; **no**
+  production Matrix Tauri cutover commands yet; JS client remains sole product
+  runtime backend.
 - **P2.2:** **MERGED** into integration (PR #61). Per-account store paths +
   encryption-key vault foundation under `src-tauri/src/matrix/store/`; 14 unit
   tests; design note `p2.2-store-paths-keys.md` + `.json`.
@@ -150,8 +152,9 @@ without explicit user approval.
 - **Progress loop:** 4-minute scheduler `019f95928db7` (session-recurring);
   keep pipeline advancing one bounded task per fire
 - **No production Matrix login/sync accepted yet** (P1.2–P1.6 foundation;
-  P2.1–P2.6 harness lifecycle/store/builder/tasks/diagnostics/wipe only — does
-  not start a second product sync loop)
+  P2.1–P2.6 harness lifecycle/store/builder/tasks/diagnostics/wipe;
+  P3.1 discovery/login-flow **service only** — does not start a second product
+  sync loop or execute login)
 
 Phase 0 evidence accepted (complete):
 
@@ -198,10 +201,17 @@ Phase 2 progress:
 - P2.6 Destructive lifecycle operations — **merged** (PR #70); **Phase 2 complete**; logout + exact-target wipe +
   non-destructive store-failure recovery under `matrix/lifecycle/`
 
+Phase 3 progress:
+
+- P3.1 Discovery and login-flow service — **IN PROGRESS** (work branch
+  `matrix-rust/p3.1-discovery-login-flow`); design
+  `p3.1-discovery-login-flow.md` + `.json`; module `matrix/auth/` with
+  `DiscoveryTransport` / `LoginFlowTransport` mocks; no login execution
+
 **Next program work:**
 
-1. **Phase 3** authentication and legacy-session transition — start **P3.1**
-   discovery and login-flow service (harness only; no dual-backend)
+1. **Complete/merge P3.1** (discovery + login-flow harness), then **P3.2**
+   password/token login and device naming (still harness; no dual-backend)
 2. Continue sole-owner cutover path (no dual-backend selector)
 
 Accepted notification findings that must be preserved:
