@@ -29,7 +29,7 @@ mod state;
 mod transition;
 
 pub use actor::{
-    harness_login_ready, harness_restore_ready, MatrixSupervisor, SupervisorSnapshot,
+    harness_login_ready, harness_restore_ready, FailureInfo, MatrixSupervisor, SupervisorSnapshot,
 };
 pub use error::{SupervisorError, TransitionError};
 pub use handle::{
