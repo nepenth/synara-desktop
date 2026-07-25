@@ -25,15 +25,15 @@ without explicit user approval.
 **Host task id:** `9022c2f8-9b21-411a-acf9-a36c10515f72`
 (`matrix-rust-sdk-replacement-orchestrator`, daily check-in)
 
-**Session state (2026-07-25, P2.3 IN PROGRESS):**
+**Session state (2026-07-25, P2.3 MERGED — next P2.4):**
 
 - **Integration tip:** `feature/matrix-rust-sdk-full-replacement` @
-  `0ac4e04` (Phase 0–1 complete + **P2.1**/**P2.2 MERGED**; tip:
-  `docs(matrix): record P2.2 merge; advance handoff to P2.3`)
-- **Active work:** **P2.3 — SDK client builder** **IN PROGRESS** on
-  `matrix-rust/p2.3-sdk-client-builder`. Unauthenticated `Client` construction
-  only (homeserver, proxy/network, UA, sqlite stores, timeouts, approved
-  features). **No** production login/sync; **no** dual-backend; **no** Matrix
+  `6c044863972b11f6a5d2508a5408e285c3cedf27`
+  (Phase 0–1 complete + **P2.1**–**P2.3 MERGED**; tip:
+  `feat(matrix): merge P2.3 SDK client builder (unauthenticated open)`)
+- **Active work:** next **P2.4 — Task supervision and cancellation** (track
+  sync/listener/upload/search tasks; shutdown + stale-generation isolation).
+  **No** production login/sync UI cutover; **no** dual-backend; **no** Matrix
   production Tauri commands; JS client remains sole runtime backend.
 - **P2.2:** **MERGED** into integration (PR #61). Per-account store paths +
   encryption-key vault foundation under `src-tauri/src/matrix/store/`; 14 unit
@@ -123,21 +123,20 @@ without explicit user approval.
   wired into `check:matrix-boundaries` + CI. Independent review: unit tests 26
   ok; live guardrails PASS. **No** production login/sync; **no** dual-backend.
 - **P2.1:** **MERGED** into integration (PR #59). Pure supervisor actor
-  foundation under `src-tauri/src/matrix/supervisor/`: states empty/opening/
-  authenticating/restoring/syncing/ready/stopping/logged_out/failed/wiping;
-  generation bumps on open/logout/wipe; sole `ClientHandle` install path via
-  abstract factory (Null/Test stubs — **no** live `matrix_sdk::Client`); unit
-  tests 18 ok; independent review `matrix::supervisor` 18 PASS + guardrails
-  PASS. **No** production login/sync; **no** dual-backend; **no** Matrix Tauri
-  commands. Design: `p2.1-matrix-supervisor-actor.md` + `.json`.
+  foundation under `src-tauri/src/matrix/supervisor/`. Design:
+  `p2.1-matrix-supervisor-actor.md` + `.json`.
+- **P2.3:** **MERGED** into integration (PR #63). Unauthenticated
+  `matrix_sdk::Client` builder under `src-tauri/src/matrix/client_builder/`
+  (sqlite + bundled-sqlite features; sole allowed `Client::builder` site;
+  no login/restore/sync). Independent review: `matrix::` **118** PASS;
+  guardrails PASS. Design: `p2.3-sdk-client-builder.md` + `.json`.
 - **Optional later:** §7.1–7.7 scaffold rows may still have shallow notes if a
   full-matrix depth pass is desired beyond the handoff resume scope
 - **Progress loop:** 4-minute scheduler `019f95928db7` (session-recurring);
   keep pipeline advancing one bounded task per fire
-- **No production Matrix login/sync accepted yet** (P1.2 crates + link smoke;
-  P1.3–P1.5 contracts; P1.6 CI guardrails; P2.1 pure supervisor; P2.2 store
-  foundation; **P2.3** unauthenticated Client builder under harnesses only —
-  does not start a second product sync loop)
+- **No production Matrix login/sync accepted yet** (P1.2–P1.6 foundation;
+  P2.1–P2.3 harness lifecycle/store/builder only — does not start a second
+  product sync loop)
 
 Phase 0 evidence accepted (complete):
 
@@ -175,17 +174,17 @@ Phase 2 progress:
   generation isolation; Client handle deferred to P2.3
 - P2.2 Store paths and encryption keys — **merged** (PR #61); per-account paths
   + key vault foundation; live keyring Entry deferred
-- P2.3 SDK client builder — **IN PROGRESS** (`matrix-rust/p2.3-sdk-client-builder`);
-  design `p2.3-sdk-client-builder.md` + `.json`; unauthenticated open only
-- P2.4 Task supervision and cancellation — not started
+- P2.3 SDK client builder — **merged** (PR #63); unauthenticated open only;
+  sole `Client::builder` site under `matrix/client_builder/`
+- P2.4 Task supervision and cancellation — **next**
 - P2.5 Diagnostics and health model — not started
 - P2.6 Destructive lifecycle operations — not started
 
 **Next program work:**
 
-1. **Finish / merge P2.3** (PR open; do not merge without review)
-2. **P2.4** task supervision and cancellation after P2.3
-3. Continue sole-owner cutover path (no dual-backend selector)
+1. **P2.4** task supervision and cancellation (track sync/listener/upload/
+   search tasks; shutdown + stale-generation isolation)
+2. Continue sole-owner cutover path (no dual-backend selector)
 
 Accepted notification findings that must be preserved:
 
