@@ -1,0 +1,7 @@
+{
+  "roomId": "!room:example.org",
+  "eventId": "$msg1",
+  "userId": "@bob:example.org",
+  "receiptType": "read",
+  "ts": 1720000002000
+}

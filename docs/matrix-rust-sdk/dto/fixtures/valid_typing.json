@@ -1,0 +1,4 @@
+{
+  "roomId": "!room:example.org",
+  "userIds": ["@bob:example.org", "@carol:example.org"]
+}

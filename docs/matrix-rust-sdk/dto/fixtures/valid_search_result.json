@@ -1,0 +1,15 @@
+{
+  "query": "hello",
+  "roomId": "!room:example.org",
+  "results": [
+    {
+      "eventId": "$msg1",
+      "roomId": "!room:example.org",
+      "originServerTs": 1720000000000,
+      "sender": "@alice:example.org",
+      "snippet": "…hello world…"
+    }
+  ],
+  "nextBatch": "s123_456",
+  "totalCount": 1
+}
