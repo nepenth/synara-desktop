@@ -25,16 +25,20 @@ without explicit user approval.
 **Host task id:** `9022c2f8-9b21-411a-acf9-a36c10515f72`
 (`matrix-rust-sdk-replacement-orchestrator`, daily check-in)
 
-**Session state (2026-07-25, P1.2 MERGED — next P1.3):**
+**Session state (2026-07-24, P1.3 IN PROGRESS — P1.2 MERGED):**
 
 - **Integration tip:** `feature/matrix-rust-sdk-full-replacement` @
-  `9fb1b1299407cfc2ee576444ba3f7c2cb216a93d`
-  (Phase 0 complete + **P1.1** PR #48 + **P1.2** PR #49 **MERGED**; tip:
-  `chore(matrix): merge P1.2 exact matrix-sdk 0.18.0 dependencies`)
-- **Active work:** next **P1.3** — versioned Matrix IPC schemas (envelope,
-  commands/responses/snapshots/deltas/errors/stream lifecycle) with
-  fixture-checked Rust + TypeScript representations. **No** production
-  login/sync; **no** dual-backend; JS client remains sole runtime backend.
+  `ac752602d2f0734d8041ffbdcd217c339b38a4c3`
+  (Phase 0 complete + **P1.1** PR #48 + **P1.2** PR #49 **MERGED**)
+- **Active work:** **P1.3 IN PROGRESS** on branch
+  `matrix-rust/p1.3-matrix-ipc-schemas` — versioned Matrix IPC schemas
+  (envelope, stream lifecycle, errors, pure protocol helpers) with
+  fixture-checked Rust + TypeScript representations. Artifacts:
+  `p1.3-matrix-ipc-schemas.md` + `.json`; fixtures under
+  `docs/matrix-rust-sdk/ipc/fixtures/`; Rust `src-tauri/src/matrix/ipc/`;
+  TS `synara/src/app/features/matrix-ipc/`. **No** production login/sync;
+  **no** dual-backend; **no** Matrix production Tauri commands; JS client
+  remains sole runtime backend.
 - **P0.2 PR:** https://github.com/nepenth/synara-desktop/pull/42 — **MERGED**
   into integration (docs-only). **Never merge to `main` without explicit user
   approval.**
@@ -119,9 +123,11 @@ Phase 1 progress:
 
 **Next program work:**
 
-1. **P1.3** versioned Matrix IPC schemas (envelope, stream lifecycle, errors;
-   fixture-checked Rust + TypeScript; no SDK types on wire)
-2. **P1.4** Synara domain DTOs
+1. **P1.3** versioned Matrix IPC schemas — **in progress** (envelope, stream
+   lifecycle, errors; fixture-checked Rust + TypeScript; no SDK types on wire)
+2. **P1.4** Synara domain DTOs (after P1.3 merge)
+3. **P1.5** IPC protocol contract tests expansion
+4. **P1.6** Architectural CI guardrails
 
 Accepted notification findings that must be preserved:
 
