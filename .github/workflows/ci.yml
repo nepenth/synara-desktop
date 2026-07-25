@@ -64,6 +64,9 @@ jobs:
       - name: Check Matrix integration boundaries
         run: npm run check:matrix-boundaries
 
+      - name: Check Matrix Rust SDK architectural guardrails
+        run: npm run check:matrix-rust-guardrails
+
       - name: Check reliability delivery gates
         run: npm run check:quality-gates
 
