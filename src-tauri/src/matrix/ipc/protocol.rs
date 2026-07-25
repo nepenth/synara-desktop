@@ -1,8 +1,11 @@
-//! Pure protocol helpers: generation checks, sequence ordering, gap/dup.
+//! Pure protocol helpers: generation checks, sequence ordering, gap/dup, bounds.
 
 use super::error::{MatrixIpcError, MatrixIpcErrorCategory};
 use super::stream::{ResyncReason, ResyncRequiredPayload, StreamLifecycleState};
-use super::version::MATRIX_IPC_PROTOCOL_VERSION;
+use super::version::{
+    MATRIX_IPC_PROTOCOL_VERSION, MAX_ENVELOPE_PAYLOAD_JSON_BYTES, MAX_OPEN_STREAMS_PER_SESSION,
+    MAX_STREAM_QUEUE_DEPTH,
+};
 
 /// Outcome of applying an incoming stream sequence number.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -167,4 +170,46 @@ pub fn apply_delta_sequence(
         }
     };
     (outcome, event)
+}
+
+/// Reject JSON envelope payload bodies that exceed the soft size bound.
+///
+/// Contract tests and future supervisors share this check. Oversized bodies
+/// must use chunking / out-of-band handles (never media bytes over JSON IPC).
+pub fn check_payload_json_bounds(byte_len: usize) -> Result<(), MatrixIpcError> {
+    if byte_len <= MAX_ENVELOPE_PAYLOAD_JSON_BYTES {
+        Ok(())
+    } else {
+        Err(
+            MatrixIpcError::new(MatrixIpcErrorCategory::SdkInvariant).with_diagnostic(format!(
+                "payload_too_large:got={byte_len}:max={MAX_ENVELOPE_PAYLOAD_JSON_BYTES}"
+            )),
+        )
+    }
+}
+
+/// Reject stream queues that would exceed the retained-depth bound.
+pub fn check_stream_queue_depth(depth: usize) -> Result<(), MatrixIpcError> {
+    if depth <= MAX_STREAM_QUEUE_DEPTH {
+        Ok(())
+    } else {
+        Err(
+            MatrixIpcError::new(MatrixIpcErrorCategory::SdkInvariant).with_diagnostic(format!(
+                "stream_queue_depth:got={depth}:max={MAX_STREAM_QUEUE_DEPTH}"
+            )),
+        )
+    }
+}
+
+/// Reject opening more concurrent streams than the per-session bound allows.
+pub fn check_open_streams(count: usize) -> Result<(), MatrixIpcError> {
+    if count <= MAX_OPEN_STREAMS_PER_SESSION {
+        Ok(())
+    } else {
+        Err(
+            MatrixIpcError::new(MatrixIpcErrorCategory::SdkInvariant).with_diagnostic(format!(
+                "open_streams:got={count}:max={MAX_OPEN_STREAMS_PER_SESSION}"
+            )),
+        )
+    }
 }

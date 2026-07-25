@@ -1,11 +1,16 @@
 /**
- * Pure Matrix IPC protocol helpers (P1.3).
+ * Pure Matrix IPC protocol helpers (P1.3 + P1.5 bounds).
  * No transport, no Tauri invoke, no matrix-js-sdk.
  */
 
 import type { MatrixIpcError } from './error';
 import type { ResyncRequiredPayload, StreamLifecycleState } from './stream';
-import { MATRIX_IPC_PROTOCOL_VERSION } from './version';
+import {
+  MATRIX_IPC_PROTOCOL_VERSION,
+  MAX_ENVELOPE_PAYLOAD_JSON_BYTES,
+  MAX_OPEN_STREAMS_PER_SESSION,
+  MAX_STREAM_QUEUE_DEPTH,
+} from './version';
 
 export type SequenceOutcome =
   | { type: 'accept'; nextLastApplied: number }
@@ -149,4 +154,34 @@ export function applyDeltaSequence(
     }
   }
   return { outcome, event };
+}
+
+/**
+ * Reject JSON envelope payload bodies that exceed the soft size bound.
+ * Oversized bodies must use chunking / out-of-band handles.
+ */
+export function checkPayloadJsonBounds(byteLen: number): MatrixIpcError | null {
+  if (byteLen <= MAX_ENVELOPE_PAYLOAD_JSON_BYTES) return null;
+  return {
+    category: 'sdk_invariant',
+    diagnosticId: `payload_too_large:got=${byteLen}:max=${MAX_ENVELOPE_PAYLOAD_JSON_BYTES}`,
+  };
+}
+
+/** Reject stream queues that would exceed the retained-depth bound. */
+export function checkStreamQueueDepth(depth: number): MatrixIpcError | null {
+  if (depth <= MAX_STREAM_QUEUE_DEPTH) return null;
+  return {
+    category: 'sdk_invariant',
+    diagnosticId: `stream_queue_depth:got=${depth}:max=${MAX_STREAM_QUEUE_DEPTH}`,
+  };
+}
+
+/** Reject opening more concurrent streams than the per-session bound allows. */
+export function checkOpenStreams(count: number): MatrixIpcError | null {
+  if (count <= MAX_OPEN_STREAMS_PER_SESSION) return null;
+  return {
+    category: 'sdk_invariant',
+    diagnosticId: `open_streams:got=${count}:max=${MAX_OPEN_STREAMS_PER_SESSION}`,
+  };
 }

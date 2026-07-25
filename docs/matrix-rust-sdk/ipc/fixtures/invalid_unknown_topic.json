@@ -1,0 +1,11 @@
+{
+  "protocolVersion": 1,
+  "sessionGeneration": 1,
+  "streamId": "stream-x",
+  "sequence": 0,
+  "kind": "subscribe",
+  "payload": {
+    "topic": "not_a_real_topic",
+    "streamId": "stream-x"
+  }
+}

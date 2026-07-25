@@ -1,0 +1,89 @@
+{
+  "taskId": "P1.5",
+  "title": "IPC protocol contract tests",
+  "date": "2026-07-24",
+  "baseBranch": "feature/matrix-rust-sdk-full-replacement",
+  "baseSha": "c2009072cbe5685947287267ecd8678126b7b19e",
+  "workBranch": "matrix-rust/p1.5-ipc-contract-tests",
+  "protocolVersion": 1,
+  "artifacts": {
+    "designNote": "docs/matrix-rust-sdk/p1.5-ipc-contract-tests.md",
+    "fixtures": "docs/matrix-rust-sdk/ipc/fixtures/",
+    "schemaCatalog": "docs/matrix-rust-sdk/ipc/schema_catalog_v1.json",
+    "rustContractTests": "src-tauri/src/matrix/ipc/contract_tests.rs",
+    "rustBaselineAndP15Tests": "src-tauri/src/matrix/ipc/tests.rs",
+    "typescriptContractTests": "synara/src/app/features/matrix-ipc/__tests__/matrixIpcContract.test.ts",
+    "typescriptBaselineAndP15Tests": "synara/src/app/features/matrix-ipc/__tests__/matrixIpc.test.ts",
+    "boundsHelpers": {
+      "rustBool": "src-tauri/src/matrix/ipc/version.rs",
+      "rustResult": "src-tauri/src/matrix/ipc/protocol.rs",
+      "typescriptBool": "synara/src/app/features/matrix-ipc/version.ts",
+      "typescriptResult": "synara/src/app/features/matrix-ipc/protocol.ts"
+    }
+  },
+  "coverage": [
+    "serialization_round_trips_envelope_kinds_error_categories",
+    "unknown_variants_unknown_kind_rejection",
+    "invalid_payloads_missing_fields_wrong_types",
+    "bounds_payload_queue_open_streams",
+    "sequence_gaps_resync_required",
+    "stale_session_generation_rejection",
+    "schema_compatibility_shared_json_fixtures",
+    "light_dto_composition_room_summary_in_snapshot_body"
+  ],
+  "policyConstants": {
+    "MATRIX_IPC_PROTOCOL_VERSION": 1,
+    "MAX_ENVELOPE_PAYLOAD_JSON_BYTES": 1048576,
+    "MAX_STREAM_QUEUE_DEPTH": 256,
+    "STREAM_COALESCE_WINDOW_MS": 16,
+    "MAX_OPEN_STREAMS_PER_SESSION": 64,
+    "FORBID_MEDIA_BYTES_OVER_JSON_IPC": true
+  },
+  "kindCount": 13,
+  "errorCategoryCount": 21,
+  "validFixturesAdded": [
+    "valid_unsubscribe.json",
+    "valid_subscribed.json",
+    "valid_unsubscribed.json",
+    "valid_cancel.json",
+    "valid_ping.json",
+    "valid_pong.json",
+    "valid_error_stale_session.json",
+    "valid_resync_stale_generation.json",
+    "valid_snapshot_with_room_summary_body.json"
+  ],
+  "invalidFixturesAdded": [
+    "invalid_missing_session_generation.json",
+    "invalid_missing_sequence.json",
+    "invalid_missing_kind.json",
+    "invalid_missing_payload.json",
+    "invalid_wrong_type_protocol_version.json",
+    "invalid_wrong_type_sequence.json",
+    "invalid_unknown_error_category.json",
+    "invalid_unknown_topic.json",
+    "invalid_subscribe_missing_stream_id.json",
+    "invalid_hello_missing_client_protocol_version.json",
+    "invalid_unknown_resync_reason.json"
+  ],
+  "outOfScope": [
+    "production_login_sync_client",
+    "dual_backend",
+    "matrix_sdk_or_ruma_on_wire",
+    "new_production_tauri_matrix_commands",
+    "architectural_ci_guardrails_P1.6",
+    "live_stream_supervisor"
+  ],
+  "residualsToP1.6": [
+    "ci_forbid_sdk_imports_in_ipc_dto",
+    "ci_forbid_unversioned_matrix_ipc",
+    "ci_forbid_new_js_sdk_imports",
+    "ci_forbid_raw_matrix_runtime_http"
+  ],
+  "constraints": {
+    "noProductionMatrixLoginSync": true,
+    "noDualBackend": true,
+    "noSdkTypesInIpcDtoWireModules": true,
+    "noNewProductionTauriMatrixCommands": true,
+    "prTarget": "feature/matrix-rust-sdk-full-replacement"
+  }
+}

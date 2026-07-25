@@ -139,12 +139,30 @@ impl MatrixIpcEnvelope {
     }
 
     /// Parse a JSON value into a typed envelope.
+    ///
     /// Unknown `kind` values fail deserialization (reject-at-boundary policy).
+    /// Non-object `payload` values are rejected so empty structs cannot accept
+    /// arrays/scalars (mirrors the TypeScript `isObject(payload)` guard).
     pub fn from_json_value(value: serde_json::Value) -> Result<Self, serde_json::Error> {
+        validate_payload_is_object(&value)?;
         serde_json::from_value(value)
     }
 
     pub fn from_json_str(s: &str) -> Result<Self, serde_json::Error> {
-        serde_json::from_str(s)
+        let value: serde_json::Value = serde_json::from_str(s)?;
+        Self::from_json_value(value)
+    }
+}
+
+/// Reject envelopes whose `payload` is not a JSON object (arrays/scalars/null).
+/// Serde can otherwise deserialize empty structs from `[]`, which would diverge
+/// from the TypeScript boundary parser.
+fn validate_payload_is_object(value: &serde_json::Value) -> Result<(), serde_json::Error> {
+    match value.get("payload") {
+        None => Ok(()), // missing payload: let serde report the real error
+        Some(payload) if payload.is_object() => Ok(()),
+        Some(_) => Err(serde::de::Error::custom(
+            "matrix ipc envelope payload must be a JSON object",
+        )),
     }
 }

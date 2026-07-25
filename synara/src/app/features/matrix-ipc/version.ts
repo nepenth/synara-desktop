@@ -23,3 +23,22 @@ export const MAX_OPEN_STREAMS_PER_SESSION = 64;
  * Use binary handles / chunked native transfer APIs instead.
  */
 export const FORBID_MEDIA_BYTES_OVER_JSON_IPC = true;
+
+/** True when a JSON-encoded payload length is within policy bounds. */
+export function payloadWithinBounds(jsonByteLen: number): boolean {
+  return jsonByteLen <= MAX_ENVELOPE_PAYLOAD_JSON_BYTES;
+}
+
+/**
+ * True when a stream queue depth is within the documented soft bound.
+ * Depth above MAX_STREAM_QUEUE_DEPTH requires backpressure/coalescing
+ * within STREAM_COALESCE_WINDOW_MS (documented policy; no live queue here).
+ */
+export function streamQueueDepthWithinBounds(depth: number): boolean {
+  return depth <= MAX_STREAM_QUEUE_DEPTH;
+}
+
+/** True when open stream count is within the documented bound. */
+export function openStreamsWithinBounds(count: number): boolean {
+  return count <= MAX_OPEN_STREAMS_PER_SESSION;
+}
