@@ -3,6 +3,11 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import {
+  formatViolations,
+  runGuardrails,
+} from "./check-matrix-rust-sdk-guardrails.mjs";
+
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
 
 const trackedFiles = execFileSync("git", ["ls-files"], {
@@ -137,3 +142,16 @@ console.log(
   `Matrix boundary check passed with ${activeIOSExceptions.size} active iOS exceptions and ` +
     `${activeDesktopExceptions.size} active desktop exceptions.`
 );
+
+// P1.6 — Matrix Rust SDK replacement architectural guardrails (contracts,
+// dual-backend ban, versioned IPC, no product Matrix Tauri commands yet).
+const rustGuardrails = runGuardrails({ root, files: repositoryFiles });
+if (!rustGuardrails.ok) {
+  console.error(`[matrix-boundaries] ${rustGuardrails.summary}`);
+  console.error(formatViolations(rustGuardrails.violations));
+  console.error(
+    "\nSee docs/matrix-rust-sdk/p1.6-architectural-guardrails.md for rules."
+  );
+  process.exit(1);
+}
+console.log(`[matrix-boundaries] ${rustGuardrails.summary}`);
