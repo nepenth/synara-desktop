@@ -1,0 +1,112 @@
+{
+  "taskId": "P1.3",
+  "title": "Versioned Matrix IPC schema foundation",
+  "date": "2026-07-24",
+  "baseBranch": "feature/matrix-rust-sdk-full-replacement",
+  "baseSha": "ac752602d2f0734d8041ffbdcd217c339b38a4c3",
+  "workBranch": "matrix-rust/p1.3-matrix-ipc-schemas",
+  "protocolVersion": 1,
+  "protocolVersionConstant": "MATRIX_IPC_PROTOCOL_VERSION",
+  "artifacts": {
+    "designNote": "docs/matrix-rust-sdk/p1.3-matrix-ipc-schemas.md",
+    "fixtures": "docs/matrix-rust-sdk/ipc/fixtures/",
+    "rustModule": "src-tauri/src/matrix/ipc/",
+    "typescriptModule": "synara/src/app/features/matrix-ipc/"
+  },
+  "kinds": [
+    "hello",
+    "hello_ack",
+    "subscribe",
+    "unsubscribe",
+    "subscribed",
+    "unsubscribed",
+    "snapshot",
+    "delta",
+    "resync_required",
+    "cancel",
+    "error",
+    "ping",
+    "pong"
+  ],
+  "streamTopics": [
+    "room_list",
+    "timeline",
+    "members",
+    "typing",
+    "receipts",
+    "account_data",
+    "presence",
+    "notification_candidates",
+    "crypto_status",
+    "send_queue"
+  ],
+  "errorCategories": [
+    "authentication_rejected",
+    "user_deactivated",
+    "interactive_auth_required",
+    "forbidden",
+    "rate_limited",
+    "connectivity",
+    "homeserver_unavailable",
+    "unsupported_capability",
+    "store_locked",
+    "store_corrupt",
+    "store_unavailable",
+    "crypto_failure",
+    "recovery_failure",
+    "verification_failure",
+    "media_too_large",
+    "media_unsupported",
+    "media_decrypt_failed",
+    "cancellation",
+    "stale_session_generation",
+    "sdk_invariant",
+    "unknown"
+  ],
+  "envelopeFields": {
+    "required": [
+      "protocolVersion",
+      "sessionGeneration",
+      "sequence",
+      "kind",
+      "payload"
+    ],
+    "optional": ["streamId", "requestId"],
+    "timestamp": "omitted_unless_product_semantics_require"
+  },
+  "policyConstants": {
+    "MAX_ENVELOPE_PAYLOAD_JSON_BYTES": 1048576,
+    "MAX_STREAM_QUEUE_DEPTH": 256,
+    "STREAM_COALESCE_WINDOW_MS": 16,
+    "MAX_OPEN_STREAMS_PER_SESSION": 64,
+    "FORBID_MEDIA_BYTES_OVER_JSON_IPC": true
+  },
+  "unknownKindPolicy": {
+    "commands": "reject_at_boundary",
+    "invalidStreamEvents": "resync_required"
+  },
+  "privacy": {
+    "forbiddenInErrorDetails": [
+      "tokens",
+      "credentials",
+      "recovery_keys",
+      "event_plaintext",
+      "raw_push_payloads",
+      "decrypted_media"
+    ]
+  },
+  "outOfScope": [
+    "domain_dtos_P1.4",
+    "expanded_contract_suite_P1.5",
+    "ci_guardrails_P1.6",
+    "production_login_sync",
+    "tauri_matrix_commands",
+    "dual_backend",
+    "matrix_js_sdk_removal"
+  ],
+  "sdkBoundary": {
+    "matrixSdkTypesOnWire": false,
+    "matrixSdkImportsInIpc": false,
+    "productionCommandsRegistered": false
+  }
+}
