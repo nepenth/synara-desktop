@@ -1,0 +1,13 @@
+{
+  "protocolVersion": 1,
+  "sessionGeneration": 1,
+  "streamId": "stream-room-list-1",
+  "sequence": 1,
+  "kind": "snapshot",
+  "payload": {
+    "streamId": "stream-room-list-1",
+    "topic": "room_list",
+    "snapshotId": "snap-001",
+    "body": {}
+  }
+}
