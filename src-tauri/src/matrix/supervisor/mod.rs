@@ -14,6 +14,10 @@
 //! Lifecycle states: empty, opening, authenticating, restoring, syncing, ready,
 //! stopping, logged_out, failed, wiping (`SupervisorState`, wire-aligned with
 //! `dto::SessionLifecycle`).
+//!
+//! Async task cancel/join on generation bump is owned by
+//! [`crate::matrix::tasks`] (P2.4) via
+//! `tasks::follow_supervisor_generation` — this actor stays pure/sync.
 
 #![allow(dead_code)]
 #![allow(unused_imports)]
@@ -29,7 +33,8 @@ pub use actor::{
 };
 pub use error::{SupervisorError, TransitionError};
 pub use handle::{
-    ClientFactory, ClientHandle, FactoryError, NullClientFactory, TestClientHandle,
+    ClientFactory, ClientHandle, FactoryError, NullClientFactory, TestClientFactory,
+    TestClientHandle,
 };
 pub use state::{SupervisorState, SupervisorEvent};
 pub use transition::{SupervisorCommand, TransitionEffect};
