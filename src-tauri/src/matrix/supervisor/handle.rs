@@ -1,16 +1,16 @@
 //! Opaque client handle slot and sole construction factory.
 //!
-//! Real `matrix_sdk::Client` wiring lands in **P2.3**. Until then handles are
-//! harness stubs so the supervisor can prove sole-owner install/drop cycles
-//! without production login/sync.
+//! P2.3 supplies [`crate::matrix::client_builder::PlannedClientFactory`] which
+//! validates config and installs a planned handle. Live `matrix_sdk::Client`
+//! construction remains test-harness-only (guardrails). No production
+//! login/sync.
 
 use crate::matrix::ipc::MatrixIpcErrorCategory;
 
 /// Opaque Matrix client slot owned exclusively by [`super::MatrixSupervisor`].
 ///
-/// Implementations must not perform network I/O in P2.1 stubs. Production
-/// SDK client adapters are introduced later (P2.3+) and remain reachable only
-/// through the supervisor.
+/// Implementations must not perform production login/sync. Planned handles
+/// (P2.3) carry config/plan only; live SDK adapters remain harness-scoped.
 pub trait ClientHandle: Send {
     /// Stable id for leak/tracking tests (not a Matrix device id).
     fn handle_id(&self) -> u64;
@@ -33,8 +33,8 @@ pub struct FactoryError {
     pub diagnostic_id: &'static str,
 }
 
-/// Default factory: refuses construction. Used until P2.3 wires the real
-/// builder. Prevents accidental silent client creation.
+/// Default factory: refuses construction. Used when no config is available.
+/// Prevents accidental silent client creation.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct NullClientFactory;
 

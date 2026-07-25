@@ -5,7 +5,8 @@
  * 1. No matrix_sdk / matrix_sdk_ui / ruma types in DTO or IPC modules.
  * 2. No matrix-js-sdk imports in matrix-ipc / matrix-dto (greenfield contracts).
  * 3. No raw /_matrix/ HTTP in greenfield contract surfaces.
- * 4. No production Client login/sync construction under src-tauri/src/matrix/.
+ * 4. No production Client login/sync under src-tauri/src/matrix/ (Client::builder
+ *    allowed only under matrix/client_builder/ for P2.3 unauthenticated open).
  * 5. No dual-backend / Matrix backend selector in production runtime sources.
  * 6. Matrix IPC contract surface must remain versioned (protocolVersion / constant).
  * 7. No Matrix product Tauri commands registered in invoke_handler yet.
@@ -283,9 +284,14 @@ const RAW_MATRIX_HTTP_PATTERNS = [
   /\bappendPathComponent\s*\(\s*["']_matrix["']\s*\)/,
 ];
 
-const PRODUCTION_CLIENT_PATTERNS = [
+/** Construction APIs allowed only under `matrix/client_builder/` (P2.3). */
+const CLIENT_BUILDER_ONLY_PATTERNS = [
   /\bClient\s*::\s*builder\b/,
   /\bClient\s*::\s*new\b/,
+];
+
+/** Login/sync/session APIs forbidden everywhere under `matrix/` (non-test). */
+const PRODUCTION_SESSION_PATTERNS = [
   /\.login_username\b/,
   /\.login_token\b/,
   /\.matrix_auth\s*\(/,
@@ -294,6 +300,14 @@ const PRODUCTION_CLIENT_PATTERNS = [
   /\.restore_session\b/,
   /\bRoom\s*::\s*join\b/,
 ];
+
+/** Full ban set for non-builder matrix modules. */
+const PRODUCTION_CLIENT_PATTERNS = [
+  ...CLIENT_BUILDER_ONLY_PATTERNS,
+  ...PRODUCTION_SESSION_PATTERNS,
+];
+
+const ZONE_CLIENT_BUILDER_ALLOW = ["src-tauri/src/matrix/client_builder/"];
 
 const DUAL_BACKEND_PATTERNS = [
   /\bMatrixBackend\b/,
@@ -371,7 +385,8 @@ export function runGuardrails(opts) {
     }
   }
 
-  // --- Zone C: src-tauri/src/matrix — no production Client/login/sync ---
+  // --- Zone C: src-tauri/src/matrix — no production login/sync;
+  //     Client::builder only under matrix/client_builder/ (P2.3) ---
   for (const rel of files) {
     if (!inAnyZone(rel, ZONE_RUST_MATRIX)) continue;
     if (!rel.endsWith(".rs")) continue;
@@ -380,12 +395,18 @@ export function runGuardrails(opts) {
     if (!existsSync(abs)) continue;
     const raw = readFileSync(abs, "utf8");
     const code = stripCommentsAndStrings(raw, { lang: "rs", blankStrings: true });
-    for (const hit of findHits(code, PRODUCTION_CLIENT_PATTERNS)) {
+    const inClientBuilder = inAnyZone(rel, ZONE_CLIENT_BUILDER_ALLOW);
+    const patterns = inClientBuilder
+      ? PRODUCTION_SESSION_PATTERNS
+      : PRODUCTION_CLIENT_PATTERNS;
+    for (const hit of findHits(code, patterns)) {
       add(
         "no-production-matrix-client-in-matrix-module",
         rel,
         hit.line,
-        `production Client/login/sync API forbidden under matrix/ until later phases: ${hit.text}`
+        inClientBuilder
+          ? `login/sync/session API forbidden under matrix/ (builder module may only construct unauthenticated Client): ${hit.text}`
+          : `production Client/login/sync API forbidden under matrix/ outside client_builder/: ${hit.text}`
       );
     }
   }
