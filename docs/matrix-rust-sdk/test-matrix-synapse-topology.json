@@ -1,438 +1,643 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "artifact": {
     "id": "R0.2-C-TEST-MATRIX-SYNAPSE-TOPOLOGY",
     "title": "Matrix Rust SDK replacement test matrix and disposable Synapse topology",
     "authoritative_format": "json",
     "markdown_twin": "docs/matrix-rust-sdk/test-matrix-synapse-topology.md",
-    "status": "ready_for_independent_review",
+    "state": "ready_for_independent_review",
     "phase_0_gate": "open",
-    "program_constraint": "The shipping desktop remains matrix-js-sdk-only until the atomic cutover. Test harnesses must never create an implicit production dual backend."
+    "authority_boundary": "R0.2 defines completeness and execution readiness only. It cannot accept P0.1-P0.7, change Phase 0 strict criteria, or close Phase 0. R0.8 alone may accept Phase 0 after exact-head rerun and independent review."
   },
   "boundaries": {
     "production_wiring": false,
+    "shipping_backend": "matrix-js-sdk 42.0.0 only until atomic cutover",
     "permitted": [
-      "static and unit validation",
-      "contract and property tests",
-      "the existing current-JS control runner",
-      "an isolated non-product Rust SDK harness",
+      "static/unit/contract validation",
+      "existing current-JS control runner",
+      "isolated non-product Matrix Rust SDK harness",
       "packaged single-backend acceptance runs"
     ],
     "forbidden": [
-      "a production backend selector",
-      "simultaneous matrix-js-sdk and Matrix Rust SDK sync owners for one session",
-      "pointing destructive fixture generation at a production homeserver",
-      "committing credentials, tokens, identifiers, event bodies, raw logs, stores, or signing material",
-      "treating current-JS control evidence as Rust SDK evidence"
+      "production backend selector or dual sync owner",
+      "destructive fixture generation against a non-loopback homeserver",
+      "current-JS evidence represented as Matrix Rust SDK evidence",
+      "acceptance, deferral, status, or gate closure by this artifact"
     ]
   },
+  "path_registry": [
+    {
+      "path": "scripts/synapse-integration.sh",
+      "kind": "existing",
+      "purpose": "deterministic Synapse lifecycle and runtime-secret producer",
+      "owner": "Synapse harness owner"
+    },
+    {
+      "path": "synara/scripts/run-synapse-two-client-integration.mjs",
+      "kind": "existing",
+      "purpose": "current-JS control producer; this corrects the stale path scripts/run-synapse-two-client-integration.mjs",
+      "owner": "current desktop behavior owner"
+    },
+    {
+      "path": "scripts/__tests__/synapse-two-client-integration.test.mjs",
+      "kind": "existing",
+      "purpose": "safe harness unit validation",
+      "owner": "Synapse harness owner"
+    },
+    {
+      "path": "integration/synapse/compose.yml",
+      "kind": "existing",
+      "purpose": "pinned disposable service topology",
+      "owner": "Synapse harness owner"
+    },
+    {
+      "path": "integration/synapse/runtime/.gitkeep",
+      "kind": "existing",
+      "purpose": "ignored runtime-secret directory anchor",
+      "owner": "Synapse harness owner"
+    },
+    {
+      "path": "docs/matrix-rust-sdk/evidence/phase0/<lane-id>.json",
+      "kind": "future_output",
+      "purpose": "sanitized exact-head evidence record produced by the named lane",
+      "owner": "corresponding lane owner",
+      "creation_rule": "Created only by the implementing PR; absence means pending and gate-open."
+    },
+    {
+      "path": "src-tauri/tests/matrix_rust_live_harness.rs",
+      "kind": "future_output",
+      "purpose": "isolated Rust SDK live harness",
+      "owner": "Matrix Rust harness owner",
+      "creation_rule": "Future R0.7 output; not present and not implied by R0.2."
+    }
+  ],
+  "credential_contract": {
+    "named_mechanism": "SYNARA-DISPOSABLE-RUNTIME-SECRETS-V1",
+    "injection_interface": {
+      "nonsecret_environment": ["SYNARA_PORT"],
+      "generated_secret_files": [
+        "integration/synapse/runtime/.env",
+        "integration/synapse/runtime/homeserver.yaml",
+        "integration/synapse/runtime/localhost.signing.key"
+      ],
+      "account_credentials": "The runner creates random passwords and receives access tokens in process memory only; stable localparts/device names are nonsecret fixture identity.",
+      "permissions": "scripts/synapse-integration.sh sets umask 077 before creating runtime files."
+    },
+    "redaction": "Commands and evidence may emit only lane/phase, bounded counts, safe error category, exit status, and cleanup result. Passwords, tokens, keys, secrets, Matrix IDs, event bodies, and absolute user paths are forbidden.",
+    "rotation": "Each reset destroys runtime files, Compose volumes, database/media/store state, and in-memory tokens; each setup generates fresh random credential material.",
+    "ci_rule": "CI passes credentials only through the named runtime-file/process-memory interface; it never uses command-line arguments, committed values, job output, logs, or artifacts for usable secrets."
+  },
   "disposable_synapse": {
-    "purpose": "Local and CI-only deterministic client integration; never production topology",
     "synapse_image": "matrixdotorg/synapse:v1.157.0",
     "postgres_image": "postgres:16.9-bookworm",
-    "origin": "http://127.0.0.1:${SYNARA_PORT:-8008}",
-    "host_port_policy": {
-      "default": 8008,
-      "allowed_range": "1024-65535",
-      "host_binding": "127.0.0.1 only",
-      "container_port": 8008,
-      "postgres_host_ports": []
-    },
-    "network": {
-      "synapse_listener_inside_container": "0.0.0.0:8008",
-      "host_exposure": "one loopback-only mapping",
-      "database_exposure": "Compose network only",
-      "accepted_client_urls": "credential-free HTTP loopback origin with no path, query, or fragment"
-    },
-    "secret_handling": {
-      "runtime_directory": "integration/synapse/runtime",
-      "git_policy": "runtime/* ignored except runtime/.gitkeep",
-      "creation_umask": "077",
-      "generated_values": [
-        "64-hex PostgreSQL password",
-        "registration shared secret",
-        "macaroon secret",
-        "form secret",
-        "ed25519 signing key"
-      ],
-      "account_credentials": "random per run and memory-only",
-      "access_tokens": "memory-only",
-      "raw_logs_committed": false
-    },
-    "lifecycle": {
-      "setup": "SYNARA_PORT=18008 scripts/synapse-integration.sh up",
-      "status": "scripts/synapse-integration.sh status",
-      "logs": "scripts/synapse-integration.sh logs",
-      "retaining_stop": "scripts/synapse-integration.sh down",
-      "mandatory_cleanup": "scripts/synapse-integration.sh reset",
-      "cleanup_effect": "remove Compose volumes, orphans, database, media, generated config, keys, credentials, and runtime children except .gitkeep",
-      "failure_rule": "Every live lane must run cleanup with always/finally semantics and report cleanup failure separately."
-    }
+    "client_origin": "http://127.0.0.1:${SYNARA_PORT:-8008}",
+    "host_binding": "127.0.0.1 only",
+    "host_port_default": 8008,
+    "host_port_allowed_range": [1024, 65535],
+    "postgres_host_ports": 0,
+    "setup": [
+      "scripts/synapse-integration.sh reset",
+      "SYNARA_PORT=18008 scripts/synapse-integration.sh up",
+      "scripts/synapse-integration.sh status"
+    ],
+    "teardown": "scripts/synapse-integration.sh reset",
+    "teardown_semantics": "always/finally; cleanup failure is a separate failed result and no live evidence is valid",
+    "reset_postcondition": "No Compose volume/orphan/database/media/generated config/key/credential/runtime child remains except integration/synapse/runtime/.gitkeep.",
+    "network_failure_controls": [
+      {
+        "id": "NF-OFFLINE-15",
+        "procedure": "Block the client-to-Synapse loopback route for exactly 15 seconds while Synapse remains healthy.",
+        "expected": "Client reports offline, owns no duplicate sync task, and converges after restoration."
+      },
+      {
+        "id": "NF-SYNAPSE-RESTART",
+        "procedure": "Restart only the Synapse container after a recorded sync boundary.",
+        "expected": "Bounded retry occurs without credential logging, lost acknowledged events, or duplicate timeline rows."
+      },
+      {
+        "id": "NF-PROCESS-CRASH",
+        "procedure": "Terminate the test client after store flush and before the next sync token is acknowledged, then reopen the same disposable store.",
+        "expected": "Exactly one owner resumes; state converges or fails explicitly without silent data loss."
+      }
+    ]
   },
   "actors": [
     {
       "id": "BOOTSTRAP",
+      "localpart": null,
       "role": "fixture bootstrap",
-      "account": "none",
-      "devices": 0,
-      "access": "loopback Synapse shared-secret registration endpoint only",
-      "production_client": false
+      "device_display_name": null,
+      "power": "shared-secret registration only; never a room member"
     },
     {
       "id": "READER-A",
+      "localpart": "synara_reader",
       "role": "primary reader device",
-      "account": "reader",
-      "devices": 1,
-      "access": "normal Matrix client session"
+      "device_display_name": "SYNARA-R0.2-READER-A",
+      "power": "joined member, level 0"
     },
     {
       "id": "READER-B",
-      "role": "second reader device",
-      "account": "same account as READER-A",
-      "devices": 1,
-      "access": "password login with an explicit disposable device display name"
+      "localpart": "synara_reader",
+      "role": "second device for the reader account",
+      "device_display_name": "SYNARA-R0.2-READER-B",
+      "power": "joined member, level 0"
     },
     {
       "id": "SENDER",
-      "role": "independent event sender",
-      "account": "sender",
-      "devices": 1,
-      "access": "normal Matrix client session"
+      "localpart": "synara_sender",
+      "role": "room creator and independent event sender",
+      "device_display_name": "SYNARA-R0.2-SENDER",
+      "power": "room creator, level 100"
     },
     {
       "id": "IOS",
-      "role": "mixed-client iOS participant",
-      "account": "reader or independent peer as scenario specifies",
-      "devices": 1,
-      "access": "Matrix Rust SDK through matrix-rust-components-swift",
-      "availability": "future mixed-client lane"
+      "localpart": "synara_ios",
+      "role": "future mixed-client participant",
+      "device_display_name": "SYNARA-R0.2-IOS",
+      "power": "joined member, level 0; future lane only"
     }
   ],
   "fixtures": [
     {
       "id": "FX-64-CONTROL",
-      "status": "proven_current_js_control",
-      "room_visibility": "private",
-      "encryption": false,
-      "joined_rooms": 1,
-      "ordered_message_events": 64,
-      "receipt_modes": ["m.read", "m.read.private"],
-      "determinism": {
-        "first_event_index": 0,
-        "marker_event_index": 32,
-        "latest_event_index": 63,
-        "limited_initial_sync_must_exclude_first": true,
-        "context_must_include_marker": true,
-        "backward_pagination_must_prepend": true
-      },
-      "note": "Public/private describes receipt privacy in the existing runner; it does not make the room public or encrypted."
+      "state": "planned",
+      "producer": "future implementation in synara/scripts/run-synapse-two-client-integration.mjs; current runner bytes do not implement FX-64-CONTROL-v2",
+      "seed": "FX-64-CONTROL-v2",
+      "rooms_total": 2,
+      "spaces_total": 0,
+      "ordered_message_events_total": 128,
+      "graph": [
+        {
+          "id": "ROOM-CONTROL",
+          "visibility": "private",
+          "encryption": false,
+          "creator": "SENDER",
+          "members": ["SENDER", "READER-A", "READER-B"],
+          "power_levels": { "SENDER": 100, "READER-A": 0, "READER-B": 0 },
+          "ordered_message_events": 64,
+          "event_template": "control-{000..063}",
+          "boundary_indices": { "first": 0, "marker": 32, "latest": 63 }
+        },
+        {
+          "id": "ROOM-BOUNDARY",
+          "visibility": "private",
+          "encryption": false,
+          "creator": "SENDER",
+          "members": ["SENDER", "READER-A", "READER-B"],
+          "power_levels": { "SENDER": 100, "READER-A": 0, "READER-B": 0 },
+          "ordered_message_events": 64,
+          "event_template": "boundary-{000..063}",
+          "boundary_indices": {
+            "first": 0,
+            "receipt_target": 31,
+            "fully_read_target": 32,
+            "latest": 63
+          }
+        }
+      ],
+      "setup_procedure": [
+        "Reset and start disposable Synapse through SYNARA-DISPOSABLE-RUNTIME-SECRETS-V1.",
+        "Create SENDER and synara_reader with fresh in-memory passwords; login READER-A and READER-B with exact device display names.",
+        "SENDER creates ROOM-CONTROL then ROOM-BOUNDARY, applies the exact membership/power state, and sends each 64-event corpus sequentially with acknowledged event IDs held only in memory.",
+        "Wait until both reader devices observe exactly 2 joined rooms and 128 unique ordered message events."
+      ],
+      "validation_assertions": [
+        "Exactly 2 joined rooms, 0 spaces, and 128 message events exist; state events are excluded from the message count.",
+        "ROOM-CONTROL limited initial sync excludes index 0; context centered on index 32 returns it once; backward pagination prepends through index 0; latest is index 63.",
+        "ROOM-BOUNDARY m.read targets index 31, m.fully_read targets index 32, and m.read.private targets index 63; the second device converges according to receipt privacy semantics.",
+        "No duplicate, missing, cross-room, or out-of-order event is accepted; sender/room/event/device IDs and bodies remain absent from evidence."
+      ],
+      "reset_teardown": "Mandatory disposable_synapse.teardown after every pass/fail/timeout; rerun with the same seed recreates identities/shape but fresh credentials and Matrix IDs.",
+      "platform_scope": [
+        "Ubuntu 22.04 x86_64 CI with Docker",
+        "local Docker developer host"
+      ],
+      "dependencies": [
+        "scripts/synapse-integration.sh",
+        "synara/scripts/run-synapse-two-client-integration.mjs"
+      ],
+      "gate_effect": "planned_or_produced_without_independent_review_remains_open"
     },
     {
       "id": "FX-64-PUBLIC",
-      "status": "aspirational",
-      "room_visibility": "public",
+      "state": "planned",
+      "producer": "future fixture owner using the common reset/setup/send/wait/validate/teardown procedure",
+      "seed": "FX-64-PUBLIC-v1",
+      "rooms_total": 1,
+      "spaces_total": 0,
       "encryption": false,
-      "joined_rooms": 1,
-      "ordered_message_events": 64,
-      "required_for": ["room visibility", "join", "ordering"]
+      "visibility": "public",
+      "members": ["SENDER", "READER-A"],
+      "power_levels": { "SENDER": 100, "READER-A": 0 },
+      "ordered_message_events_total": 64,
+      "event_template": "public-{000..063}",
+      "validation": "READER-A joins by public room alias, sees exactly 64 unique ordered events, and reset leaves only .gitkeep.",
+      "future_output": "docs/matrix-rust-sdk/evidence/phase0/FX-64-PUBLIC.json",
+      "owner": "fixture owner",
+      "reviewer": "independent Matrix test reviewer",
+      "platform_scope": ["Ubuntu 22.04 x86_64 CI", "local Docker host"],
+      "refresh": "fixture/Synapse/client/candidate change or seven days",
+      "dependencies": ["SYNARA-DISPOSABLE-RUNTIME-SECRETS-V1"],
+      "gate_effect": "open"
     },
     {
       "id": "FX-1000-E2EE",
-      "status": "aspirational",
-      "room_visibility": "private",
+      "state": "planned",
+      "producer": "future E2EE fixture owner using the common reset/setup/send/wait/validate/teardown procedure",
+      "seed": "FX-1000-E2EE-v1",
+      "rooms_total": 1,
+      "spaces_total": 0,
       "encryption": true,
-      "joined_rooms": 1,
-      "ordered_message_events_minimum": 1000,
-      "required_for": [
-        "encrypted initial open",
-        "decryption stability",
-        "backward pagination",
-        "crash and reopen"
-      ]
+      "visibility": "private",
+      "members": ["SENDER", "READER-A", "READER-B"],
+      "power_levels": { "SENDER": 100, "READER-A": 0, "READER-B": 0 },
+      "ordered_message_events_total": 1000,
+      "event_template": "e2ee-{0000..0999}",
+      "validation": "Both reader devices decrypt exactly 1000 ordered events, paginate to index 0, close/reopen the encrypted store, and retain no plaintext in evidence.",
+      "future_output": "docs/matrix-rust-sdk/evidence/phase0/FX-1000-E2EE.json",
+      "owner": "fixture owner",
+      "reviewer": "independent Matrix/E2EE reviewer",
+      "platform_scope": ["macOS arm64", "Linux x86_64", "disposable Synapse"],
+      "refresh": "fixture/crypto-store/SDK/Synapse/client/candidate change or seven days",
+      "dependencies": ["SYNARA-DISPOSABLE-RUNTIME-SECRETS-V1"],
+      "gate_effect": "open"
     },
     {
       "id": "FX-200-ROOMS",
-      "status": "aspirational",
-      "joined_rooms_minimum": 200,
-      "encrypted_rooms_minimum": 1,
-      "large_room_events_minimum": 1000,
-      "required_for": [
-        "startup",
-        "room switch",
-        "memory",
-        "idle CPU",
-        "disk growth"
-      ]
+      "state": "planned",
+      "producer": "future large-account fixture owner using the common reset/setup/send/wait/validate/teardown procedure",
+      "seed": "FX-200-ROOMS-v1",
+      "rooms_total": 200,
+      "spaces_total": 1,
+      "space_graph": "SPACE-LARGE contains rooms 000..199 in numeric order; every tenth room is encrypted.",
+      "members": ["SENDER", "READER-A"],
+      "power_levels": { "SENDER": 100, "READER-A": 0 },
+      "encrypted_rooms_total": 20,
+      "large_room_id": "ROOM-LARGE-000",
+      "large_room_ordered_message_events": 1000,
+      "other_room_ordered_message_events_each": 1,
+      "validation": "READER-A sees exactly one space, 200 joined rooms, 20 encrypted rooms, 1000 ordered events in ROOM-LARGE-000, and one event in each remaining room.",
+      "future_output": "docs/matrix-rust-sdk/evidence/phase0/FX-200-ROOMS.json",
+      "owner": "fixture owner",
+      "reviewer": "independent Matrix/performance reviewer",
+      "platform_scope": ["macOS arm64", "Linux x86_64", "disposable Synapse"],
+      "refresh": "fixture/SDK/Synapse/client/candidate change or seven days",
+      "dependencies": ["FX-1000-E2EE", "SYNARA-DISPOSABLE-RUNTIME-SECRETS-V1"],
+      "gate_effect": "open"
     },
     {
       "id": "FX-MEDIA",
-      "status": "aspirational",
-      "room_visibility": "private",
-      "encryption_variants": [false, true],
+      "state": "planned",
+      "producer": "future media fixture owner using deterministic byte generation and the common lifecycle procedure",
+      "seed": "FX-MEDIA-v1",
+      "rooms_total": 2,
+      "spaces_total": 0,
+      "room_variants": ["private-unencrypted", "private-encrypted"],
+      "members": ["SENDER", "READER-A"],
+      "power_levels": { "SENDER": 100, "READER-A": 0 },
       "assets": [
-        { "class": "small-image", "maximum_bytes": 262144 },
-        { "class": "medium-image", "maximum_bytes": 5242880 }
+        {
+          "id": "MEDIA-SMALL",
+          "bytes": 262144,
+          "generator": "seeded RGBA PNG generator"
+        },
+        {
+          "id": "MEDIA-MEDIUM",
+          "bytes": 5242880,
+          "generator": "seeded binary image fixture generator"
+        }
       ],
-      "required_for": ["upload", "download", "cache", "first paint"]
+      "validation": "Both assets upload/download in both rooms with exact byte count and digest equality; cache reopen is bounded; bytes, MXC IDs, and keys are absent from evidence.",
+      "future_output": "docs/matrix-rust-sdk/evidence/phase0/FX-MEDIA.json",
+      "owner": "fixture owner",
+      "reviewer": "independent Matrix/media reviewer",
+      "platform_scope": ["macOS arm64", "Linux x86_64", "disposable Synapse"],
+      "refresh": "generator/media/crypto/SDK/Synapse/client/candidate change or seven days",
+      "dependencies": ["FX-1000-E2EE", "SYNARA-DISPOSABLE-RUNTIME-SECRETS-V1"],
+      "gate_effect": "open"
     },
     {
       "id": "FX-GAP-RECONNECT",
-      "status": "aspirational",
-      "room_visibility": "private",
-      "encryption_variants": [false, true],
-      "determinism": {
-        "offline_duration_seconds": 15,
-        "events_sent_while_offline": 20,
-        "marker_before_gap_index": 31,
-        "marker_after_gap_index": 52
-      },
-      "required_for": [
-        "limited gaps",
-        "reconnect",
-        "stale generation",
-        "ordering"
-      ]
+      "state": "planned",
+      "producer": "future reliability fixture owner using NF-OFFLINE-15 and the common lifecycle procedure",
+      "seed": "FX-GAP-RECONNECT-v1",
+      "rooms_total": 2,
+      "spaces_total": 0,
+      "room_variants": ["private-unencrypted", "private-encrypted"],
+      "members": ["SENDER", "READER-A", "READER-B"],
+      "power_levels": { "SENDER": 100, "READER-A": 0, "READER-B": 0 },
+      "pre_gap_message_events_each": 32,
+      "offline_seconds": 15,
+      "messages_sent_during_gap_each": 20,
+      "post_gap_message_events_each": 12,
+      "ordered_message_events_total": 128,
+      "validation": "Each room converges to exactly 64 ordered events; index 31 precedes the gap, indices 32..51 are sent offline, index 52 is first post-gap, and no duplicate sync owner or stale-generation update survives.",
+      "future_output": "docs/matrix-rust-sdk/evidence/phase0/FX-GAP-RECONNECT.json",
+      "owner": "fixture owner",
+      "reviewer": "independent Matrix/reliability reviewer",
+      "platform_scope": ["macOS arm64", "Linux x86_64", "disposable Synapse"],
+      "refresh": "fixture/failure-control/SDK/Synapse/client/candidate change or seven days",
+      "dependencies": [
+        "NF-OFFLINE-15",
+        "FX-1000-E2EE",
+        "SYNARA-DISPOSABLE-RUNTIME-SECRETS-V1"
+      ],
+      "gate_effect": "open"
     }
   ],
+  "evidence_lifecycle": {
+    "states": [
+      "planned",
+      "pending",
+      "produced_pending_review",
+      "accepted",
+      "rejected",
+      "failed",
+      "blocked",
+      "deferred",
+      "stale",
+      "expired"
+    ],
+    "only_gate_satisfying_state": "accepted",
+    "binding": "Every produced lane record names exact base/head SHA, producer command/procedure, result, platform, fixture/counts, sanitized artifact path or immutable URL, owner, independent reviewer, captured_at, expiry/refresh triggers, dependencies, and explicit exclusions.",
+    "failure_rule": "Failed, blocked, rejected, deferred, stale, expired, missing, or merely produced evidence remains gate-open. Cleanup failure invalidates the live result.",
+    "refresh_rule": "Live/performance evidence expires after seven UTC days; toolchain evidence refreshes on toolchain/lock changes; ephemeral evidence expires with its artifact; every row refreshes on candidate-head, fixture, producer, SDK, Synapse image, platform, or acceptance-criteria change."
+  },
   "lanes": [
     {
       "id": "L-STATIC",
-      "kind": "static",
-      "status": "proven",
-      "owner": "repository CI",
-      "platforms": ["all developer hosts", "ubuntu-22.04 CI"],
-      "scope": [
-        "image pins",
-        "loopback mapping",
-        "generated secrets",
-        "ignored runtime state",
-        "reset semantics"
+      "state": "pending",
+      "producer_procedure": "npm run check:synapse-harness",
+      "artifact_or_reference": "future output docs/matrix-rust-sdk/evidence/phase0/L-STATIC.json",
+      "validation_procedure": "Rerun at exact head and inspect image pins, loopback mapping, generated secrets, ignored runtime state, and reset semantics.",
+      "expected_result": "Command exits 0 with every static harness invariant enforced.",
+      "owner": "repository CI owner",
+      "reviewer_acceptance_authority": "independent R0.8 reviewer",
+      "platform_scope": ["all developer hosts", "Ubuntu 22.04 CI"],
+      "dependencies": [
+        "scripts/synapse-integration.sh",
+        "integration/synapse/compose.yml"
       ],
-      "current_evidence": ["npm run check:synapse-harness"]
+      "refresh": "candidate/harness/image change",
+      "gate_effect": "open_until_exact_immutable_evidence_record_exists_and_is_accepted"
     },
     {
       "id": "L-UNIT",
-      "kind": "unit",
-      "status": "proven",
-      "owner": "repository CI",
-      "platforms": ["Node test host", "Rust test host"],
-      "scope": [
-        "URL rejection",
-        "registration HMAC",
-        "bounded polling",
-        "safe failures",
-        "Matrix module units"
+      "state": "pending",
+      "producer_procedure": "node --test scripts/__tests__/synapse-two-client-integration.test.mjs && cargo test --locked",
+      "artifact_or_reference": "future output docs/matrix-rust-sdk/evidence/phase0/L-UNIT.json",
+      "validation_procedure": "Rerun at exact head and inspect URL, HMAC, polling, safe failure, and Matrix module coverage.",
+      "expected_result": "Commands exit 0 with no skipped required cases.",
+      "owner": "repository CI owner",
+      "reviewer_acceptance_authority": "independent R0.8 reviewer",
+      "platform_scope": ["Node test host", "Rust test host"],
+      "dependencies": [
+        "scripts/__tests__/synapse-two-client-integration.test.mjs"
       ],
-      "current_evidence": [
-        "scripts/__tests__/synapse-two-client-integration.test.mjs",
-        "cargo test --locked"
-      ]
+      "refresh": "candidate/toolchain/test change",
+      "gate_effect": "open_until_exact_immutable_evidence_record_exists_and_is_accepted"
     },
     {
       "id": "L-CONTRACT",
-      "kind": "contract",
-      "status": "partially_proven",
-      "owner": "repository CI",
-      "platforms": ["ubuntu-22.04 CI"],
-      "scope": ["harness policy", "IPC/DTO fixtures", "workflow gates"],
-      "exclusions": ["live Rust SDK server behavior", "packaged runtime"]
+      "state": "pending",
+      "producer_procedure": "Run harness policy, IPC/DTO fixture, and workflow contract checks at exact head.",
+      "artifact_or_reference": "future output docs/matrix-rust-sdk/evidence/phase0/L-CONTRACT.json",
+      "validation_procedure": "Independent rerun verifies exact wire/policy assertions and explicit live/packaged exclusions.",
+      "expected_result": "All contract checks pass without claiming live Rust or packaged runtime behavior.",
+      "owner": "repository CI owner",
+      "reviewer_acceptance_authority": "independent IPC/policy reviewer",
+      "platform_scope": ["Ubuntu 22.04 CI"],
+      "dependencies": ["L-STATIC", "L-UNIT"],
+      "refresh": "contract/workflow/candidate change",
+      "gate_effect": "open_until_accepted"
     },
     {
       "id": "L-PROPERTY",
-      "kind": "property",
-      "status": "aspirational",
+      "state": "planned",
+      "producer_procedure": "Future bounded property generators exercise protocol values, ordering, counter boundaries, and redaction invariants.",
+      "artifact_or_reference": "future output docs/matrix-rust-sdk/evidence/phase0/L-PROPERTY.json",
+      "validation_procedure": "Replay recorded seeds at exact head and independently inspect shrinking, bounds, and redaction.",
+      "expected_result": "Every bounded seed passes or yields a sanitized reproducible failure.",
       "owner": "Matrix runtime test owner",
-      "platforms": ["Rust and TypeScript test hosts"],
-      "scope": [
-        "bounded generated protocol values",
-        "ordering",
-        "counter boundaries",
-        "redaction invariants"
-      ],
-      "target": "R0.3-R0.6"
+      "reviewer_acceptance_authority": "independent Matrix test reviewer",
+      "platform_scope": ["Rust test host", "TypeScript test host"],
+      "dependencies": ["L-CONTRACT"],
+      "refresh": "generator/protocol/candidate change",
+      "gate_effect": "open"
     },
     {
       "id": "L-INTEGRATION",
-      "kind": "integration",
-      "status": "partially_proven",
-      "owner": "repository CI",
-      "platforms": ["ubuntu-22.04 CI with Docker"],
-      "scope": [
-        "real Synapse/PostgreSQL",
-        "two devices",
-        "limited sync",
-        "context",
-        "pagination",
-        "receipts"
+      "state": "blocked",
+      "producer_procedure": "After corrected FX-64-CONTROL-v2 producer exists, run real disposable Synapse/PostgreSQL integration for devices, limited sync, context, pagination, and receipts.",
+      "artifact_or_reference": "future output docs/matrix-rust-sdk/evidence/phase0/L-INTEGRATION.json",
+      "validation_procedure": "Independent exact-head rerun verifies 2 rooms/128 messages, convergence, redaction, and cleanup.",
+      "expected_result": "Every v2 assertion passes and reset exits 0.",
+      "owner": "current desktop behavior owner",
+      "reviewer_acceptance_authority": "independent Matrix integration reviewer",
+      "platform_scope": ["Ubuntu 22.04 CI with Docker"],
+      "dependencies": ["FX-64-CONTROL", "RES-SYN-FIXTURE-CORPUS"],
+      "refresh": "seven days or producer/client/Synapse/candidate change",
+      "gate_effect": "open"
+    },
+    {
+      "id": "L-STATIC-UNIT",
+      "state": "pending",
+      "producer_procedure": "npm run check:synapse-harness && node --test scripts/__tests__/synapse-two-client-integration.test.mjs && cargo test --locked",
+      "artifact_or_reference": "future output docs/matrix-rust-sdk/evidence/phase0/L-STATIC-UNIT.json",
+      "validation_procedure": "Rerun the exact commands at the reviewed head.",
+      "expected_result": "All exit 0 and test loopback, secret generation/redaction, reset, URL rejection, registration HMAC, polling, and Matrix units.",
+      "owner": "repository CI owner",
+      "reviewer_acceptance_authority": "independent R0.8 reviewer",
+      "platform_scope": ["Ubuntu 22.04 CI", "Node and Rust test hosts"],
+      "dependencies": [
+        "scripts/synapse-integration.sh",
+        "scripts/__tests__/synapse-two-client-integration.test.mjs"
       ],
-      "current_backend": "matrix-js-sdk 42.0.0"
+      "refresh": "candidate/toolchain/harness change",
+      "gate_effect": "open_until_accepted"
     },
     {
       "id": "L-JS-CONTROL",
-      "kind": "current-JS-control",
-      "status": "proven_for_fx_64_control_only",
-      "owner": "desktop current-behavior owner",
-      "platforms": ["ubuntu-22.04 CI"],
-      "client": "synara/scripts/run-synapse-two-client-integration.mjs",
-      "backend": "matrix-js-sdk 42.0.0",
-      "fixture": "FX-64-CONTROL",
-      "scope": [
-        "two-device limited sync",
-        "context",
-        "backward pagination",
-        "latest timeline",
-        "fully-read marker",
-        "public and private receipts"
-      ],
-      "cannot_satisfy": [
-        "Rust adapter acceptance",
-        "E2EE",
-        "packaged app",
-        "P0.6 live UX"
-      ]
+      "state": "blocked",
+      "producer_procedure": "First implement FX-64-CONTROL-v2 in synara/scripts/run-synapse-two-client-integration.mjs; then setup, seed v2, run npm run test:synapse-integration, validate assertions/counts/redaction, and reset.",
+      "artifact_or_reference": "future output docs/matrix-rust-sdk/evidence/phase0/L-JS-CONTROL.json",
+      "validation_procedure": "Independent rerun on exact head and inspect sanitized result plus cleanup.",
+      "expected_result": "Exactly 2 rooms/128 messages and every control assertion passes with no secret/content leakage.",
+      "owner": "current desktop behavior owner",
+      "reviewer_acceptance_authority": "independent R0.8 reviewer",
+      "platform_scope": ["Ubuntu 22.04 x86_64 CI", "matrix-js-sdk 42.0.0 only"],
+      "dependencies": ["FX-64-CONTROL", "NF-OFFLINE-15"],
+      "refresh": "seven days or candidate/harness/client/Synapse change",
+      "gate_effect": "open_until_accepted; never proves Rust SDK behavior"
     },
     {
       "id": "L-RUST-HARNESS",
-      "kind": "isolated-Rust-harness",
-      "status": "aspirational",
+      "state": "planned",
+      "producer_procedure": "Future R0.7 isolated harness: discovery, login-flow retrieval, login/device naming, encrypted store open/reopen, sync readiness, crash/restart, logout, wipe.",
+      "artifact_or_reference": "future output src-tauri/tests/matrix_rust_live_harness.rs and docs/matrix-rust-sdk/evidence/phase0/L-RUST-HARNESS.json",
+      "validation_procedure": "Run only against disposable loopback Synapse on exact head; inspect task ownership, redaction, cleanup, and store destruction.",
+      "expected_result": "All cases pass on macOS arm64 and Linux x86_64 with one non-product sync owner.",
       "owner": "Matrix Rust harness owner",
-      "platforms": ["macOS arm64", "Linux x86_64"],
-      "backend": "matrix-sdk 0.18.0",
-      "production_wiring": false,
-      "scope": [
-        "discovery",
-        "login flows",
-        "encrypted store",
-        "sync readiness",
-        "reopen",
-        "logout",
-        "wipe"
+      "reviewer_acceptance_authority": "independent Matrix Rust reviewer",
+      "platform_scope": [
+        "macOS arm64",
+        "Linux x86_64",
+        "matrix-sdk 0.18.0 isolated harness"
       ],
-      "target": "R0.7"
+      "dependencies": ["FX-64-CONTROL", "FX-1000-E2EE"],
+      "refresh": "seven days or SDK/store/Synapse/platform/candidate change",
+      "gate_effect": "open; cannot create production alternative backend"
     },
     {
       "id": "L-PACKAGED-MACOS",
-      "kind": "packaged-macOS",
-      "status": "build_only_partial",
+      "state": "blocked",
+      "producer_procedure": "Build/install/launch exact-digest universal signed/notarized macOS package; validate login, session, Keychain, quit/reopen, logout, uninstall.",
+      "artifact_or_reference": "future output docs/matrix-rust-sdk/evidence/phase0/L-PACKAGED-MACOS.json",
+      "validation_procedure": "Independent exact-head macOS rerun verifies architecture/signature/notarization/digest and sanitized cases.",
+      "expected_result": "Every assigned macOS case passes with no fallback backend.",
       "owner": "macOS platform owner",
-      "platforms": ["macOS arm64", "macOS universal arm64+x86_64"],
-      "scope": [
-        "package construction",
-        "architecture verification",
-        "signing and notarization",
-        "install and launch",
-        "Keychain integration",
-        "live Matrix scenarios"
+      "reviewer_acceptance_authority": "independent macOS/release reviewer",
+      "platform_scope": ["macOS arm64", "macOS universal arm64+x86_64"],
+      "dependencies": [
+        "RES-P05-MACOS-UNIVERSAL",
+        "RES-P05-MACOS-SIGN-NOTARIZE",
+        "RES-P05-MACOS-INSTALL-LAUNCH"
       ],
-      "current_proof": "PR #77 thin arm64 ad-hoc app build",
-      "pending": [
-        "universal",
-        "Developer ID",
-        "notarization",
-        "install",
-        "launch",
-        "Keychain",
-        "live scenarios"
-      ]
+      "refresh": "seven days or package/OS/signing/SDK/candidate change",
+      "gate_effect": "open"
     },
     {
       "id": "L-PACKAGED-LINUX",
-      "kind": "packaged-Debian+Arch",
-      "status": "build_only_partial",
+      "state": "blocked",
+      "producer_procedure": "Install/launch exact-digest Debian and Arch packages; validate session, Secret Service, portal, logout, uninstall.",
+      "artifact_or_reference": "future output docs/matrix-rust-sdk/evidence/phase0/L-PACKAGED-LINUX.json",
+      "validation_procedure": "Independent exact-head Debian/Arch rerun verifies digests and sanitized cases.",
+      "expected_result": "Every assigned Linux case passes with no fallback backend.",
       "owner": "Linux platform owner",
-      "platforms": ["Debian-family KDE Wayland", "Arch-family KDE Wayland"],
-      "scope": [
-        "package construction",
-        "install and launch",
-        "Secret Service integration",
-        "portal integration",
-        "uninstall",
-        "live Matrix scenarios"
+      "reviewer_acceptance_authority": "independent Linux/release reviewer",
+      "platform_scope": [
+        "Debian-family KDE Wayland",
+        "Arch-family KDE Wayland"
       ],
-      "current_proof": "PR #77 Debian amd64 and Arch x86_64 package construction",
-      "pending": [
-        "install",
-        "launch",
-        "Secret Service",
-        "portal",
-        "uninstall",
-        "live scenarios"
-      ]
+      "dependencies": [
+        "RES-P05-DEBIAN-INSTALL-LAUNCH",
+        "RES-P05-ARCH-INSTALL-LAUNCH"
+      ],
+      "refresh": "seven days or package/distro/desktop/SDK/candidate change",
+      "gate_effect": "open"
+    },
+    {
+      "id": "L-PACKAGED-MACOS-LINUX",
+      "state": "blocked",
+      "producer_procedure": "Install and launch exact-digest macOS universal/sign/notarized and Debian/Arch packages; execute login, store, OS credential, media, logout, uninstall procedures.",
+      "artifact_or_reference": "future output docs/matrix-rust-sdk/evidence/phase0/L-PACKAGED-MACOS-LINUX.json",
+      "validation_procedure": "Independent platform rerun with package digests and sanitized OS integration evidence.",
+      "expected_result": "Every supported platform passes with no fallback backend and complete cleanup.",
+      "owner": "macOS and Linux platform owners",
+      "reviewer_acceptance_authority": "independent release/platform reviewer",
+      "platform_scope": [
+        "macOS arm64+x86_64",
+        "Debian-family KDE Wayland",
+        "Arch-family KDE Wayland"
+      ],
+      "dependencies": ["RES-P05-MACOS-PACKAGE", "RES-P05-LINUX-PACKAGES"],
+      "refresh": "package/OS/SDK/candidate change or seven days",
+      "gate_effect": "open"
+    },
+    {
+      "id": "L-PERFORMANCE-SOAK-FAULT",
+      "state": "blocked",
+      "producer_procedure": "Run packaged exact-head performance matrix, approved bounded Phase 0 soak, and NF-OFFLINE-15/NF-SYNAPSE-RESTART/NF-PROCESS-CRASH.",
+      "artifact_or_reference": "future output docs/matrix-rust-sdk/evidence/phase0/L-PERFORMANCE-SOAK-FAULT.json",
+      "validation_procedure": "Verify raw-series digests, sample counts, p50/p95/min/max/mean, thresholds, convergence, task counts, disk growth, and cleanup.",
+      "expected_result": "All approved thresholds pass on both platforms; no leak, duplicate owner, stale update, or data loss.",
+      "owner": "performance and reliability owners",
+      "reviewer_acceptance_authority": "independent performance/reliability reviewer",
+      "platform_scope": ["packaged macOS arm64", "packaged Linux x86_64"],
+      "dependencies": [
+        "RES-P06-LIVE-PERFORMANCE",
+        "RES-P06-RECONNECT-SOAK",
+        "FX-1000-E2EE",
+        "FX-200-ROOMS",
+        "FX-MEDIA",
+        "FX-GAP-RECONNECT"
+      ],
+      "refresh": "seven days or metric/fixture/hardware/toolchain/client/candidate change",
+      "gate_effect": "open; separate Phase 13 soak remains 24 hours"
     },
     {
       "id": "L-MIXED-IOS",
-      "kind": "mixed-desktop-iOS",
-      "status": "aspirational",
+      "state": "planned",
+      "producer_procedure": "Future Phase 12 packaged desktop+iOS scenarios for shared account, device naming, receipts, timeline convergence, E2EE, and logout.",
+      "artifact_or_reference": "future output docs/matrix-rust-sdk/evidence/phase0/L-MIXED-IOS.json",
+      "validation_procedure": "Independent exact-head mixed-client rerun on disposable Synapse.",
+      "expected_result": "Both clients converge without credential/content leakage or a second desktop backend.",
       "owner": "cross-client owner",
-      "platforms": ["packaged desktop", "iOS simulator or device"],
-      "scope": [
-        "shared account semantics",
-        "receipts",
-        "timeline convergence",
-        "E2EE",
-        "device naming"
+      "reviewer_acceptance_authority": "independent cross-client reviewer",
+      "platform_scope": [
+        "packaged desktop",
+        "iOS simulator and assigned physical-device lane"
       ],
-      "target": "Phase 12 and final gate"
+      "dependencies": ["IOS", "L-RUST-HARNESS"],
+      "refresh": "client/SDK/wrapper/Synapse/scenario/candidate change",
+      "gate_effect": "open; future assigned phase only"
     },
     {
       "id": "L-MANUAL",
-      "kind": "manual",
-      "status": "pending_execution",
+      "state": "pending",
+      "producer_procedure": "Execute install, launch, login, persistence, logout, media, OS integration, and P0.6 measurement checklist.",
+      "artifact_or_reference": "future output docs/matrix-rust-sdk/evidence/phase0/L-MANUAL.json",
+      "validation_procedure": "Independent operator repeats every case on exact package digests and head.",
+      "expected_result": "All applicable cases pass with sanitized per-case evidence.",
       "owner": "platform operator",
-      "platforms": [
+      "reviewer_acceptance_authority": "independent platform reviewer",
+      "platform_scope": [
         "macOS arm64",
         "Debian-family KDE Wayland",
         "Arch-family KDE Wayland"
       ],
-      "scope": [
-        "install",
-        "launch",
-        "login",
-        "session persistence",
-        "logout",
-        "media",
-        "OS integration",
-        "P0.6 measurements"
-      ]
+      "dependencies": ["L-PACKAGED-MACOS", "L-PACKAGED-LINUX"],
+      "refresh": "seven days or checklist/package/platform/candidate change",
+      "gate_effect": "open"
     },
     {
       "id": "L-FAULT",
-      "kind": "fault-restart-reconnect",
-      "status": "aspirational",
+      "state": "blocked",
+      "producer_procedure": "Execute NF-OFFLINE-15, NF-SYNAPSE-RESTART, NF-PROCESS-CRASH plus suspend/resume and partial-failure cases.",
+      "artifact_or_reference": "future output docs/matrix-rust-sdk/evidence/phase0/L-FAULT.json",
+      "validation_procedure": "Independent exact-head rerun verifies convergence, one owner, no stale generation, safe errors, and cleanup.",
+      "expected_result": "All fault cases pass without silent loss or secret/content leakage.",
       "owner": "Matrix lifecycle owner",
-      "platforms": ["macOS arm64", "Linux x86_64"],
-      "scope": [
-        "offline/online",
-        "process crash",
-        "store reopen",
-        "suspend/resume",
-        "partial failure",
-        "stale generation"
-      ],
-      "target": "R0.7 and Phase 13"
+      "reviewer_acceptance_authority": "independent reliability reviewer",
+      "platform_scope": ["macOS arm64", "Linux x86_64"],
+      "dependencies": ["FX-GAP-RECONNECT", "RES-P06-RECONNECT"],
+      "refresh": "seven days or control/SDK/platform/candidate change",
+      "gate_effect": "open"
     },
     {
       "id": "L-SOAK",
-      "kind": "soak",
-      "status": "decision_required",
+      "state": "decision_required",
+      "producer_procedure": "After DEC-P06-SOAK-DURATION approval, execute the bounded Phase 0 soak; retain separate Phase 13 24-hour soak.",
+      "artifact_or_reference": "future output docs/matrix-rust-sdk/evidence/phase0/L-SOAK.json",
+      "validation_procedure": "Independent review verifies duration, platforms, fixture, thresholds, one owner, convergence, CPU/memory/disk, and cleanup.",
+      "expected_result": "Approved Phase 0 soak passes without weakening the 24-hour Phase 13 requirement.",
       "owner": "reliability owner",
-      "platforms": ["macOS", "Linux"],
-      "scope": [
-        "single sync owner",
-        "bounded tasks",
-        "event convergence",
-        "CPU",
-        "memory",
-        "disk"
+      "reviewer_acceptance_authority": "independent reliability reviewer and program owner",
+      "platform_scope": ["macOS", "Linux"],
+      "dependencies": [
+        "DEC-P06-SOAK-DURATION",
+        "RES-P06-SOAK-SCOPE",
+        "L-FAULT"
       ],
-      "phase_0_duration": "pending explicit decision; recommendation 2 hours",
-      "phase_13_duration": "24 hours"
+      "refresh": "seven days or duration/fixture/SDK/platform/candidate change",
+      "gate_effect": "open"
     }
   ],
   "performance_matrix": {
     "platforms": [
       "macOS arm64 packaged release-like",
-      "Linux packaged release-like"
+      "Linux x86_64 packaged release-like"
     ],
     "same_fixture_required": true,
     "metrics": [
@@ -478,77 +683,48 @@
     "statistics": [
       "nearest-rank p50",
       "nearest-rank p95",
-      "min",
-      "max",
+      "minimum",
+      "maximum",
       "mean"
     ],
-    "current_status": "No end-to-end metric has been measured on either platform; only the synthetic timeline-map proxy is proven."
+    "state": "planned",
+    "gate_effect": "No end-to-end metric is accepted; the synthetic timeline-map proxy cannot satisfy these rows."
   },
-  "evidence_contract": {
-    "required_fields": [
-      "stable evidence ID",
-      "requirement IDs",
-      "self-contained immutable subject object with exact SHA coordinates",
-      "platform OS/version/architecture/hardware class",
-      "client and backend",
-      "fixture ID and counts",
-      "exact command",
-      "result and captured_at",
-      "proof scope and explicit exclusions",
-      "owner and reviewer",
-      "artifact/run URL and digest when available",
-      "privacy review"
-    ],
-    "failure_artifacts": [
-      "sanitized phase and error category",
-      "reproduction steps",
-      "exit status",
-      "bounded relevant log excerpt",
-      "cleanup result"
-    ],
-    "never_commit": [
-      "raw homeserver logs",
-      "database or store dumps",
-      "tokens or passwords",
-      "user, room, event, device, or media identifiers",
-      "event plaintext or ciphertext",
-      "absolute user paths",
-      "signing certificates or Apple credentials"
-    ]
-  },
-  "current_evidence_summary": {
-    "proven": [
-      "static harness boundaries",
-      "current-JS FX-64-CONTROL on disposable Synapse",
-      "SDK-linked Ubuntu compile/lint/unit test at PR #77",
-      "Debian and Arch package construction at PR #77",
-      "thin arm64 ad-hoc macOS app construction at PR #77",
-      "iOS simulator build/tests at PR #77",
-      "synthetic timeline-map proxy baseline on one macOS arm64 host"
-    ],
-    "not_proven": [
-      "Rust SDK live harness",
-      "public-room fixture",
-      "E2EE fixture",
-      "large-account and media fixtures",
-      "universal or Developer-ID/notarized macOS package",
-      "package install/launch/uninstall",
-      "macOS or Linux end-to-end P0.6 metrics",
-      "fault/restart/reconnect matrix",
-      "mixed desktop/iOS scenarios",
-      "Phase 0 or 24-hour soak"
-    ]
-  },
-  "acceptance": {
-    "artifact_acceptance": [
-      "JSON parses and Markdown is a faithful semantic twin",
-      "every lane has a stable ID, owner, platform, status, and scope",
-      "current evidence is never promoted beyond its explicit exclusions",
-      "all live lanes use disposable infrastructure and mandatory cleanup",
-      "the current-JS control and isolated Rust harness remain distinct",
-      "no production selector or dual sync ownership is introduced"
-    ],
-    "phase_0_status_after_artifact": "open",
-    "phase_0_closure_dependency": "The evidence manifest residuals must be executed or explicitly approved for deferral, then independently accepted in R0.8."
+  "readiness_checks": [
+    {
+      "id": "AC-R02C-FX64-BOUNDARY",
+      "state": "blocked",
+      "producer_procedure": "After the corrected producer is implemented, seed and inspect FX-64-CONTROL-v2 using its exact setup procedure; current runner bytes are not a producer.",
+      "artifact_or_reference": "future output docs/matrix-rust-sdk/evidence/phase0/AC-R02C-FX64-BOUNDARY.json",
+      "validation_procedure": "Assert rooms_total === 2, spaces_total === 0, ordered_message_events_total === 128, per-room count === 64, and all boundary assertions.",
+      "expected_result": "Exact counts and assertions pass; no secrets/Matrix IDs/event bodies are emitted.",
+      "owner": "fixture owner",
+      "reviewer_acceptance_authority": "independent R0.2-C reviewer",
+      "platform_scope": ["disposable Synapse", "current-JS control"],
+      "dependencies": ["FX-64-CONTROL"],
+      "review_by": "2026-08-02T00:00:00Z",
+      "gate_effect": "R0.2 readiness remains open until reviewed"
+    },
+    {
+      "id": "AC-R02C-TOPOLOGY-TWIN",
+      "state": "pending",
+      "producer_procedure": "Compare all normative IDs, paths, states, counts, UTC dates, owners, reviewers, and authority statements in JSON and Markdown.",
+      "artifact_or_reference": "docs/matrix-rust-sdk/test-matrix-synapse-topology.json and docs/matrix-rust-sdk/test-matrix-synapse-topology.md",
+      "validation_procedure": "strict JSON parse, path inventory, semantic twin review, Prettier, and diff-check",
+      "expected_result": "No parse, duplicate-key, path, formatting, or semantic mismatch.",
+      "owner": "R0.2-C implementer",
+      "reviewer_acceptance_authority": "independent R0.2-C reviewer",
+      "platform_scope": ["four governed documentation artifacts"],
+      "dependencies": ["R0.2-C-TEST-MATRIX-SYNAPSE-TOPOLOGY"],
+      "review_by": "2026-08-02T00:00:00Z",
+      "gate_effect": "Phase 0 remains open"
+    }
+  ],
+  "acceptance_boundary": {
+    "r0_2_result_if_reviewed": "completeness_and_execution_readiness_only",
+    "formal_phase_acceptance_authority": "R0.8 independent reviewer after full exact-head rerun",
+    "current_phase_0_gate": "open",
+    "unreviewed_deferral_or_residual_counts_as_acceptance": false,
+    "self_acceptance_permitted": false
   }
 }
