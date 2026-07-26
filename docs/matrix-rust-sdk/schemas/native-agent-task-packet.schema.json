@@ -1,0 +1,670 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://synara.invalid/schemas/matrix-rust-sdk/native-agent-task-packet.schema.json",
+  "title": "Synara native implementation-agent task packet",
+  "description": "Draft authoritative contract, ready for independent review, for a bounded implementation task delegated to a native agent. A packet describes work; it does not grant review or merge authority.",
+  "x-artifact-state": "ready_for_independent_review",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "packet_id",
+    "task",
+    "git_context",
+    "file_scope",
+    "dependency_policy",
+    "traceability",
+    "upstream_evidence",
+    "prerequisites",
+    "architecture",
+    "behavior",
+    "invariants",
+    "ordered_work",
+    "validations",
+    "criterion_evidence_map",
+    "stop_escalate_conditions",
+    "prohibitions",
+    "handback_requirements"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "packet_id": {
+      "$ref": "#/$defs/nonEmptyId"
+    },
+    "task": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "objective"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/taskId"
+        },
+        "title": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "objective": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "git_context": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "integration_branch",
+        "base_sha",
+        "work_branch",
+        "pr_target",
+        "expected_pr_state"
+      ],
+      "properties": {
+        "integration_branch": {
+          "$ref": "#/$defs/gitRef"
+        },
+        "base_sha": {
+          "$ref": "#/$defs/fullSha"
+        },
+        "work_branch": {
+          "$ref": "#/$defs/gitRef"
+        },
+        "pr_target": {
+          "$ref": "#/$defs/gitRef"
+        },
+        "expected_pr_state": {
+          "enum": ["draft", "ready-for-review"]
+        }
+      }
+    },
+    "file_scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "allowed_paths",
+        "prohibited_paths",
+        "generated_paths",
+        "out_of_scope_paths"
+      ],
+      "properties": {
+        "allowed_paths": {
+          "$ref": "#/$defs/nonEmptyUniqueStrings"
+        },
+        "prohibited_paths": {
+          "$ref": "#/$defs/nonEmptyUniqueStrings"
+        },
+        "generated_paths": {
+          "$ref": "#/$defs/uniqueStrings"
+        },
+        "out_of_scope_paths": {
+          "$ref": "#/$defs/uniqueStrings"
+        }
+      }
+    },
+    "dependency_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "changes_allowed",
+        "allowed_changes",
+        "prohibited_changes",
+        "unlisted_change_requires_approval"
+      ],
+      "properties": {
+        "changes_allowed": {
+          "type": "boolean"
+        },
+        "allowed_changes": {
+          "$ref": "#/$defs/uniqueStrings"
+        },
+        "prohibited_changes": {
+          "$ref": "#/$defs/uniqueStrings"
+        },
+        "unlisted_change_requires_approval": {
+          "const": true
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "changes_allowed": {
+                "const": false
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "allowed_changes": {
+                "maxItems": 0
+              }
+            }
+          }
+        }
+      ]
+    },
+    "traceability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "plan_sections",
+        "feature_requirement_ids",
+        "clause_ids",
+        "capability_ids",
+        "gap_ids",
+        "risk_ids",
+        "decision_ids"
+      ],
+      "properties": {
+        "plan_sections": {
+          "$ref": "#/$defs/nonEmptyUniqueStrings"
+        },
+        "feature_requirement_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^FR-[0-9]+\\.[0-9]+-[0-9]{3}$"
+          }
+        },
+        "clause_ids": {
+          "$ref": "#/$defs/uniqueIds"
+        },
+        "capability_ids": {
+          "$ref": "#/$defs/uniqueIds"
+        },
+        "gap_ids": {
+          "$ref": "#/$defs/uniqueIds"
+        },
+        "risk_ids": {
+          "$ref": "#/$defs/uniqueIds"
+        },
+        "decision_ids": {
+          "$ref": "#/$defs/uniqueIds"
+        }
+      }
+    },
+    "upstream_evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository_url", "release_tag", "commit_sha", "permalinks"],
+      "properties": {
+        "repository_url": {
+          "$ref": "#/$defs/httpUrl"
+        },
+        "release_tag": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "commit_sha": {
+          "$ref": "#/$defs/fullSha"
+        },
+        "permalinks": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/upstreamPermalink"
+          }
+        }
+      }
+    },
+    "prerequisites": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["gates", "required_artifacts", "blocking_assumptions"],
+      "properties": {
+        "gates": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/gate"
+          }
+        },
+        "required_artifacts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/artifactReference"
+          }
+        },
+        "blocking_assumptions": {
+          "$ref": "#/$defs/uniqueStrings"
+        }
+      }
+    },
+    "architecture": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "decided_architecture",
+        "constraints",
+        "material_questions_remaining"
+      ],
+      "properties": {
+        "decided_architecture": {
+          "$ref": "#/$defs/nonEmptyUniqueStrings"
+        },
+        "constraints": {
+          "$ref": "#/$defs/nonEmptyUniqueStrings"
+        },
+        "material_questions_remaining": {
+          "type": "array",
+          "maxItems": 0,
+          "description": "A packet is not ready to delegate while a material design question remains."
+        }
+      }
+    },
+    "behavior": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["requirements", "non_goals"],
+      "properties": {
+        "requirements": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/behaviorRequirement"
+          }
+        },
+        "non_goals": {
+          "$ref": "#/$defs/nonEmptyUniqueStrings"
+        }
+      }
+    },
+    "invariants": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["security", "privacy", "lifecycle", "failure"],
+      "properties": {
+        "security": {
+          "$ref": "#/$defs/nonEmptyUniqueStrings"
+        },
+        "privacy": {
+          "$ref": "#/$defs/nonEmptyUniqueStrings"
+        },
+        "lifecycle": {
+          "$ref": "#/$defs/nonEmptyUniqueStrings"
+        },
+        "failure": {
+          "$ref": "#/$defs/nonEmptyUniqueStrings"
+        }
+      }
+    },
+    "ordered_work": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/workStep"
+      }
+    },
+    "validations": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "automated",
+        "live_synapse",
+        "fixtures",
+        "platform",
+        "manual"
+      ],
+      "properties": {
+        "automated": {
+          "$ref": "#/$defs/automatedValidationGroup"
+        },
+        "live_synapse": {
+          "$ref": "#/$defs/validationGroup"
+        },
+        "fixtures": {
+          "$ref": "#/$defs/validationGroup"
+        },
+        "platform": {
+          "$ref": "#/$defs/validationGroup"
+        },
+        "manual": {
+          "$ref": "#/$defs/validationGroup"
+        }
+      }
+    },
+    "criterion_evidence_map": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/criterionEvidence"
+      }
+    },
+    "stop_escalate_conditions": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/stopCondition"
+      }
+    },
+    "prohibitions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "new_matrix_js_sdk_use",
+        "production_raw_matrix_http",
+        "backend_selector",
+        "dual_matrix_client",
+        "fixture_helper_or_compile_only_as_product_support",
+        "suppressed_failures",
+        "writer_self_acceptance"
+      ],
+      "properties": {
+        "new_matrix_js_sdk_use": {
+          "const": false
+        },
+        "production_raw_matrix_http": {
+          "const": false
+        },
+        "backend_selector": {
+          "const": false
+        },
+        "dual_matrix_client": {
+          "const": false
+        },
+        "fixture_helper_or_compile_only_as_product_support": {
+          "const": false
+        },
+        "suppressed_failures": {
+          "const": false
+        },
+        "writer_self_acceptance": {
+          "const": false
+        }
+      }
+    },
+    "handback_requirements": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "changed_files",
+        "commit_ids",
+        "validation_results",
+        "residuals",
+        "risks",
+        "pr_url",
+        "final_status"
+      ],
+      "properties": {
+        "changed_files": {
+          "const": true
+        },
+        "commit_ids": {
+          "const": true
+        },
+        "validation_results": {
+          "const": true
+        },
+        "residuals": {
+          "const": true
+        },
+        "risks": {
+          "const": true
+        },
+        "pr_url": {
+          "const": true
+        },
+        "final_status": {
+          "const": true
+        }
+      }
+    }
+  },
+  "$defs": {
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "\\S"
+    },
+    "nonEmptyId": {
+      "type": "string",
+      "minLength": 2,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+    },
+    "taskId": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Z0-9]*(?:\\.[0-9]+)?(?:-[A-Za-z0-9][A-Za-z0-9._-]*)*$"
+    },
+    "fullSha": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "gitRef": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!/)(?!.*(?:\\.\\.|//|@\\{|\\\\|[ ~^:?*\\[]))(?!.*\\.$).+$"
+    },
+    "httpUrl": {
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https://"
+    },
+    "uniqueStrings": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/nonEmptyString"
+      }
+    },
+    "nonEmptyUniqueStrings": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/nonEmptyString"
+      }
+    },
+    "uniqueIds": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/nonEmptyId"
+      }
+    },
+    "upstreamPermalink": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["label", "url", "claim"],
+      "properties": {
+        "label": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "url": {
+          "$ref": "#/$defs/httpUrl"
+        },
+        "claim": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "gate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "required_state", "evidence"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/nonEmptyId"
+        },
+        "required_state": {
+          "enum": ["accepted", "closed", "green", "reviewed"]
+        },
+        "evidence": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "artifactReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "purpose"],
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "purpose": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    },
+    "behaviorRequirement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "description", "clauses", "acceptance_criteria_ids"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/nonEmptyId"
+        },
+        "description": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "clauses": {
+          "$ref": "#/$defs/nonEmptyUniqueStrings"
+        },
+        "acceptance_criteria_ids": {
+          "$ref": "#/$defs/nonEmptyUniqueStrings"
+        }
+      }
+    },
+    "workStep": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["step", "instruction", "outputs"],
+      "properties": {
+        "step": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "instruction": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "outputs": {
+          "$ref": "#/$defs/nonEmptyUniqueStrings"
+        }
+      }
+    },
+    "validationGroup": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["required", "cases", "waiver"],
+      "properties": {
+        "required": {
+          "type": "boolean"
+        },
+        "cases": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/validationCase"
+          }
+        },
+        "waiver": {
+          "type": ["string", "null"],
+          "minLength": 1
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "required": {
+                "const": true
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "cases": {
+                "minItems": 1
+              },
+              "waiver": {
+                "type": "null"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "waiver": {
+                "$ref": "#/$defs/nonEmptyString"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "automatedValidationGroup": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/validationGroup"
+        },
+        {
+          "properties": {
+            "cases": {
+              "items": {
+                "required": ["command"]
+              }
+            }
+          }
+        }
+      ]
+    },
+    "validationCase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "description", "environment", "expected_evidence"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/nonEmptyId"
+        },
+        "description": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "command": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "environment": {
+          "$ref": "#/$defs/nonEmptyUniqueStrings"
+        },
+        "expected_evidence": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "criterionEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["criterion_id", "evidence_requirements", "validation_ids"],
+      "properties": {
+        "criterion_id": {
+          "$ref": "#/$defs/nonEmptyId"
+        },
+        "evidence_requirements": {
+          "$ref": "#/$defs/nonEmptyUniqueStrings"
+        },
+        "validation_ids": {
+          "$ref": "#/$defs/nonEmptyUniqueStrings"
+        }
+      }
+    },
+    "stopCondition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "condition", "required_action", "decision_authority"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/nonEmptyId"
+        },
+        "condition": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "required_action": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "decision_authority": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    }
+  }
+}
