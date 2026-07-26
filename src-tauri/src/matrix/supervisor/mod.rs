@@ -36,7 +36,7 @@ pub use handle::{
     ClientFactory, ClientHandle, FactoryError, NullClientFactory, TestClientFactory,
     TestClientHandle,
 };
-pub use state::{SupervisorState, SupervisorEvent};
+pub use state::{SupervisorEvent, SupervisorState};
 pub use transition::{SupervisorCommand, TransitionEffect};
 
 /// Static marker for link / schema smoke (no network, no Client).

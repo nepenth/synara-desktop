@@ -2,32 +2,18 @@
  * Security / crypto status projection — no keys or recovery material.
  */
 
-import {
-  hasForbiddenWireFields,
-  isObject,
-  optNumber,
-  reqBoolean,
-} from './parseUtil';
+import { hasForbiddenWireFields, isObject, optNumber, reqBoolean } from './parseUtil';
 
 export const BACKUP_STATUSES = ['unknown', 'disabled', 'enabled', 'outdated'] as const;
-export type BackupStatus = (typeof BACKUP_STATUSES)[number];
+export type BackupStatus = typeof BACKUP_STATUSES[number];
 const BACKUP_SET = new Set<string>(BACKUP_STATUSES);
 
-export const RECOVERY_STATUSES = [
-  'unknown',
-  'not_setup',
-  'ready',
-  'incomplete',
-] as const;
-export type RecoveryStatus = (typeof RECOVERY_STATUSES)[number];
+export const RECOVERY_STATUSES = ['unknown', 'not_setup', 'ready', 'incomplete'] as const;
+export type RecoveryStatus = typeof RECOVERY_STATUSES[number];
 const RECOVERY_SET = new Set<string>(RECOVERY_STATUSES);
 
-export const VERIFICATION_STATES = [
-  'unverified',
-  'verified',
-  'unavailable',
-] as const;
-export type VerificationState = (typeof VERIFICATION_STATES)[number];
+export const VERIFICATION_STATES = ['unverified', 'verified', 'unavailable'] as const;
+export type VerificationState = typeof VERIFICATION_STATES[number];
 const VERIFICATION_SET = new Set<string>(VERIFICATION_STATES);
 
 export type SecurityStatus = {
@@ -42,10 +28,7 @@ export type SecurityStatus = {
 export function parseSecurityStatus(value: unknown): SecurityStatus | null {
   if (!isObject(value) || hasForbiddenWireFields(value)) return null;
   const crossSigningActive = reqBoolean(value, 'crossSigningActive');
-  const hasPendingVerificationRequests = reqBoolean(
-    value,
-    'hasPendingVerificationRequests'
-  );
+  const hasPendingVerificationRequests = reqBoolean(value, 'hasPendingVerificationRequests');
   const deviceCount = optNumber(value, 'deviceCount');
   if (
     crossSigningActive === null ||

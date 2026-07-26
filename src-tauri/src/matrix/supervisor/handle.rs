@@ -89,8 +89,7 @@ impl TestClientFactory {
     }
 
     pub fn next_id(&self) -> u64 {
-        self.next_id
-            .load(std::sync::atomic::Ordering::SeqCst)
+        self.next_id.load(std::sync::atomic::Ordering::SeqCst)
     }
 }
 

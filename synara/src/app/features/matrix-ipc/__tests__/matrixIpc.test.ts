@@ -131,9 +131,7 @@ test('fixture invalid_unknown_kind rejected', () => {
 });
 
 test('fixture invalid_missing_protocol_version rejected', () => {
-  const env = parseMatrixIpcEnvelope(
-    loadFixture('invalid_missing_protocol_version.json')
-  );
+  const env = parseMatrixIpcEnvelope(loadFixture('invalid_missing_protocol_version.json'));
   assert.equal(env, null);
 });
 
@@ -258,12 +256,7 @@ test('all control kinds round-trip through makeEnvelope + parse', () => {
       { kind: 'subscribe', payload: { topic: 'room_list', streamId: 's1', params: {} } },
       { streamId: 's1' }
     ),
-    makeEnvelope(
-      1,
-      0,
-      { kind: 'unsubscribe', payload: { streamId: 's1' } },
-      { streamId: 's1' }
-    ),
+    makeEnvelope(1, 0, { kind: 'unsubscribe', payload: { streamId: 's1' } }, { streamId: 's1' }),
     makeEnvelope(
       1,
       0,
@@ -371,11 +364,7 @@ test('fixture invalid payloads rejected', () => {
     'invalid_unknown_kind.json',
     'invalid_missing_protocol_version.json',
   ]) {
-    assert.equal(
-      parseMatrixIpcEnvelope(loadFixture(name)),
-      null,
-      `${name} must be rejected`
-    );
+    assert.equal(parseMatrixIpcEnvelope(loadFixture(name)), null, `${name} must be rejected`);
   }
 });
 
@@ -393,10 +382,7 @@ test('bounds payload queue streams', () => {
 
   assert.equal(checkOpenStreams(0), null);
   assert.equal(checkOpenStreams(MAX_OPEN_STREAMS_PER_SESSION), null);
-  assert.equal(
-    checkOpenStreams(MAX_OPEN_STREAMS_PER_SESSION + 1)?.category,
-    'sdk_invariant'
-  );
+  assert.equal(checkOpenStreams(MAX_OPEN_STREAMS_PER_SESSION + 1)?.category, 'sdk_invariant');
 });
 
 test('sequence gap and stale generation compose resync', () => {
@@ -434,10 +420,7 @@ test('schema catalog compatible with TS constants', () => {
   assert.deepEqual(catalog.kinds, [...MATRIX_IPC_KINDS]);
   assert.deepEqual(catalog.errorCategories, [...MATRIX_IPC_ERROR_CATEGORIES]);
   assert.equal(catalog.streamTopics.length, 10);
-  assert.equal(
-    catalog.bounds.maxEnvelopePayloadJsonBytes,
-    MAX_ENVELOPE_PAYLOAD_JSON_BYTES
-  );
+  assert.equal(catalog.bounds.maxEnvelopePayloadJsonBytes, MAX_ENVELOPE_PAYLOAD_JSON_BYTES);
   assert.equal(catalog.bounds.maxStreamQueueDepth, MAX_STREAM_QUEUE_DEPTH);
   assert.equal(catalog.bounds.streamCoalesceWindowMs, STREAM_COALESCE_WINDOW_MS);
   assert.equal(catalog.bounds.maxOpenStreamsPerSession, MAX_OPEN_STREAMS_PER_SESSION);

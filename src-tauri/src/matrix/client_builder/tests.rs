@@ -51,9 +51,7 @@ fn marker_stable() {
     );
     assert!(APPROVED_MATRIX_SDK_FEATURES.contains(&"sqlite"));
     assert!(APPROVED_MATRIX_SDK_FEATURES.contains(&"bundled-sqlite"));
-    assert!(FORBIDDEN_MATRIX_SDK_FEATURES
-        .iter()
-        .any(|f| *f == "experimental-widgets"));
+    assert!(FORBIDDEN_MATRIX_SDK_FEATURES.contains(&"experimental-widgets"));
 }
 
 #[test]
@@ -218,12 +216,11 @@ impl ClientFactory for HarnessSdkFactory {
         _generation: u64,
     ) -> Result<Box<dyn ClientHandle>, crate::matrix::supervisor::FactoryError> {
         let _enter = self.runtime.enter();
-        let key = StoreKeyMaterial::generate().map_err(|_| {
-            crate::matrix::supervisor::FactoryError {
+        let key =
+            StoreKeyMaterial::generate().map_err(|_| crate::matrix::supervisor::FactoryError {
                 category: crate::matrix::ipc::MatrixIpcErrorCategory::StoreUnavailable,
                 diagnostic_id: "p2.3-harness-keygen",
-            }
-        })?;
+            })?;
         let cfg = ClientBuildConfig::product_default(&self.root, self.identity.clone(), Some(key))
             .map_err(|e| e.to_factory_error())?;
         let client = self
@@ -261,10 +258,14 @@ fn supervisor_installs_sdk_handle_from_builder_factory() {
     supervisor
         .apply(SupervisorCommand::BeginSync)
         .expect("sync");
-    supervisor.apply(SupervisorCommand::MarkReady).expect("ready");
+    supervisor
+        .apply(SupervisorCommand::MarkReady)
+        .expect("ready");
     assert_eq!(supervisor.state(), SupervisorState::Ready);
 
-    supervisor.apply(SupervisorCommand::BeginStop).expect("stop");
+    supervisor
+        .apply(SupervisorCommand::BeginStop)
+        .expect("stop");
     supervisor
         .apply(SupervisorCommand::CompleteLogout)
         .expect("logout");

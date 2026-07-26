@@ -3,13 +3,7 @@
  */
 
 import type { EventId, NotificationCandidateId, RoomId } from './ids';
-import {
-  hasForbiddenWireFields,
-  isObject,
-  optString,
-  reqBoolean,
-  reqString,
-} from './parseUtil';
+import { hasForbiddenWireFields, isObject, optString, reqBoolean, reqString } from './parseUtil';
 
 export const NOTIFICATION_KINDS = [
   'message',
@@ -17,7 +11,7 @@ export const NOTIFICATION_KINDS = [
   'agent_approval',
   'later_reminder',
 ] as const;
-export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
+export type NotificationKind = typeof NOTIFICATION_KINDS[number];
 const KIND_SET = new Set<string>(NOTIFICATION_KINDS);
 
 export function isNotificationKind(value: unknown): value is NotificationKind {
@@ -36,9 +30,7 @@ export type NotificationCandidate = {
   isEncrypted: boolean;
 };
 
-export function parseNotificationCandidate(
-  value: unknown
-): NotificationCandidate | null {
+export function parseNotificationCandidate(value: unknown): NotificationCandidate | null {
   if (!isObject(value) || hasForbiddenWireFields(value)) return null;
   const candidateId = reqString(value, 'candidateId');
   const roomId = reqString(value, 'roomId');

@@ -29,7 +29,7 @@ export const MATRIX_IPC_ERROR_CATEGORIES = [
   'unknown',
 ] as const;
 
-export type MatrixIpcErrorCategory = (typeof MATRIX_IPC_ERROR_CATEGORIES)[number];
+export type MatrixIpcErrorCategory = typeof MATRIX_IPC_ERROR_CATEGORIES[number];
 
 /**
  * Privacy-safe error payload for `kind: "error"`.

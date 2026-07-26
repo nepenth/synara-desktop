@@ -6,7 +6,6 @@ import type { RoomId, UserId } from './ids';
 import {
   hasForbiddenWireFields,
   isObject,
-  optBoolean,
   optNumber,
   optString,
   reqBoolean,
@@ -15,7 +14,7 @@ import {
 } from './parseUtil';
 
 export const MEMBERSHIPS = ['invite', 'join', 'knock', 'leave', 'ban'] as const;
-export type Membership = (typeof MEMBERSHIPS)[number];
+export type Membership = typeof MEMBERSHIPS[number];
 const MEMBERSHIP_SET = new Set<string>(MEMBERSHIPS);
 
 export function isMembership(value: unknown): value is Membership {
@@ -23,7 +22,7 @@ export function isMembership(value: unknown): value is Membership {
 }
 
 export const NOTIFICATION_MODES = ['all', 'mentions', 'mute', 'default'] as const;
-export type NotificationMode = (typeof NOTIFICATION_MODES)[number];
+export type NotificationMode = typeof NOTIFICATION_MODES[number];
 const NOTIFICATION_MODE_SET = new Set<string>(NOTIFICATION_MODES);
 
 export function isNotificationMode(value: unknown): value is NotificationMode {

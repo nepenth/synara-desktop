@@ -228,18 +228,16 @@ pub fn resolve(
         }
         (S::Wiping, c) if c != C::CompleteWipe && c != C::Fail => {
             // Fail is matched earlier (P2.6 wipe I/O failure path).
-            Err(illegal("wipe in progress; only CompleteWipe or Fail is allowed"))
+            Err(illegal(
+                "wipe in progress; only CompleteWipe or Fail is allowed",
+            ))
         }
         (S::LoggedOut, C::CompleteLogout) => Err(illegal("already logged out")),
-        (S::Empty, C::CompleteWipe | C::BeginWipe) => {
-            Err(illegal("nothing to wipe from empty"))
-        }
+        (S::Empty, C::CompleteWipe | C::BeginWipe) => Err(illegal("nothing to wipe from empty")),
         (S::Authenticating, C::BeginRestore) | (S::Restoring, C::BeginAuthenticate) => {
             Err(illegal("auth and restore paths are mutually exclusive"))
         }
-        (S::Opening, C::BeginSync) => {
-            Err(illegal("must authenticate or restore before sync"))
-        }
+        (S::Opening, C::BeginSync) => Err(illegal("must authenticate or restore before sync")),
         (S::Empty | S::LoggedOut, C::InstallClient) => {
             Err(illegal("must BeginOpen before InstallClient"))
         }

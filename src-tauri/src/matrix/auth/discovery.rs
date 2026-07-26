@@ -122,9 +122,12 @@ impl DiscoveryTransport for MockDiscoveryTransport {
         if let Some(cfg) = self.responses.get(server_name) {
             return Ok(cfg.clone());
         }
-        Err(self.default_error.clone().unwrap_or(AuthError::HomeserverUnavailable {
-            diagnostic_id: "p3.1-mock-well-known-miss",
-        }))
+        Err(self
+            .default_error
+            .clone()
+            .unwrap_or(AuthError::HomeserverUnavailable {
+                diagnostic_id: "p3.1-mock-well-known-miss",
+            }))
     }
 }
 
@@ -171,9 +174,7 @@ pub async fn discover_homeserver<T: DiscoveryTransport>(
                 Err(e) => Err(e),
             }
         }
-        DiscoveryInput::ServerNameOrUrl(raw) => {
-            discover_server_name_or_url(raw, transport).await
-        }
+        DiscoveryInput::ServerNameOrUrl(raw) => discover_server_name_or_url(raw, transport).await,
     }
 }
 

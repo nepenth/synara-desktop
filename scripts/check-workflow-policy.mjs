@@ -4,6 +4,11 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const indentation = (line) => line.length - line.trimStart().length;
+const integrationBranch = "feature/matrix-rust-sdk-full-replacement";
+const cancellableValidationWorkflows = [
+  "ci.yml",
+  "desktop-package-smoke.yml",
+];
 
 function parseJobs(workflow) {
   const jobs = new Map();
@@ -82,6 +87,10 @@ function pullRequestBlock(workflow) {
   );
 }
 
+function hasIntegrationPullRequestTarget(workflow) {
+  return pullRequestBlock(workflow).includes(`"${integrationBranch}"`);
+}
+
 export function inspectWorkflowPolicy({ workflows, dependabot }) {
   const errors = [];
 
@@ -94,6 +103,37 @@ export function inspectWorkflowPolicy({ workflows, dependabot }) {
     }
     if (topLevelBlock(workflow, "concurrency").length === 0) {
       errors.push(`${filename} must declare workflow-level concurrency.`);
+    }
+
+    if (cancellableValidationWorkflows.includes(filename)) {
+      if (!hasIntegrationPullRequestTarget(workflow)) {
+        errors.push(
+          `${filename} must validate pull requests targeting ${integrationBranch}.`
+        );
+      }
+
+      const concurrency = topLevelBlock(workflow, "concurrency")
+        .map((line) => line.trim())
+        .filter(Boolean);
+      const group = concurrency.find((line) => line.startsWith("group:")) ?? "";
+      if (!group.includes("github.event_name")) {
+        errors.push(
+          `${filename} concurrency must separate workflow event types.`
+        );
+      }
+      if (
+        !group.includes("github.event.pull_request.number") ||
+        !group.includes("github.ref")
+      ) {
+        errors.push(
+          `${filename} concurrency must isolate each pull request and retain a ref fallback.`
+        );
+      }
+      if (!concurrency.includes("cancel-in-progress: true")) {
+        errors.push(
+          `${filename} must cancel obsolete runs only within the same event and pull-request/ref lane.`
+        );
+      }
     }
 
     for (const match of workflow.matchAll(/^\s*uses:\s*([^\s#]+)/gm)) {
@@ -127,6 +167,7 @@ export function inspectWorkflowPolicy({ workflows, dependabot }) {
 
   const packageWorkflow = workflows["desktop-package-smoke.yml"] ?? "";
   const packageJobs = parseJobs(packageWorkflow);
+  const packageChanges = packageJobs.get("changes") ?? [];
   const packageGate = packageJobs.get("package-gate") ?? [];
   if (/^\s{4}paths:/m.test(pullRequestBlock(packageWorkflow))) {
     errors.push(
@@ -143,6 +184,36 @@ export function inspectWorkflowPolicy({ workflows, dependabot }) {
     errors.push(
       "Desktop package smoke must retain an always-running aggregate package gate."
     );
+  }
+  const packageChangeContract = packageChanges.join("\n");
+  for (const pathRoot of ["scripts", "packaging/arch", "src-tauri", "synara"]) {
+    if (!packageChangeContract.includes(pathRoot)) {
+      errors.push(
+        `Desktop package change detection must retain the ${pathRoot} path.`
+      );
+    }
+  }
+  if (
+    !packageChangeContract.includes(
+      'git diff --quiet "$BASE_SHA" "$HEAD_SHA" --'
+    ) ||
+    !packageChangeContract.includes('echo "packages=false"') ||
+    !packageChangeContract.includes('echo "packages=true"')
+  ) {
+    errors.push(
+      "Desktop package smoke must retain PR diff-based package change detection."
+    );
+  }
+
+  const ciValidate = parseJobs(workflows["ci.yml"] ?? "").get("validate") ?? [];
+  const ciValidationContract = ciValidate.join("\n");
+  for (const [label, command] of [
+    ["formatting", "cargo fmt --check"],
+    ["lint", "cargo clippy --locked --all-targets -- -D warnings"],
+  ]) {
+    if (!ciValidationContract.includes(command)) {
+      errors.push(`CI must retain strict Rust ${label}: ${command}.`);
+    }
   }
 
   const releaseConcurrency = topLevelBlock(
@@ -216,7 +287,7 @@ function main() {
     console.error(`[workflow-policy] ${error}`);
   if (!result.ok) process.exit(1);
   console.log(
-    "[workflow-policy] permissions, timeouts, action pins, release secret scope, and aggregate gates are valid."
+    "[workflow-policy] permissions, timeouts, action pins, integration CI, concurrency, Rust quality, release secret scope, and package gates are valid."
   );
 }
 

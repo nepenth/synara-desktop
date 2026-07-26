@@ -125,10 +125,8 @@ impl MatrixMetrics {
         self.store.crypto_ready = crypto_ready;
         self.store.cache_ready = cache_ready;
         self.store.media_ready = media_ready;
-        if state_ready && crypto_ready {
-            if self.store.status == StoreHealthStatus::Unknown {
-                self.store.status = StoreHealthStatus::Ready;
-            }
+        if state_ready && crypto_ready && self.store.status == StoreHealthStatus::Unknown {
+            self.store.status = StoreHealthStatus::Ready;
         }
     }
 
@@ -138,11 +136,7 @@ impl MatrixMetrics {
 
     /// Record a classified error. `diagnostic_id` must already be privacy-safe
     /// (static code). Free-form secrets are rejected and ignored.
-    pub fn record_error(
-        &mut self,
-        category: MatrixIpcErrorCategory,
-        diagnostic_id: Option<&str>,
-    ) {
+    pub fn record_error(&mut self, category: MatrixIpcErrorCategory, diagnostic_id: Option<&str>) {
         self.errors.total = self.errors.total.saturating_add(1);
         if let Some(idx) = category_index(category) {
             self.error_counts[idx] = self.error_counts[idx].saturating_add(1);

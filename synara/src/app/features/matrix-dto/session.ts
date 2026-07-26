@@ -26,7 +26,7 @@ export const SESSION_LIFECYCLES = [
   'wiping',
 ] as const;
 
-export type SessionLifecycle = (typeof SESSION_LIFECYCLES)[number];
+export type SessionLifecycle = typeof SESSION_LIFECYCLES[number];
 
 const LIFECYCLE_SET = new Set<string>(SESSION_LIFECYCLES);
 

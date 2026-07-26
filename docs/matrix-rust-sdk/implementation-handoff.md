@@ -1,8 +1,13 @@
 # Matrix Rust SDK Replacement — Execution Handoff
 
-Last updated: 2026-07-26
+Last updated: 2026-07-25 (America/New_York)
 
 Authoritative program plan: [`../matrix-rust-sdk-full-replacement-plan.md`](../matrix-rust-sdk-full-replacement-plan.md)
+
+<!-- matrix-rust-program-status-link -->
+Current delivery and strict-acceptance state:
+[`program-status.md`](program-status.md) (generated from
+[`program-status.json`](program-status.json)).
 
 Traceability artifacts:
 
@@ -17,7 +22,7 @@ remediation tasks, and the corrected continuation sequence.
 
 | Field | Audited value |
 |---|---|
-| **Status** | Paused after independent review; remediation required before P3.2 |
+| **Current status and next task** | See [`program-status.md`](program-status.md) |
 | **Integration branch** | `feature/matrix-rust-sdk-full-replacement` |
 | **Audited integration tip** | `edfefee499064b736985b6528896b693e5120f22` (always re-fetch and verify) |
 | **Open PRs → integration at audit start** | None |
@@ -25,7 +30,6 @@ remediation tasks, and the corrected continuation sequence.
 | **Product Matrix runtime** | `matrix-js-sdk` only; no Rust production login/sync, dual backend, or cutover |
 | **Landed inventory** | P0.1–P0.7, P1.1–P1.6, P2.1–P2.6, and P3.1 foundation (20/112 original task artifacts) |
 | **Strict acceptance** | Phase 0 open; Phase 1 open; Phase 2 open; P3.1 open; 0/15 phase gates closed |
-| **Next work** | R0.1–R0.8; P3.2 is blocked |
 
 The former handoff's clean-worktree and no-cutover claims were accurate. Its
 “Phases 0–2 complete,” “P3.1 complete,” and “next P3.2” claims are superseded.
@@ -33,8 +37,8 @@ The independent run found Rust fmt/clippy failures, TypeScript lint/Prettier
 failures, a failed GitHub desktop-validation job, missing required planning/live
 evidence, and critical/high lifecycle, filesystem, IPC, and privacy findings.
 
-Resume from the latest integration tip, create an R0.1 task branch, and follow
-the main plan's native orchestrator protocol. A task may merge only on a green,
+Continue the active task named in the canonical status ledger and follow the
+main plan's native orchestrator protocol. A task may merge only on a green,
 non-cancelled required CI run for the reviewed SHA.
 
 ## Superseded historical handoff snapshot (2026-07-26)
@@ -42,7 +46,8 @@ non-cancelled required CI run for the reviewed SHA.
 The following section is retained as a record of what the prior agent reported;
 it is not current acceptance or continuation guidance.
 
-Use this section first when resuming work on a new machine or with a new owner.
+Do not use this section to resume work. It is preserved only as a dated record
+of the prior agent's claims.
 
 | Field | Value |
 |-------|--------|
@@ -586,8 +591,8 @@ Before accepting a task or merging its PR, the reviewer must independently:
 
 ## Remaining program sequence
 
-1. Complete R0.1 to restore truthful formatting, lint, metadata, CI, and merge
-   gates.
+1. Finish and independently accept the active remediation named in the status
+   ledger; advance the ledger only after its merge gate passes.
 2. Complete R0.2 to deliver the missing threat model, test/Synapse topology,
    review template, owned risk register, full traceability, and residual Phase 0
    evidence.

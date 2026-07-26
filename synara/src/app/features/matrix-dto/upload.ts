@@ -3,22 +3,10 @@
  */
 
 import type { MediaHandleId, RoomId, UploadId } from './ids';
-import {
-  hasForbiddenWireFields,
-  isObject,
-  optNumber,
-  optString,
-  reqString,
-} from './parseUtil';
+import { hasForbiddenWireFields, isObject, optNumber, optString, reqString } from './parseUtil';
 
-export const UPLOAD_STATES = [
-  'queued',
-  'uploading',
-  'completed',
-  'failed',
-  'cancelled',
-] as const;
-export type UploadState = (typeof UPLOAD_STATES)[number];
+export const UPLOAD_STATES = ['queued', 'uploading', 'completed', 'failed', 'cancelled'] as const;
+export type UploadState = typeof UPLOAD_STATES[number];
 const UPLOAD_STATE_SET = new Set<string>(UPLOAD_STATES);
 
 export function isUploadState(value: unknown): value is UploadState {

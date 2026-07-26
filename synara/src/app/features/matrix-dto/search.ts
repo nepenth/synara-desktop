@@ -3,13 +3,7 @@
  */
 
 import type { EventId, RoomId, UserId } from './ids';
-import {
-  hasForbiddenWireFields,
-  isObject,
-  optNumber,
-  optString,
-  reqString,
-} from './parseUtil';
+import { hasForbiddenWireFields, isObject, optNumber, optString, reqString } from './parseUtil';
 
 export type SearchResultItem = {
   eventId: EventId;

@@ -2,13 +2,18 @@
 
 Date: 2026-07-25
 
-Status: approved direction; 20/112 task artifacts landed, but the Phase 0–2
-strict gates and P3.1 acceptance remain open pending mandatory remediation;
-production SDK replacement/cutover not started
+Status: approved direction; current delivery, acceptance, and runtime state are
+recorded only in the canonical status ledger below
 
 Integration branch: `feature/matrix-rust-sdk-full-replacement`
 
 Current execution record: [`docs/matrix-rust-sdk/implementation-handoff.md`](matrix-rust-sdk/implementation-handoff.md)
+
+<!-- matrix-rust-program-status-link -->
+Canonical current status: [`docs/matrix-rust-sdk/program-status.md`](matrix-rust-sdk/program-status.md)
+(generated from [`program-status.json`](matrix-rust-sdk/program-status.json)).
+Task evidence remains historical; only this ledger records current delivery and
+strict-acceptance state.
 
 Independent review and rebaseline:
 [`docs/matrix-rust-sdk/review-2026-07-25.md`](matrix-rust-sdk/review-2026-07-25.md)
@@ -34,6 +39,10 @@ handoff claims that Phases 0–2 and P3.1 were complete.
 Zero of 15 strict phase gates are closed. Original task P3.2 and all later work
 are blocked by remediation tasks R0.1–R0.8 in the review report. Those tasks are
 additions to the original 112 and do not count as feature progress.
+
+The status ledger must be updated as part of each accepted remediation PR;
+changing artifact or merge state never closes a strict acceptance or phase gate
+by implication.
 
 The shipping desktop product still uses only `matrix-js-sdk`. No Rust production
 login/sync backend, selector, dual-client runtime, or cutover has been accepted.

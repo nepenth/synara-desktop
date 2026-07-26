@@ -79,7 +79,7 @@ test('session rejects missing required fields', () => {
 
 test('session rejects accessToken on wire object', () => {
   const withToken = {
-    ...((loadFixture('valid_session.json') as object) as Record<string, unknown>),
+    ...(loadFixture('valid_session.json') as object as Record<string, unknown>),
     accessToken: 's3cret',
   };
   assert.equal(parseSessionSnapshot(withToken), null);
@@ -129,10 +129,7 @@ test('valid_timeline_item_state parses', () => {
 });
 
 test('timeline rejects unknown kind', () => {
-  assert.equal(
-    parseTimelineItem({ kind: 'not_a_kind', itemId: 'x' }),
-    null
-  );
+  assert.equal(parseTimelineItem({ kind: 'not_a_kind', itemId: 'x' }), null);
 });
 
 test('valid_relation_reaction parses', () => {
@@ -187,9 +184,7 @@ test('valid_security_status parses', () => {
 });
 
 test('valid_notification_candidate parses', () => {
-  const n = parseNotificationCandidate(
-    loadFixture('valid_notification_candidate.json')
-  );
+  const n = parseNotificationCandidate(loadFixture('valid_notification_candidate.json'));
   assert.ok(n);
   assert.equal(n.kind, 'message');
   assert.equal(n.suppressIfFocusedRoom, true);
@@ -254,11 +249,7 @@ test('all fixtures lack forbidden secret field names', () => {
       'mediaBytes',
       'fileBytes',
     ]) {
-      assert.equal(
-        raw.includes(forbidden),
-        false,
-        `${name} must not contain ${forbidden}`
-      );
+      assert.equal(raw.includes(forbidden), false, `${name} must not contain ${forbidden}`);
     }
   }
 });

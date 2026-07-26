@@ -112,10 +112,7 @@ impl LoginFlow {
         }
     }
 
-    pub fn sso(
-        identity_providers: Vec<SsoIdentityProvider>,
-        oauth_aware_preferred: bool,
-    ) -> Self {
+    pub fn sso(identity_providers: Vec<SsoIdentityProvider>, oauth_aware_preferred: bool) -> Self {
         Self {
             kind: LoginFlowKind::Sso,
             matrix_type: "m.login.sso".to_owned(),
@@ -232,9 +229,12 @@ impl LoginFlowTransport for MockLoginFlowTransport {
         if let Some(flows) = self.responses.get(&key) {
             return Ok(flows.clone());
         }
-        Err(self.default_error.clone().unwrap_or(AuthError::HomeserverUnavailable {
-            diagnostic_id: "p3.1-mock-login-flows-miss",
-        }))
+        Err(self
+            .default_error
+            .clone()
+            .unwrap_or(AuthError::HomeserverUnavailable {
+                diagnostic_id: "p3.1-mock-login-flows-miss",
+            }))
     }
 }
 

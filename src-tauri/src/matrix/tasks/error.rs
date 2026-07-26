@@ -28,10 +28,9 @@ impl std::fmt::Display for TaskError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::UnknownTask { id } => write!(f, "unknown task id {}", id.get()),
-            Self::StaleGeneration { observed, live } => write!(
-                f,
-                "stale task generation: observed={observed} live={live}"
-            ),
+            Self::StaleGeneration { observed, live } => {
+                write!(f, "stale task generation: observed={observed} live={live}")
+            }
             Self::SpawnStaleGeneration { observed, live } => write!(
                 f,
                 "refuse spawn for stale generation: observed={observed} live={live}"

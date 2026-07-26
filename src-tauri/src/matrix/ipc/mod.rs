@@ -27,6 +27,6 @@ pub use stream::*;
 pub use version::*;
 
 #[cfg(test)]
-mod tests;
-#[cfg(test)]
 mod contract_tests;
+#[cfg(test)]
+mod tests;

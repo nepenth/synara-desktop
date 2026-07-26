@@ -19,8 +19,7 @@ pub enum StoreFailureKind {
 }
 
 impl StoreFailureKind {
-    pub const ALL: &'static [StoreFailureKind] =
-        &[Self::Corrupt, Self::Unavailable, Self::Locked];
+    pub const ALL: &'static [StoreFailureKind] = &[Self::Corrupt, Self::Unavailable, Self::Locked];
 
     pub fn as_str(self) -> &'static str {
         match self {

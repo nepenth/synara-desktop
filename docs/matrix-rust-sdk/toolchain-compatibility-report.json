@@ -11,7 +11,12 @@
     },
     "git_commit": "1c44fb66214667c6d00acaf72ab592493653708b"
   },
-  "status": "accepted_pending_integration_merge",
+  "artifact_state": "landed",
+  "integration_state": "merged",
+  "strict_acceptance_state": "open",
+  "phase_gate_state": "open",
+  "current_status_ref": "docs/matrix-rust-sdk/program-status.json",
+  "historical_status_at_generation": "accepted_pending_integration_merge",
   "verdict": "pass-with-residuals",
   "host": {
     "os": "macos",
@@ -222,8 +227,8 @@
     "No commit/push/PR/branch switch by writer harness"
   ],
   "gates_unblocked_for": ["P1.1"],
-  "next_phase0": ["P0.6", "P0.7"],
-  "merged": false,
+  "historical_next_phase0_at_generation": ["P0.6", "P0.7"],
+  "historical_merged_at_generation": false,
   "artifacts": {
     "markdown": "docs/matrix-rust-sdk/toolchain-compatibility-report.md",
     "json": "docs/matrix-rust-sdk/toolchain-compatibility-report.json",

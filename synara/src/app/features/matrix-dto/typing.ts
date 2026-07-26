@@ -3,12 +3,7 @@
  */
 
 import type { RoomId, UserId } from './ids';
-import {
-  hasForbiddenWireFields,
-  isObject,
-  reqString,
-  stringArray,
-} from './parseUtil';
+import { hasForbiddenWireFields, isObject, reqString, stringArray } from './parseUtil';
 
 export type TypingSnapshot = {
   roomId: RoomId;

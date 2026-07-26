@@ -4,11 +4,12 @@
 | --- | --- |
 | Task | **P0.7** Migration UX decision record |
 | Date | 2026-07-24 |
-| Work branch | `matrix-rust/p0.7-migration-ux` |
-| Integration tip (base) | `feature/matrix-rust-sdk-full-replacement` @ `9e0cfcae8c377161a73ce8e01f889f485e233e5e` |
+| Work branch at generation | `matrix-rust/p0.7-migration-ux` |
+| Base integration tip at generation | `feature/matrix-rust-sdk-full-replacement` @ `9e0cfcae8c377161a73ce8e01f889f485e233e5e` |
 | Tip message | `docs(matrix): merge P0.6 performance baseline` (P0.1–**P0.6 MERGED**; PR #46 for P0.6) |
 | Machine twin | [`migration-ux-decision.json`](migration-ux-decision.json) |
-| Status | **Accepted** by independent review — PR to integration (`merged: false`) |
+| Artifact / integration state | `landed` / `merged` |
+| Strict acceptance / Phase 0 gate | `open` / `open` — policy evidence exists, but the phase gate remains open; see [`program-status.md`](program-status.md) |
 | Verdict | `migration_ux_decided` (product policy for Phase 3 implementers) |
 
 Authoritative program plan: [`../matrix-rust-sdk-full-replacement-plan.md`](../matrix-rust-sdk-full-replacement-plan.md) §3 (full replacement), §8 (session/store transition), Phase 3 (auth/legacy transition), Phase 11–14 cutover/retention notes.
@@ -518,7 +519,8 @@ This ADR **does not** modify traceability FR statuses. Implementers must preserv
 - [ ] User copy principles present; sample strings contain no secrets.
 - [ ] MD and JSON twins synchronized.
 - [ ] Docs only—no production session/migration code, no dual-backend scaffolding.
-- [ ] Handoff reflects P0.6 MERGED @ `9e0cfca` and P0.7 evidence pending review.
+- [x] P0.7 artifact is merged; current strict acceptance remains separately
+      tracked in `program-status.json`.
 - [ ] No FR-7.8–7.11 rewrites or FR-7.9-011 re-promotion.
 
 ---
