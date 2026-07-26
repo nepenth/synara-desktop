@@ -971,36 +971,40 @@ test("all-optional CI, duplicate IDs, invented procedure text, and prohibited de
 });
 
 test("production verification rejects a Git changed-path omission", () => {
-  const current = spawnSync("git", ["rev-parse", "HEAD"], {
-    encoding: "utf8",
-  }).stdout.trim();
-  const prior = spawnSync("git", ["rev-parse", "HEAD^"], {
-    encoding: "utf8",
-  }).stdout.trim();
   const source = packet();
-  source.git_context.base_sha = prior;
   const reviewed = report(source);
-  for (const location of [
-    reviewed.subject,
-    reviewed.final_diff_review,
-    reviewed.signature,
-  ]) {
-    if (Object.hasOwn(location, "base_sha")) location.base_sha = prior;
-    if (Object.hasOwn(location, "head_sha")) location.head_sha = current;
-    if (Object.hasOwn(location, "reviewed_base_sha"))
-      location.reviewed_base_sha = prior;
-    if (Object.hasOwn(location, "reviewed_head_sha"))
-      location.reviewed_head_sha = current;
-  }
-  reviewed.review_context.base_sha = prior;
-  reviewed.review_context.head_sha = current;
-  reviewed.final_diff_review.reviewed_range = `${prior}..${current}`;
   reviewed.scope_audit.actual_changed_paths = [];
+  const calls = [];
+  const runner = (command, arguments_, options) => {
+    calls.push({ command, arguments_, options });
+    return {
+      status: 0,
+      stdout:
+        arguments_[0] === "diff"
+          ? Buffer.from("docs/a.json\0")
+          : Buffer.alloc(0),
+    };
+  };
   assert(
-    codes(validateProductionReview(reviewed, source, process.cwd())).has(
-      "PRODUCTION_GIT_DIFF_PARITY"
-    )
+    codes(
+      validateProductionReview(reviewed, source, process.cwd(), runner)
+    ).has("PRODUCTION_GIT_DIFF_PARITY")
   );
+  assert.deepEqual(
+    calls.map(({ command, arguments_ }) => [command, ...arguments_]),
+    [
+      ["git", "cat-file", "-e", `${BASE}^{commit}`],
+      ["git", "cat-file", "-e", `${HEAD}^{commit}`],
+      ["git", "diff", "--no-renames", "--name-only", "-z", BASE, HEAD, "--"],
+    ]
+  );
+  for (const { options } of calls)
+    assert.deepEqual(options, {
+      cwd: process.cwd(),
+      encoding: null,
+      shell: false,
+      windowsHide: true,
+    });
 });
 
 test("production repository references reject symlink escapes", async () => {
