@@ -1,0 +1,2299 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://synara.invalid/schemas/matrix-rust-sdk/feature-parity-traceability-v2.schema.json",
+  "title": "Synara Matrix Rust SDK feature-parity traceability v2",
+  "description": "Closed version-2 contract separating audited current-product behavior from Matrix Rust SDK cutover readiness while losslessly preserving the accepted v1 ledgers.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "task_id",
+    "title",
+    "provenance",
+    "migration_provenance",
+    "coverage_contract",
+    "source_audit",
+    "lifecycle",
+    "summary",
+    "vocabularies",
+    "requirements",
+    "blockers",
+    "architecture_decisions",
+    "audit_reports",
+    "validation_reports",
+    "p0_1_fidelity",
+    "file_coverage_ledger",
+    "direct_matrix_networking_ledger",
+    "deep_import_ledger",
+    "custom_contract_ledger",
+    "dead_path_proofs",
+    "implementation_task_catalog",
+    "automated_test_catalog",
+    "manual_acceptance_catalog",
+    "risks_and_blockers",
+    "correction_passes",
+    "cx_extras",
+    "cx_extras_note",
+    "evidence_limitations",
+    "invariants",
+    "phase1_plus_handoff",
+    "prohibited_claims_guard"
+  ],
+  "properties": {
+    "schema_version": { "const": "2.0" },
+    "task_id": { "const": "P0.2" },
+    "title": { "$ref": "#/$defs/nonEmptyString" },
+    "provenance": { "$ref": "#/$defs/provenance" },
+    "migration_provenance": { "$ref": "#/$defs/migrationProvenance" },
+    "coverage_contract": { "$ref": "#/$defs/coverageContract" },
+    "source_audit": { "$ref": "#/$defs/sourceAudit" },
+    "lifecycle": { "$ref": "#/$defs/lifecycleManifest" },
+    "summary": { "$ref": "#/$defs/summary" },
+    "vocabularies": { "$ref": "#/$defs/vocabularies" },
+    "requirements": {
+      "type": "array",
+      "minItems": 119,
+      "maxItems": 119,
+      "items": { "$ref": "#/$defs/requirement" }
+    },
+    "blockers": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/blocker" }
+    },
+    "architecture_decisions": {
+      "type": "array",
+      "minItems": 26,
+      "items": { "$ref": "#/$defs/architectureDecision" }
+    },
+    "audit_reports": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/auditReport" }
+    },
+    "validation_reports": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/validationReport" }
+    },
+    "p0_1_fidelity": { "$ref": "#/$defs/legacyObject" },
+    "file_coverage_ledger": { "$ref": "#/$defs/legacyArray" },
+    "direct_matrix_networking_ledger": { "$ref": "#/$defs/legacyArray" },
+    "deep_import_ledger": { "$ref": "#/$defs/legacyArray" },
+    "custom_contract_ledger": { "$ref": "#/$defs/legacyArray" },
+    "dead_path_proofs": { "$ref": "#/$defs/legacyArray" },
+    "implementation_task_catalog": { "$ref": "#/$defs/legacyArray" },
+    "automated_test_catalog": { "$ref": "#/$defs/legacyObject" },
+    "manual_acceptance_catalog": { "$ref": "#/$defs/legacyArray" },
+    "risks_and_blockers": { "$ref": "#/$defs/legacyArray" },
+    "correction_passes": { "$ref": "#/$defs/legacyArray" },
+    "cx_extras": { "$ref": "#/$defs/legacyArray" },
+    "cx_extras_note": { "$ref": "#/$defs/nonEmptyString" },
+    "evidence_limitations": { "$ref": "#/$defs/legacyArray" },
+    "invariants": { "$ref": "#/$defs/legacyArray" },
+    "phase1_plus_handoff": { "$ref": "#/$defs/legacyObject" },
+    "prohibited_claims_guard": { "$ref": "#/$defs/legacyObject" }
+  },
+  "$defs": {
+    "nonEmptyString": { "type": "string", "minLength": 1, "pattern": "\\S" },
+    "nullableNonEmptyString": {
+      "type": ["string", "null"],
+      "minLength": 1,
+      "pattern": "\\S"
+    },
+    "id": {
+      "type": "string",
+      "minLength": 2,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$"
+    },
+    "authorizationId": {
+      "type": "string",
+      "pattern": "^AUTH-[A-Za-z0-9][A-Za-z0-9._:/-]*$"
+    },
+    "fullSha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "repositoryPath": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!/)(?![A-Za-z]:)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//)(?!.*[\\\\\\u0000-\\u001F\\u007F])(?!.*\\/$).+$"
+    },
+    "executionTranscriptPath": {
+      "type": "string",
+      "pattern": "^docs/matrix-rust-sdk/validation/executions/EXEC-[0-9]{6}\\.json$"
+    },
+    "requirementId": {
+      "type": "string",
+      "pattern": "^FR-7\\.(?:[1-9]|1[01])-[0-9]{3}$"
+    },
+    "clauseId": {
+      "type": "string",
+      "pattern": "^FR-7\\.(?:[1-9]|1[01])-[0-9]{3}\\.C[0-9]{3}$"
+    },
+    "sectionId": {
+      "enum": [
+        "7.1",
+        "7.2",
+        "7.3",
+        "7.4",
+        "7.5",
+        "7.6",
+        "7.7",
+        "7.8",
+        "7.9",
+        "7.10",
+        "7.11"
+      ]
+    },
+    "uniqueStrings": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/nonEmptyString" }
+    },
+    "nonEmptyUniqueStrings": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/nonEmptyString" }
+    },
+    "uniqueIds": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/id" }
+    },
+    "nonEmptyUniqueIds": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/id" }
+    },
+    "legacyJson": {
+      "description": "Losslessly preserved v1 value; migration digest checks, not this structural compatibility wrapper, enforce byte-independent semantic equality.",
+      "type": ["null", "boolean", "object", "array", "string", "integer"],
+      "items": { "$ref": "#/$defs/legacyJson" },
+      "additionalProperties": { "$ref": "#/$defs/legacyJson" }
+    },
+    "legacyArray": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/legacyJson" }
+    },
+    "legacyObject": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/legacyJson" }
+    },
+    "lineRange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start", "end"],
+      "properties": {
+        "start": { "type": "integer", "minimum": 1 },
+        "end": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "artifactFile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "file_sha256"],
+      "properties": {
+        "path": { "$ref": "#/$defs/repositoryPath" },
+        "file_sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "gitArtifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["commit_sha", "path", "blob_oid", "file_sha256"],
+      "properties": {
+        "commit_sha": { "$ref": "#/$defs/fullSha" },
+        "path": { "$ref": "#/$defs/repositoryPath" },
+        "blob_oid": { "$ref": "#/$defs/fullSha" },
+        "file_sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "riskRegisterIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "commit_sha",
+        "path",
+        "blob_oid",
+        "file_sha256",
+        "canonical_sha256"
+      ],
+      "properties": {
+        "commit_sha": {
+          "const": "c358502cf99ade2b81abf85ad954e21bf228dc33"
+        },
+        "path": {
+          "const": "docs/matrix-rust-sdk/security-risk-register.json"
+        },
+        "blob_oid": { "const": "2737ba78be3ad2a41a5952b9acc187949bf831a9" },
+        "file_sha256": {
+          "const": "c07b7540b931e244e43f0dc750f52ed564393dc71f2543f1692aad916eb217f6"
+        },
+        "canonical_sha256": {
+          "const": "a7e6457ff8a33d70a49f5289b245aebb133c4e803f2e19d5a13bc4872a10bda6"
+        }
+      }
+    },
+    "planIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "blob_oid", "file_sha256"],
+      "properties": {
+        "path": { "$ref": "#/$defs/repositoryPath" },
+        "blob_oid": { "$ref": "#/$defs/fullSha" },
+        "file_sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "durableAuditIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "introducing_commit_sha",
+        "blob_oid",
+        "file_sha256",
+        "canonical_semantic_sha256"
+      ],
+      "properties": {
+        "path": {
+          "const": "docs/matrix-rust-sdk/reviews/r0.2-e-audit-normalization-119.json"
+        },
+        "introducing_commit_sha": { "$ref": "#/$defs/fullSha" },
+        "blob_oid": { "$ref": "#/$defs/fullSha" },
+        "file_sha256": { "$ref": "#/$defs/sha256" },
+        "canonical_semantic_sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repository",
+        "integration_branch",
+        "plan",
+        "migration_source",
+        "audited_source_sha",
+        "risk_register",
+        "durable_audit",
+        "generated_markdown_path"
+      ],
+      "properties": {
+        "repository": { "const": "synara-desktop" },
+        "integration_branch": {
+          "const": "feature/matrix-rust-sdk-full-replacement"
+        },
+        "plan": { "$ref": "#/$defs/planIdentity" },
+        "migration_source": { "$ref": "#/$defs/gitArtifact" },
+        "audited_source_sha": {
+          "const": "2aa6d96f9b63aad64a14feac23df2f694857be85"
+        },
+        "risk_register": { "$ref": "#/$defs/riskRegisterIdentity" },
+        "durable_audit": { "$ref": "#/$defs/durableAuditIdentity" },
+        "generated_markdown_path": {
+          "const": "docs/matrix-rust-sdk/feature-parity-traceability.md"
+        }
+      }
+    },
+    "legacyV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "source",
+        "provenance",
+        "vocabularies",
+        "summary_canonical_sha256",
+        "requirements_canonical_sha256"
+      ],
+      "properties": {
+        "schema_version": { "const": 1 },
+        "source": { "$ref": "#/$defs/gitArtifact" },
+        "provenance": { "$ref": "#/$defs/legacyObject" },
+        "vocabularies": { "$ref": "#/$defs/legacyObject" },
+        "summary_canonical_sha256": { "$ref": "#/$defs/sha256" },
+        "requirements_canonical_sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "ledgerDigest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "key",
+        "pre_migration_canonical_sha256",
+        "post_migration_canonical_sha256"
+      ],
+      "properties": {
+        "key": { "$ref": "#/$defs/nonEmptyString" },
+        "pre_migration_canonical_sha256": { "$ref": "#/$defs/sha256" },
+        "post_migration_canonical_sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "migrationProvenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "legacy_v1",
+        "transformed_keys",
+        "added_keys",
+        "preserved_keys",
+        "preserved_ledger_digests"
+      ],
+      "properties": {
+        "legacy_v1": { "$ref": "#/$defs/legacyV1" },
+        "transformed_keys": {
+          "type": "array",
+          "minItems": 5,
+          "maxItems": 5,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "schema_version",
+              "provenance",
+              "summary",
+              "vocabularies",
+              "requirements"
+            ]
+          }
+        },
+        "added_keys": {
+          "type": "array",
+          "minItems": 8,
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "migration_provenance",
+              "coverage_contract",
+              "source_audit",
+              "lifecycle",
+              "blockers",
+              "architecture_decisions",
+              "audit_reports",
+              "validation_reports"
+            ]
+          }
+        },
+        "preserved_keys": {
+          "type": "array",
+          "minItems": 19,
+          "maxItems": 19,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "task_id",
+              "title",
+              "p0_1_fidelity",
+              "file_coverage_ledger",
+              "direct_matrix_networking_ledger",
+              "deep_import_ledger",
+              "custom_contract_ledger",
+              "dead_path_proofs",
+              "implementation_task_catalog",
+              "automated_test_catalog",
+              "manual_acceptance_catalog",
+              "risks_and_blockers",
+              "correction_passes",
+              "cx_extras",
+              "cx_extras_note",
+              "evidence_limitations",
+              "invariants",
+              "phase1_plus_handoff",
+              "prohibited_claims_guard"
+            ]
+          }
+        },
+        "preserved_ledger_digests": {
+          "type": "array",
+          "minItems": 19,
+          "maxItems": 19,
+          "items": { "$ref": "#/$defs/ledgerDigest" }
+        }
+      }
+    },
+    "sectionCounts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "7.1",
+        "7.2",
+        "7.3",
+        "7.4",
+        "7.5",
+        "7.6",
+        "7.7",
+        "7.8",
+        "7.9",
+        "7.10",
+        "7.11"
+      ],
+      "properties": {
+        "7.1": { "const": 13 },
+        "7.2": { "const": 13 },
+        "7.3": { "const": 17 },
+        "7.4": { "const": 11 },
+        "7.5": { "const": 11 },
+        "7.6": { "const": 8 },
+        "7.7": { "const": 9 },
+        "7.8": { "const": 9 },
+        "7.9": { "const": 13 },
+        "7.10": { "const": 7 },
+        "7.11": { "const": 8 }
+      }
+    },
+    "coverageContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "requirement_count",
+        "section_counts",
+        "requirement_id_sha256",
+        "clause_id_sha256",
+        "status_correction_count",
+        "sections_7_3_through_7_7_status_correction_subtotal",
+        "sections_7_3_through_7_7_non_status_correction_manifest",
+        "sections_7_3_through_7_7_identified_correction_count"
+      ],
+      "properties": {
+        "requirement_count": { "const": 119 },
+        "section_counts": { "$ref": "#/$defs/sectionCounts" },
+        "requirement_id_sha256": { "$ref": "#/$defs/sha256" },
+        "clause_id_sha256": { "$ref": "#/$defs/sha256" },
+        "status_correction_count": { "const": 23 },
+        "sections_7_3_through_7_7_status_correction_subtotal": { "const": 11 },
+        "sections_7_3_through_7_7_non_status_correction_manifest": {
+          "type": "array",
+          "minItems": 5,
+          "maxItems": 5,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/nonStatusCorrection" }
+        },
+        "sections_7_3_through_7_7_identified_correction_count": { "const": 16 }
+      }
+    },
+    "nonStatusCorrection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["requirement_id", "classification"],
+      "properties": {
+        "requirement_id": {
+          "enum": [
+            "FR-7.5-004",
+            "FR-7.5-009",
+            "FR-7.6-003",
+            "FR-7.7-003",
+            "FR-7.7-009"
+          ]
+        },
+        "classification": { "const": "evidence_or_test_ledger" }
+      }
+    },
+    "sourceAudit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "audit_id",
+        "subject_sha",
+        "artifact",
+        "canonical_payload_sha256",
+        "review_state"
+      ],
+      "properties": {
+        "audit_id": { "const": "R0.2-E-AUDIT-NORMALIZATION-119" },
+        "subject_sha": { "const": "2aa6d96f9b63aad64a14feac23df2f694857be85" },
+        "artifact": { "$ref": "#/$defs/durableAuditIdentity" },
+        "canonical_payload_sha256": { "$ref": "#/$defs/sha256" },
+        "review_state": {
+          "enum": ["pending_independent_review", "changes_required", "accepted"]
+        }
+      }
+    },
+    "statusCounts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "implemented",
+        "partial",
+        "missing",
+        "not_exposed",
+        "dead_path_proven",
+        "unverified"
+      ],
+      "properties": {
+        "implemented": { "type": "integer", "minimum": 0 },
+        "partial": { "type": "integer", "minimum": 0 },
+        "missing": { "type": "integer", "minimum": 0 },
+        "not_exposed": { "type": "integer", "minimum": 0 },
+        "dead_path_proven": { "type": "integer", "minimum": 0 },
+        "unverified": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "readinessCounts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "not_assessed",
+        "blocked",
+        "implementation_planned",
+        "implementation_in_progress",
+        "validation_pending",
+        "ready"
+      ],
+      "properties": {
+        "not_assessed": { "type": "integer", "minimum": 0 },
+        "blocked": { "type": "integer", "minimum": 0 },
+        "implementation_planned": { "type": "integer", "minimum": 0 },
+        "implementation_in_progress": { "type": "integer", "minimum": 0 },
+        "validation_pending": { "type": "integer", "minimum": 0 },
+        "ready": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "requirement_count",
+        "clause_count",
+        "current_product_status_counts",
+        "rust_cutover_readiness_counts",
+        "open_blocker_count",
+        "unresolved_critical_high_blocker_count",
+        "open_architecture_decision_count",
+        "accepted_audit_report_count",
+        "accepted_validation_report_count",
+        "derived"
+      ],
+      "properties": {
+        "requirement_count": { "const": 119 },
+        "clause_count": { "type": "integer", "minimum": 119 },
+        "current_product_status_counts": { "$ref": "#/$defs/statusCounts" },
+        "rust_cutover_readiness_counts": { "$ref": "#/$defs/readinessCounts" },
+        "open_blocker_count": { "type": "integer", "minimum": 0 },
+        "unresolved_critical_high_blocker_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "open_architecture_decision_count": { "type": "integer", "minimum": 0 },
+        "accepted_audit_report_count": { "type": "integer", "minimum": 0 },
+        "accepted_validation_report_count": { "type": "integer", "minimum": 0 },
+        "derived": { "const": true }
+      }
+    },
+    "vocabularies": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "current_product_status",
+        "rust_cutover_readiness",
+        "causality",
+        "source_evidence_role",
+        "blocker_kind",
+        "severity",
+        "architecture_decision_status",
+        "audit_state",
+        "validation_evidence_class"
+      ],
+      "properties": {
+        "current_product_status": { "$ref": "#/$defs/nonEmptyUniqueStrings" },
+        "rust_cutover_readiness": { "$ref": "#/$defs/nonEmptyUniqueStrings" },
+        "causality": { "$ref": "#/$defs/nonEmptyUniqueStrings" },
+        "source_evidence_role": { "$ref": "#/$defs/nonEmptyUniqueStrings" },
+        "blocker_kind": { "$ref": "#/$defs/nonEmptyUniqueStrings" },
+        "severity": { "$ref": "#/$defs/nonEmptyUniqueStrings" },
+        "architecture_decision_status": {
+          "$ref": "#/$defs/nonEmptyUniqueStrings"
+        },
+        "audit_state": { "$ref": "#/$defs/nonEmptyUniqueStrings" },
+        "validation_evidence_class": { "$ref": "#/$defs/nonEmptyUniqueStrings" }
+      }
+    },
+    "sourceEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "path",
+        "symbol",
+        "lines",
+        "source_sha",
+        "snippet_sha256",
+        "role",
+        "explanation"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^EV-FR-7\\.(?:[1-9]|1[01])-[0-9]{3}-C[0-9]{3}-SRC-[0-9]{3}$"
+        },
+        "path": { "$ref": "#/$defs/repositoryPath" },
+        "symbol": { "$ref": "#/$defs/nonEmptyString" },
+        "lines": { "$ref": "#/$defs/lineRange" },
+        "source_sha": { "const": "2aa6d96f9b63aad64a14feac23df2f694857be85" },
+        "snippet_sha256": { "$ref": "#/$defs/sha256" },
+        "role": {
+          "enum": [
+            "implementation",
+            "sdk_call",
+            "sdk_listener",
+            "sdk_model",
+            "state_owner",
+            "error_path",
+            "fallback",
+            "cleanup",
+            "reachability_entry",
+            "test_source",
+            "network_boundary",
+            "raw_matrix_http"
+          ]
+        },
+        "explanation": { "$ref": "#/$defs/nonEmptyString" }
+      }
+    },
+    "absenceEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "source_sha",
+        "expression",
+        "mode",
+        "roots",
+        "exclusions",
+        "expected_match_count",
+        "explanation"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^EV-FR-7\\.(?:[1-9]|1[01])-[0-9]{3}-C[0-9]{3}-ABS-[0-9]{3}$"
+        },
+        "source_sha": { "const": "2aa6d96f9b63aad64a14feac23df2f694857be85" },
+        "expression": { "$ref": "#/$defs/nonEmptyString" },
+        "mode": { "enum": ["literal", "regex"] },
+        "roots": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/repositoryPath" }
+        },
+        "exclusions": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/repositoryPath" }
+        },
+        "expected_match_count": { "const": 0 },
+        "explanation": { "$ref": "#/$defs/nonEmptyString" }
+      }
+    },
+    "causality": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "api_or_event_names",
+        "evidence_ids",
+        "product_ownership_reason",
+        "matrix_boundary"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "sdk_call",
+            "sdk_listener",
+            "sdk_model",
+            "product_owned",
+            "mixed"
+          ]
+        },
+        "api_or_event_names": { "$ref": "#/$defs/uniqueStrings" },
+        "evidence_ids": { "$ref": "#/$defs/uniqueIds" },
+        "product_ownership_reason": {
+          "$ref": "#/$defs/nullableNonEmptyString"
+        },
+        "matrix_boundary": { "$ref": "#/$defs/nullableNonEmptyString" }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": { "enum": ["sdk_call", "sdk_listener", "sdk_model"] }
+            }
+          },
+          "then": {
+            "properties": {
+              "api_or_event_names": { "minItems": 1 },
+              "evidence_ids": { "minItems": 1 },
+              "product_ownership_reason": { "type": "null" }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": { "kind": { "enum": ["product_owned", "mixed"] } }
+          },
+          "then": {
+            "properties": {
+              "product_ownership_reason": { "$ref": "#/$defs/nonEmptyString" },
+              "matrix_boundary": { "$ref": "#/$defs/nonEmptyString" }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "mixed" } } },
+          "then": {
+            "properties": {
+              "api_or_event_names": { "minItems": 1 },
+              "evidence_ids": { "minItems": 1 }
+            }
+          }
+        }
+      ]
+    },
+    "existingTest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "path",
+        "symbol",
+        "lines",
+        "source_sha",
+        "snippet_sha256",
+        "assertions",
+        "limitations"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^TST-FR-7\\.(?:[1-9]|1[01])-[0-9]{3}-EX-[0-9]{3}$"
+        },
+        "path": { "$ref": "#/$defs/repositoryPath" },
+        "symbol": { "$ref": "#/$defs/nonEmptyString" },
+        "lines": { "$ref": "#/$defs/lineRange" },
+        "source_sha": { "const": "2aa6d96f9b63aad64a14feac23df2f694857be85" },
+        "snippet_sha256": { "$ref": "#/$defs/sha256" },
+        "assertions": { "$ref": "#/$defs/nonEmptyUniqueStrings" },
+        "limitations": { "$ref": "#/$defs/nonEmptyUniqueStrings" }
+      }
+    },
+    "requiredTest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "evidence_class", "task_ids", "acceptance", "status"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^TST-FR-7\\.(?:[1-9]|1[01])-[0-9]{3}-REQ-[0-9]{3}$"
+        },
+        "evidence_class": {
+          "enum": [
+            "unit",
+            "integration",
+            "live_synapse",
+            "ui",
+            "platform",
+            "security_privacy",
+            "performance_reliability"
+          ]
+        },
+        "task_ids": { "$ref": "#/$defs/nonEmptyUniqueIds" },
+        "acceptance": { "$ref": "#/$defs/nonEmptyString" },
+        "status": {
+          "enum": [
+            "planned",
+            "implemented_unvalidated",
+            "validation_pending",
+            "accepted"
+          ]
+        },
+        "execution_contract": { "$ref": "#/$defs/executionContract" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "status": { "const": "planned" } } },
+          "then": {
+            "not": { "required": ["execution_contract"] }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "enum": [
+                  "implemented_unvalidated",
+                  "validation_pending",
+                  "accepted"
+                ]
+              }
+            }
+          },
+          "then": { "required": ["execution_contract"] }
+        }
+      ]
+    },
+    "invocationId": {
+      "type": "string",
+      "maxLength": 128,
+      "pattern": "^INV-FR-7\\.(?:[1-9]|1[01])-[0-9]{3}-REQ-[0-9]{3}-[0-9]{3}$"
+    },
+    "assertionId": {
+      "type": "string",
+      "maxLength": 128,
+      "pattern": "^ASSERT-FR-7\\.(?:[1-9]|1[01])-[0-9]{3}-REQ-[0-9]{3}-[0-9]{3}$"
+    },
+    "runnerId": {
+      "enum": [
+        "NODE_TEST",
+        "NPM_SCRIPT",
+        "CARGO_TEST",
+        "SYNAPSE_HARNESS",
+        "DESKTOP_UI",
+        "IOS_XCTEST",
+        "PLATFORM_SCENARIO"
+      ]
+    },
+    "executionContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "runner_id",
+        "invocation_id",
+        "invocation_fingerprint_sha256",
+        "assertion_ids"
+      ],
+      "properties": {
+        "kind": { "enum": ["command", "scenario"] },
+        "runner_id": { "$ref": "#/$defs/runnerId" },
+        "invocation_id": { "$ref": "#/$defs/invocationId" },
+        "invocation_fingerprint_sha256": { "$ref": "#/$defs/sha256" },
+        "assertion_ids": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/assertionId" }
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "kind": { "const": "command" } } },
+          "then": {
+            "properties": {
+              "runner_id": {
+                "enum": ["NODE_TEST", "NPM_SCRIPT", "CARGO_TEST"]
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "scenario" } } },
+          "then": {
+            "properties": {
+              "runner_id": {
+                "enum": [
+                  "SYNAPSE_HARNESS",
+                  "DESKTOP_UI",
+                  "IOS_XCTEST",
+                  "PLATFORM_SCENARIO"
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    "outcomes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["success", "failure", "fallback", "cleanup"],
+      "properties": {
+        "success": { "$ref": "#/$defs/nonEmptyUniqueStrings" },
+        "failure": { "$ref": "#/$defs/nonEmptyUniqueStrings" },
+        "fallback": { "$ref": "#/$defs/nonEmptyUniqueStrings" },
+        "cleanup": { "$ref": "#/$defs/nonEmptyUniqueStrings" }
+      }
+    },
+    "reachability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "kind",
+        "entry_evidence_ids",
+        "ordered_chain",
+        "absence_evidence_ids",
+        "explanation"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^REACH-FR-7\\.(?:[1-9]|1[01])-[0-9]{3}-[0-9]{3}$"
+        },
+        "kind": {
+          "enum": [
+            "reachable",
+            "conditional",
+            "not_exposed",
+            "dead_path_proven"
+          ]
+        },
+        "entry_evidence_ids": { "$ref": "#/$defs/uniqueIds" },
+        "ordered_chain": { "$ref": "#/$defs/uniqueStrings" },
+        "absence_evidence_ids": { "$ref": "#/$defs/uniqueIds" },
+        "explanation": { "$ref": "#/$defs/nonEmptyString" }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "kind": { "enum": ["reachable", "conditional"] } }
+          },
+          "then": {
+            "properties": {
+              "entry_evidence_ids": { "minItems": 1 },
+              "ordered_chain": { "minItems": 1 },
+              "absence_evidence_ids": { "maxItems": 0 }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": { "enum": ["not_exposed", "dead_path_proven"] }
+            }
+          },
+          "then": {
+            "properties": {
+              "entry_evidence_ids": { "maxItems": 0 },
+              "ordered_chain": { "maxItems": 0 },
+              "absence_evidence_ids": { "minItems": 1 }
+            }
+          }
+        }
+      ]
+    },
+    "rustMapping": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "capability_ids",
+        "gap_ids",
+        "task_ids",
+        "gate_ids",
+        "validation_report_ids",
+        "qualification"
+      ],
+      "properties": {
+        "capability_ids": { "$ref": "#/$defs/uniqueIds" },
+        "gap_ids": { "$ref": "#/$defs/uniqueIds" },
+        "task_ids": { "$ref": "#/$defs/uniqueIds" },
+        "gate_ids": { "$ref": "#/$defs/uniqueIds" },
+        "validation_report_ids": { "$ref": "#/$defs/uniqueIds" },
+        "qualification": { "$ref": "#/$defs/nonEmptyString" }
+      }
+    },
+    "currentProductStatus": {
+      "enum": [
+        "implemented",
+        "partial",
+        "missing",
+        "not_exposed",
+        "dead_path_proven",
+        "unverified"
+      ]
+    },
+    "clause": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "text",
+        "current_product_status",
+        "qualifiers",
+        "source_evidence",
+        "absence_evidence",
+        "causality",
+        "existing_tests",
+        "required_tests",
+        "outcomes",
+        "reachability",
+        "rust_mapping",
+        "blocker_ids",
+        "risk_ids",
+        "architecture_decision_ids"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/clauseId" },
+        "text": { "$ref": "#/$defs/nonEmptyString" },
+        "current_product_status": { "$ref": "#/$defs/currentProductStatus" },
+        "qualifiers": { "$ref": "#/$defs/uniqueStrings" },
+        "source_evidence": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/sourceEvidence" }
+        },
+        "absence_evidence": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/absenceEvidence" }
+        },
+        "causality": { "$ref": "#/$defs/causality" },
+        "existing_tests": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/existingTest" }
+        },
+        "required_tests": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/requiredTest" }
+        },
+        "outcomes": { "$ref": "#/$defs/outcomes" },
+        "reachability": { "$ref": "#/$defs/reachability" },
+        "rust_mapping": { "$ref": "#/$defs/rustMapping" },
+        "blocker_ids": { "$ref": "#/$defs/uniqueIds" },
+        "risk_ids": { "$ref": "#/$defs/uniqueIds" },
+        "architecture_decision_ids": { "$ref": "#/$defs/uniqueIds" }
+      }
+    },
+    "statusCorrection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "recorded_status",
+        "audited_status",
+        "changed",
+        "explanation"
+      ],
+      "properties": {
+        "recorded_status": {
+          "enum": [
+            "implemented",
+            "partial",
+            "not-currently-exposed",
+            "unverified",
+            "dead-path-proven"
+          ]
+        },
+        "audited_status": { "$ref": "#/$defs/currentProductStatus" },
+        "changed": { "type": "boolean" },
+        "explanation": { "$ref": "#/$defs/nonEmptyString" }
+      }
+    },
+    "rowAudit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "subject_sha",
+        "reviewer",
+        "reviewed_at",
+        "report_ids",
+        "audited_payload_sha256"
+      ],
+      "properties": {
+        "state": {
+          "enum": [
+            "reviewed_changes_required",
+            "corrected_pending_rereview",
+            "accepted"
+          ]
+        },
+        "subject_sha": { "const": "2aa6d96f9b63aad64a14feac23df2f694857be85" },
+        "reviewer": { "$ref": "#/$defs/nullableNonEmptyString" },
+        "reviewed_at": { "type": ["string", "null"], "format": "date-time" },
+        "report_ids": { "$ref": "#/$defs/uniqueIds" },
+        "audited_payload_sha256": { "$ref": "#/$defs/sha256" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "state": { "const": "accepted" } } },
+          "then": {
+            "properties": {
+              "reviewer": { "$ref": "#/$defs/nonEmptyString" },
+              "reviewed_at": { "type": "string", "format": "date-time" },
+              "report_ids": { "minItems": 1 }
+            }
+          }
+        }
+      ]
+    },
+    "currentProduct": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "qualifiers", "summary", "status_correction"],
+      "properties": {
+        "status": { "$ref": "#/$defs/currentProductStatus" },
+        "qualifiers": { "$ref": "#/$defs/uniqueStrings" },
+        "summary": { "$ref": "#/$defs/nonEmptyString" },
+        "status_correction": { "$ref": "#/$defs/statusCorrection" }
+      }
+    },
+    "rustCutover": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "readiness",
+        "implementation_subject_sha",
+        "matrix_owner",
+        "surviving_raw_matrix_http",
+        "surviving_matrix_js_owner",
+        "capability_ids",
+        "gap_ids",
+        "task_ids",
+        "gate_ids",
+        "blocker_ids",
+        "validation_report_ids",
+        "qualification"
+      ],
+      "properties": {
+        "readiness": {
+          "enum": [
+            "not_assessed",
+            "blocked",
+            "implementation_planned",
+            "implementation_in_progress",
+            "validation_pending",
+            "ready"
+          ]
+        },
+        "implementation_subject_sha": {
+          "type": ["string", "null"],
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "matrix_owner": {
+          "enum": [
+            "matrix_rust_sdk",
+            "matrix_js_sdk",
+            "raw_matrix_http",
+            "mixed",
+            "product_only",
+            "none"
+          ]
+        },
+        "surviving_raw_matrix_http": { "type": "boolean" },
+        "surviving_matrix_js_owner": { "type": "boolean" },
+        "capability_ids": { "$ref": "#/$defs/uniqueIds" },
+        "gap_ids": { "$ref": "#/$defs/uniqueIds" },
+        "task_ids": { "$ref": "#/$defs/uniqueIds" },
+        "gate_ids": { "$ref": "#/$defs/uniqueIds" },
+        "blocker_ids": { "$ref": "#/$defs/uniqueIds" },
+        "validation_report_ids": { "$ref": "#/$defs/uniqueIds" },
+        "qualification": { "$ref": "#/$defs/nonEmptyString" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "readiness": { "const": "ready" } } },
+          "then": {
+            "properties": {
+              "implementation_subject_sha": { "$ref": "#/$defs/fullSha" },
+              "matrix_owner": {
+                "enum": ["matrix_rust_sdk", "product_only", "none"]
+              },
+              "surviving_raw_matrix_http": { "const": false },
+              "surviving_matrix_js_owner": { "const": false },
+              "gap_ids": { "maxItems": 0 },
+              "gate_ids": { "maxItems": 0 },
+              "blocker_ids": { "maxItems": 0 },
+              "validation_report_ids": { "minItems": 1 }
+            }
+          }
+        }
+      ]
+    },
+    "planRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["heading", "normalized_text", "line_range"],
+      "properties": {
+        "heading": { "$ref": "#/$defs/nonEmptyString" },
+        "normalized_text": { "$ref": "#/$defs/nonEmptyString" },
+        "line_range": { "$ref": "#/$defs/lineRange" }
+      }
+    },
+    "legacyInventoryContext": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "file_paths",
+        "method_candidates",
+        "listener_candidates",
+        "model_coupling",
+        "behavior_evidence_prohibited"
+      ],
+      "properties": {
+        "file_paths": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/repositoryPath" }
+        },
+        "method_candidates": { "$ref": "#/$defs/uniqueStrings" },
+        "listener_candidates": { "$ref": "#/$defs/uniqueStrings" },
+        "model_coupling": { "$ref": "#/$defs/uniqueStrings" },
+        "behavior_evidence_prohibited": { "const": true }
+      }
+    },
+    "requirement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "origin",
+        "section_id",
+        "plan",
+        "audit",
+        "current_product",
+        "clauses",
+        "rust_cutover",
+        "blocker_ids",
+        "task_ids",
+        "manual_acceptance_ids",
+        "migration_disposition_ids",
+        "security_privacy_lifecycle_ids",
+        "architecture_decision_ids",
+        "legacy_inventory_context"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/requirementId" },
+        "origin": { "const": "plan-section-7" },
+        "section_id": { "$ref": "#/$defs/sectionId" },
+        "plan": { "$ref": "#/$defs/planRecord" },
+        "audit": { "$ref": "#/$defs/rowAudit" },
+        "current_product": { "$ref": "#/$defs/currentProduct" },
+        "clauses": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/clause" }
+        },
+        "rust_cutover": { "$ref": "#/$defs/rustCutover" },
+        "blocker_ids": { "$ref": "#/$defs/uniqueIds" },
+        "task_ids": { "$ref": "#/$defs/uniqueIds" },
+        "manual_acceptance_ids": { "$ref": "#/$defs/uniqueIds" },
+        "migration_disposition_ids": { "$ref": "#/$defs/uniqueIds" },
+        "security_privacy_lifecycle_ids": { "$ref": "#/$defs/uniqueIds" },
+        "architecture_decision_ids": { "$ref": "#/$defs/uniqueIds" },
+        "legacy_inventory_context": { "$ref": "#/$defs/legacyInventoryContext" }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "current_product": {
+                "properties": { "status": { "const": "dead_path_proven" } }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "clauses": {
+                "items": {
+                  "properties": {
+                    "reachability": {
+                      "properties": { "kind": { "const": "dead_path_proven" } }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "blocker": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "kind",
+        "severity",
+        "status",
+        "owner_task_ids",
+        "authority",
+        "affected_requirement_ids",
+        "affected_clause_ids",
+        "threat_ids",
+        "boundary_ids",
+        "closure_criteria",
+        "closure_evidence",
+        "qualification"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "kind": {
+          "enum": [
+            "gap",
+            "gate",
+            "risk",
+            "architecture_decision",
+            "validation",
+            "migration",
+            "product_requirement"
+          ]
+        },
+        "severity": {
+          "enum": [
+            "critical",
+            "high",
+            "medium",
+            "low",
+            "informational",
+            "not_applicable"
+          ]
+        },
+        "status": {
+          "enum": ["open", "mitigating", "blocked", "accepted_risk", "closed"]
+        },
+        "owner_task_ids": { "$ref": "#/$defs/nonEmptyUniqueIds" },
+        "authority": { "$ref": "#/$defs/nonEmptyString" },
+        "affected_requirement_ids": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/requirementId" }
+        },
+        "affected_clause_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/clauseId" }
+        },
+        "threat_ids": { "$ref": "#/$defs/uniqueIds" },
+        "boundary_ids": { "$ref": "#/$defs/uniqueIds" },
+        "closure_criteria": { "$ref": "#/$defs/nonEmptyUniqueStrings" },
+        "closure_evidence": { "$ref": "#/$defs/uniqueStrings" },
+        "qualification": { "$ref": "#/$defs/nonEmptyString" }
+      }
+    },
+    "architectureDecision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "decision",
+        "status",
+        "owner",
+        "scope_authority",
+        "affected_requirement_ids",
+        "affected_clause_ids",
+        "closure_evidence",
+        "superseded_by_id"
+      ],
+      "properties": {
+        "id": { "type": "string", "pattern": "^AD-[0-9]{2,}$" },
+        "decision": { "$ref": "#/$defs/nonEmptyString" },
+        "status": {
+          "enum": [
+            "unresolved",
+            "proposed",
+            "approved",
+            "rejected",
+            "superseded"
+          ]
+        },
+        "owner": { "$ref": "#/$defs/nonEmptyString" },
+        "scope_authority": { "$ref": "#/$defs/nonEmptyString" },
+        "affected_requirement_ids": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/requirementId" }
+        },
+        "affected_clause_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/clauseId" }
+        },
+        "closure_evidence": { "$ref": "#/$defs/uniqueStrings" },
+        "superseded_by_id": {
+          "type": ["string", "null"],
+          "pattern": "^AD-[0-9]{2,}$"
+        }
+      }
+    },
+    "previousArtifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["commit_sha", "blob_oid", "file_sha256", "canonical_sha256"],
+      "properties": {
+        "commit_sha": { "$ref": "#/$defs/fullSha" },
+        "blob_oid": { "$ref": "#/$defs/fullSha" },
+        "file_sha256": { "$ref": "#/$defs/sha256" },
+        "canonical_sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "lifecycleManifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "projection",
+        "source_baseline_sha256",
+        "previous_artifact",
+        "audit_report_ids",
+        "validation_report_ids",
+        "entity_chains"
+      ],
+      "properties": {
+        "projection": { "const": "matrix-rust-cutover-lifecycle-v1" },
+        "source_baseline_sha256": { "$ref": "#/$defs/sha256" },
+        "previous_artifact": {
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "required": [
+            "commit_sha",
+            "blob_oid",
+            "file_sha256",
+            "canonical_sha256"
+          ],
+          "properties": {
+            "commit_sha": { "$ref": "#/$defs/fullSha" },
+            "blob_oid": { "$ref": "#/$defs/fullSha" },
+            "file_sha256": { "$ref": "#/$defs/sha256" },
+            "canonical_sha256": { "$ref": "#/$defs/sha256" }
+          }
+        },
+        "audit_report_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^AUDIT-[A-Za-z0-9][A-Za-z0-9._:/-]*$"
+          }
+        },
+        "validation_report_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^VALIDATION-[A-Za-z0-9][A-Za-z0-9._:/-]*$"
+          }
+        },
+        "entity_chains": {
+          "type": "array",
+          "minItems": 151,
+          "items": { "$ref": "#/$defs/lifecycleEntityChain" }
+        }
+      }
+    },
+    "lifecycleEntityChain": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "entity_kind",
+        "entity_id",
+        "projection",
+        "source_origin",
+        "source_entity_sha256",
+        "baseline_payload_sha256",
+        "head_payload_sha256",
+        "authorization_ids"
+      ],
+      "properties": {
+        "entity_kind": {
+          "enum": ["requirement", "blocker", "architecture_decision"]
+        },
+        "entity_id": { "$ref": "#/$defs/id" },
+        "projection": {
+          "enum": [
+            "rust-cutover-row-state-v1",
+            "blocker-lifecycle-state-v1",
+            "architecture-decision-lifecycle-state-v1"
+          ]
+        },
+        "source_origin": { "enum": ["durable_audit", "authorized_create"] },
+        "source_entity_sha256": { "$ref": "#/$defs/sha256" },
+        "baseline_payload_sha256": {
+          "type": ["string", "null"],
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "head_payload_sha256": { "$ref": "#/$defs/sha256" },
+        "authorization_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/authorizationId" }
+        }
+      }
+    },
+    "blockerSourceState": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "kind",
+        "severity",
+        "owner_task_ids",
+        "authority",
+        "affected_requirement_ids",
+        "affected_clause_ids",
+        "threat_ids",
+        "boundary_ids",
+        "closure_criteria"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "kind": {
+          "enum": [
+            "gap",
+            "gate",
+            "risk",
+            "architecture_decision",
+            "validation",
+            "migration",
+            "product_requirement"
+          ]
+        },
+        "severity": {
+          "enum": [
+            "critical",
+            "high",
+            "medium",
+            "low",
+            "informational",
+            "not_applicable"
+          ]
+        },
+        "owner_task_ids": { "$ref": "#/$defs/nonEmptyUniqueIds" },
+        "authority": { "$ref": "#/$defs/nonEmptyString" },
+        "affected_requirement_ids": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/requirementId" }
+        },
+        "affected_clause_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/clauseId" }
+        },
+        "threat_ids": { "$ref": "#/$defs/uniqueIds" },
+        "boundary_ids": { "$ref": "#/$defs/uniqueIds" },
+        "closure_criteria": { "$ref": "#/$defs/nonEmptyUniqueStrings" }
+      }
+    },
+    "architectureDecisionSourceState": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "decision",
+        "owner",
+        "scope_authority",
+        "affected_requirement_ids",
+        "affected_clause_ids"
+      ],
+      "properties": {
+        "id": { "type": "string", "pattern": "^AD-[0-9]{2,}$" },
+        "decision": { "$ref": "#/$defs/nonEmptyString" },
+        "owner": { "$ref": "#/$defs/nonEmptyString" },
+        "scope_authority": { "$ref": "#/$defs/nonEmptyString" },
+        "affected_requirement_ids": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/requirementId" }
+        },
+        "affected_clause_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/clauseId" }
+        }
+      }
+    },
+    "cutoverStateSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "projection",
+        "requirement_id",
+        "required_tests",
+        "clauses",
+        "rust_cutover"
+      ],
+      "properties": {
+        "projection": { "const": "rust-cutover-row-state-v1" },
+        "requirement_id": { "$ref": "#/$defs/requirementId" },
+        "required_tests": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["clause_id", "tests"],
+            "properties": {
+              "clause_id": { "$ref": "#/$defs/clauseId" },
+              "tests": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["id", "status", "execution_contract"],
+                  "properties": {
+                    "id": { "$ref": "#/$defs/id" },
+                    "status": {
+                      "enum": [
+                        "planned",
+                        "implemented_unvalidated",
+                        "validation_pending",
+                        "accepted"
+                      ]
+                    },
+                    "execution_contract": {
+                      "type": ["object", "null"]
+                    }
+                  },
+                  "allOf": [
+                    {
+                      "if": {
+                        "properties": { "status": { "const": "planned" } }
+                      },
+                      "then": {
+                        "properties": {
+                          "execution_contract": { "type": "null" }
+                        }
+                      },
+                      "else": {
+                        "properties": {
+                          "execution_contract": {
+                            "$ref": "#/$defs/executionContract"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "clauses": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["clause_id", "validation_report_ids"],
+            "properties": {
+              "clause_id": { "$ref": "#/$defs/clauseId" },
+              "validation_report_ids": { "$ref": "#/$defs/uniqueIds" }
+            }
+          }
+        },
+        "rust_cutover": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "readiness",
+            "implementation_subject_sha",
+            "matrix_owner",
+            "surviving_raw_matrix_http",
+            "surviving_matrix_js_owner",
+            "gap_ids",
+            "gate_ids",
+            "blocker_ids",
+            "validation_report_ids",
+            "qualification"
+          ],
+          "properties": {
+            "readiness": {
+              "enum": [
+                "not_assessed",
+                "blocked",
+                "implementation_planned",
+                "implementation_in_progress",
+                "validation_pending",
+                "ready"
+              ]
+            },
+            "implementation_subject_sha": {
+              "type": ["string", "null"],
+              "pattern": "^[0-9a-f]{40}$"
+            },
+            "matrix_owner": {
+              "enum": [
+                "matrix_js_sdk",
+                "matrix_rust_sdk",
+                "raw_matrix_http",
+                "mixed",
+                "product_only",
+                "none"
+              ]
+            },
+            "surviving_raw_matrix_http": { "type": "boolean" },
+            "surviving_matrix_js_owner": { "type": "boolean" },
+            "gap_ids": { "$ref": "#/$defs/uniqueIds" },
+            "gate_ids": { "$ref": "#/$defs/uniqueIds" },
+            "blocker_ids": { "$ref": "#/$defs/uniqueIds" },
+            "validation_report_ids": { "$ref": "#/$defs/uniqueIds" },
+            "qualification": { "$ref": "#/$defs/nonEmptyString" }
+          }
+        }
+      }
+    },
+    "blockerLifecycleSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "projection",
+        "blocker_id",
+        "status",
+        "closure_evidence",
+        "qualification"
+      ],
+      "properties": {
+        "projection": { "const": "blocker-lifecycle-state-v1" },
+        "blocker_id": { "$ref": "#/$defs/id" },
+        "status": {
+          "enum": ["open", "mitigating", "blocked", "accepted_risk", "closed"]
+        },
+        "closure_evidence": { "$ref": "#/$defs/uniqueStrings" },
+        "qualification": { "$ref": "#/$defs/nonEmptyString" }
+      }
+    },
+    "architectureDecisionLifecycleSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "projection",
+        "architecture_decision_id",
+        "status",
+        "closure_evidence",
+        "superseded_by_id"
+      ],
+      "properties": {
+        "projection": { "const": "architecture-decision-lifecycle-state-v1" },
+        "architecture_decision_id": {
+          "type": "string",
+          "pattern": "^AD-[0-9]{2,}$"
+        },
+        "status": {
+          "enum": [
+            "unresolved",
+            "proposed",
+            "approved",
+            "rejected",
+            "superseded"
+          ]
+        },
+        "closure_evidence": { "$ref": "#/$defs/uniqueStrings" },
+        "superseded_by_id": {
+          "type": ["string", "null"],
+          "pattern": "^AD-[0-9]{2,}$"
+        }
+      }
+    },
+    "lifecycleAuthorization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "entity_kind",
+        "entity_id",
+        "projection",
+        "sequence",
+        "operation",
+        "source_entity",
+        "source_entity_sha256",
+        "from_payload_sha256",
+        "to_state",
+        "to_payload_sha256",
+        "previous_authorization_sha256",
+        "report_id",
+        "subject_sha",
+        "reviewer",
+        "reviewed_at",
+        "rationale",
+        "rollback_reason",
+        "rollback_evidence",
+        "authorization_sha256"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/authorizationId" },
+        "entity_kind": {
+          "enum": ["requirement", "blocker", "architecture_decision"]
+        },
+        "entity_id": { "$ref": "#/$defs/id" },
+        "projection": {
+          "enum": [
+            "rust-cutover-row-state-v1",
+            "blocker-lifecycle-state-v1",
+            "architecture-decision-lifecycle-state-v1"
+          ]
+        },
+        "sequence": { "type": "integer", "minimum": 1 },
+        "operation": { "enum": ["advance", "rollback", "create"] },
+        "source_entity": {
+          "type": ["object", "null"]
+        },
+        "source_entity_sha256": { "$ref": "#/$defs/sha256" },
+        "from_payload_sha256": {
+          "type": ["string", "null"],
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "to_state": {
+          "type": "object"
+        },
+        "to_payload_sha256": { "$ref": "#/$defs/sha256" },
+        "previous_authorization_sha256": {
+          "type": ["string", "null"],
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "report_id": {
+          "type": "string",
+          "pattern": "^VALIDATION-[A-Za-z0-9][A-Za-z0-9._:/-]*$"
+        },
+        "subject_sha": { "$ref": "#/$defs/fullSha" },
+        "reviewer": { "$ref": "#/$defs/nonEmptyString" },
+        "reviewed_at": { "type": "string", "format": "date-time" },
+        "rationale": { "$ref": "#/$defs/nonEmptyString" },
+        "rollback_reason": { "$ref": "#/$defs/nullableNonEmptyString" },
+        "rollback_evidence": { "$ref": "#/$defs/uniqueStrings" },
+        "authorization_sha256": { "$ref": "#/$defs/sha256" }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "entity_kind": { "const": "requirement" } }
+          },
+          "then": {
+            "properties": {
+              "source_entity": { "type": "null" },
+              "to_state": { "$ref": "#/$defs/cutoverStateSnapshot" }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": { "entity_kind": { "const": "blocker" } }
+          },
+          "then": {
+            "properties": {
+              "to_state": { "$ref": "#/$defs/blockerLifecycleSnapshot" }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "entity_kind": { "const": "blocker" },
+              "operation": { "const": "create" }
+            }
+          },
+          "then": {
+            "properties": {
+              "source_entity": { "$ref": "#/$defs/blockerSourceState" }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "entity_kind": { "const": "architecture_decision" }
+            }
+          },
+          "then": {
+            "properties": {
+              "to_state": {
+                "$ref": "#/$defs/architectureDecisionLifecycleSnapshot"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "entity_kind": { "const": "architecture_decision" },
+              "operation": { "const": "create" }
+            }
+          },
+          "then": {
+            "properties": {
+              "source_entity": {
+                "$ref": "#/$defs/architectureDecisionSourceState"
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "operation": { "const": "create" } } },
+          "then": {
+            "properties": {
+              "sequence": { "const": 1 },
+              "source_entity": { "type": "object" },
+              "from_payload_sha256": { "type": "null" },
+              "previous_authorization_sha256": { "type": "null" },
+              "rollback_reason": { "type": "null" },
+              "rollback_evidence": { "maxItems": 0 }
+            }
+          },
+          "else": {
+            "properties": {
+              "source_entity": { "type": "null" },
+              "from_payload_sha256": { "$ref": "#/$defs/sha256" }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "sequence": { "const": 1 } } },
+          "then": {
+            "properties": {
+              "previous_authorization_sha256": { "type": "null" }
+            }
+          },
+          "else": {
+            "properties": {
+              "previous_authorization_sha256": { "$ref": "#/$defs/sha256" }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "operation": { "const": "rollback" } } },
+          "then": {
+            "properties": {
+              "rollback_reason": { "$ref": "#/$defs/nonEmptyString" },
+              "rollback_evidence": { "minItems": 1 }
+            }
+          },
+          "else": {
+            "properties": {
+              "rollback_reason": { "type": "null" },
+              "rollback_evidence": { "maxItems": 0 }
+            }
+          }
+        }
+      ]
+    },
+    "testContractSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "test_id",
+        "requirement_id",
+        "clause_id",
+        "evidence_class",
+        "execution_contract"
+      ],
+      "properties": {
+        "test_id": { "$ref": "#/$defs/id" },
+        "requirement_id": { "$ref": "#/$defs/requirementId" },
+        "clause_id": { "$ref": "#/$defs/clauseId" },
+        "evidence_class": {
+          "enum": [
+            "unit",
+            "integration",
+            "live_synapse",
+            "ui",
+            "platform",
+            "security_privacy",
+            "performance_reliability"
+          ]
+        },
+        "execution_contract": { "$ref": "#/$defs/executionContract" }
+      }
+    },
+    "auditReport": {
+      "description": "An embedded audit-report claim whose durable JSON artifact is the exact canonical semantic projection obtained by removing storage_commit_sha, storage_blob_oid, path, file_sha256, and storage_projection from this record.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "storage_commit_sha",
+        "storage_blob_oid",
+        "storage_projection",
+        "path",
+        "file_sha256",
+        "subject_sha",
+        "artifact_payload_sha256",
+        "covered_requirement_ids",
+        "covered_clause_ids",
+        "verdict",
+        "reviewer",
+        "reviewed_at"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^AUDIT-[A-Za-z0-9][A-Za-z0-9._:/-]*$"
+        },
+        "storage_commit_sha": { "$ref": "#/$defs/fullSha" },
+        "storage_blob_oid": { "$ref": "#/$defs/fullSha" },
+        "storage_projection": {
+          "const": "report-record-minus-storage-identity-v1"
+        },
+        "path": { "$ref": "#/$defs/repositoryPath" },
+        "file_sha256": { "$ref": "#/$defs/sha256" },
+        "subject_sha": { "$ref": "#/$defs/fullSha" },
+        "artifact_payload_sha256": { "$ref": "#/$defs/sha256" },
+        "covered_requirement_ids": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/requirementId" }
+        },
+        "covered_clause_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/clauseId" }
+        },
+        "verdict": { "enum": ["accept", "changes_required", "reject"] },
+        "reviewer": { "$ref": "#/$defs/nonEmptyString" },
+        "reviewed_at": { "type": "string", "format": "date-time" }
+      }
+    },
+    "validationReport": {
+      "description": "An embedded validation-report claim whose durable JSON artifact is the exact canonical semantic projection obtained by removing storage_commit_sha, storage_blob_oid, path, file_sha256, and storage_projection from this record. subject_sha identifies the Rust implementation commit validated by the report.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "storage_commit_sha",
+        "storage_blob_oid",
+        "storage_projection",
+        "path",
+        "file_sha256",
+        "subject_sha",
+        "evidence_class",
+        "status",
+        "reviewer",
+        "reviewed_at",
+        "accepted_at",
+        "covered_requirement_ids",
+        "covered_clause_ids",
+        "executions",
+        "test_contract_snapshots",
+        "lifecycle_authorizations",
+        "limitations"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^VALIDATION-[A-Za-z0-9][A-Za-z0-9._:/-]*$"
+        },
+        "storage_commit_sha": { "$ref": "#/$defs/fullSha" },
+        "storage_blob_oid": { "$ref": "#/$defs/fullSha" },
+        "storage_projection": {
+          "const": "report-record-minus-storage-identity-v1"
+        },
+        "path": { "$ref": "#/$defs/repositoryPath" },
+        "file_sha256": { "$ref": "#/$defs/sha256" },
+        "subject_sha": { "$ref": "#/$defs/fullSha" },
+        "evidence_class": {
+          "enum": [
+            "unit",
+            "integration",
+            "live_synapse",
+            "ui",
+            "platform",
+            "security_privacy",
+            "performance_reliability"
+          ]
+        },
+        "status": { "enum": ["pending", "pass", "fail", "blocked"] },
+        "reviewer": { "$ref": "#/$defs/nullableNonEmptyString" },
+        "reviewed_at": { "type": ["string", "null"], "format": "date-time" },
+        "accepted_at": { "type": ["string", "null"], "format": "date-time" },
+        "covered_requirement_ids": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/requirementId" }
+        },
+        "covered_clause_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/clauseId" }
+        },
+        "executions": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/executionEvidence" }
+        },
+        "test_contract_snapshots": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/testContractSnapshot" }
+        },
+        "lifecycle_authorizations": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/lifecycleAuthorization" }
+        },
+        "limitations": { "$ref": "#/$defs/uniqueStrings" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "status": { "const": "pass" } } },
+          "then": {
+            "properties": {
+              "reviewer": { "$ref": "#/$defs/nonEmptyString" },
+              "reviewed_at": { "type": "string", "format": "date-time" },
+              "accepted_at": { "type": "string", "format": "date-time" },
+              "executions": { "minItems": 1 }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": { "lifecycle_authorizations": { "minItems": 1 } }
+          },
+          "then": {
+            "properties": {
+              "reviewer": { "$ref": "#/$defs/nonEmptyString" },
+              "reviewed_at": { "type": "string", "format": "date-time" }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "executions": { "minItems": 1 } } },
+          "then": {
+            "properties": {
+              "reviewed_at": { "type": "string", "format": "date-time" }
+            }
+          }
+        }
+      ]
+    },
+    "executionEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "id",
+        "storage_commit_sha",
+        "storage_blob_oid",
+        "storage_projection",
+        "path",
+        "file_sha256",
+        "canonical_sha256",
+        "kind",
+        "test_case_id",
+        "runner_id",
+        "invocation_id",
+        "invocation_fingerprint_sha256",
+        "subject_sha",
+        "started_at",
+        "finished_at",
+        "result",
+        "exit_code",
+        "assertions",
+        "result_fingerprint_sha256"
+      ],
+      "properties": {
+        "schema_version": { "const": "1.0" },
+        "id": {
+          "type": "string",
+          "pattern": "^EXEC-[0-9]{6}$"
+        },
+        "storage_commit_sha": { "$ref": "#/$defs/fullSha" },
+        "storage_blob_oid": { "$ref": "#/$defs/fullSha" },
+        "storage_projection": {
+          "const": "execution-record-minus-storage-identity-v1"
+        },
+        "path": { "$ref": "#/$defs/executionTranscriptPath" },
+        "file_sha256": { "$ref": "#/$defs/sha256" },
+        "canonical_sha256": { "$ref": "#/$defs/sha256" },
+        "kind": { "enum": ["command", "scenario"] },
+        "test_case_id": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^TST-FR-7\\.(?:[1-9]|1[01])-[0-9]{3}-REQ-[0-9]{3}$"
+        },
+        "runner_id": { "$ref": "#/$defs/runnerId" },
+        "invocation_id": { "$ref": "#/$defs/invocationId" },
+        "invocation_fingerprint_sha256": { "$ref": "#/$defs/sha256" },
+        "subject_sha": { "$ref": "#/$defs/fullSha" },
+        "started_at": { "type": "string", "format": "date-time" },
+        "finished_at": { "type": "string", "format": "date-time" },
+        "result": { "enum": ["pass", "fail", "blocked"] },
+        "exit_code": {
+          "type": ["integer", "null"],
+          "minimum": 0
+        },
+        "assertions": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["assertion_id", "result"],
+            "properties": {
+              "assertion_id": { "$ref": "#/$defs/assertionId" },
+              "result": { "enum": ["pass", "fail", "blocked"] }
+            }
+          }
+        },
+        "result_fingerprint_sha256": { "$ref": "#/$defs/sha256" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "kind": { "const": "command" } } },
+          "then": {
+            "properties": {
+              "runner_id": {
+                "enum": ["NODE_TEST", "NPM_SCRIPT", "CARGO_TEST"]
+              },
+              "exit_code": {
+                "type": "integer",
+                "enum": [
+                  0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17,
+                  18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32,
+                  33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47,
+                  48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62,
+                  63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77,
+                  78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92,
+                  93, 94, 95, 96, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106,
+                  107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118,
+                  119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130,
+                  131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142,
+                  143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154,
+                  155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166,
+                  167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178,
+                  179, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190,
+                  191, 192, 193, 194, 195, 196, 197, 198, 199, 200, 201, 202,
+                  203, 204, 205, 206, 207, 208, 209, 210, 211, 212, 213, 214,
+                  215, 216, 217, 218, 219, 220, 221, 222, 223, 224, 225, 226,
+                  227, 228, 229, 230, 231, 232, 233, 234, 235, 236, 237, 238,
+                  239, 240, 241, 242, 243, 244, 245, 246, 247, 248, 249, 250,
+                  251, 252, 253, 254, 255
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "scenario" } } },
+          "then": {
+            "properties": {
+              "runner_id": {
+                "enum": [
+                  "SYNAPSE_HARNESS",
+                  "DESKTOP_UI",
+                  "IOS_XCTEST",
+                  "PLATFORM_SCENARIO"
+                ]
+              },
+              "exit_code": { "type": "null" }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": { "const": "command" },
+              "result": { "const": "pass" }
+            }
+          },
+          "then": {
+            "properties": {
+              "exit_code": { "const": 0 },
+              "assertions": {
+                "items": { "properties": { "result": { "const": "pass" } } }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": { "const": "command" },
+              "result": { "const": "fail" }
+            }
+          },
+          "then": {
+            "properties": { "exit_code": { "not": { "const": 0 } } }
+          }
+        }
+      ]
+    }
+  }
+}
