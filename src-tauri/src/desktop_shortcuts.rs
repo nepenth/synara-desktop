@@ -403,9 +403,9 @@ fn shortcut_permission_help_hint() -> Option<&'static str> {
                 "On KDE X11, verify shortcut bindings in System Settings > Shortcuts and ensure no other app has claimed the keys.",
             );
         }
-        return Some(
+        Some(
             "On Linux X11, verify no other application has claimed the shortcut and check your desktop environment shortcut settings.",
-        );
+        )
     }
 
     #[cfg(not(any(target_os = "macos", target_os = "linux")))]
