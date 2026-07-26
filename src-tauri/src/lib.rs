@@ -106,25 +106,6 @@ fn select_localhost_port() -> Result<u16, String> {
     select_localhost_port_with(is_localhost_port_available)
 }
 
-#[cfg(test)]
-mod localhost_port_tests {
-    use super::{select_localhost_port_with, PREFERRED_LOCALHOST_PORT};
-
-    #[test]
-    fn select_localhost_port_returns_first_available_port() {
-        let port =
-            select_localhost_port_with(|_| true).expect("localhost port should be available");
-        assert_eq!(port, PREFERRED_LOCALHOST_PORT);
-    }
-
-    #[test]
-    fn select_localhost_port_skips_busy_preferred_port() {
-        let port = select_localhost_port_with(|port| port != PREFERRED_LOCALHOST_PORT)
-            .expect("fallback localhost port should be available");
-        assert_eq!(port, PREFERRED_LOCALHOST_PORT + 1);
-    }
-}
-
 pub fn run() {
     let port = match select_localhost_port() {
         Ok(port) => port,
@@ -327,4 +308,23 @@ pub fn run() {
             #[cfg(not(target_os = "macos"))]
             let _ = (app, event);
         });
+}
+
+#[cfg(test)]
+mod localhost_port_tests {
+    use super::{select_localhost_port_with, PREFERRED_LOCALHOST_PORT};
+
+    #[test]
+    fn select_localhost_port_returns_first_available_port() {
+        let port =
+            select_localhost_port_with(|_| true).expect("localhost port should be available");
+        assert_eq!(port, PREFERRED_LOCALHOST_PORT);
+    }
+
+    #[test]
+    fn select_localhost_port_skips_busy_preferred_port() {
+        let port = select_localhost_port_with(|port| port != PREFERRED_LOCALHOST_PORT)
+            .expect("fallback localhost port should be available");
+        assert_eq!(port, PREFERRED_LOCALHOST_PORT + 1);
+    }
 }

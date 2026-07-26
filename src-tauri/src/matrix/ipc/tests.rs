@@ -26,9 +26,9 @@ fn schema_catalog() -> serde_json::Value {
 #[test]
 fn protocol_version_is_one() {
     assert_eq!(MATRIX_IPC_PROTOCOL_VERSION, 1);
-    assert!(FORBID_MEDIA_BYTES_OVER_JSON_IPC);
-    assert!(MAX_STREAM_QUEUE_DEPTH > 0);
-    assert!(MAX_ENVELOPE_PAYLOAD_JSON_BYTES > 0);
+    const { assert!(FORBID_MEDIA_BYTES_OVER_JSON_IPC) };
+    const { assert!(MAX_STREAM_QUEUE_DEPTH > 0) };
+    const { assert!(MAX_ENVELOPE_PAYLOAD_JSON_BYTES > 0) };
 }
 
 #[test]
@@ -130,10 +130,7 @@ fn fixture_valid_resync_required() {
 fn fixture_invalid_unknown_kind_rejected() {
     let raw = fixture("invalid_unknown_kind.json");
     let result = MatrixIpcEnvelope::from_json_str(&raw);
-    assert!(
-        result.is_err(),
-        "unknown kind must be rejected at boundary"
-    );
+    assert!(result.is_err(), "unknown kind must be rejected at boundary");
 }
 
 #[test]
@@ -206,9 +203,7 @@ fn snapshot_then_ordered_deltas_model() {
     let mut last = None;
     let snap_seq = 1u64;
     match check_sequence(last, snap_seq) {
-        SequenceOutcome::Accept {
-            next_last_applied,
-        } => last = Some(next_last_applied),
+        SequenceOutcome::Accept { next_last_applied } => last = Some(next_last_applied),
         other => panic!("snapshot should accept: {other:?}"),
     }
     assert_eq!(last, Some(1));
@@ -216,9 +211,7 @@ fn snapshot_then_ordered_deltas_model() {
     // Deltas 2, 3
     for seq in [2u64, 3] {
         match check_sequence(last, seq) {
-            SequenceOutcome::Accept {
-                next_last_applied,
-            } => last = Some(next_last_applied),
+            SequenceOutcome::Accept { next_last_applied } => last = Some(next_last_applied),
             other => panic!("delta {seq} should accept: {other:?}"),
         }
     }
@@ -549,7 +542,10 @@ fn sequence_gap_and_stale_generation_compose_resync() {
 
     // Stale generation → error category + resync reason
     let stale = check_session_generation(3, 1).unwrap_err();
-    assert_eq!(stale.category, MatrixIpcErrorCategory::StaleSessionGeneration);
+    assert_eq!(
+        stale.category,
+        MatrixIpcErrorCategory::StaleSessionGeneration
+    );
     let resync = resync_payload_for_stale_generation(Some("stream-t".into()));
     assert_eq!(resync.reason, ResyncReason::StaleSessionGeneration);
 

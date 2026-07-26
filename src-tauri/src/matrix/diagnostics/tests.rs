@@ -47,7 +47,10 @@ fn observe_supervisor_and_tasks_export_counters() {
     let snap = metrics.snapshot();
     assert_eq!(snap.lifecycle.state, "ready");
     assert!(snap.lifecycle.has_client);
-    assert_eq!(snap.lifecycle.session_generation, actor.session_generation());
+    assert_eq!(
+        snap.lifecycle.session_generation,
+        actor.session_generation()
+    );
     assert_eq!(snap.tasks.registered, 2);
     assert_eq!(snap.tasks.running, 2);
     assert_eq!(snap.tasks.registered_by_kind.sync, 1);
@@ -86,10 +89,7 @@ fn error_recording_rejects_unsafe_diagnostic_ids() {
         "only the safe id is retained; secrets/MXIDs dropped"
     );
     // Last category is connectivity (most recent record).
-    assert_eq!(
-        snap.errors.last_category.as_deref(),
-        Some("connectivity")
-    );
+    assert_eq!(snap.errors.last_category.as_deref(), Some("connectivity"));
     let auth_count = snap
         .errors
         .by_category
@@ -254,9 +254,12 @@ fn sanitize_fixture_object(value: &serde_json::Value) -> serde_json::Value {
             serde_json::Value::Array(items.iter().map(sanitize_fixture_object).collect())
         }
         serde_json::Value::String(s) => {
-            if looks_like_secret(s) || looks_like_matrix_id(s) || looks_like_url(s) {
-                serde_json::Value::String(REDACTED.to_owned())
-            } else if s.contains("private message") || s.contains("ENCRYPTED") {
+            if looks_like_secret(s)
+                || looks_like_matrix_id(s)
+                || looks_like_url(s)
+                || s.contains("private message")
+                || s.contains("ENCRYPTED")
+            {
                 serde_json::Value::String(REDACTED.to_owned())
             } else {
                 serde_json::Value::String(redact_text(s))

@@ -48,7 +48,7 @@ fn load_fixture_as<T: DeserializeOwned>(name: &str) -> T {
 #[test]
 fn marker_and_policy_constants() {
     assert_eq!(MATRIX_DTO_MARKER, "matrix-domain-dtos-p1.4");
-    assert!(FORBID_MEDIA_BYTES_OVER_JSON_IPC);
+    const { assert!(FORBID_MEDIA_BYTES_OVER_JSON_IPC) };
     assert!(!FORBIDDEN_WIRE_FIELD_NAMES.is_empty());
 }
 

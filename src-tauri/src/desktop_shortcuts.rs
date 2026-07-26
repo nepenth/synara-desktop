@@ -290,9 +290,9 @@ fn apply_desktop_shortcuts(
 
     let brand_new_shortcuts = shortcuts_needing_registration(previous_config.as_ref(), &normalized);
     if let Err(error) =
-        register_desktop_shortcut_batch(&global_shortcut, &brand_new_shortcuts, route_by_id.clone())
+        register_desktop_shortcut_batch(global_shortcut, &brand_new_shortcuts, route_by_id.clone())
     {
-        unregister_desktop_shortcut_batch(&global_shortcut, &brand_new_shortcuts);
+        unregister_desktop_shortcut_batch(global_shortcut, &brand_new_shortcuts);
         let state = shortcut_state_from_error(&error);
         let preserved_state = read_last_shortcut_apply_state().unwrap_or(state);
         set_last_shortcut_apply_state(preserved_state);
@@ -306,11 +306,11 @@ fn apply_desktop_shortcuts(
     if let Some(previous) = previous_config.as_ref() {
         let rebind_shortcuts = shortcuts_needing_handler_rebind(previous, &normalized);
         if let Err(error) = rebind_desktop_shortcut_handlers(
-            &global_shortcut,
+            global_shortcut,
             &rebind_shortcuts,
             route_by_id.clone(),
         ) {
-            unregister_desktop_shortcut_batch(&global_shortcut, &brand_new_shortcuts);
+            unregister_desktop_shortcut_batch(global_shortcut, &brand_new_shortcuts);
             let state = shortcut_state_from_error(&error);
             let preserved_state = read_last_shortcut_apply_state().unwrap_or(state);
             set_last_shortcut_apply_state(preserved_state);
@@ -322,7 +322,7 @@ fn apply_desktop_shortcuts(
         }
 
         let retired_shortcuts = retired_shortcut_strings(previous, &normalized);
-        unregister_desktop_shortcut_batch(&global_shortcut, &retired_shortcuts);
+        unregister_desktop_shortcut_batch(global_shortcut, &retired_shortcuts);
     }
 
     set_last_active_shortcut_config(normalized);
@@ -376,9 +376,9 @@ fn shortcut_apply_state_message(state: DesktopShortcutApplyState) -> &'static st
 fn shortcut_permission_help_hint() -> Option<&'static str> {
     #[cfg(target_os = "macos")]
     {
-        return Some(
+        Some(
             "On macOS, grant Synara Input Monitoring permission in System Settings > Privacy & Security.",
-        );
+        )
     }
 
     #[cfg(target_os = "linux")]

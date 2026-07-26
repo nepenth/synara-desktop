@@ -136,8 +136,7 @@ pub fn normalize_server_name(raw: &str) -> Result<NormalizedServerName, AuthErro
     let host_ok = if host.starts_with('[') && host.ends_with(']') {
         host.len() > 2
     } else {
-        host
-            .chars()
+        host.chars()
             .all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-' || c == '_')
             && !host.starts_with('.')
             && !host.ends_with('.')

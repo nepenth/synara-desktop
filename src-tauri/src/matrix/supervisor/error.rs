@@ -13,11 +13,7 @@ pub struct TransitionError {
 }
 
 impl TransitionError {
-    pub fn new(
-        from: SupervisorState,
-        command: SupervisorCommand,
-        reason: &'static str,
-    ) -> Self {
+    pub fn new(from: SupervisorState, command: SupervisorCommand, reason: &'static str) -> Self {
         Self {
             from,
             command,

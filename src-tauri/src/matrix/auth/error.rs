@@ -17,31 +17,19 @@ pub enum AuthError {
         reason: &'static str,
     },
     /// Well-known or homeserver endpoint unreachable / offline.
-    Connectivity {
-        diagnostic_id: &'static str,
-    },
+    Connectivity { diagnostic_id: &'static str },
     /// Homeserver hard-unavailable (5xx / DNS permanent / refused).
-    HomeserverUnavailable {
-        diagnostic_id: &'static str,
-    },
+    HomeserverUnavailable { diagnostic_id: &'static str },
     /// Well-known document missing (HTTP 404 / IGNORE path in product autoDiscovery).
     ///
     /// Callers may fall back to `https://{server_name}` as base URL (product IGNORE).
-    WellKnownNotFound {
-        diagnostic_id: &'static str,
-    },
+    WellKnownNotFound { diagnostic_id: &'static str },
     /// Well-known missing, invalid, or homeserver lacks a required capability.
-    UnsupportedCapability {
-        diagnostic_id: &'static str,
-    },
+    UnsupportedCapability { diagnostic_id: &'static str },
     /// Transport / protocol invariant violated (redacted).
-    SdkInvariant {
-        diagnostic_id: &'static str,
-    },
+    SdkInvariant { diagnostic_id: &'static str },
     /// Unclassified failure with opaque diagnostic id only.
-    Unknown {
-        diagnostic_id: &'static str,
-    },
+    Unknown { diagnostic_id: &'static str },
 }
 
 impl fmt::Display for AuthError {

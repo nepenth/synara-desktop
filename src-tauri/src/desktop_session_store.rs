@@ -421,9 +421,8 @@ mod tests {
         let session = valid_session_envelope();
         let access_token = session.access_token.clone();
 
-        let error = desktop_set_session_in_store(&store, session)
-            .err()
-            .expect("set session should fail");
+        let error =
+            desktop_set_session_in_store(&store, session).expect_err("set session should fail");
 
         assert_eq!(error, DESKTOP_SECRET_STORE_OPERATION_LOCKED);
         assert!(!error.contains(&access_token));
@@ -442,9 +441,8 @@ mod tests {
         let session = valid_session_envelope();
         let session_json = serde_json::to_string(&session).expect("session envelope should encode");
 
-        let error = desktop_set_session_in_store(&store, session)
-            .err()
-            .expect("set session should fail");
+        let error =
+            desktop_set_session_in_store(&store, session).expect_err("set session should fail");
 
         assert_eq!(error, DESKTOP_SECRET_STORE_OPERATION_UNAVAILABLE);
         assert!(!error.contains(&session_json));

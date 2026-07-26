@@ -101,7 +101,10 @@ fn well_known_mock_failure_maps_category() {
     let err = rt
         .block_on(discover_homeserver(&input, &transport))
         .expect_err("must fail");
-    assert_eq!(err.category(), MatrixIpcErrorCategory::HomeserverUnavailable);
+    assert_eq!(
+        err.category(),
+        MatrixIpcErrorCategory::HomeserverUnavailable
+    );
     assert_eq!(err.diagnostic_id(), "p3.1-well-known-down");
 }
 
@@ -140,7 +143,9 @@ fn server_name_or_url_not_found_also_ignores_to_https() {
         },
     );
     let input = DiscoveryInput::ServerNameOrUrl("bare.example".into());
-    let result = rt.block_on(discover_homeserver(&input, &transport)).unwrap();
+    let result = rt
+        .block_on(discover_homeserver(&input, &transport))
+        .unwrap();
     assert_eq!(result.homeserver_base_url, "https://bare.example");
     assert!(!result.used_well_known);
 }
@@ -173,7 +178,9 @@ fn server_name_or_url_prefers_well_known() {
     let wk = WellKnownClientConfig::new("https://hs.example.org", None).unwrap();
     let transport = MockDiscoveryTransport::new().with_response("example.org", wk);
     let input = DiscoveryInput::ServerNameOrUrl("example.org".into());
-    let result = rt.block_on(discover_homeserver(&input, &transport)).unwrap();
+    let result = rt
+        .block_on(discover_homeserver(&input, &transport))
+        .unwrap();
     assert!(result.used_well_known);
     assert_eq!(
         result.input_kind,
@@ -198,7 +205,9 @@ fn server_name_or_url_falls_back_to_url_when_scheme_present() {
         },
     );
     let input = DiscoveryInput::ServerNameOrUrl("https://direct.example.org".into());
-    let result = rt.block_on(discover_homeserver(&input, &transport)).unwrap();
+    let result = rt
+        .block_on(discover_homeserver(&input, &transport))
+        .unwrap();
     assert!(!result.used_well_known);
     assert_eq!(result.input_kind, DiscoveryInputKind::ServerNameOrUrlAsUrl);
     assert_eq!(result.homeserver_base_url, "https://direct.example.org");
@@ -317,8 +326,7 @@ fn client_builder_bridge_sets_homeserver_from_discovery() {
         identity_server_base_url: None,
         used_well_known: true,
     };
-    let identity =
-        identity_with_discovered_homeserver("@alice:example.org", &discovery).unwrap();
+    let identity = identity_with_discovered_homeserver("@alice:example.org", &discovery).unwrap();
     assert_eq!(identity.user_id(), "@alice:example.org");
     assert_eq!(identity.homeserver_url(), "https://matrix.example.org");
     assert_eq!(
@@ -362,7 +370,9 @@ fn privacy_errors_never_echo_tokens_or_passwords() {
         let text = format!("{err:?}");
         for frag in secret_fragments() {
             assert!(
-                !text.to_ascii_lowercase().contains(&frag.to_ascii_lowercase()),
+                !text
+                    .to_ascii_lowercase()
+                    .contains(&frag.to_ascii_lowercase()),
                 "debug leaked {frag}: {text}"
             );
         }

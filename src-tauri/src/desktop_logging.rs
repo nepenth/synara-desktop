@@ -533,9 +533,9 @@ fn compact_diagnostic_file(path: &Path, cutoff_ms: u64) -> bool {
 
 fn prune_expired_diagnostics(log_dir: &Path, now: SystemTime) {
     let cutoff_ms = diagnostics_cutoff_ms(now);
-    let full_scan = DIAGNOSTICS_PRUNE_TICK.fetch_add(1, Ordering::Relaxed)
-        % DIAGNOSTICS_FULL_SCAN_INTERVAL
-        == 0;
+    let full_scan = DIAGNOSTICS_PRUNE_TICK
+        .fetch_add(1, Ordering::Relaxed)
+        .is_multiple_of(DIAGNOSTICS_FULL_SCAN_INTERVAL);
     let (current, rotated) = diagnostics_paths(log_dir);
     for path in [current, rotated] {
         if metadata(&path)

@@ -214,7 +214,7 @@ fn show_notification_with_route_click_handler<R: Runtime>(
                     let Some(route) = route.as_deref() else {
                         return;
                     };
-                    if let Err(error) = navigate_main_window(&app, &route) {
+                    if let Err(error) = navigate_main_window(&app, route) {
                         eprintln!("failed to navigate from notification click: {error}");
                     }
                     return;
@@ -308,7 +308,7 @@ fn show_notification_with_route_click_handler<R: Runtime>(
                     let Some(route) = route.as_deref() else {
                         return;
                     };
-                    if let Err(error) = navigate_main_window(&app, &route) {
+                    if let Err(error) = navigate_main_window(&app, route) {
                         eprintln!("failed to navigate from notification click: {error}");
                     }
                 }

@@ -77,9 +77,7 @@ export function resyncPayloadForGap(
   };
 }
 
-export function resyncPayloadForStaleGeneration(
-  streamId?: string
-): ResyncRequiredPayload {
+export function resyncPayloadForStaleGeneration(streamId?: string): ResyncRequiredPayload {
   return {
     streamId,
     reason: 'stale_session_generation',

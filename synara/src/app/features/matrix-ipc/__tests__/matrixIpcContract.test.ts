@@ -123,7 +123,7 @@ test('P1.5 typical fixture envelope within payload bounds', () => {
 // ---------------------------------------------------------------------------
 
 test('P1.5 all kinds constructible via makeEnvelope and re-parse', () => {
-  const samples: Array<{ kind: (typeof MATRIX_IPC_KINDS)[number]; payload: unknown }> = [
+  const samples: Array<{ kind: typeof MATRIX_IPC_KINDS[number]; payload: unknown }> = [
     {
       kind: 'hello',
       payload: { clientProtocolVersion: 1, clientName: 'synara-web' },
@@ -255,9 +255,7 @@ test('P1.5 lifecycle control kind fixtures', () => {
 });
 
 test('P1.5 snapshot body composes with P1.4 RoomSummary DTO', () => {
-  const env = parseMatrixIpcEnvelope(
-    loadFixture('valid_snapshot_with_room_summary_body.json')
-  );
+  const env = parseMatrixIpcEnvelope(loadFixture('valid_snapshot_with_room_summary_body.json'));
   assert.ok(env);
   assert.equal(env.kind, 'snapshot');
   if (env.kind !== 'snapshot') return;
@@ -305,10 +303,7 @@ test('P1.5 unknown kind rejected at boundary', () => {
 });
 
 test('P1.5 unknown error category / topic / resync reason rejected', () => {
-  assert.equal(
-    parseMatrixIpcError({ category: 'not_a_real_category', diagnosticId: 'x' }),
-    null
-  );
+  assert.equal(parseMatrixIpcError({ category: 'not_a_real_category', diagnosticId: 'x' }), null);
   assert.equal(
     parseMatrixIpcEnvelope({
       protocolVersion: 1,
@@ -500,10 +495,15 @@ test('P1.5 sequence gap produces resync_required payload and lifecycle event', (
     observedSequence: 5,
   });
 
-  const env = makeEnvelope(1, 0, {
-    kind: 'resync_required',
-    payload,
-  }, { streamId: 'stream-room-list-1' });
+  const env = makeEnvelope(
+    1,
+    0,
+    {
+      kind: 'resync_required',
+      payload,
+    },
+    { streamId: 'stream-room-list-1' }
+  );
   const parsed = parseMatrixIpcEnvelope(env);
   assert.ok(parsed);
   assert.equal(parsed.kind, 'resync_required');
@@ -566,9 +566,7 @@ test('P1.5 stale session generation rejected and resync payload', () => {
   assert.equal(payload.reason, 'stale_session_generation');
   assert.equal(payload.streamId, 'stream-timeline-1');
 
-  const fixtureEnv = parseMatrixIpcEnvelope(
-    loadFixture('valid_resync_stale_generation.json')
-  );
+  const fixtureEnv = parseMatrixIpcEnvelope(loadFixture('valid_resync_stale_generation.json'));
   assert.ok(fixtureEnv);
   assert.equal(fixtureEnv.kind, 'resync_required');
   if (fixtureEnv.kind === 'resync_required') {

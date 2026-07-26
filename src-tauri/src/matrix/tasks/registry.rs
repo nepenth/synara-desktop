@@ -209,10 +209,7 @@ impl TaskSupervisor {
 
     /// Accept a result only if the task exists and its generation is still live.
     pub fn accept_task_result(&self, id: TaskId) -> Result<(), TaskError> {
-        let rec = self
-            .tasks
-            .get(&id)
-            .ok_or(TaskError::UnknownTask { id })?;
+        let rec = self.tasks.get(&id).ok_or(TaskError::UnknownTask { id })?;
         if rec.generation != self.live_generation {
             return Err(TaskError::StaleGeneration {
                 observed: rec.generation,
@@ -223,11 +220,7 @@ impl TaskSupervisor {
     }
 
     /// Pure registry entry without a runtime future (generation bookkeeping tests).
-    pub fn register(
-        &mut self,
-        kind: TaskKind,
-        generation: u64,
-    ) -> Result<TaskId, TaskError> {
+    pub fn register(&mut self, kind: TaskKind, generation: u64) -> Result<TaskId, TaskError> {
         self.ensure_live_spawn(generation)?;
         let id = self.alloc_id();
         self.tasks.insert(
@@ -247,12 +240,7 @@ impl TaskSupervisor {
     /// Spawn supervised async work stamped with `generation`.
     ///
     /// Requires an ambient Tokio runtime. Refuses stale generations.
-    pub fn spawn<F>(
-        &mut self,
-        kind: TaskKind,
-        generation: u64,
-        fut: F,
-    ) -> Result<TaskId, TaskError>
+    pub fn spawn<F>(&mut self, kind: TaskKind, generation: u64, fut: F) -> Result<TaskId, TaskError>
     where
         F: Future<Output = ()> + Send + 'static,
     {
@@ -292,9 +280,7 @@ impl TaskSupervisor {
                 self.cancelled_requests = self.cancelled_requests.saturating_add(1);
                 Ok(())
             }
-            TaskRunState::Cancelled
-            | TaskRunState::Completed
-            | TaskRunState::Failed => {
+            TaskRunState::Cancelled | TaskRunState::Completed | TaskRunState::Failed => {
                 // Double-cancel / cancel-after-complete are no-ops (idempotent).
                 Ok(())
             }

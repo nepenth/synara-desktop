@@ -3,16 +3,10 @@
  */
 
 import type { MediaHandleId } from './ids';
-import {
-  hasForbiddenWireFields,
-  isObject,
-  optNumber,
-  optString,
-  reqString,
-} from './parseUtil';
+import { hasForbiddenWireFields, isObject, optNumber, optString, reqString } from './parseUtil';
 
 export const MEDIA_SOURCES = ['mxc', 'local_cache', 'upload'] as const;
-export type MediaSource = (typeof MEDIA_SOURCES)[number];
+export type MediaSource = typeof MEDIA_SOURCES[number];
 const MEDIA_SOURCE_SET = new Set<string>(MEDIA_SOURCES);
 
 export function isMediaSource(value: unknown): value is MediaSource {
