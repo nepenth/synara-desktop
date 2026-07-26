@@ -1,6 +1,6 @@
 # Matrix Rust SDK Replacement — Execution Handoff
 
-Last updated: 2026-07-25
+Last updated: 2026-07-26
 
 Authoritative program plan: [`../matrix-rust-sdk-full-replacement-plan.md`](../matrix-rust-sdk-full-replacement-plan.md)
 
@@ -9,11 +9,83 @@ Traceability artifacts:
 - [`feature-parity-traceability.json`](feature-parity-traceability.json)
 - [`feature-parity-traceability.md`](feature-parity-traceability.md)
 
+## Continuation handoff snapshot (2026-07-26)
+
+Use this section first when resuming work on a new machine or with a new owner.
+
+| Field | Value |
+|-------|--------|
+| **Status** | **Paused for human handoff** — no automatic 4-minute progress loop is running |
+| **Integration branch** | `feature/matrix-rust-sdk-full-replacement` |
+| **Integration tip** | `87d955297cc3c5decfd81e22012e7c7701f6dd04` |
+| **Tip messages** | `docs(matrix): record P3.1 merge; advance handoff to P3.2 (#73)` on top of `feat(matrix): P3.1 discovery and login-flow service (#72)` |
+| **Open PRs → integration** | **None** (all work through P3.1 is merged) |
+| **Open PR → `main`** | [#39](https://github.com/nepenth/synara-desktop/pull/39) umbrella “Plan complete Matrix Rust SDK replacement” — **do not merge without explicit user approval** |
+| **Product Matrix runtime** | Still **`matrix-js-sdk` only** (no dual-backend; no frontend cutover) |
+| **Next task** | **P3.2 — Password/token login and device naming** (harness only) |
+| **Local validation (2026-07-26)** | `cargo test --locked matrix::` → **189 PASS**; `npm run check:matrix-rust-guardrails` → **PASS** |
+| **Progress (plan line items)** | **~20 / ~112 tasks (~18%)**; Phases **0–2 complete**; Phase **3** at **P3.1/8** |
+| **Working tree** | Integration tip is the source of truth; no uncommitted handoff work should remain after this snapshot lands |
+
+### What exists on integration (Rust)
+
+Under `src-tauri/src/matrix/`:
+
+| Module | Plan tasks | Notes |
+|--------|------------|--------|
+| `ipc/` | P1.3, P1.5 | Versioned envelope, fixtures, contract tests |
+| `dto/` | P1.4 | 15 domain DTO families |
+| `supervisor/` | P2.1 | Lifecycle actor + generation isolation |
+| `store/` | P2.2 | Per-account paths + store-key vault |
+| `client_builder/` | P2.3 | Sole allowed `Client::builder` site; unauthenticated open |
+| `tasks/` | P2.4 | Generation-stamped task supervision |
+| `diagnostics/` | P2.5 | Privacy-filtered metrics + redaction |
+| `lifecycle/` | P2.6 | Logout ≠ wipe; exact-target wipe; no auto-delete on store failure |
+| `auth/` | P3.1 | Discovery + login-flow **list** only (no login execution) |
+| (+ `matrix_sdk_link_smoke` in crate root) | P1.2 | Compile-only SDK type-path smoke |
+
+Frontend mirrors: `synara/src/app/features/matrix-ipc/`, `matrix-dto/` (not wired as product runtime).
+
+### Hard rules for the next owner
+
+1. **Never merge to `main` without explicit user approval.**
+2. **PRs target `feature/matrix-rust-sdk-full-replacement` only** until cutover approval.
+3. **No dual-backend / no Matrix backend selector.**
+4. **No production Matrix Tauri product commands** for app cutover until planned phases (guardrails enforce).
+5. **Do not re-open FR-7.8–7.11 rows** or re-promote FR-7.9-011 (partial `GATE-7.9-011`).
+6. Guardrails must stay green: `npm run check:matrix-rust-guardrails`.
+7. Prefer `cargo test --locked matrix::` when disk is tight; full suite when possible.
+8. Tokens/credentials must never appear in logs, IPC errors, or diagnostics.
+
+### Resume recipe
+
+```bash
+git fetch origin
+git checkout feature/matrix-rust-sdk-full-replacement
+git pull origin feature/matrix-rust-sdk-full-replacement
+# confirm tip == 87d9552… (or later handoff commits)
+npm run check:matrix-rust-guardrails
+(cd src-tauri && cargo test --locked matrix::)
+```
+
+Then implement **P3.2** on a fresh branch (e.g. `matrix-rust/p3.2-password-token-login`) from integration tip. After merge, update this handoff’s session state + tip SHA.
+
+### Orchestration state
+
+- **4-minute session scheduler:** **cancelled / not running** (former id `019f95928db7`).
+- **Daily durable host task id** `9022c2f8-9b21-411a-acf9-a36c10515f72`: historically referenced; **do not assume it is active** — re-create only if the user wants a durable check-in.
+- Work proceeds via **manual orchestration** or a loop the user explicitly restarts.
+
+---
+
 ## Current state
 
 This remains a complete replacement program: desktop production must move from
 `matrix-js-sdk` to Matrix Rust SDK, not retain a selectable or permanent second
-backend. No production Matrix Rust SDK migration code has been accepted yet.
+backend. **Harness foundation code is accepted on the integration branch**
+(Phases 0–2 + P3.1). **No production cutover** has been accepted: the shipping
+app still uses `matrix-js-sdk` as the sole Matrix runtime; there is no dual-backend
+selector and no production Matrix login/sync path in Tauri for the product UI.
 
 ### Orchestrator goal (persistent)
 
@@ -22,18 +94,16 @@ sub-agent implementation tasks. Independently review and validate every change;
 only commit, push, open PRs, or merge accepted work. Never merge to `main`
 without explicit user approval.
 
-**Host task id:** `9022c2f8-9b21-411a-acf9-a36c10515f72`
-(`matrix-rust-sdk-replacement-orchestrator`, daily check-in)
-
-**Session state (2026-07-25, Phase 3 — P3.1 MERGED; next P3.2):**
+**Session state (2026-07-26, PAUSED — P3.1 MERGED; next P3.2):**
 
 - **Integration tip:** `feature/matrix-rust-sdk-full-replacement` @
-  `a46861ad0ed7d31f93599478a735daddf2c6c915`
-  (Phase 0–2 complete + **P3.1 MERGED**; tip:
-  `feat(matrix): P3.1 discovery and login-flow service (#72)`)
+  `87d955297cc3c5decfd81e22012e7c7701f6dd04`
+  (Phase 0–2 complete + **P3.1 MERGED** + handoff #73; tip:
+  `docs(matrix): record P3.1 merge; advance handoff to P3.2 (#73)`)
 - **Active work:** next **P3.2 — Password/token login and device naming**
   (harness only; no dual-backend; no production Matrix Tauri cutover commands;
-  JS client remains sole product runtime backend).
+  JS client remains sole product runtime backend). **Pipeline paused** for
+  human handoff — do not auto-advance without owner instruction.
 - **P2.2:** **MERGED** into integration (PR #61). Per-account store paths +
   encryption-key vault foundation under `src-tauri/src/matrix/store/`; 14 unit
   tests; design note `p2.2-store-paths-keys.md` + `.json`.
@@ -152,8 +222,8 @@ without explicit user approval.
   `.json`. Residual: live SDK well-known / `get_login_types` adapter deferred.
 - **Optional later:** §7.1–7.7 scaffold rows may still have shallow notes if a
   full-matrix depth pass is desired beyond the handoff resume scope
-- **Progress loop:** 4-minute scheduler `019f95928db7` (session-recurring);
-  keep pipeline advancing one bounded task per fire
+- **Progress loop:** **paused** (former 4-minute session scheduler cancelled;
+  no automatic fire). Resume only with explicit owner instruction.
 - **No production Matrix login/sync accepted yet** (P1.2–P1.6 foundation;
   P2.1–P2.6 harness lifecycle/store/builder/tasks/diagnostics/wipe;
   P3.1 discovery/login-flow **service only** — does not start a second product
@@ -209,12 +279,22 @@ Phase 3 progress:
 - P3.1 Discovery and login-flow service — **merged** (PR #72); mockable
   discovery + login-flow harness under `matrix/auth/`; product 404 IGNORE
   fallback; design `p3.1-discovery-login-flow.md` + `.json`; no login execution
+- P3.2 Password/token login and device naming — **not started** (next)
+- P3.3 SSO/OAuth callback lifecycle — not started
+- P3.4 UIA/registration/password-reset capability — not started
+- P3.5 Refresh-token persistence and rotation — not started
+- P3.6 Session restore and account switching — not started
+- P3.7 Legacy-session detection and transition coordinator — not started
+- P3.8 Logout, remote logout, local wipe, and recovery copy — not started
 
 **Next program work:**
 
 1. **P3.2** password/token login and device naming (harness only; no
-   dual-backend; no production Matrix Tauri cutover)
-2. Continue sole-owner cutover path (no dual-backend selector)
+   dual-backend; no production Matrix Tauri cutover; tokens must not enter
+   WebView storage or IPC after Rust login)
+2. P3.3–P3.8 remainder of Phase 3, then Phases 4–14 per plan
+3. Continue sole-owner cutover path (no dual-backend selector)
+4. **Umbrella PR #39 → `main` stays open/unmerged** until user-approved release
 
 Accepted notification findings that must be preserved:
 
