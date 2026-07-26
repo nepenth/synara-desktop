@@ -12,8 +12,8 @@ path only.
 | Item | Value |
 |------|--------|
 | Branch | `feature/matrix-rust-sdk-full-replacement` |
-| Tip (at handoff) | `87d955297cc3c5decfd81e22012e7c7701f6dd04` |
-| Open PRs to integration | **None** |
+| Tip (at handoff snapshot) | `3bea95a915c6b4368e81ed1aced88c86cb1fc602` — always re-check with `git rev-parse origin/feature/matrix-rust-sdk-full-replacement` |
+| Open PRs to integration | **None** (after continuation snapshot merged) |
 | Open PR to `main` | [#39](https://github.com/nepenth/synara-desktop/pull/39) — **do not merge without user approval** |
 | Uncommitted work expected | **None** on integration tip |
 | Auto progress loop | **Paused** (not running) |

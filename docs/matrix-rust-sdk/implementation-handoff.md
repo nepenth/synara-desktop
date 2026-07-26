@@ -17,9 +17,9 @@ Use this section first when resuming work on a new machine or with a new owner.
 |-------|--------|
 | **Status** | **Paused for human handoff** — no automatic 4-minute progress loop is running |
 | **Integration branch** | `feature/matrix-rust-sdk-full-replacement` |
-| **Integration tip** | `87d955297cc3c5decfd81e22012e7c7701f6dd04` |
-| **Tip messages** | `docs(matrix): record P3.1 merge; advance handoff to P3.2 (#73)` on top of `feat(matrix): P3.1 discovery and login-flow service (#72)` |
-| **Open PRs → integration** | **None** (all work through P3.1 is merged) |
+| **Integration tip** | `3bea95a915c6b4368e81ed1aced88c86cb1fc602` (verify with `git rev-parse origin/feature/matrix-rust-sdk-full-replacement`) |
+| **Tip messages** | `docs(matrix): continuation handoff snapshot…` on top of P3.1 merge/handoff (`#72` / `#73`) |
+| **Open PRs → integration** | **None** after this handoff lands (all work through P3.1 + this snapshot merged) |
 | **Open PR → `main`** | [#39](https://github.com/nepenth/synara-desktop/pull/39) umbrella “Plan complete Matrix Rust SDK replacement” — **do not merge without explicit user approval** |
 | **Product Matrix runtime** | Still **`matrix-js-sdk` only** (no dual-backend; no frontend cutover) |
 | **Next task** | **P3.2 — Password/token login and device naming** (harness only) |
@@ -63,7 +63,7 @@ Frontend mirrors: `synara/src/app/features/matrix-ipc/`, `matrix-dto/` (not wire
 git fetch origin
 git checkout feature/matrix-rust-sdk-full-replacement
 git pull origin feature/matrix-rust-sdk-full-replacement
-# confirm tip == 87d9552… (or later handoff commits)
+# confirm tip matches origin (at/after 3bea95a… continuation snapshot)
 npm run check:matrix-rust-guardrails
 (cd src-tauri && cargo test --locked matrix::)
 ```
@@ -97,9 +97,9 @@ without explicit user approval.
 **Session state (2026-07-26, PAUSED — P3.1 MERGED; next P3.2):**
 
 - **Integration tip:** `feature/matrix-rust-sdk-full-replacement` @
-  `87d955297cc3c5decfd81e22012e7c7701f6dd04`
-  (Phase 0–2 complete + **P3.1 MERGED** + handoff #73; tip:
-  `docs(matrix): record P3.1 merge; advance handoff to P3.2 (#73)`)
+  `3bea95a915c6b4368e81ed1aced88c86cb1fc602`
+  (Phase 0–2 complete + **P3.1 MERGED** + continuation snapshot #74; re-fetch
+  and prefer `git rev-parse` if HEAD has advanced)
 - **Active work:** next **P3.2 — Password/token login and device naming**
   (harness only; no dual-backend; no production Matrix Tauri cutover commands;
   JS client remains sole product runtime backend). **Pipeline paused** for
