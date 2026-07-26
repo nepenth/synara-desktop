@@ -1,16 +1,42 @@
 # Matrix Rust SDK Full Replacement Plan
 
-Date: 2026-07-23
+Date: 2026-07-25
 
-Status: approved direction; Phase 0 evidence work in progress; production SDK replacement not started
+Status: approved direction; 20/112 task artifacts landed, but the Phase 0–2
+strict gates and P3.1 acceptance remain open pending mandatory remediation;
+production SDK replacement/cutover not started
 
 Integration branch: `feature/matrix-rust-sdk-full-replacement`
 
 Current execution record: [`docs/matrix-rust-sdk/implementation-handoff.md`](matrix-rust-sdk/implementation-handoff.md)
 
+Independent review and rebaseline:
+[`docs/matrix-rust-sdk/review-2026-07-25.md`](matrix-rust-sdk/review-2026-07-25.md)
+
 Target upstream release: `matrix-sdk-0.18.0`
 
 Upstream source commit: `1c44fb66214667c6d00acaf72ab592493653708b`
+
+## Current audited execution state
+
+The independent review of integration commit `edfefee` supersedes earlier
+handoff claims that Phases 0–2 and P3.1 were complete.
+
+| Band | Artifact inventory | Acceptance state |
+|---|---|---|
+| Phase 0 | P0.1–P0.7 landed | **Gate open** — cross-platform/live evidence, full traceability, and mandatory planning artifacts remain incomplete |
+| Phase 1 | P1.1–P1.6 landed | **Gate open** — fmt/lint/clippy/CI fail and IPC correctness issues are unresolved |
+| Phase 2 | P2.1–P2.6 harness landed | **Gate open** — native keyring/live lifecycle evidence is absent; critical/high lifecycle, path, and privacy findings are unresolved |
+| Phase 3 | P3.1 domain/mock foundation landed | **P3.1 acceptance open** — live SDK adapter and disposable-homeserver proof remain |
+| Phases 4–14 | No named tasks landed | **Not started** |
+
+“20/112” is only an inventory of named task artifacts, not validated completion.
+Zero of 15 strict phase gates are closed. Original task P3.2 and all later work
+are blocked by remediation tasks R0.1–R0.8 in the review report. Those tasks are
+additions to the original 112 and do not count as feature progress.
+
+The shipping desktop product still uses only `matrix-js-sdk`. No Rust production
+login/sync backend, selector, dual-client runtime, or cutover has been accepted.
 
 ## 1. Decision
 
@@ -98,8 +124,8 @@ The completed system will have:
   without them and a dedicated risk gate approves their use.
 - `experimental-widgets` is expected to be required for Element Call and must
   receive its own exit/rollback criteria.
-- No Grok task may upgrade the SDK, Rust toolchain, Tauri, or Swift bindings
-  opportunistically.
+- No implementation task may upgrade the SDK, Rust toolchain, Tauri, or Swift
+  bindings opportunistically.
 
 ### 3.5 No feature regression hidden as migration
 
@@ -527,7 +553,8 @@ continuity review proves it safe.
   change.
 - No mixed formatting, unrelated cleanup, version bumps, or feature work.
 - Every commit message references its task ID.
-- Grok does not commit, push, rebase, switch branches, create PRs, or merge.
+- Implementation agents do not commit, push, rebase, switch branches, create
+  PRs, or merge unless a task explicitly delegates a bounded Git operation.
 - The orchestrator controls all Git and GitHub state.
 
 ### 9.3 Task-size limits
@@ -541,54 +568,31 @@ Default task limits:
 - one clearly stated deletion or convergence target;
 - no unbounded “continue migrating” tasks.
 
-Tasks exceeding a limit require the plan to be split before Grok starts.
+Tasks exceeding a limit require the plan to be split before implementation.
 
-## 10. Grok CLI implementation protocol
+## 10. Native orchestrator and implementation-agent protocol
 
-### 10.1 Verified tool configuration
+The program now runs in one agent harness. The primary agent is the orchestrator
+and independent reviewer. It may delegate bounded implementation units to native
+sub-agents when the task can be isolated safely. External CLI model sessions are
+not part of the required workflow.
 
-The installed tool at plan creation is:
+### 10.1 Orchestrator responsibilities
 
-- executable: `grok`;
-- version: `0.2.111` stable;
-- model: `grok-4.5`;
-- supported reasoning flag: `--reasoning-effort high`;
-- supported headless prompt input: `--prompt-file` or `--single`;
-- supported continuation: `--continue` or `--resume`;
-- supported permission modes include `acceptEdits` and `auto`;
-- supported turn bound: `--max-turns`;
-- supported transcript export: `grok export <SESSION_ID> <OUTPUT>`.
+Before delegation, the orchestrator must:
 
-Before each implementation phase, run `grok --version`, `grok models`, and
-`grok inspect`. If the model, flags, permissions, or project instructions have
-changed, stop and update this protocol before allowing code edits.
+- fetch and verify the integration tip, worktree state, open PRs, and active CI;
+- select one planned task or remediation item whose prerequisites are closed;
+- create a short-lived branch from the current integration tip;
+- resolve material architecture or SDK-capability questions from the exact
+  pinned source and committed plan rather than leaving them to the implementer;
+- define the exact file scope, acceptance cases, required tests, forbidden
+  changes, and stop conditions;
+- retain ownership of Git history, PR creation, review decisions, and merges.
 
-### 10.2 Standard invocation
+### 10.2 Required implementation task packet
 
-Use a fresh Grok session for each task:
-
-```sh
-grok \
-  --cwd /Users/nepenthe/git_repos/synara_project/synara-desktop \
-  --model grok-4.5 \
-  --reasoning-effort high \
-  --permission-mode acceptEdits \
-  --no-subagents \
-  --no-memory \
-  --max-turns 80 \
-  --prompt-file /tmp/synara-grok-<task-id>.md \
-  --output-format streaming-json
-```
-
-Do not use `--always-approve`. Network access, dependency downloads, destructive
-actions, and access outside the repository require orchestrator approval.
-
-The exact invocation may be adjusted for CLI compatibility, but model and
-reasoning effort must remain explicit.
-
-### 10.3 Required prompt template
-
-Every Grok task prompt must include:
+Every delegated task must include:
 
 1. task ID and title;
 2. the authoritative plan path and exact sections to follow;
@@ -600,7 +604,8 @@ Every Grok task prompt must include:
 8. required implementation invariants;
 9. required tests and commands;
 10. explicit deletion/convergence target;
-11. instruction not to commit, push, rebase, switch branches, or edit the plan;
+11. instruction not to commit, push, rebase, switch branches, create/merge a PR,
+    or edit the plan unless explicitly delegated;
 12. instruction not to add `matrix-js-sdk`, raw Matrix HTTP, a backend selector,
     a fallback path, or suppressed errors;
 13. instruction to stop and report if an SDK capability is absent or experimental
@@ -608,9 +613,9 @@ Every Grok task prompt must include:
 14. instruction to report files changed, design decisions, tests run, failures,
     residual risks, and anything not completed.
 
-### 10.4 Grok completion is not acceptance
+### 10.3 Implementation completion is not acceptance
 
-After Grok stops, the orchestrator must independently:
+After an implementation agent stops, the orchestrator must independently:
 
 - inspect `git status` and the complete diff;
 - verify file scope;
@@ -622,24 +627,25 @@ After Grok stops, the orchestrator must independently:
 - classify findings by severity;
 - reject the task if any acceptance criterion lacks evidence.
 
-### 10.5 Correction loop
+### 10.4 Correction loop
 
 If review finds a defect:
 
-- do not patch the code manually;
-- provide Grok the exact finding, evidence, and required behavior;
-- resume the same session with `--continue` so it retains task context;
-- require Grok to fix the defect and rerun affected tests;
+- send the responsible implementation agent the exact finding, evidence,
+  required behavior, and affected acceptance case;
+- require the agent to fix the defect and rerun affected tests on the same task
+  branch;
 - review the entire new diff, not only the latest hunk;
 - repeat until no blocking finding remains;
-- start a fresh task session after acceptance to prevent context drift.
+- reject and re-scope the task if correction reveals a material unanswered
+  architecture question or unsafe scope expansion.
 
-If Grok disputes a finding, the orchestrator resolves it from source, tests, and
-the plan. Unsupported assertions are not accepted.
+If an implementation agent disputes a finding, the orchestrator resolves it
+from source, tests, and this plan. Unsupported assertions are not accepted.
 
-### 10.6 Automatic rejection conditions
+### 10.5 Automatic rejection conditions
 
-Reject Grok output immediately if it:
+Reject implementation output immediately if it:
 
 - changes the plan or broadens scope without approval;
 - adds a runtime backend flag or dual-client path;
@@ -656,6 +662,19 @@ Reject Grok output immediately if it:
 - claims tests passed without command output;
 - leaves TODOs in place of acceptance requirements;
 - implements only the happy path for lifecycle or concurrency-sensitive work.
+
+### 10.6 PR and merge discipline
+
+- The reviewed SHA must have a green, non-cancelled required CI run. Success on
+  an older SHA or a cancelled run is not evidence.
+- The umbrella PR to `main` must not be allowed to cancel or substitute for task
+  validation on the integration-targeted PR.
+- The orchestrator reviews the complete diff against the current integration
+  base and records any accepted residual explicitly.
+- No critical/high security, privacy, data-loss, crypto, lifecycle, or protocol
+  finding may be deferred across a phase gate.
+- Task PRs may merge only into the integration branch. The final PR to `main`
+  requires every program gate plus explicit user approval.
 
 ## 11. Review checklist for every task
 
@@ -714,6 +733,39 @@ Reject Grok output immediately if it:
 
 Each phase is a hard gate. Later phases may be researched early, but code may
 not rely on an unaccepted earlier phase.
+
+### Mandatory rebaseline gate — R0 remediation
+
+The 2026-07-25 independent review found that implementation advanced past open
+gates. Before P3.2 or any later original task begins, complete:
+
+- **R0.1 — Restore truthful quality and CI gates:** fix introduced fmt/lint and
+  whitespace failures, baseline only proven pre-existing debt, require green
+  non-cancelled task CI, and reconcile stale task metadata.
+- **R0.2 — Complete missing governance and Phase 0 evidence:** threat model,
+  test/Synapse topology, native-agent review template, owned risk register,
+  full traceability, and the outstanding cross-platform/live evidence.
+- **R0.3 — Repair and freeze IPC v1:** safe cross-language counter semantics,
+  checked sequencing, one authoritative stream identity, typed/bounded topic
+  payloads, and adversarial Rust/TypeScript contract tests.
+- **R0.4 — Harden storage:** canonical/symlink-safe confinement,
+  collision-resistant versioned account identity, exact SDK store layout, and
+  supported macOS/Linux native secret-store integration.
+- **R0.5 — Make shutdown/logout/wipe transactional:** stop and join work and
+  close client/store handles before destructive operations; specify and test
+  every partial failure.
+- **R0.6 — Enforce diagnostic privacy:** eliminate full URLs, absolute paths,
+  raw SDK errors, identifiers, secrets, and content from diagnostic surfaces.
+- **R0.7 — Close Phase 2 and P3.1 with live adapters:** exercise discovery,
+  login-flow retrieval, encrypted store open/reopen, sync, crash, logout, and
+  wipe against disposable Synapse without production dual-client wiring.
+- **R0.8 — Issue formal acceptance reports:** rerun the full gate and change a
+  phase status only through evidence reviewed on a green PR.
+
+The detailed finding-to-acceptance mapping is authoritative in
+[`docs/matrix-rust-sdk/review-2026-07-25.md`](matrix-rust-sdk/review-2026-07-25.md).
+R0 tasks are corrective additions and do not change the original 112-task
+denominator.
 
 ### Phase 0 — Freeze scope, evidence, and baselines
 
@@ -1363,7 +1415,7 @@ base integration commit and recording evidence.
 ### Task PR gate
 
 - Task acceptance criteria satisfied.
-- Grok transcript/result retained long enough for review.
+- Implementation-agent result and evidence retained long enough for review.
 - Complete diff independently reviewed.
 - No blocking or high-severity finding.
 - Required local commands reproduced by orchestrator.
@@ -1437,12 +1489,17 @@ The program is complete only when all of the following are true:
 | Media byte transport harms memory/security                | High                     | Native cache/local protocol; no JSON byte payloads                    |
 | Store-key or diagnostics leak                             | Critical                 | Keyring, redaction, secret scanning, security review                  |
 | Long-lived feature branch diverges from main              | High                     | Controlled periodic reconciliation and phase retest                   |
-| Grok strays from scope or masks failures                  | High                     | Bounded prompts, independent review, correction loop, rejection rules |
+| Implementation agent strays or masks failures            | High                     | Bounded task packets, independent review, correction loop, rejection rules |
+| CI cancellation permits unvalidated merges               | High                     | Green non-cancelled run on reviewed SHA before every merge             |
+| Store deletion races live client/tasks                    | Critical data loss       | R0.5 close barrier, injected-failure tests, lifecycle acceptance report |
+| Store paths escape through symlinks                       | High security            | R0.4 canonical confinement and adversarial filesystem tests            |
+| IPC integer/stream ambiguity corrupts state               | High correctness         | R0.3 frozen cross-language wire contract and boundary/property tests    |
 | Migration scaffolding becomes permanent                   | High                     | Definition-of-done zero gates and Phase 14 deletion review            |
 
 ## 17. Required planning artifacts before code execution
 
-The following files must exist and be reviewed before Phase 2 implementation:
+The following files must exist and be reviewed before Phase 2 acceptance or any
+new P3 implementation:
 
 - SDK usage inventory JSON and Markdown report;
 - feature parity traceability matrix;
@@ -1454,21 +1511,30 @@ The following files must exist and be reviewed before Phase 2 implementation:
 - security/threat model for tokens, stores, IPC, media, diagnostics, and cleanup;
 - baseline performance/reliability report;
 - test matrix and disposable Synapse topology;
-- Grok task prompt template and review report template;
+- native implementation-agent task packet and review report template;
 - risk register with owners/status.
 
-No implementation prompt may ask Grok to “figure out the architecture.” Grok
-implements a bounded task from these reviewed artifacts and stops when the plan
+As of the 2026-07-25 audit, the dedicated threat model, test/Synapse topology,
+native-agent review template, and owned/statused risk register are missing.
+R0.2 must close those gaps; an existing implementation does not waive them.
+
+No implementation task may ask its agent to “figure out the architecture.” The
+agent implements a bounded task from reviewed artifacts and stops when the plan
 does not answer a material design question.
 
 ## 18. Immediate next actions
 
-1. Use the execution handoff record to finish the remaining P0.2 traceability
-   review, starting at FR-7.8-004; do not rewrite already accepted FR-7.8-001
-   through FR-7.8-003 without new contrary source evidence.
-2. Open a task PR into the integration branch for each accepted Phase 0 unit;
-   never target `main` until the final program gate.
-3. Do not add Matrix Rust SDK production dependencies until the Rust 1.93/Tauri
-   compatibility and exact capability gates are accepted.
-4. Re-estimate delivery only after the Phase 0 traceability matrix and call/widget
-   proof expose the true remaining work.
+1. Land R0.1 first so every later correction is reviewed against truthful,
+   non-cancelled quality gates.
+2. Complete R0.2 and resolve the architecture questions it exposes before
+   delegating lifecycle, storage, or IPC changes.
+3. Land R0.3–R0.6 as bounded task PRs into the integration branch, with the
+   complete finding-specific negative tests from the review report.
+4. Execute R0.7 on disposable Synapse and both supported desktop platforms; do
+   not wire a production Rust login/sync path or create a backend selector.
+5. Complete R0.8 and close Phase 0, Phase 1, Phase 2, and P3.1 only where every
+   acceptance row has evidence.
+6. Re-plan P3.2 against the corrected contracts, then resume P3.2–P3.8 and
+   Phases 4–14 in their existing order.
+7. Keep PR `#39` to `main` open and unmerged until the final gate passes and the
+   user gives explicit approval.
