@@ -49,7 +49,7 @@ Audited snapshot: `edfefee499064b736985b6528896b693e5120f22`
 
 | ID | Task | Artifact state | Integration state | Strict acceptance |
 |---|---|---|---|---|
-| R0.1 | Quality and metadata recovery | `in_progress` | `not_submitted` | `open` |
+| R0.1 | Quality and metadata recovery | `in_progress` | `pr_open` | `open` |
 | R0.2 | Governance and Phase 0 evidence | `not_started` | `not_submitted` | `not_reviewed` |
 | R0.3 | IPC wire-contract correctness | `not_started` | `not_submitted` | `not_reviewed` |
 | R0.4 | Store confinement and key management | `not_started` | `not_submitted` | `not_reviewed` |
