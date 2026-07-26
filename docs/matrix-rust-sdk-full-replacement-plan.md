@@ -771,6 +771,21 @@ gates. Before P3.2 or any later original task begins, complete:
 - **R0.8 — Issue formal acceptance reports:** rerun the full gate and change a
   phase status only through evidence reviewed on a green PR.
 
+#### R0.2/R0.8 acceptance authority
+
+R0.2 accepts only the completeness, traceability, ownership, and review
+readiness of the Phase 0 evidence package. Its signed report is named
+`r0.2-phase-0-evidence-readiness-report.{md,json}` and must state that it does
+not accept P0.1–P0.7, change Phase 0 strict acceptance, or close the Phase 0
+gate. After R0.2 is accepted, Phase 0 remains `open` and blocked by R0.8.
+
+R0.8 alone issues `phase-0-formal-acceptance-report.{md,json}` after rerunning
+the complete gate on a green, reviewed commit. Only that formal report may
+accept P0.1–P0.7 and change Phase 0 from `open` to `accepted`/`closed`. A signed
+report means an explicit reviewer attestation bound to an immutable commit SHA,
+UTC time, decision, and PR/review reference; it does not imply a cryptographic
+signature unless the project adopts that separate requirement.
+
 The detailed finding-to-acceptance mapping is authoritative in
 [`docs/matrix-rust-sdk/review-2026-07-25.md`](matrix-rust-sdk/review-2026-07-25.md).
 R0 tasks are corrective additions and do not change the original 112-task
