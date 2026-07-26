@@ -4,12 +4,13 @@
 | --- | --- |
 | Task | **P0.6** Baseline reliability/performance evidence |
 | Date | 2026-07-24 |
-| Work branch | `matrix-rust/p0.6-performance-baseline` |
-| Integration tip (base) | `feature/matrix-rust-sdk-full-replacement` @ `a2d288b0762104fb15a6c4829bfe1293e865f5b6` |
+| Work branch at generation | `matrix-rust/p0.6-performance-baseline` |
+| Base integration tip at generation | `feature/matrix-rust-sdk-full-replacement` @ `a2d288b0762104fb15a6c4829bfe1293e865f5b6` |
 | Tip message | `docs(matrix): merge P0.5 toolchain compatibility` (P0.1–P0.5 merged; PR #45 for P0.5) |
 | Product under baseline | Current desktop **`matrix-js-sdk` 42.0.0** product (Synara `1.2.59`) |
 | Machine twin | [`performance-baseline.json`](performance-baseline.json) |
-| Status | **Accepted** by independent review — PR to integration (`merged: false`; `pass-with-residuals`) |
+| Artifact / integration state | `landed` / `merged` |
+| Strict acceptance / Phase 0 gate | `open` / `open` (`pass-with-residuals`) — see [`program-status.md`](program-status.md) |
 
 Authoritative program plan: [`../matrix-rust-sdk-full-replacement-plan.md`](../matrix-rust-sdk-full-replacement-plan.md) (Phase 0 P0.6; Phase 13 § budgets).
 
@@ -22,7 +23,7 @@ Authoritative program plan: [`../matrix-rust-sdk-full-replacement-plan.md`](../m
 | Live signed-in UX latencies (startup, room switch, pagination, reconnect, E2EE open, media) | **Residual — methodology documented** | No fabricated p50/p95; agent session lacks signed-in multi-run protocol execution |
 | Memory / idle CPU / disk growth live scenarios | **Residual — methodology documented** | Standard large-account scenario defined; measurements pending operator |
 | Linux live UX baselines | **Residual** | Host is macOS; Linux procedure documented, not executed here |
-| Disposable Synapse multi-hour soak | **Out of scope for P0.6 stop condition** | Optional later; not required to close Phase 0 evidence scaffold |
+| Disposable Synapse multi-hour soak | **Residual** | Required live evidence is governed by the rebaselined Phase 0/R0.2 gate; this proxy artifact alone cannot close it |
 
 **Honest summary:** Phase 0 now has a **committed, repeatable catalog and an automated proxy baseline** for the virtualization row-mapping layer that feeds the web timeline. End-to-end user-path p50/p95 values are **not** invented; they remain `residual-pending-live` with exact operator steps below. Phase 13 will compare Rust cutover results against this catalog using the same markers and budgets (±10% p95 on key latencies; memory ±15%; idle CPU within Phase 0 noise band).
 
@@ -408,7 +409,9 @@ Reviewer should verify:
 1. No product code / production dependency changes.
 2. No fabricated live p50/p95 in MD/JSON.
 3. FR-7.8–7.11 findings untouched; no re-promotion of FR-7.9-011.
-4. JSON `merged: false` until integration merge.
+4. Current artifact, merge, and strict-acceptance axes match
+   [`program-status.json`](program-status.json); the historical generation state
+   remains labelled as such.
 5. Automated numbers re-run within the same budget class (sub-ms–low-ms mapping; all samples ≪ 25 ms).
 
 ---
