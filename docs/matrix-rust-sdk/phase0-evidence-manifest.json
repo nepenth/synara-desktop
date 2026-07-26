@@ -1,0 +1,872 @@
+{
+  "schema_version": 1,
+  "artifact": {
+    "id": "R0.2-C-PHASE0-EVIDENCE-MANIFEST",
+    "title": "Phase 0 evidence and residual manifest",
+    "authoritative_format": "json",
+    "markdown_twin": "docs/matrix-rust-sdk/phase0-evidence-manifest.md",
+    "status": "ready_for_independent_review",
+    "phase_0_gate": "open",
+    "rule": "Evidence proves only its declared scope. An exclusion cannot be inferred as passing."
+  },
+  "subject": {
+    "repository": "nepenth/synara-desktop",
+    "program_branch": "feature/matrix-rust-sdk-full-replacement",
+    "shipping_desktop_backend": "matrix-js-sdk 42.0.0",
+    "linked_nonshipping_rust_sdk": "matrix-sdk and matrix-sdk-ui 0.18.0",
+    "production_dual_backend": false
+  },
+  "pr_77": {
+    "number": 77,
+    "url": "https://github.com/nepenth/synara-desktop/pull/77",
+    "base_sha": "4c21f1fd38de7d64d50e111b30a99145e480ca70",
+    "head_sha": "ac3b2f690fd0413c1fa7bb13ff5a824a530734e8",
+    "merge_sha": "f7288b0ba14da24b4f86f1ba30b7cd444992f3d1",
+    "merged_at": "2026-07-26T02:36:02Z",
+    "runs": [
+      {
+        "id": 30184249305,
+        "name": "CI",
+        "event": "pull_request",
+        "head_sha": "ac3b2f690fd0413c1fa7bb13ff5a824a530734e8",
+        "conclusion": "success",
+        "url": "https://github.com/nepenth/synara-desktop/actions/runs/30184249305"
+      },
+      {
+        "id": 30184249306,
+        "name": "Desktop Package Smoke",
+        "event": "pull_request",
+        "head_sha": "ac3b2f690fd0413c1fa7bb13ff5a824a530734e8",
+        "conclusion": "success",
+        "url": "https://github.com/nepenth/synara-desktop/actions/runs/30184249306"
+      }
+    ]
+  },
+  "evidence": [
+    {
+      "id": "E-P77-LINUX-RUST-QUALITY",
+      "requirements": ["P0.5", "Phase-0-toolchain-smoke", "R0.1-quality-gate"],
+      "status": "proven",
+      "claim": "The SDK-linked production Rust shell formats, passes strict clippy, compiles, and tests on Ubuntu 22.04 with Rust 1.93.",
+      "proof_scope": [
+        "linux compile",
+        "linux lint",
+        "linux Rust unit tests",
+        "selected system dependencies"
+      ],
+      "explicit_exclusions": [
+        "installed package",
+        "GUI launch",
+        "Secret Service",
+        "live Matrix Rust SDK login/sync",
+        "performance"
+      ],
+      "platform": {
+        "os": "Ubuntu",
+        "version": "22.04",
+        "arch": "x86_64",
+        "environment": "GitHub-hosted"
+      },
+      "source": {
+        "run_id": 30184249305,
+        "job_id": 89746049445,
+        "job_name": "Validate desktop and runtime",
+        "url": "https://github.com/nepenth/synara-desktop/actions/runs/30184249305/job/89746049445"
+      },
+      "commands": [
+        "cargo fmt --check",
+        "cargo clippy --locked --all-targets -- -D warnings",
+        "cargo check --locked",
+        "cargo test --locked"
+      ],
+      "subject": {
+        "kind": "pull_request_candidate",
+        "base_sha": "4c21f1fd38de7d64d50e111b30a99145e480ca70",
+        "head_sha": "ac3b2f690fd0413c1fa7bb13ff5a824a530734e8",
+        "merge_sha": "f7288b0ba14da24b4f86f1ba30b7cd444992f3d1"
+      },
+      "owner_role": "Rust platform owner",
+      "review_state": "prior_R0.1_evidence_recorded_pending_independent_review",
+      "privacy_review": "no content-bearing artifact"
+    },
+    {
+      "id": "E-P77-IOS-SIMULATOR",
+      "requirements": ["cross-client-regression"],
+      "status": "proven",
+      "claim": "The iOS simulator build and tests passed on the PR #77 candidate.",
+      "proof_scope": ["unsigned iOS simulator build", "iOS simulator tests"],
+      "explicit_exclusions": [
+        "physical device",
+        "TestFlight",
+        "production APNs",
+        "mixed desktop/iOS live Matrix scenario"
+      ],
+      "platform": {
+        "os": "macOS",
+        "runner": "macos-26",
+        "environment": "GitHub-hosted"
+      },
+      "source": {
+        "run_id": 30184249305,
+        "job_id": 89746049438,
+        "job_name": "iOS simulator tests",
+        "url": "https://github.com/nepenth/synara-desktop/actions/runs/30184249305/job/89746049438"
+      },
+      "artifacts": [
+        {
+          "id": 8626650286,
+          "name": "ios-test-results",
+          "archive_digest": "sha256:01db61321cdaa0e86df1dde1e422a07291e29a178e6ba180fc4e672c724c8bdc",
+          "archive_size_bytes": 99467701,
+          "expires_at": "2026-08-09T02:31:59Z"
+        }
+      ],
+      "subject": {
+        "kind": "pull_request_candidate",
+        "base_sha": "4c21f1fd38de7d64d50e111b30a99145e480ca70",
+        "head_sha": "ac3b2f690fd0413c1fa7bb13ff5a824a530734e8",
+        "merge_sha": "f7288b0ba14da24b4f86f1ba30b7cd444992f3d1"
+      },
+      "owner_role": "iOS platform owner",
+      "review_state": "prior_R0.1_evidence_recorded_pending_independent_review",
+      "privacy_review": "result bundle is ephemeral and must not be treated as a content fixture"
+    },
+    {
+      "id": "E-P77-SYNAPSE-JS-CONTROL",
+      "requirements": [
+        "P0.6-current-behavior-control",
+        "Phase-0-live-disposable-Synapse-probe"
+      ],
+      "status": "proven_with_exclusions",
+      "claim": "The current matrix-js-sdk control runner passed two-device limited-sync, context, pagination, latest-timeline, fully-read, and public/private receipt convergence against disposable Synapse.",
+      "proof_scope": [
+        "matrix-js-sdk 42.0.0",
+        "FX-64-CONTROL",
+        "real Synapse/PostgreSQL",
+        "m.read",
+        "m.read.private"
+      ],
+      "explicit_exclusions": [
+        "Matrix Rust SDK",
+        "public room",
+        "E2EE",
+        "packaged app",
+        "media",
+        "reconnect",
+        "performance",
+        "soak"
+      ],
+      "platform": {
+        "os": "Ubuntu",
+        "version": "22.04",
+        "arch": "x86_64",
+        "environment": "GitHub-hosted Docker"
+      },
+      "source": {
+        "run_id": 30184249305,
+        "job_id": 89746049440,
+        "job_name": "Synapse two-client integration",
+        "url": "https://github.com/nepenth/synara-desktop/actions/runs/30184249305/job/89746049440"
+      },
+      "commands": [
+        "scripts/synapse-integration.sh up",
+        "npm run test:synapse-integration",
+        "scripts/synapse-integration.sh reset"
+      ],
+      "subject": {
+        "kind": "pull_request_candidate",
+        "base_sha": "4c21f1fd38de7d64d50e111b30a99145e480ca70",
+        "head_sha": "ac3b2f690fd0413c1fa7bb13ff5a824a530734e8",
+        "merge_sha": "f7288b0ba14da24b4f86f1ba30b7cd444992f3d1"
+      },
+      "owner_role": "current desktop behavior owner",
+      "review_state": "prior_R0.1_evidence_recorded_pending_independent_review",
+      "privacy_review": "runner emits phase/count diagnostics and holds credentials/tokens in memory"
+    },
+    {
+      "id": "E-P77-QUALITY-GATE",
+      "requirements": ["R0.1-green-current-commit-CI"],
+      "status": "proven",
+      "claim": "All CI aggregate dependencies succeeded for PR #77.",
+      "proof_scope": [
+        "desktop/runtime validation",
+        "iOS simulator tests",
+        "current-JS Synapse integration"
+      ],
+      "explicit_exclusions": [
+        "package gate",
+        "signed release",
+        "manual platform acceptance"
+      ],
+      "source": {
+        "run_id": 30184249305,
+        "job_id": 89747206440,
+        "job_name": "Quality gate",
+        "url": "https://github.com/nepenth/synara-desktop/actions/runs/30184249305/job/89747206440"
+      },
+      "subject": {
+        "kind": "pull_request_candidate",
+        "base_sha": "4c21f1fd38de7d64d50e111b30a99145e480ca70",
+        "head_sha": "ac3b2f690fd0413c1fa7bb13ff5a824a530734e8",
+        "merge_sha": "f7288b0ba14da24b4f86f1ba30b7cd444992f3d1"
+      },
+      "owner_role": "CI owner",
+      "review_state": "prior_R0.1_evidence_recorded_pending_independent_review",
+      "privacy_review": "no content-bearing artifact"
+    },
+    {
+      "id": "E-P77-DEBIAN-PACKAGE",
+      "requirements": ["P0.5-Linux-build", "Linux-package-smoke"],
+      "status": "proven_build_only",
+      "claim": "An SDK-linked Debian amd64 package was constructed successfully.",
+      "proof_scope": ["Debian package construction", "amd64 payload"],
+      "explicit_exclusions": [
+        "installation",
+        "launch",
+        "KDE Wayland",
+        "Secret Service",
+        "portal",
+        "uninstall",
+        "live Matrix behavior"
+      ],
+      "platform": {
+        "os": "Ubuntu",
+        "version": "22.04",
+        "arch": "x86_64",
+        "environment": "GitHub-hosted"
+      },
+      "source": {
+        "run_id": 30184249306,
+        "job_id": 89746043691,
+        "job_name": "Linux .deb package",
+        "url": "https://github.com/nepenth/synara-desktop/actions/runs/30184249306/job/89746043691"
+      },
+      "artifacts": [
+        {
+          "id": 8626620075,
+          "name": "synara-linux-deb",
+          "archive_digest": "sha256:31aaa8b66b02da0447ce355f087bd8a37f3f09ab77348e7f7720d3f34be91418",
+          "archive_size_bytes": 29934410,
+          "expires_at": "2026-08-02T02:27:57Z",
+          "payload": "Synara_1.2.59_amd64.deb",
+          "payload_size_bytes": 29993578,
+          "payload_sha256": "cbf1b3e97f7b0a3a68b4934feb336b61975ee4afbe3a7e9dc149d6fa8c19f547"
+        }
+      ],
+      "subject": {
+        "kind": "pull_request_candidate",
+        "base_sha": "4c21f1fd38de7d64d50e111b30a99145e480ca70",
+        "head_sha": "ac3b2f690fd0413c1fa7bb13ff5a824a530734e8",
+        "merge_sha": "f7288b0ba14da24b4f86f1ba30b7cd444992f3d1"
+      },
+      "owner_role": "Linux platform owner",
+      "review_state": "prior_R0.1_evidence_recorded_pending_independent_review",
+      "privacy_review": "package metadata only"
+    },
+    {
+      "id": "E-P77-ARCH-PACKAGE",
+      "requirements": ["P0.5-Linux-build", "Linux-package-smoke"],
+      "status": "proven_build_only",
+      "claim": "SDK-linked Arch x86_64 release and debug packages were constructed successfully.",
+      "proof_scope": [
+        "Arch release binary",
+        "pacman package construction",
+        "x86_64 payloads"
+      ],
+      "explicit_exclusions": [
+        "installation",
+        "launch",
+        "CachyOS/KDE Wayland",
+        "Secret Service",
+        "portal",
+        "uninstall",
+        "live Matrix behavior"
+      ],
+      "platform": {
+        "os": "Arch Linux container",
+        "arch": "x86_64",
+        "environment": "GitHub-hosted"
+      },
+      "source": {
+        "run_id": 30184249306,
+        "job_id": 89746043667,
+        "job_name": "Linux Arch package",
+        "url": "https://github.com/nepenth/synara-desktop/actions/runs/30184249306/job/89746043667"
+      },
+      "artifacts": [
+        {
+          "id": 8626667544,
+          "name": "synara-linux-arch-pkg",
+          "archive_digest": "sha256:a930735a8a6d00360453e596239314c854f523752779b52dba23983812f07a8b",
+          "archive_size_bytes": 28365993,
+          "expires_at": "2026-08-02T02:34:26Z",
+          "payloads": [
+            {
+              "name": "synara-desktop-bin-1.2.59-1-x86_64.pkg.tar.zst",
+              "size_bytes": 27273158,
+              "sha256": "8273a7f8bb9c8c5c844e8c02cff503a79f98fcaee9a4a91dfd7ed28e1b0aaf33"
+            },
+            {
+              "name": "synara-desktop-bin-debug-1.2.59-1-x86_64.pkg.tar.zst",
+              "size_bytes": 1105210,
+              "sha256": "67c053c98ecb0858f4467555761f734a123e123c740c069f89bc1a6b3857d0d5"
+            }
+          ]
+        }
+      ],
+      "subject": {
+        "kind": "pull_request_candidate",
+        "base_sha": "4c21f1fd38de7d64d50e111b30a99145e480ca70",
+        "head_sha": "ac3b2f690fd0413c1fa7bb13ff5a824a530734e8",
+        "merge_sha": "f7288b0ba14da24b4f86f1ba30b7cd444992f3d1"
+      },
+      "owner_role": "Linux platform owner",
+      "review_state": "prior_R0.1_evidence_recorded_pending_independent_review",
+      "privacy_review": "package metadata only"
+    },
+    {
+      "id": "E-P77-MACOS-APP",
+      "requirements": ["P0.5-macOS-build", "macOS-package-smoke"],
+      "status": "proven_build_only",
+      "claim": "An SDK-linked thin arm64 macOS app bundle was built and its ad-hoc runtime signature verified.",
+      "proof_scope": [
+        "macOS app construction",
+        "arm64 binary",
+        "ad-hoc hardened-runtime signature consistency"
+      ],
+      "explicit_exclusions": [
+        "x86_64",
+        "universal binary",
+        "Developer ID",
+        "team identity",
+        "notarization",
+        "stapling",
+        "DMG",
+        "installation",
+        "launch",
+        "Keychain",
+        "live Matrix behavior"
+      ],
+      "platform": {
+        "os": "macOS",
+        "runner": "macos-15",
+        "arch": "arm64",
+        "environment": "GitHub-hosted"
+      },
+      "source": {
+        "run_id": 30184249306,
+        "job_id": 89746043726,
+        "job_name": "macOS app bundle",
+        "url": "https://github.com/nepenth/synara-desktop/actions/runs/30184249306/job/89746043726"
+      },
+      "artifacts": [
+        {
+          "id": 8626604613,
+          "name": "synara-macos-app",
+          "archive_digest": "sha256:11c2ba05203f8b7602225cc5335c5160d03a98f1618f1fb81dc9ce14614a4ee1",
+          "archive_size_bytes": 26781523,
+          "expires_at": "2026-08-02T02:25:51Z",
+          "binary": "Contents/MacOS/synara",
+          "binary_sha256": "f22e7a6294eaad8a84ea26c87407176bcfd4a87dd95c1b0844f3af78563a6230",
+          "architectures": ["arm64"],
+          "signature": "adhoc,runtime",
+          "team_identifier": null,
+          "code_directory_sha256": "706446242cc198203c006f7c24afb3c3bf762f6d7920f08bd2bd9bb4d36038f8"
+        }
+      ],
+      "subject": {
+        "kind": "pull_request_candidate",
+        "base_sha": "4c21f1fd38de7d64d50e111b30a99145e480ca70",
+        "head_sha": "ac3b2f690fd0413c1fa7bb13ff5a824a530734e8",
+        "merge_sha": "f7288b0ba14da24b4f86f1ba30b7cd444992f3d1"
+      },
+      "owner_role": "macOS platform owner",
+      "review_state": "prior_R0.1_evidence_recorded_pending_independent_review",
+      "privacy_review": "package/signature metadata only"
+    },
+    {
+      "id": "E-P77-PACKAGE-GATE",
+      "requirements": ["P0.5-package-build-gate"],
+      "status": "proven",
+      "claim": "All package construction jobs applicable to PR #77 succeeded.",
+      "proof_scope": [
+        "Debian build",
+        "Arch build",
+        "thin arm64 macOS app build"
+      ],
+      "explicit_exclusions": [
+        "universal",
+        "Developer ID",
+        "notarization",
+        "installation",
+        "launch",
+        "manual smoke"
+      ],
+      "source": {
+        "run_id": 30184249306,
+        "job_id": 89747374197,
+        "job_name": "Desktop package gate",
+        "url": "https://github.com/nepenth/synara-desktop/actions/runs/30184249306/job/89747374197"
+      },
+      "subject": {
+        "kind": "pull_request_candidate",
+        "base_sha": "4c21f1fd38de7d64d50e111b30a99145e480ca70",
+        "head_sha": "ac3b2f690fd0413c1fa7bb13ff5a824a530734e8",
+        "merge_sha": "f7288b0ba14da24b4f86f1ba30b7cd444992f3d1"
+      },
+      "owner_role": "release engineering owner",
+      "review_state": "prior_R0.1_evidence_recorded_pending_independent_review",
+      "privacy_review": "no content-bearing artifact"
+    },
+    {
+      "id": "E-P06-TIMELINE-MAP-PROXY",
+      "requirements": ["P0.6-proxy-only"],
+      "status": "proven_proxy_only",
+      "claim": "The synthetic 10k/50k timeline row-map proxy has a committed 50-iteration macOS arm64 baseline below its 25 ms budget.",
+      "proof_scope": [
+        "synthetic row key/index mapping",
+        "macOS arm64",
+        "p50/p95 proxy"
+      ],
+      "explicit_exclusions": [
+        "startup",
+        "room switch",
+        "timeline network load",
+        "E2EE",
+        "pagination network latency",
+        "media",
+        "CPU",
+        "memory",
+        "disk",
+        "Linux"
+      ],
+      "source": {
+        "kind": "committed artifact",
+        "path": "docs/matrix-rust-sdk/performance-baseline.json",
+        "captured_at": "2026-07-24T23:28:12.781Z"
+      },
+      "subject": {
+        "kind": "committed_artifact",
+        "repository_sha": "f7288b0ba14da24b4f86f1ba30b7cd444992f3d1",
+        "path": "docs/matrix-rust-sdk/performance-baseline.json"
+      },
+      "owner_role": "performance owner",
+      "review_state": "proxy_evidence_recorded_pending_independent_review",
+      "privacy_review": "fully synthetic fixture"
+    }
+  ],
+  "residuals": [
+    {
+      "id": "RES-P05-REPORT-REBASELINE",
+      "requirement": "P0.5 truthful current report",
+      "state": "pending_documentation",
+      "owner_role": "toolchain evidence owner",
+      "exact_closure_evidence": "Update toolchain-compatibility-report.md/.json to record Rust 1.93, the production 0.18.0 dependency pin, PR #77 Linux/package/macOS evidence, and every remaining exclusion.",
+      "target_phase_gate": "R0.2 before Phase 0 acceptance",
+      "deferral_approval": {
+        "required": true,
+        "status": "not_requested",
+        "approved_by": null,
+        "approved_at": null,
+        "decision_ref": null
+      }
+    },
+    {
+      "id": "RES-P05-MACOS-UNIVERSAL",
+      "requirement": "P0.5 macOS universal coexistence",
+      "state": "pending_execution",
+      "owner_role": "macOS platform owner",
+      "exact_closure_evidence": "At one reviewed SHA, build the production app for universal-apple-darwin; lipo reports arm64 and x86_64; codesign verifies all architectures; record commands, SHA, toolchain, and artifact digest.",
+      "target_phase_gate": "P0.5 / Phase 0",
+      "deferral_approval": {
+        "required": true,
+        "status": "not_requested",
+        "approved_by": null,
+        "approved_at": null,
+        "decision_ref": null
+      }
+    },
+    {
+      "id": "RES-P05-MACOS-SIGN-NOTARIZE",
+      "requirement": "P0.5 Developer ID signing and notarization coexistence",
+      "state": "pending_authorized_execution",
+      "owner_role": "release engineering owner",
+      "exact_closure_evidence": "A reviewed SDK-linked universal DMG is Developer-ID signed with a team identifier, accepted by spctl, submitted successfully to notarytool, stapled, and staple-validated; record run URL/artifact digest without secrets.",
+      "target_phase_gate": "P0.5 / Phase 0",
+      "deferral_approval": {
+        "required": true,
+        "status": "not_requested",
+        "approved_by": null,
+        "approved_at": null,
+        "decision_ref": null
+      }
+    },
+    {
+      "id": "RES-P05-MACOS-INSTALL-LAUNCH",
+      "requirement": "macOS packaged smoke",
+      "state": "pending_execution",
+      "owner_role": "macOS platform operator",
+      "exact_closure_evidence": "Install and launch the exact reviewed package on macOS; reach login/session UI; prove quit/reopen and Keychain-backed current-session behavior; uninstall; attach privacy-safe per-case results.",
+      "target_phase_gate": "P0.5/P0.6 evidence and Phase 13 qualification",
+      "deferral_approval": {
+        "required": true,
+        "status": "not_requested",
+        "approved_by": null,
+        "approved_at": null,
+        "decision_ref": null
+      }
+    },
+    {
+      "id": "RES-P05-DEBIAN-INSTALL-LAUNCH",
+      "requirement": "Debian packaged smoke",
+      "state": "pending_execution",
+      "owner_role": "Linux platform operator",
+      "exact_closure_evidence": "Install the exact Debian artifact on a Debian-family KDE Wayland host; launch; validate Secret Service/portal/session behavior; uninstall; attach privacy-safe per-case results.",
+      "target_phase_gate": "P0.5/P0.6 evidence and Phase 13 qualification",
+      "deferral_approval": {
+        "required": true,
+        "status": "not_requested",
+        "approved_by": null,
+        "approved_at": null,
+        "decision_ref": null
+      }
+    },
+    {
+      "id": "RES-P05-ARCH-INSTALL-LAUNCH",
+      "requirement": "Arch packaged smoke",
+      "state": "pending_execution",
+      "owner_role": "Linux platform operator",
+      "exact_closure_evidence": "Install the exact Arch artifact on an Arch-family KDE Wayland host; launch; validate Secret Service/portal/session behavior; uninstall; attach privacy-safe per-case results.",
+      "target_phase_gate": "P0.5/P0.6 evidence and Phase 13 qualification",
+      "deferral_approval": {
+        "required": true,
+        "status": "not_requested",
+        "approved_by": null,
+        "approved_at": null,
+        "decision_ref": null
+      }
+    },
+    {
+      "id": "RES-P05-CARGO-CACHE-DECISION",
+      "requirement": "P0.5 CI runner/cache decision",
+      "state": "decision_required",
+      "owner_role": "CI owner",
+      "exact_closure_evidence": "Record either a reviewed cache implementation keyed by OS/toolchain/lockfile or an explicit non-gating-debt decision with owner, rationale, cost observation, and revisit date.",
+      "target_phase_gate": "R0.2",
+      "deferral_approval": {
+        "required": true,
+        "status": "not_requested",
+        "approved_by": null,
+        "approved_at": null,
+        "decision_ref": null
+      }
+    },
+    {
+      "id": "RES-P05-EDITION-DECISION",
+      "requirement": "P0.5 edition compatibility disposition",
+      "state": "decision_required",
+      "owner_role": "Rust architecture owner",
+      "exact_closure_evidence": "Record the decision to retain product edition 2021 or migrate it; if retained, cite PR #77 as proof that edition-2024 dependencies coexist without changing product edition.",
+      "target_phase_gate": "R0.2",
+      "deferral_approval": {
+        "required": false,
+        "status": "not_applicable",
+        "approved_by": null,
+        "approved_at": null,
+        "decision_ref": null
+      }
+    },
+    {
+      "id": "RES-P05-PROBE-LOCK-DISPOSITION",
+      "requirement": "P0.5 isolated probe lockfile disposition",
+      "state": "decision_required",
+      "owner_role": "Rust architecture owner",
+      "exact_closure_evidence": "Record whether probes remain maintained API-shape evidence or are superseded by the production pin; document intentional lockfile independence and its validation owner.",
+      "target_phase_gate": "R0.2",
+      "deferral_approval": {
+        "required": false,
+        "status": "not_applicable",
+        "approved_by": null,
+        "approved_at": null,
+        "decision_ref": null
+      }
+    },
+    {
+      "id": "RES-P06-STARTUP-READY",
+      "requirement": "P0.6 M-STARTUP-READY macOS and Linux baseline",
+      "state": "pending_live_execution",
+      "owner_role": "performance owner",
+      "exact_closure_evidence": "On identical committed fixtures and reviewed packaged current-JS builds, record at least 10 cold runs per platform with exact markers and nearest-rank p50/p95, min/max/mean.",
+      "target_phase_gate": "P0.6 / Phase 0",
+      "deferral_approval": {
+        "required": true,
+        "status": "not_requested",
+        "approved_by": null,
+        "approved_at": null,
+        "decision_ref": null
+      }
+    },
+    {
+      "id": "RES-P06-ROOM-SWITCH",
+      "requirement": "P0.6 M-ROOM-SWITCH-STABLE macOS and Linux baseline",
+      "state": "pending_live_execution",
+      "owner_role": "performance owner",
+      "exact_closure_evidence": "Record at least 20 measured room switches per platform after three discarded warmups using FX-200-ROOMS, with privacy-safe stable-render markers and p50/p95.",
+      "target_phase_gate": "P0.6 / Phase 0",
+      "deferral_approval": {
+        "required": true,
+        "status": "not_requested",
+        "approved_by": null,
+        "approved_at": null,
+        "decision_ref": null
+      }
+    },
+    {
+      "id": "RES-P06-INITIAL-TIMELINE",
+      "requirement": "P0.6 M-TIMELINE-OPEN-INITIAL macOS and Linux baseline",
+      "state": "pending_live_execution",
+      "owner_role": "performance owner",
+      "exact_closure_evidence": "Record at least 20 initial large-room opens per platform after three discarded warmups, using the same >=1000-event fixture and exact stable-render marker.",
+      "target_phase_gate": "P0.6 / Phase 0",
+      "deferral_approval": {
+        "required": true,
+        "status": "not_requested",
+        "approved_by": null,
+        "approved_at": null,
+        "decision_ref": null
+      }
+    },
+    {
+      "id": "RES-P06-ENCRYPTED-OPEN",
+      "requirement": "P0.6 M-TIMELINE-OPEN-ENCRYPTED macOS and Linux baseline",
+      "state": "blocked_by_fixture_then_execution",
+      "owner_role": "performance and E2EE test owners",
+      "exact_closure_evidence": "Create FX-1000-E2EE, then record at least 20 encrypted opens per platform after three discarded warmups; classify readable versus stable UTD outcome and publish p50/p95 without content.",
+      "target_phase_gate": "P0.6 / Phase 0",
+      "deferral_approval": {
+        "required": true,
+        "status": "not_requested",
+        "approved_by": null,
+        "approved_at": null,
+        "decision_ref": null
+      }
+    },
+    {
+      "id": "RES-P06-PAGINATION",
+      "requirement": "P0.6 M-PAGINATION-BACKWARD macOS and Linux baseline",
+      "state": "pending_live_execution",
+      "owner_role": "performance owner",
+      "exact_closure_evidence": "Record at least 20 backward pages per platform after three discarded warmups using deterministic marker/context positions; prove anchor preservation and publish p50/p95.",
+      "target_phase_gate": "P0.6 / Phase 0",
+      "deferral_approval": {
+        "required": true,
+        "status": "not_requested",
+        "approved_by": null,
+        "approved_at": null,
+        "decision_ref": null
+      }
+    },
+    {
+      "id": "RES-P06-RECONNECT",
+      "requirement": "P0.6 M-RECONNECT-SETTLE macOS and Linux baseline",
+      "state": "blocked_by_fixture_then_execution",
+      "owner_role": "performance and reliability owners",
+      "exact_closure_evidence": "Create FX-GAP-RECONNECT, then record at least 10 fixed 15-second offline/online cycles per platform; prove event/order convergence and publish p50/p95.",
+      "target_phase_gate": "P0.6 / Phase 0",
+      "deferral_approval": {
+        "required": true,
+        "status": "not_requested",
+        "approved_by": null,
+        "approved_at": null,
+        "decision_ref": null
+      }
+    },
+    {
+      "id": "RES-P06-MEDIA",
+      "requirement": "P0.6 M-MEDIA-OPEN macOS and Linux baseline",
+      "state": "blocked_by_fixture_then_execution",
+      "owner_role": "performance and media owners",
+      "exact_closure_evidence": "Create FX-MEDIA, then record at least 20 same-class opens per platform after three discarded warmups for unencrypted and encrypted variants; publish first-paint p50/p95.",
+      "target_phase_gate": "P0.6 / Phase 0",
+      "deferral_approval": {
+        "required": true,
+        "status": "not_requested",
+        "approved_by": null,
+        "approved_at": null,
+        "decision_ref": null
+      }
+    },
+    {
+      "id": "RES-P06-IDLE-CPU",
+      "requirement": "P0.6 M-IDLE-CPU macOS and Linux baseline",
+      "state": "blocked_by_fixture_then_execution",
+      "owner_role": "performance owner",
+      "exact_closure_evidence": "Using FX-200-ROOMS, record at least five >=60-second post-sync samples per platform, document hardware/power/session class, and establish the Phase 0 noise band.",
+      "target_phase_gate": "P0.6 / Phase 0",
+      "deferral_approval": {
+        "required": true,
+        "status": "not_requested",
+        "approved_by": null,
+        "approved_at": null,
+        "decision_ref": null
+      }
+    },
+    {
+      "id": "RES-P06-MEMORY",
+      "requirement": "P0.6 M-MEMORY-LARGE-ACCOUNT macOS and Linux baseline",
+      "state": "blocked_by_fixture_then_execution",
+      "owner_role": "performance owner",
+      "exact_closure_evidence": "Using FX-200-ROOMS and a two-minute settle, record at least five RSS samples per platform plus JS heap where exposed; publish fixture counts and aggregate statistics.",
+      "target_phase_gate": "P0.6 / Phase 0",
+      "deferral_approval": {
+        "required": true,
+        "status": "not_requested",
+        "approved_by": null,
+        "approved_at": null,
+        "decision_ref": null
+      }
+    },
+    {
+      "id": "RES-P06-DISK",
+      "requirement": "P0.6 M-DISK-GROWTH macOS and Linux baseline",
+      "state": "blocked_by_fixture_then_execution",
+      "owner_role": "performance owner",
+      "exact_closure_evidence": "Using FX-200-ROOMS, record at least five before/after deltas for the fixed ten-minute scenario per platform; commit aggregates and path classes only, never stores or absolute user paths.",
+      "target_phase_gate": "P0.6 / Phase 0",
+      "deferral_approval": {
+        "required": true,
+        "status": "not_requested",
+        "approved_by": null,
+        "approved_at": null,
+        "decision_ref": null
+      }
+    },
+    {
+      "id": "RES-P06-SOAK-SCOPE",
+      "requirement": "P0.6 baseline reliability evidence",
+      "state": "decision_required",
+      "owner_role": "reliability owner",
+      "exact_closure_evidence": "Approve and execute a bounded Phase 0 current-JS control soak duration (recommended two hours on macOS and Linux), or explicitly defer it while retaining the separate mandatory 24-hour Phase 13 replacement soak.",
+      "target_phase_gate": "R0.2 / P0.6",
+      "deferral_approval": {
+        "required": true,
+        "status": "not_requested",
+        "approved_by": null,
+        "approved_at": null,
+        "decision_ref": null
+      }
+    },
+    {
+      "id": "RES-SYN-PUBLIC-E2EE-LARGE-FIXTURES",
+      "requirement": "Section 17 disposable Synapse test matrix",
+      "state": "pending_implementation",
+      "owner_role": "fixture owner",
+      "exact_closure_evidence": "Implement and validate FX-64-PUBLIC, FX-1000-E2EE, FX-200-ROOMS, FX-MEDIA, and FX-GAP-RECONNECT with deterministic counts/markers, bounded execution, generated secrets, and mandatory cleanup.",
+      "target_phase_gate": "R0.2 before P0.6 live execution",
+      "deferral_approval": {
+        "required": true,
+        "status": "not_requested",
+        "approved_by": null,
+        "approved_at": null,
+        "decision_ref": null
+      }
+    },
+    {
+      "id": "RES-SYN-RUST-HARNESS",
+      "requirement": "Phase 2/P3.1 live Rust SDK acceptance",
+      "state": "future_gate",
+      "owner_role": "Matrix Rust harness owner",
+      "exact_closure_evidence": "At one reviewed SHA on macOS and Linux, the isolated non-product matrix-sdk 0.18.0 harness passes discovery, login-flow retrieval, encrypted store open/reopen, sync readiness, crash/restart, logout, and wipe against disposable Synapse.",
+      "target_phase_gate": "R0.7 then R0.8",
+      "deferral_approval": {
+        "required": true,
+        "status": "not_requested",
+        "approved_by": null,
+        "approved_at": null,
+        "decision_ref": null
+      }
+    },
+    {
+      "id": "RES-SYN-PACKAGED-MIXED-CLIENT",
+      "requirement": "packaged and mixed-client acceptance",
+      "state": "future_gate",
+      "owner_role": "cross-client owner",
+      "exact_closure_evidence": "Run packaged macOS, packaged Debian/Arch, and desktop/iOS mixed-client scenarios at the phase assigned by the topology; attach exact package hashes and privacy-safe convergence results.",
+      "target_phase_gate": "Phases 12-14 / final gate",
+      "deferral_approval": {
+        "required": true,
+        "status": "not_requested",
+        "approved_by": null,
+        "approved_at": null,
+        "decision_ref": null
+      }
+    }
+  ],
+  "decisions_required": [
+    {
+      "id": "DEC-P06-CROSS-PLATFORM",
+      "question": "Will the original live P0.6 baseline requirement remain mandatory on both macOS and Linux?",
+      "recommendation": "yes",
+      "status": "pending_user",
+      "approved_by": null,
+      "approved_at": null,
+      "decision_ref": null
+    },
+    {
+      "id": "DEC-P05-SIGNING-AUTH",
+      "question": "May the operator use configured Apple signing/notarization credentials for one exact reviewed SDK-linked universal build?",
+      "recommendation": "authorize after evidence handling is reviewed",
+      "status": "pending_user",
+      "approved_by": null,
+      "approved_at": null,
+      "decision_ref": null
+    },
+    {
+      "id": "DEC-P06-SOAK-DURATION",
+      "question": "What bounded Phase 0 current-JS reliability soak precedes the mandatory Phase 13 24-hour replacement soak?",
+      "recommendation": "two hours on macOS and Linux",
+      "status": "pending_user",
+      "approved_by": null,
+      "approved_at": null,
+      "decision_ref": null
+    },
+    {
+      "id": "DEC-P05-CACHE",
+      "question": "Implement Cargo caching now or accept it as owned non-gating operational debt?",
+      "recommendation": "owned non-gating debt unless CI duration becomes unstable",
+      "status": "pending_user",
+      "approved_by": null,
+      "approved_at": null,
+      "decision_ref": null
+    },
+    {
+      "id": "DEC-P05-EDITION",
+      "question": "Retain product edition 2021 while consuming edition-2024 dependencies?",
+      "recommendation": "retain 2021; PR #77 proves coexistence",
+      "status": "pending_architecture_review",
+      "approved_by": null,
+      "approved_at": null,
+      "decision_ref": null
+    },
+    {
+      "id": "DEC-P05-PROBES",
+      "question": "How are isolated probe lockfiles maintained after the production pin?",
+      "recommendation": "retain as API-shape evidence with intentionally independent locks; production lock is authoritative",
+      "status": "pending_architecture_review",
+      "approved_by": null,
+      "approved_at": null,
+      "decision_ref": null
+    }
+  ],
+  "acceptance": {
+    "current_state": "open",
+    "artifact_acceptance": [
+      "Every PR #77 claim includes explicit exclusions.",
+      "Every artifact ID and digest matches GitHub metadata or the locally inspected payload.",
+      "Every residual has a stable ID, owner role, exact closure evidence, target gate, and deferral approval fields.",
+      "No live, universal, Developer-ID, notarization, install, or performance result is invented.",
+      "Current-JS control evidence is never counted as Matrix Rust SDK acceptance."
+    ],
+    "phase_0_closure": "Forbidden from this artifact alone. Phase 0 stays open until residuals are closed or explicitly approved for deferral and R0.8 independently accepts every applicable row."
+  }
+}

@@ -1,0 +1,554 @@
+{
+  "schema_version": 1,
+  "artifact": {
+    "id": "R0.2-C-TEST-MATRIX-SYNAPSE-TOPOLOGY",
+    "title": "Matrix Rust SDK replacement test matrix and disposable Synapse topology",
+    "authoritative_format": "json",
+    "markdown_twin": "docs/matrix-rust-sdk/test-matrix-synapse-topology.md",
+    "status": "ready_for_independent_review",
+    "phase_0_gate": "open",
+    "program_constraint": "The shipping desktop remains matrix-js-sdk-only until the atomic cutover. Test harnesses must never create an implicit production dual backend."
+  },
+  "boundaries": {
+    "production_wiring": false,
+    "permitted": [
+      "static and unit validation",
+      "contract and property tests",
+      "the existing current-JS control runner",
+      "an isolated non-product Rust SDK harness",
+      "packaged single-backend acceptance runs"
+    ],
+    "forbidden": [
+      "a production backend selector",
+      "simultaneous matrix-js-sdk and Matrix Rust SDK sync owners for one session",
+      "pointing destructive fixture generation at a production homeserver",
+      "committing credentials, tokens, identifiers, event bodies, raw logs, stores, or signing material",
+      "treating current-JS control evidence as Rust SDK evidence"
+    ]
+  },
+  "disposable_synapse": {
+    "purpose": "Local and CI-only deterministic client integration; never production topology",
+    "synapse_image": "matrixdotorg/synapse:v1.157.0",
+    "postgres_image": "postgres:16.9-bookworm",
+    "origin": "http://127.0.0.1:${SYNARA_PORT:-8008}",
+    "host_port_policy": {
+      "default": 8008,
+      "allowed_range": "1024-65535",
+      "host_binding": "127.0.0.1 only",
+      "container_port": 8008,
+      "postgres_host_ports": []
+    },
+    "network": {
+      "synapse_listener_inside_container": "0.0.0.0:8008",
+      "host_exposure": "one loopback-only mapping",
+      "database_exposure": "Compose network only",
+      "accepted_client_urls": "credential-free HTTP loopback origin with no path, query, or fragment"
+    },
+    "secret_handling": {
+      "runtime_directory": "integration/synapse/runtime",
+      "git_policy": "runtime/* ignored except runtime/.gitkeep",
+      "creation_umask": "077",
+      "generated_values": [
+        "64-hex PostgreSQL password",
+        "registration shared secret",
+        "macaroon secret",
+        "form secret",
+        "ed25519 signing key"
+      ],
+      "account_credentials": "random per run and memory-only",
+      "access_tokens": "memory-only",
+      "raw_logs_committed": false
+    },
+    "lifecycle": {
+      "setup": "SYNARA_PORT=18008 scripts/synapse-integration.sh up",
+      "status": "scripts/synapse-integration.sh status",
+      "logs": "scripts/synapse-integration.sh logs",
+      "retaining_stop": "scripts/synapse-integration.sh down",
+      "mandatory_cleanup": "scripts/synapse-integration.sh reset",
+      "cleanup_effect": "remove Compose volumes, orphans, database, media, generated config, keys, credentials, and runtime children except .gitkeep",
+      "failure_rule": "Every live lane must run cleanup with always/finally semantics and report cleanup failure separately."
+    }
+  },
+  "actors": [
+    {
+      "id": "BOOTSTRAP",
+      "role": "fixture bootstrap",
+      "account": "none",
+      "devices": 0,
+      "access": "loopback Synapse shared-secret registration endpoint only",
+      "production_client": false
+    },
+    {
+      "id": "READER-A",
+      "role": "primary reader device",
+      "account": "reader",
+      "devices": 1,
+      "access": "normal Matrix client session"
+    },
+    {
+      "id": "READER-B",
+      "role": "second reader device",
+      "account": "same account as READER-A",
+      "devices": 1,
+      "access": "password login with an explicit disposable device display name"
+    },
+    {
+      "id": "SENDER",
+      "role": "independent event sender",
+      "account": "sender",
+      "devices": 1,
+      "access": "normal Matrix client session"
+    },
+    {
+      "id": "IOS",
+      "role": "mixed-client iOS participant",
+      "account": "reader or independent peer as scenario specifies",
+      "devices": 1,
+      "access": "Matrix Rust SDK through matrix-rust-components-swift",
+      "availability": "future mixed-client lane"
+    }
+  ],
+  "fixtures": [
+    {
+      "id": "FX-64-CONTROL",
+      "status": "proven_current_js_control",
+      "room_visibility": "private",
+      "encryption": false,
+      "joined_rooms": 1,
+      "ordered_message_events": 64,
+      "receipt_modes": ["m.read", "m.read.private"],
+      "determinism": {
+        "first_event_index": 0,
+        "marker_event_index": 32,
+        "latest_event_index": 63,
+        "limited_initial_sync_must_exclude_first": true,
+        "context_must_include_marker": true,
+        "backward_pagination_must_prepend": true
+      },
+      "note": "Public/private describes receipt privacy in the existing runner; it does not make the room public or encrypted."
+    },
+    {
+      "id": "FX-64-PUBLIC",
+      "status": "aspirational",
+      "room_visibility": "public",
+      "encryption": false,
+      "joined_rooms": 1,
+      "ordered_message_events": 64,
+      "required_for": ["room visibility", "join", "ordering"]
+    },
+    {
+      "id": "FX-1000-E2EE",
+      "status": "aspirational",
+      "room_visibility": "private",
+      "encryption": true,
+      "joined_rooms": 1,
+      "ordered_message_events_minimum": 1000,
+      "required_for": [
+        "encrypted initial open",
+        "decryption stability",
+        "backward pagination",
+        "crash and reopen"
+      ]
+    },
+    {
+      "id": "FX-200-ROOMS",
+      "status": "aspirational",
+      "joined_rooms_minimum": 200,
+      "encrypted_rooms_minimum": 1,
+      "large_room_events_minimum": 1000,
+      "required_for": [
+        "startup",
+        "room switch",
+        "memory",
+        "idle CPU",
+        "disk growth"
+      ]
+    },
+    {
+      "id": "FX-MEDIA",
+      "status": "aspirational",
+      "room_visibility": "private",
+      "encryption_variants": [false, true],
+      "assets": [
+        { "class": "small-image", "maximum_bytes": 262144 },
+        { "class": "medium-image", "maximum_bytes": 5242880 }
+      ],
+      "required_for": ["upload", "download", "cache", "first paint"]
+    },
+    {
+      "id": "FX-GAP-RECONNECT",
+      "status": "aspirational",
+      "room_visibility": "private",
+      "encryption_variants": [false, true],
+      "determinism": {
+        "offline_duration_seconds": 15,
+        "events_sent_while_offline": 20,
+        "marker_before_gap_index": 31,
+        "marker_after_gap_index": 52
+      },
+      "required_for": [
+        "limited gaps",
+        "reconnect",
+        "stale generation",
+        "ordering"
+      ]
+    }
+  ],
+  "lanes": [
+    {
+      "id": "L-STATIC",
+      "kind": "static",
+      "status": "proven",
+      "owner": "repository CI",
+      "platforms": ["all developer hosts", "ubuntu-22.04 CI"],
+      "scope": [
+        "image pins",
+        "loopback mapping",
+        "generated secrets",
+        "ignored runtime state",
+        "reset semantics"
+      ],
+      "current_evidence": ["npm run check:synapse-harness"]
+    },
+    {
+      "id": "L-UNIT",
+      "kind": "unit",
+      "status": "proven",
+      "owner": "repository CI",
+      "platforms": ["Node test host", "Rust test host"],
+      "scope": [
+        "URL rejection",
+        "registration HMAC",
+        "bounded polling",
+        "safe failures",
+        "Matrix module units"
+      ],
+      "current_evidence": [
+        "scripts/__tests__/synapse-two-client-integration.test.mjs",
+        "cargo test --locked"
+      ]
+    },
+    {
+      "id": "L-CONTRACT",
+      "kind": "contract",
+      "status": "partially_proven",
+      "owner": "repository CI",
+      "platforms": ["ubuntu-22.04 CI"],
+      "scope": ["harness policy", "IPC/DTO fixtures", "workflow gates"],
+      "exclusions": ["live Rust SDK server behavior", "packaged runtime"]
+    },
+    {
+      "id": "L-PROPERTY",
+      "kind": "property",
+      "status": "aspirational",
+      "owner": "Matrix runtime test owner",
+      "platforms": ["Rust and TypeScript test hosts"],
+      "scope": [
+        "bounded generated protocol values",
+        "ordering",
+        "counter boundaries",
+        "redaction invariants"
+      ],
+      "target": "R0.3-R0.6"
+    },
+    {
+      "id": "L-INTEGRATION",
+      "kind": "integration",
+      "status": "partially_proven",
+      "owner": "repository CI",
+      "platforms": ["ubuntu-22.04 CI with Docker"],
+      "scope": [
+        "real Synapse/PostgreSQL",
+        "two devices",
+        "limited sync",
+        "context",
+        "pagination",
+        "receipts"
+      ],
+      "current_backend": "matrix-js-sdk 42.0.0"
+    },
+    {
+      "id": "L-JS-CONTROL",
+      "kind": "current-JS-control",
+      "status": "proven_for_fx_64_control_only",
+      "owner": "desktop current-behavior owner",
+      "platforms": ["ubuntu-22.04 CI"],
+      "client": "synara/scripts/run-synapse-two-client-integration.mjs",
+      "backend": "matrix-js-sdk 42.0.0",
+      "fixture": "FX-64-CONTROL",
+      "scope": [
+        "two-device limited sync",
+        "context",
+        "backward pagination",
+        "latest timeline",
+        "fully-read marker",
+        "public and private receipts"
+      ],
+      "cannot_satisfy": [
+        "Rust adapter acceptance",
+        "E2EE",
+        "packaged app",
+        "P0.6 live UX"
+      ]
+    },
+    {
+      "id": "L-RUST-HARNESS",
+      "kind": "isolated-Rust-harness",
+      "status": "aspirational",
+      "owner": "Matrix Rust harness owner",
+      "platforms": ["macOS arm64", "Linux x86_64"],
+      "backend": "matrix-sdk 0.18.0",
+      "production_wiring": false,
+      "scope": [
+        "discovery",
+        "login flows",
+        "encrypted store",
+        "sync readiness",
+        "reopen",
+        "logout",
+        "wipe"
+      ],
+      "target": "R0.7"
+    },
+    {
+      "id": "L-PACKAGED-MACOS",
+      "kind": "packaged-macOS",
+      "status": "build_only_partial",
+      "owner": "macOS platform owner",
+      "platforms": ["macOS arm64", "macOS universal arm64+x86_64"],
+      "scope": [
+        "package construction",
+        "architecture verification",
+        "signing and notarization",
+        "install and launch",
+        "Keychain integration",
+        "live Matrix scenarios"
+      ],
+      "current_proof": "PR #77 thin arm64 ad-hoc app build",
+      "pending": [
+        "universal",
+        "Developer ID",
+        "notarization",
+        "install",
+        "launch",
+        "Keychain",
+        "live scenarios"
+      ]
+    },
+    {
+      "id": "L-PACKAGED-LINUX",
+      "kind": "packaged-Debian+Arch",
+      "status": "build_only_partial",
+      "owner": "Linux platform owner",
+      "platforms": ["Debian-family KDE Wayland", "Arch-family KDE Wayland"],
+      "scope": [
+        "package construction",
+        "install and launch",
+        "Secret Service integration",
+        "portal integration",
+        "uninstall",
+        "live Matrix scenarios"
+      ],
+      "current_proof": "PR #77 Debian amd64 and Arch x86_64 package construction",
+      "pending": [
+        "install",
+        "launch",
+        "Secret Service",
+        "portal",
+        "uninstall",
+        "live scenarios"
+      ]
+    },
+    {
+      "id": "L-MIXED-IOS",
+      "kind": "mixed-desktop-iOS",
+      "status": "aspirational",
+      "owner": "cross-client owner",
+      "platforms": ["packaged desktop", "iOS simulator or device"],
+      "scope": [
+        "shared account semantics",
+        "receipts",
+        "timeline convergence",
+        "E2EE",
+        "device naming"
+      ],
+      "target": "Phase 12 and final gate"
+    },
+    {
+      "id": "L-MANUAL",
+      "kind": "manual",
+      "status": "pending_execution",
+      "owner": "platform operator",
+      "platforms": [
+        "macOS arm64",
+        "Debian-family KDE Wayland",
+        "Arch-family KDE Wayland"
+      ],
+      "scope": [
+        "install",
+        "launch",
+        "login",
+        "session persistence",
+        "logout",
+        "media",
+        "OS integration",
+        "P0.6 measurements"
+      ]
+    },
+    {
+      "id": "L-FAULT",
+      "kind": "fault-restart-reconnect",
+      "status": "aspirational",
+      "owner": "Matrix lifecycle owner",
+      "platforms": ["macOS arm64", "Linux x86_64"],
+      "scope": [
+        "offline/online",
+        "process crash",
+        "store reopen",
+        "suspend/resume",
+        "partial failure",
+        "stale generation"
+      ],
+      "target": "R0.7 and Phase 13"
+    },
+    {
+      "id": "L-SOAK",
+      "kind": "soak",
+      "status": "decision_required",
+      "owner": "reliability owner",
+      "platforms": ["macOS", "Linux"],
+      "scope": [
+        "single sync owner",
+        "bounded tasks",
+        "event convergence",
+        "CPU",
+        "memory",
+        "disk"
+      ],
+      "phase_0_duration": "pending explicit decision; recommendation 2 hours",
+      "phase_13_duration": "24 hours"
+    }
+  ],
+  "performance_matrix": {
+    "platforms": [
+      "macOS arm64 packaged release-like",
+      "Linux packaged release-like"
+    ],
+    "same_fixture_required": true,
+    "metrics": [
+      {
+        "id": "M-STARTUP-READY",
+        "minimum_samples": 10,
+        "warmups_discarded": 0
+      },
+      {
+        "id": "M-ROOM-SWITCH-STABLE",
+        "minimum_samples": 20,
+        "warmups_discarded": 3
+      },
+      {
+        "id": "M-TIMELINE-OPEN-INITIAL",
+        "minimum_samples": 20,
+        "warmups_discarded": 3
+      },
+      {
+        "id": "M-TIMELINE-OPEN-ENCRYPTED",
+        "minimum_samples": 20,
+        "warmups_discarded": 3
+      },
+      {
+        "id": "M-PAGINATION-BACKWARD",
+        "minimum_samples": 20,
+        "warmups_discarded": 3
+      },
+      {
+        "id": "M-RECONNECT-SETTLE",
+        "minimum_samples": 10,
+        "offline_seconds": 15
+      },
+      { "id": "M-MEDIA-OPEN", "minimum_samples": 20, "warmups_discarded": 3 },
+      { "id": "M-IDLE-CPU", "minimum_samples": 5, "settle_seconds": 60 },
+      {
+        "id": "M-MEMORY-LARGE-ACCOUNT",
+        "minimum_samples": 5,
+        "settle_seconds": 120
+      },
+      { "id": "M-DISK-GROWTH", "minimum_samples": 5, "scenario_minutes": 10 }
+    ],
+    "statistics": [
+      "nearest-rank p50",
+      "nearest-rank p95",
+      "min",
+      "max",
+      "mean"
+    ],
+    "current_status": "No end-to-end metric has been measured on either platform; only the synthetic timeline-map proxy is proven."
+  },
+  "evidence_contract": {
+    "required_fields": [
+      "stable evidence ID",
+      "requirement IDs",
+      "self-contained immutable subject object with exact SHA coordinates",
+      "platform OS/version/architecture/hardware class",
+      "client and backend",
+      "fixture ID and counts",
+      "exact command",
+      "result and captured_at",
+      "proof scope and explicit exclusions",
+      "owner and reviewer",
+      "artifact/run URL and digest when available",
+      "privacy review"
+    ],
+    "failure_artifacts": [
+      "sanitized phase and error category",
+      "reproduction steps",
+      "exit status",
+      "bounded relevant log excerpt",
+      "cleanup result"
+    ],
+    "never_commit": [
+      "raw homeserver logs",
+      "database or store dumps",
+      "tokens or passwords",
+      "user, room, event, device, or media identifiers",
+      "event plaintext or ciphertext",
+      "absolute user paths",
+      "signing certificates or Apple credentials"
+    ]
+  },
+  "current_evidence_summary": {
+    "proven": [
+      "static harness boundaries",
+      "current-JS FX-64-CONTROL on disposable Synapse",
+      "SDK-linked Ubuntu compile/lint/unit test at PR #77",
+      "Debian and Arch package construction at PR #77",
+      "thin arm64 ad-hoc macOS app construction at PR #77",
+      "iOS simulator build/tests at PR #77",
+      "synthetic timeline-map proxy baseline on one macOS arm64 host"
+    ],
+    "not_proven": [
+      "Rust SDK live harness",
+      "public-room fixture",
+      "E2EE fixture",
+      "large-account and media fixtures",
+      "universal or Developer-ID/notarized macOS package",
+      "package install/launch/uninstall",
+      "macOS or Linux end-to-end P0.6 metrics",
+      "fault/restart/reconnect matrix",
+      "mixed desktop/iOS scenarios",
+      "Phase 0 or 24-hour soak"
+    ]
+  },
+  "acceptance": {
+    "artifact_acceptance": [
+      "JSON parses and Markdown is a faithful semantic twin",
+      "every lane has a stable ID, owner, platform, status, and scope",
+      "current evidence is never promoted beyond its explicit exclusions",
+      "all live lanes use disposable infrastructure and mandatory cleanup",
+      "the current-JS control and isolated Rust harness remain distinct",
+      "no production selector or dual sync ownership is introduced"
+    ],
+    "phase_0_status_after_artifact": "open",
+    "phase_0_closure_dependency": "The evidence manifest residuals must be executed or explicitly approved for deferral, then independently accepted in R0.8."
+  }
+}
