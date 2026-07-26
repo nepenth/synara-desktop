@@ -11,9 +11,9 @@ Audited snapshot: `edfefee499064b736985b6528896b693e5120f22`
 
 ## Current execution
 
-- Active task: **R0.1**
-- Next task: **R0.2**
-- Blocked tasks: **P3.2** (by `R0.1`, `R0.2`, `R0.3`, `R0.4`, `R0.5`, `R0.6`, `R0.7`, `R0.8`)
+- Active task: **R0.2**
+- Next task: **R0.3**
+- Blocked tasks: **P3.2** (by `R0.2`, `R0.3`, `R0.4`, `R0.5`, `R0.6`, `R0.7`, `R0.8`)
 
 ## Inventory and runtime
 
@@ -49,8 +49,8 @@ Audited snapshot: `edfefee499064b736985b6528896b693e5120f22`
 
 | ID | Task | Artifact state | Integration state | Strict acceptance |
 |---|---|---|---|---|
-| R0.1 | Quality and metadata recovery | `in_progress` | `pr_open` | `open` |
-| R0.2 | Governance and Phase 0 evidence | `not_started` | `not_submitted` | `not_reviewed` |
+| R0.1 | Quality and metadata recovery | `landed` | `merged` | `accepted` |
+| R0.2 | Governance and Phase 0 evidence | `in_progress` | `not_submitted` | `open` |
 | R0.3 | IPC wire-contract correctness | `not_started` | `not_submitted` | `not_reviewed` |
 | R0.4 | Store confinement and key management | `not_started` | `not_submitted` | `not_reviewed` |
 | R0.5 | Safe destructive lifecycle | `not_started` | `not_submitted` | `not_reviewed` |
