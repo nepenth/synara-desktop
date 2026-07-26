@@ -131,6 +131,8 @@ test("rejects phase closure until tasks and audited remediations are accepted", 
   for (const id of ["R0.2", "R0.8"]) {
     markAccepted(valid.remediation_tasks.find((task) => task.id === id));
   }
+  valid.current_execution.active_task = null;
+  valid.current_execution.next_task = "R0.3";
   syncP32Block(valid);
   assert.doesNotThrow(() => validateProgramStatus(valid, plan));
 });
