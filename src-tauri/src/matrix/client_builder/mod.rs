@@ -46,7 +46,10 @@ pub fn matrix_client_builder_markers() -> &'static str {
     debug_assert!(!_ua.is_empty());
     debug_assert!(_timeout > 0);
     debug_assert_eq!(MATRIX_SDK_PIN_VERSION, "0.18.0");
-    debug_assert_eq!(MATRIX_CLIENT_BUILDER_MARKER, "matrix-sdk-client-builder-p2.3");
+    debug_assert_eq!(
+        MATRIX_CLIENT_BUILDER_MARKER,
+        "matrix-sdk-client-builder-p2.3"
+    );
     MATRIX_CLIENT_BUILDER_MARKER
 }
 

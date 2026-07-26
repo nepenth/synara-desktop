@@ -21,11 +21,7 @@ import type {
   UnsubscribePayload,
   UnsubscribedPayload,
 } from './stream';
-import {
-  isCancelReason,
-  isResyncReason,
-  isStreamTopic,
-} from './stream';
+import { isCancelReason, isResyncReason, isStreamTopic } from './stream';
 import { MATRIX_IPC_PROTOCOL_VERSION } from './version';
 
 export const MATRIX_IPC_KINDS = [
@@ -44,7 +40,7 @@ export const MATRIX_IPC_KINDS = [
   'pong',
 ] as const;
 
-export type MatrixIpcKind = (typeof MATRIX_IPC_KINDS)[number];
+export type MatrixIpcKind = typeof MATRIX_IPC_KINDS[number];
 
 const KIND_SET = new Set<string>(MATRIX_IPC_KINDS);
 
@@ -99,8 +95,7 @@ function parseMessage(kind: MatrixIpcKind, payload: unknown): MatrixIpcMessage |
         kind,
         payload: {
           clientProtocolVersion: payload.clientProtocolVersion,
-          clientName:
-            typeof payload.clientName === 'string' ? payload.clientName : undefined,
+          clientName: typeof payload.clientName === 'string' ? payload.clientName : undefined,
         },
       };
     }
@@ -147,9 +142,7 @@ function parseMessage(kind: MatrixIpcKind, payload: unknown): MatrixIpcMessage |
         payload: {
           streamId,
           resourcesReleased:
-            typeof payload.resourcesReleased === 'boolean'
-              ? payload.resourcesReleased
-              : undefined,
+            typeof payload.resourcesReleased === 'boolean' ? payload.resourcesReleased : undefined,
         },
       };
     }
@@ -178,9 +171,7 @@ function parseMessage(kind: MatrixIpcKind, payload: unknown): MatrixIpcMessage |
           streamId,
           topic: payload.topic,
           idempotencyKey:
-            typeof payload.idempotencyKey === 'string'
-              ? payload.idempotencyKey
-              : undefined,
+            typeof payload.idempotencyKey === 'string' ? payload.idempotencyKey : undefined,
           body: payload.body,
         },
       };
@@ -190,17 +181,14 @@ function parseMessage(kind: MatrixIpcKind, payload: unknown): MatrixIpcMessage |
       return {
         kind,
         payload: {
-          streamId:
-            typeof payload.streamId === 'string' ? payload.streamId : undefined,
+          streamId: typeof payload.streamId === 'string' ? payload.streamId : undefined,
           reason: payload.reason,
           lastAppliedSequence:
             typeof payload.lastAppliedSequence === 'number'
               ? payload.lastAppliedSequence
               : undefined,
           observedSequence:
-            typeof payload.observedSequence === 'number'
-              ? payload.observedSequence
-              : undefined,
+            typeof payload.observedSequence === 'number' ? payload.observedSequence : undefined,
         },
       };
     }

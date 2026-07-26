@@ -13,8 +13,13 @@
     "matrix_js_sdk_version": "42.0.0",
     "notes": "Baseline is current JS product, not Matrix Rust SDK"
   },
-  "status": "accepted_pending_integration_merge",
-  "merged": false,
+  "artifact_state": "landed",
+  "integration_state": "merged",
+  "strict_acceptance_state": "open",
+  "phase_gate_state": "open",
+  "current_status_ref": "docs/matrix-rust-sdk/program-status.json",
+  "historical_status_at_generation": "accepted_pending_integration_merge",
+  "historical_merged_at_generation": false,
   "environment": {
     "os": "macos",
     "os_version": "26.5.2",

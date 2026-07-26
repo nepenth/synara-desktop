@@ -318,9 +318,8 @@ pub fn desktop_save_file_begin(
         bytes_received: 0,
         created_at: Instant::now(),
     };
-    let session_id = register_save_session(session).map_err(|err| {
+    let session_id = register_save_session(session).inspect_err(|_| {
         let _ = fs::remove_file(temp_path);
-        err
     })?;
 
     Ok(DesktopSaveFileBeginResult { session_id })
@@ -929,7 +928,7 @@ mod command_tests {
         let payload = vec![9_u8; total_size as usize];
         fs::write(&file_path, &payload).expect("dropped file fixture should be written");
 
-        remember_dropped_paths(&[file_path.clone()]);
+        remember_dropped_paths(std::slice::from_ref(&file_path));
         let descriptors =
             desktop_read_dropped_files(vec![file_path.to_string_lossy().into_owned()])
                 .expect("dropped file metadata should be returned");
@@ -956,10 +955,7 @@ mod command_tests {
         assert_eq!(second_chunk.len(), 512);
         assert!(second_chunk.iter().all(|byte| *byte == 9));
 
-        assert_eq!(
-            desktop_read_dropped_file_end(transfer_id).expect("transfer should end"),
-            true
-        );
+        assert!(desktop_read_dropped_file_end(transfer_id).expect("transfer should end"));
 
         let _ = fs::remove_dir_all(temp_dir);
     }
@@ -999,7 +995,7 @@ mod command_tests {
         let (temp_dir, file_path) = write_temp_drop_fixture("leave-keep.txt", b"fresh");
 
         reset_drag_drop_session();
-        remember_dropped_paths(&[file_path.clone()]);
+        remember_dropped_paths(std::slice::from_ref(&file_path));
         clear_dropped_file_allowlist_on_drag_leave();
         assert_eq!(dropped_file_allowlist_len_for_tests(), 1);
 
@@ -1043,7 +1039,7 @@ mod command_tests {
         clear_dropped_file_registry_for_tests();
         let (temp_dir, file_path) = write_temp_drop_fixture("ttl-expire.txt", b"expires");
 
-        remember_dropped_paths(&[file_path.clone()]);
+        remember_dropped_paths(std::slice::from_ref(&file_path));
         sleep(Duration::from_millis(10));
 
         let result = desktop_read_dropped_files(vec![file_path.to_string_lossy().into_owned()]);
@@ -1064,7 +1060,7 @@ mod command_tests {
         clear_dropped_file_registry_for_tests();
         let (temp_dir, file_path) = write_temp_drop_fixture("consume.txt", b"payload");
 
-        remember_dropped_paths(&[file_path.clone()]);
+        remember_dropped_paths(std::slice::from_ref(&file_path));
         let files = desktop_read_dropped_files(vec![file_path.to_string_lossy().into_owned()])
             .expect("authorized dropped file should be readable");
         assert_eq!(files.len(), 1);

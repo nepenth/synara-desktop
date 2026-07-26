@@ -4,10 +4,12 @@
 |-------|--------|
 | **Task ID** | P0.5 |
 | **Date** | 2026-07-24 |
-| **Base / integration tip** | `feature/matrix-rust-sdk-full-replacement` @ `4d318da9fdf0689b9cb085a6387fbf338fd67fd2` |
-| **Work branch** | `matrix-rust/p0.5-toolchain-compatibility` (docs + probes only) |
+| **Base integration tip at generation** | `feature/matrix-rust-sdk-full-replacement` @ `4d318da9fdf0689b9cb085a6387fbf338fd67fd2` |
+| **Work branch at generation** | `matrix-rust/p0.5-toolchain-compatibility` (docs + probes only) |
 | **Desktop SDK pin (program)** | matrix-sdk / matrix-sdk-ui `0.18.0` (git commit `1c44fb66214667c6d00acaf72ab592493653708b`) |
 | **Machine twin** | [`toolchain-compatibility-report.json`](toolchain-compatibility-report.json) |
+| **Artifact / integration state** | `landed` / `merged` |
+| **Strict acceptance / Phase 0 gate** | `open` / `open` — see [`program-status.md`](program-status.md) |
 
 ## Executive verdict
 
@@ -21,7 +23,9 @@ notarization) is analyzed with explicit evidence levels; full product release
 and notarization were **not** re-run with an SDK-linked binary (production does
 not yet depend on matrix-sdk — by design until Phase 1).
 
-**Gates unblocked for:** P1.1 (permanent toolchain pin / MSRV bump ownership).
+**Historical task result:** P1.1 implementation was unblocked. This did not
+close the Phase 0 strict gate; Linux and full product packaging evidence remain
+open under the 2026-07-25 review.
 
 ---
 

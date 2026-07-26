@@ -12,17 +12,11 @@ use crate::matrix::store::StoreKeyVaultError;
 #[derive(Debug)]
 pub enum LifecycleError {
     /// Identity or path resolution failed before any destructive I/O.
-    InvalidTarget {
-        diagnostic_id: &'static str,
-    },
+    InvalidTarget { diagnostic_id: &'static str },
     /// Proposed wipe path is not the exact derived account root.
-    TargetMismatch {
-        diagnostic_id: &'static str,
-    },
+    TargetMismatch { diagnostic_id: &'static str },
     /// Path escapes the configured Matrix store root (traversal defense).
-    PathEscapesRoot {
-        diagnostic_id: &'static str,
-    },
+    PathEscapesRoot { diagnostic_id: &'static str },
     /// Wipe refused for a policy reason (root wipe, symlink, sibling risk).
     WipeRefused {
         diagnostic_id: &'static str,

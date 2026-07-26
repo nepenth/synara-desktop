@@ -1,7 +1,7 @@
 # Matrix Rust SDK program — continuation card
 
 **Date:** 2026-07-25
-**Audience:** Next owner / orchestrator resuming the full-replacement program.
+**Audience:** Current or next orchestrator of the full-replacement program.
 
 For full history, rules, and FR preservation notes, use
 [`implementation-handoff.md`](implementation-handoff.md). This card is the short
@@ -11,6 +11,12 @@ The independent audit and finding-level remediation requirements are in
 [`review-2026-07-25.md`](review-2026-07-25.md). That review supersedes the former
 “Phase 0–2 complete / next P3.2” handoff.
 
+<!-- matrix-rust-program-status-link -->
+Current machine-readable and generated status:
+[`program-status.json`](program-status.json) and
+[`program-status.md`](program-status.md). The status ledger, not dated task
+evidence, is authoritative for current delivery and acceptance state.
+
 ## Repo truth
 
 | Item | Value |
@@ -19,22 +25,13 @@ The independent audit and finding-level remediation requirements are in
 | Audited integration tip | `edfefee499064b736985b6528896b693e5120f22` — always re-check with `git rev-parse origin/feature/matrix-rust-sdk-full-replacement` |
 | Open PRs to integration at audit start | **None** |
 | Open PR to `main` | [#39](https://github.com/nepenth/synara-desktop/pull/39) — **do not merge without user approval** |
-| Uncommitted work expected | **None** on integration tip |
-| Auto progress loop | **Paused** (not running) |
+| Current execution | See [`program-status.md`](program-status.md) |
 
-## Done vs next
+## Current state and next work
 
-| Band | Status |
-|------|--------|
-| Phase 0 evidence | P0.1–P0.7 artifacts landed; **gate open** |
-| Phase 1 contracts/guardrails | P1.1–P1.6 foundations landed; **gate open** |
-| Phase 2 lifecycle/store harness | P2.1–P2.6 harness landed; **gate open** |
-| Phase 3 auth | P3.1 domain/mock foundation landed; **acceptance open** |
-| Phases 4–14 | Not started |
-| Product cutover | **Not started** — still `matrix-js-sdk` only |
-
-**Inventory:** 20 / 112 original task artifacts landed. **Validated phase
-progress:** 0 / 15 strict phase gates closed. Complete R0.1–R0.8 before P3.2.
+Use [`program-status.md`](program-status.md). It is generated from the canonical
+JSON ledger and is the only current inventory, gate, runtime, active-task, and
+next-task summary.
 
 ## Validate after clone
 
@@ -60,12 +57,13 @@ The two commands above pass at the audited tip (189 Matrix-filtered Rust tests;
 - Parity: [`feature-parity-traceability.md`](feature-parity-traceability.md)
 - Migration UX (P0.7): [`migration-ux-decision.md`](migration-ux-decision.md)
 - Independent review: [`review-2026-07-25.md`](review-2026-07-25.md)
+- Current status: [`program-status.md`](program-status.md)
 
 ## Non-negotiables
 
-- No dual-backend / selector  
-- No merge to `main` without explicit user approval  
-- No re-open of FR-7.8–7.11 quality audit; FR-7.9-011 stays partial sequential  
-- No secrets in diagnostics/IPC  
+- No dual-backend / selector
+- No merge to `main` without explicit user approval
+- No re-open of FR-7.8–7.11 quality audit; FR-7.9-011 stays partial sequential
+- No secrets in diagnostics/IPC
 - Guardrails stay green
 - No P3.2 work until R0.1–R0.8 and the Phase 0–2/P3.1 gates are accepted

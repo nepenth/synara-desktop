@@ -13,7 +13,9 @@
 use serde_json::{json, Map, Value};
 
 use super::health::{MatrixHealthSnapshot, StoreHealthStatus, SyncPhase};
-use super::redact::{is_forbidden_field_key, looks_like_matrix_id, looks_like_secret, looks_like_url};
+use super::redact::{
+    is_forbidden_field_key, looks_like_matrix_id, looks_like_secret, looks_like_url,
+};
 
 /// Desktop diagnostic category used for Matrix lifecycle health.
 pub const DESKTOP_CATEGORY_SESSION: &str = "session";
@@ -58,7 +60,11 @@ fn lifecycle_record(snap: &MatrixHealthSnapshot) -> DesktopCompatibleDiagnostic 
     let mut fields = Map::new();
     insert_number(&mut fields, "generation", snap.lifecycle.session_generation);
     insert_bool(&mut fields, "hasSession", snap.lifecycle.has_client);
-    insert_bool(&mut fields, "success", snap.lifecycle.last_failure_category.is_none());
+    insert_bool(
+        &mut fields,
+        "success",
+        snap.lifecycle.last_failure_category.is_none(),
+    );
     insert_label(&mut fields, "phase", &snap.lifecycle.state);
     insert_label(&mut fields, "status", &snap.lifecycle.state);
     insert_label(&mut fields, "backend", "matrix-rust-sdk");
@@ -103,7 +109,11 @@ fn sync_record(snap: &MatrixHealthSnapshot) -> DesktopCompatibleDiagnostic {
 fn store_record(snap: &MatrixHealthSnapshot) -> DesktopCompatibleDiagnostic {
     let mut fields = Map::new();
     insert_label(&mut fields, "status", snap.store.status.as_str());
-    insert_bool(&mut fields, "available", snap.store.status == StoreHealthStatus::Ready);
+    insert_bool(
+        &mut fields,
+        "available",
+        snap.store.status == StoreHealthStatus::Ready,
+    );
     insert_bool(&mut fields, "success", snap.store.open_failures == 0);
     insert_bool(&mut fields, "nativeStoreConfigured", snap.store.state_ready);
     insert_bool(
@@ -111,7 +121,11 @@ fn store_record(snap: &MatrixHealthSnapshot) -> DesktopCompatibleDiagnostic {
         "nativeStoreAvailable",
         snap.store.state_ready && snap.store.crypto_ready,
     );
-    insert_bool(&mut fields, "nativeStoreError", snap.store.open_failures > 0);
+    insert_bool(
+        &mut fields,
+        "nativeStoreError",
+        snap.store.open_failures > 0,
+    );
     insert_number(&mut fields, "retryCount", snap.store.open_failures);
     insert_label(&mut fields, "backend", "matrix-rust-sdk");
     insert_label(&mut fields, "persistence", "sqlite");
@@ -191,13 +205,11 @@ fn insert_label(fields: &mut Map<String, Value>, key: &str, value: &str) {
 /// remains. Used by redaction fixture tests.
 pub fn json_contains_forbidden_content(value: &Value) -> bool {
     match value {
-        Value::String(s) => {
-            looks_like_secret(s) || looks_like_matrix_id(s) || looks_like_url(s)
-        }
+        Value::String(s) => looks_like_secret(s) || looks_like_matrix_id(s) || looks_like_url(s),
         Value::Array(items) => items.iter().any(json_contains_forbidden_content),
-        Value::Object(map) => map.iter().any(|(k, v)| {
-            is_forbidden_field_key(k) || json_contains_forbidden_content(v)
-        }),
+        Value::Object(map) => map
+            .iter()
+            .any(|(k, v)| is_forbidden_field_key(k) || json_contains_forbidden_content(v)),
         _ => false,
     }
 }

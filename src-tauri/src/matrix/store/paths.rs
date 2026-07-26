@@ -77,7 +77,10 @@ pub struct StoreLayout {
 
 impl StorePaths {
     /// Derive paths for `identity` under `app_data_root` without creating dirs.
-    pub fn derive(app_data_root: &Path, identity: &AccountIdentity) -> Result<Self, StorePathError> {
+    pub fn derive(
+        app_data_root: &Path,
+        identity: &AccountIdentity,
+    ) -> Result<Self, StorePathError> {
         let segment = identity.account_dir_segment();
         // Reject traversal in the segment itself (fingerprint/sanitize should not
         // produce this; defense in depth).

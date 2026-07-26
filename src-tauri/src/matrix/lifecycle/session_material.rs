@@ -15,8 +15,7 @@ use super::error::LifecycleError;
 /// Credential service name for Matrix session material (native only).
 ///
 /// Intentionally distinct from `STORE_KEY_SERVICE`.
-pub const SESSION_MATERIAL_SERVICE: &str =
-    "com.whylandcreative.synara.desktop.matrix-session";
+pub const SESSION_MATERIAL_SERVICE: &str = "com.whylandcreative.synara.desktop.matrix-session";
 
 /// Non-secret keyring account id for session material for one account.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -54,9 +53,7 @@ pub struct SessionMaterial {
 
 impl SessionMaterial {
     pub fn from_placeholder(bytes: impl Into<Vec<u8>>) -> Self {
-        Self {
-            blob: bytes.into(),
-        }
+        Self { blob: bytes.into() }
     }
 
     pub fn as_bytes(&self) -> &[u8] {
@@ -92,7 +89,8 @@ impl Drop for SessionMaterial {
 /// Read/write/clear session credentials by account identity.
 pub trait SessionMaterialVault: Send {
     fn get(&self, id: &SessionMaterialId) -> Result<Option<SessionMaterial>, LifecycleError>;
-    fn set(&self, id: &SessionMaterialId, material: &SessionMaterial) -> Result<(), LifecycleError>;
+    fn set(&self, id: &SessionMaterialId, material: &SessionMaterial)
+        -> Result<(), LifecycleError>;
     /// Remove session material. Returns whether an entry existed.
     fn clear(&self, id: &SessionMaterialId) -> Result<bool, LifecycleError>;
 }
@@ -129,7 +127,11 @@ impl SessionMaterialVault for InMemorySessionMaterialVault {
             .map(SessionMaterial::from_placeholder))
     }
 
-    fn set(&self, id: &SessionMaterialId, material: &SessionMaterial) -> Result<(), LifecycleError> {
+    fn set(
+        &self,
+        id: &SessionMaterialId,
+        material: &SessionMaterial,
+    ) -> Result<(), LifecycleError> {
         let mut guard = self.inner.lock().map_err(|_| LifecycleError::Vault {
             diagnostic_id: "p2.6-session-vault-poisoned",
             category: crate::matrix::ipc::MatrixIpcErrorCategory::StoreUnavailable,

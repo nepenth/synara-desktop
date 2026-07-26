@@ -10,7 +10,8 @@ use std::fs;
 use std::path::{Component, Path, PathBuf};
 
 use crate::matrix::store::{
-    AccountIdentity, StoreKeyId, StoreKeyVault, StorePathError, StorePaths, MATRIX_STORE_ROOT_SEGMENT,
+    AccountIdentity, StoreKeyId, StoreKeyVault, StorePathError, StorePaths,
+    MATRIX_STORE_ROOT_SEGMENT,
 };
 
 use super::error::LifecycleError;

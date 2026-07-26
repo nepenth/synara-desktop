@@ -15,10 +15,7 @@ pub enum SequenceOutcome {
     /// Sequence already applied (duplicate-delta idempotence).
     Duplicate { last_applied: u64 },
     /// Sequence > last + 1 — gap; require snapshot resubscription.
-    Gap {
-        last_applied: u64,
-        observed: u64,
-    },
+    Gap { last_applied: u64, observed: u64 },
     /// Sequence before the applied baseline without being an exact duplicate
     /// of the last message (should not happen with monotonic streams).
     Behind { last_applied: u64, observed: u64 },
@@ -39,9 +36,7 @@ pub fn check_sequence(last_applied: Option<u64>, incoming: u64) -> SequenceOutco
         Some(last) if incoming == last + 1 => SequenceOutcome::Accept {
             next_last_applied: incoming,
         },
-        Some(last) if incoming == last => SequenceOutcome::Duplicate {
-            last_applied: last,
-        },
+        Some(last) if incoming == last => SequenceOutcome::Duplicate { last_applied: last },
         Some(last) if incoming > last + 1 => SequenceOutcome::Gap {
             last_applied: last,
             observed: incoming,
@@ -61,10 +56,11 @@ pub fn check_session_generation(
     if live_generation == envelope_generation {
         Ok(())
     } else {
-        Err(MatrixIpcError::new(MatrixIpcErrorCategory::StaleSessionGeneration)
-            .with_diagnostic(format!(
-                "stale_gen:live={live_generation}:msg={envelope_generation}"
-            )))
+        Err(
+            MatrixIpcError::new(MatrixIpcErrorCategory::StaleSessionGeneration).with_diagnostic(
+                format!("stale_gen:live={live_generation}:msg={envelope_generation}"),
+            ),
+        )
     }
 }
 
@@ -73,10 +69,13 @@ pub fn check_protocol_version(protocol_version: u32) -> Result<(), MatrixIpcErro
     if protocol_version == MATRIX_IPC_PROTOCOL_VERSION {
         Ok(())
     } else {
-        Err(MatrixIpcError::new(MatrixIpcErrorCategory::UnsupportedCapability)
-            .with_diagnostic(format!(
-                "protocol_version:got={protocol_version}:want={MATRIX_IPC_PROTOCOL_VERSION}"
-            )))
+        Err(
+            MatrixIpcError::new(MatrixIpcErrorCategory::UnsupportedCapability).with_diagnostic(
+                format!(
+                    "protocol_version:got={protocol_version}:want={MATRIX_IPC_PROTOCOL_VERSION}"
+                ),
+            ),
+        )
     }
 }
 
@@ -95,9 +94,7 @@ pub fn resync_payload_for_gap(
 }
 
 /// Build a `resync_required` payload for stale session generation.
-pub fn resync_payload_for_stale_generation(
-    stream_id: Option<String>,
-) -> ResyncRequiredPayload {
+pub fn resync_payload_for_stale_generation(stream_id: Option<String>) -> ResyncRequiredPayload {
     ResyncRequiredPayload {
         stream_id,
         reason: ResyncReason::StaleSessionGeneration,

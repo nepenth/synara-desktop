@@ -3,16 +3,10 @@
  */
 
 import type { EventId, RoomId, UserId } from './ids';
-import {
-  hasForbiddenWireFields,
-  isObject,
-  optNumber,
-  optString,
-  reqString,
-} from './parseUtil';
+import { hasForbiddenWireFields, isObject, optNumber, optString, reqString } from './parseUtil';
 
 export const RECEIPT_TYPES = ['read', 'read_private', 'fully_read'] as const;
-export type ReceiptType = (typeof RECEIPT_TYPES)[number];
+export type ReceiptType = typeof RECEIPT_TYPES[number];
 const RECEIPT_TYPE_SET = new Set<string>(RECEIPT_TYPES);
 
 export function isReceiptType(value: unknown): value is ReceiptType {

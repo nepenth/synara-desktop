@@ -40,12 +40,7 @@ export function parseSpaceSummary(value: unknown): SpaceSummary | null {
   const roomId = reqString(value, 'roomId');
   const name = optString(value, 'name');
   const avatarUrl = optString(value, 'avatarUrl');
-  if (
-    roomId === null ||
-    name === null ||
-    avatarUrl === null ||
-    !Array.isArray(value.children)
-  ) {
+  if (roomId === null || name === null || avatarUrl === null || !Array.isArray(value.children)) {
     return null;
   }
   const children: SpaceChild[] = [];

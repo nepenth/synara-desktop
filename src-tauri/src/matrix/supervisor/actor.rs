@@ -177,7 +177,7 @@ impl MatrixSupervisor {
             if self.client.is_some() {
                 return Err(SupervisorError::ClientAlreadyPresent);
             }
-            let factory = factory.ok_or_else(|| SupervisorError::ConstructionFailed {
+            let factory = factory.ok_or(SupervisorError::ConstructionFailed {
                 category: MatrixIpcErrorCategory::SdkInvariant,
                 diagnostic_id: "p2.1-install-without-factory",
             })?;

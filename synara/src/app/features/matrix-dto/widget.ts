@@ -3,26 +3,14 @@
  */
 
 import type { RoomId, WidgetId } from './ids';
-import {
-  hasForbiddenWireFields,
-  isObject,
-  optString,
-  reqBoolean,
-  reqString,
-} from './parseUtil';
+import { hasForbiddenWireFields, isObject, optString, reqBoolean, reqString } from './parseUtil';
 
 export const WIDGET_KINDS = ['element_call', 'custom'] as const;
-export type WidgetKind = (typeof WIDGET_KINDS)[number];
+export type WidgetKind = typeof WIDGET_KINDS[number];
 const KIND_SET = new Set<string>(WIDGET_KINDS);
 
-export const WIDGET_SESSION_STATES = [
-  'idle',
-  'creating',
-  'active',
-  'ending',
-  'failed',
-] as const;
-export type WidgetSessionState = (typeof WIDGET_SESSION_STATES)[number];
+export const WIDGET_SESSION_STATES = ['idle', 'creating', 'active', 'ending', 'failed'] as const;
+export type WidgetSessionState = typeof WIDGET_SESSION_STATES[number];
 const STATE_SET = new Set<string>(WIDGET_SESSION_STATES);
 
 export type WidgetSession = {

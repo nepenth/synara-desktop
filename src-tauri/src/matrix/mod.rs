@@ -29,6 +29,7 @@ const _: fn() -> &'static str = matrix_ipc_schema_markers;
 
 /// Touch Matrix IPC + domain DTO + supervisor + store + client-builder + tasks
 /// + diagnostics + lifecycle + auth paths so foundations remain linked.
+///
 /// Returns a static marker only — no login/sync loop or Tauri Matrix commands.
 pub fn matrix_ipc_schema_markers() -> &'static str {
     let _version = ipc::MATRIX_IPC_PROTOCOL_VERSION;

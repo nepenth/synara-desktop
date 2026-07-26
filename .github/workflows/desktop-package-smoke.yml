@@ -14,11 +14,11 @@ on:
       - "src-tauri/**"
       - "synara/**"
   pull_request:
-    branches: [main, "release/**"]
+    branches: [main, "feature/matrix-rust-sdk-full-replacement", "release/**"]
   workflow_dispatch:
 
 concurrency:
-  group: package-smoke-${{ github.workflow }}-${{ github.ref }}
+  group: package-smoke-${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 permissions:

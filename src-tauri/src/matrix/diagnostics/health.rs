@@ -45,9 +45,10 @@ impl SyncPhase {
 }
 
 /// Store subsystem readiness (no paths, keys, or account identifiers).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum StoreHealthStatus {
+    #[default]
     Unknown,
     Ready,
     Locked,
@@ -168,12 +169,6 @@ pub struct StoreHealth {
     pub open_failures: u64,
 }
 
-impl Default for StoreHealthStatus {
-    fn default() -> Self {
-        Self::Unknown
-    }
-}
-
 /// Error category counters (stable IPC categories only).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -231,7 +226,10 @@ impl LifecycleHealth {
             Some(FailureInfo {
                 category,
                 diagnostic_id,
-            }) => (Some(category.as_str().to_owned()), Some((*diagnostic_id).to_owned())),
+            }) => (
+                Some(category.as_str().to_owned()),
+                Some((*diagnostic_id).to_owned()),
+            ),
             None => (None, None),
         };
         Self {

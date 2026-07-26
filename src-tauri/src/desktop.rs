@@ -210,9 +210,9 @@ mod tests {
     fn windows_secret_store_status_mapping_is_explicit_and_non_persistent() {
         let status = unavailable_secret_store_status(DESKTOP_SECRET_STORE_WINDOWS_UNSUPPORTED);
 
-        assert_eq!(status.available, false);
+        assert!(!status.available);
         assert_eq!(status.backend, DESKTOP_SECRET_STORE_BACKEND_NONE);
-        assert_eq!(status.can_persist_session, false);
+        assert!(!status.can_persist_session);
         assert_eq!(
             status.reason,
             Some(DESKTOP_SECRET_STORE_WINDOWS_UNSUPPORTED)

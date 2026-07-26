@@ -366,15 +366,9 @@ async fn logout_then_explicit_wipe_is_distinct_path() {
         .unwrap();
     let store_vault = InMemoryStoreKeyVault::new();
 
-    perform_logout(
-        &mut supervisor,
-        &mut tasks,
-        &session_vault,
-        &alice(),
-        None,
-    )
-    .await
-    .unwrap();
+    perform_logout(&mut supervisor, &mut tasks, &session_vault, &alice(), None)
+        .await
+        .unwrap();
     assert_eq!(supervisor.state(), SupervisorState::LoggedOut);
     assert!(paths.state_dir().join("state.db").is_file());
 

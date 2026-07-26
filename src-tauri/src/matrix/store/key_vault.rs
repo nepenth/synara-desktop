@@ -15,9 +15,7 @@ pub enum StoreKeyVaultError {
     /// No key stored for this id (caller may generate — must not wipe stores).
     NotFound,
     /// Backend unavailable / locked / denied.
-    BackendUnavailable {
-        diagnostic_id: &'static str,
-    },
+    BackendUnavailable { diagnostic_id: &'static str },
     /// Stored payload corrupt or wrong length.
     CorruptPayload,
     /// Serialization / encoding failure.

@@ -89,7 +89,10 @@ pub fn redact_text(input: &str) -> String {
         "Bearer ",
         "bearer ",
     ] {
-        if out.to_ascii_lowercase().contains(&needle.to_ascii_lowercase()) {
+        if out
+            .to_ascii_lowercase()
+            .contains(&needle.to_ascii_lowercase())
+        {
             return REDACTED.to_owned();
         }
     }
@@ -225,7 +228,10 @@ mod redact_unit_tests {
 
     #[test]
     fn redact_text_strips_secrets() {
-        assert_eq!(redact_text("syt_ABCDEFGHIJKLMNOPQRSTUVWXYZ012345"), REDACTED);
+        assert_eq!(
+            redact_text("syt_ABCDEFGHIJKLMNOPQRSTUVWXYZ012345"),
+            REDACTED
+        );
         assert_eq!(redact_text("@bob:hs.example"), REDACTED);
         assert_eq!(redact_text("https://hs.example"), REDACTED);
         assert_eq!(redact_text("connectivity"), "connectivity");
@@ -237,9 +243,15 @@ mod redact_unit_tests {
             safe_diagnostic_label("p2.5-store-locked"),
             Some("p2.5-store-locked".into())
         );
-        assert_eq!(safe_diagnostic_label("authentication_rejected"), Some("authentication_rejected".into()));
+        assert_eq!(
+            safe_diagnostic_label("authentication_rejected"),
+            Some("authentication_rejected".into())
+        );
         assert_eq!(safe_diagnostic_label("@eve:x"), None);
-        assert_eq!(safe_diagnostic_label("syt_ABCDEFGHIJKLMNOPQRSTUVWXYZ012345"), None);
+        assert_eq!(
+            safe_diagnostic_label("syt_ABCDEFGHIJKLMNOPQRSTUVWXYZ012345"),
+            None
+        );
         assert_eq!(safe_diagnostic_label("https://x"), None);
     }
 

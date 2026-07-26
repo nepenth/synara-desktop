@@ -170,9 +170,7 @@ async fn stale_generation_isolation_refuses_results_and_spawn() {
     assert!(s.accept_result(2).is_ok());
 
     // New work at old generation is refused.
-    let err = s
-        .spawn(TaskKind::Generic, 1, async {})
-        .unwrap_err();
+    let err = s.spawn(TaskKind::Generic, 1, async {}).unwrap_err();
     assert!(err.is_stale_generation());
 
     // Live generation may spawn.

@@ -6,11 +6,7 @@ use std::path::PathBuf;
 
 fn temp_root(label: &str) -> PathBuf {
     let mut dir = std::env::temp_dir();
-    dir.push(format!(
-        "synara-p2.2-{}-{}",
-        label,
-        std::process::id()
-    ));
+    dir.push(format!("synara-p2.2-{}-{}", label, std::process::id()));
     let _ = fs::remove_dir_all(&dir);
     fs::create_dir_all(&dir).expect("temp root");
     dir
@@ -116,7 +112,11 @@ fn ensure_dirs_creates_layout_without_wiping_existing() {
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        let mode = fs::metadata(paths.account_root()).unwrap().permissions().mode() & 0o777;
+        let mode = fs::metadata(paths.account_root())
+            .unwrap()
+            .permissions()
+            .mode()
+            & 0o777;
         assert_eq!(mode, 0o700);
     }
 
@@ -179,7 +179,7 @@ fn get_or_create_does_not_require_existing_store_dirs() {
 fn missing_vault_key_is_not_found_not_wipe_signal() {
     let vault = InMemoryStoreKeyVault::new();
     let id = StoreKeyId::from_identity(&alice());
-    assert!(matches!(vault.get(&id).unwrap(), None));
+    assert!(vault.get(&id).unwrap().is_none());
     // Explicit: NotFound would be returned by APIs that require a key;
     // get returns None. Callers must not delete stores on either outcome.
 }

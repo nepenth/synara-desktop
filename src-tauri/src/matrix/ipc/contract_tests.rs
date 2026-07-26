@@ -46,7 +46,7 @@ fn policy_constants_exact_values() {
     assert_eq!(MAX_STREAM_QUEUE_DEPTH, 256);
     assert_eq!(STREAM_COALESCE_WINDOW_MS, 16);
     assert_eq!(MAX_OPEN_STREAMS_PER_SESSION, 64);
-    assert!(FORBID_MEDIA_BYTES_OVER_JSON_IPC);
+    const { assert!(FORBID_MEDIA_BYTES_OVER_JSON_IPC) };
 }
 
 #[test]
@@ -63,10 +63,14 @@ fn payload_size_bounds_policy() {
 fn stream_queue_and_open_stream_bounds_policy() {
     assert!(stream_queue_depth_within_bounds(0));
     assert!(stream_queue_depth_within_bounds(MAX_STREAM_QUEUE_DEPTH));
-    assert!(!stream_queue_depth_within_bounds(MAX_STREAM_QUEUE_DEPTH + 1));
+    assert!(!stream_queue_depth_within_bounds(
+        MAX_STREAM_QUEUE_DEPTH + 1
+    ));
     assert!(open_streams_within_bounds(0));
     assert!(open_streams_within_bounds(MAX_OPEN_STREAMS_PER_SESSION));
-    assert!(!open_streams_within_bounds(MAX_OPEN_STREAMS_PER_SESSION + 1));
+    assert!(!open_streams_within_bounds(
+        MAX_OPEN_STREAMS_PER_SESSION + 1
+    ));
 }
 
 #[test]
@@ -133,8 +137,7 @@ fn all_kinds_round_trip_as_envelopes() {
             reason: Some(CancelReason::Timeout),
         }),
         MatrixIpcMessage::Error(
-            MatrixIpcError::new(MatrixIpcErrorCategory::Connectivity)
-                .with_diagnostic("diag-c"),
+            MatrixIpcError::new(MatrixIpcErrorCategory::Connectivity).with_diagnostic("diag-c"),
         ),
         MatrixIpcMessage::Ping(PingPayload {
             nonce: Some("n".into()),
@@ -276,7 +279,10 @@ fn all_valid_fixtures_parse() {
 fn fixture_valid_lifecycle_control_kinds() {
     assert_eq!(parse_ok("valid_unsubscribe.json").kind(), KIND_UNSUBSCRIBE);
     assert_eq!(parse_ok("valid_subscribed.json").kind(), KIND_SUBSCRIBED);
-    assert_eq!(parse_ok("valid_unsubscribed.json").kind(), KIND_UNSUBSCRIBED);
+    assert_eq!(
+        parse_ok("valid_unsubscribed.json").kind(),
+        KIND_UNSUBSCRIBED
+    );
     assert_eq!(parse_ok("valid_cancel.json").kind(), KIND_CANCEL);
     assert_eq!(parse_ok("valid_ping.json").kind(), KIND_PING);
     assert_eq!(parse_ok("valid_pong.json").kind(), KIND_PONG);
@@ -580,18 +586,17 @@ fn stale_session_generation_rejected_and_resync_payload() {
 
     // Future/higher generation also rejected (not equal → stale from peer view)
     let err2 = check_session_generation(7, 99).unwrap_err();
-    assert_eq!(err2.category, MatrixIpcErrorCategory::StaleSessionGeneration);
+    assert_eq!(
+        err2.category,
+        MatrixIpcErrorCategory::StaleSessionGeneration
+    );
 
     let payload = resync_payload_for_stale_generation(Some("stream-timeline-1".into()));
     assert_eq!(payload.reason, ResyncReason::StaleSessionGeneration);
     assert_eq!(payload.stream_id.as_deref(), Some("stream-timeline-1"));
 
-    let env = MatrixIpcEnvelope::new(
-        2,
-        0,
-        MatrixIpcMessage::ResyncRequired(payload),
-    )
-    .with_stream_id("stream-timeline-1");
+    let env = MatrixIpcEnvelope::new(2, 0, MatrixIpcMessage::ResyncRequired(payload))
+        .with_stream_id("stream-timeline-1");
     assert_eq!(env.kind(), KIND_RESYNC_REQUIRED);
 
     // Fixture parity
@@ -642,8 +647,8 @@ fn fixture_inventory_matches_contract_lists() {
     // Ensure every named fixture file exists and is valid JSON.
     for name in VALID_FIXTURES.iter().chain(INVALID_FIXTURES.iter()) {
         let raw = fixture(name);
-        let v: Value = serde_json::from_str(&raw)
-            .unwrap_or_else(|e| panic!("{name}: invalid JSON: {e}"));
+        let v: Value =
+            serde_json::from_str(&raw).unwrap_or_else(|e| panic!("{name}: invalid JSON: {e}"));
         assert!(v.is_object(), "{name} must be a JSON object");
     }
 }

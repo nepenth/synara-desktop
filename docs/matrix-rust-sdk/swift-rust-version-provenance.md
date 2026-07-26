@@ -10,9 +10,10 @@
 | ----- | ----- |
 | Task ID | **P0.4** |
 | Generation date | **2026-07-24** |
-| Base / integration tip | `feature/matrix-rust-sdk-full-replacement` @ `c76f4ff7cb19e3e6d1536e9b8f7b8d269f374dcb` |
-| Active work branch | `matrix-rust/p0.4-swift-rust-provenance` |
-| Status | **Accepted** by independent review — PR to integration (not claimed MERGED) |
+| Base integration tip at generation | `feature/matrix-rust-sdk-full-replacement` @ `c76f4ff7cb19e3e6d1536e9b8f7b8d269f374dcb` |
+| Work branch at generation | `matrix-rust/p0.4-swift-rust-provenance` |
+| Artifact / integration state | `landed` / `merged` |
+| Strict acceptance / Phase 0 gate | `open` / `open` — see [`program-status.md`](program-status.md) |
 
 ## Goals
 
@@ -277,7 +278,7 @@ exact crates `matrix-sdk` / `matrix-sdk-ui` **`=0.18.0`** at commit
 | ---- | ------------ |
 | P0.3 / P0.3a | Desktop commit `1c44fb66…` already locked; this task proves iOS embeds **the same** commit |
 | P0.2 FR rows | Unchanged; FR-7.8-009 iOS pusher path remains on current Swift bindings |
-| P0.5 | Toolchain (Rust 1.93) next; independent of CalVer packaging |
+| P0.5 | Toolchain follow-up at generation time; subsequently landed with residuals |
 | P0.6 / P0.7 | Perf baseline / migration UX — no pin changes here |
 
 ---
