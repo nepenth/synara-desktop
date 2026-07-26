@@ -1,0 +1,665 @@
+{
+  "schema_version": 1,
+  "artifact_id": "MRSDK-SEC-TM-001",
+  "title": "Matrix Rust SDK replacement security threat model",
+  "as_of_date": "2026-07-25",
+  "status": "ready_for_independent_review",
+  "scope": {
+    "platforms": ["macOS", "Linux"],
+    "sdk_target": "matrix-sdk =0.18.0",
+    "in_scope": [
+      "Matrix authentication and session material",
+      "encrypted SDK stores and native secret stores",
+      "Tauri IPC and stream lifecycle",
+      "Matrix media retrieval, decryption, caching, and delivery",
+      "diagnostics, errors, logs, and support exports",
+      "shutdown, logout, wipe, crash, and partial failure",
+      "filesystem confinement, symlinks, and account isolation",
+      "migration, cutover, cleanup, rollback, widgets, and calls",
+      "proxy configuration, dependencies, CI, packaging, and supported platforms"
+    ],
+    "non_goals": [
+      "Protecting secrets after full root or kernel compromise",
+      "Treating the isolated Rust harness as a shipping backend",
+      "Designing a permanent backend abstraction or runtime selector"
+    ]
+  },
+  "architecture_states": [
+    {
+      "id": "CURRENT_JS_ONLY",
+      "description": "The shipping product uses matrix-js-sdk only. The WebView and service worker still participate in token and media handling.",
+      "allowed": true,
+      "security_posture": "temporary pre-cutover exposure; risks remain open"
+    },
+    {
+      "id": "ISOLATED_RUST_HARNESS",
+      "description": "Rust SDK foundation and disposable-Synapse probes are test-only and are not registered as a product Matrix backend.",
+      "allowed": true,
+      "security_posture": "must use isolated accounts/processes and must not share a product token or device ID"
+    },
+    {
+      "id": "TARGET_RUST_ONLY",
+      "description": "One Rust supervisor owns the Matrix client, credentials, stores, sync, crypto, media, and lifecycle; the WebView receives bounded Synara-owned DTOs only.",
+      "allowed": true,
+      "security_posture": "required post-cutover state"
+    },
+    {
+      "id": "ROLLBACK_PRIOR_BUILD",
+      "description": "Rollback uses a prior product build and intentionally retained inert legacy data; it is not an in-app runtime choice.",
+      "allowed": true,
+      "security_posture": "time-bounded and operationally controlled"
+    },
+    {
+      "id": "DUAL_BACKEND_OR_SELECTOR",
+      "description": "A production JS and Rust client run concurrently, share identity/session state, or are selected at runtime.",
+      "allowed": false,
+      "security_posture": "forbidden"
+    }
+  ],
+  "assets": [
+    {
+      "id": "A01",
+      "name": "authentication secrets",
+      "classification": "secret",
+      "examples": ["password", "access token", "refresh token", "SSO token"]
+    },
+    {
+      "id": "A02",
+      "name": "cryptographic secrets",
+      "classification": "secret",
+      "examples": [
+        "store key",
+        "recovery key",
+        "cross-signing key",
+        "backup key"
+      ]
+    },
+    {
+      "id": "A03",
+      "name": "decrypted content",
+      "classification": "highly_sensitive",
+      "examples": ["event plaintext", "push payload", "decrypted media"]
+    },
+    {
+      "id": "A04",
+      "name": "account and network identifiers",
+      "classification": "personal_sensitive",
+      "examples": ["full user ID", "device ID", "homeserver URL", "proxy URL"]
+    },
+    {
+      "id": "A05",
+      "name": "filesystem metadata",
+      "classification": "personal_sensitive",
+      "examples": ["absolute store path", "account directory", "cache path"]
+    },
+    {
+      "id": "A06",
+      "name": "session integrity",
+      "classification": "integrity_critical",
+      "examples": [
+        "session generation",
+        "stream sequence",
+        "active client ownership"
+      ]
+    },
+    {
+      "id": "A07",
+      "name": "recoverable local state",
+      "classification": "availability_critical",
+      "examples": [
+        "encrypted SDK store",
+        "legacy IndexedDB",
+        "drafts",
+        "downloads"
+      ]
+    },
+    {
+      "id": "A08",
+      "name": "diagnostic evidence",
+      "classification": "restricted",
+      "examples": ["health snapshots", "errors", "support export", "CI logs"]
+    }
+  ],
+  "trust_boundaries": [
+    {
+      "id": "B01",
+      "from": "WebView",
+      "to": "Tauri IPC",
+      "controls_required": [
+        "purpose-specific allowlisted commands and topics",
+        "typed bounded payloads and presentation DTOs",
+        "no long-lived session token, store key, recovery key, raw push payload, or decrypted media bytes",
+        "ephemeral login password or one-time token only in a one-shot inbound authentication command and never echoed, logged, or persisted",
+        "bounded sanitized event/presentation plaintext only on outbound rendering topics and never in diagnostics",
+        "opaque bounded media handles instead of media bytes"
+      ]
+    },
+    {
+      "id": "B02",
+      "from": "Tauri IPC",
+      "to": "Rust Matrix supervisor",
+      "controls_required": [
+        "single owner",
+        "generation checks",
+        "cancellation",
+        "backpressure"
+      ]
+    },
+    {
+      "id": "B03",
+      "from": "Rust Matrix supervisor",
+      "to": "homeserver/proxy",
+      "controls_required": [
+        "validated URLs",
+        "TLS policy",
+        "no raw fallback",
+        "redacted failures"
+      ]
+    },
+    {
+      "id": "B04",
+      "from": "Rust process",
+      "to": "OS credential store",
+      "controls_required": [
+        "scoped entries",
+        "native persistence",
+        "explicit failure",
+        "least privilege"
+      ]
+    },
+    {
+      "id": "B05",
+      "from": "Rust process",
+      "to": "filesystem/SQLite/cache",
+      "controls_required": [
+        "canonical confinement",
+        "0700 directories",
+        "serialized open",
+        "exact deletion"
+      ]
+    },
+    {
+      "id": "B06",
+      "from": "untrusted Matrix content",
+      "to": "media/widget/call surfaces",
+      "controls_required": [
+        "bounds",
+        "metadata validation",
+        "origin/CSP restrictions",
+        "cleanup"
+      ]
+    },
+    {
+      "id": "B07",
+      "from": "runtime",
+      "to": "diagnostics/support/CI",
+      "controls_required": [
+        "allowlisted fields",
+        "central redaction",
+        "no raw SDK errors or identifiers"
+      ]
+    },
+    {
+      "id": "B08",
+      "from": "current JS product",
+      "to": "target Rust product/rollback build",
+      "controls_required": [
+        "atomic cutover",
+        "inert legacy data",
+        "new device",
+        "exact cleanup"
+      ]
+    },
+    {
+      "id": "B09",
+      "from": "application notification pipeline",
+      "to": "OS notification service and lock screen",
+      "controls_required": [
+        "typed bounded notification DTO and IPC command",
+        "end-to-end privacy-field preservation",
+        "encrypted-room, private-mode, and lock-screen redaction policy",
+        "no sensitive approval command preview",
+        "packaged platform and negative notification fixtures"
+      ]
+    }
+  ],
+  "threat_actors": [
+    "malicious Matrix sender or room participant",
+    "malicious or compromised homeserver/media endpoint",
+    "compromised WebView or injected script",
+    "same-user local process or filesystem attacker",
+    "stale asynchronous task from a superseded session generation",
+    "crash, power loss, disk error, or credential-store failure",
+    "malicious proxy configuration or credential-bearing URL",
+    "compromised dependency, build input, or CI artifact",
+    "operator or support recipient with diagnostic access"
+  ],
+  "security_invariants": [
+    {
+      "id": "INV01",
+      "rule": "Exactly one Rust Matrix client owner exists after cutover; no production backend selector or dual client is permitted."
+    },
+    {
+      "id": "INV02",
+      "rule": "No long-lived Matrix session token, store key, recovery key, raw push payload, or decrypted media bytes cross post-cutover WebView IPC or enter logs. An ephemeral login password or one-time login token may cross WebView-to-Rust only through a purpose-specific one-shot typed and bounded authentication command and is never echoed, logged, or persisted. Bounded sanitized event/presentation plaintext may cross Rust-to-WebView only on allowlisted rendering topics and never enters diagnostics; media uses opaque bounded handles rather than bytes."
+    },
+    {
+      "id": "INV03",
+      "rule": "The old token or device ID is not copied into a fresh Rust store without a separately approved continuity threat review."
+    },
+    {
+      "id": "INV04",
+      "rule": "A store is opened only with its matching account-scoped native secret; existing encrypted data plus a missing key is a recoverable error, not a new-key event."
+    },
+    {
+      "id": "INV05",
+      "rule": "Paths are absolute, canonical or safely rooted, symlink resistant, collision resistant, account isolated, and deleted only by exact idempotent operations."
+    },
+    {
+      "id": "INV06",
+      "rule": "New work is rejected and tasks are cancelled and joined before clients/stores close, credentials clear, or files are deleted."
+    },
+    {
+      "id": "INV07",
+      "rule": "IPC uses cross-language-safe counters, one authoritative stream identity, typed bounded bodies, stale-generation rejection, and bounded queues."
+    },
+    {
+      "id": "INV08",
+      "rule": "Media bytes do not travel as JSON; authenticated retrieval, decryption, cache bounds, metadata validation, revocation, and persistence policy are Rust owned."
+    },
+    {
+      "id": "INV09",
+      "rule": "A crash or partial migration never triggers automatic wipe and leaves legacy data inert and recoverable until an exact approved cleanup."
+    },
+    {
+      "id": "INV10",
+      "rule": "Widgets and calls cannot retain matrix-js-sdk as a hidden exception and must pass an explicit CSP/origin and experimental-feature review."
+    }
+  ],
+  "threats": [
+    {
+      "id": "TM-T01",
+      "domain": "tokens",
+      "assets": ["A01", "A02"],
+      "boundaries": ["B01", "B04", "B08"],
+      "scenario": "Credentials remain in WebView/localStorage/service-worker memory, cross IPC, or are copied into the Rust session without a continuity review; a WebView fallback when native persistence is unavailable and session-scoped or unsupported platform stores can blur secure restore, fallback exposure, and durability; an authentication callback token can remain in URL/history-visible state or be accepted without complete origin, replay, state, nonce, and PKCE integrity checks.",
+      "risk_ids": [
+        "MRSDK-R004",
+        "MRSDK-R012",
+        "MRSDK-R024",
+        "MRSDK-R028",
+        "MRSDK-R037"
+      ],
+      "required_controls": [
+        "native scoped vault",
+        "Rust-only custody after cutover",
+        "new-device reauthentication",
+        "secret-negative fixtures",
+        "no credential-bearing WebView fallback after cutover",
+        "explicit per-platform persistence and recovery policy",
+        "clean-quit, crash, and OS-restart restore-or-reauthentication tests",
+        "consume-once callback token with pre-async URL/history scrub",
+        "strict callback origin and replay/malformed rejection",
+        "OAuth/OIDC state, nonce, and PKCE validation",
+        "hash-router, history-router, and hostile callback tests"
+      ]
+    },
+    {
+      "id": "TM-T02",
+      "domain": "store_keyring",
+      "assets": ["A02", "A07"],
+      "boundaries": ["B04", "B05"],
+      "scenario": "A missing, replaced, leaked, or partially deleted key strands or exposes an encrypted store; swallowed credential-store or Matrix IndexedDB deletion failures can leave retained state while logout appears complete.",
+      "risk_ids": [
+        "MRSDK-R012",
+        "MRSDK-R022",
+        "MRSDK-R023",
+        "MRSDK-R027",
+        "MRSDK-R028"
+      ],
+      "required_controls": [
+        "production native keyring",
+        "existing-store key-miss error",
+        "zeroization",
+        "failure-atomic lifecycle",
+        "verified fail-closed credential and store deletion"
+      ]
+    },
+    {
+      "id": "TM-T03",
+      "domain": "filesystem",
+      "assets": ["A05", "A07"],
+      "boundaries": ["B05"],
+      "scenario": "Traversal, symlink substitution, collision, or TOCTOU redirects creation or deletion outside the account root.",
+      "risk_ids": ["MRSDK-R017", "MRSDK-R020", "MRSDK-R021"],
+      "required_controls": [
+        "absolute canonical root",
+        "component-by-component no-follow",
+        "collision-resistant versioned identity",
+        "adversarial tests"
+      ]
+    },
+    {
+      "id": "TM-T04",
+      "domain": "ipc",
+      "assets": ["A03", "A06"],
+      "boundaries": ["B01", "B02"],
+      "scenario": "Unsafe integers, sequence overflow, stream-ID disagreement, unbounded JSON, or stale tasks corrupt state or leak sensitive payloads.",
+      "risk_ids": ["MRSDK-R006", "MRSDK-R011", "MRSDK-R018"],
+      "required_controls": [
+        "safe counter contract",
+        "checked sequencing",
+        "single stream identity",
+        "typed bounded payloads",
+        "adversarial cross-language corpus"
+      ]
+    },
+    {
+      "id": "TM-T05",
+      "domain": "media",
+      "assets": ["A03", "A07"],
+      "boundaries": ["B01", "B05", "B06"],
+      "scenario": "Untrusted media metadata/content, authenticated URLs, decrypted bytes, or object handles cause disclosure, resource exhaustion, unsafe file behavior, or persistence.",
+      "risk_ids": ["MRSDK-R011", "MRSDK-R029"],
+      "required_controls": [
+        "native streaming/cache",
+        "size and MIME validation",
+        "safe filenames and disposition",
+        "TTL/revocation",
+        "no JSON bytes"
+      ]
+    },
+    {
+      "id": "TM-T06",
+      "domain": "diagnostics",
+      "assets": ["A01", "A02", "A03", "A04", "A05", "A08"],
+      "boundaries": ["B07"],
+      "scenario": "Raw SDK failures, URLs, identifiers, paths, content, or secrets enter errors, logs, health snapshots, or support exports.",
+      "risk_ids": ["MRSDK-R012", "MRSDK-R026", "MRSDK-R035"],
+      "required_controls": [
+        "producer-side allowlists",
+        "stable categories",
+        "central hostile fixtures",
+        "no raw SDK strings"
+      ]
+    },
+    {
+      "id": "TM-T07",
+      "domain": "lifecycle",
+      "assets": ["A02", "A06", "A07"],
+      "boundaries": ["B02", "B04", "B05"],
+      "scenario": "Logout or wipe destroys files/keys while a client or task is live, or a partial failure leaves an indeterminate state; swallowed deletion errors can falsely report completion and reload without a visible recovery path.",
+      "risk_ids": ["MRSDK-R016", "MRSDK-R027"],
+      "required_controls": [
+        "close barrier",
+        "transactional state model",
+        "ordered operations",
+        "failure injection and retry path",
+        "verified deletion with no completion or reload on failure",
+        "user-visible recoverable failure"
+      ]
+    },
+    {
+      "id": "TM-T08",
+      "domain": "migration_cutover",
+      "assets": ["A01", "A02", "A06", "A07"],
+      "boundaries": ["B08"],
+      "scenario": "Concurrent owners, reused device identity, premature cleanup, or an ambiguous cutover marker causes duplicated actions or data/identity loss.",
+      "risk_ids": [
+        "MRSDK-R004",
+        "MRSDK-R007",
+        "MRSDK-R019",
+        "MRSDK-R025",
+        "MRSDK-R031"
+      ],
+      "required_controls": [
+        "reauthentication and new device",
+        "atomic readiness marker",
+        "inert retention",
+        "exact idempotent cleanup",
+        "single-owner guardrail"
+      ]
+    },
+    {
+      "id": "TM-T09",
+      "domain": "rollback",
+      "assets": ["A01", "A06", "A07"],
+      "boundaries": ["B08"],
+      "scenario": "An in-app selector or uncontrolled downgrade reopens legacy data while Rust is active or extends legacy credential exposure indefinitely.",
+      "risk_ids": ["MRSDK-R007", "MRSDK-R019", "MRSDK-R024", "MRSDK-R031"],
+      "required_controls": [
+        "prior-build-only rollback",
+        "time bound",
+        "no shared identity",
+        "operational runbook"
+      ]
+    },
+    {
+      "id": "TM-T10",
+      "domain": "widgets_calls",
+      "assets": ["A01", "A03", "A04"],
+      "boundaries": ["B06"],
+      "scenario": "Widget/call origins, CSP, experimental APIs, or a hidden JS SDK exception can expose credentials/content or defeat full replacement; mismatched listener identities can retain disposed call/widget state and process post-dispose events.",
+      "risk_ids": ["MRSDK-R002", "MRSDK-R003", "MRSDK-R030"],
+      "required_controls": [
+        "origin allowlist",
+        "least privilege CSP",
+        "experimental-feature approval",
+        "Phase 10 parity gate",
+        "stable callback or disposer identities",
+        "idempotent teardown",
+        "listener-count and no-post-dispose-delivery tests"
+      ]
+    },
+    {
+      "id": "TM-T11",
+      "domain": "proxy_network",
+      "assets": ["A01", "A04", "A08"],
+      "boundaries": ["B03", "B07"],
+      "scenario": "Credential-bearing or malformed proxy/homeserver URLs leak through configuration or raw SDK errors, or broaden network access.",
+      "risk_ids": ["MRSDK-R026", "MRSDK-R033"],
+      "required_controls": [
+        "parsed URL policy",
+        "reject embedded credentials by default",
+        "redacted categories",
+        "no broad allowlist"
+      ]
+    },
+    {
+      "id": "TM-T12",
+      "domain": "supply_chain_platform",
+      "assets": ["A01", "A02", "A06", "A08"],
+      "boundaries": ["B03", "B04", "B07"],
+      "scenario": "Toolchain drift, unstable experimental features, unsupported native keyring behavior, or unvalidated platform packaging invalidates security assumptions.",
+      "risk_ids": ["MRSDK-R001", "MRSDK-R002", "MRSDK-R015", "MRSDK-R028"],
+      "required_controls": [
+        "exact pins",
+        "cross-platform CI",
+        "dependency review",
+        "green non-cancelled reviewed SHA",
+        "explicit unsupported-state UX"
+      ]
+    },
+    {
+      "id": "TM-T13",
+      "domain": "untrusted_events",
+      "assets": ["A03", "A06"],
+      "boundaries": ["B01", "B06"],
+      "scenario": "Malformed/custom events lose necessary raw content or inject oversized/unsafe content across DTO and rendering boundaries; forwarding may also republish encrypted wire metadata or decryption-failure placeholders when it does not require successful clear content and an approved event type.",
+      "risk_ids": ["MRSDK-R008", "MRSDK-R036"],
+      "required_controls": [
+        "bounded raw-content representation",
+        "golden fixtures",
+        "safe rendering",
+        "forwarding clear-state and approved-type gate",
+        "fail-closed mixed and multi-select forwarding"
+      ]
+    },
+    {
+      "id": "TM-T14",
+      "domain": "product_parity",
+      "assets": ["A06", "A07"],
+      "boundaries": ["B02", "B03"],
+      "scenario": "UIA, registration, search, or migration gaps lead to unsafe fallbacks or concealed JS SDK retention.",
+      "risk_ids": ["MRSDK-R005", "MRSDK-R009", "MRSDK-R010", "MRSDK-R019"],
+      "required_controls": [
+        "owned parity rows",
+        "no raw REST fallback",
+        "zero-usage cutover gate"
+      ]
+    },
+    {
+      "id": "TM-T15",
+      "domain": "tauri_capabilities",
+      "assets": ["A01", "A02", "A03", "A07"],
+      "boundaries": ["B01"],
+      "scenario": "Over-broad Tauri commands or capabilities expose Matrix lifecycle, filesystem, or secret operations to untrusted WebView code.",
+      "risk_ids": ["MRSDK-R032"],
+      "required_controls": [
+        "purpose-specific commands",
+        "least privilege capabilities",
+        "negative invocation tests",
+        "cutover security review"
+      ]
+    },
+    {
+      "id": "TM-T16",
+      "domain": "governance",
+      "assets": ["A06", "A08"],
+      "boundaries": ["B07"],
+      "scenario": "Stale plans, agent drift, branch divergence, or artifact-only completion claims allow unresolved security defects through a gate.",
+      "risk_ids": ["MRSDK-R013", "MRSDK-R014", "MRSDK-R015", "MRSDK-R034"],
+      "required_controls": [
+        "owned register",
+        "bounded packets",
+        "independent review",
+        "formal R0.8 reports"
+      ]
+    },
+    {
+      "id": "TM-T17",
+      "domain": "notification_privacy",
+      "assets": ["A03", "A04"],
+      "boundaries": ["B01", "B09"],
+      "scenario": "Notification privacy metadata is lost before the native/OS boundary, or encrypted/private content and approval command previews reach OS notification or lock-screen surfaces.",
+      "risk_ids": ["MRSDK-R038"],
+      "required_controls": [
+        "end-to-end privacy-field preservation",
+        "encrypted-room, private-mode, and lock-screen redaction",
+        "no sensitive approval command preview",
+        "bounded notification DTO and IPC schema",
+        "packaged platform tests and negative IPC/OS fixtures"
+      ]
+    }
+  ],
+  "unresolved_decisions": [
+    {
+      "id": "TM-D01",
+      "decision": "Final legacy retention period",
+      "safe_default": "Retain inert data until the later of 30 days or two releases; do not clean automatically without the approved rule.",
+      "owner": "Product plus P3.7/P14.2",
+      "due_gate": "P3.7"
+    },
+    {
+      "id": "TM-D02",
+      "decision": "Cutover marker schema, privacy, permissions, and account identifier",
+      "safe_default": "No raw user ID; use a collision-resistant versioned account identifier and restrictive permissions.",
+      "owner": "P3.7 plus R0.4/R0.6",
+      "due_gate": "P3.7"
+    },
+    {
+      "id": "TM-D03",
+      "decision": "Repair or discard behavior for an incomplete Rust store",
+      "safe_default": "Stop with recoverable error; preserve all data and never auto-wipe.",
+      "owner": "R0.4/R0.5/P3.7",
+      "due_gate": "R0.5"
+    },
+    {
+      "id": "TM-D04",
+      "decision": "Behavior when Linux Secret Service is unavailable",
+      "safe_default": "Block persistent session completion; do not fall back to localStorage, files, or session-scoped keyutils.",
+      "owner": "R0.4 plus Product",
+      "due_gate": "R0.4"
+    },
+    {
+      "id": "TM-D05",
+      "decision": "Native media delivery and decrypted persistence policy",
+      "safe_default": "No WebView byte JSON and no durable decrypted persistence.",
+      "owner": "P7",
+      "due_gate": "P7"
+    },
+    {
+      "id": "TM-D06",
+      "decision": "Whether pseudonymous stable identifiers are permitted in diagnostics",
+      "safe_default": "No stable account identifier until explicitly approved.",
+      "owner": "R0.6 plus Privacy review",
+      "due_gate": "R0.6"
+    },
+    {
+      "id": "TM-D07",
+      "decision": "Proxy credential support",
+      "safe_default": "Reject URLs containing credentials.",
+      "owner": "R0.4/R0.6",
+      "due_gate": "R0.6"
+    },
+    {
+      "id": "TM-D08",
+      "decision": "experimental-widgets feature use and exit criteria",
+      "safe_default": "Do not enable in production without explicit Phase 10 risk approval.",
+      "owner": "P10",
+      "due_gate": "P10"
+    },
+    {
+      "id": "TM-D09",
+      "decision": "Rollback/downgrade retention and credential bounds",
+      "safe_default": "Prior-build rollback only, time-bounded, with no concurrently active Rust session.",
+      "owner": "P13.6/P14",
+      "due_gate": "P13"
+    }
+  ],
+  "acceptance": {
+    "r0_2_effect": "Documents threats, assigns risks, and makes decisions explicit; it closes no technical risk.",
+    "technical_closure_owners": [
+      "R0.3",
+      "R0.4",
+      "R0.5",
+      "R0.6",
+      "R0.7",
+      "R0.8",
+      "P3-P14"
+    ],
+    "phase_0_gate_effect": "none; Phase 0 remains open until R0.8 formal acceptance"
+  },
+  "source_references": [
+    "docs/matrix-rust-sdk-full-replacement-plan.md#3-target-architecture-and-non-negotiable-invariants",
+    "docs/matrix-rust-sdk-full-replacement-plan.md#8-session-store-and-migration-strategy",
+    "docs/matrix-rust-sdk-full-replacement-plan.md#11-review-checklist-for-every-task",
+    "docs/matrix-rust-sdk-full-replacement-plan.md#16-initial-risk-register",
+    "docs/matrix-rust-sdk/review-2026-07-25.md#code-review-findings",
+    "docs/matrix-rust-sdk/migration-ux-decision.md",
+    "docs/desktop-secure-secret-storage-plan.md",
+    "docs/matrix-rust-sdk/p1.6-architectural-guardrails.md",
+    "src-tauri/src/matrix/store/identity.rs",
+    "src-tauri/src/matrix/store/paths.rs",
+    "src-tauri/src/matrix/store/key_vault.rs",
+    "src-tauri/src/matrix/client_builder/config.rs",
+    "src-tauri/src/matrix/client_builder/open.rs",
+    "src-tauri/src/matrix/lifecycle/logout.rs",
+    "src-tauri/src/matrix/lifecycle/wipe.rs",
+    "src-tauri/src/matrix/ipc/protocol.rs",
+    "src-tauri/src/matrix/ipc/stream.rs",
+    "src-tauri/src/matrix/diagnostics/redact.rs",
+    "synara/src/app/features/matrix-ipc/envelope.ts",
+    "synara/src/app/pages/auth/login/Login.tsx",
+    "synara/src/app/pages/client/ClientNonUIFeatures.tsx",
+    "synara/src/app/plugins/call/CallEmbed.ts",
+    "synara/src/app/platform/notifications.ts",
+    "synara/src/app/platform/secrets.ts",
+    "synara/src/app/state/sessions.ts",
+    "synara/src/app/state/sessionPersistence.ts",
+    "synara/src/sw.ts",
+    "synara/src/client/initMatrix.ts",
+    "synara/src/app/matrix/media.ts",
+    "synara/src/app/utils/forward.ts"
+  ]
+}
