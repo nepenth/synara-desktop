@@ -9,7 +9,38 @@ Traceability artifacts:
 - [`feature-parity-traceability.json`](feature-parity-traceability.json)
 - [`feature-parity-traceability.md`](feature-parity-traceability.md)
 
-## Continuation handoff snapshot (2026-07-26)
+## Authoritative continuation snapshot (2026-07-25 independent audit)
+
+Start with [`review-2026-07-25.md`](review-2026-07-25.md). It contains the
+reviewed commit range, finding-level evidence, validation results, R0.1–R0.8
+remediation tasks, and the corrected continuation sequence.
+
+| Field | Audited value |
+|---|---|
+| **Status** | Paused after independent review; remediation required before P3.2 |
+| **Integration branch** | `feature/matrix-rust-sdk-full-replacement` |
+| **Audited integration tip** | `edfefee499064b736985b6528896b693e5120f22` (always re-fetch and verify) |
+| **Open PRs → integration at audit start** | None |
+| **Open PR → `main`** | [#39](https://github.com/nepenth/synara-desktop/pull/39) — do not merge without explicit user approval |
+| **Product Matrix runtime** | `matrix-js-sdk` only; no Rust production login/sync, dual backend, or cutover |
+| **Landed inventory** | P0.1–P0.7, P1.1–P1.6, P2.1–P2.6, and P3.1 foundation (20/112 original task artifacts) |
+| **Strict acceptance** | Phase 0 open; Phase 1 open; Phase 2 open; P3.1 open; 0/15 phase gates closed |
+| **Next work** | R0.1–R0.8; P3.2 is blocked |
+
+The former handoff's clean-worktree and no-cutover claims were accurate. Its
+“Phases 0–2 complete,” “P3.1 complete,” and “next P3.2” claims are superseded.
+The independent run found Rust fmt/clippy failures, TypeScript lint/Prettier
+failures, a failed GitHub desktop-validation job, missing required planning/live
+evidence, and critical/high lifecycle, filesystem, IPC, and privacy findings.
+
+Resume from the latest integration tip, create an R0.1 task branch, and follow
+the main plan's native orchestrator protocol. A task may merge only on a green,
+non-cancelled required CI run for the reviewed SHA.
+
+## Superseded historical handoff snapshot (2026-07-26)
+
+The following section is retained as a record of what the prior agent reported;
+it is not current acceptance or continuation guidance.
 
 Use this section first when resuming work on a new machine or with a new owner.
 
@@ -78,7 +109,11 @@ Then implement **P3.2** on a fresh branch (e.g. `matrix-rust/p3.2-password-token
 
 ---
 
-## Current state
+## Historical implementation ledger
+
+This ledger preserves the per-PR/task narrative from the prior handoff. Words
+such as “accepted,” “complete,” or “next P3.2” below describe that former
+assessment and are overridden by the authoritative audit section above.
 
 This remains a complete replacement program: desktop production must move from
 `matrix-js-sdk` to Matrix Rust SDK, not retain a selectable or permanent second
@@ -551,18 +586,21 @@ Before accepting a task or merging its PR, the reviewer must independently:
 
 ## Remaining program sequence
 
-1. Complete P0.2 — **done** (merged into integration).
-2. Complete P0.4 — **done** (merged into integration, PR #44).
-3. Complete P0.5 — **done** (merged into integration @ `a2d288b`, PR #45;
-   `pass-with-residuals`).
-4. Complete remaining Phase 0 gate: **P0.7** migration UX (accepted; merge PR
-   into integration closes Phase 0 docs). **P0.6 MERGED** @ `9e0cfca` (PR #46;
-   `pass-with-residuals`).
-5. Build the Phase 1 foundation: Rust 1.93, exact SDK pins, versioned
-   Synara-owned IPC schemas, lifecycle/store security, and test infrastructure.
-6. Implement Phases 2–11 by bounded capability task: authentication/sync,
-   rooms/timelines, messaging/media, E2EE/verification/recovery, account data,
-   notifications, search, spaces/threads, and calls/widgets.
+1. Complete R0.1 to restore truthful formatting, lint, metadata, CI, and merge
+   gates.
+2. Complete R0.2 to deliver the missing threat model, test/Synapse topology,
+   review template, owned risk register, full traceability, and residual Phase 0
+   evidence.
+3. Complete R0.3–R0.6 to repair IPC, store confinement/keyring/layout,
+   destructive lifecycle ordering, and diagnostic privacy.
+4. Complete R0.7 live disposable-Synapse/platform evidence and the actual P3.1
+   SDK adapter.
+5. Complete R0.8 formal Phase 0–2 and P3.1 acceptance reports. Do not begin P3.2
+   until these gates close.
+6. Implement original P3.2 through Phase 11 by bounded capability task:
+   authentication/sync, rooms/timelines, messaging/media,
+   E2EE/verification/recovery, account data, notifications, search,
+   spaces/threads, and calls/widgets.
 7. Complete Phase 12 cutover and deletion: Rust is sole desktop Matrix owner;
    no `matrix-js-sdk`, JS sync/crypto/store, or product raw Matrix HTTP remains.
 8. Complete Phases 13–14: reliability/performance/security/release validation,
@@ -578,4 +616,4 @@ Before accepting a task or merging its PR, the reviewer must independently:
 - [ ] Capability/traceability artifacts are updated when behavior evidence
       changes.
 - [ ] Reviewer findings are resolved and the complete final diff is re-reviewed.
-- [ ] CI is green before merge.
+- [ ] Required CI is green and non-cancelled on the reviewed SHA before merge.
