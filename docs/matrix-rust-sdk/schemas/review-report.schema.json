@@ -3,17 +3,19 @@
   "$id": "https://synara.invalid/schemas/matrix-rust-sdk/review-report.schema.json",
   "title": "Synara implementation review report",
   "description": "Draft authoritative contract, ready for independent review, for independent review of a bounded native-agent task. Merge state is not acceptance evidence.",
-  "x-artifact-state": "ready_for_independent_review",
   "type": "object",
   "additionalProperties": false,
   "required": [
     "schema_version",
+    "schema_id",
     "report_id",
     "task_id",
     "task_packet_path",
+    "subject",
     "review_context",
     "reviewer",
     "scope_audit",
+    "packet_conformance",
     "requirement_matrix",
     "upstream_api_verification",
     "final_diff_review",
@@ -29,6 +31,9 @@
     "schema_version": {
       "const": "1.0"
     },
+    "schema_id": {
+      "const": "https://synara.invalid/schemas/matrix-rust-sdk/review-report.schema.json"
+    },
     "report_id": {
       "$ref": "#/$defs/nonEmptyId"
     },
@@ -36,7 +41,10 @@
       "$ref": "#/$defs/taskId"
     },
     "task_packet_path": {
-      "$ref": "#/$defs/nonEmptyString"
+      "$ref": "#/$defs/repositoryPath"
+    },
+    "subject": {
+      "$ref": "#/$defs/exactSubject"
     },
     "review_context": {
       "type": "object",
@@ -50,7 +58,7 @@
       ],
       "properties": {
         "integration_branch": {
-          "$ref": "#/$defs/gitRef"
+          "const": "feature/matrix-rust-sdk-full-replacement"
         },
         "work_branch": {
           "$ref": "#/$defs/gitRef"
@@ -62,7 +70,8 @@
           "$ref": "#/$defs/fullSha"
         },
         "pr_url": {
-          "$ref": "#/$defs/httpUrl"
+          "type": "string",
+          "pattern": "^https://github\\.com/nepenth/synara-desktop/pull/[1-9][0-9]*$"
         }
       }
     },
@@ -78,10 +87,10 @@
       ],
       "properties": {
         "identity": {
-          "$ref": "#/$defs/nonEmptyString"
+          "$ref": "#/$defs/principal"
         },
         "role": {
-          "$ref": "#/$defs/nonEmptyString"
+          "const": "independent_reviewer"
         },
         "independent_of_implementation": {
           "const": true
@@ -108,7 +117,7 @@
       ],
       "properties": {
         "allowed_paths": {
-          "$ref": "#/$defs/nonEmptyUniqueStrings"
+          "$ref": "#/$defs/nonEmptyScopeEntries"
         },
         "actual_changed_paths": {
           "$ref": "#/$defs/uniqueStrings"
@@ -127,6 +136,9 @@
         }
       }
     },
+    "packet_conformance": {
+      "$ref": "#/$defs/packetConformance"
+    },
     "requirement_matrix": {
       "type": "array",
       "minItems": 1,
@@ -138,6 +150,7 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
+        "repository_url",
         "release_tag",
         "commit_sha",
         "permalinks",
@@ -145,6 +158,9 @@
         "notes"
       ],
       "properties": {
+        "repository_url": {
+          "const": "https://github.com/matrix-org/matrix-rust-sdk"
+        },
         "release_tag": {
           "$ref": "#/$defs/nonEmptyString"
         },
@@ -170,6 +186,8 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
+        "base_sha",
+        "head_sha",
         "reviewed_range",
         "reviewed_complete_final_diff",
         "correction_rounds",
@@ -177,6 +195,12 @@
         "evidence"
       ],
       "properties": {
+        "base_sha": {
+          "$ref": "#/$defs/fullSha"
+        },
+        "head_sha": {
+          "$ref": "#/$defs/fullSha"
+        },
         "reviewed_range": {
           "type": "string",
           "pattern": "^[0-9a-f]{40}\\.\\.[0-9a-f]{40}$"
@@ -287,6 +311,16 @@
               },
               "verdict": {
                 "const": "pass"
+              }
+            }
+          },
+          "packet_conformance": {
+            "properties": {
+              "dependency_policy": {
+                "properties": { "verdict": { "const": "pass" } }
+              },
+              "prerequisites": {
+                "properties": { "verdict": { "const": "pass" } }
               }
             }
           },
@@ -436,10 +470,45 @@
     }
   ],
   "$defs": {
+    "exactSubject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["base_sha", "head_sha"],
+      "properties": {
+        "base_sha": { "$ref": "#/$defs/fullSha" },
+        "head_sha": { "$ref": "#/$defs/fullSha" }
+      }
+    },
     "nonEmptyString": {
       "type": "string",
       "minLength": 1,
       "pattern": "\\S"
+    },
+    "principal": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "pattern": "^(?=\\S)(?:[^\\u0000-\\u001F\\u007F]*\\S)$"
+    },
+    "repositoryPath": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!/)(?![A-Za-z]:)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//)(?!.*[\\\\\\u0000-\\u001F\\u007F])(?!.*\\/$).+$"
+    },
+    "scopeEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "kind"],
+      "properties": {
+        "path": { "$ref": "#/$defs/repositoryPath" },
+        "kind": { "enum": ["file", "directory"] }
+      }
+    },
+    "nonEmptyScopeEntries": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/scopeEntry" }
     },
     "nonEmptyId": {
       "type": "string",
@@ -482,6 +551,90 @@
     "auditVerdict": {
       "enum": ["pass", "fail", "blocked"]
     },
+    "packetConformance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["dependency_policy", "prerequisites"],
+      "properties": {
+        "dependency_policy": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "changes_detected",
+            "actual_changes",
+            "verdict",
+            "evidence"
+          ],
+          "properties": {
+            "changes_detected": { "type": "boolean" },
+            "actual_changes": { "$ref": "#/$defs/uniqueStrings" },
+            "verdict": { "$ref": "#/$defs/auditVerdict" },
+            "evidence": { "$ref": "#/$defs/nonEmptyUniqueStrings" }
+          }
+        },
+        "prerequisites": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "gates",
+            "required_artifacts",
+            "blocking_assumptions",
+            "verdict",
+            "evidence"
+          ],
+          "properties": {
+            "gates": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/prerequisiteGateReview" }
+            },
+            "required_artifacts": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/prerequisiteArtifactReview" }
+            },
+            "blocking_assumptions": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/blockingAssumptionReview" }
+            },
+            "verdict": { "$ref": "#/$defs/auditVerdict" },
+            "evidence": { "$ref": "#/$defs/nonEmptyUniqueStrings" }
+          }
+        }
+      }
+    },
+    "prerequisiteGateReview": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "required_state", "packet_evidence", "verified"],
+      "properties": {
+        "id": { "$ref": "#/$defs/nonEmptyId" },
+        "required_state": {
+          "enum": ["accepted", "closed", "green", "reviewed"]
+        },
+        "packet_evidence": { "$ref": "#/$defs/nonEmptyString" },
+        "verified": { "type": "boolean" }
+      }
+    },
+    "prerequisiteArtifactReview": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "purpose", "verified"],
+      "properties": {
+        "path": { "$ref": "#/$defs/nonEmptyString" },
+        "purpose": { "$ref": "#/$defs/nonEmptyString" },
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "verified": { "type": "boolean" }
+      }
+    },
+    "blockingAssumptionReview": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["assumption", "verified", "evidence"],
+      "properties": {
+        "assumption": { "$ref": "#/$defs/nonEmptyString" },
+        "verified": { "type": "boolean" },
+        "evidence": { "$ref": "#/$defs/nonEmptyString" }
+      }
+    },
     "requirementReview": {
       "type": "object",
       "additionalProperties": false,
@@ -504,13 +657,19 @@
     "upstreamPermalinkReview": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["url", "claim", "verified"],
+      "required": ["label", "url", "claim", "required", "verified"],
       "properties": {
+        "label": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
         "url": {
           "$ref": "#/$defs/httpUrl"
         },
         "claim": {
           "$ref": "#/$defs/nonEmptyString"
+        },
+        "required": {
+          "type": "boolean"
         },
         "verified": {
           "type": "boolean"
@@ -552,9 +711,13 @@
       "additionalProperties": false,
       "required": [
         "id",
-        "command",
+        "required",
+        "execution_kind",
+        "execution",
         "cwd",
         "environment",
+        "base_sha",
+        "head_sha",
         "started_at",
         "finished_at",
         "exit_code",
@@ -565,17 +728,26 @@
         "id": {
           "$ref": "#/$defs/nonEmptyId"
         },
-        "command": {
+        "required": {
+          "type": "boolean"
+        },
+        "execution_kind": {
+          "enum": ["command", "procedure"]
+        },
+        "execution": {
           "$ref": "#/$defs/nonEmptyString"
         },
         "cwd": {
           "$ref": "#/$defs/nonEmptyString"
         },
         "environment": {
-          "type": "object",
-          "additionalProperties": {
-            "type": "string"
-          }
+          "$ref": "#/$defs/uniqueStrings"
+        },
+        "base_sha": {
+          "$ref": "#/$defs/fullSha"
+        },
+        "head_sha": {
+          "$ref": "#/$defs/fullSha"
         },
         "started_at": {
           "type": "string",
@@ -586,7 +758,7 @@
           "format": "date-time"
         },
         "exit_code": {
-          "type": "integer"
+          "type": ["integer", "null"]
         },
         "result": {
           "$ref": "#/$defs/auditVerdict"
@@ -594,14 +766,48 @@
         "evidence": {
           "$ref": "#/$defs/nonEmptyString"
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "execution_kind": { "const": "command" } },
+            "required": ["execution_kind"]
+          },
+          "then": {
+            "properties": { "exit_code": { "type": "integer" } }
+          },
+          "else": {
+            "properties": { "exit_code": { "type": "null" } }
+          }
+        }
+      ]
     },
     "ciCheck": {
       "type": "object",
       "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "required": {
+                "const": true
+              }
+            },
+            "required": ["required"]
+          },
+          "then": {
+            "properties": {
+              "url": {
+                "pattern": "^https://github\\.com/nepenth/synara-desktop/actions/runs/[1-9][0-9]*(?:/job/[1-9][0-9]*)?$"
+              }
+            }
+          }
+        }
+      ],
       "required": [
         "name",
         "url",
+        "base_sha",
         "head_sha",
         "required",
         "status",
@@ -613,6 +819,9 @@
         },
         "url": {
           "$ref": "#/$defs/httpUrl"
+        },
+        "base_sha": {
+          "$ref": "#/$defs/fullSha"
         },
         "head_sha": {
           "$ref": "#/$defs/fullSha"
@@ -695,6 +904,35 @@
               "required": ["risk_acceptance"]
             }
           }
+        },
+        {
+          "if": {
+            "properties": {
+              "severity": {
+                "enum": ["critical", "high"]
+              },
+              "status": {
+                "const": "accepted-risk"
+              }
+            },
+            "required": ["severity", "status"]
+          },
+          "then": {
+            "properties": {
+              "risk_acceptance": {
+                "properties": {
+                  "authority_role": {
+                    "enum": [
+                      "user",
+                      "product_owner",
+                      "program_owner",
+                      "security_owner"
+                    ]
+                  }
+                }
+              }
+            }
+          }
         }
       ]
     },
@@ -710,13 +948,15 @@
       ],
       "properties": {
         "authority_identity": {
-          "$ref": "#/$defs/nonEmptyString"
+          "$ref": "#/$defs/principal"
         },
         "authority_role": {
-          "$ref": "#/$defs/nonEmptyString"
+          "$ref": "#/$defs/principal"
         },
         "approval_reference": {
-          "$ref": "#/$defs/nonEmptyString"
+          "type": "string",
+          "minLength": 8,
+          "pattern": "^(?:https://[^\\s]+|(?:docs|security|governance|reviews|\\.github)/[^#\\s]+#[A-Za-z0-9._:-]+)$"
         },
         "bounded_rationale": {
           "type": "string",
@@ -773,6 +1013,7 @@
         "identity",
         "role",
         "signed_at",
+        "reviewed_base_sha",
         "reviewed_head_sha",
         "decision",
         "method",
@@ -780,14 +1021,17 @@
       ],
       "properties": {
         "identity": {
-          "$ref": "#/$defs/nonEmptyString"
+          "$ref": "#/$defs/principal"
         },
         "role": {
-          "$ref": "#/$defs/nonEmptyString"
+          "const": "independent_reviewer"
         },
         "signed_at": {
           "type": "string",
           "format": "date-time"
+        },
+        "reviewed_base_sha": {
+          "$ref": "#/$defs/fullSha"
         },
         "reviewed_head_sha": {
           "$ref": "#/$defs/fullSha"

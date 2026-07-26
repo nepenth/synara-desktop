@@ -12,37 +12,58 @@
 > delegate the task while a material architecture question remains. Do not
 > change a gate or task status merely because implementation or merge occurred.
 
+Canonical instances live only under
+`docs/matrix-rust-sdk/governance/task-packets/` and use the suffix
+`.task-packet.json`. Symlinks, non-regular files, alternate suffixes, duplicate
+JSON keys, and governance `schema_id` values outside that root are invalid.
+Missing roots or zero instances validate contracts only and claim no governed
+instance acceptance.
+
 ## 1. Packet and task identity
 
-| JSON field       | Required value                                     |
-| ---------------- | -------------------------------------------------- |
-| `schema_version` | `1.0`                                              |
-| `packet_id`      | Unique packet identifier, for example `R0.3-A`     |
-| `task.id`        | Plan/remediation task ID                           |
-| `task.title`     | Bounded task title                                 |
-| `task.objective` | One outcome-oriented paragraph defining completion |
+| JSON field       | Required value                                                                        |
+| ---------------- | ------------------------------------------------------------------------------------- |
+| `schema_version` | `1.0`                                                                                 |
+| `schema_id`      | `https://synara.invalid/schemas/matrix-rust-sdk/native-agent-task-packet.schema.json` |
+| `packet_id`      | Unique packet identifier, for example `R0.3-A`                                        |
+| `task.id`        | Plan/remediation task ID                                                              |
+| `task.title`     | Bounded task title                                                                    |
+| `task.objective` | One outcome-oriented paragraph defining completion                                    |
+
+Populate `writer.identity` with the stable implementation-writer identity and
+set `writer.role` to exactly `implementation_writer`. Every field in
+`writer.git_pr_authority` is explicitly
+`false`: `commit`, `push`, `rebase`, `switch_branch`, `open_pr`, `merge_pr`,
+`delete_unrelated_files`, and `modify_program_plan`. The orchestrator alone
+owns Git/PR actions and program-plan changes. A packet delegates bounded file
+work, never repository control.
 
 ## 2. Git and PR context
 
 Record immutable branch context before work begins. The full 40-character base
 SHA is mandatory.
 
-| JSON field                       | Value                                                  |
-| -------------------------------- | ------------------------------------------------------ |
-| `git_context.integration_branch` | `<integration branch>`                                 |
-| `git_context.base_sha`           | `<40-character integration SHA>`                       |
-| `git_context.work_branch`        | `<task work branch>`                                   |
-| `git_context.pr_target`          | `<integration branch; never main for migration tasks>` |
-| `git_context.expected_pr_state`  | `draft` or `ready-for-review`                          |
+| JSON field                       | Value                                      |
+| -------------------------------- | ------------------------------------------ |
+| `git_context.integration_branch` | `feature/matrix-rust-sdk-full-replacement` |
+| `git_context.base_sha`           | `<40-character integration SHA>`           |
+| `git_context.work_branch`        | `<task work branch>`                       |
+| `git_context.pr_target`          | `feature/matrix-rust-sdk-full-replacement` |
+| `git_context.expected_pr_state`  | `draft` or `ready-for-review`              |
+| `git_context.required_ci_checks` | Nonempty unique exact required check names |
 
-The writer must stop if the actual base or target differs from this packet.
+`integration_branch` and `pr_target` are semantically equal and never `main`.
+The writer must stop if the actual base, work branch, or target differs from
+this packet; the writer must not switch or repair branch state.
 
 ## 3. File and dependency scope
 
 ### Allowed paths
 
-Populate `file_scope.allowed_paths` with exact files or narrowly bounded
-directories:
+Populate `file_scope.allowed_paths` with typed objects `{path, kind}`, where
+`kind` is `file` or `directory`. Files match only exactly; directories match
+themselves and descendants. Reject absolute, drive/UNC, `.`, `..`, empty
+segments, trailing slash, control/NUL, or backslash-ambiguous paths.
 
 - `<allowed path>`
 
@@ -54,8 +75,8 @@ Populate `file_scope.prohibited_paths`:
 
 ### Generated and out-of-scope paths
 
-- `file_scope.generated_paths`: `<generated output or empty array>`
-- `file_scope.out_of_scope_paths`: `<explicitly excluded area or empty array>`
+- `file_scope.generated_paths`: `<exact normalized generated file or empty array>`
+- `file_scope.out_of_scope_paths`: `<typed excluded entry or empty array>`
 
 ### Dependency policy
 
@@ -97,8 +118,11 @@ Every requirement below must map to a criterion and evidence row in Section 11.
 For each `upstream_evidence.permalinks[]` entry, provide:
 
 - `label`: API/source identifier;
-- `url`: commit-pinned HTTPS permalink, not moving `main`;
+- `url`: exact
+  `https://github.com/matrix-org/matrix-rust-sdk/blob/<commit_sha>/...`
+  permalink, never a moving branch or tag;
 - `claim`: the precise claim established by that source.
+- `required`: whether acceptance requires this exact source to be verified.
 
 A docs.rs page or compile probe establishes only what it actually proves. It
 must not be described as live product parity.
@@ -199,12 +223,10 @@ required, record a concrete waiver rationale; omission is not a waiver.
 
 ### Automated (`validations.automated`)
 
-For each case record `id`, exact `command`, `description`, `environment`, and
-`expected_evidence`.
-
-Every required or optional automated case must include `command`; a prose-only
-automated case is schema-invalid. Other categories may use an exact command or
-a reproducible procedural description when no command applies.
+For every case record `id`, `description`, `execution_kind` (`command` or
+`procedure`), exact nonempty `execution`, `environment`, and
+`expected_evidence`. Automated cases must use `command`; other categories may
+use either kind. A report must reproduce kind, text, and environment exactly.
 
 ### Live disposable Synapse (`validations.live_synapse`)
 
@@ -241,15 +263,18 @@ at least one criterion.
 
 ## 12. Stop and escalate conditions
 
-Each `stop_escalate_conditions[]` entry contains `id`, `condition`,
-`required_action`, and `decision_authority`. At minimum include conditions for:
+Each `stop_escalate_conditions[]` entry contains `id`, `category`, `condition`,
+`required_action`, and `decision_authority`. Include exactly one concrete
+condition for every mandatory category:
 
-- missing stable or typed SDK support;
-- required API being experimental beyond an approved gate;
-- file/dependency/task scope expansion;
-- a conflict with security, privacy, lifecycle, or failure invariants;
-- inability to reproduce a prerequisite baseline or required test;
-- a material architecture question not answered by reviewed artifacts.
+- `scope-dependency`: file, dependency, generated-output, or task scope would expand;
+- `git-base-target`: actual base SHA, work branch, integration branch, or PR target differs;
+- `upstream-architecture`: stable/typed SDK support is absent, upstream is experimental
+  beyond an approved gate, or an architecture question remains unresolved;
+- `invariant`: a security, privacy, lifecycle, or failure invariant cannot be preserved;
+- `prerequisite-validation-evidence`: a prerequisite, baseline, required validation,
+  or exact evidence requirement cannot be reproduced;
+- `authority-approval`: the requested action lacks explicit authority or approval.
 
 The writer stops and reports evidence. It does not invent raw HTTP, a backend
 selector, a second Matrix owner, or a weakened acceptance substitute.

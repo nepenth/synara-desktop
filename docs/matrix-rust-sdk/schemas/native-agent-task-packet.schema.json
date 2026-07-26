@@ -3,12 +3,13 @@
   "$id": "https://synara.invalid/schemas/matrix-rust-sdk/native-agent-task-packet.schema.json",
   "title": "Synara native implementation-agent task packet",
   "description": "Draft authoritative contract, ready for independent review, for a bounded implementation task delegated to a native agent. A packet describes work; it does not grant review or merge authority.",
-  "x-artifact-state": "ready_for_independent_review",
   "type": "object",
   "additionalProperties": false,
   "required": [
     "schema_version",
+    "schema_id",
     "packet_id",
+    "writer",
     "task",
     "git_context",
     "file_scope",
@@ -30,8 +31,27 @@
     "schema_version": {
       "const": "1.0"
     },
+    "schema_id": {
+      "const": "https://synara.invalid/schemas/matrix-rust-sdk/native-agent-task-packet.schema.json"
+    },
     "packet_id": {
       "$ref": "#/$defs/nonEmptyId"
+    },
+    "writer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["identity", "role", "git_pr_authority"],
+      "properties": {
+        "identity": {
+          "$ref": "#/$defs/principal"
+        },
+        "role": {
+          "const": "implementation_writer"
+        },
+        "git_pr_authority": {
+          "$ref": "#/$defs/writerAuthority"
+        }
+      }
     },
     "task": {
       "type": "object",
@@ -57,11 +77,12 @@
         "base_sha",
         "work_branch",
         "pr_target",
-        "expected_pr_state"
+        "expected_pr_state",
+        "required_ci_checks"
       ],
       "properties": {
         "integration_branch": {
-          "$ref": "#/$defs/gitRef"
+          "const": "feature/matrix-rust-sdk-full-replacement"
         },
         "base_sha": {
           "$ref": "#/$defs/fullSha"
@@ -70,10 +91,13 @@
           "$ref": "#/$defs/gitRef"
         },
         "pr_target": {
-          "$ref": "#/$defs/gitRef"
+          "const": "feature/matrix-rust-sdk-full-replacement"
         },
         "expected_pr_state": {
           "enum": ["draft", "ready-for-review"]
+        },
+        "required_ci_checks": {
+          "$ref": "#/$defs/nonEmptyUniqueStrings"
         }
       }
     },
@@ -88,16 +112,16 @@
       ],
       "properties": {
         "allowed_paths": {
-          "$ref": "#/$defs/nonEmptyUniqueStrings"
+          "$ref": "#/$defs/nonEmptyScopeEntries"
         },
         "prohibited_paths": {
-          "$ref": "#/$defs/nonEmptyUniqueStrings"
+          "$ref": "#/$defs/nonEmptyScopeEntries"
         },
         "generated_paths": {
-          "$ref": "#/$defs/uniqueStrings"
+          "$ref": "#/$defs/uniqueRepositoryPaths"
         },
         "out_of_scope_paths": {
-          "$ref": "#/$defs/uniqueStrings"
+          "$ref": "#/$defs/uniqueScopeEntries"
         }
       }
     },
@@ -190,7 +214,7 @@
       "required": ["repository_url", "release_tag", "commit_sha", "permalinks"],
       "properties": {
         "repository_url": {
-          "$ref": "#/$defs/httpUrl"
+          "const": "https://github.com/matrix-org/matrix-rust-sdk"
         },
         "release_tag": {
           "$ref": "#/$defs/nonEmptyString"
@@ -331,7 +355,7 @@
     },
     "stop_escalate_conditions": {
       "type": "array",
-      "minItems": 1,
+      "minItems": 6,
       "items": {
         "$ref": "#/$defs/stopCondition"
       }
@@ -410,10 +434,70 @@
     }
   },
   "$defs": {
+    "writerAuthority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "commit",
+        "push",
+        "rebase",
+        "switch_branch",
+        "open_pr",
+        "merge_pr",
+        "delete_unrelated_files",
+        "modify_program_plan"
+      ],
+      "properties": {
+        "commit": { "const": false },
+        "push": { "const": false },
+        "rebase": { "const": false },
+        "switch_branch": { "const": false },
+        "open_pr": { "const": false },
+        "merge_pr": { "const": false },
+        "delete_unrelated_files": { "const": false },
+        "modify_program_plan": { "const": false }
+      }
+    },
     "nonEmptyString": {
       "type": "string",
       "minLength": 1,
       "pattern": "\\S"
+    },
+    "principal": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "pattern": "^(?=\\S)(?:[^\\u0000-\\u001F\\u007F]*\\S)$"
+    },
+    "repositoryPath": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!/)(?![A-Za-z]:)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//)(?!.*[\\\\\\u0000-\\u001F\\u007F])(?!.*\\/$).+$"
+    },
+    "scopeEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "kind"],
+      "properties": {
+        "path": { "$ref": "#/$defs/repositoryPath" },
+        "kind": { "enum": ["file", "directory"] }
+      }
+    },
+    "uniqueScopeEntries": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/scopeEntry" }
+    },
+    "nonEmptyScopeEntries": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/scopeEntry" }
+    },
+    "uniqueRepositoryPaths": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/repositoryPath" }
     },
     "nonEmptyId": {
       "type": "string",
@@ -463,7 +547,7 @@
     "upstreamPermalink": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["label", "url", "claim"],
+      "required": ["label", "url", "claim", "required"],
       "properties": {
         "label": {
           "$ref": "#/$defs/nonEmptyString"
@@ -473,6 +557,9 @@
         },
         "claim": {
           "$ref": "#/$defs/nonEmptyString"
+        },
+        "required": {
+          "type": "boolean"
         }
       }
     },
@@ -602,7 +689,9 @@
           "properties": {
             "cases": {
               "items": {
-                "required": ["command"]
+                "properties": {
+                  "execution_kind": { "const": "command" }
+                }
               }
             }
           }
@@ -612,7 +701,14 @@
     "validationCase": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "description", "environment", "expected_evidence"],
+      "required": [
+        "id",
+        "description",
+        "execution_kind",
+        "execution",
+        "environment",
+        "expected_evidence"
+      ],
       "properties": {
         "id": {
           "$ref": "#/$defs/nonEmptyId"
@@ -620,7 +716,10 @@
         "description": {
           "$ref": "#/$defs/nonEmptyString"
         },
-        "command": {
+        "execution_kind": {
+          "enum": ["command", "procedure"]
+        },
+        "execution": {
           "$ref": "#/$defs/nonEmptyString"
         },
         "environment": {
@@ -650,10 +749,26 @@
     "stopCondition": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "condition", "required_action", "decision_authority"],
+      "required": [
+        "id",
+        "category",
+        "condition",
+        "required_action",
+        "decision_authority"
+      ],
       "properties": {
         "id": {
           "$ref": "#/$defs/nonEmptyId"
+        },
+        "category": {
+          "enum": [
+            "scope-dependency",
+            "git-base-target",
+            "upstream-architecture",
+            "invariant",
+            "prerequisite-validation-evidence",
+            "authority-approval"
+          ]
         },
         "condition": {
           "$ref": "#/$defs/nonEmptyString"
