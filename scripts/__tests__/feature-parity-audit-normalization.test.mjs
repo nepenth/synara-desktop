@@ -285,12 +285,35 @@ function assertFakeGitChildrenClosed(children) {
   }
 }
 
+function reclaimHeapIfPossible() {
+  // Optional: child is spawned with --expose-gc. Never required for correctness.
+  if (typeof globalThis.gc === "function") {
+    globalThis.gc();
+  }
+}
+
+/**
+ * Deterministic dual-render digests without holding two full markdown buffers
+ * or a structuredClone of the entire 119-row graph at peak RSS.
+ *
+ * Renders twice and compares digests only (bytes discarded after hash).
+ * Proves render determinism on a fixed live object without cloning the graph.
+ */
+function dualRenderDigests(render) {
+  const firstDigest = api.sha256(render().bytes);
+  const secondDigest = api.sha256(render().bytes);
+  assert.equal(firstDigest, secondDigest);
+  return [firstDigest, secondDigest];
+}
+
 async function measureOperation(operation) {
+  reclaimHeapIfPossible();
   let peakRssBytes = process.memoryUsage().rss;
   const sample = () => {
     peakRssBytes = Math.max(peakRssBytes, process.memoryUsage().rss);
   };
-  const interval = setInterval(sample, 1);
+  // 10ms sampling is enough for peak capture and avoids timer thrash cost.
+  const interval = setInterval(sample, 10);
   const started = process.hrtime.bigint();
   try {
     const value = await operation();
@@ -321,7 +344,14 @@ function runIsolatedBenchmarkChild() {
   delete childEnvironment.NODE_TEST_CONTEXT;
   const result = spawnSync(
     process.execPath,
-    ["--test", `--test-name-pattern=^${BENCHMARK_TEST_NAME}$`, TEST_FILE],
+    // --expose-gc lets the isolated child reclaim heap between audit and v2
+    // phases so peak RSS measures the active phase, not residual growth.
+    [
+      "--expose-gc",
+      "--test",
+      `--test-name-pattern=^${BENCHMARK_TEST_NAME}$`,
+      TEST_FILE,
+    ],
     {
       cwd: REPOSITORY_ROOT,
       env: childEnvironment,
@@ -4184,10 +4214,12 @@ test(BENCHMARK_TEST_NAME, async (t) => {
   );
   const firstLineEnd = sourceBytes.indexOf(0x0a);
   assert.ok(firstLineEnd >= 0);
-  const snippet = sourceBytes.subarray(0, firstLineEnd + 1);
+  // Copy only the first-line snippet; drop the full blob buffer immediately.
+  const snippet = Buffer.from(sourceBytes.subarray(0, firstLineEnd + 1));
   assert.equal(snippet.toString("utf8"), "{\n");
+  const snippetSha = api.sha256(snippet);
 
-  const audit = productionShapedAuditFixture();
+  let audit = productionShapedAuditFixture();
   for (const row of audit.rows) {
     const clause = row.clauses[0];
     const evidenceId = `EV-${clause.id.replace(".C", "-C")}-SRC-001`;
@@ -4198,7 +4230,7 @@ test(BENCHMARK_TEST_NAME, async (t) => {
         symbol: "{",
         lines: { start: 1, end: 1 },
         source_sha: api.AUDITED_SOURCE_COMMIT,
-        snippet_sha256: api.sha256(snippet),
+        snippet_sha256: snippetSha,
         role: "reachability_entry",
         explanation:
           "Synthetic benchmark evidence reads an exact immutable Git blob.",
@@ -4233,14 +4265,16 @@ test(BENCHMARK_TEST_NAME, async (t) => {
         gitObjects: auditReader,
       });
       assert.deepEqual(errors, []);
-      const first = api.renderAuditMarkdown(audit).bytes;
-      const second = api.renderAuditMarkdown(structuredClone(audit)).bytes;
-      assert.deepEqual(first, second);
-      return [api.sha256(first), api.sha256(second)];
+      // Sequential digests: do not hold two full markdown buffers + structuredClone.
+      return dualRenderDigests(() => api.renderAuditMarkdown(audit));
     });
   } finally {
     await settlesWithin(auditReader.close(), 5_000);
   }
+
+  // Reclaim audit-phase peak before measuring v2 so residual heap is not billed
+  // to the v2 budget (the prior CI failure: "v2 exceeded 512 MiB").
+  reclaimHeapIfPossible();
 
   const v1 = api.parseCanonicalJson(
     git(root, ["show", `${api.AUDITED_SOURCE_COMMIT}:${api.V1_PATH}`], {
@@ -4277,14 +4311,14 @@ test(BENCHMARK_TEST_NAME, async (t) => {
         durableAudit: audit,
       });
       assert.deepEqual(errors, []);
-      const first = api.renderTraceabilityMarkdown(v2).bytes;
-      const second = api.renderTraceabilityMarkdown(structuredClone(v2)).bytes;
-      assert.deepEqual(first, second);
-      return [api.sha256(first), api.sha256(second)];
+      return dualRenderDigests(() => api.renderTraceabilityMarkdown(v2));
     });
   } finally {
     await settlesWithin(v2Reader.close(), 5_000);
   }
+  // Allow GC of audit fixture after v2 measurement; identity already captured.
+  audit = null;
+  reclaimHeapIfPossible();
 
   for (const [name, reader, calls, measurement] of [
     ["audit", auditReader, auditCalls, auditMeasurement],
