@@ -25,7 +25,7 @@
 
 | | |
 | --- | --- |
-| **Now** | **P3.6 merged.** Next: land **#114** P4.1 (needs tip rebase — guardrail conflict with P3.6) then **#115** P4.2; merge **#113** CI filters when green. |
+| **Now** | **P3.6 merged** (`69f1087`). **#114** rebased onto tip (P3.6+P4.1 guardrails combined). **#115** restacked. Waiting CI → merge P4.1 next. |
 | **Inventory** | ~23/112 original task artifacts when program-status is synced (P3.1–P3.2 + P3.5–P3.6 landed; see ledger). |
 | **Phase gates** | **0 / 15** strict gates closed (honest). |
 | **Open PRs → integration** | [#114](https://github.com/nepenth/synara-desktop/pull/114) P4.1 (rebase on tip); [#115](https://github.com/nepenth/synara-desktop/pull/115) P4.2; [#113](https://github.com/nepenth/synara-desktop/pull/113) CI filters; [#111](https://github.com/nepenth/synara-desktop/pull/111) this log; [#109](https://github.com/nepenth/synara-desktop/pull/109) MiniMax (deprioritize). |
@@ -58,6 +58,7 @@ Update rules:
 
 | When (UTC) | Item | Result | Notes |
 | --- | --- | --- | --- |
+| ~14:08 | **#114** rebased on tip after #112 | **Pushed** `d0ab3e5` | Combined lifecycle restore + sync guardrail zones; matrix tests 270/270. #115/#113 also tip-merged. |
 | ~14:07 | **P3.6** session restore | **Merged** [#112](https://github.com/nepenth/synara-desktop/pull/112) | Vault → identity bind → `restore_session`. Tip `69f1087`. Full CI green (iOS ~23m). |
 | ~14:00 | **P4.2** room-list snapshot/delta | **PR open** [#115](https://github.com/nepenth/synara-desktop/pull/115) | Pure `RoomListProjection` + delta ops + sequence gap resync. Local 10/10; stacks on #114. |
 | ~13:53 | **P4.1** sync readiness foundation | **PR open** [#114](https://github.com/nepenth/synara-desktop/pull/114) | `matrix/sync/`: readiness map, reconnect table, SyncServiceOwner, guardrail confine `SyncService::builder`. Local 12/12 + clippy + guardrails green. |
