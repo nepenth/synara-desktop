@@ -288,6 +288,95 @@ function aggregateGateError(jobLines, expectedName, expectedNeeds) {
   return "job must explicitly exit 1 unless every required job result is success";
 }
 
+/**
+ * CI quality gate after path filters: needs include `changes` plus the three
+ * heavy jobs. `changes` must be success; heavy jobs may be success or skipped.
+ */
+function pathFilteredCiAggregateError(jobLines) {
+  if (!jobLines) return "job is missing";
+  if (getScalar(jobLines, "name", 4) !== "Quality gate") {
+    return "job name must be Quality gate";
+  }
+  if (getScalar(jobLines, "if", 4) !== "always()") {
+    return "job must use if: always()";
+  }
+  const expectedNeeds = [
+    "changes",
+    "validate",
+    "ios-tests",
+    "synapse-integration",
+  ];
+  if (!sameList(getList(jobLines, "needs", 4), expectedNeeds)) {
+    return `job needs must be exactly [${expectedNeeds.join(", ")}]`;
+  }
+
+  for (const step of parseSteps(jobLines)) {
+    const environment = getStepEnvironment(step);
+    const changesVar = [...environment.entries()].find(
+      ([, value]) => value === "${{ needs.changes.result }}"
+    )?.[0];
+    const desktopVar = [...environment.entries()].find(
+      ([, value]) => value === "${{ needs.validate.result }}"
+    )?.[0];
+    const iosVar = [...environment.entries()].find(
+      ([, value]) => value === "${{ needs.ios-tests.result }}"
+    )?.[0];
+    const synapseVar = [...environment.entries()].find(
+      ([, value]) => value === "${{ needs.synapse-integration.result }}"
+    )?.[0];
+    if (!changesVar || !desktopVar || !iosVar || !synapseVar) continue;
+
+    const runLines = executableLines(getStepRun(step));
+    const runText = runLines.join("\n");
+
+    // changes must hard-fail unless success.
+    const changesGuard = runLines.findIndex(
+      (line) =>
+        line.includes(`"$${changesVar}" != "success"`) ||
+        line.includes(`"$${changesVar}" == "success"`)
+    );
+    if (changesGuard < 0) continue;
+    const changesExit = runLines
+      .slice(changesGuard)
+      .findIndex((line) => line === "exit 1");
+    if (changesExit < 0) continue;
+
+    // Path-filtered heavy jobs: success|skipped accepted via case arm.
+    if (!runText.includes("success|skipped")) continue;
+
+    // Each heavy result variable must be referenced in an ok()/case path.
+    if (
+      !runText.includes(`"$${desktopVar}"`) ||
+      !runText.includes(`"$${iosVar}"`) ||
+      !runText.includes(`"$${synapseVar}"`)
+    ) {
+      continue;
+    }
+
+    // Aggregate fail flag must force a bare exit 1 (not quoted/echoed/short-circuited).
+    const failExit = runLines.findIndex(
+      (line, idx) =>
+        line === "exit 1" &&
+        idx > changesGuard + changesExit &&
+        runLines[idx - 1]?.includes("fail")
+    );
+    // Also accept: `if [[ "$fail" -ne 0 ]]; then` then `exit 1`
+    const failBlock = runLines.findIndex((line) =>
+      /\[\[\s*"\$fail"\s*-ne\s*0\s*\]\]/.test(line)
+    );
+    if (failBlock >= 0) {
+      const body = runLines.slice(failBlock + 1);
+      const end = body.indexOf("fi");
+      if (end > 0 && body.slice(0, end).includes("exit 1")) {
+        return undefined;
+      }
+    }
+    if (failExit >= 0) return undefined;
+  }
+
+  return "job must require changes=success, allow success|skipped for validate/ios/synapse, and exit 1 on failure";
+}
+
 export function inspectQualityGates({
   ciWorkflow,
   iosWorkflow,
@@ -391,10 +480,8 @@ export function inspectQualityGates({
     );
   }
 
-  const ciAggregateError = aggregateGateError(
-    ciJobs.get("quality-gate"),
-    "Quality gate",
-    ["validate", "ios-tests", "synapse-integration"]
+  const ciAggregateError = pathFilteredCiAggregateError(
+    ciJobs.get("quality-gate")
   );
   if (ciAggregateError) errors.push(`CI aggregate ${ciAggregateError}.`);
 
