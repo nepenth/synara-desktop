@@ -66,5 +66,5 @@ pub fn matrix_ipc_schema_markers() -> &'static str {
     debug_assert_eq!(_diagnostics, diagnostics::MATRIX_DIAGNOSTICS_MARKER);
     debug_assert_eq!(_lifecycle, lifecycle::MATRIX_LIFECYCLE_MARKER);
     debug_assert_eq!(_auth, auth::MATRIX_AUTH_MARKER);
-    "matrix-ipc-protocol-v1+domain-dtos-p1.4+supervisor-p2.1+store-p2.2+client-builder-p2.3+tasks-p2.4+diagnostics-p2.5+lifecycle-p2.6+auth-p3.1"
+    "matrix-ipc-protocol-v1+domain-dtos-p1.4+supervisor-p2.1+store-p2.2+client-builder-p2.3+tasks-p2.4+diagnostics-p2.5+lifecycle-p2.6+auth-p3.2"
 }

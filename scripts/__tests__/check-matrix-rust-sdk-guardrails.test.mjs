@@ -211,6 +211,64 @@ test("allows Client::builder under matrix/client_builder/ but bans login/sync", 
   }
 });
 
+test("allows password/token login under matrix/auth/ but bans Client::builder and sync", () => {
+  const { root, files } = makeTree({
+    "src-tauri/src/matrix/auth/login.rs":
+      "async fn login(c: &Client) { let _ = c.matrix_auth().login_username(\"a\", \"b\").initial_device_display_name(\"Synara macOS\").await; let _ = c.matrix_auth().login_token(\"t\"); }\n",
+    "src-tauri/src/matrix/auth/evil_builder.rs":
+      "fn open() { let _ = Client::builder(); }\n",
+    "src-tauri/src/matrix/auth/evil_sync.rs":
+      "async fn s(c: &Client) { let _ = c.sync_once(Default::default()).await; }\n",
+    "src-tauri/src/matrix/supervisor/evil_login.rs":
+      "fn login(c: &Client) { let _ = c.matrix_auth().login_token(\"t\"); }\n",
+    "src-tauri/src/matrix/ipc/version.rs":
+      "pub const MATRIX_IPC_PROTOCOL_VERSION: u32 = 1;\n",
+    "synara/src/app/features/matrix-ipc/version.ts":
+      "export const MATRIX_IPC_PROTOCOL_VERSION = 1 as const;\n",
+  });
+  try {
+    const result = runGuardrails({ root, files });
+    assert.equal(result.ok, false, formatFail(result));
+    // login under auth/ must be allowed
+    assert.ok(
+      !result.violations.some(
+        (v) =>
+          v.rule === "no-production-matrix-client-in-matrix-module" &&
+          v.path.includes("auth/login.rs")
+      ),
+      formatFail(result)
+    );
+    // builder and sync under auth must fail
+    assert.ok(
+      result.violations.some(
+        (v) =>
+          v.rule === "no-production-matrix-client-in-matrix-module" &&
+          v.path.includes("evil_builder.rs")
+      ),
+      formatFail(result)
+    );
+    assert.ok(
+      result.violations.some(
+        (v) =>
+          v.rule === "no-production-matrix-client-in-matrix-module" &&
+          v.path.includes("evil_sync.rs")
+      ),
+      formatFail(result)
+    );
+    // login outside auth must fail
+    assert.ok(
+      result.violations.some(
+        (v) =>
+          v.rule === "no-production-matrix-client-in-matrix-module" &&
+          v.path.includes("evil_login.rs")
+      ),
+      formatFail(result)
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("fails on dual-backend selector pattern", () => {
   const { root, files } = makeTree({
     "synara/src/app/state/matrixBackend.ts":

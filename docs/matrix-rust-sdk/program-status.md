@@ -12,12 +12,12 @@ Audited snapshot: `edfefee499064b736985b6528896b693e5120f22`
 ## Current execution
 
 - Active task: **None**
-- Next task: **P3.2**
-- Blocked tasks: **P3.2** (by `R0.2`, `R0.7`, `R0.8`)
+- Next task: **P3.3**
+- Blocked tasks: None
 
 ## Inventory and runtime
 
-- Landed original task artifacts: **20 / 112**
+- Landed original task artifacts: **21 / 112**
 - Shipping Matrix client: `matrix-js-sdk-only`
 - Rust SDK state: `harness-foundation-only`
 - Dual backend: `false`
@@ -30,7 +30,7 @@ Audited snapshot: `edfefee499064b736985b6528896b693e5120f22`
 | 0 | 7/7 | 0/7 | `R0.2`, `R0.8` | `open` | `open` |
 | 1 | 6/6 | 0/6 | `R0.1`, `R0.3`, `R0.8` | `open` | `open` |
 | 2 | 6/6 | 0/6 | `R0.4`, `R0.5`, `R0.6`, `R0.7`, `R0.8` | `open` | `open` |
-| 3 | 1/8 | 0/8 | `R0.7`, `R0.8` | `open` | `open` |
+| 3 | 2/8 | 0/8 | `R0.7`, `R0.8` | `open` | `open` |
 | 4 | 0/8 | 0/8 | None | `not_reviewed` | `open` |
 | 5 | 0/10 | 0/10 | None | `not_reviewed` | `open` |
 | 6 | 0/8 | 0/8 | None | `not_reviewed` | `open` |
@@ -50,7 +50,7 @@ Audited snapshot: `edfefee499064b736985b6528896b693e5120f22`
 | ID | Task | Artifact state | Integration state | Strict acceptance |
 |---|---|---|---|---|
 | R0.1 | Quality and metadata recovery | `landed` | `merged` | `accepted` |
-| R0.2 | Governance and Phase 0 evidence | `landed` | `pr_open` | `open` |
+| R0.2 | Governance and Phase 0 evidence | `landed` | `merged` | `open` |
 | R0.3 | IPC wire-contract correctness | `landed` | `merged` | `accepted` |
 | R0.4 | Store confinement and key management | `landed` | `merged` | `accepted` |
 | R0.5 | Safe destructive lifecycle | `landed` | `merged` | `accepted` |
@@ -84,3 +84,4 @@ Audited snapshot: `edfefee499064b736985b6528896b693e5120f22`
 | P2.5 | `landed` | `merged` | `open` | `open` |
 | P2.6 | `landed` | `merged` | `open` | `open` |
 | P3.1 | `landed` | `merged` | `open` | `open` |
+| P3.2 | `landed` | `pr_open` | `open` | `open` |
