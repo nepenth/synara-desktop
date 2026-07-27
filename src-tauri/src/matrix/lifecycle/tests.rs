@@ -166,6 +166,11 @@ fn wipe_removes_exact_account_only_sibling_untouched() {
     let report = wipe_account_store(&target, Some(&vault)).unwrap();
 
     assert_eq!(report.account_segment, alice_paths.account_segment());
+    assert_eq!(report.wipe_target_kind, WIPE_TARGET_KIND_ACCOUNT_ROOT);
+    // R0.6 / REV-003: wipe report must not embed absolute paths.
+    let report_dbg = format!("{report:?}");
+    assert!(!report_dbg.contains(root.to_string_lossy().as_ref()));
+    assert!(!report_dbg.contains(alice_paths.account_root().to_string_lossy().as_ref()));
     assert!(!alice_paths.account_root().exists());
     assert!(!alice_paths.state_dir().exists());
 
