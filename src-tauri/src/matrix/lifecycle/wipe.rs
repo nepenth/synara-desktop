@@ -214,6 +214,13 @@ fn map_path_err(err: StorePathError) -> LifecycleError {
         StorePathError::PathEscapesRoot => LifecycleError::PathEscapesRoot {
             diagnostic_id: "p2.6-store-path-escapes-root",
         },
+        StorePathError::RelativeAppDataRoot => LifecycleError::InvalidTarget {
+            diagnostic_id: "r0.4-relative-app-data-root",
+        },
+        StorePathError::SymlinkRefused => LifecycleError::WipeRefused {
+            diagnostic_id: "r0.4-symlink-refused",
+            reason: "managed store path must not be a symlink",
+        },
         StorePathError::Io(e) => LifecycleError::Io(e),
     }
 }
