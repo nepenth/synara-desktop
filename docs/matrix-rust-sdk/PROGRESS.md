@@ -9,8 +9,8 @@
 
 | Field | Value |
 | --- | --- |
-| Last updated (UTC) | **2026-07-27 ~14:42** |
-| Integration tip | `168ca2b` — Merge #113 CI path-filter heavy jobs |
+| Last updated (UTC) | **2026-07-27 ~14:47** |
+| Integration tip | `b3397db` — Merge #111 PROGRESS.md live work log |
 | Product runtime | Still **`matrix-js-sdk` only** until atomic sole-owner cutover |
 | Dual backend | **`false`** (forbidden forever) |
 | Operating model | [cutover-operating-model.md](cutover-operating-model.md) |
@@ -25,11 +25,11 @@
 
 | | |
 | --- | --- |
-| **Now** | **#113 CI path filters merged** (`168ca2b`). **#114** P4.1 branch updated onto tip (CI re-run). Next: merge #114 when green, then #115–#119. |
+| **Now** | **Primary: merge #114 P4.1** when CI green (update-branch after #111). Stacked #115–#119 re-running after tip + clippy fix on #116+. |
 | **Inventory** | ~23/112 original task artifacts when program-status is synced (P3.1–P3.2 + P3.5–P3.6 landed; see ledger). |
 | **Phase gates** | **0 / 15** strict gates closed (honest). |
-| **Open PRs → integration** | [#114](https://github.com/nepenth/synara-desktop/pull/114) P4.1; [#115](https://github.com/nepenth/synara-desktop/pull/115) P4.2; [#116](https://github.com/nepenth/synara-desktop/pull/116) P4.3; [#111](https://github.com/nepenth/synara-desktop/pull/111) this log; [#109](https://github.com/nepenth/synara-desktop/pull/109) MiniMax (deprioritize). |
-| **Blocked on** | Rebase/resolve #114 vs tip; CI green for product PRs. Required: Quality gate + Desktop package gate. |
+| **Open PRs → integration** | [#114](https://github.com/nepenth/synara-desktop/pull/114) P4.1; [#115](https://github.com/nepenth/synara-desktop/pull/115) P4.2; [#116](https://github.com/nepenth/synara-desktop/pull/116)–[#119](https://github.com/nepenth/synara-desktop/pull/119) stacked; [#109](https://github.com/nepenth/synara-desktop/pull/109) MiniMax (deprioritize). |
+| **Blocked on** | CI green for #114 (then sequential merge stack). Required: Quality gate + Desktop package gate. |
 | **Dogfood path** | Login ✅ → persist ✅ → restore ✅ (**#112**) → **sync readiness (#114)** → **room list (#115)** → timeline. |
 
 ---
@@ -58,7 +58,10 @@ Update rules:
 
 | When (UTC) | Item | Result | Notes |
 | --- | --- | --- | --- |
-| ~14:42 | CI path filters for heavy jobs | **Merged** [#113](https://github.com/nepenth/synara-desktop/pull/113) | Job-level scopes; quality-gate accepts success\|skipped. Tip `168ca2b`. |
+| ~14:47 | P4.3+ clippy `needless_borrow` | **Fixed** on [#116](https://github.com/nepenth/synara-desktop/pull/116)–[#119](https://github.com/nepenth/synara-desktop/pull/119) | Lint Rust failed at `room_list/tests.rs` scope test; dropped extra `&` on `find().unwrap()`. Branches rebased/merged onto tip. |
+| ~14:46 | Tip update-branch #114/#115/#109 | **Kicked** | After #111 merge so product PRs not BEHIND; #109 should get path-filtered skip of iOS. |
+| ~14:45 | **PROGRESS.md** live work log | **Merged** [#111](https://github.com/nepenth/synara-desktop/pull/111) | Docs-only CI: heavy jobs skipped, Quality gate green. Tip `b3397db`. |
+| ~14:42 | CI path filters for heavy jobs | **Merged** [#113](https://github.com/nepenth/synara-desktop/pull/113) | Job-level scopes; quality-gate accepts success\|skipped. Prior tip `168ca2b`. |
 | ~14:30 | **P5.1** timeline registry foundation | **PR open** [#119](https://github.com/nepenth/synara-desktop/pull/119) | TimelineRegistry lifecycle; local 8/8. |
 | ~14:25 | **P4.5** space hierarchy foundation | **PR open** [#118](https://github.com/nepenth/synara-desktop/pull/118) | SpaceHierarchy + filter/cycle; local 6/6. |
 | ~14:21 | **P4.4** favorite/low-priority/folder/recent | **PR open** [#117](https://github.com/nepenth/synara-desktop/pull/117) | DTO tag fields + sorts; local room_list 15/15. |
