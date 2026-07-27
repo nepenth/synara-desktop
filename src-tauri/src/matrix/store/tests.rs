@@ -124,18 +124,24 @@ fn ensure_dirs_creates_layout_without_wiping_existing() {
 }
 
 #[test]
-fn layout_serializes_without_secrets() {
+fn layout_serializes_without_secrets_or_absolute_paths() {
     let root = PathBuf::from("/var/app");
     let paths = StorePaths::derive(&root, &alice()).unwrap();
     let layout = paths.layout();
     let json = serde_json::to_string(&layout).unwrap();
-    // camelCase wire
+    // camelCase wire + privacy-safe relative children only (R0.6 / REV-003)
     assert!(json.contains("accountSegment"));
-    assert!(json.contains("stateDir"));
+    assert!(json.contains("relativeStateDir"));
+    assert!(json.contains("confinedUnderMatrixRoot"));
     assert!(!json.contains("access_token"));
     assert!(!json.contains("storeKey"));
+    assert!(!json.contains("/var/app"));
+    assert!(!json.contains(paths.account_root().to_string_lossy().as_ref()));
+    assert!(!json.contains(paths.state_dir().to_string_lossy().as_ref()));
     let back: StoreLayout = serde_json::from_str(&json).unwrap();
     assert_eq!(back.account_segment, paths.account_segment());
+    assert_eq!(back.relative_state_dir, "state");
+    assert!(back.confined_under_matrix_root);
 }
 
 #[test]

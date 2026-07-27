@@ -30,7 +30,8 @@ pub use health::{
 };
 pub use metrics::MatrixMetrics;
 pub use redact::{
-    is_forbidden_field_key, looks_like_matrix_id, looks_like_secret, looks_like_url, redact_text,
+    is_forbidden_field_key, looks_like_absolute_path, looks_like_matrix_id, looks_like_secret,
+    looks_like_sensitive_diagnostic, looks_like_url, looks_like_url_with_credentials, redact_text,
     safe_diagnostic_label, MAX_SAFE_LABEL_CHARS, REDACTED,
 };
 
