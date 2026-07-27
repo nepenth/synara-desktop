@@ -9,8 +9,8 @@
 
 | Field | Value |
 | --- | --- |
-| Last updated (UTC) | **2026-07-27 ~19:08** |
-| Integration tip | `ef75e3e` — Merge #125 P6.2 receipt index |
+| Last updated (UTC) | **2026-07-27 ~19:35** |
+| Integration tip | `ef8bf60` — Merge #127 P6.3 typing index |
 | Product runtime | Still **`matrix-js-sdk` only** until atomic sole-owner cutover |
 | Dual backend | **`false`** (forbidden forever) |
 | Operating model | [cutover-operating-model.md](cutover-operating-model.md) |
@@ -25,12 +25,12 @@
 
 | | |
 | --- | --- |
-| **Now** | **#125 P6.2 merged.** Primary next: **#127 P6.3** typing (tip-updated after #125; CI re-run). |
-| **Inventory** | ~33/112 original task artifacts when program-status is synced (through P6.2 landed; see ledger). |
+| **Now** | **#127 P6.3 merged.** Primary next: **#128 P6.4** media (tip-updated after #127; CI re-run). |
+| **Inventory** | ~34/112 original task artifacts when program-status is synced (through P6.3 landed; see ledger). |
 | **Phase gates** | **0 / 15** strict gates closed (honest). |
-| **Open PRs → integration** | [#127](https://github.com/nepenth/synara-desktop/pull/127) typing, [#128](https://github.com/nepenth/synara-desktop/pull/128) media, [#129](https://github.com/nepenth/synara-desktop/pull/129) P5.6 relations; [#109](https://github.com/nepenth/synara-desktop/pull/109) MiniMax (deprioritize). |
-| **Blocked on** | CI green for #127 after tip-merge with #125. Required: Quality gate + Desktop package gate. |
-| **Dogfood path** | send ✅ → receipts ✅ (**#125**) → **typing (#127)** → media → relations. |
+| **Open PRs → integration** | [#128](https://github.com/nepenth/synara-desktop/pull/128) media, [#129](https://github.com/nepenth/synara-desktop/pull/129) relations, [#131](https://github.com/nepenth/synara-desktop/pull/131) threads; [#109](https://github.com/nepenth/synara-desktop/pull/109) MiniMax (deprioritize). |
+| **Blocked on** | CI green for #128 after tip-merge with #127. Required: Quality gate + Desktop package gate. |
+| **Dogfood path** | receipts ✅ → typing ✅ (**#127**) → **media (#128)** → relations/threads. |
 
 ---
 
@@ -58,6 +58,8 @@ Update rules:
 
 | When (UTC) | Item | Result | Notes |
 | --- | --- | --- | --- |
+| ~19:33 | **P6.3** typing index foundation | **Merged** [#127](https://github.com/nepenth/synara-desktop/pull/127) | TypingIndex + cap 32; tip `ef8bf60`. Quality + package gate green. |
+| ~19:15 | **P5.8** thread list index foundation | **PR open** [#131](https://github.com/nepenth/synara-desktop/pull/131) | ThreadIndex over ThreadSummary; local 6/6. |
 | ~19:06 | **P6.2** receipt index foundation | **Merged** [#125](https://github.com/nepenth/synara-desktop/pull/125) | ReceiptIndex over DTO Receipt; tip `ef75e3e`. Quality + package gate green. |
 | ~18:52 | **P5.6** relations index foundation | **PR open** [#129](https://github.com/nepenth/synara-desktop/pull/129) | RelationIndex annotations/replace/reference/thread; local 8/8. |
 | ~18:39 | **P6.1** outbound send queue foundation | **Merged** [#124](https://github.com/nepenth/synara-desktop/pull/124) | SendQueue + LocalEchoState; tip `c6cbc2c`. Quality ✅; package gate after Arch Docker Hub flake re-run. |
@@ -123,9 +125,10 @@ Update rules:
 | 12 | Timeline pagination (P5.3) | **Done** (merged #122) |
 | 13 | Send queue / local echo (P6.1) | **Done** (merged #124) |
 | 14 | Receipt index (P6.2) | **Done** (merged #125) |
-| 15 | Typing index (P6.3) | **In PR** [#127](https://github.com/nepenth/synara-desktop/pull/127) |
+| 15 | Typing index (P6.3) | **Done** (merged #127) |
 | 16 | Media upload queue (P6.4) | **In PR** [#128](https://github.com/nepenth/synara-desktop/pull/128) |
 | 17 | Relations / reactions (P5.6) | **In PR** [#129](https://github.com/nepenth/synara-desktop/pull/129) |
+| 18 | Thread list / summaries (P5.8) | **In PR** [#131](https://github.com/nepenth/synara-desktop/pull/131) |
 | 10 | Crypto / verification / recovery | Not started |
 | 11 | Atomic sole-owner cutover + js-sdk burn-down (P11) | Not started |
 | 12 | Merge to `main` (#39) | Needs **explicit user approval** |
