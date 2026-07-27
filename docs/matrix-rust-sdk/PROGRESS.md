@@ -9,8 +9,8 @@
 
 | Field | Value |
 | --- | --- |
-| Last updated (UTC) | **2026-07-27 ~14:00** |
-| Integration tip | `8b7d39e` — Merge #110 P3.5 session secret persistence |
+| Last updated (UTC) | **2026-07-27 ~14:07** |
+| Integration tip | `69f1087` — Merge #112 P3.6 session restore |
 | Product runtime | Still **`matrix-js-sdk` only** until atomic sole-owner cutover |
 | Dual backend | **`false`** (forbidden forever) |
 | Operating model | [cutover-operating-model.md](cutover-operating-model.md) |
@@ -25,12 +25,12 @@
 
 | | |
 | --- | --- |
-| **Now** | Waiting on CI to merge **#112** (P3.6). Product stack continues: **#114** P4.1 + **#115** P4.2 opened. |
-| **Inventory** | ~22/112 original task artifacts when program-status is synced (P3.1–P3.2 + P3.5 landed; see ledger). |
+| **Now** | **P3.6 merged.** Next: land **#114** P4.1 (needs tip rebase — guardrail conflict with P3.6) then **#115** P4.2; merge **#113** CI filters when green. |
+| **Inventory** | ~23/112 original task artifacts when program-status is synced (P3.1–P3.2 + P3.5–P3.6 landed; see ledger). |
 | **Phase gates** | **0 / 15** strict gates closed (honest). |
-| **Open PRs → integration** | [#112](https://github.com/nepenth/synara-desktop/pull/112) P3.6 (Validate+iOS still running; packages green); [#114](https://github.com/nepenth/synara-desktop/pull/114) P4.1; [#115](https://github.com/nepenth/synara-desktop/pull/115) P4.2 room-list; [#113](https://github.com/nepenth/synara-desktop/pull/113) CI filters; [#111](https://github.com/nepenth/synara-desktop/pull/111) this log; [#109](https://github.com/nepenth/synara-desktop/pull/109) MiniMax (deprioritize). |
-| **Blocked on** | Required checks: **Quality gate** + **Desktop package gate**. Prefer product merges (#112 → #114 → #115). |
-| **Dogfood path** | Login ✅ → persist ✅ → **restore (#112 CI)** → **sync readiness (#114)** → **room list (#115)** → timeline. |
+| **Open PRs → integration** | [#114](https://github.com/nepenth/synara-desktop/pull/114) P4.1 (rebase on tip); [#115](https://github.com/nepenth/synara-desktop/pull/115) P4.2; [#113](https://github.com/nepenth/synara-desktop/pull/113) CI filters; [#111](https://github.com/nepenth/synara-desktop/pull/111) this log; [#109](https://github.com/nepenth/synara-desktop/pull/109) MiniMax (deprioritize). |
+| **Blocked on** | Rebase/resolve #114 vs tip; CI green for product PRs. Required: Quality gate + Desktop package gate. |
+| **Dogfood path** | Login ✅ → persist ✅ → restore ✅ (**#112**) → **sync readiness (#114)** → **room list (#115)** → timeline. |
 
 ---
 
@@ -58,6 +58,7 @@ Update rules:
 
 | When (UTC) | Item | Result | Notes |
 | --- | --- | --- | --- |
+| ~14:07 | **P3.6** session restore | **Merged** [#112](https://github.com/nepenth/synara-desktop/pull/112) | Vault → identity bind → `restore_session`. Tip `69f1087`. Full CI green (iOS ~23m). |
 | ~14:00 | **P4.2** room-list snapshot/delta | **PR open** [#115](https://github.com/nepenth/synara-desktop/pull/115) | Pure `RoomListProjection` + delta ops + sequence gap resync. Local 10/10; stacks on #114. |
 | ~13:53 | **P4.1** sync readiness foundation | **PR open** [#114](https://github.com/nepenth/synara-desktop/pull/114) | `matrix/sync/`: readiness map, reconnect table, SyncServiceOwner, guardrail confine `SyncService::builder`. Local 12/12 + clippy + guardrails green. |
 | ~13:52 | CI path-filter policy checker fix | **Pushed** `09bd360` on [#113](https://github.com/nepenth/synara-desktop/pull/113) | First CI run failed `check:quality-gates` (expected needs lacked `changes` + skipped). Checker now matches path-filtered Quality gate. |
@@ -92,7 +93,7 @@ Update rules:
 | 1 | Discovery / login-flow list (P3.1) | **Done** (artifact) |
 | 2 | Password/token login + device name (P3.2) | **Done** (merged) |
 | 3 | Session secret persist / refresh structure (P3.5) | **Done** (merged) |
-| 4 | Session restore after restart (P3.6) | **In PR** [#112](https://github.com/nepenth/synara-desktop/pull/112) |
+| 4 | Session restore after restart (P3.6) | **Done** (merged #112) |
 | 5 | Sync readiness / reconnect (P4.1) | **In PR** [#114](https://github.com/nepenth/synara-desktop/pull/114) |
 | 6 | Room list snapshot/delta (P4.2) | **In PR** [#115](https://github.com/nepenth/synara-desktop/pull/115) |
 | 7 | Timeline read/send | Not started |
