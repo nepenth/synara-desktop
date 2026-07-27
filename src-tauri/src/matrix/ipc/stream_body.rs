@@ -205,7 +205,7 @@ fn reject_forbidden_and_media_bytes(value: &Value) -> Result<(), serde_json::Err
 }
 
 fn is_forbidden_field_name(name: &str) -> bool {
-    FORBIDDEN_WIRE_FIELD_NAMES.iter().any(|f| *f == name)
+    FORBIDDEN_WIRE_FIELD_NAMES.contains(&name)
 }
 
 #[cfg(test)]
