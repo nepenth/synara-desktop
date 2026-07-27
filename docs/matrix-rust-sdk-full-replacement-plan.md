@@ -39,10 +39,13 @@ after `edfefee`, use the canonical status ledger and the current live snapshot i
 | Phase 3 | P3.1 domain/mock foundation landed | **P3.1 acceptance open** — live SDK adapter and disposable-homeserver proof remain |
 | Phases 4–14 | No named tasks landed | **Not started** |
 
-“20/112” is only an inventory of named task artifacts, not validated completion.
-Zero of 15 strict phase gates are closed. Original task P3.2 and all later work
-are blocked by remediation tasks R0.1–R0.8 in the review report. Those tasks are
-additions to the original 112 and do not count as feature progress.
+“N/112” is only an inventory of named task artifacts, not validated completion.
+Zero of 15 strict phase gates are closed. Remediation tasks R0.1–R0.8 from the
+review report are additions to the original 112. **Product-first policy
+(2026-07-27):** residual unaccepted formal R0 gates do **not** hard-block
+capability slices such as P3.2+ on the integration branch; real safety findings
+still must be fixed. Inventory growth measures Rust owner capability landing,
+not dual-SDK product mode.
 
 The status ledger must be updated as part of each accepted remediation PR;
 changing artifact or merge state never closes a strict acceptance or phase gate
@@ -66,7 +69,18 @@ same signed-in session.
 
 Implementation will happen on the integration branch and task branches derived
 from it. Incomplete migration work must not merge to `main`. The final merge to
-`main` occurs only after all completion gates in this document pass.
+`main` occurs only after product confidence (CI + client testing) and the
+completion gates in this document — never via a dual-SDK interim release.
+
+**Canonical execution model (2026-07-27):** build the Rust Matrix owner as
+**capability vertical slices** on the integration branch; keep product on
+`matrix-js-sdk` only as temporary branch scaffolding until an **atomic sole-owner
+cutover**; then burn down and remove `matrix-js-sdk`. Do **not** replace usage
+file-by-file as an in-process package swap (frontend JS vs host Rust are
+different boundaries — UI talks IPC/DTOs to the Rust owner). Clean-break
+re-login / wipe of local Matrix state is acceptable; elaborate JS→Rust
+session/token migration is out of scope. Full write-up:
+[`docs/matrix-rust-sdk/cutover-operating-model.md`](matrix-rust-sdk/cutover-operating-model.md).
 
 ## 2. Outcomes
 
@@ -104,6 +118,16 @@ The completed system will have:
 - The desktop bootstrap cutover must be atomic: Rust becomes the sole Matrix
   owner, JavaScript initialization stops, and obsolete JavaScript runtime paths
   are deleted in the same cutover phase.
+- **Transitional monorepo coexistence is allowed only on the integration
+  branch:** product may still boot `matrix-js-sdk` while Rust harness code grows.
+  That is scaffolding, not a dual-backend product. After sole-owner cutover,
+  js-sdk importers and dependencies only decrease (burn-down), never grow.
+- **Execution order:** capability vertical slices (auth → session → sync →
+  timeline → crypto → …) with host ownership + IPC contracts first; UI rewires
+  consume Synara DTOs only. The ~220 baseline production `matrix-js-sdk` import
+  sites are a burn-down checklist after cutover, not a file-by-file dual-SDK
+  rewrite order. See
+  [`cutover-operating-model.md`](matrix-rust-sdk/cutover-operating-model.md).
 
 ### 3.2 No compatibility clone of `matrix-js-sdk`
 
