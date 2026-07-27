@@ -6,7 +6,8 @@
  * 2. No matrix-js-sdk imports in matrix-ipc / matrix-dto (greenfield contracts).
  * 3. No raw /_matrix/ HTTP in greenfield contract surfaces.
  * 4. No production Client login/sync under src-tauri/src/matrix/ (Client::builder
- *    allowed only under matrix/client_builder/ for P2.3 unauthenticated open).
+ *    allowed only under matrix/client_builder/ for P2.3 unauthenticated open;
+ *    password/token login APIs allowed only under matrix/auth/ for P3.2).
  * 5. No dual-backend / Matrix backend selector in production runtime sources.
  * 6. Matrix IPC contract surface must remain versioned (protocolVersion / constant).
  * 7. No Matrix product Tauri commands registered in invoke_handler yet.
@@ -290,24 +291,45 @@ const CLIENT_BUILDER_ONLY_PATTERNS = [
   /\bClient\s*::\s*new\b/,
 ];
 
-/** Login/sync/session APIs forbidden everywhere under `matrix/` (non-test). */
-const PRODUCTION_SESSION_PATTERNS = [
+/**
+ * Password/token login APIs allowed only under `matrix/auth/` (P3.2).
+ * Still banned under client_builder/ and every other matrix/ module.
+ */
+const AUTH_LOGIN_ONLY_PATTERNS = [
   /\.login_username\b/,
   /\.login_token\b/,
   /\.matrix_auth\s*\(/,
+];
+
+/** Sync/session-restore APIs forbidden everywhere under `matrix/` (non-test). */
+const PRODUCTION_SESSION_PATTERNS = [
   /\.sync_once\b/,
   /\.sync_with_result_callback\b/,
   /\.restore_session\b/,
   /\bRoom\s*::\s*join\b/,
 ];
 
-/** Full ban set for non-builder matrix modules. */
+/** Full ban set for non-builder / non-auth matrix modules. */
 const PRODUCTION_CLIENT_PATTERNS = [
+  ...CLIENT_BUILDER_ONLY_PATTERNS,
+  ...AUTH_LOGIN_ONLY_PATTERNS,
+  ...PRODUCTION_SESSION_PATTERNS,
+];
+
+/** Patterns still banned inside client_builder/ (may construct Client only). */
+const CLIENT_BUILDER_BANNED_PATTERNS = [
+  ...AUTH_LOGIN_ONLY_PATTERNS,
+  ...PRODUCTION_SESSION_PATTERNS,
+];
+
+/** Patterns still banned inside auth/ (may login; may not construct Client or sync). */
+const AUTH_BANNED_PATTERNS = [
   ...CLIENT_BUILDER_ONLY_PATTERNS,
   ...PRODUCTION_SESSION_PATTERNS,
 ];
 
 const ZONE_CLIENT_BUILDER_ALLOW = ["src-tauri/src/matrix/client_builder/"];
+const ZONE_AUTH_LOGIN_ALLOW = ["src-tauri/src/matrix/auth/"];
 
 const DUAL_BACKEND_PATTERNS = [
   /\bMatrixBackend\b/,
@@ -385,8 +407,10 @@ export function runGuardrails(opts) {
     }
   }
 
-  // --- Zone C: src-tauri/src/matrix — no production login/sync;
-  //     Client::builder only under matrix/client_builder/ (P2.3) ---
+  // --- Zone C: src-tauri/src/matrix —
+  //     Client::builder only under matrix/client_builder/ (P2.3);
+  //     login_username/login_token/matrix_auth only under matrix/auth/ (P3.2);
+  //     sync/restore_session banned everywhere under matrix/ (non-test). ---
   for (const rel of files) {
     if (!inAnyZone(rel, ZONE_RUST_MATRIX)) continue;
     if (!rel.endsWith(".rs")) continue;
@@ -396,17 +420,28 @@ export function runGuardrails(opts) {
     const raw = readFileSync(abs, "utf8");
     const code = stripCommentsAndStrings(raw, { lang: "rs", blankStrings: true });
     const inClientBuilder = inAnyZone(rel, ZONE_CLIENT_BUILDER_ALLOW);
-    const patterns = inClientBuilder
-      ? PRODUCTION_SESSION_PATTERNS
-      : PRODUCTION_CLIENT_PATTERNS;
+    const inAuthLogin = inAnyZone(rel, ZONE_AUTH_LOGIN_ALLOW);
+    let patterns;
+    let detailPrefix;
+    if (inClientBuilder) {
+      patterns = CLIENT_BUILDER_BANNED_PATTERNS;
+      detailPrefix =
+        "login/sync/session API forbidden under matrix/ (builder module may only construct unauthenticated Client)";
+    } else if (inAuthLogin) {
+      patterns = AUTH_BANNED_PATTERNS;
+      detailPrefix =
+        "Client construction/sync/session-restore forbidden under matrix/auth/ (auth may only password/token login)";
+    } else {
+      patterns = PRODUCTION_CLIENT_PATTERNS;
+      detailPrefix =
+        "production Client/login/sync API forbidden under matrix/ outside client_builder/ and auth/";
+    }
     for (const hit of findHits(code, patterns)) {
       add(
         "no-production-matrix-client-in-matrix-module",
         rel,
         hit.line,
-        inClientBuilder
-          ? `login/sync/session API forbidden under matrix/ (builder module may only construct unauthenticated Client): ${hit.text}`
-          : `production Client/login/sync API forbidden under matrix/ outside client_builder/: ${hit.text}`
+        `${detailPrefix}: ${hit.text}`
       );
     }
   }
