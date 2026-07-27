@@ -9,8 +9,8 @@
 
 | Field | Value |
 | --- | --- |
-| Last updated (UTC) | **2026-07-27 ~14:47** |
-| Integration tip | `b3397db` — Merge #111 PROGRESS.md live work log |
+| Last updated (UTC) | **2026-07-27 ~16:00** |
+| Integration tip | `c2cdc0b` — Merge #115 P4.2 room-list snapshot/delta |
 | Product runtime | Still **`matrix-js-sdk` only** until atomic sole-owner cutover |
 | Dual backend | **`false`** (forbidden forever) |
 | Operating model | [cutover-operating-model.md](cutover-operating-model.md) |
@@ -25,12 +25,12 @@
 
 | | |
 | --- | --- |
-| **Now** | **Primary: merge #114 P4.1** when CI green (update-branch after #111). Stacked #115–#119 re-running after tip + clippy fix on #116+. |
-| **Inventory** | ~23/112 original task artifacts when program-status is synced (P3.1–P3.2 + P3.5–P3.6 landed; see ledger). |
+| **Now** | **#115 P4.2 merged.** Primary next: **#116 P4.3** membership/unread. Timeline #119–#122 + send #124 queued. |
+| **Inventory** | ~25/112 original task artifacts when program-status is synced (through P4.2 landed; see ledger). |
 | **Phase gates** | **0 / 15** strict gates closed (honest). |
-| **Open PRs → integration** | [#114](https://github.com/nepenth/synara-desktop/pull/114) P4.1; [#115](https://github.com/nepenth/synara-desktop/pull/115) P4.2; [#116](https://github.com/nepenth/synara-desktop/pull/116)–[#119](https://github.com/nepenth/synara-desktop/pull/119) stacked; [#109](https://github.com/nepenth/synara-desktop/pull/109) MiniMax (deprioritize). |
-| **Blocked on** | CI green for #114 (then sequential merge stack). Required: Quality gate + Desktop package gate. |
-| **Dogfood path** | Login ✅ → persist ✅ → restore ✅ (**#112**) → **sync readiness (#114)** → **room list (#115)** → timeline. |
+| **Open PRs → integration** | [#116](https://github.com/nepenth/synara-desktop/pull/116)–[#119](https://github.com/nepenth/synara-desktop/pull/119) stack; [#121](https://github.com/nepenth/synara-desktop/pull/121) P5.2; [#122](https://github.com/nepenth/synara-desktop/pull/122) P5.3; [#124](https://github.com/nepenth/synara-desktop/pull/124) P6.1 send; [#109](https://github.com/nepenth/synara-desktop/pull/109) MiniMax (deprioritize). |
+| **Blocked on** | CI green for #116 after tip update. Required: Quality gate + Desktop package gate. |
+| **Dogfood path** | Login ✅ → persist ✅ → restore ✅ (**#112**) → sync ✅ (**#114**) → room list ✅ (**#115**) → **membership/unread (#116)** → timeline. |
 
 ---
 
@@ -58,6 +58,12 @@ Update rules:
 
 | When (UTC) | Item | Result | Notes |
 | --- | --- | --- | --- |
+| ~16:00 | **P4.2** room-list snapshot/delta | **Merged** [#115](https://github.com/nepenth/synara-desktop/pull/115) | Pure projection + ordered ops; tip `c2cdc0b`. iOS/Synapse skipped. |
+| ~15:56 | **P6.1** outbound send queue foundation | **PR open** [#124](https://github.com/nepenth/synara-desktop/pull/124) | LocalEchoState queue; no Room::send; local 8/8. Disk pressure: cleaned cargo target (-34GB). |
+| ~15:40 | **P4.1** sync readiness + reconnect | **Merged** [#114](https://github.com/nepenth/synara-desktop/pull/114) | `matrix/sync/`: readiness, reconnect table, SyncServiceOwner, guardrail confine. Tip `f9bfe0d`. Full CI green (iOS skipped via path filters). |
+| ~15:38 | **P5.3** timeline pagination foundation | **PR open** [#122](https://github.com/nepenth/synara-desktop/pull/122) | Pure `TimelinePagination` state machine; local timeline 23/23. CI deferred until stack advances. |
+| ~15:11 | **P5.2** timeline snapshot/diff projection | **PR open** [#121](https://github.com/nepenth/synara-desktop/pull/121) | `TimelineProjection` + ordered ops; local 16/16 then extended by P5.3. |
+| ~15:40 | **#115** tip-merged after #114 | **Pushed** | Local matrix 270/270 + clippy + guardrails; CI re-run for P4.2 merge. |
 | ~14:47 | P4.3+ clippy `needless_borrow` | **Fixed** on [#116](https://github.com/nepenth/synara-desktop/pull/116)–[#119](https://github.com/nepenth/synara-desktop/pull/119) | Lint Rust failed at `room_list/tests.rs` scope test; dropped extra `&` on `find().unwrap()`. Branches rebased/merged onto tip. |
 | ~14:46 | Tip update-branch #114/#115/#109 | **Kicked** | After #111 merge so product PRs not BEHIND; #109 should get path-filtered skip of iOS. |
 | ~14:45 | **PROGRESS.md** live work log | **Merged** [#111](https://github.com/nepenth/synara-desktop/pull/111) | Docs-only CI: heavy jobs skipped, Quality gate green. Tip `b3397db`. |
@@ -102,13 +108,15 @@ Update rules:
 | 2 | Password/token login + device name (P3.2) | **Done** (merged) |
 | 3 | Session secret persist / refresh structure (P3.5) | **Done** (merged) |
 | 4 | Session restore after restart (P3.6) | **Done** (merged #112) |
-| 5 | Sync readiness / reconnect (P4.1) | **In PR** [#114](https://github.com/nepenth/synara-desktop/pull/114) |
-| 6 | Room list snapshot/delta (P4.2) | **In PR** [#115](https://github.com/nepenth/synara-desktop/pull/115) |
+| 5 | Sync readiness / reconnect (P4.1) | **Done** (merged #114) |
+| 6 | Room list snapshot/delta (P4.2) | **Done** (merged #115) |
 | 7 | Membership / unread / invites (P4.3) | **In PR** [#116](https://github.com/nepenth/synara-desktop/pull/116) |
 | 8 | Favorite / low-priority / recent (P4.4) | **In PR** [#117](https://github.com/nepenth/synara-desktop/pull/117) |
 | 9 | Space hierarchy (P4.5) | **In PR** [#118](https://github.com/nepenth/synara-desktop/pull/118) |
 | 10 | Timeline registry (P5.1) | **In PR** [#119](https://github.com/nepenth/synara-desktop/pull/119) |
-| 11 | Timeline diffs (P5.2+) | Not started |
+| 11 | Timeline diffs (P5.2) | **In PR** [#121](https://github.com/nepenth/synara-desktop/pull/121) |
+| 12 | Timeline pagination (P5.3) | **In PR** [#122](https://github.com/nepenth/synara-desktop/pull/122) |
+| 13 | Send queue / local echo (P6.1) | **In PR** [#124](https://github.com/nepenth/synara-desktop/pull/124) |
 | 10 | Crypto / verification / recovery | Not started |
 | 11 | Atomic sole-owner cutover + js-sdk burn-down (P11) | Not started |
 | 12 | Merge to `main` (#39) | Needs **explicit user approval** |
