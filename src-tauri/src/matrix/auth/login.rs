@@ -5,10 +5,12 @@
 //! and `login_token(...)`.
 //!
 //! **Harness / foundation only.** No production Tauri Matrix login commands, no
-//! dual-backend, no session restore (P3.6), no refresh persistence (P3.5), no SSO (P3.3).
+//! dual-backend, no session restore (P3.6), no SSO (P3.3).
 //!
 //! Tokens remain on the SDK `Client` after success. [`LoginResult`] never carries
 //! access/refresh tokens — only privacy-safe identity fields for harness/status.
+//! Optional host-side persistence after login is
+//! [`crate::matrix::lifecycle::persist_session_after_login`] (P3.5).
 
 use matrix_sdk::Client;
 
@@ -50,7 +52,8 @@ pub struct LoginOptions {
     /// Initial device display name. Defaults to [`platform_device_display_name`].
     pub device_display_name: Option<String>,
     /// When true, request a refresh token from the homeserver (SDK `request_refresh_token`).
-    /// Persistence of that token is **out of scope** (P3.5); this only opts into the SDK flag.
+    /// Persistence of that token uses
+    /// [`crate::matrix::lifecycle::persist_session_after_login`] (P3.5) after success.
     pub request_refresh_token: bool,
 }
 

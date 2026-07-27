@@ -9,6 +9,8 @@
 //! P2.5: Privacy-filtered diagnostics and health model.
 //! P2.6: Destructive lifecycle (logout, local wipe, failed-store recovery).
 //! P3.1: Discovery and login-flow service (harness; no login execution).
+//! P3.2: Password/token login + device naming (harness).
+//! P3.5: Session secret / refresh-token persistence foundation (host vault only).
 //! No production login/sync loop or Tauri command registration lives here yet.
 //! No dual-backend selector. Product runtime remains matrix-js-sdk.
 
@@ -66,5 +68,5 @@ pub fn matrix_ipc_schema_markers() -> &'static str {
     debug_assert_eq!(_diagnostics, diagnostics::MATRIX_DIAGNOSTICS_MARKER);
     debug_assert_eq!(_lifecycle, lifecycle::MATRIX_LIFECYCLE_MARKER);
     debug_assert_eq!(_auth, auth::MATRIX_AUTH_MARKER);
-    "matrix-ipc-protocol-v1+domain-dtos-p1.4+supervisor-p2.1+store-p2.2+client-builder-p2.3+tasks-p2.4+diagnostics-p2.5+lifecycle-p2.6+auth-p3.2"
+    "matrix-ipc-protocol-v1+domain-dtos-p1.4+supervisor-p2.1+store-p2.2+client-builder-p2.3+tasks-p2.4+diagnostics-p2.5+lifecycle-p2.6+auth-p3.2+session-persist-p3.5"
 }

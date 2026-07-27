@@ -1,0 +1,119 @@
+{
+  "task_id": "P3.5",
+  "title": "Refresh-token persistence and rotation foundation",
+  "date": "2026-07-27",
+  "artifact_state": "landed",
+  "integration_state": "pr_open",
+  "strict_acceptance_state": "open",
+  "phase_gate_state": "open",
+  "current_status_ref": "docs/matrix-rust-sdk/program-status.json",
+  "historical_status_at_generation": "implemented",
+  "base_branch": "feature/matrix-rust-sdk-full-replacement",
+  "base_sha": "52376d9",
+  "work_branch": "matrix-rust/p3.5-session-secret-persist",
+  "human_doc": "docs/matrix-rust-sdk/p3.5-refresh-token-persistence.md",
+  "fr_ids": ["FR-7.1-007"],
+  "decisions": ["D-TOKEN-CONTINUITY", "D-NEW-DEVICE", "D-NO-DUAL-BACKEND"],
+  "production_posture": {
+    "production_client_session_started": false,
+    "production_login": false,
+    "production_sync": false,
+    "dual_backend": false,
+    "tauri_commands_for_matrix": false,
+    "session_secret_persist_harness": true,
+    "keyring_session_vault": true,
+    "session_restore": false,
+    "restore_session_api_enabled": false,
+    "live_refresh_rotation": false,
+    "exercised_by": "unit_tests_in_memory_vault_plus_envelope_round_trip"
+  },
+  "artifacts": {
+    "rust_module": "src-tauri/src/matrix/lifecycle/",
+    "session_material_rs": "src-tauri/src/matrix/lifecycle/session_material.rs",
+    "session_persist_rs": "src-tauri/src/matrix/lifecycle/session_persist.rs",
+    "design_note": "docs/matrix-rust-sdk/p3.5-refresh-token-persistence.md"
+  },
+  "module_files_touched": [
+    "session_material.rs",
+    "session_persist.rs",
+    "mod.rs"
+  ],
+  "api_surface": {
+    "types": [
+      "SessionMaterial",
+      "SessionMaterialMeta",
+      "HostMatrixSessionSecrets",
+      "SessionMaterialId",
+      "SessionMaterialVault",
+      "InMemorySessionMaterialVault",
+      "KeyringSessionMaterialVault",
+      "KeyringSessionMaterialRefs",
+      "SessionPersistOutcome"
+    ],
+    "ops": [
+      "persist_session_material",
+      "load_session_material",
+      "clear_session_material",
+      "rotate_persisted_session_tokens",
+      "persist_session_after_login",
+      "session_material_from_auth_session",
+      "SessionMaterial::from_matrix_tokens",
+      "SessionMaterial::public_meta",
+      "SessionMaterial::decode_host_secrets"
+    ],
+    "constants": [
+      "SESSION_MATERIAL_SERVICE",
+      "SESSION_ENVELOPE_VERSION",
+      "SESSION_KIND_MATRIX"
+    ]
+  },
+  "envelope": {
+    "version": 1,
+    "kind": "matrix",
+    "fields": [
+      "v",
+      "kind",
+      "user_id",
+      "device_id",
+      "homeserver_url",
+      "access_token",
+      "refresh_token"
+    ],
+    "storage": "utf8_json_in_session_material_vault"
+  },
+  "keyring": {
+    "session_service": "com.whylandcreative.synara.desktop.matrix-session",
+    "store_key_service": "com.whylandcreative.synara.desktop.matrix-store-key",
+    "services_distinct": true,
+    "account_prefix": "matrix-session:"
+  },
+  "privacy": {
+    "login_result_includes_tokens": false,
+    "session_snapshot_includes_tokens": false,
+    "persist_outcome_includes_tokens": false,
+    "session_material_debug_redacts": true,
+    "host_secrets_debug_redacts": true,
+    "lifecycle_error_echoes_tokens": false
+  },
+  "guardrail_policy": {
+    "restore_session_banned_in_matrix_non_test": true,
+    "login_apis_only_under_auth": true,
+    "lifecycle_may_read_client_session_for_persist": true
+  },
+  "out_of_scope": [
+    "production_tauri_matrix_commands",
+    "dual_backend",
+    "P3.3_sso_oauth_envelope",
+    "P3.4_uia",
+    "P3.6_session_restore",
+    "P3.7_legacy_transition",
+    "js_to_rust_token_migration",
+    "live_sdk_refresh_access_token_product_wiring"
+  ],
+  "residuals": [
+    { "id": "session-restore-onto-client", "waitsFor": "P3.6" },
+    { "id": "live-refresh-rotation-evidence", "waitsFor": "P3.6 / cutover" },
+    { "id": "oauth-session-envelope", "waitsFor": "P3.3" },
+    { "id": "product-login-persist-command", "waitsFor": "cutover" }
+  ]
+}
