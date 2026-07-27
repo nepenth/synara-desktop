@@ -55,7 +55,7 @@ Audited snapshot: `edfefee499064b736985b6528896b693e5120f22`
 | R0.4 | Store confinement and key management | `landed` | `merged` | `accepted` |
 | R0.5 | Safe destructive lifecycle | `landed` | `merged` | `accepted` |
 | R0.6 | Diagnostic privacy | `landed` | `merged` | `accepted` |
-| R0.7 | Live Phase 2 and P3.1 adapters | `not_started` | `not_submitted` | `not_reviewed` |
+| R0.7 | Live Phase 2 and P3.1 adapters | `landed` | `merged` | `open` |
 | R0.8 | Acceptance reports and CI evidence | `not_started` | `not_submitted` | `not_reviewed` |
 
 ## Recorded original task artifacts
