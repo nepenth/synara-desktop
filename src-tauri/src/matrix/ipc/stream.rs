@@ -2,6 +2,10 @@
 
 use serde::{Deserialize, Serialize};
 
+use super::wire_counter::{
+    deserialize_optional_wire_counter, deserialize_wire_counter, serialize_wire_counter,
+};
+
 /// Stream topics scaffolded for later phases. Domain bodies arrive in P1.4.
 /// Wire form is a stable snake_case string.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -119,7 +123,11 @@ pub struct HelloPayload {
 pub struct HelloAckPayload {
     /// Negotiated protocol version.
     pub protocol_version: u32,
-    /// Session generation assigned/confirmed by the Rust host.
+    /// Session generation assigned/confirmed by the Rust host (wire-safe).
+    #[serde(
+        serialize_with = "serialize_wire_counter",
+        deserialize_with = "deserialize_wire_counter"
+    )]
     pub session_generation: u64,
 }
 
@@ -188,10 +196,18 @@ pub struct ResyncRequiredPayload {
     pub stream_id: Option<String>,
     pub reason: ResyncReason,
     /// Last sequence the sender believes the peer applied (if known).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_optional_wire_counter"
+    )]
     pub last_applied_sequence: Option<u64>,
     /// Sequence that triggered the gap / rejection (if known).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_optional_wire_counter"
+    )]
     pub observed_sequence: Option<u64>,
 }
 

@@ -10,6 +10,8 @@ import {
   MAX_ENVELOPE_PAYLOAD_JSON_BYTES,
   MAX_OPEN_STREAMS_PER_SESSION,
   MAX_STREAM_QUEUE_DEPTH,
+  checkedNextWireCounter,
+  isWireCounter,
 } from './version';
 
 export type SequenceOutcome =
@@ -21,25 +23,42 @@ export type SequenceOutcome =
 /**
  * Check an incoming sequence against the last applied sequence on a stream.
  *
+ * R0.3 / REV-004:
+ * - Counters must be wire-safe integers (`isWireCounter`); out-of-range → gap.
  * - After a snapshot is applied, lastApplied is the snapshot sequence.
- * - Deltas must arrive as last+1.
+ * - Deltas must arrive as checked last+1 (never overflow past MAX_WIRE_COUNTER).
  * - Exact equal sequence → duplicate (idempotent ignore).
- * - Greater than last+1 → gap → emit resync_required.
+ * - Greater than expected next → gap → emit resync_required.
  */
 export function checkSequence(
   lastApplied: number | null | undefined,
   incoming: number
 ): SequenceOutcome {
+  if (!isWireCounter(incoming)) {
+    return {
+      type: 'gap',
+      lastApplied: isWireCounter(lastApplied) ? lastApplied : 0,
+      observed: typeof incoming === 'number' ? incoming : Number.NaN,
+    };
+  }
   if (lastApplied === null || lastApplied === undefined) {
     return { type: 'accept', nextLastApplied: incoming };
   }
-  if (incoming === lastApplied + 1) {
-    return { type: 'accept', nextLastApplied: incoming };
+  if (!isWireCounter(lastApplied)) {
+    return { type: 'gap', lastApplied, observed: incoming };
   }
   if (incoming === lastApplied) {
     return { type: 'duplicate', lastApplied };
   }
-  if (incoming > lastApplied + 1) {
+  const expected = checkedNextWireCounter(lastApplied);
+  if (expected === null) {
+    // last is already MAX_WIRE_COUNTER: only exact duplicate is safe.
+    return { type: 'gap', lastApplied, observed: incoming };
+  }
+  if (incoming === expected) {
+    return { type: 'accept', nextLastApplied: incoming };
+  }
+  if (incoming > expected) {
     return { type: 'gap', lastApplied, observed: incoming };
   }
   return { type: 'behind', lastApplied, observed: incoming };
