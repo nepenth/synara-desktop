@@ -1,8 +1,8 @@
-//! Privacy-safe errors for timeline registry (P5.1).
+//! Privacy-safe errors for timeline registry + projection (P5.1 / P5.2).
 
 use crate::matrix::ipc::MatrixIpcErrorCategory;
 
-/// Timeline registry / lifecycle failure.
+/// Timeline registry / lifecycle / projection failure.
 #[derive(Debug)]
 pub enum TimelineError {
     Invalid {
@@ -23,6 +23,15 @@ pub enum TimelineError {
         diagnostic_id: &'static str,
         category: MatrixIpcErrorCategory,
     },
+    /// Delta sequence gap or resync pending → client must reset stream.
+    ResyncRequired {
+        diagnostic_id: &'static str,
+        category: MatrixIpcErrorCategory,
+    },
+    /// Index / operation out of bounds for current projection.
+    InvalidDelta {
+        diagnostic_id: &'static str,
+    },
 }
 
 impl TimelineError {
@@ -32,18 +41,28 @@ impl TimelineError {
             | Self::NotFound { diagnostic_id }
             | Self::AlreadyOpen { diagnostic_id }
             | Self::StaleGeneration { diagnostic_id, .. }
-            | Self::Failed { diagnostic_id, .. } => diagnostic_id,
+            | Self::Failed { diagnostic_id, .. }
+            | Self::ResyncRequired { diagnostic_id, .. }
+            | Self::InvalidDelta { diagnostic_id } => diagnostic_id,
         }
     }
 
     pub fn category(&self) -> MatrixIpcErrorCategory {
         match self {
-            Self::Invalid { .. } | Self::NotFound { .. } | Self::AlreadyOpen { .. } => {
-                MatrixIpcErrorCategory::SdkInvariant
-            }
+            Self::Invalid { .. }
+            | Self::NotFound { .. }
+            | Self::AlreadyOpen { .. }
+            | Self::InvalidDelta { .. } => MatrixIpcErrorCategory::SdkInvariant,
             Self::StaleGeneration { .. } => MatrixIpcErrorCategory::StaleSessionGeneration,
-            Self::Failed { category, .. } => *category,
+            Self::Failed { category, .. } | Self::ResyncRequired { category, .. } => *category,
         }
+    }
+
+    pub fn requires_resync(&self) -> bool {
+        matches!(
+            self,
+            Self::ResyncRequired { .. } | Self::StaleGeneration { .. }
+        )
     }
 }
 
@@ -69,6 +88,16 @@ impl std::fmt::Display for TimelineError {
                 diagnostic_id,
                 category,
             } => write!(f, "timeline failed ({category:?}, {diagnostic_id})"),
+            Self::ResyncRequired {
+                diagnostic_id,
+                category,
+            } => write!(
+                f,
+                "timeline resync required ({category:?}, {diagnostic_id})"
+            ),
+            Self::InvalidDelta { diagnostic_id } => {
+                write!(f, "invalid timeline delta ({diagnostic_id})")
+            }
         }
     }
 }
