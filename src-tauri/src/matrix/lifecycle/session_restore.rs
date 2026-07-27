@@ -311,10 +311,10 @@ mod tests {
     #[test]
     fn account_switch_uses_identity_scoped_vault_entries() {
         let vault = InMemorySessionMaterialVault::new();
-        let a = SessionMaterial::from_matrix_tokens(&alice(), "DEVA", "syt_alice_tok", None)
+        let a =
+            SessionMaterial::from_matrix_tokens(&alice(), "DEVA", "syt_alice_tok", None).unwrap();
+        let b = SessionMaterial::from_matrix_tokens(&bob(), "DEVB", "syt_bob_tok", Some("syr_bob"))
             .unwrap();
-        let b =
-            SessionMaterial::from_matrix_tokens(&bob(), "DEVB", "syt_bob_tok", Some("syr_bob")).unwrap();
         persist_session_material(&vault, &alice(), &a).unwrap();
         persist_session_material(&vault, &bob(), &b).unwrap();
 
