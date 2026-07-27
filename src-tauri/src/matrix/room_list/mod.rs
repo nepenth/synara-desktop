@@ -1,42 +1,55 @@
-//! P4.2 — Room-list snapshot and delta stream (harness foundation).
+//! P4.2 / P4.3 — Room-list snapshot/delta + membership/unread projection.
 //!
 //! Deterministic projection of ordered room summaries for the dogfood path:
 //! - product DTOs only ([`RoomSummary`]) — no SDK Room/VectorDiff on the wire
 //! - ordered delta ops with monotonic sequence + session generation
 //! - gap / stale generation → resync (full snapshot reset)
+//! - P4.3: scope filters (joined/invites/unread/mentions/direct) + badge counts
 //!
 //! **Harness / unit tests only until cutover.** No production Tauri commands,
 //! no live sliding-sync subscription loop, no dual-backend.
 //!
-//! Authoritative design note: `docs/matrix-rust-sdk/p4.2-room-list.md`
+//! Authoritative design notes:
+//! - `docs/matrix-rust-sdk/p4.2-room-list.md`
+//! - `docs/matrix-rust-sdk/p4.3-membership-unread.md`
 
 #![allow(dead_code)]
 #![allow(unused_imports)]
 
+mod counts;
 mod delta;
 mod error;
+mod filters;
 mod projection;
 mod summary;
 
+pub use counts::RoomListBadgeCounts;
 pub use delta::{RoomListDeltaBatch, RoomListDeltaOp, RoomListSnapshot};
 pub use error::RoomListError;
+pub use filters::{
+    filter_rooms_by_scope, room_matches_scope, select_rooms_by_scope, RoomListScope,
+};
 pub use projection::{reconstruct, RoomListProjection};
 pub use summary::RoomSummaryBuilder;
 
 /// Static marker for link / schema smoke.
-pub const MATRIX_ROOM_LIST_MARKER: &str = "matrix-room-list-snapshot-delta-p4.2";
+pub const MATRIX_ROOM_LIST_MARKER: &str = "matrix-room-list-p4.2+membership-unread-p4.3";
 
 /// Touch room-list foundation paths so they remain linked in non-test builds.
 pub fn matrix_room_list_markers() -> &'static str {
     let mut proj = RoomListProjection::new(1);
     let snap = RoomListSnapshot::empty(1);
     let _ = proj.apply_snapshot(snap);
+    let _scopes = RoomListScope::ALL.len();
+    let _counts = RoomListBadgeCounts::from_rooms(&[]);
     debug_assert!(proj.is_empty());
     debug_assert_eq!(proj.last_sequence(), 0);
     debug_assert_eq!(RoomListDeltaOp::Clear.op_name(), "clear");
+    debug_assert_eq!(_scopes, 6);
+    debug_assert_eq!(_counts.joined, 0);
     debug_assert_eq!(
         MATRIX_ROOM_LIST_MARKER,
-        "matrix-room-list-snapshot-delta-p4.2"
+        "matrix-room-list-p4.2+membership-unread-p4.3"
     );
     MATRIX_ROOM_LIST_MARKER
 }

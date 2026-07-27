@@ -256,3 +256,115 @@ fn delta_op_names_are_stable() {
     assert_eq!(RoomListDeltaOp::Clear.op_name(), "clear");
     assert_eq!(RoomListDeltaOp::Remove { index: 0 }.op_name(), "remove");
 }
+
+// --- P4.3 membership / unread filters + badge counts ---
+
+fn fixture_rooms() -> Vec<RoomSummary> {
+    vec![
+        RoomSummaryBuilder::new("!join:example.org")
+            .name("Joined quiet")
+            .membership(Membership::Join)
+            .build()
+            .unwrap(),
+        RoomSummaryBuilder::new("!unread:example.org")
+            .name("Unread")
+            .membership(Membership::Join)
+            .unread(4, 0)
+            .build()
+            .unwrap(),
+        RoomSummaryBuilder::new("!mention:example.org")
+            .name("Mention")
+            .membership(Membership::Join)
+            .unread(1, 2)
+            .build()
+            .unwrap(),
+        RoomSummaryBuilder::new("!marked:example.org")
+            .name("Marked")
+            .membership(Membership::Join)
+            .marked_unread(true)
+            .build()
+            .unwrap(),
+        RoomSummaryBuilder::new("!dm:example.org")
+            .name("DM")
+            .membership(Membership::Join)
+            .direct(true)
+            .unread(0, 0)
+            .build()
+            .unwrap(),
+        RoomSummaryBuilder::new("!invite:example.org")
+            .name("Invite")
+            .membership(Membership::Invite)
+            .build()
+            .unwrap(),
+        RoomSummaryBuilder::new("!left:example.org")
+            .name("Left")
+            .membership(Membership::Leave)
+            .build()
+            .unwrap(),
+    ]
+}
+
+#[test]
+fn p4_3_scope_filters_membership_and_unread() {
+    let rooms = fixture_rooms();
+    assert_eq!(
+        select_rooms_by_scope(&rooms, RoomListScope::Joined).len(),
+        5
+    );
+    assert_eq!(
+        select_rooms_by_scope(&rooms, RoomListScope::Invites).len(),
+        1
+    );
+    let unread = select_rooms_by_scope(&rooms, RoomListScope::Unread);
+    // unread: !unread, !mention, !marked (not quiet, not dm without flags, not invite)
+    assert_eq!(unread.len(), 3);
+    assert!(unread.iter().all(|r| r.membership == Membership::Join));
+
+    let mentions = select_rooms_by_scope(&rooms, RoomListScope::Mentions);
+    assert_eq!(mentions.len(), 1);
+    assert_eq!(mentions[0].room_id.as_str(), "!mention:example.org");
+
+    let dms = select_rooms_by_scope(&rooms, RoomListScope::Direct);
+    assert_eq!(dms.len(), 1);
+    assert!(dms[0].is_direct);
+
+    let active = select_rooms_by_scope(&rooms, RoomListScope::AllActive);
+    assert_eq!(active.len(), 7); // no ban in fixture
+    assert!(!room_matches_scope(
+        rooms
+            .iter()
+            .find(|r| r.room_id == "!left:example.org")
+            .unwrap(),
+        RoomListScope::Joined
+    ));
+}
+
+#[test]
+fn p4_3_badge_counts_and_attention() {
+    let rooms = fixture_rooms();
+    let c = RoomListBadgeCounts::from_rooms(&rooms);
+    assert_eq!(c.joined, 5);
+    assert_eq!(c.invites, 1);
+    assert_eq!(c.unread_rooms, 3);
+    assert_eq!(c.mention_rooms, 1);
+    assert_eq!(c.direct, 1);
+    assert_eq!(c.unread_messages, 5); // 4 + 1
+    assert_eq!(c.highlight_messages, 2);
+    assert_eq!(c.marked_unread_rooms, 1);
+    assert_eq!(c.attention_total(), 4); // 3 unread rooms + 1 invite
+
+    let empty = RoomListBadgeCounts::from_rooms(&[]);
+    assert_eq!(empty, RoomListBadgeCounts::default());
+    assert_eq!(empty.attention_total(), 0);
+
+    let dbg = format!("{c:?}");
+    assert!(!dbg.contains("access_token"));
+}
+
+#[test]
+fn p4_3_scope_labels_cover_all() {
+    assert_eq!(RoomListScope::ALL.len(), 6);
+    for s in RoomListScope::ALL {
+        assert!(!s.as_str().is_empty());
+    }
+}
