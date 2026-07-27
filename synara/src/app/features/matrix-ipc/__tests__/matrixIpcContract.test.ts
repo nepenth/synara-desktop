@@ -17,12 +17,15 @@ import {
   MAX_ENVELOPE_PAYLOAD_JSON_BYTES,
   MAX_OPEN_STREAMS_PER_SESSION,
   MAX_STREAM_QUEUE_DEPTH,
+  MAX_WIRE_COUNTER,
   STREAM_COALESCE_WINDOW_MS,
   FORBID_MEDIA_BYTES_OVER_JSON_IPC,
   applyDeltaSequence,
   checkProtocolVersion,
   checkSequence,
   checkSessionGeneration,
+  checkedNextWireCounter,
+  isWireCounter,
   makeEnvelope,
   openStreamsWithinBounds,
   parseMatrixIpcEnvelope,
@@ -81,6 +84,8 @@ const INVALID_FIXTURES = [
   'invalid_hello_missing_client_protocol_version.json',
   'invalid_unknown_resync_reason.json',
   'invalid_error_with_secret_field.json',
+  'invalid_sequence_above_wire_max.json',
+  'invalid_stream_id_mismatch.json',
 ] as const;
 
 // ---------------------------------------------------------------------------
@@ -93,9 +98,36 @@ test('P1.5 policy constants exact values', () => {
   assert.equal(MAX_STREAM_QUEUE_DEPTH, 256);
   assert.equal(STREAM_COALESCE_WINDOW_MS, 16);
   assert.equal(MAX_OPEN_STREAMS_PER_SESSION, 64);
+  assert.equal(MAX_WIRE_COUNTER, Number.MAX_SAFE_INTEGER);
   assert.equal(FORBID_MEDIA_BYTES_OVER_JSON_IPC, true);
   assert.equal(MATRIX_IPC_KINDS.length, 13);
   assert.equal(MATRIX_IPC_ERROR_CATEGORIES.length, 21);
+});
+
+test('R0.3 wire counters reject NaN fractions overflow and stream id mismatch', () => {
+  assert.equal(isWireCounter(0), true);
+  assert.equal(isWireCounter(MAX_WIRE_COUNTER), true);
+  assert.equal(isWireCounter(MAX_WIRE_COUNTER + 1), false);
+  assert.equal(isWireCounter(1.5), false);
+  assert.equal(isWireCounter(Number.NaN), false);
+  assert.equal(isWireCounter(-1), false);
+  assert.equal(checkedNextWireCounter(MAX_WIRE_COUNTER), null);
+  assert.equal(checkedNextWireCounter(MAX_WIRE_COUNTER - 1), MAX_WIRE_COUNTER);
+  assert.equal(checkSequence(MAX_WIRE_COUNTER, MAX_WIRE_COUNTER + 1).type, 'gap');
+  assert.equal(checkSequence(MAX_WIRE_COUNTER - 1, MAX_WIRE_COUNTER).type, 'accept');
+
+  assert.equal(parseMatrixIpcEnvelope(loadFixture('invalid_sequence_above_wire_max.json')), null);
+  assert.equal(parseMatrixIpcEnvelope(loadFixture('invalid_stream_id_mismatch.json')), null);
+
+  // MAX_WIRE_COUNTER is accepted.
+  const maxOk = parseMatrixIpcEnvelope({
+    protocolVersion: 1,
+    sessionGeneration: MAX_WIRE_COUNTER,
+    sequence: MAX_WIRE_COUNTER,
+    kind: 'ping',
+    payload: {},
+  });
+  assert.ok(maxOk);
 });
 
 test('P1.5 payload size bounds policy', () => {
@@ -186,12 +218,22 @@ test('P1.5 all kinds constructible via makeEnvelope and re-parse', () => {
   for (let i = 0; i < samples.length; i++) {
     const sample = samples[i]!;
     assert.equal(sample.kind, MATRIX_IPC_KINDS[i]);
+    // R0.3: stream-scoped kinds require matching envelope.streamId.
+    const needsStreamId = [
+      'subscribe',
+      'unsubscribe',
+      'subscribed',
+      'unsubscribed',
+      'snapshot',
+      'delta',
+      'resync_required',
+    ].includes(sample.kind);
     const env = makeEnvelope(
       1,
       i,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       { kind: sample.kind, payload: sample.payload } as any,
-      { requestId: `req-${i}` }
+      { requestId: `req-${i}`, streamId: needsStreamId ? 's1' : undefined }
     );
     assert.equal(env.protocolVersion, MATRIX_IPC_PROTOCOL_VERSION);
     assert.equal(env.kind, sample.kind);

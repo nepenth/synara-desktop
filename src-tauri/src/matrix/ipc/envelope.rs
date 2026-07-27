@@ -9,6 +9,9 @@ use super::stream::{
     UnsubscribePayload, UnsubscribedPayload,
 };
 use super::version::MATRIX_IPC_PROTOCOL_VERSION;
+use super::wire_counter::{
+    deserialize_wire_counter, is_valid_wire_counter, serialize_wire_counter,
+};
 
 /// Stable wire `kind` discriminators (snake_case).
 pub const KIND_HELLO: &str = "hello";
@@ -85,20 +88,30 @@ impl MatrixIpcMessage {
     }
 }
 
-/// Versioned IPC envelope (plan §6.3).
+/// Versioned IPC envelope (plan §6.3, R0.3 wire freeze).
 ///
 /// Required fields: `protocolVersion`, `sessionGeneration`, `sequence`, `kind`
 /// (via message), bounded payload. Optional: `streamId`, `requestId`.
-/// Timestamp is omitted unless a future product semantic requires it.
+/// Counters are wire-safe integers (`0..=MAX_WIRE_COUNTER`). Stream-scoped
+/// kinds require a single authoritative `streamId` on the envelope that matches
+/// any payload `streamId` (REV-005).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MatrixIpcEnvelope {
     pub protocol_version: u32,
+    #[serde(
+        serialize_with = "serialize_wire_counter",
+        deserialize_with = "deserialize_wire_counter"
+    )]
     pub session_generation: u64,
     /// Present for stream-scoped messages (subscribe, snapshot, delta, …).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stream_id: Option<String>,
     /// Monotonically increasing per stream (or per control channel when no stream).
+    #[serde(
+        serialize_with = "serialize_wire_counter",
+        deserialize_with = "deserialize_wire_counter"
+    )]
     pub sequence: u64,
     /// Optional correlation / request id for request-response pairing.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -109,6 +122,10 @@ pub struct MatrixIpcEnvelope {
 
 impl MatrixIpcEnvelope {
     pub fn new(session_generation: u64, sequence: u64, message: MatrixIpcMessage) -> Self {
+        debug_assert!(
+            is_valid_wire_counter(session_generation) && is_valid_wire_counter(sequence),
+            "envelope counters must be wire-safe"
+        );
         Self {
             protocol_version: MATRIX_IPC_PROTOCOL_VERSION,
             session_generation,
@@ -143,14 +160,62 @@ impl MatrixIpcEnvelope {
     /// Unknown `kind` values fail deserialization (reject-at-boundary policy).
     /// Non-object `payload` values are rejected so empty structs cannot accept
     /// arrays/scalars (mirrors the TypeScript `isObject(payload)` guard).
+    /// Wire counters outside `0..=MAX_WIRE_COUNTER` fail (REV-004).
+    /// Stream-scoped kinds enforce a single authoritative stream id (REV-005).
     pub fn from_json_value(value: serde_json::Value) -> Result<Self, serde_json::Error> {
         validate_payload_is_object(&value)?;
-        serde_json::from_value(value)
+        let env: Self = serde_json::from_value(value)?;
+        env.validate_stream_id_authority()?;
+        Ok(env)
     }
 
     pub fn from_json_str(s: &str) -> Result<Self, serde_json::Error> {
         let value: serde_json::Value = serde_json::from_str(s)?;
         Self::from_json_value(value)
+    }
+
+    /// R0.3 / REV-005: envelope `streamId` is authoritative for stream-scoped kinds.
+    fn validate_stream_id_authority(&self) -> Result<(), serde_json::Error> {
+        let payload_stream = payload_stream_id(&self.message);
+        match (self.kind(), self.stream_id.as_deref(), payload_stream) {
+            // Kinds that always carry a payload stream id: require envelope match.
+            (
+                KIND_SUBSCRIBE | KIND_UNSUBSCRIBE | KIND_SUBSCRIBED | KIND_UNSUBSCRIBED
+                | KIND_SNAPSHOT | KIND_DELTA,
+                Some(env_id),
+                Some(pay_id),
+            ) if env_id == pay_id => Ok(()),
+            (
+                KIND_SUBSCRIBE | KIND_UNSUBSCRIBE | KIND_SUBSCRIBED | KIND_UNSUBSCRIBED
+                | KIND_SNAPSHOT | KIND_DELTA,
+                _,
+                _,
+            ) => Err(serde::de::Error::custom(
+                "stream-scoped envelope requires matching envelope.streamId and payload.streamId",
+            )),
+            // resync_required: optional; when both present they must match.
+            (KIND_RESYNC_REQUIRED, Some(env_id), Some(pay_id)) if env_id == pay_id => Ok(()),
+            (KIND_RESYNC_REQUIRED, Some(_), Some(_)) => Err(serde::de::Error::custom(
+                "resync_required streamId mismatch between envelope and payload",
+            )),
+            (KIND_RESYNC_REQUIRED, None, Some(_)) => Err(serde::de::Error::custom(
+                "resync_required payload.streamId requires envelope.streamId",
+            )),
+            _ => Ok(()),
+        }
+    }
+}
+
+fn payload_stream_id(message: &MatrixIpcMessage) -> Option<&str> {
+    match message {
+        MatrixIpcMessage::Subscribe(p) => Some(p.stream_id.as_str()),
+        MatrixIpcMessage::Unsubscribe(p) => Some(p.stream_id.as_str()),
+        MatrixIpcMessage::Subscribed(p) => Some(p.stream_id.as_str()),
+        MatrixIpcMessage::Unsubscribed(p) => Some(p.stream_id.as_str()),
+        MatrixIpcMessage::Snapshot(p) => Some(p.stream_id.as_str()),
+        MatrixIpcMessage::Delta(p) => Some(p.stream_id.as_str()),
+        MatrixIpcMessage::ResyncRequired(p) => p.stream_id.as_deref(),
+        _ => None,
     }
 }
 
