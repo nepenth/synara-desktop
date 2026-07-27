@@ -295,7 +295,7 @@ test('all control kinds round-trip through makeEnvelope + parse', () => {
           streamId: 's1',
           topic: 'timeline',
           idempotencyKey: 'idem-1',
-          body: { op: 'append' },
+          body: { items: [] },
         },
       },
       { streamId: 's1' }

@@ -35,7 +35,7 @@ pub use session_material::{
 };
 pub use wipe::{
     assert_exact_account_root, assert_path_is_wipe_allowed, wipe_account_store, WipeReport,
-    WipeTarget,
+    WipeTarget, WIPE_TARGET_KIND_ACCOUNT_ROOT,
 };
 
 /// Static marker for link / schema smoke (no network, no Client, no wipe).

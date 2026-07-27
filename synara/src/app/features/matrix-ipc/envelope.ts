@@ -22,7 +22,8 @@ import type {
   UnsubscribedPayload,
 } from './stream';
 import { isCancelReason, isResyncReason, isStreamTopic } from './stream';
-import { MATRIX_IPC_PROTOCOL_VERSION } from './version';
+import { validateStreamTopicBody } from './streamBody';
+import { MATRIX_IPC_PROTOCOL_VERSION, isWireCounter } from './version';
 
 export const MATRIX_IPC_KINDS = [
   'hello',
@@ -101,7 +102,7 @@ function parseMessage(kind: MatrixIpcKind, payload: unknown): MatrixIpcMessage |
     }
     case 'hello_ack': {
       if (typeof payload.protocolVersion !== 'number') return null;
-      if (typeof payload.sessionGeneration !== 'number') return null;
+      if (!isWireCounter(payload.sessionGeneration)) return null;
       return {
         kind,
         payload: {
@@ -151,13 +152,15 @@ function parseMessage(kind: MatrixIpcKind, payload: unknown): MatrixIpcMessage |
       const streamId = requireString(payload, 'streamId');
       const snapshotId = requireString(payload, 'snapshotId');
       if (!streamId || !snapshotId) return null;
+      const body = payload.body === undefined ? {} : payload.body;
+      if (!validateStreamTopicBody(payload.topic, body)) return null;
       return {
         kind,
         payload: {
           streamId,
           topic: payload.topic,
           snapshotId,
-          body: payload.body,
+          body,
         },
       };
     }
@@ -165,6 +168,8 @@ function parseMessage(kind: MatrixIpcKind, payload: unknown): MatrixIpcMessage |
       if (!isStreamTopic(payload.topic)) return null;
       const streamId = requireString(payload, 'streamId');
       if (!streamId) return null;
+      const body = payload.body === undefined ? {} : payload.body;
+      if (!validateStreamTopicBody(payload.topic, body)) return null;
       return {
         kind,
         payload: {
@@ -172,23 +177,32 @@ function parseMessage(kind: MatrixIpcKind, payload: unknown): MatrixIpcMessage |
           topic: payload.topic,
           idempotencyKey:
             typeof payload.idempotencyKey === 'string' ? payload.idempotencyKey : undefined,
-          body: payload.body,
+          body,
         },
       };
     }
     case 'resync_required': {
       if (!isResyncReason(payload.reason)) return null;
+      if (
+        payload.lastAppliedSequence !== undefined &&
+        !isWireCounter(payload.lastAppliedSequence)
+      ) {
+        return null;
+      }
+      if (payload.observedSequence !== undefined && !isWireCounter(payload.observedSequence)) {
+        return null;
+      }
       return {
         kind,
         payload: {
           streamId: typeof payload.streamId === 'string' ? payload.streamId : undefined,
           reason: payload.reason,
-          lastAppliedSequence:
-            typeof payload.lastAppliedSequence === 'number'
-              ? payload.lastAppliedSequence
-              : undefined,
-          observedSequence:
-            typeof payload.observedSequence === 'number' ? payload.observedSequence : undefined,
+          lastAppliedSequence: isWireCounter(payload.lastAppliedSequence)
+            ? payload.lastAppliedSequence
+            : undefined,
+          observedSequence: isWireCounter(payload.observedSequence)
+            ? payload.observedSequence
+            : undefined,
         },
       };
     }
@@ -234,12 +248,13 @@ function parseMessage(kind: MatrixIpcKind, payload: unknown): MatrixIpcMessage |
 /**
  * Parse and validate a JSON value as a Matrix IPC envelope.
  * Returns null when the envelope is invalid or the kind is unknown (reject policy).
+ * R0.3: counters must be wire-safe; stream-scoped kinds require matching streamId.
  */
 export function parseMatrixIpcEnvelope(value: unknown): MatrixIpcEnvelope | null {
   if (!isObject(value)) return null;
   if (typeof value.protocolVersion !== 'number') return null;
-  if (typeof value.sessionGeneration !== 'number') return null;
-  if (typeof value.sequence !== 'number') return null;
+  if (!isWireCounter(value.sessionGeneration)) return null;
+  if (!isWireCounter(value.sequence)) return null;
   if (value.streamId !== undefined && typeof value.streamId !== 'string') return null;
   if (value.requestId !== undefined && typeof value.requestId !== 'string') return null;
   if (!isMatrixIpcKind(value.kind)) return null;
@@ -248,14 +263,56 @@ export function parseMatrixIpcEnvelope(value: unknown): MatrixIpcEnvelope | null
   const message = parseMessage(value.kind, value.payload);
   if (!message) return null;
 
+  const streamId = typeof value.streamId === 'string' ? value.streamId : undefined;
+  if (!streamIdAuthorityOk(message, streamId)) return null;
+
   return {
     protocolVersion: value.protocolVersion,
     sessionGeneration: value.sessionGeneration,
-    streamId: typeof value.streamId === 'string' ? value.streamId : undefined,
+    streamId,
     sequence: value.sequence,
     requestId: typeof value.requestId === 'string' ? value.requestId : undefined,
     ...message,
   };
+}
+
+/** R0.3 / REV-005: single authoritative stream id for stream-scoped kinds. */
+function streamIdAuthorityOk(message: MatrixIpcMessage, envelopeStreamId?: string): boolean {
+  const payloadStreamId = payloadStreamIdOf(message);
+  switch (message.kind) {
+    case 'subscribe':
+    case 'unsubscribe':
+    case 'subscribed':
+    case 'unsubscribed':
+    case 'snapshot':
+    case 'delta':
+      return (
+        typeof envelopeStreamId === 'string' &&
+        typeof payloadStreamId === 'string' &&
+        envelopeStreamId === payloadStreamId
+      );
+    case 'resync_required':
+      if (payloadStreamId === undefined) return true;
+      return envelopeStreamId === payloadStreamId;
+    default:
+      return true;
+  }
+}
+
+function payloadStreamIdOf(message: MatrixIpcMessage): string | undefined {
+  switch (message.kind) {
+    case 'subscribe':
+    case 'unsubscribe':
+    case 'subscribed':
+    case 'unsubscribed':
+    case 'snapshot':
+    case 'delta':
+      return message.payload.streamId;
+    case 'resync_required':
+      return message.payload.streamId;
+    default:
+      return undefined;
+  }
 }
 
 /** Build a typed envelope with the current protocol version. */
@@ -265,7 +322,10 @@ export function makeEnvelope(
   message: MatrixIpcMessage,
   opts?: { streamId?: string; requestId?: string }
 ): MatrixIpcEnvelope {
-  return {
+  if (!isWireCounter(sessionGeneration) || !isWireCounter(sequence)) {
+    throw new Error('makeEnvelope: sessionGeneration/sequence must be wire-safe counters');
+  }
+  const env: MatrixIpcEnvelope = {
     protocolVersion: MATRIX_IPC_PROTOCOL_VERSION,
     sessionGeneration,
     sequence,
@@ -273,4 +333,8 @@ export function makeEnvelope(
     requestId: opts?.requestId,
     ...message,
   };
+  if (!streamIdAuthorityOk(message, opts?.streamId)) {
+    throw new Error('makeEnvelope: stream-scoped kinds require matching streamId');
+  }
+  return env;
 }

@@ -46,7 +46,32 @@ fn policy_constants_exact_values() {
     assert_eq!(MAX_STREAM_QUEUE_DEPTH, 256);
     assert_eq!(STREAM_COALESCE_WINDOW_MS, 16);
     assert_eq!(MAX_OPEN_STREAMS_PER_SESSION, 64);
+    assert_eq!(MAX_WIRE_COUNTER, 9_007_199_254_740_991);
     const { assert!(FORBID_MEDIA_BYTES_OVER_JSON_IPC) };
+}
+
+#[test]
+fn r0_3_wire_counter_and_stream_id_authority_fixtures() {
+    parse_err("invalid_sequence_above_wire_max.json");
+    parse_err("invalid_stream_id_mismatch.json");
+    // Boundary value MAX_WIRE_COUNTER is accepted.
+    let max_ok = json!({
+        "protocolVersion": 1,
+        "sessionGeneration": MAX_WIRE_COUNTER,
+        "sequence": MAX_WIRE_COUNTER,
+        "kind": "ping",
+        "payload": {}
+    });
+    MatrixIpcEnvelope::from_json_value(max_ok).expect("max wire counter must parse");
+    // Checked next at max is None → sequence gap, not wrap.
+    assert!(matches!(
+        check_sequence(Some(MAX_WIRE_COUNTER), MAX_WIRE_COUNTER + 1),
+        SequenceOutcome::Gap { .. }
+    ));
+    assert!(matches!(
+        check_sequence(Some(MAX_WIRE_COUNTER - 1), MAX_WIRE_COUNTER),
+        SequenceOutcome::Accept { .. }
+    ));
 }
 
 #[test]
@@ -124,7 +149,7 @@ fn all_kinds_round_trip_as_envelopes() {
             stream_id: "s1".into(),
             topic: StreamTopic::Timeline,
             idempotency_key: Some("idem-1".into()),
-            body: json!({"op": "upsert"}),
+            body: json!({"items": []}),
         }),
         MatrixIpcMessage::ResyncRequired(ResyncRequiredPayload {
             stream_id: Some("s1".into()),
@@ -151,7 +176,20 @@ fn all_kinds_round_trip_as_envelopes() {
     for (i, msg) in samples.into_iter().enumerate() {
         let expected_kind = MATRIX_IPC_KINDS[i];
         assert_eq!(msg.kind(), expected_kind);
-        let env = MatrixIpcEnvelope::new(1, i as u64, msg).with_request_id(format!("req-{i}"));
+        // R0.3: stream-scoped kinds require matching envelope.streamId.
+        let mut env = MatrixIpcEnvelope::new(1, i as u64, msg).with_request_id(format!("req-{i}"));
+        if matches!(
+            expected_kind,
+            KIND_SUBSCRIBE
+                | KIND_UNSUBSCRIBE
+                | KIND_SUBSCRIBED
+                | KIND_UNSUBSCRIBED
+                | KIND_SNAPSHOT
+                | KIND_DELTA
+                | KIND_RESYNC_REQUIRED
+        ) {
+            env = env.with_stream_id("s1");
+        }
         let json = serde_json::to_string(&env).expect("serialize");
         let back = MatrixIpcEnvelope::from_json_str(&json).expect("deserialize");
         assert_eq!(back.kind(), expected_kind);
@@ -334,6 +372,11 @@ const INVALID_FIXTURES: &[&str] = &[
     "invalid_hello_missing_client_protocol_version.json",
     "invalid_unknown_resync_reason.json",
     "invalid_error_with_secret_field.json",
+    "invalid_sequence_above_wire_max.json",
+    "invalid_stream_id_mismatch.json",
+    "invalid_snapshot_body_secret_field.json",
+    "invalid_snapshot_body_wrong_topic_shape.json",
+    "invalid_delta_body_media_bytes.json",
 ];
 
 #[test]

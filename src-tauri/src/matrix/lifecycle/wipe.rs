@@ -77,14 +77,18 @@ impl WipeTarget {
     }
 }
 
-/// Privacy-safe wipe report.
+/// Bounded wipe target category for privacy-safe reports (R0.6 / REV-003).
+pub const WIPE_TARGET_KIND_ACCOUNT_ROOT: &str = "account_root";
+
+/// Privacy-safe wipe report (no absolute paths, URLs, or user IDs).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WipeReport {
     pub account_segment: String,
     /// True when account root is absent after the operation (idempotent).
     pub account_root_removed: bool,
     pub store_key_removed: bool,
-    pub wiped_account_root: String,
+    /// Bounded wipe target kind — never an absolute filesystem path.
+    pub wipe_target_kind: String,
 }
 
 /// Assert the resolved account root is a direct child of the matrix root.
@@ -184,7 +188,7 @@ pub fn wipe_account_store<K: StoreKeyVault + ?Sized>(
         account_segment: target.account_segment().to_owned(),
         account_root_removed: true,
         store_key_removed,
-        wiped_account_root: account_root.to_string_lossy().into_owned(),
+        wipe_target_kind: WIPE_TARGET_KIND_ACCOUNT_ROOT.to_owned(),
     })
 }
 
