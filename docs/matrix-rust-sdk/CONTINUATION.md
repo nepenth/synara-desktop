@@ -24,12 +24,12 @@ evidence, is authoritative for current delivery and acceptance state.
 | Item | Value |
 |---|---|
 | Integration branch | `feature/matrix-rust-sdk-full-replacement` |
-| Live integration tip (this handoff) | `ba75e460109203b953bfcac77109bbd2d11268cb` — **R0.4 / #87 merged** on top of R0.5; re-fetch and verify |
+| Live integration tip (this handoff) | `e259102774848cf94e7d36f790e77f5a9fd31f55` — **R0.8 slice 1 / #104 merged** (residual formal reports + inventory; no false accept); re-fetch and verify |
 | Historical audited snapshot | `edfefee499064b736985b6528896b693e5120f22` — bound to the 2026-07-25 review, not the live tip |
-| Merged product fixes | PR [#86](https://github.com/nepenth/synara-desktop/pull/86) R0.5 wipe (**accepted**); PR [#87](https://github.com/nepenth/synara-desktop/pull/87) R0.4 store confinement (**merged**, strict acceptance **open** — keyring residual) |
-| Open R0.2-E1 PR | PR [#82](https://github.com/nepenth/synara-desktop/pull/82) — tooling; cheap CI-portability only; park residual if thrash |
+| Merged product fixes | PR [#86](https://github.com/nepenth/synara-desktop/pull/86) R0.5 wipe (**accepted**); PR [#87](https://github.com/nepenth/synara-desktop/pull/87)+[#94](https://github.com/nepenth/synara-desktop/pull/94) R0.4 store confinement + native keyring (**accepted**); PR [#89](https://github.com/nepenth/synara-desktop/pull/89) R0.6 diagnostic privacy (**accepted**); PR [#91](https://github.com/nepenth/synara-desktop/pull/91)+[#92](https://github.com/nepenth/synara-desktop/pull/92) R0.3 IPC wire freeze (**accepted**); PR [#96](https://github.com/nepenth/synara-desktop/pull/96)+[#98](https://github.com/nepenth/synara-desktop/pull/98)+[#100](https://github.com/nepenth/synara-desktop/pull/100)+[#102](https://github.com/nepenth/synara-desktop/pull/102) R0.7 live CS + login-types + composed store + stale-gen/wrong-key residuals (**merged**, strict acceptance **open** — authenticated live sync residual) |
+| Parked R0.2-E1 PR | PR [#82](https://github.com/nepenth/synara-desktop/pull/82) — **draft / parked** (2× CI `v2 exceeded 512 MiB` residual; do not thrash) |
 | Open PR to `main` | [#39](https://github.com/nepenth/synara-desktop/pull/39) — **do not merge without user approval** |
-| Current execution | Dual-track: next **implement R0.6 diagnostic privacy** (REV-003); then R0.3 IPC; residual R0.4 native keyring; timebox #82 |
+| Current execution | Dual-track: R0.8 slice 1 **merged** (residual formal reports; gates still open); next clear R0.2/R0.7 residuals or P3.2-gated auth; P3.2 blocked by R0.2 / R0.7 residual / R0.8; parked #82 |
 
 Always re-fetch and verify branch tips and PR state.
 
@@ -37,20 +37,21 @@ Always re-fetch and verify branch tips and PR state.
 
 ### Dual-track priority (user-approved)
 
-1. Land Critical/High product fixes first (R0.5 ✓, R0.4 path confinement ✓).
-2. Next product engineering: **R0.6 diagnostic privacy** (REV-003), then **R0.3 IPC** (REV-004/005).
-3. R0.4 residual (do not block R0.6): native macOS/Linux secret-store provider, production keyring, live encrypted reopen evidence.
-4. R0.2-E1 (#82): merge if green; park residual if thrash continues.
+1. Land Critical/High product fixes first (R0.5 ✓, R0.4 ✓, R0.6 ✓, R0.3 ✓).
+2. R0.7 slices landed: live CS transports (**#96**) + loopback login-types (**#98**) + composed encrypted store lifecycle (**#100**) + stale-gen/wrong-key residuals (**#102**).
+3. Remaining R0 blockers for P3.2: R0.2 (parked E1), R0.7 residual (authenticated live sync vs Synapse — guardrail-banned login APIs until deliberate P3.2 allowlist + formal accept), R0.8 (acceptance evidence).
+4. R0.2-E1 (#82): **parked** on identical 512 MiB isolation-benchmark residual; resume only with a deliberate memory-bound fix.
 5. Inventory stays **20/112** until more P-tasks land.
 6. No dual-backend; no production cutover; no merge to `main` without explicit approval.
 
-### This fire (2026-07-27, R0.4)
+### This fire (2026-07-27, R0.8 slice-1 merge + status handoff)
 
-- Independently reviewed PR **#87** against REV-002/006/007.
-- Local: `cargo test --locked matrix::store` **16 pass**; `cargo test --locked matrix::` **193 pass**.
-- Exact-head CI all required checks green.
-- **Merged** #87 → integration `ba75e46`.
-- Ledger: R0.4 `landed`/`merged`/`open` (path slice only; keyring residual).
+- Independently reviewed and merged PR **#104** (residual formal reports +
+  readiness inventory; all verdicts **`not_accepted`**; **no** phase-gate close).
+- Exact-head CI required gates green on #104 `6d3598a`.
+- **Merged** #104 → integration `e259102`.
+- Ledger: R0.8 → `landed` / `merged` / strict **`open`**. R0.7 strict remains open.
+- #82 remains parked draft. Inventory still 20/112.
 
 ### Next owner procedure
 
@@ -58,18 +59,29 @@ Always re-fetch and verify branch tips and PR state.
 git fetch origin
 git checkout feature/matrix-rust-sdk-full-replacement
 git pull --ff-only
-# Implement R0.6: redact URLs, absolute paths, raw SDK errors from diagnostics
-# (ClientBuildPlan, WipeReport, store layout projection, builder errors)
-# Add adversarial redaction tests; no product cutover commands
+# After R0.8 slice-1 merges: clear R0.2/R0.7 residuals, then re-issue accepting
+# formal reports on a green exact head with independent attestation.
+# Or deliberate P3.2-gated authenticated disposable-Synapse residual.
+# No false gate close. Resume #82 only with memory-bound fix.
+# No cutover; no dual-backend; no main merge.
 ```
 
 ## Program accounting
 
 - Original-plan artifact inventory remains **20 / 112 (~18%)**.
 - **0 of 15** strict phase gates are closed.
-- R0.5 **accepted**. R0.4 **merged** but strict acceptance **open** (keyring residual).
-- R0.2 remains `landed` / `pr_open` / strict acceptance `open`.
+- R0.1 / R0.3 / R0.4 / R0.5 / R0.6 **accepted**. R0.2 remains `landed` / `pr_open` (parked draft) / strict acceptance `open`.
+- R0.7 `landed` / `merged` / strict acceptance **`open`** (slices 1–4).
+- R0.8 `landed` / `merged` (slice 1 residual formal reports) / strict acceptance **`open`**.
 - Shipping runtime: `matrix-js-sdk` only; Rust harness foundation only.
+
+## R0.8 formal report pointers
+
+- [`r0.8-phase-gate-readiness-inventory.md`](r0.8-phase-gate-readiness-inventory.md)
+- [`phase-0-formal-acceptance-report.md`](phase-0-formal-acceptance-report.md) — **not_accepted**
+- [`phase-1-formal-acceptance-report.md`](phase-1-formal-acceptance-report.md) — **not_accepted**
+- [`phase-2-formal-acceptance-report.md`](phase-2-formal-acceptance-report.md) — **not_accepted**
+- [`p3.1-task-acceptance-report.md`](p3.1-task-acceptance-report.md) — **not_accepted**
 
 ## Authoritative docs
 

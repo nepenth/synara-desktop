@@ -70,20 +70,15 @@ pub async fn build_unauthenticated_client(
 }
 
 fn map_build_error(err: matrix_sdk::ClientBuildError) -> ClientBuilderError {
-    // Keep a short message without secrets (SDK errors should not include keys).
-    let message = format!("{err}");
-    let message = if message.len() > 240 {
-        format!("{}…", &message[..240])
-    } else {
-        message
-    };
-
-    let (category, diagnostic_id) = classify_build_error(&message);
+    // R0.6 / REV-003: classify from the raw SDK text internally, but never
+    // export the raw message (it may contain homeserver URLs, paths, or proxy data).
+    let raw = format!("{err}");
+    let (category, diagnostic_id) = classify_build_error(&raw);
 
     ClientBuilderError::SdkBuild {
         category,
         diagnostic_id,
-        message,
+        message: safe_build_message(diagnostic_id).to_owned(),
     }
 }
 
@@ -109,5 +104,40 @@ fn classify_build_error(message: &str) -> (MatrixIpcErrorCategory, &'static str)
             MatrixIpcErrorCategory::SdkInvariant,
             "p2.3-sdk-build-generic",
         )
+    }
+}
+
+/// Bounded, non-sensitive public message for SDK build failures.
+fn safe_build_message(diagnostic_id: &str) -> &'static str {
+    match diagnostic_id {
+        "p2.3-sdk-build-store" => "store initialization failed",
+        "p2.3-sdk-build-network" => "network configuration failed",
+        "p2.3-sdk-build-homeserver" => "homeserver configuration failed",
+        _ => "client build failed",
+    }
+}
+
+#[cfg(test)]
+mod privacy_tests {
+    use super::*;
+
+    #[test]
+    fn classify_and_safe_message_never_echo_raw_sdk_text() {
+        let hostile = "failed sqlite open at /Users/alice/Library/Application Support/Synara/matrix/acct/state for https://matrix.evil.example/?access_token=syt_LEAK";
+        let (category, id) = classify_build_error(hostile);
+        assert_eq!(id, "p2.3-sdk-build-store");
+        assert_eq!(category, MatrixIpcErrorCategory::StoreUnavailable);
+        let msg = safe_build_message(id);
+        assert!(!msg.contains("/Users/"));
+        assert!(!msg.contains("https://"));
+        assert!(!msg.contains("syt_"));
+        assert!(!msg.contains("access_token"));
+        assert_eq!(msg, "store initialization failed");
+
+        let (cat2, id2) =
+            classify_build_error("proxy http://user:p@ss@127.0.0.1:8080 tls handshake failed");
+        assert_eq!(id2, "p2.3-sdk-build-network");
+        assert_eq!(cat2, MatrixIpcErrorCategory::Connectivity);
+        assert_eq!(safe_build_message(id2), "network configuration failed");
     }
 }

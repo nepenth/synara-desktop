@@ -395,7 +395,7 @@ fn all_control_kinds_json_round_trip() {
                 stream_id: "s1".into(),
                 topic: StreamTopic::Timeline,
                 idempotency_key: Some("idem-1".into()),
-                body: json!({"op": "append"}),
+                body: json!({"items": []}),
             }),
         )
         .with_stream_id("s1"),
@@ -617,6 +617,7 @@ fn schema_catalog_compatible_with_rust_constants() {
         bounds["forbidMediaBytesOverJsonIpc"].as_bool().unwrap(),
         FORBID_MEDIA_BYTES_OVER_JSON_IPC
     );
+    assert_eq!(bounds["maxWireCounter"].as_u64().unwrap(), MAX_WIRE_COUNTER);
 }
 
 #[test]

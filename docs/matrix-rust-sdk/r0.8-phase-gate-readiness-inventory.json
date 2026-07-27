@@ -1,0 +1,130 @@
+{
+  "schema_version": 1,
+  "artifact_id": "R0.8-PHASE-GATE-READINESS-INVENTORY",
+  "title": "R0.8 phase-gate readiness inventory (truthful residual; no false accept)",
+  "as_of_utc": "2026-07-27T09:40:00Z",
+  "integration_branch": "feature/matrix-rust-sdk-full-replacement",
+  "subject": {
+    "integration_tip_sha": "e7d9cb992b8f7e648a232b8d006f7f3e5f3c77d2",
+    "product_evidence_sha": "3a2fa6f400762f95b4851d02206d5be8ee550c66",
+    "product_merge_sha": "d3134f0a40b56caf1ae440f24a0499f7041e2d62",
+    "note": "product_evidence_sha is exact-head green CI for R0.7 slice 4 (#102). integration_tip_sha includes docs handoff #103."
+  },
+  "product_runtime": {
+    "matrix_client_sdk": "matrix-js-sdk-only",
+    "rust_sdk_state": "harness-foundation-only",
+    "dual_backend": false,
+    "cutover_state": "not_started"
+  },
+  "authority": {
+    "task": "R0.8",
+    "may_close_phase_gates": true,
+    "this_slice_closes_any_phase_gate": false,
+    "this_slice_accepts_any_original_task": false,
+    "formal_accept_requires": "Independent reviewer attestation bound to immutable SHA + green required CI after every residual is cleared or an R0.8-approved bounded deferral exists."
+  },
+  "exact_head_ci_evidence": [
+    {
+      "label": "R0.7 slice 4 PR #102 required CI",
+      "head_sha": "3a2fa6f400762f95b4851d02206d5be8ee550c66",
+      "pr_url": "https://github.com/nepenth/synara-desktop/pull/102",
+      "quality_gate_run": "https://github.com/nepenth/synara-desktop/actions/runs/30250177308",
+      "desktop_package_gate_run": "https://github.com/nepenth/synara-desktop/actions/runs/30250177300",
+      "required_checks": [
+        "Validate desktop and runtime",
+        "Synapse two-client integration",
+        "iOS simulator tests",
+        "Quality gate",
+        "Desktop package gate"
+      ],
+      "conclusion": "success"
+    },
+    {
+      "label": "Integration tip after #102 merge",
+      "head_sha": "d3134f0a40b56caf1ae440f24a0499f7041e2d62",
+      "ci_run": "https://github.com/nepenth/synara-desktop/actions/runs/30251489680",
+      "conclusion": "success"
+    }
+  ],
+  "local_validation_product_evidence": {
+    "head_sha": "3a2fa6f400762f95b4851d02206d5be8ee550c66",
+    "commands": [
+      "cargo test --locked matrix:: → 225 PASS",
+      "npm run check:matrix-rust-guardrails → PASS",
+      "npm run check:matrix-boundaries → PASS"
+    ]
+  },
+  "remediation_snapshot": [
+    {"id": "R0.1", "strict_acceptance_state": "accepted", "blocks_phase_close": false},
+    {"id": "R0.2", "strict_acceptance_state": "open", "integration_state": "pr_open", "note": "E1 PR #82 parked draft; 512 MiB isolation residual", "blocks_phase_close": true},
+    {"id": "R0.3", "strict_acceptance_state": "accepted", "blocks_phase_close": false},
+    {"id": "R0.4", "strict_acceptance_state": "accepted", "blocks_phase_close": false},
+    {"id": "R0.5", "strict_acceptance_state": "accepted", "blocks_phase_close": false},
+    {"id": "R0.6", "strict_acceptance_state": "accepted", "blocks_phase_close": false},
+    {"id": "R0.7", "strict_acceptance_state": "open", "integration_state": "merged", "note": "Slices 1–4 merged; authenticated live sync residual remains (login APIs guardrail-banned until deliberate P3.2 allowlist)", "blocks_phase_close": true},
+    {"id": "R0.8", "strict_acceptance_state": "open", "note": "This inventory + residual formal reports; no phase gate closed", "blocks_phase_close": true}
+  ],
+  "phase_readiness": [
+    {
+      "phase": 0,
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open",
+      "formal_report": "docs/matrix-rust-sdk/phase-0-formal-acceptance-report.json",
+      "verdict": "not_accepted",
+      "blocking_residuals": [
+        "R0.2 incomplete (parked E1 + Phase 0 evidence readiness not accepted)",
+        "Phase 0 evidence-manifest rows still open/stale/blocked (see phase0-evidence-manifest)",
+        "R0.8 formal accept not issued"
+      ]
+    },
+    {
+      "phase": 1,
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open",
+      "formal_report": "docs/matrix-rust-sdk/phase-1-formal-acceptance-report.json",
+      "verdict": "not_accepted",
+      "blocking_residuals": [
+        "R0.8 formal Phase 1 accept not issued",
+        "P1.1–P1.6 strict acceptance remains open (landed/merged only)"
+      ]
+    },
+    {
+      "phase": 2,
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open",
+      "formal_report": "docs/matrix-rust-sdk/phase-2-formal-acceptance-report.json",
+      "verdict": "not_accepted",
+      "blocking_residuals": [
+        "R0.7 authenticated live sync residual open",
+        "R0.8 formal Phase 2 accept not issued",
+        "P2.1–P2.6 strict acceptance remains open (landed/merged only)"
+      ]
+    },
+    {
+      "phase": 3,
+      "task_focus": "P3.1",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open",
+      "formal_report": "docs/matrix-rust-sdk/p3.1-task-acceptance-report.json",
+      "verdict": "not_accepted",
+      "blocking_residuals": [
+        "R0.7 live disposable-Synapse authenticated residual open",
+        "R0.8 P3.1 task acceptance not issued",
+        "P3.2+ not started; blocked by R0.2/R0.7/R0.8"
+      ]
+    }
+  ],
+  "r0_7_landed_slices": [
+    {"pr": 96, "summary": "live CS discovery/login-types HTTP transports"},
+    {"pr": 98, "summary": "loopback CS stub login-types + opt-in disposable Synapse"},
+    {"pr": 100, "summary": "composed encrypted store open/Ready/logout/reopen/wipe"},
+    {"pr": 102, "summary": "stale-generation after real SDK logout + wrong-key privacy"}
+  ],
+  "explicit_non_claims": [
+    "No Phase 0/1/2 gate closed",
+    "No P0–P3.1 original task strict-accepted by this slice",
+    "No dual-backend or production Matrix Tauri cutover",
+    "No merge to main",
+    "No secrets in diagnostics or evidence"
+  ]
+}

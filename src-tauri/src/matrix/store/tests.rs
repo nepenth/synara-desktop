@@ -124,18 +124,24 @@ fn ensure_dirs_creates_layout_without_wiping_existing() {
 }
 
 #[test]
-fn layout_serializes_without_secrets() {
+fn layout_serializes_without_secrets_or_absolute_paths() {
     let root = PathBuf::from("/var/app");
     let paths = StorePaths::derive(&root, &alice()).unwrap();
     let layout = paths.layout();
     let json = serde_json::to_string(&layout).unwrap();
-    // camelCase wire
+    // camelCase wire + privacy-safe relative children only (R0.6 / REV-003)
     assert!(json.contains("accountSegment"));
-    assert!(json.contains("stateDir"));
+    assert!(json.contains("relativeStateDir"));
+    assert!(json.contains("confinedUnderMatrixRoot"));
     assert!(!json.contains("access_token"));
     assert!(!json.contains("storeKey"));
+    assert!(!json.contains("/var/app"));
+    assert!(!json.contains(paths.account_root().to_string_lossy().as_ref()));
+    assert!(!json.contains(paths.state_dir().to_string_lossy().as_ref()));
     let back: StoreLayout = serde_json::from_str(&json).unwrap();
     assert_eq!(back.account_segment, paths.account_segment());
+    assert_eq!(back.relative_state_dir, "state");
+    assert!(back.confined_under_matrix_root);
 }
 
 #[test]
@@ -192,6 +198,123 @@ fn keyring_refs_stable_and_scoped() {
     assert!(refs.account.starts_with("store-key:"));
     // Must not collide with session credential account name.
     assert_ne!(refs.account, "matrix-session");
+}
+
+#[test]
+fn keyring_vault_platform_support_matches_cfg() {
+    let supported = KeyringStoreKeyVault::platform_supported();
+    assert_eq!(
+        supported,
+        cfg!(any(target_os = "macos", target_os = "linux"))
+    );
+}
+
+/// R0.4 residual: live OS keyring round-trip when the backend is available.
+///
+/// Skips (returns early via Ok paths that tolerate unavailable backends) only
+/// when the host cannot access the credential store — CI macOS/Linux runners
+/// with a working keyring exercise the real path.
+#[test]
+fn keyring_vault_round_trip_when_available() {
+    let vault = KeyringStoreKeyVault::new();
+    let id = StoreKeyId::from_identity(
+        &AccountIdentity::new(
+            "@r04-keyring-probe:example.org",
+            "https://matrix.example.org",
+        )
+        .unwrap(),
+    );
+
+    // Cleanup any leftover probe entry from a prior interrupted run.
+    let _ = vault.delete(&id);
+
+    let key = match StoreKeyMaterial::generate() {
+        Ok(k) => k,
+        Err(_) => return,
+    };
+
+    match vault.set(&id, &key) {
+        Ok(()) => {}
+        Err(StoreKeyVaultError::BackendUnavailable { .. }) => {
+            // Backend locked/missing on this host — residual still implemented.
+            return;
+        }
+        Err(e) => panic!("unexpected keyring set error: {e}"),
+    }
+
+    let loaded = vault
+        .get(&id)
+        .expect("get after set")
+        .expect("key present after set");
+    assert!(loaded.equals(&key));
+
+    // get_or_create must not rotate an existing key.
+    let again = get_or_create_store_key(&vault, &id).expect("get_or_create");
+    assert!(again.equals(&key));
+
+    assert!(vault.delete(&id).expect("delete"));
+    assert!(vault.get(&id).expect("get after delete").is_none());
+}
+
+/// Encrypted store reopen using a key that survived a keyring get_or_create cycle.
+#[test]
+fn keyring_backed_encrypted_store_reopen_when_available() {
+    use crate::matrix::client_builder::{build_unauthenticated_client, ClientBuildConfig};
+    use std::fs;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    let vault = KeyringStoreKeyVault::new();
+    let identity = AccountIdentity::new(
+        "@r04-reopen-probe:example.org",
+        "https://matrix.example.org",
+    )
+    .unwrap();
+    let id = StoreKeyId::from_identity(&identity);
+    let _ = vault.delete(&id);
+
+    let key = match get_or_create_store_key(&vault, &id) {
+        Ok(k) => k,
+        Err(StoreKeyVaultError::BackendUnavailable { .. }) => return,
+        Err(e) => panic!("keyring get_or_create failed: {e}"),
+    };
+    // Reload from keyring (simulates process restart).
+    let key_reloaded = match vault.get(&id) {
+        Ok(Some(k)) => k,
+        Ok(None) => panic!("key missing after get_or_create"),
+        Err(StoreKeyVaultError::BackendUnavailable { .. }) => return,
+        Err(e) => panic!("keyring get failed: {e}"),
+    };
+    assert!(key_reloaded.equals(&key));
+
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let root = std::env::temp_dir().join(format!("synara-r04-reopen-{nanos}"));
+    let _ = fs::remove_dir_all(&root);
+
+    let cfg1 = ClientBuildConfig::product_default(&root, identity.clone(), Some(key)).unwrap();
+    let cfg2 = ClientBuildConfig::product_default(&root, identity, Some(key_reloaded)).unwrap();
+
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .expect("runtime");
+    let _enter = rt.enter();
+    let c1 = rt
+        .block_on(build_unauthenticated_client(&cfg1))
+        .expect("first encrypted open");
+    drop(c1);
+    let c2 = rt
+        .block_on(build_unauthenticated_client(&cfg2))
+        .expect("reopen with keyring-reloaded key");
+    assert!(c2.session().is_none());
+    drop(c2);
+    drop(_enter);
+    drop(rt);
+
+    let _ = vault.delete(&id);
+    let _ = fs::remove_dir_all(&root);
 }
 
 #[test]

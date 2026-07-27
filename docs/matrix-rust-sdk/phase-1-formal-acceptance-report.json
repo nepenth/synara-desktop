@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "report_id": "phase-1-formal-acceptance-report",
+  "task_id": "R0.8",
+  "report_kind": "phase_formal_acceptance",
+  "phase": 1,
+  "title": "Phase 1 formal acceptance report",
+  "issued_by": "R0.8",
+  "as_of_utc": "2026-07-27T09:40:00Z",
+  "subject": {
+    "integration_branch": "feature/matrix-rust-sdk-full-replacement",
+    "integration_tip_sha": "e7d9cb992b8f7e648a232b8d006f7f3e5f3c77d2",
+    "product_evidence_sha": "3a2fa6f400762f95b4851d02206d5be8ee550c66"
+  },
+  "verdict": "not_accepted",
+  "phase_gate_state": "open",
+  "strict_acceptance_state": "open",
+  "tasks_in_scope": ["P1.1", "P1.2", "P1.3", "P1.4", "P1.5", "P1.6"],
+  "tasks_strict_accepted": [],
+  "delivery_note": "P1.1–P1.6 are landed/merged inventory only; R0.1 and R0.3 product remediations are accepted, but Phase 1 formal accept remains R0.8 authority.",
+  "blocking_residuals": [
+    {
+      "id": "RES-P1-STRICT-OPEN",
+      "summary": "P1.1–P1.6 strict_acceptance_state remains open in program-status.json"
+    },
+    {
+      "id": "RES-R0.8-FORMAL-ACCEPT",
+      "summary": "No independent attestation authorizes Phase 1 closed/accepted on this subject"
+    }
+  ],
+  "evidence_refs": [
+    "docs/matrix-rust-sdk/r0.8-phase-gate-readiness-inventory.json",
+    "docs/matrix-rust-sdk/program-status.json",
+    "docs/matrix-rust-sdk/p1.6-architectural-guardrails.md"
+  ],
+  "attestation": {
+    "decision": "Phase 1 remains open. Truthful residual formal record only.",
+    "independent_reviewer_required_for_accept": true,
+    "implementer_cannot_self_accept": true
+  }
+}

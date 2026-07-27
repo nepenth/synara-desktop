@@ -73,19 +73,22 @@ pub struct StorePaths {
     account_segment: String,
 }
 
-/// Serializable layout description for diagnostics.
+/// Privacy-safe serializable layout description for diagnostics (R0.6 / REV-003).
 ///
-/// R0.6 will further redact absolute paths from product diagnostic surfaces;
-/// this type remains path-bearing for harness/layout tests only.
+/// Exposes only the opaque account segment and fixed relative child directory
+/// names. Absolute filesystem paths never appear on this type.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StoreLayout {
+    /// Opaque non-user directory segment under `{app_data}/matrix/`.
     pub account_segment: String,
-    pub account_root: String,
-    pub state_dir: String,
-    pub crypto_dir: String,
-    pub cache_dir: String,
-    pub media_dir: String,
+    /// Fixed relative child names under the account root (never absolute).
+    pub relative_state_dir: String,
+    pub relative_crypto_dir: String,
+    pub relative_cache_dir: String,
+    pub relative_media_dir: String,
+    /// Confirms layout is confined under the product Matrix root policy.
+    pub confined_under_matrix_root: bool,
 }
 
 impl StorePaths {
@@ -199,15 +202,15 @@ impl StorePaths {
         Ok(())
     }
 
-    /// Product/diagnostic projection — never includes key material.
+    /// Product/diagnostic projection — never includes key material or absolute paths.
     pub fn layout(&self) -> StoreLayout {
         StoreLayout {
             account_segment: self.account_segment.clone(),
-            account_root: self.account_root.to_string_lossy().into_owned(),
-            state_dir: self.state_dir.to_string_lossy().into_owned(),
-            crypto_dir: self.crypto_dir.to_string_lossy().into_owned(),
-            cache_dir: self.cache_dir.to_string_lossy().into_owned(),
-            media_dir: self.media_dir.to_string_lossy().into_owned(),
+            relative_state_dir: STATE_SEGMENT.to_owned(),
+            relative_crypto_dir: CRYPTO_SEGMENT.to_owned(),
+            relative_cache_dir: CACHE_SEGMENT.to_owned(),
+            relative_media_dir: MEDIA_SEGMENT.to_owned(),
+            confined_under_matrix_root: true,
         }
     }
 }
