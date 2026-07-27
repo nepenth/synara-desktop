@@ -101,6 +101,6 @@
     {"id": "R0.5", "title": "Safe destructive lifecycle", "artifact_state": "landed", "integration_state": "merged", "strict_acceptance_state": "accepted", "phase_gate_state": "open"},
     {"id": "R0.6", "title": "Diagnostic privacy", "artifact_state": "landed", "integration_state": "merged", "strict_acceptance_state": "accepted", "phase_gate_state": "open"},
     {"id": "R0.7", "title": "Live Phase 2 and P3.1 adapters", "artifact_state": "landed", "integration_state": "merged", "strict_acceptance_state": "open", "phase_gate_state": "open"},
-    {"id": "R0.8", "title": "Acceptance reports and CI evidence", "artifact_state": "landed", "integration_state": "pr_open", "strict_acceptance_state": "open", "phase_gate_state": "open"}
+    {"id": "R0.8", "title": "Acceptance reports and CI evidence", "artifact_state": "landed", "integration_state": "merged", "strict_acceptance_state": "open", "phase_gate_state": "open"}
   ]
 }
