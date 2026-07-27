@@ -22,10 +22,14 @@ Target upstream release: `matrix-sdk-0.18.0`
 
 Upstream source commit: `1c44fb66214667c6d00acaf72ab592493653708b`
 
-## Current audited execution state
+## 2026-07-25 audited execution baseline
 
 The independent review of integration commit `edfefee` supersedes earlier
 handoff claims that Phases 0–2 and P3.1 were complete.
+
+This table is the immutable audit baseline, not a live PR ledger. For progress
+after `edfefee`, use the canonical status ledger and the current live snapshot in
+[`implementation-handoff.md`](matrix-rust-sdk/implementation-handoff.md).
 
 | Band | Artifact inventory | Acceptance state |
 |---|---|---|
