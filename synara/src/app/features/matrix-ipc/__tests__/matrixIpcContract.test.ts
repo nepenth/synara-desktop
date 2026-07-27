@@ -86,6 +86,9 @@ const INVALID_FIXTURES = [
   'invalid_error_with_secret_field.json',
   'invalid_sequence_above_wire_max.json',
   'invalid_stream_id_mismatch.json',
+  'invalid_snapshot_body_secret_field.json',
+  'invalid_snapshot_body_wrong_topic_shape.json',
+  'invalid_delta_body_media_bytes.json',
 ] as const;
 
 // ---------------------------------------------------------------------------
@@ -118,6 +121,41 @@ test('R0.3 wire counters reject NaN fractions overflow and stream id mismatch', 
 
   assert.equal(parseMatrixIpcEnvelope(loadFixture('invalid_sequence_above_wire_max.json')), null);
   assert.equal(parseMatrixIpcEnvelope(loadFixture('invalid_stream_id_mismatch.json')), null);
+});
+
+test('R0.3 topic-bound stream bodies reject secrets wrong shape and media bytes', () => {
+  assert.equal(
+    parseMatrixIpcEnvelope(loadFixture('invalid_snapshot_body_secret_field.json')),
+    null
+  );
+  assert.equal(
+    parseMatrixIpcEnvelope(loadFixture('invalid_snapshot_body_wrong_topic_shape.json')),
+    null
+  );
+  assert.equal(parseMatrixIpcEnvelope(loadFixture('invalid_delta_body_media_bytes.json')), null);
+
+  const okRoomList = parseMatrixIpcEnvelope(
+    loadFixture('valid_snapshot_with_room_summary_body.json')
+  );
+  assert.ok(okRoomList);
+  assert.equal(okRoomList.kind, 'snapshot');
+
+  // Wrong topic shape inline
+  assert.equal(
+    parseMatrixIpcEnvelope({
+      protocolVersion: 1,
+      sessionGeneration: 1,
+      streamId: 's1',
+      sequence: 1,
+      kind: 'delta',
+      payload: {
+        streamId: 's1',
+        topic: 'timeline',
+        body: { op: 'append' },
+      },
+    }),
+    null
+  );
 
   // MAX_WIRE_COUNTER is accepted.
   const maxOk = parseMatrixIpcEnvelope({
@@ -189,7 +227,7 @@ test('P1.5 all kinds constructible via makeEnvelope and re-parse', () => {
         streamId: 's1',
         topic: 'timeline',
         idempotencyKey: 'idem-1',
-        body: { op: 'upsert' },
+        body: { items: [] },
       },
     },
     {

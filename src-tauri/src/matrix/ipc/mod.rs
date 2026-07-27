@@ -18,6 +18,7 @@ mod envelope;
 mod error;
 mod protocol;
 mod stream;
+mod stream_body;
 mod version;
 mod wire_counter;
 
@@ -25,6 +26,7 @@ pub use envelope::*;
 pub use error::*;
 pub use protocol::*;
 pub use stream::*;
+pub use stream_body::{validate_stream_topic_body, RoomListStreamBody, TimelineStreamBody};
 pub use version::*;
 pub use wire_counter::{checked_next_wire_counter, is_valid_wire_counter, MAX_WIRE_COUNTER};
 
