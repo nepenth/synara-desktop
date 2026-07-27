@@ -72,7 +72,7 @@ fn cap_and_overwrite() {
     let err = idx.upsert(device("OVERFLOW", false, false)).unwrap_err();
     assert_eq!(err.diagnostic_id(), "p8.2-device-cap");
     idx.upsert(device("D0", true, true)).unwrap();
-    assert_eq!(idx.get("D0").unwrap().is_own, true);
+    assert!(idx.get("D0").unwrap().is_own);
 }
 
 #[test]
