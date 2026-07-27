@@ -11,6 +11,7 @@
 //! P3.1: Discovery and login-flow service (harness; no login execution).
 //! P3.2: Password/token login + device naming (harness).
 //! P3.5: Session secret / refresh-token persistence foundation (host vault only).
+//! P3.7: Legacy-session detection / transition coordinator (clean-break; no JS client).
 //! P4.1: Sync service readiness / reconnect model (harness foundation).
 //! P4.2: Room-list snapshot and delta projection (harness foundation).
 //! P4.5: Space hierarchy / filters / parents (harness foundation).
@@ -36,6 +37,7 @@ pub mod client_builder;
 pub mod diagnostics;
 pub mod dto;
 pub mod ipc;
+pub mod legacy;
 pub mod lifecycle;
 pub mod media;
 pub mod members;
@@ -77,6 +79,7 @@ pub fn matrix_ipc_schema_markers() -> &'static str {
     let _diagnostics = diagnostics::matrix_diagnostics_markers();
     let _lifecycle = lifecycle::matrix_lifecycle_markers();
     let _auth = auth::matrix_auth_markers();
+    let _legacy = legacy::matrix_legacy_markers();
     let _sync = sync::matrix_sync_markers();
     let _room_list = room_list::matrix_room_list_markers();
     let _routes = routes::matrix_routes_markers();
@@ -109,6 +112,7 @@ pub fn matrix_ipc_schema_markers() -> &'static str {
     debug_assert_eq!(_diagnostics, diagnostics::MATRIX_DIAGNOSTICS_MARKER);
     debug_assert_eq!(_lifecycle, lifecycle::MATRIX_LIFECYCLE_MARKER);
     debug_assert_eq!(_auth, auth::MATRIX_AUTH_MARKER);
+    debug_assert_eq!(_legacy, legacy::MATRIX_LEGACY_MARKER);
     debug_assert_eq!(_sync, sync::MATRIX_SYNC_MARKER);
     debug_assert_eq!(_room_list, room_list::MATRIX_ROOM_LIST_MARKER);
     debug_assert_eq!(_routes, routes::MATRIX_ROUTES_MARKER);
@@ -124,5 +128,5 @@ pub fn matrix_ipc_schema_markers() -> &'static str {
     debug_assert_eq!(_typing, typing::MATRIX_TYPING_MARKER);
     debug_assert_eq!(_media, media::MATRIX_MEDIA_MARKER);
     debug_assert_eq!(_notifications, notifications::MATRIX_NOTIFICATIONS_MARKER);
-    "matrix-ipc-protocol-v1+domain-dtos-p1.4+supervisor-p2.1+store-p2.2+client-builder-p2.3+tasks-p2.4+diagnostics-p2.5+lifecycle-p2.6+auth-p3.2+session-persist-p3.5+sync-p4.1+room-list-p4.2+routes-p4.8+spaces-p4.5+members-p4.6+timeline-p5.1+diffs-p5.2+pagination-p5.3+search-p6.8+relations-p5.6+send-p6.1+receipts-p6.2+typing-p6.3+media-p6.4+threads-p5.8+notifications-p7.1+security-p8.1"
+    "matrix-ipc-protocol-v1+domain-dtos-p1.4+supervisor-p2.1+store-p2.2+client-builder-p2.3+tasks-p2.4+diagnostics-p2.5+lifecycle-p2.6+auth-p3.2+session-persist-p3.5+legacy-p3.7+sync-p4.1+room-list-p4.2+routes-p4.8+spaces-p4.5+members-p4.6+timeline-p5.1+diffs-p5.2+pagination-p5.3+search-p6.8+relations-p5.6+send-p6.1+receipts-p6.2+typing-p6.3+media-p6.4+threads-p5.8+notifications-p7.1+security-p8.1"
 }
