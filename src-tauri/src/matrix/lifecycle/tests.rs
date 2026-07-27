@@ -963,7 +963,9 @@ fn r0_7_stale_generation_after_real_sdk_logout() {
 /// dump). Complements happy-path reopen in slice 3.
 #[test]
 fn r0_7_wrong_store_key_reopen_fails_privately() {
-    use crate::matrix::client_builder::{build_unauthenticated_client, ClientBuildConfig, ClientBuilderError};
+    use crate::matrix::client_builder::{
+        build_unauthenticated_client, ClientBuildConfig, ClientBuilderError,
+    };
     use crate::matrix::store::StoreKeyMaterial;
 
     let root = temp_root("r07-wrong-key");
@@ -971,8 +973,16 @@ fn r0_7_wrong_store_key_reopen_fails_privately() {
     let key_a = StoreKeyMaterial::generate().unwrap();
     let key_b = StoreKeyMaterial::generate().unwrap();
     assert!(!key_a.equals(&key_b));
-    let key_a_hex = key_a.as_bytes().iter().map(|b| format!("{b:02x}")).collect::<String>();
-    let key_b_hex = key_b.as_bytes().iter().map(|b| format!("{b:02x}")).collect::<String>();
+    let key_a_hex = key_a
+        .as_bytes()
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect::<String>();
+    let key_b_hex = key_b
+        .as_bytes()
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect::<String>();
     let root_display = root.display().to_string();
 
     let rt = tokio::runtime::Builder::new_multi_thread()
@@ -989,8 +999,7 @@ fn r0_7_wrong_store_key_reopen_fails_privately() {
     assert!(client.session().is_none());
     drop(client);
 
-    let cfg_bad =
-        ClientBuildConfig::product_default(&root, identity.clone(), Some(key_b)).unwrap();
+    let cfg_bad = ClientBuildConfig::product_default(&root, identity.clone(), Some(key_b)).unwrap();
     let err = rt
         .block_on(build_unauthenticated_client(&cfg_bad))
         .expect_err("wrong store key must fail reopen");
@@ -1005,18 +1014,21 @@ fn r0_7_wrong_store_key_reopen_fails_privately() {
                 diagnostic_id.starts_with("p2.3-"),
                 "expected redacted p2.3 diagnostic id, got {diagnostic_id}"
             );
-            assert!(
-                !message.is_empty(),
-                "safe message must be non-empty"
-            );
+            assert!(!message.is_empty(), "safe message must be non-empty");
             // Privacy: Display surface must not leak paths or key material.
             let surface = err.to_string();
             assert!(
                 !surface.contains(&root_display),
                 "error must not contain absolute store root"
             );
-            assert!(!surface.contains(&key_a_hex), "error must not contain key A");
-            assert!(!surface.contains(&key_b_hex), "error must not contain key B");
+            assert!(
+                !surface.contains(&key_a_hex),
+                "error must not contain key A"
+            );
+            assert!(
+                !surface.contains(&key_b_hex),
+                "error must not contain key B"
+            );
             assert!(
                 !surface.contains("sqlite"),
                 "error must not leak raw engine detail: {surface}"
