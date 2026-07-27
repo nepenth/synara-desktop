@@ -1,0 +1,12 @@
+{
+  "protocolVersion": 1,
+  "sessionGeneration": 1,
+  "streamId": "stream-a",
+  "sequence": 1,
+  "kind": "delta",
+  "payload": {
+    "streamId": "stream-b",
+    "topic": "room_list",
+    "body": {}
+  }
+}
