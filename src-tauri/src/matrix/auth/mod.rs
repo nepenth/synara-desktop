@@ -1,15 +1,14 @@
-//! P3.1 — Discovery and login-flow service foundation.
+//! P3.1 / R0.7 — Discovery and login-flow service foundation + live CS transports.
 //!
-//! Harness / foundation only until cutover:
 //! - homeserver URL + server-name input normalization
-//! - well-known discovery behind [`DiscoveryTransport`] (mockable)
-//! - login-flow discovery behind [`LoginFlowTransport`] (mockable)
+//! - well-known discovery behind [`DiscoveryTransport`] (mock + live HTTP)
+//! - login-flow discovery behind [`LoginFlowTransport`] (mock + live HTTP)
 //! - stable Synara domain types (not raw SDK / Ruma on the boundary)
 //! - optional thin bridge into P2.3 client-builder identity/homeserver URL
 //!
 //! **Out of scope:** password/token login (P3.2), SSO callback (P3.3), UIA
 //! (P3.4), refresh-token persistence (P3.5), session restore (P3.6), production
-//! Matrix Tauri commands, dual-backend.
+//! Matrix Tauri commands, dual-backend, dual sync.
 //!
 //! Authoritative design note: `docs/matrix-rust-sdk/p3.1-discovery-login-flow.md`
 
@@ -19,6 +18,7 @@
 mod client_config;
 mod discovery;
 mod error;
+mod http_transport;
 mod input;
 mod login_flow;
 
@@ -28,6 +28,10 @@ pub use discovery::{
     MockDiscoveryTransport, WellKnownClientConfig,
 };
 pub use error::AuthError;
+pub use http_transport::{
+    parse_login_types_json, parse_well_known_client_json, HttpDiscoveryTransport,
+    HttpLoginFlowTransport, AUTH_HTTP_TIMEOUT_SECS,
+};
 pub use input::{
     normalize_homeserver_url, normalize_server_name, parse_discovery_input, DiscoveryInput,
     DiscoveryInputKind, NormalizedHomeserverUrl, NormalizedServerName,
@@ -45,9 +49,11 @@ pub fn matrix_auth_markers() -> &'static str {
     let _kinds = LoginFlowKind::ALL_KNOWN.len();
     let _password = LoginFlowKind::Password.matrix_type();
     let _input = DiscoveryInputKind::HomeserverUrl.as_str();
+    let _timeout = AUTH_HTTP_TIMEOUT_SECS;
     debug_assert!(_kinds >= 4);
     debug_assert_eq!(_password, Some("m.login.password"));
     debug_assert_eq!(_input, "homeserver_url");
+    debug_assert!(_timeout >= 5);
     debug_assert_eq!(MATRIX_AUTH_MARKER, "matrix-auth-discovery-login-flow-p3.1");
     MATRIX_AUTH_MARKER
 }
