@@ -14,6 +14,7 @@
 //! P4.1: Sync service readiness / reconnect model (harness foundation).
 //! P4.2: Room-list snapshot and delta projection (harness foundation).
 //! P4.5: Space hierarchy / filters / parents (harness foundation).
+//! P5.1: Timeline registry and lifecycle (harness foundation).
 //! No production login/sync loop or Tauri command registration lives here yet.
 //! No dual-backend selector. Product runtime remains matrix-js-sdk.
 
@@ -29,6 +30,7 @@ pub mod store;
 pub mod supervisor;
 pub mod sync;
 pub mod tasks;
+pub mod timeline;
 
 // Keep schema/DTO/supervisor/store/client_builder/tasks/diagnostics/lifecycle/auth
 // symbols resolved in non-test builds (avoids dead-strip until production
@@ -60,6 +62,7 @@ pub fn matrix_ipc_schema_markers() -> &'static str {
     let _sync = sync::matrix_sync_markers();
     let _room_list = room_list::matrix_room_list_markers();
     let _spaces = spaces::matrix_spaces_markers();
+    let _timeline = timeline::matrix_timeline_markers();
     debug_assert_eq!(_version, 1);
     debug_assert!(_kinds > 0);
     debug_assert!(_errors > 0);
@@ -80,5 +83,6 @@ pub fn matrix_ipc_schema_markers() -> &'static str {
     debug_assert_eq!(_sync, sync::MATRIX_SYNC_MARKER);
     debug_assert_eq!(_room_list, room_list::MATRIX_ROOM_LIST_MARKER);
     debug_assert_eq!(_spaces, spaces::MATRIX_SPACES_MARKER);
-    "matrix-ipc-protocol-v1+domain-dtos-p1.4+supervisor-p2.1+store-p2.2+client-builder-p2.3+tasks-p2.4+diagnostics-p2.5+lifecycle-p2.6+auth-p3.2+session-persist-p3.5+sync-p4.1+room-list-p4.2+spaces-p4.5"
+    debug_assert_eq!(_timeline, timeline::MATRIX_TIMELINE_MARKER);
+    "matrix-ipc-protocol-v1+domain-dtos-p1.4+supervisor-p2.1+store-p2.2+client-builder-p2.3+tasks-p2.4+diagnostics-p2.5+lifecycle-p2.6+auth-p3.2+session-persist-p3.5+sync-p4.1+room-list-p4.2+spaces-p4.5+timeline-p5.1"
 }
