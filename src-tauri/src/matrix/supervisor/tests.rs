@@ -103,7 +103,8 @@ fn wipe_cycle_returns_empty_and_bumps_generation() {
     let gen_ready = s.session_generation();
     s.apply(SupervisorCommand::BeginWipe).unwrap();
     assert_eq!(s.state(), SupervisorState::Wiping);
-    assert!(s.has_client());
+    // R0.5 / REV-001: client is dropped at BeginWipe, not CompleteWipe.
+    assert!(!s.has_client());
     s.apply(SupervisorCommand::CompleteWipe).unwrap();
     assert_eq!(s.state(), SupervisorState::Empty);
     assert!(!s.has_client());

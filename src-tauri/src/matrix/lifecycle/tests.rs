@@ -451,3 +451,140 @@ fn recovery_action_categories_match_ipc() {
         MatrixIpcErrorCategory::StoreLocked
     );
 }
+
+/// R0.5 / REV-001: BeginWipe drops the client *before* disk deletion, and
+/// generation-stamped tasks are cancelled before the account root is removed.
+#[tokio::test]
+async fn wipe_quiesces_client_and_tasks_before_store_deletion() {
+    let root = temp_root("wipe-order");
+    let alice_paths = seed_account_store(&root, &alice());
+
+    let mut supervisor = MatrixSupervisor::new();
+    let factory = TestClientFactory::new();
+    harness_login_ready(&mut supervisor, &factory).unwrap();
+    let gen_ready = supervisor.session_generation();
+    assert!(supervisor.has_client());
+
+    let mut tasks = TaskSupervisor::new();
+    tasks.set_live_generation(gen_ready);
+    let _id = tasks
+        .spawn(TaskKind::Sync, gen_ready, async {
+            std::future::pending::<()>().await;
+        })
+        .unwrap();
+    assert_eq!(tasks.running_count(), 1);
+
+    // Enter Wiping without calling full wipe yet — client must drop immediately.
+    supervisor
+        .apply(crate::matrix::supervisor::SupervisorCommand::BeginWipe)
+        .unwrap();
+    assert_eq!(supervisor.state(), SupervisorState::Wiping);
+    assert!(
+        !supervisor.has_client(),
+        "client must be dropped at BeginWipe before store deletion"
+    );
+    // Account store still present until wipe_account_store runs.
+    assert!(alice_paths.account_root().is_dir());
+
+    let session_vault = InMemorySessionMaterialVault::new();
+    session_vault
+        .set(
+            &SessionMaterialId::from_identity(&alice()),
+            &SessionMaterial::from_placeholder(b"sess"),
+        )
+        .unwrap();
+    let store_vault = InMemoryStoreKeyVault::new();
+    let _ = get_or_create_store_key(
+        &store_vault,
+        &StoreKeyId::from_identity(&alice()),
+    )
+    .unwrap();
+
+    let target = WipeTarget::resolve(&root, alice()).unwrap();
+    let outcome = perform_local_wipe(
+        &mut supervisor,
+        &mut tasks,
+        &target,
+        &store_vault,
+        &session_vault,
+        None,
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(supervisor.state(), SupervisorState::Empty);
+    assert!(!supervisor.has_client());
+    assert!(!alice_paths.account_root().exists());
+    assert_eq!(tasks.registered_count(), 0);
+    assert!(outcome.tasks_retired >= 1);
+    assert!(outcome.session_generation > gen_ready);
+
+    let _ = fs::remove_dir_all(&root);
+}
+
+/// R0.5: session-vault failure during wipe must not leave tasks running against
+/// a deleted store. We clear vault before disk wipe, so a failing vault aborts
+/// with client already dropped and store still present.
+#[tokio::test]
+async fn wipe_session_vault_failure_fails_supervisor_without_deleting_store() {
+    struct FailingSessionVault;
+    impl SessionMaterialVault for FailingSessionVault {
+        fn get(
+            &self,
+            _id: &SessionMaterialId,
+        ) -> Result<Option<SessionMaterial>, LifecycleError> {
+            Ok(None)
+        }
+        fn set(
+            &self,
+            _id: &SessionMaterialId,
+            _material: &SessionMaterial,
+        ) -> Result<(), LifecycleError> {
+            Ok(())
+        }
+        fn clear(&self, _id: &SessionMaterialId) -> Result<bool, LifecycleError> {
+            Err(LifecycleError::Vault {
+                diagnostic_id: "r0.5-test-session-vault-fail",
+                category: MatrixIpcErrorCategory::StoreUnavailable,
+            })
+        }
+    }
+
+    let root = temp_root("wipe-vault-fail");
+    let paths = seed_account_store(&root, &alice());
+
+    let mut supervisor = MatrixSupervisor::new();
+    let factory = TestClientFactory::new();
+    harness_login_ready(&mut supervisor, &factory).unwrap();
+
+    let mut tasks = TaskSupervisor::new();
+    tasks.set_live_generation(supervisor.session_generation());
+    let _id = tasks
+        .spawn(TaskKind::Listener, supervisor.session_generation(), async {
+            std::future::pending::<()>().await;
+        })
+        .unwrap();
+
+    let store_vault = InMemoryStoreKeyVault::new();
+    let target = WipeTarget::resolve(&root, alice()).unwrap();
+    let err = perform_local_wipe(
+        &mut supervisor,
+        &mut tasks,
+        &target,
+        &store_vault,
+        &FailingSessionVault,
+        None,
+    )
+    .await
+    .unwrap_err();
+    assert!(matches!(err, LifecycleError::Vault { .. }));
+    assert_eq!(supervisor.state(), SupervisorState::Failed);
+    assert!(!supervisor.has_client());
+    // Store must still exist — vault failed before wipe_account_store.
+    assert!(paths.account_root().is_dir());
+    assert_eq!(fs::read(paths.state_dir().join("state.db")).unwrap(), b"state-blob");
+    // Tasks for pre-wipe generation were retired before vault clear.
+    assert_eq!(tasks.running_count(), 0);
+
+    let _ = fs::remove_dir_all(&root);
+}
