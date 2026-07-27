@@ -9,7 +9,7 @@
 
 | Field | Value |
 | --- | --- |
-| Last updated (UTC) | **2026-07-27 ~13:32** |
+| Last updated (UTC) | **2026-07-27 ~13:41** |
 | Integration tip | `8b7d39e` — Merge #110 P3.5 session secret persistence |
 | Product runtime | Still **`matrix-js-sdk` only** until atomic sole-owner cutover |
 | Dual backend | **`false`** (forbidden forever) |
@@ -25,11 +25,11 @@
 
 | | |
 | --- | --- |
-| **Now** | P3.5 **merged**. **P3.6 session restore** open as [#112](https://github.com/nepenth/synara-desktop/pull/112) (CI in progress). |
+| **Now** | **P3.6** [#112](https://github.com/nepenth/synara-desktop/pull/112) — rustfmt CI fail fixed (`78c61ea`); re-running CI. Local `session_restore` + full `lifecycle` + guardrails **green**. |
 | **Inventory** | ~22/112 original task artifacts when program-status is synced (P3.1–P3.2 + P3.5 landed; see ledger). |
 | **Phase gates** | **0 / 15** strict gates closed (honest). |
-| **Open PRs → integration** | [#112](https://github.com/nepenth/synara-desktop/pull/112) P3.6 restore (product); [#111](https://github.com/nepenth/synara-desktop/pull/111) this progress log; [#109](https://github.com/nepenth/synara-desktop/pull/109) MiniMax helper. |
-| **Blocked on** | Nothing hard-blocking product slices (product-first policy). |
+| **Open PRs → integration** | [#112](https://github.com/nepenth/synara-desktop/pull/112) P3.6 restore (product, CI re-run); [#111](https://github.com/nepenth/synara-desktop/pull/111) this progress log; [#109](https://github.com/nepenth/synara-desktop/pull/109) MiniMax (desktop green; iOS long-running; branch **behind** tip). |
+| **Blocked on** | CI completion for merge candidates (required: Quality gate + Desktop package gate; tip must be current). |
 | **Dogfood path** | Login ✅ (P3.2) → persist secrets ✅ (P3.5) → **restore in flight (P3.6 / #112)** → sync/room list. |
 
 ---
@@ -58,7 +58,8 @@ Update rules:
 
 | When (UTC) | Item | Result | Notes |
 | --- | --- | --- | --- |
-| ~13:29 | **P3.6** session restore foundation | **PR open** [#112](https://github.com/nepenth/synara-desktop/pull/112) | Vault → identity bind → `restore_session` under lifecycle only; CI running. |
+| ~13:40 | **P3.6** rustfmt CI fix | **Pushed** `78c61ea` on [#112](https://github.com/nepenth/synara-desktop/pull/112) | `cargo fmt --check` failed on test wrapping; local tests 5/5 + lifecycle 36/36 + guardrails PASS. CI re-run. |
+| ~13:29 | **P3.6** session restore foundation | **PR open** [#112](https://github.com/nepenth/synara-desktop/pull/112) | Vault → identity bind → `restore_session` under lifecycle only. |
 | ~13:30 | **PROGRESS.md** live work log introduced | **PR open** [#111](https://github.com/nepenth/synara-desktop/pull/111) | Remote-monitor file for orchestrator updates. |
 | ~13:23 | **P3.5** session secret / refresh-token persistence | **Merged** [#110](https://github.com/nepenth/synara-desktop/pull/110) | Host keyring vault + `persist_session_after_login`. Tip `8b7d39e`. |
 | ~12:57 | Cutover **operating model** docs | **Merged** [#108](https://github.com/nepenth/synara-desktop/pull/108) | Canonical capability slices + atomic sole-owner cutover. |

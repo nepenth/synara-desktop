@@ -32,7 +32,7 @@ evidence, is authoritative for current delivery and acceptance state.
 | Integration branch | `feature/matrix-rust-sdk-full-replacement` |
 | Live integration tip | Re-fetch; expected at/after `8b7d39e` (#110 P3.5). Verify with `git rev-parse origin/feature/matrix-rust-sdk-full-replacement` |
 | Progress log | [`PROGRESS.md`](PROGRESS.md) — remote human monitor |
-| Open PRs | [#109](https://github.com/nepenth/synara-desktop/pull/109) MiniMax helper; next product **P3.6** |
+| Open PRs | [#112](https://github.com/nepenth/synara-desktop/pull/112) **P3.6** (product); [#111](https://github.com/nepenth/synara-desktop/pull/111) PROGRESS; [#109](https://github.com/nepenth/synara-desktop/pull/109) MiniMax |
 | Open PR to `main` | [#39](https://github.com/nepenth/synara-desktop/pull/39) — **do not merge without user approval** |
 | Product runtime | Still **`matrix-js-sdk` only** until atomic cutover; Rust = harness foundation / future sole owner |
 | Dual backend | **`false` forever** — no selector |
@@ -45,8 +45,8 @@ Always re-fetch and verify branch tips and PR state.
 ### Priority (user-approved 2026-07-27)
 
 1. **Update [`PROGRESS.md`](PROGRESS.md)** on every merge / priority change.
-2. **P3.2 + P3.5 landed.** Next: **P3.6 session restore** (dogfood restart path).
-3. Then sync + room list (P4.x) toward dogfood sole-owner flip.
+2. **P3.2 + P3.5 landed.** **P3.6 session restore** open [#112](https://github.com/nepenth/synara-desktop/pull/112) (merge when CI green; rustfmt fix `78c61ea`).
+3. Then sync + room list (P4.1 SyncService readiness → P4.2 room list) toward dogfood sole-owner flip.
 4. **Clean-break:** re-login / wipe local Matrix dirs OK; no elaborate JS→Rust token/device migration.
 5. **Do not** build dual-backend, runtime flags, or dual live clients.
 6. Residual R0 formal work is secondary; fix real safety only.
@@ -60,7 +60,7 @@ git checkout feature/matrix-rust-sdk-full-replacement
 git pull --ff-only
 npm run check:matrix-rust-guardrails
 (cd src-tauri && cargo test --locked matrix::)
-# Next: P3.6 session restore; keep PROGRESS.md current after merges.
+# Next: merge #112 when green; then P4.1 sync readiness. Keep PROGRESS.md current.
 ```
 
 ## Program accounting
