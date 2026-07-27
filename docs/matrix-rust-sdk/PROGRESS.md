@@ -9,7 +9,7 @@
 
 | Field | Value |
 | --- | --- |
-| Last updated (UTC) | **2026-07-27 ~14:25** |
+| Last updated (UTC) | **2026-07-27 ~14:30** |
 | Integration tip | `69f1087` — Merge #112 P3.6 session restore |
 | Product runtime | Still **`matrix-js-sdk` only** until atomic sole-owner cutover |
 | Dual backend | **`false`** (forbidden forever) |
@@ -25,7 +25,7 @@
 
 | | |
 | --- | --- |
-| **Now** | Tip `69f1087`. **#114** packages nearly green (deb+macOS pass); Validate clippy/test; iOS still queued. **#118** P4.5 opened. |
+| **Now** | Tip `69f1087`. **#114** packages all green (Desktop package gate PASS); Validate+iOS finishing. **#119** P5.1 opened. |
 | **Inventory** | ~23/112 original task artifacts when program-status is synced (P3.1–P3.2 + P3.5–P3.6 landed; see ledger). |
 | **Phase gates** | **0 / 15** strict gates closed (honest). |
 | **Open PRs → integration** | [#114](https://github.com/nepenth/synara-desktop/pull/114) P4.1; [#115](https://github.com/nepenth/synara-desktop/pull/115) P4.2; [#116](https://github.com/nepenth/synara-desktop/pull/116) P4.3; [#113](https://github.com/nepenth/synara-desktop/pull/113) CI filters; [#111](https://github.com/nepenth/synara-desktop/pull/111) this log; [#109](https://github.com/nepenth/synara-desktop/pull/109) MiniMax (deprioritize). |
@@ -58,6 +58,7 @@ Update rules:
 
 | When (UTC) | Item | Result | Notes |
 | --- | --- | --- | --- |
+| ~14:30 | **P5.1** timeline registry foundation | **PR open** [#119](https://github.com/nepenth/synara-desktop/pull/119) | TimelineRegistry lifecycle; local 8/8. |
 | ~14:25 | **P4.5** space hierarchy foundation | **PR open** [#118](https://github.com/nepenth/synara-desktop/pull/118) | SpaceHierarchy + filter/cycle; local 6/6. |
 | ~14:21 | **P4.4** favorite/low-priority/folder/recent | **PR open** [#117](https://github.com/nepenth/synara-desktop/pull/117) | DTO tag fields + sorts; local room_list 15/15. |
 | ~14:08 | **#114** rebased on tip after #112 | **Pushed** `d0ab3e5` | Combined lifecycle restore + sync guardrail zones; matrix tests 270/270. #115/#113 also tip-merged. |
@@ -102,7 +103,8 @@ Update rules:
 | 7 | Membership / unread / invites (P4.3) | **In PR** [#116](https://github.com/nepenth/synara-desktop/pull/116) |
 | 8 | Favorite / low-priority / recent (P4.4) | **In PR** [#117](https://github.com/nepenth/synara-desktop/pull/117) |
 | 9 | Space hierarchy (P4.5) | **In PR** [#118](https://github.com/nepenth/synara-desktop/pull/118) |
-| 10 | Timeline read/send | Not started |
+| 10 | Timeline registry (P5.1) | **In PR** [#119](https://github.com/nepenth/synara-desktop/pull/119) |
+| 11 | Timeline diffs (P5.2+) | Not started |
 | 10 | Crypto / verification / recovery | Not started |
 | 11 | Atomic sole-owner cutover + js-sdk burn-down (P11) | Not started |
 | 12 | Merge to `main` (#39) | Needs **explicit user approval** |
