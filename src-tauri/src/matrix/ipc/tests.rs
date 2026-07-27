@@ -617,6 +617,7 @@ fn schema_catalog_compatible_with_rust_constants() {
         bounds["forbidMediaBytesOverJsonIpc"].as_bool().unwrap(),
         FORBID_MEDIA_BYTES_OVER_JSON_IPC
     );
+    assert_eq!(bounds["maxWireCounter"].as_u64().unwrap(), MAX_WIRE_COUNTER);
 }
 
 #[test]

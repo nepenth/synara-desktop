@@ -69,6 +69,7 @@
     "maxStreamQueueDepth": 256,
     "streamCoalesceWindowMs": 16,
     "maxOpenStreamsPerSession": 64,
-    "forbidMediaBytesOverJsonIpc": true
+    "forbidMediaBytesOverJsonIpc": true,
+    "maxWireCounter": 9007199254740991
   }
 }

@@ -6,6 +6,7 @@ use super::version::{
     MATRIX_IPC_PROTOCOL_VERSION, MAX_ENVELOPE_PAYLOAD_JSON_BYTES, MAX_OPEN_STREAMS_PER_SESSION,
     MAX_STREAM_QUEUE_DEPTH,
 };
+use super::wire_counter::{checked_next_wire_counter, is_valid_wire_counter};
 
 /// Outcome of applying an incoming stream sequence number.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -23,27 +24,46 @@ pub enum SequenceOutcome {
 
 /// Check an incoming sequence against the last applied sequence on a stream.
 ///
-/// Contract:
+/// Contract (R0.3 / REV-004):
+/// - Counters must be wire-safe (`<= MAX_WIRE_COUNTER`); out-of-range → gap.
 /// - After a snapshot is applied, `last_applied` is set to the snapshot sequence.
-/// - Deltas must arrive as last+1.
+/// - Deltas must arrive as checked `last+1` (never overflow/wrap).
 /// - Exact equal sequence → duplicate (idempotent ignore).
-/// - Greater than last+1 → gap → emit `resync_required`.
+/// - Greater than expected next → gap → emit `resync_required`.
 pub fn check_sequence(last_applied: Option<u64>, incoming: u64) -> SequenceOutcome {
+    // Reject counters that cannot cross the JS boundary losslessly.
+    if !is_valid_wire_counter(incoming) {
+        return SequenceOutcome::Gap {
+            last_applied: last_applied.unwrap_or(0),
+            observed: incoming,
+        };
+    }
     match last_applied {
         None => SequenceOutcome::Accept {
             next_last_applied: incoming,
         },
-        Some(last) if incoming == last + 1 => SequenceOutcome::Accept {
-            next_last_applied: incoming,
+        Some(last) if !is_valid_wire_counter(last) => SequenceOutcome::Gap {
+            last_applied: last,
+            observed: incoming,
         },
         Some(last) if incoming == last => SequenceOutcome::Duplicate { last_applied: last },
-        Some(last) if incoming > last + 1 => SequenceOutcome::Gap {
-            last_applied: last,
-            observed: incoming,
-        },
-        Some(last) => SequenceOutcome::Behind {
-            last_applied: last,
-            observed: incoming,
+        Some(last) => match checked_next_wire_counter(last) {
+            Some(expected) if incoming == expected => SequenceOutcome::Accept {
+                next_last_applied: incoming,
+            },
+            Some(expected) if incoming > expected => SequenceOutcome::Gap {
+                last_applied: last,
+                observed: incoming,
+            },
+            Some(_) => SequenceOutcome::Behind {
+                last_applied: last,
+                observed: incoming,
+            },
+            // last is already MAX_WIRE_COUNTER: only exact duplicate is safe.
+            None => SequenceOutcome::Gap {
+                last_applied: last,
+                observed: incoming,
+            },
         },
     }
 }
