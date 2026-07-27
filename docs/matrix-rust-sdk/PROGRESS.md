@@ -9,8 +9,8 @@
 
 | Field | Value |
 | --- | --- |
-| Last updated (UTC) | **2026-07-27 ~19:35** |
-| Integration tip | `ef8bf60` — Merge #127 P6.3 typing index |
+| Last updated (UTC) | **2026-07-27 ~20:00** |
+| Integration tip | `f44bc5c` — Merge #128 P6.4 media upload queue |
 | Product runtime | Still **`matrix-js-sdk` only** until atomic sole-owner cutover |
 | Dual backend | **`false`** (forbidden forever) |
 | Operating model | [cutover-operating-model.md](cutover-operating-model.md) |
@@ -25,12 +25,12 @@
 
 | | |
 | --- | --- |
-| **Now** | **#127 P6.3 merged.** Primary next: **#128 P6.4** media (tip-updated after #127; CI re-run). |
-| **Inventory** | ~34/112 original task artifacts when program-status is synced (through P6.3 landed; see ledger). |
+| **Now** | **#128 P6.4 merged.** Dogfood core path harnesses complete through media. Next: **#129 P5.6** relations. |
+| **Inventory** | ~35/112 original task artifacts when program-status is synced (through P6.4 landed; see ledger). |
 | **Phase gates** | **0 / 15** strict gates closed (honest). |
-| **Open PRs → integration** | [#128](https://github.com/nepenth/synara-desktop/pull/128) media, [#129](https://github.com/nepenth/synara-desktop/pull/129) relations, [#131](https://github.com/nepenth/synara-desktop/pull/131) threads; [#109](https://github.com/nepenth/synara-desktop/pull/109) MiniMax (deprioritize). |
-| **Blocked on** | CI green for #128 after tip-merge with #127. Required: Quality gate + Desktop package gate. |
-| **Dogfood path** | receipts ✅ → typing ✅ (**#127**) → **media (#128)** → relations/threads. |
+| **Open PRs → integration** | [#129](https://github.com/nepenth/synara-desktop/pull/129) relations, [#131](https://github.com/nepenth/synara-desktop/pull/131) threads, [#133](https://github.com/nepenth/synara-desktop/pull/133) members; [#109](https://github.com/nepenth/synara-desktop/pull/109) MiniMax (deprioritize). |
+| **Blocked on** | CI green for #129 after tip-merge with #128. Required: Quality gate + Desktop package gate. |
+| **Dogfood path** | typing ✅ → media ✅ (**#128**) → **relations (#129)** → threads/members. |
 
 ---
 
@@ -58,6 +58,8 @@ Update rules:
 
 | When (UTC) | Item | Result | Notes |
 | --- | --- | --- | --- |
+| ~19:58 | **P6.4** media upload queue foundation | **Merged** [#128](https://github.com/nepenth/synara-desktop/pull/128) | UploadQueue metadata-only; tip `f44bc5c`. Dogfood send/receipts/typing/media foundations landed. |
+| ~19:42 | **P4.6** member / power-level index | **PR open** [#133](https://github.com/nepenth/synara-desktop/pull/133) | MemberIndex; local 6/6. |
 | ~19:33 | **P6.3** typing index foundation | **Merged** [#127](https://github.com/nepenth/synara-desktop/pull/127) | TypingIndex + cap 32; tip `ef8bf60`. Quality + package gate green. |
 | ~19:15 | **P5.8** thread list index foundation | **PR open** [#131](https://github.com/nepenth/synara-desktop/pull/131) | ThreadIndex over ThreadSummary; local 6/6. |
 | ~19:06 | **P6.2** receipt index foundation | **Merged** [#125](https://github.com/nepenth/synara-desktop/pull/125) | ReceiptIndex over DTO Receipt; tip `ef75e3e`. Quality + package gate green. |
@@ -126,9 +128,10 @@ Update rules:
 | 13 | Send queue / local echo (P6.1) | **Done** (merged #124) |
 | 14 | Receipt index (P6.2) | **Done** (merged #125) |
 | 15 | Typing index (P6.3) | **Done** (merged #127) |
-| 16 | Media upload queue (P6.4) | **In PR** [#128](https://github.com/nepenth/synara-desktop/pull/128) |
+| 16 | Media upload queue (P6.4) | **Done** (merged #128) |
 | 17 | Relations / reactions (P5.6) | **In PR** [#129](https://github.com/nepenth/synara-desktop/pull/129) |
 | 18 | Thread list / summaries (P5.8) | **In PR** [#131](https://github.com/nepenth/synara-desktop/pull/131) |
+| 19 | Member / power-level index (P4.6) | **In PR** [#133](https://github.com/nepenth/synara-desktop/pull/133) |
 | 10 | Crypto / verification / recovery | Not started |
 | 11 | Atomic sole-owner cutover + js-sdk burn-down (P11) | Not started |
 | 12 | Merge to `main` (#39) | Needs **explicit user approval** |
