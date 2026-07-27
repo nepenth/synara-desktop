@@ -47,6 +47,10 @@ const DESKTOP_ALLOWED_DIRECT_MATRIX_PATHS = new Map([
     "synara/src/app/cs-api.ts",
     "DESKTOP-REST-EXCEPTION-002: login-time homeserver version discovery helper.",
   ],
+  [
+    "src-tauri/src/matrix/auth/http_transport.rs",
+    "DESKTOP-REST-EXCEPTION-003 / R0.7-CS-API-001: read-only well-known + login-types listing (no credentials; no dual-backend).",
+  ],
 ]);
 
 const DOCS_ALLOWLIST = [
