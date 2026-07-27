@@ -363,8 +363,103 @@ fn p4_3_badge_counts_and_attention() {
 
 #[test]
 fn p4_3_scope_labels_cover_all() {
-    assert_eq!(RoomListScope::ALL.len(), 6);
+    assert_eq!(RoomListScope::ALL.len(), 8);
     for s in RoomListScope::ALL {
         assert!(!s.as_str().is_empty());
     }
+}
+
+// --- P4.4 favorite / low-priority / folder / recent ---
+
+#[test]
+fn p4_4_favorite_low_priority_folder_filters() {
+    let rooms = vec![
+        RoomSummaryBuilder::new("!fav:example.org")
+            .name("Fav")
+            .favorite(true)
+            .last_activity_ts(100)
+            .build()
+            .unwrap(),
+        RoomSummaryBuilder::new("!low:example.org")
+            .name("Low")
+            .low_priority(true)
+            .last_activity_ts(200)
+            .build()
+            .unwrap(),
+        RoomSummaryBuilder::new("!folder:example.org")
+            .name("In folder")
+            .folder_id("work")
+            .last_activity_ts(150)
+            .build()
+            .unwrap(),
+        RoomSummaryBuilder::new("!plain:example.org")
+            .name("Plain")
+            .last_activity_ts(50)
+            .build()
+            .unwrap(),
+    ];
+    assert_eq!(
+        select_rooms_by_scope(&rooms, RoomListScope::Favorites).len(),
+        1
+    );
+    assert_eq!(
+        select_rooms_by_scope(&rooms, RoomListScope::LowPriority).len(),
+        1
+    );
+    let folder = select_rooms_in_folder(&rooms, "work");
+    assert_eq!(folder.len(), 1);
+    assert_eq!(folder[0].room_id.as_str(), "!folder:example.org");
+}
+
+#[test]
+fn p4_4_recent_and_priority_sorts() {
+    let rooms = vec![
+        RoomSummaryBuilder::new("!a:example.org")
+            .name("A")
+            .last_activity_ts(10)
+            .build()
+            .unwrap(),
+        RoomSummaryBuilder::new("!b:example.org")
+            .name("B")
+            .favorite(true)
+            .last_activity_ts(5)
+            .build()
+            .unwrap(),
+        RoomSummaryBuilder::new("!c:example.org")
+            .name("C")
+            .low_priority(true)
+            .last_activity_ts(20)
+            .build()
+            .unwrap(),
+        RoomSummaryBuilder::new("!d:example.org")
+            .name("D")
+            .last_activity_ts(15)
+            .build()
+            .unwrap(),
+    ];
+
+    let recent = sort_rooms(&rooms, RoomListSort::RecentActivity);
+    assert_eq!(
+        recent
+            .iter()
+            .map(|r| r.room_id.as_str())
+            .collect::<Vec<_>>(),
+        vec![
+            "!c:example.org",
+            "!d:example.org",
+            "!a:example.org",
+            "!b:example.org"
+        ]
+    );
+
+    let fav_first = sort_rooms(&rooms, RoomListSort::FavoritesThenRecent);
+    assert_eq!(fav_first[0].room_id.as_str(), "!b:example.org");
+
+    let low_last = sort_rooms(&rooms, RoomListSort::LowPriorityLast);
+    assert_eq!(low_last.last().unwrap().room_id.as_str(), "!c:example.org");
+
+    let top2 = recent_joined_rooms(&rooms, 2);
+    assert_eq!(top2.len(), 2);
+    assert_eq!(top2[0].room_id.as_str(), "!c:example.org");
+    assert_eq!(top2[1].room_id.as_str(), "!d:example.org");
 }
