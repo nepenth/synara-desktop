@@ -24,12 +24,12 @@ evidence, is authoritative for current delivery and acceptance state.
 | Item | Value |
 |---|---|
 | Integration branch | `feature/matrix-rust-sdk-full-replacement` |
-| Live integration tip (this handoff) | `ba75e460109203b953bfcac77109bbd2d11268cb` — **R0.4 / #87 merged** on top of R0.5; re-fetch and verify |
+| Live integration tip (this handoff) | `5492841eea925ee2176c0e585c478b2b208f4719` — **R0.6 / #89 merged** on top of docs #88 + R0.4/R0.5; re-fetch and verify |
 | Historical audited snapshot | `edfefee499064b736985b6528896b693e5120f22` — bound to the 2026-07-25 review, not the live tip |
-| Merged product fixes | PR [#86](https://github.com/nepenth/synara-desktop/pull/86) R0.5 wipe (**accepted**); PR [#87](https://github.com/nepenth/synara-desktop/pull/87) R0.4 store confinement (**merged**, strict acceptance **open** — keyring residual) |
-| Open R0.2-E1 PR | PR [#82](https://github.com/nepenth/synara-desktop/pull/82) — tooling; cheap CI-portability only; park residual if thrash |
+| Merged product fixes | PR [#86](https://github.com/nepenth/synara-desktop/pull/86) R0.5 wipe (**accepted**); PR [#87](https://github.com/nepenth/synara-desktop/pull/87) R0.4 path confinement (**merged**, strict acceptance **open** — keyring residual); PR [#89](https://github.com/nepenth/synara-desktop/pull/89) R0.6 diagnostic privacy (**accepted**) |
+| Parked R0.2-E1 PR | PR [#82](https://github.com/nepenth/synara-desktop/pull/82) — **draft / parked** (2× CI `v2 exceeded 512 MiB` residual; do not thrash) |
 | Open PR to `main` | [#39](https://github.com/nepenth/synara-desktop/pull/39) — **do not merge without user approval** |
-| Current execution | Dual-track: next **implement R0.6 diagnostic privacy** (REV-003); then R0.3 IPC; residual R0.4 native keyring; timebox #82 |
+| Current execution | Dual-track: next **implement R0.3 IPC wire freeze** (REV-004/005); residual R0.4 native keyring; parked #82 |
 
 Always re-fetch and verify branch tips and PR state.
 
@@ -37,20 +37,21 @@ Always re-fetch and verify branch tips and PR state.
 
 ### Dual-track priority (user-approved)
 
-1. Land Critical/High product fixes first (R0.5 ✓, R0.4 path confinement ✓).
-2. Next product engineering: **R0.6 diagnostic privacy** (REV-003), then **R0.3 IPC** (REV-004/005).
-3. R0.4 residual (do not block R0.6): native macOS/Linux secret-store provider, production keyring, live encrypted reopen evidence.
-4. R0.2-E1 (#82): merge if green; park residual if thrash continues.
+1. Land Critical/High product fixes first (R0.5 ✓, R0.4 path confinement ✓, R0.6 ✓).
+2. Next product engineering: **R0.3 IPC wire freeze** (REV-004/005).
+3. R0.4 residual (do not block R0.3): native macOS/Linux secret-store provider, production keyring, live encrypted reopen evidence.
+4. R0.2-E1 (#82): **parked** on identical 512 MiB isolation-benchmark residual; resume only with a deliberate memory-bound fix.
 5. Inventory stays **20/112** until more P-tasks land.
 6. No dual-backend; no production cutover; no merge to `main` without explicit approval.
 
-### This fire (2026-07-27, R0.4)
+### This fire (2026-07-27, R0.6)
 
-- Independently reviewed PR **#87** against REV-002/006/007.
-- Local: `cargo test --locked matrix::store` **16 pass**; `cargo test --locked matrix::` **193 pass**.
+- Independently reviewed PR **#89** against REV-003.
+- Local: `cargo test --locked matrix::` **196 pass**; boundaries/guardrails pass.
 - Exact-head CI all required checks green.
-- **Merged** #87 → integration `ba75e46`.
-- Ledger: R0.4 `landed`/`merged`/`open` (path slice only; keyring residual).
+- **Merged** #89 → integration `5492841`.
+- Ledger: R0.6 `landed` / `merged` / **`accepted`**.
+- Also merged docs #88 earlier; parked #82 as draft.
 
 ### Next owner procedure
 
@@ -58,17 +59,18 @@ Always re-fetch and verify branch tips and PR state.
 git fetch origin
 git checkout feature/matrix-rust-sdk-full-replacement
 git pull --ff-only
-# Implement R0.6: redact URLs, absolute paths, raw SDK errors from diagnostics
-# (ClientBuildPlan, WipeReport, store layout projection, builder errors)
-# Add adversarial redaction tests; no product cutover commands
+# Implement R0.3: IPC counters safe across Rust/JS (bounded safe integers or
+# decimal strings); freeze stream identity + payload contracts (REV-004/005);
+# regenerate schemas/fixtures; cross-language boundary tests
+# No product cutover commands; no dual-backend
 ```
 
 ## Program accounting
 
 - Original-plan artifact inventory remains **20 / 112 (~18%)**.
 - **0 of 15** strict phase gates are closed.
-- R0.5 **accepted**. R0.4 **merged** but strict acceptance **open** (keyring residual).
-- R0.2 remains `landed` / `pr_open` / strict acceptance `open`.
+- R0.5 **accepted**. R0.6 **accepted**. R0.4 **merged** but strict acceptance **open** (keyring residual).
+- R0.2 remains `landed` / `pr_open` (parked draft) / strict acceptance `open`.
 - Shipping runtime: `matrix-js-sdk` only; Rust harness foundation only.
 
 ## Authoritative docs
