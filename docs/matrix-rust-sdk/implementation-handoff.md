@@ -22,7 +22,7 @@ the canonical status ledger.
 
 | Field | Current value |
 |---|---|
-| **Integration branch/tip** | `feature/matrix-rust-sdk-full-replacement` at `7ffd5885e456c2b99c42d834127bc1ec6b1956ce` |
+| **Integration branch / E1 base** | `feature/matrix-rust-sdk-full-replacement`; E1 was rebased on `7ffd5885e456c2b99c42d834127bc1ec6b1956ce`, and the live integration tip is that commit or later |
 | **Active remediation** | R0.2 — `in_progress`, PR open, strict acceptance open |
 | **Active slice** | R0.2-E1 traceability tooling, PR [#82](https://github.com/nepenth/synara-desktop/pull/82), head `8ded923c6846194b3332c85dce69614368882729` |
 | **E1 acceptance** | Independently accepted locally; **not** CI-accepted, merged, or complete |

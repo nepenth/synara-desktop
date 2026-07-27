@@ -25,7 +25,7 @@ evidence, is authoritative for current delivery and acceptance state.
 | Item | Value |
 |---|---|
 | Integration branch | `feature/matrix-rust-sdk-full-replacement` |
-| Current integration tip | `7ffd5885e456c2b99c42d834127bc1ec6b1956ce` |
+| E1 base before this documentation handoff | `7ffd5885e456c2b99c42d834127bc1ec6b1956ce`; the live integration tip is this commit or later and must be re-read from `origin` |
 | Historical audited snapshot | `edfefee499064b736985b6528896b693e5120f22` — bound to the 2026-07-25 review, not the live tip |
 | CI prerequisite | PR [#83](https://github.com/nepenth/synara-desktop/pull/83) merged as `7ffd588`; validation checkout now fetches full Git history |
 | Active task PR | PR [#82](https://github.com/nepenth/synara-desktop/pull/82), R0.2-E1, open at `8ded923c6846194b3332c85dce69614368882729` |
