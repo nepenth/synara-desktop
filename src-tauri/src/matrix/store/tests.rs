@@ -2,7 +2,7 @@
 
 use super::*;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 fn temp_root(label: &str) -> PathBuf {
     let mut dir = std::env::temp_dir();
@@ -202,7 +202,41 @@ fn account_segment_has_no_path_separators() {
 
     let weird = AccountIdentity::new("@alice.bob-1:example.org", "https://example.org").unwrap();
     let seg = weird.account_dir_segment();
+    assert!(seg.starts_with("v1_"));
     assert!(!seg.contains('/'));
     assert!(!seg.contains('\\'));
     assert!(!seg.contains(".."));
+    // SHA-256 prefix length (32 hex) after final underscore.
+    let fp = seg.rsplit('_').next().unwrap();
+    assert_eq!(fp.len(), 32);
+    assert!(fp.chars().all(|c| c.is_ascii_hexdigit()));
+}
+
+#[test]
+fn derive_rejects_relative_app_data_root() {
+    let err = StorePaths::derive(Path::new("relative/app-data"), &alice()).unwrap_err();
+    assert!(matches!(err, StorePathError::RelativeAppDataRoot));
+}
+
+#[cfg(unix)]
+#[test]
+fn ensure_dirs_refuses_symlink_at_account_root() {
+    use std::os::unix::fs::symlink;
+
+    let root = temp_root("symlink-refuse");
+    let paths = StorePaths::derive(&root, &alice()).unwrap();
+
+    // Create a decoy outside the app-data root and point account_root at it.
+    let outside = root.join("outside-target");
+    fs::create_dir_all(&outside).unwrap();
+    fs::create_dir_all(paths.account_root().parent().unwrap()).unwrap();
+    symlink(&outside, paths.account_root()).unwrap();
+
+    let err = paths.ensure_dirs().unwrap_err();
+    assert!(
+        matches!(err, StorePathError::SymlinkRefused),
+        "expected SymlinkRefused, got {err:?}"
+    );
+
+    let _ = fs::remove_dir_all(&root);
 }

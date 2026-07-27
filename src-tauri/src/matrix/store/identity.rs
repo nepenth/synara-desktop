@@ -77,11 +77,15 @@ impl AccountIdentity {
         format!("{}|{}", self.user_id, self.homeserver_url)
     }
 
-    /// Path-safe account directory segment: sanitized local label + stable fingerprint.
+    /// Path-safe account directory segment: versioned label + collision-resistant digest.
     ///
-    /// Format: `{sanitized_localpart}_{fp16}` where `fp16` is a 16-hex FNV-1a of
-    /// `canonical_key()`. Collision resistance is the fingerprint; sanitization is
-    /// only for human readability.
+    /// Format: `v1_{sanitized_localpart}_{sha256_32}` where `sha256_32` is the first
+    /// 32 hex digits (128 bits) of SHA-256 over `canonical_key()`. Sanitization is
+    /// only for human readability; isolation relies on the digest, not FNV.
+    ///
+    /// **Version note:** `v1_` prefix allows future derivation changes without
+    /// silent path reuse. Real on-disk stores must not migrate silently across
+    /// derivation versions without an explicit store migration task.
     pub fn account_dir_segment(&self) -> String {
         let local = self
             .user_id
@@ -89,8 +93,8 @@ impl AccountIdentity {
             .unwrap_or(self.user_id.as_str());
         let local_part = local.split(':').next().unwrap_or(local);
         let sanitized = sanitize_path_label(local_part);
-        let fp = fnv1a64_hex(&self.canonical_key());
-        format!("{sanitized}_{fp}")
+        let fp = sha256_prefix_hex(&self.canonical_key(), 32);
+        format!("v1_{sanitized}_{fp}")
     }
 }
 
@@ -137,17 +141,16 @@ fn sanitize_path_label(raw: &str) -> String {
     out
 }
 
-/// Stable FNV-1a 64-bit fingerprint as 16 lowercase hex digits.
-fn fnv1a64_hex(input: &str) -> String {
-    let mut hash: u64 = 0xcbf29ce484222325;
-    for b in input.as_bytes() {
-        hash ^= u64::from(*b);
-        hash = hash.wrapping_mul(0x100000001b3);
-    }
-    format!("{hash:016x}")
+/// First `hex_chars` lowercase hex digits of SHA-256(`input`).
+fn sha256_prefix_hex(input: &str, hex_chars: usize) -> String {
+    use sha2::{Digest, Sha256};
+    let digest = Sha256::digest(input.as_bytes());
+    let encoded: String = digest.iter().map(|b| format!("{b:02x}")).collect();
+    let n = hex_chars.min(encoded.len());
+    encoded[..n].to_owned()
 }
 
 #[cfg(test)]
 pub(super) fn fingerprint_for_test(canonical: &str) -> String {
-    fnv1a64_hex(canonical)
+    sha256_prefix_hex(canonical, 32)
 }
