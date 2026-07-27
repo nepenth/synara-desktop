@@ -12,7 +12,12 @@
 //! - **slice 1:** live HTTP transports + domain parsers (this module)
 //! - **slice 2:** loopback CS stub + optional disposable-Synapse login-types
 //!   evidence (see tests; gated by `SYNARA_RUN_MATRIX_RUST_AUTH_LIVE=1`)
-//! - **later:** encrypted store open / sync readiness / logout / wipe lifecycle
+//! - **slice 3:** composed encrypted store open / Ready / logout / reopen / wipe
+//!   (lifecycle tests; real `SdkClientHandle`)
+//! - **slice 4:** stale-generation isolation + wrong-key reopen privacy residual
+//!   after real SDK install (lifecycle tests)
+//! - **later residual:** authenticated live sync vs disposable Synapse (P3.2
+//!   login APIs; guardrail-banned until deliberate P3.2 allowlist)
 
 use std::time::Duration;
 
