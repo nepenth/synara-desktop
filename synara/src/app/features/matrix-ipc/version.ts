@@ -56,10 +56,7 @@ export function openStreamsWithinBounds(count: number): boolean {
  */
 export function isWireCounter(value: unknown): value is number {
   return (
-    typeof value === 'number' &&
-    Number.isInteger(value) &&
-    value >= 0 &&
-    value <= MAX_WIRE_COUNTER
+    typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= MAX_WIRE_COUNTER
   );
 }
 
