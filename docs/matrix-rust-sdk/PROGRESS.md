@@ -9,8 +9,8 @@
 
 | Field | Value |
 | --- | --- |
-| Last updated (UTC) | **2026-07-27 ~22:37** |
-| Integration tip | `a74fb78` — Merge #139 P4.8 route resolution |
+| Last updated (UTC) | **2026-07-27 ~23:05** |
+| Integration tip | `d6ef679` — Merge #141 P6.8 search session |
 | Product runtime | Still **`matrix-js-sdk` only** until atomic sole-owner cutover |
 | Dual backend | **`false`** (forbidden forever) |
 | Operating model | [cutover-operating-model.md](cutover-operating-model.md) |
@@ -25,12 +25,12 @@
 
 | | |
 | --- | --- |
-| **Now** | **#139 P4.8 merged.** Primary next: **#141 P6.8** search (tip-updated after #139; CI re-run). |
-| **Inventory** | ~41/112 original task artifacts when program-status is synced (through P4.8 landed; see ledger). |
+| **Now** | **#141 P6.8 search merged.** Primary next: **#143 P9.1** widgets (tip-merged after #141; CI re-run). Then #145 devices, #147 verification. |
+| **Inventory** | ~42/112 original task artifacts when program-status is synced (through P6.8 landed; see ledger). |
 | **Phase gates** | **0 / 15** strict gates closed (honest). |
-| **Open PRs → integration** | [#141](https://github.com/nepenth/synara-desktop/pull/141) search, [#143](https://github.com/nepenth/synara-desktop/pull/143) widgets, [#145](https://github.com/nepenth/synara-desktop/pull/145) devices; [#109](https://github.com/nepenth/synara-desktop/pull/109) MiniMax (deprioritize). |
-| **Blocked on** | CI green for #141 after tip-merge with #139. Required: Quality gate + Desktop package gate. |
-| **Dogfood path** | security ✅ → routes ✅ (**#139**) → **search (#141)** → widgets/devices. |
+| **Open PRs → integration** | [#143](https://github.com/nepenth/synara-desktop/pull/143) widgets, [#145](https://github.com/nepenth/synara-desktop/pull/145) devices, [#147](https://github.com/nepenth/synara-desktop/pull/147) verification; [#109](https://github.com/nepenth/synara-desktop/pull/109) MiniMax (deprioritize). |
+| **Blocked on** | CI green after tip-merge of #143/#145/#147 onto post-#141 tip. Required: Quality gate + Desktop package gate. |
+| **Dogfood path** | security ✅ → routes ✅ → search ✅ (**#141**) → **widgets (#143)** → devices → verification. |
 
 ---
 
@@ -58,6 +58,10 @@ Update rules:
 
 | When (UTC) | Item | Result | Notes |
 | --- | --- | --- | --- |
+| ~23:05 | **PROGRESS.md** after #141 | **This PR** | Tip `d6ef679`; next widgets/devices/verification. |
+| ~23:00 | **P6.8** search session foundation | **Merged** [#141](https://github.com/nepenth/synara-desktop/pull/141) | SearchSession request-id stale protection; tip `d6ef679`. Quality + package gate green. |
+| ~22:53 | **P8.2** clippy fix + tip-merge | **Pushed** on [#145](https://github.com/nepenth/synara-desktop/pull/145) | `bool_assert_comparison` → `assert!`; tip after #141. |
+| ~22:45 | **P8.3** verification inbox / SAS display | **PR open** [#147](https://github.com/nepenth/synara-desktop/pull/147) | VerificationInbox; no secrets; local 7/7. |
 | ~22:34 | **P4.8** route / deep-link resolution | **Merged** [#139](https://github.com/nepenth/synara-desktop/pull/139) | resolve_path/build_path; tip `a74fb78`. |
 | ~22:18 | **P8.2** device list / trust projection | **PR open** [#145](https://github.com/nepenth/synara-desktop/pull/145) | DeviceIndex; no keys; local 6/6. |
 | ~22:09 | **P8.1** security status projection | **Merged** [#137](https://github.com/nepenth/synara-desktop/pull/137) | SecurityStatusStore no keys/secrets; tip `f461a00`. |
@@ -147,12 +151,13 @@ Update rules:
 | 20 | Notification candidates (P7.1) | **Done** (merged #135) |
 | 21 | Security status projection (P8.1) | **Done** (merged #137) |
 | 22 | Route / deep-link resolution (P4.8) | **Done** (merged #139) |
-| 23 | Search session (P6.8) | **In PR** [#141](https://github.com/nepenth/synara-desktop/pull/141) |
+| 23 | Search session (P6.8) | **Done** (merged #141) |
 | 24 | Widget / Element Call registry (P9.1) | **In PR** [#143](https://github.com/nepenth/synara-desktop/pull/143) |
 | 25 | Device list / trust (P8.2) | **In PR** [#145](https://github.com/nepenth/synara-desktop/pull/145) |
-| 10 | Crypto / verification / recovery | Not started |
-| 11 | Atomic sole-owner cutover + js-sdk burn-down (P11) | Not started |
-| 12 | Merge to `main` (#39) | Needs **explicit user approval** |
+| 26 | Verification inbox / SAS display (P8.3) | **In PR** [#147](https://github.com/nepenth/synara-desktop/pull/147) |
+| 27 | Cross-signing / recovery / remaining crypto | Not started (partial via P8.1–P8.3 foundations) |
+| 28 | Atomic sole-owner cutover + js-sdk burn-down (P11) | Not started |
+| 29 | Merge to `main` (#39) | Needs **explicit user approval** |
 
 
 ---
