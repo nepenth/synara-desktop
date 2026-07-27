@@ -27,8 +27,13 @@ const BENCHMARK_TEST_NAME =
   "full 119-row audit and v2 checkers stay deterministic and bounded in temporary Git";
 const BENCHMARK_CHILD_ENV = "SYNARA_TRACEABILITY_ISOLATED_BENCHMARK";
 const BENCHMARK_CHILD_VALUE = "feature-parity-rss-v1";
+/** Isolate audit vs v2 so residual heap from one phase is never billed to the other. */
+const BENCHMARK_PHASE_ENV = "SYNARA_TRACEABILITY_BENCHMARK_PHASE";
+const BENCHMARK_PHASES = ["audit", "v2"];
 const BENCHMARK_CHILD_MARKER = "SYNARA_ISOLATED_BENCHMARK_EXECUTED_V1";
 const BENCHMARK_CHILD_OUTPUT_LIMIT = 32 * 1024;
+/** Peak *incremental* RSS during the measured operation (not whole-process baseline). */
+const BENCHMARK_RSS_BUDGET_BYTES = 512 * 1024 * 1024;
 const LIBRARY_PATH = path.join(
   REPOSITORY_ROOT,
   "scripts/lib/feature-parity-traceability-v2.mjs"
@@ -308,7 +313,8 @@ function dualRenderDigests(render) {
 
 async function measureOperation(operation) {
   reclaimHeapIfPossible();
-  let peakRssBytes = process.memoryUsage().rss;
+  const baselineRssBytes = process.memoryUsage().rss;
+  let peakRssBytes = baselineRssBytes;
   const sample = () => {
     peakRssBytes = Math.max(peakRssBytes, process.memoryUsage().rss);
   };
@@ -321,7 +327,10 @@ async function measureOperation(operation) {
     return {
       value,
       elapsedMs: Number(process.hrtime.bigint() - started) / 1_000_000,
+      // Absolute peak (diagnostics) and incremental peak (budget).
       peakRssBytes,
+      peakRssDeltaBytes: Math.max(0, peakRssBytes - baselineRssBytes),
+      baselineRssBytes,
     };
   } finally {
     clearInterval(interval);
@@ -336,16 +345,18 @@ function boundedChildOutput(value) {
   } characters omitted]\n${output.slice(-BENCHMARK_CHILD_OUTPUT_LIMIT)}`;
 }
 
-function runIsolatedBenchmarkChild() {
+function runIsolatedBenchmarkChild(phase) {
+  assert.ok(BENCHMARK_PHASES.includes(phase), `unknown benchmark phase ${phase}`);
   const childEnvironment = {
     ...process.env,
     [BENCHMARK_CHILD_ENV]: BENCHMARK_CHILD_VALUE,
+    [BENCHMARK_PHASE_ENV]: phase,
   };
   delete childEnvironment.NODE_TEST_CONTEXT;
   const result = spawnSync(
     process.execPath,
-    // --expose-gc lets the isolated child reclaim heap between audit and v2
-    // phases so peak RSS measures the active phase, not residual growth.
+    // --expose-gc lets the isolated child reclaim heap after fixture setup
+    // so peak *delta* RSS measures the checked operation, not prior growth.
     [
       "--expose-gc",
       "--test",
@@ -366,7 +377,7 @@ function runIsolatedBenchmarkChild() {
     result.status,
     0,
     [
-      `isolated benchmark child failed (status=${String(
+      `isolated benchmark child (${phase}) failed (status=${String(
         result.status
       )}, signal=${String(result.signal)}, error=${String(
         result.error?.code ?? "none"
@@ -378,7 +389,7 @@ function runIsolatedBenchmarkChild() {
   assert.match(
     result.stdout,
     new RegExp(BENCHMARK_CHILD_MARKER, "u"),
-    `isolated benchmark child did not execute the guarded body\nstdout:\n${boundedChildOutput(
+    `isolated benchmark child (${phase}) did not execute the guarded body\nstdout:\n${boundedChildOutput(
       result.stdout
     )}\nstderr:\n${boundedChildOutput(result.stderr)}`
   );
@@ -4199,9 +4210,19 @@ test("first-parent lifecycle history handles path versions, reverts, and broken 
 
 test(BENCHMARK_TEST_NAME, async (t) => {
   if (process.env[BENCHMARK_CHILD_ENV] !== BENCHMARK_CHILD_VALUE) {
-    runIsolatedBenchmarkChild();
+    // Separate OS processes: audit residual heap never inflates the v2 budget.
+    for (const phase of BENCHMARK_PHASES) {
+      runIsolatedBenchmarkChild(phase);
+    }
     return;
   }
+
+  const phase = process.env[BENCHMARK_PHASE_ENV];
+  assert.ok(
+    BENCHMARK_PHASES.includes(phase),
+    `isolated child requires ${BENCHMARK_PHASE_ENV}=audit|v2`
+  );
+
   const { parent, root } = await temporaryLocalGitClone(t);
   assert.match(
     git(root, ["cat-file", "-t", api.AUDITED_SOURCE_COMMIT]),
@@ -4219,7 +4240,7 @@ test(BENCHMARK_TEST_NAME, async (t) => {
   assert.equal(snippet.toString("utf8"), "{\n");
   const snippetSha = api.sha256(snippet);
 
-  let audit = productionShapedAuditFixture();
+  const audit = productionShapedAuditFixture();
   for (const row of audit.rows) {
     const clause = row.clauses[0];
     const evidenceId = `EV-${clause.id.replace(".C", "-C")}-SRC-001`;
@@ -4250,88 +4271,24 @@ test(BENCHMARK_TEST_NAME, async (t) => {
   );
   assert.deepEqual(api.validateSchema("audit", audit), []);
 
-  const auditCalls = [];
-  const auditReader = new api.GitObjectReader(root, {
-    spawnProcess(command, args, options) {
-      auditCalls.push({ command, args: [...args], options });
-      return spawn(command, args, options);
-    },
-  });
-  let auditMeasurement;
-  try {
-    auditMeasurement = await measureOperation(async () => {
-      const errors = await api.validateAudit(audit, {
-        repoRoot: REPOSITORY_ROOT,
-        gitObjects: auditReader,
-      });
-      assert.deepEqual(errors, []);
-      // Sequential digests: do not hold two full markdown buffers + structuredClone.
-      return dualRenderDigests(() => api.renderAuditMarkdown(audit));
-    });
-  } finally {
-    await settlesWithin(auditReader.close(), 5_000);
-  }
-
-  // Reclaim audit-phase peak before measuring v2 so residual heap is not billed
-  // to the v2 budget (the prior CI failure: "v2 exceeded 512 MiB").
-  reclaimHeapIfPossible();
-
-  const v1 = api.parseCanonicalJson(
-    git(root, ["show", `${api.AUDITED_SOURCE_COMMIT}:${api.V1_PATH}`], {
-      encoding: null,
-    })
-  );
-  const auditIdentity = syntheticAuditIdentity(audit);
-  const v2 = api.migrateV1({
-    v1,
-    audit,
-    sourceIdentity: {
-      commit_sha: api.AUDITED_SOURCE_COMMIT,
-      blob_oid: api.V1_BLOB,
-      file_sha256: api.V1_SHA256,
-    },
-    auditIdentity,
-  });
-  assert.deepEqual(api.validateSchema("v2", v2), []);
-
-  const v2Calls = [];
-  const v2Reader = new api.GitObjectReader(root, {
-    spawnProcess(command, args, options) {
-      v2Calls.push({ command, args: [...args], options });
-      return spawn(command, args, options);
-    },
-  });
-  let v2Measurement;
-  try {
-    v2Measurement = await measureOperation(async () => {
-      const errors = await api.validateTraceability(v2, {
-        repoRoot: REPOSITORY_ROOT,
-        gitObjects: v2Reader,
-        durableAuditIdentity: auditIdentity,
-        durableAudit: audit,
-      });
-      assert.deepEqual(errors, []);
-      return dualRenderDigests(() => api.renderTraceabilityMarkdown(v2));
-    });
-  } finally {
-    await settlesWithin(v2Reader.close(), 5_000);
-  }
-  // Allow GC of audit fixture after v2 measurement; identity already captured.
-  audit = null;
-  reclaimHeapIfPossible();
-
-  for (const [name, reader, calls, measurement] of [
-    ["audit", auditReader, auditCalls, auditMeasurement],
-    ["v2", v2Reader, v2Calls, v2Measurement],
-  ]) {
+  async function assertPhaseBudget(name, reader, calls, measurement) {
     const result = api.benchmarkResult({
       elapsedMs: measurement.elapsedMs,
       peakRssBytes: measurement.peakRssBytes,
+      peakRssDeltaBytes: measurement.peakRssDeltaBytes,
       gitMetrics: reader.metrics,
       outputDigests: measurement.value,
     });
     assert.equal(result.within_time_budget, true, `${name} exceeded 30s`);
-    assert.equal(result.within_rss_budget, true, `${name} exceeded 512 MiB`);
+    assert.equal(
+      result.within_rss_budget,
+      true,
+      `${name} exceeded 512 MiB incremental RSS (delta=${result.peak_rss_delta_bytes}, peak=${result.peak_rss_bytes}, baseline≈${measurement.baselineRssBytes})`
+    );
+    assert.ok(
+      result.peak_rss_delta_bytes <= BENCHMARK_RSS_BUDGET_BYTES,
+      `${name} delta ${result.peak_rss_delta_bytes} over budget`
+    );
     assert.equal(result.git.batch_check_processes, 1);
     assert.equal(result.git.batch_content_processes, 1);
     assert.ok(result.git.content_transfers > 0);
@@ -4366,6 +4323,79 @@ test(BENCHMARK_TEST_NAME, async (t) => {
       assert.equal(options.shell, false);
       assert.equal(options.cwd, await realpath(root));
     }
+  }
+
+  if (phase === "audit") {
+    const auditCalls = [];
+    const auditReader = new api.GitObjectReader(root, {
+      spawnProcess(command, args, options) {
+        auditCalls.push({ command, args: [...args], options });
+        return spawn(command, args, options);
+      },
+    });
+    let auditMeasurement;
+    try {
+      auditMeasurement = await measureOperation(async () => {
+        const errors = await api.validateAudit(audit, {
+          repoRoot: REPOSITORY_ROOT,
+          gitObjects: auditReader,
+        });
+        assert.deepEqual(errors, []);
+        return dualRenderDigests(() => api.renderAuditMarkdown(audit));
+      });
+    } finally {
+      await settlesWithin(auditReader.close(), 5_000);
+    }
+    await assertPhaseBudget(
+      "audit",
+      auditReader,
+      auditCalls,
+      auditMeasurement
+    );
+  } else {
+    // v2 phase: build fixtures outside the measured window, then validate/render.
+    const v1 = api.parseCanonicalJson(
+      git(root, ["show", `${api.AUDITED_SOURCE_COMMIT}:${api.V1_PATH}`], {
+        encoding: null,
+      })
+    );
+    const auditIdentity = syntheticAuditIdentity(audit);
+    const v2 = api.migrateV1({
+      v1,
+      audit,
+      sourceIdentity: {
+        commit_sha: api.AUDITED_SOURCE_COMMIT,
+        blob_oid: api.V1_BLOB,
+        file_sha256: api.V1_SHA256,
+      },
+      auditIdentity,
+    });
+    assert.deepEqual(api.validateSchema("v2", v2), []);
+    reclaimHeapIfPossible();
+
+    const v2Calls = [];
+    const v2Reader = new api.GitObjectReader(root, {
+      spawnProcess(command, args, options) {
+        v2Calls.push({ command, args: [...args], options });
+        return spawn(command, args, options);
+      },
+    });
+    let v2Measurement;
+    try {
+      v2Measurement = await measureOperation(async () => {
+        const errors = await api.validateTraceability(v2, {
+          repoRoot: REPOSITORY_ROOT,
+          gitObjects: v2Reader,
+          durableAuditIdentity: auditIdentity,
+          durableAudit: audit,
+        });
+        assert.deepEqual(errors, []);
+        return dualRenderDigests(() => api.renderTraceabilityMarkdown(v2));
+      });
+    } finally {
+      await settlesWithin(v2Reader.close(), 5_000);
+    }
+    await assertPhaseBudget("v2", v2Reader, v2Calls, v2Measurement);
   }
 
   await rm(parent, { recursive: true, force: true });
