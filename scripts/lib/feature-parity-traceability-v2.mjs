@@ -6540,14 +6540,20 @@ export async function runCli(
 export function benchmarkResult({
   elapsedMs,
   peakRssBytes,
+  peakRssDeltaBytes,
   gitMetrics,
   outputDigests,
 }) {
+  // Budget is incremental RSS during the measured operation so CI process
+  // baseline (Node + loaded modules) is not billed against the 512 MiB cap.
+  const deltaBytes =
+    typeof peakRssDeltaBytes === "number" ? peakRssDeltaBytes : peakRssBytes;
   return {
     elapsed_ms: Math.round(elapsedMs),
     peak_rss_bytes: peakRssBytes,
+    peak_rss_delta_bytes: deltaBytes,
     within_time_budget: elapsedMs <= 30_000,
-    within_rss_budget: peakRssBytes <= 512 * 1024 * 1024,
+    within_rss_budget: deltaBytes <= 512 * 1024 * 1024,
     git: { ...gitMetrics },
     output_digests: [...outputDigests],
   };
