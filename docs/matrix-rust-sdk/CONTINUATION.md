@@ -1,13 +1,12 @@
 # Matrix Rust SDK program — continuation card
 
-**Date:** 2026-07-26
+**Date:** 2026-07-27
 
 **Audience:** Current or next orchestrator of the full-replacement program.
 
-For full history, rules, today’s validation accounting, and FR preservation
-notes, use [`implementation-handoff.md`](implementation-handoff.md). The detailed
-2026-07-26 E1 snapshot is
-[`r0.2-e1-handoff-2026-07-26.md`](r0.2-e1-handoff-2026-07-26.md).
+For full history, rules, validation accounting, and FR preservation notes, use
+[`implementation-handoff.md`](implementation-handoff.md). The detailed 2026-07-26
+E1 snapshot is [`r0.2-e1-handoff-2026-07-26.md`](r0.2-e1-handoff-2026-07-26.md).
 
 The independent audit and finding-level remediation requirements are in
 [`review-2026-07-25.md`](review-2026-07-25.md). That review supersedes the former
@@ -25,82 +24,58 @@ evidence, is authoritative for current delivery and acceptance state.
 | Item | Value |
 |---|---|
 | Integration branch | `feature/matrix-rust-sdk-full-replacement` |
-| E1 base before this documentation handoff | `7ffd5885e456c2b99c42d834127bc1ec6b1956ce`; the live integration tip is this commit or later and must be re-read from `origin` |
+| Live integration tip (this handoff) | `9ab482bcc00998b3c9f62d227ccacfd42000b6cd` — **R0.5 / #86 merged**; re-fetch and verify |
 | Historical audited snapshot | `edfefee499064b736985b6528896b693e5120f22` — bound to the 2026-07-25 review, not the live tip |
-| CI prerequisite | PR [#83](https://github.com/nepenth/synara-desktop/pull/83) merged as `7ffd588`; validation checkout now fetches full Git history |
-| Active task PR | PR [#82](https://github.com/nepenth/synara-desktop/pull/82), R0.2-E1, open at `8ded923c6846194b3332c85dce69614368882729` |
+| Merged this fire | PR [#86](https://github.com/nepenth/synara-desktop/pull/86) — R0.5 transactional wipe (REV-001), merge `9ab482b` |
+| Active product PR | PR [#87](https://github.com/nepenth/synara-desktop/pull/87) — R0.4 store confinement; CI was all-green on pre-#86 base — re-check mergeability after #86 |
+| Open R0.2-E1 PR | PR [#82](https://github.com/nepenth/synara-desktop/pull/82) — tooling; cheap CI-portability only; park residual if thrash continues |
 | Open PR to `main` | [#39](https://github.com/nepenth/synara-desktop/pull/39) — **do not merge without user approval** |
-| Current execution | R0.2 in progress; E1 locally accepted but unmerged; E2 blocked |
+| Current execution | Dual-track: **R0.5 accepted/merged**; next **review/merge #87 (R0.4)**; then R0.6 → R0.3 → P3.2 when Critical/High residual allows |
 
-Always re-fetch and verify the two branch tips and PR state. The SHAs above are
-the exact handoff snapshot, not a promise that remote state has not advanced.
+Always re-fetch and verify branch tips and PR state. The SHAs above are the exact
+handoff snapshot, not a promise that remote state has not advanced.
 
 ## Exact continuation point
 
-R0.2-E1 implements the deterministic audit-normalization and traceability-v2
-tooling in an exact 11-path scope. Independent local review accepted the content,
-but plan acceptance requires a green, non-cancelled exact-head CI run and merge.
-PR #82 therefore remains **pending**, not completed or merged.
+### Dual-track priority (user-approved)
 
-The first E1 CI attempt exposed a shallow-checkout incompatibility because the
-validator intentionally reads pinned repository history. PR #83 corrected the CI
-checkout and passed all of its required jobs. Refreshed PR #82 CI then ran the
-full repository script suite: **283 of 284 tests passed**. The sole primary
-failure is test-fixture portability: `temporaryLocalGitClone` creates a commit
-without first configuring repository-local `user.name` and `user.email`. The
-downstream `Quality gate` failure follows from the failed desktop-validation job;
-it is not a separate E1 behavior defect.
+1. **Review/merge open product PRs** targeting integration (never `main`).
+2. Prefer Critical/High product defects: R0.5 wipe ✓, **R0.4 store confinement next**, then R0.6 privacy, R0.3 IPC.
+3. R0.2-E1 (#82): only cheap CI-portability fixes; merge if green; if CI thrash continues, park with residual and proceed with product engineering.
+4. Do **not** block forever on formal R0.8 phase-gate theater before product Critical/High land.
+5. Original-plan inventory stays **20/112** until more P-tasks land; R0 does not inflate that count.
+6. No dual-backend; no production cutover; no merge to `main` without explicit approval.
 
-At this snapshot the focused helper fix has **not** been implemented. Make only
-that bounded test-helper change, rerun the complete validation set, independently
-review the new exact head, push it to PR #82, and wait for green exact-head CI.
-Only then merge #82 into the integration branch.
+### This fire (2026-07-27)
 
-After the merge, E2 is the next R0.2 slice: recover and commit the authoritative
-119-row normalized audit and traceability-v2 artifact through the accepted E1
-tooling. Do not reconstruct, paraphrase, or invent missing reviewed payloads.
-E2 does not by itself complete R0.2 or close Phase 0.
+- Independently reviewed PR **#86** (R0.5 / REV-001) against wipe ordering requirements.
+- Local: `cargo test --locked matrix::lifecycle` **19 pass**; `cargo test --locked matrix::` **191 pass**.
+- Exact-head CI all required checks **green** (Validate desktop, Quality gate, Synapse, iOS, package smoke).
+- **Merged** #86 → integration `9ab482b`.
+- R0.5 ledger: `landed` / `merged` / **`accepted`** (product fix + tests + green CI). Phase 2 gate remains **open** (still blocked by R0.4/R0.6/R0.7/R0.8).
 
-## Resume recipe
+### Next owner procedure
 
 ```bash
 git fetch origin
-git checkout matrix-rust/r0.2-e-traceability-tooling
-git pull --ff-only origin matrix-rust/r0.2-e-traceability-tooling
-git rev-parse HEAD
-git status --short
-gh pr view 82 --json headRefOid,baseRefName,state,statusCheckRollup
+gh pr view 87 --json headRefOid,baseRefName,mergeable,mergeStateStatus,statusCheckRollup
+# If #87 is behind integration after #86, rebase onto feature/matrix-rust-sdk-full-replacement
+# Independently review diff vs REV-002/006/007; rerun focused store tests + guardrails
+# Merge only on green non-cancelled required checks for the reviewed SHA
 ```
 
-Expected pre-fix head: `8ded923c6846194b3332c85dce69614368882729`.
-Configure the cloned test repository’s local Git identity inside
-`temporaryLocalGitClone`; do not rely on a developer’s global Git configuration
-and do not broaden the exact 11-path E1 scope.
-
-Then reproduce at minimum:
-
-```bash
-npm run test:matrix-rust-traceability-tooling
-node --test scripts/__tests__/*.test.mjs
-npm run check:matrix-rust-guardrails
-npm run check:matrix-rust-governance
-npm run check:quality-gates
-git diff --check origin/feature/matrix-rust-sdk-full-replacement...HEAD
-```
-
-Also rerun the focused temporary-clone regression, exact-scope Prettier, and
-`node --check` for all six production E1 scripts as recorded in the detailed E1
-handoff. Review the complete base-to-head diff again before push or merge.
+Then: R0.6 diagnostic privacy → R0.3 IPC wire freeze → timebox remaining R0.2 evidence → P3.2 when dual-track Critical/High residual allows.
 
 ## Program accounting
 
 - Original-plan artifact inventory remains **20 / 112 (~18%)**. R0 corrective
   work does not increment that metric.
 - **0 of 15** strict phase gates are closed.
-- R0.2 remains `in_progress` / `pr_open` / strict acceptance `open`.
+- R0.5 is **accepted** on integration. R0.4 is `in_progress` / `pr_open`. R0.2 remains
+  `landed` / `pr_open` / strict acceptance `open` (E1 unmerged).
 - The shipping desktop runtime remains `matrix-js-sdk` only; the Rust SDK is
   still a harness foundation. There is no dual backend and no cutover.
-- P3.2 remains blocked by every unaccepted R0 remediation.
+- P3.2 remains blocked by unaccepted R0 remediations (R0.5 removed from that list).
 
 ## Authoritative docs
 
@@ -119,5 +94,5 @@ handoff. Review the complete base-to-head diff again before push or merge.
 - No re-open of FR-7.8–7.11 quality audit; FR-7.9-011 stays partial sequential.
 - No secrets in diagnostics/IPC.
 - Guardrails stay green.
-- No E2 before E1 has green exact-head CI and is merged.
-- No P3.2 work until R0.1–R0.8 and the Phase 0–2/P3.1 gates are accepted.
+- No unnecessary E1 scope expansion beyond the 11-path set.
+- No force-merge without independent review + green required CI.
