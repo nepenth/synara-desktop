@@ -1,8 +1,8 @@
-//! Per-account Matrix store path layout (plan §8.3).
+//! Per-account Matrix store path layout (plan §8.3, R0.4 / REV-002).
 
 use std::fs;
 use std::io;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 use super::identity::AccountIdentity;
 
@@ -20,6 +20,10 @@ pub enum StorePathError {
     Io(io::Error),
     /// Resolved path escaped the expected root (traversal / collision defense).
     PathEscapesRoot,
+    /// App-data root must be absolute (relative roots are rejected).
+    RelativeAppDataRoot,
+    /// A managed path component is a symlink (refused; R0.4 / REV-002).
+    SymlinkRefused,
 }
 
 impl std::fmt::Display for StorePathError {
@@ -27,6 +31,8 @@ impl std::fmt::Display for StorePathError {
         match self {
             Self::Io(e) => write!(f, "store path io error: {e}"),
             Self::PathEscapesRoot => write!(f, "store path escapes configured root"),
+            Self::RelativeAppDataRoot => write!(f, "app data root must be absolute"),
+            Self::SymlinkRefused => write!(f, "managed store path must not be a symlink"),
         }
     }
 }
@@ -35,7 +41,7 @@ impl std::error::Error for StorePathError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             Self::Io(e) => Some(e),
-            Self::PathEscapesRoot => None,
+            _ => None,
         }
     }
 }
@@ -49,10 +55,14 @@ impl From<io::Error> for StorePathError {
 /// Absolute paths for one account's Matrix native stores.
 ///
 /// Layout under `{app_data_root}/matrix/{account_segment}/`:
-/// - `state/` — state store
-/// - `crypto/` — crypto store
-/// - `cache/` — event cache
-/// - `media/` — media cache
+/// - `state/` — SDK state store (matrix-sdk 0.18 also keeps crypto under state)
+/// - `crypto/` — reserved product-managed crypto sidecar (not the sole SDK crypto dir)
+/// - `cache/` — event cache path passed to `sqlite_store_with_cache_path`
+/// - `media/` — media cache (product-managed; not always bound by Client builder)
+///
+/// **Honest mapping (REV-006):** `Client::sqlite_store_with_cache_path(state, cache, …)`
+/// uses `state/` for both state and crypto SQLite files. `crypto_dir` and
+/// `media_dir` are product layout slots, not independent SDK store roots.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StorePaths {
     account_root: PathBuf,
@@ -63,7 +73,10 @@ pub struct StorePaths {
     account_segment: String,
 }
 
-/// Serializable layout description for diagnostics (paths only — never keys).
+/// Serializable layout description for diagnostics.
+///
+/// R0.6 will further redact absolute paths from product diagnostic surfaces;
+/// this type remains path-bearing for harness/layout tests only.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StoreLayout {
@@ -76,14 +89,23 @@ pub struct StoreLayout {
 }
 
 impl StorePaths {
-    /// Derive paths for `identity` under `app_data_root` without creating dirs.
+    /// Derive paths for `identity` under absolute `app_data_root` without creating dirs.
     pub fn derive(
         app_data_root: &Path,
         identity: &AccountIdentity,
     ) -> Result<Self, StorePathError> {
+        if !app_data_root.is_absolute() {
+            return Err(StorePathError::RelativeAppDataRoot);
+        }
+        // Reject `.` / `..` components in the configured root itself.
+        if app_data_root
+            .components()
+            .any(|c| matches!(c, Component::CurDir | Component::ParentDir))
+        {
+            return Err(StorePathError::PathEscapesRoot);
+        }
+
         let segment = identity.account_dir_segment();
-        // Reject traversal in the segment itself (fingerprint/sanitize should not
-        // produce this; defense in depth).
         if segment.contains("..") || segment.contains('/') || segment.contains('\\') {
             return Err(StorePathError::PathEscapesRoot);
         }
@@ -137,9 +159,18 @@ impl StorePaths {
 
     /// Create the directory tree with least-privilege permissions where supported.
     ///
-    /// Does **not** delete existing content. Crash recovery / open failure must
-    /// call this (or only open) — never wipe on failure (plan §8.3).
+    /// Does **not** delete existing content. Refuses symlink components at every
+    /// managed path (R0.4 / REV-002). Never wipe on failure (plan §8.3).
     pub fn ensure_dirs(&self) -> Result<(), StorePathError> {
+        // Matrix root and account root must not be pre-existing symlinks.
+        if let Some(matrix_root) = self.account_root.parent() {
+            refuse_if_symlink(matrix_root)?;
+            if let Some(app_root) = matrix_root.parent() {
+                refuse_if_symlink(app_root)?;
+            }
+        }
+        refuse_if_symlink(&self.account_root)?;
+
         for dir in [
             &self.account_root,
             &self.state_dir,
@@ -147,7 +178,17 @@ impl StorePaths {
             &self.cache_dir,
             &self.media_dir,
         ] {
+            refuse_if_symlink(dir)?;
             fs::create_dir_all(dir)?;
+            refuse_if_symlink(dir)?;
+
+            // After creation, require canonical path still under the account root.
+            let canon_account = self.account_root.canonicalize()?;
+            let canon_dir = dir.canonicalize()?;
+            if canon_dir != canon_account {
+                ensure_under_root(&canon_account, &canon_dir)?;
+            }
+
             #[cfg(unix)]
             {
                 use std::os::unix::fs::PermissionsExt;
@@ -172,10 +213,18 @@ impl StorePaths {
 }
 
 fn ensure_under_root(root: &Path, candidate: &Path) -> Result<(), StorePathError> {
-    // Lexical check: candidate must start with root as a path prefix.
     if candidate == root || candidate.starts_with(root) {
         Ok(())
     } else {
         Err(StorePathError::PathEscapesRoot)
+    }
+}
+
+fn refuse_if_symlink(path: &Path) -> Result<(), StorePathError> {
+    match fs::symlink_metadata(path) {
+        Ok(meta) if meta.file_type().is_symlink() => Err(StorePathError::SymlinkRefused),
+        Ok(_) => Ok(()),
+        Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(StorePathError::Io(e)),
     }
 }
