@@ -79,6 +79,15 @@ pub struct RoomSummary {
     pub avatar_url: Option<String>,
     pub membership: Membership,
     pub is_direct: bool,
+    /// Account-data favorite (m.tag `m.favourite`) projection.
+    #[serde(default)]
+    pub is_favorite: bool,
+    /// Account-data low-priority (m.tag `m.lowpriority`) projection.
+    #[serde(default)]
+    pub is_low_priority: bool,
+    /// Optional product folder / section label (not a Matrix space id).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub folder_id: Option<String>,
     pub is_encrypted: bool,
     /// Stable join-rule string (e.g. `public`, `invite`); not an SDK enum object.
     #[serde(default, skip_serializing_if = "Option::is_none")]
