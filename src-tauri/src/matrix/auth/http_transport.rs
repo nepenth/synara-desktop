@@ -6,7 +6,13 @@
 //! `Client::builder` outside `client_builder/`).
 //!
 //! **Read-only:** never submits credentials. No dual-backend. No Tauri Matrix
-//! product commands. Full disposable-Synapse lifecycle remains a later R0.7 residual.
+//! product commands.
+//!
+//! R0.7 residual slices:
+//! - **slice 1:** live HTTP transports + domain parsers (this module)
+//! - **slice 2:** loopback CS stub + optional disposable-Synapse login-types
+//!   evidence (see tests; gated by `SYNARA_RUN_MATRIX_RUST_AUTH_LIVE=1`)
+//! - **later:** encrypted store open / sync readiness / logout / wipe lifecycle
 
 use std::time::Duration;
 
@@ -358,5 +364,140 @@ mod tests {
     fn transport_constructors_do_not_panic() {
         let _ = HttpDiscoveryTransport::new();
         let _ = HttpLoginFlowTransport::new();
+    }
+
+    // --- R0.7 slice 2: real HTTP against loopback CS stub (no Docker required) ---
+
+    /// Minimal HTTP/1.1 JSON responder for login-types (and optional 5xx paths).
+    async fn serve_loopback_json_once(listener: &tokio::net::TcpListener, status: u16, body: &str) {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let (mut sock, _) = listener
+            .accept()
+            .await
+            .expect("loopback accept login-types request");
+        let mut buf = vec![0u8; 8192];
+        let _ = sock.read(&mut buf).await.expect("read request");
+        let reason = match status {
+            200 => "OK",
+            404 => "Not Found",
+            503 => "Service Unavailable",
+            500 => "Internal Server Error",
+            _ => "Error",
+        };
+        let resp = format!(
+            "HTTP/1.1 {status} {reason}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+            body.len()
+        );
+        sock.write_all(resp.as_bytes())
+            .await
+            .expect("write response");
+    }
+
+    fn is_loopback_homeserver_url(raw: &str) -> bool {
+        let Ok(url) = url::Url::parse(raw) else {
+            return false;
+        };
+        if url.scheme() != "http" {
+            return false;
+        }
+        matches!(
+            url.host_str(),
+            Some("127.0.0.1") | Some("localhost") | Some("::1")
+        ) && url.username().is_empty()
+            && url.password().is_none()
+            && (url.path().is_empty() || url.path() == "/")
+            && url.query().is_none()
+            && url.fragment().is_none()
+    }
+
+    #[tokio::test]
+    async fn live_login_types_against_loopback_cs_stub() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind loopback CS stub");
+        let addr = listener.local_addr().expect("local addr");
+        let base = format!("http://{addr}");
+        assert!(is_loopback_homeserver_url(&base));
+
+        let body = r#"{"flows":[{"type":"m.login.password"},{"type":"m.login.dummy"}]}"#;
+        let server = tokio::spawn(async move {
+            serve_loopback_json_once(&listener, 200, body).await;
+        });
+
+        let transport = HttpLoginFlowTransport::new().expect("http transport");
+        let result = super::super::discover_login_flows(&base, &transport)
+            .await
+            .expect("login-types from loopback CS stub");
+
+        assert_eq!(result.homeserver_base_url, base.trim_end_matches('/'));
+        assert!(result.password_available());
+        assert!(result
+            .flows
+            .iter()
+            .any(|f| f.matrix_type == "m.login.dummy"));
+        // Privacy: domain types only — no raw error/body leakage surfaces here.
+        server.await.expect("stub task");
+    }
+
+    #[tokio::test]
+    async fn live_login_types_maps_stub_5xx_privately() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind loopback CS stub");
+        let addr = listener.local_addr().expect("local addr");
+        let base = format!("http://{addr}");
+
+        let server = tokio::spawn(async move {
+            serve_loopback_json_once(&listener, 503, r#"{"error":"upstream"}"#).await;
+        });
+
+        let transport = HttpLoginFlowTransport::new().expect("http transport");
+        let err = transport
+            .fetch_login_flows(&base)
+            .await
+            .expect_err("503 must not parse as flows");
+        // Privacy: diagnostic_id only — never the JSON error body / host.
+        let msg = err.to_string();
+        assert!(!msg.contains("upstream"));
+        assert!(!msg.contains(&addr.to_string()));
+        assert!(matches!(
+            err,
+            AuthError::Connectivity {
+                diagnostic_id: "r0.7-http-retryable"
+            }
+        ));
+        server.await.expect("stub task");
+    }
+
+    #[tokio::test]
+    async fn live_login_types_against_disposable_synapse_when_configured() {
+        // Opt-in live residual against `scripts/synapse-integration.sh` (loopback only).
+        // SYNARA_RUN_MATRIX_RUST_AUTH_LIVE=1
+        // SYNARA_MATRIX_HOMESERVER_URL=http://127.0.0.1:<port>
+        if std::env::var("SYNARA_RUN_MATRIX_RUST_AUTH_LIVE")
+            .ok()
+            .as_deref()
+            != Some("1")
+        {
+            return;
+        }
+        let base = match std::env::var("SYNARA_MATRIX_HOMESERVER_URL") {
+            Ok(v) => v,
+            Err(_) => return,
+        };
+        assert!(
+            is_loopback_homeserver_url(&base),
+            "live auth transport tests accept only credential-free HTTP loopback homeserver URLs"
+        );
+
+        let transport = HttpLoginFlowTransport::new().expect("http transport");
+        let result = super::super::discover_login_flows(&base, &transport)
+            .await
+            .expect("disposable Synapse login-types listing");
+        assert!(
+            result.password_available(),
+            "disposable Synapse must advertise m.login.password for harness registration/login paths"
+        );
     }
 }
