@@ -297,12 +297,18 @@ mod redact_unit_tests {
 
     #[test]
     fn absolute_paths_and_credential_urls_are_detected() {
-        assert!(looks_like_absolute_path("/Users/alice/Library/Application Support/Synara"));
-        assert!(looks_like_absolute_path("C:\\Users\\alice\\AppData\\Roaming\\Synara"));
+        assert!(looks_like_absolute_path(
+            "/Users/alice/Library/Application Support/Synara"
+        ));
+        assert!(looks_like_absolute_path(
+            "C:\\Users\\alice\\AppData\\Roaming\\Synara"
+        ));
         assert!(looks_like_url_with_credentials(
             "https://user:p%40ss@matrix.example.org"
         ));
-        assert!(!looks_like_url_with_credentials("https://matrix.example.org"));
+        assert!(!looks_like_url_with_credentials(
+            "https://matrix.example.org"
+        ));
         assert!(!looks_like_absolute_path("state"));
         assert!(!looks_like_absolute_path("p2.3-sdk-build-store"));
     }

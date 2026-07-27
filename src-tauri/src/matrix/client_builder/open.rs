@@ -134,9 +134,8 @@ mod privacy_tests {
         assert!(!msg.contains("access_token"));
         assert_eq!(msg, "store initialization failed");
 
-        let (cat2, id2) = classify_build_error(
-            "proxy http://user:p@ss@127.0.0.1:8080 tls handshake failed",
-        );
+        let (cat2, id2) =
+            classify_build_error("proxy http://user:p@ss@127.0.0.1:8080 tls handshake failed");
         assert_eq!(id2, "p2.3-sdk-build-network");
         assert_eq!(cat2, MatrixIpcErrorCategory::Connectivity);
         assert_eq!(safe_build_message(id2), "network configuration failed");
