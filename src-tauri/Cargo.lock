@@ -5755,6 +5755,7 @@ dependencies = [
  "notify-rust",
  "objc2",
  "objc2-app-kit",
+ "reqwest",
  "security-framework 3.7.0",
  "serde",
  "serde_json",
