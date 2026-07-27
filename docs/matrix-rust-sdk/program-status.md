@@ -50,7 +50,7 @@ Audited snapshot: `edfefee499064b736985b6528896b693e5120f22`
 | ID | Task | Artifact state | Integration state | Strict acceptance |
 |---|---|---|---|---|
 | R0.1 | Quality and metadata recovery | `landed` | `merged` | `accepted` |
-| R0.2 | Governance and Phase 0 evidence | `landed` | `pr_open` | `open` |
+| R0.2 | Governance and Phase 0 evidence | `landed` | `merged` | `open` |
 | R0.3 | IPC wire-contract correctness | `landed` | `merged` | `accepted` |
 | R0.4 | Store confinement and key management | `landed` | `merged` | `accepted` |
 | R0.5 | Safe destructive lifecycle | `landed` | `merged` | `accepted` |

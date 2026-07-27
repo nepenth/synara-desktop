@@ -22,8 +22,8 @@ the canonical status ledger.
 
 | Field | Current value |
 |---|---|
-| **Integration branch / tip** | `feature/matrix-rust-sdk-full-replacement` @ `e259102774848cf94e7d36f790e77f5a9fd31f55` (PR #104 / R0.8 slice-1 residual formal reports on #102 / R0.7 slices 1–4 + R0.3–R0.6) |
-| **Dual-track strategy** | Land Critical/High product fixes first; park R0.2-E1 thrash; R0.8 residual formal reports without false gate close |
+| **Integration branch / tip** | `feature/matrix-rust-sdk-full-replacement` @ `447cbdcdd43a26775db32d8d62d6929d8a5c09b9` (PR #82 / R0.2-E1 on R0.8 slice-1 + R0.7 + R0.3–R0.6) |
+| **Dual-track strategy** | Land Critical/High product fixes first; R0.2-E1 unparked with memory-bound fix and merged; R0.8 residual formal reports without false gate close |
 | **R0.5 / REV-001** | **Merged and accepted** via PR [#86](https://github.com/nepenth/synara-desktop/pull/86) |
 | **R0.4 / REV-002/006/007** | **Merged and accepted** via PR [#87](https://github.com/nepenth/synara-desktop/pull/87) (path confinement) + PR [#94](https://github.com/nepenth/synara-desktop/pull/94) (native keyring vault + encrypted reopen evidence) |
 | **R0.6 / REV-003** | **Merged and accepted** via PR [#89](https://github.com/nepenth/synara-desktop/pull/89) — privacy-safe plan/layout/wipe/SDK errors; adversarial redaction fixtures |
@@ -31,8 +31,8 @@ the canonical status ledger.
 | **R0.7 live adapters** | **Slices 1–4 merged** via PR [#96](https://github.com/nepenth/synara-desktop/pull/96) (CS transports) + [#98](https://github.com/nepenth/synara-desktop/pull/98) (loopback login-types) + [#100](https://github.com/nepenth/synara-desktop/pull/100) (composed encrypted store open/ready/logout/reopen/wipe) + [#102](https://github.com/nepenth/synara-desktop/pull/102) (stale-generation after real SDK logout + wrong-key reopen privacy). Strict acceptance **open** (authenticated live sync residual — login APIs guardrail-banned until deliberate P3.2 allowlist) |
 | **R0.8 formal reports** | **Slice 1 merged** via PR [#104](https://github.com/nepenth/synara-desktop/pull/104): readiness inventory + Phase 0/1/2 + P3.1 formal reports with verdict **`not_accepted`**. See [`r0.8-phase-gate-readiness-inventory.md`](r0.8-phase-gate-readiness-inventory.md). Strict acceptance **open**; **0** phase gates closed |
 | **Active remediation** | R0.8 residual formal path / R0.7 auth residual / R0.2 parked; **P3.2** blocked by unaccepted R0.2 / R0.7 residual / R0.8 |
-| **Parked** | R0.2-E1 PR [#82](https://github.com/nepenth/synara-desktop/pull/82) — **draft**; 2× `v2 exceeded 512 MiB` residual |
-| **Next product slice** | After R0.8 slice-1 lands: clear residuals or deliberate P3.2-gated auth residual; never false-accept phase gates |
+| **R0.2-E1** | **Merged** via PR [#82](https://github.com/nepenth/synara-desktop/pull/82) after deliberate memory-bound RSS fix (phase-isolated audit/v2 children + incremental 512 MiB budget). Strict R0.2 acceptance **open** — E2 + Phase 0 evidence residuals remain |
+| **Next product slice** | **R0.2-E2** (normalized audit+v2 artifacts via E1 tooling) or R0.7 authenticated residual / R0.8 accepting re-issue; never false-accept phase gates |
 | **Product runtime** | `matrix-js-sdk` only; Rust remains harness foundation; no dual backend or cutover |
 | **Progress** | 20/112 original artifacts (~18%); R0 work does not increment this; 0/15 strict phase gates closed |
 | **Main PR** | [#39](https://github.com/nepenth/synara-desktop/pull/39) remains open and must not merge without explicit user approval |
