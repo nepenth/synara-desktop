@@ -1,4 +1,4 @@
-//! Room-list filters for membership / unread / invite views (P4.3).
+//! Room-list filters for membership / unread / invite / tag views (P4.3–P4.4).
 //!
 //! Pure predicates over [`RoomSummary`] — no SDK Room objects, no network.
 
@@ -17,6 +17,10 @@ pub enum RoomListScope {
     Mentions,
     /// Direct-message joined rooms.
     Direct,
+    /// Favorite-tagged joined rooms (`m.favourite`).
+    Favorites,
+    /// Low-priority-tagged joined rooms (`m.lowpriority`).
+    LowPriority,
     /// All memberships except ban (includes leave/knock for recovery UIs).
     AllActive,
 }
@@ -28,6 +32,8 @@ impl RoomListScope {
         Self::Unread,
         Self::Mentions,
         Self::Direct,
+        Self::Favorites,
+        Self::LowPriority,
         Self::AllActive,
     ];
 
@@ -38,6 +44,8 @@ impl RoomListScope {
             Self::Unread => "unread",
             Self::Mentions => "mentions",
             Self::Direct => "direct",
+            Self::Favorites => "favorites",
+            Self::LowPriority => "low_priority",
             Self::AllActive => "all_active",
         }
     }
@@ -54,8 +62,19 @@ pub fn room_matches_scope(room: &RoomSummary, scope: RoomListScope) -> bool {
         }
         RoomListScope::Mentions => room.membership == Membership::Join && room.highlight_count > 0,
         RoomListScope::Direct => room.membership == Membership::Join && room.is_direct,
+        RoomListScope::Favorites => room.membership == Membership::Join && room.is_favorite,
+        RoomListScope::LowPriority => room.membership == Membership::Join && room.is_low_priority,
         RoomListScope::AllActive => !matches!(room.membership, Membership::Ban),
     }
+}
+
+/// Rooms in an explicit product folder (exact folder_id match).
+pub fn select_rooms_in_folder(rooms: &[RoomSummary], folder_id: &str) -> Vec<RoomSummary> {
+    rooms
+        .iter()
+        .filter(|r| r.folder_id.as_deref() == Some(folder_id))
+        .cloned()
+        .collect()
 }
 
 /// Filter an ordered projection slice by scope (preserves order).
