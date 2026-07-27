@@ -154,11 +154,10 @@ test("accepts R0.1 completion and R0.2 activation without checker edits", () => 
   const future = clone(status);
   markAccepted(future.remediation_tasks[0]);
   clearInProgressExcept(future, "R0.2");
+  // Residual R0.2 work (e.g. E2) after E1 may land/merge: model activation as
+  // in_progress + pr_open, never in_progress + merged (state machine forbids it).
   future.remediation_tasks[1].artifact_state = "in_progress";
-  future.remediation_tasks[1].integration_state =
-    future.remediation_tasks[1].integration_state === "not_submitted"
-      ? "pr_open"
-      : future.remediation_tasks[1].integration_state;
+  future.remediation_tasks[1].integration_state = "pr_open";
   future.remediation_tasks[1].strict_acceptance_state = "open";
   future.current_execution.active_task = "R0.2";
   future.current_execution.next_task = "R0.3";
