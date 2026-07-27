@@ -820,3 +820,224 @@ fn r0_7_encrypted_store_open_ready_logout_reopen_wipe() {
     drop(rt);
     let _ = fs::remove_dir_all(&root);
 }
+
+/// R0.7 slice 4 — always-on residual: real SDK install → Ready → generation-
+/// stamped task → logout retires work → stale generation refused → reinstall
+/// at new generation succeeds.
+///
+/// Complements unit-level task isolation tests by composing them with a real
+/// `SdkClientHandle` and the logout barrier (R0.5 / R0.7 failure + stale cases).
+#[test]
+fn r0_7_stale_generation_after_real_sdk_logout() {
+    use crate::matrix::client_builder::{build_unauthenticated_client, ClientBuildConfig};
+    use crate::matrix::store::StoreKeyMaterial;
+    use crate::matrix::supervisor::SupervisorCommand;
+
+    let root = temp_root("r07-stale-gen");
+    let identity = r0_7_identity();
+    let key_bytes = *StoreKeyMaterial::generate().unwrap().as_bytes();
+
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(2)
+        .enable_all()
+        .build()
+        .expect("multi-thread runtime for SDK Client drop");
+    let _enter = rt.enter();
+
+    let key = StoreKeyMaterial::from_bytes(key_bytes);
+    let cfg = ClientBuildConfig::product_default(&root, identity.clone(), Some(key)).unwrap();
+    let client = rt
+        .block_on(build_unauthenticated_client(&cfg))
+        .expect("encrypted open");
+    assert!(client.session().is_none());
+    drop(client);
+
+    let factory = R07SdkFactory {
+        root: root.clone(),
+        identity: identity.clone(),
+        key_bytes,
+        next_id: AtomicUsize::new(0),
+    };
+    let mut supervisor = MatrixSupervisor::new();
+    supervisor
+        .apply(SupervisorCommand::BeginOpen)
+        .expect("begin open");
+    supervisor
+        .apply(SupervisorCommand::BeginAuthenticate)
+        .expect("auth");
+    supervisor
+        .apply_with_factory(SupervisorCommand::InstallClient, &factory)
+        .expect("install sdk client");
+    supervisor
+        .apply(SupervisorCommand::BeginSync)
+        .expect("begin sync");
+    supervisor
+        .apply(SupervisorCommand::MarkReady)
+        .expect("mark ready");
+    let gen_ready = supervisor.session_generation();
+    assert!(gen_ready >= 1);
+
+    let mut tasks = TaskSupervisor::new();
+    tasks.set_live_generation(gen_ready);
+    let stale_task = tasks
+        .spawn(TaskKind::Sync, gen_ready, async {
+            std::future::pending::<()>().await;
+        })
+        .expect("spawn at live generation");
+
+    let session_vault = InMemorySessionMaterialVault::new();
+    session_vault
+        .set(
+            &SessionMaterialId::from_identity(&identity),
+            &SessionMaterial::from_placeholder(b"r07-stale"),
+        )
+        .unwrap();
+
+    let logout = rt
+        .block_on(perform_logout(
+            &mut supervisor,
+            &mut tasks,
+            &session_vault,
+            &identity,
+            None,
+        ))
+        .expect("logout");
+    assert_eq!(supervisor.state(), SupervisorState::LoggedOut);
+    assert!(!supervisor.has_client());
+    assert!(logout.tasks_retired >= 1);
+    assert_eq!(tasks.registered_count(), 0);
+    assert!(tasks.get(stale_task).is_none());
+
+    let gen_after = supervisor.session_generation();
+    assert!(
+        gen_after > gen_ready,
+        "logout must advance session generation"
+    );
+    // Task supervisor follows supervisor generation after logout.
+    assert_eq!(tasks.live_generation(), gen_after);
+
+    // Stale generation refused for both result acceptance and new work.
+    assert!(tasks
+        .accept_result(gen_ready)
+        .unwrap_err()
+        .is_stale_generation());
+    assert!(tasks
+        .spawn(TaskKind::Generic, gen_ready, async {})
+        .unwrap_err()
+        .is_stale_generation());
+
+    // Live generation may spawn after reinstall.
+    supervisor
+        .apply(SupervisorCommand::BeginOpen)
+        .expect("reopen begin");
+    supervisor
+        .apply(SupervisorCommand::BeginAuthenticate)
+        .expect("reopen auth");
+    supervisor
+        .apply_with_factory(SupervisorCommand::InstallClient, &factory)
+        .expect("reinstall sdk client");
+    supervisor
+        .apply(SupervisorCommand::BeginSync)
+        .expect("reopen sync");
+    supervisor
+        .apply(SupervisorCommand::MarkReady)
+        .expect("reopen ready");
+    assert_eq!(supervisor.state(), SupervisorState::Ready);
+    assert!(supervisor.has_client());
+    let gen_reopen = supervisor.session_generation();
+    assert!(gen_reopen >= gen_after);
+    tasks.set_live_generation(gen_reopen);
+    let live_task = tasks
+        .spawn(TaskKind::Generic, gen_reopen, async {})
+        .expect("spawn at post-logout live generation");
+    assert!(tasks.accept_task_result(live_task).is_ok());
+
+    drop(supervisor);
+    drop(_enter);
+    drop(rt);
+    let _ = fs::remove_dir_all(&root);
+}
+
+/// R0.7 slice 4 — always-on residual: wrong store-key reopen fails with a
+/// privacy-safe builder error (no absolute paths, no key material, no raw SDK
+/// dump). Complements happy-path reopen in slice 3.
+#[test]
+fn r0_7_wrong_store_key_reopen_fails_privately() {
+    use crate::matrix::client_builder::{
+        build_unauthenticated_client, ClientBuildConfig, ClientBuilderError,
+    };
+    use crate::matrix::store::StoreKeyMaterial;
+
+    let root = temp_root("r07-wrong-key");
+    let identity = r0_7_identity();
+    let key_a = StoreKeyMaterial::generate().unwrap();
+    let key_b = StoreKeyMaterial::generate().unwrap();
+    assert!(!key_a.equals(&key_b));
+    let key_a_hex = key_a
+        .as_bytes()
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect::<String>();
+    let key_b_hex = key_b
+        .as_bytes()
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect::<String>();
+    let root_display = root.display().to_string();
+
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(2)
+        .enable_all()
+        .build()
+        .expect("multi-thread runtime for SDK Client drop");
+    let _enter = rt.enter();
+
+    let cfg_ok = ClientBuildConfig::product_default(&root, identity.clone(), Some(key_a)).unwrap();
+    let client = rt
+        .block_on(build_unauthenticated_client(&cfg_ok))
+        .expect("first encrypted open with key A");
+    assert!(client.session().is_none());
+    drop(client);
+
+    let cfg_bad = ClientBuildConfig::product_default(&root, identity.clone(), Some(key_b)).unwrap();
+    let err = rt
+        .block_on(build_unauthenticated_client(&cfg_bad))
+        .expect_err("wrong store key must fail reopen");
+
+    match &err {
+        ClientBuilderError::SdkBuild {
+            diagnostic_id,
+            message,
+            category: _,
+        } => {
+            assert!(
+                diagnostic_id.starts_with("p2.3-"),
+                "expected redacted p2.3 diagnostic id, got {diagnostic_id}"
+            );
+            assert!(!message.is_empty(), "safe message must be non-empty");
+            // Privacy: Display surface must not leak paths or key material.
+            let surface = err.to_string();
+            assert!(
+                !surface.contains(&root_display),
+                "error must not contain absolute store root"
+            );
+            assert!(
+                !surface.contains(&key_a_hex),
+                "error must not contain key A"
+            );
+            assert!(
+                !surface.contains(&key_b_hex),
+                "error must not contain key B"
+            );
+            assert!(
+                !surface.contains("sqlite"),
+                "error must not leak raw engine detail: {surface}"
+            );
+        }
+        other => panic!("expected SdkBuild error, got {other:?}"),
+    }
+
+    drop(_enter);
+    drop(rt);
+    let _ = fs::remove_dir_all(&root);
+}
