@@ -56,14 +56,30 @@ function syncInventory(candidate) {
   candidate.original_plan.landed_task_count = landed.length;
 }
 
-function syncP32Block(candidate) {
+/**
+ * Optional residual-awareness block only (product policy 2026-07-27):
+ * unaccepted R0 formal gates do not hard-block P3.2 product progress.
+ * When callers want an explicit residual note, list unaccepted remediations.
+ * When empty, product tasks may advance (clean-break re-login).
+ */
+function syncP32ResidualAwareness(candidate, { forceBlock = false } = {}) {
   const blockers = candidate.remediation_tasks
     .filter(
       ({ strict_acceptance_state: acceptance }) => acceptance !== "accepted"
     )
     .map(({ id }) => id);
-  candidate.current_execution.blocked_tasks =
-    blockers.length === 0 ? [] : [{ id: "P3.2", blocked_by: blockers }];
+  if (forceBlock && blockers.length > 0) {
+    candidate.current_execution.blocked_tasks = [
+      { id: "P3.2", blocked_by: blockers },
+    ];
+  } else {
+    candidate.current_execution.blocked_tasks = [];
+  }
+}
+
+/** @deprecated name kept for older call sites — clears hard P3.2 block. */
+function syncP32Block(candidate) {
+  syncP32ResidualAwareness(candidate, { forceBlock: false });
 }
 
 function closePhase(candidate, phase) {
@@ -99,7 +115,9 @@ test("current ledger matches the 112-task plan", () => {
 test("renderer is deterministic and distinguishes delivery from acceptance", () => {
   const first = renderProgramStatus(status);
   assert.equal(first, renderProgramStatus(clone(status)));
-  assert.match(first, /20 \/ 112/);
+  // Inventory grows as original tasks land (P3.2 → 21 / 112 at this tip).
+  assert.match(first, /\d+ \/ 112/);
+  assert.match(first, /21 \/ 112/);
   assert.match(first, /landed.*merged.*open.*open/);
   assert.match(first, /[^\n]\n$/);
   assert.doesNotMatch(first, /\n\n$/);
@@ -150,35 +168,56 @@ test("rejects phase closure until tasks and audited remediations are accepted", 
   assert.doesNotThrow(() => validateProgramStatus(valid, plan));
 });
 
-test("accepts R0.1 completion and R0.2 activation without checker edits", () => {
+test("accepts residual R0 activation without checker edits", () => {
+  // Product-first: residual formal R0 work may still be in progress while
+  // product tasks (P3.2+) advance. Simulate R0.7 residual as the active task.
   const future = clone(status);
-  markAccepted(future.remediation_tasks[0]);
-  clearInProgressExcept(future, "R0.2");
-  future.remediation_tasks[1].artifact_state = "in_progress";
-  future.remediation_tasks[1].integration_state =
-    future.remediation_tasks[1].integration_state === "not_submitted"
-      ? "pr_open"
-      : future.remediation_tasks[1].integration_state;
-  future.remediation_tasks[1].strict_acceptance_state = "open";
-  future.current_execution.active_task = "R0.2";
-  future.current_execution.next_task = "R0.3";
-  syncP32Block(future);
+  clearInProgressExcept(future, "R0.7");
+  const r07 = future.remediation_tasks.find((task) => task.id === "R0.7");
+  r07.artifact_state = "in_progress";
+  r07.integration_state = "pr_open";
+  r07.strict_acceptance_state = "open";
+  future.current_execution.active_task = "R0.7";
+  future.current_execution.next_task = "P3.3";
+  future.current_execution.blocked_tasks = [];
   assert.doesNotThrow(() => validateProgramStatus(future, plan));
-  assert.match(renderProgramStatus(future), /Active task: \*\*R0\.2\*\*/);
+  assert.match(renderProgramStatus(future), /Active task: \*\*R0\.7\*\*/);
 });
 
-test("P3.2 is blocked iff an R0 remediation remains unaccepted", () => {
-  const missingBlocker = clone(status);
-  missingBlocker.current_execution.blocked_tasks[0].blocked_by.pop();
+test("residual R0 gates do not hard-block P3.2; optional residual notes stay consistent", () => {
+  // Current ledger: unaccepted remediations remain, but blocked_tasks is empty
+  // so product P3.x work is not hard-gated (policy 2026-07-27).
+  assert.ok(
+    status.remediation_tasks.some(
+      (task) => task.strict_acceptance_state !== "accepted"
+    )
+  );
+  assert.deepEqual(status.current_execution.blocked_tasks, []);
+  assert.doesNotThrow(() => validateProgramStatus(status, plan));
+  assert.match(renderProgramStatus(status), /Blocked tasks: None/);
+
+  // Optional residual-awareness block is allowed when blockers are unaccepted.
+  const residualNote = clone(status);
+  residualNote.current_execution.blocked_tasks = [
+    { id: "P3.2", blocked_by: ["R0.7", "R0.8"] },
+  ];
+  assert.doesNotThrow(() => validateProgramStatus(residualNote, plan));
+
+  // Accepted remediations cannot appear as residual blockers.
+  const badBlocker = clone(status);
+  badBlocker.current_execution.blocked_tasks = [
+    { id: "P3.2", blocked_by: ["R0.1"] },
+  ];
   assert.throws(
-    () => validateProgramStatus(missingBlocker, plan),
-    /exactly match/
+    () => validateProgramStatus(badBlocker, plan),
+    /unaccepted R0 remediation/
   );
 
+  // Clearing all remediations still leaves product free to proceed.
   const future = clone(status);
   for (const task of future.remediation_tasks) markAccepted(task);
   future.current_execution.active_task = null;
-  future.current_execution.next_task = "P3.2";
+  future.current_execution.next_task = "P3.3";
   syncP32Block(future);
   assert.doesNotThrow(() => validateProgramStatus(future, plan));
   assert.match(renderProgramStatus(future), /Blocked tasks: None/);
