@@ -84,5 +84,5 @@ pub fn matrix_ipc_schema_markers() -> &'static str {
     debug_assert_eq!(_room_list, room_list::MATRIX_ROOM_LIST_MARKER);
     debug_assert_eq!(_spaces, spaces::MATRIX_SPACES_MARKER);
     debug_assert_eq!(_timeline, timeline::MATRIX_TIMELINE_MARKER);
-    "matrix-ipc-protocol-v1+domain-dtos-p1.4+supervisor-p2.1+store-p2.2+client-builder-p2.3+tasks-p2.4+diagnostics-p2.5+lifecycle-p2.6+auth-p3.2+session-persist-p3.5+sync-p4.1+room-list-p4.2+spaces-p4.5+timeline-p5.1+diffs-p5.2"
+    "matrix-ipc-protocol-v1+domain-dtos-p1.4+supervisor-p2.1+store-p2.2+client-builder-p2.3+tasks-p2.4+diagnostics-p2.5+lifecycle-p2.6+auth-p3.2+session-persist-p3.5+sync-p4.1+room-list-p4.2+spaces-p4.5+timeline-p5.1+diffs-p5.2+pagination-p5.3"
 }
