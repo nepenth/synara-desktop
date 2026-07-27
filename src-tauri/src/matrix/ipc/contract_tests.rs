@@ -149,7 +149,7 @@ fn all_kinds_round_trip_as_envelopes() {
             stream_id: "s1".into(),
             topic: StreamTopic::Timeline,
             idempotency_key: Some("idem-1".into()),
-            body: json!({"op": "upsert"}),
+            body: json!({"items": []}),
         }),
         MatrixIpcMessage::ResyncRequired(ResyncRequiredPayload {
             stream_id: Some("s1".into()),
@@ -374,6 +374,9 @@ const INVALID_FIXTURES: &[&str] = &[
     "invalid_error_with_secret_field.json",
     "invalid_sequence_above_wire_max.json",
     "invalid_stream_id_mismatch.json",
+    "invalid_snapshot_body_secret_field.json",
+    "invalid_snapshot_body_wrong_topic_shape.json",
+    "invalid_delta_body_media_bytes.json",
 ];
 
 #[test]

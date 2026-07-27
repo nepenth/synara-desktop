@@ -1,0 +1,22 @@
+{
+  "protocolVersion": 1,
+  "sessionGeneration": 1,
+  "streamId": "stream-account-data-1",
+  "sequence": 2,
+  "kind": "delta",
+  "payload": {
+    "streamId": "stream-account-data-1",
+    "topic": "account_data",
+    "idempotencyKey": "delta-media",
+    "body": {
+      "events": [
+        {
+          "type": "m.media",
+          "content": {
+            "mediaBytes": [1, 2, 3, 4, 5]
+          }
+        }
+      ]
+    }
+  }
+}

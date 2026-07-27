@@ -8,5 +8,6 @@
 export * from './version';
 export * from './error';
 export * from './stream';
+export * from './streamBody';
 export * from './envelope';
 export * from './protocol';
