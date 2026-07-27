@@ -9,8 +9,8 @@
 
 | Field | Value |
 | --- | --- |
-| Last updated (UTC) | **2026-07-27 ~21:20** |
-| Integration tip | `22ec745` — Merge #133 P4.6 member index |
+| Last updated (UTC) | **2026-07-27 ~21:45** |
+| Integration tip | `848dc14` — Merge #135 P7.1 notification candidates |
 | Product runtime | Still **`matrix-js-sdk` only** until atomic sole-owner cutover |
 | Dual backend | **`false`** (forbidden forever) |
 | Operating model | [cutover-operating-model.md](cutover-operating-model.md) |
@@ -25,12 +25,12 @@
 
 | | |
 | --- | --- |
-| **Now** | **#133 P4.6 merged.** Primary next: **#135 P7.1** notifications (tip-updated after #133; CI re-run). |
-| **Inventory** | ~38/112 original task artifacts when program-status is synced (through P4.6 landed; see ledger). |
+| **Now** | **#135 P7.1 merged.** Primary next: **#137 P8.1** security status (tip-updated after #135; CI re-run). |
+| **Inventory** | ~39/112 original task artifacts when program-status is synced (through P7.1 landed; see ledger). |
 | **Phase gates** | **0 / 15** strict gates closed (honest). |
-| **Open PRs → integration** | [#135](https://github.com/nepenth/synara-desktop/pull/135) notifications, [#137](https://github.com/nepenth/synara-desktop/pull/137) security, [#139](https://github.com/nepenth/synara-desktop/pull/139) routes; [#109](https://github.com/nepenth/synara-desktop/pull/109) MiniMax (deprioritize). |
-| **Blocked on** | CI green for #135 after tip-merge with #133. Required: Quality gate + Desktop package gate. |
-| **Dogfood path** | threads ✅ → members ✅ (**#133**) → **notifications (#135)** → security/routes. |
+| **Open PRs → integration** | [#137](https://github.com/nepenth/synara-desktop/pull/137) security, [#139](https://github.com/nepenth/synara-desktop/pull/139) routes, [#141](https://github.com/nepenth/synara-desktop/pull/141) search; [#109](https://github.com/nepenth/synara-desktop/pull/109) MiniMax (deprioritize). |
+| **Blocked on** | CI green for #137 after tip-merge with #135. Required: Quality gate + Desktop package gate. |
+| **Dogfood path** | members ✅ → notifications ✅ (**#135**) → **security (#137)** → routes/search. |
 
 ---
 
@@ -58,6 +58,8 @@ Update rules:
 
 | When (UTC) | Item | Result | Notes |
 | --- | --- | --- | --- |
+| ~21:42 | **P7.1** notification candidate index | **Merged** [#135](https://github.com/nepenth/synara-desktop/pull/135) | NotificationIndex suppress/dedup/cap; tip `848dc14`. |
+| ~21:27 | **P6.8** search session foundation | **PR open** [#141](https://github.com/nepenth/synara-desktop/pull/141) | SearchSession request-id stale protection; local 7/7. |
 | ~21:17 | **P4.6** member / power-level index | **Merged** [#133](https://github.com/nepenth/synara-desktop/pull/133) | MemberIndex power-ordered; tip `22ec745`. |
 | ~20:58 | **P4.8** route / deep-link resolution | **PR open** [#139](https://github.com/nepenth/synara-desktop/pull/139) | resolve_path/build_path; local 7/7. |
 | ~20:50 | **P5.8** thread list index foundation | **Merged** [#131](https://github.com/nepenth/synara-desktop/pull/131) | ThreadIndex activity order + cap; tip `27f870e`. |
@@ -138,9 +140,10 @@ Update rules:
 | 17 | Relations / reactions (P5.6) | **Done** (merged #129) |
 | 18 | Thread list / summaries (P5.8) | **Done** (merged #131) |
 | 19 | Member / power-level index (P4.6) | **Done** (merged #133) |
-| 20 | Notification candidates (P7.1) | **In PR** [#135](https://github.com/nepenth/synara-desktop/pull/135) |
+| 20 | Notification candidates (P7.1) | **Done** (merged #135) |
 | 21 | Security status projection (P8.1) | **In PR** [#137](https://github.com/nepenth/synara-desktop/pull/137) |
 | 22 | Route / deep-link resolution (P4.8) | **In PR** [#139](https://github.com/nepenth/synara-desktop/pull/139) |
+| 23 | Search session (P6.8) | **In PR** [#141](https://github.com/nepenth/synara-desktop/pull/141) |
 | 10 | Crypto / verification / recovery | Not started |
 | 11 | Atomic sole-owner cutover + js-sdk burn-down (P11) | Not started |
 | 12 | Merge to `main` (#39) | Needs **explicit user approval** |
