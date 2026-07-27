@@ -22,13 +22,14 @@ the canonical status ledger.
 
 | Field | Current value |
 |---|---|
-| **Integration branch / tip** | `feature/matrix-rust-sdk-full-replacement` @ `ba75e460109203b953bfcac77109bbd2d11268cb` (PR #87 / R0.4 on top of #86 / R0.5) |
-| **Dual-track strategy** | Land Critical/High product fixes first; timebox R0.2-E1 CI; do not block product work on R0.8 theater |
+| **Integration branch / tip** | `feature/matrix-rust-sdk-full-replacement` @ `5492841eea925ee2176c0e585c478b2b208f4719` (PR #89 / R0.6 on top of #88 docs + #87 R0.4 + #86 R0.5) |
+| **Dual-track strategy** | Land Critical/High product fixes first; park R0.2-E1 thrash; do not block product work on R0.8 theater |
 | **R0.5 / REV-001** | **Merged and accepted** via PR [#86](https://github.com/nepenth/synara-desktop/pull/86) |
 | **R0.4 / REV-002/006/007** | **Merged** via PR [#87](https://github.com/nepenth/synara-desktop/pull/87) — absolute roots, symlink refuse, v1 SHA-256 segments, honest layout docs. Strict acceptance **open** (native keyring + live encrypted reopen residual) |
-| **Active remediation** | None in progress; **next = R0.6** diagnostic privacy (REV-003) |
-| **Also open** | R0.2-E1 PR [#82](https://github.com/nepenth/synara-desktop/pull/82) — tooling; merge if green; park residual if thrash |
-| **Next product slice** | Implement R0.6 privacy redaction; then R0.3 IPC wire freeze |
+| **R0.6 / REV-003** | **Merged and accepted** via PR [#89](https://github.com/nepenth/synara-desktop/pull/89) — privacy-safe plan/layout/wipe/SDK errors; adversarial redaction fixtures |
+| **Active remediation** | None in progress; **next = R0.3** IPC wire freeze (REV-004/005) |
+| **Parked** | R0.2-E1 PR [#82](https://github.com/nepenth/synara-desktop/pull/82) — **draft**; 2× `v2 exceeded 512 MiB` residual |
+| **Next product slice** | Implement R0.3 IPC counter + stream/payload contract freeze; then P3.2 when remediations allow |
 | **Product runtime** | `matrix-js-sdk` only; Rust remains harness foundation; no dual backend or cutover |
 | **Progress** | 20/112 original artifacts (~18%); R0 work does not increment this; 0/15 strict phase gates closed |
 | **Main PR** | [#39](https://github.com/nepenth/synara-desktop/pull/39) remains open and must not merge without explicit user approval |
