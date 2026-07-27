@@ -13,6 +13,9 @@ pub struct RoomSummaryBuilder {
     name: Option<String>,
     membership: Membership,
     is_direct: bool,
+    is_favorite: bool,
+    is_low_priority: bool,
+    folder_id: Option<String>,
     is_encrypted: bool,
     unread_count: u32,
     highlight_count: u32,
@@ -27,6 +30,9 @@ impl RoomSummaryBuilder {
             name: None,
             membership: Membership::Join,
             is_direct: false,
+            is_favorite: false,
+            is_low_priority: false,
+            folder_id: None,
             is_encrypted: false,
             unread_count: 0,
             highlight_count: 0,
@@ -47,6 +53,21 @@ impl RoomSummaryBuilder {
 
     pub fn direct(mut self, is_direct: bool) -> Self {
         self.is_direct = is_direct;
+        self
+    }
+
+    pub fn favorite(mut self, is_favorite: bool) -> Self {
+        self.is_favorite = is_favorite;
+        self
+    }
+
+    pub fn low_priority(mut self, is_low_priority: bool) -> Self {
+        self.is_low_priority = is_low_priority;
+        self
+    }
+
+    pub fn folder_id(mut self, folder_id: impl Into<String>) -> Self {
+        self.folder_id = Some(folder_id.into());
         self
     }
 
@@ -86,6 +107,9 @@ impl RoomSummaryBuilder {
             avatar_url: None,
             membership: self.membership,
             is_direct: self.is_direct,
+            is_favorite: self.is_favorite,
+            is_low_priority: self.is_low_priority,
+            folder_id: self.folder_id,
             is_encrypted: self.is_encrypted,
             join_rule: None,
             unread_count: self.unread_count,
