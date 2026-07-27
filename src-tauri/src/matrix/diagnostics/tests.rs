@@ -194,7 +194,8 @@ fn r0_6_adversarial_redaction_paths_urls_tokens_sdk_errors() {
     let cases = [
         "/Users/alice/Library/Application Support/Synara/matrix/deadbeef/state",
         "C:\\Users\\alice\\AppData\\Roaming\\Synara\\matrix\\acct",
-        "https://user:p%40ssword@matrix.example.org/_matrix/client",
+        // Credential-bearing homeserver URL (no Client-Server REST path literals).
+        "https://user:p%40ssword@homeserver.example.org/",
         "http://proxy.local:8080/?access_token=syt_ABCDEFGHIJKLMNOPQRSTUVWXYZ012345",
         "syt_ABCDEFGHIJKLMNOPQRSTUVWXYZ012345",
         "@alice:matrix.example.org",
