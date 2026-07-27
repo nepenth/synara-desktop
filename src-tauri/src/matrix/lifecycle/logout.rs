@@ -38,7 +38,7 @@ pub struct WipeOutcome {
     pub tasks_retired: usize,
 }
 
-/// Perform logout: supervisor stop/logout, task retire, session material clear.
+/// Perform logout: stop new work → cancel/join tasks → drop client → clear session material.
 ///
 /// Does **not** delete store directories or store encryption keys.
 pub async fn perform_logout<S>(
@@ -61,11 +61,22 @@ where
         }
     }
 
+    // Cancel and join work *before* CompleteLogout drops the client handle.
+    let gen_before = supervisor.session_generation();
+    let mut tasks_retired = if matches!(
+        supervisor.state(),
+        SupervisorState::Stopping | SupervisorState::Ready | SupervisorState::Syncing
+    ) {
+        tasks.retire_generation(gen_before).await
+    } else {
+        0
+    };
+
     if supervisor.state() == SupervisorState::Stopping {
         apply_cmd(supervisor, SupervisorCommand::CompleteLogout)?;
     }
 
-    let tasks_retired = follow_supervisor_generation(tasks, supervisor).await;
+    tasks_retired += follow_supervisor_generation(tasks, supervisor).await;
     let session_material_cleared = clear_session_material(session_vault, identity)?;
 
     if let Some(m) = metrics {
@@ -82,10 +93,15 @@ where
     })
 }
 
-/// Perform exact-target local wipe: BeginWipe → disk wipe → CompleteWipe.
+/// Perform exact-target local wipe with transactional ordering (R0.5 / REV-001):
 ///
-/// Wipe I/O runs only after `BeginWipe`. On I/O failure the actor moves to
-/// `Failed` without completing wipe (no further auto-delete).
+/// 1. `BeginWipe` (rejects other work; **drops client handle**)
+/// 2. Cancel and join all tasks for the pre-wipe generation
+/// 3. Clear session material and remove store key + exact account store
+/// 4. `CompleteWipe` (bumps generation) and align task supervisor
+///
+/// On I/O / vault failure the actor moves to `Failed` without `CompleteWipe`
+/// and never auto-retries delete. Client and tasks are already stopped first.
 pub async fn perform_local_wipe<K, S>(
     supervisor: &mut MatrixSupervisor,
     tasks: &mut TaskSupervisor,
@@ -105,6 +121,29 @@ where
         }
     }
 
+    // Client must already be dropped at BeginWipe (REV-001).
+    debug_assert!(
+        !supervisor.has_client(),
+        "BeginWipe must drop ClientHandle before store deletion"
+    );
+
+    // Quiesce async work for the generation that still owns the store.
+    let gen_pre_wipe = supervisor.session_generation();
+    let mut tasks_retired = tasks.retire_generation(gen_pre_wipe).await;
+
+    // Session material first so a vault failure does not delete stores while
+    // still holding secrets we meant to keep recoverable.
+    let session_material_cleared = match clear_session_material(session_vault, target.identity()) {
+        Ok(cleared) => cleared,
+        Err(e) => {
+            let _ = supervisor.fail(
+                crate::matrix::ipc::MatrixIpcErrorCategory::StoreUnavailable,
+                "r0.5-wipe-session-vault-failed",
+            );
+            return Err(e);
+        }
+    };
+
     let wipe = match wipe_account_store(target, Some(key_vault)) {
         Ok(r) => r,
         Err(e) => {
@@ -112,16 +151,14 @@ where
             // failure, and never auto-retry delete.
             let _ = supervisor.fail(
                 crate::matrix::ipc::MatrixIpcErrorCategory::StoreUnavailable,
-                "p2.6-wipe-io-failed",
+                "r0.5-wipe-io-failed",
             );
             return Err(e);
         }
     };
 
-    let session_material_cleared = clear_session_material(session_vault, target.identity())?;
-
     apply_cmd(supervisor, SupervisorCommand::CompleteWipe)?;
-    let tasks_retired = follow_supervisor_generation(tasks, supervisor).await;
+    tasks_retired += follow_supervisor_generation(tasks, supervisor).await;
 
     if let Some(m) = metrics {
         m.observe_supervisor(supervisor);

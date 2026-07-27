@@ -174,15 +174,16 @@ pub fn resolve(
         ) => Ok((
             S::Wiping,
             TransitionEffect {
-                // Keep handle until CompleteWipe so P2.6 can target exact store;
-                // drop on complete.
+                // R0.5 / REV-001: drop the live client *before* destructive wipe
+                // so SQLite handles cannot race against store deletion.
+                drop_client: true,
                 ..TransitionEffect::default()
             },
         )),
         (S::Wiping, C::CompleteWipe) => Ok((
             S::Empty,
             TransitionEffect {
-                drop_client: true,
+                drop_client: true, // idempotent if BeginWipe already dropped
                 clear_failure: true,
                 bump_generation: true, // epoch after wipe so stale IPC dies
                 ..TransitionEffect::default()
