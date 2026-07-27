@@ -24,6 +24,7 @@ keyring = { version = "3.6.3", default-features = false, features = [
 ] }
 tauri = { version = "2.11", features = ["tray-icon", "image-png"] }
 getrandom = "0.3"
+sha2 = "0.10"
 tauri-plugin-localhost = "2"
 tauri-plugin-window-state = "2"
 tauri-plugin-clipboard-manager = "2"
