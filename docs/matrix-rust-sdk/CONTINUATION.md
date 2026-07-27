@@ -14,6 +14,11 @@ merge to main with approval). Supersedes any older text that implies a runtime
 SDK selector, dual production backends, or hard-blocking product slices on residual
 R0 formal thrash.
 
+**Live human progress log (refresh on GitHub while away):**
+[`PROGRESS.md`](PROGRESS.md) —
+https://github.com/nepenth/synara-desktop/blob/feature/matrix-rust-sdk-full-replacement/docs/matrix-rust-sdk/PROGRESS.md  
+Orchestrators must update `PROGRESS.md` when PRs merge or priorities change.
+
 <!-- matrix-rust-program-status-link -->
 Current machine-readable and generated status:
 [`program-status.json`](program-status.json) and
@@ -25,9 +30,9 @@ evidence, is authoritative for current delivery and acceptance state.
 | Item | Value |
 |---|---|
 | Integration branch | `feature/matrix-rust-sdk-full-replacement` |
-| Live integration tip | Re-fetch; expected at/after `447cbdc` (#82 E1 tooling). Verify with `git rev-parse origin/feature/matrix-rust-sdk-full-replacement` |
-| Open product PR | [#107](https://github.com/nepenth/synara-desktop/pull/107) **P3.2** password/token login + device naming (merge when CI green) |
-| Docs-only | [#106](https://github.com/nepenth/synara-desktop/pull/106) E1 status handoff — non-blocking |
+| Live integration tip | Re-fetch; expected at/after `8b7d39e` (#110 P3.5). Verify with `git rev-parse origin/feature/matrix-rust-sdk-full-replacement` |
+| Progress log | [`PROGRESS.md`](PROGRESS.md) — remote human monitor |
+| Open PRs | [#112](https://github.com/nepenth/synara-desktop/pull/112) **P3.6** (product); [#111](https://github.com/nepenth/synara-desktop/pull/111) PROGRESS; [#109](https://github.com/nepenth/synara-desktop/pull/109) MiniMax |
 | Open PR to `main` | [#39](https://github.com/nepenth/synara-desktop/pull/39) — **do not merge without user approval** |
 | Product runtime | Still **`matrix-js-sdk` only** until atomic cutover; Rust = harness foundation / future sole owner |
 | Dual backend | **`false` forever** — no selector |
@@ -39,12 +44,13 @@ Always re-fetch and verify branch tips and PR state.
 
 ### Priority (user-approved 2026-07-27)
 
-1. **Land P3.2** (#107) when CI green — password/token login + D-NEW-DEVICE names under `matrix/auth/`.
-2. **Next vertical slices:** session secrets / restore (P3.5–P3.6) → sync + room list (P4.x) toward dogfood path.
-3. **Clean-break:** re-login / wipe local Matrix dirs OK; no elaborate JS→Rust token/device migration.
-4. **Do not** build dual-backend, runtime flags, or dual live clients.
-5. Residual R0 formal work is secondary; fix real safety only.
-6. Merge to `main` / #39 only with explicit user approval.
+1. **Update [`PROGRESS.md`](PROGRESS.md)** on every merge / priority change.
+2. **P3.2 + P3.5 landed.** **P3.6 session restore** open [#112](https://github.com/nepenth/synara-desktop/pull/112) (merge when CI green; rustfmt fix `78c61ea`).
+3. Then sync + room list (P4.1 SyncService readiness → P4.2 room list) toward dogfood sole-owner flip.
+4. **Clean-break:** re-login / wipe local Matrix dirs OK; no elaborate JS→Rust token/device migration.
+5. **Do not** build dual-backend, runtime flags, or dual live clients.
+6. Residual R0 formal work is secondary; fix real safety only.
+7. Merge to `main` / #39 only with explicit user approval.
 
 ### Next owner procedure
 
@@ -54,24 +60,25 @@ git checkout feature/matrix-rust-sdk-full-replacement
 git pull --ff-only
 npm run check:matrix-rust-guardrails
 (cd src-tauri && cargo test --locked matrix::)
-# Merge #107 when green; then P3.5/P3.6 or next slice per cutover-operating-model.md
+# Next: merge #112 when green; then P4.1 sync readiness. Keep PROGRESS.md current.
 ```
 
 ## Program accounting
 
-- Original-plan artifact inventory: see [`program-status.md`](program-status.md) (P3.2 open PR → 21/112 when ledger includes it).
+- Original-plan artifact inventory: see [`program-status.md`](program-status.md) (sync after P3.5; human view in [`PROGRESS.md`](PROGRESS.md)).
 - **0 of 15** strict phase gates closed (honest).
 - Shipping runtime: `matrix-js-sdk` only until cutover.
-- Rust: harness foundation growing toward sole owner.
+- Rust: harness foundation growing toward sole owner (login + session persist landed).
 
 ## Authoritative docs
 
+- **Progress log (remote):** [`PROGRESS.md`](PROGRESS.md)
 - Operating model: [`cutover-operating-model.md`](cutover-operating-model.md)
 - Plan: [`../matrix-rust-sdk-full-replacement-plan.md`](../matrix-rust-sdk-full-replacement-plan.md)
 - Full handoff: [`implementation-handoff.md`](implementation-handoff.md)
 - Migration UX (reauth / new device / no token continuity): [`migration-ux-decision.md`](migration-ux-decision.md)
 - Independent review (historical baseline): [`review-2026-07-25.md`](review-2026-07-25.md)
-- Current status: [`program-status.md`](program-status.md)
+- Machine status: [`program-status.md`](program-status.md)
 
 ## Non-negotiables
 
