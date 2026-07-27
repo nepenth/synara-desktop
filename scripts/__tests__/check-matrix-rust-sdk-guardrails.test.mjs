@@ -211,6 +211,60 @@ test("allows Client::builder under matrix/client_builder/ but bans login/sync", 
   }
 });
 
+test("allows restore_session under matrix/lifecycle/ but bans login/builder/sync", () => {
+  const { root, files } = makeTree({
+    "src-tauri/src/matrix/lifecycle/session_restore.rs":
+      "async fn restore(c: &Client, s: AuthSession) { let _ = c.restore_session(s).await; }\n",
+    "src-tauri/src/matrix/lifecycle/evil_login.rs":
+      "fn login(c: &Client) { let _ = c.matrix_auth().login_token(\"t\"); }\n",
+    "src-tauri/src/matrix/lifecycle/evil_builder.rs":
+      "fn open() { let _ = Client::builder(); }\n",
+    "src-tauri/src/matrix/lifecycle/evil_sync.rs":
+      "async fn s(c: &Client) { let _ = c.sync_once(Default::default()).await; }\n",
+    "src-tauri/src/matrix/supervisor/evil_restore.rs":
+      "async fn r(c: &Client, s: AuthSession) { let _ = c.restore_session(s).await; }\n",
+    "src-tauri/src/matrix/ipc/version.rs":
+      "pub const MATRIX_IPC_PROTOCOL_VERSION: u32 = 1;\n",
+    "synara/src/app/features/matrix-ipc/version.ts":
+      "export const MATRIX_IPC_PROTOCOL_VERSION = 1 as const;\n",
+  });
+  try {
+    const result = runGuardrails({ root, files });
+    assert.equal(result.ok, false, formatFail(result));
+    // restore under lifecycle must be allowed
+    assert.ok(
+      !result.violations.some(
+        (v) =>
+          v.rule === "no-production-matrix-client-in-matrix-module" &&
+          v.path.includes("lifecycle/session_restore.rs")
+      ),
+      formatFail(result)
+    );
+    // login/builder/sync under lifecycle must fail
+    for (const bad of ["evil_login.rs", "evil_builder.rs", "evil_sync.rs"]) {
+      assert.ok(
+        result.violations.some(
+          (v) =>
+            v.rule === "no-production-matrix-client-in-matrix-module" &&
+            v.path.includes(bad)
+        ),
+        formatFail(result)
+      );
+    }
+    // restore outside lifecycle must fail
+    assert.ok(
+      result.violations.some(
+        (v) =>
+          v.rule === "no-production-matrix-client-in-matrix-module" &&
+          v.path.includes("evil_restore.rs")
+      ),
+      formatFail(result)
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("allows password/token login under matrix/auth/ but bans Client::builder and sync", () => {
   const { root, files } = makeTree({
     "src-tauri/src/matrix/auth/login.rs":
