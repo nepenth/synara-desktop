@@ -24,12 +24,12 @@ evidence, is authoritative for current delivery and acceptance state.
 | Item | Value |
 |---|---|
 | Integration branch | `feature/matrix-rust-sdk-full-replacement` |
-| Live integration tip (this handoff) | `e7d9cb992b8f7e648a232b8d006f7f3e5f3c77d2` — **#103 status** on R0.7 slice 4 / #102; R0.8 slice-1 residual formal reports in flight; re-fetch and verify |
+| Live integration tip (this handoff) | `e259102774848cf94e7d36f790e77f5a9fd31f55` — **R0.8 slice 1 / #104 merged** (residual formal reports + inventory; no false accept); re-fetch and verify |
 | Historical audited snapshot | `edfefee499064b736985b6528896b693e5120f22` — bound to the 2026-07-25 review, not the live tip |
 | Merged product fixes | PR [#86](https://github.com/nepenth/synara-desktop/pull/86) R0.5 wipe (**accepted**); PR [#87](https://github.com/nepenth/synara-desktop/pull/87)+[#94](https://github.com/nepenth/synara-desktop/pull/94) R0.4 store confinement + native keyring (**accepted**); PR [#89](https://github.com/nepenth/synara-desktop/pull/89) R0.6 diagnostic privacy (**accepted**); PR [#91](https://github.com/nepenth/synara-desktop/pull/91)+[#92](https://github.com/nepenth/synara-desktop/pull/92) R0.3 IPC wire freeze (**accepted**); PR [#96](https://github.com/nepenth/synara-desktop/pull/96)+[#98](https://github.com/nepenth/synara-desktop/pull/98)+[#100](https://github.com/nepenth/synara-desktop/pull/100)+[#102](https://github.com/nepenth/synara-desktop/pull/102) R0.7 live CS + login-types + composed store + stale-gen/wrong-key residuals (**merged**, strict acceptance **open** — authenticated live sync residual) |
 | Parked R0.2-E1 PR | PR [#82](https://github.com/nepenth/synara-desktop/pull/82) — **draft / parked** (2× CI `v2 exceeded 512 MiB` residual; do not thrash) |
 | Open PR to `main` | [#39](https://github.com/nepenth/synara-desktop/pull/39) — **do not merge without user approval** |
-| Current execution | Dual-track: **R0.8 slice 1** residual formal reports + readiness inventory (no false gate close); P3.2 blocked by R0.2 / R0.7 residual / R0.8; parked #82 |
+| Current execution | Dual-track: R0.8 slice 1 **merged** (residual formal reports; gates still open); next clear R0.2/R0.7 residuals or P3.2-gated auth; P3.2 blocked by R0.2 / R0.7 residual / R0.8; parked #82 |
 
 Always re-fetch and verify branch tips and PR state.
 
@@ -44,12 +44,13 @@ Always re-fetch and verify branch tips and PR state.
 5. Inventory stays **20/112** until more P-tasks land.
 6. No dual-backend; no production cutover; no merge to `main` without explicit approval.
 
-### This fire (2026-07-27, R0.8 slice-1 residual formal reports)
+### This fire (2026-07-27, R0.8 slice-1 merge + status handoff)
 
-- Land R0.8 readiness inventory + Phase 0/1/2 + P3.1 formal reports with
-  verdict **`not_accepted`** (truthful residual; **no** phase-gate close).
-- Bind CI evidence for #102 `3a2fa6f` / merge `d3134f0` and tip `e7d9cb9`.
-- Ledger: R0.8 → `landed` / `pr_open` / strict **`open`**. R0.7 strict remains open.
+- Independently reviewed and merged PR **#104** (residual formal reports +
+  readiness inventory; all verdicts **`not_accepted`**; **no** phase-gate close).
+- Exact-head CI required gates green on #104 `6d3598a`.
+- **Merged** #104 → integration `e259102`.
+- Ledger: R0.8 → `landed` / `merged` / strict **`open`**. R0.7 strict remains open.
 - #82 remains parked draft. Inventory still 20/112.
 
 ### Next owner procedure
@@ -71,7 +72,7 @@ git pull --ff-only
 - **0 of 15** strict phase gates are closed.
 - R0.1 / R0.3 / R0.4 / R0.5 / R0.6 **accepted**. R0.2 remains `landed` / `pr_open` (parked draft) / strict acceptance `open`.
 - R0.7 `landed` / `merged` / strict acceptance **`open`** (slices 1–4).
-- R0.8 `landed` / `pr_open` (slice 1 residual formal reports) / strict acceptance **`open`**.
+- R0.8 `landed` / `merged` (slice 1 residual formal reports) / strict acceptance **`open`**.
 - Shipping runtime: `matrix-js-sdk` only; Rust harness foundation only.
 
 ## R0.8 formal report pointers
