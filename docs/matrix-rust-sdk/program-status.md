@@ -3,7 +3,7 @@
 > Generated from `program-status.json` by `scripts/check-matrix-rust-sdk-program-status.mjs`.
 > Do not hand-edit. Dated task evidence and the independent review remain historical records.
 
-As of: 2026-07-26
+As of: 2026-07-27
 
 Integration branch: `feature/matrix-rust-sdk-full-replacement`
 
@@ -11,9 +11,9 @@ Audited snapshot: `edfefee499064b736985b6528896b693e5120f22`
 
 ## Current execution
 
-- Active task: **R0.2**
-- Next task: **R0.3**
-- Blocked tasks: **P3.2** (by `R0.2`, `R0.3`, `R0.4`, `R0.5`, `R0.6`, `R0.7`, `R0.8`)
+- Active task: **R0.4**
+- Next task: **R0.6**
+- Blocked tasks: **P3.2** (by `R0.2`, `R0.3`, `R0.4`, `R0.6`, `R0.7`, `R0.8`)
 
 ## Inventory and runtime
 
@@ -50,10 +50,10 @@ Audited snapshot: `edfefee499064b736985b6528896b693e5120f22`
 | ID | Task | Artifact state | Integration state | Strict acceptance |
 |---|---|---|---|---|
 | R0.1 | Quality and metadata recovery | `landed` | `merged` | `accepted` |
-| R0.2 | Governance and Phase 0 evidence | `in_progress` | `pr_open` | `open` |
+| R0.2 | Governance and Phase 0 evidence | `landed` | `pr_open` | `open` |
 | R0.3 | IPC wire-contract correctness | `not_started` | `not_submitted` | `not_reviewed` |
-| R0.4 | Store confinement and key management | `not_started` | `not_submitted` | `not_reviewed` |
-| R0.5 | Safe destructive lifecycle | `not_started` | `not_submitted` | `not_reviewed` |
+| R0.4 | Store confinement and key management | `in_progress` | `pr_open` | `open` |
+| R0.5 | Safe destructive lifecycle | `landed` | `merged` | `accepted` |
 | R0.6 | Diagnostic privacy | `not_started` | `not_submitted` | `not_reviewed` |
 | R0.7 | Live Phase 2 and P3.1 adapters | `not_started` | `not_submitted` | `not_reviewed` |
 | R0.8 | Acceptance reports and CI evidence | `not_started` | `not_submitted` | `not_reviewed` |
