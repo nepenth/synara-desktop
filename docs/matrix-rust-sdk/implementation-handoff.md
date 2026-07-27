@@ -1,6 +1,6 @@
 # Matrix Rust SDK Replacement — Execution Handoff
 
-Last updated: 2026-07-26 (America/New_York)
+Last updated: 2026-07-27
 
 Authoritative program plan: [`../matrix-rust-sdk-full-replacement-plan.md`](../matrix-rust-sdk-full-replacement-plan.md)
 
@@ -14,7 +14,7 @@ Traceability artifacts:
 - [`feature-parity-traceability.json`](feature-parity-traceability.json)
 - [`feature-parity-traceability.md`](feature-parity-traceability.md)
 
-## Live continuation snapshot (2026-07-26)
+## Live continuation snapshot (2026-07-27)
 
 This section is the current handoff. The dated audit and former implementation
 ledger below remain historical evidence and must not override this snapshot or
@@ -22,12 +22,13 @@ the canonical status ledger.
 
 | Field | Current value |
 |---|---|
-| **Integration branch / E1 base** | `feature/matrix-rust-sdk-full-replacement`; E1 was rebased on `7ffd5885e456c2b99c42d834127bc1ec6b1956ce`, and the live integration tip is that commit or later |
-| **Active remediation** | R0.2 — `in_progress`, PR open, strict acceptance open |
-| **Active slice** | R0.2-E1 traceability tooling, PR [#82](https://github.com/nepenth/synara-desktop/pull/82), head `8ded923c6846194b3332c85dce69614368882729` |
-| **E1 acceptance** | Independently accepted locally; **not** CI-accepted, merged, or complete |
-| **CI prerequisite** | PR [#83](https://github.com/nepenth/synara-desktop/pull/83) merged as `7ffd588`; full Git history is now available to desktop validation |
-| **Next slice** | R0.2-E2, blocked until E1 has green exact-head CI and is merged |
+| **Integration branch / tip** | `feature/matrix-rust-sdk-full-replacement` @ `ba75e460109203b953bfcac77109bbd2d11268cb` (PR #87 / R0.4 on top of #86 / R0.5) |
+| **Dual-track strategy** | Land Critical/High product fixes first; timebox R0.2-E1 CI; do not block product work on R0.8 theater |
+| **R0.5 / REV-001** | **Merged and accepted** via PR [#86](https://github.com/nepenth/synara-desktop/pull/86) |
+| **R0.4 / REV-002/006/007** | **Merged** via PR [#87](https://github.com/nepenth/synara-desktop/pull/87) — absolute roots, symlink refuse, v1 SHA-256 segments, honest layout docs. Strict acceptance **open** (native keyring + live encrypted reopen residual) |
+| **Active remediation** | None in progress; **next = R0.6** diagnostic privacy (REV-003) |
+| **Also open** | R0.2-E1 PR [#82](https://github.com/nepenth/synara-desktop/pull/82) — tooling; merge if green; park residual if thrash |
+| **Next product slice** | Implement R0.6 privacy redaction; then R0.3 IPC wire freeze |
 | **Product runtime** | `matrix-js-sdk` only; Rust remains harness foundation; no dual backend or cutover |
 | **Progress** | 20/112 original artifacts (~18%); R0 work does not increment this; 0/15 strict phase gates closed |
 | **Main PR** | [#39](https://github.com/nepenth/synara-desktop/pull/39) remains open and must not merge without explicit user approval |
