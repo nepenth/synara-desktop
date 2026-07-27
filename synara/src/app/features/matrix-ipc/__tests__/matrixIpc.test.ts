@@ -226,13 +226,13 @@ test('error parser rejects secret-looking fields', () => {
       category: 'authentication_rejected',
       accessToken: 's3cret',
     }),
-    null
+    null,
   );
   assert.ok(
     parseMatrixIpcError({
       category: 'unknown',
       diagnosticId: 'diag-only',
-    })
+    }),
   );
 });
 
@@ -254,14 +254,14 @@ test('all control kinds round-trip through makeEnvelope + parse', () => {
       1,
       0,
       { kind: 'subscribe', payload: { topic: 'room_list', streamId: 's1', params: {} } },
-      { streamId: 's1' }
+      { streamId: 's1' },
     ),
     makeEnvelope(1, 0, { kind: 'unsubscribe', payload: { streamId: 's1' } }, { streamId: 's1' }),
     makeEnvelope(
       1,
       0,
       { kind: 'subscribed', payload: { streamId: 's1', topic: 'room_list' } },
-      { streamId: 's1' }
+      { streamId: 's1' },
     ),
     makeEnvelope(
       1,
@@ -270,7 +270,7 @@ test('all control kinds round-trip through makeEnvelope + parse', () => {
         kind: 'unsubscribed',
         payload: { streamId: 's1', resourcesReleased: true },
       },
-      { streamId: 's1' }
+      { streamId: 's1' },
     ),
     makeEnvelope(
       1,
@@ -284,7 +284,7 @@ test('all control kinds round-trip through makeEnvelope + parse', () => {
           body: { items: [] },
         },
       },
-      { streamId: 's1' }
+      { streamId: 's1' },
     ),
     makeEnvelope(
       1,
@@ -295,10 +295,10 @@ test('all control kinds round-trip through makeEnvelope + parse', () => {
           streamId: 's1',
           topic: 'timeline',
           idempotencyKey: 'idem-1',
-          body: { op: 'append' },
+          body: { items: [] },
         },
       },
-      { streamId: 's1' }
+      { streamId: 's1' },
     ),
     makeEnvelope(
       1,
@@ -307,7 +307,7 @@ test('all control kinds round-trip through makeEnvelope + parse', () => {
         kind: 'resync_required',
         payload: resyncPayloadForGap('s1', 2, 5),
       },
-      { streamId: 's1' }
+      { streamId: 's1' },
     ),
     makeEnvelope(1, 0, {
       kind: 'cancel',
@@ -395,7 +395,7 @@ test('sequence gap and stale generation compose resync', () => {
     7,
     0,
     { kind: 'resync_required', payload: gap },
-    { streamId: 'stream-t' }
+    { streamId: 'stream-t' },
   );
   const parsed = parseMatrixIpcEnvelope(JSON.parse(JSON.stringify(env)));
   assert.ok(parsed);
@@ -436,7 +436,7 @@ test('unknown resync and cancel reasons rejected', () => {
       kind: 'resync_required',
       payload: { reason: 'not_a_reason' },
     }),
-    null
+    null,
   );
   assert.equal(
     parseMatrixIpcEnvelope({
@@ -449,7 +449,7 @@ test('unknown resync and cancel reasons rejected', () => {
         reason: 'not_a_cancel_reason',
       },
     }),
-    null
+    null,
   );
 });
 

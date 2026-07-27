@@ -6,7 +6,8 @@ use super::wire_counter::{
     deserialize_optional_wire_counter, deserialize_wire_counter, serialize_wire_counter,
 };
 
-/// Stream topics scaffolded for later phases. Domain bodies arrive in P1.4.
+/// Stream topics for IPC subscriptions. Snapshot/delta bodies are topic-typed
+/// (see `stream_body::validate_stream_topic_body`, R0.3 / REV-005).
 /// Wire form is a stable snake_case string.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -107,7 +108,7 @@ pub enum CancelReason {
     Superseded,
 }
 
-// --- Control payloads (strongly typed; domain bodies deferred to P1.4) ---
+// --- Control payloads (strongly typed; snapshot/delta bodies topic-validated) ---
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -164,6 +165,10 @@ pub struct UnsubscribedPayload {
     pub resources_released: bool,
 }
 
+fn default_stream_body() -> serde_json::Value {
+    serde_json::Value::Object(serde_json::Map::new())
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SnapshotPayload {
@@ -171,8 +176,8 @@ pub struct SnapshotPayload {
     pub topic: StreamTopic,
     /// Opaque snapshot identity for debugging / resync correlation.
     pub snapshot_id: String,
-    /// Domain body placeholder — typed DTOs land in P1.4.
-    #[serde(default)]
+    /// Topic-bound domain body (validated via `validate_stream_topic_body`).
+    #[serde(default = "default_stream_body")]
     pub body: serde_json::Value,
 }
 
@@ -184,8 +189,8 @@ pub struct DeltaPayload {
     /// Optional idempotency key for duplicate-delta coalescing.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub idempotency_key: Option<String>,
-    /// Domain body placeholder — typed DTOs land in P1.4.
-    #[serde(default)]
+    /// Topic-bound domain body (validated via `validate_stream_topic_body`).
+    #[serde(default = "default_stream_body")]
     pub body: serde_json::Value,
 }
 

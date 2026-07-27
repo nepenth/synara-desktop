@@ -1,6 +1,6 @@
 /**
  * Stream topics, lifecycle states, and control payload types (P1.3).
- * Domain bodies for snapshot/delta are opaque until P1.4.
+ * Snapshot/delta bodies are topic-typed (see streamBody.ts, R0.3 / REV-005).
  */
 
 export const STREAM_TOPICS = [
@@ -16,7 +16,7 @@ export const STREAM_TOPICS = [
   'send_queue',
 ] as const;
 
-export type StreamTopic = typeof STREAM_TOPICS[number];
+export type StreamTopic = (typeof STREAM_TOPICS)[number];
 
 export const STREAM_LIFECYCLE_STATES = [
   'idle',
@@ -29,7 +29,7 @@ export const STREAM_LIFECYCLE_STATES = [
   'failed',
 ] as const;
 
-export type StreamLifecycleState = typeof STREAM_LIFECYCLE_STATES[number];
+export type StreamLifecycleState = (typeof STREAM_LIFECYCLE_STATES)[number];
 
 export const RESYNC_REASONS = [
   'sequence_gap',
@@ -39,7 +39,7 @@ export const RESYNC_REASONS = [
   'supervisor_reset',
 ] as const;
 
-export type ResyncReason = typeof RESYNC_REASONS[number];
+export type ResyncReason = (typeof RESYNC_REASONS)[number];
 
 export const CANCEL_REASONS = [
   'client_request',
@@ -49,7 +49,7 @@ export const CANCEL_REASONS = [
   'superseded',
 ] as const;
 
-export type CancelReason = typeof CANCEL_REASONS[number];
+export type CancelReason = (typeof CANCEL_REASONS)[number];
 
 export type HelloPayload = {
   clientProtocolVersion: number;
@@ -85,7 +85,7 @@ export type SnapshotPayload = {
   streamId: string;
   topic: StreamTopic;
   snapshotId: string;
-  /** Domain body placeholder — typed DTOs in P1.4. */
+  /** Topic-bound domain body (validated via validateStreamTopicBody). */
   body?: unknown;
 };
 
@@ -93,7 +93,7 @@ export type DeltaPayload = {
   streamId: string;
   topic: StreamTopic;
   idempotencyKey?: string;
-  /** Domain body placeholder — typed DTOs in P1.4. */
+  /** Topic-bound domain body (validated via validateStreamTopicBody). */
   body?: unknown;
 };
 

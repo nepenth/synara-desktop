@@ -32,7 +32,7 @@ export type SequenceOutcome =
  */
 export function checkSequence(
   lastApplied: number | null | undefined,
-  incoming: number
+  incoming: number,
 ): SequenceOutcome {
   if (!isWireCounter(incoming)) {
     return {
@@ -66,7 +66,7 @@ export function checkSequence(
 
 export function checkSessionGeneration(
   liveGeneration: number,
-  envelopeGeneration: number
+  envelopeGeneration: number,
 ): MatrixIpcError | null {
   if (liveGeneration === envelopeGeneration) return null;
   return {
@@ -86,7 +86,7 @@ export function checkProtocolVersion(protocolVersion: number): MatrixIpcError | 
 export function resyncPayloadForGap(
   streamId: string,
   lastApplied: number,
-  observed: number
+  observed: number,
 ): ResyncRequiredPayload {
   return {
     streamId,
@@ -121,7 +121,7 @@ export type StreamLifecycleEvent =
  */
 export function transitionStreamLifecycle(
   current: StreamLifecycleState,
-  event: StreamLifecycleEvent
+  event: StreamLifecycleEvent,
 ): StreamLifecycleState | null {
   const key = `${current}|${event}`;
   const table: Record<string, StreamLifecycleState> = {
@@ -150,7 +150,7 @@ export function transitionStreamLifecycle(
 
 export function applyDeltaSequence(
   lastApplied: number | null | undefined,
-  incoming: number
+  incoming: number,
 ): { outcome: SequenceOutcome; event: StreamLifecycleEvent } {
   const outcome = checkSequence(lastApplied, incoming);
   let event: StreamLifecycleEvent;

@@ -86,6 +86,9 @@ const INVALID_FIXTURES = [
   'invalid_error_with_secret_field.json',
   'invalid_sequence_above_wire_max.json',
   'invalid_stream_id_mismatch.json',
+  'invalid_snapshot_body_secret_field.json',
+  'invalid_snapshot_body_wrong_topic_shape.json',
+  'invalid_delta_body_media_bytes.json',
 ] as const;
 
 // ---------------------------------------------------------------------------
@@ -118,6 +121,41 @@ test('R0.3 wire counters reject NaN fractions overflow and stream id mismatch', 
 
   assert.equal(parseMatrixIpcEnvelope(loadFixture('invalid_sequence_above_wire_max.json')), null);
   assert.equal(parseMatrixIpcEnvelope(loadFixture('invalid_stream_id_mismatch.json')), null);
+});
+
+test('R0.3 topic-bound stream bodies reject secrets wrong shape and media bytes', () => {
+  assert.equal(
+    parseMatrixIpcEnvelope(loadFixture('invalid_snapshot_body_secret_field.json')),
+    null,
+  );
+  assert.equal(
+    parseMatrixIpcEnvelope(loadFixture('invalid_snapshot_body_wrong_topic_shape.json')),
+    null,
+  );
+  assert.equal(parseMatrixIpcEnvelope(loadFixture('invalid_delta_body_media_bytes.json')), null);
+
+  const okRoomList = parseMatrixIpcEnvelope(
+    loadFixture('valid_snapshot_with_room_summary_body.json'),
+  );
+  assert.ok(okRoomList);
+  assert.equal(okRoomList.kind, 'snapshot');
+
+  // Wrong topic shape inline
+  assert.equal(
+    parseMatrixIpcEnvelope({
+      protocolVersion: 1,
+      sessionGeneration: 1,
+      streamId: 's1',
+      sequence: 1,
+      kind: 'delta',
+      payload: {
+        streamId: 's1',
+        topic: 'timeline',
+        body: { op: 'append' },
+      },
+    }),
+    null,
+  );
 
   // MAX_WIRE_COUNTER is accepted.
   const maxOk = parseMatrixIpcEnvelope({
@@ -155,7 +193,7 @@ test('P1.5 typical fixture envelope within payload bounds', () => {
 // ---------------------------------------------------------------------------
 
 test('P1.5 all kinds constructible via makeEnvelope and re-parse', () => {
-  const samples: Array<{ kind: typeof MATRIX_IPC_KINDS[number]; payload: unknown }> = [
+  const samples: Array<{ kind: (typeof MATRIX_IPC_KINDS)[number]; payload: unknown }> = [
     {
       kind: 'hello',
       payload: { clientProtocolVersion: 1, clientName: 'synara-web' },
@@ -189,7 +227,7 @@ test('P1.5 all kinds constructible via makeEnvelope and re-parse', () => {
         streamId: 's1',
         topic: 'timeline',
         idempotencyKey: 'idem-1',
-        body: { op: 'upsert' },
+        body: { items: [] },
       },
     },
     {
@@ -233,7 +271,7 @@ test('P1.5 all kinds constructible via makeEnvelope and re-parse', () => {
       i,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       { kind: sample.kind, payload: sample.payload } as any,
-      { requestId: `req-${i}`, streamId: needsStreamId ? 's1' : undefined }
+      { requestId: `req-${i}`, streamId: needsStreamId ? 's1' : undefined },
     );
     assert.equal(env.protocolVersion, MATRIX_IPC_PROTOCOL_VERSION);
     assert.equal(env.kind, sample.kind);
@@ -259,7 +297,7 @@ test('P1.5 all error categories parse and remain privacy-safe', () => {
         accessToken: 's3cret',
       }),
       null,
-      `category ${category} must reject secret fields`
+      `category ${category} must reject secret fields`,
     );
   }
 });
@@ -289,7 +327,7 @@ test('P1.5 lifecycle control kind fixtures', () => {
   assert.equal(parseMatrixIpcEnvelope(loadFixture('valid_subscribed.json'))?.kind, 'subscribed');
   assert.equal(
     parseMatrixIpcEnvelope(loadFixture('valid_unsubscribed.json'))?.kind,
-    'unsubscribed'
+    'unsubscribed',
   );
   assert.equal(parseMatrixIpcEnvelope(loadFixture('valid_cancel.json'))?.kind, 'cancel');
   assert.equal(parseMatrixIpcEnvelope(loadFixture('valid_ping.json'))?.kind, 'ping');
@@ -330,7 +368,7 @@ test('P1.5 unknown kind rejected at boundary', () => {
       kind: 'login',
       payload: {},
     }),
-    null
+    null,
   );
   assert.equal(
     parseMatrixIpcEnvelope({
@@ -340,7 +378,7 @@ test('P1.5 unknown kind rejected at boundary', () => {
       kind: 'future_experimental_kind',
       payload: { anything: true },
     }),
-    null
+    null,
   );
 });
 
@@ -354,7 +392,7 @@ test('P1.5 unknown error category / topic / resync reason rejected', () => {
       kind: 'subscribe',
       payload: { topic: 'not_a_real_topic', streamId: 's' },
     }),
-    null
+    null,
   );
   assert.equal(
     parseMatrixIpcEnvelope({
@@ -364,7 +402,7 @@ test('P1.5 unknown error category / topic / resync reason rejected', () => {
       kind: 'resync_required',
       payload: { reason: 'not_a_resync_reason' },
     }),
-    null
+    null,
   );
 });
 
@@ -380,7 +418,7 @@ test('P1.5 missing required envelope fields rejected', () => {
       kind: 'ping',
       payload: {},
     }),
-    null
+    null,
   );
   assert.equal(
     parseMatrixIpcEnvelope({
@@ -389,7 +427,7 @@ test('P1.5 missing required envelope fields rejected', () => {
       kind: 'ping',
       payload: {},
     }),
-    null
+    null,
   );
   assert.equal(
     parseMatrixIpcEnvelope({
@@ -398,7 +436,7 @@ test('P1.5 missing required envelope fields rejected', () => {
       kind: 'ping',
       payload: {},
     }),
-    null
+    null,
   );
   assert.equal(
     parseMatrixIpcEnvelope({
@@ -407,7 +445,7 @@ test('P1.5 missing required envelope fields rejected', () => {
       sequence: 0,
       payload: {},
     }),
-    null
+    null,
   );
   assert.equal(
     parseMatrixIpcEnvelope({
@@ -416,7 +454,7 @@ test('P1.5 missing required envelope fields rejected', () => {
       sequence: 0,
       kind: 'ping',
     }),
-    null
+    null,
   );
 });
 
@@ -429,7 +467,7 @@ test('P1.5 wrong types rejected', () => {
       kind: 'ping',
       payload: {},
     }),
-    null
+    null,
   );
   assert.equal(
     parseMatrixIpcEnvelope({
@@ -439,7 +477,7 @@ test('P1.5 wrong types rejected', () => {
       kind: 'ping',
       payload: {},
     }),
-    null
+    null,
   );
   assert.equal(
     parseMatrixIpcEnvelope({
@@ -449,7 +487,7 @@ test('P1.5 wrong types rejected', () => {
       kind: 'ping',
       payload: {},
     }),
-    null
+    null,
   );
   assert.equal(
     parseMatrixIpcEnvelope({
@@ -459,7 +497,7 @@ test('P1.5 wrong types rejected', () => {
       kind: 'ping',
       payload: 'not-an-object',
     }),
-    null
+    null,
   );
   assert.equal(
     parseMatrixIpcEnvelope({
@@ -469,7 +507,7 @@ test('P1.5 wrong types rejected', () => {
       kind: 'ping',
       payload: [],
     }),
-    null
+    null,
   );
 });
 
@@ -482,7 +520,7 @@ test('P1.5 invalid kind-specific required fields rejected', () => {
       kind: 'hello',
       payload: { clientName: 'synara-web' },
     }),
-    null
+    null,
   );
   assert.equal(
     parseMatrixIpcEnvelope({
@@ -492,7 +530,7 @@ test('P1.5 invalid kind-specific required fields rejected', () => {
       kind: 'subscribe',
       payload: { topic: 'room_list' },
     }),
-    null
+    null,
   );
   assert.equal(
     parseMatrixIpcEnvelope({
@@ -502,7 +540,7 @@ test('P1.5 invalid kind-specific required fields rejected', () => {
       kind: 'snapshot',
       payload: { streamId: 's1', topic: 'room_list', body: {} },
     }),
-    null
+    null,
   );
   assert.equal(
     parseMatrixIpcEnvelope({
@@ -512,7 +550,7 @@ test('P1.5 invalid kind-specific required fields rejected', () => {
       kind: 'cancel',
       payload: { reason: 'timeout' },
     }),
-    null
+    null,
   );
 });
 
@@ -544,7 +582,7 @@ test('P1.5 sequence gap produces resync_required payload and lifecycle event', (
       kind: 'resync_required',
       payload,
     },
-    { streamId: 'stream-room-list-1' }
+    { streamId: 'stream-room-list-1' },
   );
   const parsed = parseMatrixIpcEnvelope(env);
   assert.ok(parsed);
