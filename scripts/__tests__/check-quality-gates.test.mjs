@@ -14,7 +14,11 @@ const iosBuildStep = `
 
 const ciWorkflow = `
 jobs:
+  changes:
+    name: Detect CI scopes
+    runs-on: ubuntu-latest
   validate:
+    needs: [changes]
     runs-on: ubuntu-latest
     steps:
       - run: npm run check:release-updater
@@ -27,10 +31,12 @@ jobs:
       - run: npm run check:security
         working-directory: synara
   ios-tests:
+    needs: [changes]
     runs-on: macos-latest
 ${iosBuildStep}
   synapse-integration:
     name: Synapse two-client integration
+    needs: [changes]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -45,16 +51,38 @@ ${iosBuildStep}
   quality-gate:
     name: Quality gate
     if: always()
-    needs: [validate, ios-tests, synapse-integration]
+    needs: [changes, validate, ios-tests, synapse-integration]
     runs-on: ubuntu-latest
     steps:
-      - name: Require every client validation job
+      - name: Require every scheduled client validation job
         env:
           DESKTOP_RESULT: \${{ needs.validate.result }}
           IOS_RESULT: \${{ needs.ios-tests.result }}
           SYNAPSE_RESULT: \${{ needs.synapse-integration.result }}
+          CHANGES_RESULT: \${{ needs.changes.result }}
         run: |
-          if [[ "$DESKTOP_RESULT" != "success" || "$IOS_RESULT" != "success" || "$SYNAPSE_RESULT" != "success" ]]; then
+          set -euo pipefail
+          if [[ "$CHANGES_RESULT" != "success" ]]; then
+            echo "Detect CI scopes: $CHANGES_RESULT" >&2
+            exit 1
+          fi
+          ok() {
+            local name="$1" result="$2"
+            case "$result" in
+              success|skipped)
+                echo "$name: $result"
+                ;;
+              *)
+                echo "$name: $result" >&2
+                return 1
+                ;;
+            esac
+          }
+          fail=0
+          ok "Desktop/runtime validation" "$DESKTOP_RESULT" || fail=1
+          ok "iOS simulator tests" "$IOS_RESULT" || fail=1
+          ok "Synapse two-client integration" "$SYNAPSE_RESULT" || fail=1
+          if [[ "$fail" -ne 0 ]]; then
             exit 1
           fi
 `;
@@ -313,12 +341,12 @@ test("rejects an exact-tag iOS job that does not invoke the test script", () => 
 test("rejects an always aggregate that never fails", () => {
   const result = inspect({
     ciWorkflow: ciWorkflow.replace(
-      "            exit 1",
-      "            echo ignored"
+      '          if [[ "$fail" -ne 0 ]]; then\n            exit 1\n          fi',
+      '          if [[ "$fail" -ne 0 ]]; then\n            echo ignored\n          fi'
     ),
   });
   assert.equal(result.ok, false);
-  assert.match(result.errors.join("\n"), /explicitly exit 1/i);
+  assert.match(result.errors.join("\n"), /exit 1 on failure|success\|skipped/i);
 });
 
 test("rejects quoted, echoed, and short-circuited aggregate failures", () => {
@@ -329,25 +357,28 @@ test("rejects quoted, echoed, and short-circuited aggregate failures", () => {
   ]) {
     const result = inspect({
       ciWorkflow: ciWorkflow.replace(
-        "            exit 1",
-        `            ${replacement}`
+        '          if [[ "$fail" -ne 0 ]]; then\n            exit 1\n          fi',
+        `          if [[ "$fail" -ne 0 ]]; then\n            ${replacement}\n          fi`
       ),
     });
     assert.equal(result.ok, false, replacement);
-    assert.match(result.errors.join("\n"), /explicitly exit 1/i);
+    assert.match(
+      result.errors.join("\n"),
+      /exit 1 on failure|success\|skipped/i
+    );
   }
 
-  for (const prefix of ["exit 0", "true"]) {
-    const result = inspect({
-      ciWorkflow: ciWorkflow.replace(
-        '          if [[ "$DESKTOP_RESULT"',
-        `          ${prefix}\n          if [[ "$DESKTOP_RESULT"`
-      ),
-    });
-    assert.equal(result.ok, false, prefix);
-    assert.match(result.errors.join("\n"), /explicitly exit 1/i);
-  }
+  // Dropping success|skipped acceptance must fail the checker.
+  const noSkip = inspect({
+    ciWorkflow: ciWorkflow.replace("success|skipped", "success_only"),
+  });
+  assert.equal(resultOk(noSkip), false);
+  assert.match(noSkip.errors.join("\n"), /success\|skipped|exit 1 on failure/i);
 });
+
+function resultOk(result) {
+  return result.ok;
+}
 
 test("rejects missing and no-op Synapse integration execution", () => {
   for (const workflow of [
