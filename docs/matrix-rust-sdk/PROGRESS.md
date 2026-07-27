@@ -9,8 +9,8 @@
 
 | Field | Value |
 | --- | --- |
-| Last updated (UTC) | **2026-07-27 ~17:58** |
-| Integration tip | `ed5b3c3` — Merge #122 P5.3 timeline pagination |
+| Last updated (UTC) | **2026-07-27 ~18:40** |
+| Integration tip | `c6cbc2c` — Merge #124 P6.1 outbound send queue |
 | Product runtime | Still **`matrix-js-sdk` only** until atomic sole-owner cutover |
 | Dual backend | **`false`** (forbidden forever) |
 | Operating model | [cutover-operating-model.md](cutover-operating-model.md) |
@@ -25,12 +25,12 @@
 
 | | |
 | --- | --- |
-| **Now** | **#122 P5.3 merged.** Primary next: **#124 P6.1** send queue (tip-updated, CI re-run). |
-| **Inventory** | ~31/112 original task artifacts when program-status is synced (through P5.3 landed; see ledger). |
+| **Now** | **#124 P6.1 merged.** Primary next: **#125 P6.2** receipts (tip-updated after #124; CI re-run). |
+| **Inventory** | ~32/112 original task artifacts when program-status is synced (through P6.1 landed; see ledger). |
 | **Phase gates** | **0 / 15** strict gates closed (honest). |
-| **Open PRs → integration** | [#124](https://github.com/nepenth/synara-desktop/pull/124)–[#128](https://github.com/nepenth/synara-desktop/pull/128) send/receipts/typing/media; [#109](https://github.com/nepenth/synara-desktop/pull/109) MiniMax (deprioritize). |
-| **Blocked on** | CI green for #124. Required: Quality gate + Desktop package gate. |
-| **Dogfood path** | diffs ✅ → pagination ✅ (**#122**) → **send (#124)** → receipts/typing/media. |
+| **Open PRs → integration** | [#125](https://github.com/nepenth/synara-desktop/pull/125)–[#128](https://github.com/nepenth/synara-desktop/pull/128) receipts/typing/media; [#109](https://github.com/nepenth/synara-desktop/pull/109) MiniMax (deprioritize). |
+| **Blocked on** | CI green for #125 after tip-merge with #124. Required: Quality gate + Desktop package gate. |
+| **Dogfood path** | diffs ✅ → pagination ✅ → send ✅ (**#124**) → **receipts (#125)** → typing/media. |
 
 ---
 
@@ -58,6 +58,8 @@ Update rules:
 
 | When (UTC) | Item | Result | Notes |
 | --- | --- | --- | --- |
+| ~18:39 | **P6.1** outbound send queue foundation | **Merged** [#124](https://github.com/nepenth/synara-desktop/pull/124) | SendQueue + LocalEchoState; tip `c6cbc2c`. Quality ✅; package gate after Arch Docker Hub flake re-run. |
+| ~18:35 | Tip-merge P6.2/P6.3/P6.4 onto tip | **Pushed** | #125/#127/#128 had green CI on pre-#124 tip; re-tip after #124. Local receipts 7/7 + send 8/8. |
 | ~17:58 | **P5.3** timeline pagination foundation | **Merged** [#122](https://github.com/nepenth/synara-desktop/pull/122) | TimelinePagination state machine; tip `ed5b3c3`. |
 | ~16:00 | **P4.2** room-list snapshot/delta | **Merged** [#115](https://github.com/nepenth/synara-desktop/pull/115) | Pure projection + ordered ops; tip `c2cdc0b`. iOS/Synapse skipped. |
 | ~15:56 | **P6.1** outbound send queue foundation | **PR open** [#124](https://github.com/nepenth/synara-desktop/pull/124) | LocalEchoState queue; no Room::send; local 8/8. Disk pressure: cleaned cargo target (-34GB). |
@@ -111,13 +113,13 @@ Update rules:
 | 4 | Session restore after restart (P3.6) | **Done** (merged #112) |
 | 5 | Sync readiness / reconnect (P4.1) | **Done** (merged #114) |
 | 6 | Room list snapshot/delta (P4.2) | **Done** (merged #115) |
-| 7 | Membership / unread / invites (P4.3) | **In PR** [#116](https://github.com/nepenth/synara-desktop/pull/116) |
-| 8 | Favorite / low-priority / recent (P4.4) | **In PR** [#117](https://github.com/nepenth/synara-desktop/pull/117) |
-| 9 | Space hierarchy (P4.5) | **In PR** [#118](https://github.com/nepenth/synara-desktop/pull/118) |
-| 10 | Timeline registry (P5.1) | **In PR** [#119](https://github.com/nepenth/synara-desktop/pull/119) |
-| 11 | Timeline diffs (P5.2) | **In PR** [#121](https://github.com/nepenth/synara-desktop/pull/121) |
+| 7 | Membership / unread / invites (P4.3) | **Done** (merged #116) |
+| 8 | Favorite / low-priority / recent (P4.4) | **Done** (merged #117) |
+| 9 | Space hierarchy (P4.5) | **Done** (merged #118) |
+| 10 | Timeline registry (P5.1) | **Done** (merged #119) |
+| 11 | Timeline diffs (P5.2) | **Done** (merged #121) |
 | 12 | Timeline pagination (P5.3) | **Done** (merged #122) |
-| 13 | Send queue / local echo (P6.1) | **In PR** [#124](https://github.com/nepenth/synara-desktop/pull/124) |
+| 13 | Send queue / local echo (P6.1) | **Done** (merged #124) |
 | 10 | Crypto / verification / recovery | Not started |
 | 11 | Atomic sole-owner cutover + js-sdk burn-down (P11) | Not started |
 | 12 | Merge to `main` (#39) | Needs **explicit user approval** |
