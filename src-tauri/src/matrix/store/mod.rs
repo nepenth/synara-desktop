@@ -1,11 +1,11 @@
-//! P2.2 — Per-account Matrix store paths and encryption-key foundation.
+//! P2.2 / R0.4 — Per-account Matrix store paths and encryption-key foundation.
 //!
 //! Derives isolated store directories from a non-secret account identity and
-//! manages store encryption keys through an abstract vault (memory for tests;
-//! OS keyring adapter for later production wiring).
+//! manages store encryption keys through an abstract vault:
+//! - [`KeyringStoreKeyVault`] — production OS credential store (macOS/Linux)
+//! - [`InMemoryStoreKeyVault`] — unit/integration harness only
 //!
-//! **Harness / unit tests only until cutover.** No `matrix_sdk::Client` builder,
-//! no production login/sync, no Tauri Matrix commands, no dual-backend.
+//! **No production login/sync, no Tauri Matrix commands, no dual-backend.**
 //! Store open failures **never** auto-delete on-disk data (plan §8.3).
 //!
 //! Authoritative design note: `docs/matrix-rust-sdk/p2.2-store-paths-keys.md`
@@ -21,8 +21,8 @@ mod paths;
 pub use identity::{AccountIdentity, AccountIdentityError};
 pub use key_material::{StoreKeyId, StoreKeyMaterial, STORE_KEY_LEN, STORE_KEY_SERVICE};
 pub use key_vault::{
-    get_or_create_store_key, InMemoryStoreKeyVault, KeyringStoreKeyRefs, StoreKeyVault,
-    StoreKeyVaultError,
+    get_or_create_store_key, InMemoryStoreKeyVault, KeyringStoreKeyRefs, KeyringStoreKeyVault,
+    StoreKeyVault, StoreKeyVaultError,
 };
 pub use paths::{StoreLayout, StorePathError, StorePaths, MATRIX_STORE_ROOT_SEGMENT};
 
