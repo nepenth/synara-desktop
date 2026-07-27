@@ -494,11 +494,7 @@ async fn wipe_quiesces_client_and_tasks_before_store_deletion() {
         )
         .unwrap();
     let store_vault = InMemoryStoreKeyVault::new();
-    let _ = get_or_create_store_key(
-        &store_vault,
-        &StoreKeyId::from_identity(&alice()),
-    )
-    .unwrap();
+    let _ = get_or_create_store_key(&store_vault, &StoreKeyId::from_identity(&alice())).unwrap();
 
     let target = WipeTarget::resolve(&root, alice()).unwrap();
     let outcome = perform_local_wipe(
@@ -529,10 +525,7 @@ async fn wipe_quiesces_client_and_tasks_before_store_deletion() {
 async fn wipe_session_vault_failure_fails_supervisor_without_deleting_store() {
     struct FailingSessionVault;
     impl SessionMaterialVault for FailingSessionVault {
-        fn get(
-            &self,
-            _id: &SessionMaterialId,
-        ) -> Result<Option<SessionMaterial>, LifecycleError> {
+        fn get(&self, _id: &SessionMaterialId) -> Result<Option<SessionMaterial>, LifecycleError> {
             Ok(None)
         }
         fn set(
@@ -582,7 +575,10 @@ async fn wipe_session_vault_failure_fails_supervisor_without_deleting_store() {
     assert!(!supervisor.has_client());
     // Store must still exist — vault failed before wipe_account_store.
     assert!(paths.account_root().is_dir());
-    assert_eq!(fs::read(paths.state_dir().join("state.db")).unwrap(), b"state-blob");
+    assert_eq!(
+        fs::read(paths.state_dir().join("state.db")).unwrap(),
+        b"state-blob"
+    );
     // Tasks for pre-wipe generation were retired before vault clear.
     assert_eq!(tasks.running_count(), 0);
 
