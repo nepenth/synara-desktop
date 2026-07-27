@@ -1,0 +1,1114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://synara.invalid/schemas/matrix-rust-sdk/feature-parity-audit-normalization.schema.json",
+  "title": "Synara R0.2-E durable feature-parity audit normalization",
+  "description": "Closed version-1 contract for the self-contained, fully expanded, 119-row source audit. Test-source inspection is not runtime validation evidence.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "audit_id",
+    "subject",
+    "source_inputs",
+    "coverage",
+    "vocabularies",
+    "architecture_decisions",
+    "blockers_and_risks",
+    "rows",
+    "normalization_rules",
+    "review",
+    "digests"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "audit_id": { "const": "R0.2-E-AUDIT-NORMALIZATION-119" },
+    "subject": { "$ref": "#/$defs/auditSubject" },
+    "source_inputs": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "items": { "$ref": "#/$defs/sourceInput" }
+    },
+    "coverage": { "$ref": "#/$defs/coverage" },
+    "vocabularies": { "$ref": "#/$defs/vocabularies" },
+    "architecture_decisions": {
+      "type": "array",
+      "minItems": 26,
+      "maxItems": 26,
+      "items": { "$ref": "#/$defs/architectureDecision" }
+    },
+    "blockers_and_risks": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/blocker" }
+    },
+    "rows": {
+      "type": "array",
+      "minItems": 119,
+      "maxItems": 119,
+      "items": { "$ref": "#/$defs/requirement" }
+    },
+    "normalization_rules": { "$ref": "#/$defs/normalizationRules" },
+    "review": { "$ref": "#/$defs/auditReview" },
+    "digests": { "$ref": "#/$defs/auditDigests" }
+  },
+  "$defs": {
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "\\S"
+    },
+    "nullableNonEmptyString": {
+      "type": ["string", "null"],
+      "minLength": 1,
+      "pattern": "\\S"
+    },
+    "id": {
+      "type": "string",
+      "minLength": 2,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$"
+    },
+    "fullSha": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "repositoryPath": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!/)(?![A-Za-z]:)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//)(?!.*[\\\\\\u0000-\\u001F\\u007F])(?!.*\\/$).+$"
+    },
+    "requirementId": {
+      "type": "string",
+      "pattern": "^FR-7\\.(?:[1-9]|1[01])-[0-9]{3}$"
+    },
+    "clauseId": {
+      "type": "string",
+      "pattern": "^FR-7\\.(?:[1-9]|1[01])-[0-9]{3}\\.C[0-9]{3}$"
+    },
+    "sectionId": {
+      "enum": [
+        "7.1",
+        "7.2",
+        "7.3",
+        "7.4",
+        "7.5",
+        "7.6",
+        "7.7",
+        "7.8",
+        "7.9",
+        "7.10",
+        "7.11"
+      ]
+    },
+    "uniqueStrings": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/nonEmptyString" }
+    },
+    "nonEmptyUniqueStrings": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/nonEmptyString" }
+    },
+    "uniqueIds": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/id" }
+    },
+    "nonEmptyUniqueIds": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/id" }
+    },
+    "lineRange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start", "end"],
+      "properties": {
+        "start": { "type": "integer", "minimum": 1 },
+        "end": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "artifactIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "blob_oid", "file_sha256"],
+      "properties": {
+        "path": { "const": "docs/matrix-rust-sdk-full-replacement-plan.md" },
+        "blob_oid": { "const": "e949fc5c3e64e5a93a675dc96c3a7e37db7a5152" },
+        "file_sha256": {
+          "const": "a6e47c0ccaba9ea67ba82e6ddb981443b963ad11f6895ad232023c0494f66b5f"
+        }
+      }
+    },
+    "riskRegisterIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "commit_sha",
+        "path",
+        "blob_oid",
+        "file_sha256",
+        "canonical_sha256"
+      ],
+      "properties": {
+        "commit_sha": {
+          "const": "c358502cf99ade2b81abf85ad954e21bf228dc33"
+        },
+        "path": {
+          "const": "docs/matrix-rust-sdk/security-risk-register.json"
+        },
+        "blob_oid": { "const": "2737ba78be3ad2a41a5952b9acc187949bf831a9" },
+        "file_sha256": {
+          "const": "c07b7540b931e244e43f0dc750f52ed564393dc71f2543f1692aad916eb217f6"
+        },
+        "canonical_sha256": {
+          "const": "a7e6457ff8a33d70a49f5289b245aebb133c4e803f2e19d5a13bc4872a10bda6"
+        }
+      }
+    },
+    "auditSubject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repository",
+        "source_commit",
+        "plan",
+        "risk_register",
+        "audit_method"
+      ],
+      "properties": {
+        "repository": { "const": "synara-desktop" },
+        "source_commit": {
+          "const": "2aa6d96f9b63aad64a14feac23df2f694857be85"
+        },
+        "plan": { "$ref": "#/$defs/artifactIdentity" },
+        "risk_register": { "$ref": "#/$defs/riskRegisterIdentity" },
+        "audit_method": { "$ref": "#/$defs/nonEmptyString" }
+      }
+    },
+    "sourceInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "logical_id",
+        "section_range",
+        "row_count",
+        "sha256",
+        "adapter_version",
+        "ingestion_notes"
+      ],
+      "properties": {
+        "logical_id": { "$ref": "#/$defs/id" },
+        "section_range": {
+          "type": "string",
+          "pattern": "^7\\.(?:[1-9]|1[01])(?:-7\\.(?:[1-9]|1[01]))?$"
+        },
+        "row_count": { "type": "integer", "minimum": 1 },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "adapter_version": { "const": "r0.2-e1-v1" },
+        "ingestion_notes": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "const": "Logical durable provenance; no scratch path."
+          }
+        }
+      }
+    },
+    "sectionCounts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "7.1",
+        "7.2",
+        "7.3",
+        "7.4",
+        "7.5",
+        "7.6",
+        "7.7",
+        "7.8",
+        "7.9",
+        "7.10",
+        "7.11"
+      ],
+      "properties": {
+        "7.1": { "const": 13 },
+        "7.2": { "const": 13 },
+        "7.3": { "const": 17 },
+        "7.4": { "const": 11 },
+        "7.5": { "const": 11 },
+        "7.6": { "const": 8 },
+        "7.7": { "const": 9 },
+        "7.8": { "const": 9 },
+        "7.9": { "const": 13 },
+        "7.10": { "const": 7 },
+        "7.11": { "const": 8 }
+      }
+    },
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "expected_row_count",
+        "actual_row_count",
+        "unique_requirement_count",
+        "section_counts",
+        "requirement_id_sha256",
+        "status_correction_count",
+        "sections_7_3_through_7_7_status_correction_subtotal",
+        "sections_7_3_through_7_7_non_status_correction_manifest",
+        "sections_7_3_through_7_7_identified_correction_count"
+      ],
+      "properties": {
+        "expected_row_count": { "const": 119 },
+        "actual_row_count": { "const": 119 },
+        "unique_requirement_count": { "const": 119 },
+        "section_counts": { "$ref": "#/$defs/sectionCounts" },
+        "requirement_id_sha256": { "$ref": "#/$defs/sha256" },
+        "status_correction_count": { "const": 23 },
+        "sections_7_3_through_7_7_status_correction_subtotal": { "const": 11 },
+        "sections_7_3_through_7_7_non_status_correction_manifest": {
+          "type": "array",
+          "minItems": 5,
+          "maxItems": 5,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/nonStatusCorrection" }
+        },
+        "sections_7_3_through_7_7_identified_correction_count": { "const": 16 }
+      }
+    },
+    "nonStatusCorrection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["requirement_id", "classification"],
+      "properties": {
+        "requirement_id": {
+          "enum": [
+            "FR-7.5-004",
+            "FR-7.5-009",
+            "FR-7.6-003",
+            "FR-7.7-003",
+            "FR-7.7-009"
+          ]
+        },
+        "classification": { "const": "evidence_or_test_ledger" }
+      }
+    },
+    "vocabularies": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "current_product_status",
+        "rust_cutover_readiness",
+        "causality",
+        "source_evidence_role",
+        "blocker_kind",
+        "severity",
+        "architecture_decision_status",
+        "audit_state",
+        "validation_evidence_class"
+      ],
+      "properties": {
+        "current_product_status": { "$ref": "#/$defs/nonEmptyUniqueStrings" },
+        "rust_cutover_readiness": { "$ref": "#/$defs/nonEmptyUniqueStrings" },
+        "causality": { "$ref": "#/$defs/nonEmptyUniqueStrings" },
+        "source_evidence_role": { "$ref": "#/$defs/nonEmptyUniqueStrings" },
+        "blocker_kind": { "$ref": "#/$defs/nonEmptyUniqueStrings" },
+        "severity": { "$ref": "#/$defs/nonEmptyUniqueStrings" },
+        "architecture_decision_status": {
+          "$ref": "#/$defs/nonEmptyUniqueStrings"
+        },
+        "audit_state": { "$ref": "#/$defs/nonEmptyUniqueStrings" },
+        "validation_evidence_class": { "$ref": "#/$defs/nonEmptyUniqueStrings" }
+      }
+    },
+    "sourceEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "path",
+        "symbol",
+        "lines",
+        "source_sha",
+        "snippet_sha256",
+        "role",
+        "explanation"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^EV-FR-7\\.(?:[1-9]|1[01])-[0-9]{3}-C[0-9]{3}-SRC-[0-9]{3}$"
+        },
+        "path": { "$ref": "#/$defs/repositoryPath" },
+        "symbol": { "$ref": "#/$defs/nonEmptyString" },
+        "lines": { "$ref": "#/$defs/lineRange" },
+        "source_sha": { "const": "2aa6d96f9b63aad64a14feac23df2f694857be85" },
+        "snippet_sha256": { "$ref": "#/$defs/sha256" },
+        "role": {
+          "enum": [
+            "implementation",
+            "sdk_call",
+            "sdk_listener",
+            "sdk_model",
+            "state_owner",
+            "error_path",
+            "fallback",
+            "cleanup",
+            "reachability_entry",
+            "test_source",
+            "network_boundary",
+            "raw_matrix_http"
+          ]
+        },
+        "explanation": { "$ref": "#/$defs/nonEmptyString" }
+      }
+    },
+    "absenceEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "source_sha",
+        "expression",
+        "mode",
+        "roots",
+        "exclusions",
+        "expected_match_count",
+        "explanation"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^EV-FR-7\\.(?:[1-9]|1[01])-[0-9]{3}-C[0-9]{3}-ABS-[0-9]{3}$"
+        },
+        "source_sha": { "const": "2aa6d96f9b63aad64a14feac23df2f694857be85" },
+        "expression": { "$ref": "#/$defs/nonEmptyString" },
+        "mode": { "enum": ["literal", "regex"] },
+        "roots": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/repositoryPath" }
+        },
+        "exclusions": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/repositoryPath" }
+        },
+        "expected_match_count": { "const": 0 },
+        "explanation": { "$ref": "#/$defs/nonEmptyString" }
+      }
+    },
+    "causality": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "api_or_event_names",
+        "evidence_ids",
+        "product_ownership_reason",
+        "matrix_boundary"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "sdk_call",
+            "sdk_listener",
+            "sdk_model",
+            "product_owned",
+            "mixed"
+          ]
+        },
+        "api_or_event_names": { "$ref": "#/$defs/uniqueStrings" },
+        "evidence_ids": { "$ref": "#/$defs/uniqueIds" },
+        "product_ownership_reason": {
+          "$ref": "#/$defs/nullableNonEmptyString"
+        },
+        "matrix_boundary": { "$ref": "#/$defs/nullableNonEmptyString" }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": { "enum": ["sdk_call", "sdk_listener", "sdk_model"] }
+            }
+          },
+          "then": {
+            "properties": {
+              "api_or_event_names": { "minItems": 1 },
+              "evidence_ids": { "minItems": 1 },
+              "product_ownership_reason": { "type": "null" }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": { "kind": { "enum": ["product_owned", "mixed"] } }
+          },
+          "then": {
+            "properties": {
+              "product_ownership_reason": { "$ref": "#/$defs/nonEmptyString" },
+              "matrix_boundary": { "$ref": "#/$defs/nonEmptyString" }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "mixed" } } },
+          "then": {
+            "properties": {
+              "api_or_event_names": { "minItems": 1 },
+              "evidence_ids": { "minItems": 1 }
+            }
+          }
+        }
+      ]
+    },
+    "existingTest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "path",
+        "symbol",
+        "lines",
+        "source_sha",
+        "snippet_sha256",
+        "assertions",
+        "limitations"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^TST-FR-7\\.(?:[1-9]|1[01])-[0-9]{3}-EX-[0-9]{3}$"
+        },
+        "path": { "$ref": "#/$defs/repositoryPath" },
+        "symbol": { "$ref": "#/$defs/nonEmptyString" },
+        "lines": { "$ref": "#/$defs/lineRange" },
+        "source_sha": { "const": "2aa6d96f9b63aad64a14feac23df2f694857be85" },
+        "snippet_sha256": { "$ref": "#/$defs/sha256" },
+        "assertions": { "$ref": "#/$defs/nonEmptyUniqueStrings" },
+        "limitations": { "$ref": "#/$defs/nonEmptyUniqueStrings" }
+      }
+    },
+    "requiredTest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "evidence_class", "task_ids", "acceptance", "status"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^TST-FR-7\\.(?:[1-9]|1[01])-[0-9]{3}-REQ-[0-9]{3}$"
+        },
+        "evidence_class": {
+          "enum": [
+            "unit",
+            "integration",
+            "live_synapse",
+            "ui",
+            "platform",
+            "security_privacy",
+            "performance_reliability"
+          ]
+        },
+        "task_ids": { "$ref": "#/$defs/nonEmptyUniqueIds" },
+        "acceptance": { "$ref": "#/$defs/nonEmptyString" },
+        "status": { "const": "planned" }
+      }
+    },
+    "outcomes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["success", "failure", "fallback", "cleanup"],
+      "properties": {
+        "success": { "$ref": "#/$defs/nonEmptyUniqueStrings" },
+        "failure": { "$ref": "#/$defs/nonEmptyUniqueStrings" },
+        "fallback": { "$ref": "#/$defs/nonEmptyUniqueStrings" },
+        "cleanup": { "$ref": "#/$defs/nonEmptyUniqueStrings" }
+      }
+    },
+    "reachability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "kind",
+        "entry_evidence_ids",
+        "ordered_chain",
+        "absence_evidence_ids",
+        "explanation"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^REACH-FR-7\\.(?:[1-9]|1[01])-[0-9]{3}-[0-9]{3}$"
+        },
+        "kind": {
+          "enum": [
+            "reachable",
+            "conditional",
+            "not_exposed",
+            "dead_path_proven"
+          ]
+        },
+        "entry_evidence_ids": { "$ref": "#/$defs/uniqueIds" },
+        "ordered_chain": { "$ref": "#/$defs/uniqueStrings" },
+        "absence_evidence_ids": { "$ref": "#/$defs/uniqueIds" },
+        "explanation": { "$ref": "#/$defs/nonEmptyString" }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "kind": { "enum": ["reachable", "conditional"] } }
+          },
+          "then": {
+            "properties": {
+              "entry_evidence_ids": { "minItems": 1 },
+              "ordered_chain": { "minItems": 1 },
+              "absence_evidence_ids": { "maxItems": 0 }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": { "enum": ["not_exposed", "dead_path_proven"] }
+            }
+          },
+          "then": {
+            "properties": {
+              "entry_evidence_ids": { "maxItems": 0 },
+              "ordered_chain": { "maxItems": 0 },
+              "absence_evidence_ids": { "minItems": 1 }
+            }
+          }
+        }
+      ]
+    },
+    "rustMapping": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "capability_ids",
+        "gap_ids",
+        "task_ids",
+        "gate_ids",
+        "validation_report_ids",
+        "qualification"
+      ],
+      "properties": {
+        "capability_ids": { "$ref": "#/$defs/uniqueIds" },
+        "gap_ids": { "$ref": "#/$defs/uniqueIds" },
+        "task_ids": { "$ref": "#/$defs/uniqueIds" },
+        "gate_ids": { "$ref": "#/$defs/uniqueIds" },
+        "validation_report_ids": { "$ref": "#/$defs/uniqueIds" },
+        "qualification": { "$ref": "#/$defs/nonEmptyString" }
+      }
+    },
+    "clause": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "text",
+        "current_product_status",
+        "qualifiers",
+        "source_evidence",
+        "absence_evidence",
+        "causality",
+        "existing_tests",
+        "required_tests",
+        "outcomes",
+        "reachability",
+        "rust_mapping",
+        "blocker_ids",
+        "risk_ids",
+        "architecture_decision_ids"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/clauseId" },
+        "text": { "$ref": "#/$defs/nonEmptyString" },
+        "current_product_status": { "$ref": "#/$defs/currentProductStatus" },
+        "qualifiers": { "$ref": "#/$defs/uniqueStrings" },
+        "source_evidence": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/sourceEvidence" }
+        },
+        "absence_evidence": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/absenceEvidence" }
+        },
+        "causality": { "$ref": "#/$defs/causality" },
+        "existing_tests": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/existingTest" }
+        },
+        "required_tests": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/requiredTest" }
+        },
+        "outcomes": { "$ref": "#/$defs/outcomes" },
+        "reachability": { "$ref": "#/$defs/reachability" },
+        "rust_mapping": { "$ref": "#/$defs/rustMapping" },
+        "blocker_ids": { "$ref": "#/$defs/uniqueIds" },
+        "risk_ids": { "$ref": "#/$defs/uniqueIds" },
+        "architecture_decision_ids": { "$ref": "#/$defs/uniqueIds" }
+      }
+    },
+    "currentProductStatus": {
+      "enum": [
+        "implemented",
+        "partial",
+        "missing",
+        "not_exposed",
+        "dead_path_proven",
+        "unverified"
+      ]
+    },
+    "statusCorrection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "recorded_status",
+        "audited_status",
+        "changed",
+        "explanation"
+      ],
+      "properties": {
+        "recorded_status": {
+          "enum": [
+            "implemented",
+            "partial",
+            "not-currently-exposed",
+            "unverified",
+            "dead-path-proven"
+          ]
+        },
+        "audited_status": { "$ref": "#/$defs/currentProductStatus" },
+        "changed": { "type": "boolean" },
+        "explanation": { "$ref": "#/$defs/nonEmptyString" }
+      }
+    },
+    "rowAudit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "subject_sha",
+        "reviewer",
+        "reviewed_at",
+        "report_ids",
+        "audited_payload_sha256"
+      ],
+      "properties": {
+        "state": {
+          "enum": [
+            "reviewed_changes_required",
+            "corrected_pending_rereview",
+            "accepted"
+          ]
+        },
+        "subject_sha": { "const": "2aa6d96f9b63aad64a14feac23df2f694857be85" },
+        "reviewer": { "$ref": "#/$defs/nullableNonEmptyString" },
+        "reviewed_at": { "type": ["string", "null"], "format": "date-time" },
+        "report_ids": { "$ref": "#/$defs/uniqueIds" },
+        "audited_payload_sha256": { "$ref": "#/$defs/sha256" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "state": { "const": "accepted" } } },
+          "then": {
+            "properties": {
+              "reviewer": { "$ref": "#/$defs/nonEmptyString" },
+              "reviewed_at": { "type": "string", "format": "date-time" },
+              "report_ids": { "minItems": 1 }
+            }
+          }
+        }
+      ]
+    },
+    "currentProduct": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "qualifiers", "summary", "status_correction"],
+      "properties": {
+        "status": { "$ref": "#/$defs/currentProductStatus" },
+        "qualifiers": { "$ref": "#/$defs/uniqueStrings" },
+        "summary": { "$ref": "#/$defs/nonEmptyString" },
+        "status_correction": { "$ref": "#/$defs/statusCorrection" }
+      }
+    },
+    "rustCutover": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "readiness",
+        "implementation_subject_sha",
+        "matrix_owner",
+        "surviving_raw_matrix_http",
+        "surviving_matrix_js_owner",
+        "capability_ids",
+        "gap_ids",
+        "task_ids",
+        "gate_ids",
+        "blocker_ids",
+        "validation_report_ids",
+        "qualification"
+      ],
+      "properties": {
+        "readiness": {
+          "enum": [
+            "not_assessed",
+            "blocked",
+            "implementation_planned",
+            "implementation_in_progress",
+            "validation_pending",
+            "ready"
+          ]
+        },
+        "implementation_subject_sha": {
+          "type": ["string", "null"],
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "matrix_owner": {
+          "enum": [
+            "matrix_rust_sdk",
+            "matrix_js_sdk",
+            "raw_matrix_http",
+            "mixed",
+            "product_only",
+            "none"
+          ]
+        },
+        "surviving_raw_matrix_http": { "type": "boolean" },
+        "surviving_matrix_js_owner": { "type": "boolean" },
+        "capability_ids": { "$ref": "#/$defs/uniqueIds" },
+        "gap_ids": { "$ref": "#/$defs/uniqueIds" },
+        "task_ids": { "$ref": "#/$defs/uniqueIds" },
+        "gate_ids": { "$ref": "#/$defs/uniqueIds" },
+        "blocker_ids": { "$ref": "#/$defs/uniqueIds" },
+        "validation_report_ids": { "$ref": "#/$defs/uniqueIds" },
+        "qualification": { "$ref": "#/$defs/nonEmptyString" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "readiness": { "const": "ready" } } },
+          "then": {
+            "properties": {
+              "implementation_subject_sha": { "$ref": "#/$defs/fullSha" },
+              "matrix_owner": {
+                "enum": ["matrix_rust_sdk", "product_only", "none"]
+              },
+              "surviving_raw_matrix_http": { "const": false },
+              "surviving_matrix_js_owner": { "const": false },
+              "gap_ids": { "maxItems": 0 },
+              "gate_ids": { "maxItems": 0 },
+              "blocker_ids": { "maxItems": 0 },
+              "validation_report_ids": { "minItems": 1 }
+            }
+          }
+        }
+      ]
+    },
+    "planRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["heading", "normalized_text", "line_range"],
+      "properties": {
+        "heading": { "$ref": "#/$defs/nonEmptyString" },
+        "normalized_text": { "$ref": "#/$defs/nonEmptyString" },
+        "line_range": { "$ref": "#/$defs/lineRange" }
+      }
+    },
+    "legacyInventoryContext": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "file_paths",
+        "method_candidates",
+        "listener_candidates",
+        "model_coupling",
+        "behavior_evidence_prohibited"
+      ],
+      "properties": {
+        "file_paths": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/repositoryPath" }
+        },
+        "method_candidates": { "$ref": "#/$defs/uniqueStrings" },
+        "listener_candidates": { "$ref": "#/$defs/uniqueStrings" },
+        "model_coupling": { "$ref": "#/$defs/uniqueStrings" },
+        "behavior_evidence_prohibited": { "const": true }
+      }
+    },
+    "requirement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "origin",
+        "section_id",
+        "plan",
+        "audit",
+        "current_product",
+        "clauses",
+        "rust_cutover",
+        "blocker_ids",
+        "task_ids",
+        "manual_acceptance_ids",
+        "migration_disposition_ids",
+        "security_privacy_lifecycle_ids",
+        "architecture_decision_ids",
+        "legacy_inventory_context"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/requirementId" },
+        "origin": { "const": "plan-section-7" },
+        "section_id": { "$ref": "#/$defs/sectionId" },
+        "plan": { "$ref": "#/$defs/planRecord" },
+        "audit": { "$ref": "#/$defs/rowAudit" },
+        "current_product": { "$ref": "#/$defs/currentProduct" },
+        "clauses": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/clause" }
+        },
+        "rust_cutover": { "$ref": "#/$defs/rustCutover" },
+        "blocker_ids": { "$ref": "#/$defs/uniqueIds" },
+        "task_ids": { "$ref": "#/$defs/uniqueIds" },
+        "manual_acceptance_ids": { "$ref": "#/$defs/uniqueIds" },
+        "migration_disposition_ids": { "$ref": "#/$defs/uniqueIds" },
+        "security_privacy_lifecycle_ids": { "$ref": "#/$defs/uniqueIds" },
+        "architecture_decision_ids": { "$ref": "#/$defs/uniqueIds" },
+        "legacy_inventory_context": { "$ref": "#/$defs/legacyInventoryContext" }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "current_product": {
+                "properties": { "status": { "const": "dead_path_proven" } }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "clauses": {
+                "items": {
+                  "properties": {
+                    "reachability": {
+                      "properties": { "kind": { "const": "dead_path_proven" } }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "architectureDecision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "decision",
+        "status",
+        "owner",
+        "scope_authority",
+        "affected_requirement_ids",
+        "affected_clause_ids",
+        "closure_evidence"
+      ],
+      "properties": {
+        "id": { "type": "string", "pattern": "^AD-[0-9]{2}$" },
+        "decision": { "$ref": "#/$defs/nonEmptyString" },
+        "status": {
+          "enum": [
+            "unresolved",
+            "proposed",
+            "approved",
+            "rejected",
+            "superseded"
+          ]
+        },
+        "owner": { "$ref": "#/$defs/nonEmptyString" },
+        "scope_authority": { "$ref": "#/$defs/nonEmptyString" },
+        "affected_requirement_ids": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/requirementId" }
+        },
+        "affected_clause_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/clauseId" }
+        },
+        "closure_evidence": { "$ref": "#/$defs/uniqueStrings" }
+      }
+    },
+    "blocker": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "kind",
+        "severity",
+        "status",
+        "owner_task_ids",
+        "authority",
+        "affected_requirement_ids",
+        "affected_clause_ids",
+        "threat_ids",
+        "boundary_ids",
+        "closure_criteria",
+        "closure_evidence",
+        "qualification"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "kind": {
+          "enum": [
+            "gap",
+            "gate",
+            "risk",
+            "architecture_decision",
+            "validation",
+            "migration",
+            "product_requirement"
+          ]
+        },
+        "severity": {
+          "enum": [
+            "critical",
+            "high",
+            "medium",
+            "low",
+            "informational",
+            "not_applicable"
+          ]
+        },
+        "status": {
+          "enum": ["open", "mitigating", "blocked", "accepted_risk", "closed"]
+        },
+        "owner_task_ids": { "$ref": "#/$defs/nonEmptyUniqueIds" },
+        "authority": { "$ref": "#/$defs/nonEmptyString" },
+        "affected_requirement_ids": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/requirementId" }
+        },
+        "affected_clause_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/clauseId" }
+        },
+        "threat_ids": { "$ref": "#/$defs/uniqueIds" },
+        "boundary_ids": { "$ref": "#/$defs/uniqueIds" },
+        "closure_criteria": { "$ref": "#/$defs/nonEmptyUniqueStrings" },
+        "closure_evidence": { "$ref": "#/$defs/uniqueStrings" },
+        "qualification": { "$ref": "#/$defs/nonEmptyString" }
+      }
+    },
+    "normalizationRules": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "fully_expanded_rows",
+        "no_ephemeral_or_indirect_evidence",
+        "test_source_is_not_runtime_evidence",
+        "current_product_separate_from_rust_cutover",
+        "canonicalization",
+        "row_mutable_json_pointers",
+        "audit_payload_removed_json_pointers"
+      ],
+      "properties": {
+        "fully_expanded_rows": { "const": true },
+        "no_ephemeral_or_indirect_evidence": { "const": true },
+        "test_source_is_not_runtime_evidence": { "const": true },
+        "current_product_separate_from_rust_cutover": { "const": true },
+        "canonicalization": { "$ref": "#/$defs/nonEmptyString" },
+        "row_mutable_json_pointers": {
+          "type": "array",
+          "minItems": 5,
+          "maxItems": 5,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "/audit/state",
+              "/audit/reviewer",
+              "/audit/reviewed_at",
+              "/audit/report_ids",
+              "/audit/audited_payload_sha256"
+            ]
+          }
+        },
+        "audit_payload_removed_json_pointers": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "uniqueItems": true,
+          "items": { "enum": ["/review", "/digests/canonical_payload_sha256"] }
+        }
+      }
+    },
+    "auditReview": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "reviewer", "reviewed_at", "report_ids", "notes"],
+      "properties": {
+        "state": {
+          "enum": ["pending_independent_review", "changes_required", "accepted"]
+        },
+        "reviewer": { "$ref": "#/$defs/nullableNonEmptyString" },
+        "reviewed_at": { "type": ["string", "null"], "format": "date-time" },
+        "report_ids": { "$ref": "#/$defs/uniqueIds" },
+        "notes": { "$ref": "#/$defs/uniqueStrings" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "state": { "const": "accepted" } } },
+          "then": {
+            "properties": {
+              "reviewer": { "$ref": "#/$defs/nonEmptyString" },
+              "reviewed_at": { "type": "string", "format": "date-time" },
+              "report_ids": { "minItems": 1 }
+            }
+          }
+        }
+      ]
+    },
+    "auditDigests": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "canonical_payload_sha256",
+        "requirement_id_sha256",
+        "clause_id_sha256",
+        "generated_markdown_file_sha256"
+      ],
+      "properties": {
+        "canonical_payload_sha256": { "$ref": "#/$defs/sha256" },
+        "requirement_id_sha256": { "$ref": "#/$defs/sha256" },
+        "clause_id_sha256": { "$ref": "#/$defs/sha256" },
+        "generated_markdown_file_sha256": {
+          "description": "Null when recording this digest would create a JSON/Markdown self-reference; otherwise the lowercase SHA-256 of the generated Markdown bytes.",
+          "type": ["string", "null"],
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    }
+  }
+}
