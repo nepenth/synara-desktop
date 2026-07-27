@@ -24,6 +24,7 @@
 //! P6.2: Receipt index foundation (harness; no SDK send_receipt).
 //! P6.3: Typing index foundation (harness; no SDK typing send).
 //! P6.4: Media upload queue foundation (metadata only; no bytes / no SDK upload).
+//! P6.8: Search session / result index foundation (harness).
 //! No production login/sync loop or Tauri command registration lives here yet.
 //! No dual-backend selector. Product runtime remains matrix-js-sdk.
 
@@ -38,6 +39,7 @@ pub mod members;
 pub mod receipts;
 pub mod relations;
 pub mod room_list;
+pub mod search;
 pub mod send;
 pub mod spaces;
 pub mod store;
@@ -75,6 +77,7 @@ pub fn matrix_ipc_schema_markers() -> &'static str {
     let _members = members::matrix_members_markers();
     let _timeline = timeline::matrix_timeline_markers();
     let _relations = relations::matrix_relations_markers();
+    let _search = search::matrix_search_markers();
     let _send = send::matrix_send_markers();
     let _receipts = receipts::matrix_receipts_markers();
     let _threads = threads::matrix_threads_markers();
@@ -103,10 +106,11 @@ pub fn matrix_ipc_schema_markers() -> &'static str {
     debug_assert_eq!(_members, members::MATRIX_MEMBERS_MARKER);
     debug_assert_eq!(_timeline, timeline::MATRIX_TIMELINE_MARKER);
     debug_assert_eq!(_relations, relations::MATRIX_RELATIONS_MARKER);
+    debug_assert_eq!(_search, search::MATRIX_SEARCH_MARKER);
     debug_assert_eq!(_send, send::MATRIX_SEND_MARKER);
     debug_assert_eq!(_receipts, receipts::MATRIX_RECEIPTS_MARKER);
     debug_assert_eq!(_threads, threads::MATRIX_THREADS_MARKER);
     debug_assert_eq!(_typing, typing::MATRIX_TYPING_MARKER);
     debug_assert_eq!(_media, media::MATRIX_MEDIA_MARKER);
-    "matrix-ipc-protocol-v1+domain-dtos-p1.4+supervisor-p2.1+store-p2.2+client-builder-p2.3+tasks-p2.4+diagnostics-p2.5+lifecycle-p2.6+auth-p3.2+session-persist-p3.5+sync-p4.1+room-list-p4.2+spaces-p4.5+members-p4.6+timeline-p5.1+diffs-p5.2+pagination-p5.3+relations-p5.6+send-p6.1+receipts-p6.2+typing-p6.3+media-p6.4+threads-p5.8"
+    "matrix-ipc-protocol-v1+domain-dtos-p1.4+supervisor-p2.1+store-p2.2+client-builder-p2.3+tasks-p2.4+diagnostics-p2.5+lifecycle-p2.6+auth-p3.2+session-persist-p3.5+sync-p4.1+room-list-p4.2+spaces-p4.5+members-p4.6+timeline-p5.1+diffs-p5.2+pagination-p5.3+search-p6.8+relations-p5.6+send-p6.1+receipts-p6.2+typing-p6.3+media-p6.4+threads-p5.8"
 }
