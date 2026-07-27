@@ -1,6 +1,6 @@
 # Matrix Rust SDK Replacement — Execution Handoff
 
-Last updated: 2026-07-25 (America/New_York)
+Last updated: 2026-07-26 (America/New_York)
 
 Authoritative program plan: [`../matrix-rust-sdk-full-replacement-plan.md`](../matrix-rust-sdk-full-replacement-plan.md)
 
@@ -13,6 +13,110 @@ Traceability artifacts:
 
 - [`feature-parity-traceability.json`](feature-parity-traceability.json)
 - [`feature-parity-traceability.md`](feature-parity-traceability.md)
+
+## Live continuation snapshot (2026-07-26)
+
+This section is the current handoff. The dated audit and former implementation
+ledger below remain historical evidence and must not override this snapshot or
+the canonical status ledger.
+
+| Field | Current value |
+|---|---|
+| **Integration branch / E1 base** | `feature/matrix-rust-sdk-full-replacement`; E1 was rebased on `7ffd5885e456c2b99c42d834127bc1ec6b1956ce`, and the live integration tip is that commit or later |
+| **Active remediation** | R0.2 — `in_progress`, PR open, strict acceptance open |
+| **Active slice** | R0.2-E1 traceability tooling, PR [#82](https://github.com/nepenth/synara-desktop/pull/82), head `8ded923c6846194b3332c85dce69614368882729` |
+| **E1 acceptance** | Independently accepted locally; **not** CI-accepted, merged, or complete |
+| **CI prerequisite** | PR [#83](https://github.com/nepenth/synara-desktop/pull/83) merged as `7ffd588`; full Git history is now available to desktop validation |
+| **Next slice** | R0.2-E2, blocked until E1 has green exact-head CI and is merged |
+| **Product runtime** | `matrix-js-sdk` only; Rust remains harness foundation; no dual backend or cutover |
+| **Progress** | 20/112 original artifacts (~18%); R0 work does not increment this; 0/15 strict phase gates closed |
+| **Main PR** | [#39](https://github.com/nepenth/synara-desktop/pull/39) remains open and must not merge without explicit user approval |
+
+### R0.2 work landed before E1
+
+| Delivery | Evidence | State |
+|---|---|---|
+| Security threat model and owned risk register | PR #79, integration commit `239c04b` | Merged; R0.2 remains open |
+| Native-agent task/review governance contracts and validators | PR #80, integration commit `4ec78c7` | Merged; R0.2 remains open |
+| Phase 0 test/Synapse topology and evidence manifest | PR #81, integration commit `c358502` | Merged; R0.2 remains open |
+| CI full-history prerequisite for traceability validation | PR #83, integration commit `7ffd588` | Merged; prerequisite only |
+
+R0.1 was accepted before this sequence. The entries above are corrective
+deliveries within R0.2, not additional original-plan features and not authority
+to accept R0.2 or Phase 0.
+
+### E1 implementation and present blocker
+
+PR #82 adds deterministic R0.2-E1 audit-normalization and traceability-v2
+tooling in exactly 11 paths: two closed JSON schemas; one shared implementation
+library; check, generate, and migrate entry points; the package script; and two
+test files. The tooling binds normalized evidence to immutable Git objects,
+enforces a durable append-only lifecycle/report/authorization chain, validates
+source and cutover projections, detects prior v2 history, and exercises
+production-shaped plus adversarial real-Git cases. It does not change a product
+Matrix client, dependency, lockfile, CI workflow, or runtime backend.
+
+Independent review rejected earlier drafts until they prevented one-shot state
+authorization, truncatable report history, invalid risk/decision transitions,
+deletable historical evidence, incorrect subject ancestry handling, created-
+entity source loss, stale execution contracts, and inadequately bounded Git
+history discovery. Benchmark isolation and historical schema/semantic checks were
+also tightened. The frozen 11-path content at `8ded923` matched the locally
+accepted content byte-for-byte.
+
+Local acceptance evidence for that exact content:
+
+| Validation | Result |
+|---|---|
+| Independent frozen-tree review | **ACCEPT**, no remaining blocking correctness, lifecycle-integrity, schema/runtime, CLI-safety, security, or scope finding |
+| `npm run test:matrix-rust-traceability-tooling` | **86/86 PASS** |
+| `node --test scripts/__tests__/*.test.mjs` | **284/284 PASS** |
+| `npm run check:matrix-rust-guardrails` | **PASS**, 1,588 files checked |
+| `npm run check:matrix-rust-governance` | **PASS** |
+| `npm run check:quality-gates` | **PASS** |
+| Prettier 2.8.1 across the exact 11 paths | **PASS** |
+| `node --check` across all six production E1 scripts | **PASS** |
+| `git diff --check` and exact changed-path audit | **PASS** |
+
+CI provided two useful environment checks. The first E1 run failed because CI
+used a shallow checkout while the validator correctly requires pinned historical
+objects. PR #83 changed validation checkout to full history and passed all of its
+required jobs. The refreshed PR #82 run then passed 283 of 284 repository script
+tests. Its sole primary failure is in the test harness:
+`temporaryLocalGitClone` creates a commit without setting repository-local
+`user.name` and `user.email`. Developer-local Git identity masked that portability
+defect. The downstream `Quality gate` failure is a consequence of the failed
+desktop-validation job, not a second tooling failure. iOS simulator, disposable
+Synapse, macOS bundle, Linux package, and desktop package jobs passed.
+
+At handoff, the focused test-helper fix is intentionally not present. PR #82 is
+mergeable at the Git level but blocked by CI and the plan's exact-head merge gate.
+
+### Exact next-owner procedure
+
+1. Fetch and verify integration remains at or after `7ffd588`, PR #82 remains
+   open, and the E1 branch is clean at `8ded923` or a documented later SHA.
+2. In `temporaryLocalGitClone`, configure `user.name` and `user.email` in the
+   cloned repository before any fixture commit. Keep the change inside the
+   existing E1 test file and do not broaden the exact 11-path scope.
+3. Run the focused failing temporary-clone regression, then the 86-test E1 suite,
+   the full repository script suite, guardrails, governance, quality gates,
+   exact-scope Prettier, six-script syntax checks, and `git diff --check`.
+4. Independently inspect the complete integration-to-head diff again. Confirm no
+   implementation, schema, or assertion weakening accompanied the helper fix.
+5. Commit and push the correction to PR #82. Record acceptance against the new
+   exact head and wait for every required job to finish green and non-cancelled.
+6. Merge #82 only into `feature/matrix-rust-sdk-full-replacement`; update the
+   local integration branch and rerun the relevant smoke gates.
+7. Start E2 only after that merge. E2 recovers the authoritative reviewed
+   119-row source payloads and generates/commits the normalized audit and v2
+   traceability artifacts. It must not reconstruct, paraphrase, or invent missing
+   payloads and must use the accepted E1 tooling.
+8. Do not mark R0.2 complete after E1 or E2. Continue the remaining owned
+   residual/evidence closure and readiness-report work required by the plan.
+
+Detailed validation, workflow assessment, and the exact 11-path inventory are in
+[`r0.2-e1-handoff-2026-07-26.md`](r0.2-e1-handoff-2026-07-26.md).
 
 ## Authoritative continuation snapshot (2026-07-25 independent audit)
 
