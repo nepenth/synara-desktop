@@ -100,7 +100,7 @@
     {"id": "R0.4", "title": "Store confinement and key management", "artifact_state": "landed", "integration_state": "merged", "strict_acceptance_state": "accepted", "phase_gate_state": "open"},
     {"id": "R0.5", "title": "Safe destructive lifecycle", "artifact_state": "landed", "integration_state": "merged", "strict_acceptance_state": "accepted", "phase_gate_state": "open"},
     {"id": "R0.6", "title": "Diagnostic privacy", "artifact_state": "landed", "integration_state": "merged", "strict_acceptance_state": "accepted", "phase_gate_state": "open"},
-    {"id": "R0.7", "title": "Live Phase 2 and P3.1 adapters", "artifact_state": "not_started", "integration_state": "not_submitted", "strict_acceptance_state": "not_reviewed", "phase_gate_state": "open"},
+    {"id": "R0.7", "title": "Live Phase 2 and P3.1 adapters", "artifact_state": "landed", "integration_state": "merged", "strict_acceptance_state": "open", "phase_gate_state": "open"},
     {"id": "R0.8", "title": "Acceptance reports and CI evidence", "artifact_state": "not_started", "integration_state": "not_submitted", "strict_acceptance_state": "not_reviewed", "phase_gate_state": "open"}
   ]
 }
