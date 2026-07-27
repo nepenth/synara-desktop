@@ -358,3 +358,136 @@ fn p5_2_reconstruct_helper_matches_manual_apply() {
     assert_eq!(proj.len(), 2);
     assert_eq!(proj.last_sequence(), 2);
 }
+
+// --- P5.3 pagination ---
+
+#[test]
+fn p5_3_begin_complete_backwards_page() {
+    let key = TimelineKey::main("!room:example.org").unwrap();
+    let mut pag = TimelinePagination::new(key, 3);
+    assert_eq!(pag.session_generation(), 3);
+    assert!(!pag.any_in_flight());
+
+    pag.begin(PaginationRequest::backwards(50)).unwrap();
+    assert!(pag.any_in_flight());
+    assert_eq!(
+        pag.status(PaginationDirection::Backwards).phase,
+        PaginationPhase::InFlight
+    );
+
+    pag.complete(PaginationOutcome {
+        direction: PaginationDirection::Backwards,
+        items_applied: 20,
+        exhausted: false,
+    })
+    .unwrap();
+    let st = pag.status(PaginationDirection::Backwards);
+    assert_eq!(st.phase, PaginationPhase::Idle);
+    assert_eq!(st.pages_completed, 1);
+    assert_eq!(st.items_loaded, 20);
+    assert!(!pag.any_in_flight());
+}
+
+#[test]
+fn p5_3_exhausted_rejects_further_begin() {
+    let key = TimelineKey::main("!room:example.org").unwrap();
+    let mut pag = TimelinePagination::new(key, 1);
+    pag.begin(PaginationRequest::backwards(30)).unwrap();
+    pag.complete(PaginationOutcome {
+        direction: PaginationDirection::Backwards,
+        items_applied: 0,
+        exhausted: true,
+    })
+    .unwrap();
+    assert_eq!(
+        pag.status(PaginationDirection::Backwards).phase,
+        PaginationPhase::Exhausted
+    );
+    let err = pag.begin(PaginationRequest::backwards(30)).unwrap_err();
+    assert_eq!(err.diagnostic_id(), "p5.3-pagination-exhausted");
+}
+
+#[test]
+fn p5_3_double_begin_rejected() {
+    let key = TimelineKey::main("!r:example.org").unwrap();
+    let mut pag = TimelinePagination::new(key, 1);
+    pag.begin(PaginationRequest::backwards(10)).unwrap();
+    let err = pag.begin(PaginationRequest::backwards(10)).unwrap_err();
+    assert_eq!(err.diagnostic_id(), "p5.3-pagination-already-in-flight");
+}
+
+#[test]
+fn p5_3_fail_then_clear_and_retry() {
+    let key = TimelineKey::main("!r:example.org").unwrap();
+    let mut pag = TimelinePagination::new(key, 1);
+    pag.begin(PaginationRequest::forwards(5)).unwrap();
+    pag.fail(PaginationDirection::Forwards, "p5.3-network-failed")
+        .unwrap();
+    let st = pag.status(PaginationDirection::Forwards);
+    assert_eq!(st.phase, PaginationPhase::Failed);
+    assert_eq!(st.failure_diagnostic_id, Some("p5.3-network-failed"));
+    assert!(!st.failure_diagnostic_id.unwrap().contains("access_token"));
+
+    pag.clear_failure(PaginationDirection::Forwards).unwrap();
+    pag.begin(PaginationRequest::forwards(5)).unwrap();
+    pag.complete(PaginationOutcome {
+        direction: PaginationDirection::Forwards,
+        items_applied: 3,
+        exhausted: false,
+    })
+    .unwrap();
+    assert_eq!(pag.status(PaginationDirection::Forwards).items_loaded, 3);
+}
+
+#[test]
+fn p5_3_invalid_limit_rejected() {
+    let key = TimelineKey::main("!r:example.org").unwrap();
+    let mut pag = TimelinePagination::new(key, 1);
+    let err = pag.begin(PaginationRequest::backwards(0)).unwrap_err();
+    assert_eq!(err.diagnostic_id(), "p5.3-invalid-page-limit");
+    let err = pag.begin(PaginationRequest::backwards(101)).unwrap_err();
+    assert_eq!(err.diagnostic_id(), "p5.3-invalid-page-limit");
+}
+
+#[test]
+fn p5_3_retire_generation_cancels_in_flight() {
+    let key = TimelineKey::main("!r:example.org").unwrap();
+    let mut pag = TimelinePagination::new(key, 1);
+    pag.begin(PaginationRequest::backwards(20)).unwrap();
+    pag.retire_generation(2);
+    assert_eq!(pag.session_generation(), 2);
+    let st = pag.status(PaginationDirection::Backwards);
+    assert_eq!(st.phase, PaginationPhase::Failed);
+    assert_eq!(
+        st.failure_diagnostic_id,
+        Some("p5.3-stale-generation-cancelled")
+    );
+}
+
+#[test]
+fn p5_3_directions_independent() {
+    let key = TimelineKey::main("!r:example.org").unwrap();
+    let mut pag = TimelinePagination::new(key, 1);
+    pag.begin(PaginationRequest::backwards(10)).unwrap();
+    // Forwards still idle and startable.
+    pag.begin(PaginationRequest::forwards(10)).unwrap();
+    assert!(pag.any_in_flight());
+    pag.complete(PaginationOutcome {
+        direction: PaginationDirection::Backwards,
+        items_applied: 5,
+        exhausted: false,
+    })
+    .unwrap();
+    assert!(pag.any_in_flight()); // forwards still in flight
+    pag.complete(PaginationOutcome {
+        direction: PaginationDirection::Forwards,
+        items_applied: 2,
+        exhausted: true,
+    })
+    .unwrap();
+    assert!(!pag.any_in_flight());
+    assert_eq!(
+        pag.status(PaginationDirection::Forwards).phase,
+        PaginationPhase::Exhausted
+    );
+}
