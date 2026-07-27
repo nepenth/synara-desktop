@@ -35,8 +35,8 @@
 
 pub mod auth;
 pub mod client_builder;
-pub mod devices;
 pub mod cross_signing;
+pub mod devices;
 pub mod diagnostics;
 pub mod dto;
 pub mod ipc;
