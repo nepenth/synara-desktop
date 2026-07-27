@@ -4,14 +4,15 @@
 
 **Audience:** Current or next orchestrator of the full-replacement program.
 
-For full history, rules, validation accounting, and FR preservation notes, use
-[`implementation-handoff.md`](implementation-handoff.md). The detailed 2026-07-26
-E1 snapshot is [`r0.2-e1-handoff-2026-07-26.md`](r0.2-e1-handoff-2026-07-26.md).
+For full history, rules, and FR notes use
+[`implementation-handoff.md`](implementation-handoff.md).
 
-The independent audit and finding-level remediation requirements are in
-[`review-2026-07-25.md`](review-2026-07-25.md). That review supersedes the former
-“Phase 0–2 complete / next P3.2” handoff and remains an immutable historical
-baseline.
+**Canonical how-we-execute model:**
+[`cutover-operating-model.md`](cutover-operating-model.md)
+(capability vertical slices → atomic sole-owner cutover → burn down js-sdk →
+merge to main with approval). Supersedes any older text that implies a runtime
+SDK selector, dual production backends, or hard-blocking product slices on residual
+R0 formal thrash.
 
 <!-- matrix-rust-program-status-link -->
 Current machine-readable and generated status:
@@ -24,34 +25,26 @@ evidence, is authoritative for current delivery and acceptance state.
 | Item | Value |
 |---|---|
 | Integration branch | `feature/matrix-rust-sdk-full-replacement` |
-| Live integration tip (this handoff) | `e259102774848cf94e7d36f790e77f5a9fd31f55` — **R0.8 slice 1 / #104 merged** (residual formal reports + inventory; no false accept); re-fetch and verify |
-| Historical audited snapshot | `edfefee499064b736985b6528896b693e5120f22` — bound to the 2026-07-25 review, not the live tip |
-| Merged product fixes | PR [#86](https://github.com/nepenth/synara-desktop/pull/86) R0.5 wipe (**accepted**); PR [#87](https://github.com/nepenth/synara-desktop/pull/87)+[#94](https://github.com/nepenth/synara-desktop/pull/94) R0.4 store confinement + native keyring (**accepted**); PR [#89](https://github.com/nepenth/synara-desktop/pull/89) R0.6 diagnostic privacy (**accepted**); PR [#91](https://github.com/nepenth/synara-desktop/pull/91)+[#92](https://github.com/nepenth/synara-desktop/pull/92) R0.3 IPC wire freeze (**accepted**); PR [#96](https://github.com/nepenth/synara-desktop/pull/96)+[#98](https://github.com/nepenth/synara-desktop/pull/98)+[#100](https://github.com/nepenth/synara-desktop/pull/100)+[#102](https://github.com/nepenth/synara-desktop/pull/102) R0.7 live CS + login-types + composed store + stale-gen/wrong-key residuals (**merged**, strict acceptance **open** — authenticated live sync residual) |
-| Parked R0.2-E1 PR | PR [#82](https://github.com/nepenth/synara-desktop/pull/82) — **draft / parked** (2× CI `v2 exceeded 512 MiB` residual; do not thrash) |
+| Live integration tip | Re-fetch; expected at/after `447cbdc` (#82 E1 tooling). Verify with `git rev-parse origin/feature/matrix-rust-sdk-full-replacement` |
+| Open product PR | [#107](https://github.com/nepenth/synara-desktop/pull/107) **P3.2** password/token login + device naming (merge when CI green) |
+| Docs-only | [#106](https://github.com/nepenth/synara-desktop/pull/106) E1 status handoff — non-blocking |
 | Open PR to `main` | [#39](https://github.com/nepenth/synara-desktop/pull/39) — **do not merge without user approval** |
-| Current execution | Dual-track: R0.8 slice 1 **merged** (residual formal reports; gates still open); next clear R0.2/R0.7 residuals or P3.2-gated auth; P3.2 blocked by R0.2 / R0.7 residual / R0.8; parked #82 |
+| Product runtime | Still **`matrix-js-sdk` only** until atomic cutover; Rust = harness foundation / future sole owner |
+| Dual backend | **`false` forever** — no selector |
+| Execution model | Capability slices on branch → dogfood sole-owner cutover → delete js-sdk → main when approved |
 
 Always re-fetch and verify branch tips and PR state.
 
 ## Exact continuation point
 
-### Dual-track priority (user-approved)
+### Priority (user-approved 2026-07-27)
 
-1. Land Critical/High product fixes first (R0.5 ✓, R0.4 ✓, R0.6 ✓, R0.3 ✓).
-2. R0.7 slices landed: live CS transports (**#96**) + loopback login-types (**#98**) + composed encrypted store lifecycle (**#100**) + stale-gen/wrong-key residuals (**#102**).
-3. Remaining R0 blockers for P3.2: R0.2 (parked E1), R0.7 residual (authenticated live sync vs Synapse — guardrail-banned login APIs until deliberate P3.2 allowlist + formal accept), R0.8 (acceptance evidence).
-4. R0.2-E1 (#82): **parked** on identical 512 MiB isolation-benchmark residual; resume only with a deliberate memory-bound fix.
-5. Inventory stays **20/112** until more P-tasks land.
-6. No dual-backend; no production cutover; no merge to `main` without explicit approval.
-
-### This fire (2026-07-27, R0.8 slice-1 merge + status handoff)
-
-- Independently reviewed and merged PR **#104** (residual formal reports +
-  readiness inventory; all verdicts **`not_accepted`**; **no** phase-gate close).
-- Exact-head CI required gates green on #104 `6d3598a`.
-- **Merged** #104 → integration `e259102`.
-- Ledger: R0.8 → `landed` / `merged` / strict **`open`**. R0.7 strict remains open.
-- #82 remains parked draft. Inventory still 20/112.
+1. **Land P3.2** (#107) when CI green — password/token login + D-NEW-DEVICE names under `matrix/auth/`.
+2. **Next vertical slices:** session secrets / restore (P3.5–P3.6) → sync + room list (P4.x) toward dogfood path.
+3. **Clean-break:** re-login / wipe local Matrix dirs OK; no elaborate JS→Rust token/device migration.
+4. **Do not** build dual-backend, runtime flags, or dual live clients.
+5. Residual R0 formal work is secondary; fix real safety only.
+6. Merge to `main` / #39 only with explicit user approval.
 
 ### Next owner procedure
 
@@ -59,42 +52,32 @@ Always re-fetch and verify branch tips and PR state.
 git fetch origin
 git checkout feature/matrix-rust-sdk-full-replacement
 git pull --ff-only
-# After R0.8 slice-1 merges: clear R0.2/R0.7 residuals, then re-issue accepting
-# formal reports on a green exact head with independent attestation.
-# Or deliberate P3.2-gated authenticated disposable-Synapse residual.
-# No false gate close. Resume #82 only with memory-bound fix.
-# No cutover; no dual-backend; no main merge.
+npm run check:matrix-rust-guardrails
+(cd src-tauri && cargo test --locked matrix::)
+# Merge #107 when green; then P3.5/P3.6 or next slice per cutover-operating-model.md
 ```
 
 ## Program accounting
 
-- Original-plan artifact inventory remains **20 / 112 (~18%)**.
-- **0 of 15** strict phase gates are closed.
-- R0.1 / R0.3 / R0.4 / R0.5 / R0.6 **accepted**. R0.2 remains `landed` / `pr_open` (parked draft) / strict acceptance `open`.
-- R0.7 `landed` / `merged` / strict acceptance **`open`** (slices 1–4).
-- R0.8 `landed` / `merged` (slice 1 residual formal reports) / strict acceptance **`open`**.
-- Shipping runtime: `matrix-js-sdk` only; Rust harness foundation only.
-
-## R0.8 formal report pointers
-
-- [`r0.8-phase-gate-readiness-inventory.md`](r0.8-phase-gate-readiness-inventory.md)
-- [`phase-0-formal-acceptance-report.md`](phase-0-formal-acceptance-report.md) — **not_accepted**
-- [`phase-1-formal-acceptance-report.md`](phase-1-formal-acceptance-report.md) — **not_accepted**
-- [`phase-2-formal-acceptance-report.md`](phase-2-formal-acceptance-report.md) — **not_accepted**
-- [`p3.1-task-acceptance-report.md`](p3.1-task-acceptance-report.md) — **not_accepted**
+- Original-plan artifact inventory: see [`program-status.md`](program-status.md) (P3.2 open PR → 21/112 when ledger includes it).
+- **0 of 15** strict phase gates closed (honest).
+- Shipping runtime: `matrix-js-sdk` only until cutover.
+- Rust: harness foundation growing toward sole owner.
 
 ## Authoritative docs
 
+- Operating model: [`cutover-operating-model.md`](cutover-operating-model.md)
 - Plan: [`../matrix-rust-sdk-full-replacement-plan.md`](../matrix-rust-sdk-full-replacement-plan.md)
 - Full handoff: [`implementation-handoff.md`](implementation-handoff.md)
-- Independent review: [`review-2026-07-25.md`](review-2026-07-25.md)
+- Migration UX (reauth / new device / no token continuity): [`migration-ux-decision.md`](migration-ux-decision.md)
+- Independent review (historical baseline): [`review-2026-07-25.md`](review-2026-07-25.md)
 - Current status: [`program-status.md`](program-status.md)
 
 ## Non-negotiables
 
 - No dual-backend / selector.
+- No concurrent JS + Rust Matrix clients for one session.
 - No merge to `main` without explicit user approval.
-- No re-open of FR-7.8–7.11 quality audit; FR-7.9-011 stays partial sequential.
 - No secrets in diagnostics/IPC.
 - Guardrails stay green.
-- No force-merge without independent review + green required CI.
+- Capability-first slices; atomic cutover; then js-sdk burn-down.
