@@ -3,7 +3,7 @@
 > Generated from `program-status.json` by `scripts/check-matrix-rust-sdk-program-status.mjs`.
 > Do not hand-edit. Dated task evidence and the independent review remain historical records.
 
-As of: 2026-07-25
+As of: 2026-07-26
 
 Integration branch: `feature/matrix-rust-sdk-full-replacement`
 
@@ -50,7 +50,7 @@ Audited snapshot: `edfefee499064b736985b6528896b693e5120f22`
 | ID | Task | Artifact state | Integration state | Strict acceptance |
 |---|---|---|---|---|
 | R0.1 | Quality and metadata recovery | `landed` | `merged` | `accepted` |
-| R0.2 | Governance and Phase 0 evidence | `in_progress` | `not_submitted` | `open` |
+| R0.2 | Governance and Phase 0 evidence | `in_progress` | `pr_open` | `open` |
 | R0.3 | IPC wire-contract correctness | `not_started` | `not_submitted` | `not_reviewed` |
 | R0.4 | Store confinement and key management | `not_started` | `not_submitted` | `not_reviewed` |
 | R0.5 | Safe destructive lifecycle | `not_started` | `not_submitted` | `not_reviewed` |
