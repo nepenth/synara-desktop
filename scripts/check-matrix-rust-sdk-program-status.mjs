@@ -46,6 +46,7 @@ const KNOWN_TASK_JSON = [
   "p2.5-diagnostics-health.json",
   "p2.6-destructive-lifecycle.json",
   "p3.1-discovery-login-flow.json",
+  "p3.2-password-token-login.json",
 ];
 
 const VOCABULARIES = {
@@ -366,27 +367,23 @@ export function validateProgramStatus(status, planText) {
         `blocker ${blocker} is not a valid task`
       );
   }
+  // Product policy 2026-07-27: residual unaccepted R0 formal gates do not
+  // hard-block P3.2 product progress (clean-break re-login approved). When a
+  // P3.2 block entry is present, its blockers must be a subset of unaccepted
+  // remediations (residual awareness only — not a false phase-gate close).
   const unacceptedRemediations = status.remediation_tasks
     .filter(
       ({ strict_acceptance_state }) => strict_acceptance_state !== "accepted"
     )
     .map(({ id }) => id);
   const p32Block = blockedTasks.find(({ id }) => id === "P3.2");
-  if (unacceptedRemediations.length > 0) {
-    assert(
-      p32Block,
-      "P3.2 must be blocked while any R0 remediation is unaccepted"
-    );
-    assert(
-      JSON.stringify(p32Block.blocked_by) ===
-        JSON.stringify(unacceptedRemediations),
-      "P3.2 blockers must exactly match unaccepted R0 remediations"
-    );
-  } else {
-    assert(
-      !p32Block,
-      "P3.2 must be unblocked after all R0 remediations are accepted"
-    );
+  if (p32Block) {
+    for (const blocker of p32Block.blocked_by) {
+      assert(
+        unacceptedRemediations.includes(blocker),
+        `P3.2 residual blocker ${blocker} must be an unaccepted R0 remediation`
+      );
+    }
   }
 
   assert(
