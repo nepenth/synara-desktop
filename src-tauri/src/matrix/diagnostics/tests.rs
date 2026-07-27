@@ -209,8 +209,7 @@ fn r0_6_adversarial_redaction_paths_urls_tokens_sdk_errors() {
             "expected full redaction for {case:?}"
         );
         assert!(
-            looks_like_sensitive_diagnostic(case)
-                || redact_text(case) == REDACTED,
+            looks_like_sensitive_diagnostic(case) || redact_text(case) == REDACTED,
             "sensitive classifier/redactor must catch {case:?}"
         );
         assert!(
@@ -224,7 +223,10 @@ fn r0_6_adversarial_redaction_paths_urls_tokens_sdk_errors() {
         safe_diagnostic_label("p2.3-sdk-build-store"),
         Some("p2.3-sdk-build-store".into())
     );
-    assert_eq!(redact_text("store initialization failed"), "store initialization failed");
+    assert_eq!(
+        redact_text("store initialization failed"),
+        "store initialization failed"
+    );
 }
 
 #[test]
