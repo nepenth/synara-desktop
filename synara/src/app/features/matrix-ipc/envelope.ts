@@ -41,7 +41,7 @@ export const MATRIX_IPC_KINDS = [
   'pong',
 ] as const;
 
-export type MatrixIpcKind = (typeof MATRIX_IPC_KINDS)[number];
+export type MatrixIpcKind = typeof MATRIX_IPC_KINDS[number];
 
 const KIND_SET = new Set<string>(MATRIX_IPC_KINDS);
 
@@ -320,7 +320,7 @@ export function makeEnvelope(
   sessionGeneration: number,
   sequence: number,
   message: MatrixIpcMessage,
-  opts?: { streamId?: string; requestId?: string },
+  opts?: { streamId?: string; requestId?: string }
 ): MatrixIpcEnvelope {
   if (!isWireCounter(sessionGeneration) || !isWireCounter(sequence)) {
     throw new Error('makeEnvelope: sessionGeneration/sequence must be wire-safe counters');
