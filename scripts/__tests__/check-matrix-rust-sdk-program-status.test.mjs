@@ -36,6 +36,18 @@ function markAccepted(task) {
   task.strict_acceptance_state = "accepted";
 }
 
+/** Dual-track ledgers may already have another remediation in progress. */
+function clearInProgressExcept(candidate, exceptId = null) {
+  for (const task of [
+    ...candidate.task_records,
+    ...candidate.remediation_tasks,
+  ]) {
+    if (task.artifact_state === "in_progress" && task.id !== exceptId) {
+      task.artifact_state = "landed";
+    }
+  }
+}
+
 function syncInventory(candidate) {
   const landed = candidate.task_records
     .filter(({ artifact_state: artifactState }) => artifactState === "landed")
@@ -131,6 +143,7 @@ test("rejects phase closure until tasks and audited remediations are accepted", 
   for (const id of ["R0.2", "R0.8"]) {
     markAccepted(valid.remediation_tasks.find((task) => task.id === id));
   }
+  clearInProgressExcept(valid, null);
   valid.current_execution.active_task = null;
   valid.current_execution.next_task = "R0.3";
   syncP32Block(valid);
@@ -140,7 +153,12 @@ test("rejects phase closure until tasks and audited remediations are accepted", 
 test("accepts R0.1 completion and R0.2 activation without checker edits", () => {
   const future = clone(status);
   markAccepted(future.remediation_tasks[0]);
+  clearInProgressExcept(future, "R0.2");
   future.remediation_tasks[1].artifact_state = "in_progress";
+  future.remediation_tasks[1].integration_state =
+    future.remediation_tasks[1].integration_state === "not_submitted"
+      ? "pr_open"
+      : future.remediation_tasks[1].integration_state;
   future.remediation_tasks[1].strict_acceptance_state = "open";
   future.current_execution.active_task = "R0.2";
   future.current_execution.next_task = "R0.3";
