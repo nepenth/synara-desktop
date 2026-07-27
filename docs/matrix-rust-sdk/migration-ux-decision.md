@@ -22,6 +22,12 @@ Related:
 
 **This document is the single source of truth for migration UX policy.** Implementers must not invent dual-backend paths, token/device reuse into a fresh crypto store, or concurrent multi-account promises beyond FR-7.9-011.
 
+**Execution / cutover shape** (how we build and flip owners) is documented in
+[`cutover-operating-model.md`](cutover-operating-model.md). Product-owner
+confirmation (2026-07-27): clean-break re-login and local Matrix wipe are
+acceptable for this desktop client; prefer that over elaborate JS→Rust session
+migration. Sole owner after cutover is Rust only — never a runtime SDK selector.
+
 ---
 
 ## 1. Executive decision summary
