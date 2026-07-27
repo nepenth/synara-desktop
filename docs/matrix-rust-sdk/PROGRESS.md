@@ -9,7 +9,7 @@
 
 | Field | Value |
 | --- | --- |
-| Last updated (UTC) | **2026-07-27 ~14:07** |
+| Last updated (UTC) | **2026-07-27 ~14:12** |
 | Integration tip | `69f1087` — Merge #112 P3.6 session restore |
 | Product runtime | Still **`matrix-js-sdk` only** until atomic sole-owner cutover |
 | Dual backend | **`false`** (forbidden forever) |
@@ -25,10 +25,10 @@
 
 | | |
 | --- | --- |
-| **Now** | **P3.6 merged** (`69f1087`). **#114** rebased onto tip (P3.6+P4.1 guardrails combined). **#115** restacked. Waiting CI → merge P4.1 next. |
+| **Now** | Tip `69f1087` (P3.6). Waiting CI to merge **#114** P4.1. Stack open: #115 P4.2, **#116** P4.3 membership/unread (local 13/13). |
 | **Inventory** | ~23/112 original task artifacts when program-status is synced (P3.1–P3.2 + P3.5–P3.6 landed; see ledger). |
 | **Phase gates** | **0 / 15** strict gates closed (honest). |
-| **Open PRs → integration** | [#114](https://github.com/nepenth/synara-desktop/pull/114) P4.1 (rebase on tip); [#115](https://github.com/nepenth/synara-desktop/pull/115) P4.2; [#113](https://github.com/nepenth/synara-desktop/pull/113) CI filters; [#111](https://github.com/nepenth/synara-desktop/pull/111) this log; [#109](https://github.com/nepenth/synara-desktop/pull/109) MiniMax (deprioritize). |
+| **Open PRs → integration** | [#114](https://github.com/nepenth/synara-desktop/pull/114) P4.1; [#115](https://github.com/nepenth/synara-desktop/pull/115) P4.2; [#116](https://github.com/nepenth/synara-desktop/pull/116) P4.3; [#113](https://github.com/nepenth/synara-desktop/pull/113) CI filters; [#111](https://github.com/nepenth/synara-desktop/pull/111) this log; [#109](https://github.com/nepenth/synara-desktop/pull/109) MiniMax (deprioritize). |
 | **Blocked on** | Rebase/resolve #114 vs tip; CI green for product PRs. Required: Quality gate + Desktop package gate. |
 | **Dogfood path** | Login ✅ → persist ✅ → restore ✅ (**#112**) → **sync readiness (#114)** → **room list (#115)** → timeline. |
 
@@ -97,12 +97,12 @@ Update rules:
 | 4 | Session restore after restart (P3.6) | **Done** (merged #112) |
 | 5 | Sync readiness / reconnect (P4.1) | **In PR** [#114](https://github.com/nepenth/synara-desktop/pull/114) |
 | 6 | Room list snapshot/delta (P4.2) | **In PR** [#115](https://github.com/nepenth/synara-desktop/pull/115) |
-| 7 | Timeline read/send | Not started |
-| 8 | Crypto / verification / recovery | Not started |
-| 9 | Atomic sole-owner cutover + js-sdk burn-down (P11) | Not started |
-| 10 | Merge to `main` (#39) | Needs **explicit user approval** |
+| 7 | Membership / unread / invites (P4.3) | **In PR** [#116](https://github.com/nepenth/synara-desktop/pull/116) |
+| 8 | Timeline read/send | Not started |
+| 9 | Crypto / verification / recovery | Not started |
+| 10 | Atomic sole-owner cutover + js-sdk burn-down (P11) | Not started |
+| 11 | Merge to `main` (#39) | Needs **explicit user approval** |
 
-SSO (P3.3), UIA (P3.4), elaborate legacy dual-state (P3.7) are **not** on the critical dogfood path unless needed.
 
 ---
 
