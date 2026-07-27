@@ -22,6 +22,7 @@
 //! P6.2: Receipt index foundation (harness; no SDK send_receipt).
 //! P6.3: Typing index foundation (harness; no SDK typing send).
 //! P6.4: Media upload queue foundation (metadata only; no bytes / no SDK upload).
+//! P8.1: Security / crypto status projection foundation (harness; no secrets).
 //! No production login/sync loop or Tauri command registration lives here yet.
 //! No dual-backend selector. Product runtime remains matrix-js-sdk.
 
@@ -35,6 +36,7 @@ pub mod media;
 pub mod receipts;
 pub mod relations;
 pub mod room_list;
+pub mod security;
 pub mod send;
 pub mod spaces;
 pub mod store;
@@ -70,6 +72,7 @@ pub fn matrix_ipc_schema_markers() -> &'static str {
     let _spaces = spaces::matrix_spaces_markers();
     let _timeline = timeline::matrix_timeline_markers();
     let _relations = relations::matrix_relations_markers();
+    let _security = security::matrix_security_markers();
     let _send = send::matrix_send_markers();
     let _receipts = receipts::matrix_receipts_markers();
     let _typing = typing::matrix_typing_markers();
@@ -96,9 +99,10 @@ pub fn matrix_ipc_schema_markers() -> &'static str {
     debug_assert_eq!(_spaces, spaces::MATRIX_SPACES_MARKER);
     debug_assert_eq!(_timeline, timeline::MATRIX_TIMELINE_MARKER);
     debug_assert_eq!(_relations, relations::MATRIX_RELATIONS_MARKER);
+    debug_assert_eq!(_security, security::MATRIX_SECURITY_MARKER);
     debug_assert_eq!(_send, send::MATRIX_SEND_MARKER);
     debug_assert_eq!(_receipts, receipts::MATRIX_RECEIPTS_MARKER);
     debug_assert_eq!(_typing, typing::MATRIX_TYPING_MARKER);
     debug_assert_eq!(_media, media::MATRIX_MEDIA_MARKER);
-    "matrix-ipc-protocol-v1+domain-dtos-p1.4+supervisor-p2.1+store-p2.2+client-builder-p2.3+tasks-p2.4+diagnostics-p2.5+lifecycle-p2.6+auth-p3.2+session-persist-p3.5+sync-p4.1+room-list-p4.2+spaces-p4.5+timeline-p5.1+diffs-p5.2+pagination-p5.3+relations-p5.6+send-p6.1+receipts-p6.2+typing-p6.3+media-p6.4"
+    "matrix-ipc-protocol-v1+domain-dtos-p1.4+supervisor-p2.1+store-p2.2+client-builder-p2.3+tasks-p2.4+diagnostics-p2.5+lifecycle-p2.6+auth-p3.2+session-persist-p3.5+sync-p4.1+room-list-p4.2+spaces-p4.5+timeline-p5.1+diffs-p5.2+pagination-p5.3+relations-p5.6+send-p6.1+receipts-p6.2+typing-p6.3+media-p6.4+security-p8.1"
 }
