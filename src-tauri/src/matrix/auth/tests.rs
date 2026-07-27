@@ -355,6 +355,19 @@ fn privacy_errors_never_echo_tokens_or_passwords() {
         AuthError::UnsupportedCapability {
             diagnostic_id: "p3.1-no-wk",
         },
+        AuthError::AuthenticationRejected {
+            diagnostic_id: "p3.2-login-rejected",
+        },
+        AuthError::UserDeactivated {
+            diagnostic_id: "p3.2-login-user-deactivated",
+        },
+        AuthError::InteractiveAuthRequired {
+            diagnostic_id: "p3.2-login-uiaa-required",
+        },
+        AuthError::RateLimited {
+            diagnostic_id: "p3.2-login-rate-limited",
+            retry_after_ms: Some(1_000),
+        },
         AuthError::SdkInvariant {
             diagnostic_id: "p3.1-invariant",
         },
@@ -380,6 +393,22 @@ fn privacy_errors_never_echo_tokens_or_passwords() {
         let _ = err.category();
         assert!(!err.diagnostic_id().is_empty());
     }
+    assert_eq!(
+        AuthError::AuthenticationRejected {
+            diagnostic_id: "p3.2-login-rejected",
+        }
+        .category(),
+        MatrixIpcErrorCategory::AuthenticationRejected
+    );
+}
+
+#[test]
+fn platform_device_display_names_are_product_fixed() {
+    assert_eq!(DEVICE_DISPLAY_NAME_MACOS, "Synara macOS");
+    assert_eq!(DEVICE_DISPLAY_NAME_LINUX, "Synara Linux");
+    let host = platform_device_display_name();
+    assert!(host.starts_with("Synara "), "got {host}");
+    assert_eq!(host_device_platform().device_display_name(), host);
 }
 
 #[test]

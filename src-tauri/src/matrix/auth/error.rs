@@ -1,4 +1,4 @@
-//! Privacy-safe discovery / login-flow errors (P3.1).
+//! Privacy-safe discovery / login-flow / login errors (P3.1 + P3.2).
 //!
 //! Tokens, passwords, recovery keys, and raw homeserver error bodies must never
 //! appear in error messages or diagnostic fields.
@@ -7,10 +7,11 @@ use std::fmt;
 
 use crate::matrix::ipc::MatrixIpcErrorCategory;
 
-/// Failure while validating input, discovering a homeserver, or listing login flows.
+/// Failure while validating input, discovering a homeserver, listing login
+/// flows, or performing password/token login.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AuthError {
-    /// User-supplied homeserver URL or server name is empty/malformed.
+    /// User-supplied homeserver URL, server name, user id, or device name is empty/malformed.
     InvalidInput {
         diagnostic_id: &'static str,
         /// Short privacy-safe reason (no secrets / tokens).
@@ -26,6 +27,20 @@ pub enum AuthError {
     WellKnownNotFound { diagnostic_id: &'static str },
     /// Well-known missing, invalid, or homeserver lacks a required capability.
     UnsupportedCapability { diagnostic_id: &'static str },
+    /// Password/token login rejected (wrong credentials, forbidden, unknown token).
+    ///
+    /// Never includes the password, login token, or access token.
+    AuthenticationRejected { diagnostic_id: &'static str },
+    /// Homeserver reports the account is deactivated.
+    UserDeactivated { diagnostic_id: &'static str },
+    /// Interactive authentication (UIA) required to continue login (P3.4 owns full UIA).
+    InteractiveAuthRequired { diagnostic_id: &'static str },
+    /// Rate limited by the homeserver during login.
+    RateLimited {
+        diagnostic_id: &'static str,
+        /// Optional retry hint in milliseconds (never a secret).
+        retry_after_ms: Option<u64>,
+    },
     /// Transport / protocol invariant violated (redacted).
     SdkInvariant { diagnostic_id: &'static str },
     /// Unclassified failure with opaque diagnostic id only.
@@ -51,6 +66,25 @@ impl fmt::Display for AuthError {
             Self::UnsupportedCapability { diagnostic_id } => {
                 write!(f, "unsupported homeserver capability ({diagnostic_id})")
             }
+            Self::AuthenticationRejected { diagnostic_id } => {
+                write!(f, "authentication rejected ({diagnostic_id})")
+            }
+            Self::UserDeactivated { diagnostic_id } => {
+                write!(f, "user deactivated ({diagnostic_id})")
+            }
+            Self::InteractiveAuthRequired { diagnostic_id } => {
+                write!(f, "interactive auth required ({diagnostic_id})")
+            }
+            Self::RateLimited {
+                diagnostic_id,
+                retry_after_ms,
+            } => match retry_after_ms {
+                Some(ms) => write!(
+                    f,
+                    "auth rate limited ({diagnostic_id}); retry_after_ms={ms}"
+                ),
+                None => write!(f, "auth rate limited ({diagnostic_id})"),
+            },
             Self::SdkInvariant { diagnostic_id } => {
                 write!(f, "auth invariant failure ({diagnostic_id})")
             }
@@ -74,6 +108,10 @@ impl AuthError {
             // surfaced without fallback, treat as unsupported discovery.
             Self::WellKnownNotFound { .. } => MatrixIpcErrorCategory::UnsupportedCapability,
             Self::UnsupportedCapability { .. } => MatrixIpcErrorCategory::UnsupportedCapability,
+            Self::AuthenticationRejected { .. } => MatrixIpcErrorCategory::AuthenticationRejected,
+            Self::UserDeactivated { .. } => MatrixIpcErrorCategory::UserDeactivated,
+            Self::InteractiveAuthRequired { .. } => MatrixIpcErrorCategory::InteractiveAuthRequired,
+            Self::RateLimited { .. } => MatrixIpcErrorCategory::RateLimited,
             Self::SdkInvariant { .. } => MatrixIpcErrorCategory::SdkInvariant,
             Self::Unknown { .. } => MatrixIpcErrorCategory::Unknown,
         }
@@ -86,6 +124,10 @@ impl AuthError {
             | Self::HomeserverUnavailable { diagnostic_id }
             | Self::WellKnownNotFound { diagnostic_id }
             | Self::UnsupportedCapability { diagnostic_id }
+            | Self::AuthenticationRejected { diagnostic_id }
+            | Self::UserDeactivated { diagnostic_id }
+            | Self::InteractiveAuthRequired { diagnostic_id }
+            | Self::RateLimited { diagnostic_id, .. }
             | Self::SdkInvariant { diagnostic_id }
             | Self::Unknown { diagnostic_id } => diagnostic_id,
         }

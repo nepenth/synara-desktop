@@ -1,0 +1,425 @@
+//! Password and token login against an unauthenticated Matrix Rust SDK client (P3.2).
+//!
+//! Uses SDK APIs only under this module:
+//! `client.matrix_auth().login_username(...).initial_device_display_name(...).await`
+//! and `login_token(...)`.
+//!
+//! **Harness / foundation only.** No production Tauri Matrix login commands, no
+//! dual-backend, no session restore (P3.6), no refresh persistence (P3.5), no SSO (P3.3).
+//!
+//! Tokens remain on the SDK `Client` after success. [`LoginResult`] never carries
+//! access/refresh tokens — only privacy-safe identity fields for harness/status.
+
+use matrix_sdk::Client;
+
+use super::device_name::{platform_device_display_name, DevicePlatform};
+use super::error::AuthError;
+
+/// How the caller authenticated (privacy-safe discriminator; no secrets).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum LoginMethodKind {
+    Password,
+    Token,
+}
+
+impl LoginMethodKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Password => "password",
+            Self::Token => "token",
+        }
+    }
+}
+
+/// Privacy-safe outcome of a successful password or token login.
+///
+/// **Never** includes access_token, refresh_token, password, or login token.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LoginResult {
+    pub user_id: String,
+    pub device_id: String,
+    pub homeserver_url: String,
+    /// Device display name sent on the login request (D-NEW-DEVICE).
+    pub device_display_name: String,
+    pub method: LoginMethodKind,
+}
+
+/// Options for password / token login (P3.2).
+#[derive(Debug, Clone, Default)]
+pub struct LoginOptions {
+    /// Initial device display name. Defaults to [`platform_device_display_name`].
+    pub device_display_name: Option<String>,
+    /// When true, request a refresh token from the homeserver (SDK `request_refresh_token`).
+    /// Persistence of that token is **out of scope** (P3.5); this only opts into the SDK flag.
+    pub request_refresh_token: bool,
+}
+
+impl LoginOptions {
+    pub fn with_platform_device_name(platform: DevicePlatform) -> Self {
+        Self {
+            device_display_name: Some(platform.device_display_name().to_owned()),
+            request_refresh_token: false,
+        }
+    }
+
+    fn resolved_device_display_name(&self) -> String {
+        self.device_display_name
+            .clone()
+            .unwrap_or_else(|| platform_device_display_name().to_owned())
+    }
+}
+
+/// Log in with Matrix user id (or localpart) + password.
+///
+/// `client` must be an **unauthenticated** client from P2.3
+/// [`crate::matrix::client_builder::build_unauthenticated_client`].
+///
+/// On success the SDK client holds the session (including tokens). The returned
+/// [`LoginResult`] is privacy-safe for harness/status use.
+pub async fn login_with_password(
+    client: &Client,
+    user_id_or_localpart: &str,
+    password: &str,
+    options: &LoginOptions,
+) -> Result<LoginResult, AuthError> {
+    let user = validate_user_id_or_localpart(user_id_or_localpart)?;
+    validate_password_present(password)?;
+    let device_display_name = options.resolved_device_display_name();
+    validate_device_display_name(&device_display_name)?;
+
+    let mut builder = client
+        .matrix_auth()
+        .login_username(user.as_str(), password)
+        .initial_device_display_name(&device_display_name);
+
+    if options.request_refresh_token {
+        builder = builder.request_refresh_token();
+    }
+
+    let response = builder.send().await.map_err(map_login_sdk_error)?;
+
+    Ok(LoginResult {
+        user_id: response.user_id.to_string(),
+        device_id: response.device_id.to_string(),
+        homeserver_url: client.homeserver().to_string(),
+        device_display_name,
+        method: LoginMethodKind::Password,
+    })
+}
+
+/// Log in with a one-time login token (typically after SSO; not an access token).
+///
+/// Tokens must never be logged or placed on IPC error paths. This function only
+/// passes the token into the SDK login builder.
+pub async fn login_with_token(
+    client: &Client,
+    login_token: &str,
+    options: &LoginOptions,
+) -> Result<LoginResult, AuthError> {
+    validate_login_token_present(login_token)?;
+    let device_display_name = options.resolved_device_display_name();
+    validate_device_display_name(&device_display_name)?;
+
+    let mut builder = client
+        .matrix_auth()
+        .login_token(login_token)
+        .initial_device_display_name(&device_display_name);
+
+    if options.request_refresh_token {
+        builder = builder.request_refresh_token();
+    }
+
+    let response = builder.send().await.map_err(map_login_sdk_error)?;
+
+    Ok(LoginResult {
+        user_id: response.user_id.to_string(),
+        device_id: response.device_id.to_string(),
+        homeserver_url: client.homeserver().to_string(),
+        device_display_name,
+        method: LoginMethodKind::Token,
+    })
+}
+
+fn validate_user_id_or_localpart(raw: &str) -> Result<String, AuthError> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return Err(AuthError::InvalidInput {
+            diagnostic_id: "p3.2-empty-user-id",
+            reason: "user id is empty",
+        });
+    }
+    if trimmed.len() > 255 {
+        return Err(AuthError::InvalidInput {
+            diagnostic_id: "p3.2-user-id-too-long",
+            reason: "user id exceeds length limit",
+        });
+    }
+    // Reject obvious whitespace / control characters; full MXID shape is enforced
+    // by the homeserver / SDK. Localparts are allowed.
+    if trimmed.chars().any(|c| c.is_control() || c.is_whitespace()) {
+        return Err(AuthError::InvalidInput {
+            diagnostic_id: "p3.2-user-id-invalid-chars",
+            reason: "user id contains whitespace or control characters",
+        });
+    }
+    Ok(trimmed.to_owned())
+}
+
+fn validate_password_present(password: &str) -> Result<(), AuthError> {
+    if password.is_empty() {
+        return Err(AuthError::InvalidInput {
+            diagnostic_id: "p3.2-empty-password",
+            reason: "password is empty",
+        });
+    }
+    Ok(())
+}
+
+fn validate_login_token_present(token: &str) -> Result<(), AuthError> {
+    if token.is_empty() {
+        return Err(AuthError::InvalidInput {
+            diagnostic_id: "p3.2-empty-login-token",
+            reason: "login token is empty",
+        });
+    }
+    Ok(())
+}
+
+fn validate_device_display_name(name: &str) -> Result<(), AuthError> {
+    let trimmed = name.trim();
+    if trimmed.is_empty() {
+        return Err(AuthError::InvalidInput {
+            diagnostic_id: "p3.2-empty-device-display-name",
+            reason: "device display name is empty",
+        });
+    }
+    if trimmed.len() > 128 {
+        return Err(AuthError::InvalidInput {
+            diagnostic_id: "p3.2-device-display-name-too-long",
+            reason: "device display name exceeds length limit",
+        });
+    }
+    Ok(())
+}
+
+/// Map SDK login errors to privacy-safe [`AuthError`] variants.
+///
+/// Uses structured UIA detection when available, then classifies from a
+/// redacted structural scan of the error Display text. Never embeds password,
+/// token, or raw homeserver error bodies into Display/diagnostic fields.
+pub(crate) fn map_login_sdk_error(err: matrix_sdk::Error) -> AuthError {
+    if err.as_uiaa_response().is_some() {
+        return AuthError::InteractiveAuthRequired {
+            diagnostic_id: "p3.2-login-uiaa-required",
+        };
+    }
+
+    // Prefer structured kind presence for soft hints, without depending on a
+    // direct `ruma` crate import (ErrorKind is not re-exported as a matrix-sdk type).
+    if let Some(kind) = err.client_api_error_kind() {
+        let kind_debug = format!("{kind:?}");
+        return classify_error_kind_debug(&kind_debug);
+    }
+
+    let raw = format!("{err}");
+    classify_login_message_fallback(&raw)
+}
+
+fn classify_error_kind_debug(kind_debug: &str) -> AuthError {
+    // `Debug` of ErrorKind is variant-shaped (e.g. "Forbidden", "LimitExceeded(...)").
+    // Never include the original SDK error body.
+    let k = kind_debug.to_ascii_lowercase();
+    if k.starts_with("forbidden") || k.starts_with("unauthorized") {
+        return AuthError::AuthenticationRejected {
+            diagnostic_id: "p3.2-login-rejected",
+        };
+    }
+    if k.starts_with("userdeactivated") {
+        return AuthError::UserDeactivated {
+            diagnostic_id: "p3.2-login-user-deactivated",
+        };
+    }
+    if k.starts_with("limitexceeded") {
+        return AuthError::RateLimited {
+            diagnostic_id: "p3.2-login-rate-limited",
+            retry_after_ms: None,
+        };
+    }
+    if k.starts_with("unknowntoken") || k.starts_with("missingtoken") {
+        return AuthError::AuthenticationRejected {
+            diagnostic_id: "p3.2-login-unknown-token",
+        };
+    }
+    if k.starts_with("notfound") {
+        return AuthError::HomeserverUnavailable {
+            diagnostic_id: "p3.2-login-endpoint-not-found",
+        };
+    }
+    if k.starts_with("unrecognized") {
+        return AuthError::UnsupportedCapability {
+            diagnostic_id: "p3.2-login-unrecognized",
+        };
+    }
+    if k.starts_with("weakpassword") || k.starts_with("invalidusername") {
+        return AuthError::AuthenticationRejected {
+            diagnostic_id: "p3.2-login-rejected",
+        };
+    }
+    if k.starts_with("unknown") {
+        return AuthError::AuthenticationRejected {
+            diagnostic_id: "p3.2-login-unknown-rejected",
+        };
+    }
+    AuthError::Unknown {
+        diagnostic_id: "p3.2-login-unknown",
+    }
+}
+
+fn classify_login_message_fallback(message: &str) -> AuthError {
+    let lower = message.to_ascii_lowercase();
+    if looks_like_connectivity(&lower) {
+        return AuthError::Connectivity {
+            diagnostic_id: "p3.2-login-connectivity",
+        };
+    }
+    if lower.contains("deactivated") {
+        return AuthError::UserDeactivated {
+            diagnostic_id: "p3.2-login-user-deactivated",
+        };
+    }
+    if lower.contains("uiaa") || (lower.contains("unauthorized") && lower.contains("interaction")) {
+        return AuthError::InteractiveAuthRequired {
+            diagnostic_id: "p3.2-login-uiaa-required",
+        };
+    }
+    if lower.contains("403")
+        || lower.contains("forbidden")
+        || lower.contains("401")
+        || lower.contains("unauthorized")
+        || lower.contains("invalid username")
+        || lower.contains("invalid password")
+        || lower.contains("m_forbidden")
+    {
+        return AuthError::AuthenticationRejected {
+            diagnostic_id: "p3.2-login-rejected",
+        };
+    }
+    if lower.contains("429") || lower.contains("rate") || lower.contains("limit exceeded") {
+        return AuthError::RateLimited {
+            diagnostic_id: "p3.2-login-rate-limited",
+            retry_after_ms: None,
+        };
+    }
+    if lower.contains("502")
+        || lower.contains("503")
+        || lower.contains("504")
+        || lower.contains("homeserver")
+    {
+        return AuthError::HomeserverUnavailable {
+            diagnostic_id: "p3.2-login-homeserver-unavailable",
+        };
+    }
+    AuthError::Unknown {
+        diagnostic_id: "p3.2-login-unknown",
+    }
+}
+
+fn looks_like_connectivity(lower: &str) -> bool {
+    lower.contains("dns")
+        || lower.contains("connection")
+        || lower.contains("connect")
+        || lower.contains("timed out")
+        || lower.contains("timeout")
+        || lower.contains("network")
+        || lower.contains("offline")
+        || lower.contains("tls")
+        || lower.contains("certificate")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rejects_empty_user_and_password() {
+        assert_eq!(
+            validate_user_id_or_localpart("")
+                .unwrap_err()
+                .diagnostic_id(),
+            "p3.2-empty-user-id"
+        );
+        assert_eq!(
+            validate_password_present("").unwrap_err().diagnostic_id(),
+            "p3.2-empty-password"
+        );
+        assert_eq!(
+            validate_login_token_present("")
+                .unwrap_err()
+                .diagnostic_id(),
+            "p3.2-empty-login-token"
+        );
+    }
+
+    #[test]
+    fn accepts_mxid_and_localpart() {
+        assert_eq!(
+            validate_user_id_or_localpart("  @alice:example.org  ").unwrap(),
+            "@alice:example.org"
+        );
+        assert_eq!(validate_user_id_or_localpart("alice").unwrap(), "alice");
+    }
+
+    #[test]
+    fn login_result_has_no_token_fields() {
+        // Structural privacy: LoginResult fields are only identity metadata.
+        let result = LoginResult {
+            user_id: "@alice:example.org".into(),
+            device_id: "DEVICE".into(),
+            homeserver_url: "https://matrix.example.org".into(),
+            device_display_name: "Synara macOS".into(),
+            method: LoginMethodKind::Password,
+        };
+        let debug = format!("{result:?}");
+        assert!(!debug.contains("access_token"));
+        assert!(!debug.contains("refresh_token"));
+        assert!(!debug.contains("password"));
+        assert_eq!(result.method.as_str(), "password");
+    }
+
+    #[test]
+    fn fallback_classifier_never_echoes_secret_fragments() {
+        let secret = "syt_super_secret_access_token_xyz";
+        let err = classify_login_message_fallback(&format!(
+            "M_FORBIDDEN: invalid password for {secret} password=hunter2"
+        ));
+        assert_eq!(err.diagnostic_id(), "p3.2-login-rejected");
+        assert!(err.display_is_privacy_safe(&[secret, "hunter2", "password="]));
+    }
+
+    #[test]
+    fn kind_debug_classifier_maps_common_variants() {
+        assert_eq!(
+            classify_error_kind_debug("Forbidden").diagnostic_id(),
+            "p3.2-login-rejected"
+        );
+        assert_eq!(
+            classify_error_kind_debug("UserDeactivated").diagnostic_id(),
+            "p3.2-login-user-deactivated"
+        );
+        assert_eq!(
+            classify_error_kind_debug("LimitExceeded(...)").diagnostic_id(),
+            "p3.2-login-rate-limited"
+        );
+        assert!(classify_error_kind_debug("Forbidden")
+            .display_is_privacy_safe(&["syt_token", "password=x"]));
+    }
+
+    #[test]
+    fn options_default_uses_platform_name_resolution() {
+        let opts = LoginOptions::default();
+        let name = opts.resolved_device_display_name();
+        assert!(name.starts_with("Synara "));
+        let macos = LoginOptions::with_platform_device_name(DevicePlatform::MacOs);
+        assert_eq!(macos.resolved_device_display_name(), "Synara macOS");
+    }
+}
