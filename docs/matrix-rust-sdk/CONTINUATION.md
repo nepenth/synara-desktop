@@ -24,66 +24,57 @@ evidence, is authoritative for current delivery and acceptance state.
 | Item | Value |
 |---|---|
 | Integration branch | `feature/matrix-rust-sdk-full-replacement` |
-| Live integration tip (this handoff) | `9ab482bcc00998b3c9f62d227ccacfd42000b6cd` — **R0.5 / #86 merged**; re-fetch and verify |
+| Live integration tip (this handoff) | `ba75e460109203b953bfcac77109bbd2d11268cb` — **R0.4 / #87 merged** on top of R0.5; re-fetch and verify |
 | Historical audited snapshot | `edfefee499064b736985b6528896b693e5120f22` — bound to the 2026-07-25 review, not the live tip |
-| Merged this fire | PR [#86](https://github.com/nepenth/synara-desktop/pull/86) — R0.5 transactional wipe (REV-001), merge `9ab482b` |
-| Active product PR | PR [#87](https://github.com/nepenth/synara-desktop/pull/87) — R0.4 store confinement; CI was all-green on pre-#86 base — re-check mergeability after #86 |
-| Open R0.2-E1 PR | PR [#82](https://github.com/nepenth/synara-desktop/pull/82) — tooling; cheap CI-portability only; park residual if thrash continues |
+| Merged product fixes | PR [#86](https://github.com/nepenth/synara-desktop/pull/86) R0.5 wipe (**accepted**); PR [#87](https://github.com/nepenth/synara-desktop/pull/87) R0.4 store confinement (**merged**, strict acceptance **open** — keyring residual) |
+| Open R0.2-E1 PR | PR [#82](https://github.com/nepenth/synara-desktop/pull/82) — tooling; cheap CI-portability only; park residual if thrash |
 | Open PR to `main` | [#39](https://github.com/nepenth/synara-desktop/pull/39) — **do not merge without user approval** |
-| Current execution | Dual-track: **R0.5 accepted/merged**; next **review/merge #87 (R0.4)**; then R0.6 → R0.3 → P3.2 when Critical/High residual allows |
+| Current execution | Dual-track: next **implement R0.6 diagnostic privacy** (REV-003); then R0.3 IPC; residual R0.4 native keyring; timebox #82 |
 
-Always re-fetch and verify branch tips and PR state. The SHAs above are the exact
-handoff snapshot, not a promise that remote state has not advanced.
+Always re-fetch and verify branch tips and PR state.
 
 ## Exact continuation point
 
 ### Dual-track priority (user-approved)
 
-1. **Review/merge open product PRs** targeting integration (never `main`).
-2. Prefer Critical/High product defects: R0.5 wipe ✓, **R0.4 store confinement next**, then R0.6 privacy, R0.3 IPC.
-3. R0.2-E1 (#82): only cheap CI-portability fixes; merge if green; if CI thrash continues, park with residual and proceed with product engineering.
-4. Do **not** block forever on formal R0.8 phase-gate theater before product Critical/High land.
-5. Original-plan inventory stays **20/112** until more P-tasks land; R0 does not inflate that count.
+1. Land Critical/High product fixes first (R0.5 ✓, R0.4 path confinement ✓).
+2. Next product engineering: **R0.6 diagnostic privacy** (REV-003), then **R0.3 IPC** (REV-004/005).
+3. R0.4 residual (do not block R0.6): native macOS/Linux secret-store provider, production keyring, live encrypted reopen evidence.
+4. R0.2-E1 (#82): merge if green; park residual if thrash continues.
+5. Inventory stays **20/112** until more P-tasks land.
 6. No dual-backend; no production cutover; no merge to `main` without explicit approval.
 
-### This fire (2026-07-27)
+### This fire (2026-07-27, R0.4)
 
-- Independently reviewed PR **#86** (R0.5 / REV-001) against wipe ordering requirements.
-- Local: `cargo test --locked matrix::lifecycle` **19 pass**; `cargo test --locked matrix::` **191 pass**.
-- Exact-head CI all required checks **green** (Validate desktop, Quality gate, Synapse, iOS, package smoke).
-- **Merged** #86 → integration `9ab482b`.
-- R0.5 ledger: `landed` / `merged` / **`accepted`** (product fix + tests + green CI). Phase 2 gate remains **open** (still blocked by R0.4/R0.6/R0.7/R0.8).
+- Independently reviewed PR **#87** against REV-002/006/007.
+- Local: `cargo test --locked matrix::store` **16 pass**; `cargo test --locked matrix::` **193 pass**.
+- Exact-head CI all required checks green.
+- **Merged** #87 → integration `ba75e46`.
+- Ledger: R0.4 `landed`/`merged`/`open` (path slice only; keyring residual).
 
 ### Next owner procedure
 
 ```bash
 git fetch origin
-gh pr view 87 --json headRefOid,baseRefName,mergeable,mergeStateStatus,statusCheckRollup
-# If #87 is behind integration after #86, rebase onto feature/matrix-rust-sdk-full-replacement
-# Independently review diff vs REV-002/006/007; rerun focused store tests + guardrails
-# Merge only on green non-cancelled required checks for the reviewed SHA
+git checkout feature/matrix-rust-sdk-full-replacement
+git pull --ff-only
+# Implement R0.6: redact URLs, absolute paths, raw SDK errors from diagnostics
+# (ClientBuildPlan, WipeReport, store layout projection, builder errors)
+# Add adversarial redaction tests; no product cutover commands
 ```
-
-Then: R0.6 diagnostic privacy → R0.3 IPC wire freeze → timebox remaining R0.2 evidence → P3.2 when dual-track Critical/High residual allows.
 
 ## Program accounting
 
-- Original-plan artifact inventory remains **20 / 112 (~18%)**. R0 corrective
-  work does not increment that metric.
+- Original-plan artifact inventory remains **20 / 112 (~18%)**.
 - **0 of 15** strict phase gates are closed.
-- R0.5 is **accepted** on integration. R0.4 is `in_progress` / `pr_open`. R0.2 remains
-  `landed` / `pr_open` / strict acceptance `open` (E1 unmerged).
-- The shipping desktop runtime remains `matrix-js-sdk` only; the Rust SDK is
-  still a harness foundation. There is no dual backend and no cutover.
-- P3.2 remains blocked by unaccepted R0 remediations (R0.5 removed from that list).
+- R0.5 **accepted**. R0.4 **merged** but strict acceptance **open** (keyring residual).
+- R0.2 remains `landed` / `pr_open` / strict acceptance `open`.
+- Shipping runtime: `matrix-js-sdk` only; Rust harness foundation only.
 
 ## Authoritative docs
 
 - Plan: [`../matrix-rust-sdk-full-replacement-plan.md`](../matrix-rust-sdk-full-replacement-plan.md)
-- Detailed E1 handoff: [`r0.2-e1-handoff-2026-07-26.md`](r0.2-e1-handoff-2026-07-26.md)
-- Full implementation handoff: [`implementation-handoff.md`](implementation-handoff.md)
-- Parity: [`feature-parity-traceability.md`](feature-parity-traceability.md)
-- Migration UX: [`migration-ux-decision.md`](migration-ux-decision.md)
+- Full handoff: [`implementation-handoff.md`](implementation-handoff.md)
 - Independent review: [`review-2026-07-25.md`](review-2026-07-25.md)
 - Current status: [`program-status.md`](program-status.md)
 
@@ -94,5 +85,4 @@ Then: R0.6 diagnostic privacy → R0.3 IPC wire freeze → timebox remaining R0.
 - No re-open of FR-7.8–7.11 quality audit; FR-7.9-011 stays partial sequential.
 - No secrets in diagnostics/IPC.
 - Guardrails stay green.
-- No unnecessary E1 scope expansion beyond the 11-path set.
 - No force-merge without independent review + green required CI.
