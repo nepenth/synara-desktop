@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "report_id": "phase-0-formal-acceptance-report",
+  "task_id": "R0.8",
+  "report_kind": "phase_formal_acceptance",
+  "phase": 0,
+  "title": "Phase 0 formal acceptance report",
+  "issued_by": "R0.8",
+  "as_of_utc": "2026-07-27T09:40:00Z",
+  "subject": {
+    "integration_branch": "feature/matrix-rust-sdk-full-replacement",
+    "integration_tip_sha": "e7d9cb992b8f7e648a232b8d006f7f3e5f3c77d2",
+    "product_evidence_sha": "3a2fa6f400762f95b4851d02206d5be8ee550c66"
+  },
+  "verdict": "not_accepted",
+  "phase_gate_state": "open",
+  "strict_acceptance_state": "open",
+  "tasks_in_scope": ["P0.1", "P0.2", "P0.3", "P0.4", "P0.5", "P0.6", "P0.7"],
+  "tasks_strict_accepted": [],
+  "blocking_residuals": [
+    {
+      "id": "RES-R0.2-E1-PARKED",
+      "summary": "R0.2-E1 PR #82 parked on identical CI residual v2 exceeded 512 MiB; R0.2 strict acceptance remains open"
+    },
+    {
+      "id": "RES-PHASE0-EVIDENCE-MANIFEST",
+      "summary": "phase0-evidence-manifest still lists open/stale/blocked evidence and residual rows; only accepted rows may satisfy gates"
+    },
+    {
+      "id": "RES-R0.8-FORMAL-ACCEPT",
+      "summary": "No independent attestation authorizes Phase 0 closed/accepted on this subject"
+    }
+  ],
+  "evidence_refs": [
+    "docs/matrix-rust-sdk/r0.8-phase-gate-readiness-inventory.json",
+    "docs/matrix-rust-sdk/phase0-evidence-manifest.json",
+    "docs/matrix-rust-sdk/program-status.json"
+  ],
+  "ci_refs": [
+    {
+      "head_sha": "3a2fa6f400762f95b4851d02206d5be8ee550c66",
+      "url": "https://github.com/nepenth/synara-desktop/actions/runs/30250177308",
+      "conclusion": "success",
+      "note": "Quality path green; does not clear Phase 0 evidence residuals"
+    }
+  ],
+  "attestation": {
+    "decision": "Phase 0 remains open. This report is a truthful residual formal record, not acceptance.",
+    "independent_reviewer_required_for_accept": true,
+    "implementer_cannot_self_accept": true
+  }
+}
