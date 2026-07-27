@@ -11,6 +11,7 @@
 //! P3.1: Discovery and login-flow service (harness; no login execution).
 //! P3.2: Password/token login + device naming (harness).
 //! P3.5: Session secret / refresh-token persistence foundation (host vault only).
+//! P4.1: Sync service readiness / reconnect model (harness foundation).
 //! No production login/sync loop or Tauri command registration lives here yet.
 //! No dual-backend selector. Product runtime remains matrix-js-sdk.
 
@@ -22,6 +23,7 @@ pub mod ipc;
 pub mod lifecycle;
 pub mod store;
 pub mod supervisor;
+pub mod sync;
 pub mod tasks;
 
 // Keep schema/DTO/supervisor/store/client_builder/tasks/diagnostics/lifecycle/auth
@@ -51,6 +53,7 @@ pub fn matrix_ipc_schema_markers() -> &'static str {
     let _diagnostics = diagnostics::matrix_diagnostics_markers();
     let _lifecycle = lifecycle::matrix_lifecycle_markers();
     let _auth = auth::matrix_auth_markers();
+    let _sync = sync::matrix_sync_markers();
     debug_assert_eq!(_version, 1);
     debug_assert!(_kinds > 0);
     debug_assert!(_errors > 0);
@@ -68,5 +71,6 @@ pub fn matrix_ipc_schema_markers() -> &'static str {
     debug_assert_eq!(_diagnostics, diagnostics::MATRIX_DIAGNOSTICS_MARKER);
     debug_assert_eq!(_lifecycle, lifecycle::MATRIX_LIFECYCLE_MARKER);
     debug_assert_eq!(_auth, auth::MATRIX_AUTH_MARKER);
-    "matrix-ipc-protocol-v1+domain-dtos-p1.4+supervisor-p2.1+store-p2.2+client-builder-p2.3+tasks-p2.4+diagnostics-p2.5+lifecycle-p2.6+auth-p3.2+session-persist-p3.5"
+    debug_assert_eq!(_sync, sync::MATRIX_SYNC_MARKER);
+    "matrix-ipc-protocol-v1+domain-dtos-p1.4+supervisor-p2.1+store-p2.2+client-builder-p2.3+tasks-p2.4+diagnostics-p2.5+lifecycle-p2.6+auth-p3.2+session-persist-p3.5+sync-p4.1"
 }
