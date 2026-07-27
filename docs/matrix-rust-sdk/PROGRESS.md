@@ -9,8 +9,8 @@
 
 | Field | Value |
 | --- | --- |
-| Last updated (UTC) | **2026-07-27 ~20:26** |
-| Integration tip | `116ed3d` — Merge #129 P5.6 relations index |
+| Last updated (UTC) | **2026-07-27 ~20:52** |
+| Integration tip | `27f870e` — Merge #131 P5.8 thread list index |
 | Product runtime | Still **`matrix-js-sdk` only** until atomic sole-owner cutover |
 | Dual backend | **`false`** (forbidden forever) |
 | Operating model | [cutover-operating-model.md](cutover-operating-model.md) |
@@ -25,12 +25,12 @@
 
 | | |
 | --- | --- |
-| **Now** | **#129 P5.6 merged.** Primary next: **#131 P5.8** threads (tip-updated after #129; CI re-run). |
-| **Inventory** | ~36/112 original task artifacts when program-status is synced (through P5.6 landed; see ledger). |
+| **Now** | **#131 P5.8 merged.** Primary next: **#133 P4.6** members (tip-updated after #131; CI re-run). |
+| **Inventory** | ~37/112 original task artifacts when program-status is synced (through P5.8 landed; see ledger). |
 | **Phase gates** | **0 / 15** strict gates closed (honest). |
-| **Open PRs → integration** | [#131](https://github.com/nepenth/synara-desktop/pull/131) threads, [#133](https://github.com/nepenth/synara-desktop/pull/133) members, [#135](https://github.com/nepenth/synara-desktop/pull/135) notifications; [#109](https://github.com/nepenth/synara-desktop/pull/109) MiniMax (deprioritize). |
-| **Blocked on** | CI green for #131 after tip-merge with #129. Required: Quality gate + Desktop package gate. |
-| **Dogfood path** | media ✅ → relations ✅ (**#129**) → **threads (#131)** → members/notifications. |
+| **Open PRs → integration** | [#133](https://github.com/nepenth/synara-desktop/pull/133) members, [#135](https://github.com/nepenth/synara-desktop/pull/135) notifications, [#137](https://github.com/nepenth/synara-desktop/pull/137) security status; [#109](https://github.com/nepenth/synara-desktop/pull/109) MiniMax (deprioritize). |
+| **Blocked on** | CI green for #133 after tip-merge with #131. Required: Quality gate + Desktop package gate. |
+| **Dogfood path** | relations ✅ → threads ✅ (**#131**) → **members (#133)** → notifications/security. |
 
 ---
 
@@ -58,6 +58,8 @@ Update rules:
 
 | When (UTC) | Item | Result | Notes |
 | --- | --- | --- | --- |
+| ~20:50 | **P5.8** thread list index foundation | **Merged** [#131](https://github.com/nepenth/synara-desktop/pull/131) | ThreadIndex activity order + cap; tip `27f870e`. |
+| ~20:30 | **P8.1** security status projection | **PR open** [#137](https://github.com/nepenth/synara-desktop/pull/137) | SecurityStatusStore; no keys/secrets; local 5/5. |
 | ~20:24 | **P5.6** relations index foundation | **Merged** [#129](https://github.com/nepenth/synara-desktop/pull/129) | RelationIndex reactions/replaces/refs/threads; tip `116ed3d`. |
 | ~20:06 | **P7.1** notification candidate index | **PR open** [#135](https://github.com/nepenth/synara-desktop/pull/135) | NotificationIndex suppress/dedup/cap; local 7/7. |
 | ~19:58 | **P6.4** media upload queue foundation | **Merged** [#128](https://github.com/nepenth/synara-desktop/pull/128) | UploadQueue metadata-only; tip `f44bc5c`. Dogfood send/receipts/typing/media foundations landed. |
@@ -132,9 +134,10 @@ Update rules:
 | 15 | Typing index (P6.3) | **Done** (merged #127) |
 | 16 | Media upload queue (P6.4) | **Done** (merged #128) |
 | 17 | Relations / reactions (P5.6) | **Done** (merged #129) |
-| 18 | Thread list / summaries (P5.8) | **In PR** [#131](https://github.com/nepenth/synara-desktop/pull/131) |
+| 18 | Thread list / summaries (P5.8) | **Done** (merged #131) |
 | 19 | Member / power-level index (P4.6) | **In PR** [#133](https://github.com/nepenth/synara-desktop/pull/133) |
 | 20 | Notification candidates (P7.1) | **In PR** [#135](https://github.com/nepenth/synara-desktop/pull/135) |
+| 21 | Security status projection (P8.1) | **In PR** [#137](https://github.com/nepenth/synara-desktop/pull/137) |
 | 10 | Crypto / verification / recovery | Not started |
 | 11 | Atomic sole-owner cutover + js-sdk burn-down (P11) | Not started |
 | 12 | Merge to `main` (#39) | Needs **explicit user approval** |
