@@ -9,7 +9,7 @@
 
 | Field | Value |
 | --- | --- |
-| Last updated (UTC) | **2026-07-27 ~13:30** (seeded at PROGRESS.md introduction) |
+| Last updated (UTC) | **2026-07-27 ~13:32** |
 | Integration tip | `8b7d39e` — Merge #110 P3.5 session secret persistence |
 | Product runtime | Still **`matrix-js-sdk` only** until atomic sole-owner cutover |
 | Dual backend | **`false`** (forbidden forever) |
@@ -25,12 +25,12 @@
 
 | | |
 | --- | --- |
-| **Now** | P3.5 **merged**. Next product slice: **P3.6 session restore** (restart dogfood path). |
+| **Now** | P3.5 **merged**. **P3.6 session restore** open as [#112](https://github.com/nepenth/synara-desktop/pull/112) (CI in progress). |
 | **Inventory** | ~22/112 original task artifacts when program-status is synced (P3.1–P3.2 + P3.5 landed; see ledger). |
 | **Phase gates** | **0 / 15** strict gates closed (honest). |
-| **Open PRs → integration** | [#109](https://github.com/nepenth/synara-desktop/pull/109) MiniMax helper (tooling). |
+| **Open PRs → integration** | [#112](https://github.com/nepenth/synara-desktop/pull/112) P3.6 restore (product); [#111](https://github.com/nepenth/synara-desktop/pull/111) this progress log; [#109](https://github.com/nepenth/synara-desktop/pull/109) MiniMax helper. |
 | **Blocked on** | Nothing hard-blocking product slices (product-first policy). |
-| **Dogfood path** | Login ✅ (P3.2) → persist secrets ✅ (P3.5) → **restore (P3.6)** → sync/room list. |
+| **Dogfood path** | Login ✅ (P3.2) → persist secrets ✅ (P3.5) → **restore in flight (P3.6 / #112)** → sync/room list. |
 
 ---
 
@@ -58,7 +58,9 @@ Update rules:
 
 | When (UTC) | Item | Result | Notes |
 | --- | --- | --- | --- |
-| ~13:26 | **P3.5** session secret / refresh-token persistence | **Merged** [#110](https://github.com/nepenth/synara-desktop/pull/110) | Host keyring vault + `persist_session_after_login`; restore deferred to P3.6. Tip `8b7d39e`. |
+| ~13:29 | **P3.6** session restore foundation | **PR open** [#112](https://github.com/nepenth/synara-desktop/pull/112) | Vault → identity bind → `restore_session` under lifecycle only; CI running. |
+| ~13:30 | **PROGRESS.md** live work log introduced | **PR open** [#111](https://github.com/nepenth/synara-desktop/pull/111) | Remote-monitor file for orchestrator updates. |
+| ~13:23 | **P3.5** session secret / refresh-token persistence | **Merged** [#110](https://github.com/nepenth/synara-desktop/pull/110) | Host keyring vault + `persist_session_after_login`. Tip `8b7d39e`. |
 | ~12:57 | Cutover **operating model** docs | **Merged** [#108](https://github.com/nepenth/synara-desktop/pull/108) | Canonical capability slices + atomic sole-owner cutover. |
 | ~12:36 | **P3.2** password/token login + device naming | **Merged** [#107](https://github.com/nepenth/synara-desktop/pull/107) | Harness login under `matrix/auth/`; D-NEW-DEVICE names; guardrail allowlist. |
 | earlier | **R0.2-E1** traceability tooling | **Merged** [#82](https://github.com/nepenth/synara-desktop/pull/82) | Governance tooling; not product cutover. |
@@ -84,7 +86,7 @@ Update rules:
 | 1 | Discovery / login-flow list (P3.1) | **Done** (artifact) |
 | 2 | Password/token login + device name (P3.2) | **Done** (merged) |
 | 3 | Session secret persist / refresh structure (P3.5) | **Done** (merged) |
-| 4 | Session restore after restart (P3.6) | **Next** |
+| 4 | Session restore after restart (P3.6) | **In PR** [#112](https://github.com/nepenth/synara-desktop/pull/112) |
 | 5 | Sync + room list (P4.x start) | Not started |
 | 6 | Timeline read/send | Not started |
 | 7 | Crypto / verification / recovery | Not started |
