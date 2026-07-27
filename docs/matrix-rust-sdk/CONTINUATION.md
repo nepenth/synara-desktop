@@ -24,12 +24,12 @@ evidence, is authoritative for current delivery and acceptance state.
 | Item | Value |
 |---|---|
 | Integration branch | `feature/matrix-rust-sdk-full-replacement` |
-| Live integration tip (this handoff) | `5492841eea925ee2176c0e585c478b2b208f4719` — **R0.6 / #89 merged** on top of docs #88 + R0.4/R0.5; re-fetch and verify |
+| Live integration tip (this handoff) | `451eca403117ef1cd75b1ebb1feef8f1dca9569b` — **R0.3 / #91+#92 merged**; re-fetch and verify |
 | Historical audited snapshot | `edfefee499064b736985b6528896b693e5120f22` — bound to the 2026-07-25 review, not the live tip |
-| Merged product fixes | PR [#86](https://github.com/nepenth/synara-desktop/pull/86) R0.5 wipe (**accepted**); PR [#87](https://github.com/nepenth/synara-desktop/pull/87) R0.4 path confinement (**merged**, strict acceptance **open** — keyring residual); PR [#89](https://github.com/nepenth/synara-desktop/pull/89) R0.6 diagnostic privacy (**accepted**) |
+| Merged product fixes | PR [#86](https://github.com/nepenth/synara-desktop/pull/86) R0.5 wipe (**accepted**); PR [#87](https://github.com/nepenth/synara-desktop/pull/87) R0.4 path confinement (**merged**, strict acceptance **open** — keyring residual); PR [#89](https://github.com/nepenth/synara-desktop/pull/89) R0.6 diagnostic privacy (**accepted**); PR [#91](https://github.com/nepenth/synara-desktop/pull/91)+[#92](https://github.com/nepenth/synara-desktop/pull/92) R0.3 IPC wire freeze (**accepted**) |
 | Parked R0.2-E1 PR | PR [#82](https://github.com/nepenth/synara-desktop/pull/82) — **draft / parked** (2× CI `v2 exceeded 512 MiB` residual; do not thrash) |
 | Open PR to `main` | [#39](https://github.com/nepenth/synara-desktop/pull/39) — **do not merge without user approval** |
-| Current execution | Dual-track: next **implement R0.3 IPC wire freeze** (REV-004/005); residual R0.4 native keyring; parked #82 |
+| Current execution | Dual-track: next **P3.2** password/token login harness (blocked by unaccepted R0.2/R0.4 residual/R0.7/R0.8); residual R0.4 native keyring; parked #82 |
 
 Always re-fetch and verify branch tips and PR state.
 
@@ -37,21 +37,21 @@ Always re-fetch and verify branch tips and PR state.
 
 ### Dual-track priority (user-approved)
 
-1. Land Critical/High product fixes first (R0.5 ✓, R0.4 path confinement ✓, R0.6 ✓).
-2. Next product engineering: **R0.3 IPC wire freeze** (REV-004/005).
-3. R0.4 residual (do not block R0.3): native macOS/Linux secret-store provider, production keyring, live encrypted reopen evidence.
+1. Land Critical/High product fixes first (R0.5 ✓, R0.4 path confinement ✓, R0.6 ✓, R0.3 ✓).
+2. Next product engineering: **P3.2** password/token login harness when remediations allow; practical residual first: **R0.4 keyring**.
+3. R0.4 residual: native macOS/Linux secret-store provider, production keyring, live encrypted reopen evidence.
 4. R0.2-E1 (#82): **parked** on identical 512 MiB isolation-benchmark residual; resume only with a deliberate memory-bound fix.
 5. Inventory stays **20/112** until more P-tasks land.
 6. No dual-backend; no production cutover; no merge to `main` without explicit approval.
 
-### This fire (2026-07-27, R0.6)
+### This fire (2026-07-27, R0.3 status handoff)
 
-- Independently reviewed PR **#89** against REV-003.
-- Local: `cargo test --locked matrix::` **196 pass**; boundaries/guardrails pass.
-- Exact-head CI all required checks green.
-- **Merged** #89 → integration `5492841`.
-- Ledger: R0.6 `landed` / `merged` / **`accepted`**.
-- Also merged docs #88 earlier; parked #82 as draft.
+- Independently reviewed and merged PR **#91** (wire counters + stream-id authority) and PR **#92** (topic→DTO body binding + secret/media reject).
+- Local: `cargo test --locked matrix::` **206 pass** (on #92); guardrails/prettier pass on exact head.
+- Exact-head CI all required checks green on #92 `4299286`.
+- **Merged** #92 → integration `451eca4` (on top of #91).
+- Ledger: R0.3 `landed` / `merged` / **`accepted`** (REV-004 + REV-005 residual closed for contract freeze).
+- Status docs catch-up this PR; #82 remains parked draft.
 
 ### Next owner procedure
 
@@ -59,17 +59,16 @@ Always re-fetch and verify branch tips and PR state.
 git fetch origin
 git checkout feature/matrix-rust-sdk-full-replacement
 git pull --ff-only
-# Implement R0.3: IPC counters safe across Rust/JS (bounded safe integers or
-# decimal strings); freeze stream identity + payload contracts (REV-004/005);
-# regenerate schemas/fixtures; cross-language boundary tests
-# No product cutover commands; no dual-backend
+# Prefer residual R0.4: native secret-store / production keyring / live encrypted reopen
+# Or start P3.2 harness only when blockers (R0.2, R0.4 residual, R0.7, R0.8) allow
+# No product cutover commands; no dual-backend; no main merge without approval
 ```
 
 ## Program accounting
 
 - Original-plan artifact inventory remains **20 / 112 (~18%)**.
 - **0 of 15** strict phase gates are closed.
-- R0.5 **accepted**. R0.6 **accepted**. R0.4 **merged** but strict acceptance **open** (keyring residual).
+- R0.3 **accepted**. R0.5 **accepted**. R0.6 **accepted**. R0.4 **merged** but strict acceptance **open** (keyring residual).
 - R0.2 remains `landed` / `pr_open` (parked draft) / strict acceptance `open`.
 - Shipping runtime: `matrix-js-sdk` only; Rust harness foundation only.
 
