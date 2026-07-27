@@ -16,8 +16,9 @@
 //! P4.5: Space hierarchy / filters / parents (harness foundation).
 //! P5.1: Timeline registry and lifecycle (harness foundation).
 //! P5.2: Timeline snapshot / ordered-diff projection (harness foundation).
-//! P5.3: Timeline pagination state machine (harness foundation).
+//! P5.3: Timeline pagination state machine foundation.
 //! P6.1: Outbound send queue + local-echo foundation (harness; no Room::send).
+//! P6.2: Receipt index foundation (harness; no SDK send_receipt).
 //! No production login/sync loop or Tauri command registration lives here yet.
 //! No dual-backend selector. Product runtime remains matrix-js-sdk.
 
@@ -27,6 +28,7 @@ pub mod diagnostics;
 pub mod dto;
 pub mod ipc;
 pub mod lifecycle;
+pub mod receipts;
 pub mod room_list;
 pub mod send;
 pub mod spaces;
@@ -36,9 +38,14 @@ pub mod sync;
 pub mod tasks;
 pub mod timeline;
 
+// Keep schema/DTO/supervisor/store/client_builder/tasks/diagnostics/lifecycle/auth
+// symbols resolved in non-test builds (avoids dead-strip until production
+// consumers land later).
 const _: fn() -> &'static str = matrix_ipc_schema_markers;
 
 /// Touch Matrix foundation paths so they remain linked in non-test builds.
+///
+/// Returns a static marker only — no login/sync loop or Tauri Matrix commands.
 pub fn matrix_ipc_schema_markers() -> &'static str {
     let _version = ipc::MATRIX_IPC_PROTOCOL_VERSION;
     let _kinds = ipc::MATRIX_IPC_KINDS.len();
@@ -62,6 +69,7 @@ pub fn matrix_ipc_schema_markers() -> &'static str {
     let _spaces = spaces::matrix_spaces_markers();
     let _timeline = timeline::matrix_timeline_markers();
     let _send = send::matrix_send_markers();
+    let _receipts = receipts::matrix_receipts_markers();
     debug_assert_eq!(_version, 1);
     debug_assert!(_kinds > 0);
     debug_assert!(_errors > 0);
@@ -84,5 +92,6 @@ pub fn matrix_ipc_schema_markers() -> &'static str {
     debug_assert_eq!(_spaces, spaces::MATRIX_SPACES_MARKER);
     debug_assert_eq!(_timeline, timeline::MATRIX_TIMELINE_MARKER);
     debug_assert_eq!(_send, send::MATRIX_SEND_MARKER);
-    "matrix-ipc-protocol-v1+domain-dtos-p1.4+supervisor-p2.1+store-p2.2+client-builder-p2.3+tasks-p2.4+diagnostics-p2.5+lifecycle-p2.6+auth-p3.2+session-persist-p3.5+sync-p4.1+room-list-p4.2+spaces-p4.5+timeline-p5.1+diffs-p5.2+pagination-p5.3+send-p6.1"
+    debug_assert_eq!(_receipts, receipts::MATRIX_RECEIPTS_MARKER);
+    "matrix-ipc-protocol-v1+domain-dtos-p1.4+supervisor-p2.1+store-p2.2+client-builder-p2.3+tasks-p2.4+diagnostics-p2.5+lifecycle-p2.6+auth-p3.2+session-persist-p3.5+sync-p4.1+room-list-p4.2+spaces-p4.5+timeline-p5.1+diffs-p5.2+pagination-p5.3+send-p6.1+receipts-p6.2"
 }
