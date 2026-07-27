@@ -62,6 +62,11 @@ Rust and TypeScript contract tests assert their constants match this catalog.
 | `invalid_error_with_secret_field.json` | Secret-looking field rejected |
 | `invalid_hello_missing_client_protocol_version.json` | Incomplete hello payload |
 | `invalid_subscribe_missing_stream_id.json` | Incomplete subscribe payload |
+| `invalid_sequence_above_wire_max.json` | Wire counter above `MAX_SAFE_INTEGER` |
+| `invalid_stream_id_mismatch.json` | Envelope/payload streamId mismatch |
+| `invalid_snapshot_body_secret_field.json` | Secret field in topic body rejected |
+| `invalid_snapshot_body_wrong_topic_shape.json` | Body shape mismatch for topic |
+| `invalid_delta_body_media_bytes.json` | Media byte array in body rejected |
 
 Both Rust (`cargo test --locked matrix::ipc`) and TypeScript (`node:test` via
 modernization runner or direct esbuild bundle) load these fixtures. P1.5 covers

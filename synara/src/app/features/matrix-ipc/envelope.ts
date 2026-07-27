@@ -22,6 +22,7 @@ import type {
   UnsubscribedPayload,
 } from './stream';
 import { isCancelReason, isResyncReason, isStreamTopic } from './stream';
+import { validateStreamTopicBody } from './streamBody';
 import { MATRIX_IPC_PROTOCOL_VERSION, isWireCounter } from './version';
 
 export const MATRIX_IPC_KINDS = [
@@ -151,13 +152,15 @@ function parseMessage(kind: MatrixIpcKind, payload: unknown): MatrixIpcMessage |
       const streamId = requireString(payload, 'streamId');
       const snapshotId = requireString(payload, 'snapshotId');
       if (!streamId || !snapshotId) return null;
+      const body = payload.body === undefined ? {} : payload.body;
+      if (!validateStreamTopicBody(payload.topic, body)) return null;
       return {
         kind,
         payload: {
           streamId,
           topic: payload.topic,
           snapshotId,
-          body: payload.body,
+          body,
         },
       };
     }
@@ -165,6 +168,8 @@ function parseMessage(kind: MatrixIpcKind, payload: unknown): MatrixIpcMessage |
       if (!isStreamTopic(payload.topic)) return null;
       const streamId = requireString(payload, 'streamId');
       if (!streamId) return null;
+      const body = payload.body === undefined ? {} : payload.body;
+      if (!validateStreamTopicBody(payload.topic, body)) return null;
       return {
         kind,
         payload: {
@@ -172,7 +177,7 @@ function parseMessage(kind: MatrixIpcKind, payload: unknown): MatrixIpcMessage |
           topic: payload.topic,
           idempotencyKey:
             typeof payload.idempotencyKey === 'string' ? payload.idempotencyKey : undefined,
-          body: payload.body,
+          body,
         },
       };
     }

@@ -8,6 +8,7 @@ use super::stream::{
     ResyncRequiredPayload, SnapshotPayload, SubscribePayload, SubscribedPayload,
     UnsubscribePayload, UnsubscribedPayload,
 };
+use super::stream_body::validate_stream_topic_body;
 use super::version::MATRIX_IPC_PROTOCOL_VERSION;
 use super::wire_counter::{
     deserialize_wire_counter, is_valid_wire_counter, serialize_wire_counter,
@@ -162,11 +163,22 @@ impl MatrixIpcEnvelope {
     /// arrays/scalars (mirrors the TypeScript `isObject(payload)` guard).
     /// Wire counters outside `0..=MAX_WIRE_COUNTER` fail (REV-004).
     /// Stream-scoped kinds enforce a single authoritative stream id (REV-005).
+    /// Snapshot/delta bodies are topic-typed and reject secrets/media bytes.
     pub fn from_json_value(value: serde_json::Value) -> Result<Self, serde_json::Error> {
         validate_payload_is_object(&value)?;
         let env: Self = serde_json::from_value(value)?;
         env.validate_stream_id_authority()?;
+        env.validate_stream_bodies()?;
         Ok(env)
+    }
+
+    /// R0.3 residual / REV-005: bind snapshot/delta body to topic DTOs.
+    fn validate_stream_bodies(&self) -> Result<(), serde_json::Error> {
+        match &self.message {
+            MatrixIpcMessage::Snapshot(p) => validate_stream_topic_body(p.topic, &p.body),
+            MatrixIpcMessage::Delta(p) => validate_stream_topic_body(p.topic, &p.body),
+            _ => Ok(()),
+        }
     }
 
     pub fn from_json_str(s: &str) -> Result<Self, serde_json::Error> {

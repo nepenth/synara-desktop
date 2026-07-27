@@ -395,7 +395,7 @@ fn all_control_kinds_json_round_trip() {
                 stream_id: "s1".into(),
                 topic: StreamTopic::Timeline,
                 idempotency_key: Some("idem-1".into()),
-                body: json!({"op": "append"}),
+                body: json!({"items": []}),
             }),
         )
         .with_stream_id("s1"),
