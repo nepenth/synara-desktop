@@ -1,7 +1,25 @@
-//! Unit tests for P5.1 timeline registry.
+//! Unit tests for P5.1 timeline registry + P5.2 snapshot/diff projection.
 
 use super::*;
+use crate::matrix::dto::{TimelineItem, TimelineMessageItem};
 use crate::matrix::ipc::MatrixIpcErrorCategory;
+
+fn msg(id: &str, body: &str) -> TimelineItem {
+    TimelineItem::Message(TimelineMessageItem {
+        item_id: id.into(),
+        event_id: id.into(),
+        room_id: "!room:example.org".into(),
+        sender: "@alice:example.org".into(),
+        origin_server_ts: 1_720_000_000_000,
+        body: body.into(),
+        msgtype: Some("m.text".into()),
+        relates_to: None,
+        local_echo_state: None,
+        is_edited: None,
+        is_redacted: None,
+        thread_root_id: None,
+    })
+}
 
 #[test]
 fn marker_stable() {
@@ -96,4 +114,247 @@ fn clear_wipes_registry() {
         .unwrap();
     reg.clear();
     assert!(reg.is_empty());
+}
+
+// --- P5.2 projection ---
+
+#[test]
+fn p5_2_delta_op_names_are_stable() {
+    assert_eq!(TimelineDeltaOp::Reset { items: vec![] }.op_name(), "reset");
+    assert_eq!(
+        TimelineDeltaOp::Append { items: vec![] }.op_name(),
+        "append"
+    );
+    assert_eq!(TimelineDeltaOp::Clear.op_name(), "clear");
+    assert_eq!(
+        TimelineDeltaOp::PushFront {
+            item: msg("$a", "a")
+        }
+        .op_name(),
+        "push_front"
+    );
+    assert_eq!(
+        TimelineDeltaOp::PushBack {
+            item: msg("$b", "b")
+        }
+        .op_name(),
+        "push_back"
+    );
+    assert_eq!(
+        TimelineDeltaOp::Insert {
+            index: 0,
+            item: msg("$c", "c")
+        }
+        .op_name(),
+        "insert"
+    );
+    assert_eq!(
+        TimelineDeltaOp::Set {
+            index: 0,
+            item: msg("$d", "d")
+        }
+        .op_name(),
+        "set"
+    );
+    assert_eq!(TimelineDeltaOp::Remove { index: 0 }.op_name(), "remove");
+    assert_eq!(TimelineDeltaOp::Truncate { len: 0 }.op_name(), "truncate");
+    assert_eq!(TimelineDeltaOp::Move { from: 0, to: 1 }.op_name(), "move");
+}
+
+#[test]
+fn p5_2_snapshot_then_ordered_deltas_reconstruct() {
+    let mut proj = TimelineProjection::new(7);
+    proj.apply_snapshot(TimelineSnapshot {
+        session_generation: 7,
+        sequence: 1,
+        items: vec![msg("$1", "one"), msg("$2", "two")],
+    })
+    .unwrap();
+    assert_eq!(proj.len(), 2);
+    assert_eq!(proj.last_sequence(), 1);
+
+    proj.apply_batch(TimelineDeltaBatch {
+        session_generation: 7,
+        sequence: 2,
+        ops: vec![TimelineDeltaOp::PushBack {
+            item: msg("$3", "three"),
+        }],
+    })
+    .unwrap();
+    assert_eq!(proj.len(), 3);
+    assert_eq!(proj.items()[2].item_id(), "$3");
+
+    proj.apply_batch(TimelineDeltaBatch {
+        session_generation: 7,
+        sequence: 3,
+        ops: vec![
+            TimelineDeltaOp::Set {
+                index: 0,
+                item: msg("$1", "one-edited"),
+            },
+            TimelineDeltaOp::Remove { index: 1 },
+        ],
+    })
+    .unwrap();
+    assert_eq!(proj.len(), 2);
+    assert_eq!(proj.items()[0].item_id(), "$1");
+    match &proj.items()[0] {
+        TimelineItem::Message(m) => assert_eq!(m.body, "one-edited"),
+        other => panic!("expected message, got {}", other.kind()),
+    }
+}
+
+#[test]
+fn p5_2_sequence_gap_requires_resync_then_reset_recovers() {
+    let mut proj = TimelineProjection::new(1);
+    proj.apply_snapshot(TimelineSnapshot {
+        session_generation: 1,
+        sequence: 1,
+        items: vec![msg("$1", "a")],
+    })
+    .unwrap();
+
+    let err = proj
+        .apply_batch(TimelineDeltaBatch {
+            session_generation: 1,
+            sequence: 3, // gap: expected 2
+            ops: vec![TimelineDeltaOp::PushBack {
+                item: msg("$2", "b"),
+            }],
+        })
+        .unwrap_err();
+    assert_eq!(err.diagnostic_id(), "p5.2-sequence-gap");
+    assert!(err.requires_resync());
+    assert!(proj.resync_required());
+
+    // Non-reset while resync pending is rejected.
+    let err2 = proj
+        .apply_batch(TimelineDeltaBatch {
+            session_generation: 1,
+            sequence: 2,
+            ops: vec![TimelineDeltaOp::Clear],
+        })
+        .unwrap_err();
+    assert_eq!(err2.diagnostic_id(), "p5.2-resync-pending");
+
+    proj.apply_batch(TimelineDeltaBatch {
+        session_generation: 1,
+        sequence: 10,
+        ops: vec![TimelineDeltaOp::Reset {
+            items: vec![msg("$z", "recovered")],
+        }],
+    })
+    .unwrap();
+    assert!(!proj.resync_required());
+    assert_eq!(proj.len(), 1);
+    assert_eq!(proj.last_sequence(), 10);
+}
+
+#[test]
+fn p5_2_stale_generation_is_rejected() {
+    let mut proj = TimelineProjection::new(2);
+    let err = proj
+        .apply_snapshot(TimelineSnapshot {
+            session_generation: 1,
+            sequence: 0,
+            items: vec![],
+        })
+        .unwrap_err();
+    assert_eq!(err.diagnostic_id(), "p5.2-snapshot-stale-generation");
+    assert_eq!(
+        err.category(),
+        MatrixIpcErrorCategory::StaleSessionGeneration
+    );
+}
+
+#[test]
+fn p5_2_move_insert_truncate_clear_ops() {
+    let mut proj = TimelineProjection::new(1);
+    proj.apply_batch(TimelineDeltaBatch {
+        session_generation: 1,
+        sequence: 1,
+        ops: vec![TimelineDeltaOp::Reset {
+            items: vec![msg("$a", "a"), msg("$b", "b"), msg("$c", "c")],
+        }],
+    })
+    .unwrap();
+
+    proj.apply_batch(TimelineDeltaBatch {
+        session_generation: 1,
+        sequence: 2,
+        ops: vec![
+            TimelineDeltaOp::Move { from: 0, to: 2 },
+            TimelineDeltaOp::Insert {
+                index: 0,
+                item: msg("$z", "z"),
+            },
+            TimelineDeltaOp::Truncate { len: 3 },
+        ],
+    })
+    .unwrap();
+    assert_eq!(proj.len(), 3);
+    assert_eq!(proj.items()[0].item_id(), "$z");
+
+    proj.apply_batch(TimelineDeltaBatch {
+        session_generation: 1,
+        sequence: 3,
+        ops: vec![TimelineDeltaOp::Clear],
+    })
+    .unwrap();
+    assert!(proj.is_empty());
+}
+
+#[test]
+fn p5_2_oob_ops_mark_resync() {
+    let mut proj = TimelineProjection::new(1);
+    proj.apply_batch(TimelineDeltaBatch {
+        session_generation: 1,
+        sequence: 1,
+        ops: vec![TimelineDeltaOp::Reset {
+            items: vec![msg("$a", "a")],
+        }],
+    })
+    .unwrap();
+    let err = proj
+        .apply_batch(TimelineDeltaBatch {
+            session_generation: 1,
+            sequence: 2,
+            ops: vec![TimelineDeltaOp::Remove { index: 9 }],
+        })
+        .unwrap_err();
+    assert_eq!(err.diagnostic_id(), "p5.2-remove-oob");
+    assert!(proj.resync_required());
+}
+
+#[test]
+fn p5_2_snapshot_into_reset_batch() {
+    let snap = TimelineSnapshot {
+        session_generation: 4,
+        sequence: 5,
+        items: vec![msg("$1", "hi")],
+    };
+    let batch = snap.into_reset_batch();
+    assert_eq!(batch.session_generation, 4);
+    assert_eq!(batch.sequence, 5);
+    assert_eq!(batch.ops.len(), 1);
+    assert_eq!(batch.ops[0].op_name(), "reset");
+}
+
+#[test]
+fn p5_2_reconstruct_helper_matches_manual_apply() {
+    let snap = TimelineSnapshot {
+        session_generation: 1,
+        sequence: 1,
+        items: vec![msg("$1", "a")],
+    };
+    let batches = vec![TimelineDeltaBatch {
+        session_generation: 1,
+        sequence: 2,
+        ops: vec![TimelineDeltaOp::Append {
+            items: vec![msg("$2", "b")],
+        }],
+    }];
+    let proj = reconstruct(1, snap, &batches).unwrap();
+    assert_eq!(proj.len(), 2);
+    assert_eq!(proj.last_sequence(), 2);
 }
