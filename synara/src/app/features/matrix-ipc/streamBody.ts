@@ -59,7 +59,7 @@ function parseObjectArray<T>(value: unknown, parseOne: (v: unknown) => T | null)
 }
 
 function parseAccountDataEvent(
-  value: unknown,
+  value: unknown
 ): { type: string; content: Record<string, unknown> } | null {
   if (!isObject(value) || hasForbiddenWireFields(value)) return null;
   if (!onlyKnownKeys(value, ['type', 'content'])) return null;
