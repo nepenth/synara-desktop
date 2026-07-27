@@ -8,9 +8,9 @@
 //! - stable Synara domain types (not raw SDK / Ruma on the boundary)
 //! - optional thin bridge into P2.3 client-builder identity/homeserver URL
 //!
-//! **Out of scope:** SSO callback (P3.3), UIA (P3.4), refresh-token persistence
-//! (P3.5), session restore (P3.6), production Matrix Tauri commands, dual-backend,
-//! dual sync.
+//! **Out of scope:** SSO callback (P3.3), UIA (P3.4), session restore (P3.6),
+//! production Matrix Tauri commands, dual-backend, dual sync.
+//! Session secret persist after login lives in [`crate::matrix::lifecycle`] (P3.5).
 //!
 //! Authoritative design notes:
 //! - `docs/matrix-rust-sdk/p3.1-discovery-login-flow.md`
