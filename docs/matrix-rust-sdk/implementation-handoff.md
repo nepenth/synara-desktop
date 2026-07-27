@@ -22,16 +22,16 @@ the canonical status ledger.
 
 | Field | Current value |
 |---|---|
-| **Integration branch / tip** | `feature/matrix-rust-sdk-full-replacement` @ `67f27f283255ef013e01b7bc596e337fea080f57` (PR #100 / R0.7 composed store lifecycle on #98/#96 + status + R0.3–R0.6) |
+| **Integration branch / tip** | `feature/matrix-rust-sdk-full-replacement` @ `d3134f0a40b56caf1ae440f24a0499f7041e2d62` (PR #102 / R0.7 stale-gen + wrong-key on #100/#98/#96 + status + R0.3–R0.6) |
 | **Dual-track strategy** | Land Critical/High product fixes first; park R0.2-E1 thrash; do not block product work on R0.8 theater |
 | **R0.5 / REV-001** | **Merged and accepted** via PR [#86](https://github.com/nepenth/synara-desktop/pull/86) |
 | **R0.4 / REV-002/006/007** | **Merged and accepted** via PR [#87](https://github.com/nepenth/synara-desktop/pull/87) (path confinement) + PR [#94](https://github.com/nepenth/synara-desktop/pull/94) (native keyring vault + encrypted reopen evidence) |
 | **R0.6 / REV-003** | **Merged and accepted** via PR [#89](https://github.com/nepenth/synara-desktop/pull/89) — privacy-safe plan/layout/wipe/SDK errors; adversarial redaction fixtures |
 | **R0.3 / REV-004/005** | **Merged and accepted** via PR [#91](https://github.com/nepenth/synara-desktop/pull/91) (wire counters + stream-id authority) + PR [#92](https://github.com/nepenth/synara-desktop/pull/92) (topic→DTO bodies + secret/media reject) |
-| **R0.7 live adapters** | **Slices 1–3 merged** via PR [#96](https://github.com/nepenth/synara-desktop/pull/96) (CS transports) + [#98](https://github.com/nepenth/synara-desktop/pull/98) (loopback login-types) + [#100](https://github.com/nepenth/synara-desktop/pull/100) (composed encrypted store open/ready/logout/reopen/wipe with real `SdkClientHandle`). Strict acceptance **open** (authenticated live sync residual + full Phase 2/P3.1 live evidence) |
+| **R0.7 live adapters** | **Slices 1–4 merged** via PR [#96](https://github.com/nepenth/synara-desktop/pull/96) (CS transports) + [#98](https://github.com/nepenth/synara-desktop/pull/98) (loopback login-types) + [#100](https://github.com/nepenth/synara-desktop/pull/100) (composed encrypted store open/ready/logout/reopen/wipe) + [#102](https://github.com/nepenth/synara-desktop/pull/102) (stale-generation after real SDK logout + wrong-key reopen privacy). Strict acceptance **open** (authenticated live sync residual — login APIs guardrail-banned until deliberate P3.2 allowlist) |
 | **Active remediation** | R0.7 residual / R0.8 next; **P3.2** blocked by unaccepted R0.2 / R0.7 residual / R0.8 |
 | **Parked** | R0.2-E1 PR [#82](https://github.com/nepenth/synara-desktop/pull/82) — **draft**; 2× `v2 exceeded 512 MiB` residual |
-| **Next product slice** | R0.8 evidence or authenticated Synapse residual; P3.2 only when remediations allow |
+| **Next product slice** | R0.8 evidence inventory or deliberate P3.2-gated authenticated Synapse residual; P3.2 only when remediations allow |
 | **Product runtime** | `matrix-js-sdk` only; Rust remains harness foundation; no dual backend or cutover |
 | **Progress** | 20/112 original artifacts (~18%); R0 work does not increment this; 0/15 strict phase gates closed |
 | **Main PR** | [#39](https://github.com/nepenth/synara-desktop/pull/39) remains open and must not merge without explicit user approval |
