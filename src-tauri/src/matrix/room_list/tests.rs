@@ -331,7 +331,7 @@ fn p4_3_scope_filters_membership_and_unread() {
     let active = select_rooms_by_scope(&rooms, RoomListScope::AllActive);
     assert_eq!(active.len(), 7); // no ban in fixture
     assert!(!room_matches_scope(
-        &rooms
+        rooms
             .iter()
             .find(|r| r.room_id == "!left:example.org")
             .unwrap(),
