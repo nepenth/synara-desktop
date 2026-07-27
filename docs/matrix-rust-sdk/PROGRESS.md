@@ -9,8 +9,8 @@
 
 | Field | Value |
 | --- | --- |
-| Last updated (UTC) | **2026-07-27 ~18:40** |
-| Integration tip | `c6cbc2c` — Merge #124 P6.1 outbound send queue |
+| Last updated (UTC) | **2026-07-27 ~19:08** |
+| Integration tip | `ef75e3e` — Merge #125 P6.2 receipt index |
 | Product runtime | Still **`matrix-js-sdk` only** until atomic sole-owner cutover |
 | Dual backend | **`false`** (forbidden forever) |
 | Operating model | [cutover-operating-model.md](cutover-operating-model.md) |
@@ -25,12 +25,12 @@
 
 | | |
 | --- | --- |
-| **Now** | **#124 P6.1 merged.** Primary next: **#125 P6.2** receipts (tip-updated after #124; CI re-run). |
-| **Inventory** | ~32/112 original task artifacts when program-status is synced (through P6.1 landed; see ledger). |
+| **Now** | **#125 P6.2 merged.** Primary next: **#127 P6.3** typing (tip-updated after #125; CI re-run). |
+| **Inventory** | ~33/112 original task artifacts when program-status is synced (through P6.2 landed; see ledger). |
 | **Phase gates** | **0 / 15** strict gates closed (honest). |
-| **Open PRs → integration** | [#125](https://github.com/nepenth/synara-desktop/pull/125)–[#128](https://github.com/nepenth/synara-desktop/pull/128) receipts/typing/media; [#109](https://github.com/nepenth/synara-desktop/pull/109) MiniMax (deprioritize). |
-| **Blocked on** | CI green for #125 after tip-merge with #124. Required: Quality gate + Desktop package gate. |
-| **Dogfood path** | diffs ✅ → pagination ✅ → send ✅ (**#124**) → **receipts (#125)** → typing/media. |
+| **Open PRs → integration** | [#127](https://github.com/nepenth/synara-desktop/pull/127) typing, [#128](https://github.com/nepenth/synara-desktop/pull/128) media, [#129](https://github.com/nepenth/synara-desktop/pull/129) P5.6 relations; [#109](https://github.com/nepenth/synara-desktop/pull/109) MiniMax (deprioritize). |
+| **Blocked on** | CI green for #127 after tip-merge with #125. Required: Quality gate + Desktop package gate. |
+| **Dogfood path** | send ✅ → receipts ✅ (**#125**) → **typing (#127)** → media → relations. |
 
 ---
 
@@ -58,6 +58,8 @@ Update rules:
 
 | When (UTC) | Item | Result | Notes |
 | --- | --- | --- | --- |
+| ~19:06 | **P6.2** receipt index foundation | **Merged** [#125](https://github.com/nepenth/synara-desktop/pull/125) | ReceiptIndex over DTO Receipt; tip `ef75e3e`. Quality + package gate green. |
+| ~18:52 | **P5.6** relations index foundation | **PR open** [#129](https://github.com/nepenth/synara-desktop/pull/129) | RelationIndex annotations/replace/reference/thread; local 8/8. |
 | ~18:39 | **P6.1** outbound send queue foundation | **Merged** [#124](https://github.com/nepenth/synara-desktop/pull/124) | SendQueue + LocalEchoState; tip `c6cbc2c`. Quality ✅; package gate after Arch Docker Hub flake re-run. |
 | ~18:35 | Tip-merge P6.2/P6.3/P6.4 onto tip | **Pushed** | #125/#127/#128 had green CI on pre-#124 tip; re-tip after #124. Local receipts 7/7 + send 8/8. |
 | ~17:58 | **P5.3** timeline pagination foundation | **Merged** [#122](https://github.com/nepenth/synara-desktop/pull/122) | TimelinePagination state machine; tip `ed5b3c3`. |
@@ -120,6 +122,10 @@ Update rules:
 | 11 | Timeline diffs (P5.2) | **Done** (merged #121) |
 | 12 | Timeline pagination (P5.3) | **Done** (merged #122) |
 | 13 | Send queue / local echo (P6.1) | **Done** (merged #124) |
+| 14 | Receipt index (P6.2) | **Done** (merged #125) |
+| 15 | Typing index (P6.3) | **In PR** [#127](https://github.com/nepenth/synara-desktop/pull/127) |
+| 16 | Media upload queue (P6.4) | **In PR** [#128](https://github.com/nepenth/synara-desktop/pull/128) |
+| 17 | Relations / reactions (P5.6) | **In PR** [#129](https://github.com/nepenth/synara-desktop/pull/129) |
 | 10 | Crypto / verification / recovery | Not started |
 | 11 | Atomic sole-owner cutover + js-sdk burn-down (P11) | Not started |
 | 12 | Merge to `main` (#39) | Needs **explicit user approval** |
