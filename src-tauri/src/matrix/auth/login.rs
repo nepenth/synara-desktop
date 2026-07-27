@@ -54,7 +54,6 @@ pub struct LoginOptions {
     pub request_refresh_token: bool,
 }
 
-
 impl LoginOptions {
     pub fn with_platform_device_name(platform: DevicePlatform) -> Self {
         Self {
