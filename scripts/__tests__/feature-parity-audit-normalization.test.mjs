@@ -156,6 +156,9 @@ async function temporaryLocalGitClone(t) {
   assert.equal(result.status, 0, result.stderr);
   assert.doesNotMatch(result.stderr, /https?:|ssh:|git@/iu);
   git(root, ["checkout", "--quiet", "--detach", "HEAD"]);
+  // Repository-local identity only — CI and isolated HOME have no global Git user.
+  git(root, ["config", "user.name", "Synara Test"]);
+  git(root, ["config", "user.email", "synara-test@example.invalid"]);
   return { parent, root };
 }
 
