@@ -8,7 +8,8 @@
  * 4. No production Client login/sync under src-tauri/src/matrix/ (Client::builder
  *    allowed only under matrix/client_builder/ for P2.3 unauthenticated open;
  *    password/token login APIs allowed only under matrix/auth/ for P3.2;
- *    Client::restore_session allowed only under matrix/lifecycle/ for P3.6).
+ *    Client::restore_session allowed only under matrix/lifecycle/ for P3.6;
+ *    SyncService::builder allowed only under matrix/sync/ for P4.1).
  * 5. No dual-backend / Matrix backend selector in production runtime sources.
  * 6. Matrix IPC contract surface must remain versioned (protocolVersion / constant).
  * 7. No Matrix product Tauri commands registered in invoke_handler yet.
@@ -311,15 +312,22 @@ const PRODUCTION_SYNC_PATTERNS = [
 
 /**
  * Session restore API allowed only under `matrix/lifecycle/` (P3.6).
- * Still banned under client_builder/, auth/, and every other matrix/ module.
+ * Still banned under client_builder/, auth/, sync/, and every other matrix/ module.
  */
 const RESTORE_SESSION_ONLY_PATTERNS = [/\.restore_session\b/];
 
-/** Full ban set for non-builder / non-auth / non-lifecycle matrix modules. */
+/**
+ * SyncService construction allowed only under `matrix/sync/` (P4.1).
+ * Still banned under client_builder/, auth/, lifecycle/, and every other matrix/ module.
+ */
+const SYNC_SERVICE_ONLY_PATTERNS = [/\bSyncService\s*::\s*builder\b/];
+
+/** Full ban set for non-allowlisted matrix modules. */
 const PRODUCTION_CLIENT_PATTERNS = [
   ...CLIENT_BUILDER_ONLY_PATTERNS,
   ...AUTH_LOGIN_ONLY_PATTERNS,
   ...RESTORE_SESSION_ONLY_PATTERNS,
+  ...SYNC_SERVICE_ONLY_PATTERNS,
   ...PRODUCTION_SYNC_PATTERNS,
 ];
 
@@ -327,6 +335,7 @@ const PRODUCTION_CLIENT_PATTERNS = [
 const CLIENT_BUILDER_BANNED_PATTERNS = [
   ...AUTH_LOGIN_ONLY_PATTERNS,
   ...RESTORE_SESSION_ONLY_PATTERNS,
+  ...SYNC_SERVICE_ONLY_PATTERNS,
   ...PRODUCTION_SYNC_PATTERNS,
 ];
 
@@ -334,22 +343,36 @@ const CLIENT_BUILDER_BANNED_PATTERNS = [
 const AUTH_BANNED_PATTERNS = [
   ...CLIENT_BUILDER_ONLY_PATTERNS,
   ...RESTORE_SESSION_ONLY_PATTERNS,
+  ...SYNC_SERVICE_ONLY_PATTERNS,
   ...PRODUCTION_SYNC_PATTERNS,
 ];
 
 /**
  * Patterns still banned inside lifecycle/ (may restore_session; may not construct
- * Client, login, or sync).
+ * Client, login, SyncService, or Client::sync_once).
  */
 const LIFECYCLE_BANNED_PATTERNS = [
   ...CLIENT_BUILDER_ONLY_PATTERNS,
   ...AUTH_LOGIN_ONLY_PATTERNS,
+  ...SYNC_SERVICE_ONLY_PATTERNS,
+  ...PRODUCTION_SYNC_PATTERNS,
+];
+
+/**
+ * Patterns still banned inside sync/ (may SyncService::builder; may not construct
+ * Client, login, restore_session, or Client::sync_once).
+ */
+const SYNC_BANNED_PATTERNS = [
+  ...CLIENT_BUILDER_ONLY_PATTERNS,
+  ...AUTH_LOGIN_ONLY_PATTERNS,
+  ...RESTORE_SESSION_ONLY_PATTERNS,
   ...PRODUCTION_SYNC_PATTERNS,
 ];
 
 const ZONE_CLIENT_BUILDER_ALLOW = ["src-tauri/src/matrix/client_builder/"];
 const ZONE_AUTH_LOGIN_ALLOW = ["src-tauri/src/matrix/auth/"];
 const ZONE_LIFECYCLE_RESTORE_ALLOW = ["src-tauri/src/matrix/lifecycle/"];
+const ZONE_SYNC_SERVICE_ALLOW = ["src-tauri/src/matrix/sync/"];
 
 const DUAL_BACKEND_PATTERNS = [
   /\bMatrixBackend\b/,
@@ -431,7 +454,8 @@ export function runGuardrails(opts) {
   //     Client::builder only under matrix/client_builder/ (P2.3);
   //     login_username/login_token/matrix_auth only under matrix/auth/ (P3.2);
   //     restore_session only under matrix/lifecycle/ (P3.6);
-  //     sync still banned under all non-test matrix/ modules. ---
+  //     SyncService::builder only under matrix/sync/ (P4.1);
+  //     sync_once banned under non-test matrix modules. ---
   for (const rel of files) {
     if (!inAnyZone(rel, ZONE_RUST_MATRIX)) continue;
     if (!rel.endsWith(".rs")) continue;
@@ -443,6 +467,7 @@ export function runGuardrails(opts) {
     const inClientBuilder = inAnyZone(rel, ZONE_CLIENT_BUILDER_ALLOW);
     const inAuthLogin = inAnyZone(rel, ZONE_AUTH_LOGIN_ALLOW);
     const inLifecycleRestore = inAnyZone(rel, ZONE_LIFECYCLE_RESTORE_ALLOW);
+    const inSyncService = inAnyZone(rel, ZONE_SYNC_SERVICE_ALLOW);
     let patterns;
     let detailPrefix;
     if (inClientBuilder) {
@@ -456,11 +481,15 @@ export function runGuardrails(opts) {
     } else if (inLifecycleRestore) {
       patterns = LIFECYCLE_BANNED_PATTERNS;
       detailPrefix =
-        "Client construction/login/sync forbidden under matrix/lifecycle/ (lifecycle may only restore_session for P3.6)";
+        "Client construction/login/SyncService/sync_once forbidden under matrix/lifecycle/ (lifecycle may only restore_session for P3.6)";
+    } else if (inSyncService) {
+      patterns = SYNC_BANNED_PATTERNS;
+      detailPrefix =
+        "Client construction/login/restore_session/sync_once forbidden under matrix/sync/ (sync may only SyncService::builder for P4.1)";
     } else {
       patterns = PRODUCTION_CLIENT_PATTERNS;
       detailPrefix =
-        "production Client/login/restore/sync API forbidden under matrix/ outside client_builder/, auth/, and lifecycle/";
+        "production Client/login/restore/sync API forbidden under matrix/ outside client_builder/, auth/, lifecycle/, and sync/";
     }
     for (const hit of findHits(code, patterns)) {
       add(

@@ -323,6 +323,54 @@ test("allows password/token login under matrix/auth/ but bans Client::builder an
   }
 });
 
+test("allows SyncService::builder under matrix/sync/ but bans it elsewhere and bans sync_once in sync/", () => {
+  const { root, files } = makeTree({
+    "src-tauri/src/matrix/sync/service.rs":
+      "async fn build(c: Client) { let _ = SyncService::builder(c).build().await; }\n",
+    "src-tauri/src/matrix/sync/evil_sync_once.rs":
+      "async fn s(c: &Client) { let _ = c.sync_once(Default::default()).await; }\n",
+    "src-tauri/src/matrix/supervisor/evil_sync_service.rs":
+      "async fn build(c: Client) { let _ = SyncService::builder(c); }\n",
+    "src-tauri/src/matrix/ipc/version.rs":
+      "pub const MATRIX_IPC_PROTOCOL_VERSION: u32 = 1;\n",
+    "synara/src/app/features/matrix-ipc/version.ts":
+      "export const MATRIX_IPC_PROTOCOL_VERSION = 1 as const;\n",
+  });
+  try {
+    const result = runGuardrails({ root, files });
+    assert.equal(result.ok, false, formatFail(result));
+    // SyncService::builder under matrix/sync/ must be allowed
+    assert.ok(
+      !result.violations.some(
+        (v) =>
+          v.rule === "no-production-matrix-client-in-matrix-module" &&
+          v.path.includes("sync/service.rs")
+      ),
+      formatFail(result)
+    );
+    // Client::sync_once under sync/ must fail
+    assert.ok(
+      result.violations.some(
+        (v) =>
+          v.rule === "no-production-matrix-client-in-matrix-module" &&
+          v.path.includes("evil_sync_once.rs")
+      ),
+      formatFail(result)
+    );
+    // SyncService::builder outside sync/ must fail
+    assert.ok(
+      result.violations.some(
+        (v) =>
+          v.rule === "no-production-matrix-client-in-matrix-module" &&
+          v.path.includes("evil_sync_service.rs")
+      ),
+      formatFail(result)
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("fails on dual-backend selector pattern", () => {
   const { root, files } = makeTree({
     "synara/src/app/state/matrixBackend.ts":
