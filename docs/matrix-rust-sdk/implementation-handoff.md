@@ -9,6 +9,9 @@ Authoritative program plan: [`../matrix-rust-sdk-full-replacement-plan.md`](../m
 cutover (Rust only) → burn down `matrix-js-sdk` → merge to `main` with approval.
 No runtime SDK selector; no dual live Matrix clients; clean-break re-login OK.
 
+**Live progress log (remote monitor):** [`PROGRESS.md`](PROGRESS.md) —
+https://github.com/nepenth/synara-desktop/blob/feature/matrix-rust-sdk-full-replacement/docs/matrix-rust-sdk/PROGRESS.md
+
 <!-- matrix-rust-program-status-link -->
 Current delivery and strict-acceptance state:
 [`program-status.md`](program-status.md) (generated from
@@ -27,7 +30,7 @@ the operating model, or the canonical status ledger.
 
 | Field | Current value |
 |---|---|
-| **Integration branch / tip** | `feature/matrix-rust-sdk-full-replacement` @ `8b7d39e` (PR [#110](https://github.com/nepenth/synara-desktop/pull/110) P3.5; [#108](https://github.com/nepenth/synara-desktop/pull/108) operating model; [#107](https://github.com/nepenth/synara-desktop/pull/107) P3.2). Re-fetch to confirm. |
+| **Integration branch / tip** | `feature/matrix-rust-sdk-full-replacement` @ `69f1087` (PR [#112](https://github.com/nepenth/synara-desktop/pull/112) P3.6; [#110](https://github.com/nepenth/synara-desktop/pull/110) P3.5). Re-fetch to confirm. |
 | **Operating model** | Capability-first vertical slices; atomic sole-owner cutover; js-sdk burn-down; **no** dual-backend/selector ([`cutover-operating-model.md`](cutover-operating-model.md)) |
 | **Strategy** | Prefer **product progress** (auth → session → sync …) over residual R0 formal thrash; clean-break re-login approved; no false phase-gate closes |
 | **R0.5 / REV-001** | **Merged and accepted** via PR [#86](https://github.com/nepenth/synara-desktop/pull/86) |
@@ -38,12 +41,12 @@ the operating model, or the canonical status ledger.
 | **R0.8 formal reports** | **Slice 1 merged** via PR [#104](https://github.com/nepenth/synara-desktop/pull/104); strict acceptance **open**; **0** phase gates closed |
 | **P3.2 password/token login** | **Merged** via PR [#107](https://github.com/nepenth/synara-desktop/pull/107). Strict acceptance **open** |
 | **P3.5 session secret persist** | **Merged** via PR [#110](https://github.com/nepenth/synara-desktop/pull/110) — sealed vault + post-login persist + rotation. Strict acceptance **open** |
-| **P3.6 session restore** | **PR open** on `matrix-rust/p3.6-session-restore` — vault→`Client::restore_session` + identity-scoped account switch probe. Strict acceptance **open** |
-| **Active product work** | Land/merge P3.6; then P4.1 sync readiness (dogfood path); optional P3.3 SSO |
-| **Parked** | R0.2-E2 thrash; elaborate P3.7 dual-state; residual R0.8 churn unless real safety. #109 MiniMax helper non-priority; #111 PROGRESS.md docs when green |
-| **Next product slice** | Merge P3.6 when CI green; then P4.1 sync readiness toward dogfood sole-owner flip |
+| **P3.6 session restore** | **Merged** via PR [#112](https://github.com/nepenth/synara-desktop/pull/112) — vault→`Client::restore_session` + identity-scoped switch probe. Strict acceptance **open** |
+| **Active product work** | Merge P4.1 [#114](https://github.com/nepenth/synara-desktop/pull/114) + P4.2 [#115](https://github.com/nepenth/synara-desktop/pull/115); CI path filters [#113](https://github.com/nepenth/synara-desktop/pull/113) |
+| **Parked** | R0.2-E2 thrash; elaborate P3.7 dual-state; residual R0.8 churn unless real safety. #109 MiniMax helper non-priority |
+| **Next product slice** | Land P4.1 sync readiness → P4.2 room list → timeline toward dogfood sole-owner flip |
 | **Product runtime** | `matrix-js-sdk` only until atomic cutover; Rust = future sole owner foundation; **dual_backend false** |
-| **Progress** | See program-status ledger (P3.2+P3.5 merged; P3.6 PR open ≠ phase gate); 0/15 strict phase gates closed |
+| **Progress** | See [`PROGRESS.md`](PROGRESS.md) + program-status ledger; 0/15 strict phase gates closed |
 | **Main PR** | [#39](https://github.com/nepenth/synara-desktop/pull/39) — do not merge without explicit user approval |
 
 ### R0.2 work landed before E1
