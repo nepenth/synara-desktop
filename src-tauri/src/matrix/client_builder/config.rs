@@ -59,6 +59,12 @@ impl NetworkPolicy {
                     "proxy url must use http:// or https:// scheme",
                 ));
             }
+            // R0.6 / REV-003: reject credential-bearing proxy URLs.
+            if crate::matrix::diagnostics::looks_like_url_with_credentials(p) {
+                return Err(ClientBuilderError::InvalidConfig(
+                    "proxy url must not embed credentials",
+                ));
+            }
         }
         Ok(())
     }
@@ -215,10 +221,13 @@ impl ClientBuildConfig {
         })
     }
 
-    /// Privacy-safe plan projection for diagnostics (paths + policies; never keys).
+    /// Privacy-safe plan projection for diagnostics (R0.6 / REV-003).
+    ///
+    /// Never includes homeserver/proxy URLs, absolute paths, user IDs, tokens,
+    /// or store key material.
     pub fn plan(&self) -> ClientBuildPlan {
         ClientBuildPlan {
-            homeserver_url: self.identity.homeserver_url().to_owned(),
+            homeserver_configured: !self.identity.homeserver_url().is_empty(),
             homeserver_mode: match self.homeserver_mode {
                 HomeserverMode::ExplicitUrl => "explicit_url",
             }
@@ -259,11 +268,12 @@ impl ClientBuildConfig {
     }
 }
 
-/// Serializable diagnostic plan (no secrets).
+/// Serializable diagnostic plan (no secrets, URLs, or absolute paths).
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ClientBuildPlan {
-    pub homeserver_url: String,
+    /// Whether a homeserver endpoint is configured (never the URL itself).
+    pub homeserver_configured: bool,
     pub homeserver_mode: String,
     pub user_agent: String,
     pub proxy_configured: bool,

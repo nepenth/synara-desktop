@@ -1,9 +1,10 @@
 //! Privacy redaction helpers for Matrix diagnostics.
 //!
 //! Tokens, recovery secrets, Matrix user/room/event IDs, homeserver URLs,
-//! event bodies, and long opaque secrets must never appear in diagnostic
-//! payloads. Prefer counts, enums, opaque `diagnostic_id` codes, and temporary
-//! correlation tokens owned by the desktop diagnostics layer.
+//! absolute filesystem paths, raw SDK errors, event bodies, and long opaque
+//! secrets must never appear in diagnostic payloads (R0.6 / REV-003). Prefer
+//! counts, enums, opaque `diagnostic_id` codes, and temporary correlation
+//! tokens owned by the desktop diagnostics layer.
 
 /// Marker substituted for redacted sensitive substrings.
 pub const REDACTED: &str = "[redacted]";
@@ -63,7 +64,7 @@ pub fn looks_like_matrix_id(value: &str) -> bool {
     }
 }
 
-/// True when the string looks like an absolute URL (homeserver / media).
+/// True when the string looks like an absolute URL (homeserver / media / proxy).
 pub fn looks_like_url(value: &str) -> bool {
     let lower = value.to_ascii_lowercase();
     lower.starts_with("http://")
@@ -72,32 +73,90 @@ pub fn looks_like_url(value: &str) -> bool {
         || lower.contains("://")
 }
 
+/// True when the string embeds URL userinfo credentials (`scheme://user:pass@host`).
+pub fn looks_like_url_with_credentials(value: &str) -> bool {
+    // After scheme://, userinfo is present when '@' appears before the first path slash
+    // of the authority section.
+    let Some(scheme_end) = value.find("://") else {
+        return false;
+    };
+    let rest = &value[scheme_end + 3..];
+    let authority = rest.split(['/', '?', '#']).next().unwrap_or(rest);
+    authority.contains('@')
+}
+
+/// True when the string looks like an absolute filesystem path (Unix or Windows).
+pub fn looks_like_absolute_path(value: &str) -> bool {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return false;
+    }
+    if trimmed.starts_with('/') {
+        return true;
+    }
+    // Windows drive paths: C:\... or C:/...
+    let bytes = trimmed.as_bytes();
+    if bytes.len() >= 3
+        && bytes[0].is_ascii_alphabetic()
+        && bytes[1] == b':'
+        && (bytes[2] == b'\\' || bytes[2] == b'/')
+    {
+        return true;
+    }
+    // UNC paths
+    if trimmed.starts_with("\\\\") {
+        return true;
+    }
+    false
+}
+
+/// True when free-form text should be treated as unsafe for diagnostic export.
+pub fn looks_like_sensitive_diagnostic(value: &str) -> bool {
+    looks_like_secret(value)
+        || looks_like_matrix_id(value)
+        || looks_like_url(value)
+        || looks_like_absolute_path(value)
+        || looks_like_url_with_credentials(value)
+}
+
 /// Redact known secret patterns and Matrix identifiers from a free-form string.
 ///
 /// Intended for defensive sanitization of untrusted strings before they can be
 /// recorded. Preferred path is never accepting free-form secrets at all.
 pub fn redact_text(input: &str) -> String {
-    if looks_like_secret(input) || looks_like_matrix_id(input) || looks_like_url(input) {
+    if looks_like_sensitive_diagnostic(input) {
         return REDACTED.to_owned();
     }
-    // Token-ish substrings inside longer messages.
-    let mut out = input.to_owned();
+    // Token / URL / path-ish substrings inside longer messages.
+    let lower = input.to_ascii_lowercase();
     for needle in [
         "access_token",
         "refresh_token",
         "recovery_key",
-        "Bearer ",
         "bearer ",
+        "https://",
+        "http://",
+        "matrix://",
+        "://",
+        "file://",
     ] {
-        if out
-            .to_ascii_lowercase()
-            .contains(&needle.to_ascii_lowercase())
-        {
+        if lower.contains(needle) {
             return REDACTED.to_owned();
         }
     }
+    // Absolute path fragments embedded in free-form SDK-style messages.
+    if lower.contains("/users/")
+        || lower.contains("/home/")
+        || lower.contains("/var/")
+        || lower.contains("/tmp/")
+        || lower.contains("\\users\\")
+        || lower.contains("appdata")
+        || lower.contains("library/application support")
+    {
+        return REDACTED.to_owned();
+    }
     // Collapse whitespace and bound length for labels.
-    out = out
+    let mut out: String = input
         .chars()
         .map(|c| if c == '\n' || c == '\r' { ' ' } else { c })
         .collect();
@@ -109,19 +168,20 @@ pub fn redact_text(input: &str) -> String {
 
 /// Keep only a safe diagnostic label: enums, short codes, opaque ids.
 ///
-/// Returns [`None`] when the value cannot be made safe (secrets / ids / URLs).
+/// Returns [`None`] when the value cannot be made safe (secrets / ids / URLs / paths).
 pub fn safe_diagnostic_label(value: &str) -> Option<String> {
     let trimmed = value.trim();
     if trimmed.is_empty() {
         return None;
     }
-    if looks_like_secret(trimmed) || looks_like_matrix_id(trimmed) || looks_like_url(trimmed) {
+    if looks_like_sensitive_diagnostic(trimmed) {
         return None;
     }
     // Allow snake_case / kebab / dotted diagnostic codes and short reasons.
+    // Disallow path separators so absolute/relative path labels cannot slip through.
     let safe = trimmed
         .chars()
-        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.' | ':' | '/'));
+        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.' | ':'));
     if !safe {
         return None;
     }
@@ -198,16 +258,25 @@ pub fn is_forbidden_field_key(key: &str) -> bool {
             | "event_id"
             | "body"
             | "homeserver"
+            | "homeserver_url"
+            | "homeserverurl"
             | "baseurl"
             | "base_url"
             | "mxid"
             | "device_id"
             | "deviceid"
+            | "wiped_account_root"
+            | "wipedaccountroot"
+            | "proxy"
+            | "proxy_url"
+            | "proxyurl"
     ) || lower.ends_with("url")
         || lower.ends_with("_path")
         || lower.ends_with("path") && lower != "filepathkind"
         || lower.contains("absolutepath")
         || lower.contains("absolute_path")
+        || lower.contains("accountroot")
+        || lower.contains("account_root")
 }
 
 #[cfg(test)]
@@ -227,13 +296,33 @@ mod redact_unit_tests {
     }
 
     #[test]
-    fn redact_text_strips_secrets() {
+    fn absolute_paths_and_credential_urls_are_detected() {
+        assert!(looks_like_absolute_path("/Users/alice/Library/Application Support/Synara"));
+        assert!(looks_like_absolute_path("C:\\Users\\alice\\AppData\\Roaming\\Synara"));
+        assert!(looks_like_url_with_credentials(
+            "https://user:p%40ss@matrix.example.org"
+        ));
+        assert!(!looks_like_url_with_credentials("https://matrix.example.org"));
+        assert!(!looks_like_absolute_path("state"));
+        assert!(!looks_like_absolute_path("p2.3-sdk-build-store"));
+    }
+
+    #[test]
+    fn redact_text_strips_secrets_paths_and_urls() {
         assert_eq!(
             redact_text("syt_ABCDEFGHIJKLMNOPQRSTUVWXYZ012345"),
             REDACTED
         );
         assert_eq!(redact_text("@bob:hs.example"), REDACTED);
         assert_eq!(redact_text("https://hs.example"), REDACTED);
+        assert_eq!(
+            redact_text("failed opening /var/app/matrix/acct/state"),
+            REDACTED
+        );
+        assert_eq!(
+            redact_text("proxy http://user:secret@127.0.0.1:8080 rejected"),
+            REDACTED
+        );
         assert_eq!(redact_text("connectivity"), "connectivity");
     }
 
@@ -253,6 +342,8 @@ mod redact_unit_tests {
             None
         );
         assert_eq!(safe_diagnostic_label("https://x"), None);
+        assert_eq!(safe_diagnostic_label("/var/app/matrix"), None);
+        assert_eq!(safe_diagnostic_label("relative/path"), None);
     }
 
     #[test]
@@ -266,5 +357,8 @@ mod redact_unit_tests {
         assert!(is_forbidden_field_key("recoveryKey"));
         assert!(is_forbidden_field_key("user_id"));
         assert!(is_forbidden_field_key("homeserverUrl"));
+        assert!(is_forbidden_field_key("wipedAccountRoot"));
+        assert!(is_forbidden_field_key("accountRoot"));
+        assert!(is_forbidden_field_key("proxyUrl"));
     }
 }

@@ -91,6 +91,13 @@ fn network_policy_rejects_empty_or_bad_proxy() {
     }
     .validate()
     .is_ok());
+    // R0.6: credential-bearing proxy URLs are rejected.
+    assert!(NetworkPolicy {
+        proxy_url: Some("http://user:secret@127.0.0.1:8080".into()),
+        ssl_verification: true,
+    }
+    .validate()
+    .is_err());
 }
 
 #[test]
@@ -120,12 +127,20 @@ fn product_default_config_plan_has_no_secrets() {
     if let Some(pass) = cfg.store_passphrase_hex() {
         assert!(!json.contains(&pass));
     }
+    // R0.6 / REV-003: no homeserver URL, user id, or absolute store paths.
+    assert!(!json.contains("https://example.org"));
+    assert!(!json.contains("@alice:example.org"));
+    assert!(!json.contains(root.to_string_lossy().as_ref()));
+    assert!(!json.contains("homeserverUrl"));
+    assert!(plan.homeserver_configured);
     assert!(plan.store_key_present);
     assert!(plan.ssl_verification);
     assert!(!plan.proxy_configured);
     assert_eq!(plan.homeserver_mode, "explicit_url");
     assert_eq!(plan.matrix_sdk_version, MATRIX_SDK_PIN_VERSION);
     assert!(plan.approved_features.iter().any(|f| f == "sqlite"));
+    assert!(plan.store_layout.confined_under_matrix_root);
+    assert_eq!(plan.store_layout.relative_state_dir, "state");
     let _ = fs::remove_dir_all(&root);
 }
 

@@ -188,6 +188,44 @@ fn redact_text_and_forbidden_keys() {
     assert!(!is_forbidden_field_key("errorType"));
 }
 
+/// R0.6 / REV-003 adversarial fixtures: paths, credential URLs, tokens, raw SDK errors.
+#[test]
+fn r0_6_adversarial_redaction_paths_urls_tokens_sdk_errors() {
+    let cases = [
+        "/Users/alice/Library/Application Support/Synara/matrix/deadbeef/state",
+        "C:\\Users\\alice\\AppData\\Roaming\\Synara\\matrix\\acct",
+        "https://user:p%40ssword@matrix.example.org/_matrix/client",
+        "http://proxy.local:8080/?access_token=syt_ABCDEFGHIJKLMNOPQRSTUVWXYZ012345",
+        "syt_ABCDEFGHIJKLMNOPQRSTUVWXYZ012345",
+        "@alice:matrix.example.org",
+        "sdk error: failed to open sqlite at /var/folders/xx/T/store for https://hs.example",
+        "Bearer syt_ABCDEFGHIJKLMNOPQRSTUVWXYZ012345",
+    ];
+    for case in cases {
+        assert_eq!(
+            redact_text(case),
+            REDACTED,
+            "expected full redaction for {case:?}"
+        );
+        assert!(
+            looks_like_sensitive_diagnostic(case)
+                || redact_text(case) == REDACTED,
+            "sensitive classifier/redactor must catch {case:?}"
+        );
+        assert!(
+            safe_diagnostic_label(case).is_none(),
+            "unsafe label must be rejected: {case:?}"
+        );
+    }
+
+    // Safe bounded codes remain usable.
+    assert_eq!(
+        safe_diagnostic_label("p2.3-sdk-build-store"),
+        Some("p2.3-sdk-build-store".into())
+    );
+    assert_eq!(redact_text("store initialization failed"), "store initialization failed");
+}
+
 #[test]
 fn failure_on_supervisor_surfaces_in_health() {
     let mut actor = MatrixSupervisor::new();
