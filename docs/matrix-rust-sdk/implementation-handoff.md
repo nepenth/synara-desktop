@@ -22,15 +22,16 @@ the canonical status ledger.
 
 | Field | Current value |
 |---|---|
-| **Integration branch / tip** | `feature/matrix-rust-sdk-full-replacement` @ `235e6f6ff476785bb653890373168a6751de7b3c` (PR #94 / R0.4 keyring on top of #93 docs + #92/#91 R0.3 + #89 R0.6 + #87 R0.4 path + #86 R0.5) |
+| **Integration branch / tip** | `feature/matrix-rust-sdk-full-replacement` @ `ac7a062159f5fca0662f6491f34cadc7ceb9867d` (PR #96 / R0.7 live CS discovery+login-types on top of #94 R0.4 + #93 docs + #92/#91 R0.3 + #89 R0.6 + #87 R0.4 path + #86 R0.5) |
 | **Dual-track strategy** | Land Critical/High product fixes first; park R0.2-E1 thrash; do not block product work on R0.8 theater |
 | **R0.5 / REV-001** | **Merged and accepted** via PR [#86](https://github.com/nepenth/synara-desktop/pull/86) |
 | **R0.4 / REV-002/006/007** | **Merged and accepted** via PR [#87](https://github.com/nepenth/synara-desktop/pull/87) (path confinement) + PR [#94](https://github.com/nepenth/synara-desktop/pull/94) (native keyring vault + encrypted reopen evidence) |
 | **R0.6 / REV-003** | **Merged and accepted** via PR [#89](https://github.com/nepenth/synara-desktop/pull/89) — privacy-safe plan/layout/wipe/SDK errors; adversarial redaction fixtures |
 | **R0.3 / REV-004/005** | **Merged and accepted** via PR [#91](https://github.com/nepenth/synara-desktop/pull/91) (wire counters + stream-id authority) + PR [#92](https://github.com/nepenth/synara-desktop/pull/92) (topic→DTO bodies + secret/media reject) |
-| **Active remediation** | None in progress; **next = P3.2** (blocked by unaccepted R0.2 / R0.7 / R0.8) |
+| **R0.7 live adapters** | **Slice 1 merged** via PR [#96](https://github.com/nepenth/synara-desktop/pull/96) — read-only `HttpDiscoveryTransport` / `HttpLoginFlowTransport` (well-known + login-types). Strict acceptance **open** (disposable-Synapse lifecycle residual + full Phase 2/P3.1 live evidence) |
+| **Active remediation** | R0.7 residual / R0.8 next; **P3.2** blocked by unaccepted R0.2 / R0.7 residual / R0.8 |
 | **Parked** | R0.2-E1 PR [#82](https://github.com/nepenth/synara-desktop/pull/82) — **draft**; 2× `v2 exceeded 512 MiB` residual |
-| **Next product slice** | P3.2 password/token login harness when remediations allow; or deliberate R0.7/R0.8 slices |
+| **Next product slice** | R0.7 residual (Synapse lifecycle) or R0.8 evidence; P3.2 only when remediations allow |
 | **Product runtime** | `matrix-js-sdk` only; Rust remains harness foundation; no dual backend or cutover |
 | **Progress** | 20/112 original artifacts (~18%); R0 work does not increment this; 0/15 strict phase gates closed |
 | **Main PR** | [#39](https://github.com/nepenth/synara-desktop/pull/39) remains open and must not merge without explicit user approval |
