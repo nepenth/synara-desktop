@@ -4,6 +4,11 @@ Last updated: 2026-07-27
 
 Authoritative program plan: [`../matrix-rust-sdk-full-replacement-plan.md`](../matrix-rust-sdk-full-replacement-plan.md)
 
+**Canonical execution model:** [`cutover-operating-model.md`](cutover-operating-model.md)
+— capability vertical slices on the integration branch → atomic sole-owner
+cutover (Rust only) → burn down `matrix-js-sdk` → merge to `main` with approval.
+No runtime SDK selector; no dual live Matrix clients; clean-break re-login OK.
+
 <!-- matrix-rust-program-status-link -->
 Current delivery and strict-acceptance state:
 [`program-status.md`](program-status.md) (generated from
@@ -17,26 +22,27 @@ Traceability artifacts:
 ## Live continuation snapshot (2026-07-27)
 
 This section is the current handoff. The dated audit and former implementation
-ledger below remain historical evidence and must not override this snapshot or
-the canonical status ledger.
+ledger below remain historical evidence and must not override this snapshot,
+the operating model, or the canonical status ledger.
 
 | Field | Current value |
 |---|---|
-| **Integration branch / tip** | `feature/matrix-rust-sdk-full-replacement` @ `447cbdc` (PR #82 R0.2-E1 tooling merged; prior #104 R0.8 slice-1 + R0.7 slices) |
-| **Dual-track strategy** | Prefer **product progress** (P3.2 auth lifecycle) over residual R0 formal thrash; clean-break re-login approved; no false phase-gate closes |
+| **Integration branch / tip** | `feature/matrix-rust-sdk-full-replacement` @ `52376d9` (PR [#107](https://github.com/nepenth/synara-desktop/pull/107) P3.2 merged; prior #82 R0.2-E1, #104 R0.8, #96–#102 R0.7). Re-fetch to confirm. |
+| **Operating model** | Capability-first vertical slices; atomic sole-owner cutover; js-sdk burn-down; **no** dual-backend/selector ([`cutover-operating-model.md`](cutover-operating-model.md)) |
+| **Strategy** | Prefer **product progress** (auth → session → sync …) over residual R0 formal thrash; clean-break re-login approved; no false phase-gate closes |
 | **R0.5 / REV-001** | **Merged and accepted** via PR [#86](https://github.com/nepenth/synara-desktop/pull/86) |
 | **R0.4 / REV-002/006/007** | **Merged and accepted** via PR [#87](https://github.com/nepenth/synara-desktop/pull/87) (path confinement) + PR [#94](https://github.com/nepenth/synara-desktop/pull/94) (native keyring vault + encrypted reopen evidence) |
 | **R0.6 / REV-003** | **Merged and accepted** via PR [#89](https://github.com/nepenth/synara-desktop/pull/89) — privacy-safe plan/layout/wipe/SDK errors; adversarial redaction fixtures |
 | **R0.3 / REV-004/005** | **Merged and accepted** via PR [#91](https://github.com/nepenth/synara-desktop/pull/91) (wire counters + stream-id authority) + PR [#92](https://github.com/nepenth/synara-desktop/pull/92) (topic→DTO bodies + secret/media reject) |
-| **R0.7 live adapters** | **Slices 1–4 merged** via PR [#96](https://github.com/nepenth/synara-desktop/pull/96)–[#102](https://github.com/nepenth/synara-desktop/pull/102). Strict acceptance **open** (authenticated live sync residual). P3.2 deliberately allowlists login APIs under `matrix/auth/` |
+| **R0.7 live adapters** | **Slices 1–4 merged** via PR [#96](https://github.com/nepenth/synara-desktop/pull/96)–[#102](https://github.com/nepenth/synara-desktop/pull/102). Strict acceptance **open** (authenticated live sync residual). P3.2 allowlists login APIs under `matrix/auth/` only |
 | **R0.8 formal reports** | **Slice 1 merged** via PR [#104](https://github.com/nepenth/synara-desktop/pull/104); strict acceptance **open**; **0** phase gates closed |
-| **P3.2 password/token login** | **Artifact landed** on branch `matrix-rust/p3.2-password-token-login` (PR open) — SDK password/token login + D-NEW-DEVICE names + auth-only guardrail allowlist. Strict acceptance **open**; not a Phase 3 gate close |
-| **Active product work** | Land/merge P3.2; then P3.5/P3.6 session secrets restore path or P3.3 SSO skeleton |
-| **Parked** | R0.2-E2 119-row thrash; elaborate P3.7 dual-state; residual R0.8 formal churn unless real safety bug. Docs PR [#106](https://github.com/nepenth/synara-desktop/pull/106) E1 status handoff |
-| **Next product slice** | Merge P3.2 when CI green; prefer auth lifecycle over residual docs |
-| **Product runtime** | `matrix-js-sdk` only; Rust remains harness foundation; no dual backend or cutover |
-| **Progress** | 21/112 original artifacts (~19%) including P3.2 artifact (PR open ≠ phase gate); 0/15 strict phase gates closed |
-| **Main PR** | [#39](https://github.com/nepenth/synara-desktop/pull/39) remains open and must not merge without explicit user approval |
+| **P3.2 password/token login** | **Merged** via PR [#107](https://github.com/nepenth/synara-desktop/pull/107) — harness password/token login + D-NEW-DEVICE names + auth-only guardrail allowlist. Strict acceptance **open**; not a Phase 3 gate close |
+| **Active product work** | P3.5/P3.6 session persist/restore (dogfood path) → sync/room list; optional P3.3 SSO skeleton |
+| **Parked** | R0.2-E2 thrash; elaborate P3.7 dual-state; residual R0.8 formal churn unless real safety bug. Docs [#106](https://github.com/nepenth/synara-desktop/pull/106) non-blocking |
+| **Next product slice** | P3.5/P3.6 session lifecycle (required before dogfood sole-owner flip) |
+| **Product runtime** | `matrix-js-sdk` only until atomic cutover; Rust = future sole owner foundation; **dual_backend false** |
+| **Progress** | See program-status ledger (~21/112 with P3.2 landed); 0/15 strict phase gates closed |
+| **Main PR** | [#39](https://github.com/nepenth/synara-desktop/pull/39) — do not merge without explicit user approval |
 
 ### R0.2 work landed before E1
 
