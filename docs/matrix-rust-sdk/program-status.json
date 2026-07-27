@@ -41,7 +41,7 @@
     "cutover_state": "not_started"
   },
   "current_execution": {
-    "active_task": "R0.4",
+    "active_task": null,
     "next_task": "R0.6",
     "blocked_tasks": [
       {
@@ -100,7 +100,7 @@
     { "id": "R0.1", "title": "Quality and metadata recovery", "artifact_state": "landed", "integration_state": "merged", "strict_acceptance_state": "accepted", "phase_gate_state": "open" },
     { "id": "R0.2", "title": "Governance and Phase 0 evidence", "artifact_state": "landed", "integration_state": "pr_open", "strict_acceptance_state": "open", "phase_gate_state": "open" },
     { "id": "R0.3", "title": "IPC wire-contract correctness", "artifact_state": "not_started", "integration_state": "not_submitted", "strict_acceptance_state": "not_reviewed", "phase_gate_state": "open" },
-    { "id": "R0.4", "title": "Store confinement and key management", "artifact_state": "in_progress", "integration_state": "pr_open", "strict_acceptance_state": "open", "phase_gate_state": "open" },
+    { "id": "R0.4", "title": "Store confinement and key management", "artifact_state": "landed", "integration_state": "merged", "strict_acceptance_state": "open", "phase_gate_state": "open" },
     { "id": "R0.5", "title": "Safe destructive lifecycle", "artifact_state": "landed", "integration_state": "merged", "strict_acceptance_state": "accepted", "phase_gate_state": "open" },
     { "id": "R0.6", "title": "Diagnostic privacy", "artifact_state": "not_started", "integration_state": "not_submitted", "strict_acceptance_state": "not_reviewed", "phase_gate_state": "open" },
     { "id": "R0.7", "title": "Live Phase 2 and P3.1 adapters", "artifact_state": "not_started", "integration_state": "not_submitted", "strict_acceptance_state": "not_reviewed", "phase_gate_state": "open" },
