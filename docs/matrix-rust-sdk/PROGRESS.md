@@ -9,7 +9,7 @@
 
 | Field | Value |
 | --- | --- |
-| Last updated (UTC) | **2026-07-27 ~13:53** |
+| Last updated (UTC) | **2026-07-27 ~14:00** |
 | Integration tip | `8b7d39e` — Merge #110 P3.5 session secret persistence |
 | Product runtime | Still **`matrix-js-sdk` only** until atomic sole-owner cutover |
 | Dual backend | **`false`** (forbidden forever) |
@@ -25,12 +25,12 @@
 
 | | |
 | --- | --- |
-| **Now** | **P3.6** [#112](https://github.com/nepenth/synara-desktop/pull/112) CI still running → merge when green. **P4.1** opened in parallel [#114](https://github.com/nepenth/synara-desktop/pull/114) (local 12/12 + clippy + guardrails green). |
+| **Now** | Waiting on CI to merge **#112** (P3.6). Product stack continues: **#114** P4.1 + **#115** P4.2 opened. |
 | **Inventory** | ~22/112 original task artifacts when program-status is synced (P3.1–P3.2 + P3.5 landed; see ledger). |
 | **Phase gates** | **0 / 15** strict gates closed (honest). |
-| **Open PRs → integration** | [#112](https://github.com/nepenth/synara-desktop/pull/112) P3.6 restore; [#114](https://github.com/nepenth/synara-desktop/pull/114) P4.1 sync readiness; [#113](https://github.com/nepenth/synara-desktop/pull/113) CI path filters (**policy checker fixed** `09bd360`); [#111](https://github.com/nepenth/synara-desktop/pull/111) this log; [#109](https://github.com/nepenth/synara-desktop/pull/109) MiniMax (**iOS cancelled / Quality gate fail** — low priority tooling; deprioritize). |
-| **Blocked on** | Required CI green on product PRs before merge. Prefer product (#112 then #114) over residual tooling. |
-| **Dogfood path** | Login ✅ (P3.2) → persist secrets ✅ (P3.5) → **restore CI (#112)** → **sync readiness open (#114)** → room list (P4.2). |
+| **Open PRs → integration** | [#112](https://github.com/nepenth/synara-desktop/pull/112) P3.6 (Validate+iOS still running; packages green); [#114](https://github.com/nepenth/synara-desktop/pull/114) P4.1; [#115](https://github.com/nepenth/synara-desktop/pull/115) P4.2 room-list; [#113](https://github.com/nepenth/synara-desktop/pull/113) CI filters; [#111](https://github.com/nepenth/synara-desktop/pull/111) this log; [#109](https://github.com/nepenth/synara-desktop/pull/109) MiniMax (deprioritize). |
+| **Blocked on** | Required checks: **Quality gate** + **Desktop package gate**. Prefer product merges (#112 → #114 → #115). |
+| **Dogfood path** | Login ✅ → persist ✅ → **restore (#112 CI)** → **sync readiness (#114)** → **room list (#115)** → timeline. |
 
 ---
 
@@ -58,6 +58,7 @@ Update rules:
 
 | When (UTC) | Item | Result | Notes |
 | --- | --- | --- | --- |
+| ~14:00 | **P4.2** room-list snapshot/delta | **PR open** [#115](https://github.com/nepenth/synara-desktop/pull/115) | Pure `RoomListProjection` + delta ops + sequence gap resync. Local 10/10; stacks on #114. |
 | ~13:53 | **P4.1** sync readiness foundation | **PR open** [#114](https://github.com/nepenth/synara-desktop/pull/114) | `matrix/sync/`: readiness map, reconnect table, SyncServiceOwner, guardrail confine `SyncService::builder`. Local 12/12 + clippy + guardrails green. |
 | ~13:52 | CI path-filter policy checker fix | **Pushed** `09bd360` on [#113](https://github.com/nepenth/synara-desktop/pull/113) | First CI run failed `check:quality-gates` (expected needs lacked `changes` + skipped). Checker now matches path-filtered Quality gate. |
 | ~13:48 | MiniMax tooling #109 | **CI fail** | iOS job cancelled (~45m hang); Quality gate failed. Not product path — deprioritize; merge after #113 if still wanted. |
@@ -93,7 +94,7 @@ Update rules:
 | 3 | Session secret persist / refresh structure (P3.5) | **Done** (merged) |
 | 4 | Session restore after restart (P3.6) | **In PR** [#112](https://github.com/nepenth/synara-desktop/pull/112) |
 | 5 | Sync readiness / reconnect (P4.1) | **In PR** [#114](https://github.com/nepenth/synara-desktop/pull/114) |
-| 6 | Room list snapshot/delta (P4.2) | Not started |
+| 6 | Room list snapshot/delta (P4.2) | **In PR** [#115](https://github.com/nepenth/synara-desktop/pull/115) |
 | 7 | Timeline read/send | Not started |
 | 8 | Crypto / verification / recovery | Not started |
 | 9 | Atomic sole-owner cutover + js-sdk burn-down (P11) | Not started |
