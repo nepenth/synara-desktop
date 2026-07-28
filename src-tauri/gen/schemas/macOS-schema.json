@@ -537,6 +537,12 @@
           "markdownDescription": "Enables the desktop_update_tray_state command without any pre-configured scope."
         },
         {
+          "description": "Enables the matrix_crypto_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-crypto-status",
+          "markdownDescription": "Enables the matrix_crypto_status command without any pre-configured scope."
+        },
+        {
           "description": "Enables the matrix_login_password command without any pre-configured scope.",
           "type": "string",
           "const": "allow-matrix-login-password",
@@ -787,6 +793,12 @@
           "type": "string",
           "const": "deny-desktop-update-tray-state",
           "markdownDescription": "Denies the desktop_update_tray_state command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_crypto_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-crypto-status",
+          "markdownDescription": "Denies the matrix_crypto_status command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_login_password command without any pre-configured scope.",
