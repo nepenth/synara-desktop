@@ -31,6 +31,7 @@
 //! P9.1: Widget / Element Call session registry foundation (harness).
 //! P8.4: Cross-signing / identity state foundation (harness; no key material).
 //! P8.2: Device list / trust projection foundation (harness; no keys).
+//! P8.6: Room-key import/export transfer foundation (harness; no key material).
 //! P8.3: Verification request inbox + SAS display foundation (harness; no secrets).
 //! No production login/sync loop or Tauri command registration lives here yet.
 //! No dual-backend selector. Product runtime remains matrix-js-sdk.
@@ -48,6 +49,7 @@ pub mod members;
 pub mod notifications;
 pub mod receipts;
 pub mod relations;
+pub mod room_keys;
 pub mod room_list;
 pub mod routes;
 pub mod search;
@@ -86,6 +88,7 @@ pub fn matrix_ipc_schema_markers() -> &'static str {
     let _lifecycle = lifecycle::matrix_lifecycle_markers();
     let _auth = auth::matrix_auth_markers();
     let _sync = sync::matrix_sync_markers();
+    let _room_keys = room_keys::matrix_room_keys_markers();
     let _room_list = room_list::matrix_room_list_markers();
     let _routes = routes::matrix_routes_markers();
     let _spaces = spaces::matrix_spaces_markers();
@@ -122,6 +125,7 @@ pub fn matrix_ipc_schema_markers() -> &'static str {
     debug_assert_eq!(_lifecycle, lifecycle::MATRIX_LIFECYCLE_MARKER);
     debug_assert_eq!(_auth, auth::MATRIX_AUTH_MARKER);
     debug_assert_eq!(_sync, sync::MATRIX_SYNC_MARKER);
+    debug_assert_eq!(_room_keys, room_keys::MATRIX_ROOM_KEYS_MARKER);
     debug_assert_eq!(_room_list, room_list::MATRIX_ROOM_LIST_MARKER);
     debug_assert_eq!(_routes, routes::MATRIX_ROUTES_MARKER);
     debug_assert_eq!(_spaces, spaces::MATRIX_SPACES_MARKER);
@@ -140,5 +144,5 @@ pub fn matrix_ipc_schema_markers() -> &'static str {
     debug_assert_eq!(_media, media::MATRIX_MEDIA_MARKER);
     debug_assert_eq!(_notifications, notifications::MATRIX_NOTIFICATIONS_MARKER);
     debug_assert_eq!(_widgets, widgets::MATRIX_WIDGETS_MARKER);
-    "matrix-ipc-protocol-v1+domain-dtos-p1.4+supervisor-p2.1+store-p2.2+client-builder-p2.3+tasks-p2.4+diagnostics-p2.5+lifecycle-p2.6+auth-p3.2+session-persist-p3.5+sync-p4.1+room-list-p4.2+routes-p4.8+spaces-p4.5+members-p4.6+timeline-p5.1+diffs-p5.2+pagination-p5.3+search-p6.8+relations-p5.6+send-p6.1+receipts-p6.2+typing-p6.3+media-p6.4+threads-p5.8+notifications-p7.1+security-p8.1+cross-signing-p8.4+widgets-p9.1+devices-p8.2+verification-p8.3"
+    "matrix-ipc-protocol-v1+domain-dtos-p1.4+supervisor-p2.1+store-p2.2+client-builder-p2.3+tasks-p2.4+diagnostics-p2.5+lifecycle-p2.6+auth-p3.2+session-persist-p3.5+sync-p4.1+room-list-p4.2+routes-p4.8+spaces-p4.5+members-p4.6+timeline-p5.1+diffs-p5.2+pagination-p5.3+search-p6.8+relations-p5.6+send-p6.1+receipts-p6.2+typing-p6.3+media-p6.4+threads-p5.8+notifications-p7.1+security-p8.1+cross-signing-p8.4+widgets-p9.1+devices-p8.2+verification-p8.3+room-keys-p8.6"
 }
