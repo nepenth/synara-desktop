@@ -158,3 +158,5 @@ Machine status: [`program-status.json`](program-status.json) /
 Client capability map (JS → Rust, hard problems): [`client-feature-graph.md`](client-feature-graph.md).
 
 Local MiniMax-M3 parallel text work during CI waits: [`minimax-parallel-work.md`](minimax-parallel-work.md).
+
+Codex (`gpt-5.6-sol` / medium) parallel implementer under Grok review: [`codex-parallel-work.md`](codex-parallel-work.md).

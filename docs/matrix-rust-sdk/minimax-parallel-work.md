@@ -64,8 +64,22 @@ if product CI in_progress and no mergeable PR:
 - no API key; OpenAI-compatible chat completions
 - large context (~189k); keep completions bounded (`max_tokens` sane — model may preamble if too low)
 
+## Failure / downtime discipline
+
+- If MiniMax endpoint fails (timeout, 5xx, connection refused, empty models list):
+  1. **Report once** in orchestrator status (do not block the migration).
+  2. Continue Grok (+ Codex if credits remain) and CI babysit.
+  3. **Recheck health every few orchestrator fires** (`GET /v1/models`); resume jobs when up.
+- Chain-of-thought **leaking into completions** is a known quality issue: strip preamble before landing drafts; user may tune the server/prompting. Do not stop the project for leaky outputs — clean or discard the draft.
+- MiniMax is free-token capacity; prefer it for text so **paid Codex credits** last longer.
+
 ## Acceptance for using MiniMax output
 
 - Grok (or human) spot-checks against repo facts.
 - Feature-graph / inventory changes land in a **docs or docs+ledger** PR with green Quality gate.
 - Product code still goes through normal CI.
+
+## See also
+
+- Codex parallel implementer: [`codex-parallel-work.md`](codex-parallel-work.md)
+- Client capability map: [`client-feature-graph.md`](client-feature-graph.md)

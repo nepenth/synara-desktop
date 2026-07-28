@@ -17,6 +17,7 @@
 | Machine ledger | [program-status.md](program-status.md) (**source of inventory counts**; generated from JSON) |
 | Feature graph | [client-feature-graph.md](client-feature-graph.md) (client capability → Rust map) |
 | MiniMax parallel | [minimax-parallel-work.md](minimax-parallel-work.md) |
+| Codex parallel | [codex-parallel-work.md](codex-parallel-work.md) (`gpt-5.6-sol` / medium) |
 | Short continuation | [CONTINUATION.md](CONTINUATION.md) |
 | Full handoff | [implementation-handoff.md](implementation-handoff.md) |
 | Umbrella → main | [PR #39](https://github.com/nepenth/synara-desktop/pull/39) — **do not merge without explicit user approval** |
@@ -82,6 +83,7 @@ Update rules:
 | — | **program-status ledger resync** | **This PR** | Was stuck at 21/112; now **50/112** landed (45 merged + 5 open). Drift guard: tip task docs require landed records. |
 | — | **client-feature-graph** | **This PR** | Client capability → JS surface → Rust owner → hard problems (scroll/read/sync). |
 | — | **MiniMax-M3 parallel protocol** | **This PR** | Use local MiniMax during CI waits for graph/inventory text work; Grok remains implementer. |
+| — | **Codex parallel protocol** | **This PR** | `gpt-5.6-sol`/medium implementer under Grok review; credit exhaustion expected — stop dispatch, keep going. |
 
 ### 2026-07-27
 
@@ -212,4 +214,5 @@ Update rules:
 | Machine status ledger | https://github.com/nepenth/synara-desktop/blob/feature/matrix-rust-sdk-full-replacement/docs/matrix-rust-sdk/program-status.md |
 | Client feature graph | https://github.com/nepenth/synara-desktop/blob/feature/matrix-rust-sdk-full-replacement/docs/matrix-rust-sdk/client-feature-graph.md |
 | MiniMax parallel protocol | https://github.com/nepenth/synara-desktop/blob/feature/matrix-rust-sdk-full-replacement/docs/matrix-rust-sdk/minimax-parallel-work.md |
+| Codex parallel protocol | https://github.com/nepenth/synara-desktop/blob/feature/matrix-rust-sdk-full-replacement/docs/matrix-rust-sdk/codex-parallel-work.md |
 | Umbrella PR (do not merge) | https://github.com/nepenth/synara-desktop/pull/39 |
