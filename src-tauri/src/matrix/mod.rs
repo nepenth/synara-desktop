@@ -46,6 +46,7 @@
 //! P8.7: UTD retry / encrypted-history recovery foundation (harness).
 //! P8.6: Room-key import/export transfer foundation (harness; no key material).
 //! P8.8: Crypto-store continuity / corruption handling foundation (harness).
+//! P8.9: Crypto bootstrap readiness coordinator (harness; no secrets).
 //! P8.3: Verification request inbox + SAS display foundation (harness; no secrets).
 //! No production login/sync loop or Tauri command registration lives here yet.
 //! No dual-backend selector. Product runtime remains matrix-js-sdk.
@@ -54,6 +55,7 @@ pub mod auth;
 pub mod backup;
 pub mod client_builder;
 pub mod cross_signing;
+pub mod crypto_bootstrap;
 pub mod crypto_store;
 pub mod devices;
 pub mod diagnostics;
@@ -127,6 +129,7 @@ pub fn matrix_ipc_schema_markers() -> &'static str {
     let _devices = devices::matrix_devices_markers();
     let _verification = verification::matrix_verification_markers();
     let _cross_signing = cross_signing::matrix_cross_signing_markers();
+    let _crypto_bootstrap = crypto_bootstrap::matrix_crypto_bootstrap_markers();
     let _crypto_store = crypto_store::matrix_crypto_store_markers();
     let _send = send::matrix_send_markers();
     let _receipts = receipts::matrix_receipts_markers();
@@ -174,6 +177,10 @@ pub fn matrix_ipc_schema_markers() -> &'static str {
     debug_assert_eq!(_devices, devices::MATRIX_DEVICES_MARKER);
     debug_assert_eq!(_verification, verification::MATRIX_VERIFICATION_MARKER);
     debug_assert_eq!(_cross_signing, cross_signing::MATRIX_CROSS_SIGNING_MARKER);
+    debug_assert_eq!(
+        _crypto_bootstrap,
+        crypto_bootstrap::MATRIX_CRYPTO_BOOTSTRAP_MARKER
+    );
     debug_assert_eq!(_crypto_store, crypto_store::MATRIX_CRYPTO_STORE_MARKER);
     debug_assert_eq!(_send, send::MATRIX_SEND_MARKER);
     debug_assert_eq!(_receipts, receipts::MATRIX_RECEIPTS_MARKER);
@@ -187,5 +194,5 @@ pub fn matrix_ipc_schema_markers() -> &'static str {
     debug_assert_eq!(_room_ops, room_ops::MATRIX_ROOM_OPS_MARKER);
     debug_assert_eq!(_room_profile, room_profile::MATRIX_ROOM_PROFILE_MARKER);
     debug_assert_eq!(_widgets, widgets::MATRIX_WIDGETS_MARKER);
-    "matrix-ipc-protocol-v1+domain-dtos-p1.4+supervisor-p2.1+store-p2.2+client-builder-p2.3+tasks-p2.4+diagnostics-p2.5+lifecycle-p2.6+auth-p3.3+p3.4+session-persist-p3.5+sync-p4.1+room-list-p4.2+routes-p4.8+spaces-p4.5+members-p4.6+timeline-p5.1+diffs-p5.2+pagination-p5.3+search-p6.8+relations-p5.6+send-p6.1+receipts-p6.2+typing-p6.3+media-p6.4+room-profile-p6.5+threads-p5.8+notifications-p7.1+security-p8.1+cross-signing-p8.4+widgets-p9.1+legacy-p3.7+devices-p8.2+verification-p8.3+backup-p8.5+user-profile-p6.6+room-ops-p6.9+crypto-store-p8.8+presence-p4.7+room-keys-p8.6+utd-recovery-p8.7+polls-p5.7"
+    "matrix-ipc-protocol-v1+domain-dtos-p1.4+supervisor-p2.1+store-p2.2+client-builder-p2.3+tasks-p2.4+diagnostics-p2.5+lifecycle-p2.6+auth-p3.3+p3.4+session-persist-p3.5+sync-p4.1+room-list-p4.2+routes-p4.8+spaces-p4.5+members-p4.6+timeline-p5.1+diffs-p5.2+pagination-p5.3+search-p6.8+relations-p5.6+send-p6.1+receipts-p6.2+typing-p6.3+media-p6.4+room-profile-p6.5+threads-p5.8+notifications-p7.1+security-p8.1+cross-signing-p8.4+widgets-p9.1+legacy-p3.7+devices-p8.2+verification-p8.3+backup-p8.5+user-profile-p6.6+room-ops-p6.9+crypto-bootstrap-p8.9+crypto-store-p8.8+presence-p4.7+room-keys-p8.6+utd-recovery-p8.7+polls-p5.7"
 }
