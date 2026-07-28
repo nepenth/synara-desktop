@@ -21,6 +21,7 @@
 //! P5.3: Timeline pagination state machine foundation.
 //! P5.6: Relations / reactions / replaces index foundation (harness).
 //! P5.8: Thread list / summary index foundation (harness).
+//! P5.9: Custom Synara raw-content extraction foundation (harness).
 //! P6.1: Outbound send queue + local-echo foundation (harness; no Room::send).
 //! P6.2: Receipt index foundation (harness; no SDK send_receipt).
 //! P6.3: Typing index foundation (harness; no SDK typing send).
@@ -45,6 +46,7 @@ pub mod lifecycle;
 pub mod media;
 pub mod members;
 pub mod notifications;
+pub mod raw_content;
 pub mod receipts;
 pub mod relations;
 pub mod room_list;
@@ -95,6 +97,7 @@ pub fn matrix_ipc_schema_markers() -> &'static str {
     let _devices = devices::matrix_devices_markers();
     let _cross_signing = cross_signing::matrix_cross_signing_markers();
     let _send = send::matrix_send_markers();
+    let _raw_content = raw_content::matrix_raw_content_markers();
     let _receipts = receipts::matrix_receipts_markers();
     let _threads = threads::matrix_threads_markers();
     let _typing = typing::matrix_typing_markers();
@@ -130,11 +133,12 @@ pub fn matrix_ipc_schema_markers() -> &'static str {
     debug_assert_eq!(_devices, devices::MATRIX_DEVICES_MARKER);
     debug_assert_eq!(_cross_signing, cross_signing::MATRIX_CROSS_SIGNING_MARKER);
     debug_assert_eq!(_send, send::MATRIX_SEND_MARKER);
+    debug_assert_eq!(_raw_content, raw_content::MATRIX_RAW_CONTENT_MARKER);
     debug_assert_eq!(_receipts, receipts::MATRIX_RECEIPTS_MARKER);
     debug_assert_eq!(_threads, threads::MATRIX_THREADS_MARKER);
     debug_assert_eq!(_typing, typing::MATRIX_TYPING_MARKER);
     debug_assert_eq!(_media, media::MATRIX_MEDIA_MARKER);
     debug_assert_eq!(_notifications, notifications::MATRIX_NOTIFICATIONS_MARKER);
     debug_assert_eq!(_widgets, widgets::MATRIX_WIDGETS_MARKER);
-    "matrix-ipc-protocol-v1+domain-dtos-p1.4+supervisor-p2.1+store-p2.2+client-builder-p2.3+tasks-p2.4+diagnostics-p2.5+lifecycle-p2.6+auth-p3.2+session-persist-p3.5+sync-p4.1+room-list-p4.2+routes-p4.8+spaces-p4.5+members-p4.6+timeline-p5.1+diffs-p5.2+pagination-p5.3+search-p6.8+relations-p5.6+send-p6.1+receipts-p6.2+typing-p6.3+media-p6.4+threads-p5.8+notifications-p7.1+security-p8.1+cross-signing-p8.4+widgets-p9.1+devices-p8.2"
+    "matrix-ipc-protocol-v1+domain-dtos-p1.4+supervisor-p2.1+store-p2.2+client-builder-p2.3+tasks-p2.4+diagnostics-p2.5+lifecycle-p2.6+auth-p3.2+session-persist-p3.5+sync-p4.1+room-list-p4.2+routes-p4.8+spaces-p4.5+members-p4.6+timeline-p5.1+diffs-p5.2+pagination-p5.3+search-p6.8+relations-p5.6+send-p6.1+receipts-p6.2+typing-p6.3+media-p6.4+threads-p5.8+notifications-p7.1+security-p8.1+cross-signing-p8.4+widgets-p9.1+devices-p8.2+raw-content-p5.9"
 }
