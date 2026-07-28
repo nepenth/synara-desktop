@@ -17,8 +17,15 @@ type NativeTimelineItem = {
 type NativeTimelineSnapshot = {
   sessionGeneration: number;
   roomId: string;
+  isEncrypted: boolean;
   items: NativeTimelineItem[];
   hitStart: boolean;
+};
+
+type NativeCryptoStatus = {
+  sessionGeneration: number;
+  encryptionEnabled: boolean;
+  crossSigningState: 'unavailable' | 'not_set_up' | 'partial' | 'ready';
 };
 
 type NativeTimelineOwner = 'checking' | 'native' | 'legacy';
@@ -58,6 +65,8 @@ export function NativeRoomTimelineBoundary({
 
 function NativeRoomTimeline({ roomId }: { roomId: string }) {
   const [snapshot, setSnapshot] = useState<NativeTimelineSnapshot>();
+  const [cryptoStatus, setCryptoStatus] = useState<NativeCryptoStatus>();
+  const [cryptoStatusUnavailable, setCryptoStatusUnavailable] = useState(false);
   const [error, setError] = useState(false);
   const [paginating, setPaginating] = useState(false);
 
@@ -86,6 +95,18 @@ function NativeRoomTimeline({ roomId }: { roomId: string }) {
         if (!result.available || !result.value) throw new Error('Native timeline IPC unavailable');
         setSnapshot(result.value);
         setError(false);
+        if (result.value.isEncrypted) {
+          const crypto = await invokeDesktopWithAvailability<NativeCryptoStatus>(
+            'matrix_crypto_status'
+          );
+          if (disposed) return;
+          if (!crypto.available || !crypto.value) {
+            setCryptoStatusUnavailable(true);
+          } else {
+            setCryptoStatus(crypto.value);
+            setCryptoStatusUnavailable(false);
+          }
+        }
         pollId = window.setInterval(() => {
           void loadSnapshot('matrix_timeline_snapshot').catch(() => {
             if (!disposed) setError(true);
@@ -137,6 +158,31 @@ function NativeRoomTimeline({ roomId }: { roomId: string }) {
         padding: '16px 24px',
       }}
     >
+      {snapshot.isEncrypted && (
+        <p
+          role="status"
+          data-native-crypto-status={
+            cryptoStatus?.encryptionEnabled ? cryptoStatus.crossSigningState : 'unavailable'
+          }
+          style={{
+            margin: '0 0 12px',
+            padding: '8px 12px',
+            borderRadius: 6,
+            background: 'rgba(127, 127, 127, 0.12)',
+            fontSize: 13,
+          }}
+        >
+          {cryptoStatus?.encryptionEnabled
+            ? `End-to-end encrypted with Rust crypto${
+                cryptoStatus.crossSigningState === 'ready'
+                  ? '.'
+                  : '; device verification setup is incomplete.'
+              }`
+            : cryptoStatusUnavailable
+            ? 'Encrypted room; native crypto readiness could not be confirmed.'
+            : 'Confirming native encryption readiness…'}
+        </p>
+      )}
       {!snapshot.hitStart && (
         <div style={{ display: 'flex', justifyContent: 'center', paddingBottom: 12 }}>
           <button type="button" disabled={paginating} onClick={() => void paginateBackwards()}>

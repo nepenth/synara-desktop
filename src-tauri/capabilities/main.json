@@ -56,6 +56,7 @@
     "allow-matrix-login-password",
     "allow-matrix-session-snapshot",
     "allow-matrix-sync-status",
+    "allow-matrix-crypto-status",
     "allow-matrix-room-list-snapshot",
     "allow-matrix-timeline-open",
     "allow-matrix-timeline-snapshot",

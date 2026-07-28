@@ -43,12 +43,14 @@ pub struct NativeTimelineItem {
 pub struct NativeTimelineSnapshot {
     pub session_generation: u64,
     pub room_id: String,
+    pub is_encrypted: bool,
     pub items: Vec<NativeTimelineItem>,
     pub hit_start: bool,
 }
 
 struct LiveTimelineEntry {
     timeline: Arc<Timeline>,
+    is_encrypted: bool,
     hit_start: bool,
 }
 
@@ -76,6 +78,11 @@ impl NativeTimelineRegistry {
             let room = client
                 .get_room(&room_id)
                 .ok_or("d0.3-timeline-room-not-found")?;
+            let is_encrypted = room
+                .latest_encryption_state()
+                .await
+                .map_err(|_| "d0.5-timeline-encryption-state-unavailable")?
+                .is_encrypted();
             let timeline = TimelineBuilder::new(&room)
                 .build()
                 .await
@@ -84,6 +91,7 @@ impl NativeTimelineRegistry {
                 room_id_string.clone(),
                 LiveTimelineEntry {
                     timeline: Arc::new(timeline),
+                    is_encrypted,
                     hit_start: false,
                 },
             );
@@ -98,6 +106,7 @@ impl NativeTimelineRegistry {
             self.session_generation,
             room_id,
             &entry.timeline,
+            entry.is_encrypted,
             entry.hit_start,
         )
         .await
@@ -132,6 +141,7 @@ impl NativeTimelineRegistry {
             self.session_generation,
             room_id,
             &entry.timeline,
+            entry.is_encrypted,
             entry.hit_start,
         )
         .await
@@ -146,6 +156,7 @@ async fn snapshot_from_timeline(
     session_generation: u64,
     room_id: String,
     timeline: &Timeline,
+    is_encrypted: bool,
     hit_start: bool,
 ) -> Result<NativeTimelineSnapshot, &'static str> {
     let (items, _updates) = timeline.subscribe().await;
@@ -153,6 +164,7 @@ async fn snapshot_from_timeline(
     Ok(NativeTimelineSnapshot {
         session_generation,
         room_id,
+        is_encrypted,
         items,
         hit_start,
     })
@@ -210,6 +222,7 @@ mod tests {
         let snapshot = NativeTimelineSnapshot {
             session_generation: 7,
             room_id: "!room:example.org".into(),
+            is_encrypted: true,
             items: vec![NativeTimelineItem {
                 item_id: "item-1".into(),
                 event_id: "$event".into(),
@@ -233,6 +246,7 @@ mod tests {
         }
         assert!(json.contains("\"type\":\"m.room.message\""));
         assert!(json.contains("\"body\":\"hello\""));
+        assert!(json.contains("\"isEncrypted\":true"));
     }
 
     #[test]
