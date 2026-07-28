@@ -7,7 +7,17 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use matrix_sdk::Client;
+use matrix_sdk::{
+    ruma::{
+        events::{
+            relation::Reply,
+            room::message::{Relation, RoomMessageEventContent},
+            Mentions,
+        },
+        OwnedEventId, OwnedRoomId, OwnedTransactionId,
+    },
+    Client, Room,
+};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
 use tokio::sync::Mutex;
@@ -19,6 +29,7 @@ use crate::matrix::lifecycle::{
     KeyringSessionMaterialVault,
 };
 use crate::matrix::room_list::{snapshot_from_sync_owner, NativeRoomListSnapshot};
+use crate::matrix::send::SendQueue;
 use crate::matrix::store::{
     get_or_create_store_key, AccountIdentity, KeyringStoreKeyVault, StoreKeyId,
 };
@@ -60,6 +71,15 @@ pub struct MatrixAuthCommandError {
     pub diagnostic_id: &'static str,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MatrixSendTextResult {
+    pub room_id: String,
+    pub event_id: String,
+    pub local_txn_id: String,
+    pub status: &'static str,
+}
+
 impl MatrixAuthCommandError {
     fn new(code: &'static str, message: &'static str, diagnostic_id: &'static str) -> Self {
         Self {
@@ -91,6 +111,7 @@ struct ManagedMatrixSession {
     identity: MatrixLoginIdentity,
     sync: SyncServiceOwner,
     timelines: NativeTimelineRegistry,
+    sends: SendQueue,
 }
 
 #[derive(Default)]
@@ -172,6 +193,7 @@ pub async fn matrix_login_password(
         identity: identity.clone(),
         sync,
         timelines: NativeTimelineRegistry::new(state.current_generation()),
+        sends: SendQueue::new(state.current_generation()),
     });
     Ok(identity)
 }
@@ -256,6 +278,66 @@ pub async fn matrix_timeline_paginate(
 }
 
 #[tauri::command]
+pub async fn matrix_send_text(
+    state: State<'_, MatrixAuthState>,
+    room_id: String,
+    body: String,
+    reply_to: Option<String>,
+    txn_id: Option<String>,
+) -> Result<MatrixSendTextResult, MatrixAuthCommandError> {
+    let room_id = parse_send_room_id(&room_id)?;
+    let reply_to = parse_reply_event_id(reply_to)?;
+    let txn_id = parse_transaction_id(txn_id)?;
+
+    let (room, session_generation, local_txn_id) = {
+        let mut session = state.session.lock().await;
+        let active = require_send_session_mut(session.as_mut())?;
+        let room = active.client.get_room(&room_id).ok_or_else(|| {
+            MatrixAuthCommandError::new(
+                "NotFound",
+                "The native Matrix room is not available.",
+                "d0.4-send-room-not-found",
+            )
+        })?;
+        let session_generation = active.sends.session_generation();
+        let item = active
+            .sends
+            .enqueue_text(room_id.to_string(), body.clone())
+            .map_err(|error| map_send_error(error.diagnostic_id()))?;
+        (room, session_generation, item.local_txn_id.clone())
+    };
+
+    let send_result = send_text_to_room(&room, body, reply_to, txn_id).await;
+
+    let mut session = state.session.lock().await;
+    if let Some(active) = session.as_mut() {
+        if active.sends.session_generation() == session_generation {
+            if send_result.is_ok() {
+                let _ = active.sends.mark_sent(&local_txn_id);
+            } else {
+                let _ = active
+                    .sends
+                    .mark_failed(&local_txn_id, "d0.4-send-sdk-failed");
+            }
+        }
+    }
+
+    let event_id = send_result.map_err(|_| {
+        MatrixAuthCommandError::new(
+            "Unknown",
+            "The native Matrix message could not be sent.",
+            "d0.4-send-sdk-failed",
+        )
+    })?;
+    Ok(MatrixSendTextResult {
+        room_id: room_id.to_string(),
+        event_id,
+        local_txn_id,
+        status: "sent",
+    })
+}
+
+#[tauri::command]
 pub async fn matrix_logout(
     app: AppHandle,
     state: State<'_, MatrixAuthState>,
@@ -327,6 +409,7 @@ pub async fn matrix_restore_session(
         identity: identity.clone(),
         sync,
         timelines: NativeTimelineRegistry::new(state.current_generation()),
+        sends: SendQueue::new(state.current_generation()),
     });
     Ok(identity)
 }
@@ -409,6 +492,80 @@ fn map_timeline_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
         _ => ("Unknown", "The native Matrix timeline is unavailable."),
     };
     MatrixAuthCommandError::new(code, message, diagnostic_id)
+}
+
+fn require_send_session_mut(
+    session: Option<&mut ManagedMatrixSession>,
+) -> Result<&mut ManagedMatrixSession, MatrixAuthCommandError> {
+    session.ok_or_else(|| {
+        MatrixAuthCommandError::new(
+            "Forbidden",
+            "No native Matrix session is active.",
+            "d0.4-send-requires-session",
+        )
+    })
+}
+
+fn map_send_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
+    MatrixAuthCommandError::new(
+        "InvalidRequest",
+        "The native Matrix send request is invalid.",
+        diagnostic_id,
+    )
+}
+
+fn parse_send_room_id(room_id: &str) -> Result<OwnedRoomId, MatrixAuthCommandError> {
+    room_id
+        .parse()
+        .map_err(|_| map_send_error("d0.4-send-invalid-room-id"))
+}
+
+fn parse_reply_event_id(
+    reply_to: Option<String>,
+) -> Result<Option<OwnedEventId>, MatrixAuthCommandError> {
+    reply_to
+        .map(|event_id| {
+            event_id
+                .parse()
+                .map_err(|_| map_send_error("d0.4-send-invalid-reply-event-id"))
+        })
+        .transpose()
+}
+
+fn parse_transaction_id(
+    txn_id: Option<String>,
+) -> Result<Option<OwnedTransactionId>, MatrixAuthCommandError> {
+    txn_id
+        .map(|txn_id| {
+            if txn_id.is_empty() || txn_id.len() > 255 {
+                return Err(map_send_error("d0.4-send-invalid-transaction-id"));
+            }
+            Ok(OwnedTransactionId::from(txn_id))
+        })
+        .transpose()
+}
+
+fn text_message_content(body: String, reply_to: Option<OwnedEventId>) -> RoomMessageEventContent {
+    let mut content = RoomMessageEventContent::text_plain(body);
+    content.mentions = Some(Mentions::new());
+    if let Some(event_id) = reply_to {
+        content.relates_to = Some(Relation::Reply(Reply::with_event_id(event_id)));
+    }
+    content
+}
+
+async fn send_text_to_room(
+    room: &Room,
+    body: String,
+    reply_to: Option<OwnedEventId>,
+    txn_id: Option<OwnedTransactionId>,
+) -> matrix_sdk::Result<String> {
+    let send = room.send(text_message_content(body, reply_to));
+    let result = match txn_id {
+        Some(txn_id) => send.with_transaction_id(txn_id).await?,
+        None => send.await?,
+    };
+    Ok(result.response.event_id.to_string())
 }
 
 fn snapshot(session: Option<&ManagedMatrixSession>) -> MatrixSessionSnapshot {
@@ -581,5 +738,59 @@ mod tests {
         assert_eq!(state.next_generation(), 1);
         assert_eq!(state.next_generation(), 2);
         assert_eq!(state.current_generation(), 2);
+    }
+
+    #[test]
+    fn send_result_serialization_is_privacy_safe() {
+        let result = MatrixSendTextResult {
+            room_id: "!room:example.org".into(),
+            event_id: "$event:example.org".into(),
+            local_txn_id: "local-txn-1".into(),
+            status: "sent",
+        };
+        let json = serde_json::to_string(&result).unwrap();
+        assert_eq!(
+            json,
+            r#"{"roomId":"!room:example.org","eventId":"$event:example.org","localTxnId":"local-txn-1","status":"sent"}"#
+        );
+        assert!(!json.contains("token"));
+        assert!(!json.contains("ciphertext"));
+    }
+
+    #[test]
+    fn text_content_sets_empty_mentions_and_optional_reply() {
+        let plain = text_message_content("hello".into(), None);
+        let plain_json = serde_json::to_value(plain).unwrap();
+        assert_eq!(plain_json["body"], "hello");
+        assert_eq!(plain_json["msgtype"], "m.text");
+        assert_eq!(plain_json["m.mentions"], serde_json::json!({}));
+
+        let reply =
+            text_message_content("reply".into(), Some("$event:example.org".parse().unwrap()));
+        let reply_json = serde_json::to_value(reply).unwrap();
+        assert_eq!(
+            reply_json["m.relates_to"]["m.in_reply_to"]["event_id"],
+            "$event:example.org"
+        );
+    }
+
+    #[test]
+    fn send_input_parsers_reject_invalid_ids() {
+        assert_eq!(
+            parse_send_room_id("not-a-room").unwrap_err().diagnostic_id,
+            "d0.4-send-invalid-room-id"
+        );
+        assert_eq!(
+            parse_reply_event_id(Some("not-an-event".into()))
+                .unwrap_err()
+                .diagnostic_id,
+            "d0.4-send-invalid-reply-event-id"
+        );
+        assert_eq!(
+            parse_transaction_id(Some(String::new()))
+                .unwrap_err()
+                .diagnostic_id,
+            "d0.4-send-invalid-transaction-id"
+        );
     }
 }
