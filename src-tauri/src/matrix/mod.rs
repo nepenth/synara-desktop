@@ -166,7 +166,10 @@ pub fn matrix_ipc_schema_markers() -> &'static str {
     debug_assert_eq!(_sync, sync::MATRIX_SYNC_MARKER);
     debug_assert_eq!(_room_keys, room_keys::MATRIX_ROOM_KEYS_MARKER);
     debug_assert_eq!(_room_list, room_list::MATRIX_ROOM_LIST_MARKER);
-    debug_assert_eq!(_room_directory, room_directory::MATRIX_ROOM_DIRECTORY_MARKER);
+    debug_assert_eq!(
+        _room_directory,
+        room_directory::MATRIX_ROOM_DIRECTORY_MARKER
+    );
     debug_assert_eq!(_routes, routes::MATRIX_ROUTES_MARKER);
     debug_assert_eq!(_spaces, spaces::MATRIX_SPACES_MARKER);
     debug_assert_eq!(_members, members::MATRIX_MEMBERS_MARKER);
