@@ -18,6 +18,7 @@
 //! P4.2: Room-list snapshot and delta projection (harness foundation).
 //! P4.5: Space hierarchy / filters / parents (harness foundation).
 //! P4.6: Room member / power-level index foundation (harness).
+//! P4.7: Presence stream index foundation (harness; no SDK presence).
 //! P4.8: Route / deep-link resolution foundation (harness).
 //! P5.1: Timeline registry and lifecycle (harness foundation).
 //! P5.2: Timeline snapshot / ordered-diff projection (harness foundation).
@@ -59,6 +60,7 @@ pub mod lifecycle;
 pub mod media;
 pub mod members;
 pub mod notifications;
+pub mod presence;
 pub mod receipts;
 pub mod relations;
 pub mod room_list;
@@ -120,6 +122,7 @@ pub fn matrix_ipc_schema_markers() -> &'static str {
     let _threads = threads::matrix_threads_markers();
     let _typing = typing::matrix_typing_markers();
     let _utd_recovery = utd_recovery::matrix_utd_recovery_markers();
+    let _presence = presence::matrix_presence_markers();
     let _media = media::matrix_media_markers();
     let _notifications = notifications::matrix_notifications_markers();
     let _user_profile = user_profile::matrix_user_profile_markers();
@@ -161,9 +164,10 @@ pub fn matrix_ipc_schema_markers() -> &'static str {
     debug_assert_eq!(_threads, threads::MATRIX_THREADS_MARKER);
     debug_assert_eq!(_typing, typing::MATRIX_TYPING_MARKER);
     debug_assert_eq!(_utd_recovery, utd_recovery::MATRIX_UTD_RECOVERY_MARKER);
+    debug_assert_eq!(_presence, presence::MATRIX_PRESENCE_MARKER);
     debug_assert_eq!(_media, media::MATRIX_MEDIA_MARKER);
     debug_assert_eq!(_notifications, notifications::MATRIX_NOTIFICATIONS_MARKER);
     debug_assert_eq!(_user_profile, user_profile::MATRIX_USER_PROFILE_MARKER);
     debug_assert_eq!(_widgets, widgets::MATRIX_WIDGETS_MARKER);
-    "matrix-ipc-protocol-v1+domain-dtos-p1.4+supervisor-p2.1+store-p2.2+client-builder-p2.3+tasks-p2.4+diagnostics-p2.5+lifecycle-p2.6+auth-p3.3+p3.4+session-persist-p3.5+sync-p4.1+room-list-p4.2+routes-p4.8+spaces-p4.5+members-p4.6+timeline-p5.1+diffs-p5.2+pagination-p5.3+search-p6.8+relations-p5.6+send-p6.1+receipts-p6.2+typing-p6.3+media-p6.4+threads-p5.8+notifications-p7.1+security-p8.1+cross-signing-p8.4+widgets-p9.1+legacy-p3.7+devices-p8.2+verification-p8.3+backup-p8.5+user-profile-p6.6+crypto-store-p8.8+utd-recovery-p8.7"
+    "matrix-ipc-protocol-v1+domain-dtos-p1.4+supervisor-p2.1+store-p2.2+client-builder-p2.3+tasks-p2.4+diagnostics-p2.5+lifecycle-p2.6+auth-p3.3+p3.4+session-persist-p3.5+sync-p4.1+room-list-p4.2+routes-p4.8+spaces-p4.5+members-p4.6+timeline-p5.1+diffs-p5.2+pagination-p5.3+search-p6.8+relations-p5.6+send-p6.1+receipts-p6.2+typing-p6.3+media-p6.4+threads-p5.8+notifications-p7.1+security-p8.1+cross-signing-p8.4+widgets-p9.1+legacy-p3.7+devices-p8.2+verification-p8.3+backup-p8.5+user-profile-p6.6+crypto-store-p8.8+presence-p4.7+utd-recovery-p8.7"
 }
