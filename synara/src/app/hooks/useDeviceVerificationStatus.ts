@@ -5,6 +5,10 @@ import { useAlive } from './useAlive';
 import { fulfilledPromiseSettledResult } from '../utils/common';
 import { useMatrixClient } from './useMatrixClient';
 import { useDeviceListChange } from './useDeviceList';
+import {
+  getNativeDeviceVerificationStatus,
+  isNativeMatrixSession,
+} from '../features/verification/nativeVerification';
 
 export enum VerificationStatus {
   Unknown,
@@ -17,11 +21,31 @@ export const useDeviceVerificationDetect = (
   crypto: CryptoApi | undefined,
   userId: string,
   deviceId: string | undefined,
-  callback: (status: VerificationStatus) => void
+  callback: (status: VerificationStatus) => void,
 ): void => {
   const mx = useMatrixClient();
+  const nativeSession = isNativeMatrixSession();
 
   const updateStatus = useCallback(async () => {
+    if (nativeSession) {
+      if (!deviceId) {
+        callback(VerificationStatus.Unknown);
+        return;
+      }
+      try {
+        const status = await getNativeDeviceVerificationStatus(deviceId);
+        callback(
+          status === 'verified'
+            ? VerificationStatus.Verified
+            : status === 'unverified'
+              ? VerificationStatus.Unverified
+              : VerificationStatus.Unsupported,
+        );
+      } catch {
+        callback(VerificationStatus.Unsupported);
+      }
+      return;
+    }
     if (crypto && deviceId) {
       const data = await verifiedDevice(crypto, userId, deviceId);
       if (data === null) {
@@ -32,11 +56,17 @@ export const useDeviceVerificationDetect = (
       return;
     }
     callback(VerificationStatus.Unknown);
-  }, [crypto, deviceId, userId, callback]);
+  }, [nativeSession, crypto, deviceId, userId, callback]);
 
   useEffect(() => {
     updateStatus();
   }, [mx, updateStatus, userId]);
+
+  useEffect(() => {
+    if (!nativeSession) return undefined;
+    const interval = window.setInterval(() => void updateStatus(), 1_000);
+    return () => window.clearInterval(interval);
+  }, [nativeSession, updateStatus]);
 
   useDeviceListChange(
     useCallback(
@@ -45,15 +75,16 @@ export const useDeviceVerificationDetect = (
           updateStatus();
         }
       },
-      [userId, updateStatus]
-    )
+      [userId, updateStatus],
+    ),
+    !nativeSession,
   );
 };
 
 export const useDeviceVerificationStatus = (
   crypto: CryptoApi | undefined,
   userId: string,
-  deviceId: string | undefined
+  deviceId: string | undefined,
 ): VerificationStatus => {
   const [verificationStatus, setVerificationStatus] = useState(VerificationStatus.Unknown);
 
@@ -65,14 +96,23 @@ export const useDeviceVerificationStatus = (
 export const useUnverifiedDeviceCount = (
   crypto: CryptoApi | undefined,
   userId: string,
-  devices: string[]
+  devices: string[],
 ): number | undefined => {
   const [unverifiedCount, setUnverifiedCount] = useState<number>();
   const alive = useAlive();
+  const nativeSession = isNativeMatrixSession();
 
   const updateCount = useCallback(async () => {
     let count = 0;
-    if (crypto) {
+    if (nativeSession) {
+      const result = await Promise.allSettled(
+        devices.map((deviceId) => getNativeDeviceVerificationStatus(deviceId)),
+      );
+      const settledResult = fulfilledPromiseSettledResult(result);
+      settledResult.forEach((status) => {
+        if (status === 'unverified') count += 1;
+      });
+    } else if (crypto) {
       const promises = devices.map((deviceId) => verifiedDevice(crypto, userId, deviceId));
       const result = await Promise.allSettled(promises);
       const settledResult = fulfilledPromiseSettledResult(result);
@@ -85,7 +125,7 @@ export const useUnverifiedDeviceCount = (
     if (alive()) {
       setUnverifiedCount(count);
     }
-  }, [crypto, userId, devices, alive]);
+  }, [nativeSession, crypto, userId, devices, alive]);
 
   useDeviceListChange(
     useCallback(
@@ -94,8 +134,9 @@ export const useUnverifiedDeviceCount = (
           updateCount();
         }
       },
-      [userId, updateCount]
-    )
+      [userId, updateCount],
+    ),
+    !nativeSession,
   );
 
   useEffect(() => {

@@ -38,6 +38,8 @@ import { clearNotificationCaches } from '../app/notifications/notificationCaches
 import { assertCryptoStoreContinuity, CryptoStoreContinuityError } from './cryptoStoreContinuity';
 import { ensureVerificationRequestInbox } from './verificationRequestInbox';
 import { recordClientDiagnostic } from '../app/utils/clientDiagnostics';
+import { getSessionBootstrapResult } from '../app/state/sessionBootstrap';
+import { isSynaraDesktop } from '../app/utils/desktop';
 
 export const REFRESH_BEFORE_EXPIRY_MS = 60_000;
 
@@ -51,7 +53,7 @@ export type RefreshAndPersistSessionDeps = {
 
 export const toRefreshedSession = (
   session: MatrixClientSession,
-  response: IRefreshTokenResponse
+  response: IRefreshTokenResponse,
 ): MatrixClientSession => ({
   baseUrl: session.baseUrl,
   userId: session.userId,
@@ -78,7 +80,7 @@ type MatrixClientWithRefreshToken = MatrixClient & {
 
 export const applyRefreshedCredentialsToClient = (
   mx: MatrixClient,
-  response: IRefreshTokenResponse
+  response: IRefreshTokenResponse,
 ): void => {
   mx.setAccessToken(response.access_token);
   (mx as MatrixClientWithRefreshToken).http.opts.refreshToken = response.refresh_token;
@@ -97,7 +99,7 @@ export const refreshAndPersistSession = async (
     persistAuthenticatedSession: persistSession,
     pushSessionToSW: pushSession,
     nativeSessionStore,
-  }: RefreshAndPersistSessionDeps
+  }: RefreshAndPersistSessionDeps,
 ): Promise<RefreshAndPersistResult> => {
   const startedAtMs = performance.now();
   let refreshPhase = 'request';
@@ -138,7 +140,7 @@ export const refreshAndPersistSession = async (
 export const createTokenRefreshFunction = (
   getClient: () => MatrixClient,
   session: MatrixClientSession,
-  deps: RefreshAndPersistSessionDeps
+  deps: RefreshAndPersistSessionDeps,
 ): TokenRefreshFunction => {
   return async (refreshToken: string) => {
     try {
@@ -167,7 +169,7 @@ export type CreateMatrixClientOptions = {
 
 const createMatrixClient = (
   session: MatrixClientSession,
-  { refreshDeps }: CreateMatrixClientOptions = {}
+  { refreshDeps }: CreateMatrixClientOptions = {},
 ): MatrixClient => {
   const indexedDBStore = new IndexedDBStore({
     indexedDB: global.indexedDB,
@@ -177,7 +179,7 @@ const createMatrixClient = (
 
   const legacyCryptoStore = new IndexedDBCryptoStore(
     global.indexedDB,
-    MATRIX_LEGACY_CRYPTO_STORE_NAME
+    MATRIX_LEGACY_CRYPTO_STORE_NAME,
   );
 
   const mxHolder: { client?: MatrixClient } = {};
@@ -199,7 +201,7 @@ const createMatrixClient = (
       tokenRefreshFunction: createTokenRefreshFunction(
         () => mxHolder.client!,
         session,
-        refreshDeps
+        refreshDeps,
       ),
     });
   }
@@ -218,13 +220,14 @@ const defaultRefreshDeps = (): RefreshAndPersistSessionDeps => ({
 
 const startMatrixClient = async (
   session: MatrixClientSession,
-  options: CreateMatrixClientOptions = {}
+  options: CreateMatrixClientOptions = {},
 ): Promise<MatrixClient> => {
   const startupStartedAtMs = performance.now();
   let initializationPhase = 'store-startup';
   const refreshDeps = session.refreshToken
     ? { ...defaultRefreshDeps(), ...options.refreshDeps }
     : undefined;
+  const nativeCryptoOwner = isSynaraDesktop() && getSessionBootstrapResult().source === 'native';
   const mx = createMatrixClient(session, { refreshDeps });
   recordClientDiagnostic('session', 'matrix-client.initialization-started', {
     hasRefreshToken: Boolean(session.refreshToken),
@@ -236,31 +239,37 @@ const startMatrixClient = async (
     recordClientDiagnostic('session', 'matrix-store.startup-completed', {
       durationMs: performance.now() - storeStartedAtMs,
     });
-    initializationPhase = 'crypto-initialization';
-    const cryptoStartedAtMs = performance.now();
-    await mx.initRustCrypto();
-    recordClientDiagnostic('session', 'matrix-crypto.initialization-completed', {
-      durationMs: performance.now() - cryptoStartedAtMs,
-    });
-    initializationPhase = 'crypto-continuity';
-    const continuityStartedAtMs = performance.now();
-    const continuity = await assertCryptoStoreContinuity(mx, {
-      userId: session.userId,
-      deviceId: session.deviceId,
-      allowMissingServerDevice: options.allowMissingServerDevice,
-    });
-    recordClientDiagnostic('session', 'crypto-continuity.completed', {
-      outcome: continuity,
-      durationMs: performance.now() - continuityStartedAtMs,
-    });
-    initializationPhase = 'continuity-finalization';
-    if (continuity === 'matched') {
-      clearPendingFreshLoginIdentity(session);
+    if (nativeCryptoOwner) {
+      recordClientDiagnostic('session', 'matrix-crypto.initialization-skipped', {
+        owner: 'matrix-rust-sdk',
+      });
     } else {
-      pendingFreshLoginContinuity.set(mx, session);
+      initializationPhase = 'crypto-initialization';
+      const cryptoStartedAtMs = performance.now();
+      await mx.initRustCrypto();
+      recordClientDiagnostic('session', 'matrix-crypto.initialization-completed', {
+        durationMs: performance.now() - cryptoStartedAtMs,
+      });
+      initializationPhase = 'crypto-continuity';
+      const continuityStartedAtMs = performance.now();
+      const continuity = await assertCryptoStoreContinuity(mx, {
+        userId: session.userId,
+        deviceId: session.deviceId,
+        allowMissingServerDevice: options.allowMissingServerDevice,
+      });
+      recordClientDiagnostic('session', 'crypto-continuity.completed', {
+        outcome: continuity,
+        durationMs: performance.now() - continuityStartedAtMs,
+      });
+      initializationPhase = 'continuity-finalization';
+      if (continuity === 'matched') {
+        clearPendingFreshLoginIdentity(session);
+      } else {
+        pendingFreshLoginContinuity.set(mx, session);
+      }
+      initializationPhase = 'verification-inbox';
+      ensureVerificationRequestInbox(mx);
     }
-    initializationPhase = 'verification-inbox';
-    ensureVerificationRequestInbox(mx);
     recordClientDiagnostic('session', 'matrix-client.initialization-completed', {
       outcome: 'ready-to-start',
       durationMs: performance.now() - startupStartedAtMs,
@@ -291,7 +300,7 @@ export type InitClientDeps = {
 
 const recordBootstrappedMatrixIdentity = (
   session: MatrixClientSession,
-  setLastBootstrapped: InitClientDeps['setLastBootstrappedMatrixIdentity'] = setLastBootstrappedMatrixIdentity
+  setLastBootstrapped: InitClientDeps['setLastBootstrappedMatrixIdentity'] = setLastBootstrappedMatrixIdentity,
 ): void => {
   setLastBootstrapped?.({
     userId: session.userId,
@@ -307,7 +316,7 @@ export const initClient = async (
     isPendingFreshLoginIdentity: isFreshLoginIdentity = isPendingFreshLoginIdentity,
     setLastBootstrappedMatrixIdentity: setLastBootstrapped = setLastBootstrappedMatrixIdentity,
     startMatrixClient: startClient = startMatrixClient,
-  }: InitClientDeps = {}
+  }: InitClientDeps = {},
 ): Promise<MatrixClient> => {
   const initStartedAtMs = performance.now();
   const freshLogin = isFreshLoginIdentity(session);
@@ -338,7 +347,7 @@ export const initClient = async (
       throw new CryptoStoreContinuityError(
         session.userId,
         session.deviceId,
-        'identity-key-mismatch'
+        'identity-key-mismatch',
       );
     }
     throw error;
@@ -352,7 +361,7 @@ const POST_START_CRYPTO_QUERY_RETRY_DELAYS_MS = [0, 250, 1_000, 2_500] as const;
 
 export const waitForInitialSyncPrepared = async (
   mx: MatrixClient,
-  timeoutMs = POST_START_CRYPTO_CONTINUITY_TIMEOUT_MS
+  timeoutMs = POST_START_CRYPTO_CONTINUITY_TIMEOUT_MS,
 ): Promise<void> => {
   const startedAtMs = performance.now();
   if (mx.getSyncState() === SyncState.Prepared) {
@@ -404,7 +413,7 @@ export const confirmFreshLoginCryptoContinuity = async (
     assertContinuity?: typeof assertCryptoStoreContinuity;
     clearPendingIdentity?: typeof clearPendingFreshLoginIdentity;
     retryDelaysMs?: readonly number[];
-  } = {}
+  } = {},
 ): Promise<void> => {
   let lastError: unknown;
   for (const delayMs of retryDelaysMs) {
@@ -443,7 +452,7 @@ export const startClient = async (
     pendingSession: pendingSessionOverride,
     waitForPrepared = waitForInitialSyncPrepared,
     confirmContinuity = confirmFreshLoginCryptoContinuity,
-  }: StartClientContinuityDeps = {}
+  }: StartClientContinuityDeps = {},
 ) => {
   const startCallStartedAtMs = performance.now();
   const pendingSession = pendingSessionOverride ?? pendingFreshLoginContinuity.get(mx);
@@ -480,7 +489,7 @@ export const startClient = async (
         durationMs: performance.now() - startCallStartedAtMs,
         continuityConfirmationPending: Boolean(pendingSession),
         errorType: error instanceof Error ? error.name : typeof error,
-      }
+      },
     );
     if (!pendingSession) throw error;
     mx.stopClient();
@@ -489,7 +498,7 @@ export const startClient = async (
       : new CryptoStoreContinuityError(
           pendingSession.userId,
           pendingSession.deviceId,
-          'server-query-incomplete'
+          'server-query-incomplete',
         );
   }
 };
@@ -520,7 +529,10 @@ const defaultPerformLogoutDeps = (): PerformLogoutDeps => ({
 
 export const performLogout = async (
   mx?: MatrixClient,
-  { storage, ...depsOverrides }: Partial<PerformLogoutDeps> & { storage?: SessionLocalStorage } = {}
+  {
+    storage,
+    ...depsOverrides
+  }: Partial<PerformLogoutDeps> & { storage?: SessionLocalStorage } = {},
 ): Promise<void> => {
   const deps = { ...defaultPerformLogoutDeps(), ...depsOverrides };
 
@@ -547,7 +559,7 @@ export const logoutClient = async (mx: MatrixClient) => performLogout(mx);
 export const clearLoginData = async (
   storage: SessionLocalStorage | undefined = typeof window === 'undefined'
     ? undefined
-    : window.localStorage
+    : window.localStorage,
 ) => performLogout(undefined, { storage });
 
 const canScheduleProactiveTokenRefresh = (session: MatrixClientSession): boolean =>
@@ -560,7 +572,7 @@ export const scheduleProactiveTokenRefresh = (
   mx: MatrixClient,
   session: MatrixClientSession,
   deps: Partial<RefreshAndPersistSessionDeps> = {},
-  nowMs = Date.now()
+  nowMs = Date.now(),
 ): ProactiveTokenRefreshHandle => {
   const resolvedDeps = { ...defaultRefreshDeps(), ...deps };
 
@@ -580,7 +592,7 @@ export const scheduleProactiveTokenRefresh = (
 
   const scheduleRefreshForSession = (
     activeSession: MatrixClientSession,
-    scheduleAtMs = Date.now()
+    scheduleAtMs = Date.now(),
   ): void => {
     clearScheduledRefresh();
     if (disposed || !canScheduleProactiveTokenRefresh(activeSession)) return;
@@ -602,7 +614,7 @@ export const scheduleProactiveTokenRefresh = (
         mx,
         activeSession,
         activeSession.refreshToken,
-        resolvedDeps
+        resolvedDeps,
       );
       scheduleRefreshForSession(refreshedSession);
     } catch {

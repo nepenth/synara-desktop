@@ -17,11 +17,12 @@ import {
 import { useCrossSigningActive } from '../../../hooks/useCrossSigning';
 import { Modal500 } from '../../../components/Modal500';
 import { Settings, SettingsPages } from '../../../features/settings';
+import { isNativeMatrixSession } from '../../../features/verification/nativeVerification';
 
 function UnverifiedIndicator() {
   const mx = useMatrixClient();
 
-  const crypto = mx.getCrypto();
+  const crypto = isNativeMatrixSession() ? undefined : mx.getCrypto();
   const [devices] = useDeviceList();
 
   const [currentDevice, otherDevices] = useSplitCurrentDevice(devices);

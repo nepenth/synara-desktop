@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-matrix-verification-begin-sas"
+description = "Enables the matrix_verification_begin_sas command without any pre-configured scope."
+commands.allow = ["matrix_verification_begin_sas"]
+
+[[permission]]
+identifier = "deny-matrix-verification-begin-sas"
+description = "Denies the matrix_verification_begin_sas command without any pre-configured scope."
+commands.deny = ["matrix_verification_begin_sas"]

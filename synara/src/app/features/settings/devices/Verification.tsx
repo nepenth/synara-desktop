@@ -36,6 +36,8 @@ import { useAuthMetadata } from '../../../hooks/useAuthMetadata';
 import { withSearchParam } from '../../../pages/pathUtils';
 import { useAccountManagementActions } from '../../../hooks/useAccountManagement';
 import { openExternalUrl } from '../../../utils/appLinks';
+import { NativeStartVerification } from '../../verification/NativeDeviceVerification';
+import { isNativeMatrixSession } from '../../verification/nativeVerification';
 
 type VerificationStatusBadgeProps = {
   verificationStatus: VerificationStatus;
@@ -101,7 +103,7 @@ function LearnStartVerificationFromOtherDevice({
 }
 
 type VerifyCurrentDeviceTileProps = {
-  crypto: CryptoApi;
+  crypto?: CryptoApi;
   secretStorageKeyId?: string;
   secretStorageKeyContent?: SecretStorageKeyContent;
 };
@@ -110,6 +112,43 @@ export function VerifyCurrentDeviceTile({
   secretStorageKeyId,
   secretStorageKeyContent,
 }: VerifyCurrentDeviceTileProps) {
+  if (isNativeMatrixSession()) {
+    return (
+      <InfoCard
+        variant="Critical"
+        title="Unverified"
+        description="Use another verified device to compare emoji or decimal security codes."
+        after={<NativeStartVerification onExit={() => undefined} />}
+      />
+    );
+  }
+  if (!crypto) {
+    return (
+      <InfoCard
+        variant="Critical"
+        title="Verification unavailable"
+        description="Device verification is unavailable for this session."
+      />
+    );
+  }
+  return (
+    <LegacyVerifyCurrentDeviceTile
+      crypto={crypto}
+      secretStorageKeyId={secretStorageKeyId}
+      secretStorageKeyContent={secretStorageKeyContent}
+    />
+  );
+}
+
+function LegacyVerifyCurrentDeviceTile({
+  crypto,
+  secretStorageKeyId,
+  secretStorageKeyContent,
+}: {
+  crypto: CryptoApi;
+  secretStorageKeyId?: string;
+  secretStorageKeyContent?: SecretStorageKeyContent;
+}) {
   const [learnMore, setLearnMore] = useState(false);
 
   const [manualVerification, setManualVerification] = useState(false);
@@ -122,7 +161,7 @@ export function VerifyCurrentDeviceTile({
 
   const requestVerification = useAsync<VerificationRequest, Error, []>(
     useCallback(() => crypto.requestOwnUserVerification(), [crypto]),
-    setRequestState
+    setRequestState,
   );
 
   const handleExit = useCallback(() => {
@@ -216,10 +255,39 @@ export function VerifyCurrentDeviceTile({
 }
 
 type VerifyOtherDeviceTileProps = {
-  crypto: CryptoApi;
+  crypto?: CryptoApi;
   deviceId: string;
 };
 export function VerifyOtherDeviceTile({ crypto, deviceId }: VerifyOtherDeviceTileProps) {
+  if (isNativeMatrixSession()) {
+    return (
+      <InfoCard
+        variant="Warning"
+        title="Unverified"
+        description="Verify device identity and grant access to encrypted messages."
+        after={<NativeStartVerification deviceId={deviceId} onExit={() => undefined} />}
+      />
+    );
+  }
+  if (!crypto) {
+    return (
+      <InfoCard
+        variant="Warning"
+        title="Verification unavailable"
+        description="Device verification is unavailable for this session."
+      />
+    );
+  }
+  return <LegacyVerifyOtherDeviceTile crypto={crypto} deviceId={deviceId} />;
+}
+
+function LegacyVerifyOtherDeviceTile({
+  crypto,
+  deviceId,
+}: {
+  crypto: CryptoApi;
+  deviceId: string;
+}) {
   const mx = useMatrixClient();
   const [requestState, setRequestState] = useState<AsyncState<VerificationRequest, Error>>({
     status: AsyncStatus.Idle,
@@ -230,7 +298,7 @@ export function VerifyOtherDeviceTile({ crypto, deviceId }: VerifyOtherDeviceTil
       const requestPromise = crypto.requestDeviceVerification(mx.getSafeUserId(), deviceId);
       return requestPromise;
     }, [mx, crypto, deviceId]),
-    setRequestState
+    setRequestState,
   );
 
   const handleExit = useCallback(() => {
@@ -274,6 +342,18 @@ type EnableVerificationProps = {
   visible: boolean;
 };
 export function EnableVerification({ visible }: EnableVerificationProps) {
+  if (isNativeMatrixSession()) {
+    return visible ? (
+      <Text size="T200">
+        Cross-signing setup is unavailable in this screen. Device verification cannot start until
+        cross-signing is configured.
+      </Text>
+    ) : null;
+  }
+  return <LegacyEnableVerification visible={visible} />;
+}
+
+function LegacyEnableVerification({ visible }: EnableVerificationProps) {
   const [open, setOpen] = useState(false);
 
   const handleCancel = useCallback(() => setOpen(false), []);
@@ -329,7 +409,7 @@ export function DeviceVerificationOptions() {
       void openExternalUrl(
         withSearchParam(authUrl, {
           action: accountManagementActions.crossSigningReset,
-        })
+        }),
       );
       return;
     }

@@ -16,6 +16,7 @@ import { withSearchParam } from '../../../pages/pathUtils';
 import { useAccountManagementActions } from '../../../hooks/useAccountManagement';
 import { SettingTile } from '../../../components/setting-tile';
 import { openExternalUrl } from '../../../utils/appLinks';
+import { isNativeMatrixSession } from '../../verification/nativeVerification';
 
 type OtherDevicesProps = {
   devices: IMyDevice[];
@@ -24,7 +25,8 @@ type OtherDevicesProps = {
 };
 export function OtherDevices({ devices, refreshDeviceList, showVerification }: OtherDevicesProps) {
   const mx = useMatrixClient();
-  const crypto = mx.getCrypto();
+  const nativeSession = isNativeMatrixSession();
+  const crypto = nativeSession ? undefined : mx.getCrypto();
   const authMetadata = useAuthMetadata();
   const accountManagementActions = useAccountManagementActions();
 
@@ -37,7 +39,7 @@ export function OtherDevices({ devices, refreshDeviceList, showVerification }: O
     void openExternalUrl(
       withSearchParam(authUrl, {
         action: accountManagementActions.sessionsList,
-      })
+      }),
     );
   }, [authMetadata, accountManagementActions]);
 
@@ -50,10 +52,10 @@ export function OtherDevices({ devices, refreshDeviceList, showVerification }: O
         withSearchParam(authUrl, {
           action: accountManagementActions.sessionEnd,
           device_id: deviceId,
-        })
+        }),
       );
     },
-    [authMetadata, accountManagementActions]
+    [authMetadata, accountManagementActions],
   );
 
   const handleToggleDelete = useCallback((deviceId: string) => {
@@ -77,7 +79,7 @@ export function OtherDevices({ devices, refreshDeviceList, showVerification }: O
       async (authDict?: AuthDict) => {
         await mx.deleteMultipleDevices(Array.from(deleted), authDict);
       },
-      [mx, deleted]
+      [mx, deleted],
     ),
     useCallback(
       (state: typeof deleteState) => {
@@ -87,11 +89,11 @@ export function OtherDevices({ devices, refreshDeviceList, showVerification }: O
         }
         setDeleteState(state);
       },
-      [refreshDeviceList]
-    )
+      [refreshDeviceList],
+    ),
   );
   const [authData, deleteError] = useUIAMatrixError(
-    deleteState.status === AsyncStatus.Error ? deleteState.error : undefined
+    deleteState.status === AsyncStatus.Error ? deleteState.error : undefined,
   );
   const deleting = deleteState.status === AsyncStatus.Loading || authData !== undefined;
 
@@ -164,7 +166,7 @@ export function OtherDevices({ devices, refreshDeviceList, showVerification }: O
                   )
                 }
               />
-              {showVerification && crypto && (
+              {showVerification && (nativeSession || crypto) && (
                 <DeviceVerificationStatus
                   crypto={crypto}
                   userId={mx.getSafeUserId()}

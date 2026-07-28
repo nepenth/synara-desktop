@@ -543,6 +543,12 @@
           "markdownDescription": "Enables the matrix_crypto_status command without any pre-configured scope."
         },
         {
+          "description": "Enables the matrix_device_verification_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-device-verification-status",
+          "markdownDescription": "Enables the matrix_device_verification_status command without any pre-configured scope."
+        },
+        {
           "description": "Enables the matrix_login_password command without any pre-configured scope.",
           "type": "string",
           "const": "allow-matrix-login-password",
@@ -601,6 +607,54 @@
           "type": "string",
           "const": "allow-matrix-timeline-snapshot",
           "markdownDescription": "Enables the matrix_timeline_snapshot command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_verification_accept command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-verification-accept",
+          "markdownDescription": "Enables the matrix_verification_accept command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_verification_begin_sas command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-verification-begin-sas",
+          "markdownDescription": "Enables the matrix_verification_begin_sas command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_verification_cancel command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-verification-cancel",
+          "markdownDescription": "Enables the matrix_verification_cancel command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_verification_confirm command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-verification-confirm",
+          "markdownDescription": "Enables the matrix_verification_confirm command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_verification_dismiss command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-verification-dismiss",
+          "markdownDescription": "Enables the matrix_verification_dismiss command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_verification_list command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-verification-list",
+          "markdownDescription": "Enables the matrix_verification_list command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_verification_mismatch command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-verification-mismatch",
+          "markdownDescription": "Enables the matrix_verification_mismatch command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_verification_start command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-verification-start",
+          "markdownDescription": "Enables the matrix_verification_start command without any pre-configured scope."
         },
         {
           "description": "Denies the desktop_agent_action command without any pre-configured scope.",
@@ -801,6 +855,12 @@
           "markdownDescription": "Denies the matrix_crypto_status command without any pre-configured scope."
         },
         {
+          "description": "Denies the matrix_device_verification_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-device-verification-status",
+          "markdownDescription": "Denies the matrix_device_verification_status command without any pre-configured scope."
+        },
+        {
           "description": "Denies the matrix_login_password command without any pre-configured scope.",
           "type": "string",
           "const": "deny-matrix-login-password",
@@ -859,6 +919,54 @@
           "type": "string",
           "const": "deny-matrix-timeline-snapshot",
           "markdownDescription": "Denies the matrix_timeline_snapshot command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_verification_accept command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-verification-accept",
+          "markdownDescription": "Denies the matrix_verification_accept command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_verification_begin_sas command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-verification-begin-sas",
+          "markdownDescription": "Denies the matrix_verification_begin_sas command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_verification_cancel command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-verification-cancel",
+          "markdownDescription": "Denies the matrix_verification_cancel command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_verification_confirm command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-verification-confirm",
+          "markdownDescription": "Denies the matrix_verification_confirm command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_verification_dismiss command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-verification-dismiss",
+          "markdownDescription": "Denies the matrix_verification_dismiss command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_verification_list command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-verification-list",
+          "markdownDescription": "Denies the matrix_verification_list command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_verification_mismatch command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-verification-mismatch",
+          "markdownDescription": "Denies the matrix_verification_mismatch command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_verification_start command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-verification-start",
+          "markdownDescription": "Denies the matrix_verification_start command without any pre-configured scope."
         },
         {
           "description": "No features are enabled by default, as we believe\nthe clipboard can be inherently dangerous and it is \napplication specific if read and/or write access is needed.\n\nClipboard interaction needs to be explicitly enabled.\n",

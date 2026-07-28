@@ -37,6 +37,8 @@ import {
 } from '../utils/verification';
 import { useMatrixClient } from '../hooks/useMatrixClient';
 import { ensureVerificationRequestInbox } from '../../client/verificationRequestInbox';
+import { isNativeMatrixSession } from '../features/verification/nativeVerification';
+import { NativeVerificationInboxRenderer } from '../features/verification/NativeDeviceVerification';
 
 const DialogHeaderStyles: CSSProperties = {
   padding: `0 ${config.space.S200} 0 ${config.space.S400}`,
@@ -216,7 +218,7 @@ type SasVerificationProps = {
 };
 function SasVerification({ verifier, onVerifierCancel }: SasVerificationProps) {
   const [sasData, setSasData] = useState<ShowSasCallbacks | undefined>(() =>
-    getInitialSasCallbacks(verifier)
+    getInitialSasCallbacks(verifier),
   );
   const [verifyError, setVerifyError] = useState<string>();
   const [verifyAttempt, setVerifyAttempt] = useState(0);
@@ -383,7 +385,7 @@ export function DeviceVerification({ request, onExit }: DeviceVerificationProps)
   );
 }
 
-export function ReceiveSelfDeviceVerification() {
+function LegacyReceiveSelfDeviceVerification() {
   const mx = useMatrixClient();
   const inbox = useMemo(() => ensureVerificationRequestInbox(mx), [mx]);
   const [requests, setRequests] = useState<VerificationRequest[]>(() => inbox.getSnapshot());
@@ -413,4 +415,11 @@ export function ReceiveSelfDeviceVerification() {
       onExit={handleExit}
     />
   );
+}
+
+export function ReceiveSelfDeviceVerification() {
+  if (isNativeMatrixSession()) {
+    return <NativeVerificationInboxRenderer />;
+  }
+  return <LegacyReceiveSelfDeviceVerification />;
 }
