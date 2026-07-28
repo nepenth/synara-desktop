@@ -19,6 +19,7 @@
 //! P5.1: Timeline registry and lifecycle (harness foundation).
 //! P5.2: Timeline snapshot / ordered-diff projection (harness foundation).
 //! P5.3: Timeline pagination state machine foundation.
+//! P5.10: UTD / decryption update propagation foundation.
 //! P5.6: Relations / reactions / replaces index foundation (harness).
 //! P5.8: Thread list / summary index foundation (harness).
 //! P6.1: Outbound send queue + local-echo foundation (harness; no Room::send).

@@ -491,3 +491,146 @@ fn p5_3_directions_independent() {
         PaginationPhase::Exhausted
     );
 }
+
+// --- P5.10 UTD / decryption update propagation ---
+
+fn enc(
+    item: &str,
+    event: &str,
+    room: &str,
+) -> crate::matrix::dto::TimelineEncryptedUnavailableItem {
+    crate::matrix::dto::TimelineEncryptedUnavailableItem {
+        item_id: item.into(),
+        event_id: event.into(),
+        room_id: room.into(),
+        reason: Some("missing_keys".into()),
+    }
+}
+
+#[test]
+fn p5_10_mark_retry_decrypt_flow() {
+    let mut idx = UtdIndex::new(2);
+    let u = idx
+        .mark_unavailable(
+            enc("i1", "$e1:example.org", "!r:example.org"),
+            UtdReasonCode::MissingKeys,
+        )
+        .unwrap();
+    assert!(matches!(u, UtdUpdate::MarkedUnavailable { .. }));
+    assert_eq!(idx.active_utd_count(), 1);
+
+    idx.begin_retry("!r:example.org", "$e1:example.org")
+        .unwrap();
+    assert_eq!(
+        idx.get("!r:example.org", "$e1:example.org").unwrap().phase,
+        UtdPhase::RetryPending
+    );
+    assert_eq!(
+        idx.get("!r:example.org", "$e1:example.org")
+            .unwrap()
+            .retry_count,
+        1
+    );
+
+    let u = idx
+        .mark_decrypted("!r:example.org", "$e1:example.org")
+        .unwrap();
+    assert!(matches!(u, UtdUpdate::Decrypted { .. }));
+    assert_eq!(idx.active_utd_count(), 0);
+    assert_eq!(
+        idx.get("!r:example.org", "$e1:example.org").unwrap().phase,
+        UtdPhase::Decrypted
+    );
+}
+
+#[test]
+fn p5_10_retry_failed_then_permanent() {
+    let mut idx = UtdIndex::new(1);
+    idx.mark_unavailable(
+        enc("i1", "$e1:example.org", "!r:example.org"),
+        UtdReasonCode::Historical,
+    )
+    .unwrap();
+    idx.begin_retry("!r:example.org", "$e1:example.org")
+        .unwrap();
+    idx.retry_failed("!r:example.org", "$e1:example.org", "p5.10-key-not-yet")
+        .unwrap();
+    assert_eq!(
+        idx.get("!r:example.org", "$e1:example.org").unwrap().phase,
+        UtdPhase::UnableToDecrypt
+    );
+
+    idx.begin_retry("!r:example.org", "$e1:example.org")
+        .unwrap();
+    let u = idx
+        .mark_permanent_failure("!r:example.org", "$e1:example.org", "p5.10-unrecoverable")
+        .unwrap();
+    assert!(matches!(u, UtdUpdate::PermanentFailure { .. }));
+    let err = idx
+        .begin_retry("!r:example.org", "$e1:example.org")
+        .unwrap_err();
+    assert_eq!(err.diagnostic_id(), "p5.10-permanent-no-retry");
+}
+
+#[test]
+fn p5_10_forbidden_reason_and_diagnostic() {
+    let mut idx = UtdIndex::new(1);
+    let mut bad = enc("i1", "$e1:example.org", "!r:example.org");
+    bad.reason = Some("session_key=abc".into());
+    let err = idx.mark_unavailable(bad, UtdReasonCode::Other).unwrap_err();
+    assert_eq!(err.diagnostic_id(), "p5.10-forbidden-reason");
+
+    idx.mark_unavailable(
+        enc("i1", "$e1:example.org", "!r:example.org"),
+        UtdReasonCode::MissingKeys,
+    )
+    .unwrap();
+    idx.begin_retry("!r:example.org", "$e1:example.org")
+        .unwrap();
+    let err = idx
+        .retry_failed("!r:example.org", "$e1:example.org", "leak-access_token")
+        .unwrap_err();
+    assert_eq!(err.diagnostic_id(), "p5.10-forbidden-diagnostic");
+}
+
+#[test]
+fn p5_10_list_active_and_gc_and_retire() {
+    let mut idx = UtdIndex::new(1);
+    idx.mark_unavailable(
+        enc("i1", "$a:example.org", "!r:example.org"),
+        UtdReasonCode::MissingKeys,
+    )
+    .unwrap();
+    idx.mark_unavailable(
+        enc("i2", "$b:example.org", "!r:example.org"),
+        UtdReasonCode::Withheld,
+    )
+    .unwrap();
+    idx.mark_unavailable(
+        enc("i3", "$c:example.org", "!other:example.org"),
+        UtdReasonCode::Other,
+    )
+    .unwrap();
+    assert_eq!(idx.list_active_for_room("!r:example.org").len(), 2);
+
+    idx.mark_decrypted("!r:example.org", "$a:example.org")
+        .unwrap();
+    assert_eq!(idx.gc_decrypted(), 1);
+    assert!(idx.get("!r:example.org", "$a:example.org").is_none());
+
+    idx.retire_generation(9);
+    assert_eq!(idx.session_generation(), 9);
+    assert!(idx.is_empty());
+}
+
+#[test]
+fn p5_10_invalid_ids() {
+    let mut idx = UtdIndex::new(1);
+    let err = idx
+        .mark_unavailable(
+            enc("i1", "not-event", "!r:example.org"),
+            UtdReasonCode::Other,
+        )
+        .unwrap_err();
+    assert_eq!(err.diagnostic_id(), "p5.10-invalid-event-id");
+}
