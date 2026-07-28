@@ -491,3 +491,300 @@ fn p5_3_directions_independent() {
         PaginationPhase::Exhausted
     );
 }
+
+// --- P5.10 UTD / decryption update propagation ---
+
+fn enc(
+    item: &str,
+    event: &str,
+    room: &str,
+) -> crate::matrix::dto::TimelineEncryptedUnavailableItem {
+    crate::matrix::dto::TimelineEncryptedUnavailableItem {
+        item_id: item.into(),
+        event_id: event.into(),
+        room_id: room.into(),
+        reason: Some("missing_keys".into()),
+    }
+}
+
+#[test]
+fn p5_10_mark_retry_decrypt_flow() {
+    let mut idx = UtdIndex::new(2);
+    let u = idx
+        .mark_unavailable(
+            enc("i1", "$e1:example.org", "!r:example.org"),
+            UtdReasonCode::MissingKeys,
+        )
+        .unwrap();
+    assert!(matches!(u, UtdUpdate::MarkedUnavailable { .. }));
+    assert_eq!(idx.active_utd_count(), 1);
+
+    idx.begin_retry("!r:example.org", "$e1:example.org")
+        .unwrap();
+    assert_eq!(
+        idx.get("!r:example.org", "$e1:example.org").unwrap().phase,
+        UtdPhase::RetryPending
+    );
+    assert_eq!(
+        idx.get("!r:example.org", "$e1:example.org")
+            .unwrap()
+            .retry_count,
+        1
+    );
+
+    let u = idx
+        .mark_decrypted("!r:example.org", "$e1:example.org")
+        .unwrap();
+    assert!(matches!(u, UtdUpdate::Decrypted { .. }));
+    assert_eq!(idx.active_utd_count(), 0);
+    assert_eq!(
+        idx.get("!r:example.org", "$e1:example.org").unwrap().phase,
+        UtdPhase::Decrypted
+    );
+}
+
+#[test]
+fn p5_10_retry_failed_then_permanent() {
+    let mut idx = UtdIndex::new(1);
+    idx.mark_unavailable(
+        enc("i1", "$e1:example.org", "!r:example.org"),
+        UtdReasonCode::Historical,
+    )
+    .unwrap();
+    idx.begin_retry("!r:example.org", "$e1:example.org")
+        .unwrap();
+    idx.retry_failed("!r:example.org", "$e1:example.org", "p5.10-key-not-yet")
+        .unwrap();
+    assert_eq!(
+        idx.get("!r:example.org", "$e1:example.org").unwrap().phase,
+        UtdPhase::UnableToDecrypt
+    );
+
+    idx.begin_retry("!r:example.org", "$e1:example.org")
+        .unwrap();
+    let u = idx
+        .mark_permanent_failure("!r:example.org", "$e1:example.org", "p5.10-unrecoverable")
+        .unwrap();
+    assert!(matches!(u, UtdUpdate::PermanentFailure { .. }));
+    let err = idx
+        .begin_retry("!r:example.org", "$e1:example.org")
+        .unwrap_err();
+    assert_eq!(err.diagnostic_id(), "p5.10-permanent-no-retry");
+}
+
+#[test]
+fn p5_10_forbidden_reason_and_diagnostic() {
+    let mut idx = UtdIndex::new(1);
+    let mut bad = enc("i1", "$e1:example.org", "!r:example.org");
+    bad.reason = Some("session_key=abc".into());
+    let err = idx.mark_unavailable(bad, UtdReasonCode::Other).unwrap_err();
+    assert_eq!(err.diagnostic_id(), "p5.10-forbidden-reason");
+
+    idx.mark_unavailable(
+        enc("i1", "$e1:example.org", "!r:example.org"),
+        UtdReasonCode::MissingKeys,
+    )
+    .unwrap();
+    idx.begin_retry("!r:example.org", "$e1:example.org")
+        .unwrap();
+    let err = idx
+        .retry_failed("!r:example.org", "$e1:example.org", "leak-access_token")
+        .unwrap_err();
+    assert_eq!(err.diagnostic_id(), "p5.10-forbidden-diagnostic");
+}
+
+#[test]
+fn p5_10_list_active_and_gc_and_retire() {
+    let mut idx = UtdIndex::new(1);
+    idx.mark_unavailable(
+        enc("i1", "$a:example.org", "!r:example.org"),
+        UtdReasonCode::MissingKeys,
+    )
+    .unwrap();
+    idx.mark_unavailable(
+        enc("i2", "$b:example.org", "!r:example.org"),
+        UtdReasonCode::Withheld,
+    )
+    .unwrap();
+    idx.mark_unavailable(
+        enc("i3", "$c:example.org", "!other:example.org"),
+        UtdReasonCode::Other,
+    )
+    .unwrap();
+    assert_eq!(idx.list_active_for_room("!r:example.org").len(), 2);
+
+    idx.mark_decrypted("!r:example.org", "$a:example.org")
+        .unwrap();
+    assert_eq!(idx.gc_decrypted(), 1);
+    assert!(idx.get("!r:example.org", "$a:example.org").is_none());
+
+    idx.retire_generation(9);
+    assert_eq!(idx.session_generation(), 9);
+    assert!(idx.is_empty());
+}
+
+#[test]
+fn p5_10_invalid_ids() {
+    let mut idx = UtdIndex::new(1);
+    let err = idx
+        .mark_unavailable(
+            enc("i1", "not-event", "!r:example.org"),
+            UtdReasonCode::Other,
+        )
+        .unwrap_err();
+    assert_eq!(err.diagnostic_id(), "p5.10-invalid-event-id");
+}
+
+// --- P5.4 focus / event-context opening ---
+
+#[test]
+fn p5_4_open_focused_settle_ready() {
+    let key = TimelineKey::main("!r:example.org").unwrap();
+    let mut focus = TimelineFocus::new(key, 1);
+    assert!(focus.is_live());
+    assert_eq!(focus.phase(), NavigationPhase::Idle);
+
+    focus
+        .begin_open(FocusOpenRequest::focused("$evt1:example.org"))
+        .unwrap();
+    assert_eq!(focus.phase(), NavigationPhase::LoadingContext);
+    assert_eq!(focus.mode().as_kind_str(), "focused");
+    assert_eq!(focus.highlight_event_id(), Some("$evt1:example.org"));
+    assert!(focus.is_busy());
+
+    focus
+        .complete_open(FocusOpenOutcome {
+            items_applied: 40,
+            target_found: true,
+            at_live_bottom: false,
+        })
+        .unwrap();
+    assert_eq!(focus.phase(), NavigationPhase::SettlingLayout);
+    assert_eq!(focus.opens_completed(), 1);
+
+    focus.confirm_ready().unwrap();
+    assert_eq!(focus.phase(), NavigationPhase::BottomConfirmed);
+    assert!(!focus.is_live());
+}
+
+#[test]
+fn p5_4_open_unread_then_jump_latest() {
+    let key = TimelineKey::main("!r:example.org").unwrap();
+    let mut focus = TimelineFocus::new(key, 2);
+    focus
+        .begin_open(FocusOpenRequest::unread("$mark:example.org"))
+        .unwrap();
+    focus
+        .complete_open(FocusOpenOutcome {
+            items_applied: 20,
+            target_found: true,
+            at_live_bottom: false,
+        })
+        .unwrap();
+    focus.confirm_ready().unwrap();
+    assert_eq!(focus.mode().as_kind_str(), "unread");
+
+    focus.begin_jump_latest().unwrap();
+    assert_eq!(focus.phase(), NavigationPhase::RebindingLive);
+    focus
+        .complete_open(FocusOpenOutcome {
+            items_applied: 10,
+            target_found: true,
+            at_live_bottom: true,
+        })
+        .unwrap();
+    assert!(focus.is_live());
+    assert!(focus.highlight_event_id().is_none());
+    focus.confirm_ready().unwrap();
+    assert_eq!(focus.phase(), NavigationPhase::BottomConfirmed);
+}
+
+#[test]
+fn p5_4_target_not_found_errors() {
+    let key = TimelineKey::main("!r:example.org").unwrap();
+    let mut focus = TimelineFocus::new(key, 1);
+    focus
+        .begin_open(FocusOpenRequest::focused("$missing:example.org"))
+        .unwrap();
+    let err = focus
+        .complete_open(FocusOpenOutcome {
+            items_applied: 0,
+            target_found: false,
+            at_live_bottom: false,
+        })
+        .unwrap_err();
+    assert_eq!(err.diagnostic_id(), "p5.4-target-not-found");
+    assert_eq!(focus.phase(), NavigationPhase::Error);
+    focus.clear_failure().unwrap();
+    assert_eq!(focus.phase(), NavigationPhase::Idle);
+}
+
+#[test]
+fn p5_4_busy_rejects_double_open() {
+    let key = TimelineKey::main("!r:example.org").unwrap();
+    let mut focus = TimelineFocus::new(key, 1);
+    focus.begin_open(FocusOpenRequest::live()).unwrap();
+    let err = focus
+        .begin_open(FocusOpenRequest::focused("$e:example.org"))
+        .unwrap_err();
+    assert_eq!(err.diagnostic_id(), "p5.4-navigation-busy");
+}
+
+#[test]
+fn p5_4_invalid_event_id_and_window() {
+    let key = TimelineKey::main("!r:example.org").unwrap();
+    let mut focus = TimelineFocus::new(key, 1);
+    let err = focus
+        .begin_open(FocusOpenRequest::focused("not-an-event"))
+        .unwrap_err();
+    assert_eq!(err.diagnostic_id(), "p5.4-invalid-event-id");
+    let err = focus.begin_open(FocusOpenRequest::focused("")).unwrap_err();
+    assert_eq!(err.diagnostic_id(), "p5.4-invalid-event-id");
+    let err = focus
+        .begin_open(
+            FocusOpenRequest::focused("$ok:example.org").with_window(ContextWindow {
+                before: 101,
+                after: 0,
+            }),
+        )
+        .unwrap_err();
+    assert_eq!(err.diagnostic_id(), "p5.4-invalid-context-window");
+}
+
+#[test]
+fn p5_4_fail_rejects_secret_diagnostics() {
+    let key = TimelineKey::main("!r:example.org").unwrap();
+    let mut focus = TimelineFocus::new(key, 1);
+    focus
+        .begin_open(FocusOpenRequest::focused("$e:example.org"))
+        .unwrap();
+    let err = focus.fail("leak-access_token").unwrap_err();
+    assert_eq!(err.diagnostic_id(), "p5.4-forbidden-diagnostic");
+    focus.fail("p5.4-homeserver-timeout").unwrap();
+    assert_eq!(focus.phase(), NavigationPhase::Error);
+    assert_eq!(
+        focus.failure_diagnostic_id(),
+        Some("p5.4-homeserver-timeout")
+    );
+    assert!(!focus
+        .failure_diagnostic_id()
+        .unwrap()
+        .contains("access_token"));
+}
+
+#[test]
+fn p5_4_retire_generation_cancels_in_flight() {
+    let key = TimelineKey::main("!r:example.org").unwrap();
+    let mut focus = TimelineFocus::new(key, 1);
+    focus
+        .begin_open(FocusOpenRequest::focused("$e:example.org"))
+        .unwrap();
+    focus.retire_generation(9);
+    assert_eq!(focus.session_generation(), 9);
+    assert_eq!(focus.phase(), NavigationPhase::Error);
+    assert_eq!(
+        focus.failure_diagnostic_id(),
+        Some("p5.4-stale-generation-cancelled")
+    );
+    assert!(focus.is_live());
+}
