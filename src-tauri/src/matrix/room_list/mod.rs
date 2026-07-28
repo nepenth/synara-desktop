@@ -7,8 +7,9 @@
 //! - P4.3: scope filters (joined/invites/unread/mentions/direct) + badge counts
 //! - P4.4: favorite / low-priority / folder filters + recent-activity sorts
 //!
-//! **Harness / unit tests only until cutover.** No production Tauri commands,
-//! no live sliding-sync subscription loop, no dual-backend.
+//! D0.2 adds a production snapshot projection backed only by matrix-sdk-ui's
+//! room-list service. There is no JS room-list fallback while a native session
+//! is live and no dual-backend sync.
 //!
 //! Authoritative design notes:
 //! - `docs/matrix-rust-sdk/p4.2-room-list.md`
@@ -22,6 +23,7 @@ mod counts;
 mod delta;
 mod error;
 mod filters;
+mod live;
 mod projection;
 mod sort;
 mod summary;
@@ -33,6 +35,7 @@ pub use filters::{
     filter_rooms_by_scope, room_matches_scope, select_rooms_by_scope, select_rooms_in_folder,
     RoomListScope,
 };
+pub use live::{snapshot_from_sync_owner, NativeRoomListSnapshot};
 pub use projection::{reconstruct, RoomListProjection};
 pub use sort::{recent_joined_rooms, sort_rooms, sort_rooms_in_place, RoomListSort};
 pub use summary::RoomSummaryBuilder;
