@@ -26,3 +26,10 @@ Strict phase-gate **acceptance** is a fourth axis: landed ≠ accepted (still **
 ## Update rule
 
 Every product task merge that adds `docs/matrix-rust-sdk/pN.M-*.md` **must** update `program-status.json` in the same PR or an immediate ledger PR.
+
+
+## Current priority (D0)
+
+**L2 dogfood vertical over new L1.** See [d0-dogfood-epic.md](d0-dogfood-epic.md).
+
+Primary scoreboard: product `matrix-js-sdk` import count ↓ and “can log in via Rust on this branch.”

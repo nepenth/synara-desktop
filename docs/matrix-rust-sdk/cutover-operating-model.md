@@ -52,6 +52,15 @@ are forbidden (crypto/device/sync integrity).
 
 ---
 
+## 2b. D0 dogfood pivot (active 2026-07-28)
+
+**Current execution mode on this branch:** [d0-dogfood-epic.md](d0-dogfood-epic.md).
+
+- Stop prioritizing new L1-only harness PRs.
+- **Break the branch product** if needed: Rust owns Matrix capability-by-capability.
+- Order: **D0.1 login/session → D0.2 sync+rooms → D0.3 timeline → D0.4 send → crypto min → js burn-down**.
+- No dual-backend. Clean-break re-login OK. Temporary broken app until D0.1–D0.2 is accepted.
+
 ## 3. Execution model (what we do)
 
 ### A. Capability-first vertical slices on the integration branch

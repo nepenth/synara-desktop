@@ -1,3 +1,36 @@
+# Continuation — D0 dogfood pivot
+
+> **Do this next.** Full history remains in PROGRESS / program-status.
+
+## Active mode
+
+**D0** — break integration branch product; Rust owns Matrix vertically.  
+Canonical: [d0-dogfood-epic.md](d0-dogfood-epic.md)
+
+## Next task
+
+**D0.1 — Login/session sole owner** (password path first): Tauri commands + product login no longer uses js `createClient`/`loginRequest` for happy path.
+
+Then: D0.2 sync+rooms → D0.3 timeline → D0.4 send.
+
+## Parked
+
+L1-only open PRs (notify/call/media polish, MiniMax helper) unless they block D0.
+
+## Metrics
+
+- `program-status` inventory (L1 honesty)
+- `rg matrix-js-sdk synara/src` count ↓
+- Dogfood: login works on Rust
+
+## Never
+
+- dual_backend
+- merge umbrella #39 / main without approval
+
+
+---
+
 # Matrix Rust SDK program — continuation card
 
 **Date:** 2026-07-27

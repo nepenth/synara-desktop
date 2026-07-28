@@ -30,6 +30,7 @@
 //! P5.7: Poll and room state/membership projection foundation (harness).
 //! P5.8: Thread list / summary index foundation (harness).
 //! P6.1: Outbound send queue + local-echo foundation (harness; no Room::send).
+//! P7.4: Outbound attachment / media send queue foundation (handle only; no bytes).
 //! P6.2: Receipt index foundation (harness; no SDK send_receipt).
 //! P6.3: Typing index foundation (harness; no SDK typing send).
 //! P6.4: Media upload queue foundation (metadata only; no bytes / no SDK upload).
@@ -208,5 +209,5 @@ pub fn matrix_ipc_schema_markers() -> &'static str {
     debug_assert_eq!(_room_ops, room_ops::MATRIX_ROOM_OPS_MARKER);
     debug_assert_eq!(_room_profile, room_profile::MATRIX_ROOM_PROFILE_MARKER);
     debug_assert_eq!(_widgets, widgets::MATRIX_WIDGETS_MARKER);
-    "matrix-ipc-protocol-v1+domain-dtos-p1.4+supervisor-p2.1+store-p2.2+client-builder-p2.3+tasks-p2.4+diagnostics-p2.5+lifecycle-p2.6+auth-p3.3+p3.4+session-persist-p3.5+sync-p4.1+room-list-p4.2+routes-p4.8+spaces-p4.5+members-p4.6+timeline-p5.1+diffs-p5.2+pagination-p5.3+search-p6.8+relations-p5.6+send-p6.1+receipts-p6.2+typing-p6.3+media-p6.4+download-p7.2+room-profile-p6.5+threads-p5.8+notifications-p7.1+security-p8.1+cross-signing-p8.4+widgets-p9.1+legacy-p3.7+devices-p8.2+verification-p8.3+backup-p8.5+user-profile-p6.6+room-ops-p6.9+crypto-store-p8.8+presence-p4.7+room-keys-p8.6+utd-recovery-p8.7+polls-p5.7+unread-p5.5+raw-content-p5.9+account-data-p6.7+media-cache-p7.3+room-directory-p6.10"
+    "matrix-ipc-protocol-v1+domain-dtos-p1.4+supervisor-p2.1+store-p2.2+client-builder-p2.3+tasks-p2.4+diagnostics-p2.5+lifecycle-p2.6+auth-p3.3+p3.4+session-persist-p3.5+sync-p4.1+room-list-p4.2+routes-p4.8+spaces-p4.5+members-p4.6+timeline-p5.1+diffs-p5.2+pagination-p5.3+search-p6.8+relations-p5.6+send-p6.1+receipts-p6.2+typing-p6.3+media-p6.4+download-p7.2+room-profile-p6.5+threads-p5.8+notifications-p7.1+security-p8.1+cross-signing-p8.4+widgets-p9.1+legacy-p3.7+devices-p8.2+verification-p8.3+backup-p8.5+user-profile-p6.6+room-ops-p6.9+crypto-store-p8.8+presence-p4.7+room-keys-p8.6+utd-recovery-p8.7+polls-p5.7+unread-p5.5+raw-content-p5.9+account-data-p6.7+media-cache-p7.3+room-directory-p6.10+attachment-p7.4"
 }
