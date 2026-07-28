@@ -14,6 +14,7 @@ import { platformSessionStore } from '../../../platform';
 import { persistAuthenticatedSession } from '../../../state/sessionPersistence';
 import { pushSessionToSW } from '../../../../sw-session';
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../../utils/desktop';
+import { setActiveNativeMatrixSession } from '../../../state/nativeMatrixSession';
 
 export enum GetBaseUrlError {
   NotAllow = 'NotAllow',
@@ -187,6 +188,7 @@ export const loginPassword = async (
     if (!result.available || !result.value) {
       throw new MatrixError({ errcode: LoginError.Unknown });
     }
+    setActiveNativeMatrixSession(result.value);
     return {
       native: true,
       identity: result.value,

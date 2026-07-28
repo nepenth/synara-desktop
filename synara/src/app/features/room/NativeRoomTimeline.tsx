@@ -63,7 +63,7 @@ export function NativeRoomTimelineBoundary({
   return <NativeTimelineStatus>Opening native timeline…</NativeTimelineStatus>;
 }
 
-function NativeRoomTimeline({ roomId }: { roomId: string }) {
+export function NativeRoomTimeline({ roomId }: { roomId: string }) {
   const [snapshot, setSnapshot] = useState<NativeTimelineSnapshot>();
   const [cryptoStatus, setCryptoStatus] = useState<NativeCryptoStatus>();
   const [cryptoStatusUnavailable, setCryptoStatusUnavailable] = useState(false);

@@ -18,6 +18,10 @@ import './app/i18n';
 import { pushActiveSessionToSW } from './sw-session';
 import { platformSessionStore } from './app/platform';
 import { getActiveSession, initializeSessionBootstrap } from './app/state/sessionBootstrap';
+import {
+  hasActiveNativeMatrixSession,
+  restoreActiveNativeMatrixSession,
+} from './app/state/nativeMatrixSession';
 
 document.body.classList.add(configClass, varsClass);
 
@@ -29,7 +33,8 @@ const registerServiceWorker = () => {
       ? `${trimTrailingSlash(import.meta.env.BASE_URL)}/sw.js`
       : `/dev-sw.js?dev-sw`;
 
-  const sendSessionToSW = () => pushActiveSessionToSW(getActiveSession);
+  const sendSessionToSW = () =>
+    pushActiveSessionToSW(() => (hasActiveNativeMatrixSession() ? undefined : getActiveSession()));
 
   navigator.serviceWorker.register(swUrl).then(sendSessionToSW);
   navigator.serviceWorker.ready.then(sendSessionToSW);
@@ -55,7 +60,12 @@ const mountApp = () => {
   root.render(<App />);
 };
 
-initializeSessionBootstrap({ nativeSessionStore: platformSessionStore })
+restoreActiveNativeMatrixSession()
+  .then((nativeIdentity) =>
+    nativeIdentity
+      ? undefined
+      : initializeSessionBootstrap({ nativeSessionStore: platformSessionStore })
+  )
   .catch(() => undefined)
   .finally(() => {
     registerServiceWorker();

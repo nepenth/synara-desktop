@@ -75,6 +75,10 @@ import { CallStatusRenderer } from './CallStatusRenderer';
 import { CallEmbedProvider } from '../components/CallEmbedProvider';
 import { Settings } from '../features/settings';
 import { Modal500 } from '../components/Modal500';
+import { hasActiveNativeMatrixSession } from '../state/nativeMatrixSession';
+
+const hasAuthenticatedSession = (): boolean =>
+  hasActiveNativeMatrixSession() || Boolean(getActiveSession());
 
 function SettingsRoute() {
   const navigate = useNavigate();
@@ -96,7 +100,7 @@ export const createRouter = (clientConfig: ClientConfig, screenSize: ScreenSize)
       <Route
         index
         loader={() => {
-          if (getActiveSession()) return redirect(getHomePath());
+          if (hasAuthenticatedSession()) return redirect(getHomePath());
           const afterLoginPath = getAppPathFromHref(getOriginBaseUrl(), window.location.href);
           if (afterLoginPath) setAfterLoginRedirectPath(afterLoginPath);
           return redirect(getLoginPath());
@@ -104,7 +108,7 @@ export const createRouter = (clientConfig: ClientConfig, screenSize: ScreenSize)
       />
       <Route
         loader={() => {
-          if (getActiveSession()) {
+          if (hasAuthenticatedSession()) {
             return redirect(getHomePath());
           }
 
@@ -124,8 +128,7 @@ export const createRouter = (clientConfig: ClientConfig, screenSize: ScreenSize)
 
       <Route
         loader={() => {
-          const session = getActiveSession();
-          if (!session) {
+          if (!hasAuthenticatedSession()) {
             const afterLoginPath = getAppPathFromHref(
               getOriginBaseUrl(hashRouter),
               window.location.href

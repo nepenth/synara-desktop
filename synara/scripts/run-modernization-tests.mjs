@@ -55,6 +55,7 @@ const tests = [
   'src/app/state/__tests__/tokenRefresh.test.ts',
   'src/app/matrix/__tests__/secretStorageKeys.test.ts',
   'src/app/state/__tests__/sessionBootstrap.test.ts',
+  'src/app/state/__tests__/nativeMatrixSession.test.ts',
   'src/app/state/__tests__/sessionPersistence.test.ts',
   'src/app/state/__tests__/sessions.test.ts',
   'src/app/state/__tests__/clearLoginData.test.ts',

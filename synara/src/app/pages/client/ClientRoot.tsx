@@ -58,6 +58,8 @@ import {
   SYNC_PREPARED_TIMEOUT_MS,
 } from '../../utils/syncSplashRecovery';
 import { recordClientDiagnostic } from '../../utils/clientDiagnostics';
+import { getActiveNativeMatrixSession } from '../../state/nativeMatrixSession';
+import { NativeDesktopClient } from './NativeDesktopClient';
 
 function ClientRootLoading({ status }: { status: string }) {
   return (
@@ -239,7 +241,7 @@ const usePlatformDeviceDisplayNameRepair = (mx?: MatrixClient) => {
 type ClientRootProps = {
   children: ReactNode;
 };
-export function ClientRoot({ children }: ClientRootProps) {
+function LegacyClientRoot({ children }: ClientRootProps) {
   const [loading, setLoading] = useState(true);
   const [syncTimedOut, setSyncTimedOut] = useState(false);
   const [syncState, setSyncState] = useState<SyncState | null>(null);
@@ -480,4 +482,10 @@ export function ClientRoot({ children }: ClientRootProps) {
       </SpecVersions>
     </AutoDiscovery>
   );
+}
+
+export function ClientRoot({ children }: ClientRootProps) {
+  const nativeIdentity = getActiveNativeMatrixSession();
+  if (nativeIdentity) return <NativeDesktopClient identity={nativeIdentity} />;
+  return <LegacyClientRoot>{children}</LegacyClientRoot>;
 }
