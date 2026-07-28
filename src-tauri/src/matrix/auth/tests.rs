@@ -426,6 +426,85 @@ fn login_flow_kind_matrix_type_roundtrip() {
     }
 }
 
+// --- P3.3 SSO callback lifecycle ---
+
+#[test]
+fn sso_happy_path() {
+    let mut flow = SsoCallbackFlow::new(2);
+    let op = flow
+        .begin(
+            "state-abc",
+            "synara-desktop://sso-callback",
+            Some("github".into()),
+            Some("https://matrix.example.org".into()),
+        )
+        .unwrap();
+    assert_eq!(flow.phase(), SsoCallbackPhase::AwaitingBrowser);
+    assert!(flow.is_active());
+    flow.on_callback("state-abc", op).unwrap();
+    assert_eq!(flow.phase(), SsoCallbackPhase::CallbackReceived);
+    flow.begin_exchange(op).unwrap();
+    let out = flow.complete_success(op).unwrap();
+    assert_eq!(out.session_generation, 2);
+    assert_eq!(out.idp_id.as_deref(), Some("github"));
+    assert_eq!(flow.phase(), SsoCallbackPhase::Succeeded);
+    assert!(flow.never_stores_tokens());
+    assert!(flow.state_id().is_none());
+}
+
+#[test]
+fn sso_state_mismatch_fails() {
+    let mut flow = SsoCallbackFlow::new(1);
+    let op = flow
+        .begin("good", "https://app.example.org/cb", None, None)
+        .unwrap();
+    let err = flow.on_callback("bad", op).unwrap_err();
+    assert_eq!(err.diagnostic_id(), "p3.3-state-mismatch");
+    assert_eq!(flow.phase(), SsoCallbackPhase::Failed);
+}
+
+#[test]
+fn sso_forbids_secret_redirect_and_http() {
+    let mut flow = SsoCallbackFlow::new(1);
+    let err = flow
+        .begin("s", "http://insecure.example/cb", None, None)
+        .unwrap_err();
+    assert_eq!(err.diagnostic_id(), "p3.3-forbidden-redirect-scheme");
+    let err = flow
+        .begin(
+            "s",
+            "https://app.example.org/cb?access_token=leak",
+            None,
+            None,
+        )
+        .unwrap_err();
+    assert_eq!(err.diagnostic_id(), "p3.3-redirect-forbids-secrets");
+}
+
+#[test]
+fn sso_cancel_and_stale_op() {
+    let mut flow = SsoCallbackFlow::new(1);
+    let op = flow.begin("s", "synara://sso", None, None).unwrap();
+    flow.cancel(op).unwrap();
+    assert_eq!(flow.phase(), SsoCallbackPhase::Cancelled);
+    let err = flow.begin_exchange(op).unwrap_err();
+    assert_eq!(err.diagnostic_id(), "p3.3-exchange-wrong-phase");
+    flow.reset();
+    let op2 = flow.begin("s2", "synara://sso", None, None).unwrap();
+    let err = flow.on_callback("s2", op2 + 99).unwrap_err();
+    assert_eq!(err.diagnostic_id(), "p3.3-stale-sso-op");
+}
+
+#[test]
+fn sso_retire_generation_wipes() {
+    let mut flow = SsoCallbackFlow::new(1);
+    flow.begin("s", "synara://sso", None, None).unwrap();
+    flow.retire_generation(5);
+    assert_eq!(flow.session_generation(), 5);
+    assert!(!flow.is_active());
+    assert_eq!(flow.phase(), SsoCallbackPhase::Idle);
+}
+
 // --- P3.4 UIA session ---
 
 fn password_then_dummy_stages() -> Vec<UiaStage> {
