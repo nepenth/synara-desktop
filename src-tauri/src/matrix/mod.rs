@@ -11,6 +11,7 @@
 //! P3.1: Discovery and login-flow service (harness; no login execution).
 //! P3.2: Password/token login + device naming (harness).
 //! P3.5: Session secret / refresh-token persistence foundation (host vault only).
+//! P3.8: Remote logout flow + recovery UX copy keys (harness).
 //! P4.1: Sync service readiness / reconnect model (harness foundation).
 //! P4.2: Room-list snapshot and delta projection (harness foundation).
 //! P4.5: Space hierarchy / filters / parents (harness foundation).
