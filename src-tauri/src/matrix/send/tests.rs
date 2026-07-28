@@ -115,3 +115,83 @@ fn clear_wipes_queue() {
     q.clear();
     assert!(q.is_empty());
 }
+
+#[test]
+fn attachment_enqueue_sent() {
+    let mut q = AttachmentSendQueue::new(2);
+    let id = q
+        .enqueue(AttachmentEnqueue {
+            room_id: "!r:example.org".into(),
+            kind: AttachmentKind::Image,
+            media_handle_id: "mxc://example.org/abc".into(),
+            file_name: Some("photo.jpg".into()),
+            caption: Some("hi".into()),
+            mime_type: Some("image/jpeg".into()),
+            size_bytes: Some(1024),
+        })
+        .unwrap()
+        .local_txn_id
+        .clone();
+    assert_eq!(q.get(&id).unwrap().state, LocalEchoState::Sending);
+    q.mark_sent(&id).unwrap();
+    assert_eq!(q.get(&id).unwrap().state, LocalEchoState::Sent);
+}
+
+#[test]
+fn attachment_fail_retry_cancel_prune() {
+    let mut q = AttachmentSendQueue::new(1);
+    let id = q
+        .enqueue(AttachmentEnqueue {
+            room_id: "!r:example.org".into(),
+            kind: AttachmentKind::File,
+            media_handle_id: "upload-1".into(),
+            file_name: None,
+            caption: None,
+            mime_type: None,
+            size_bytes: Some(10),
+        })
+        .unwrap()
+        .local_txn_id
+        .clone();
+    q.mark_failed(&id, "p7.4-network-failed").unwrap();
+    q.retry(&id).unwrap();
+    q.cancel(&id).unwrap();
+    assert_eq!(q.prune_terminal(), 1);
+    assert!(q.is_empty());
+}
+
+#[test]
+fn attachment_forbids_data_and_tokens() {
+    let mut q = AttachmentSendQueue::new(1);
+    let err = q
+        .enqueue(AttachmentEnqueue {
+            room_id: "!r:example.org".into(),
+            kind: AttachmentKind::Image,
+            media_handle_id: "data:image/png;base64,AAA".into(),
+            file_name: None,
+            caption: None,
+            mime_type: None,
+            size_bytes: None,
+        })
+        .unwrap_err();
+    assert_eq!(err.diagnostic_id(), "p7.4-forbidden-handle-scheme");
+    let err = q
+        .enqueue(AttachmentEnqueue {
+            room_id: "!r:example.org".into(),
+            kind: AttachmentKind::File,
+            media_handle_id: "ok".into(),
+            file_name: None,
+            caption: Some("leaked access_token=x".into()),
+            mime_type: None,
+            size_bytes: None,
+        })
+        .unwrap_err();
+    assert_eq!(err.diagnostic_id(), "p7.4-forbidden-caption");
+}
+
+#[test]
+fn attachment_kinds() {
+    for k in AttachmentKind::ALL {
+        assert!(!k.as_str().is_empty());
+    }
+}
