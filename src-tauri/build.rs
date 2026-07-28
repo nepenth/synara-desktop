@@ -44,6 +44,10 @@ const DESKTOP_COMMANDS: &[&str] = &[
     "matrix_secret_storage_bootstrap",
     "matrix_secret_storage_unlock",
     "matrix_secret_storage_reset",
+    "matrix_room_key_transfer_status",
+    "matrix_room_key_export",
+    "matrix_room_key_import_select",
+    "matrix_room_key_import",
 ];
 
 fn git_output(repo: &Path, args: &[&str]) -> Option<String> {

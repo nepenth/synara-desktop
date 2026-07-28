@@ -609,6 +609,30 @@
           "markdownDescription": "Enables the matrix_restore_session command without any pre-configured scope."
         },
         {
+          "description": "Enables the matrix_room_key_export command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-room-key-export",
+          "markdownDescription": "Enables the matrix_room_key_export command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_room_key_import command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-room-key-import",
+          "markdownDescription": "Enables the matrix_room_key_import command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_room_key_import_select command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-room-key-import-select",
+          "markdownDescription": "Enables the matrix_room_key_import_select command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_room_key_transfer_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-room-key-transfer-status",
+          "markdownDescription": "Enables the matrix_room_key_transfer_status command without any pre-configured scope."
+        },
+        {
           "description": "Enables the matrix_room_list_snapshot command without any pre-configured scope.",
           "type": "string",
           "const": "allow-matrix-room-list-snapshot",
@@ -985,6 +1009,30 @@
           "type": "string",
           "const": "deny-matrix-restore-session",
           "markdownDescription": "Denies the matrix_restore_session command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_room_key_export command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-room-key-export",
+          "markdownDescription": "Denies the matrix_room_key_export command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_room_key_import command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-room-key-import",
+          "markdownDescription": "Denies the matrix_room_key_import command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_room_key_import_select command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-room-key-import-select",
+          "markdownDescription": "Denies the matrix_room_key_import_select command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_room_key_transfer_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-room-key-transfer-status",
+          "markdownDescription": "Denies the matrix_room_key_transfer_status command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_room_list_snapshot command without any pre-configured scope.",

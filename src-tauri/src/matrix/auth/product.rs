@@ -6,6 +6,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 
 use matrix_sdk::{
     encryption::CrossSigningStatus,
@@ -37,6 +38,13 @@ use crate::matrix::cross_signing::live::{
 use crate::matrix::lifecycle::{
     clear_session_material, persist_session_after_login, restore_session_from_vault,
     KeyringSessionMaterialVault,
+};
+use crate::matrix::room_keys::{
+    live::{
+        self as live_room_keys, NativeRoomKeyFileSelection, NativeRoomKeyTransferResult,
+        NativeRoomKeyTransferStatus, SelectedRoomKeyImport,
+    },
+    RoomKeyTransferFlow,
 };
 use crate::matrix::room_list::{snapshot_from_sync_owner, NativeRoomListSnapshot};
 use crate::matrix::secret_storage::live::{
@@ -152,6 +160,9 @@ struct ManagedMatrixSession {
     sends: SendQueue,
     verification: NativeVerificationOwner,
     pending_cross_signing_auth_session: Option<String>,
+    room_key_transfer: Arc<Mutex<RoomKeyTransferFlow>>,
+    selected_room_key_import: Option<SelectedRoomKeyImport>,
+    next_room_key_import_selection_id: u64,
 }
 
 #[derive(Default)]
@@ -239,6 +250,9 @@ pub async fn matrix_login_password(
         sends: SendQueue::new(session_generation),
         verification,
         pending_cross_signing_auth_session: None,
+        room_key_transfer: Arc::new(Mutex::new(RoomKeyTransferFlow::new(session_generation))),
+        selected_room_key_import: None,
+        next_room_key_import_selection_id: 0,
     });
     Ok(identity)
 }
@@ -568,6 +582,135 @@ pub async fn matrix_secret_storage_reset(
     let result = matrix_secret_storage_reset_inner(&state, &passphrase).await;
     passphrase.zeroize();
     result
+}
+
+#[tauri::command]
+pub async fn matrix_room_key_transfer_status(
+    state: State<'_, MatrixAuthState>,
+) -> Result<NativeRoomKeyTransferStatus, MatrixAuthCommandError> {
+    let (flow, generation) = {
+        let session = state.session.lock().await;
+        let active = require_room_key_session(session.as_ref())?;
+        (
+            Arc::clone(&active.room_key_transfer),
+            active.sync.session_generation(),
+        )
+    };
+    let flow = flow.lock().await;
+    Ok(live_room_keys::project_status(generation, &flow))
+}
+
+#[tauri::command]
+pub async fn matrix_room_key_export(
+    state: State<'_, MatrixAuthState>,
+    mut passphrase: String,
+) -> Result<NativeRoomKeyTransferResult, MatrixAuthCommandError> {
+    let result = matrix_room_key_export_inner(&state, &passphrase).await;
+    passphrase.zeroize();
+    result
+}
+
+async fn matrix_room_key_export_inner(
+    state: &State<'_, MatrixAuthState>,
+    passphrase: &str,
+) -> Result<NativeRoomKeyTransferResult, MatrixAuthCommandError> {
+    live_room_keys::require_passphrase(passphrase)?;
+    let (client, generation, flow) = {
+        let session = state.session.lock().await;
+        let active = require_room_key_session(session.as_ref())?;
+        (
+            active.client.clone(),
+            active.sync.session_generation(),
+            Arc::clone(&active.room_key_transfer),
+        )
+    };
+    let result = live_room_keys::export(&client, generation, &flow, passphrase).await?;
+    require_current_room_key_generation(state, generation).await?;
+    Ok(result)
+}
+
+#[tauri::command]
+pub async fn matrix_room_key_import_select(
+    state: State<'_, MatrixAuthState>,
+) -> Result<Option<NativeRoomKeyFileSelection>, MatrixAuthCommandError> {
+    let generation = {
+        let session = state.session.lock().await;
+        require_room_key_session(session.as_ref())?
+            .sync
+            .session_generation()
+    };
+    let picked = live_room_keys::pick_import_file().await;
+    let Some((path, file_label)) = picked else {
+        return Ok(None);
+    };
+
+    let mut session = state.session.lock().await;
+    let active = require_room_key_session_mut(session.as_mut())?;
+    if active.sync.session_generation() != generation {
+        return Err(stale_room_key_generation_error());
+    }
+    active.next_room_key_import_selection_id =
+        active.next_room_key_import_selection_id.saturating_add(1);
+    let selection_id = active.next_room_key_import_selection_id;
+    active.selected_room_key_import = Some(SelectedRoomKeyImport {
+        selection_id,
+        path,
+        file_label: file_label.clone(),
+    });
+    Ok(Some(NativeRoomKeyFileSelection {
+        selection_id,
+        file_label,
+    }))
+}
+
+#[tauri::command]
+pub async fn matrix_room_key_import(
+    state: State<'_, MatrixAuthState>,
+    selection_id: u64,
+    mut passphrase: String,
+) -> Result<NativeRoomKeyTransferResult, MatrixAuthCommandError> {
+    let result = matrix_room_key_import_inner(&state, selection_id, &passphrase).await;
+    passphrase.zeroize();
+    result
+}
+
+async fn matrix_room_key_import_inner(
+    state: &State<'_, MatrixAuthState>,
+    selection_id: u64,
+    passphrase: &str,
+) -> Result<NativeRoomKeyTransferResult, MatrixAuthCommandError> {
+    live_room_keys::require_passphrase(passphrase)?;
+    let (client, generation, flow, selected) = {
+        let mut session = state.session.lock().await;
+        let active = require_room_key_session_mut(session.as_mut())?;
+        if active
+            .selected_room_key_import
+            .as_ref()
+            .is_none_or(|selected| selected.selection_id != selection_id)
+        {
+            return Err(MatrixAuthCommandError::new(
+                "InvalidRequest",
+                "Choose an encrypted room-key file before importing.",
+                "v-crypto.5-import-selection-invalid",
+            ));
+        }
+        let selected = active.selected_room_key_import.take().ok_or_else(|| {
+            MatrixAuthCommandError::new(
+                "InvalidRequest",
+                "Choose an encrypted room-key file before importing.",
+                "v-crypto.5-import-selection-invalid",
+            )
+        })?;
+        (
+            active.client.clone(),
+            active.sync.session_generation(),
+            Arc::clone(&active.room_key_transfer),
+            selected,
+        )
+    };
+    let result = live_room_keys::import(&client, generation, &flow, selected, passphrase).await?;
+    require_current_room_key_generation(state, generation).await?;
+    Ok(result)
 }
 
 async fn matrix_secret_storage_reset_inner(
@@ -918,6 +1061,9 @@ pub async fn matrix_restore_session(
         sends: SendQueue::new(session_generation),
         verification,
         pending_cross_signing_auth_session: None,
+        room_key_transfer: Arc::new(Mutex::new(RoomKeyTransferFlow::new(session_generation))),
+        selected_room_key_import: None,
+        next_room_key_import_selection_id: 0,
     });
     Ok(identity)
 }
@@ -1124,6 +1270,53 @@ fn require_secret_storage_session(
             "v-crypto.4-secret-storage-requires-session",
         )
     })
+}
+
+fn require_room_key_session(
+    session: Option<&ManagedMatrixSession>,
+) -> Result<&ManagedMatrixSession, MatrixAuthCommandError> {
+    session.ok_or_else(|| {
+        MatrixAuthCommandError::new(
+            "Forbidden",
+            "No native Matrix session is active.",
+            "v-crypto.5-room-keys-requires-session",
+        )
+    })
+}
+
+fn require_room_key_session_mut(
+    session: Option<&mut ManagedMatrixSession>,
+) -> Result<&mut ManagedMatrixSession, MatrixAuthCommandError> {
+    session.ok_or_else(|| {
+        MatrixAuthCommandError::new(
+            "Forbidden",
+            "No native Matrix session is active.",
+            "v-crypto.5-room-keys-requires-session",
+        )
+    })
+}
+
+async fn require_current_room_key_generation(
+    state: &State<'_, MatrixAuthState>,
+    generation: u64,
+) -> Result<(), MatrixAuthCommandError> {
+    let session = state.session.lock().await;
+    if require_room_key_session(session.as_ref())?
+        .sync
+        .session_generation()
+        != generation
+    {
+        return Err(stale_room_key_generation_error());
+    }
+    Ok(())
+}
+
+fn stale_room_key_generation_error() -> MatrixAuthCommandError {
+    MatrixAuthCommandError::new(
+        "StaleSessionGeneration",
+        "The native Matrix session changed during room-key transfer.",
+        "v-crypto.5-stale-session-generation",
+    )
 }
 
 fn require_session_mut(

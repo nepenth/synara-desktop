@@ -1,7 +1,8 @@
-//! P8.6 — Room-key import/export foundation (harness).
+//! Native room-key import/export ownership.
 //!
-//! Pure transfer flow. **Never stores room keys, passphrases, or file bytes.**
-//! No SDK crypto APIs, no dual-backend.
+//! The transfer flow stores counts and privacy-safe labels only. Live SDK and
+//! host-file ownership lives in [`live`]; room keys, passphrases, file bytes,
+//! and import paths never appear in command results.
 //!
 //! Authoritative design note: `docs/matrix-rust-sdk/p8.6-room-key-export.md`
 
@@ -10,6 +11,7 @@
 
 mod error;
 mod flow;
+pub mod live;
 
 pub use error::RoomKeyError;
 pub use flow::{
