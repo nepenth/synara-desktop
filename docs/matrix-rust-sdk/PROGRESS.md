@@ -9,8 +9,8 @@
 
 | Field | Value |
 | --- | --- |
-| Last updated (UTC) | **2026-07-28 ~02:42** |
-| Integration tip | `0e6399d` — Merge #155 P3.8 remote logout |
+| Last updated (UTC) | **2026-07-28 ~03:15** |
+| Integration tip | `5380471` — Merge #154 P5.4 timeline focus |
 | Product runtime | Still **`matrix-js-sdk` only** until atomic sole-owner cutover |
 | Dual backend | **`false`** (forbidden forever) |
 | Operating model | [cutover-operating-model.md](cutover-operating-model.md) |
@@ -25,12 +25,12 @@
 
 | | |
 | --- | --- |
-| **Now** | **#155 P3.8 remote logout merged.** Primary next: **#151 P3.7** legacy (CI). Then #154 focus, #157 UTD. New: **#170 P3.3** SSO callback. |
-| **Inventory** | ~48/112 original task artifacts when program-status is synced (through P3.8 landed; open foundations not yet counted). |
+| **Now** | **#154 P5.4 timeline focus merged.** Primary next: **#151 P3.7** legacy (tip-merge + CI). Then #157 UTD (resolve conflict). Open: #170 SSO, #171 UIA, #168 crypto-store, #169 presence. |
+| **Inventory** | ~49/112 original task artifacts when program-status is synced (through P5.4 landed; open foundations not yet counted). |
 | **Phase gates** | **0 / 15** strict gates closed (honest). |
-| **Open PRs → integration** | [#151](https://github.com/nepenth/synara-desktop/pull/151) legacy, [#154](https://github.com/nepenth/synara-desktop/pull/154) focus, [#157](https://github.com/nepenth/synara-desktop/pull/157) UTD, [#160](https://github.com/nepenth/synara-desktop/pull/160) polls, [#161](https://github.com/nepenth/synara-desktop/pull/161) unread, [#162](https://github.com/nepenth/synara-desktop/pull/162) raw-content, [#163](https://github.com/nepenth/synara-desktop/pull/163) account-data, [#165](https://github.com/nepenth/synara-desktop/pull/165) room-keys, [#166](https://github.com/nepenth/synara-desktop/pull/166) UTD recovery, [#168](https://github.com/nepenth/synara-desktop/pull/168) crypto-store, [#169](https://github.com/nepenth/synara-desktop/pull/169) presence, [#170](https://github.com/nepenth/synara-desktop/pull/170) SSO; [#167](https://github.com/nepenth/synara-desktop/pull/167) PROGRESS; [#156](https://github.com/nepenth/synara-desktop/pull/156) ledger resync; [#109](https://github.com/nepenth/synara-desktop/pull/109) MiniMax (deprioritize). |
-| **Blocked on** | CI re-run after tip-merge post-#155. Required: Quality gate + Desktop package gate. Non-priority package smoke cancelled earlier to free runners. |
-| **Dogfood path** | search ✅ → cross-signing ✅ → widgets ✅ → devices ✅ → verification ✅ → backup ✅ → remote logout ✅ (**#155**) → **legacy (#151)** → focus → UTD → … |
+| **Open PRs → integration** | [#151](https://github.com/nepenth/synara-desktop/pull/151) legacy, [#157](https://github.com/nepenth/synara-desktop/pull/157) UTD (conflict), [#160](https://github.com/nepenth/synara-desktop/pull/160) polls, [#161](https://github.com/nepenth/synara-desktop/pull/161) unread, [#162](https://github.com/nepenth/synara-desktop/pull/162) raw-content, [#163](https://github.com/nepenth/synara-desktop/pull/163) account-data, [#165](https://github.com/nepenth/synara-desktop/pull/165) room-keys, [#166](https://github.com/nepenth/synara-desktop/pull/166) UTD recovery, [#168](https://github.com/nepenth/synara-desktop/pull/168) crypto-store, [#169](https://github.com/nepenth/synara-desktop/pull/169) presence, [#170](https://github.com/nepenth/synara-desktop/pull/170) SSO, [#171](https://github.com/nepenth/synara-desktop/pull/171) UIA; [#156](https://github.com/nepenth/synara-desktop/pull/156) ledger resync (conflicts); [#109](https://github.com/nepenth/synara-desktop/pull/109) MiniMax (deprioritize). |
+| **Blocked on** | #151 CI after tip-merge post-#154. #157 needs conflict resolve with timeline focus. Required: Quality gate + Desktop package gate. |
+| **Dogfood path** | search ✅ → … → remote logout ✅ → focus ✅ (**#154**) → **legacy (#151)** → UTD → … |
 
 ---
 
@@ -58,6 +58,10 @@ Update rules:
 
 | When (UTC) | Item | Result | Notes |
 | --- | --- | --- | --- |
+| ~03:15 | **P5.4** timeline focus / context | **Merged** [#154](https://github.com/nepenth/synara-desktop/pull/154) | TimelineFocus Live/Unread/Focused; tip `5380471`. |
+| ~03:15 | **PROGRESS.md** after #154 | **This PR** | Next #151; note #157 conflict. |
+| ~02:55 | **P3.4** UIA multi-stage | **PR open** [#171](https://github.com/nepenth/synara-desktop/pull/171) | UiaSession; local auth 49/49. |
+| ~02:44 | **PROGRESS.md** | **Merged** [#167](https://github.com/nepenth/synara-desktop/pull/167) | Tip was `d9009ca` before #154. |
 | ~02:42 | **P3.3** SSO / OAuth callback | **PR open** [#170](https://github.com/nepenth/synara-desktop/pull/170) | SsoCallbackFlow; no tokens/codes; local auth 48/48. |
 | ~02:35 | **P3.8** remote logout + recovery copy | **Merged** [#155](https://github.com/nepenth/synara-desktop/pull/155) | RemoteLogoutFlow + RecoveryCopyKey; tip `0e6399d`. |
 | ~02:35 | **PROGRESS.md** after #155 | **This PR** | Next #151 legacy; tip-merged open stack. |
