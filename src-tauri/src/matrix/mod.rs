@@ -31,12 +31,14 @@
 //! P9.1: Widget / Element Call session registry foundation (harness).
 //! P8.4: Cross-signing / identity state foundation (harness; no key material).
 //! P3.7: Legacy-session detection / transition coordinator (clean-break; no JS client).
+//! P8.5: Key backup / recovery setup-restore-repair foundation (harness; no secrets).
 //! P8.2: Device list / trust projection foundation (harness; no keys).
 //! P8.3: Verification request inbox + SAS display foundation (harness; no secrets).
 //! No production login/sync loop or Tauri command registration lives here yet.
 //! No dual-backend selector. Product runtime remains matrix-js-sdk.
 
 pub mod auth;
+pub mod backup;
 pub mod client_builder;
 pub mod cross_signing;
 pub mod devices;
@@ -97,6 +99,7 @@ pub fn matrix_ipc_schema_markers() -> &'static str {
     let _search = search::matrix_search_markers();
     let _security = security::matrix_security_markers();
     let _legacy = legacy::matrix_legacy_markers();
+    let _backup = backup::matrix_backup_markers();
     let _devices = devices::matrix_devices_markers();
     let _verification = verification::matrix_verification_markers();
     let _cross_signing = cross_signing::matrix_cross_signing_markers();
@@ -134,6 +137,7 @@ pub fn matrix_ipc_schema_markers() -> &'static str {
     debug_assert_eq!(_search, search::MATRIX_SEARCH_MARKER);
     debug_assert_eq!(_security, security::MATRIX_SECURITY_MARKER);
     debug_assert_eq!(_legacy, legacy::MATRIX_LEGACY_MARKER);
+    debug_assert_eq!(_backup, backup::MATRIX_BACKUP_MARKER);
     debug_assert_eq!(_devices, devices::MATRIX_DEVICES_MARKER);
     debug_assert_eq!(_verification, verification::MATRIX_VERIFICATION_MARKER);
     debug_assert_eq!(_cross_signing, cross_signing::MATRIX_CROSS_SIGNING_MARKER);
@@ -144,5 +148,5 @@ pub fn matrix_ipc_schema_markers() -> &'static str {
     debug_assert_eq!(_media, media::MATRIX_MEDIA_MARKER);
     debug_assert_eq!(_notifications, notifications::MATRIX_NOTIFICATIONS_MARKER);
     debug_assert_eq!(_widgets, widgets::MATRIX_WIDGETS_MARKER);
-    "matrix-ipc-protocol-v1+domain-dtos-p1.4+supervisor-p2.1+store-p2.2+client-builder-p2.3+tasks-p2.4+diagnostics-p2.5+lifecycle-p2.6+auth-p3.2+session-persist-p3.5+sync-p4.1+room-list-p4.2+routes-p4.8+spaces-p4.5+members-p4.6+timeline-p5.1+diffs-p5.2+pagination-p5.3+search-p6.8+relations-p5.6+send-p6.1+receipts-p6.2+typing-p6.3+media-p6.4+threads-p5.8+notifications-p7.1+security-p8.1+cross-signing-p8.4+widgets-p9.1+legacy-p3.7+devices-p8.2+verification-p8.3"
+    "matrix-ipc-protocol-v1+domain-dtos-p1.4+supervisor-p2.1+store-p2.2+client-builder-p2.3+tasks-p2.4+diagnostics-p2.5+lifecycle-p2.6+auth-p3.2+session-persist-p3.5+sync-p4.1+room-list-p4.2+routes-p4.8+spaces-p4.5+members-p4.6+timeline-p5.1+diffs-p5.2+pagination-p5.3+search-p6.8+relations-p5.6+send-p6.1+receipts-p6.2+typing-p6.3+media-p6.4+threads-p5.8+notifications-p7.1+security-p8.1+cross-signing-p8.4+widgets-p9.1+legacy-p3.7+devices-p8.2+verification-p8.3+backup-p8.5"
 }
