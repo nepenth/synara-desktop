@@ -537,6 +537,24 @@
           "markdownDescription": "Enables the desktop_update_tray_state command without any pre-configured scope."
         },
         {
+          "description": "Enables the matrix_cross_signing_setup command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-cross-signing-setup",
+          "markdownDescription": "Enables the matrix_cross_signing_setup command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_cross_signing_setup_password command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-cross-signing-setup-password",
+          "markdownDescription": "Enables the matrix_cross_signing_setup_password command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_cross_signing_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-cross-signing-status",
+          "markdownDescription": "Enables the matrix_cross_signing_status command without any pre-configured scope."
+        },
+        {
           "description": "Enables the matrix_crypto_status command without any pre-configured scope.",
           "type": "string",
           "const": "allow-matrix-crypto-status",
@@ -847,6 +865,24 @@
           "type": "string",
           "const": "deny-desktop-update-tray-state",
           "markdownDescription": "Denies the desktop_update_tray_state command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_cross_signing_setup command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-cross-signing-setup",
+          "markdownDescription": "Denies the matrix_cross_signing_setup command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_cross_signing_setup_password command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-cross-signing-setup-password",
+          "markdownDescription": "Denies the matrix_cross_signing_setup_password command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_cross_signing_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-cross-signing-status",
+          "markdownDescription": "Denies the matrix_cross_signing_status command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_crypto_status command without any pre-configured scope.",
