@@ -142,6 +142,7 @@ import {
   POLL_START_EVENT_TYPE,
 } from '../../utils/polls';
 import { RoomComposer } from './RoomComposer';
+import { sendPlainTextWithNativeOwner } from './nativeSendText';
 
 const NATIVE_PASTE_EVENT = 'synara://native-paste';
 
@@ -602,7 +603,17 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
       try {
         setSendingMessage(true);
         setSendError(undefined);
-        await mx.sendMessage(roomId, content as any);
+        const nativeOwner =
+          msgType === MsgType.Text
+            ? await sendPlainTextWithNativeOwner({
+                roomId,
+                body,
+                replyTo: replyDraft?.eventId,
+              })
+            : 'legacy';
+        if (nativeOwner === 'legacy') {
+          await mx.sendMessage(roomId, content as any);
+        }
         resetEditor(editor);
         resetEditorHistory(editor);
         clearRoomDraft(window.localStorage, mx.getSafeUserId(), roomId);
