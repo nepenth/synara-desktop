@@ -9,8 +9,8 @@
 
 | Field | Value |
 | --- | --- |
-| Last updated (UTC) | **2026-07-28 ~05:40** |
-| Integration tip | `edd6121` — Merge #173 P6.6 user profile |
+| Last updated (UTC) | **2026-07-28 ~06:05** |
+| Integration tip | `13dcb55` — Merge #168 P8.8 crypto-store |
 | Product runtime | Still **`matrix-js-sdk` only** until atomic sole-owner cutover |
 | Dual backend | **`false`** (forbidden forever) |
 | Operating model | [cutover-operating-model.md](cutover-operating-model.md) |
@@ -25,12 +25,12 @@
 
 | | |
 | --- | --- |
-| **Now** | **#173 P6.6 user profile merged.** Next: **#168** crypto-store, **#169** presence (tip-merged), then #165 room-keys / #166 UTD recovery. |
-| **Inventory** | ~54/112 original task artifacts when program-status is synced (through P6.6 landed). |
+| **Now** | **#168 P8.8 crypto-store merged.** Primary next: **#169** presence (tip-merged post-#168; CI). Then #165 room-keys, #166 UTD recovery. |
+| **Inventory** | ~55/112 original task artifacts when program-status is synced (through P8.8 landed). |
 | **Phase gates** | **0 / 15** strict gates closed (honest). |
-| **Open PRs → integration** | [#168](https://github.com/nepenth/synara-desktop/pull/168) crypto-store, [#169](https://github.com/nepenth/synara-desktop/pull/169) presence, [#165](https://github.com/nepenth/synara-desktop/pull/165) room-keys, [#166](https://github.com/nepenth/synara-desktop/pull/166) UTD recovery; mid-stack #160–#163; [#109](https://github.com/nepenth/synara-desktop/pull/109) MiniMax (deprioritize). |
-| **Blocked on** | CI for tip-merged #168/#169 after #173. |
-| **Dogfood path** | … → UIA ✅ → **profile ✅ (#173)** → crypto-store / presence → … |
+| **Open PRs → integration** | [#169](https://github.com/nepenth/synara-desktop/pull/169) presence, [#165](https://github.com/nepenth/synara-desktop/pull/165) room-keys, [#166](https://github.com/nepenth/synara-desktop/pull/166) UTD recovery; mid-stack #160–#163; [#109](https://github.com/nepenth/synara-desktop/pull/109) MiniMax (deprioritize). |
+| **Blocked on** | #169 CI after crypto-store tip-merge. |
+| **Dogfood path** | … → profile ✅ → **crypto-store ✅ (#168)** → presence (#169) → … |
 
 ---
 
@@ -58,6 +58,10 @@ Update rules:
 
 | When (UTC) | Item | Result | Notes |
 | --- | --- | --- | --- |
+| ~06:05 | **P8.8** crypto-store continuity | **Merged** [#168](https://github.com/nepenth/synara-desktop/pull/168) | Never auto-wipe; tip `13dcb55`. |
+| ~06:05 | **PROGRESS.md** after #168 | **This PR** | Next #169 presence. |
+| ~05:40 | **P6.6** user profile | **Merged** [#173](https://github.com/nepenth/synara-desktop/pull/173) | tip `edd6121`. |
+| ~05:41 | **PROGRESS.md** after #173 | **Merged** [#178](https://github.com/nepenth/synara-desktop/pull/178) | |
 | ~05:40 | **P6.6** user profile / ignore | **Merged** [#173](https://github.com/nepenth/synara-desktop/pull/173) | UserProfileIndex; tip `edd6121`. |
 | ~05:40 | **PROGRESS.md** after #173 | **This PR** | Next #168 crypto-store. |
 | ~05:15 | **PROGRESS.md** after #171 | **Merged** [#177](https://github.com/nepenth/synara-desktop/pull/177) | tip was `fc8dcaa`. |
