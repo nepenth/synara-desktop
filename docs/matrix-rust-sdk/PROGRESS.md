@@ -30,7 +30,7 @@
 | **Phase gates** | **0 / 15** strict gates closed (honest). |
 | **Open PRs → integration** | [#147](https://github.com/nepenth/synara-desktop/pull/147) verification, [#150](https://github.com/nepenth/synara-desktop/pull/150) backup/recovery, [#151](https://github.com/nepenth/synara-desktop/pull/151) legacy, [#154](https://github.com/nepenth/synara-desktop/pull/154) timeline focus, [#155](https://github.com/nepenth/synara-desktop/pull/155) remote logout, [#157](https://github.com/nepenth/synara-desktop/pull/157) UTD; [#109](https://github.com/nepenth/synara-desktop/pull/109) MiniMax (deprioritize). |
 | **Blocked on** | CI green after tip-merge onto post-#145 tip. Required: Quality gate + Desktop package gate. |
-| **Dogfood path** | search ✅ → cross-signing ✅ → widgets ✅ → devices ✅ (**#145**) → **verification (#147)** → backup → legacy → focus → remote logout → UTD. |
+| **Dogfood path** | search ✅ → cross-signing ✅ → widgets ✅ → devices ✅ → verification ✅ (**#147**) → **backup (#150)** → legacy → focus → remote logout → UTD/polls/unread. |
 
 ---
 
