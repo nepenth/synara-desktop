@@ -9,8 +9,8 @@
 
 | Field | Value |
 | --- | --- |
-| Last updated (UTC) | **2026-07-28 ~06:35** |
-| Integration tip | `fd87180` — Merge #169 P4.7 presence |
+| Last updated (UTC) | **2026-07-28 ~07:20** |
+| Integration tip | `821177b` — Merge #166 P8.7 UTD recovery |
 | Product runtime | Still **`matrix-js-sdk` only** until atomic sole-owner cutover |
 | Dual backend | **`false`** (forbidden forever) |
 | Operating model | [cutover-operating-model.md](cutover-operating-model.md) |
@@ -25,12 +25,12 @@
 
 | | |
 | --- | --- |
-| **Now** | **#169 P4.7 presence + #168 P8.8 crypto-store merged.** Next: **#165** room-keys, **#166** UTD recovery (tip-merge). Then mid-stack #160–#163. |
-| **Inventory** | ~56/112 original task artifacts when program-status is synced (through P4.7/P8.8 landed). |
+| **Now** | **#166 P8.7 UTD recovery + #165 room-keys merged.** Crypto phase foundations largely landed. Next: mid-stack **#160–#163** (poll/unread/raw/account-data). |
+| **Inventory** | ~58/112 original task artifacts when program-status is synced (through P8.7 landed). |
 | **Phase gates** | **0 / 15** strict gates closed (honest). |
-| **Open PRs → integration** | [#165](https://github.com/nepenth/synara-desktop/pull/165) room-keys, [#166](https://github.com/nepenth/synara-desktop/pull/166) UTD recovery; mid-stack #160–#163; [#179](https://github.com/nepenth/synara-desktop/pull/179) PROGRESS; [#109](https://github.com/nepenth/synara-desktop/pull/109) MiniMax (deprioritize). |
-| **Blocked on** | CI for #165/#166 after tip-merge. |
-| **Dogfood path** | … → crypto-store ✅ → **presence ✅ (#169)** → room-keys / UTD recovery → … |
+| **Open PRs → integration** | [#160](https://github.com/nepenth/synara-desktop/pull/160) polls, [#161](https://github.com/nepenth/synara-desktop/pull/161) unread, [#162](https://github.com/nepenth/synara-desktop/pull/162) raw-content, [#163](https://github.com/nepenth/synara-desktop/pull/163) account-data; [#181](https://github.com/nepenth/synara-desktop/pull/181) PROGRESS; [#109](https://github.com/nepenth/synara-desktop/pull/109) MiniMax (deprioritize). |
+| **Blocked on** | Tip-merge + CI for mid-stack after #166. |
+| **Dogfood path** | … → room-keys ✅ → **UTD recovery ✅ (#166)** → timeline mid-stack → … |
 
 ---
 
@@ -58,6 +58,10 @@ Update rules:
 
 | When (UTC) | Item | Result | Notes |
 | --- | --- | --- | --- |
+| ~07:20 | **P8.7** UTD recovery | **Merged** [#166](https://github.com/nepenth/synara-desktop/pull/166) | tip `821177b`. |
+| ~07:00 | **P8.6** room-keys | **Merged** [#165](https://github.com/nepenth/synara-desktop/pull/165) | tip `8d5cbd8`. |
+| ~07:20 | **PROGRESS.md** after #165+#166 | **This PR** | Next mid-stack #160–#163. |
+| ~06:35 | **P4.7** presence | **Merged** [#169](https://github.com/nepenth/synara-desktop/pull/169) | tip `fd87180`. |
 | ~06:35 | **P4.7** presence stream | **Merged** [#169](https://github.com/nepenth/synara-desktop/pull/169) | PresenceIndex; tip `fd87180`. |
 | ~06:05 | **P8.8** crypto-store | **Merged** [#168](https://github.com/nepenth/synara-desktop/pull/168) | tip `13dcb55`. |
 | ~06:35 | **PROGRESS.md** after #168+#169 | **This PR** | Next #165/#166. |
