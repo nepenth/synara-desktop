@@ -9,8 +9,8 @@
 
 | Field | Value |
 | --- | --- |
-| Last updated (UTC) | **2026-07-28 ~03:40** |
-| Integration tip | `0698147` — Merge #151 P3.7 legacy transition |
+| Last updated (UTC) | **2026-07-28 ~04:30** |
+| Integration tip | `7d95461` — Merge #170 P3.3 SSO |
 | Product runtime | Still **`matrix-js-sdk` only** until atomic sole-owner cutover |
 | Dual backend | **`false`** (forbidden forever) |
 | Operating model | [cutover-operating-model.md](cutover-operating-model.md) |
@@ -25,12 +25,12 @@
 
 | | |
 | --- | --- |
-| **Now** | **#151 P3.7 legacy transition merged.** Primary next: **#157 P5.10** UTD (tip-merge). Then #170 SSO, #171 UIA, #168 crypto-store, #169 presence, #173 user-profile. |
-| **Inventory** | ~50/112 original task artifacts when program-status is synced (through P3.7 landed; open foundations not yet counted). |
+| **Now** | **#170 P3.3 SSO merged.** Primary next: **#171 P3.4 UIA** (SSO+UIA combined after tip-merge). Then #168 crypto-store, #169 presence, #173 profile. |
+| **Inventory** | ~52/112 original task artifacts when program-status is synced (through P3.3 landed). |
 | **Phase gates** | **0 / 15** strict gates closed (honest). |
-| **Open PRs → integration** | [#157](https://github.com/nepenth/synara-desktop/pull/157) UTD, [#160](https://github.com/nepenth/synara-desktop/pull/160)–[#166](https://github.com/nepenth/synara-desktop/pull/166) timeline/crypto stack, [#168](https://github.com/nepenth/synara-desktop/pull/168) crypto-store, [#169](https://github.com/nepenth/synara-desktop/pull/169) presence, [#170](https://github.com/nepenth/synara-desktop/pull/170) SSO, [#171](https://github.com/nepenth/synara-desktop/pull/171) UIA, [#173](https://github.com/nepenth/synara-desktop/pull/173) user-profile; [#156](https://github.com/nepenth/synara-desktop/pull/156) ledger; [#109](https://github.com/nepenth/synara-desktop/pull/109) MiniMax (deprioritize). |
-| **Blocked on** | CI green after tip-merge post-#151. Re-run cancelled package smoke on secondary PRs before merge. |
-| **Dogfood path** | … → remote logout ✅ → focus ✅ → **legacy ✅ (#151)** → UTD (#157) → … |
+| **Open PRs → integration** | [#171](https://github.com/nepenth/synara-desktop/pull/171) UIA, [#168](https://github.com/nepenth/synara-desktop/pull/168) crypto-store, [#169](https://github.com/nepenth/synara-desktop/pull/169) presence, [#173](https://github.com/nepenth/synara-desktop/pull/173) user-profile, [#165](https://github.com/nepenth/synara-desktop/pull/165) room-keys, [#166](https://github.com/nepenth/synara-desktop/pull/166) UTD recovery; mid-stack #160–#163; [#109](https://github.com/nepenth/synara-desktop/pull/109) MiniMax (deprioritize). |
+| **Blocked on** | #171 CI after SSO merge resolve. |
+| **Dogfood path** | … → UTD ✅ → **SSO ✅ (#170)** → **UIA (#171)** → … |
 
 ---
 
@@ -58,6 +58,14 @@ Update rules:
 
 | When (UTC) | Item | Result | Notes |
 | --- | --- | --- | --- |
+| ~04:30 | **P3.3** SSO / OAuth callback | **Merged** [#170](https://github.com/nepenth/synara-desktop/pull/170) | SsoCallbackFlow; tip `7d95461`. |
+| ~04:30 | **PROGRESS.md** after #170 | **This PR** | Next #171 UIA. |
+| ~04:05 | **P5.10** UTD | **Merged** [#157](https://github.com/nepenth/synara-desktop/pull/157) | tip `0c24e4b`. |
+| ~04:11 | **PROGRESS.md** after #157 | **Merged** [#175](https://github.com/nepenth/synara-desktop/pull/175) | |
+| ~04:05 | **P5.10** UTD / decrypt updates | **Merged** [#157](https://github.com/nepenth/synara-desktop/pull/157) | UtdIndex; tip `0c24e4b`. |
+| ~04:05 | **PROGRESS.md** after #157 | **This PR** | Next #170/#171 auth + crypto stack. |
+| ~03:45 | **PROGRESS.md** after #151 | **Merged** [#174](https://github.com/nepenth/synara-desktop/pull/174) | Tip was `6332042`. |
+| ~03:40 | **P3.7** legacy transition | **Merged** [#151](https://github.com/nepenth/synara-desktop/pull/151) | Clean-break; tip `0698147`. |
 | ~03:40 | **P3.7** legacy-session transition | **Merged** [#151](https://github.com/nepenth/synara-desktop/pull/151) | Clean-break; no JS/token continuity; tip `0698147`. |
 | ~03:40 | **PROGRESS.md** after #151 | **This PR** | Next #157 UTD. |
 | ~03:25 | **P6.6** user profile / ignore | **PR open** [#173](https://github.com/nepenth/synara-desktop/pull/173) | UserProfileIndex; local 6/6. |
