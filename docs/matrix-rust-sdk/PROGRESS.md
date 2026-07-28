@@ -9,8 +9,8 @@
 
 | Field | Value |
 | --- | --- |
-| Last updated (UTC) | **2026-07-28 ~00:15** |
-| Integration tip | `1e42d27` — Merge #143 P9.1 widgets |
+| Last updated (UTC) | **2026-07-28 ~00:55** |
+| Integration tip | `5799d16` — Merge #145 P8.2 devices |
 | Product runtime | Still **`matrix-js-sdk` only** until atomic sole-owner cutover |
 | Dual backend | **`false`** (forbidden forever) |
 | Operating model | [cutover-operating-model.md](cutover-operating-model.md) |
@@ -25,12 +25,12 @@
 
 | | |
 | --- | --- |
-| **Now** | **#143 P9.1 widgets merged.** Primary next: **#145 P8.2** devices (tip-merged after #143; CI re-run). Then #147 verification, #150 backup, #151 legacy. |
-| **Inventory** | ~44/112 original task artifacts when program-status is synced (through P9.1 landed; see ledger). |
+| **Now** | **#145 P8.2 devices merged.** Primary next: **#147 P8.3** verification (tip-merged after #145; CI re-run). Then #150 backup, #151 legacy, #154 focus, #155 remote logout, #157 UTD. |
+| **Inventory** | ~45/112 original task artifacts when program-status is synced (through P8.2 landed; see ledger). |
 | **Phase gates** | **0 / 15** strict gates closed (honest). |
-| **Open PRs → integration** | [#145](https://github.com/nepenth/synara-desktop/pull/145) devices, [#147](https://github.com/nepenth/synara-desktop/pull/147) verification, [#150](https://github.com/nepenth/synara-desktop/pull/150) backup/recovery, [#151](https://github.com/nepenth/synara-desktop/pull/151) legacy transition; [#109](https://github.com/nepenth/synara-desktop/pull/109) MiniMax (deprioritize). |
-| **Blocked on** | CI green after tip-merge onto post-#143 tip. Required: Quality gate + Desktop package gate. |
-| **Dogfood path** | search ✅ → cross-signing ✅ → widgets ✅ (**#143**) → **devices (#145)** → verification → backup → legacy. |
+| **Open PRs → integration** | [#147](https://github.com/nepenth/synara-desktop/pull/147) verification, [#150](https://github.com/nepenth/synara-desktop/pull/150) backup/recovery, [#151](https://github.com/nepenth/synara-desktop/pull/151) legacy, [#154](https://github.com/nepenth/synara-desktop/pull/154) timeline focus, [#155](https://github.com/nepenth/synara-desktop/pull/155) remote logout, [#157](https://github.com/nepenth/synara-desktop/pull/157) UTD; [#109](https://github.com/nepenth/synara-desktop/pull/109) MiniMax (deprioritize). |
+| **Blocked on** | CI green after tip-merge onto post-#145 tip. Required: Quality gate + Desktop package gate. |
+| **Dogfood path** | search ✅ → cross-signing ✅ → widgets ✅ → devices ✅ (**#145**) → **verification (#147)** → backup → legacy → focus → remote logout → UTD. |
 
 ---
 
@@ -53,6 +53,17 @@ Update rules:
 ---
 
 ## Work log (newest first)
+
+### 2026-07-28
+
+| When (UTC) | Item | Result | Notes |
+| --- | --- | --- | --- |
+| ~00:55 | **PROGRESS.md** after #145 | **This PR** | Tip `5799d16`; open stack tip-merged; next #147. |
+| ~00:54 | **P8.2** device list / trust | **Merged** [#145](https://github.com/nepenth/synara-desktop/pull/145) | DeviceIndex; no keys; tip `5799d16`. |
+| ~00:54 | **P5.10** UTD / decrypt updates | **PR open** [#157](https://github.com/nepenth/synara-desktop/pull/157) | UtdIndex; no session keys / bodies. |
+| ~00:38 | **P3.8** remote logout + recovery copy | **PR open** [#155](https://github.com/nepenth/synara-desktop/pull/155) | RemoteLogoutFlow + RecoveryCopyKey. |
+| ~00:32 | **P5.4** timeline focus / context | **PR open** [#154](https://github.com/nepenth/synara-desktop/pull/154) | TimelineFocus Live/Unread/Focused. |
+| ~00:29 | **PROGRESS.md** after #143 | **Merged** [#153](https://github.com/nepenth/synara-desktop/pull/153) | After P9.1 widgets. |
 
 ### 2026-07-27
 
