@@ -9,8 +9,8 @@
 
 | Field | Value |
 | --- | --- |
-| Last updated (UTC) | **2026-07-28 ~00:55** |
-| Integration tip | `5799d16` — Merge #145 P8.2 devices |
+| Last updated (UTC) | **2026-07-28 ~01:50** |
+| Integration tip | `b0e9fc1` — Merge #147 P8.3 verification |
 | Product runtime | Still **`matrix-js-sdk` only** until atomic sole-owner cutover |
 | Dual backend | **`false`** (forbidden forever) |
 | Operating model | [cutover-operating-model.md](cutover-operating-model.md) |
@@ -58,6 +58,9 @@ Update rules:
 
 | When (UTC) | Item | Result | Notes |
 | --- | --- | --- | --- |
+| ~01:50 | **PROGRESS.md** after #147 | **This PR** | Tip `b0e9fc1`; next #150 backup. |
+| ~01:46 | **P8.3** verification inbox / SAS | **Merged** [#147](https://github.com/nepenth/synara-desktop/pull/147) | VerificationInbox; no secrets; tip `b0e9fc1`. |
+| ~01:50 | **P6.7** account-data foundation | **PR open** [#163](https://github.com/nepenth/synara-desktop/pull/163) | AccountDataIndex string fields only. |
 | ~00:55 | **PROGRESS.md** after #145 | **This PR** | Tip `5799d16`; open stack tip-merged; next #147. |
 | ~00:54 | **P8.2** device list / trust | **Merged** [#145](https://github.com/nepenth/synara-desktop/pull/145) | DeviceIndex; no keys; tip `5799d16`. |
 | ~00:54 | **P5.10** UTD / decrypt updates | **PR open** [#157](https://github.com/nepenth/synara-desktop/pull/157) | UtdIndex; no session keys / bodies. |
