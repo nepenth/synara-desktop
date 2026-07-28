@@ -29,7 +29,7 @@
 | | |
 | --- | --- |
 | **Now** | Ledger resync + feature graph + Codex protocol (**#156**). **#145 devices merged.** Next: **#147** verification → #150 → #151; also #154 focus, #155 logout, #157 UTD, #160 polls, #161 unread, #162 raw-content. |
-| **Inventory** | **50 / 112** landed artifacts in [program-status](program-status.md) (**45 merged** + open-PR foundations). **Do not invent other counts.** |
+| **Inventory** | **56 / 112** landed artifacts in [program-status](program-status.md) (**46 merged** incl. P8.3 + open-PR foundations). **Do not invent other counts.** |
 | **Phase gates** | **0 / 15** strict gates closed (honest). |
 | **Open PRs → integration** | [#147](https://github.com/nepenth/synara-desktop/pull/147) verification, [#150](https://github.com/nepenth/synara-desktop/pull/150) backup, [#151](https://github.com/nepenth/synara-desktop/pull/151) legacy, [#154](https://github.com/nepenth/synara-desktop/pull/154) focus, [#155](https://github.com/nepenth/synara-desktop/pull/155) logout, [#157](https://github.com/nepenth/synara-desktop/pull/157) UTD, [#160](https://github.com/nepenth/synara-desktop/pull/160) polls, [#161](https://github.com/nepenth/synara-desktop/pull/161) unread, [#162](https://github.com/nepenth/synara-desktop/pull/162) raw-content; [#156](https://github.com/nepenth/synara-desktop/pull/156) this ledger PR. |
 | **Blocked on** | CI green for product merges. Required: Quality gate + Desktop package gate. |

@@ -12,12 +12,12 @@ Audited snapshot: `edfefee499064b736985b6528896b693e5120f22`
 ## Current execution
 
 - Active task: **None**
-- Next task: **P8.3**
+- Next task: **P8.5**
 - Blocked tasks: None
 
 ## Inventory and runtime
 
-- Landed original task artifacts: **50 / 112**
+- Landed original task artifacts: **56 / 112**
 - Shipping Matrix client: `matrix-js-sdk-only`
 - Rust SDK state: `harness-foundation-only`
 - Dual backend: `false`
@@ -32,10 +32,10 @@ Audited snapshot: `edfefee499064b736985b6528896b693e5120f22`
 | 2 | 6/6 | 0/6 | `R0.4`, `R0.5`, `R0.6`, `R0.7`, `R0.8` | `open` | `open` |
 | 3 | 6/8 | 0/8 | `R0.7`, `R0.8` | `open` | `open` |
 | 4 | 7/8 | 0/8 | None | `not_reviewed` | `open` |
-| 5 | 6/10 | 0/10 | None | `not_reviewed` | `open` |
-| 6 | 5/8 | 0/8 | None | `not_reviewed` | `open` |
+| 5 | 10/10 | 0/10 | None | `not_reviewed` | `open` |
+| 6 | 6/8 | 0/8 | None | `not_reviewed` | `open` |
 | 7 | 1/7 | 0/7 | None | `not_reviewed` | `open` |
-| 8 | 5/8 | 0/8 | None | `not_reviewed` | `open` |
+| 8 | 6/8 | 0/8 | None | `not_reviewed` | `open` |
 | 9 | 1/6 | 0/6 | None | `not_reviewed` | `open` |
 | 10 | 0/7 | 0/7 | None | `not_reviewed` | `open` |
 | 11 | 0/10 | 0/10 | None | `not_reviewed` | `open` |
@@ -100,17 +100,23 @@ Audited snapshot: `edfefee499064b736985b6528896b693e5120f22`
 | P5.2 | `landed` | `merged` | `open` | `open` |
 | P5.3 | `landed` | `merged` | `open` | `open` |
 | P5.4 | `landed` | `pr_open` | `open` | `open` |
+| P5.5 | `landed` | `pr_open` | `open` | `open` |
 | P5.6 | `landed` | `merged` | `open` | `open` |
+| P5.7 | `landed` | `pr_open` | `open` | `open` |
 | P5.8 | `landed` | `merged` | `open` | `open` |
+| P5.9 | `landed` | `pr_open` | `open` | `open` |
+| P5.10 | `landed` | `pr_open` | `open` | `open` |
 | P6.1 | `landed` | `merged` | `open` | `open` |
 | P6.2 | `landed` | `merged` | `open` | `open` |
 | P6.3 | `landed` | `merged` | `open` | `open` |
 | P6.4 | `landed` | `merged` | `open` | `open` |
+| P6.7 | `landed` | `pr_open` | `open` | `open` |
 | P6.8 | `landed` | `merged` | `open` | `open` |
 | P7.1 | `landed` | `merged` | `open` | `open` |
 | P8.1 | `landed` | `merged` | `open` | `open` |
 | P8.2 | `landed` | `merged` | `open` | `open` |
-| P8.3 | `landed` | `pr_open` | `open` | `open` |
+| P8.3 | `landed` | `merged` | `open` | `open` |
 | P8.4 | `landed` | `merged` | `open` | `open` |
 | P8.5 | `landed` | `pr_open` | `open` | `open` |
+| P8.6 | `landed` | `pr_open` | `open` | `open` |
 | P9.1 | `landed` | `merged` | `open` | `open` |
