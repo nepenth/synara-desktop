@@ -67,6 +67,7 @@ pub mod members;
 pub mod notifications;
 pub mod polls;
 pub mod presence;
+pub mod raw_content;
 pub mod receipts;
 pub mod relations;
 pub mod room_keys;
@@ -120,6 +121,7 @@ pub fn matrix_ipc_schema_markers() -> &'static str {
     let _spaces = spaces::matrix_spaces_markers();
     let _members = members::matrix_members_markers();
     let _timeline = timeline::matrix_timeline_markers();
+    let _raw_content = raw_content::matrix_raw_content_markers();
     let _relations = relations::matrix_relations_markers();
     let _polls = polls::matrix_polls_markers();
     let _search = search::matrix_search_markers();
@@ -168,6 +170,7 @@ pub fn matrix_ipc_schema_markers() -> &'static str {
     debug_assert_eq!(_spaces, spaces::MATRIX_SPACES_MARKER);
     debug_assert_eq!(_members, members::MATRIX_MEMBERS_MARKER);
     debug_assert_eq!(_timeline, timeline::MATRIX_TIMELINE_MARKER);
+    debug_assert_eq!(_raw_content, raw_content::MATRIX_RAW_CONTENT_MARKER);
     debug_assert_eq!(_relations, relations::MATRIX_RELATIONS_MARKER);
     debug_assert_eq!(_polls, polls::MATRIX_POLLS_MARKER);
     debug_assert_eq!(_search, search::MATRIX_SEARCH_MARKER);
@@ -191,5 +194,5 @@ pub fn matrix_ipc_schema_markers() -> &'static str {
     debug_assert_eq!(_room_ops, room_ops::MATRIX_ROOM_OPS_MARKER);
     debug_assert_eq!(_room_profile, room_profile::MATRIX_ROOM_PROFILE_MARKER);
     debug_assert_eq!(_widgets, widgets::MATRIX_WIDGETS_MARKER);
-    "matrix-ipc-protocol-v1+domain-dtos-p1.4+supervisor-p2.1+store-p2.2+client-builder-p2.3+tasks-p2.4+diagnostics-p2.5+lifecycle-p2.6+auth-p3.3+p3.4+session-persist-p3.5+sync-p4.1+room-list-p4.2+routes-p4.8+spaces-p4.5+members-p4.6+timeline-p5.1+diffs-p5.2+pagination-p5.3+search-p6.8+relations-p5.6+send-p6.1+receipts-p6.2+typing-p6.3+media-p6.4+room-profile-p6.5+threads-p5.8+notifications-p7.1+security-p8.1+cross-signing-p8.4+widgets-p9.1+legacy-p3.7+devices-p8.2+verification-p8.3+backup-p8.5+user-profile-p6.6+room-ops-p6.9+crypto-store-p8.8+presence-p4.7+room-keys-p8.6+utd-recovery-p8.7+polls-p5.7+unread-p5.5"
+    "matrix-ipc-protocol-v1+domain-dtos-p1.4+supervisor-p2.1+store-p2.2+client-builder-p2.3+tasks-p2.4+diagnostics-p2.5+lifecycle-p2.6+auth-p3.3+p3.4+session-persist-p3.5+sync-p4.1+room-list-p4.2+routes-p4.8+spaces-p4.5+members-p4.6+timeline-p5.1+diffs-p5.2+pagination-p5.3+search-p6.8+relations-p5.6+send-p6.1+receipts-p6.2+typing-p6.3+media-p6.4+room-profile-p6.5+threads-p5.8+notifications-p7.1+security-p8.1+cross-signing-p8.4+widgets-p9.1+legacy-p3.7+devices-p8.2+verification-p8.3+backup-p8.5+user-profile-p6.6+room-ops-p6.9+crypto-store-p8.8+presence-p4.7+room-keys-p8.6+utd-recovery-p8.7+polls-p5.7+unread-p5.5+raw-content-p5.9"
 }
