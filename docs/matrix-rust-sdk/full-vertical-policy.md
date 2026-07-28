@@ -1,0 +1,55 @@
+# Full vertical replacement policy
+
+| Field | Value |
+| --- | --- |
+| Status | **Active** (user directive 2026-07-28) |
+| Branch | `feature/matrix-rust-sdk-full-replacement` only |
+| Supersedes | “Dogfood minimum / usable enough / approved residual plateau” acceptance for product verticals |
+
+## Directive
+
+**No dogfood cuts.** Each product vertical must be **fully implemented / re-implemented** under the native Matrix Rust SDK path (UI → Tauri IPC → live `matrix-sdk`), for capabilities that:
+
+1. Exist in the current Synara client (matrix-js-sdk product surface), **and/or**
+2. Are supported by matrix-rust-sdk and are part of product parity for that vertical.
+
+Do **not** ship “minimum”, “usable enough for dogfood”, “approved non-zero residual plateau”, or stub shells as acceptance for a vertical. Temporary brokenness *between* sequential full verticals is OK; **declaring a vertical done while product still owns the capability on js-sdk is not**.
+
+## Dual backend
+
+Still **forbidden** forever. Full vertical ≠ dual runtime selector.
+
+## Acceptance for a vertical slice
+
+A slice is **done only when** all of the following hold for its capability set:
+
+| Gate | Requirement |
+| --- | --- |
+| **Ownership** | Product happy path does not use `matrix-js-sdk` live client for that capability |
+| **Parity** | Behaviors that existed in product for that capability are re-homed to Rust IPC/SDK (or explicitly deleted with product sign-off — rare) |
+| **Secrets** | No tokens, keys, recovery material, ciphertext over IPC or logs |
+| **Ledger** | Residual list for that slice is **empty** or only items that are **other verticals** with named follow-up IDs (not “later / deferred / minimum”) |
+| **Tests** | Scoped host + product tests for pure helpers; typecheck for wired TS |
+
+**Not** acceptance: “core path works; verification/backup/media left as approved residual.”
+
+## Sequencing under this policy
+
+1. **Finish incomplete prior verticals first** — see [d0-residual-completion.md](d0-residual-completion.md).
+2. Only then open new verticals (media, widgets, registry, …) with the same full bar.
+3. Do **not** merge PRs that document “approved residual plateau” or “dogfood minimum” as the done state for D0 / crypto / burn-down.
+4. L1 harness PRs remain parked unless they block a full product vertical.
+
+## Orchestrator / Codex rules
+
+- Prefer one full vertical in flight (serial product merges).
+- Reject prompts that say “minimum”, “dogfood enough”, “plateau residual OK”, “0 imports removed is fine”.
+- If a PR only documents residual debt without product rewire, treat as **docs debt PR**, not vertical complete.
+- High effort sparingly for crypto/session edges; still full product wire, not stubs.
+
+## Related
+
+- Residual inventory: [d0-residual-completion.md](d0-residual-completion.md)
+- Epic (reoriented): [d0-dogfood-epic.md](d0-dogfood-epic.md)
+- Loop: [d0-orchestrator-loop.md](d0-orchestrator-loop.md)
+- Migration crypto decisions: [migration-ux-decision.md](migration-ux-decision.md) (`D-KEY-RECOVERY`, etc.)
