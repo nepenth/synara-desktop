@@ -9,9 +9,9 @@
 
 | Field | Value |
 | --- | --- |
-| Last updated (UTC) | **2026-07-28 ~14:20** |
-| Integration tip | `73b60f4` — Merge #215 PROGRESS after #200; D0 dogfood pivot active |
-| Product runtime | Still **`matrix-js-sdk` only** until atomic sole-owner cutover |
+| Last updated (UTC) | **2026-07-28 ~18:05** |
+| Integration tip | `0400306` — D0.1–D0.5 on tip; full-vertical residual debt open |
+| Product runtime | Native owns login/rooms/timeline/send/crypto-min; residual crypto/product still js |
 | Dual backend | **`false`** (forbidden forever) |
 | Operating model | [cutover-operating-model.md](cutover-operating-model.md) |
 | Machine ledger | [program-status.md](program-status.md) (generated; do not hand-edit) |
