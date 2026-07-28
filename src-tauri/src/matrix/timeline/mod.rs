@@ -4,8 +4,8 @@
 //! generation, pure ordered-diff projection over Synara [`TimelineItem`] DTOs,
 //! a pagination state machine, live/unread/focused open navigation, and
 //! UTD/decryption update propagation.
-//! No SDK `Timeline` attach yet, no production Tauri commands, no dual-backend,
-//! no event plaintext / session keys in errors.
+//! D0.3 adds a live SDK adapter for the product desktop session while retaining
+//! these pure foundations. No dual backend and no session keys in errors.
 //!
 //! Authoritative design notes:
 //! - `docs/matrix-rust-sdk/p5.1-timeline-registry.md`
@@ -20,6 +20,7 @@
 mod delta;
 mod error;
 mod focus;
+mod live;
 mod pagination;
 mod projection;
 mod registry;
@@ -29,6 +30,9 @@ pub use delta::{TimelineDeltaBatch, TimelineDeltaOp, TimelineSnapshot};
 pub use error::TimelineError;
 pub use focus::{
     ContextWindow, FocusOpenOutcome, FocusOpenRequest, NavigationPhase, TimelineFocus, TimelineMode,
+};
+pub use live::{
+    NativeTimelineDirection, NativeTimelineItem, NativeTimelineRegistry, NativeTimelineSnapshot,
 };
 pub use pagination::{
     DirectionStatus, PaginationDirection, PaginationOutcome, PaginationPhase, PaginationRequest,
