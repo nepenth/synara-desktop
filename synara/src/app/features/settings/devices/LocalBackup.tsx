@@ -11,6 +11,7 @@ import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
 import { decryptMegolmKeyFile, encryptMegolmKeyFile } from '../../../../util/cryptE2ERoomKeys';
 import { useAlive } from '../../../hooks/useAlive';
 import { useFilePicker } from '../../../hooks/useFilePicker';
+import { isNativeMatrixSession } from '../../verification/nativeVerification';
 
 function ExportKeys() {
   const mx = useMatrixClient();
@@ -300,7 +301,7 @@ function ImportKeysTile() {
   );
 }
 
-export function LocalBackup() {
+function LegacyLocalBackup() {
   return (
     <Box direction="Column" gap="100">
       <Text size="L400">Local Backup</Text>
@@ -322,4 +323,26 @@ export function LocalBackup() {
       </SequenceCard>
     </Box>
   );
+}
+
+export function LocalBackup() {
+  if (isNativeMatrixSession()) {
+    return (
+      <Box direction="Column" gap="100">
+        <Text size="L400">Local Backup</Text>
+        <SequenceCard
+          className={SequenceCardStyle}
+          variant="SurfaceVariant"
+          direction="Column"
+          gap="400"
+        >
+          <SettingTile
+            title="Server-side encryption backup"
+            description="Native sessions restore encrypted message history through Encryption Backup above. Local room-key file transfer is unavailable on the native path."
+          />
+        </SequenceCard>
+      </Box>
+    );
+  }
+  return <LegacyLocalBackup />;
 }

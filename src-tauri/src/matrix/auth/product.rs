@@ -26,6 +26,9 @@ use tokio::sync::Mutex;
 use zeroize::Zeroize;
 
 use super::{login_with_password, normalize_homeserver_url, AuthError, LoginOptions};
+use crate::matrix::backup::live::{
+    self as live_backup, NativeBackupOperationResult, NativeBackupStatus,
+};
 use crate::matrix::client_builder::{build_unauthenticated_client, ClientBuildConfig};
 use crate::matrix::cross_signing::live::{
     project_status, supported_authentication, NativeCrossSigningSetupOutcome,
@@ -412,6 +415,103 @@ async fn matrix_cross_signing_setup_password_inner(
     }
 
     cross_signing_setup_complete(active).await
+}
+
+#[tauri::command]
+pub async fn matrix_backup_status(
+    state: State<'_, MatrixAuthState>,
+) -> Result<NativeBackupStatus, MatrixAuthCommandError> {
+    let session = state.session.lock().await;
+    let active = require_backup_session(session.as_ref())?;
+    live_backup::status(&active.client, active.sync.session_generation()).await
+}
+
+#[tauri::command]
+pub async fn matrix_backup_setup(
+    state: State<'_, MatrixAuthState>,
+    mut passphrase: String,
+) -> Result<NativeBackupOperationResult, MatrixAuthCommandError> {
+    let result = matrix_backup_setup_inner(&state, &passphrase).await;
+    passphrase.zeroize();
+    result
+}
+
+async fn matrix_backup_setup_inner(
+    state: &State<'_, MatrixAuthState>,
+    passphrase: &str,
+) -> Result<NativeBackupOperationResult, MatrixAuthCommandError> {
+    if passphrase.is_empty() {
+        return Err(MatrixAuthCommandError::new(
+            "InvalidRequest",
+            "A recovery passphrase is required to set up encryption backup.",
+            "v-crypto.3-setup-passphrase-empty",
+        ));
+    }
+    let session = state.session.lock().await;
+    let active = require_backup_session(session.as_ref())?;
+    live_backup::setup(&active.client, active.sync.session_generation(), passphrase).await
+}
+
+#[tauri::command]
+pub async fn matrix_backup_restore(
+    state: State<'_, MatrixAuthState>,
+    mut recovery_secret: String,
+) -> Result<NativeBackupOperationResult, MatrixAuthCommandError> {
+    let result = matrix_backup_restore_inner(&state, &recovery_secret).await;
+    recovery_secret.zeroize();
+    result
+}
+
+async fn matrix_backup_restore_inner(
+    state: &State<'_, MatrixAuthState>,
+    recovery_secret: &str,
+) -> Result<NativeBackupOperationResult, MatrixAuthCommandError> {
+    require_recovery_secret(recovery_secret)?;
+    let session = state.session.lock().await;
+    let active = require_backup_session(session.as_ref())?;
+    live_backup::restore(
+        &active.client,
+        active.sync.session_generation(),
+        recovery_secret,
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn matrix_backup_repair(
+    state: State<'_, MatrixAuthState>,
+    mut recovery_secret: String,
+) -> Result<NativeBackupOperationResult, MatrixAuthCommandError> {
+    let result = matrix_backup_repair_inner(&state, &recovery_secret).await;
+    recovery_secret.zeroize();
+    result
+}
+
+async fn matrix_backup_repair_inner(
+    state: &State<'_, MatrixAuthState>,
+    recovery_secret: &str,
+) -> Result<NativeBackupOperationResult, MatrixAuthCommandError> {
+    require_recovery_secret(recovery_secret)?;
+    let session = state.session.lock().await;
+    let active = require_backup_session(session.as_ref())?;
+    live_backup::repair(
+        &active.client,
+        active.sync.session_generation(),
+        recovery_secret,
+    )
+    .await
+}
+
+fn require_recovery_secret(recovery_secret: &str) -> Result<(), MatrixAuthCommandError> {
+    if recovery_secret.is_empty() {
+        Err(MatrixAuthCommandError::new(
+            "InvalidRequest",
+            "A recovery key or passphrase is required.",
+            "v-crypto.3-recovery-secret-empty",
+        ))
+    } else {
+        Ok(())
+    }
 }
 
 #[tauri::command]
@@ -905,6 +1005,18 @@ fn require_cross_signing_session_mut(
             "Forbidden",
             "No native Matrix session is active.",
             "v-crypto.2-cross-signing-requires-session",
+        )
+    })
+}
+
+fn require_backup_session(
+    session: Option<&ManagedMatrixSession>,
+) -> Result<&ManagedMatrixSession, MatrixAuthCommandError> {
+    session.ok_or_else(|| {
+        MatrixAuthCommandError::new(
+            "Forbidden",
+            "No native Matrix session is active.",
+            "v-crypto.3-backup-requires-session",
         )
     })
 }

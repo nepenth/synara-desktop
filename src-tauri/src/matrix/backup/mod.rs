@@ -10,6 +10,7 @@
 
 mod error;
 mod flow;
+pub mod live;
 
 pub use error::BackupError;
 pub use flow::{BackupFlowKind, BackupFlowPhase, BackupRecoveryFlow};

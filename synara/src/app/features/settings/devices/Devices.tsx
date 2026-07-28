@@ -119,6 +119,16 @@ export function Devices({ requestClose }: DevicesProps) {
                     }
                   />
                 </SequenceCard>
+                {nativeSession && (
+                  <SequenceCard
+                    className={SequenceCardStyle}
+                    variant="SurfaceVariant"
+                    direction="Column"
+                    gap="400"
+                  >
+                    <BackupRestoreTile />
+                  </SequenceCard>
+                )}
               </Box>
               <Box direction="Column" gap="100">
                 <Text size="L400">Current</Text>
