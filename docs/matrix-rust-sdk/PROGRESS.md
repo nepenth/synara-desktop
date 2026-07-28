@@ -9,8 +9,8 @@
 
 | Field | Value |
 | --- | --- |
-| Last updated (UTC) | **2026-07-28 ~13:30** |
-| Integration tip | `b9b86f2` — Merge #192 P7.4 attachment send |
+| Last updated (UTC) | **2026-07-28 ~14:05** |
+| Integration tip | `54e0419` — Merge #200 P7.5 save/share |
 | Product runtime | Still **`matrix-js-sdk` only** until atomic sole-owner cutover |
 | Dual backend | **`false`** (forbidden forever) |
 | Operating model | [cutover-operating-model.md](cutover-operating-model.md) |
@@ -25,12 +25,12 @@
 
 | | |
 | --- | --- |
-| **Now** | **#192 P7.4 attachment send merged** (tip `b9b86f2`). Next **#200** save/share or **#207** cache privacy. |
-| **Inventory** | ~68/112 original task artifacts when program-status is synced (through P7.4 landed). |
+| **Now** | **#200 P7.5 save/share merged** (tip `54e0419`). Next **#207** cache privacy / **#209** SW media boundary. |
+| **Inventory** | ~69/112 original task artifacts when program-status is synced (through P7.5 landed). |
 | **Phase gates** | **0 / 15** strict gates closed (honest). |
-| **Open PRs → integration** | [#200](https://github.com/nepenth/synara-desktop/pull/200) save/share, [#207](https://github.com/nepenth/synara-desktop/pull/207)/[#209](https://github.com/nepenth/synara-desktop/pull/209) media privacy/SW, crypto/notify stack needs re-tip. |
-| **Blocked on** | Re-tip + CI for next media slice; keep serial. |
-| **Dogfood path** | … → directory ✅ → **attachment ✅ (#192)** → save/share #200 / privacy #207 → … |
+| **Open PRs → integration** | [#207](https://github.com/nepenth/synara-desktop/pull/207)/[#209](https://github.com/nepenth/synara-desktop/pull/209) media privacy/SW, crypto/notify stack needs re-tip. |
+| **Blocked on** | Re-tip + CI for #207 after #200. Serial merges. |
+| **Dogfood path** | … → attachment ✅ → **save/share ✅ (#200)** → privacy #207 → SW #209 → … |
 
 ---
 
@@ -58,6 +58,8 @@ Update rules:
 
 | When (UTC) | Item | Result | Notes |
 | --- | --- | --- | --- |
+| ~14:05 | **P7.5** save/share | **Merged** [#200](https://github.com/nepenth/synara-desktop/pull/200) | tip `54e0419`. |
+| ~14:05 | **PROGRESS.md** after #200 | **This PR** | Next #207. |
 | ~13:30 | **P7.4** attachment send | **Merged** [#192](https://github.com/nepenth/synara-desktop/pull/192) | tip `b9b86f2`. |
 | ~13:30 | **PROGRESS.md** after #192 | **This PR** | Next #200/#207. |
 | ~13:00 | **P6.10** room directory | **Merged** [#190](https://github.com/nepenth/synara-desktop/pull/190) | tip `8d544fa`. |
