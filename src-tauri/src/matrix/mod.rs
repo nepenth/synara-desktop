@@ -40,6 +40,7 @@
 //! P7.1: Notification candidate index foundation (harness; privacy-filtered).
 //! P8.1: Security / crypto status projection foundation (harness; no secrets).
 //! P9.1: Widget / Element Call session registry foundation (harness).
+//! P9.3: App-focus suppression and badge semantics foundation (pure harness).
 //! P8.4: Cross-signing / identity state foundation (harness; no key material).
 //! P3.7: Legacy-session detection / transition coordinator (clean-break; no JS client).
 //! P8.5: Key backup / recovery setup-restore-repair foundation (harness; no secrets).
@@ -64,6 +65,7 @@ pub mod legacy;
 pub mod lifecycle;
 pub mod media;
 pub mod members;
+pub mod notification_policy;
 pub mod notifications;
 pub mod polls;
 pub mod presence;
@@ -137,6 +139,7 @@ pub fn matrix_ipc_schema_markers() -> &'static str {
     let _utd_recovery = utd_recovery::matrix_utd_recovery_markers();
     let _presence = presence::matrix_presence_markers();
     let _media = media::matrix_media_markers();
+    let _notification_policy = notification_policy::matrix_notification_policy_markers();
     let _notifications = notifications::matrix_notifications_markers();
     let _unread = unread::matrix_unread_markers();
     let _user_profile = user_profile::matrix_user_profile_markers();
@@ -185,11 +188,15 @@ pub fn matrix_ipc_schema_markers() -> &'static str {
     debug_assert_eq!(_utd_recovery, utd_recovery::MATRIX_UTD_RECOVERY_MARKER);
     debug_assert_eq!(_presence, presence::MATRIX_PRESENCE_MARKER);
     debug_assert_eq!(_media, media::MATRIX_MEDIA_MARKER);
+    debug_assert_eq!(
+        _notification_policy,
+        notification_policy::MATRIX_NOTIFICATION_POLICY_MARKER
+    );
     debug_assert_eq!(_notifications, notifications::MATRIX_NOTIFICATIONS_MARKER);
     debug_assert_eq!(_unread, unread::MATRIX_UNREAD_MARKER);
     debug_assert_eq!(_user_profile, user_profile::MATRIX_USER_PROFILE_MARKER);
     debug_assert_eq!(_room_ops, room_ops::MATRIX_ROOM_OPS_MARKER);
     debug_assert_eq!(_room_profile, room_profile::MATRIX_ROOM_PROFILE_MARKER);
     debug_assert_eq!(_widgets, widgets::MATRIX_WIDGETS_MARKER);
-    "matrix-ipc-protocol-v1+domain-dtos-p1.4+supervisor-p2.1+store-p2.2+client-builder-p2.3+tasks-p2.4+diagnostics-p2.5+lifecycle-p2.6+auth-p3.3+p3.4+session-persist-p3.5+sync-p4.1+room-list-p4.2+routes-p4.8+spaces-p4.5+members-p4.6+timeline-p5.1+diffs-p5.2+pagination-p5.3+search-p6.8+relations-p5.6+send-p6.1+receipts-p6.2+typing-p6.3+media-p6.4+room-profile-p6.5+threads-p5.8+notifications-p7.1+security-p8.1+cross-signing-p8.4+widgets-p9.1+legacy-p3.7+devices-p8.2+verification-p8.3+backup-p8.5+user-profile-p6.6+room-ops-p6.9+crypto-store-p8.8+presence-p4.7+room-keys-p8.6+utd-recovery-p8.7+polls-p5.7+unread-p5.5"
+    "matrix-ipc-protocol-v1+domain-dtos-p1.4+supervisor-p2.1+store-p2.2+client-builder-p2.3+tasks-p2.4+diagnostics-p2.5+lifecycle-p2.6+auth-p3.3+p3.4+session-persist-p3.5+sync-p4.1+room-list-p4.2+routes-p4.8+spaces-p4.5+members-p4.6+timeline-p5.1+diffs-p5.2+pagination-p5.3+search-p6.8+relations-p5.6+send-p6.1+receipts-p6.2+typing-p6.3+media-p6.4+room-profile-p6.5+threads-p5.8+notifications-p7.1+security-p8.1+cross-signing-p8.4+widgets-p9.1+notification-policy-p9.3+legacy-p3.7+devices-p8.2+verification-p8.3+backup-p8.5+user-profile-p6.6+room-ops-p6.9+crypto-store-p8.8+presence-p4.7+room-keys-p8.6+utd-recovery-p8.7+polls-p5.7+unread-p5.5"
 }
