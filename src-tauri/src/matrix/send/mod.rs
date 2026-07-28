@@ -1,29 +1,40 @@
-//! P6.1 — Outbound send queue + local-echo foundation (harness).
+//! P6.1 — Outbound text send queue + local-echo foundation (harness).
+//! P7.4 — Outbound attachment / media send queue foundation (harness).
 //!
-//! Tracks plain-text outbound messages with [`LocalEchoState`] and session
-//! generation stamps. No SDK `Room::send`, no production Tauri commands, no
-//! dual-backend.
+//! Tracks plain-text and attachment outbound messages with [`LocalEchoState`]
+//! and session generation stamps. Attachment queue uses **media handle ids
+//! only** (no file bytes). No SDK `Room::send`, no dual-backend.
 //!
-//! Authoritative design note: `docs/matrix-rust-sdk/p6.1-send-queue.md`
+//! Authoritative design notes:
+//! - `docs/matrix-rust-sdk/p6.1-send-queue.md`
+//! - `docs/matrix-rust-sdk/p7.4-attachment-send.md`
 
 #![allow(dead_code)]
 #![allow(unused_imports)]
 
+mod attachment_queue;
 mod error;
 mod queue;
 
+pub use attachment_queue::{
+    AttachmentEnqueue, AttachmentKind, AttachmentSendQueue, OutboundAttachment,
+    MAX_ACTIVE_ATTACHMENTS, MAX_CAPTION_CHARS, MAX_HANDLE_CHARS,
+};
 pub use error::SendError;
 pub use queue::{LocalTxnId, OutboundTextMessage, SendQueue};
 
-/// Static marker for link / schema smoke.
-pub const MATRIX_SEND_MARKER: &str = "matrix-send-queue-p6.1";
+/// Static marker for link / schema smoke (text + attachment queues).
+pub const MATRIX_SEND_MARKER: &str = "matrix-send-queue-p6.1+attachment-p7.4";
 
 /// Touch send-queue paths so they remain linked in non-test builds.
 pub fn matrix_send_markers() -> &'static str {
     let q = SendQueue::new(0);
+    let a = AttachmentSendQueue::new(0);
     debug_assert!(q.is_empty());
+    debug_assert!(a.is_empty());
     debug_assert_eq!(q.active_count(), 0);
-    debug_assert_eq!(MATRIX_SEND_MARKER, "matrix-send-queue-p6.1");
+    debug_assert_eq!(AttachmentKind::Image.as_str(), "image");
+    debug_assert_eq!(MATRIX_SEND_MARKER, "matrix-send-queue-p6.1+attachment-p7.4");
     MATRIX_SEND_MARKER
 }
 

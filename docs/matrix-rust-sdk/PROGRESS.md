@@ -9,8 +9,8 @@
 
 | Field | Value |
 | --- | --- |
-| Last updated (UTC) | **2026-07-28 ~13:00** |
-| Integration tip | `8d544fa` — Merge #190 P6.10 room directory |
+| Last updated (UTC) | **2026-07-28 ~13:30** |
+| Integration tip | `b9b86f2` — Merge #192 P7.4 attachment send |
 | Product runtime | Still **`matrix-js-sdk` only** until atomic sole-owner cutover |
 | Dual backend | **`false`** (forbidden forever) |
 | Operating model | [cutover-operating-model.md](cutover-operating-model.md) |
@@ -25,12 +25,14 @@
 
 | | |
 | --- | --- |
-| **Now** | **#190 P6.10 room directory merged** (tip `8d544fa`). Next **#192** attachment / media send. |
+| **Now** | **D0 dogfood pivot.** Freeze L1-only PRs. Next: **D0.1 Rust login/session sole owner** (break js auth on this branch). Then D0.2 sync+rooms → D0.3 timeline → D0.4 send. |
 | **Inventory** | **74 / 112** landed artifacts in [program-status](program-status.md) (**65 merged** on tip + **9 open-PR** foundations). Strict gates **0/15**. Runtime still **matrix-js-sdk-only** / harness-foundation. **Do not invent other counts.** |
+| **Now** | **#192 P7.4 attachment send merged** (tip `b9b86f2`). Next **#200** save/share or **#207** cache privacy. |
+| **Inventory** | ~68/112 original task artifacts when program-status is synced (through P7.4 landed). |
 | **Phase gates** | **0 / 15** strict gates closed (honest). |
-| **Open PRs → integration** | [#192](https://github.com/nepenth/synara-desktop/pull/192) attachment send, [#207](https://github.com/nepenth/synara-desktop/pull/207)/[#209](https://github.com/nepenth/synara-desktop/pull/209) media privacy/SW, crypto/notify stack needs re-tip. |
-| **Blocked on** | Re-tip + CI for #192 after #190. Keep merges serial. |
-| **Dogfood path** | … → media cache ✅ → **directory ✅ (#190)** → attachment #192 → … |
+| **Open PRs → integration** | [#200](https://github.com/nepenth/synara-desktop/pull/200) save/share, [#207](https://github.com/nepenth/synara-desktop/pull/207)/[#209](https://github.com/nepenth/synara-desktop/pull/209) media privacy/SW, crypto/notify stack needs re-tip. |
+| **Blocked on** | Re-tip + CI for next media slice; keep serial. |
+| **Dogfood path** | … → directory ✅ → **attachment ✅ (#192)** → save/share #200 / privacy #207 → … |
 
 ---
 
@@ -65,6 +67,8 @@ Update rules:
 
 | When (UTC) | Item | Result | Notes |
 | --- | --- | --- | --- |
+| ~13:30 | **P7.4** attachment send | **Merged** [#192](https://github.com/nepenth/synara-desktop/pull/192) | tip `b9b86f2`. |
+| ~13:30 | **PROGRESS.md** after #192 | **This PR** | Next #200/#207. |
 | ~13:00 | **P6.10** room directory | **Merged** [#190](https://github.com/nepenth/synara-desktop/pull/190) | tip `8d544fa`. |
 | ~13:00 | **PROGRESS.md** after #190 | **This PR** | Next #192. |
 | ~12:25 | **P7.3** media cache | **Merged** [#188](https://github.com/nepenth/synara-desktop/pull/188) | tip `21101da`. |
