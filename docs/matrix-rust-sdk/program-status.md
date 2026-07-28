@@ -17,7 +17,7 @@ Audited snapshot: `edfefee499064b736985b6528896b693e5120f22`
 
 ## Inventory and runtime
 
-- Landed original task artifacts: **56 / 112**
+- Landed original task artifacts: **63 / 112**
 - Shipping Matrix client: `matrix-js-sdk-only`
 - Rust SDK state: `harness-foundation-only`
 - Dual backend: `false`
@@ -30,12 +30,12 @@ Audited snapshot: `edfefee499064b736985b6528896b693e5120f22`
 | 0 | 7/7 | 0/7 | `R0.2`, `R0.8` | `open` | `open` |
 | 1 | 6/6 | 0/6 | `R0.1`, `R0.3`, `R0.8` | `open` | `open` |
 | 2 | 6/6 | 0/6 | `R0.4`, `R0.5`, `R0.6`, `R0.7`, `R0.8` | `open` | `open` |
-| 3 | 6/8 | 0/8 | `R0.7`, `R0.8` | `open` | `open` |
-| 4 | 7/8 | 0/8 | None | `not_reviewed` | `open` |
+| 3 | 8/8 | 0/8 | `R0.7`, `R0.8` | `open` | `open` |
+| 4 | 8/8 | 0/8 | None | `not_reviewed` | `open` |
 | 5 | 10/10 | 0/10 | None | `not_reviewed` | `open` |
-| 6 | 6/8 | 0/8 | None | `not_reviewed` | `open` |
+| 6 | 8/8 | 0/8 | None | `not_reviewed` | `open` |
 | 7 | 1/7 | 0/7 | None | `not_reviewed` | `open` |
-| 8 | 6/8 | 0/8 | None | `not_reviewed` | `open` |
+| 8 | 8/8 | 0/8 | None | `not_reviewed` | `open` |
 | 9 | 1/6 | 0/6 | None | `not_reviewed` | `open` |
 | 10 | 0/7 | 0/7 | None | `not_reviewed` | `open` |
 | 11 | 0/10 | 0/10 | None | `not_reviewed` | `open` |
@@ -85,6 +85,8 @@ Audited snapshot: `edfefee499064b736985b6528896b693e5120f22`
 | P2.6 | `landed` | `merged` | `open` | `open` |
 | P3.1 | `landed` | `merged` | `open` | `open` |
 | P3.2 | `landed` | `merged` | `open` | `open` |
+| P3.3 | `landed` | `merged` | `open` | `open` |
+| P3.4 | `landed` | `merged` | `open` | `open` |
 | P3.5 | `landed` | `merged` | `open` | `open` |
 | P3.6 | `landed` | `merged` | `open` | `open` |
 | P3.7 | `landed` | `pr_open` | `open` | `open` |
@@ -95,6 +97,7 @@ Audited snapshot: `edfefee499064b736985b6528896b693e5120f22`
 | P4.4 | `landed` | `merged` | `open` | `open` |
 | P4.5 | `landed` | `merged` | `open` | `open` |
 | P4.6 | `landed` | `merged` | `open` | `open` |
+| P4.7 | `landed` | `merged` | `open` | `open` |
 | P4.8 | `landed` | `merged` | `open` | `open` |
 | P5.1 | `landed` | `merged` | `open` | `open` |
 | P5.2 | `landed` | `merged` | `open` | `open` |
@@ -110,6 +113,8 @@ Audited snapshot: `edfefee499064b736985b6528896b693e5120f22`
 | P6.2 | `landed` | `merged` | `open` | `open` |
 | P6.3 | `landed` | `merged` | `open` | `open` |
 | P6.4 | `landed` | `merged` | `open` | `open` |
+| P6.5 | `landed` | `merged` | `open` | `open` |
+| P6.6 | `landed` | `merged` | `open` | `open` |
 | P6.7 | `landed` | `pr_open` | `open` | `open` |
 | P6.8 | `landed` | `merged` | `open` | `open` |
 | P7.1 | `landed` | `merged` | `open` | `open` |
@@ -119,4 +124,6 @@ Audited snapshot: `edfefee499064b736985b6528896b693e5120f22`
 | P8.4 | `landed` | `merged` | `open` | `open` |
 | P8.5 | `landed` | `pr_open` | `open` | `open` |
 | P8.6 | `landed` | `pr_open` | `open` | `open` |
+| P8.7 | `landed` | `merged` | `open` | `open` |
+| P8.8 | `landed` | `merged` | `open` | `open` |
 | P9.1 | `landed` | `merged` | `open` | `open` |
