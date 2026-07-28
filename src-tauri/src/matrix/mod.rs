@@ -28,6 +28,7 @@
 //! P6.8: Search session / result index foundation (harness).
 //! P7.1: Notification candidate index foundation (harness; privacy-filtered).
 //! P8.1: Security / crypto status projection foundation (harness; no secrets).
+//! P9.1: Widget / Element Call session registry foundation (harness).
 //! P8.4: Cross-signing / identity state foundation (harness; no key material).
 //! No production login/sync loop or Tauri command registration lives here yet.
 //! No dual-backend selector. Product runtime remains matrix-js-sdk.
@@ -57,6 +58,7 @@ pub mod tasks;
 pub mod threads;
 pub mod timeline;
 pub mod typing;
+pub mod widgets;
 
 const _: fn() -> &'static str = matrix_ipc_schema_markers;
 
@@ -95,6 +97,7 @@ pub fn matrix_ipc_schema_markers() -> &'static str {
     let _typing = typing::matrix_typing_markers();
     let _media = media::matrix_media_markers();
     let _notifications = notifications::matrix_notifications_markers();
+    let _widgets = widgets::matrix_widgets_markers();
     debug_assert_eq!(_version, 1);
     debug_assert!(_kinds > 0);
     debug_assert!(_errors > 0);
@@ -128,5 +131,6 @@ pub fn matrix_ipc_schema_markers() -> &'static str {
     debug_assert_eq!(_typing, typing::MATRIX_TYPING_MARKER);
     debug_assert_eq!(_media, media::MATRIX_MEDIA_MARKER);
     debug_assert_eq!(_notifications, notifications::MATRIX_NOTIFICATIONS_MARKER);
-    "matrix-ipc-protocol-v1+domain-dtos-p1.4+supervisor-p2.1+store-p2.2+client-builder-p2.3+tasks-p2.4+diagnostics-p2.5+lifecycle-p2.6+auth-p3.2+session-persist-p3.5+sync-p4.1+room-list-p4.2+routes-p4.8+spaces-p4.5+members-p4.6+timeline-p5.1+diffs-p5.2+pagination-p5.3+search-p6.8+relations-p5.6+send-p6.1+receipts-p6.2+typing-p6.3+media-p6.4+threads-p5.8+notifications-p7.1+security-p8.1+cross-signing-p8.4"
+    debug_assert_eq!(_widgets, widgets::MATRIX_WIDGETS_MARKER);
+    "matrix-ipc-protocol-v1+domain-dtos-p1.4+supervisor-p2.1+store-p2.2+client-builder-p2.3+tasks-p2.4+diagnostics-p2.5+lifecycle-p2.6+auth-p3.2+session-persist-p3.5+sync-p4.1+room-list-p4.2+routes-p4.8+spaces-p4.5+members-p4.6+timeline-p5.1+diffs-p5.2+pagination-p5.3+search-p6.8+relations-p5.6+send-p6.1+receipts-p6.2+typing-p6.3+media-p6.4+threads-p5.8+notifications-p7.1+security-p8.1+cross-signing-p8.4+widgets-p9.1"
 }
