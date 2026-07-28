@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use matrix_sdk::{
+    encryption::CrossSigningStatus,
     ruma::{
         events::{
             relation::Reply,
@@ -61,6 +62,23 @@ pub enum MatrixSessionSnapshot {
         device_id: String,
         homeserver_url: String,
     },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MatrixCrossSigningState {
+    Unavailable,
+    NotSetUp,
+    Partial,
+    Ready,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MatrixCryptoStatus {
+    pub session_generation: u64,
+    pub encryption_enabled: bool,
+    pub cross_signing_state: MatrixCrossSigningState,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -173,6 +191,7 @@ pub async fn matrix_login_password(
         ));
     }
 
+    ensure_crypto_ready(&client).await?;
     let sync = start_sync_owner(&client, state.next_generation()).await?;
     let session_vault = KeyringSessionMaterialVault::new();
     persist_session_after_login(&client, &live_identity, &session_vault)
@@ -215,6 +234,21 @@ pub async fn matrix_sync_status(
         Some(active) => active.sync.observe(),
         None => unconfigured_snapshot(state.current_generation()),
     })
+}
+
+#[tauri::command]
+pub async fn matrix_crypto_status(
+    state: State<'_, MatrixAuthState>,
+) -> Result<MatrixCryptoStatus, MatrixAuthCommandError> {
+    let session = state.session.lock().await;
+    let Some(active) = session.as_ref() else {
+        return Ok(crypto_status(state.current_generation(), None));
+    };
+    let cross_signing = active.client.encryption().cross_signing_status().await;
+    Ok(crypto_status(
+        active.sync.session_generation(),
+        cross_signing,
+    ))
 }
 
 #[tauri::command]
@@ -403,6 +437,7 @@ pub async fn matrix_restore_session(
         ));
     }
 
+    ensure_crypto_ready(&client).await?;
     let sync = start_sync_owner(&client, state.next_generation()).await?;
     *session = Some(ManagedMatrixSession {
         client,
@@ -438,6 +473,39 @@ async fn start_sync_owner(
         .await
         .map_err(|error| map_sync_error(error.diagnostic_id()))?;
     Ok(owner)
+}
+
+async fn ensure_crypto_ready(client: &Client) -> Result<(), MatrixAuthCommandError> {
+    if client.encryption().cross_signing_status().await.is_none() {
+        return Err(MatrixAuthCommandError::new(
+            "Unknown",
+            "Native Matrix encryption is unavailable.",
+            "d0.5-crypto-machine-unavailable",
+        ));
+    }
+    Ok(())
+}
+
+fn crypto_status(
+    session_generation: u64,
+    cross_signing: Option<CrossSigningStatus>,
+) -> MatrixCryptoStatus {
+    MatrixCryptoStatus {
+        session_generation,
+        encryption_enabled: cross_signing.is_some(),
+        cross_signing_state: cross_signing_state(cross_signing.as_ref()),
+    }
+}
+
+fn cross_signing_state(status: Option<&CrossSigningStatus>) -> MatrixCrossSigningState {
+    match status {
+        None => MatrixCrossSigningState::Unavailable,
+        Some(status) if status.is_complete() => MatrixCrossSigningState::Ready,
+        Some(status) if status.has_master || status.has_self_signing || status.has_user_signing => {
+            MatrixCrossSigningState::Partial
+        }
+        Some(_) => MatrixCrossSigningState::NotSetUp,
+    }
 }
 
 fn map_sync_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
@@ -705,6 +773,53 @@ mod tests {
             assert!(!json.contains("refresh_token"));
             assert!(!json.contains("password"));
         }
+    }
+
+    #[test]
+    fn crypto_status_projection_is_privacy_safe_and_reports_cross_signing_shape() {
+        let status = crypto_status(
+            7,
+            Some(CrossSigningStatus {
+                has_master: true,
+                has_self_signing: false,
+                has_user_signing: false,
+            }),
+        );
+        assert!(status.encryption_enabled);
+        assert_eq!(status.cross_signing_state, MatrixCrossSigningState::Partial);
+
+        let json = serde_json::to_string(&status).unwrap();
+        assert_eq!(
+            json,
+            r#"{"sessionGeneration":7,"encryptionEnabled":true,"crossSigningState":"partial"}"#
+        );
+        for forbidden in ["token", "key", "ciphertext", "passphrase"] {
+            assert!(!json.to_ascii_lowercase().contains(forbidden));
+        }
+    }
+
+    #[test]
+    fn crypto_status_distinguishes_unavailable_unset_and_ready() {
+        assert_eq!(
+            cross_signing_state(None),
+            MatrixCrossSigningState::Unavailable
+        );
+        assert_eq!(
+            cross_signing_state(Some(&CrossSigningStatus {
+                has_master: false,
+                has_self_signing: false,
+                has_user_signing: false,
+            })),
+            MatrixCrossSigningState::NotSetUp
+        );
+        assert_eq!(
+            cross_signing_state(Some(&CrossSigningStatus {
+                has_master: true,
+                has_self_signing: true,
+                has_user_signing: true,
+            })),
+            MatrixCrossSigningState::Ready
+        );
     }
 
     #[test]
