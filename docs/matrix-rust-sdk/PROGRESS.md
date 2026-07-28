@@ -25,7 +25,7 @@
 
 | | |
 | --- | --- |
-| **Now** | **#145 P8.2 devices merged.** Primary next: **#147 P8.3** verification (tip-merged after #145; CI re-run). Then #150 backup, #151 legacy, #154 focus, #155 remote logout, #157 UTD. |
+| **Now** | **#147 P8.3 verification merged.** Primary next: **#150 P8.5** backup (tip-merged after #147; CI re-run). Then #151 legacy, #154 focus, #155 remote logout, timeline/crypto stack. |
 | **Inventory** | ~45/112 original task artifacts when program-status is synced (through P8.2 landed; see ledger). |
 | **Phase gates** | **0 / 15** strict gates closed (honest). |
 | **Open PRs → integration** | [#147](https://github.com/nepenth/synara-desktop/pull/147) verification, [#150](https://github.com/nepenth/synara-desktop/pull/150) backup/recovery, [#151](https://github.com/nepenth/synara-desktop/pull/151) legacy, [#154](https://github.com/nepenth/synara-desktop/pull/154) timeline focus, [#155](https://github.com/nepenth/synara-desktop/pull/155) remote logout, [#157](https://github.com/nepenth/synara-desktop/pull/157) UTD; [#109](https://github.com/nepenth/synara-desktop/pull/109) MiniMax (deprioritize). |
