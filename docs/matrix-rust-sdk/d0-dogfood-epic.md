@@ -77,3 +77,7 @@ L1-only open PRs (notify polish, call-state, extra media orthogona**l**, MiniMax
 | delivery-layers | L2 dogfood vertical is current priority over new L1 |
 | PROGRESS | Snapshot = D0 priority list |
 | program-status | next_task / inventory stay L1-truthful; cutover_state remains not_started until formal P11 (checker constraint) — D0 is tracked here and PROGRESS |
+
+## Orchestration
+
+Recurring loop contract: [d0-orchestrator-loop.md](d0-orchestrator-loop.md).
