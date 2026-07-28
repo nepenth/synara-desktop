@@ -1,8 +1,8 @@
-//! Privacy-safe errors for media upload queue (P6.4).
+//! Privacy-safe errors for media upload / download queues (P6.4 / P7.2).
 
 use crate::matrix::ipc::MatrixIpcErrorCategory;
 
-/// Media upload queue failure.
+/// Media upload or download queue failure.
 #[derive(Debug)]
 pub enum MediaError {
     Invalid {
@@ -42,7 +42,7 @@ impl std::fmt::Display for MediaError {
                 write!(f, "invalid media operation ({diagnostic_id})")
             }
             Self::NotFound { diagnostic_id } => {
-                write!(f, "media upload not found ({diagnostic_id})")
+                write!(f, "media job not found ({diagnostic_id})")
             }
             Self::StaleGeneration {
                 diagnostic_id,
