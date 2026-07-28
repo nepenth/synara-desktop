@@ -2,9 +2,11 @@ import { useState, useCallback } from 'react';
 import { useMatrixClient } from './useMatrixClient';
 import { useAccountDataCallback } from './useAccountDataCallback';
 
-export function useAccountData(eventType: string) {
+export function useAccountData(eventType: string, enabled = true) {
   const mx = useMatrixClient();
-  const [event, setEvent] = useState(() => mx.getAccountData(eventType as any));
+  const [event, setEvent] = useState(() =>
+    enabled ? mx.getAccountData(eventType as any) : undefined
+  );
 
   useAccountDataCallback(
     mx,
@@ -15,8 +17,9 @@ export function useAccountData(eventType: string) {
         }
       },
       [eventType, setEvent]
-    )
+    ),
+    enabled
   );
 
-  return event;
+  return enabled ? event : undefined;
 }
