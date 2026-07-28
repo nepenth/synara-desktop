@@ -9,8 +9,8 @@
 
 | Field | Value |
 | --- | --- |
-| Last updated (UTC) | **2026-07-28 ~14:05** |
-| Integration tip | `54e0419` — Merge #200 P7.5 save/share |
+| Last updated (UTC) | **2026-07-28 ~14:20** |
+| Integration tip | `73b60f4` — Merge #215 PROGRESS after #200; D0 dogfood pivot active |
 | Product runtime | Still **`matrix-js-sdk` only** until atomic sole-owner cutover |
 | Dual backend | **`false`** (forbidden forever) |
 | Operating model | [cutover-operating-model.md](cutover-operating-model.md) |
@@ -25,12 +25,12 @@
 
 | | |
 | --- | --- |
-| **Now** | **#200 P7.5 save/share merged** (tip `54e0419`). Next **#207** cache privacy / **#209** SW media boundary. |
-| **Inventory** | ~69/112 original task artifacts when program-status is synced (through P7.5 landed). |
+| **Now** | **D0 dogfood pivot.** Freeze L1-only PRs (#207/#209/P9/P10/etc.). Next: **D0.1 Rust login/session sole owner** ([#214](https://github.com/nepenth/synara-desktop/pull/214)). Then D0.2 sync+rooms → D0.3 timeline → D0.4 send. |
+| **Inventory** | **74 / 112** landed artifacts in [program-status](program-status.md) (**65 merged** on tip + **9 open-PR** foundations; tip now includes #200 P7.5). Strict gates **0/15**. Runtime still **matrix-js-sdk-only** / harness-foundation. **Do not invent other counts.** |
 | **Phase gates** | **0 / 15** strict gates closed (honest). |
-| **Open PRs → integration** | [#207](https://github.com/nepenth/synara-desktop/pull/207)/[#209](https://github.com/nepenth/synara-desktop/pull/209) media privacy/SW, crypto/notify stack needs re-tip. |
-| **Blocked on** | Re-tip + CI for #207 after #200. Serial merges. |
-| **Dogfood path** | … → attachment ✅ → **save/share ✅ (#200)** → privacy #207 → SW #209 → … |
+| **Open PRs → integration** | **D0:** [#214](https://github.com/nepenth/synara-desktop/pull/214) D0.1 login sole owner; [#212](https://github.com/nepenth/synara-desktop/pull/212) ledger+D0 docs. L1 frozen: #207/#209/P9/P10 stack. |
+| **Blocked on** | #214 Quality + Desktop package gates SUCCESS, then merge. Then dispatch D0.2 only. |
+| **Dogfood path** | **D0.1 login** → D0.2 sync+rooms → D0.3 timeline → D0.4 send. (L1 media/notify frozen mid-dogfood.) |
 
 ---
 
@@ -53,6 +53,13 @@ Update rules:
 ---
 
 ## Work log (newest first)
+
+### 2026-07-28 (ledger)
+
+| When (UTC) | Item | Result | Notes |
+| --- | --- | --- | --- |
+| — | **program-status truth resync** | **This PR** | Rebuilt from tip task docs + open plan-task PRs: **74/112** landed (65 merged). Supersedes stale 21/112 and thrashing #156. |
+
 
 ### 2026-07-28
 
