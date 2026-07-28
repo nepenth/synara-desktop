@@ -1041,3 +1041,121 @@ fn r0_7_wrong_store_key_reopen_fails_privately() {
     drop(rt);
     let _ = fs::remove_dir_all(&root);
 }
+
+// --- P3.8 remote logout + recovery copy ---
+
+#[test]
+fn p3_8_marker_includes_remote_logout() {
+    assert_eq!(matrix_lifecycle_markers(), MATRIX_LIFECYCLE_MARKER);
+    assert!(MATRIX_LIFECYCLE_MARKER.contains("p3.8"));
+}
+
+#[test]
+fn p3_8_remote_this_device_then_local_cleanup() {
+    let mut flow = RemoteLogoutFlow::new(4);
+    flow.begin(RemoteLogoutScope::ThisDevice).unwrap();
+    assert_eq!(flow.phase(), RemoteLogoutPhase::RequestingRemote);
+    assert!(flow.is_busy());
+    flow.complete_remote().unwrap();
+    assert_eq!(flow.phase(), RemoteLogoutPhase::LocalCleanupPending);
+    let out = flow.complete_local_cleanup().unwrap();
+    assert!(out.remote_succeeded);
+    assert!(!out.remote_skipped);
+    assert!(out.local_cleanup_applied);
+    assert_eq!(out.session_generation, 4);
+    assert_eq!(flow.phase(), RemoteLogoutPhase::Complete);
+    let key = copy_for_remote_outcome(
+        out.remote_succeeded,
+        out.remote_skipped,
+        out.scope,
+        out.local_policy,
+    );
+    assert_eq!(key, RecoveryCopyKey::RemoteLogoutThisDeviceOk);
+}
+
+#[test]
+fn p3_8_skip_remote_offline_then_wipe_policy() {
+    let mut flow = RemoteLogoutFlow::new(1);
+    flow.set_local_policy(LocalCleanupPolicy::WipeAccountStore)
+        .unwrap();
+    flow.begin(RemoteLogoutScope::ThisDevice).unwrap();
+    flow.skip_remote("p3.8-homeserver-unreachable").unwrap();
+    assert_eq!(flow.phase(), RemoteLogoutPhase::LocalCleanupPending);
+    let out = flow.complete_local_cleanup().unwrap();
+    assert!(out.remote_skipped);
+    assert!(!out.remote_succeeded);
+    assert_eq!(out.local_policy, LocalCleanupPolicy::WipeAccountStore);
+    let key = copy_for_remote_outcome(
+        out.remote_succeeded,
+        out.remote_skipped,
+        out.scope,
+        out.local_policy,
+    );
+    assert_eq!(key, RecoveryCopyKey::RemoteLogoutSkippedOffline);
+}
+
+#[test]
+fn p3_8_fail_remote_forbids_secret_diagnostics() {
+    let mut flow = RemoteLogoutFlow::new(1);
+    flow.begin(RemoteLogoutScope::AllDevices).unwrap();
+    let err = flow.fail_remote("leaked-access_token").unwrap_err();
+    match err {
+        LifecycleError::InvalidTarget { diagnostic_id } => {
+            assert_eq!(diagnostic_id, "p3.8-forbidden-diagnostic");
+        }
+        other => panic!("unexpected {other:?}"),
+    }
+    flow.fail_remote("p3.8-server-rejected").unwrap();
+    assert_eq!(flow.phase(), RemoteLogoutPhase::Failed);
+    flow.clear_failure().unwrap();
+    flow.begin(RemoteLogoutScope::AllDevices).unwrap();
+    assert_eq!(flow.attempts(), 2);
+}
+
+#[test]
+fn p3_8_busy_and_skip_disallowed() {
+    let mut flow = RemoteLogoutFlow::new(1);
+    flow.set_allow_skip_remote(false);
+    flow.begin(RemoteLogoutScope::ThisDevice).unwrap();
+    let err = flow.begin(RemoteLogoutScope::ThisDevice).unwrap_err();
+    match err {
+        LifecycleError::InvalidTarget { diagnostic_id } => {
+            assert_eq!(diagnostic_id, "p3.8-remote-logout-busy");
+        }
+        other => panic!("unexpected {other:?}"),
+    }
+    let err = flow.skip_remote("p3.8-offline").unwrap_err();
+    match err {
+        LifecycleError::InvalidTarget { diagnostic_id } => {
+            assert_eq!(diagnostic_id, "p3.8-skip-remote-disallowed");
+        }
+        other => panic!("unexpected {other:?}"),
+    }
+}
+
+#[test]
+fn p3_8_retire_generation_cancels_in_flight() {
+    let mut flow = RemoteLogoutFlow::new(1);
+    flow.begin(RemoteLogoutScope::ThisDevice).unwrap();
+    flow.retire_generation(9);
+    assert_eq!(flow.session_generation(), 9);
+    assert_eq!(flow.phase(), RemoteLogoutPhase::Failed);
+    assert_eq!(
+        flow.failure_diagnostic_id(),
+        Some("p3.8-stale-generation-cancelled")
+    );
+}
+
+#[test]
+fn p3_8_recovery_copy_keys_stable_and_safe() {
+    assert_eq!(RecoveryCopyKey::ALL.len(), 9);
+    for key in RecoveryCopyKey::ALL {
+        let s = recovery_copy_en(*key);
+        assert!(!s.is_empty());
+        assert_eq!(s, key.default_en());
+        let id = key.as_str();
+        assert!(!id.is_empty());
+        assert!(!id.contains(' '));
+        assert!(!s.to_ascii_lowercase().contains("access_token"));
+    }
+}
