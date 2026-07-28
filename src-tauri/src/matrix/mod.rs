@@ -53,8 +53,9 @@
 //! P8.6: Room-key import/export transfer foundation (harness; no key material).
 //! P8.8: Crypto-store continuity / corruption handling foundation (harness).
 //! P8.3: Verification request inbox + SAS display foundation (harness; no secrets).
-//! No production login/sync loop or Tauri command registration lives here yet.
-//! No dual-backend selector. Product runtime remains matrix-js-sdk.
+//! D0.1–D0.3 add the production desktop login, sync/room-list, and opened-room
+//! timeline read path. No dual-backend selector; remaining product slices are
+//! migrated incrementally.
 
 pub mod account_data;
 pub mod auth;
