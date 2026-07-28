@@ -11,6 +11,7 @@
 //! P3.1: Discovery and login-flow service (harness; no login execution).
 //! P3.2: Password/token login + device naming (harness).
 //! P3.3: SSO / OAuth callback lifecycle foundation (harness; no tokens stored).
+//! P3.4: Interactive auth (UIA) multi-stage foundation (harness; no secrets).
 //! P3.5: Session secret / refresh-token persistence foundation (host vault only).
 //! P3.8: Remote logout flow + recovery UX copy keys (harness).
 //! P4.1: Sync service readiness / reconnect model (harness foundation).
@@ -156,5 +157,5 @@ pub fn matrix_ipc_schema_markers() -> &'static str {
     debug_assert_eq!(_media, media::MATRIX_MEDIA_MARKER);
     debug_assert_eq!(_notifications, notifications::MATRIX_NOTIFICATIONS_MARKER);
     debug_assert_eq!(_widgets, widgets::MATRIX_WIDGETS_MARKER);
-    "matrix-ipc-protocol-v1+domain-dtos-p1.4+supervisor-p2.1+store-p2.2+client-builder-p2.3+tasks-p2.4+diagnostics-p2.5+lifecycle-p2.6+auth-p3.3+session-persist-p3.5+sync-p4.1+room-list-p4.2+routes-p4.8+spaces-p4.5+members-p4.6+timeline-p5.1+diffs-p5.2+pagination-p5.3+search-p6.8+relations-p5.6+send-p6.1+receipts-p6.2+typing-p6.3+media-p6.4+threads-p5.8+notifications-p7.1+security-p8.1+cross-signing-p8.4+widgets-p9.1+legacy-p3.7+devices-p8.2+verification-p8.3+backup-p8.5+crypto-store-p8.8"
+    "matrix-ipc-protocol-v1+domain-dtos-p1.4+supervisor-p2.1+store-p2.2+client-builder-p2.3+tasks-p2.4+diagnostics-p2.5+lifecycle-p2.6+auth-p3.3+p3.4+session-persist-p3.5+sync-p4.1+room-list-p4.2+routes-p4.8+spaces-p4.5+members-p4.6+timeline-p5.1+diffs-p5.2+pagination-p5.3+search-p6.8+relations-p5.6+send-p6.1+receipts-p6.2+typing-p6.3+media-p6.4+threads-p5.8+notifications-p7.1+security-p8.1+cross-signing-p8.4+widgets-p9.1+legacy-p3.7+devices-p8.2+verification-p8.3+backup-p8.5+crypto-store-p8.8"
 }
