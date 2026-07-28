@@ -4,10 +4,10 @@
 //! homeserver URL, proxy/network policy, user agent, SQLite stores, crypto
 //! settings, request timeouts, and approved Cargo features.
 //!
-//! **Harness / foundation only until cutover.** No production login/sync loop,
-//! no Matrix Tauri commands, no dual-backend selector. Product runtime remains
-//! `matrix-js-sdk`. This module is the **only** production construction site
-//! for `Client::builder` under `src-tauri/src/matrix/`.
+//! D0.1 uses this builder for the production native password-login client.
+//! Native sync remains out of scope and there is no dual-backend selector.
+//! This module is the **only** production construction site for
+//! `Client::builder` under `src-tauri/src/matrix/`.
 //!
 //! Authoritative design note: `docs/matrix-rust-sdk/p2.3-sdk-client-builder.md`
 

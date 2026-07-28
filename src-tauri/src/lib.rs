@@ -120,6 +120,7 @@ pub fn run() {
     #[cfg(any(target_os = "android", target_os = "ios"))]
     let updater_configured = false;
     let mut builder = tauri::Builder::default()
+        .manage(matrix::auth::MatrixAuthState::new())
         .plugin(tauri_plugin_localhost::Builder::new(port).build())
         .plugin(tauri_plugin_window_state::Builder::default().build())
         .plugin(tauri_plugin_clipboard_manager::init())
@@ -157,7 +158,11 @@ pub fn run() {
             desktop_logging::desktop_read_diagnostics,
             desktop_logging::desktop_clear_diagnostics,
             desktop_spellcheck::desktop_enable_spellcheck,
-            desktop_agent_actions::desktop_agent_action
+            desktop_agent_actions::desktop_agent_action,
+            matrix::auth::product::matrix_login_password,
+            matrix::auth::product::matrix_session_snapshot,
+            matrix::auth::product::matrix_logout,
+            matrix::auth::product::matrix_restore_session
         ])
         .on_window_event(|window, event| {
             if window.label() != desktop::MAIN_WINDOW_LABEL {

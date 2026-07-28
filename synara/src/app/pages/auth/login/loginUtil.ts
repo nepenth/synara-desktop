@@ -13,6 +13,7 @@ import { getHomePath } from '../../pathUtils';
 import { platformSessionStore } from '../../../platform';
 import { persistAuthenticatedSession } from '../../../state/sessionPersistence';
 import { pushSessionToSW } from '../../../../sw-session';
+import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../../utils/desktop';
 
 export enum GetBaseUrlError {
   NotAllow = 'NotAllow',
@@ -59,12 +60,26 @@ export type CustomLoginResponse = {
   baseUrl: string;
   response: LoginResponse;
 };
-export const login = async (
-  serverBaseUrl: string | (() => Promise<string>),
-  data: LoginRequest
-): Promise<CustomLoginResponse> => {
-  const [urlError, url] =
-    typeof serverBaseUrl === 'function' ? await to(serverBaseUrl()) : [undefined, serverBaseUrl];
+
+export type NativeLoginIdentity = {
+  userId: string;
+  deviceId: string;
+  homeserverUrl: string;
+};
+
+export type NativeLoginResponse = {
+  native: true;
+  identity: NativeLoginIdentity;
+};
+
+export type PasswordLoginResponse = CustomLoginResponse | NativeLoginResponse;
+
+const resolveLoginBaseUrl = async (
+  serverBaseUrl: string | (() => Promise<string>)
+): Promise<string> => {
+  if (typeof serverBaseUrl === 'string') return serverBaseUrl;
+
+  const [urlError, url] = await to(serverBaseUrl());
   if (urlError) {
     throw new MatrixError({
       errcode:
@@ -73,6 +88,17 @@ export const login = async (
           : LoginError.InvalidServer,
     });
   }
+  if (!url) {
+    throw new MatrixError({ errcode: LoginError.InvalidServer });
+  }
+  return url;
+};
+
+export const login = async (
+  serverBaseUrl: string | (() => Promise<string>),
+  data: LoginRequest
+): Promise<CustomLoginResponse> => {
+  const url = await resolveLoginBaseUrl(serverBaseUrl);
 
   const mx = createClient({ baseUrl: url });
   const [err, res] = await to<LoginResponse, MatrixError>(mx.loginRequest(data));
@@ -110,6 +136,67 @@ export const login = async (
   };
 };
 
+type NativeCommandError = {
+  code?: string;
+};
+
+const mapNativeLoginError = (error: unknown): MatrixError => {
+  const code =
+    typeof error === 'object' && error !== null ? (error as NativeCommandError).code : undefined;
+  const errcode = Object.values(LoginError).includes(code as LoginError)
+    ? (code as LoginError)
+    : LoginError.Unknown;
+  return new MatrixError({ errcode });
+};
+
+const passwordLoginUser = (data: LoginRequest): string | undefined => {
+  const request = data as LoginRequest & {
+    password?: string;
+    identifier?: {
+      user?: string;
+      address?: string;
+    };
+  };
+  return request.identifier?.user ?? request.identifier?.address;
+};
+
+export const loginPassword = async (
+  serverBaseUrl: string | (() => Promise<string>),
+  data: LoginRequest
+): Promise<PasswordLoginResponse> => {
+  if (!isSynaraDesktop()) {
+    return login(serverBaseUrl, data);
+  }
+
+  const url = await resolveLoginBaseUrl(serverBaseUrl);
+  const user = passwordLoginUser(data);
+  const password = (data as LoginRequest & { password?: string }).password;
+  if (!user || !password) {
+    throw new MatrixError({ errcode: LoginError.InvalidRequest });
+  }
+
+  try {
+    const result = await invokeDesktopWithAvailability<NativeLoginIdentity>(
+      'matrix_login_password',
+      {
+        homeserverUrl: url,
+        user,
+        password,
+      }
+    );
+    if (!result.available || !result.value) {
+      throw new MatrixError({ errcode: LoginError.Unknown });
+    }
+    return {
+      native: true,
+      identity: result.value,
+    };
+  } catch (error) {
+    if (error instanceof MatrixError) throw error;
+    throw mapNativeLoginError(error);
+  }
+};
+
 export type CompleteAuthenticatedLoginDeps = {
   persistAuthenticatedSession: typeof persistAuthenticatedSession;
   pushSessionToSW: typeof pushSessionToSW;
@@ -142,7 +229,7 @@ export const completeAuthenticatedLogin = async (
   pushSession(loginBaseUrl, loginRes.access_token);
 };
 
-export const useLoginComplete = (data?: CustomLoginResponse) => {
+export const useLoginComplete = (data?: CustomLoginResponse | NativeLoginResponse) => {
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -150,7 +237,9 @@ export const useLoginComplete = (data?: CustomLoginResponse) => {
 
     let active = true;
     const persistAndNavigate = async () => {
-      await completeAuthenticatedLogin(data);
+      if (!('native' in data)) {
+        await completeAuthenticatedLogin(data);
+      }
       if (!active) return;
       const afterLoginRedirectUrl = getAfterLoginRedirectPath();
       deleteAfterLoginRedirectPath();

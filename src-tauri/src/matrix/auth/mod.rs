@@ -9,10 +9,10 @@
 //! - platform device display names (`Synara macOS` / `Synara Linux` / …)
 //! - stable Synara domain types (not raw SDK / Ruma on the boundary)
 //! - optional thin bridge into P2.3 client-builder identity/homeserver URL
+//! - D0.1 production Tauri password-login/session ownership
 //!
-//! **Out of scope:** session restore (P3.6), production Matrix Tauri commands,
-//! dual-backend, dual sync.
-//! Session secret persist after login lives in [`crate::matrix::lifecycle`] (P3.5).
+//! **Out of scope:** dual-backend, dual sync, rooms, timelines.
+//! Session secret persist/restore lives in [`crate::matrix::lifecycle`].
 //!
 //! Authoritative design notes:
 //! - `docs/matrix-rust-sdk/p3.1-discovery-login-flow.md`
@@ -31,6 +31,7 @@ mod http_transport;
 mod input;
 mod login;
 mod login_flow;
+pub(crate) mod product;
 mod sso_callback;
 mod uia;
 
@@ -59,6 +60,9 @@ pub use login::{
 pub use login_flow::{
     discover_login_flows, map_matrix_login_types, LoginFlow, LoginFlowDiscoveryResult,
     LoginFlowKind, LoginFlowTransport, MockLoginFlowTransport, SsoIdentityProvider,
+};
+pub use product::{
+    MatrixAuthCommandError, MatrixAuthState, MatrixLoginIdentity, MatrixSessionSnapshot,
 };
 pub use sso_callback::{
     SsoCallbackFlow, SsoCallbackOutcome, SsoCallbackPhase, MAX_PENDING_SSO_FLOWS,
