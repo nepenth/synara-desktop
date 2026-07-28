@@ -615,6 +615,30 @@
           "markdownDescription": "Enables the matrix_room_list_snapshot command without any pre-configured scope."
         },
         {
+          "description": "Enables the matrix_secret_storage_bootstrap command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-secret-storage-bootstrap",
+          "markdownDescription": "Enables the matrix_secret_storage_bootstrap command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_secret_storage_reset command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-secret-storage-reset",
+          "markdownDescription": "Enables the matrix_secret_storage_reset command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_secret_storage_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-secret-storage-status",
+          "markdownDescription": "Enables the matrix_secret_storage_status command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_secret_storage_unlock command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-secret-storage-unlock",
+          "markdownDescription": "Enables the matrix_secret_storage_unlock command without any pre-configured scope."
+        },
+        {
           "description": "Enables the matrix_send_text command without any pre-configured scope.",
           "type": "string",
           "const": "allow-matrix-send-text",
@@ -967,6 +991,30 @@
           "type": "string",
           "const": "deny-matrix-room-list-snapshot",
           "markdownDescription": "Denies the matrix_room_list_snapshot command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_secret_storage_bootstrap command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-secret-storage-bootstrap",
+          "markdownDescription": "Denies the matrix_secret_storage_bootstrap command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_secret_storage_reset command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-secret-storage-reset",
+          "markdownDescription": "Denies the matrix_secret_storage_reset command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_secret_storage_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-secret-storage-status",
+          "markdownDescription": "Denies the matrix_secret_storage_status command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_secret_storage_unlock command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-secret-storage-unlock",
+          "markdownDescription": "Denies the matrix_secret_storage_unlock command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_send_text command without any pre-configured scope.",

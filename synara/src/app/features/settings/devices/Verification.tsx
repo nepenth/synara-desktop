@@ -47,6 +47,7 @@ import {
   startNativeCrossSigningSetup,
 } from '../../cross-signing/nativeCrossSigning';
 import { PasswordInput } from '../../../components/password-input';
+import { NativeSecretStorageGate } from '../../../components/SecretStorage';
 
 type VerificationStatusBadgeProps = {
   verificationStatus: VerificationStatus;
@@ -427,6 +428,7 @@ function NativeEnableVerification({
 
 function NativeCrossSigningSetup({ onCancel }: { onCancel: () => void }) {
   const [authenticationRequired, setAuthenticationRequired] = useState(false);
+  const [crossSigningComplete, setCrossSigningComplete] = useState(false);
   const [working, setWorking] = useState(false);
   const [setupError, setSetupError] = useState<string>();
 
@@ -438,7 +440,7 @@ function NativeCrossSigningSetup({ onCancel }: { onCancel: () => void }) {
       if (result.outcome === 'authentication_required') {
         setAuthenticationRequired(true);
       } else {
-        onCancel();
+        setCrossSigningComplete(true);
       }
     } catch (error) {
       setSetupError(error instanceof Error ? error.message : 'Cross-signing setup failed.');
@@ -457,7 +459,7 @@ function NativeCrossSigningSetup({ onCancel }: { onCancel: () => void }) {
     setSetupError(undefined);
     try {
       await authenticateNativeCrossSigningSetup(password);
-      onCancel();
+      setCrossSigningComplete(true);
     } catch (error) {
       setSetupError(error instanceof Error ? error.message : 'Cross-signing setup failed.');
     } finally {
@@ -484,33 +486,50 @@ function NativeCrossSigningSetup({ onCancel }: { onCancel: () => void }) {
         </IconButton>
       </Header>
       <Box
-        as={authenticationRequired ? 'form' : undefined}
-        onSubmit={authenticationRequired ? authenticate : undefined}
+        as={authenticationRequired && !crossSigningComplete ? 'form' : undefined}
+        onSubmit={authenticationRequired && !crossSigningComplete ? authenticate : undefined}
         style={{ padding: config.space.S400 }}
         direction="Column"
         gap="400"
       >
-        <Text size="T300">
-          Synara will create and securely store your cross-signing identity on this device.
-        </Text>
-        {authenticationRequired && (
-          <Box direction="Column" gap="100">
-            <Text size="L400">Account Password</Text>
-            <PasswordInput name="password" size="400" readOnly={working} autoFocus />
-          </Box>
-        )}
-        <Button
-          type={authenticationRequired ? 'submit' : 'button'}
-          onClick={authenticationRequired ? undefined : startSetup}
-          disabled={working}
-          before={working && <Spinner size="200" variant="Primary" fill="Solid" />}
-        >
-          <Text size="B400">{authenticationRequired ? 'Authenticate' : 'Continue'}</Text>
-        </Button>
-        {setupError && (
-          <Text size="T200" style={{ color: color.Critical.Main }}>
-            {setupError}
-          </Text>
+        {crossSigningComplete ? (
+          <NativeSecretStorageGate>
+            {() => (
+              <>
+                <Text size="T300">
+                  Device verification and account recovery are configured for this session.
+                </Text>
+                <Button type="button" onClick={onCancel}>
+                  <Text size="B400">Done</Text>
+                </Button>
+              </>
+            )}
+          </NativeSecretStorageGate>
+        ) : (
+          <>
+            <Text size="T300">
+              Synara will create and securely store your cross-signing identity on this device.
+            </Text>
+            {authenticationRequired && (
+              <Box direction="Column" gap="100">
+                <Text size="L400">Account Password</Text>
+                <PasswordInput name="password" size="400" readOnly={working} autoFocus />
+              </Box>
+            )}
+            <Button
+              type={authenticationRequired ? 'submit' : 'button'}
+              onClick={authenticationRequired ? undefined : startSetup}
+              disabled={working}
+              before={working && <Spinner size="200" variant="Primary" fill="Solid" />}
+            >
+              <Text size="B400">{authenticationRequired ? 'Authenticate' : 'Continue'}</Text>
+            </Button>
+            {setupError && (
+              <Text size="T200" style={{ color: color.Critical.Main }}>
+                {setupError}
+              </Text>
+            )}
+          </>
         )}
       </Box>
     </Dialog>

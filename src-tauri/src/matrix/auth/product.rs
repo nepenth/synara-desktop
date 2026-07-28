@@ -39,6 +39,9 @@ use crate::matrix::lifecycle::{
     KeyringSessionMaterialVault,
 };
 use crate::matrix::room_list::{snapshot_from_sync_owner, NativeRoomListSnapshot};
+use crate::matrix::secret_storage::live::{
+    self as live_secret_storage, NativeSecretStorageOperationResult, NativeSecretStorageStatus,
+};
 use crate::matrix::send::SendQueue;
 use crate::matrix::store::{
     get_or_create_store_key, AccountIdentity, KeyringStoreKeyVault, StoreKeyId,
@@ -500,6 +503,96 @@ async fn matrix_backup_repair_inner(
         recovery_secret,
     )
     .await
+}
+
+#[tauri::command]
+pub async fn matrix_secret_storage_status(
+    state: State<'_, MatrixAuthState>,
+) -> Result<NativeSecretStorageStatus, MatrixAuthCommandError> {
+    let session = state.session.lock().await;
+    let active = require_secret_storage_session(session.as_ref())?;
+    live_secret_storage::status(&active.client, active.sync.session_generation()).await
+}
+
+#[tauri::command]
+pub async fn matrix_secret_storage_bootstrap(
+    state: State<'_, MatrixAuthState>,
+    mut passphrase: String,
+) -> Result<NativeSecretStorageOperationResult, MatrixAuthCommandError> {
+    let result = matrix_secret_storage_bootstrap_inner(&state, &passphrase).await;
+    passphrase.zeroize();
+    result
+}
+
+async fn matrix_secret_storage_bootstrap_inner(
+    state: &State<'_, MatrixAuthState>,
+    passphrase: &str,
+) -> Result<NativeSecretStorageOperationResult, MatrixAuthCommandError> {
+    require_secret_storage_input(passphrase, "v-crypto.4-bootstrap-passphrase-empty")?;
+    let session = state.session.lock().await;
+    let active = require_secret_storage_session(session.as_ref())?;
+    live_secret_storage::bootstrap(&active.client, active.sync.session_generation(), passphrase)
+        .await
+}
+
+#[tauri::command]
+pub async fn matrix_secret_storage_unlock(
+    state: State<'_, MatrixAuthState>,
+    mut recovery_secret: String,
+) -> Result<NativeSecretStorageOperationResult, MatrixAuthCommandError> {
+    let result = matrix_secret_storage_unlock_inner(&state, &recovery_secret).await;
+    recovery_secret.zeroize();
+    result
+}
+
+async fn matrix_secret_storage_unlock_inner(
+    state: &State<'_, MatrixAuthState>,
+    recovery_secret: &str,
+) -> Result<NativeSecretStorageOperationResult, MatrixAuthCommandError> {
+    require_secret_storage_input(recovery_secret, "v-crypto.4-unlock-secret-empty")?;
+    let session = state.session.lock().await;
+    let active = require_secret_storage_session(session.as_ref())?;
+    live_secret_storage::unlock(
+        &active.client,
+        active.sync.session_generation(),
+        recovery_secret,
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn matrix_secret_storage_reset(
+    state: State<'_, MatrixAuthState>,
+    mut passphrase: String,
+) -> Result<NativeSecretStorageOperationResult, MatrixAuthCommandError> {
+    let result = matrix_secret_storage_reset_inner(&state, &passphrase).await;
+    passphrase.zeroize();
+    result
+}
+
+async fn matrix_secret_storage_reset_inner(
+    state: &State<'_, MatrixAuthState>,
+    passphrase: &str,
+) -> Result<NativeSecretStorageOperationResult, MatrixAuthCommandError> {
+    require_secret_storage_input(passphrase, "v-crypto.4-reset-passphrase-empty")?;
+    let session = state.session.lock().await;
+    let active = require_secret_storage_session(session.as_ref())?;
+    live_secret_storage::reset(&active.client, active.sync.session_generation(), passphrase).await
+}
+
+fn require_secret_storage_input(
+    value: &str,
+    diagnostic_id: &'static str,
+) -> Result<(), MatrixAuthCommandError> {
+    if value.is_empty() {
+        Err(MatrixAuthCommandError::new(
+            "InvalidRequest",
+            "A recovery key or passphrase is required.",
+            diagnostic_id,
+        ))
+    } else {
+        Ok(())
+    }
 }
 
 fn require_recovery_secret(recovery_secret: &str) -> Result<(), MatrixAuthCommandError> {
@@ -1017,6 +1110,18 @@ fn require_backup_session(
             "Forbidden",
             "No native Matrix session is active.",
             "v-crypto.3-backup-requires-session",
+        )
+    })
+}
+
+fn require_secret_storage_session(
+    session: Option<&ManagedMatrixSession>,
+) -> Result<&ManagedMatrixSession, MatrixAuthCommandError> {
+    session.ok_or_else(|| {
+        MatrixAuthCommandError::new(
+            "Forbidden",
+            "No native Matrix session is active.",
+            "v-crypto.4-secret-storage-requires-session",
         )
     })
 }
