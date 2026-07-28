@@ -1,10 +1,10 @@
-//! Privacy-safe errors for media upload / download queues (P6.4 / P7.2).
+//! Privacy-safe errors for media cache index (P7.3).
 
 use crate::matrix::ipc::MatrixIpcErrorCategory;
 
-/// Media upload or download queue failure.
+/// Media cache index failure.
 #[derive(Debug)]
-pub enum MediaError {
+pub enum MediaCacheError {
     Invalid {
         diagnostic_id: &'static str,
     },
@@ -18,7 +18,7 @@ pub enum MediaError {
     },
 }
 
-impl MediaError {
+impl MediaCacheError {
     pub fn diagnostic_id(&self) -> &'static str {
         match self {
             Self::Invalid { diagnostic_id }
@@ -35,14 +35,14 @@ impl MediaError {
     }
 }
 
-impl std::fmt::Display for MediaError {
+impl std::fmt::Display for MediaCacheError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Invalid { diagnostic_id } => {
-                write!(f, "invalid media operation ({diagnostic_id})")
+                write!(f, "invalid media cache operation ({diagnostic_id})")
             }
             Self::NotFound { diagnostic_id } => {
-                write!(f, "media job not found ({diagnostic_id})")
+                write!(f, "media cache entry not found ({diagnostic_id})")
             }
             Self::StaleGeneration {
                 diagnostic_id,
@@ -50,10 +50,10 @@ impl std::fmt::Display for MediaError {
                 observed,
             } => write!(
                 f,
-                "stale media generation ({diagnostic_id}): expected {expected}, observed {observed}"
+                "stale media cache generation ({diagnostic_id}): expected {expected}, observed {observed}"
             ),
         }
     }
 }
 
-impl std::error::Error for MediaError {}
+impl std::error::Error for MediaCacheError {}
