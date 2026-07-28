@@ -21,7 +21,7 @@ export const useDeviceVerificationDetect = (
   crypto: CryptoApi | undefined,
   userId: string,
   deviceId: string | undefined,
-  callback: (status: VerificationStatus) => void,
+  callback: (status: VerificationStatus) => void
 ): void => {
   const mx = useMatrixClient();
   const nativeSession = isNativeMatrixSession();
@@ -38,8 +38,8 @@ export const useDeviceVerificationDetect = (
           status === 'verified'
             ? VerificationStatus.Verified
             : status === 'unverified'
-              ? VerificationStatus.Unverified
-              : VerificationStatus.Unsupported,
+            ? VerificationStatus.Unverified
+            : VerificationStatus.Unsupported
         );
       } catch {
         callback(VerificationStatus.Unsupported);
@@ -75,16 +75,16 @@ export const useDeviceVerificationDetect = (
           updateStatus();
         }
       },
-      [userId, updateStatus],
+      [userId, updateStatus]
     ),
-    !nativeSession,
+    !nativeSession
   );
 };
 
 export const useDeviceVerificationStatus = (
   crypto: CryptoApi | undefined,
   userId: string,
-  deviceId: string | undefined,
+  deviceId: string | undefined
 ): VerificationStatus => {
   const [verificationStatus, setVerificationStatus] = useState(VerificationStatus.Unknown);
 
@@ -96,7 +96,7 @@ export const useDeviceVerificationStatus = (
 export const useUnverifiedDeviceCount = (
   crypto: CryptoApi | undefined,
   userId: string,
-  devices: string[],
+  devices: string[]
 ): number | undefined => {
   const [unverifiedCount, setUnverifiedCount] = useState<number>();
   const alive = useAlive();
@@ -106,7 +106,7 @@ export const useUnverifiedDeviceCount = (
     let count = 0;
     if (nativeSession) {
       const result = await Promise.allSettled(
-        devices.map((deviceId) => getNativeDeviceVerificationStatus(deviceId)),
+        devices.map((deviceId) => getNativeDeviceVerificationStatus(deviceId))
       );
       const settledResult = fulfilledPromiseSettledResult(result);
       settledResult.forEach((status) => {
@@ -134,9 +134,9 @@ export const useUnverifiedDeviceCount = (
           updateCount();
         }
       },
-      [userId, updateCount],
+      [userId, updateCount]
     ),
-    !nativeSession,
+    !nativeSession
   );
 
   useEffect(() => {

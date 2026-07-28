@@ -268,11 +268,11 @@ export function ClientRoot({ children }: ClientRootProps) {
         });
         return client;
       })();
-    }, []),
+    }, [])
   );
   const mx = loadState.status === AsyncStatus.Success ? loadState.data : undefined;
   const [startState, startMatrix] = useAsyncCallback<void, Error, [MatrixClient]>(
-    useCallback((m) => startClient(m), []),
+    useCallback((m) => startClient(m), [])
   );
 
   useLogoutListener(mx);
@@ -305,7 +305,7 @@ export function ClientRoot({ children }: ClientRootProps) {
         setLoading(false);
         setSyncTimedOut(false);
       }
-    }, []),
+    }, [])
   );
 
   useEffect(() => {

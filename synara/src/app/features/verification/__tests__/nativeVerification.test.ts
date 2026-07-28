@@ -8,7 +8,7 @@ import {
 
 const request = (
   direction: NativeVerificationRequest['direction'],
-  phase: NativeVerificationRequest['phase'],
+  phase: NativeVerificationRequest['phase']
 ): NativeVerificationRequest => ({
   flowId: 'flow',
   otherUserId: '@alice:example.org',

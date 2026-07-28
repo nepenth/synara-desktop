@@ -161,7 +161,7 @@ function LegacyVerifyCurrentDeviceTile({
 
   const requestVerification = useAsync<VerificationRequest, Error, []>(
     useCallback(() => crypto.requestOwnUserVerification(), [crypto]),
-    setRequestState,
+    setRequestState
   );
 
   const handleExit = useCallback(() => {
@@ -298,7 +298,7 @@ function LegacyVerifyOtherDeviceTile({
       const requestPromise = crypto.requestDeviceVerification(mx.getSafeUserId(), deviceId);
       return requestPromise;
     }, [mx, crypto, deviceId]),
-    setRequestState,
+    setRequestState
   );
 
   const handleExit = useCallback(() => {
@@ -409,7 +409,7 @@ export function DeviceVerificationOptions() {
       void openExternalUrl(
         withSearchParam(authUrl, {
           action: accountManagementActions.crossSigningReset,
-        }),
+        })
       );
       return;
     }

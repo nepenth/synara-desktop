@@ -218,7 +218,7 @@ type SasVerificationProps = {
 };
 function SasVerification({ verifier, onVerifierCancel }: SasVerificationProps) {
   const [sasData, setSasData] = useState<ShowSasCallbacks | undefined>(() =>
-    getInitialSasCallbacks(verifier),
+    getInitialSasCallbacks(verifier)
   );
   const [verifyError, setVerifyError] = useState<string>();
   const [verifyAttempt, setVerifyAttempt] = useState(0);

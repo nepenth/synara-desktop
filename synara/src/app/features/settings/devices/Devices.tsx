@@ -51,19 +51,19 @@ export function Devices({ requestClose }: DevicesProps) {
   const verificationStatus = useDeviceVerificationStatus(
     crypto,
     mx.getSafeUserId(),
-    currentDevice?.device_id,
+    currentDevice?.device_id
   );
 
   const otherDevicesId = useDeviceIds(otherDevices);
   const unverifiedDeviceCount = useUnverifiedDeviceCount(
     crypto,
     mx.getSafeUserId(),
-    otherDevicesId,
+    otherDevicesId
   );
 
   const defaultSecretStorageKeyId = useSecretStorageDefaultKeyId();
   const defaultSecretStorageKeyContent = useSecretStorageKeyContent(
-    defaultSecretStorageKeyId ?? '',
+    defaultSecretStorageKeyId ?? ''
   );
 
   return (
