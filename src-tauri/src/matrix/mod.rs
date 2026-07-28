@@ -53,6 +53,7 @@
 //! No production login/sync loop or Tauri command registration lives here yet.
 //! No dual-backend selector. Product runtime remains matrix-js-sdk.
 
+pub mod account_data;
 pub mod auth;
 pub mod backup;
 pub mod client_builder;
@@ -115,6 +116,7 @@ pub fn matrix_ipc_schema_markers() -> &'static str {
     let _tasks = tasks::matrix_tasks_markers();
     let _diagnostics = diagnostics::matrix_diagnostics_markers();
     let _lifecycle = lifecycle::matrix_lifecycle_markers();
+    let _account_data = account_data::matrix_account_data_markers();
     let _auth = auth::matrix_auth_markers();
     let _sync = sync::matrix_sync_markers();
     let _room_keys = room_keys::matrix_room_keys_markers();
@@ -165,6 +167,7 @@ pub fn matrix_ipc_schema_markers() -> &'static str {
     debug_assert_eq!(_tasks, tasks::MATRIX_TASKS_MARKER);
     debug_assert_eq!(_diagnostics, diagnostics::MATRIX_DIAGNOSTICS_MARKER);
     debug_assert_eq!(_lifecycle, lifecycle::MATRIX_LIFECYCLE_MARKER);
+    debug_assert_eq!(_account_data, account_data::MATRIX_ACCOUNT_DATA_MARKER);
     debug_assert_eq!(_auth, auth::MATRIX_AUTH_MARKER);
     debug_assert_eq!(_sync, sync::MATRIX_SYNC_MARKER);
     debug_assert_eq!(_room_keys, room_keys::MATRIX_ROOM_KEYS_MARKER);
@@ -198,5 +201,5 @@ pub fn matrix_ipc_schema_markers() -> &'static str {
     debug_assert_eq!(_room_ops, room_ops::MATRIX_ROOM_OPS_MARKER);
     debug_assert_eq!(_room_profile, room_profile::MATRIX_ROOM_PROFILE_MARKER);
     debug_assert_eq!(_widgets, widgets::MATRIX_WIDGETS_MARKER);
-    "matrix-ipc-protocol-v1+domain-dtos-p1.4+supervisor-p2.1+store-p2.2+client-builder-p2.3+tasks-p2.4+diagnostics-p2.5+lifecycle-p2.6+auth-p3.3+p3.4+session-persist-p3.5+sync-p4.1+room-list-p4.2+routes-p4.8+spaces-p4.5+members-p4.6+timeline-p5.1+diffs-p5.2+pagination-p5.3+search-p6.8+relations-p5.6+send-p6.1+receipts-p6.2+typing-p6.3+media-p6.4+download-p7.2+room-profile-p6.5+threads-p5.8+notifications-p7.1+security-p8.1+cross-signing-p8.4+widgets-p9.1+legacy-p3.7+devices-p8.2+verification-p8.3+backup-p8.5+user-profile-p6.6+room-ops-p6.9+crypto-store-p8.8+presence-p4.7+room-keys-p8.6+utd-recovery-p8.7+polls-p5.7+unread-p5.5+raw-content-p5.9+media-cache-p7.3"
+    "matrix-ipc-protocol-v1+domain-dtos-p1.4+supervisor-p2.1+store-p2.2+client-builder-p2.3+tasks-p2.4+diagnostics-p2.5+lifecycle-p2.6+auth-p3.3+p3.4+session-persist-p3.5+sync-p4.1+room-list-p4.2+routes-p4.8+spaces-p4.5+members-p4.6+timeline-p5.1+diffs-p5.2+pagination-p5.3+search-p6.8+relations-p5.6+send-p6.1+receipts-p6.2+typing-p6.3+media-p6.4+download-p7.2+room-profile-p6.5+threads-p5.8+notifications-p7.1+security-p8.1+cross-signing-p8.4+widgets-p9.1+legacy-p3.7+devices-p8.2+verification-p8.3+backup-p8.5+user-profile-p6.6+room-ops-p6.9+crypto-store-p8.8+presence-p4.7+room-keys-p8.6+utd-recovery-p8.7+polls-p5.7+unread-p5.5+raw-content-p5.9+account-data-p6.7+media-cache-p7.3"
 }
