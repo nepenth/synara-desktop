@@ -1,10 +1,11 @@
-//! D0.1 product password-login and native session ownership.
+//! D0.1/D0.2 product password-login, native session, and sync ownership.
 //!
 //! This is the only desktop product boundary for password login. The live
 //! `matrix_sdk::Client` and all access/refresh tokens remain in the Rust host.
 
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use matrix_sdk::Client;
 use serde::{Deserialize, Serialize};
@@ -17,8 +18,13 @@ use crate::matrix::lifecycle::{
     clear_session_material, persist_session_after_login, restore_session_from_vault,
     KeyringSessionMaterialVault,
 };
+use crate::matrix::room_list::{snapshot_from_sync_owner, NativeRoomListSnapshot};
 use crate::matrix::store::{
     get_or_create_store_key, AccountIdentity, KeyringStoreKeyVault, StoreKeyId,
+};
+use crate::matrix::sync::{
+    build_sync_service, unconfigured_snapshot, SyncReadinessSnapshot, SyncServiceConfig,
+    SyncServiceOwner,
 };
 
 const ACTIVE_SESSION_FILE: &str = "active-session.json";
@@ -80,11 +86,13 @@ impl MatrixAuthCommandError {
 struct ManagedMatrixSession {
     client: Client,
     identity: MatrixLoginIdentity,
+    sync: SyncServiceOwner,
 }
 
 #[derive(Default)]
 pub struct MatrixAuthState {
     session: Mutex<Option<ManagedMatrixSession>>,
+    next_session_generation: AtomicU64,
 }
 
 impl MatrixAuthState {
@@ -140,6 +148,7 @@ pub async fn matrix_login_password(
         ));
     }
 
+    let sync = start_sync_owner(&client, state.next_generation()).await?;
     let session_vault = KeyringSessionMaterialVault::new();
     persist_session_after_login(&client, &live_identity, &session_vault)
         .map_err(|_| MatrixAuthCommandError::unavailable("d0.1-session-persist-failed"))?;
@@ -157,6 +166,7 @@ pub async fn matrix_login_password(
     *session = Some(ManagedMatrixSession {
         client,
         identity: identity.clone(),
+        sync,
     });
     Ok(identity)
 }
@@ -167,6 +177,34 @@ pub async fn matrix_session_snapshot(
 ) -> Result<MatrixSessionSnapshot, MatrixAuthCommandError> {
     let session = state.session.lock().await;
     Ok(snapshot(session.as_ref()))
+}
+
+#[tauri::command]
+pub async fn matrix_sync_status(
+    state: State<'_, MatrixAuthState>,
+) -> Result<SyncReadinessSnapshot, MatrixAuthCommandError> {
+    let session = state.session.lock().await;
+    Ok(match session.as_ref() {
+        Some(active) => active.sync.observe(),
+        None => unconfigured_snapshot(state.current_generation()),
+    })
+}
+
+#[tauri::command]
+pub async fn matrix_room_list_snapshot(
+    state: State<'_, MatrixAuthState>,
+) -> Result<NativeRoomListSnapshot, MatrixAuthCommandError> {
+    let session = state.session.lock().await;
+    let active = session.as_ref().ok_or_else(|| {
+        MatrixAuthCommandError::new(
+            "Forbidden",
+            "No native Matrix session is active.",
+            "d0.2-room-list-requires-session",
+        )
+    })?;
+    snapshot_from_sync_owner(&active.sync)
+        .await
+        .map_err(map_room_list_error)
 }
 
 #[tauri::command]
@@ -186,6 +224,11 @@ pub async fn matrix_logout(
             "d0.1-remote-logout-failed",
         )
     })?;
+    active
+        .sync
+        .stop()
+        .await
+        .map_err(|error| map_sync_error(error.diagnostic_id()))?;
 
     let identity = account_identity(&active.identity)?;
     let clear_result = clear_session_material(&KeyringSessionMaterialVault::new(), &identity)
@@ -230,11 +273,55 @@ pub async fn matrix_restore_session(
         ));
     }
 
+    let sync = start_sync_owner(&client, state.next_generation()).await?;
     *session = Some(ManagedMatrixSession {
         client,
         identity: identity.clone(),
+        sync,
     });
     Ok(identity)
+}
+
+impl MatrixAuthState {
+    fn next_generation(&self) -> u64 {
+        self.next_session_generation
+            .fetch_add(1, Ordering::Relaxed)
+            .saturating_add(1)
+    }
+
+    fn current_generation(&self) -> u64 {
+        self.next_session_generation.load(Ordering::Relaxed)
+    }
+}
+
+async fn start_sync_owner(
+    client: &Client,
+    session_generation: u64,
+) -> Result<SyncServiceOwner, MatrixAuthCommandError> {
+    let owner = build_sync_service(client, session_generation, SyncServiceConfig::default())
+        .await
+        .map_err(|error| map_sync_error(error.diagnostic_id()))?;
+    owner
+        .start()
+        .await
+        .map_err(|error| map_sync_error(error.diagnostic_id()))?;
+    Ok(owner)
+}
+
+fn map_sync_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
+    MatrixAuthCommandError::new(
+        "Unknown",
+        "Native Matrix sync is unavailable.",
+        diagnostic_id,
+    )
+}
+
+fn map_room_list_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
+    MatrixAuthCommandError::new(
+        "Unknown",
+        "The native Matrix room list is unavailable.",
+        diagnostic_id,
+    )
 }
 
 fn snapshot(session: Option<&ManagedMatrixSession>) -> MatrixSessionSnapshot {
@@ -398,5 +485,14 @@ mod tests {
         assert_eq!(read_active_identity(&root).unwrap(), identity);
         remove_active_identity(&root).unwrap();
         let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn session_generations_are_monotonic() {
+        let state = MatrixAuthState::new();
+        assert_eq!(state.current_generation(), 0);
+        assert_eq!(state.next_generation(), 1);
+        assert_eq!(state.next_generation(), 2);
+        assert_eq!(state.current_generation(), 2);
     }
 }

@@ -52,6 +52,12 @@
     "allow-desktop-read-diagnostics",
     "allow-desktop-clear-diagnostics",
     "allow-desktop-enable-spellcheck",
-    "allow-desktop-agent-action"
+    "allow-desktop-agent-action",
+    "allow-matrix-login-password",
+    "allow-matrix-session-snapshot",
+    "allow-matrix-sync-status",
+    "allow-matrix-room-list-snapshot",
+    "allow-matrix-logout",
+    "allow-matrix-restore-session"
   ]
 }

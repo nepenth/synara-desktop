@@ -45,6 +45,8 @@ matrix-sdk = { version = "=0.18.0", default-features = false, features = [
   "bundled-sqlite",
 ] }
 matrix-sdk-ui = { version = "=0.18.0", default-features = false }
+eyeball-im = "0.8"
+futures-util = "0.3"
 # Runtime for Matrix client open/drop (also used by matrix-sdk). Kept direct so
 # SdkClientHandle can shut down SQLite pools outside an ambient async context.
 tokio = { version = "1", features = ["rt", "rt-multi-thread", "macros", "time"] }
