@@ -491,3 +491,157 @@ fn p5_3_directions_independent() {
         PaginationPhase::Exhausted
     );
 }
+
+// --- P5.4 focus / event-context opening ---
+
+#[test]
+fn p5_4_open_focused_settle_ready() {
+    let key = TimelineKey::main("!r:example.org").unwrap();
+    let mut focus = TimelineFocus::new(key, 1);
+    assert!(focus.is_live());
+    assert_eq!(focus.phase(), NavigationPhase::Idle);
+
+    focus
+        .begin_open(FocusOpenRequest::focused("$evt1:example.org"))
+        .unwrap();
+    assert_eq!(focus.phase(), NavigationPhase::LoadingContext);
+    assert_eq!(focus.mode().as_kind_str(), "focused");
+    assert_eq!(focus.highlight_event_id(), Some("$evt1:example.org"));
+    assert!(focus.is_busy());
+
+    focus
+        .complete_open(FocusOpenOutcome {
+            items_applied: 40,
+            target_found: true,
+            at_live_bottom: false,
+        })
+        .unwrap();
+    assert_eq!(focus.phase(), NavigationPhase::SettlingLayout);
+    assert_eq!(focus.opens_completed(), 1);
+
+    focus.confirm_ready().unwrap();
+    assert_eq!(focus.phase(), NavigationPhase::BottomConfirmed);
+    assert!(!focus.is_live());
+}
+
+#[test]
+fn p5_4_open_unread_then_jump_latest() {
+    let key = TimelineKey::main("!r:example.org").unwrap();
+    let mut focus = TimelineFocus::new(key, 2);
+    focus
+        .begin_open(FocusOpenRequest::unread("$mark:example.org"))
+        .unwrap();
+    focus
+        .complete_open(FocusOpenOutcome {
+            items_applied: 20,
+            target_found: true,
+            at_live_bottom: false,
+        })
+        .unwrap();
+    focus.confirm_ready().unwrap();
+    assert_eq!(focus.mode().as_kind_str(), "unread");
+
+    focus.begin_jump_latest().unwrap();
+    assert_eq!(focus.phase(), NavigationPhase::RebindingLive);
+    focus
+        .complete_open(FocusOpenOutcome {
+            items_applied: 10,
+            target_found: true,
+            at_live_bottom: true,
+        })
+        .unwrap();
+    assert!(focus.is_live());
+    assert!(focus.highlight_event_id().is_none());
+    focus.confirm_ready().unwrap();
+    assert_eq!(focus.phase(), NavigationPhase::BottomConfirmed);
+}
+
+#[test]
+fn p5_4_target_not_found_errors() {
+    let key = TimelineKey::main("!r:example.org").unwrap();
+    let mut focus = TimelineFocus::new(key, 1);
+    focus
+        .begin_open(FocusOpenRequest::focused("$missing:example.org"))
+        .unwrap();
+    let err = focus
+        .complete_open(FocusOpenOutcome {
+            items_applied: 0,
+            target_found: false,
+            at_live_bottom: false,
+        })
+        .unwrap_err();
+    assert_eq!(err.diagnostic_id(), "p5.4-target-not-found");
+    assert_eq!(focus.phase(), NavigationPhase::Error);
+    focus.clear_failure().unwrap();
+    assert_eq!(focus.phase(), NavigationPhase::Idle);
+}
+
+#[test]
+fn p5_4_busy_rejects_double_open() {
+    let key = TimelineKey::main("!r:example.org").unwrap();
+    let mut focus = TimelineFocus::new(key, 1);
+    focus.begin_open(FocusOpenRequest::live()).unwrap();
+    let err = focus
+        .begin_open(FocusOpenRequest::focused("$e:example.org"))
+        .unwrap_err();
+    assert_eq!(err.diagnostic_id(), "p5.4-navigation-busy");
+}
+
+#[test]
+fn p5_4_invalid_event_id_and_window() {
+    let key = TimelineKey::main("!r:example.org").unwrap();
+    let mut focus = TimelineFocus::new(key, 1);
+    let err = focus
+        .begin_open(FocusOpenRequest::focused("not-an-event"))
+        .unwrap_err();
+    assert_eq!(err.diagnostic_id(), "p5.4-invalid-event-id");
+    let err = focus.begin_open(FocusOpenRequest::focused("")).unwrap_err();
+    assert_eq!(err.diagnostic_id(), "p5.4-invalid-event-id");
+    let err = focus
+        .begin_open(
+            FocusOpenRequest::focused("$ok:example.org").with_window(ContextWindow {
+                before: 101,
+                after: 0,
+            }),
+        )
+        .unwrap_err();
+    assert_eq!(err.diagnostic_id(), "p5.4-invalid-context-window");
+}
+
+#[test]
+fn p5_4_fail_rejects_secret_diagnostics() {
+    let key = TimelineKey::main("!r:example.org").unwrap();
+    let mut focus = TimelineFocus::new(key, 1);
+    focus
+        .begin_open(FocusOpenRequest::focused("$e:example.org"))
+        .unwrap();
+    let err = focus.fail("leak-access_token").unwrap_err();
+    assert_eq!(err.diagnostic_id(), "p5.4-forbidden-diagnostic");
+    focus.fail("p5.4-homeserver-timeout").unwrap();
+    assert_eq!(focus.phase(), NavigationPhase::Error);
+    assert_eq!(
+        focus.failure_diagnostic_id(),
+        Some("p5.4-homeserver-timeout")
+    );
+    assert!(!focus
+        .failure_diagnostic_id()
+        .unwrap()
+        .contains("access_token"));
+}
+
+#[test]
+fn p5_4_retire_generation_cancels_in_flight() {
+    let key = TimelineKey::main("!r:example.org").unwrap();
+    let mut focus = TimelineFocus::new(key, 1);
+    focus
+        .begin_open(FocusOpenRequest::focused("$e:example.org"))
+        .unwrap();
+    focus.retire_generation(9);
+    assert_eq!(focus.session_generation(), 9);
+    assert_eq!(focus.phase(), NavigationPhase::Error);
+    assert_eq!(
+        focus.failure_diagnostic_id(),
+        Some("p5.4-stale-generation-cancelled")
+    );
+    assert!(focus.is_live());
+}
