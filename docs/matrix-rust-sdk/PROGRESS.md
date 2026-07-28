@@ -28,12 +28,12 @@
 
 | | |
 | --- | --- |
-| **Now** | Ledger resync + feature graph. **#145 P8.2 devices merged.** Next: **#147 P8.3** verification → #150 backup → #151 legacy; open #154 focus, #155 logout. |
-| **Inventory** | **50 / 112** landed artifacts in [program-status](program-status.md) (**45 merged** + **5 open-PR** foundations). **Do not invent other counts.** |
+| **Now** | Ledger resync + feature graph + Codex protocol (**#156**). **#145 devices merged.** Next: **#147** verification → #150 → #151; also #154 focus, #155 logout, #157 UTD, #160 polls, #161 unread, #162 raw-content. |
+| **Inventory** | **50 / 112** landed artifacts in [program-status](program-status.md) (**45 merged** + open-PR foundations). **Do not invent other counts.** |
 | **Phase gates** | **0 / 15** strict gates closed (honest). |
-| **Open PRs → integration** | [#147](https://github.com/nepenth/synara-desktop/pull/147) verification, [#150](https://github.com/nepenth/synara-desktop/pull/150) backup, [#151](https://github.com/nepenth/synara-desktop/pull/151) legacy, [#154](https://github.com/nepenth/synara-desktop/pull/154) focus, [#155](https://github.com/nepenth/synara-desktop/pull/155) remote logout; [#109](https://github.com/nepenth/synara-desktop/pull/109) MiniMax helper (optional). |
+| **Open PRs → integration** | [#147](https://github.com/nepenth/synara-desktop/pull/147) verification, [#150](https://github.com/nepenth/synara-desktop/pull/150) backup, [#151](https://github.com/nepenth/synara-desktop/pull/151) legacy, [#154](https://github.com/nepenth/synara-desktop/pull/154) focus, [#155](https://github.com/nepenth/synara-desktop/pull/155) logout, [#157](https://github.com/nepenth/synara-desktop/pull/157) UTD, [#160](https://github.com/nepenth/synara-desktop/pull/160) polls, [#161](https://github.com/nepenth/synara-desktop/pull/161) unread, [#162](https://github.com/nepenth/synara-desktop/pull/162) raw-content; [#156](https://github.com/nepenth/synara-desktop/pull/156) this ledger PR. |
 | **Blocked on** | CI green for product merges. Required: Quality gate + Desktop package gate. |
-| **Dogfood path** | search ✅ → cross-signing ✅ → widgets ✅ → devices ✅ (**#145**) → **verification (#147)** → backup → legacy. |
+| **Dogfood path** | …devices ✅ → **verification (#147)** → backup → legacy → focus → logout → UTD → polls → unread. |
 
 ---
 
@@ -79,11 +79,13 @@ Update rules:
 
 | When (UTC) | Item | Result | Notes |
 | --- | --- | --- | --- |
-| — | **P8.2** device list / trust | **Merged** [#145](https://github.com/nepenth/synara-desktop/pull/145) | Landed on integration tip before this docs PR. |
-| — | **program-status ledger resync** | **This PR** | Was stuck at 21/112; now **50/112** landed (45 merged + 5 open). Drift guard: tip task docs require landed records. |
-| — | **client-feature-graph** | **This PR** | Client capability → JS surface → Rust owner → hard problems (scroll/read/sync). |
-| — | **MiniMax-M3 parallel protocol** | **This PR** | Use local MiniMax during CI waits for graph/inventory text work; Grok remains implementer. |
-| — | **Codex parallel protocol** | **This PR** | `gpt-5.6-sol`/medium implementer under Grok review; credit exhaustion expected — stop dispatch, keep going. |
+| — | **program-status ledger resync** | **This PR (#156)** | Was stuck at 21/112; now **50/112** landed. Drift guard: tip task docs require landed records. |
+| — | **client-feature-graph** + MiniMax + **Codex** protocols | **This PR (#156)** | Capability map; MiniMax text; Codex `gpt-5.6-sol`/medium implementer under Grok review. |
+| ~00:55 | **PROGRESS.md** after #145 | **Merged** [#158](https://github.com/nepenth/synara-desktop/pull/158) | Tip after devices; next #147. |
+| ~00:54 | **P8.2** device list / trust | **Merged** [#145](https://github.com/nepenth/synara-desktop/pull/145) | DeviceIndex; no keys. |
+| ~00:54 | **P5.10** UTD / decrypt updates | **PR open** [#157](https://github.com/nepenth/synara-desktop/pull/157) | UtdIndex; no session keys / bodies. |
+| ~00:38 | **P3.8** remote logout + recovery copy | **PR open** [#155](https://github.com/nepenth/synara-desktop/pull/155) | RemoteLogoutFlow + RecoveryCopyKey. |
+| ~00:32 | **P5.4** timeline focus / context | **PR open** [#154](https://github.com/nepenth/synara-desktop/pull/154) | TimelineFocus Live/Unread/Focused. |
 
 ### 2026-07-27
 
