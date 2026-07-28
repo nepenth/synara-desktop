@@ -9,8 +9,8 @@
 
 | Field | Value |
 | --- | --- |
-| Last updated (UTC) | **2026-07-28 ~11:05** |
-| Integration tip | `671d590` — Merge #162 P5.9 raw-content |
+| Last updated (UTC) | **2026-07-28 ~11:45** |
+| Integration tip | `db97d15` — Merge #187 P7.2 media download |
 | Product runtime | Still **`matrix-js-sdk` only** until atomic sole-owner cutover |
 | Dual backend | **`false`** (forbidden forever) |
 | Operating model | [cutover-operating-model.md](cutover-operating-model.md) |
@@ -25,12 +25,12 @@
 
 | | |
 | --- | --- |
-| **Now** | **#162 P5.9 raw-content merged** (tip `671d590`). Next **#163** account-data (tip-merged). Then media/crypto/notify stack. |
-| **Inventory** | ~63/112 original task artifacts when program-status is synced (through P5.9 landed). |
+| **Now** | **#187 P7.2 media download merged** (tip `db97d15`). Next **#163** account-data (re-tip after #187; CI). Then #188/#190 media+directory stack. |
+| **Inventory** | ~64/112 original task artifacts when program-status is synced (through P7.2 landed). |
 | **Phase gates** | **0 / 15** strict gates closed (honest). |
-| **Open PRs → integration** | [#163](https://github.com/nepenth/synara-desktop/pull/163) account-data, [#187](https://github.com/nepenth/synara-desktop/pull/187)/[#188](https://github.com/nepenth/synara-desktop/pull/188) media, [#190](https://github.com/nepenth/synara-desktop/pull/190) directory, [#192](https://github.com/nepenth/synara-desktop/pull/192)–[#193](https://github.com/nepenth/synara-desktop/pull/193)/[#196](https://github.com/nepenth/synara-desktop/pull/196)/[#201](https://github.com/nepenth/synara-desktop/pull/201) parallel. |
-| **Blocked on** | CI for #163 after tip-merge. |
-| **Dogfood path** | … → unread ✅ → **raw-content ✅ (#162)** → account-data #163 → media → … |
+| **Open PRs → integration** | [#163](https://github.com/nepenth/synara-desktop/pull/163) account-data, [#188](https://github.com/nepenth/synara-desktop/pull/188)/[#190](https://github.com/nepenth/synara-desktop/pull/190)/[#192](https://github.com/nepenth/synara-desktop/pull/192) media+directory, [#193](https://github.com/nepenth/synara-desktop/pull/193) crypto, [#196](https://github.com/nepenth/synara-desktop/pull/196)/[#198](https://github.com/nepenth/synara-desktop/pull/198)–[#201](https://github.com/nepenth/synara-desktop/pull/201)/[#203](https://github.com/nepenth/synara-desktop/pull/203)/[#204](https://github.com/nepenth/synara-desktop/pull/204) notify/timeline parallel (all tip-merged). |
+| **Blocked on** | CI for #163 after re-tip on #187. Package-smoke thrash from concurrent tip-merges. |
+| **Dogfood path** | … → raw-content ✅ → **media download ✅ (#187)** → account-data #163 → media cache #188 → … |
 
 ---
 
@@ -58,6 +58,9 @@ Update rules:
 
 | When (UTC) | Item | Result | Notes |
 | --- | --- | --- | --- |
+| ~11:45 | **P7.2** media download | **Merged** [#187](https://github.com/nepenth/synara-desktop/pull/187) | tip `db97d15`. DownloadQueue foundation. |
+| ~11:45 | **PROGRESS.md** after #187 | **This PR** | Next #163 account-data. |
+| ~11:40 | Stack tip-merge | **Advanced** | #163/#188/#190/#192/#193/#196/#198–#201/#203/#204 rebased onto tip after #187. |
 | ~11:05 | **P5.9** raw-content | **Merged** [#162](https://github.com/nepenth/synara-desktop/pull/162) | tip `671d590`. |
 | ~11:05 | **PROGRESS.md** after #162 | **This PR** | Next #163. |
 | ~10:50 | **P9.2** push-rules | **PR open** [#196](https://github.com/nepenth/synara-desktop/pull/196) | |
