@@ -81,7 +81,7 @@ fn allowlist_override_and_retire() {
         )
         .unwrap();
     assert_eq!(out.get_str("status"), Some("ok"));
-    assert!(out.fields.get("body").is_none());
+    assert!(!out.fields.contains_key("body"));
     assert_eq!(
         out.unknown.get("body").map(String::as_str),
         Some("ignored-as-unknown")
