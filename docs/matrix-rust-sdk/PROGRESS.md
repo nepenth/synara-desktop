@@ -26,7 +26,7 @@
 | | |
 | --- | --- |
 | **Now** | **#190 P6.10 room directory merged** (tip `8d544fa`). Next **#192** attachment / media send. |
-| **Inventory** | ~67/112 original task artifacts when program-status is synced (through P6.10 landed). |
+| **Inventory** | **74 / 112** landed artifacts in [program-status](program-status.md) (**65 merged** on tip + **9 open-PR** foundations). Strict gates **0/15**. Runtime still **matrix-js-sdk-only** / harness-foundation. **Do not invent other counts.** |
 | **Phase gates** | **0 / 15** strict gates closed (honest). |
 | **Open PRs → integration** | [#192](https://github.com/nepenth/synara-desktop/pull/192) attachment send, [#207](https://github.com/nepenth/synara-desktop/pull/207)/[#209](https://github.com/nepenth/synara-desktop/pull/209) media privacy/SW, crypto/notify stack needs re-tip. |
 | **Blocked on** | Re-tip + CI for #192 after #190. Keep merges serial. |
@@ -53,6 +53,13 @@ Update rules:
 ---
 
 ## Work log (newest first)
+
+### 2026-07-28 (ledger)
+
+| When (UTC) | Item | Result | Notes |
+| --- | --- | --- | --- |
+| — | **program-status truth resync** | **This PR** | Rebuilt from tip task docs + open plan-task PRs: **74/112** landed (65 merged). Supersedes stale 21/112 and thrashing #156. |
+
 
 ### 2026-07-28
 

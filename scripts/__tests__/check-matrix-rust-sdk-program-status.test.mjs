@@ -115,9 +115,11 @@ test("current ledger matches the 112-task plan", () => {
 test("renderer is deterministic and distinguishes delivery from acceptance", () => {
   const first = renderProgramStatus(status);
   assert.equal(first, renderProgramStatus(clone(status)));
-  // Inventory grows as original tasks land (P3.2 → 21 / 112 at this tip).
+  // Inventory is ledger-driven; must match landed_task_count (not a frozen constant).
+  const landed = status.original_plan.landed_task_count;
   assert.match(first, /\d+ \/ 112/);
-  assert.match(first, /21 \/ 112/);
+  assert.match(first, new RegExp(`${landed} / 112`));
+  assert.ok(landed >= 21, "inventory must not regress below post-P3.2 baseline");
   assert.match(first, /landed.*merged.*open.*open/);
   assert.match(first, /[^\n]\n$/);
   assert.doesNotMatch(first, /\n\n$/);
