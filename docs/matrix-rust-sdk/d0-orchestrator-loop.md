@@ -83,3 +83,9 @@ Review PR for dual_backend / secrets / scope; write `/tmp/codex-review-N.md` PAS
 - Next action: …
 - Blockers: …
 ```
+
+## Package smoke (integration)
+
+Full Desktop package smoke is **off by default** on PRs into this branch.
+Gate still reports success. Opt in with label `needs-package`, or run
+`workflow_dispatch` on Desktop Package Smoke when ready for dogfood artifacts.
