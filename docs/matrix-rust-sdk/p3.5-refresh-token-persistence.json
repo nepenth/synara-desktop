@@ -3,7 +3,7 @@
   "title": "Refresh-token persistence and rotation foundation",
   "date": "2026-07-27",
   "artifact_state": "landed",
-  "integration_state": "pr_open",
+  "integration_state": "merged",
   "strict_acceptance_state": "open",
   "phase_gate_state": "open",
   "current_status_ref": "docs/matrix-rust-sdk/program-status.json",
@@ -12,8 +12,14 @@
   "base_sha": "52376d9",
   "work_branch": "matrix-rust/p3.5-session-secret-persist",
   "human_doc": "docs/matrix-rust-sdk/p3.5-refresh-token-persistence.md",
-  "fr_ids": ["FR-7.1-007"],
-  "decisions": ["D-TOKEN-CONTINUITY", "D-NEW-DEVICE", "D-NO-DUAL-BACKEND"],
+  "fr_ids": [
+    "FR-7.1-007"
+  ],
+  "decisions": [
+    "D-TOKEN-CONTINUITY",
+    "D-NEW-DEVICE",
+    "D-NO-DUAL-BACKEND"
+  ],
   "production_posture": {
     "production_client_session_started": false,
     "production_login": false,
@@ -111,9 +117,21 @@
     "live_sdk_refresh_access_token_product_wiring"
   ],
   "residuals": [
-    { "id": "session-restore-onto-client", "waitsFor": "P3.6" },
-    { "id": "live-refresh-rotation-evidence", "waitsFor": "P3.6 / cutover" },
-    { "id": "oauth-session-envelope", "waitsFor": "P3.3" },
-    { "id": "product-login-persist-command", "waitsFor": "cutover" }
+    {
+      "id": "session-restore-onto-client",
+      "waitsFor": "P3.6"
+    },
+    {
+      "id": "live-refresh-rotation-evidence",
+      "waitsFor": "P3.6 / cutover"
+    },
+    {
+      "id": "oauth-session-envelope",
+      "waitsFor": "P3.3"
+    },
+    {
+      "id": "product-login-persist-command",
+      "waitsFor": "cutover"
+    }
   ]
 }
