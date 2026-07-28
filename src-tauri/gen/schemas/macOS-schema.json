@@ -561,6 +561,12 @@
           "markdownDescription": "Enables the matrix_room_list_snapshot command without any pre-configured scope."
         },
         {
+          "description": "Enables the matrix_send_text command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-send-text",
+          "markdownDescription": "Enables the matrix_send_text command without any pre-configured scope."
+        },
+        {
           "description": "Enables the matrix_session_snapshot command without any pre-configured scope.",
           "type": "string",
           "const": "allow-matrix-session-snapshot",
@@ -805,6 +811,12 @@
           "type": "string",
           "const": "deny-matrix-room-list-snapshot",
           "markdownDescription": "Denies the matrix_room_list_snapshot command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_send_text command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-send-text",
+          "markdownDescription": "Denies the matrix_send_text command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_session_snapshot command without any pre-configured scope.",
