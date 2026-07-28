@@ -36,6 +36,14 @@ const DESKTOP_COMMANDS: &[&str] = &[
     "matrix_cross_signing_status",
     "matrix_cross_signing_setup",
     "matrix_cross_signing_setup_password",
+    "matrix_backup_status",
+    "matrix_backup_setup",
+    "matrix_backup_restore",
+    "matrix_backup_repair",
+    "matrix_secret_storage_status",
+    "matrix_secret_storage_bootstrap",
+    "matrix_secret_storage_unlock",
+    "matrix_secret_storage_reset",
 ];
 
 fn git_output(repo: &Path, args: &[&str]) -> Option<String> {

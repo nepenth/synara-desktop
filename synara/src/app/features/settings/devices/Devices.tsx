@@ -27,6 +27,7 @@ import {
 import { useCrossSigning } from '../../../hooks/useCrossSigning';
 import { BackupRestoreTile } from '../../../components/BackupRestore';
 import { isNativeMatrixSession } from '../../verification/nativeVerification';
+import { NativeSecretStorageTile } from '../../../components/SecretStorage';
 
 function DevicesPlaceholder() {
   return (
@@ -126,6 +127,7 @@ export function Devices({ requestClose }: DevicesProps) {
                     direction="Column"
                     gap="400"
                   >
+                    <NativeSecretStorageTile />
                     <BackupRestoreTile />
                   </SequenceCard>
                 )}
