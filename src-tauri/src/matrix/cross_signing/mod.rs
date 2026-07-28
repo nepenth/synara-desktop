@@ -11,6 +11,7 @@
 
 mod error;
 mod identity;
+pub mod live;
 
 pub use error::CrossSigningError;
 pub use identity::{

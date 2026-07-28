@@ -33,6 +33,9 @@ const DESKTOP_COMMANDS: &[&str] = &[
     "desktop_read_diagnostics",
     "desktop_clear_diagnostics",
     "desktop_agent_action",
+    "matrix_cross_signing_status",
+    "matrix_cross_signing_setup",
+    "matrix_cross_signing_setup_password",
 ];
 
 fn git_output(repo: &Path, args: &[&str]) -> Option<String> {

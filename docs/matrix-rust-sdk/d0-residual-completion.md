@@ -31,8 +31,8 @@ Order is **fix incomplete crypto first** (largest intentional product gap on tip
 
 | ID | Capability | Product surfaces today (js) | Host foundations (parts only) | Done when |
 | --- | --- | --- | --- | --- |
-| **V-CRYPTO.1 — DONE** | Device verification UX | Native `DeviceVerification*`, settings verification actions/status, and inbound inbox; legacy components are non-native only | Live `matrix/verification/live.rs` owner + registered/permissioned IPC | Completed on `matrix-rust/v-crypto-1-verification`; see [v-crypto-1-verification.md](v-crypto-1-verification.md) |
-| **V-CRYPTO.2** | Cross-signing readiness / setup product path | Device verification setup, status | `matrix/cross_signing/*` | Bootstrap/status/setup product path native; secrets never in webview |
+| **V-CRYPTO.1 — DONE (merged #223)** | Device verification UX | Native `DeviceVerification*`, settings verification actions/status, and inbound inbox; legacy components are non-native only | Live `matrix/verification/live.rs` owner + registered/permissioned IPC | Completed on `matrix-rust/v-crypto-1-verification`; see [v-crypto-1-verification.md](v-crypto-1-verification.md) |
+| **V-CRYPTO.2 — DONE** | Cross-signing readiness / setup product path | Native `useCrossSigning` readiness and Devices setup/authentication UI; legacy setup is non-native only | `matrix/cross_signing/live.rs` projections + managed-client commands in `matrix/auth/product.rs` | Bootstrap/status/setup product path native; cross-signing and recovery secrets never cross IPC; see [v-crypto-2-cross-signing.md](v-crypto-2-cross-signing.md) |
 | **V-CRYPTO.3** | Key backup restore / recovery UI | `BackupRestore`, `useKeyBackup`, `backupRestore.ts` | `matrix/backup/*` | Restore/setup/repair via Rust; privacy-safe errors only |
 | **V-CRYPTO.4** | SSSS / secret storage bootstrap & unlock | `SecretStorage.tsx` | SDK secret storage + P8 parts | Unlock/bootstrap import UI native; no secrets over IPC |
 | **V-CRYPTO.5** | Interactive key-share / room-key flows | (js crypto paths) | `matrix/room_keys/*` | Key-share prompts / export-import advanced path as product retained |

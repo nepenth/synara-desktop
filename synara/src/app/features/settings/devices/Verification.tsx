@@ -1,10 +1,13 @@
-import React, { MouseEventHandler, useCallback, useState } from 'react';
+import React, { FormEventHandler, MouseEventHandler, useCallback, useState } from 'react';
 import {
   Badge,
   Box,
   Button,
   Chip,
+  color,
   config,
+  Dialog,
+  Header,
   Icon,
   Icons,
   Spinner,
@@ -38,6 +41,12 @@ import { useAccountManagementActions } from '../../../hooks/useAccountManagement
 import { openExternalUrl } from '../../../utils/appLinks';
 import { NativeStartVerification } from '../../verification/NativeDeviceVerification';
 import { isNativeMatrixSession } from '../../verification/nativeVerification';
+import {
+  authenticateNativeCrossSigningSetup,
+  NativeCrossSigningStatus,
+  startNativeCrossSigningSetup,
+} from '../../cross-signing/nativeCrossSigning';
+import { PasswordInput } from '../../../components/password-input';
 
 type VerificationStatusBadgeProps = {
   verificationStatus: VerificationStatus;
@@ -340,17 +349,172 @@ function LegacyVerifyOtherDeviceTile({
 
 type EnableVerificationProps = {
   visible: boolean;
+  nativeStatus?: NativeCrossSigningStatus;
+  loading?: boolean;
+  error?: string;
 };
-export function EnableVerification({ visible }: EnableVerificationProps) {
+export function EnableVerification({
+  visible,
+  nativeStatus,
+  loading,
+  error,
+}: EnableVerificationProps) {
   if (isNativeMatrixSession()) {
-    return visible ? (
-      <Text size="T200">
-        Cross-signing setup is unavailable in this screen. Device verification cannot start until
-        cross-signing is configured.
-      </Text>
-    ) : null;
+    return (
+      <NativeEnableVerification
+        visible={visible}
+        status={nativeStatus}
+        loading={loading}
+        error={error}
+      />
+    );
   }
   return <LegacyEnableVerification visible={visible} />;
+}
+
+function NativeEnableVerification({
+  visible,
+  status,
+  loading,
+  error,
+}: {
+  visible: boolean;
+  status?: NativeCrossSigningStatus;
+  loading?: boolean;
+  error?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  if (!visible) return null;
+  if (loading) return <Spinner size="200" variant="Secondary" />;
+  if (error || status?.readiness === 'unavailable') {
+    return (
+      <Text size="T200">Native cross-signing is unavailable. Restart Synara and try again.</Text>
+    );
+  }
+  if (status?.bootstrap === 'not_needed') {
+    return (
+      <Text size="T200">
+        Your cross-signing identity is configured, but this device needs verification or recovery.
+      </Text>
+    );
+  }
+
+  return (
+    <>
+      <Button size="300" radii="300" onClick={() => setOpen(true)}>
+        <Text as="span" size="B300">
+          Enable
+        </Text>
+      </Button>
+      {open && (
+        <Overlay open backdrop={<OverlayBackdrop />}>
+          <OverlayCenter>
+            <FocusTrap
+              focusTrapOptions={{
+                initialFocus: false,
+                clickOutsideDeactivates: false,
+                escapeDeactivates: false,
+              }}
+            >
+              <NativeCrossSigningSetup onCancel={() => setOpen(false)} />
+            </FocusTrap>
+          </OverlayCenter>
+        </Overlay>
+      )}
+    </>
+  );
+}
+
+function NativeCrossSigningSetup({ onCancel }: { onCancel: () => void }) {
+  const [authenticationRequired, setAuthenticationRequired] = useState(false);
+  const [working, setWorking] = useState(false);
+  const [setupError, setSetupError] = useState<string>();
+
+  const startSetup = async () => {
+    setWorking(true);
+    setSetupError(undefined);
+    try {
+      const result = await startNativeCrossSigningSetup();
+      if (result.outcome === 'authentication_required') {
+        setAuthenticationRequired(true);
+      } else {
+        onCancel();
+      }
+    } catch (error) {
+      setSetupError(error instanceof Error ? error.message : 'Cross-signing setup failed.');
+    } finally {
+      setWorking(false);
+    }
+  };
+
+  const authenticate: FormEventHandler<HTMLFormElement> = async (event) => {
+    event.preventDefault();
+    if (working) return;
+    const target = event.currentTarget;
+    const passwordInput = target.elements.namedItem('password') as HTMLInputElement | null;
+    const password = passwordInput?.value ?? '';
+    setWorking(true);
+    setSetupError(undefined);
+    try {
+      await authenticateNativeCrossSigningSetup(password);
+      onCancel();
+    } catch (error) {
+      setSetupError(error instanceof Error ? error.message : 'Cross-signing setup failed.');
+    } finally {
+      if (passwordInput) passwordInput.value = '';
+      setWorking(false);
+    }
+  };
+
+  return (
+    <Dialog>
+      <Header
+        style={{
+          padding: `0 ${config.space.S200} 0 ${config.space.S400}`,
+          borderBottomWidth: config.borderWidth.B300,
+        }}
+        variant="Surface"
+        size="500"
+      >
+        <Box grow="Yes">
+          <Text size="H4">Setup Device Verification</Text>
+        </Box>
+        <IconButton size="300" radii="300" onClick={onCancel} disabled={working}>
+          <Icon src={Icons.Cross} />
+        </IconButton>
+      </Header>
+      <Box
+        as={authenticationRequired ? 'form' : undefined}
+        onSubmit={authenticationRequired ? authenticate : undefined}
+        style={{ padding: config.space.S400 }}
+        direction="Column"
+        gap="400"
+      >
+        <Text size="T300">
+          Synara will create and securely store your cross-signing identity on this device.
+        </Text>
+        {authenticationRequired && (
+          <Box direction="Column" gap="100">
+            <Text size="L400">Account Password</Text>
+            <PasswordInput name="password" size="400" readOnly={working} autoFocus />
+          </Box>
+        )}
+        <Button
+          type={authenticationRequired ? 'submit' : 'button'}
+          onClick={authenticationRequired ? undefined : startSetup}
+          disabled={working}
+          before={working && <Spinner size="200" variant="Primary" fill="Solid" />}
+        >
+          <Text size="B400">{authenticationRequired ? 'Authenticate' : 'Continue'}</Text>
+        </Button>
+        {setupError && (
+          <Text size="T200" style={{ color: color.Critical.Main }}>
+            {setupError}
+          </Text>
+        )}
+      </Box>
+    </Dialog>
+  );
 }
 
 function LegacyEnableVerification({ visible }: EnableVerificationProps) {
