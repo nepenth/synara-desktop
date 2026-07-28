@@ -1,0 +1,11 @@
+"$schema" = "../../gen/schemas/schema.json"
+
+[[permission]]
+identifier = "allow-matrix-backup-status"
+description = "Enables the matrix_backup_status command without any pre-configured scope."
+commands.allow = ["matrix_backup_status"]
+
+[[permission]]
+identifier = "deny-matrix-backup-status"
+description = "Denies the matrix_backup_status command without any pre-configured scope."
+commands.deny = ["matrix_backup_status"]

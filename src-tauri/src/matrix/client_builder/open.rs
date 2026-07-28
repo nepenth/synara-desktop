@@ -4,7 +4,7 @@
 //! `src-tauri/src/matrix/`. It never performs login, restore_session, or sync.
 
 use matrix_sdk::config::RequestConfig;
-use matrix_sdk::encryption::EncryptionSettings;
+use matrix_sdk::encryption::{BackupDownloadStrategy, EncryptionSettings};
 use matrix_sdk::Client;
 
 use super::config::{ClientBuildConfig, HomeserverMode};
@@ -27,9 +27,12 @@ pub async fn build_unauthenticated_client(
         .timeout(config.timeouts.request_timeout)
         .retry_limit(config.timeouts.retry_limit);
 
-    // Conservative crypto defaults: no auto backup / cross-signing bootstrap
-    // until auth lifecycle tasks explicitly opt in.
-    let encryption_settings = EncryptionSettings::default();
+    // Recovery secrets remain explicitly user/verification driven. Once the
+    // SDK receives one, restore all available room keys into the native store.
+    let encryption_settings = EncryptionSettings {
+        backup_download_strategy: BackupDownloadStrategy::OneShot,
+        ..EncryptionSettings::default()
+    };
 
     let mut builder = Client::builder()
         .request_config(request_config)

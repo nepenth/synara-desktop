@@ -537,6 +537,30 @@
           "markdownDescription": "Enables the desktop_update_tray_state command without any pre-configured scope."
         },
         {
+          "description": "Enables the matrix_backup_repair command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-backup-repair",
+          "markdownDescription": "Enables the matrix_backup_repair command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_backup_restore command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-backup-restore",
+          "markdownDescription": "Enables the matrix_backup_restore command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_backup_setup command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-backup-setup",
+          "markdownDescription": "Enables the matrix_backup_setup command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_backup_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-backup-status",
+          "markdownDescription": "Enables the matrix_backup_status command without any pre-configured scope."
+        },
+        {
           "description": "Enables the matrix_cross_signing_setup command without any pre-configured scope.",
           "type": "string",
           "const": "allow-matrix-cross-signing-setup",
@@ -865,6 +889,30 @@
           "type": "string",
           "const": "deny-desktop-update-tray-state",
           "markdownDescription": "Denies the desktop_update_tray_state command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_backup_repair command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-backup-repair",
+          "markdownDescription": "Denies the matrix_backup_repair command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_backup_restore command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-backup-restore",
+          "markdownDescription": "Denies the matrix_backup_restore command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_backup_setup command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-backup-setup",
+          "markdownDescription": "Denies the matrix_backup_setup command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_backup_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-backup-status",
+          "markdownDescription": "Denies the matrix_backup_status command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_cross_signing_setup command without any pre-configured scope.",
