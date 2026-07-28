@@ -48,16 +48,23 @@ Examples:
 `Quality gate` still aggregates results. Acceptable results per heavy job:
 `success` or `skipped`. Fail on `failure` / `cancelled` / missing.
 
-## Package smoke
+## Package smoke (2026-07-28 — D0 policy)
 
-`desktop-package-smoke.yml` already uses a diff-based gate: heavy package jobs
-run only when package-sensitive paths change. The lightweight detection job still
-runs on every PR so required “Desktop package gate” checks always report
-(success with “not required”). We intentionally do **not** workflow-level-skip
-this file for docs PRs, to avoid hanging required checks.
+Required check name remains **Desktop package gate** (must always report).
+
+| Event | Heavy package jobs (deb / Arch / macOS) |
+| --- | --- |
+| PR → `feature/matrix-rust-sdk-full-replacement` | **Skipped by default** (gate succeeds as “not required”) |
+| Same PR with label **`needs-package`** | **Run** full smoke |
+| PR → `main` / `release/**` | Run when package-sensitive paths change (unchanged) |
+| `workflow_dispatch` | **Always run** full smoke (“when ready”) |
+| Push `release/**` | Run (workflow path filters) |
+
+Rationale: during dogfood rewire, packaging every `src-tauri` PR was ~15–20m of
+wall clock with little signal. Validate + Quality gate remain the merge bar for
+integration. Run a full package smoke manually before dogfood builds / main.
 
 ## Residual cost
 
-A `src-tauri`-only PR still runs the full **Validate** job (Rust + frontend +
-script tests) because that job is one monolithic suite today. Further splitting
-Validate (Rust vs frontend vs scripts) is a follow-up optimization.
+A `src-tauri`-only integration PR still runs **Validate** (~15–20m). Package
+smoke no longer doubles that by default.
