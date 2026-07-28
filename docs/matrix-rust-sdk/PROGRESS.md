@@ -9,8 +9,8 @@
 
 | Field | Value |
 | --- | --- |
-| Last updated (UTC) | **2026-07-27 ~23:36** |
-| Integration tip | `f71be28` — Merge #149 P8.4 cross-signing |
+| Last updated (UTC) | **2026-07-28 ~00:15** |
+| Integration tip | `1e42d27` — Merge #143 P9.1 widgets |
 | Product runtime | Still **`matrix-js-sdk` only** until atomic sole-owner cutover |
 | Dual backend | **`false`** (forbidden forever) |
 | Operating model | [cutover-operating-model.md](cutover-operating-model.md) |
@@ -25,12 +25,12 @@
 
 | | |
 | --- | --- |
-| **Now** | **#149 P8.4 cross-signing merged.** Primary next: **#143 P9.1** widgets (tip-merged after #149; CI re-run). Then #145 devices, #147 verification, #150 backup, #151 legacy. |
-| **Inventory** | ~43/112 original task artifacts when program-status is synced (through P8.4 landed; see ledger). |
+| **Now** | **#143 P9.1 widgets merged.** Primary next: **#145 P8.2** devices (tip-merged after #143; CI re-run). Then #147 verification, #150 backup, #151 legacy. |
+| **Inventory** | ~44/112 original task artifacts when program-status is synced (through P9.1 landed; see ledger). |
 | **Phase gates** | **0 / 15** strict gates closed (honest). |
-| **Open PRs → integration** | [#143](https://github.com/nepenth/synara-desktop/pull/143) widgets, [#145](https://github.com/nepenth/synara-desktop/pull/145) devices, [#147](https://github.com/nepenth/synara-desktop/pull/147) verification, [#150](https://github.com/nepenth/synara-desktop/pull/150) backup/recovery, [#151](https://github.com/nepenth/synara-desktop/pull/151) legacy transition; [#109](https://github.com/nepenth/synara-desktop/pull/109) MiniMax (deprioritize). |
-| **Blocked on** | CI green after tip-merge onto post-#149 tip. Required: Quality gate + Desktop package gate. |
-| **Dogfood path** | search ✅ → **widgets (#143)** → devices → verification → crypto foundations → legacy transition. |
+| **Open PRs → integration** | [#145](https://github.com/nepenth/synara-desktop/pull/145) devices, [#147](https://github.com/nepenth/synara-desktop/pull/147) verification, [#150](https://github.com/nepenth/synara-desktop/pull/150) backup/recovery, [#151](https://github.com/nepenth/synara-desktop/pull/151) legacy transition; [#109](https://github.com/nepenth/synara-desktop/pull/109) MiniMax (deprioritize). |
+| **Blocked on** | CI green after tip-merge onto post-#143 tip. Required: Quality gate + Desktop package gate. |
+| **Dogfood path** | search ✅ → cross-signing ✅ → widgets ✅ (**#143**) → **devices (#145)** → verification → backup → legacy. |
 
 ---
 
@@ -58,6 +58,8 @@ Update rules:
 
 | When (UTC) | Item | Result | Notes |
 | --- | --- | --- | --- |
+| ~00:13 | **P9.1** widget / Element Call registry | **Merged** [#143](https://github.com/nepenth/synara-desktop/pull/143) | WidgetRegistry; no token URLs; tip `1e42d27`. |
+| ~00:15 | **PROGRESS.md** after #143 | **This PR** | Next devices/verification/backup/legacy tip-merged. |
 | ~23:36 | **PROGRESS.md** after #149 | **This PR** | Tip `f71be28`; open #143/#145/#147/#150/#151 tip-merged. |
 | ~23:34 | **P8.4** cross-signing / identity | **Merged** [#149](https://github.com/nepenth/synara-desktop/pull/149) | CrossSigningStore presence + IdentityTrust; tip `f71be28`. |
 | ~23:27 | **P3.7** legacy transition coordinator | **PR open** [#151](https://github.com/nepenth/synara-desktop/pull/151) | Clean-break; no JS client / token continuity. |
@@ -157,7 +159,7 @@ Update rules:
 | 22 | Route / deep-link resolution (P4.8) | **Done** (merged #139) |
 | 23 | Search session (P6.8) | **Done** (merged #141) |
 | 24 | Cross-signing / identity (P8.4) | **Done** (merged #149) |
-| 25 | Widget / Element Call registry (P9.1) | **In PR** [#143](https://github.com/nepenth/synara-desktop/pull/143) |
+| 25 | Widget / Element Call registry (P9.1) | **Done** (merged #143) |
 | 26 | Device list / trust (P8.2) | **In PR** [#145](https://github.com/nepenth/synara-desktop/pull/145) |
 | 27 | Verification inbox / SAS display (P8.3) | **In PR** [#147](https://github.com/nepenth/synara-desktop/pull/147) |
 | 28 | Backup / recovery flow (P8.5) | **In PR** [#150](https://github.com/nepenth/synara-desktop/pull/150) |
