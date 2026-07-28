@@ -17,7 +17,7 @@ export const allRoomsAtom = atom<string[], [RoomsAction], undefined>(
       if (action.type === 'PUT') newIds.push(action.roomId);
       return newIds;
     });
-  },
+  }
 );
 export const useBindAllRoomsAtom = (mx: MatrixClient, allRooms: typeof allRoomsAtom) => {
   const setRooms = useSetAtom(allRooms);
@@ -59,13 +59,13 @@ export const useBindAllRoomsAtom = (mx: MatrixClient, allRooms: typeof allRoomsA
       nativePollInFlight = true;
       try {
         const result = await invokeDesktopWithAvailability<NativeRoomListSnapshot>(
-          'matrix_room_list_snapshot',
+          'matrix_room_list_snapshot'
         );
         if (disposed || !result.available || !result.value) return;
         setRooms({
           type: 'INITIALIZE',
           rooms: result.value.orderedRoomIds.filter(
-            (roomId): roomId is string => typeof roomId === 'string',
+            (roomId): roomId is string => typeof roomId === 'string'
           ),
         });
       } finally {
@@ -80,7 +80,7 @@ export const useBindAllRoomsAtom = (mx: MatrixClient, allRooms: typeof allRoomsA
       }
 
       const session = await invokeDesktopWithAvailability<NativeSessionSnapshot>(
-        'matrix_session_snapshot',
+        'matrix_session_snapshot'
       ).catch(() => undefined);
       if (disposed) return;
       if (!session?.available) {
