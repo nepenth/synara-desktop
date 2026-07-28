@@ -32,20 +32,6 @@
 
 ---
 
-## Snapshot (read this first) — superseded below retained for history
-
-
-| | |
-| --- | --- |
-| **Now** | **D0 dogfood pivot.** Freeze L1-only PRs (#207/#209/P9/P10/etc.). Next: **D0.1 Rust login/session sole owner** ([#214](https://github.com/nepenth/synara-desktop/pull/214)). Then D0.2 sync+rooms → D0.3 timeline → D0.4 send. |
-| **Inventory** | **74 / 112** landed artifacts in [program-status](program-status.md) (**65 merged** on tip + **9 open-PR** foundations; tip now includes #200 P7.5). Strict gates **0/15**. Runtime still **matrix-js-sdk-only** / harness-foundation. **Do not invent other counts.** |
-| **Phase gates** | **0 / 15** strict gates closed (honest). |
-| **Open PRs → integration** | **D0:** [#214](https://github.com/nepenth/synara-desktop/pull/214) D0.1 login sole owner; [#212](https://github.com/nepenth/synara-desktop/pull/212) ledger+D0 docs. L1 frozen: #207/#209/P9/P10 stack. |
-| **Blocked on** | #214 Quality + Desktop package gates SUCCESS, then merge. Then dispatch D0.2 only. |
-| **Dogfood path** | **D0.1 login** → D0.2 sync+rooms → D0.3 timeline → D0.4 send. (L1 media/notify frozen mid-dogfood.) |
-
----
-
 ## How this file is maintained
 
 **Orchestrator / implementers must update this file** when:
