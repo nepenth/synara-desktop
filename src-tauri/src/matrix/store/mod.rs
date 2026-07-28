@@ -5,8 +5,9 @@
 //! - [`KeyringStoreKeyVault`] — production OS credential store (macOS/Linux)
 //! - [`InMemoryStoreKeyVault`] — unit/integration harness only
 //!
-//! **No production login/sync, no Tauri Matrix commands, no dual-backend.**
-//! Store open failures **never** auto-delete on-disk data (plan §8.3).
+//! D0.1 uses these stores for production native password login. There is no
+//! production sync and no dual-backend. Store open failures **never**
+//! auto-delete on-disk data (plan §8.3).
 //!
 //! Authoritative design note: `docs/matrix-rust-sdk/p2.2-store-paths-keys.md`
 
