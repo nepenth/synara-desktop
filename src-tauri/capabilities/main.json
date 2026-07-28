@@ -57,6 +57,9 @@
     "allow-matrix-session-snapshot",
     "allow-matrix-sync-status",
     "allow-matrix-room-list-snapshot",
+    "allow-matrix-timeline-open",
+    "allow-matrix-timeline-snapshot",
+    "allow-matrix-timeline-paginate",
     "allow-matrix-logout",
     "allow-matrix-restore-session"
   ]

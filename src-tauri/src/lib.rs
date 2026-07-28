@@ -163,6 +163,9 @@ pub fn run() {
             matrix::auth::product::matrix_session_snapshot,
             matrix::auth::product::matrix_sync_status,
             matrix::auth::product::matrix_room_list_snapshot,
+            matrix::auth::product::matrix_timeline_open,
+            matrix::auth::product::matrix_timeline_snapshot,
+            matrix::auth::product::matrix_timeline_paginate,
             matrix::auth::product::matrix_logout,
             matrix::auth::product::matrix_restore_session
         ])
