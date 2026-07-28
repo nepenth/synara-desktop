@@ -25,6 +25,18 @@
 
 | | |
 | --- | --- |
+| **Now** | **Full-vertical policy.** No dogfood minima. Residual debt **blocks** new work. Next: **V-CRYPTO** full product wire ([d0-residual-completion.md](d0-residual-completion.md)). **#221 HOLD**. |
+| **Policy** | [full-vertical-policy.md](full-vertical-policy.md) |
+| **Tip** | `0400306` — D0.1–D0.5 merged; D0.5 incomplete under full-vertical (crypto minimum). |
+| **Blocked** | Merging plateau D0.6 (#221); starting media/widgets/etc before residual queue. |
+
+---
+
+## Snapshot (read this first) — superseded below retained for history
+
+
+| | |
+| --- | --- |
 | **Now** | **D0 dogfood pivot.** Freeze L1-only PRs (#207/#209/P9/P10/etc.). Next: **D0.1 Rust login/session sole owner** ([#214](https://github.com/nepenth/synara-desktop/pull/214)). Then D0.2 sync+rooms → D0.3 timeline → D0.4 send. |
 | **Inventory** | **74 / 112** landed artifacts in [program-status](program-status.md) (**65 merged** on tip + **9 open-PR** foundations; tip now includes #200 P7.5). Strict gates **0/15**. Runtime still **matrix-js-sdk-only** / harness-foundation. **Do not invent other counts.** |
 | **Phase gates** | **0 / 15** strict gates closed (honest). |
@@ -53,6 +65,14 @@ Update rules:
 ---
 
 ## Work log (newest first)
+
+### 2026-07-28 (policy)
+
+| When (UTC) | Item | Result | Notes |
+| --- | --- | --- | --- |
+| — | **Full vertical policy** | **This PR** | No dogfood cuts; residual completion queue; hold #221 plateau. |
+
+
 
 ### 2026-07-28 (ledger)
 
