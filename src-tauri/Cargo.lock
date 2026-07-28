@@ -5775,6 +5775,7 @@ dependencies = [
  "tokio",
  "url",
  "webkit2gtk",
+ "zeroize",
 ]
 
 [[package]]
