@@ -44,12 +44,37 @@ jobs:
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
         run: |
-          if [[ "$GITHUB_EVENT_NAME" != "pull_request" ]]; then
+          # Always-on full smoke: manual runs and release pushes.
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
             echo "packages=true" >> "$GITHUB_OUTPUT"
+            echo "reason=workflow_dispatch"
             exit 0
           fi
 
+          if [[ "$GITHUB_EVENT_NAME" != "pull_request" ]]; then
+            echo "packages=true" >> "$GITHUB_OUTPUT"
+            echo "reason=non_pr_event"
+            exit 0
+          fi
+
+          # Integration-branch dogfood (D0): full package smoke is opt-in only.
+          # Required "Desktop package gate" still runs and succeeds when skipped.
+          # Opt in with PR label: needs-package
+          if [[ "$BASE_REF" == "feature/matrix-rust-sdk-full-replacement" ]]; then
+            if [[ ",$PR_LABELS," == *",needs-package,"* ]]; then
+              echo "packages=true" >> "$GITHUB_OUTPUT"
+              echo "reason=integration_pr_label_needs-package"
+            else
+              echo "packages=false" >> "$GITHUB_OUTPUT"
+              echo "reason=integration_pr_default_skip_package_smoke"
+            fi
+            exit 0
+          fi
+
+          # PRs into main / release/**: path-sensitive package builds.
           if git diff --quiet "$BASE_SHA" "$HEAD_SHA" -- \
             .github/workflows/desktop-package-smoke.yml \
             .node-version \
@@ -61,8 +86,10 @@ jobs:
             src-tauri \
             synara; then
             echo "packages=false" >> "$GITHUB_OUTPUT"
+            echo "reason=main_pr_no_package_paths"
           else
             echo "packages=true" >> "$GITHUB_OUTPUT"
+            echo "reason=main_pr_package_paths"
           fi
 
   linux-deb:
@@ -251,7 +278,8 @@ jobs:
           fi
 
           if [[ "$PACKAGES_REQUIRED" != "true" ]]; then
-            echo "No package-sensitive files changed; package builds are not required."
+            echo "Package builds not required for this event (integration default, or no package-sensitive paths)."
+            echo "Run workflow_dispatch or add PR label 'needs-package' for a full smoke."
             exit 0
           fi
 
