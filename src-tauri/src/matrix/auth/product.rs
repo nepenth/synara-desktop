@@ -41,6 +41,10 @@ use crate::matrix::sync::{
 use crate::matrix::timeline::{
     NativeTimelineDirection, NativeTimelineRegistry, NativeTimelineSnapshot,
 };
+use crate::matrix::verification::live::{
+    NativeDeviceVerificationStatus, NativeVerificationInbox, NativeVerificationOwner,
+    NativeVerificationRequest,
+};
 
 const ACTIVE_SESSION_FILE: &str = "active-session.json";
 const MATRIX_DATA_DIR: &str = "matrix";
@@ -99,7 +103,11 @@ pub struct MatrixSendTextResult {
 }
 
 impl MatrixAuthCommandError {
-    fn new(code: &'static str, message: &'static str, diagnostic_id: &'static str) -> Self {
+    pub(crate) fn new(
+        code: &'static str,
+        message: &'static str,
+        diagnostic_id: &'static str,
+    ) -> Self {
         Self {
             code,
             message,
@@ -130,6 +138,7 @@ struct ManagedMatrixSession {
     sync: SyncServiceOwner,
     timelines: NativeTimelineRegistry,
     sends: SendQueue,
+    verification: NativeVerificationOwner,
 }
 
 #[derive(Default)]
@@ -192,7 +201,9 @@ pub async fn matrix_login_password(
     }
 
     ensure_crypto_ready(&client).await?;
-    let sync = start_sync_owner(&client, state.next_generation()).await?;
+    let session_generation = state.next_generation();
+    let verification = NativeVerificationOwner::new(&client, session_generation);
+    let sync = start_sync_owner(&client, session_generation).await?;
     let session_vault = KeyringSessionMaterialVault::new();
     persist_session_after_login(&client, &live_identity, &session_vault)
         .map_err(|_| MatrixAuthCommandError::unavailable("d0.1-session-persist-failed"))?;
@@ -211,8 +222,9 @@ pub async fn matrix_login_password(
         client,
         identity: identity.clone(),
         sync,
-        timelines: NativeTimelineRegistry::new(state.current_generation()),
-        sends: SendQueue::new(state.current_generation()),
+        timelines: NativeTimelineRegistry::new(session_generation),
+        sends: SendQueue::new(session_generation),
+        verification,
     });
     Ok(identity)
 }
@@ -249,6 +261,119 @@ pub async fn matrix_crypto_status(
         active.sync.session_generation(),
         cross_signing,
     ))
+}
+
+#[tauri::command]
+pub async fn matrix_verification_list(
+    state: State<'_, MatrixAuthState>,
+) -> Result<NativeVerificationInbox, MatrixAuthCommandError> {
+    let session = state.session.lock().await;
+    let active = require_verification_session(session.as_ref())?;
+    Ok(active.verification.list().await)
+}
+
+#[tauri::command]
+pub async fn matrix_verification_start(
+    state: State<'_, MatrixAuthState>,
+    device_id: Option<String>,
+) -> Result<NativeVerificationRequest, MatrixAuthCommandError> {
+    let session = state.session.lock().await;
+    let active = require_verification_session(session.as_ref())?;
+    active.verification.start(&active.client, device_id).await
+}
+
+#[tauri::command]
+pub async fn matrix_verification_accept(
+    state: State<'_, MatrixAuthState>,
+    flow_id: String,
+) -> Result<NativeVerificationRequest, MatrixAuthCommandError> {
+    let session = state.session.lock().await;
+    let active = require_verification_session(session.as_ref())?;
+    active.verification.accept(&flow_id).await
+}
+
+#[tauri::command]
+pub async fn matrix_verification_begin_sas(
+    state: State<'_, MatrixAuthState>,
+    flow_id: String,
+) -> Result<NativeVerificationRequest, MatrixAuthCommandError> {
+    let session = state.session.lock().await;
+    let active = require_verification_session(session.as_ref())?;
+    active.verification.begin_sas(&flow_id).await
+}
+
+#[tauri::command]
+pub async fn matrix_verification_confirm(
+    state: State<'_, MatrixAuthState>,
+    flow_id: String,
+) -> Result<NativeVerificationRequest, MatrixAuthCommandError> {
+    let session = state.session.lock().await;
+    let active = require_verification_session(session.as_ref())?;
+    active.verification.confirm(&flow_id).await
+}
+
+#[tauri::command]
+pub async fn matrix_verification_mismatch(
+    state: State<'_, MatrixAuthState>,
+    flow_id: String,
+) -> Result<NativeVerificationRequest, MatrixAuthCommandError> {
+    let session = state.session.lock().await;
+    let active = require_verification_session(session.as_ref())?;
+    active.verification.mismatch(&flow_id).await
+}
+
+#[tauri::command]
+pub async fn matrix_verification_cancel(
+    state: State<'_, MatrixAuthState>,
+    flow_id: String,
+) -> Result<NativeVerificationRequest, MatrixAuthCommandError> {
+    let session = state.session.lock().await;
+    let active = require_verification_session(session.as_ref())?;
+    active.verification.cancel(&flow_id).await
+}
+
+#[tauri::command]
+pub async fn matrix_verification_dismiss(
+    state: State<'_, MatrixAuthState>,
+    flow_id: String,
+) -> Result<(), MatrixAuthCommandError> {
+    let session = state.session.lock().await;
+    let active = require_verification_session(session.as_ref())?;
+    active.verification.dismiss(&flow_id).await
+}
+
+#[tauri::command]
+pub async fn matrix_device_verification_status(
+    state: State<'_, MatrixAuthState>,
+    device_id: String,
+) -> Result<NativeDeviceVerificationStatus, MatrixAuthCommandError> {
+    let session = state.session.lock().await;
+    let active = require_verification_session(session.as_ref())?;
+    let user_id = active.client.user_id().ok_or_else(|| {
+        MatrixAuthCommandError::new(
+            "Forbidden",
+            "No native Matrix session is active.",
+            "v-crypto.1-status-requires-session",
+        )
+    })?;
+    let device_id = matrix_sdk::ruma::OwnedDeviceId::from(device_id);
+    let device = active
+        .client
+        .encryption()
+        .get_device(user_id, &device_id)
+        .await
+        .map_err(|_| {
+            MatrixAuthCommandError::new(
+                "Unknown",
+                "Device verification status is unavailable.",
+                "v-crypto.1-status-query-failed",
+            )
+        })?;
+    Ok(match device {
+        Some(device) if device.is_verified() => NativeDeviceVerificationStatus::Verified,
+        Some(_) => NativeDeviceVerificationStatus::Unverified,
+        None => NativeDeviceVerificationStatus::Unavailable,
+    })
 }
 
 #[tauri::command]
@@ -438,13 +563,16 @@ pub async fn matrix_restore_session(
     }
 
     ensure_crypto_ready(&client).await?;
-    let sync = start_sync_owner(&client, state.next_generation()).await?;
+    let session_generation = state.next_generation();
+    let verification = NativeVerificationOwner::new(&client, session_generation);
+    let sync = start_sync_owner(&client, session_generation).await?;
     *session = Some(ManagedMatrixSession {
         client,
         identity: identity.clone(),
         sync,
-        timelines: NativeTimelineRegistry::new(state.current_generation()),
-        sends: SendQueue::new(state.current_generation()),
+        timelines: NativeTimelineRegistry::new(session_generation),
+        sends: SendQueue::new(session_generation),
+        verification,
     });
     Ok(identity)
 }
@@ -532,6 +660,18 @@ fn require_session(
             "Forbidden",
             "No native Matrix session is active.",
             "d0.3-timeline-requires-session",
+        )
+    })
+}
+
+fn require_verification_session(
+    session: Option<&ManagedMatrixSession>,
+) -> Result<&ManagedMatrixSession, MatrixAuthCommandError> {
+    session.ok_or_else(|| {
+        MatrixAuthCommandError::new(
+            "Forbidden",
+            "No native Matrix session is active.",
+            "v-crypto.1-verification-requires-session",
         )
     })
 }

@@ -5,15 +5,17 @@ import { CryptoEvent, CryptoEventHandlerMap } from 'matrix-js-sdk/lib/crypto-api
 import { useMatrixClient } from './useMatrixClient';
 
 export const useDeviceListChange = (
-  onChange: CryptoEventHandlerMap[CryptoEvent.DevicesUpdated]
+  onChange: CryptoEventHandlerMap[CryptoEvent.DevicesUpdated],
+  enabled = true
 ) => {
   const mx = useMatrixClient();
   useEffect(() => {
+    if (!enabled) return undefined;
     mx.on(CryptoEvent.DevicesUpdated, onChange);
     return () => {
       mx.removeListener(CryptoEvent.DevicesUpdated, onChange);
     };
-  }, [mx, onChange]);
+  }, [enabled, mx, onChange]);
 };
 
 const DEVICES_QUERY_KEY = ['devices'];

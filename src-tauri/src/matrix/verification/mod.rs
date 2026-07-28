@@ -11,6 +11,7 @@
 
 mod error;
 mod inbox;
+pub mod live;
 
 pub use error::VerificationError;
 pub use inbox::{

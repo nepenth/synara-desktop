@@ -26,6 +26,7 @@ import {
 } from '../../../hooks/useSecretStorage';
 import { useCrossSigningActive } from '../../../hooks/useCrossSigning';
 import { BackupRestoreTile } from '../../../components/BackupRestore';
+import { isNativeMatrixSession } from '../../verification/nativeVerification';
 
 function DevicesPlaceholder() {
   return (
@@ -41,7 +42,8 @@ type DevicesProps = {
 };
 export function Devices({ requestClose }: DevicesProps) {
   const mx = useMatrixClient();
-  const crypto = mx.getCrypto();
+  const nativeSession = isNativeMatrixSession();
+  const crypto = nativeSession ? undefined : mx.getCrypto();
   const crossSigningActive = useCrossSigningActive();
   const [devices, refreshDeviceList] = useDeviceList();
 
@@ -104,7 +106,7 @@ export function Devices({ requestClose }: DevicesProps) {
                               verificationStatus={verificationStatus}
                               otherUnverifiedCount={unverifiedDeviceCount}
                             />
-                            <DeviceVerificationOptions />
+                            {!nativeSession && <DeviceVerificationOptions />}
                           </Box>
                         )}
                       </>
@@ -130,16 +132,18 @@ export function Devices({ requestClose }: DevicesProps) {
                     </DeviceTile>
                     {crossSigningActive &&
                       verificationStatus === VerificationStatus.Unverified &&
-                      crypto && (
+                      (nativeSession || crypto) && (
                         <VerifyCurrentDeviceTile
                           crypto={crypto}
                           secretStorageKeyId={defaultSecretStorageKeyId}
                           secretStorageKeyContent={defaultSecretStorageKeyContent}
                         />
                       )}
-                    {crypto && verificationStatus === VerificationStatus.Verified && (
-                      <BackupRestoreTile crypto={crypto} />
-                    )}
+                    {!nativeSession &&
+                      crypto &&
+                      verificationStatus === VerificationStatus.Verified && (
+                        <BackupRestoreTile crypto={crypto} />
+                      )}
                   </SequenceCard>
                 ) : (
                   <DeviceTilePlaceholder />
