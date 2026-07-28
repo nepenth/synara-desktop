@@ -274,7 +274,7 @@ impl NativeVerificationOwner {
         let managed = registry
             .requests
             .get_mut(flow_id)
-            .ok_or_else(|| unknown_flow_error())?;
+            .ok_or_else(unknown_flow_error)?;
         managed.other_device_id = Some(sas.other_device().device_id().to_owned());
         managed.sas = Some(sas);
         Ok(project_request(managed))
@@ -299,7 +299,7 @@ impl NativeVerificationOwner {
         let managed = registry
             .requests
             .get_mut(flow_id)
-            .ok_or_else(|| unknown_flow_error())?;
+            .ok_or_else(unknown_flow_error)?;
         managed.user_confirmed = true;
         Ok(project_request(managed))
     }
@@ -330,7 +330,7 @@ impl NativeVerificationOwner {
             let managed = registry
                 .requests
                 .get(flow_id)
-                .ok_or_else(|| unknown_flow_error())?;
+                .ok_or_else(unknown_flow_error)?;
             (managed.request.clone(), managed.sas.clone())
         };
         if let Some(sas) = sas {
@@ -351,7 +351,7 @@ impl NativeVerificationOwner {
         let managed = registry
             .requests
             .get_mut(flow_id)
-            .ok_or_else(|| unknown_flow_error())?;
+            .ok_or_else(unknown_flow_error)?;
         let projection = project_request(managed);
         if !matches!(
             projection.phase,
@@ -375,7 +375,7 @@ impl NativeVerificationOwner {
             .requests
             .get(flow_id)
             .map(|managed| managed.request.clone())
-            .ok_or_else(|| unknown_flow_error())
+            .ok_or_else(unknown_flow_error)
     }
 
     async fn sas(&self, flow_id: &str) -> Result<SasVerification, MatrixAuthCommandError> {
@@ -383,7 +383,7 @@ impl NativeVerificationOwner {
         let managed = registry
             .requests
             .get_mut(flow_id)
-            .ok_or_else(|| unknown_flow_error())?;
+            .ok_or_else(unknown_flow_error)?;
         refresh_sas(managed);
         managed.sas.clone().ok_or_else(|| {
             verification_error(
@@ -403,7 +403,7 @@ impl NativeVerificationOwner {
             .requests
             .get_mut(flow_id)
             .map(project_request)
-            .ok_or_else(|| unknown_flow_error())
+            .ok_or_else(unknown_flow_error)
     }
 }
 
