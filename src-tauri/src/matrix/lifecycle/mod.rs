@@ -12,8 +12,8 @@
 //! logout transitions), [`crate::matrix::tasks`] (generation retire), and
 //! optional [`crate::matrix::diagnostics::MatrixMetrics`].
 //!
-//! **No** production Tauri Matrix commands, **no** live sync product path,
-//! **no** dual-backend.
+//! D0.1 composes session persist/restore into production Tauri auth commands.
+//! There is **no** live sync product path and **no** dual-backend.
 //!
 //! Authoritative design notes:
 //! - `docs/matrix-rust-sdk/p2.6-destructive-lifecycle.md`

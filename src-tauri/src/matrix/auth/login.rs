@@ -4,8 +4,9 @@
 //! `client.matrix_auth().login_username(...).initial_device_display_name(...).await`
 //! and `login_token(...)`.
 //!
-//! **Harness / foundation only.** No production Tauri Matrix login commands, no
-//! dual-backend, no session restore (P3.6), no SSO (P3.3).
+//! D0.1 composes password login into the production Tauri command in
+//! [`super::product`]. Token login remains foundation-only. There is no
+//! dual-backend.
 //!
 //! Tokens remain on the SDK `Client` after success. [`LoginResult`] never carries
 //! access/refresh tokens — only privacy-safe identity fields for harness/status.
