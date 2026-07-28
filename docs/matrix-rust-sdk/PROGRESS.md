@@ -9,8 +9,8 @@
 
 | Field | Value |
 | --- | --- |
-| Last updated (UTC) | **2026-07-28 ~00:55** |
-| Integration tip | `5799d16` — Merge #145 P8.2 devices |
+| Last updated (UTC) | **2026-07-28 ~02:15** |
+| Integration tip | `c3c630e` — Merge #150 P8.5 backup/recovery |
 | Product runtime | Still **`matrix-js-sdk` only** until atomic sole-owner cutover |
 | Dual backend | **`false`** (forbidden forever) |
 | Operating model | [cutover-operating-model.md](cutover-operating-model.md) |
@@ -25,12 +25,12 @@
 
 | | |
 | --- | --- |
-| **Now** | **#145 P8.2 devices merged.** Primary next: **#147 P8.3** verification (tip-merged after #145; CI re-run). Then #150 backup, #151 legacy, #154 focus, #155 remote logout, #157 UTD. |
-| **Inventory** | ~45/112 original task artifacts when program-status is synced (through P8.2 landed; see ledger). |
+| **Now** | **#150 P8.5 backup/recovery merged.** Primary next: **#151 P3.7** legacy (tip-merged). Then #154 focus, #155 remote logout, timeline/crypto stack. |
+| **Inventory** | ~47/112 original task artifacts when program-status is synced (through P8.5 landed; see ledger). |
 | **Phase gates** | **0 / 15** strict gates closed (honest). |
-| **Open PRs → integration** | [#147](https://github.com/nepenth/synara-desktop/pull/147) verification, [#150](https://github.com/nepenth/synara-desktop/pull/150) backup/recovery, [#151](https://github.com/nepenth/synara-desktop/pull/151) legacy, [#154](https://github.com/nepenth/synara-desktop/pull/154) timeline focus, [#155](https://github.com/nepenth/synara-desktop/pull/155) remote logout, [#157](https://github.com/nepenth/synara-desktop/pull/157) UTD; [#109](https://github.com/nepenth/synara-desktop/pull/109) MiniMax (deprioritize). |
-| **Blocked on** | CI green after tip-merge onto post-#145 tip. Required: Quality gate + Desktop package gate. |
-| **Dogfood path** | search ✅ → cross-signing ✅ → widgets ✅ → devices ✅ (**#145**) → **verification (#147)** → backup → legacy → focus → remote logout → UTD. |
+| **Open PRs → integration** | [#151](https://github.com/nepenth/synara-desktop/pull/151) legacy, [#154](https://github.com/nepenth/synara-desktop/pull/154) focus, [#155](https://github.com/nepenth/synara-desktop/pull/155) remote logout, [#157](https://github.com/nepenth/synara-desktop/pull/157) UTD, [#160](https://github.com/nepenth/synara-desktop/pull/160) polls, [#161](https://github.com/nepenth/synara-desktop/pull/161) unread, [#162](https://github.com/nepenth/synara-desktop/pull/162) raw-content, [#163](https://github.com/nepenth/synara-desktop/pull/163) account-data, [#165](https://github.com/nepenth/synara-desktop/pull/165) room-keys, [#166](https://github.com/nepenth/synara-desktop/pull/166) UTD recovery; [#164](https://github.com/nepenth/synara-desktop/pull/164)/docs PROGRESS; [#109](https://github.com/nepenth/synara-desktop/pull/109) MiniMax (deprioritize). |
+| **Blocked on** | CI green after tip-merge onto post-#150 tip. Required: Quality gate + Desktop package gate. |
+| **Dogfood path** | search ✅ → cross-signing ✅ → widgets ✅ → devices ✅ → verification ✅ → backup ✅ (**#150**) → **legacy (#151)** → focus → remote logout → … |
 
 ---
 
@@ -58,6 +58,10 @@ Update rules:
 
 | When (UTC) | Item | Result | Notes |
 | --- | --- | --- | --- |
+| ~02:15 | **PROGRESS.md** after #150 | **This PR** | Tip `c3c630e`; next #151 legacy. |
+| ~02:13 | **P8.5** key backup / recovery | **Merged** [#150](https://github.com/nepenth/synara-desktop/pull/150) | BackupRecoveryFlow; no recovery keys; tip `c3c630e`. |
+| ~02:15 | **P8.7** UTD recovery coordinator | **PR open** [#166](https://github.com/nepenth/synara-desktop/pull/166) | Room-level retry/history recovery. |
+| ~01:58 | **P8.6** room-key transfer | **PR open** [#165](https://github.com/nepenth/synara-desktop/pull/165) | Export/import flow; no key material. |
 | ~00:55 | **PROGRESS.md** after #145 | **This PR** | Tip `5799d16`; open stack tip-merged; next #147. |
 | ~00:54 | **P8.2** device list / trust | **Merged** [#145](https://github.com/nepenth/synara-desktop/pull/145) | DeviceIndex; no keys; tip `5799d16`. |
 | ~00:54 | **P5.10** UTD / decrypt updates | **PR open** [#157](https://github.com/nepenth/synara-desktop/pull/157) | UtdIndex; no session keys / bodies. |
