@@ -537,6 +537,42 @@
           "markdownDescription": "Enables the desktop_update_tray_state command without any pre-configured scope."
         },
         {
+          "description": "Enables the matrix_login_password command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-login-password",
+          "markdownDescription": "Enables the matrix_login_password command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_logout command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-logout",
+          "markdownDescription": "Enables the matrix_logout command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_restore_session command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-restore-session",
+          "markdownDescription": "Enables the matrix_restore_session command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_room_list_snapshot command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-room-list-snapshot",
+          "markdownDescription": "Enables the matrix_room_list_snapshot command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_session_snapshot command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-session-snapshot",
+          "markdownDescription": "Enables the matrix_session_snapshot command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_sync_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-sync-status",
+          "markdownDescription": "Enables the matrix_sync_status command without any pre-configured scope."
+        },
+        {
           "description": "Denies the desktop_agent_action command without any pre-configured scope.",
           "type": "string",
           "const": "deny-desktop-agent-action",
@@ -727,6 +763,42 @@
           "type": "string",
           "const": "deny-desktop-update-tray-state",
           "markdownDescription": "Denies the desktop_update_tray_state command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_login_password command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-login-password",
+          "markdownDescription": "Denies the matrix_login_password command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_logout command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-logout",
+          "markdownDescription": "Denies the matrix_logout command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_restore_session command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-restore-session",
+          "markdownDescription": "Denies the matrix_restore_session command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_room_list_snapshot command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-room-list-snapshot",
+          "markdownDescription": "Denies the matrix_room_list_snapshot command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_session_snapshot command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-session-snapshot",
+          "markdownDescription": "Denies the matrix_session_snapshot command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_sync_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-sync-status",
+          "markdownDescription": "Denies the matrix_sync_status command without any pre-configured scope."
         },
         {
           "description": "No features are enabled by default, as we believe\nthe clipboard can be inherently dangerous and it is \napplication specific if read and/or write access is needed.\n\nClipboard interaction needs to be explicitly enabled.\n",
