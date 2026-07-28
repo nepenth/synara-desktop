@@ -9,6 +9,7 @@ import {
   useDeviceVerificationStatus,
   VerificationStatus,
 } from '../hooks/useDeviceVerificationStatus';
+import { isNativeMatrixSession } from '../features/verification/nativeVerification';
 
 type LogoutDialogProps = {
   handleClose: () => void;
@@ -19,7 +20,7 @@ export const LogoutDialog = forwardRef<HTMLDivElement, LogoutDialogProps>(
     const hasEncryptedRoom = !!mx.getRooms().find((room) => room.hasEncryptionStateEvent());
     const crossSigningActive = useCrossSigningActive();
     const verificationStatus = useDeviceVerificationStatus(
-      mx.getCrypto(),
+      isNativeMatrixSession() ? undefined : mx.getCrypto(),
       mx.getSafeUserId(),
       mx.getDeviceId() ?? undefined
     );

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-matrix-verification-dismiss"
+description = "Enables the matrix_verification_dismiss command without any pre-configured scope."
+commands.allow = ["matrix_verification_dismiss"]
+
+[[permission]]
+identifier = "deny-matrix-verification-dismiss"
+description = "Denies the matrix_verification_dismiss command without any pre-configured scope."
+commands.deny = ["matrix_verification_dismiss"]

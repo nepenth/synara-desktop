@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-matrix-verification-mismatch"
+description = "Enables the matrix_verification_mismatch command without any pre-configured scope."
+commands.allow = ["matrix_verification_mismatch"]
+
+[[permission]]
+identifier = "deny-matrix-verification-mismatch"
+description = "Denies the matrix_verification_mismatch command without any pre-configured scope."
+commands.deny = ["matrix_verification_mismatch"]

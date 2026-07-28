@@ -46,7 +46,7 @@ import { useSyncState } from '../../hooks/useSyncState';
 import { stopPropagation } from '../../utils/keyboard';
 import { SyncStatus } from './SyncStatus';
 import { AuthMetadataProvider } from '../../hooks/useAuthMetadata';
-import { getActiveSession } from '../../state/sessionBootstrap';
+import { getActiveSession, getSessionBootstrapResult } from '../../state/sessionBootstrap';
 import { AutoDiscovery } from './AutoDiscovery';
 import { platformSessionStore, repairPlatformDeviceDisplayName } from '../../platform';
 import { migrateLegacySessionToNativeAfterClientInit } from '../../state/sessionPersistence';
@@ -58,6 +58,7 @@ import {
   SYNC_PREPARED_TIMEOUT_MS,
 } from '../../utils/syncSplashRecovery';
 import { recordClientDiagnostic } from '../../utils/clientDiagnostics';
+import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
 
 function ClientRootLoading({ status }: { status: string }) {
   return (
@@ -254,12 +255,19 @@ export function ClientRoot({ children }: ClientRootProps) {
       if (!session) {
         throw new Error('No session Found!');
       }
-      return initClient(session).then(async (client) => {
+      return (async () => {
+        if (isSynaraDesktop() && getSessionBootstrapResult().source === 'native') {
+          const restored = await invokeDesktopWithAvailability('matrix_restore_session');
+          if (!restored.available || !restored.value) {
+            throw new Error('Native Matrix session is unavailable.');
+          }
+        }
+        const client = await initClient(session);
         await migrateLegacySessionToNativeAfterClientInit({
           nativeSessionStore: platformSessionStore,
         });
         return client;
-      });
+      })();
     }, [])
   );
   const mx = loadState.status === AsyncStatus.Success ? loadState.data : undefined;

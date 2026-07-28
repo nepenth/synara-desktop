@@ -31,7 +31,7 @@ Order is **fix incomplete crypto first** (largest intentional product gap on tip
 
 | ID | Capability | Product surfaces today (js) | Host foundations (parts only) | Done when |
 | --- | --- | --- | --- | --- |
-| **V-CRYPTO.1** | Device verification UX | `DeviceVerification*`, settings `Verification`, `useVerificationRequest`, `verification.ts` | `matrix/verification/*` | Verify/inbound request flows via Rust IPC + SDK; no js `CryptoApi` for native session |
+| **V-CRYPTO.1 — DONE** | Device verification UX | Native `DeviceVerification*`, settings verification actions/status, and inbound inbox; legacy components are non-native only | Live `matrix/verification/live.rs` owner + registered/permissioned IPC | Completed on `matrix-rust/v-crypto-1-verification`; see [v-crypto-1-verification.md](v-crypto-1-verification.md) |
 | **V-CRYPTO.2** | Cross-signing readiness / setup product path | Device verification setup, status | `matrix/cross_signing/*` | Bootstrap/status/setup product path native; secrets never in webview |
 | **V-CRYPTO.3** | Key backup restore / recovery UI | `BackupRestore`, `useKeyBackup`, `backupRestore.ts` | `matrix/backup/*` | Restore/setup/repair via Rust; privacy-safe errors only |
 | **V-CRYPTO.4** | SSSS / secret storage bootstrap & unlock | `SecretStorage.tsx` | SDK secret storage + P8 parts | Unlock/bootstrap import UI native; no secrets over IPC |

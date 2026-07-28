@@ -38,6 +38,8 @@ import { clearNotificationCaches } from '../app/notifications/notificationCaches
 import { assertCryptoStoreContinuity, CryptoStoreContinuityError } from './cryptoStoreContinuity';
 import { ensureVerificationRequestInbox } from './verificationRequestInbox';
 import { recordClientDiagnostic } from '../app/utils/clientDiagnostics';
+import { getSessionBootstrapResult } from '../app/state/sessionBootstrap';
+import { isSynaraDesktop } from '../app/utils/desktop';
 
 export const REFRESH_BEFORE_EXPIRY_MS = 60_000;
 
@@ -225,6 +227,7 @@ const startMatrixClient = async (
   const refreshDeps = session.refreshToken
     ? { ...defaultRefreshDeps(), ...options.refreshDeps }
     : undefined;
+  const nativeCryptoOwner = isSynaraDesktop() && getSessionBootstrapResult().source === 'native';
   const mx = createMatrixClient(session, { refreshDeps });
   recordClientDiagnostic('session', 'matrix-client.initialization-started', {
     hasRefreshToken: Boolean(session.refreshToken),
@@ -236,31 +239,37 @@ const startMatrixClient = async (
     recordClientDiagnostic('session', 'matrix-store.startup-completed', {
       durationMs: performance.now() - storeStartedAtMs,
     });
-    initializationPhase = 'crypto-initialization';
-    const cryptoStartedAtMs = performance.now();
-    await mx.initRustCrypto();
-    recordClientDiagnostic('session', 'matrix-crypto.initialization-completed', {
-      durationMs: performance.now() - cryptoStartedAtMs,
-    });
-    initializationPhase = 'crypto-continuity';
-    const continuityStartedAtMs = performance.now();
-    const continuity = await assertCryptoStoreContinuity(mx, {
-      userId: session.userId,
-      deviceId: session.deviceId,
-      allowMissingServerDevice: options.allowMissingServerDevice,
-    });
-    recordClientDiagnostic('session', 'crypto-continuity.completed', {
-      outcome: continuity,
-      durationMs: performance.now() - continuityStartedAtMs,
-    });
-    initializationPhase = 'continuity-finalization';
-    if (continuity === 'matched') {
-      clearPendingFreshLoginIdentity(session);
+    if (nativeCryptoOwner) {
+      recordClientDiagnostic('session', 'matrix-crypto.initialization-skipped', {
+        owner: 'matrix-rust-sdk',
+      });
     } else {
-      pendingFreshLoginContinuity.set(mx, session);
+      initializationPhase = 'crypto-initialization';
+      const cryptoStartedAtMs = performance.now();
+      await mx.initRustCrypto();
+      recordClientDiagnostic('session', 'matrix-crypto.initialization-completed', {
+        durationMs: performance.now() - cryptoStartedAtMs,
+      });
+      initializationPhase = 'crypto-continuity';
+      const continuityStartedAtMs = performance.now();
+      const continuity = await assertCryptoStoreContinuity(mx, {
+        userId: session.userId,
+        deviceId: session.deviceId,
+        allowMissingServerDevice: options.allowMissingServerDevice,
+      });
+      recordClientDiagnostic('session', 'crypto-continuity.completed', {
+        outcome: continuity,
+        durationMs: performance.now() - continuityStartedAtMs,
+      });
+      initializationPhase = 'continuity-finalization';
+      if (continuity === 'matched') {
+        clearPendingFreshLoginIdentity(session);
+      } else {
+        pendingFreshLoginContinuity.set(mx, session);
+      }
+      initializationPhase = 'verification-inbox';
+      ensureVerificationRequestInbox(mx);
     }
-    initializationPhase = 'verification-inbox';
-    ensureVerificationRequestInbox(mx);
     recordClientDiagnostic('session', 'matrix-client.initialization-completed', {
       outcome: 'ready-to-start',
       durationMs: performance.now() - startupStartedAtMs,
