@@ -9,8 +9,8 @@
 
 | Field | Value |
 | --- | --- |
-| Last updated (UTC) | **2026-07-28 ~02:30** |
-| Integration tip | `c3c630e` — Merge #150 P8.5 backup/recovery |
+| Last updated (UTC) | **2026-07-28 ~02:35** |
+| Integration tip | `0e6399d` — Merge #155 P3.8 remote logout |
 | Product runtime | Still **`matrix-js-sdk` only** until atomic sole-owner cutover |
 | Dual backend | **`false`** (forbidden forever) |
 | Operating model | [cutover-operating-model.md](cutover-operating-model.md) |
@@ -25,12 +25,12 @@
 
 | | |
 | --- | --- |
-| **Now** | **#150 P8.5 backup/recovery merged.** Primary next: **#151 P3.7** legacy (tip-merged; CI). Then #154 focus, #155 remote logout, #157 UTD. New: **#169 P4.7** presence, **#168 P8.8** crypto-store. |
-| **Inventory** | ~47/112 original task artifacts when program-status is synced (through P8.5 landed; open foundations not yet counted). |
+| **Now** | **#155 P3.8 remote logout merged.** Primary next: **#151 P3.7** legacy (tip-merged; CI re-run). Then #154 focus, #157 UTD. Open: #168 crypto-store, #169 presence. |
+| **Inventory** | ~48/112 original task artifacts when program-status is synced (through P3.8 landed; open foundations not yet counted). |
 | **Phase gates** | **0 / 15** strict gates closed (honest). |
-| **Open PRs → integration** | [#151](https://github.com/nepenth/synara-desktop/pull/151) legacy, [#154](https://github.com/nepenth/synara-desktop/pull/154) focus, [#155](https://github.com/nepenth/synara-desktop/pull/155) remote logout, [#157](https://github.com/nepenth/synara-desktop/pull/157) UTD, [#160](https://github.com/nepenth/synara-desktop/pull/160) polls, [#161](https://github.com/nepenth/synara-desktop/pull/161) unread, [#162](https://github.com/nepenth/synara-desktop/pull/162) raw-content, [#163](https://github.com/nepenth/synara-desktop/pull/163) account-data, [#165](https://github.com/nepenth/synara-desktop/pull/165) room-keys, [#166](https://github.com/nepenth/synara-desktop/pull/166) UTD recovery, [#168](https://github.com/nepenth/synara-desktop/pull/168) crypto-store, [#169](https://github.com/nepenth/synara-desktop/pull/169) presence; [#167](https://github.com/nepenth/synara-desktop/pull/167) PROGRESS; [#156](https://github.com/nepenth/synara-desktop/pull/156) ledger resync; [#109](https://github.com/nepenth/synara-desktop/pull/109) MiniMax (deprioritize). |
-| **Blocked on** | GitHub Actions runner starvation (~19 queued). Prefer merge #151 when green; deprioritized package smoke cancelled to free runners. Required: Quality gate + Desktop package gate. |
-| **Dogfood path** | search ✅ → cross-signing ✅ → widgets ✅ → devices ✅ → verification ✅ → backup ✅ (**#150**) → **legacy (#151)** → focus → remote logout → UTD → … |
+| **Open PRs → integration** | [#151](https://github.com/nepenth/synara-desktop/pull/151) legacy, [#154](https://github.com/nepenth/synara-desktop/pull/154) focus, [#157](https://github.com/nepenth/synara-desktop/pull/157) UTD, [#160](https://github.com/nepenth/synara-desktop/pull/160) polls, [#161](https://github.com/nepenth/synara-desktop/pull/161) unread, [#162](https://github.com/nepenth/synara-desktop/pull/162) raw-content, [#163](https://github.com/nepenth/synara-desktop/pull/163) account-data, [#165](https://github.com/nepenth/synara-desktop/pull/165) room-keys, [#166](https://github.com/nepenth/synara-desktop/pull/166) UTD recovery, [#168](https://github.com/nepenth/synara-desktop/pull/168) crypto-store, [#169](https://github.com/nepenth/synara-desktop/pull/169) presence; [#167](https://github.com/nepenth/synara-desktop/pull/167) PROGRESS; [#156](https://github.com/nepenth/synara-desktop/pull/156) ledger resync; [#109](https://github.com/nepenth/synara-desktop/pull/109) MiniMax (deprioritize). |
+| **Blocked on** | CI re-run after tip-merge post-#155. Required: Quality gate + Desktop package gate. Non-priority package smoke cancelled earlier to free runners. |
+| **Dogfood path** | search ✅ → cross-signing ✅ → widgets ✅ → devices ✅ → verification ✅ → backup ✅ → remote logout ✅ (**#155**) → **legacy (#151)** → focus → UTD → … |
 
 ---
 
@@ -58,6 +58,8 @@ Update rules:
 
 | When (UTC) | Item | Result | Notes |
 | --- | --- | --- | --- |
+| ~02:35 | **P3.8** remote logout + recovery copy | **Merged** [#155](https://github.com/nepenth/synara-desktop/pull/155) | RemoteLogoutFlow + RecoveryCopyKey; tip `0e6399d`. |
+| ~02:35 | **PROGRESS.md** after #155 | **This PR** | Next #151 legacy; tip-merged open stack. |
 | ~02:30 | **P4.7** presence stream index | **PR open** [#169](https://github.com/nepenth/synara-desktop/pull/169) | PresenceIndex; local 8/8; clippy+guardrails. |
 | ~02:30 | **PROGRESS.md** refresh | **This PR** | Open #168/#169; CI queue triage (cancel non-priority package smoke). |
 | ~02:24 | **P8.8** crypto-store continuity | **PR open** [#168](https://github.com/nepenth/synara-desktop/pull/168) | Never auto-wipe; no keys. |
