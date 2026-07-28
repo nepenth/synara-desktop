@@ -1,4 +1,4 @@
-//! Unit tests for P6.4 media upload queue.
+//! Unit tests for P6.4 media upload + P7.2 media download queues.
 
 use super::*;
 use crate::matrix::dto::UploadState;
@@ -123,4 +123,82 @@ fn progress_clamped() {
     assert_eq!(q.get(&id).unwrap().progress01, Some(1.0));
     q.set_progress(&id, -1.0).unwrap();
     assert_eq!(q.get(&id).unwrap().progress01, Some(0.0));
+}
+
+#[test]
+fn download_lifecycle() {
+    let mut q = DownloadQueue::new(3);
+    let id = q
+        .enqueue(
+            "mxc://example.org/abc",
+            DownloadKind::Original,
+            Some("!r:example.org".into()),
+        )
+        .unwrap()
+        .download_id
+        .clone();
+    assert_eq!(q.get(&id).unwrap().state, DownloadState::Queued);
+    q.begin(&id).unwrap();
+    q.set_progress(&id, 0.4).unwrap();
+    q.complete(&id, "local-cache:abc").unwrap();
+    let done = q.get(&id).unwrap();
+    assert_eq!(done.state, DownloadState::Ready);
+    assert_eq!(done.local_handle_id.as_deref(), Some("local-cache:abc"));
+    assert_eq!(done.progress01, Some(1.0));
+}
+
+#[test]
+fn download_fail_retry_cancel_prune() {
+    let mut q = DownloadQueue::new(1);
+    let id = q
+        .enqueue("mxc://example.org/x", DownloadKind::Thumbnail, None)
+        .unwrap()
+        .download_id
+        .clone();
+    q.begin(&id).unwrap();
+    q.fail(&id, "p7.2-network-failed").unwrap();
+    assert_eq!(
+        q.get(&id).unwrap().failure_diagnostic_id,
+        Some("p7.2-network-failed")
+    );
+    q.retry(&id).unwrap();
+    assert_eq!(q.get(&id).unwrap().state, DownloadState::Queued);
+    q.cancel(&id).unwrap();
+    assert_eq!(q.prune_terminal(), 1);
+    assert!(q.is_empty());
+}
+
+#[test]
+fn download_forbids_data_and_tokens() {
+    let mut q = DownloadQueue::new(1);
+    let err = q
+        .enqueue("data:image/png;base64,AAA", DownloadKind::Avatar, None)
+        .unwrap_err();
+    assert_eq!(err.diagnostic_id(), "p7.2-forbidden-media-scheme");
+    let err = q
+        .enqueue(
+            "mxc://example.org/x?access_token=secret",
+            DownloadKind::Original,
+            None,
+        )
+        .unwrap_err();
+    assert_eq!(err.diagnostic_id(), "p7.2-forbidden-media-id");
+    let id = q
+        .enqueue("mxc://example.org/y", DownloadKind::Original, None)
+        .unwrap()
+        .download_id
+        .clone();
+    q.begin(&id).unwrap();
+    let err = q.complete(&id, "data:image/png;base64,AAA").unwrap_err();
+    assert_eq!(err.diagnostic_id(), "p7.2-forbidden-handle-scheme");
+}
+
+#[test]
+fn download_retire() {
+    let mut q = DownloadQueue::new(1);
+    q.enqueue("mxc://example.org/z", DownloadKind::Avatar, None)
+        .unwrap();
+    q.retire_generation(7);
+    assert!(q.is_empty());
+    assert_eq!(q.session_generation(), 7);
 }
