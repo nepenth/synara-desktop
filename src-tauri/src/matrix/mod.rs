@@ -25,6 +25,7 @@
 //! P6.2: Receipt index foundation (harness; no SDK send_receipt).
 //! P6.3: Typing index foundation (harness; no SDK typing send).
 //! P6.4: Media upload queue foundation (metadata only; no bytes / no SDK upload).
+//! P6.7: Account-data service foundation (harness; string fields only).
 //! P6.8: Search session / result index foundation (harness).
 //! P7.1: Notification candidate index foundation (harness; privacy-filtered).
 //! P8.1: Security / crypto status projection foundation (harness; no secrets).
@@ -35,6 +36,7 @@
 //! No production login/sync loop or Tauri command registration lives here yet.
 //! No dual-backend selector. Product runtime remains matrix-js-sdk.
 
+pub mod account_data;
 pub mod auth;
 pub mod client_builder;
 pub mod cross_signing;
@@ -84,6 +86,7 @@ pub fn matrix_ipc_schema_markers() -> &'static str {
     let _tasks = tasks::matrix_tasks_markers();
     let _diagnostics = diagnostics::matrix_diagnostics_markers();
     let _lifecycle = lifecycle::matrix_lifecycle_markers();
+    let _account_data = account_data::matrix_account_data_markers();
     let _auth = auth::matrix_auth_markers();
     let _sync = sync::matrix_sync_markers();
     let _room_list = room_list::matrix_room_list_markers();
@@ -120,6 +123,7 @@ pub fn matrix_ipc_schema_markers() -> &'static str {
     debug_assert_eq!(_tasks, tasks::MATRIX_TASKS_MARKER);
     debug_assert_eq!(_diagnostics, diagnostics::MATRIX_DIAGNOSTICS_MARKER);
     debug_assert_eq!(_lifecycle, lifecycle::MATRIX_LIFECYCLE_MARKER);
+    debug_assert_eq!(_account_data, account_data::MATRIX_ACCOUNT_DATA_MARKER);
     debug_assert_eq!(_auth, auth::MATRIX_AUTH_MARKER);
     debug_assert_eq!(_sync, sync::MATRIX_SYNC_MARKER);
     debug_assert_eq!(_room_list, room_list::MATRIX_ROOM_LIST_MARKER);
@@ -140,5 +144,5 @@ pub fn matrix_ipc_schema_markers() -> &'static str {
     debug_assert_eq!(_media, media::MATRIX_MEDIA_MARKER);
     debug_assert_eq!(_notifications, notifications::MATRIX_NOTIFICATIONS_MARKER);
     debug_assert_eq!(_widgets, widgets::MATRIX_WIDGETS_MARKER);
-    "matrix-ipc-protocol-v1+domain-dtos-p1.4+supervisor-p2.1+store-p2.2+client-builder-p2.3+tasks-p2.4+diagnostics-p2.5+lifecycle-p2.6+auth-p3.2+session-persist-p3.5+sync-p4.1+room-list-p4.2+routes-p4.8+spaces-p4.5+members-p4.6+timeline-p5.1+diffs-p5.2+pagination-p5.3+search-p6.8+relations-p5.6+send-p6.1+receipts-p6.2+typing-p6.3+media-p6.4+threads-p5.8+notifications-p7.1+security-p8.1+cross-signing-p8.4+widgets-p9.1+devices-p8.2+verification-p8.3"
+    "matrix-ipc-protocol-v1+domain-dtos-p1.4+supervisor-p2.1+store-p2.2+client-builder-p2.3+tasks-p2.4+diagnostics-p2.5+lifecycle-p2.6+auth-p3.2+session-persist-p3.5+sync-p4.1+room-list-p4.2+routes-p4.8+spaces-p4.5+members-p4.6+timeline-p5.1+diffs-p5.2+pagination-p5.3+search-p6.8+relations-p5.6+send-p6.1+receipts-p6.2+typing-p6.3+media-p6.4+threads-p5.8+notifications-p7.1+security-p8.1+cross-signing-p8.4+widgets-p9.1+devices-p8.2+verification-p8.3+account-data-p6.7"
 }
