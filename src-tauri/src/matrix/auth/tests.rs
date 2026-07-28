@@ -425,3 +425,118 @@ fn login_flow_kind_matrix_type_roundtrip() {
         assert!(!kind.as_str().is_empty());
     }
 }
+
+// --- P3.4 UIA session ---
+
+fn password_then_dummy_stages() -> Vec<UiaStage> {
+    vec![
+        UiaStage {
+            kind: UiaStageKind::Password,
+            matrix_type: "m.login.password".into(),
+            public_param_id: None,
+        },
+        UiaStage {
+            kind: UiaStageKind::Dummy,
+            matrix_type: "m.login.dummy".into(),
+            public_param_id: None,
+        },
+    ]
+}
+
+#[test]
+fn uia_happy_path_two_stages() {
+    let mut s = UiaSession::new(3);
+    let op = s
+        .begin(UiaFlowKind::Login, "sess-1", password_then_dummy_stages())
+        .unwrap();
+    assert_eq!(s.phase(), UiaPhase::ChallengePending);
+    assert_eq!(s.current_stage().unwrap().kind, UiaStageKind::Password);
+    assert_eq!(s.begin_submit(op).unwrap(), UiaStageKind::Password);
+    s.stage_accepted(op).unwrap();
+    assert_eq!(s.current_stage().unwrap().kind, UiaStageKind::Dummy);
+    s.begin_submit(op).unwrap();
+    s.stage_accepted(op).unwrap();
+    assert_eq!(s.phase(), UiaPhase::Completed);
+    assert!(s.uia_session_id().is_none());
+    let out = s.complete_success(op).unwrap();
+    assert_eq!(out.stages_completed, 2);
+    assert_eq!(out.flow_kind, UiaFlowKind::Login);
+    assert!(s.never_stores_secrets());
+}
+
+#[test]
+fn uia_stage_rejected_retries_same_stage() {
+    let mut s = UiaSession::new(1);
+    let op = s
+        .begin(
+            UiaFlowKind::Registration,
+            "reg",
+            password_then_dummy_stages(),
+        )
+        .unwrap();
+    s.begin_submit(op).unwrap();
+    s.stage_rejected(op, "p3.4-bad-password").unwrap();
+    assert_eq!(s.phase(), UiaPhase::ChallengePending);
+    assert_eq!(s.current_stage().unwrap().kind, UiaStageKind::Password);
+    assert_eq!(s.failure_diagnostic_id(), Some("p3.4-bad-password"));
+    assert_eq!(s.stages_completed(), 0);
+}
+
+#[test]
+fn uia_empty_stages_and_cap() {
+    let mut s = UiaSession::new(1);
+    let err = s.begin(UiaFlowKind::Login, "s", vec![]).unwrap_err();
+    assert_eq!(err.diagnostic_id(), "p3.4-empty-stages");
+    let many: Vec<UiaStage> = (0..=MAX_UIA_STAGES)
+        .map(|i| UiaStage {
+            kind: UiaStageKind::Dummy,
+            matrix_type: format!("m.login.dummy.{i}"),
+            public_param_id: None,
+        })
+        .collect();
+    let err = s.begin(UiaFlowKind::Login, "s", many).unwrap_err();
+    assert_eq!(err.diagnostic_id(), "p3.4-stage-cap");
+}
+
+#[test]
+fn uia_cancel_and_stale_op() {
+    let mut s = UiaSession::new(1);
+    let op = s
+        .begin(
+            UiaFlowKind::PasswordReset,
+            "s",
+            password_then_dummy_stages(),
+        )
+        .unwrap();
+    s.cancel(op).unwrap();
+    assert_eq!(s.phase(), UiaPhase::Cancelled);
+    let err = s.begin_submit(op).unwrap_err();
+    assert_eq!(err.diagnostic_id(), "p3.4-submit-wrong-phase");
+    s.reset();
+    let op2 = s
+        .begin(UiaFlowKind::StepUp, "s2", password_then_dummy_stages())
+        .unwrap();
+    let err = s.begin_submit(op2 + 1).unwrap_err();
+    assert_eq!(err.diagnostic_id(), "p3.4-stale-uia-op");
+}
+
+#[test]
+fn uia_stage_kind_from_matrix_type() {
+    assert_eq!(
+        UiaStageKind::from_matrix_type("m.login.recaptcha"),
+        UiaStageKind::Recaptcha
+    );
+    assert!(UiaStageKind::Password.requires_secret_input());
+    assert!(!UiaStageKind::Dummy.requires_secret_input());
+}
+
+#[test]
+fn uia_retire_generation() {
+    let mut s = UiaSession::new(1);
+    s.begin(UiaFlowKind::Login, "s", password_then_dummy_stages())
+        .unwrap();
+    s.retire_generation(9);
+    assert_eq!(s.session_generation(), 9);
+    assert!(!s.is_active());
+    assert_eq!(s.phase(), UiaPhase::Idle);
+}
