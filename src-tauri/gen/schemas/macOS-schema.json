@@ -573,6 +573,24 @@
           "markdownDescription": "Enables the matrix_sync_status command without any pre-configured scope."
         },
         {
+          "description": "Enables the matrix_timeline_open command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-timeline-open",
+          "markdownDescription": "Enables the matrix_timeline_open command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_timeline_paginate command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-timeline-paginate",
+          "markdownDescription": "Enables the matrix_timeline_paginate command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_timeline_snapshot command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-timeline-snapshot",
+          "markdownDescription": "Enables the matrix_timeline_snapshot command without any pre-configured scope."
+        },
+        {
           "description": "Denies the desktop_agent_action command without any pre-configured scope.",
           "type": "string",
           "const": "deny-desktop-agent-action",
@@ -799,6 +817,24 @@
           "type": "string",
           "const": "deny-matrix-sync-status",
           "markdownDescription": "Denies the matrix_sync_status command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_timeline_open command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-timeline-open",
+          "markdownDescription": "Denies the matrix_timeline_open command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_timeline_paginate command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-timeline-paginate",
+          "markdownDescription": "Denies the matrix_timeline_paginate command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_timeline_snapshot command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-timeline-snapshot",
+          "markdownDescription": "Denies the matrix_timeline_snapshot command without any pre-configured scope."
         },
         {
           "description": "No features are enabled by default, as we believe\nthe clipboard can be inherently dangerous and it is \napplication specific if read and/or write access is needed.\n\nClipboard interaction needs to be explicitly enabled.\n",

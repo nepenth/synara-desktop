@@ -1,4 +1,4 @@
-//! D0.1/D0.2 product password-login, native session, and sync ownership.
+//! D0.1–D0.3 product password-login, native session, sync, and timeline ownership.
 //!
 //! This is the only desktop product boundary for password login. The live
 //! `matrix_sdk::Client` and all access/refresh tokens remain in the Rust host.
@@ -25,6 +25,9 @@ use crate::matrix::store::{
 use crate::matrix::sync::{
     build_sync_service, unconfigured_snapshot, SyncReadinessSnapshot, SyncServiceConfig,
     SyncServiceOwner,
+};
+use crate::matrix::timeline::{
+    NativeTimelineDirection, NativeTimelineRegistry, NativeTimelineSnapshot,
 };
 
 const ACTIVE_SESSION_FILE: &str = "active-session.json";
@@ -87,6 +90,7 @@ struct ManagedMatrixSession {
     client: Client,
     identity: MatrixLoginIdentity,
     sync: SyncServiceOwner,
+    timelines: NativeTimelineRegistry,
 }
 
 #[derive(Default)]
@@ -167,6 +171,7 @@ pub async fn matrix_login_password(
         client,
         identity: identity.clone(),
         sync,
+        timelines: NativeTimelineRegistry::new(state.current_generation()),
     });
     Ok(identity)
 }
@@ -205,6 +210,49 @@ pub async fn matrix_room_list_snapshot(
     snapshot_from_sync_owner(&active.sync)
         .await
         .map_err(map_room_list_error)
+}
+
+#[tauri::command]
+pub async fn matrix_timeline_open(
+    state: State<'_, MatrixAuthState>,
+    room_id: String,
+) -> Result<NativeTimelineSnapshot, MatrixAuthCommandError> {
+    let mut session = state.session.lock().await;
+    let active = require_session_mut(session.as_mut())?;
+    active
+        .timelines
+        .open(&active.client, &room_id)
+        .await
+        .map_err(map_timeline_error)
+}
+
+#[tauri::command]
+pub async fn matrix_timeline_snapshot(
+    state: State<'_, MatrixAuthState>,
+    room_id: String,
+) -> Result<NativeTimelineSnapshot, MatrixAuthCommandError> {
+    let session = state.session.lock().await;
+    let active = require_session(session.as_ref())?;
+    active
+        .timelines
+        .snapshot(&room_id)
+        .await
+        .map_err(map_timeline_error)
+}
+
+#[tauri::command]
+pub async fn matrix_timeline_paginate(
+    state: State<'_, MatrixAuthState>,
+    room_id: String,
+    dir: NativeTimelineDirection,
+) -> Result<NativeTimelineSnapshot, MatrixAuthCommandError> {
+    let mut session = state.session.lock().await;
+    let active = require_session_mut(session.as_mut())?;
+    active
+        .timelines
+        .paginate(&room_id, dir)
+        .await
+        .map_err(map_timeline_error)
 }
 
 #[tauri::command]
@@ -278,6 +326,7 @@ pub async fn matrix_restore_session(
         client,
         identity: identity.clone(),
         sync,
+        timelines: NativeTimelineRegistry::new(state.current_generation()),
     });
     Ok(identity)
 }
@@ -322,6 +371,44 @@ fn map_room_list_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
         "The native Matrix room list is unavailable.",
         diagnostic_id,
     )
+}
+
+fn require_session(
+    session: Option<&ManagedMatrixSession>,
+) -> Result<&ManagedMatrixSession, MatrixAuthCommandError> {
+    session.ok_or_else(|| {
+        MatrixAuthCommandError::new(
+            "Forbidden",
+            "No native Matrix session is active.",
+            "d0.3-timeline-requires-session",
+        )
+    })
+}
+
+fn require_session_mut(
+    session: Option<&mut ManagedMatrixSession>,
+) -> Result<&mut ManagedMatrixSession, MatrixAuthCommandError> {
+    session.ok_or_else(|| {
+        MatrixAuthCommandError::new(
+            "Forbidden",
+            "No native Matrix session is active.",
+            "d0.3-timeline-requires-session",
+        )
+    })
+}
+
+fn map_timeline_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
+    let (code, message) = match diagnostic_id {
+        "d0.3-timeline-invalid-room-id" => (
+            "InvalidRequest",
+            "The native Matrix timeline request is invalid.",
+        ),
+        "d0.3-timeline-room-not-found" | "d0.3-timeline-not-open" => {
+            ("NotFound", "The native Matrix timeline is not available.")
+        }
+        _ => ("Unknown", "The native Matrix timeline is unavailable."),
+    };
+    MatrixAuthCommandError::new(code, message, diagnostic_id)
 }
 
 fn snapshot(session: Option<&ManagedMatrixSession>) -> MatrixSessionSnapshot {
