@@ -9,8 +9,8 @@
 
 | Field | Value |
 | --- | --- |
-| Last updated (UTC) | **2026-07-28 ~04:30** |
-| Integration tip | `7d95461` — Merge #170 P3.3 SSO |
+| Last updated (UTC) | **2026-07-28 ~05:05** |
+| Integration tip | `3d1c46e` — Merge #171 P3.4 UIA |
 | Product runtime | Still **`matrix-js-sdk` only** until atomic sole-owner cutover |
 | Dual backend | **`false`** (forbidden forever) |
 | Operating model | [cutover-operating-model.md](cutover-operating-model.md) |
@@ -25,12 +25,12 @@
 
 | | |
 | --- | --- |
-| **Now** | **#170 P3.3 SSO merged.** Primary next: **#171 P3.4 UIA** (SSO+UIA combined after tip-merge). Then #168 crypto-store, #169 presence, #173 profile. |
-| **Inventory** | ~52/112 original task artifacts when program-status is synced (through P3.3 landed). |
+| **Now** | **#171 P3.4 UIA merged** (with SSO under auth). Next: **#173** user-profile, **#168** crypto-store, **#169** presence, **#165/#166** room-keys/UTD recovery. |
+| **Inventory** | ~53/112 original task artifacts when program-status is synced (through P3.4 landed). |
 | **Phase gates** | **0 / 15** strict gates closed (honest). |
-| **Open PRs → integration** | [#171](https://github.com/nepenth/synara-desktop/pull/171) UIA, [#168](https://github.com/nepenth/synara-desktop/pull/168) crypto-store, [#169](https://github.com/nepenth/synara-desktop/pull/169) presence, [#173](https://github.com/nepenth/synara-desktop/pull/173) user-profile, [#165](https://github.com/nepenth/synara-desktop/pull/165) room-keys, [#166](https://github.com/nepenth/synara-desktop/pull/166) UTD recovery; mid-stack #160–#163; [#109](https://github.com/nepenth/synara-desktop/pull/109) MiniMax (deprioritize). |
-| **Blocked on** | #171 CI after SSO merge resolve. |
-| **Dogfood path** | … → UTD ✅ → **SSO ✅ (#170)** → **UIA (#171)** → … |
+| **Open PRs → integration** | [#173](https://github.com/nepenth/synara-desktop/pull/173) user-profile, [#168](https://github.com/nepenth/synara-desktop/pull/168) crypto-store, [#169](https://github.com/nepenth/synara-desktop/pull/169) presence, [#165](https://github.com/nepenth/synara-desktop/pull/165) room-keys, [#166](https://github.com/nepenth/synara-desktop/pull/166) UTD recovery; mid-stack #160–#163; [#109](https://github.com/nepenth/synara-desktop/pull/109) MiniMax (deprioritize). |
+| **Blocked on** | Tip-merge + CI for #173/#168/#169 after #171. |
+| **Dogfood path** | … → SSO ✅ → **UIA ✅ (#171)** → profile/crypto/presence stack → … |
 
 ---
 
@@ -58,6 +58,10 @@ Update rules:
 
 | When (UTC) | Item | Result | Notes |
 | --- | --- | --- | --- |
+| ~05:05 | **P3.4** UIA multi-stage | **Merged** [#171](https://github.com/nepenth/synara-desktop/pull/171) | Combined with SSO under auth; tip `3d1c46e`. |
+| ~05:05 | **PROGRESS.md** after #171 | **This PR** | Next #173 profile + crypto stack. |
+| ~04:31 | **P3.3** SSO | **Merged** [#170](https://github.com/nepenth/synara-desktop/pull/170) | tip `7d95461`. |
+| ~04:32 | **PROGRESS.md** after #170 | **Merged** [#176](https://github.com/nepenth/synara-desktop/pull/176) | |
 | ~04:30 | **P3.3** SSO / OAuth callback | **Merged** [#170](https://github.com/nepenth/synara-desktop/pull/170) | SsoCallbackFlow; tip `7d95461`. |
 | ~04:30 | **PROGRESS.md** after #170 | **This PR** | Next #171 UIA. |
 | ~04:05 | **P5.10** UTD | **Merged** [#157](https://github.com/nepenth/synara-desktop/pull/157) | tip `0c24e4b`. |
