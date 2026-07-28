@@ -13,10 +13,7 @@ import { getHomePath } from '../../pathUtils';
 import { platformSessionStore } from '../../../platform';
 import { persistAuthenticatedSession } from '../../../state/sessionPersistence';
 import { pushSessionToSW } from '../../../../sw-session';
-import {
-  invokeDesktopWithAvailability,
-  isSynaraDesktop,
-} from '../../../utils/desktop';
+import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../../utils/desktop';
 
 export enum GetBaseUrlError {
   NotAllow = 'NotAllow',
