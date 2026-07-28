@@ -3,11 +3,13 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import {
+  discoverTaskDocIds,
   extractOriginalTaskIds,
   renderProgramStatus,
   validateCurrentDoc,
   validateProgramStatus,
   validateRenderedStatus,
+  validateTaskDocInventory,
   validateTaskRecord,
 } from "../check-matrix-rust-sdk-program-status.mjs";
 
@@ -112,12 +114,38 @@ test("current ledger matches the 112-task plan", () => {
   assert.doesNotThrow(() => validateProgramStatus(status, plan));
 });
 
+test("tip task docs must be reflected as landed task_records", () => {
+  assert.deepEqual(
+    discoverTaskDocIds(
+      ["p4.1-sync-readiness.md", "README.md", "p99.1-fake.md"],
+      planOrder
+    ),
+    ["P4.1"]
+  );
+  assert.doesNotThrow(() =>
+    validateTaskDocInventory(status, plan, [
+      "p3.2-password-token-login.md",
+      "p9.1-widgets.md",
+      "program-status.md",
+    ])
+  );
+  assert.throws(
+    () =>
+      validateTaskDocInventory(status, plan, [
+        "p14.6-not-in-ledger-yet.md",
+      ]),
+    /missing task_records for tip docs: P14\.6/
+  );
+});
+
 test("renderer is deterministic and distinguishes delivery from acceptance", () => {
   const first = renderProgramStatus(status);
   assert.equal(first, renderProgramStatus(clone(status)));
-  // Inventory grows as original tasks land (P3.2 → 21 / 112 at this tip).
+  // Inventory is ledger-driven (not a fixed constant); must match landed_task_count.
+  const landed = status.original_plan.landed_task_count;
   assert.match(first, /\d+ \/ 112/);
-  assert.match(first, /21 \/ 112/);
+  assert.match(first, new RegExp(`${landed} / 112`));
+  assert.ok(landed >= 21, "inventory must not regress below post-P3.2 baseline");
   assert.match(first, /landed.*merged.*open.*open/);
   assert.match(first, /[^\n]\n$/);
   assert.doesNotMatch(first, /\n\n$/);

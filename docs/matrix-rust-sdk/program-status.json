@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "as_of_date": "2026-07-27",
+  "as_of_date": "2026-07-28",
   "source_of_truth": "Current delivery and strict-acceptance state only; dated evidence and audit artifacts remain historical sources.",
   "integration_branch": "feature/matrix-rust-sdk-full-replacement",
   "audited_snapshot": {
@@ -10,7 +10,7 @@
   "original_plan": {
     "path": "docs/matrix-rust-sdk-full-replacement-plan.md",
     "task_count": 112,
-    "landed_task_count": 21,
+    "landed_task_count": 50,
     "landed_task_ids": [
       "P0.1",
       "P0.2",
@@ -32,7 +32,36 @@
       "P2.5",
       "P2.6",
       "P3.1",
-      "P3.2"
+      "P3.2",
+      "P3.5",
+      "P3.6",
+      "P3.7",
+      "P3.8",
+      "P4.1",
+      "P4.2",
+      "P4.3",
+      "P4.4",
+      "P4.5",
+      "P4.6",
+      "P4.8",
+      "P5.1",
+      "P5.2",
+      "P5.3",
+      "P5.4",
+      "P5.6",
+      "P5.8",
+      "P6.1",
+      "P6.2",
+      "P6.3",
+      "P6.4",
+      "P6.8",
+      "P7.1",
+      "P8.1",
+      "P8.2",
+      "P8.3",
+      "P8.4",
+      "P8.5",
+      "P9.1"
     ]
   },
   "product_runtime": {
@@ -43,7 +72,7 @@
   },
   "current_execution": {
     "active_task": null,
-    "next_task": "P3.3",
+    "next_task": "P8.3",
     "blocked_tasks": []
   },
   "phase_gates": [
@@ -440,7 +469,210 @@
     {
       "id": "P3.2",
       "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P3.5",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P3.6",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P3.7",
+      "artifact_state": "landed",
       "integration_state": "pr_open",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P3.8",
+      "artifact_state": "landed",
+      "integration_state": "pr_open",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P4.1",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P4.2",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P4.3",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P4.4",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P4.5",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P4.6",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P4.8",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P5.1",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P5.2",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P5.3",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P5.4",
+      "artifact_state": "landed",
+      "integration_state": "pr_open",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P5.6",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P5.8",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P6.1",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P6.2",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P6.3",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P6.4",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P6.8",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P7.1",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P8.1",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P8.2",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P8.3",
+      "artifact_state": "landed",
+      "integration_state": "pr_open",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P8.4",
+      "artifact_state": "landed",
+      "integration_state": "merged",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P8.5",
+      "artifact_state": "landed",
+      "integration_state": "pr_open",
+      "strict_acceptance_state": "open",
+      "phase_gate_state": "open"
+    },
+    {
+      "id": "P9.1",
+      "artifact_state": "landed",
+      "integration_state": "merged",
       "strict_acceptance_state": "open",
       "phase_gate_state": "open"
     }

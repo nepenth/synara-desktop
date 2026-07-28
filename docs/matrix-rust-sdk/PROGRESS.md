@@ -9,12 +9,14 @@
 
 | Field | Value |
 | --- | --- |
-| Last updated (UTC) | **2026-07-28 ~00:15** |
-| Integration tip | `1e42d27` — Merge #143 P9.1 widgets |
+| Last updated (UTC) | **2026-07-28** |
+| Integration tip | see GitHub branch tip |
 | Product runtime | Still **`matrix-js-sdk` only** until atomic sole-owner cutover |
 | Dual backend | **`false`** (forbidden forever) |
 | Operating model | [cutover-operating-model.md](cutover-operating-model.md) |
-| Machine ledger | [program-status.md](program-status.md) (generated; do not hand-edit) |
+| Machine ledger | [program-status.md](program-status.md) (**source of inventory counts**; generated from JSON) |
+| Feature graph | [client-feature-graph.md](client-feature-graph.md) (client capability → Rust map) |
+| MiniMax parallel | [minimax-parallel-work.md](minimax-parallel-work.md) |
 | Short continuation | [CONTINUATION.md](CONTINUATION.md) |
 | Full handoff | [implementation-handoff.md](implementation-handoff.md) |
 | Umbrella → main | [PR #39](https://github.com/nepenth/synara-desktop/pull/39) — **do not merge without explicit user approval** |
@@ -25,12 +27,12 @@
 
 | | |
 | --- | --- |
-| **Now** | **#143 P9.1 widgets merged.** Primary next: **#145 P8.2** devices (tip-merged after #143; CI re-run). Then #147 verification, #150 backup, #151 legacy. |
-| **Inventory** | ~44/112 original task artifacts when program-status is synced (through P9.1 landed; see ledger). |
+| **Now** | Ledger resync + feature graph. **#145 P8.2 devices merged.** Next: **#147 P8.3** verification → #150 backup → #151 legacy; open #154 focus, #155 logout. |
+| **Inventory** | **50 / 112** landed artifacts in [program-status](program-status.md) (**45 merged** + **5 open-PR** foundations). **Do not invent other counts.** |
 | **Phase gates** | **0 / 15** strict gates closed (honest). |
-| **Open PRs → integration** | [#145](https://github.com/nepenth/synara-desktop/pull/145) devices, [#147](https://github.com/nepenth/synara-desktop/pull/147) verification, [#150](https://github.com/nepenth/synara-desktop/pull/150) backup/recovery, [#151](https://github.com/nepenth/synara-desktop/pull/151) legacy transition; [#109](https://github.com/nepenth/synara-desktop/pull/109) MiniMax (deprioritize). |
-| **Blocked on** | CI green after tip-merge onto post-#143 tip. Required: Quality gate + Desktop package gate. |
-| **Dogfood path** | search ✅ → cross-signing ✅ → widgets ✅ (**#143**) → **devices (#145)** → verification → backup → legacy. |
+| **Open PRs → integration** | [#147](https://github.com/nepenth/synara-desktop/pull/147) verification, [#150](https://github.com/nepenth/synara-desktop/pull/150) backup, [#151](https://github.com/nepenth/synara-desktop/pull/151) legacy, [#154](https://github.com/nepenth/synara-desktop/pull/154) focus, [#155](https://github.com/nepenth/synara-desktop/pull/155) remote logout; [#109](https://github.com/nepenth/synara-desktop/pull/109) MiniMax helper (optional). |
+| **Blocked on** | CI green for product merges. Required: Quality gate + Desktop package gate. |
+| **Dogfood path** | search ✅ → cross-signing ✅ → widgets ✅ → devices ✅ (**#145**) → **verification (#147)** → backup → legacy. |
 
 ---
 
@@ -42,10 +44,28 @@
 2. Active work **starts** (set “Now” + open PR link).
 3. Priority or policy **changes** (user direction).
 
+### Mandatory companion: machine ledger
+
+**`program-status.json` is the only source of inventory counts** (`N / 112`).
+When a product task lands or its PR opens/merges:
+
+1. Update `docs/matrix-rust-sdk/program-status.json` `task_records` + inventory fields.
+2. Keep twin task JSON state axes in sync when they embed them.
+3. Run `npm run check:matrix-rust-program-status -- --write`.
+4. CI (`check:matrix-rust-guardrails`) **fails** if tip `pN.M-*.md` docs exist without a **landed** task_record — do not skip.
+
+PROGRESS Snapshot **Inventory** must quote the ledger number, never an estimate.
+
+### Feature graph
+
+When a merge materially changes capability ownership, update
+[`client-feature-graph.json`](client-feature-graph.json) node `delivery_status` / notes
+(batch OK with PROGRESS).
+
 Update rules:
 
 - Prepend new **Work log** entries (newest first).
-- Keep **Snapshot** accurate (tip SHA, Now, open PRs).
+- Keep **Snapshot** accurate (Now, open PRs, inventory from ledger).
 - Prefer short bullets + PR numbers + one-line meaning.
 - Do **not** claim phase-gate acceptance unless strict acceptance really closed.
 - Commit as `docs(matrix): progress log — …` on a PR or as part of the landing PR.
@@ -53,6 +73,15 @@ Update rules:
 ---
 
 ## Work log (newest first)
+
+### 2026-07-28
+
+| When (UTC) | Item | Result | Notes |
+| --- | --- | --- | --- |
+| — | **P8.2** device list / trust | **Merged** [#145](https://github.com/nepenth/synara-desktop/pull/145) | Landed on integration tip before this docs PR. |
+| — | **program-status ledger resync** | **This PR** | Was stuck at 21/112; now **50/112** landed (45 merged + 5 open). Drift guard: tip task docs require landed records. |
+| — | **client-feature-graph** | **This PR** | Client capability → JS surface → Rust owner → hard problems (scroll/read/sync). |
+| — | **MiniMax-M3 parallel protocol** | **This PR** | Use local MiniMax during CI waits for graph/inventory text work; Grok remains implementer. |
 
 ### 2026-07-27
 
@@ -160,13 +189,15 @@ Update rules:
 | 23 | Search session (P6.8) | **Done** (merged #141) |
 | 24 | Cross-signing / identity (P8.4) | **Done** (merged #149) |
 | 25 | Widget / Element Call registry (P9.1) | **Done** (merged #143) |
-| 26 | Device list / trust (P8.2) | **In PR** [#145](https://github.com/nepenth/synara-desktop/pull/145) |
+| 26 | Device list / trust (P8.2) | **Done** (merged #145) |
 | 27 | Verification inbox / SAS display (P8.3) | **In PR** [#147](https://github.com/nepenth/synara-desktop/pull/147) |
 | 28 | Backup / recovery flow (P8.5) | **In PR** [#150](https://github.com/nepenth/synara-desktop/pull/150) |
 | 29 | Legacy transition coordinator (P3.7) | **In PR** [#151](https://github.com/nepenth/synara-desktop/pull/151) |
-| 30 | Remaining crypto / UTD / store continuity | Not started |
-| 31 | Atomic sole-owner cutover + js-sdk burn-down (P11) | Not started |
-| 32 | Merge to `main` (#39) | Needs **explicit user approval** |
+| 30 | Timeline focus (P5.4) | **In PR** [#154](https://github.com/nepenth/synara-desktop/pull/154) |
+| 31 | Remote logout (P3.8) | **In PR** [#155](https://github.com/nepenth/synara-desktop/pull/155) |
+| 32 | Remaining crypto / UTD / store continuity | Not started |
+| 33 | Atomic sole-owner cutover + js-sdk burn-down (P11) | Not started |
+| 34 | Merge to `main` (#39) | Needs **explicit user approval** |
 
 
 ---
@@ -179,4 +210,6 @@ Update rules:
 | Integration branch commits | https://github.com/nepenth/synara-desktop/commits/feature/matrix-rust-sdk-full-replacement |
 | Open PRs into integration | https://github.com/nepenth/synara-desktop/pulls?q=is%3Apr+is%3Aopen+base%3Afeature%2Fmatrix-rust-sdk-full-replacement |
 | Machine status ledger | https://github.com/nepenth/synara-desktop/blob/feature/matrix-rust-sdk-full-replacement/docs/matrix-rust-sdk/program-status.md |
+| Client feature graph | https://github.com/nepenth/synara-desktop/blob/feature/matrix-rust-sdk-full-replacement/docs/matrix-rust-sdk/client-feature-graph.md |
+| MiniMax parallel protocol | https://github.com/nepenth/synara-desktop/blob/feature/matrix-rust-sdk-full-replacement/docs/matrix-rust-sdk/minimax-parallel-work.md |
 | Umbrella PR (do not merge) | https://github.com/nepenth/synara-desktop/pull/39 |

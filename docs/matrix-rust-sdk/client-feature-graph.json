@@ -1,0 +1,273 @@
+{
+  "schema_version": 1,
+  "title": "Client feature / functionality graph — JS SDK surface → Rust owner map",
+  "as_of_date": "2026-07-28",
+  "purpose": "High-level client capabilities mapped from current matrix-js-sdk product usage to Matrix Rust SDK ownership targets. Used during migration and for post-cutover re-review of alignment with rust-sdk expectations.",
+  "sources": [
+    "docs/matrix-rust-sdk/desktop-sdk-usage.md",
+    "docs/matrix-rust-sdk/feature-parity-traceability.md",
+    "docs/matrix-rust-sdk/0.18.0-feature-and-gap-analysis.md",
+    "docs/matrix-rust-sdk/cutover-operating-model.md",
+    "docs/matrix-rust-sdk/program-status.json",
+    "docs/matrix-rust-sdk-full-replacement-plan.md"
+  ],
+  "status_vocabulary": {
+    "not_started": "No harness or product work for this capability yet",
+    "harness_foundation": "Rust pure/index/state machine or guardrailed hooks on integration branch; product still js-sdk",
+    "harness_live_partial": "Some live SDK wiring in harness; not product sole owner",
+    "product_cutover": "UI talks only to Synara IPC/DTO; Rust is sole Matrix owner for this capability",
+    "burned_down": "js-sdk usage for this capability removed from product"
+  },
+  "risk_tags": [
+    "scroll_position",
+    "large_room",
+    "sync_freshness",
+    "streaming_append",
+    "read_state",
+    "crypto_identity",
+    "media_lifecycle",
+    "multi_device"
+  ],
+  "nodes": [
+    {
+      "id": "session.discovery_login",
+      "client_feature": "Homeserver discovery + login flow list",
+      "user_visible": true,
+      "js_sdk_surface": ["createClient", "loginFlows", "well-known"],
+      "rust_sdk_surface": ["ClientBuilder", "HomeserverLoginDetails", "matrix_auth"],
+      "plan_tasks": ["P3.1", "P3.2"],
+      "rust_module": "src-tauri/src/matrix/auth/",
+      "delivery_status": "harness_foundation",
+      "hard_problems": [],
+      "notes": "Password/token login + device naming landed as harness foundation."
+    },
+    {
+      "id": "session.persist_restore",
+      "client_feature": "Session secret persistence + restore after restart",
+      "user_visible": true,
+      "js_sdk_surface": ["IndexedDB store", "access/refresh tokens", "startClient"],
+      "rust_sdk_surface": ["Client::restore_session", "SqliteStore", "Session tokens via host vault"],
+      "plan_tasks": ["P3.5", "P3.6", "P2.2"],
+      "rust_module": "src-tauri/src/matrix/lifecycle/ + session vault",
+      "delivery_status": "harness_foundation",
+      "hard_problems": ["crypto_identity", "multi_device"],
+      "notes": "Clean-break re-login OK; no JS→Rust token migration."
+    },
+    {
+      "id": "session.logout_legacy",
+      "client_feature": "Logout, remote logout, legacy transition",
+      "user_visible": true,
+      "js_sdk_surface": ["logout", "clearStores", "IndexedDB wipe"],
+      "rust_sdk_surface": ["Client logout APIs", "store wipe", "generation retire"],
+      "plan_tasks": ["P2.6", "P3.7", "P3.8"],
+      "rust_module": "src-tauri/src/matrix/lifecycle/",
+      "delivery_status": "harness_foundation",
+      "hard_problems": ["crypto_identity"],
+      "notes": "P3.7/P3.8 in open PRs; no dual-client continuity."
+    },
+    {
+      "id": "sync.readiness",
+      "client_feature": "Sync readiness, reconnect, online/offline presentation",
+      "user_visible": true,
+      "js_sdk_surface": ["ClientEvent.Sync", "startClient", "stopClient", "Sliding Sync"],
+      "rust_sdk_surface": ["SyncService", "RoomListService", "sliding sync"],
+      "plan_tasks": ["P4.1", "P2.1", "P2.4"],
+      "rust_module": "src-tauri/src/matrix/sync/",
+      "delivery_status": "harness_foundation",
+      "hard_problems": ["sync_freshness"],
+      "notes": "Foundation readiness map + reconnect table; live SyncService residual."
+    },
+    {
+      "id": "rooms.list",
+      "client_feature": "Room list snapshot/delta, filters, badges, tags, spaces",
+      "user_visible": true,
+      "js_sdk_surface": ["Room", "RoomEvent", "getRooms", "m.tag", "space hierarchy"],
+      "rust_sdk_surface": ["RoomListService", "room list entries", "space APIs"],
+      "plan_tasks": ["P4.2", "P4.3", "P4.4", "P4.5", "P4.6"],
+      "rust_module": "src-tauri/src/matrix/room_list/",
+      "delivery_status": "harness_foundation",
+      "hard_problems": ["sync_freshness"],
+      "notes": "Pure projections for list/membership/tags/spaces/members."
+    },
+    {
+      "id": "timeline.read_window",
+      "client_feature": "Timeline registry, diffs, pagination, focus/jump",
+      "user_visible": true,
+      "js_sdk_surface": ["Room.getLiveTimeline", "paginateEventTimeline", "TimelineWindow", "scroll/anchor logic in UI"],
+      "rust_sdk_surface": ["matrix-sdk-ui Timeline", "BackPaginationStatus", "timeline focus APIs"],
+      "plan_tasks": ["P5.1", "P5.2", "P5.3", "P5.4", "P5.5"],
+      "rust_module": "src-tauri/src/matrix/timeline/",
+      "delivery_status": "harness_foundation",
+      "hard_problems": ["scroll_position", "large_room", "streaming_append", "sync_freshness"],
+      "notes": "Historical pain: large-room scroll, maintain position, jump-to-latest, focused event open. Prefer rust-sdk-ui Timeline semantics over reimplementing js TimelineWindow."
+    },
+    {
+      "id": "timeline.relations_threads",
+      "client_feature": "Reactions, edits, references, thread list",
+      "user_visible": true,
+      "js_sdk_surface": ["Relations", "Thread", "EventTimelineSet"],
+      "rust_sdk_surface": ["Timeline item relations", "thread room timelines"],
+      "plan_tasks": ["P5.6", "P5.8", "P5.7", "P5.9"],
+      "rust_module": "src-tauri/src/matrix/relations/ + threads/",
+      "delivery_status": "harness_foundation",
+      "hard_problems": ["streaming_append"],
+      "notes": "Index foundations landed; live aggregation residual."
+    },
+    {
+      "id": "composer.send_echo",
+      "client_feature": "Outbound send queue + local echo",
+      "user_visible": true,
+      "js_sdk_surface": ["sendEvent", "sendMessage", "local echoes / txn ids"],
+      "rust_sdk_surface": ["Room::send", "SendQueue (sdk)", "local echoes in Timeline"],
+      "plan_tasks": ["P6.1", "P6.5"],
+      "rust_module": "src-tauri/src/matrix/send/",
+      "delivery_status": "harness_foundation",
+      "hard_problems": ["streaming_append", "sync_freshness"],
+      "notes": "Synara SendQueue foundation; wire to SDK send residual."
+    },
+    {
+      "id": "timeline.read_state",
+      "client_feature": "Read receipts, fully-read markers, unread badges",
+      "user_visible": true,
+      "js_sdk_surface": ["setRoomReadMarkers", "getEventReadUpTo", "RoomEvent.Receipt", "notification counts"],
+      "rust_sdk_surface": ["receipts APIs", "RoomInfo unread", "timeline read receipts"],
+      "plan_tasks": ["P6.2", "P4.3", "P7.1"],
+      "rust_module": "src-tauri/src/matrix/receipts/ + room_list",
+      "delivery_status": "harness_foundation",
+      "hard_problems": ["read_state", "multi_device", "sync_freshness"],
+      "notes": "Cross-client read state consistency is a known hard area; align with SDK receipt model, do not invent parallel markers."
+    },
+    {
+      "id": "presence.typing",
+      "client_feature": "Typing indicators",
+      "user_visible": true,
+      "js_sdk_surface": ["sendTyping", "RoomEvent.Typing"],
+      "rust_sdk_surface": ["typing notifications", "Room typing members"],
+      "plan_tasks": ["P6.3"],
+      "rust_module": "src-tauri/src/matrix/typing/",
+      "delivery_status": "harness_foundation",
+      "hard_problems": [],
+      "notes": null
+    },
+    {
+      "id": "media.upload_download",
+      "client_feature": "Media upload/download and encrypted media",
+      "user_visible": true,
+      "js_sdk_surface": ["uploadContent", "mxc URL", "media handlers", "Blob URLs in UI"],
+      "rust_sdk_surface": ["media APIs", "encryption media", "native cache"],
+      "plan_tasks": ["P6.4", "P7.2", "P7.3", "P7.4", "P7.5", "P7.6", "P7.7"],
+      "rust_module": "src-tauri/src/matrix/media/ (partial)",
+      "delivery_status": "harness_foundation",
+      "hard_problems": ["media_lifecycle"],
+      "notes": "Upload queue metadata foundation only; native media path residual."
+    },
+    {
+      "id": "search.room_messages",
+      "client_feature": "Room / message search session",
+      "user_visible": true,
+      "js_sdk_surface": ["searchMessage", "searchUserDirectory"],
+      "rust_sdk_surface": ["server search", "experimental-search feature"],
+      "plan_tasks": ["P6.8", "P12.6"],
+      "rust_module": "src-tauri/src/matrix/search/",
+      "delivery_status": "harness_foundation",
+      "hard_problems": [],
+      "notes": "Request-id stale protection foundation."
+    },
+    {
+      "id": "crypto.devices_verification",
+      "client_feature": "Devices, verification (SAS), cross-signing, backup",
+      "user_visible": true,
+      "js_sdk_surface": ["crypto-api", "verification", "cross-signing", "key backup"],
+      "rust_sdk_surface": ["encryption module", "verification", "backups", "recovery"],
+      "plan_tasks": ["P8.1", "P8.2", "P8.3", "P8.4", "P8.5", "P8.6", "P8.7", "P8.8"],
+      "rust_module": "src-tauri/src/matrix/security|devices|verification|cross_signing|backup",
+      "delivery_status": "harness_foundation",
+      "hard_problems": ["crypto_identity", "multi_device"],
+      "notes": "Partial land; open PRs for devices/verification/backup."
+    },
+    {
+      "id": "calls.widgets",
+      "client_feature": "Widgets / Element Call / MatrixRTC",
+      "user_visible": true,
+      "js_sdk_surface": ["matrixrtc/*", "widget drivers", "CallMembership"],
+      "rust_sdk_surface": ["experimental-widgets", "MatrixRTC (upstream gaps)"],
+      "plan_tasks": ["P9.1", "P10.1", "P10.2", "P10.3", "P10.4", "P10.5", "P10.6", "P10.7"],
+      "rust_module": "src-tauri/src/matrix/widgets/",
+      "delivery_status": "harness_foundation",
+      "hard_problems": [],
+      "notes": "Registry foundation only; Phase 10 live call parity residual."
+    },
+    {
+      "id": "nav.routes",
+      "client_feature": "Deep links / room routes",
+      "user_visible": true,
+      "js_sdk_surface": ["roomId/alias resolution via client"],
+      "rust_sdk_surface": ["Client room APIs", "permalink parsing"],
+      "plan_tasks": ["P4.8"],
+      "rust_module": "src-tauri/src/matrix/routes/",
+      "delivery_status": "harness_foundation",
+      "hard_problems": ["scroll_position"],
+      "notes": "Focus + route combine for event permalinks."
+    },
+    {
+      "id": "cutover.sole_owner",
+      "client_feature": "Atomic sole-owner cutover + js-sdk burn-down",
+      "user_visible": true,
+      "js_sdk_surface": ["entire production import surface (~220 files)"],
+      "rust_sdk_surface": ["single Rust supervisor owns session/sync/crypto/rooms"],
+      "plan_tasks": ["P11.1", "P11.2", "P11.3", "P11.4", "P11.5", "P11.6", "P11.7", "P11.8", "P11.9", "P11.10", "P14.1"],
+      "rust_module": "supervisor + IPC + frontend rewire",
+      "delivery_status": "not_started",
+      "hard_problems": ["crypto_identity", "sync_freshness"],
+      "notes": "Forbidden: dual backend / concurrent JS+Rust clients."
+    }
+  ],
+  "hard_problem_index": {
+    "scroll_position": {
+      "summary": "Preserve visual position across pagination, live append, jump-to-latest, and focused-event open in variable-height timelines.",
+      "preferred_rust_alignment": "Use matrix-sdk-ui Timeline item identities and pagination status; UI owns viewport math only.",
+      "related_nodes": ["timeline.read_window", "nav.routes"]
+    },
+    "large_room": {
+      "summary": "Bounded windows, virtualization, and back-pagination under multi-10k event rooms.",
+      "preferred_rust_alignment": "SDK timeline window + event cache; avoid full-history JS TimelineWindow patterns.",
+      "related_nodes": ["timeline.read_window"]
+    },
+    "sync_freshness": {
+      "summary": "Single owner of interactive sync freshness; no dual client races.",
+      "preferred_rust_alignment": "One SyncService / RoomListService owner in supervisor.",
+      "related_nodes": ["sync.readiness", "rooms.list", "timeline.read_window"]
+    },
+    "streaming_append": {
+      "summary": "Live message stream + local echo ordering without scroll jumps or duplicate rows.",
+      "preferred_rust_alignment": "Timeline diffs from SDK; map to ordered DTO ops already in P5.2.",
+      "related_nodes": ["timeline.read_window", "composer.send_echo"]
+    },
+    "read_state": {
+      "summary": "Receipts and unread markers consistent across devices and restarts.",
+      "preferred_rust_alignment": "SDK receipt / RoomInfo unread; one write path for markers.",
+      "related_nodes": ["timeline.read_state", "rooms.list"]
+    },
+    "crypto_identity": {
+      "summary": "Device identity, cross-signing, verification, backup; clean-break from JS IndexedDB crypto.",
+      "preferred_rust_alignment": "matrix-sdk encryption store only; no dual crypto stores.",
+      "related_nodes": ["session.persist_restore", "crypto.devices_verification", "cutover.sole_owner"]
+    },
+    "media_lifecycle": {
+      "summary": "Encrypted media fetch, cache bounds, Blob/URL reclamation.",
+      "preferred_rust_alignment": "Native media pipeline via Tauri; no long-lived decrypted JSON blobs.",
+      "related_nodes": ["media.upload_download"]
+    },
+    "multi_device": {
+      "summary": "Device lists, verification UX, remote logout across devices.",
+      "preferred_rust_alignment": "encryption device APIs + explicit remote logout flow.",
+      "related_nodes": ["crypto.devices_verification", "session.logout_legacy"]
+    }
+  },
+  "minimax_jobs": [
+    "Expand js_sdk_surface with AST symbols from desktop-sdk-usage.json per node",
+    "Map FR-7.* rows from feature-parity-traceability.json onto nodes",
+    "Draft post-cutover re-review checklist per hard_problem",
+    "Diff rust_sdk_surface against 0.18.0-feature-and-gap-analysis.json gaps"
+  ]
+}

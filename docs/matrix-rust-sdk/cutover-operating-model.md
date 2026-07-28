@@ -154,3 +154,7 @@ not “dual-SDK progress” and not automatic phase-gate closure.
 
 Machine status: [`program-status.json`](program-status.json) /
 [`program-status.md`](program-status.md).
+
+Client capability map (JS → Rust, hard problems): [`client-feature-graph.md`](client-feature-graph.md).
+
+Local MiniMax-M3 parallel text work during CI waits: [`minimax-parallel-work.md`](minimax-parallel-work.md).

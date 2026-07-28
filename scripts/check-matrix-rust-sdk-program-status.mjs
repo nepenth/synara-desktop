@@ -33,6 +33,7 @@ const PHASE_REMEDIATION_BLOCKERS = new Map([
   ...Array.from({ length: 11 }, (_, index) => [index + 4, []]),
 ]);
 
+/** Explicit twin JSON files that embed program-status state axes. */
 const KNOWN_TASK_JSON = [
   "swift-rust-version-provenance.json",
   "toolchain-compatibility-report.json",
@@ -47,7 +48,12 @@ const KNOWN_TASK_JSON = [
   "p2.6-destructive-lifecycle.json",
   "p3.1-discovery-login-flow.json",
   "p3.2-password-token-login.json",
+  "p3.5-refresh-token-persistence.json",
+  "p3.6-session-restore.json",
 ];
+
+/** Markdown task docs on tip must appear as landed records (prevents ledger drift). */
+const TASK_DOC_FILENAME_RE = /^p(\d+)\.(\d+)-.+\.md$/i;
 
 const VOCABULARIES = {
   artifact_state: new Set([
@@ -177,6 +183,50 @@ export function extractOriginalTaskIds(planText) {
       const [rightPhase, rightTask] = right.slice(1).split(".").map(Number);
       return leftPhase - rightPhase || leftTask - rightTask;
     }
+  );
+}
+
+/**
+ * Task artifact markdown files under docs/matrix-rust-sdk/ named pN.M-*.md.
+ * Returns sorted plan-order task IDs that have tip-side docs.
+ */
+export function discoverTaskDocIds(fileNames, planIds) {
+  const planSet = new Set(planIds);
+  const found = new Set();
+  for (const name of fileNames) {
+    const match = name.match(TASK_DOC_FILENAME_RE);
+    if (!match) continue;
+    const id = `P${Number(match[1])}.${Number(match[2])}`;
+    if (planSet.has(id)) found.add(id);
+  }
+  return planIds.filter((id) => found.has(id));
+}
+
+/**
+ * Every tip-side task doc must have a landed task_record. Missing or
+ * not-started/in-progress-only records mean the machine ledger lagged merges.
+ */
+export function validateTaskDocInventory(status, planText, fileNames) {
+  const planIds = extractOriginalTaskIds(planText);
+  const docIds = discoverTaskDocIds(fileNames, planIds);
+  const byId = new Map(status.task_records.map((task) => [task.id, task]));
+  const missing = [];
+  const notLanded = [];
+  for (const id of docIds) {
+    const record = byId.get(id);
+    if (!record) {
+      missing.push(id);
+      continue;
+    }
+    if (record.artifact_state !== "landed") notLanded.push(id);
+  }
+  assert(
+    missing.length === 0,
+    `program-status.json missing task_records for tip docs: ${missing.join(", ")} — update the ledger when landing product tasks`
+  );
+  assert(
+    notLanded.length === 0,
+    `tip task docs require artifact_state=landed: ${notLanded.join(", ")}`
   );
 }
 
@@ -555,17 +605,32 @@ async function validateRepository(root, write) {
   validateProgramStatus(status, planText);
 
   const docsDir = path.join(root, "docs/matrix-rust-sdk");
-  const jsonFiles = (await readdir(docsDir)).filter((name) =>
-    name.endsWith(".json")
-  );
+  const allDocNames = await readdir(docsDir);
+  const jsonFiles = allDocNames.filter((name) => name.endsWith(".json"));
   for (const name of jsonFiles) await parseJsonFile(path.join(docsDir, name));
+
+  // Fail CI if product task markdown exists on tip but the ledger was not updated.
+  validateTaskDocInventory(status, planText, allDocNames);
 
   const artifactById = new Map(
     status.task_records.map((artifact) => [artifact.id, artifact])
   );
-  for (const name of KNOWN_TASK_JSON) {
+  // Explicit allowlist + any other task twin that embeds the four state axes.
+  const twinNames = new Set(KNOWN_TASK_JSON);
+  for (const name of jsonFiles) {
+    if (twinNames.has(name)) continue;
+    if (!/^p\d+\.\d+-.+\.json$/i.test(name)) continue;
+    const candidate = await parseJsonFile(path.join(docsDir, name));
+    const hasAxes = Object.keys(VOCABULARIES).every((field) =>
+      Object.hasOwn(candidate, field)
+    );
+    if (hasAxes) twinNames.add(name);
+  }
+  for (const name of twinNames) {
     const task = await parseJsonFile(path.join(docsDir, name));
     const id = task.task_id ?? task.taskId;
+    // Remediation / non-original twins may use R0.* ids; only bind original tasks.
+    if (typeof id === "string" && id.startsWith("R")) continue;
     const canonical = artifactById.get(id);
     assert(canonical, `${name} task ID ${id} is absent from task_records`);
     validateTaskRecord(task, name, canonical);
