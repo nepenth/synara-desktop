@@ -154,3 +154,5 @@ not “dual-SDK progress” and not automatic phase-gate closure.
 
 Machine status: [`program-status.json`](program-status.json) /
 [`program-status.md`](program-status.md).
+
+Delivery layers (L1 harness vs L2 live vs L3 cutover): [`delivery-layers.md`](delivery-layers.md).
