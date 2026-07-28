@@ -9,8 +9,8 @@
 
 | Field | Value |
 | --- | --- |
-| Last updated (UTC) | **2026-07-28 ~10:20** |
-| Integration tip | `5db58a5` — Merge #161 P5.5 unread |
+| Last updated (UTC) | **2026-07-28 ~11:05** |
+| Integration tip | `671d590` — Merge #162 P5.9 raw-content |
 | Product runtime | Still **`matrix-js-sdk` only** until atomic sole-owner cutover |
 | Dual backend | **`false`** (forbidden forever) |
 | Operating model | [cutover-operating-model.md](cutover-operating-model.md) |
@@ -25,12 +25,12 @@
 
 | | |
 | --- | --- |
-| **Now** | **#161 P5.5 unread merged** (tip `5db58a5`). Next **#162** raw-content, **#163** account-data. Parallel media #187–#188, #190, #192, #193. |
-| **Inventory** | ~62/112 original task artifacts when program-status is synced (through P5.5 landed). |
+| **Now** | **#162 P5.9 raw-content merged** (tip `671d590`). Next **#163** account-data (tip-merged). Then media/crypto/notify stack. |
+| **Inventory** | ~63/112 original task artifacts when program-status is synced (through P5.9 landed). |
 | **Phase gates** | **0 / 15** strict gates closed (honest). |
-| **Open PRs → integration** | [#162](https://github.com/nepenth/synara-desktop/pull/162) raw-content, [#163](https://github.com/nepenth/synara-desktop/pull/163) account-data, [#187](https://github.com/nepenth/synara-desktop/pull/187)/[#188](https://github.com/nepenth/synara-desktop/pull/188) media, [#190](https://github.com/nepenth/synara-desktop/pull/190) directory, [#192](https://github.com/nepenth/synara-desktop/pull/192) attachment-send, [#193](https://github.com/nepenth/synara-desktop/pull/193) crypto-bootstrap. |
-| **Blocked on** | CI package for #162 after tip-merge. |
-| **Dogfood path** | … → room-ops ✅ → **unread ✅ (#161)** → raw/account-data → media → crypto bootstrap → … |
+| **Open PRs → integration** | [#163](https://github.com/nepenth/synara-desktop/pull/163) account-data, [#187](https://github.com/nepenth/synara-desktop/pull/187)/[#188](https://github.com/nepenth/synara-desktop/pull/188) media, [#190](https://github.com/nepenth/synara-desktop/pull/190) directory, [#192](https://github.com/nepenth/synara-desktop/pull/192)–[#193](https://github.com/nepenth/synara-desktop/pull/193)/[#196](https://github.com/nepenth/synara-desktop/pull/196)/[#201](https://github.com/nepenth/synara-desktop/pull/201) parallel. |
+| **Blocked on** | CI for #163 after tip-merge. |
+| **Dogfood path** | … → unread ✅ → **raw-content ✅ (#162)** → account-data #163 → media → … |
 
 ---
 
@@ -58,6 +58,10 @@ Update rules:
 
 | When (UTC) | Item | Result | Notes |
 | --- | --- | --- | --- |
+| ~11:05 | **P5.9** raw-content | **Merged** [#162](https://github.com/nepenth/synara-desktop/pull/162) | tip `671d590`. |
+| ~11:05 | **PROGRESS.md** after #162 | **This PR** | Next #163. |
+| ~10:50 | **P9.2** push-rules | **PR open** [#196](https://github.com/nepenth/synara-desktop/pull/196) | |
+| ~10:55 | **P5.11** timeline filter | **PR open** [#201](https://github.com/nepenth/synara-desktop/pull/201) | |
 | ~10:15 | **P5.5** unread | **Merged** [#161](https://github.com/nepenth/synara-desktop/pull/161) | tip `5db58a5`. |
 | ~10:20 | **PROGRESS.md** after #161 | **This PR** | Next #162. |
 | ~10:10 | **P8.9** crypto bootstrap | **PR open** [#193](https://github.com/nepenth/synara-desktop/pull/193) | Coordinator; local 6/6. |
