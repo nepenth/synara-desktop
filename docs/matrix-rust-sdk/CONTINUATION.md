@@ -12,7 +12,7 @@
 | Integration branch       | `feature/matrix-rust-sdk-full-replacement`                                      |
 | Execution model          | Primary Codex and every implementation/review sub-agent: `gpt-5.6-terra`, high reasoning |
 | Verified integration tip | `528a510` — V-CRYPTO.7 merged (#236)                                            |
-| Active PR                | None — V-AUTH.1 product decision is next                                         |
+| Active PR                | None — V-AUTH.1 complete desktop SSO removal is next                              |
 | Policy                   | [full-vertical-policy.md](full-vertical-policy.md)                              |
 | Operating path           | [operating-path-contract.md](operating-path-contract.md)                        |
 | Binding queue            | [d0-residual-completion.md](d0-residual-completion.md)                          |
@@ -37,8 +37,8 @@ obsolete tests/types before closure.
 ## Exact continuation point
 
 1. V-CRYPTO.7 [#236](https://github.com/nepenth/synara-desktop/pull/236) is merged at integration `528a510`; its reviewed, green product/test head was `192be46`. Live multi-session/UI proof remains unclaimed.
-2. Resolve the V-AUTH.1 product contract before implementation: require a full Matrix-ID hint for native SSO, or explicitly authorize the materially larger pending-store/adoption architecture. Do not silently infer an identity from an email, IdP, or domain.
-3. Continue with the selected V-AUTH.1 contract → remaining V-AUTH → V-ROOMS → V-TIMELINE → V-SEND, deleting the superseded JS owner inside each capability slice.
+2. Execute V-AUTH.1 as a removal vertical: delete all desktop SSO entry points, browser/callback/token-completion ownership, and native SSO UIAA continuation. Do not replace them with Rust SSO, a Matrix-ID prompt, an inferred identity, or a fallback route.
+3. Continue with remaining V-AUTH → V-ROOMS → V-TIMELINE → V-SEND, deleting the superseded JS owner inside each capability slice.
 4. Run V-BURN only as the final convergence audit and npm dependency/bootstrap/store cleanup.
 5. Resume new media/widgets/notifications/calls verticals only after the residual queue allows.
 

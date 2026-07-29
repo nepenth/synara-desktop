@@ -2,7 +2,7 @@
 
 | Field                     | Value                                                                  |
 | ------------------------- | ---------------------------------------------------------------------- |
-| Status                    | **Between slices — V-AUTH.1 product decision pending** (2026-07-29)    |
+| Status                    | **Between slices — V-AUTH.1 complete SSO removal queued** (2026-07-29) |
 | Policy                    | [full-vertical-policy.md](full-vertical-policy.md)                     |
 | Integration tip at policy | `0400306` (D0.1–D0.5 merged; D0.5 was **crypto minimum**)              |
 | Current integration tip   | `528a510` (V-CRYPTO.7 #236 merged)                                     |
@@ -55,7 +55,7 @@ Migration decision already decided: **`D-KEY-RECOVERY`** in [migration-ux-decisi
 
 | ID           | Capability                     | Residual today    | Done when                                                                    |
 | ------------ | ------------------------------ | ----------------- | ---------------------------------------------------------------------------- |
-| **V-AUTH.1** | SSO login                      | Product decision pending | Before implementation, choose: require a full Matrix-ID hint for the native SSO path, or explicitly authorize the larger pending-store/adoption architecture. Do not infer identity from email, IdP, or domain; then deliver desktop SSO via Rust with no JS `createClient` for the session. |
+| **V-AUTH.1** | Complete desktop SSO removal    | JS login/callback owner and native UIAA SSO continuation | Delete every desktop SSO entry point, browser/callback/token-completion route, JS SSO owner/import, and native device-delete SSO UIAA continuation. Keep no Rust replacement, Matrix-ID prompt, inferred identity, pending-store/adoption route, or fallback. Password-only UIAA remains where server-supported; SSO-only authentication is explicitly unsupported on desktop. |
 | **V-AUTH.2** | Token login                    | Out of D0.1       | Native token login if product retains it                                     |
 | **V-AUTH.3** | UIA flows used by product auth | Largely js        | UIA stages for retained flows native or product-owned without live js client |
 | **V-AUTH.4** | Register / reset-password      | js                | Re-home if product keeps them on desktop                                     |
@@ -105,7 +105,7 @@ have already deleted their implementations.
 
 ## Execution order (binding)
 
-1. Resolve the **V-AUTH.1** full-Matrix-ID-hint versus pending-store/adoption product decision, then begin the selected full wire-plus-delete vertical.
+1. Execute **V-AUTH.1** as complete desktop SSO removal, then continue the remaining native-auth slices.
 2. **V-AUTH** remaining desktop auth surfaces, deleting each superseded JS owner in its slice
 3. **V-ROOMS** / **V-TIMELINE** / **V-SEND** gaps, with physical deletion per completed capability
 4. **V-BURN** final convergence audit + npm dependency removal
@@ -131,6 +131,6 @@ Loop must:
 1. **Not** merge #221 as D0.6 complete.
 2. Treat V-CRYPTO.1–.6 as done.
 3. Preserve V-CRYPTO.5 [#227](https://github.com/nepenth/synara-desktop/pull/227) as done; its legacy deletion, retry safety, privacy, and reviewed-SHA evidence passed.
-4. Resolve V-AUTH.1's full-Matrix-ID-hint versus pending-store/adoption product decision before implementation.
+4. Execute V-AUTH.1 as complete desktop SSO removal: JS and native SSO ownership must both be deleted, with no replacement route.
 5. Update [PROGRESS.md](PROGRESS.md) with product wiring, deletion deltas, and residual closure.
 6. Refuse new L1-only or new non-residual verticals until this queue is cleared or user reorders explicitly.

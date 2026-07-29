@@ -28,7 +28,7 @@ Earlier D0 wording allowed a partial crypto path and an “approved residual pla
 
 | ID   | Name                        | Tip status                                         | Debt                                                                |
 | ---- | --------------------------- | -------------------------------------------------- | ------------------------------------------------------------------- |
-| D0.1 | Login + session sole owner  | Merged #214                                        | V-AUTH (SSO/token/UIA/register) open                                |
+| D0.1 | Login + session sole owner  | Merged #214                                        | V-AUTH (SSO removal/token/UIA/register) open                        |
 | D0.2 | Sync + room list sole owner | Merged #216                                        | V-ROOMS (invites/spaces/unread) open                                |
 | D0.3 | Timeline read               | Merged #218                                        | V-TIMELINE (virtualization, reactions, rich events, …) open         |
 | D0.4 | Send text                   | Merged #219                                        | V-SEND (attachments, reactions, polls, rich, threads) open          |
@@ -37,7 +37,7 @@ Earlier D0 wording allowed a partial crypto path and an “approved residual pla
 
 ## Current priority (binding)
 
-1. **Close residual queue** in [d0-residual-completion.md](d0-residual-completion.md) — V-CRYPTO.1–.7 are done; first resolve the V-AUTH.1 product contract, then implement its selected native path.
+1. **Close residual queue** in [d0-residual-completion.md](d0-residual-completion.md) — V-CRYPTO.1–.7 are done; next execute V-AUTH.1 as complete desktop SSO removal.
 2. Do **not** merge incomplete or plateau PRs as complete.
 3. Only after native wiring **and superseded JS deletion** are both landed may a vertical be marked done.
 4. New verticals (media, widgets, registry, …) only after residual completion order allows.

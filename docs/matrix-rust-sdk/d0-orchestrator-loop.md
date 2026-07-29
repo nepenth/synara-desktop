@@ -2,7 +2,7 @@
 
 | Field              | Value                                                                                |
 | ------------------ | ------------------------------------------------------------------------------------ |
-| Active             | **Between product slices** (2026-07-29); V-CRYPTO.7 #236 merged at `528a510`; V-AUTH.1 decision pending |
+| Active             | **Between product slices** (2026-07-29); V-CRYPTO.7 #236 merged at `528a510`; V-AUTH.1 SSO removal queued |
 | Interval           | Goal continuation; optional scheduler fires every **4 minutes**                      |
 | Integration        | `feature/matrix-rust-sdk-full-replacement` only                                      |
 | Orchestrator       | **Codex `gpt-5.6-terra`, high reasoning**                                            |
@@ -41,7 +41,7 @@ authority even when implementation is delegated.
 1. **Do not merge** PRs that leave an incomplete/plateau shell without full vertical acceptance
 2. Merge green **residual-completion / full vertical** product PR if Quality + Desktop package gates success
 3. Merge green **policy/docs** that enforce full-vertical + residual ledger
-4. If no merge: resolve the V-AUTH.1 product contract in [d0-residual-completion.md](d0-residual-completion.md) before opening implementation work
+4. If no merge: prepare V-AUTH.1 as the complete desktop SSO-removal vertical in [d0-residual-completion.md](d0-residual-completion.md)
 5. Tip-merge **only** the active residual PR if BEHIND/CONFLICTING
 6. Update PROGRESS after residual lands
 7. Report short status; stop if disk &lt; 5 Gi free
@@ -57,7 +57,7 @@ authority even when implementation is delegated.
 | V-CRYPTO.6    | **DONE #235**                            | Automatic native UTD/history recovery; legacy retry/listener owners deleted  |
 | V-CRYPTO.7    | **DONE #236**                            | Merged at `528a510`; reviewed, green product/test head `192be46`; native device/trust/actions and JS device/dead UIA owner deletion |
 | D0.6 plateau  | **#221 HOLD — do not merge as complete** | rework → V-BURN later                                                        |
-| **Next**      | **Decide V-AUTH.1 contract**             | Full Matrix-ID hint, or explicitly authorized pending-store/adoption architecture |
+| **Next**      | **V-AUTH.1 SSO removal**                 | Delete desktop SSO entry points, callback/token path, and native SSO UIAA continuation |
 
 _Orchestrator must rewrite this table when a residual slice merges._
 
@@ -89,7 +89,7 @@ or a retained `Legacy*` / native-vs-JS branch for the claimed capability.
 - Merge #221 plateau as D0.6 complete
 - Open new media/widgets/registry verticals before residual queue allows
 - Open new notify/call L1 polish PRs
-- Start V-AUTH.1 before its full-Matrix-ID-hint versus pending-store/adoption product decision
+- Retain, reimplement, or add a desktop SSO route, callback/token-completion path, identity prompt, inferred identity, or native SSO UIAA continuation
 - Merge umbrella #39 or `main`
 - Claim phase-gate acceptance for crypto until V-CRYPTO complete
 
