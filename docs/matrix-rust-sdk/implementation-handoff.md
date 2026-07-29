@@ -1,6 +1,6 @@
 # Matrix Rust SDK Replacement — Execution Handoff
 
-Last updated: 2026-07-28
+Last updated: 2026-07-29
 
 Authoritative program plan: [`../matrix-rust-sdk-full-replacement-plan.md`](../matrix-rust-sdk-full-replacement-plan.md)
 
@@ -24,32 +24,32 @@ Traceability artifacts:
 - [`feature-parity-traceability.json`](feature-parity-traceability.json)
 - [`feature-parity-traceability.md`](feature-parity-traceability.md)
 
-## Live continuation snapshot (2026-07-28)
+## Live continuation snapshot (2026-07-29)
 
 This section is the current handoff. The dated audit and former implementation
 ledger below remain historical evidence and must not override this snapshot,
 the operating model, or the canonical status ledger.
 
-| Field                        | Current value                                                                                                                                                |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Integration branch / tip** | `feature/matrix-rust-sdk-full-replacement` @ `fd7c934` (policy alignment [#228](https://github.com/nepenth/synara-desktop/pull/228)); re-fetch before acting |
-| **Policy**                   | [Full vertical replacement](full-vertical-policy.md): no minima/plateau; **physical deletion per vertical**                                                  |
-| **Active product work**      | V-CRYPTO.5 [#227](https://github.com/nepenth/synara-desktop/pull/227), draft; closure implementation is pending reviewed-SHA validation and ledger evidence  |
-| **Already wired**            | D0 core #214/#216/#218/#219/#220; V-CRYPTO.1–.4 #223–#226                                                                                                    |
-| **Deletion residuals**       | V-CRYPTO.1-D verification → .2-D cross-signing → .3-D backup → .4-D secret storage; drain before V-CRYPTO.6                                                  |
-| **Next product work**        | Validate/land #227 → drain V-CRYPTO.1-D→.4-D → V-CRYPTO.6 UTD recovery → V-CRYPTO.7 devices/trust                                                            |
-| **Import baseline**          | 232 files / 292 direct import lines; record a non-increasing global delta plus a negative capability-owner/file deletion delta for each completed vertical   |
-| **Held**                     | #221 plateau; L1-only notify/call/media/helper PRs unless they block the active vertical                                                                     |
-| **Runtime truth**            | Native product cutover is underway capability-by-capability; relevant JS owners remain until deletion residuals close; **dual_backend false**                |
-| **Strict gates**             | Original-plan inventory ~74/112; 0/15 strict phase gates closed. Inventory is not product completion.                                                        |
-| **Main PR**                  | [#39](https://github.com/nepenth/synara-desktop/pull/39) — do not merge without explicit user approval                                                       |
+| Field                        | Current value                                                                                                                                              |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Integration branch / tip** | `feature/matrix-rust-sdk-full-replacement` @ `146952a` (V-CRYPTO.5 [#227](https://github.com/nepenth/synara-desktop/pull/227)); re-fetch before acting     |
+| **Policy**                   | [Full vertical replacement](full-vertical-policy.md): no minima/plateau; **physical deletion per vertical**                                                |
+| **Active product work**      | None; intentionally paused between slices after V-CRYPTO.5 landed                                                                                          |
+| **Already wired**            | D0 core #214/#216/#218/#219/#220; V-CRYPTO.1–.4 #223–#226                                                                                                  |
+| **Deletion residuals**       | V-CRYPTO.1-D verification → .2-D cross-signing → .3-D backup → .4-D secret storage; drain before V-CRYPTO.6                                                |
+| **Next product work**        | V-CRYPTO.1-D verification deletion → .2-D→.4-D → V-CRYPTO.6 UTD recovery → V-CRYPTO.7 devices/trust                                                        |
+| **Import baseline**          | 232 files / 292 direct import lines; record a non-increasing global delta plus a negative capability-owner/file deletion delta for each completed vertical |
+| **Held**                     | #221 plateau; L1-only notify/call/media/helper PRs unless they block the active vertical                                                                   |
+| **Runtime truth**            | Native product cutover is underway capability-by-capability; relevant JS owners remain until deletion residuals close; **dual_backend false**              |
+| **Strict gates**             | Original-plan inventory ~74/112; 0/15 strict phase gates closed. Inventory is not product completion.                                                      |
+| **Main PR**                  | [#39](https://github.com/nepenth/synara-desktop/pull/39) — do not merge without explicit user approval                                                     |
 
 ### Current next-owner procedure
 
-1. Re-fetch and verify the integration tip and [#227](https://github.com/nepenth/synara-desktop/pull/227) state.
-2. Confirm #227 keeps `LegacyLocalBackup`, WebView keyfile crypto/FileSaver, and the native-vs-legacy branch physically deleted on the reviewed SHA.
+1. Re-fetch and verify integration remains at or after `146952a`; confirm there is no active implementation PR.
+2. Resume with the bounded V-CRYPTO.1-D verification-deletion packet on Codex `gpt-5.6-terra` high.
 3. Require each vertical/deletion residual to report deleted paths and importer/file count delta.
-4. After #227 lands, drain V-CRYPTO.1-D→.4-D serially; then implement V-CRYPTO.6 and .7 as wire-plus-delete slices.
+4. Drain V-CRYPTO.1-D→.4-D serially; then implement V-CRYPTO.6 and .7 as wire-plus-delete slices.
 5. Update [PROGRESS.md](PROGRESS.md), [d0-residual-completion.md](d0-residual-completion.md), and the short [CONTINUATION.md](CONTINUATION.md) in the same PR whenever the active pointer or residual status changes.
 
 Everything below this live snapshot is dated audit/history. It remains useful

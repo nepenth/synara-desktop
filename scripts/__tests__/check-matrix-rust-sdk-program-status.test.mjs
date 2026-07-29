@@ -135,7 +135,9 @@ test("tracks full-vertical execution and requires per-vertical deletion policy",
   assert.match(rendered, /Wired \/ deletion open/);
   assert.match(rendered, /232 files \/ 292 import lines current/);
   assert.match(rendered, /negative capability-owner\/file deletion delta/);
-  assert.match(rendered, /Completed under full policy: None/);
+  assert.match(rendered, /Integration product state: `between-slices-paused`/);
+  assert.match(rendered, /Active slice: \*\*None\*\*/);
+  assert.match(rendered, /Completed under full policy: `V-CRYPTO\.5`/);
 
   const wrongPolicy = clone(status);
   wrongPolicy.vertical_execution.policy = "bulk-delete-at-end";
@@ -164,6 +166,22 @@ test("tracks full-vertical execution and requires per-vertical deletion policy",
   assert.throws(
     () => validateProgramStatus(importerRegression, plan),
     /cannot exceed the full-vertical baseline/
+  );
+
+  const pausedWithActiveWork = clone(status);
+  pausedWithActiveWork.vertical_execution.active_slice = "V-CRYPTO.1-D";
+  pausedWithActiveWork.vertical_execution.active_pr = 229;
+  assert.throws(
+    () => validateProgramStatus(pausedWithActiveWork, plan),
+    /between-slices-paused requires null active_slice and active_pr/
+  );
+
+  const resumedWithoutActiveWork = clone(status);
+  resumedWithoutActiveWork.vertical_execution.integration_product_state =
+    "capability-cutover-in-progress";
+  assert.throws(
+    () => validateProgramStatus(resumedWithoutActiveWork, plan),
+    /active_slice must be a vertical ID while cutover is in progress/
   );
 });
 
