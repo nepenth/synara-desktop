@@ -4,7 +4,7 @@
 | ---------- | -------------------------------------------------------------------------------- |
 | Date       | 2026-07-29                                                                       |
 | Base       | integration commit `05e3f64dc9b6e1b38dcc181abe2090370e85a5e3` (V-CRYPTO.6, #235) |
-| Candidate  | `matrix-rust/v-crypto-7-devices`; no PR at this checkpoint                       |
+| Candidate  | PR [#236](https://github.com/nepenth/synara-desktop/pull/236); reviewed code head `7df8abe` |
 | Next slice | V-AUTH.1                                                                         |
 
 ## Retained operating path
@@ -95,7 +95,7 @@ account's visible device list.
   `cargo test matrix::devices` (2 passed), scoped Prettier/ESLint, frontend and
   modernization typechecks, inventory validation, Matrix Rust guardrails, JSON
   parse, and `git diff --check`.
-- Live multi-session/UI proof is not claimed by this local candidate.
+- Live multi-session/UI proof is not claimed by this active PR.
 
-This candidate closes the V-CRYPTO device-list/trust/action owner. It does not
+This PR candidate closes the V-CRYPTO device-list/trust/action owner. It does not
 claim a global crypto phase gate or replace generic registration/reset UIA.

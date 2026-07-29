@@ -2,7 +2,7 @@
 
 | Field              | Value                                                                                |
 | ------------------ | ------------------------------------------------------------------------------------ |
-| Active             | **V-CRYPTO.7 local candidate** (2026-07-29); persistent Codex goal resumed           |
+| Active             | **V-CRYPTO.7 PR #236** (2026-07-29); reviewed code head `7df8abe`; persistent Codex goal resumed |
 | Interval           | Goal continuation; optional scheduler fires every **4 minutes**                      |
 | Integration        | `feature/matrix-rust-sdk-full-replacement` only                                      |
 | Orchestrator       | **Codex `gpt-5.6-sol`, medium reasoning**                                            |
@@ -42,7 +42,7 @@ authority even when implementation is delegated.
 1. **Do not merge** PRs that only plateau residual / dogfood-shell without full vertical acceptance
 2. Merge green **residual-completion / full vertical** product PR if Quality + Desktop package gates success
 3. Merge green **policy/docs** that enforce full-vertical + residual ledger
-4. If no merge: review V-CRYPTO.7; after it lands, advance V-AUTH.1 from [d0-residual-completion.md](d0-residual-completion.md)
+4. If no merge: monitor V-CRYPTO.7 #236; after it lands, advance V-AUTH.1 from [d0-residual-completion.md](d0-residual-completion.md)
 5. Tip-merge **only** the active residual PR if BEHIND/CONFLICTING
 6. Update PROGRESS after residual lands
 7. Report short status; stop if disk &lt; 5 Gi free
@@ -56,9 +56,9 @@ authority even when implementation is delegated.
 | V-CRYPTO.4    | **DONE #234**                            | Native owner retained; legacy secret-storage owner deleted                   |
 | V-CRYPTO.5    | **DONE #227**                            | Rust-only owner; legacy owner/helper deleted; gates green                    |
 | V-CRYPTO.6    | **DONE #235**                            | Automatic native UTD/history recovery; legacy retry/listener owners deleted  |
-| V-CRYPTO.7    | **ACTIVE local candidate**               | Native device/trust/actions; JS device and dead UIA owners deleted           |
+| V-CRYPTO.7    | **ACTIVE #236**                          | Reviewed code head `7df8abe`; native device/trust/actions; JS device and dead UIA owners deleted; live proof unclaimed |
 | D0.6 plateau  | **#221 HOLD — do not merge as complete** | rework → V-BURN later                                                        |
-| **Next**      | **Review V-CRYPTO.7, then V-AUTH.1**     | Native desktop SSO login follows device/trust landing                        |
+| **Next**      | **Monitor V-CRYPTO.7, then V-AUTH.1**    | Native desktop SSO login follows device/trust landing                        |
 
 _Orchestrator must rewrite this table when a residual slice merges._
 
