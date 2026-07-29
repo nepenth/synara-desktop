@@ -142,6 +142,32 @@ must not be used as a model for a new native/JS hybrid route.
 The V-ROOMS opaque avatar protocol is a useful narrow media pattern, but it
 does not close general timeline media delivery/cache lifecycle requirements.
 
+### Timeline media owner route
+
+Timeline media is a separate V-TIMELINE owner, not an extension of invite
+avatars or a webview `mxc://` conversion. The locked SDK exposes both plaintext
+and encrypted attachment/sticker sources through its `MediaSource` abstraction;
+the native registry must retain that SDK source and let the SDK obtain and
+decrypt bytes. The webview receives only a bounded opaque handle and safe
+metadata.
+
+```text
+SDK timeline event media source
+  → session-scoped native handle registry
+  → TimelineMediaHandle (opaque handle + safe metadata)
+  → native URI/protocol resolver requests that handle
+  → SDK media request/decryption/cache
+  → bytes returned directly to the renderer
+```
+
+The registry must bind each handle to session generation and its source event,
+cap its entries, reject unknown/revoked handles, and revoke handles when the
+event disappears or the session ends. No MXC URI, encryption descriptor,
+download URL, media bytes, or credential may enter `TimelineViewSnapshot`, a
+delta batch, or a Tauri command payload. The presenter may render sticker or
+attachment media only after this complete route and bounded resolver readback
+exist; a per-kind URL workaround is not an acceptable partial replacement.
+
 ## Acceptance evidence
 
 Completion requires retained-behavior proof for focused links, live and unread
