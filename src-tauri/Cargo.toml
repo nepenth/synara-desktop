@@ -26,6 +26,7 @@ tauri = { version = "2.11", features = ["tray-icon", "image-png"] }
 getrandom = "0.3"
 sha2 = "0.10"
 zeroize = "1"
+rfd = "0.17.2"
 # R0.7: live CS-API discovery/login-types transports (read-only; no login).
 reqwest = { version = "0.13", default-features = false, features = [
   "rustls",

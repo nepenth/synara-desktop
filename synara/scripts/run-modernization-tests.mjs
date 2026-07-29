@@ -55,6 +55,7 @@ const tests = [
   'src/app/features/cross-signing/__tests__/nativeCrossSigning.test.ts',
   'src/app/features/backup/__tests__/nativeBackup.test.ts',
   'src/app/features/secret-storage/__tests__/nativeSecretStorage.test.ts',
+  'src/app/features/room-keys/__tests__/nativeRoomKeys.test.ts',
   'src/app/state/__tests__/initMatrix.test.ts',
   'src/app/state/__tests__/tokenRefresh.test.ts',
   'src/app/matrix/__tests__/secretStorageKeys.test.ts',

@@ -6,16 +6,16 @@
 
 <!-- matrix-rust-program-status-link -->
 
-| Field                    | Current value                                                                                                      |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------ |
-| Date                     | 2026-07-28 (America/New_York)                                                                                      |
-| Integration branch       | `feature/matrix-rust-sdk-full-replacement`                                                                         |
-| Execution model          | Primary Codex + Codex sub-agents, all `gpt-5.6-sol` medium; MiniMax-M3 optional                                    |
-| Verified integration tip | `4b4d921` — V-CRYPTO.4 merged (#226)                                                                               |
-| Active PR                | [#227](https://github.com/nepenth/synara-desktop/pull/227) — V-CRYPTO.5 room-key export/import, draft and CI-green |
-| Policy                   | [full-vertical-policy.md](full-vertical-policy.md)                                                                 |
-| Binding queue            | [d0-residual-completion.md](d0-residual-completion.md)                                                             |
-| Main merge               | PR #39 — explicit user approval required                                                                           |
+| Field                    | Current value                                                                                            |
+| ------------------------ | -------------------------------------------------------------------------------------------------------- |
+| Date                     | 2026-07-28 (America/New_York)                                                                            |
+| Integration branch       | `feature/matrix-rust-sdk-full-replacement`                                                               |
+| Execution model          | Primary Codex + Codex sub-agents, all `gpt-5.6-terra` high; MiniMax-M3 optional                          |
+| Verified integration tip | `fd7c934` — full-vertical policy alignment merged (#228)                                                 |
+| Active PR                | [#227](https://github.com/nepenth/synara-desktop/pull/227) — V-CRYPTO.5 closure implementation in review |
+| Policy                   | [full-vertical-policy.md](full-vertical-policy.md)                                                       |
+| Binding queue            | [d0-residual-completion.md](d0-residual-completion.md)                                                   |
+| Main merge               | PR #39 — explicit user approval required                                                                 |
 
 ## Active direction
 
@@ -35,7 +35,7 @@ obsolete tests/types before closure.
 
 ## Exact continuation point
 
-1. Amend active V-CRYPTO.5 [#227](https://github.com/nepenth/synara-desktop/pull/227): remove `LegacyLocalBackup`, WebView room-key file crypto/FileSaver behavior, and its old JS owner before calling the row done.
+1. Validate and land active V-CRYPTO.5 [#227](https://github.com/nepenth/synara-desktop/pull/227): its branch now removes `LegacyLocalBackup`, WebView room-key file crypto/FileSaver behavior, and the old JS owner; closure still requires reviewed-SHA gates and ledger evidence.
 2. Drain the already-wired crypto deletion queue serially:
    - V-CRYPTO.1-D — verification;
    - V-CRYPTO.2-D — cross-signing;
@@ -67,8 +67,11 @@ obsolete tests/types before closure.
 
 1. Native product ownership through the managed Rust client.
 2. Retained behavior parity or explicit product-approved removal.
-3. No tokens, keys, passphrases, recovery material, ciphertext, raw paths, or
-   raw SDK errors in IPC/logs.
+3. Passphrases and recovery inputs may cross IPC only as one-way command
+   inputs. The Rust-owned command buffer is zeroized after the awaited
+   operation. Tokens, keys, passphrases, recovery material, ciphertext, raw
+   paths, and raw SDK errors must never appear in IPC responses, events,
+   diagnostics, or logs.
 4. Physical deletion of the replaced JS implementation/imports.
 5. Capability-owner/file deletion and repository-wide direct-import counts
    before and after the slice.

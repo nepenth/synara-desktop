@@ -56,11 +56,11 @@ L1-only open PRs (notify polish, call-state, extra media orthogonal, MiniMax hel
 
 ## Codex execution roles
 
-| Role                                    | Owner                                                                              |
-| --------------------------------------- | ---------------------------------------------------------------------------------- |
-| Orchestrate, dispatch, and merge         | **Codex** `gpt-5.6-sol` medium — **refuse dogfood acceptance**                     |
-| Implement full vertical residual slices | Same-model Codex sub-agents with bounded task packets                              |
-| Review + tip-merge + focused tests      | Primary Codex orchestrator; independent same-model review may assist               |
+| Role                                    | Owner                                                                               |
+| --------------------------------------- | ----------------------------------------------------------------------------------- |
+| Orchestrate, dispatch, and merge        | **Codex** `gpt-5.6-terra` high — **refuse dogfood acceptance**                      |
+| Implement full vertical residual slices | Same-model/high-reasoning Codex sub-agents with bounded task packets                |
+| Review + tip-merge + focused tests      | Primary Codex orchestrator; independent same-model review may assist                |
 | Optional wait-time assistance           | MiniMax-M3, never sole implementer/reviewer and never acceptance or merge authority |
 
 ## Orchestration
