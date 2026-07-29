@@ -55,8 +55,10 @@ obsolete tests/types before closure.
 - Those four rows are reopened as **wired / deletion open** because relevant JS
   crypto imports and conditional legacy implementations remain.
 - V-CRYPTO.5 is still draft and can be corrected before merge.
-- Repository baseline remains **232 files / 292 import lines** referencing
-  `matrix-js-sdk`; each completed vertical must record a negative delta.
+- Repository baseline remains **232 files / 292 direct import lines** referencing
+  `matrix-js-sdk`. Each completed vertical must record a negative
+  capability-owner/file deletion delta and an honest, non-increasing global
+  import delta; the latter may be zero for indirect ownership.
 - #221 remains held: zero deleted importers is not completion.
 - L1 foundation inventory is about 74/112, but that number is not product
   replacement completion and 0/15 strict phase gates remain closed.
@@ -68,7 +70,8 @@ obsolete tests/types before closure.
 3. No tokens, keys, passphrases, recovery material, ciphertext, raw paths, or
    raw SDK errors in IPC/logs.
 4. Physical deletion of the replaced JS implementation/imports.
-5. Importer/file count before and after the slice.
+5. Capability-owner/file deletion and repository-wide direct-import counts
+   before and after the slice.
 6. Scoped Rust tests, product/helper tests, TypeScript typecheck, formatting,
    guardrails, and required CI on the reviewed SHA.
 7. Residual ledger and [PROGRESS.md](PROGRESS.md) updated in the same PR.

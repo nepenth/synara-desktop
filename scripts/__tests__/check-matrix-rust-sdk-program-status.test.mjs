@@ -134,6 +134,7 @@ test("tracks full-vertical execution and requires per-vertical deletion policy",
   assert.match(rendered, /full-vertical-delete-per-vertical/);
   assert.match(rendered, /Wired \/ deletion open/);
   assert.match(rendered, /232 files \/ 292 import lines current/);
+  assert.match(rendered, /negative capability-owner\/file deletion delta/);
   assert.match(rendered, /Completed under full policy: None/);
 
   const wrongPolicy = clone(status);
@@ -141,6 +142,14 @@ test("tracks full-vertical execution and requires per-vertical deletion policy",
   assert.throws(
     () => validateProgramStatus(wrongPolicy, plan),
     /must require per-vertical deletion/
+  );
+
+  const wrongDeltaRule = clone(status);
+  wrongDeltaRule.vertical_execution.completion_evidence.capability_owner_delta =
+    "optional";
+  assert.throws(
+    () => validateProgramStatus(wrongDeltaRule, plan),
+    /negative capability-owner delta/
   );
 
   const duplicateResidual = clone(status);

@@ -115,6 +115,10 @@
       "V-CRYPTO.7"
     ],
     "held_prs": [221],
+    "completion_evidence": {
+      "capability_owner_delta": "negative",
+      "global_direct_import_delta": "recorded-non-increasing"
+    },
     "matrix_js_sdk_import_inventory": {
       "baseline": {
         "files": 232,

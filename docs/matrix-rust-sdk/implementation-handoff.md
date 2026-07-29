@@ -38,7 +38,7 @@ the operating model, or the canonical status ledger.
 | **Already wired**            | D0 core #214/#216/#218/#219/#220; V-CRYPTO.1–.4 #223–#226                                                                                                     |
 | **Deletion residuals**       | V-CRYPTO.1-D verification → .2-D cross-signing → .3-D backup → .4-D secret storage; drain before V-CRYPTO.6                                                   |
 | **Next product work**        | Amend #227 → drain V-CRYPTO.1-D→.4-D → V-CRYPTO.6 UTD recovery → V-CRYPTO.7 devices/trust                                                                     |
-| **Import baseline**          | 232 files / 292 import lines referencing `matrix-js-sdk`; completed verticals must record a negative delta                                                    |
+| **Import baseline**          | 232 files / 292 direct import lines; record a non-increasing global delta plus a negative capability-owner/file deletion delta for each completed vertical   |
 | **Held**                     | #221 plateau; L1-only notify/call/media/helper PRs unless they block the active vertical                                                                      |
 | **Runtime truth**            | Native product cutover is underway capability-by-capability; relevant JS owners remain until deletion residuals close; **dual_backend false**                 |
 | **Strict gates**             | Original-plan inventory ~74/112; 0/15 strict phase gates closed. Inventory is not product completion.                                                         |

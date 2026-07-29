@@ -37,5 +37,7 @@ Every product task merge that adds `docs/matrix-rust-sdk/pN.M-*.md` **must** upd
 **Full product verticals over new L1.** See [d0-dogfood-epic.md](d0-dogfood-epic.md).
 
 Primary scoreboard: capability residual rows close only after live wiring,
-parity, privacy, tests, and physical JS deletion. Product `matrix-js-sdk`
-import/file count must decrease with every completed vertical.
+parity, privacy, tests, and physical JS deletion. Each completed vertical must
+record a negative capability-owner/file deletion delta. The repository-wide
+direct `matrix-js-sdk` import count is recorded and non-increasing; a zero global
+delta is honest when the deleted owner accessed the SDK indirectly.

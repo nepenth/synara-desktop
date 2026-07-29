@@ -58,7 +58,7 @@ A slice is **done only when** all of the following hold for its capability set:
 2. Only then open new verticals (media, widgets, registry, …) with the same full bar.
 3. Do **not** merge PRs that document “approved residual plateau” or “dogfood minimum” as the done state for D0 / crypto / burn-down.
 4. L1 harness PRs remain parked unless they block a full product vertical.
-5. Import/file counts must decrease with each completed vertical; the final burn-down is a verification and dependency-removal gate, not a warehouse for deferred capability deletion.
+5. Capability-owner/file deletion must be negative and recorded for each completed vertical. Record the repository-wide direct `matrix-js-sdk` import delta too; it must not increase, but it may be zero when the deleted owner reached the SDK indirectly through a shared hook. Do not mix unrelated cleanup into a slice merely to force the global counter down. The final burn-down is a verification and dependency-removal gate, not a warehouse for deferred capability deletion.
 
 ## Orchestrator / Codex rules
 

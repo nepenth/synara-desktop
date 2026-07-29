@@ -33,7 +33,7 @@ authority even when implementation is delegated.
 - **No tokens/secrets** in IPC returns / logs
 - Prefer **serial** product merges
 - Slim Codex validation: `fmt` + module `cargo test` (+ optional clippy); **no** full suite / package / governance regen
-- **Do not merge #221** (or successors) that claim “approved residual plateau” / “0 imports removed is success”
+- **Do not merge #221** (or successors) that claim “approved residual plateau” / “no capability owner deleted is success”
 
 ## Priority order (always)
 

@@ -34,6 +34,7 @@ These release/main fields do not describe partial product wiring on the integrat
 - Completed under full policy: None
 - Next slices: `V-CRYPTO.1-D` → `V-CRYPTO.2-D` → `V-CRYPTO.3-D` → `V-CRYPTO.4-D` → `V-CRYPTO.6` → `V-CRYPTO.7`
 - Held PRs: #221
+- Completion evidence: negative capability-owner/file deletion delta; global direct-import delta recorded and non-increasing
 - matrix-js-sdk inventory: **232 files / 292 import lines current**; baseline **232 / 292**
 
 ## Phase gates

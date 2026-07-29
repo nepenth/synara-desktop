@@ -478,6 +478,15 @@ export function validateProgramStatus(status, planText) {
   );
   assertUnique(vertical.next_slices, "vertical_execution.next_slices");
   assertUnique(vertical.held_prs, "vertical_execution.held_prs");
+  assert(
+    vertical.completion_evidence?.capability_owner_delta === "negative",
+    "vertical completion must require a negative capability-owner delta"
+  );
+  assert(
+    vertical.completion_evidence?.global_direct_import_delta ===
+      "recorded-non-increasing",
+    "vertical completion must record a non-increasing global direct-import delta"
+  );
   const importInventory = vertical.matrix_js_sdk_import_inventory;
   assert(
     importInventory.baseline.files >= 0 &&
@@ -576,6 +585,7 @@ export function renderProgramStatus(status) {
     `- Held PRs: ${status.vertical_execution.held_prs
       .map((pr) => `#${pr}`)
       .join(", ")}`,
+    `- Completion evidence: negative capability-owner/file deletion delta; global direct-import delta recorded and non-increasing`,
     `- matrix-js-sdk inventory: **${status.vertical_execution.matrix_js_sdk_import_inventory.current.files} files / ${status.vertical_execution.matrix_js_sdk_import_inventory.current.import_lines} import lines current**; baseline **${status.vertical_execution.matrix_js_sdk_import_inventory.baseline.files} / ${status.vertical_execution.matrix_js_sdk_import_inventory.baseline.import_lines}**`,
     "",
     "## Phase gates",

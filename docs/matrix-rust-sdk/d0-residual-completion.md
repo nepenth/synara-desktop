@@ -136,7 +136,8 @@ L1 modules under `src-tauri/src/matrix/{verification,backup,cross_signing,device
 | -------------------------------------------------------------- | --------------------------------------------------------------- |
 | Open rows in this residual table                               | **0** for claimed-complete verticals                            |
 | js importers for a claimed-complete capability                 | **0** production files                                          |
-| Import/file delta for each completed vertical                  | **Negative and recorded**; zero-deletion completion is rejected |
+| Capability-owner/file deletion delta per completed vertical    | **Negative and recorded**; zero-deletion completion is rejected |
+| Repository-wide direct `matrix-js-sdk` import delta            | Recorded and non-increasing; zero is allowed only for an indirectly owned capability |
 | New PRs with “minimum / dogfood / plateau residual” acceptance | **0**                                                           |
 | Phase-gate crypto / cutover claims                             | Only after V-CRYPTO + owning verticals complete                 |
 

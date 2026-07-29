@@ -15,7 +15,7 @@
 | Active work        | [#227](https://github.com/nepenth/synara-desktop/pull/227) V-CRYPTO.5 draft; amend for physical deletion before closure |
 | Product runtime    | Native owns core D0 path and wired crypto surfaces; superseded JS implementations/imports remain deletion residuals     |
 | Execution model    | Primary Codex + same-model sub-agents: `gpt-5.6-sol`, medium; MiniMax-M3 optional                                        |
-| Import baseline    | **232 files / 292 import lines**; must decrease per completed vertical                                                  |
+| Import baseline    | **232 files / 292 import lines**; global count is recorded/non-increasing; capability deletion must be negative         |
 | Dual backend       | **`false`** (forbidden forever)                                                                                         |
 | Operating model    | [cutover-operating-model.md](cutover-operating-model.md)                                                                |
 | Machine ledger     | [program-status.md](program-status.md) (generated; do not hand-edit)                                                    |
