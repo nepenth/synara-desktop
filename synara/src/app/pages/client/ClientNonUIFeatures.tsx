@@ -2,7 +2,7 @@ import { useAtomValue } from 'jotai';
 import { isKeyHotkey } from 'is-hotkey';
 import React, { ReactNode, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ClientEvent, MatrixEvent, RoomEvent, RoomEventHandlerMap } from 'matrix-js-sdk';
+import { ClientEvent, MatrixEvent, Room, RoomEvent, RoomEventHandlerMap } from 'matrix-js-sdk';
 import { roomToUnreadAtom, unreadEqual, unreadInfoToUnread } from '../../state/room/roomToUnread';
 import LogoPNG from '../../../../public/res/png/synara.png';
 import LogoUnreadPNG from '../../../../public/res/png/synara-unread.png';
