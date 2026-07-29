@@ -78,8 +78,13 @@ use crate::matrix::sync::{
     SyncServiceOwner,
 };
 use crate::matrix::timeline::{
-    NativeReactionMutationResult, NativeTimelineDirection, NativeTimelineEventReadback,
-    NativeTimelineRegistry, NativeTimelineSnapshot,
+    NativeReactionMutationResult,
+    NativeTimelineDirection,
+    NativeTimelineEventReadback,
+    NativeTimelineRegistry,
+    NativeTimelineSnapshot,
+    NativeTimelineOpenReadback,
+    NativeTimelineOpenRequest,
 };
 use crate::matrix::typing::{set_typing_notice, NativeTypingOwner, NativeTypingSnapshot};
 use crate::matrix::verification::live::{
@@ -1270,13 +1275,13 @@ pub async fn matrix_invites_block_sender(
 #[tauri::command]
 pub async fn matrix_timeline_open(
     state: State<'_, MatrixAuthState>,
-    room_id: String,
-) -> Result<NativeTimelineSnapshot, MatrixAuthCommandError> {
+    request: NativeTimelineOpenRequest,
+) -> Result<NativeTimelineOpenReadback, MatrixAuthCommandError> {
     let mut session = state.session.lock().await;
     let active = require_session_mut(session.as_mut())?;
     active
         .timelines
-        .open(&active.client, &room_id)
+        .open_at(&active.client, request)
         .await
         .map_err(map_timeline_error)
 }

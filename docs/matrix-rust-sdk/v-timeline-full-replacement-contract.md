@@ -40,9 +40,9 @@ dropping it is an ownership defect. The presenter must also preserve viewport
 restore, jump-to-latest/unread, pagination state, day/unread rows, loading and
 error states.
 
-Implementation foundation: the Rust registry now accepts a versioned typed
-open request with either `live_bottom` or `focused(eventId)` position and
-returns that position in authoritative native readback. This fixes the first
+Implementation foundation: `matrix_timeline_open` now accepts a versioned
+typed native request with either `live_bottom` or `focused(eventId)` position
+and returns that position in authoritative Rust readback. This fixes the first
 owner-boundary loss without activating a new presenter. Native unread and
 restored-viewport positions remain pending with their read-frontier/viewport
 owners; they must not be silently mapped to live bottom.
