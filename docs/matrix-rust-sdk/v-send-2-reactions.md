@@ -23,6 +23,10 @@ timeline and reaction-rendering code is not a write owner. Generic message/call
 redaction is outside this reactions slice and remains explicitly owned by its
 future vertical.
 
+The withdrawn `NativeRoomTimeline` flat shell is not a V-SEND.2 target and is
+not wired to these commands. Its existence cannot provide a presenter, fallback,
+or acceptance route for this vertical.
+
 ## Operating paths
 
 ### Toggle one reaction

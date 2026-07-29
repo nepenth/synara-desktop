@@ -20,14 +20,6 @@ type NativeTimelineItem = {
   body: string;
   originServerTs: number;
   decryptionState?: 'pending' | 'unavailable';
-  reactions?: NativeTimelineReaction[];
-};
-
-type NativeTimelineReaction = {
-  key: string;
-  count: number;
-  me: boolean;
-  senders: Array<{ userId: string; reactionEventId?: string }>;
 };
 
 type NativeUtdStatus = {
@@ -94,7 +86,6 @@ function NativeRoomTimeline({ roomId }: { roomId: string }) {
   const [error, setError] = useState(false);
   const [paginating, setPaginating] = useState(false);
   const [recoverySettingsOpen, setRecoverySettingsOpen] = useState(false);
-  const [reactionBusy, setReactionBusy] = useState<string>();
   const [recoveryGuidance, setRecoveryGuidance] = useState<
     'checking' | 'ready' | 'action_required' | 'unavailable'
   >('checking');
@@ -196,25 +187,6 @@ function NativeRoomTimeline({ roomId }: { roomId: string }) {
       setError(true);
     } finally {
       setPaginating(false);
-    }
-  };
-
-  const toggleReaction = async (eventId: string, key: string) => {
-    const operationId = `${eventId}:${key}`;
-    if (reactionBusy) return;
-    setReactionBusy(operationId);
-    try {
-      const result = await invokeDesktopWithAvailability('matrix_timeline_reaction_toggle', {
-        roomId,
-        eventId,
-        key,
-      });
-      if (!result.available) throw new Error('Native reaction IPC unavailable');
-      await loadSnapshot('matrix_timeline_snapshot');
-    } catch {
-      setError(true);
-    } finally {
-      setReactionBusy(undefined);
     }
   };
 
@@ -333,25 +305,6 @@ function NativeRoomTimeline({ roomId }: { roomId: string }) {
             </time>
           </header>
           <p style={{ margin: '4px 0 0', whiteSpace: 'pre-wrap' }}>{item.body}</p>
-          {item.reactions && item.reactions.length > 0 && (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
-              {item.reactions.map((reaction) => {
-                const operationId = `${item.eventId}:${reaction.key}`;
-                return (
-                  <button
-                    key={reaction.key}
-                    type="button"
-                    aria-pressed={reaction.me}
-                    disabled={reactionBusy === operationId}
-                    onClick={() => void toggleReaction(item.eventId, reaction.key)}
-                    title={reaction.senders.map((sender) => sender.userId).join(', ')}
-                  >
-                    {reaction.key} {reaction.count}
-                  </button>
-                );
-              })}
-            </div>
-          )}
         </article>
       ))}
       {recoverySettingsOpen && (
