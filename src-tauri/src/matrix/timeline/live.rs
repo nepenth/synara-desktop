@@ -34,6 +34,45 @@ const REDACTED_PLACEHOLDER: &str = "Message removed";
 const UTD_PLACEHOLDER: &str = "Unable to decrypt this message";
 const UNSUPPORTED_PLACEHOLDER: &str = "Unsupported event";
 const MAX_FOCUSED_EVENT_READBACKS: usize = 256;
+const FOCUSED_CONTEXT_EVENT_COUNT: u16 = 25;
+
+/// Version of the bounded native timeline-open contract.
+///
+/// This is an implementation foundation for the full V-TIMELINE DTO boundary;
+/// it is not a claim that the flat legacy snapshot is the final presenter
+/// payload.
+pub const NATIVE_TIMELINE_OPEN_SCHEMA_VERSION: u32 = 1;
+
+/// Requested initial position for one native timeline view.
+///
+/// `Unread` and restored-viewport positions deliberately remain unimplemented
+/// until their native read-frontier and viewport contracts are ready. They
+/// must not be silently treated as a live-bottom request.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum NativeTimelineOpenPosition {
+    LiveBottom,
+    Focused { event_id: String },
+}
+
+/// Typed input for the native timeline-open owner.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NativeTimelineOpenRequest {
+    pub room_id: String,
+    pub position: NativeTimelineOpenPosition,
+}
+
+/// Bounded authoritative result of opening the requested native timeline
+/// position. The `snapshot` remains the pre-cutover projection; a future
+/// `TimelineViewSnapshot` replaces it with the complete typed row union.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NativeTimelineOpenReadback {
+    pub schema_version: u32,
+    pub position: NativeTimelineOpenPosition,
+    pub snapshot: NativeTimelineSnapshot,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -200,6 +239,74 @@ impl NativeTimelineRegistry {
             );
         }
         self.snapshot(client, &room_id_string).await
+    }
+
+    /// Open the requested view from the native timeline owner without
+    /// collapsing an event-link focus into the live-bottom route.
+    pub async fn open_at(
+        &mut self,
+        client: &Client,
+        request: NativeTimelineOpenRequest,
+    ) -> Result<NativeTimelineOpenReadback, &'static str> {
+        let room_id = parse_room_id(&request.room_id)?;
+        let room_id_string = room_id.to_string();
+        let position = request.position;
+        let snapshot = match &position {
+            NativeTimelineOpenPosition::LiveBottom => self.open(client, &room_id_string).await?,
+            NativeTimelineOpenPosition::Focused { event_id } => {
+                let event_id = parse_event_id(event_id)?;
+                let key = (room_id_string.clone(), event_id.to_string());
+                let room = client
+                    .get_room(&room_id)
+                    .ok_or("v-timeline-focused-room-not-found")?;
+                let is_encrypted = room
+                    .latest_encryption_state()
+                    .await
+                    .map_err(|_| "d0.5-timeline-encryption-state-unavailable")?
+                    .is_encrypted();
+                if !self.focused_entries.contains_key(&key) {
+                    if self.focused_entries.len() >= MAX_FOCUSED_EVENT_READBACKS {
+                        if let Some(oldest_key) = self.focused_entries.keys().next().cloned() {
+                            self.focused_entries.remove(&oldest_key);
+                        }
+                    }
+                    let timeline = TimelineBuilder::new(&room)
+                        .with_focus(TimelineFocus::Event {
+                            target: event_id.clone(),
+                            num_context_events: FOCUSED_CONTEXT_EVENT_COUNT,
+                            thread_mode: TimelineEventFocusThreadMode::Automatic {
+                                hide_threaded_events: false,
+                            },
+                        })
+                        .build()
+                        .await
+                        .map_err(|_| "v-timeline-focused-open-failed")?;
+                    self.focused_entries.insert(key.clone(), Arc::new(timeline));
+                }
+                // The room remains encrypted even when its focused window
+                // currently contains no encrypted item. Carry that fact in the
+                // returned snapshot rather than inferring it in React.
+                let timeline = self
+                    .focused_entries
+                    .get(&key)
+                    .expect("focused timeline present");
+                let mut snapshot = snapshot_from_timeline(
+                    self.session_generation,
+                    room_id_string.clone(),
+                    timeline,
+                    is_encrypted,
+                    false,
+                )
+                .await?;
+                self.reconcile_utd(&mut snapshot, UtdRecoveryKind::RetryDecrypt)?;
+                snapshot
+            }
+        };
+        Ok(NativeTimelineOpenReadback {
+            schema_version: NATIVE_TIMELINE_OPEN_SCHEMA_VERSION,
+            position,
+            snapshot,
+        })
     }
 
     pub async fn snapshot(
@@ -937,6 +1044,21 @@ mod tests {
         assert!(parse_event_id("$event:example.org").is_ok());
     }
 
+    #[test]
+    fn focused_open_request_keeps_the_event_link_at_the_native_boundary() {
+        let request: NativeTimelineOpenRequest = serde_json::from_value(serde_json::json!({
+            "roomId": "!room:example.org",
+            "position": { "kind": "focused", "event_id": "$event:example.org" }
+        }))
+        .unwrap();
+        assert_eq!(request.room_id, "!room:example.org");
+        assert_eq!(
+            request.position,
+            NativeTimelineOpenPosition::Focused {
+                event_id: "$event:example.org".into()
+            }
+        );
+    }
     #[test]
     fn safe_body_projection_never_exposes_unavailable_event_content() {
         assert_eq!(
