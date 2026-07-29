@@ -35,6 +35,11 @@ use crate::matrix::cross_signing::live::{
     project_status, supported_authentication, NativeCrossSigningSetupOutcome,
     NativeCrossSigningSetupResult, NativeCrossSigningStatus, SupportedBootstrapAuthentication,
 };
+use crate::matrix::devices::{
+    live::{snapshot as live_device_snapshot, sso_fallback_url, supported_delete_authentication},
+    NativeDeviceDeleteChallenge, NativeDeviceDeleteResult, NativeDeviceOwner, NativeDeviceSnapshot,
+    PendingDeviceDeletion,
+};
 use crate::matrix::lifecycle::{
     clear_session_material, persist_session_after_login, restore_session_from_vault,
     KeyringSessionMaterialVault,
@@ -63,8 +68,7 @@ use crate::matrix::timeline::{
     NativeTimelineSnapshot,
 };
 use crate::matrix::verification::live::{
-    NativeDeviceVerificationStatus, NativeVerificationInbox, NativeVerificationOwner,
-    NativeVerificationRequest,
+    NativeVerificationInbox, NativeVerificationOwner, NativeVerificationRequest,
 };
 
 const ACTIVE_SESSION_FILE: &str = "active-session.json";
@@ -160,6 +164,9 @@ struct ManagedMatrixSession {
     timelines: NativeTimelineRegistry,
     sends: SendQueue,
     verification: NativeVerificationOwner,
+    _devices: NativeDeviceOwner,
+    pending_device_deletion: Option<PendingDeviceDeletion>,
+    next_device_delete_operation_id: u64,
     pending_cross_signing_auth_session: Option<String>,
     room_key_transfer: Arc<Mutex<RoomKeyTransferFlow>>,
     selected_room_key_import: Option<SelectedRoomKeyImport>,
@@ -228,6 +235,9 @@ pub async fn matrix_login_password(
     ensure_crypto_ready(&client).await?;
     let session_generation = state.next_generation();
     let verification = NativeVerificationOwner::new(&client, session_generation);
+    let devices = NativeDeviceOwner::start(&client, app.clone(), session_generation)
+        .await
+        .map_err(map_device_error)?;
     let sync = start_sync_owner(&client, session_generation).await?;
     let session_vault = KeyringSessionMaterialVault::new();
     persist_session_after_login(&client, &live_identity, &session_vault)
@@ -250,6 +260,9 @@ pub async fn matrix_login_password(
         timelines: NativeTimelineRegistry::new(session_generation),
         sends: SendQueue::new(session_generation),
         verification,
+        _devices: devices,
+        pending_device_deletion: None,
+        next_device_delete_operation_id: 0,
         pending_cross_signing_auth_session: None,
         room_key_transfer: Arc::new(Mutex::new(RoomKeyTransferFlow::new(session_generation))),
         selected_room_key_import: None,
@@ -879,37 +892,167 @@ pub async fn matrix_verification_dismiss(
 }
 
 #[tauri::command]
-pub async fn matrix_device_verification_status(
+pub async fn matrix_device_snapshot(
+    state: State<'_, MatrixAuthState>,
+) -> Result<NativeDeviceSnapshot, MatrixAuthCommandError> {
+    let session = state.session.lock().await;
+    let active = require_device_session(session.as_ref())?;
+    live_device_snapshot(&active.client, active.sync.session_generation())
+        .await
+        .map_err(map_device_error)
+}
+
+#[tauri::command]
+pub async fn matrix_device_rename(
     state: State<'_, MatrixAuthState>,
     device_id: String,
-) -> Result<NativeDeviceVerificationStatus, MatrixAuthCommandError> {
-    let session = state.session.lock().await;
-    let active = require_verification_session(session.as_ref())?;
-    let user_id = active.client.user_id().ok_or_else(|| {
-        MatrixAuthCommandError::new(
-            "Forbidden",
-            "No native Matrix session is active.",
-            "v-crypto.1-status-requires-session",
-        )
-    })?;
+    display_name: String,
+) -> Result<NativeDeviceSnapshot, MatrixAuthCommandError> {
+    let display_name = display_name.trim();
+    if display_name.is_empty() {
+        return Err(map_device_error("v-crypto.7-device-rename-empty"));
+    }
+    let mut session = state.session.lock().await;
+    let active = require_device_session_mut(session.as_mut())?;
     let device_id = matrix_sdk::ruma::OwnedDeviceId::from(device_id);
-    let device = active
+    active
         .client
-        .encryption()
-        .get_device(user_id, &device_id)
+        .rename_device(&device_id, display_name)
         .await
-        .map_err(|_| {
-            MatrixAuthCommandError::new(
-                "Unknown",
-                "Device verification status is unavailable.",
-                "v-crypto.1-status-query-failed",
-            )
-        })?;
-    Ok(match device {
-        Some(device) if device.is_verified() => NativeDeviceVerificationStatus::Verified,
-        Some(_) => NativeDeviceVerificationStatus::Unverified,
-        None => NativeDeviceVerificationStatus::Unavailable,
-    })
+        .map_err(|_| map_device_error("v-crypto.7-device-rename-failed"))?;
+    live_device_snapshot(&active.client, active.sync.session_generation())
+        .await
+        .map_err(map_device_error)
+}
+
+#[tauri::command]
+pub async fn matrix_device_delete_start(
+    state: State<'_, MatrixAuthState>,
+    device_ids: Vec<String>,
+) -> Result<NativeDeviceDeleteResult, MatrixAuthCommandError> {
+    let mut session = state.session.lock().await;
+    let active = require_device_session_mut(session.as_mut())?;
+    active.pending_device_deletion = None;
+    let device_ids = validate_device_deletion(active, device_ids).await?;
+    match active.client.delete_devices(&device_ids, None).await {
+        Ok(_) => complete_device_deletion(active, &device_ids).await,
+        Err(error) => {
+            let info = error
+                .as_uiaa_response()
+                .ok_or_else(|| map_device_error("v-crypto.7-device-delete-start-failed"))?;
+            retain_device_delete_challenge(active, device_ids, info).await
+        }
+    }
+}
+
+#[tauri::command]
+pub async fn matrix_device_delete_password(
+    state: State<'_, MatrixAuthState>,
+    operation_id: u64,
+    password: String,
+) -> Result<NativeDeviceDeleteResult, MatrixAuthCommandError> {
+    let password = zeroize::Zeroizing::new(password);
+    if password.is_empty() {
+        return Err(map_device_error("v-crypto.7-device-delete-password-empty"));
+    }
+    let mut session = state.session.lock().await;
+    let active = require_device_session_mut(session.as_mut())?;
+    let pending = active
+        .pending_device_deletion
+        .as_ref()
+        .ok_or_else(|| map_device_error("v-crypto.7-device-delete-not-pending"))?;
+    if pending.operation_id != operation_id {
+        return Err(map_device_error(
+            "v-crypto.7-device-delete-operation-mismatch",
+        ));
+    }
+    if pending.session_generation != active.sync.session_generation() {
+        active.pending_device_deletion = None;
+        return Err(map_device_error(
+            "v-crypto.7-device-delete-stale-generation",
+        ));
+    }
+    let user_id = active
+        .client
+        .user_id()
+        .ok_or_else(|| map_device_error("v-crypto.7-device-delete-user-missing"))?;
+    let mut auth = uiaa::Password::new(
+        uiaa::UserIdentifier::Matrix(uiaa::MatrixUserIdentifier::new(user_id.to_string())),
+        password.to_string(),
+    );
+    auth.session = Some(pending.auth_session.clone());
+    let device_ids = pending.device_ids.clone();
+    match active
+        .client
+        .delete_devices(&device_ids, Some(uiaa::AuthData::Password(auth)))
+        .await
+    {
+        Ok(_) => complete_device_deletion(active, &device_ids).await,
+        Err(error) => {
+            let info = error
+                .as_uiaa_response()
+                .ok_or_else(|| map_device_error("v-crypto.7-device-delete-password-failed"))?;
+            let authentication_failed = !info.completed.contains(&uiaa::AuthType::Password);
+            refresh_device_delete_challenge(active, info, authentication_failed).await
+        }
+    }
+}
+
+#[tauri::command]
+pub async fn matrix_device_delete_sso_acknowledge(
+    state: State<'_, MatrixAuthState>,
+    operation_id: u64,
+) -> Result<NativeDeviceDeleteResult, MatrixAuthCommandError> {
+    let mut session = state.session.lock().await;
+    let active = require_device_session_mut(session.as_mut())?;
+    let pending = active
+        .pending_device_deletion
+        .as_ref()
+        .ok_or_else(|| map_device_error("v-crypto.7-device-delete-not-pending"))?;
+    if pending.operation_id != operation_id {
+        return Err(map_device_error(
+            "v-crypto.7-device-delete-operation-mismatch",
+        ));
+    }
+    if pending.session_generation != active.sync.session_generation() {
+        active.pending_device_deletion = None;
+        return Err(map_device_error(
+            "v-crypto.7-device-delete-stale-generation",
+        ));
+    }
+    let device_ids = pending.device_ids.clone();
+    let auth = uiaa::AuthData::fallback_acknowledgement(pending.auth_session.clone());
+    match active.client.delete_devices(&device_ids, Some(auth)).await {
+        Ok(_) => complete_device_deletion(active, &device_ids).await,
+        Err(error) => {
+            let info = error
+                .as_uiaa_response()
+                .ok_or_else(|| map_device_error("v-crypto.7-device-delete-sso-failed"))?;
+            let authentication_failed = !info.completed.contains(&uiaa::AuthType::Sso);
+            refresh_device_delete_challenge(active, info, authentication_failed).await
+        }
+    }
+}
+
+#[tauri::command]
+pub async fn matrix_device_delete_cancel(
+    state: State<'_, MatrixAuthState>,
+    operation_id: u64,
+) -> Result<(), MatrixAuthCommandError> {
+    let mut session = state.session.lock().await;
+    let active = require_device_session_mut(session.as_mut())?;
+    if active
+        .pending_device_deletion
+        .as_ref()
+        .is_some_and(|pending| pending.operation_id == operation_id)
+    {
+        active.pending_device_deletion = None;
+        Ok(())
+    } else {
+        Err(map_device_error(
+            "v-crypto.7-device-delete-operation-mismatch",
+        ))
+    }
 }
 
 #[tauri::command]
@@ -1116,6 +1259,9 @@ pub async fn matrix_restore_session(
     ensure_crypto_ready(&client).await?;
     let session_generation = state.next_generation();
     let verification = NativeVerificationOwner::new(&client, session_generation);
+    let devices = NativeDeviceOwner::start(&client, app.clone(), session_generation)
+        .await
+        .map_err(map_device_error)?;
     let sync = start_sync_owner(&client, session_generation).await?;
     *session = Some(ManagedMatrixSession {
         client,
@@ -1124,6 +1270,9 @@ pub async fn matrix_restore_session(
         timelines: NativeTimelineRegistry::new(session_generation),
         sends: SendQueue::new(session_generation),
         verification,
+        _devices: devices,
+        pending_device_deletion: None,
+        next_device_delete_operation_id: 0,
         pending_cross_signing_auth_session: None,
         room_key_transfer: Arc::new(Mutex::new(RoomKeyTransferFlow::new(session_generation))),
         selected_room_key_import: None,
@@ -1224,6 +1373,140 @@ async fn live_cross_signing_status(
     ))
 }
 
+async fn validate_device_deletion(
+    active: &ManagedMatrixSession,
+    device_ids: Vec<String>,
+) -> Result<Vec<matrix_sdk::ruma::OwnedDeviceId>, MatrixAuthCommandError> {
+    if device_ids.is_empty() {
+        return Err(map_device_error("v-crypto.7-device-delete-selection-empty"));
+    }
+    let snapshot = live_device_snapshot(&active.client, active.sync.session_generation())
+        .await
+        .map_err(map_device_error)?;
+    let current = snapshot
+        .devices
+        .iter()
+        .find(|device| device.is_current)
+        .map(|device| device.device_id.as_str())
+        .ok_or_else(|| map_device_error("v-crypto.7-device-delete-current-missing"))?;
+    let mut unique = std::collections::BTreeSet::new();
+    for device_id in device_ids {
+        if device_id.is_empty() || device_id == current || !snapshot.contains(&device_id) {
+            return Err(map_device_error(
+                "v-crypto.7-device-delete-selection-invalid",
+            ));
+        }
+        unique.insert(matrix_sdk::ruma::OwnedDeviceId::from(device_id));
+    }
+    Ok(unique.into_iter().collect())
+}
+
+async fn retain_device_delete_challenge(
+    active: &mut ManagedMatrixSession,
+    device_ids: Vec<matrix_sdk::ruma::OwnedDeviceId>,
+    info: &uiaa::UiaaInfo,
+) -> Result<NativeDeviceDeleteResult, MatrixAuthCommandError> {
+    let operation_id = active
+        .next_device_delete_operation_id
+        .checked_add(1)
+        .ok_or_else(|| map_device_error("v-crypto.7-device-delete-operation-overflow"))?;
+    active.next_device_delete_operation_id = operation_id;
+    install_device_delete_challenge(active, operation_id, device_ids, info, false).await
+}
+
+async fn refresh_device_delete_challenge(
+    active: &mut ManagedMatrixSession,
+    info: &uiaa::UiaaInfo,
+    authentication_failed: bool,
+) -> Result<NativeDeviceDeleteResult, MatrixAuthCommandError> {
+    let pending = active
+        .pending_device_deletion
+        .take()
+        .ok_or_else(|| map_device_error("v-crypto.7-device-delete-not-pending"))?;
+    install_device_delete_challenge(
+        active,
+        pending.operation_id,
+        pending.device_ids,
+        info,
+        authentication_failed,
+    )
+    .await
+}
+
+async fn install_device_delete_challenge(
+    active: &mut ManagedMatrixSession,
+    operation_id: u64,
+    device_ids: Vec<matrix_sdk::ruma::OwnedDeviceId>,
+    info: &uiaa::UiaaInfo,
+    authentication_failed: bool,
+) -> Result<NativeDeviceDeleteResult, MatrixAuthCommandError> {
+    let auth_session = info
+        .session
+        .clone()
+        .ok_or_else(|| map_device_error("v-crypto.7-device-delete-auth-session-missing"))?;
+    let available = supported_delete_authentication(info);
+    let authentication = if available
+        .contains(&crate::matrix::devices::NativeDeviceDeleteAuthentication::Password)
+    {
+        vec![crate::matrix::devices::NativeDeviceDeleteAuthentication::Password]
+    } else if available
+        .contains(&crate::matrix::devices::NativeDeviceDeleteAuthentication::SsoFallback)
+    {
+        vec![crate::matrix::devices::NativeDeviceDeleteAuthentication::SsoFallback]
+    } else {
+        return Err(map_device_error(
+            "v-crypto.7-device-delete-auth-unsupported",
+        ));
+    };
+    let sso_fallback_url = if authentication
+        .contains(&crate::matrix::devices::NativeDeviceDeleteAuthentication::SsoFallback)
+    {
+        // This Ruma-generated browser URL necessarily embeds the opaque UIAA
+        // session. The session is never returned as a separate field or logged.
+        Some(
+            sso_fallback_url(&active.client, &auth_session)
+                .await
+                .map_err(map_device_error)?,
+        )
+    } else {
+        None
+    };
+    active.pending_device_deletion = Some(PendingDeviceDeletion {
+        operation_id,
+        session_generation: active.sync.session_generation(),
+        device_ids,
+        auth_session,
+    });
+    Ok(NativeDeviceDeleteResult::AuthenticationRequired {
+        challenge: NativeDeviceDeleteChallenge {
+            operation_id,
+            session_generation: active.sync.session_generation(),
+            authentication,
+            sso_fallback_url,
+            authentication_failed,
+        },
+    })
+}
+
+async fn complete_device_deletion(
+    active: &mut ManagedMatrixSession,
+    deleted: &[matrix_sdk::ruma::OwnedDeviceId],
+) -> Result<NativeDeviceDeleteResult, MatrixAuthCommandError> {
+    let snapshot = live_device_snapshot(&active.client, active.sync.session_generation())
+        .await
+        .map_err(map_device_error)?;
+    if deleted
+        .iter()
+        .any(|device_id| snapshot.contains(device_id.as_str()))
+    {
+        return Err(map_device_error(
+            "v-crypto.7-device-delete-readback-incomplete",
+        ));
+    }
+    active.pending_device_deletion = None;
+    Ok(NativeDeviceDeleteResult::Complete { snapshot })
+}
+
 async fn cross_signing_setup_complete(
     active: &mut ManagedMatrixSession,
 ) -> Result<NativeCrossSigningSetupResult, MatrixAuthCommandError> {
@@ -1264,6 +1547,29 @@ fn map_room_list_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
     )
 }
 
+fn map_device_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
+    let (code, message) = match diagnostic_id {
+        "v-crypto.7-device-rename-empty"
+        | "v-crypto.7-device-delete-selection-empty"
+        | "v-crypto.7-device-delete-selection-invalid"
+        | "v-crypto.7-device-delete-not-pending"
+        | "v-crypto.7-device-delete-operation-mismatch" => (
+            "InvalidRequest",
+            "The native Matrix device request is invalid.",
+        ),
+        "v-crypto.7-device-delete-stale-generation" => (
+            "StaleSessionGeneration",
+            "The native Matrix session changed during device logout.",
+        ),
+        "v-crypto.7-device-delete-auth-unsupported" => (
+            "Forbidden",
+            "The homeserver requires an unsupported authentication step for device logout.",
+        ),
+        _ => ("Unknown", "Native Matrix device management is unavailable."),
+    };
+    MatrixAuthCommandError::new(code, message, diagnostic_id)
+}
+
 fn require_session(
     session: Option<&ManagedMatrixSession>,
 ) -> Result<&ManagedMatrixSession, MatrixAuthCommandError> {
@@ -1284,6 +1590,30 @@ fn require_verification_session(
             "Forbidden",
             "No native Matrix session is active.",
             "v-crypto.1-verification-requires-session",
+        )
+    })
+}
+
+fn require_device_session(
+    session: Option<&ManagedMatrixSession>,
+) -> Result<&ManagedMatrixSession, MatrixAuthCommandError> {
+    session.ok_or_else(|| {
+        MatrixAuthCommandError::new(
+            "Forbidden",
+            "No native Matrix session is active.",
+            "v-crypto.7-device-requires-session",
+        )
+    })
+}
+
+fn require_device_session_mut(
+    session: Option<&mut ManagedMatrixSession>,
+) -> Result<&mut ManagedMatrixSession, MatrixAuthCommandError> {
+    session.ok_or_else(|| {
+        MatrixAuthCommandError::new(
+            "Forbidden",
+            "No native Matrix session is active.",
+            "v-crypto.7-device-requires-session",
         )
     })
 }

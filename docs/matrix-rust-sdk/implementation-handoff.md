@@ -30,26 +30,26 @@ This section is the current handoff. The dated audit and former implementation
 ledger below remain historical evidence and must not override this snapshot,
 the operating model, or the canonical status ledger.
 
-| Field                        | Current value                                                                                                                                                        |
-| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Integration branch / tip** | `feature/matrix-rust-sdk-full-replacement` @ `c2a002df90a3b9de1553bdc5843f7045949b427f`; active candidate [#235](https://github.com/nepenth/synara-desktop/pull/235) |
-| **Policy**                   | [Full vertical replacement](full-vertical-policy.md): no minima/plateau; **physical deletion per vertical**                                                          |
-| **Active product work**      | V-CRYPTO.6 automatic UTD/history-recovery candidate [#235](https://github.com/nepenth/synara-desktop/pull/235); live/UI proof not confirmed                          |
-| **Completed verticals**      | D0 core #214/#216/#218/#219/#220; V-CRYPTO.1–.5 have native owners and per-vertical legacy deletion complete                                                         |
-| **Deletion residuals**       | V-CRYPTO.6 JS retry, per-event decrypt, pagination call, and Decrypted-listener ownership are deleted in the candidate                                               |
-| **Next product work**        | Review V-CRYPTO.6 automatic UTD recovery candidate → V-CRYPTO.7 devices/trust                                                                                        |
-| **Import baseline**          | 232 files / 292 direct import lines → 218 / 273 in the V-CRYPTO.6 candidate; generated production importer files remain 207                                          |
-| **Held**                     | #221 plateau; L1-only notify/call/media/helper PRs unless they block the active vertical                                                                             |
-| **Runtime truth**            | Native product cutover is underway capability-by-capability; relevant JS owners remain until deletion residuals close; **dual_backend false**                        |
-| **Strict gates**             | Original-plan inventory ~74/112; 0/15 strict phase gates closed. Inventory is not product completion.                                                                |
-| **Main PR**                  | [#39](https://github.com/nepenth/synara-desktop/pull/39) — do not merge without explicit user approval                                                               |
+| Field                        | Current value                                                                                                                                 |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Integration branch / tip** | `feature/matrix-rust-sdk-full-replacement` @ `05e3f64dc9b6e1b38dcc181abe2090370e85a5e3`; V-CRYPTO.7 local candidate, no PR                    |
+| **Policy**                   | [Full vertical replacement](full-vertical-policy.md): no minima/plateau; **physical deletion per vertical**                                   |
+| **Active product work**      | V-CRYPTO.7 native device list/trust/rename/delete and purpose-specific Password/SSO UIAA candidate; live multi-session/UI proof not claimed   |
+| **Completed verticals**      | D0 core #214/#216/#218/#219/#220; V-CRYPTO.1–.6 have native owners and per-vertical legacy deletion complete                                  |
+| **Deletion residuals**       | V-CRYPTO.7 JS `CryptoApi`, device model/listener/polling, trust hooks, platform repair helper, and dead delete-UIA owners are deleted         |
+| **Next product work**        | Review/land V-CRYPTO.7 → V-AUTH.1 desktop SSO login                                                                                           |
+| **Import baseline**          | 232 files / 292 direct import lines → 212 / 265 in V-CRYPTO.7; production importer files 207→201 and repository-wide 221→215                  |
+| **Held**                     | #221 plateau; L1-only notify/call/media/helper PRs unless they block the active vertical                                                      |
+| **Runtime truth**            | Native product cutover is underway capability-by-capability; relevant JS owners remain until deletion residuals close; **dual_backend false** |
+| **Strict gates**             | Original-plan inventory ~74/112; 0/15 strict phase gates closed. Inventory is not product completion.                                         |
+| **Main PR**                  | [#39](https://github.com/nepenth/synara-desktop/pull/39) — do not merge without explicit user approval                                        |
 
 ### Current next-owner procedure
 
-1. Review [#235](https://github.com/nepenth/synara-desktop/pull/235) at its exact head; runtime proof remains unconfirmed.
-2. Merge only after required exact-head checks and independent review pass.
+1. Review the local V-CRYPTO.7 candidate against [v-crypto-7-device-list-trust.md](v-crypto-7-device-list-trust.md); live multi-session/UI proof remains unconfirmed.
+2. Open/merge only after required exact-head checks and independent review pass.
 3. Require each vertical/deletion residual to report deleted paths and importer/file count delta.
-4. After V-CRYPTO.6 lands, implement V-CRYPTO.7 as the next wire-plus-delete slice.
+4. After V-CRYPTO.7 lands, implement V-AUTH.1 as the next wire-plus-delete slice.
 5. Update [PROGRESS.md](PROGRESS.md), [d0-residual-completion.md](d0-residual-completion.md), and the short [CONTINUATION.md](CONTINUATION.md) in the same PR whenever the active pointer or residual status changes.
 
 Everything below this live snapshot is dated audit/history. It remains useful

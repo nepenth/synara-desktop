@@ -48,7 +48,7 @@ import { SyncStatus } from './SyncStatus';
 import { AuthMetadataProvider } from '../../hooks/useAuthMetadata';
 import { getActiveSession, getSessionBootstrapResult } from '../../state/sessionBootstrap';
 import { AutoDiscovery } from './AutoDiscovery';
-import { platformSessionStore, repairPlatformDeviceDisplayName } from '../../platform';
+import { platformSessionStore } from '../../platform';
 import { migrateLegacySessionToNativeAfterClientInit } from '../../state/sessionPersistence';
 import { shouldRetrySyncOnResume } from '../../utils/syncLifecycle';
 import {
@@ -220,23 +220,6 @@ const useProactiveTokenRefresh = (mx?: MatrixClient) => {
   }, [mx]);
 };
 
-const usePlatformDeviceDisplayNameRepair = (mx?: MatrixClient) => {
-  useEffect(() => {
-    const deviceId = mx?.getDeviceId();
-    if (!mx || !deviceId) return undefined;
-
-    let cancelled = false;
-    void (async () => {
-      if (cancelled) return;
-      await repairPlatformDeviceDisplayName(mx);
-    })().catch(() => undefined);
-
-    return () => {
-      cancelled = true;
-    };
-  }, [mx]);
-};
-
 type ClientRootProps = {
   children: ReactNode;
 };
@@ -278,7 +261,6 @@ export function ClientRoot({ children }: ClientRootProps) {
   useLogoutListener(mx);
   useSyncResumeRetry(mx);
   useProactiveTokenRefresh(mx);
-  usePlatformDeviceDisplayNameRepair(mx);
 
   useEffect(() => {
     if (loadState.status === AsyncStatus.Idle) {

@@ -37,7 +37,6 @@ export type NativeVerificationInbox = {
   requests: NativeVerificationRequest[];
 };
 
-export type NativeDeviceVerificationStatus = 'verified' | 'unverified' | 'unavailable';
 export type NativeCryptoStatus = {
   sessionGeneration: number;
   encryptionEnabled: boolean;
@@ -88,11 +87,6 @@ export const cancelNativeVerification = (flowId: string): Promise<NativeVerifica
 
 export const dismissNativeVerification = (flowId: string): Promise<void> =>
   invokeNativeVerification('matrix_verification_dismiss', { flowId });
-
-export const getNativeDeviceVerificationStatus = (
-  deviceId: string
-): Promise<NativeDeviceVerificationStatus> =>
-  invokeNativeVerification('matrix_device_verification_status', { deviceId });
 
 export const getNativeCryptoStatus = (): Promise<NativeCryptoStatus> =>
   invokeNativeVerification('matrix_crypto_status');

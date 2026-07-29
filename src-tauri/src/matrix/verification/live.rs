@@ -83,14 +83,6 @@ pub struct NativeVerificationInbox {
     pub requests: Vec<NativeVerificationRequest>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum NativeDeviceVerificationStatus {
-    Verified,
-    Unverified,
-    Unavailable,
-}
-
 #[derive(Clone)]
 struct ManagedVerification {
     request: VerificationRequest,

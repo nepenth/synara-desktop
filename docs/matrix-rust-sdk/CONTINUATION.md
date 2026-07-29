@@ -11,8 +11,8 @@
 | Date                     | 2026-07-29 (America/New_York)                                                   |
 | Integration branch       | `feature/matrix-rust-sdk-full-replacement`                                      |
 | Execution model          | Primary Codex + Codex sub-agents, all `gpt-5.6-sol` medium; MiniMax-M3 optional |
-| Verified integration tip | `38f0994` — V-CRYPTO.3 deletion merged (#233)                                   |
-| Active PR                | None — intentionally paused between slices                                      |
+| Verified integration tip | `05e3f64` — V-CRYPTO.6 merged (#235)                                            |
+| Active PR                | None — V-CRYPTO.7 local candidate                                               |
 | Policy                   | [full-vertical-policy.md](full-vertical-policy.md)                              |
 | Operating path           | [operating-path-contract.md](operating-path-contract.md)                        |
 | Binding queue            | [d0-residual-completion.md](d0-residual-completion.md)                          |
@@ -36,9 +36,9 @@ obsolete tests/types before closure.
 
 ## Exact continuation point
 
-1. Review and merge V-CRYPTO.6 [#235](https://github.com/nepenth/synara-desktop/pull/235); live two-client recovery proof remains unconfirmed until the existing harness is run.
-2. Implement V-CRYPTO.7 device list/trust/actions as the next complete wire-plus-delete vertical.
-3. Continue V-AUTH → V-ROOMS → V-TIMELINE → V-SEND, deleting the superseded JS owner inside each capability slice.
+1. Review the V-CRYPTO.7 device list/trust/actions local candidate; live multi-session/UI proof is not yet claimed.
+2. Land V-CRYPTO.7 only after focused checks and review; its native route and physical JS-owner deletion are documented in [v-crypto-7-device-list-trust.md](v-crypto-7-device-list-trust.md).
+3. Continue with V-AUTH.1 → remaining V-AUTH → V-ROOMS → V-TIMELINE → V-SEND, deleting the superseded JS owner inside each capability slice.
 4. Run V-BURN only as the final convergence audit and npm dependency/bootstrap/store cleanup.
 5. Resume new media/widgets/notifications/calls verticals only after the residual queue allows.
 
@@ -63,6 +63,10 @@ obsolete tests/types before closure.
   relies on SDK-owned pagination insertion/late-key redecryption and adds safe late-decrypt readback, reuses native
   recovery settings, and deletes the JS retry/per-event/listener owners. See
   [v-crypto-6-utd-recovery.md](v-crypto-6-utd-recovery.md).
+- V-CRYPTO.7 is a local candidate: native device list/trust, rename, and
+  purpose-specific other-device deletion/UIAA replace the device page's JS SDK
+  owners. Direct inventory is **212 files / 265 import lines**, production
+  importers **201**, and repository-wide importers **215**.
 - Repository baseline remains **232 files / 292 direct import lines** referencing
   `matrix-js-sdk`. Each completed vertical must record a negative
   capability-owner/file deletion delta and an honest, non-increasing global
