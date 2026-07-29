@@ -32,9 +32,10 @@ pub use focus::{
     ContextWindow, FocusOpenOutcome, FocusOpenRequest, NavigationPhase, TimelineFocus, TimelineMode,
 };
 pub use live::{
-    NativeDecryptionState, NativeTimelineDirection, NativeTimelineEventReadback,
-    NativeTimelineItem, NativeTimelineRegistry, NativeTimelineSnapshot, NativeUtdPhase,
-    NativeUtdStatus,
+    NativeDecryptionState, NativeReactionMutation, NativeReactionMutationResult,
+    NativeTimelineDirection, NativeTimelineEventReadback, NativeTimelineItem,
+    NativeTimelineReaction, NativeTimelineReactionSender, NativeTimelineRegistry,
+    NativeTimelineSnapshot, NativeUtdPhase, NativeUtdStatus,
 };
 pub use pagination::{
     DirectionStatus, PaginationDirection, PaginationOutcome, PaginationPhase, PaginationRequest,

@@ -657,6 +657,18 @@
           "markdownDescription": "Enables the matrix_logout command without any pre-configured scope."
         },
         {
+          "description": "Enables the matrix_reaction_ensure command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-reaction-ensure",
+          "markdownDescription": "Enables the matrix_reaction_ensure command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_reaction_redact command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-reaction-redact",
+          "markdownDescription": "Enables the matrix_reaction_redact command without any pre-configured scope."
+        },
+        {
           "description": "Enables the matrix_restore_session command without any pre-configured scope.",
           "type": "string",
           "const": "allow-matrix-restore-session",
@@ -745,6 +757,12 @@
           "type": "string",
           "const": "allow-matrix-timeline-paginate",
           "markdownDescription": "Enables the matrix_timeline_paginate command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_timeline_reaction_toggle command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-timeline-reaction-toggle",
+          "markdownDescription": "Enables the matrix_timeline_reaction_toggle command without any pre-configured scope."
         },
         {
           "description": "Enables the matrix_timeline_snapshot command without any pre-configured scope.",
@@ -1125,6 +1143,18 @@
           "markdownDescription": "Denies the matrix_logout command without any pre-configured scope."
         },
         {
+          "description": "Denies the matrix_reaction_ensure command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-reaction-ensure",
+          "markdownDescription": "Denies the matrix_reaction_ensure command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_reaction_redact command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-reaction-redact",
+          "markdownDescription": "Denies the matrix_reaction_redact command without any pre-configured scope."
+        },
+        {
           "description": "Denies the matrix_restore_session command without any pre-configured scope.",
           "type": "string",
           "const": "deny-matrix-restore-session",
@@ -1213,6 +1243,12 @@
           "type": "string",
           "const": "deny-matrix-timeline-paginate",
           "markdownDescription": "Denies the matrix_timeline_paginate command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_timeline_reaction_toggle command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-timeline-reaction-toggle",
+          "markdownDescription": "Denies the matrix_timeline_reaction_toggle command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_timeline_snapshot command without any pre-configured scope.",

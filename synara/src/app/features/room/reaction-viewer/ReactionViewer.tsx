@@ -31,6 +31,7 @@ import { useOpenUserRoomProfile } from '../../../state/hooks/userRoomProfile';
 import { useSpaceOptionally } from '../../../hooks/useSpace';
 import { getMouseEventCords } from '../../../utils/dom';
 import { resolveMatrixThumbnailUrl } from '../../../matrix/media';
+import { redactReactionWithNativeOwner } from '../nativeReactionOwner';
 
 export type ReactionViewerProps = {
   room: Room;
@@ -80,7 +81,16 @@ export const ReactionViewer = as<'div', ReactionViewerProps>(
       setRedactingEventId(eventId);
       setRedactError(undefined);
       try {
-        await mx.redactEvent(room.roomId, eventId, undefined, { reason: 'Removed reaction' });
+        const relation = mEvent.getRelation();
+        const targetEventId = relation?.event_id;
+        const key = relation?.key;
+        if (!targetEventId || typeof key !== 'string') throw new Error('Missing reaction relation');
+        await redactReactionWithNativeOwner({
+          roomId: room.roomId,
+          eventId: targetEventId,
+          reactionEventId: eventId,
+          key,
+        });
       } catch {
         setRedactError('Failed to remove reaction.');
       } finally {
