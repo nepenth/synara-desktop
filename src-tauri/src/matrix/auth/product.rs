@@ -85,6 +85,7 @@ use crate::matrix::timeline::{
     NativeTimelineSnapshot,
     NativeTimelineOpenReadback,
     NativeTimelineOpenRequest,
+    NativeTimelineViewPaginationRequest,
 };
 use crate::matrix::typing::{set_typing_notice, NativeTypingOwner, NativeTypingSnapshot};
 use crate::matrix::verification::live::{
@@ -1319,15 +1320,13 @@ pub async fn matrix_timeline_event_readback(
 #[tauri::command]
 pub async fn matrix_timeline_paginate(
     state: State<'_, MatrixAuthState>,
-    room_id: String,
-    dir: NativeTimelineDirection,
-) -> Result<NativeTimelineSnapshot, MatrixAuthCommandError> {
+    request: NativeTimelineViewPaginationRequest,
+) -> Result<crate::matrix::timeline::TimelineViewSnapshot, MatrixAuthCommandError> {
     let mut session = state.session.lock().await;
     let active = require_session_mut(session.as_mut())?;
     active
         .timelines
-        .paginate(&active.client, &room_id, dir)
-        .await
+        .paginate(&active.client, request)        .await
         .map_err(map_timeline_error)
 }
 

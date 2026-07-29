@@ -93,6 +93,15 @@ pub enum NativeTimelineDirection {
     Forwards,
 }
 
+/// A pagination request addresses the exact opened view, rather than assuming
+/// a room has only one timeline. `stream_id` comes from `matrix_timeline_open`.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NativeTimelineViewPaginationRequest {
+    pub stream_id: String,
+    pub direction: NativeTimelineDirection,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeTimelineItem {
@@ -202,10 +211,18 @@ struct LiveTimelineEntry {
     hit_start: bool,
 }
 
+struct ViewStreamEntry {
+    room_id: String,
+    timeline: Arc<Timeline>,
+    position: TimelineViewPosition,
+    hit_start: bool,
+}
+
 pub struct NativeTimelineRegistry {
     session_generation: u64,
     entries: HashMap<String, LiveTimelineEntry>,
     focused_entries: HashMap<(String, String), Arc<Timeline>>,
+    view_streams: HashMap<String, ViewStreamEntry>,
     view_update_tasks: HashMap<String, JoinHandle<()>>,
     view_revisions: HashMap<String, Arc<AtomicU64>>,
     utd_index: UtdIndex,
@@ -218,6 +235,7 @@ impl NativeTimelineRegistry {
             session_generation,
             entries: HashMap::new(),
             focused_entries: HashMap::new(),
+            view_streams: HashMap::new(),
             view_update_tasks: HashMap::new(),
             view_revisions: HashMap::new(),
             utd_index: UtdIndex::new(session_generation),
@@ -337,6 +355,14 @@ impl NativeTimelineRegistry {
             .entry(subscription_key.clone())
             .or_insert_with(|| Arc::new(AtomicU64::new(0)))
             .clone();
+        self.view_streams
+            .entry(subscription_key.clone())
+            .or_insert_with(|| ViewStreamEntry {
+                room_id: room_id_string.clone(),
+                timeline: timeline.clone(),
+                position: view_position.clone(),
+                hit_start: matches!(pagination.backward, TimelinePageState::Exhausted),
+            });
         let snapshot = if self.view_update_tasks.contains_key(&subscription_key) {
             view_snapshot_from_timeline(
                 self.session_generation,
@@ -411,6 +437,26 @@ impl NativeTimelineRegistry {
     pub async fn paginate(
         &mut self,
         client: &Client,
+    request: NativeTimelineViewPaginationRequest,
+    ) -> Result<TimelineViewSnapshot,
+    &'static str> {         let (room_id,
+    timeline,
+    position,
+    pagination) = {             let stream = self                 .view_streams                 .get_mut(&request.stream_id)                 .ok_or("v-timeline-view-not-open")?;             let reached_end = match request.direction {                 NativeTimelineDirection::Backwards => stream                     .timeline                     .paginate_backwards(PAGINATION_BATCH_SIZE)                     .await                     .map_err(|_| "v-timeline-view-paginate-backwards-failed")?,
+    NativeTimelineDirection::Forwards => stream                     .timeline                     .paginate_forwards(PAGINATION_BATCH_SIZE)                     .await                     .map_err(|_| "v-timeline-view-paginate-forwards-failed")?,
+    };             if request.direction == NativeTimelineDirection::Backwards {                 stream.hit_start = reached_end;             }             (                 stream.room_id.clone(),
+    stream.timeline.clone(),
+    stream.position.clone(),
+    TimelinePaginationState {                     backward: if stream.hit_start {                         TimelinePageState::Exhausted                     } else {                         TimelinePageState::Available                     },
+    forward: TimelinePageState::Available,
+    },
+    )         };         let revision = self             .view_revisions             .get(&request.stream_id)             .ok_or("v-timeline-view-revision-missing")?             .load(Ordering::Acquire);         Ok(view_snapshot_from_timeline(             self.session_generation,
+    room_id,
+    pagination,
+    &timeline,
+    client.user_id().map(ToOwned::to_owned),
+    revision,
+    )         .await)     }      pub async fn paginate_legacy(         &mut self,
         room_id: &str,
         direction: NativeTimelineDirection,
     ) -> Result<NativeTimelineSnapshot, &'static str> {
@@ -1247,6 +1293,21 @@ mod tests {
             ),
             "focused:!room:example.org:$one:example.org"
         );
+    }
+
+    #[test]
+    fn pagination_request_targets_the_opened_stream_not_a_room() {
+        let request: NativeTimelineViewPaginationRequest =
+            serde_json::from_value(serde_json::json!({
+                "streamId": "focused:!room:example.org:$one:example.org",
+                "direction": "backwards"
+            }))
+            .unwrap();
+        assert_eq!(
+            request.stream_id,
+            "focused:!room:example.org:$one:example.org"
+        );
+        assert_eq!(request.direction, NativeTimelineDirection::Backwards);
     }
 
     #[test]
