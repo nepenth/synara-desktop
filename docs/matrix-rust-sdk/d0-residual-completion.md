@@ -129,8 +129,8 @@ L1 modules under `src-tauri/src/matrix/{verification,backup,cross_signing,device
 Loop must:
 
 1. **Not** merge #221 as D0.6 complete.
-2. Treat V-CRYPTO.1–.5 as done.
+2. Treat V-CRYPTO.1–.6 as done.
 3. Preserve V-CRYPTO.5 [#227](https://github.com/nepenth/synara-desktop/pull/227) as done; its legacy deletion, retry safety, privacy, and reviewed-SHA evidence passed.
-4. After V-CRYPTO.7 review, advance to V-AUTH.1.
+4. After V-CRYPTO.7 [#236](https://github.com/nepenth/synara-desktop/pull/236) lands, advance to V-AUTH.1.
 5. Update [PROGRESS.md](PROGRESS.md) with product wiring, deletion deltas, and residual closure.
 6. Refuse new L1-only or new non-residual verticals until this queue is cleared or user reorders explicitly.
