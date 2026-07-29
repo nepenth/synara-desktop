@@ -113,7 +113,9 @@ pub struct TimelineViewCapabilities {
 #[serde(rename_all = "camelCase")]
 pub struct TimelineEventRowBase {
     pub item_id: TimelineItemId,
-    pub event_id: EventId,
+    /// Absent only for a local echo which has not received a server event ID.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub event_id: Option<EventId>,
     pub sender_id: UserId,
     pub sender_name: String,
     pub origin_server_ts: u64,
