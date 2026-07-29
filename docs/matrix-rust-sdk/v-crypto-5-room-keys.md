@@ -2,7 +2,7 @@
 
 | Field                 | Value                                                                        |
 | --------------------- | ---------------------------------------------------------------------------- |
-| Status                | **Implemented on PR #227; integration acceptance pending**                   |
+| Status                | **DONE — merged #227 at integration tip `146952a`**                          |
 | Scope                 | Retained local encrypted room-key export/import product path                 |
 | Product path          | UI → privacy-safe Tauri IPC → managed `matrix_sdk::Client` → host filesystem |
 | Follow-up crypto rows | V-CRYPTO.6–V-CRYPTO.7 remain open                                            |
@@ -51,8 +51,8 @@ direct-import inventory:
 The global direct-import count is unchanged because the deleted owner reached
 the JavaScript client indirectly through `useMatrixClient`; the negative
 capability-owner and helper-file deltas are the binding deletion evidence.
-V-CRYPTO.5 is not accepted or complete in the integration ledger until PR #227
-passes reviewed-SHA gates and lands.
+V-CRYPTO.5 passed reviewed-SHA gates and landed in PR #227. The integration
+ledger records it complete under the full-vertical deletion policy.
 
 Synara has no retained inbound room-key-request approval prompt or accept/deny
 surface. V-CRYPTO.5 therefore does not invent one. Matrix device verification,

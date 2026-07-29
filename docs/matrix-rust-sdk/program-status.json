@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "as_of_date": "2026-07-28",
+  "as_of_date": "2026-07-29",
   "source_of_truth": "Original-plan inventory, strict gates, release runtime, and current full-vertical product execution. Dated evidence and audit artifacts remain historical sources.",
   "integration_branch": "feature/matrix-rust-sdk-full-replacement",
   "audited_snapshot": {
@@ -96,10 +96,10 @@
   },
   "vertical_execution": {
     "policy": "full-vertical-delete-per-vertical",
-    "integration_product_state": "capability-cutover-in-progress",
-    "active_slice": "V-CRYPTO.5",
-    "active_pr": 227,
-    "completed_slices": [],
+    "integration_product_state": "between-slices-paused",
+    "active_slice": null,
+    "active_pr": null,
+    "completed_slices": ["V-CRYPTO.5"],
     "wired_deletion_open": [
       "V-CRYPTO.1",
       "V-CRYPTO.2",

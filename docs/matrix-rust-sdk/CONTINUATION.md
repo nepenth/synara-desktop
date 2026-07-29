@@ -6,16 +6,16 @@
 
 <!-- matrix-rust-program-status-link -->
 
-| Field                    | Current value                                                                                            |
-| ------------------------ | -------------------------------------------------------------------------------------------------------- |
-| Date                     | 2026-07-28 (America/New_York)                                                                            |
-| Integration branch       | `feature/matrix-rust-sdk-full-replacement`                                                               |
-| Execution model          | Primary Codex + Codex sub-agents, all `gpt-5.6-terra` high; MiniMax-M3 optional                          |
-| Verified integration tip | `fd7c934` — full-vertical policy alignment merged (#228)                                                 |
-| Active PR                | [#227](https://github.com/nepenth/synara-desktop/pull/227) — V-CRYPTO.5 closure implementation in review |
-| Policy                   | [full-vertical-policy.md](full-vertical-policy.md)                                                       |
-| Binding queue            | [d0-residual-completion.md](d0-residual-completion.md)                                                   |
-| Main merge               | PR #39 — explicit user approval required                                                                 |
+| Field                    | Current value                                                                   |
+| ------------------------ | ------------------------------------------------------------------------------- |
+| Date                     | 2026-07-29 (America/New_York)                                                   |
+| Integration branch       | `feature/matrix-rust-sdk-full-replacement`                                      |
+| Execution model          | Primary Codex + Codex sub-agents, all `gpt-5.6-terra` high; MiniMax-M3 optional |
+| Verified integration tip | `146952a` — V-CRYPTO.5 room-key ownership and deletion merged (#227)            |
+| Active PR                | None — intentionally paused between slices                                      |
+| Policy                   | [full-vertical-policy.md](full-vertical-policy.md)                              |
+| Binding queue            | [d0-residual-completion.md](d0-residual-completion.md)                          |
+| Main merge               | PR #39 — explicit user approval required                                        |
 
 ## Active direction
 
@@ -35,7 +35,7 @@ obsolete tests/types before closure.
 
 ## Exact continuation point
 
-1. Validate and land active V-CRYPTO.5 [#227](https://github.com/nepenth/synara-desktop/pull/227): its branch now removes `LegacyLocalBackup`, WebView room-key file crypto/FileSaver behavior, and the old JS owner; closure still requires reviewed-SHA gates and ledger evidence.
+1. Resume the goal with V-CRYPTO.1-D. Keep orchestration and coding on Codex `gpt-5.6-terra` high; there is no active implementation PR to recover.
 2. Drain the already-wired crypto deletion queue serially:
    - V-CRYPTO.1-D — verification;
    - V-CRYPTO.2-D — cross-signing;
@@ -54,7 +54,7 @@ obsolete tests/types before closure.
 - V-CRYPTO.1–.4 product wiring merged in #223–#226.
 - Those four rows are reopened as **wired / deletion open** because relevant JS
   crypto imports and conditional legacy implementations remain.
-- V-CRYPTO.5 is still draft and can be corrected before merge.
+- V-CRYPTO.5 merged in #227 and is complete under the per-vertical deletion policy: the retained product path has one Rust IPC owner, and the legacy WebView owner/browser crypto helper are deleted.
 - Repository baseline remains **232 files / 292 direct import lines** referencing
   `matrix-js-sdk`. Each completed vertical must record a negative
   capability-owner/file deletion delta and an honest, non-increasing global

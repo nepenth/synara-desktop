@@ -1,12 +1,12 @@
 # D0 residual completion — finish partial verticals before new work
 
-| Field                     | Value                                                                                                                                       |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| Status                    | **Active — blocking forward work** (2026-07-28)                                                                                             |
-| Policy                    | [full-vertical-policy.md](full-vertical-policy.md)                                                                                          |
-| Integration tip at policy | `0400306` (D0.1–D0.5 merged; D0.5 was **crypto minimum**)                                                                                   |
-| Current integration tip   | `fd7c934` (full-vertical policy alignment #228 merged)                                                                                      |
-| Active PR                 | [#227](https://github.com/nepenth/synara-desktop/pull/227) — V-CRYPTO.5 room-key export/import; **draft, closure implementation in review** |
+| Field                     | Value                                                                  |
+| ------------------------- | ---------------------------------------------------------------------- |
+| Status                    | **Paused between slices — blocking forward work remains** (2026-07-29) |
+| Policy                    | [full-vertical-policy.md](full-vertical-policy.md)                     |
+| Integration tip at policy | `0400306` (D0.1–D0.5 merged; D0.5 was **crypto minimum**)              |
+| Current integration tip   | `146952a` (V-CRYPTO.5 room-key ownership/deletion #227 merged)         |
+| Active PR                 | None — intentionally paused between slices                             |
 
 ## Policy trigger
 
@@ -43,7 +43,7 @@ Status language in this ledger is strict:
 | **V-CRYPTO.2** | **WIRED #224; deletion open** | Cross-signing readiness/setup                | Live `matrix/cross_signing/live.rs`, setup/auth UI                   | Delete superseded JS cross-signing setup/status implementation/imports; SDK-neutral shared UI only; see [v-crypto-2-cross-signing.md](v-crypto-2-cross-signing.md) |
 | **V-CRYPTO.3** | **WIRED #225; deletion open** | Key backup restore/recovery                  | Live `matrix/backup/live.rs`, native backup UI/hooks                 | Delete superseded JS backup restore/setup/repair implementation/imports; see [v-crypto-3-key-backup.md](v-crypto-3-key-backup.md)                                  |
 | **V-CRYPTO.4** | **WIRED #226; deletion open** | SSSS bootstrap/unlock                        | Live `matrix/secret_storage/live.rs`, native secret-storage UI/hooks | Delete JS recovery-key derivation/storage path and imports; keep secrets host-side; see [v-crypto-4-secret-storage.md](v-crypto-4-secret-storage.md)               |
-| **V-CRYPTO.5** | **ACTIVE draft #227**         | Room-key export/import retained product path | Single Rust IPC owner and legacy deletion implemented on PR          | Merge only after reviewed-SHA validation proves parity, retry safety, privacy, deletion, and ledger evidence                                                       |
+| **V-CRYPTO.5** | **DONE #227**                 | Room-key export/import retained product path | Single Rust IPC owner; legacy WebView owner/helper deleted           | Reviewed-SHA validation proved parity, retry safety, privacy, deletion, and ledger evidence                                                                        |
 | **V-CRYPTO.6** | **QUEUED**                    | UTD recovery UX                              | `matrix/utd_recovery/*`, timeline UTD foundations                    | User-visible recovery/retry controls plus deletion of superseded JS retry/decryption-listener ownership                                                            |
 | **V-CRYPTO.7** | **QUEUED**                    | Device list/trust presentation               | `matrix/devices/*` foundations                                       | Device list/trust/actions from Rust projections and deletion of JS `CryptoApi`/device model ownership                                                              |
 
@@ -57,11 +57,10 @@ Because V-CRYPTO.1–.4 merged before the physical-deletion clarification, close
 their deletion residuals before starting V-CRYPTO.6. Keep the cleanup serial and
 capability-bounded; do not create a generic formatting or type-rewrite sweep.
 
-1. **V-CRYPTO.5** — validate and land the still-draft PR with its legacy owner physically deleted.
-2. **V-CRYPTO.1-D** — verification components, hooks, inbox/listeners, and JS crypto imports.
-3. **V-CRYPTO.2-D** — cross-signing setup/status legacy implementation and imports.
-4. **V-CRYPTO.3-D** — backup restore/setup/repair legacy implementation and imports.
-5. **V-CRYPTO.4-D** — WebView secret-storage/recovery-key implementation and imports.
+1. **V-CRYPTO.1-D** — verification components, hooks, inbox/listeners, and JS crypto imports.
+2. **V-CRYPTO.2-D** — cross-signing setup/status legacy implementation and imports.
+3. **V-CRYPTO.3-D** — backup restore/setup/repair legacy implementation and imports.
+4. **V-CRYPTO.4-D** — WebView secret-storage/recovery-key implementation and imports.
 
 Each deletion slice must preserve current product behavior through native IPC,
 delete tests that only validate the removed JS owner, migrate reusable UI tests
@@ -121,7 +120,7 @@ have already deleted their implementations.
 
 ## Execution order (binding)
 
-1. **Validate and land V-CRYPTO.5, then close V-CRYPTO.1-D → .4-D** (physical deletion for already-wired crypto capabilities)
+1. **Close V-CRYPTO.1-D → .4-D** (physical deletion for already-wired crypto capabilities; V-CRYPTO.5 is done)
 2. **V-CRYPTO.6 → .7** as full wire-plus-delete verticals (closes D0.5 dogfood debt)
 3. **V-AUTH** remaining desktop auth surfaces, deleting each superseded JS owner in its slice
 4. **V-ROOMS** / **V-TIMELINE** / **V-SEND** gaps, with physical deletion per completed capability
@@ -147,7 +146,7 @@ Loop must:
 
 1. **Not** merge #221 as D0.6 complete.
 2. Treat V-CRYPTO.1–.4 as **wired / deletion open**, not done.
-3. Validate and land active [#227](https://github.com/nepenth/synara-desktop/pull/227) only after its legacy deletion, retry safety, privacy, and ledger evidence pass on the reviewed SHA.
-4. Drain V-CRYPTO.1-D → .4-D, then advance to V-CRYPTO.6.
+3. Preserve V-CRYPTO.5 [#227](https://github.com/nepenth/synara-desktop/pull/227) as done; its legacy deletion, retry safety, privacy, and reviewed-SHA evidence passed.
+4. On resume, drain V-CRYPTO.1-D → .4-D, then advance to V-CRYPTO.6.
 5. Update [PROGRESS.md](PROGRESS.md) with product wiring, deletion deltas, and residual closure.
 6. Refuse new L1-only or new non-residual verticals until this queue is cleared or user reorders explicitly.
