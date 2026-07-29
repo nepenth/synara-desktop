@@ -446,6 +446,52 @@ export function validateProgramStatus(status, planText) {
       );
     }
   }
+
+  const vertical = status.vertical_execution;
+  assert(
+    vertical && typeof vertical === "object",
+    "vertical_execution is required"
+  );
+  assert(
+    vertical.policy === "full-vertical-delete-per-vertical",
+    "vertical_execution.policy must require per-vertical deletion"
+  );
+  assert(
+    vertical.integration_product_state === "capability-cutover-in-progress",
+    "invalid integration_product_state"
+  );
+  assert(
+    /^V-[A-Z]+\.\d+(?:-D)?$/.test(vertical.active_slice),
+    "vertical_execution.active_slice must be a vertical ID"
+  );
+  assert(
+    Number.isInteger(vertical.active_pr) && vertical.active_pr > 0,
+    "vertical_execution.active_pr must be a positive PR number"
+  );
+  assertUnique(
+    vertical.wired_deletion_open,
+    "vertical_execution.wired_deletion_open"
+  );
+  assertUnique(
+    vertical.completed_slices,
+    "vertical_execution.completed_slices"
+  );
+  assertUnique(vertical.next_slices, "vertical_execution.next_slices");
+  assertUnique(vertical.held_prs, "vertical_execution.held_prs");
+  const importInventory = vertical.matrix_js_sdk_import_inventory;
+  assert(
+    importInventory.baseline.files >= 0 &&
+      importInventory.baseline.import_lines >= 0 &&
+      importInventory.current.files >= 0 &&
+      importInventory.current.import_lines >= 0,
+    "matrix-js-sdk import inventory must be non-negative"
+  );
+  assert(
+    importInventory.current.files <= importInventory.baseline.files &&
+      importInventory.current.import_lines <=
+        importInventory.baseline.import_lines,
+    "matrix-js-sdk current inventory cannot exceed the full-vertical baseline"
+  );
 }
 
 export function renderProgramStatus(status) {
@@ -482,7 +528,7 @@ export function renderProgramStatus(status) {
     "",
     `Audited snapshot: \`${status.audited_snapshot.sha}\``,
     "",
-    "## Current execution",
+    "## Original-plan foundation queue",
     "",
     `- Active task: **${status.current_execution.active_task ?? "None"}**`,
     `- Next task: **${status.current_execution.next_task ?? "None"}**`,
@@ -499,13 +545,38 @@ export function renderProgramStatus(status) {
             .join("; ")
     }`,
     "",
-    "## Inventory and runtime",
+    "## Original-plan inventory and release/main runtime",
     "",
     `- Landed original task artifacts: **${status.original_plan.landed_task_count} / ${status.original_plan.task_count}**`,
-    `- Shipping Matrix client: \`${status.product_runtime.matrix_client_sdk}\``,
+    `- Release/main Matrix client: \`${status.product_runtime.matrix_client_sdk}\``,
     `- Rust SDK state: \`${status.product_runtime.rust_sdk_state}\``,
     `- Dual backend: \`${status.product_runtime.dual_backend}\``,
     `- Cutover state: \`${status.product_runtime.cutover_state}\``,
+    "",
+    "These release/main fields do not describe partial product wiring on the integration branch.",
+    "",
+    "## Current full-vertical product execution",
+    "",
+    `- Policy: \`${status.vertical_execution.policy}\``,
+    `- Integration product state: \`${status.vertical_execution.integration_product_state}\``,
+    `- Active slice: **${status.vertical_execution.active_slice}** (PR #${status.vertical_execution.active_pr})`,
+    `- Wired / deletion open: ${status.vertical_execution.wired_deletion_open
+      .map((id) => `\`${id}\``)
+      .join(", ")}`,
+    `- Completed under full policy: ${
+      status.vertical_execution.completed_slices.length === 0
+        ? "None"
+        : status.vertical_execution.completed_slices
+            .map((id) => `\`${id}\``)
+            .join(", ")
+    }`,
+    `- Next slices: ${status.vertical_execution.next_slices
+      .map((id) => `\`${id}\``)
+      .join(" → ")}`,
+    `- Held PRs: ${status.vertical_execution.held_prs
+      .map((pr) => `#${pr}`)
+      .join(", ")}`,
+    `- matrix-js-sdk inventory: **${status.vertical_execution.matrix_js_sdk_import_inventory.current.files} files / ${status.vertical_execution.matrix_js_sdk_import_inventory.current.import_lines} import lines current**; baseline **${status.vertical_execution.matrix_js_sdk_import_inventory.baseline.files} / ${status.vertical_execution.matrix_js_sdk_import_inventory.baseline.import_lines}**`,
     "",
     "## Phase gates",
     "",

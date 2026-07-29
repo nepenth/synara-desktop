@@ -1,10 +1,11 @@
 # Full vertical replacement policy
 
-| Field | Value |
-| --- | --- |
-| Status | **Active** (user directive 2026-07-28) |
-| Branch | `feature/matrix-rust-sdk-full-replacement` only |
-| Supersedes | “Dogfood minimum / usable enough / approved residual plateau” acceptance for product verticals |
+| Field           | Value                                                                                          |
+| --------------- | ---------------------------------------------------------------------------------------------- |
+| Status          | **Active** (user directive 2026-07-28)                                                         |
+| Branch          | `feature/matrix-rust-sdk-full-replacement` only                                                |
+| Supersedes      | “Dogfood minimum / usable enough / approved residual plateau” acceptance for product verticals |
+| Deletion policy | **Physical deletion happens inside each vertical** (clarified 2026-07-28)                      |
 
 ## Directive
 
@@ -13,7 +14,24 @@
 1. Exist in the current Synara client (matrix-js-sdk product surface), **and/or**
 2. Are supported by matrix-rust-sdk and are part of product parity for that vertical.
 
-Do **not** ship “minimum”, “usable enough for dogfood”, “approved non-zero residual plateau”, or stub shells as acceptance for a vertical. Temporary brokenness *between* sequential full verticals is OK; **declaring a vertical done while product still owns the capability on js-sdk is not**.
+Do **not** ship “minimum”, “usable enough for dogfood”, “approved non-zero residual plateau”, or stub shells as acceptance for a vertical. Temporary brokenness _between_ sequential full verticals is OK; **declaring a vertical done while product still owns the capability on js-sdk is not**.
+
+## Physical deletion is part of the vertical
+
+Replacing the native happy path is necessary, but it is not the complete slice.
+The same vertical must also delete the superseded `matrix-js-sdk` implementation,
+imports, compatibility branches, tests that exist only for that implementation,
+and obsolete product types for its capability.
+
+Do not retain a `Legacy*` component or `isNative ? rust : js` branch on the theory
+that a final burn-down will remove it later. The React runtime is a desktop
+implementation detail; Synara does not ship a separate browser product that
+requires a second Matrix implementation. Shared UI that remains useful should be
+made SDK-neutral and consume Synara-owned DTOs.
+
+For work merged before this clarification, “wired” means the Rust product path
+landed; it does **not** mean the vertical is closed. Reopen a named deletion
+residual and drain it before advancing.
 
 ## Dual backend
 
@@ -23,13 +41,14 @@ Still **forbidden** forever. Full vertical ≠ dual runtime selector.
 
 A slice is **done only when** all of the following hold for its capability set:
 
-| Gate | Requirement |
-| --- | --- |
-| **Ownership** | Product happy path does not use `matrix-js-sdk` live client for that capability |
-| **Parity** | Behaviors that existed in product for that capability are re-homed to Rust IPC/SDK (or explicitly deleted with product sign-off — rare) |
-| **Secrets** | No tokens, keys, recovery material, ciphertext over IPC or logs |
-| **Ledger** | Residual list for that slice is **empty** or only items that are **other verticals** with named follow-up IDs (not “later / deferred / minimum”) |
-| **Tests** | Scoped host + product tests for pure helpers; typecheck for wired TS |
+| Gate          | Requirement                                                                                                                                      |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Ownership** | Product happy path does not use `matrix-js-sdk` live client for that capability                                                                  |
+| **Parity**    | Behaviors that existed in product for that capability are re-homed to Rust IPC/SDK (or explicitly deleted with product sign-off — rare)          |
+| **Deletion**  | Superseded JS implementation/imports and JS-only compatibility branches for the capability are physically removed in this slice                  |
+| **Secrets**   | No tokens, keys, recovery material, ciphertext over IPC or logs                                                                                  |
+| **Ledger**    | Residual list for that slice is **empty** or only items that are **other verticals** with named follow-up IDs (not “later / deferred / minimum”) |
+| **Tests**     | Scoped host + product tests for pure helpers; typecheck for wired TS                                                                             |
 
 **Not** acceptance: “core path works; verification/backup/media left as approved residual.”
 
@@ -39,12 +58,14 @@ A slice is **done only when** all of the following hold for its capability set:
 2. Only then open new verticals (media, widgets, registry, …) with the same full bar.
 3. Do **not** merge PRs that document “approved residual plateau” or “dogfood minimum” as the done state for D0 / crypto / burn-down.
 4. L1 harness PRs remain parked unless they block a full product vertical.
+5. Import/file counts must decrease with each completed vertical; the final burn-down is a verification and dependency-removal gate, not a warehouse for deferred capability deletion.
 
 ## Orchestrator / Codex rules
 
 - Prefer one full vertical in flight (serial product merges).
 - Reject prompts that say “minimum”, “dogfood enough”, “plateau residual OK”, “0 imports removed is fine”.
 - If a PR only documents residual debt without product rewire, treat as **docs debt PR**, not vertical complete.
+- If a PR adds a native branch but retains the replaced JS branch, mark it **wired / deletion open**, not done.
 - High effort sparingly for crypto/session edges; still full product wire, not stubs.
 
 ## Related

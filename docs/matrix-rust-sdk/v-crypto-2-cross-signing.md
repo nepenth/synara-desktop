@@ -1,11 +1,11 @@
 # V-CRYPTO.2 — native cross-signing readiness and setup
 
-| Field | Value |
-| --- | --- |
-| Status | **Done on `matrix-rust/v-crypto-2-cross-signing`** |
-| Scope | Cross-signing publication, local readiness, own-identity status, and first-time setup |
-| Product path | UI → Tauri IPC → managed `matrix_sdk::Client` |
-| Follow-up crypto rows | V-CRYPTO.3–V-CRYPTO.7 remain open |
+| Field                 | Value                                                                                 |
+| --------------------- | ------------------------------------------------------------------------------------- |
+| Status                | **Product wiring merged #224; physical deletion open (V-CRYPTO.2-D)**                 |
+| Scope                 | Cross-signing publication, local readiness, own-identity status, and first-time setup |
+| Product path          | UI → Tauri IPC → managed `matrix_sdk::Client`                                         |
+| Follow-up crypto rows | V-CRYPTO.3–V-CRYPTO.7 remain open                                                     |
 
 ## Product ownership
 
@@ -58,7 +58,7 @@ Cross-signing private keys are generated, retained, and read by matrix-sdk
 inside the encrypted native crypto store. The store encryption key remains in
 the OS credential store through the existing native client/store foundation.
 
-## V-CRYPTO.2 done criteria
+## V-CRYPTO.2 product-wiring criteria met
 
 - Native-session status comes from the live managed Rust client.
 - Fresh cross-signing bootstrap completes through Rust, including password or
@@ -77,9 +77,16 @@ the OS credential store through the existing native client/store foundation.
 - Rust formatting, tests/check, and touched TypeScript formatting/typecheck
   pass.
 
+## Blocking deletion residual — V-CRYPTO.2-D
+
+Delete the superseded matrix-js-sdk cross-signing status/setup implementation,
+`CryptoApi` ownership, and native-vs-legacy branches. Keep shared setup UI only
+after it consumes native DTOs/actions. Record the deleted-file/import delta
+before marking V-CRYPTO.2 done.
+
 ## Remaining named crypto residuals
 
-Closing this row does **not** close the V-CRYPTO vertical:
+Closing the deletion residual for this row does **not** close the V-CRYPTO vertical:
 
 - **V-CRYPTO.3** — key-backup setup, restore, repair, and recovery UI.
 - **V-CRYPTO.4** — full secret-storage bootstrap and unlock UX, including

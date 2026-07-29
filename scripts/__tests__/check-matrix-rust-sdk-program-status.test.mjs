@@ -119,10 +119,43 @@ test("renderer is deterministic and distinguishes delivery from acceptance", () 
   const landed = status.original_plan.landed_task_count;
   assert.match(first, /\d+ \/ 112/);
   assert.match(first, new RegExp(`${landed} / 112`));
-  assert.ok(landed >= 21, "inventory must not regress below post-P3.2 baseline");
+  assert.ok(
+    landed >= 21,
+    "inventory must not regress below post-P3.2 baseline"
+  );
   assert.match(first, /landed.*merged.*open.*open/);
   assert.match(first, /[^\n]\n$/);
   assert.doesNotMatch(first, /\n\n$/);
+});
+
+test("tracks full-vertical execution and requires per-vertical deletion policy", () => {
+  const rendered = renderProgramStatus(status);
+  assert.match(rendered, /Current full-vertical product execution/);
+  assert.match(rendered, /full-vertical-delete-per-vertical/);
+  assert.match(rendered, /Wired \/ deletion open/);
+  assert.match(rendered, /232 files \/ 292 import lines current/);
+  assert.match(rendered, /Completed under full policy: None/);
+
+  const wrongPolicy = clone(status);
+  wrongPolicy.vertical_execution.policy = "bulk-delete-at-end";
+  assert.throws(
+    () => validateProgramStatus(wrongPolicy, plan),
+    /must require per-vertical deletion/
+  );
+
+  const duplicateResidual = clone(status);
+  duplicateResidual.vertical_execution.next_slices.push("V-CRYPTO.1-D");
+  assert.throws(
+    () => validateProgramStatus(duplicateResidual, plan),
+    /duplicate IDs/
+  );
+
+  const importerRegression = clone(status);
+  importerRegression.vertical_execution.matrix_js_sdk_import_inventory.current.files += 1;
+  assert.throws(
+    () => validateProgramStatus(importerRegression, plan),
+    /cannot exceed the full-vertical baseline/
+  );
 });
 
 test("rejects invalid vocabulary, duplicate IDs, and inventory drift", () => {

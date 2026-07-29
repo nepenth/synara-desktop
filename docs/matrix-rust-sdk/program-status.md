@@ -9,19 +9,32 @@ Integration branch: `feature/matrix-rust-sdk-full-replacement`
 
 Audited snapshot: `edfefee499064b736985b6528896b693e5120f22`
 
-## Current execution
+## Original-plan foundation queue
 
 - Active task: **None**
-- Next task: **P7.4**
+- Next task: **None**
 - Blocked tasks: None
 
-## Inventory and runtime
+## Original-plan inventory and release/main runtime
 
 - Landed original task artifacts: **74 / 112**
-- Shipping Matrix client: `matrix-js-sdk-only`
+- Release/main Matrix client: `matrix-js-sdk-only`
 - Rust SDK state: `harness-foundation-only`
 - Dual backend: `false`
 - Cutover state: `not_started`
+
+These release/main fields do not describe partial product wiring on the integration branch.
+
+## Current full-vertical product execution
+
+- Policy: `full-vertical-delete-per-vertical`
+- Integration product state: `capability-cutover-in-progress`
+- Active slice: **V-CRYPTO.5** (PR #227)
+- Wired / deletion open: `V-CRYPTO.1`, `V-CRYPTO.2`, `V-CRYPTO.3`, `V-CRYPTO.4`
+- Completed under full policy: None
+- Next slices: `V-CRYPTO.1-D` → `V-CRYPTO.2-D` → `V-CRYPTO.3-D` → `V-CRYPTO.4-D` → `V-CRYPTO.6` → `V-CRYPTO.7`
+- Held PRs: #221
+- matrix-js-sdk inventory: **232 files / 292 import lines current**; baseline **232 / 292**
 
 ## Phase gates
 
@@ -120,8 +133,8 @@ Audited snapshot: `edfefee499064b736985b6528896b693e5120f22`
 | P7.1 | `landed` | `merged` | `open` | `open` |
 | P7.2 | `landed` | `merged` | `open` | `open` |
 | P7.3 | `landed` | `merged` | `open` | `open` |
-| P7.4 | `landed` | `pr_open` | `open` | `open` |
-| P7.5 | `landed` | `pr_open` | `open` | `open` |
+| P7.4 | `landed` | `merged` | `open` | `open` |
+| P7.5 | `landed` | `merged` | `open` | `open` |
 | P7.6 | `landed` | `pr_open` | `open` | `open` |
 | P7.7 | `landed` | `pr_open` | `open` | `open` |
 | P8.1 | `landed` | `merged` | `open` | `open` |

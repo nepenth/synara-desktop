@@ -1,26 +1,32 @@
 # D0 orchestrator loop (integration branch)
 
-| Field | Value |
-| --- | --- |
-| Active | **Yes** (2026-07-28) |
-| Interval | Every **4 minutes** (scheduler) |
-| Integration | `feature/matrix-rust-sdk-full-replacement` only |
-| Epic | [d0-dogfood-epic.md](d0-dogfood-epic.md) |
-| **Policy** | **[full-vertical-policy.md](full-vertical-policy.md)** — **no dogfood cuts** |
+| Field              | Value                                                                         |
+| ------------------ | ----------------------------------------------------------------------------- |
+| Active             | **Yes** (2026-07-28), as a persistent Codex goal                              |
+| Interval           | Goal continuation; optional scheduler fires every **4 minutes**               |
+| Integration        | `feature/matrix-rust-sdk-full-replacement` only                               |
+| Orchestrator       | **Codex `gpt-5.6-sol`, medium reasoning**                                     |
+| Epic               | [d0-dogfood-epic.md](d0-dogfood-epic.md)                                      |
+| **Policy**         | **[full-vertical-policy.md](full-vertical-policy.md)** — **no dogfood cuts**  |
 | **Residual queue** | [d0-residual-completion.md](d0-residual-completion.md) — **must drain first** |
 
 ## Roles
 
-| Agent | Role |
-| --- | --- |
-| **Grok** (thin) | Fire this loop; merge green **full-vertical** PRs only; dispatch Codex; never merge main/#39 |
-| **Codex** `gpt-5.6-sol` **medium** | Full product rewires (not minima); tip-merge; lightweight review |
-| **MiniMax-M3** | Optional free text during waits; never sole implementer |
+| Agent                                      | Role                                                                                                              |
+| ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
+| **Codex** `gpt-5.6-sol` **medium**         | Primary orchestrator: fire this loop, own Git/PR state, review and merge green full-vertical PRs, never main/#39 |
+| **Codex sub-agents**, same model/reasoning | Implement bounded task packets or independent review in parallel when scopes do not conflict                    |
+| **MiniMax-M3**                             | Optional text/research assistance during waits; never sole implementer, reviewer, or acceptance authority       |
+
+Grok is not part of the active execution path while its usage allocation is
+unavailable. The primary Codex orchestrator retains acceptance and merge
+authority even when implementation is delegated.
 
 ## Hard policy
 
 - **No dual_backend**
 - **No dogfood / minimum / plateau residual** acceptance for product verticals
+- **Physical deletion per vertical** — native wiring plus retained legacy JS is not done
 - Clean-break re-login OK while a full vertical is mid-stack
 - **Do not** open new L1-only foundation PRs unless they block residual queue
 - Parked L1 PRs stay parked
@@ -31,24 +37,26 @@
 
 ## Priority order (always)
 
-1. **Do not merge** PRs that only plateau residual / dogfood-shell without full vertical acceptance  
-2. Merge green **residual-completion / full vertical** product PR if Quality + Desktop package gates success  
-3. Merge green **policy/docs** that enforce full-vertical + residual ledger  
-4. If no merge: advance **next residual ID** from [d0-residual-completion.md](d0-residual-completion.md) via Codex — default **V-CRYPTO.1** then V-CRYPTO.*  
-5. Tip-merge **only** the active residual PR if BEHIND/CONFLICTING  
-6. Update PROGRESS after residual lands  
-7. Report short status; stop if disk &lt; 5 Gi free  
+1. **Do not merge** PRs that only plateau residual / dogfood-shell without full vertical acceptance
+2. Merge green **residual-completion / full vertical** product PR if Quality + Desktop package gates success
+3. Merge green **policy/docs** that enforce full-vertical + residual ledger
+4. If no merge: advance the next item from [d0-residual-completion.md](d0-residual-completion.md) — active [#227](https://github.com/nepenth/synara-desktop/pull/227), then V-CRYPTO.1-D→.4-D, then V-CRYPTO.6
+5. Tip-merge **only** the active residual PR if BEHIND/CONFLICTING
+6. Update PROGRESS after residual lands
+7. Report short status; stop if disk &lt; 5 Gi free
 
 ## Current slice pointer
 
-| Slice | Status | Branch / PR |
-| --- | --- | --- |
-| D0.1–D0.4 | Merged (partial debt → residual doc) | tip history |
-| D0.5 Crypto minimum | Merged #220 — **incomplete under full-vertical** | debt = **V-CRYPTO.*** |
-| D0.6 plateau | **#221 HOLD — do not merge as complete** | rework → V-BURN later |
-| **Next** | **V-CRYPTO.1** device verification product wire | dispatch on tip |
+| Slice         | Status                                             | Branch / PR                                                  |
+| ------------- | -------------------------------------------------- | ------------------------------------------------------------ |
+| D0.1–D0.4     | Merged (partial debt → residual doc)               | tip history                                                  |
+| V-CRYPTO.1–.4 | Product wiring merged #223–#226; **deletion open** | debt = **V-CRYPTO.1-D→.4-D**                                 |
+| V-CRYPTO.5    | **Active draft #227**; CI green                    | amend to delete legacy room-key path before closure          |
+| V-CRYPTO.6–.7 | Queued                                             | UTD recovery, then device/trust; wire + delete in each slice |
+| D0.6 plateau  | **#221 HOLD — do not merge as complete**           | rework → V-BURN later                                        |
+| **Next**      | Amend **#227**, then **V-CRYPTO.1-D**              | serial residual drain                                        |
 
-*Orchestrator must rewrite this table when a residual slice merges.*
+_Orchestrator must rewrite this table when a residual slice merges._
 
 ## Codex dispatch recipes
 
@@ -63,27 +71,34 @@ codex exec -m gpt-5.6-sol -c model_reasoning_effort="medium" --ephemeral -
 ### B) Implement next residual full vertical
 
 Use [d0-residual-completion.md](d0-residual-completion.md) + [full-vertical-policy.md](full-vertical-policy.md).  
-**Full product rewire** for the ID (start **V-CRYPTO.1**). No “minimum” acceptance. One branch, one PR, residual row closed when done.
+**Full product rewire plus physical deletion** for the ID. For already-wired
+V-CRYPTO.1–.4, use the named `-D` residuals. One capability-bounded branch/PR;
+record deleted paths/import delta; close the row only when both ownership and
+deletion gates pass.
 
 ### C) Review
 
-Reject dual_backend, secrets, dogfood-minimum scope, empty residual claimed as done.
+Reject dual_backend, secrets, dogfood-minimum scope, zero-deletion completion,
+or a retained `Legacy*` / native-vs-JS branch for the claimed capability.
 
 ## Explicitly do NOT do each fire
 
-- Merge #221 plateau as D0.6 complete  
-- Open new media/widgets/registry verticals before residual queue allows  
-- Open new notify/call L1 polish PRs  
-- Merge umbrella #39 or `main`  
-- Claim phase-gate acceptance for crypto until V-CRYPTO complete  
+- Merge #221 plateau as D0.6 complete
+- Open new media/widgets/registry verticals before residual queue allows
+- Open new notify/call L1 polish PRs
+- Start V-CRYPTO.6 while V-CRYPTO.1-D→.5 deletion residuals remain open
+- Merge umbrella #39 or `main`
+- Claim phase-gate acceptance for crypto until V-CRYPTO complete
 
 ## End-of-fire status template
 
 ```markdown
 ## Loop status (full vertical)
+
 - Tip: `sha` — message
 - Merged: …
 - Residual next: V-CRYPTO.N / …
+- Import delta: files/statements removed this vertical
 - Held: #221 …
 - Codex: running / done / none
 - Next action: …
