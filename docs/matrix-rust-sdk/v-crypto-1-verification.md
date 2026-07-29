@@ -1,11 +1,11 @@
 # V-CRYPTO.1 — native device verification product ownership
 
-| Field | Value |
-| --- | --- |
-| Status | **Done on `matrix-rust/v-crypto-1-verification`** |
-| Scope | Device-verification request, SAS comparison, and completion UX |
-| Product path | UI → Tauri IPC → managed `matrix_sdk::Client` |
-| Follow-up crypto rows | V-CRYPTO.2–V-CRYPTO.7 remain open |
+| Field                 | Value                                                                 |
+| --------------------- | --------------------------------------------------------------------- |
+| Status                | **Product wiring merged #223; physical deletion open (V-CRYPTO.1-D)** |
+| Scope                 | Device-verification request, SAS comparison, and completion UX        |
+| Product path          | UI → Tauri IPC → managed `matrix_sdk::Client`                         |
+| Follow-up crypto rows | V-CRYPTO.2–V-CRYPTO.7 remain open                                     |
 
 ## Product ownership
 
@@ -26,7 +26,8 @@ The app-level incoming request renderer, current-device verification action,
 other-device verification action, verification status checks, and cross-signing
 readiness display select this native owner for a native session. The legacy
 matrix-js-sdk components remain reachable only for a legacy web/non-native
-session.
+session. Under the clarified full-vertical policy, that retained implementation
+is a blocking deletion residual rather than an accepted steady state.
 
 Native client bootstrap explicitly skips `MatrixClient.initRustCrypto()` and
 does not install the matrix-js-sdk verification inbox. It first restores or
@@ -69,7 +70,7 @@ This is not a permanent verification-unavailable shell: incoming requests,
 verification of selected known devices, and own-identity verification on
 configured accounts all execute against the live SDK.
 
-## V-CRYPTO.1 done criteria
+## V-CRYPTO.1 product-wiring criteria met
 
 - Native-session verification happy paths use no matrix-js-sdk `CryptoApi`.
 - Native-session bootstrap does not call `initRustCrypto` or install the JS
@@ -81,9 +82,16 @@ configured accounts all execute against the live SDK.
 - Pure host projection and product ownership helpers have scoped tests.
 - Rust formatting/check/tests and touched TypeScript formatting/typecheck pass.
 
+## Blocking deletion residual — V-CRYPTO.1-D
+
+Delete the legacy matrix-js-sdk verification implementation, inbox/listeners,
+`CryptoApi`/verification type imports, and native-vs-legacy product branches.
+Preserve reusable presentation as SDK-neutral UI over native DTOs. Record the
+deleted-file/import delta before marking V-CRYPTO.1 done.
+
 ## Remaining named crypto residuals
 
-Closing this row does **not** close the V-CRYPTO vertical:
+Closing the deletion residual for this row does **not** close the V-CRYPTO vertical:
 
 - **V-CRYPTO.2** — cross-signing readiness/setup/reset product UX.
 - **V-CRYPTO.3** — key backup setup, restore, and repair.
