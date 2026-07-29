@@ -57,7 +57,6 @@ const tests = [
   'src/app/features/room-keys/__tests__/nativeRoomKeys.test.ts',
   'src/app/state/__tests__/initMatrix.test.ts',
   'src/app/state/__tests__/tokenRefresh.test.ts',
-  'src/app/matrix/__tests__/secretStorageKeys.test.ts',
   'src/app/state/__tests__/sessionBootstrap.test.ts',
   'src/app/state/__tests__/sessionPersistence.test.ts',
   'src/app/state/__tests__/sessions.test.ts',

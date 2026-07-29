@@ -16,8 +16,8 @@
 
 **Today:** L1 is large (**~74/112** plan tasks with foundations). L2 is broad
 enough to support the D0 native core and V-CRYPTO wiring. L3 is **in progress**:
-D0 core paths and V-CRYPTO.1–.3 are complete while V-CRYPTO.4 is native-wired, but crypto JS deletion
-residuals remain, so those rows are not closed. L4 has not started.
+D0 core paths and V-CRYPTO.1–.5 are complete, including physical deletion of
+their superseded JS owners. V-CRYPTO.6–.7 remain queued. L4 has not started.
 
 Strict phase-gate **acceptance** is a fourth axis: landed ≠ accepted (still **0/15** gates closed).
 

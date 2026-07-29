@@ -582,9 +582,13 @@ export function renderProgramStatus(status) {
         ? ""
         : ` (PR #${status.vertical_execution.active_pr})`
     }`,
-    `- Wired / deletion open: ${status.vertical_execution.wired_deletion_open
-      .map((id) => `\`${id}\``)
-      .join(", ")}`,
+    `- Wired / deletion open: ${
+      status.vertical_execution.wired_deletion_open.length === 0
+        ? "None"
+        : status.vertical_execution.wired_deletion_open
+            .map((id) => `\`${id}\``)
+            .join(", ")
+    }`,
     `- Completed under full policy: ${
       status.vertical_execution.completed_slices.length === 0
         ? "None"

@@ -16,7 +16,6 @@ import {
   MATRIX_LEGACY_CRYPTO_STORE_NAME,
   MATRIX_SYNC_STORE_NAME,
 } from './matrixLocalStores';
-import { clearSecretStorageKeys, cryptoCallbacks } from './secretStorageKeys';
 import { clearNavToActivePathStore } from '../app/state/navToActivePath';
 import { pushSessionToSW } from '../sw-session';
 import {
@@ -190,7 +189,6 @@ const createMatrixClient = (
     cryptoStore: legacyCryptoStore,
     deviceId: session.deviceId,
     timelineSupport: true,
-    cryptoCallbacks: cryptoCallbacks as any,
     verificationMethods: ['m.sas.v1'],
   };
 
@@ -543,7 +541,6 @@ export const performLogout = async (
   deps.pushSessionToSW();
 
   deps.clearSessionLocalStorage(storage);
-  clearSecretStorageKeys();
   clearNotificationCaches();
   deps.reload();
 };
