@@ -13,6 +13,11 @@ in exchange for the current flat native snapshot would remove retained user
 behavior, so it is not a valid V-TIMELINE.1 completion. The uncommitted
 virtualized-timeline candidate must not be merged as a replacement.
 
+The previously checked-in desktop selector for that flat renderer is withdrawn:
+until the complete native presenter exists, `RoomTimeline.tsx` remains the sole
+active timeline presenter. A logged-in desktop session must not select an
+incomplete native text shell and then fall back to the legacy owner.
+
 V-TIMELINE.1 through V-TIMELINE.5 may be delivered in dependency-ordered
 native slices, but the JS timeline owner is deleted only when every behavior it
 continues to own has a native read/action path. There is no native/JS presenter
@@ -74,6 +79,11 @@ The required sequence is:
    context helpers, JS event synthesis, and tests used exclusively by the
    former operating path. Shared utilities remain until their other consumers
    are re-homed.
+
+The existing focused UTD readback bridge is a V-CRYPTO.6 dependency, not the
+native timeline presenter. It remains only until the full timeline DTO and
+presenter replace the legacy row path; it must be deleted in that cutover and
+must not be used as a model for a new native/JS hybrid route.
 
 The V-ROOMS opaque avatar protocol is a useful narrow media pattern, but it
 does not close general timeline media delivery/cache lifecycle requirements.
