@@ -41,14 +41,14 @@ Still **forbidden** forever. Full vertical ≠ dual runtime selector.
 
 A slice is **done only when** all of the following hold for its capability set:
 
-| Gate          | Requirement                                                                                                                                      |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Ownership** | Product happy path does not use `matrix-js-sdk` live client for that capability                                                                  |
-| **Parity**    | Behaviors that existed in product for that capability are re-homed to Rust IPC/SDK (or explicitly deleted with product sign-off — rare)          |
-| **Deletion**  | Superseded JS implementation/imports and JS-only compatibility branches for the capability are physically removed in this slice                  |
-| **Secrets**   | No tokens, keys, recovery material, ciphertext over IPC or logs                                                                                  |
-| **Ledger**    | Residual list for that slice is **empty** or only items that are **other verticals** with named follow-up IDs (not “later / deferred / minimum”) |
-| **Tests**     | Scoped host + product tests for pure helpers; typecheck for wired TS                                                                             |
+| Gate          | Requirement                                                                                                                                        |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Ownership** | Product happy path does not use `matrix-js-sdk` live client for that capability                                                                    |
+| **Parity**    | Behaviors that existed in product for that capability are re-homed to Rust IPC/SDK (or explicitly deleted with product sign-off — rare)            |
+| **Deletion**  | Superseded JS implementation/imports and JS-only compatibility branches for the capability are physically removed in this slice                    |
+| **Secrets**   | No tokens, keys, recovery material, ciphertext over IPC or logs                                                                                    |
+| **Ledger**    | Residual list for that slice is **empty** or only items that are **other verticals** with named follow-up IDs (not “later / deferred / minimum”)   |
+| **Tests**     | Smallest focused evidence set for changed retained behavior and real privacy/authority boundaries; required PR CI supplies broad integration proof |
 
 **Not** acceptance: “core path works; verification/backup/media left as approved residual.”
 
@@ -67,10 +67,15 @@ A slice is **done only when** all of the following hold for its capability set:
 - If a PR only documents residual debt without product rewire, treat as **docs debt PR**, not vertical complete.
 - If a PR adds a native branch but retains the replaced JS branch, mark it **wired / deletion open**, not done.
 - High effort sparingly for crypto/session edges; still full product wire, not stubs.
+- Apply [operating-path-contract.md](operating-path-contract.md): incidental
+  findings remain separate, and new preservation machinery requires a named
+  confirmed path plus a concrete boundary that existing focused evidence and CI
+  do not protect.
 
 ## Related
 
 - Residual inventory: [d0-residual-completion.md](d0-residual-completion.md)
 - Epic (reoriented): [d0-dogfood-epic.md](d0-dogfood-epic.md)
 - Loop: [d0-orchestrator-loop.md](d0-orchestrator-loop.md)
+- Operating path and evidence budget: [operating-path-contract.md](operating-path-contract.md)
 - Migration crypto decisions: [migration-ux-decision.md](migration-ux-decision.md) (`D-KEY-RECOVERY`, etc.)
