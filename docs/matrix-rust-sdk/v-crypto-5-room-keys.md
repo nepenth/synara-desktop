@@ -2,7 +2,7 @@
 
 | Field                 | Value                                                                        |
 | --------------------- | ---------------------------------------------------------------------------- |
-| Status                | **Done on `matrix-rust/v-crypto-5-room-keys`**                               |
+| Status                | **Implemented on PR #227; integration acceptance pending**                   |
 | Scope                 | Retained local encrypted room-key export/import product path                 |
 | Product path          | UI → privacy-safe Tauri IPC → managed `matrix_sdk::Client` → host filesystem |
 | Follow-up crypto rows | V-CRYPTO.6–V-CRYPTO.7 remain open                                            |
@@ -33,6 +33,26 @@ helpers, browser file reads, Blob export, or FileSaver. The superseded WebView
 owner and browser megolm keyfile helper are physically deleted; there is no
 native/legacy runtime branch. Missing IPC and SDK/file failures fail closed
 with fixed privacy-safe product errors.
+
+## Capability deletion and import delta
+
+The PR records the physical ownership change separately from the repository's
+direct-import inventory:
+
+| Evidence                                      | Before                | After                 | Delta |
+| --------------------------------------------- | --------------------- | --------------------- | ----: |
+| Legacy conditional WebView room-key owner     | 1                     | 0                     |    -1 |
+| Browser room-key crypto helper files          | 1                     | 0                     |    -1 |
+| `useMatrixClient` calls in `LocalBackup.tsx`  | 2                     | 0                     |    -2 |
+| `getCrypto` calls in `LocalBackup.tsx`        | 2                     | 0                     |    -2 |
+| JavaScript room-key API calls in Local Backup | 2                     | 0                     |    -2 |
+| Repository direct `matrix-js-sdk` inventory   | 232 files / 292 lines | 232 files / 292 lines |     0 |
+
+The global direct-import count is unchanged because the deleted owner reached
+the JavaScript client indirectly through `useMatrixClient`; the negative
+capability-owner and helper-file deltas are the binding deletion evidence.
+V-CRYPTO.5 is not accepted or complete in the integration ledger until PR #227
+passes reviewed-SHA gates and lands.
 
 Synara has no retained inbound room-key-request approval prompt or accept/deny
 surface. V-CRYPTO.5 therefore does not invent one. Matrix device verification,

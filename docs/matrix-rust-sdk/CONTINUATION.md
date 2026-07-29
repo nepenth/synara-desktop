@@ -67,8 +67,11 @@ obsolete tests/types before closure.
 
 1. Native product ownership through the managed Rust client.
 2. Retained behavior parity or explicit product-approved removal.
-3. No tokens, keys, passphrases, recovery material, ciphertext, raw paths, or
-   raw SDK errors in IPC/logs.
+3. Passphrases and recovery inputs may cross IPC only as one-way command
+   inputs. The Rust-owned command buffer is zeroized after the awaited
+   operation. Tokens, keys, passphrases, recovery material, ciphertext, raw
+   paths, and raw SDK errors must never appear in IPC responses, events,
+   diagnostics, or logs.
 4. Physical deletion of the replaced JS implementation/imports.
 5. Capability-owner/file deletion and repository-wide direct-import counts
    before and after the slice.

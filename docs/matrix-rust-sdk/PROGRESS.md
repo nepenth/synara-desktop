@@ -5,22 +5,24 @@
 >
 > **Branch:** [`feature/matrix-rust-sdk-full-replacement`](https://github.com/nepenth/synara-desktop/tree/feature/matrix-rust-sdk-full-replacement)
 >
-> **This file on GitHub:** > [docs/matrix-rust-sdk/PROGRESS.md](https://github.com/nepenth/synara-desktop/blob/feature/matrix-rust-sdk-full-replacement/docs/matrix-rust-sdk/PROGRESS.md)
+> **This file on GitHub:**
+>
+> [docs/matrix-rust-sdk/PROGRESS.md](https://github.com/nepenth/synara-desktop/blob/feature/matrix-rust-sdk-full-replacement/docs/matrix-rust-sdk/PROGRESS.md)
 
-| Field              | Value                                                                                                                             |
-| ------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
-| Last updated (UTC) | **2026-07-29 ~00:10**                                                                                                             |
-| Integration tip    | `fd7c934` — full-vertical policy alignment merged (#228)                                                                          |
-| Active work        | [#227](https://github.com/nepenth/synara-desktop/pull/227) V-CRYPTO.5 draft; closure implementation under reviewed-SHA validation |
-| Product runtime    | Native owns core D0 path and wired crypto surfaces; superseded JS implementations/imports remain deletion residuals               |
-| Execution model    | Primary Codex + same-model sub-agents: `gpt-5.6-sol`, medium; MiniMax-M3 optional                                                 |
-| Import baseline    | **232 files / 292 import lines**; global count is recorded/non-increasing; capability deletion must be negative                   |
-| Dual backend       | **`false`** (forbidden forever)                                                                                                   |
-| Operating model    | [cutover-operating-model.md](cutover-operating-model.md)                                                                          |
-| Machine ledger     | [program-status.md](program-status.md) (generated; do not hand-edit)                                                              |
-| Short continuation | [CONTINUATION.md](CONTINUATION.md)                                                                                                |
-| Full handoff       | [implementation-handoff.md](implementation-handoff.md)                                                                            |
-| Umbrella → main    | [PR #39](https://github.com/nepenth/synara-desktop/pull/39) — **do not merge without explicit user approval**                     |
+| Field              | Value                                                                                                                                                                                                                                     |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Last updated (UTC) | **2026-07-29 ~00:10**                                                                                                                                                                                                                     |
+| Integration tip    | `fd7c934` — full-vertical policy alignment merged (#228)                                                                                                                                                                                  |
+| Active work        | [#227](https://github.com/nepenth/synara-desktop/pull/227) V-CRYPTO.5 draft; closure implementation under reviewed-SHA validation                                                                                                         |
+| Product runtime    | Native owns core D0 path and wired crypto surfaces; superseded JS implementations/imports remain deletion residuals                                                                                                                       |
+| Execution model    | Primary Codex + same-model sub-agents: `gpt-5.6-sol`, medium; MiniMax-M3 optional                                                                                                                                                         |
+| Import accounting  | V-CRYPTO.5 capability deltas: legacy owner 1→0; helper files 1→0; `useMatrixClient` 2→0; `getCrypto` 2→0; JS room-key API calls 2→0. Global direct inventory remains **232 files / 292 lines** (0 delta; deleted ownership was indirect). |
+| Dual backend       | **`false`** (forbidden forever)                                                                                                                                                                                                           |
+| Operating model    | [cutover-operating-model.md](cutover-operating-model.md)                                                                                                                                                                                  |
+| Machine ledger     | [program-status.md](program-status.md) (generated; do not hand-edit)                                                                                                                                                                      |
+| Short continuation | [CONTINUATION.md](CONTINUATION.md)                                                                                                                                                                                                        |
+| Full handoff       | [implementation-handoff.md](implementation-handoff.md)                                                                                                                                                                                    |
+| Umbrella → main    | [PR #39](https://github.com/nepenth/synara-desktop/pull/39) — **do not merge without explicit user approval**                                                                                                                             |
 
 ---
 

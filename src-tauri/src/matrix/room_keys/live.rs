@@ -141,16 +141,13 @@ pub async fn export(
     fs::create_dir_all(&downloads).map_err(|_| export_file_error())?;
     let path = unique_download_path(&downloads, EXPORT_FILE_NAME);
     let label = file_label(&path).ok_or_else(export_file_error)?;
-    create_private_file(&path).map_err(|_| export_file_error())?;
-
-    let op_id = begin_transfer(flow, RoomKeyTransferKind::Export, label.clone()).await?;
-    mark_in_flight(flow, op_id).await?;
+    let (destination, op_id) = prepare_export_destination(flow, path, label.clone()).await?;
 
     let mut keys_processed = 0u32;
     let mut rooms = HashSet::new();
     let result = client
         .encryption()
-        .export_room_keys(path.clone(), passphrase, |session| {
+        .export_room_keys(destination.path().to_path_buf(), passphrase, |session| {
             keys_processed = keys_processed.saturating_add(1);
             rooms.insert(session.room_id().to_owned());
             true
@@ -171,6 +168,7 @@ pub async fn export(
                 session_generation,
             )
             .await?;
+            destination.persist();
             Ok(NativeRoomKeyTransferResult {
                 outcome: "complete",
                 file_label: label,
@@ -181,7 +179,6 @@ pub async fn export(
             })
         }
         Err(_) => {
-            let _ = fs::remove_file(path);
             fail_transfer(flow, op_id, "v-crypto.5-export-sdk-failed").await;
             Err(room_key_error(
                 "The encrypted room-key export could not be completed.",
@@ -189,6 +186,17 @@ pub async fn export(
             ))
         }
     }
+}
+
+async fn prepare_export_destination(
+    flow: &Arc<Mutex<RoomKeyTransferFlow>>,
+    path: PathBuf,
+    file_label: String,
+) -> Result<(PendingExportFile, u64), MatrixAuthCommandError> {
+    let destination = PendingExportFile::create(path).map_err(|_| export_file_error())?;
+    let op_id = begin_transfer(flow, RoomKeyTransferKind::Export, file_label).await?;
+    mark_in_flight(flow, op_id).await?;
+    Ok((destination, op_id))
 }
 
 pub async fn import(
@@ -302,6 +310,38 @@ fn create_private_file(path: &Path) -> std::io::Result<()> {
     options.open(path)?.sync_all()
 }
 
+#[derive(Debug)]
+struct PendingExportFile {
+    path: PathBuf,
+    persist: bool,
+}
+
+impl PendingExportFile {
+    fn create(path: PathBuf) -> std::io::Result<Self> {
+        create_private_file(&path)?;
+        Ok(Self {
+            path,
+            persist: false,
+        })
+    }
+
+    fn path(&self) -> &Path {
+        &self.path
+    }
+
+    fn persist(mut self) {
+        self.persist = true;
+    }
+}
+
+impl Drop for PendingExportFile {
+    fn drop(&mut self) {
+        if !self.persist {
+            let _ = fs::remove_file(&self.path);
+        }
+    }
+}
+
 fn export_file_error() -> MatrixAuthCommandError {
     room_key_error(
         "The encrypted room-key file could not be saved.",
@@ -330,6 +370,42 @@ fn room_key_error(message: &'static str, diagnostic_id: &'static str) -> MatrixA
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn temporary_export_path(test_name: &str) -> PathBuf {
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        std::env::temp_dir().join(format!(
+            "synara-vcrypto5-{test_name}-{}-{nonce}.keys",
+            std::process::id()
+        ))
+    }
+
+    #[tokio::test]
+    async fn busy_export_removes_precreated_private_destination() {
+        let flow = Arc::new(Mutex::new(RoomKeyTransferFlow::new(7)));
+        let active = begin_transfer(&flow, RoomKeyTransferKind::Import, "active.keys".to_owned())
+            .await
+            .unwrap();
+        mark_in_flight(&flow, active).await.unwrap();
+
+        let path = temporary_export_path("busy-cleanup");
+        let error =
+            prepare_export_destination(&flow, path.clone(), "synara-room-keys.txt".to_owned())
+                .await
+                .unwrap_err();
+        assert_eq!(error.diagnostic_id, "v-crypto.5-transfer-already-active");
+        assert!(!path.exists(), "busy rejection left an export file behind");
+    }
+
+    #[test]
+    fn persisted_export_destination_survives_guard_drop() {
+        let path = temporary_export_path("persist");
+        PendingExportFile::create(path.clone()).unwrap().persist();
+        assert!(path.exists());
+        fs::remove_file(path).unwrap();
+    }
 
     #[tokio::test]
     async fn failed_import_flow_can_retry_through_in_flight() {
