@@ -36,7 +36,7 @@ Every product task merge that adds `docs/matrix-rust-sdk/pN.M-*.md` **must** upd
 
 ## Current priority (D0)
 
-**Full product verticals over new L1.** See [d0-dogfood-epic.md](d0-dogfood-epic.md).
+**Full product verticals over new L1.** See [d0-product-replacement-epic.md](d0-product-replacement-epic.md).
 
 Primary scoreboard: capability residual rows close only after live wiring,
 parity, privacy, tests, and physical JS deletion. Each completed vertical must

@@ -2,12 +2,12 @@
 
 | Field              | Value                                                                                |
 | ------------------ | ------------------------------------------------------------------------------------ |
-| Active             | **V-CRYPTO.7 PR #236** (2026-07-29); reviewed code head `7df8abe`; persistent Codex goal resumed |
+| Active             | **Between product slices** (2026-07-29); V-CRYPTO.7 #236 merged at `528a510`; V-AUTH.1 SSO removal queued |
 | Interval           | Goal continuation; optional scheduler fires every **4 minutes**                      |
 | Integration        | `feature/matrix-rust-sdk-full-replacement` only                                      |
-| Orchestrator       | **Codex `gpt-5.6-sol`, medium reasoning**                                            |
-| Epic               | [d0-dogfood-epic.md](d0-dogfood-epic.md)                                             |
-| **Policy**         | **[full-vertical-policy.md](full-vertical-policy.md)** — **no dogfood cuts**         |
+| Orchestrator       | **Codex `gpt-5.6-terra`, high reasoning**                                            |
+| Epic               | [d0-product-replacement-epic.md](d0-product-replacement-epic.md)                     |
+| **Policy**         | **[full-vertical-policy.md](full-vertical-policy.md)** — complete replacement only   |
 | **Residual queue** | [d0-residual-completion.md](d0-residual-completion.md) — **must drain first**        |
 | **Operating path** | [operating-path-contract.md](operating-path-contract.md) — scope and evidence budget |
 
@@ -15,9 +15,8 @@
 
 | Agent                                      | Role                                                                                                             |
 | ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
-| **Codex** `gpt-5.6-sol` **medium**         | Primary orchestrator: fire this loop, own Git/PR state, review and merge green full-vertical PRs, never main/#39 |
+| **Codex** `gpt-5.6-terra` **high**         | Primary orchestrator: fire this loop, own Git/PR state, review and merge green full-vertical PRs, never main/#39 |
 | **Codex sub-agents**, same model/reasoning | Implement bounded task packets or independent review in parallel when scopes do not conflict                     |
-| **MiniMax-M3**                             | Optional text/research assistance during waits; never sole implementer, reviewer, or acceptance authority        |
 
 Grok is not part of the active execution path while its usage allocation is
 unavailable. The primary Codex orchestrator retains acceptance and merge
@@ -26,7 +25,7 @@ authority even when implementation is delegated.
 ## Hard policy
 
 - **No dual_backend**
-- **No dogfood / minimum / plateau residual** acceptance for product verticals
+- **No incomplete / minimum / plateau residual** acceptance for product verticals
 - **Physical deletion per vertical** — native wiring plus retained legacy JS is not done
 - Clean-break re-login OK while a full vertical is mid-stack
 - **Do not** open new L1-only foundation PRs unless they block residual queue
@@ -39,10 +38,10 @@ authority even when implementation is delegated.
 
 ## Priority order (always)
 
-1. **Do not merge** PRs that only plateau residual / dogfood-shell without full vertical acceptance
+1. **Do not merge** PRs that leave an incomplete/plateau shell without full vertical acceptance
 2. Merge green **residual-completion / full vertical** product PR if Quality + Desktop package gates success
 3. Merge green **policy/docs** that enforce full-vertical + residual ledger
-4. If no merge: monitor V-CRYPTO.7 #236; after it lands, advance V-AUTH.1 from [d0-residual-completion.md](d0-residual-completion.md)
+4. If no merge: prepare V-AUTH.1 as the complete desktop SSO-removal vertical in [d0-residual-completion.md](d0-residual-completion.md)
 5. Tip-merge **only** the active residual PR if BEHIND/CONFLICTING
 6. Update PROGRESS after residual lands
 7. Report short status; stop if disk &lt; 5 Gi free
@@ -56,9 +55,9 @@ authority even when implementation is delegated.
 | V-CRYPTO.4    | **DONE #234**                            | Native owner retained; legacy secret-storage owner deleted                   |
 | V-CRYPTO.5    | **DONE #227**                            | Rust-only owner; legacy owner/helper deleted; gates green                    |
 | V-CRYPTO.6    | **DONE #235**                            | Automatic native UTD/history recovery; legacy retry/listener owners deleted  |
-| V-CRYPTO.7    | **ACTIVE #236**                          | Reviewed code head `7df8abe`; native device/trust/actions; JS device and dead UIA owners deleted; live proof unclaimed |
+| V-CRYPTO.7    | **DONE #236**                            | Merged at `528a510`; reviewed, green product/test head `192be46`; native device/trust/actions and JS device/dead UIA owner deletion |
 | D0.6 plateau  | **#221 HOLD — do not merge as complete** | rework → V-BURN later                                                        |
-| **Next**      | **Monitor V-CRYPTO.7, then V-AUTH.1**    | Native desktop SSO login follows device/trust landing                        |
+| **Next**      | **V-AUTH.1 SSO removal**                 | Delete desktop SSO entry points, callback/token path, and native SSO UIAA continuation |
 
 _Orchestrator must rewrite this table when a residual slice merges._
 
@@ -67,7 +66,7 @@ _Orchestrator must rewrite this table when a residual slice merges._
 ### A) Tip-merge active residual PR only
 
 ```text
-codex exec -m gpt-5.6-sol -c model_reasoning_effort="medium" --ephemeral -
+codex exec -m gpt-5.6-terra -c model_reasoning_effort="high" --ephemeral -
 # tip-merge PR N onto origin/feature/matrix-rust-sdk-full-replacement;
 # resolve mod.rs by union; fmt; cargo test --lib <module>; push; do not merge
 ```
@@ -82,7 +81,7 @@ only when both ownership and deletion gates pass.
 
 ### C) Review
 
-Reject dual_backend, secrets, dogfood-minimum scope, zero-deletion completion,
+Reject dual_backend, secrets, incomplete/minimum scope, zero-deletion completion,
 or a retained `Legacy*` / native-vs-JS branch for the claimed capability.
 
 ## Explicitly do NOT do each fire
@@ -90,7 +89,7 @@ or a retained `Legacy*` / native-vs-JS branch for the claimed capability.
 - Merge #221 plateau as D0.6 complete
 - Open new media/widgets/registry verticals before residual queue allows
 - Open new notify/call L1 polish PRs
-- Start V-AUTH.1 while V-CRYPTO.7 remains open
+- Retain, reimplement, or add a desktop SSO route, callback/token-completion path, identity prompt, inferred identity, or native SSO UIAA continuation
 - Merge umbrella #39 or `main`
 - Claim phase-gate acceptance for crypto until V-CRYPTO complete
 

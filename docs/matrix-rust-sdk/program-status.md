@@ -28,10 +28,10 @@ These release/main fields do not describe partial product wiring on the integrat
 ## Current full-vertical product execution
 
 - Policy: `full-vertical-delete-per-vertical`
-- Integration product state: `capability-cutover-in-progress`
-- Active slice: **V-CRYPTO.7** (PR #236)
+- Integration product state: `between-slices-paused`
+- Active slice: **None**
 - Wired / deletion open: None
-- Completed under full policy: `V-CRYPTO.1`, `V-CRYPTO.2`, `V-CRYPTO.3`, `V-CRYPTO.4`, `V-CRYPTO.5`, `V-CRYPTO.6`
+- Completed under full policy: `V-CRYPTO.1`, `V-CRYPTO.2`, `V-CRYPTO.3`, `V-CRYPTO.4`, `V-CRYPTO.5`, `V-CRYPTO.6`, `V-CRYPTO.7`
 - Next slices: `V-AUTH.1`
 - Held PRs: #221
 - Completion evidence: negative capability-owner/file deletion delta; global direct-import delta recorded and non-increasing

@@ -5736,7 +5736,7 @@ Limited rejected-review correction (`p0.2-correct-54-fr-7.11-008-widget-continge
 - **Text**: own-device and other-device lists;
 - **Lines**: 427–427
 - **Status**: `implemented`
-- **V-CRYPTO.7 candidate**: The managed Rust session owns the authoritative list through `Client::devices`. `matrix/devices/live.rs` projects a bounded `NativeDeviceSnapshot`; `nativeDevices.ts` and `useDeviceList.ts` provide the SDK-neutral product boundary. Current sorts first and Others sort by `lastSeenTs` descending with a device-ID tiebreaker.
+- **V-CRYPTO.7 merged (#236)**: The managed Rust session owns the authoritative list through `Client::devices`. `matrix/devices/live.rs` projects a bounded `NativeDeviceSnapshot`; `nativeDevices.ts` and `useDeviceList.ts` provide the SDK-neutral product boundary. Current sorts first and Others sort by `lastSeenTs` descending with a device-ID tiebreaker.
 - **Refresh semantics**: reads are demand-driven on mount/refocus. The native query cache is keyed by the existing bootstrap session generation, so stale old-session results cannot install as the next account's visible list. Supported `Encryption::devices_stream` new/changed entries for the current user emit only a generation-scoped refresh trigger; the stream is not list authority and undocumented empty/deletion signals are ignored. Rename/delete results install their authoritative readback directly.
 - **Privacy/limits**: DTO retains device ID, display name, `lastSeenIp`, `lastSeenTs`, trust, and `isCurrent`; it contains no keys, tokens, recovery material, raw SDK errors, or raw UIAA. Ed25519 display was deliberately removed. Live multi-session/UI acceptance remains open.
 - **UI**: `Devices.tsx`, `OtherDevices.tsx`, `UnverifiedTab.tsx`
@@ -5748,14 +5748,14 @@ Limited rejected-review correction (`p0.2-correct-54-fr-7.11-008-widget-continge
   - `synara/src/app/hooks/useDeviceList.ts` — demand-driven query and generation-scoped trigger consumer
 - **Superseded JS owner**: deleted `getDevices`/`getDeviceId`, `CryptoEvent.DevicesUpdated`, device-model, listener, and polling ownership.
 - **Rust mapping**: `Client::devices` plus `Encryption::get_user_devices` under P8.2/V-CRYPTO.7; no raw `/_matrix` HTTP and no dual backend.
-- **Planned** `AT-FR-7.9-003-001` / **Manual** `MA-FR-7.9-003`: on a disposable multi-session Synapse, prove Current/Others identity fields and ordering, mount/refocus refresh, documented new/changed-trigger refresh, generation isolation, and no refresh storm/process restart. Live proof remains unclaimed by this candidate.
+- **Planned** `AT-FR-7.9-003-001` / **Manual** `MA-FR-7.9-003`: on a disposable multi-session Synapse, prove Current/Others identity fields and ordering, mount/refocus refresh, documented new/changed-trigger refresh, generation isolation, and no refresh storm/process restart. Live proof remains unclaimed by this merged vertical.
 
 ### `FR-7.9-004` — ### 7.9 Devices, E2EE, verification, and recovery
 
 - **Text**: device trust and verification state;
 - **Lines**: 428–428
 - **Status**: `implemented`
-- **V-CRYPTO.7 candidate**: `matrix/devices/live.rs` joins `Encryption::get_user_devices` by device ID and maps `is_verified_with_cross_signing` to verified/unverified; an authoritative server row without a crypto row maps to unsupported. The bounded DTO drives Settings badge/count, other-device verification affordances, `UnverifiedTab`, and `LogoutDialog`.
+- **V-CRYPTO.7 merged (#236)**: `matrix/devices/live.rs` joins `Encryption::get_user_devices` by device ID and maps `is_verified_with_cross_signing` to verified/unverified; an authoritative server row without a crypto row maps to unsupported. The bounded DTO drives Settings badge/count, other-device verification affordances, `UnverifiedTab`, and `LogoutDialog`.
 - **Refresh semantics**: trust refresh shares the generation-scoped native device snapshot route; SAS ceremony remains the separate existing native verification owner.
 - **Privacy/limits**: no device keys or raw crypto objects cross IPC. Live multi-session/UI acceptance remains open.
 - **UI**: `Devices.tsx`, `Verification.tsx`, `OtherDevices.tsx`, `UnverifiedTab.tsx`, `LogoutDialog.tsx`
@@ -5766,7 +5766,7 @@ Limited rejected-review correction (`p0.2-correct-54-fr-7.11-008-widget-continge
   - listed UI consumers render only the native projection
 - **Superseded JS owner**: deleted CryptoApi trust helpers, `DeviceVerificationStatus`, `useDeviceVerificationStatus`, device-list refresh coupling, and the unused `useUserTrustStatusChange` listener.
 - **Rust mapping**: `Encryption::get_user_devices` / `is_verified_with_cross_signing` under P8.2/P8.4/V-CRYPTO.7; cross-signing status or SAS alone does not satisfy this row.
-- **Planned** `AT-FR-7.9-004-001` / **Manual** `MA-FR-7.9-004`: with cross-signing and two sessions, prove verified/unverified/unsupported projection, badge/count/banner/logout-warning consumers, and refresh after a trust change without restart. Live proof remains unclaimed by this candidate.
+- **Planned** `AT-FR-7.9-004-001` / **Manual** `MA-FR-7.9-004`: with cross-signing and two sessions, prove verified/unverified/unsupported projection, badge/count/banner/logout-warning consumers, and refresh after a trust change without restart. Live proof remains unclaimed by this merged vertical.
 
 ### `FR-7.9-005` — ### 7.9 Devices, E2EE, verification, and recovery
 
@@ -6126,7 +6126,7 @@ Limited rejected-review correction (`p0.2-correct-54-fr-7.11-008-widget-continge
 - **Text**: device deletion and UIA;
 - **Lines**: 434–434
 - **Status**: `implemented`
-- **V-CRYPTO.7 candidate**: `matrix/auth/product.rs` owns non-current multi-select `Client::delete_devices`, mandatory operation ID/session-generation validation, purpose-specific Password/SSO UIAA, cancel/unmount cleanup, and authoritative absence readback. Each continuation and cancellation carries the challenge generation; Rust compares it with both the active session and pending operation before acting on an operation ID. The current device keeps its separate native logout route; OIDC sessions keep external account-management `sessionEnd`.
+- **V-CRYPTO.7 merged (#236)**: `matrix/auth/product.rs` owns non-current multi-select `Client::delete_devices`, mandatory operation ID/session-generation validation, purpose-specific Password/SSO UIAA, cancel/unmount cleanup, and authoritative absence readback. Each continuation and cancellation carries the challenge generation; Rust compares it with both the active session and pending operation before acting on an operation ID. The current device keeps its separate native logout route; OIDC sessions keep external account-management `sessionEnd`.
 - **UIAA semantics**: only flows whose remaining stages are entirely Password/SSO are viable. Password is preferred across alternative flows; authoritative `completed` stages advance a multi-stage flow without falsely reporting the accepted stage as failed. Exactly one method is presented as a scalar challenge field. Password crosses IPC once and is immediately zeroized. The Ruma-generated fallback URL, returned only when SSO is selected, is the sole bounded field containing the opaque UIAA session. `authDone` requires the exact fallback origin and exact popup source; manual Continue uses the same native acknowledgement.
 - **Completion/failure**: operation mismatch rejects late responses after cancel/replacement. UIAA authentication failure is distinct from terminal delete failure. Success is returned only after server success and `Client::devices` readback proves all selected IDs absent.
 - **UI**: `OtherDevices.tsx`, `DeviceTile.tsx`
@@ -6138,7 +6138,7 @@ Limited rejected-review correction (`p0.2-correct-54-fr-7.11-008-widget-continge
   - `synara/src/app/features/settings/devices/OtherDevices.tsx` — multi-select and one-method UI
 - **Superseded JS owner**: deleted `deleteMultipleDevices`, raw Matrix UIAA state, `ActionUIA`, and its device-delete Password/SSO stages. Generic registration/reset UIA remains outside this row.
 - **Rust mapping**: `Client::delete_devices` plus typed Ruma `AuthData`; no raw Matrix HTTP and no dual backend.
-- **Planned** `AT-FR-7.9-010-001` / **Manual** `MA-FR-7.9-010`: on a disposable multi-session Synapse, prove non-current selection/cancel, password and SSO continuation (including supported multi-stage progression), exact-origin/source popup completion, terminal-vs-auth failure copy, authoritative disappearance without restart, unmount cancellation, and retained OIDC external policy. Live proof remains unclaimed by this candidate.
+- **Planned** `AT-FR-7.9-010-001` / **Manual** `MA-FR-7.9-010`: on a disposable multi-session Synapse, prove non-current selection/cancel, password and SSO continuation (including supported multi-stage progression), exact-origin/source popup completion, terminal-vs-auth failure copy, authoritative disappearance without restart, unmount cancellation, and retained OIDC external policy. Live proof remains unclaimed by this merged vertical.
 
 ### `FR-7.9-011` — ### 7.9 Devices, E2EE, verification, and recovery
 

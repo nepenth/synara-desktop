@@ -58,6 +58,6 @@ otherwise migrated by this slice.
 - Focused Rust tests prove pending → automatic plaintext reconciliation,
   cause-to-current-availability mapping, placeholder safety, and event-readback IPC privacy.
 
-Live two-client Synapse/UI proof is **not confirmed** in this candidate. The
+Live two-client Synapse/UI proof is **not confirmed** for this merged vertical. The
 existing acceptance scenario remains the runtime gate; compile/unit evidence is
 not represented as live recovery proof.

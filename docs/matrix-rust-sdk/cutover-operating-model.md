@@ -22,7 +22,7 @@ _execution shape_, this model wins until the plan is updated to match.
 | **One Matrix owner**              | After cutover, only Matrix Rust SDK owns session, sync, crypto, and room state           |
 | **No dual production backend**    | No user-visible or hidden runtime flag to choose JS vs Rust                              |
 | **No long-term dual maintenance** | Do not keep both SDKs as coequal product paths                                           |
-| **Branch → prove → merge**        | Build and dogfood on the integration branch; merge to `main` only with explicit approval |
+| **Branch → prove → merge**        | Build and validate complete replacement verticals on the integration branch; merge to `main` only with explicit approval |
 | **Clean-break client migration**  | Re-login, clear cache, wipe local Matrix dirs are acceptable for the sole desktop user   |
 
 Architecture after cutover:
@@ -54,11 +54,11 @@ are forbidden (crypto/device/sync integrity).
 
 ## 2b. D0 full-vertical pivot (active 2026-07-28)
 
-**Current execution mode on this branch:** [d0-dogfood-epic.md](d0-dogfood-epic.md).
+**Current execution mode on this branch:** [d0-product-replacement-epic.md](d0-product-replacement-epic.md).
 
 - Stop prioritizing new L1-only harness PRs.
 - **Break the branch product** if needed: Rust owns Matrix capability-by-capability.
-- The former D0.1–D0.5 “dogfood minimum” sequence is historical and incomplete.
+- The former D0.1–D0.5 partial-minimum sequence is historical and incomplete.
 - Current binding order is the residual queue in [d0-residual-completion.md](d0-residual-completion.md): crypto completion/deletion → auth → rooms → timeline → send → final convergence.
 - No dual-backend. Clean-break re-login OK. Temporary brokenness between serial full verticals is acceptable.
 - **Physical deletion happens per vertical**; final convergence is not a bulk warehouse for retained JS owners.
