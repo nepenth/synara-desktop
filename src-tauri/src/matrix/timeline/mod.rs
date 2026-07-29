@@ -25,6 +25,7 @@ mod pagination;
 mod projection;
 mod registry;
 mod utd;
+mod view;
 
 #[cfg(test)]
 mod live_synapse_proof;
@@ -59,6 +60,14 @@ pub use pagination::{
 pub use projection::{reconstruct, TimelineProjection};
 pub use registry::{TimelineEntry, TimelineKey, TimelineLifecycle, TimelineRegistry};
 pub use utd::{UtdEntry, UtdIndex, UtdPhase, UtdReasonCode, UtdUpdate, MAX_UTD_ENTRIES};
+pub use view::{
+    TimelineCallRow, TimelineEncryptedUnavailableRow, TimelineEventRowBase, TimelineMediaHandle,
+    TimelineMembershipRow, TimelineMessageRow, TimelineOtherRow, TimelinePageState,
+    TimelinePaginationState, TimelinePollRow, TimelineReaction, TimelineReadState,
+    TimelineRedactedRow, TimelineReplyPreview, TimelineRowCapabilities, TimelineStateRow,
+    TimelineThreadSummary, TimelineViewCapabilities, TimelineViewPosition, TimelineViewRow,
+    TimelineViewSnapshot, TIMELINE_VIEW_SCHEMA_VERSION,
+};
 
 /// Static marker for link / schema smoke.
 pub const MATRIX_TIMELINE_MARKER: &str =
