@@ -45,8 +45,9 @@ selection against an authoritative snapshot and owns a pending operation with a
 mandatory operation ID, session generation, selected device IDs, and opaque UIAA
 session. Password input crosses IPC once, is immediately wrapped in a zeroizing
 buffer, and is never retained in pending state. Cancel, password continuation,
-and SSO continuation all require the matching operation ID and generation, so a
-late response cannot complete a cancelled or replaced operation.
+and SSO continuation carry the challenge's session generation. Rust checks that
+generation against both the active session and pending operation before checking
+the operation ID, so an old-session callback cannot affect a reused operation ID.
 Leaving the device surface during UIAA sends a best-effort cancellation for the
 retained operation ID, so an opaque auth session is not left natively pending
 without a reachable UI owner.
@@ -54,8 +55,9 @@ without a reachable UI owner.
 For multi-stage UIAA, Rust considers only flows whose remaining stages are all
 Password or SSO. It exposes the current stage for one viable method, preferring
 Password across alternative flows, and advances using the server's authoritative
-`completed` stages. The WebView receives no raw UIAA parameters, session, or
-error. The one exception is the SDK/Ruma-generated SSO fallback URL, which
+`completed` stages. The challenge exposes authentication as one scalar method,
+not an array. The WebView receives no raw UIAA parameters, session, or error. The
+one exception is the SDK/Ruma-generated SSO fallback URL, which
 necessarily embeds the opaque session. The SSO popup completion path accepts
 `authDone` only from the exact fallback origin and exact child window; the manual
 Continue action uses the same native acknowledgement command. UIAA authentication
@@ -65,6 +67,11 @@ Delete succeeds only after the SDK call succeeds and a fresh `Client::devices`
 readback proves every selected device absent. The OIDC account-dashboard
 `sessionEnd` route and current-device native logout/verification routes remain
 unchanged.
+
+The frontend device query is keyed by the existing native bootstrap session
+generation. A request that resolves after a native session transition therefore
+can update only its old generation's cache entry and cannot become the next
+account's visible device list.
 
 ## Superseded owners deleted
 

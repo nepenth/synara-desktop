@@ -5,17 +5,23 @@ import {
   NativeDevice,
   NativeDeviceSnapshot,
 } from '../features/settings/devices/nativeDevices';
+import { getActiveSession } from '../state/sessionBootstrap';
 
-const DEVICES_QUERY_KEY = ['native-devices'];
 const DEVICE_LIST_UPDATED_EVENT = 'matrix-device-list-updated';
 
 export type RefreshDeviceList = (snapshot?: NativeDeviceSnapshot) => Promise<void>;
 
 export function useDeviceList(): [undefined | NativeDevice[], RefreshDeviceList] {
   const queryClient = useQueryClient();
+  const sessionGeneration = getActiveSession()?.sessionGeneration;
+  const queryKey = useMemo(
+    () => ['native-devices', sessionGeneration] as const,
+    [sessionGeneration]
+  );
   const { data: snapshot, refetch } = useQuery({
-    queryKey: DEVICES_QUERY_KEY,
+    queryKey,
     queryFn: getNativeDeviceSnapshot,
+    enabled: sessionGeneration !== undefined,
     staleTime: 0,
     gcTime: Infinity,
     refetchOnMount: 'always',
@@ -24,13 +30,14 @@ export function useDeviceList(): [undefined | NativeDevice[], RefreshDeviceList]
 
   const refreshDeviceList = useCallback(
     async (authoritativeSnapshot?: NativeDeviceSnapshot) => {
+      if (sessionGeneration === undefined) return;
       if (authoritativeSnapshot) {
-        queryClient.setQueryData(DEVICES_QUERY_KEY, authoritativeSnapshot);
+        queryClient.setQueryData(queryKey, authoritativeSnapshot);
         return;
       }
       await refetch();
     },
-    [queryClient, refetch]
+    [queryClient, queryKey, refetch, sessionGeneration]
   );
 
   useEffect(() => {

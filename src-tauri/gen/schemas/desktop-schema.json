@@ -585,10 +585,40 @@
           "markdownDescription": "Enables the matrix_crypto_status command without any pre-configured scope."
         },
         {
-          "description": "Enables the matrix_device_verification_status command without any pre-configured scope.",
+          "description": "Enables the matrix_device_delete_cancel command without any pre-configured scope.",
           "type": "string",
-          "const": "allow-matrix-device-verification-status",
-          "markdownDescription": "Enables the matrix_device_verification_status command without any pre-configured scope."
+          "const": "allow-matrix-device-delete-cancel",
+          "markdownDescription": "Enables the matrix_device_delete_cancel command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_device_delete_password command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-device-delete-password",
+          "markdownDescription": "Enables the matrix_device_delete_password command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_device_delete_sso_acknowledge command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-device-delete-sso-acknowledge",
+          "markdownDescription": "Enables the matrix_device_delete_sso_acknowledge command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_device_delete_start command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-device-delete-start",
+          "markdownDescription": "Enables the matrix_device_delete_start command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_device_rename command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-device-rename",
+          "markdownDescription": "Enables the matrix_device_rename command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_device_snapshot command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-device-snapshot",
+          "markdownDescription": "Enables the matrix_device_snapshot command without any pre-configured scope."
         },
         {
           "description": "Enables the matrix_login_password command without any pre-configured scope.",
@@ -987,10 +1017,40 @@
           "markdownDescription": "Denies the matrix_crypto_status command without any pre-configured scope."
         },
         {
-          "description": "Denies the matrix_device_verification_status command without any pre-configured scope.",
+          "description": "Denies the matrix_device_delete_cancel command without any pre-configured scope.",
           "type": "string",
-          "const": "deny-matrix-device-verification-status",
-          "markdownDescription": "Denies the matrix_device_verification_status command without any pre-configured scope."
+          "const": "deny-matrix-device-delete-cancel",
+          "markdownDescription": "Denies the matrix_device_delete_cancel command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_device_delete_password command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-device-delete-password",
+          "markdownDescription": "Denies the matrix_device_delete_password command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_device_delete_sso_acknowledge command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-device-delete-sso-acknowledge",
+          "markdownDescription": "Denies the matrix_device_delete_sso_acknowledge command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_device_delete_start command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-device-delete-start",
+          "markdownDescription": "Denies the matrix_device_delete_start command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_device_rename command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-device-rename",
+          "markdownDescription": "Denies the matrix_device_rename command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_device_snapshot command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-device-snapshot",
+          "markdownDescription": "Denies the matrix_device_snapshot command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_login_password command without any pre-configured scope.",

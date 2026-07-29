@@ -949,6 +949,7 @@ pub async fn matrix_device_delete_start(
 pub async fn matrix_device_delete_password(
     state: State<'_, MatrixAuthState>,
     operation_id: u64,
+    session_generation: u64,
     password: String,
 ) -> Result<NativeDeviceDeleteResult, MatrixAuthCommandError> {
     let password = zeroize::Zeroizing::new(password);
@@ -957,21 +958,7 @@ pub async fn matrix_device_delete_password(
     }
     let mut session = state.session.lock().await;
     let active = require_device_session_mut(session.as_mut())?;
-    let pending = active
-        .pending_device_deletion
-        .as_ref()
-        .ok_or_else(|| map_device_error("v-crypto.7-device-delete-not-pending"))?;
-    if pending.operation_id != operation_id {
-        return Err(map_device_error(
-            "v-crypto.7-device-delete-operation-mismatch",
-        ));
-    }
-    if pending.session_generation != active.sync.session_generation() {
-        active.pending_device_deletion = None;
-        return Err(map_device_error(
-            "v-crypto.7-device-delete-stale-generation",
-        ));
-    }
+    let pending = validate_pending_device_deletion(active, operation_id, session_generation)?;
     let user_id = active
         .client
         .user_id()
@@ -1002,24 +989,11 @@ pub async fn matrix_device_delete_password(
 pub async fn matrix_device_delete_sso_acknowledge(
     state: State<'_, MatrixAuthState>,
     operation_id: u64,
+    session_generation: u64,
 ) -> Result<NativeDeviceDeleteResult, MatrixAuthCommandError> {
     let mut session = state.session.lock().await;
     let active = require_device_session_mut(session.as_mut())?;
-    let pending = active
-        .pending_device_deletion
-        .as_ref()
-        .ok_or_else(|| map_device_error("v-crypto.7-device-delete-not-pending"))?;
-    if pending.operation_id != operation_id {
-        return Err(map_device_error(
-            "v-crypto.7-device-delete-operation-mismatch",
-        ));
-    }
-    if pending.session_generation != active.sync.session_generation() {
-        active.pending_device_deletion = None;
-        return Err(map_device_error(
-            "v-crypto.7-device-delete-stale-generation",
-        ));
-    }
+    let pending = validate_pending_device_deletion(active, operation_id, session_generation)?;
     let device_ids = pending.device_ids.clone();
     let auth = uiaa::AuthData::fallback_acknowledgement(pending.auth_session.clone());
     match active.client.delete_devices(&device_ids, Some(auth)).await {
@@ -1038,21 +1012,13 @@ pub async fn matrix_device_delete_sso_acknowledge(
 pub async fn matrix_device_delete_cancel(
     state: State<'_, MatrixAuthState>,
     operation_id: u64,
+    session_generation: u64,
 ) -> Result<(), MatrixAuthCommandError> {
     let mut session = state.session.lock().await;
     let active = require_device_session_mut(session.as_mut())?;
-    if active
-        .pending_device_deletion
-        .as_ref()
-        .is_some_and(|pending| pending.operation_id == operation_id)
-    {
-        active.pending_device_deletion = None;
-        Ok(())
-    } else {
-        Err(map_device_error(
-            "v-crypto.7-device-delete-operation-mismatch",
-        ))
-    }
+    validate_pending_device_deletion(active, operation_id, session_generation)?;
+    active.pending_device_deletion = None;
+    Ok(())
 }
 
 #[tauri::command]
@@ -1401,6 +1367,33 @@ async fn validate_device_deletion(
     Ok(unique.into_iter().collect())
 }
 
+fn validate_pending_device_deletion(
+    active: &ManagedMatrixSession,
+    operation_id: u64,
+    session_generation: u64,
+) -> Result<&PendingDeviceDeletion, MatrixAuthCommandError> {
+    if active.sync.session_generation() != session_generation {
+        return Err(map_device_error(
+            "v-crypto.7-device-delete-stale-generation",
+        ));
+    }
+    let pending = active
+        .pending_device_deletion
+        .as_ref()
+        .ok_or_else(|| map_device_error("v-crypto.7-device-delete-not-pending"))?;
+    if pending.session_generation != session_generation {
+        return Err(map_device_error(
+            "v-crypto.7-device-delete-stale-generation",
+        ));
+    }
+    if pending.operation_id != operation_id {
+        return Err(map_device_error(
+            "v-crypto.7-device-delete-operation-mismatch",
+        ));
+    }
+    Ok(pending)
+}
+
 async fn retain_device_delete_challenge(
     active: &mut ManagedMatrixSession,
     device_ids: Vec<matrix_sdk::ruma::OwnedDeviceId>,
@@ -1448,18 +1441,18 @@ async fn install_device_delete_challenge(
     let authentication = if available
         .contains(&crate::matrix::devices::NativeDeviceDeleteAuthentication::Password)
     {
-        vec![crate::matrix::devices::NativeDeviceDeleteAuthentication::Password]
+        crate::matrix::devices::NativeDeviceDeleteAuthentication::Password
     } else if available
         .contains(&crate::matrix::devices::NativeDeviceDeleteAuthentication::SsoFallback)
     {
-        vec![crate::matrix::devices::NativeDeviceDeleteAuthentication::SsoFallback]
+        crate::matrix::devices::NativeDeviceDeleteAuthentication::SsoFallback
     } else {
         return Err(map_device_error(
             "v-crypto.7-device-delete-auth-unsupported",
         ));
     };
     let sso_fallback_url = if authentication
-        .contains(&crate::matrix::devices::NativeDeviceDeleteAuthentication::SsoFallback)
+        == crate::matrix::devices::NativeDeviceDeleteAuthentication::SsoFallback
     {
         // This Ruma-generated browser URL necessarily embeds the opaque UIAA
         // session. The session is never returned as a separate field or logged.

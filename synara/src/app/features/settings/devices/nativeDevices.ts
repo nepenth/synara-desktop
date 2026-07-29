@@ -22,7 +22,7 @@ export type NativeDeviceDeleteAuthentication = 'password' | 'sso_fallback';
 export type NativeDeviceDeleteChallenge = {
   operationId: number;
   sessionGeneration: number;
-  authentication: NativeDeviceDeleteAuthentication[];
+  authentication: NativeDeviceDeleteAuthentication;
   ssoFallbackUrl?: string;
   authenticationFailed: boolean;
 };
@@ -56,14 +56,26 @@ export const startNativeDeviceDelete = (deviceIds: string[]): Promise<NativeDevi
 
 export const authenticateNativeDeviceDeletePassword = (
   operationId: number,
+  sessionGeneration: number,
   password: string
 ): Promise<NativeDeviceDeleteResult> =>
-  invokeNativeDevices('matrix_device_delete_password', { operationId, password });
+  invokeNativeDevices('matrix_device_delete_password', {
+    operationId,
+    sessionGeneration,
+    password,
+  });
 
 export const acknowledgeNativeDeviceDeleteSso = (
-  operationId: number
+  operationId: number,
+  sessionGeneration: number
 ): Promise<NativeDeviceDeleteResult> =>
-  invokeNativeDevices('matrix_device_delete_sso_acknowledge', { operationId });
+  invokeNativeDevices('matrix_device_delete_sso_acknowledge', {
+    operationId,
+    sessionGeneration,
+  });
 
-export const cancelNativeDeviceDelete = (operationId: number): Promise<void> =>
-  invokeNativeDevices('matrix_device_delete_cancel', { operationId });
+export const cancelNativeDeviceDelete = (
+  operationId: number,
+  sessionGeneration: number
+): Promise<void> =>
+  invokeNativeDevices('matrix_device_delete_cancel', { operationId, sessionGeneration });

@@ -67012,7 +67012,7 @@
       },
       "current_behavior_and_limits": {
         "summary": "V-CRYPTO.7 candidate implements current and other-device lists through a bounded native snapshot with Client::devices as authority.",
-        "notes": "Trust is joined separately. Mount/refocus and supported own-user new/changed stream signals trigger reads. Native ordering is Current first, then Others by lastSeenTs descending and device ID. Action readbacks install authoritative snapshots. Ed25519 display is deliberately removed because keys are outside the DTO.",
+        "notes": "Trust is joined separately. Mount/refocus and supported own-user new/changed stream signals trigger reads. The native query cache is keyed by the existing bootstrap session generation, so stale old-session results cannot become the next account's visible list. Native ordering is Current first, then Others by lastSeenTs descending and device ID. Action readbacks install authoritative snapshots. Ed25519 display is deliberately removed because keys are outside the DTO.",
         "limits": "Live multi-session/UI acceptance remains open. No polling, raw sync, OlmMachine access, device keys, or matrix-js-sdk device model remains on this route."
       },
       "p0_1_linkage": {
@@ -71211,7 +71211,7 @@
       },
       "current_behavior_and_limits": {
         "summary": "V-CRYPTO.7 candidate implements native multi-select deletion for non-current devices with purpose-specific Password/SSO UIAA and authoritative absence readback; OIDC sessionEnd remains external.",
-        "notes": "Mandatory operation ID and generation reject late responses. Password is a one-way zeroized input. Viable flows contain only remaining Password/SSO stages; Password is preferred across alternatives and completed stages advance a multi-stage flow. SSO authDone requires exact origin and child source, with manual Continue retained.",
+        "notes": "Each continuation and cancellation carries the challenge generation; Rust compares it with both the active session and pending operation before acting on an operation ID. Password is a one-way zeroized input. Viable flows contain only remaining Password/SSO stages; Password is preferred across alternatives and completed stages advance a multi-stage flow. Authentication is a scalar challenge field. SSO authDone requires exact origin and child source, with manual Continue retained.",
         "limits": "Raw UIAA session/parameters/errors never cross IPC. The Ruma-generated fallback URL embeds the opaque session and is returned only when SSO is selected. Live multi-session/UI acceptance remains open."
       },
       "p0_1_linkage": {
