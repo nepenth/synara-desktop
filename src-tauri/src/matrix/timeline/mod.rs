@@ -21,6 +21,7 @@ mod delta;
 mod error;
 mod focus;
 mod live;
+mod media;
 mod pagination;
 mod projection;
 mod registry;
@@ -57,6 +58,7 @@ pub use live::{
     NativeTimelineReadStateRequest,
     NATIVE_TIMELINE_OPEN_SCHEMA_VERSION,
 };
+pub use media::{TimelineMediaRegistry, TimelineMediaSource};
 pub use pagination::{
     DirectionStatus, PaginationDirection, PaginationOutcome, PaginationPhase, PaginationRequest,
     TimelinePagination,
