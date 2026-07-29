@@ -5,7 +5,7 @@
 | Status                    | **Paused between slices — blocking forward work remains** (2026-07-29) |
 | Policy                    | [full-vertical-policy.md](full-vertical-policy.md)                     |
 | Integration tip at policy | `0400306` (D0.1–D0.5 merged; D0.5 was **crypto minimum**)              |
-| Current integration tip   | `146952a` (V-CRYPTO.5 room-key ownership/deletion #227 merged)         |
+| Current integration tip   | `0ba87f3` (V-CRYPTO.2 cross-signing ownership/deletion #231 merged)    |
 | Active PR                 | None — intentionally paused between slices                             |
 
 ## Policy trigger

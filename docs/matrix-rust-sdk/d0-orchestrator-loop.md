@@ -1,14 +1,15 @@
 # D0 orchestrator loop (integration branch)
 
-| Field              | Value                                                                         |
-| ------------------ | ----------------------------------------------------------------------------- |
-| Active             | **Paused between slices** (2026-07-29); resume as a persistent Codex goal     |
-| Interval           | Goal continuation; optional scheduler fires every **4 minutes**               |
-| Integration        | `feature/matrix-rust-sdk-full-replacement` only                               |
-| Orchestrator       | **Codex `gpt-5.6-sol`, medium reasoning**                                     |
-| Epic               | [d0-dogfood-epic.md](d0-dogfood-epic.md)                                      |
-| **Policy**         | **[full-vertical-policy.md](full-vertical-policy.md)** — **no dogfood cuts**  |
-| **Residual queue** | [d0-residual-completion.md](d0-residual-completion.md) — **must drain first** |
+| Field              | Value                                                                                |
+| ------------------ | ------------------------------------------------------------------------------------ |
+| Active             | **Paused between slices** (2026-07-29); resume as a persistent Codex goal            |
+| Interval           | Goal continuation; optional scheduler fires every **4 minutes**                      |
+| Integration        | `feature/matrix-rust-sdk-full-replacement` only                                      |
+| Orchestrator       | **Codex `gpt-5.6-sol`, medium reasoning**                                            |
+| Epic               | [d0-dogfood-epic.md](d0-dogfood-epic.md)                                             |
+| **Policy**         | **[full-vertical-policy.md](full-vertical-policy.md)** — **no dogfood cuts**         |
+| **Residual queue** | [d0-residual-completion.md](d0-residual-completion.md) — **must drain first**        |
+| **Operating path** | [operating-path-contract.md](operating-path-contract.md) — scope and evidence budget |
 
 ## Roles
 
@@ -32,7 +33,8 @@ authority even when implementation is delegated.
 - Parked L1 PRs stay parked
 - **No tokens/secrets** in IPC returns / logs
 - Prefer **serial** product merges
-- Slim Codex validation: `fmt` + module `cargo test` (+ optional clippy); **no** full suite / package / governance regen
+- Follow the operating-path evidence budget: focused owner tests locally; required PR CI supplies broad integration proof
+- Do not add tests, guardrails, retries, or fallbacks without a named confirmed path and concrete boundary they preserve
 - **Do not merge #221** (or successors) that claim “approved residual plateau” / “no capability owner deleted is success”
 
 ## Priority order (always)
@@ -71,7 +73,8 @@ codex exec -m gpt-5.6-sol -c model_reasoning_effort="medium" --ephemeral -
 
 ### B) Implement next residual full vertical
 
-Use [d0-residual-completion.md](d0-residual-completion.md) + [full-vertical-policy.md](full-vertical-policy.md).  
+Use [d0-residual-completion.md](d0-residual-completion.md) + [full-vertical-policy.md](full-vertical-policy.md) + [operating-path-contract.md](operating-path-contract.md).
+
 **Full product rewire plus physical deletion** for the ID. For already-wired
 V-CRYPTO.3–.4, use the named `-D` residuals. One capability-bounded branch/PR;
 record deleted paths/import delta; close the row only when both ownership and

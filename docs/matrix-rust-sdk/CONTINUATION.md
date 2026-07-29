@@ -11,9 +11,10 @@
 | Date                     | 2026-07-29 (America/New_York)                                                   |
 | Integration branch       | `feature/matrix-rust-sdk-full-replacement`                                      |
 | Execution model          | Primary Codex + Codex sub-agents, all `gpt-5.6-sol` medium; MiniMax-M3 optional |
-| Verified integration tip | `5c68b19` — V-CRYPTO.1 verification ownership and deletion merged (#230)        |
+| Verified integration tip | `0ba87f3` — V-CRYPTO.2 cross-signing ownership and deletion merged (#231)       |
 | Active PR                | None — intentionally paused between slices                                      |
 | Policy                   | [full-vertical-policy.md](full-vertical-policy.md)                              |
+| Operating path           | [operating-path-contract.md](operating-path-contract.md)                        |
 | Binding queue            | [d0-residual-completion.md](d0-residual-completion.md)                          |
 | Main merge               | PR #39 — explicit user approval required                                        |
 
