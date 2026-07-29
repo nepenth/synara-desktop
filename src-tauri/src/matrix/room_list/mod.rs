@@ -23,6 +23,8 @@ mod counts;
 mod delta;
 mod error;
 mod filters;
+mod invite_avatars;
+mod invites;
 mod live;
 mod projection;
 mod sort;
@@ -34,6 +36,10 @@ pub use error::RoomListError;
 pub use filters::{
     filter_rooms_by_scope, room_matches_scope, select_rooms_by_scope, select_rooms_in_folder,
     RoomListScope,
+};
+pub use invite_avatars::{InviteAvatarHandles, InviteAvatarSource, MAX_INVITE_AVATAR_HANDLES};
+pub use invites::{
+    contains_bad_word, snapshot_invites, NativeInvite, NativeInviteSnapshot, NativeInviteTriage,
 };
 pub use live::{snapshot_from_sync_owner, NativeRoomListSnapshot};
 pub use projection::{reconstruct, RoomListProjection};

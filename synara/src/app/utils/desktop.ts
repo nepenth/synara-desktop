@@ -9,6 +9,7 @@ import {
 
 type TauriInternals = {
   invoke?: <T = unknown>(command: string, args?: Record<string, unknown>) => Promise<T>;
+  convertFileSrc?: (filePath: string, protocol?: string) => string;
   transformCallback?: <T>(callback: (response: T) => void, once?: boolean) => number;
 };
 
@@ -500,6 +501,11 @@ export const invokeDesktop = async <T = unknown>(
   const result = await invokeDesktopWithAvailability<T>(command, args);
   if (!result.available) return undefined;
   return result.value;
+};
+
+export const convertDesktopFileSrc = (handle: string, protocol: string): string | undefined => {
+  if (!handle || !isSynaraDesktop()) return undefined;
+  return window.__TAURI_INTERNALS__?.convertFileSrc?.(handle, protocol);
 };
 
 export const enableDesktopSpellcheck = async (): Promise<boolean> => {
