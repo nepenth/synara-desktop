@@ -10,7 +10,7 @@
 | ------------------------ | -------------------------------------------------------------------------------------------------------- |
 | Date                     | 2026-07-28 (America/New_York)                                                                            |
 | Integration branch       | `feature/matrix-rust-sdk-full-replacement`                                                               |
-| Execution model          | Primary Codex + Codex sub-agents, all `gpt-5.6-sol` medium; MiniMax-M3 optional                          |
+| Execution model          | Primary Codex + Codex sub-agents, all `gpt-5.6-terra` high; MiniMax-M3 optional                          |
 | Verified integration tip | `fd7c934` — full-vertical policy alignment merged (#228)                                                 |
 | Active PR                | [#227](https://github.com/nepenth/synara-desktop/pull/227) — V-CRYPTO.5 closure implementation in review |
 | Policy                   | [full-vertical-policy.md](full-vertical-policy.md)                                                       |

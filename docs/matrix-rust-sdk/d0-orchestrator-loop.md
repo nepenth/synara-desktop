@@ -5,7 +5,7 @@
 | Active             | **Yes** (2026-07-28), as a persistent Codex goal                              |
 | Interval           | Goal continuation; optional scheduler fires every **4 minutes**               |
 | Integration        | `feature/matrix-rust-sdk-full-replacement` only                               |
-| Orchestrator       | **Codex `gpt-5.6-sol`, medium reasoning**                                     |
+| Orchestrator       | **Codex `gpt-5.6-terra`, high reasoning**                                     |
 | Epic               | [d0-dogfood-epic.md](d0-dogfood-epic.md)                                      |
 | **Policy**         | **[full-vertical-policy.md](full-vertical-policy.md)** — **no dogfood cuts**  |
 | **Residual queue** | [d0-residual-completion.md](d0-residual-completion.md) — **must drain first** |
@@ -14,7 +14,7 @@
 
 | Agent                                      | Role                                                                                                             |
 | ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
-| **Codex** `gpt-5.6-sol` **medium**         | Primary orchestrator: fire this loop, own Git/PR state, review and merge green full-vertical PRs, never main/#39 |
+| **Codex** `gpt-5.6-terra` **high**         | Primary orchestrator: fire this loop, own Git/PR state, review and merge green full-vertical PRs, never main/#39 |
 | **Codex sub-agents**, same model/reasoning | Implement bounded task packets or independent review in parallel when scopes do not conflict                     |
 | **MiniMax-M3**                             | Optional text/research assistance during waits; never sole implementer, reviewer, or acceptance authority        |
 
@@ -63,7 +63,7 @@ _Orchestrator must rewrite this table when a residual slice merges._
 ### A) Tip-merge active residual PR only
 
 ```text
-codex exec -m gpt-5.6-sol -c model_reasoning_effort="medium" --ephemeral -
+codex exec -m gpt-5.6-terra -c model_reasoning_effort="high" --ephemeral -
 # tip-merge PR N onto origin/feature/matrix-rust-sdk-full-replacement;
 # resolve mod.rs by union; fmt; cargo test --lib <module>; push; do not merge
 ```
