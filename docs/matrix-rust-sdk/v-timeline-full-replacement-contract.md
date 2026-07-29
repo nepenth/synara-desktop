@@ -168,6 +168,19 @@ delta batch, or a Tauri command payload. The presenter may render sticker or
 attachment media only after this complete route and bounded resolver readback
 exist; a per-kind URL workaround is not an acceptable partial replacement.
 
+### Cross-vertical protocol ownership gate
+
+`V-ROOMS.1` establishes the application's sole `synara-media` URI-protocol
+registration for opaque invite-avatar capabilities. `V-TIMELINE` must extend
+that one native protocol owner after the candidates are integrated; it must
+not register a second handler for the same scheme or route an opaque timeline
+handle through the invite-avatar store. The shared resolver dispatches only
+after validating the handle in its typed, session-scoped native registry, then
+uses that registry's retained source and media policy. This is a sequencing
+gate, not a Matrix Rust SDK gap: the timeline registry foundation is currently
+unattached, so timeline media remains pending until the shared owner has a
+single authoritative readback for both capability classes.
+
 ## Acceptance evidence
 
 Completion requires retained-behavior proof for focused links, live and unread
