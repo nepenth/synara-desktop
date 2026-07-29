@@ -20,10 +20,6 @@ import {
   useUnverifiedDeviceCount,
   VerificationStatus,
 } from '../../../hooks/useDeviceVerificationStatus';
-import {
-  useSecretStorageDefaultKeyId,
-  useSecretStorageKeyContent,
-} from '../../../hooks/useSecretStorage';
 import { useCrossSigning } from '../../../hooks/useCrossSigning';
 import { BackupRestoreTile } from '../../../components/BackupRestore';
 import { isNativeMatrixSession } from '../../verification/nativeVerification';
@@ -50,23 +46,10 @@ export function Devices({ requestClose }: DevicesProps) {
   const [devices, refreshDeviceList] = useDeviceList();
 
   const [currentDevice, otherDevices] = useSplitCurrentDevice(devices);
-  const verificationStatus = useDeviceVerificationStatus(
-    crypto,
-    mx.getSafeUserId(),
-    currentDevice?.device_id
-  );
+  const verificationStatus = useDeviceVerificationStatus(currentDevice?.device_id);
 
   const otherDevicesId = useDeviceIds(otherDevices);
-  const unverifiedDeviceCount = useUnverifiedDeviceCount(
-    crypto,
-    mx.getSafeUserId(),
-    otherDevicesId
-  );
-
-  const defaultSecretStorageKeyId = useSecretStorageDefaultKeyId();
-  const defaultSecretStorageKeyContent = useSecretStorageKeyContent(
-    defaultSecretStorageKeyId ?? ''
-  );
+  const unverifiedDeviceCount = useUnverifiedDeviceCount(otherDevicesId);
 
   return (
     <Page>
@@ -148,15 +131,9 @@ export function Devices({ requestClose }: DevicesProps) {
                     >
                       {crypto && <DeviceKeyDetails crypto={crypto} />}
                     </DeviceTile>
-                    {crossSigningActive &&
-                      verificationStatus === VerificationStatus.Unverified &&
-                      (nativeSession || crypto) && (
-                        <VerifyCurrentDeviceTile
-                          crypto={crypto}
-                          secretStorageKeyId={defaultSecretStorageKeyId}
-                          secretStorageKeyContent={defaultSecretStorageKeyContent}
-                        />
-                      )}
+                    {crossSigningActive && verificationStatus === VerificationStatus.Unverified && (
+                      <VerifyCurrentDeviceTile />
+                    )}
                     {!nativeSession &&
                       crypto &&
                       verificationStatus === VerificationStatus.Verified && (

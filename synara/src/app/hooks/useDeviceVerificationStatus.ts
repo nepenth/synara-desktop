@@ -1,14 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
-import { CryptoApi } from 'matrix-js-sdk/lib/crypto-api';
-import { verifiedDevice } from '../utils/matrix-crypto';
 import { useAlive } from './useAlive';
 import { fulfilledPromiseSettledResult } from '../utils/common';
-import { useMatrixClient } from './useMatrixClient';
-import { useDeviceListChange } from './useDeviceList';
-import {
-  getNativeDeviceVerificationStatus,
-  isNativeMatrixSession,
-} from '../features/verification/nativeVerification';
+import { getNativeDeviceVerificationStatus } from '../features/verification/nativeVerification';
 
 export enum VerificationStatus {
   Unknown,
@@ -18,129 +11,71 @@ export enum VerificationStatus {
 }
 
 export const useDeviceVerificationDetect = (
-  crypto: CryptoApi | undefined,
-  userId: string,
   deviceId: string | undefined,
   callback: (status: VerificationStatus) => void
 ): void => {
-  const mx = useMatrixClient();
-  const nativeSession = isNativeMatrixSession();
-
   const updateStatus = useCallback(async () => {
-    if (nativeSession) {
-      if (!deviceId) {
-        callback(VerificationStatus.Unknown);
-        return;
-      }
-      try {
-        const status = await getNativeDeviceVerificationStatus(deviceId);
-        callback(
-          status === 'verified'
-            ? VerificationStatus.Verified
-            : status === 'unverified'
-            ? VerificationStatus.Unverified
-            : VerificationStatus.Unsupported
-        );
-      } catch {
-        callback(VerificationStatus.Unsupported);
-      }
+    if (!deviceId) {
+      callback(VerificationStatus.Unknown);
       return;
     }
-    if (crypto && deviceId) {
-      const data = await verifiedDevice(crypto, userId, deviceId);
-      if (data === null) {
-        callback(VerificationStatus.Unsupported);
-        return;
-      }
-      callback(data ? VerificationStatus.Verified : VerificationStatus.Unverified);
-      return;
+    try {
+      const status = await getNativeDeviceVerificationStatus(deviceId);
+      callback(
+        status === 'verified'
+          ? VerificationStatus.Verified
+          : status === 'unverified'
+          ? VerificationStatus.Unverified
+          : VerificationStatus.Unsupported
+      );
+    } catch {
+      callback(VerificationStatus.Unsupported);
     }
-    callback(VerificationStatus.Unknown);
-  }, [nativeSession, crypto, deviceId, userId, callback]);
+  }, [deviceId, callback]);
 
   useEffect(() => {
     updateStatus();
-  }, [mx, updateStatus, userId]);
+  }, [updateStatus]);
 
   useEffect(() => {
-    if (!nativeSession) return undefined;
     const interval = window.setInterval(() => void updateStatus(), 1_000);
     return () => window.clearInterval(interval);
-  }, [nativeSession, updateStatus]);
-
-  useDeviceListChange(
-    useCallback(
-      (userIds) => {
-        if (userIds.includes(userId)) {
-          updateStatus();
-        }
-      },
-      [userId, updateStatus]
-    ),
-    !nativeSession
-  );
+  }, [updateStatus]);
 };
 
-export const useDeviceVerificationStatus = (
-  crypto: CryptoApi | undefined,
-  userId: string,
-  deviceId: string | undefined
-): VerificationStatus => {
+export const useDeviceVerificationStatus = (deviceId: string | undefined): VerificationStatus => {
   const [verificationStatus, setVerificationStatus] = useState(VerificationStatus.Unknown);
 
-  useDeviceVerificationDetect(crypto, userId, deviceId, setVerificationStatus);
+  useDeviceVerificationDetect(deviceId, setVerificationStatus);
 
   return verificationStatus;
 };
 
-export const useUnverifiedDeviceCount = (
-  crypto: CryptoApi | undefined,
-  userId: string,
-  devices: string[]
-): number | undefined => {
+export const useUnverifiedDeviceCount = (devices: string[]): number | undefined => {
   const [unverifiedCount, setUnverifiedCount] = useState<number>();
   const alive = useAlive();
-  const nativeSession = isNativeMatrixSession();
 
   const updateCount = useCallback(async () => {
     let count = 0;
-    if (nativeSession) {
-      const result = await Promise.allSettled(
-        devices.map((deviceId) => getNativeDeviceVerificationStatus(deviceId))
-      );
-      const settledResult = fulfilledPromiseSettledResult(result);
-      settledResult.forEach((status) => {
-        if (status === 'unverified') count += 1;
-      });
-    } else if (crypto) {
-      const promises = devices.map((deviceId) => verifiedDevice(crypto, userId, deviceId));
-      const result = await Promise.allSettled(promises);
-      const settledResult = fulfilledPromiseSettledResult(result);
-      settledResult.forEach((status) => {
-        if (status === false) {
-          count += 1;
-        }
-      });
-    }
+    const result = await Promise.allSettled(
+      devices.map((deviceId) => getNativeDeviceVerificationStatus(deviceId))
+    );
+    const settledResult = fulfilledPromiseSettledResult(result);
+    settledResult.forEach((status) => {
+      if (status === 'unverified') count += 1;
+    });
     if (alive()) {
       setUnverifiedCount(count);
     }
-  }, [nativeSession, crypto, userId, devices, alive]);
-
-  useDeviceListChange(
-    useCallback(
-      (userIds) => {
-        if (userIds.includes(userId)) {
-          updateCount();
-        }
-      },
-      [userId, updateCount]
-    ),
-    !nativeSession
-  );
+  }, [devices, alive]);
 
   useEffect(() => {
     updateCount();
+  }, [updateCount]);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => void updateCount(), 1_000);
+    return () => window.clearInterval(interval);
   }, [updateCount]);
 
   return unverifiedCount;

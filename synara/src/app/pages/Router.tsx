@@ -59,7 +59,7 @@ import { MobileFriendlyPageNav, MobileFriendlyClientNav } from './MobileFriendly
 import { ClientInitStorageAtom } from './client/ClientInitStorageAtom';
 import { ClientNonUIFeatures } from './client/ClientNonUIFeatures';
 import { AuthRouteThemeManager, UnAuthRouteThemeManager } from './ThemeManager';
-import { ReceiveSelfDeviceVerification } from '../components/DeviceVerification';
+import { NativeVerificationInboxRenderer } from '../features/verification/NativeDeviceVerification';
 import { AutoRestoreBackupOnVerification } from '../components/BackupRestore';
 import { RoomSettingsRenderer } from '../features/room-settings';
 import { ClientRoomsNotificationPreferences } from './client/ClientRoomsNotificationPreferences';
@@ -160,7 +160,7 @@ export const createRouter = (clientConfig: ClientConfig, screenSize: ScreenSize)
                       <CreateSpaceModalRenderer />
                       <RoomSettingsRenderer />
                       <SpaceSettingsRenderer />
-                      <ReceiveSelfDeviceVerification />
+                      <NativeVerificationInboxRenderer />
                       <AutoRestoreBackupOnVerification />
                     </ClientNonUIFeatures>
                   </ClientBindAtoms>

@@ -1,11 +1,11 @@
 # V-CRYPTO.1 — native device verification product ownership
 
-| Field                 | Value                                                                 |
-| --------------------- | --------------------------------------------------------------------- |
-| Status                | **Product wiring merged #223; physical deletion open (V-CRYPTO.1-D)** |
-| Scope                 | Device-verification request, SAS comparison, and completion UX        |
-| Product path          | UI → Tauri IPC → managed `matrix_sdk::Client`                         |
-| Follow-up crypto rows | V-CRYPTO.2–V-CRYPTO.7 remain open                                     |
+| Field                 | Value                                                          |
+| --------------------- | -------------------------------------------------------------- |
+| Status                | **Done — native owner plus physical legacy deletion**          |
+| Scope                 | Device-verification request, SAS comparison, and completion UX |
+| Product path          | UI → Tauri IPC → managed `matrix_sdk::Client`                  |
+| Follow-up crypto rows | V-CRYPTO.2–V-CRYPTO.7 remain open                              |
 
 ## Product ownership
 
@@ -23,11 +23,9 @@ device-verification flow:
 - dismiss terminal requests from the product inbox.
 
 The app-level incoming request renderer, current-device verification action,
-other-device verification action, verification status checks, and cross-signing
-readiness display select this native owner for a native session. The legacy
-matrix-js-sdk components remain reachable only for a legacy web/non-native
-session. Under the clarified full-vertical policy, that retained implementation
-is a blocking deletion residual rather than an accepted steady state.
+other-device verification action, and verification status checks use this
+native owner. The retained settings presentation is SDK-neutral and takes only
+device IDs; it does not select a legacy verification implementation.
 
 Native client bootstrap explicitly skips `MatrixClient.initRustCrypto()` and
 does not install the matrix-js-sdk verification inbox. It first restores or
@@ -82,12 +80,19 @@ configured accounts all execute against the live SDK.
 - Pure host projection and product ownership helpers have scoped tests.
 - Rust formatting/check/tests and touched TypeScript formatting/typecheck pass.
 
-## Blocking deletion residual — V-CRYPTO.1-D
+## Deletion evidence
 
-Delete the legacy matrix-js-sdk verification implementation, inbox/listeners,
-`CryptoApi`/verification type imports, and native-vs-legacy product branches.
-Preserve reusable presentation as SDK-neutral UI over native DTOs. Record the
-deleted-file/import delta before marking V-CRYPTO.1 done.
+V-CRYPTO.1 physically removed the legacy verification component, request hook,
+request inbox, crypto helper, verification helper, and JS-only verification
+test. The router now renders `NativeVerificationInboxRenderer` directly;
+status and settings verification tiles are native DTO/device-ID consumers.
+
+The generated SDK inventory records the capability delta as **-8 production
+importers / -10 production import lines**, plus **-1 test importer / -2 test
+import lines**: desktop-runtime direct imports moved from **232 files / 292
+lines** to **223 files / 280 lines**. The P1.6 allowlist was regenerated from
+220 to 212 production paths. Device list sourcing, device deletion/UIA,
+cross-signing setup/reset, backup, and secret storage remain separate owners.
 
 ## Remaining named crypto residuals
 
