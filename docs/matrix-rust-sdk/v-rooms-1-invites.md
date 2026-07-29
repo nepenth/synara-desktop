@@ -31,11 +31,15 @@ Matrix client, so the native owner replaces that media-resolution step too.
 
 ```text
 Invite inbox mount or refocus
-  → matrix_invites_snapshot
+  → matrix_session_snapshot + matrix_sync_status + matrix_invites_snapshot
   → active native Client::rooms (invited + joined state-store view)
   → invite DTO/classification + opaque avatar capability
   → SDK-neutral React cards and counts
 ```
+
+The Invite notification gate reads the native sync readiness projection too;
+the webview must not mix a native invite snapshot with legacy JS sync state when
+deciding whether a newly observed invitation is live.
 
 ```text
 Accept / decline / report / block control
@@ -103,7 +107,8 @@ executes all actions, and reads the native snapshot after each side effect.
   and the three avatar-capability lifecycle tests pass on this candidate.
 - Scoped frontend Prettier, ESLint, and `tsc --noEmit` pass. The Invite page,
   list binding, and obsolete invite-list hooks have no `matrix-js-sdk` import
-  or JS room/action listener.
+  or JS room/action listener. The notification gate likewise reads the native
+  `matrix_sync_status` projection, rather than consulting legacy JS sync state.
 - The generated inventory measures **201 → 198** desktop-runtime production
   import files on this pre-V-AUTH.1 base. This is intentionally a branch-local
   measurement, not an assertion update: after V-AUTH.1 merges, this candidate

@@ -26,8 +26,13 @@ export type NativeInviteSnapshot = {
   invites: NativeInvite[];
 };
 
+type NativeSyncReadiness = {
+  readiness: 'unconfigured' | 'idle' | 'running' | 'offline' | 'terminated' | 'failed';
+};
+
 const emptyInviteSnapshot: NativeInviteSnapshot = { sessionGeneration: 0, invites: [] };
 const nativeInviteSnapshotAtom = atom<NativeInviteSnapshot>(emptyInviteSnapshot);
+const nativeInviteSyncingAtom = atom(false);
 
 // Counts and badges derive from Rust-owned invite data. Keeping the legacy
 // string-shaped read atom avoids spreading the native DTO through unrelated UI.
@@ -36,9 +41,11 @@ export const allInvitesAtom = atom((get) =>
 );
 
 export const useNativeInvites = (): NativeInviteSnapshot => useAtomValue(nativeInviteSnapshotAtom);
+export const useNativeInviteSyncing = (): boolean => useAtomValue(nativeInviteSyncingAtom);
 
 export const useBindAllInvitesAtom = () => {
   const setSnapshot = useSetAtom(nativeInviteSnapshotAtom);
+  const setSyncing = useSetAtom(nativeInviteSyncingAtom);
 
   useEffect(() => {
     let disposed = false;
@@ -54,7 +61,14 @@ export const useBindAllInvitesAtom = () => {
         if (disposed || !session.available) return;
         if (session.value?.status !== 'logged_in') {
           setSnapshot(emptyInviteSnapshot);
+          setSyncing(false);
           return;
+        }
+        const syncStatus = await invokeDesktopWithAvailability<NativeSyncReadiness>(
+          'matrix_sync_status'
+        );
+        if (!disposed && syncStatus.available && syncStatus.value) {
+          setSyncing(syncStatus.value.readiness === 'running');
         }
         const result = await invokeDesktopWithAvailability<NativeInviteSnapshot>(
           'matrix_invites_snapshot'
@@ -70,6 +84,7 @@ export const useBindAllInvitesAtom = () => {
 
     if (!isSynaraDesktop()) {
       setSnapshot(emptyInviteSnapshot);
+      setSyncing(false);
       return undefined;
     }
 
@@ -79,7 +94,7 @@ export const useBindAllInvitesAtom = () => {
       disposed = true;
       window.clearInterval(pollId);
     };
-  }, [setSnapshot]);
+  }, [setSnapshot, setSyncing]);
 };
 
 type NativeSessionSnapshot = { status: 'logged_out' | 'logged_in' };
