@@ -67,8 +67,11 @@ TimelineViewSnapshot
 message/rich body and relation state, sticker/media handles, poll, membership,
 state, call, redacted, encrypted-unavailable, and bounded unknown/developer
 rows; it also includes presentation rows for dates, unread marker, read marker,
-intro, and pagination. It never includes a `MatrixClient`, `Room`, `MatrixEvent`,
-raw event graph/content, ciphertext, media bytes, tokens, or SDK/Ruma types.
+intro, and pagination. Date separators carry their neutral SDK timestamp; the
+SDK-neutral presenter formats it for its locale rather than Rust inventing a
+machine-local day key. The boundary never includes a `MatrixClient`, `Room`,
+`MatrixEvent`, raw event graph/content, ciphertext, media bytes, tokens, or
+SDK/Ruma types.
 
 The version-one Rust `TimelineViewSnapshot`/`TimelineViewRow` contract now
 exists in `src-tauri/src/matrix/timeline/view.rs`, including opaque media

@@ -6,7 +6,10 @@
 //! subscription are deliberately separate follow-up work; this module fixes
 //! the stable shape that those owners must produce.
 
-use matrix_sdk_ui::timeline::{EventTimelineItem, MsgLikeKind, TimelineItemContent};
+use matrix_sdk_ui::timeline::{
+    EventTimelineItem, MsgLikeKind, TimelineItem as SdkTimelineItem, TimelineItemContent,
+    VirtualTimelineItem,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::matrix::dto::{EventId, RoomId, TimelineItemId, UserId};
@@ -187,6 +190,29 @@ pub fn project_event_row(item_id: &str, event: &EventTimelineItem) -> TimelineVi
     }
 }
 
+/// Project one SDK item without allowing the SDK object graph to cross the
+/// presenter boundary. The SDK supplies only three virtual item kinds; native
+/// unread and pagination rows are synthesized later by their respective
+/// read-frontier and pagination owners.
+pub fn project_timeline_item(item: &SdkTimelineItem) -> TimelineViewRow {
+    let item_id = item.unique_id().0.clone();
+    if let Some(event) = item.as_event() {
+        return project_event_row(&item_id, event);
+    }
+
+    match item.as_virtual() {
+        Some(VirtualTimelineItem::DateDivider(timestamp)) => TimelineViewRow::DateSeparator {
+            item_id,
+            // The renderer formats this neutral instant for its locale. Rust
+            // must not invent a day key using a machine-local timezone.
+            timestamp_ms: timestamp.get().into(),
+        },
+        Some(VirtualTimelineItem::ReadMarker) => TimelineViewRow::ReadMarker { item_id },
+        Some(VirtualTimelineItem::TimelineStart) => TimelineViewRow::TimelineStart { item_id },
+        None => other_row(&item_id, None, "Unsupported timeline item"),
+    }
+}
+
 fn other_row(item_id: &str, event_id: Option<EventId>, summary: &str) -> TimelineViewRow {
     TimelineViewRow::Other(TimelineOtherRow {
         item_id: item_id.to_owned(),
@@ -297,7 +323,9 @@ pub enum TimelineViewRow {
     Other(TimelineOtherRow),
     DateSeparator {
         item_id: TimelineItemId,
-        day_key: String,
+        /// The SDK separator's local-day instant in milliseconds. Locale
+        /// rendering belongs to the SDK-neutral presenter, not the Rust host.
+        timestamp_ms: u64,
     },
     ReadMarker {
         item_id: TimelineItemId,
