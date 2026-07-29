@@ -133,7 +133,7 @@ test("tracks full-vertical execution and requires per-vertical deletion policy",
   assert.match(rendered, /Current full-vertical product execution/);
   assert.match(rendered, /full-vertical-delete-per-vertical/);
   assert.match(rendered, /Wired \/ deletion open/);
-  assert.match(rendered, /222 files \/ 275 import lines current/);
+  assert.match(rendered, /222 files \/ 279 import lines current/);
   assert.match(rendered, /negative capability-owner\/file deletion delta/);
   assert.match(rendered, /Integration product state: `between-slices-paused`/);
   assert.match(rendered, /Active slice: \*\*None\*\*/);

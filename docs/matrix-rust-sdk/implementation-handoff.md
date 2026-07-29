@@ -38,7 +38,7 @@ the operating model, or the canonical status ledger.
 | **Already wired**            | D0 core #214/#216/#218/#219/#220; V-CRYPTO.3–.4 #225–#226; V-CRYPTO.1–.2 complete                                                                             |
 | **Deletion residuals**       | V-CRYPTO.3-D backup → V-CRYPTO.4-D secret storage; drain before V-CRYPTO.6                                                                                    |
 | **Next product work**        | V-CRYPTO.3-D backup deletion → .4-D → V-CRYPTO.6 UTD recovery → V-CRYPTO.7 devices/trust                                                                      |
-| **Import baseline**          | 232 files / 292 direct import lines → 222 / 275 after V-CRYPTO.2-D; record a non-increasing global delta plus a negative capability-owner/file deletion delta |
+| **Import baseline**          | 232 files / 292 direct import lines → 222 / 279 after V-CRYPTO.2-D; record a non-increasing global delta plus a negative capability-owner/file deletion delta |
 | **Held**                     | #221 plateau; L1-only notify/call/media/helper PRs unless they block the active vertical                                                                      |
 | **Runtime truth**            | Native product cutover is underway capability-by-capability; relevant JS owners remain until deletion residuals close; **dual_backend false**                 |
 | **Strict gates**             | Original-plan inventory ~74/112; 0/15 strict phase gates closed. Inventory is not product completion.                                                         |

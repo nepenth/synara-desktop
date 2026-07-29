@@ -53,7 +53,7 @@ obsolete tests/types before closure.
   and JS-only test are deleted, with direct desktop-runtime imports 232/292 → 223/280.
 - V-CRYPTO.2 native cross-signing is complete: its legacy setup/status/reset owner,
   account-data fallback, and compatibility types are deleted, with direct
-  desktop-runtime imports 223/280 → 222/275.
+  desktop-runtime imports 223/280 → 222/279.
 - V-CRYPTO.3–.4 remain **wired / deletion open** because relevant JS crypto
   imports and conditional legacy implementations remain.
 - V-CRYPTO.5 merged in #227 and is complete under the per-vertical deletion policy: the retained product path has one Rust IPC owner, and the legacy WebView owner/browser crypto helper are deleted.

@@ -83,7 +83,7 @@ The superseded matrix-js-sdk cross-signing setup/status/reset owner,
 account-data status fallback, account-management reset action, and compatibility
 types are deleted. Native setup UI and DTO actions remain the sole cross-signing
 product path. Direct desktop-runtime inventory moved from **223 files / 280
-import lines** to **222 / 275**; production importers moved **212 → 211** and the
+import declarations** to **222 / 279**; production importers moved **212 → 211** and the
 component bucket moved **41 → 40**.
 
 ## Remaining named crypto residuals
