@@ -12,8 +12,11 @@ use eyeball_im::VectorDiff;
 use futures_util::StreamExt;
 use matrix_sdk::{
     ruma::{
+    ruma::{
+        api::client::receipt::create_receipt::v3::ReceiptType,
         events::{reaction::ReactionEventContent, relation::Annotation},
         OwnedEventId, OwnedRoomId, OwnedUserId,
+    },
     },
     Client,
 };
@@ -100,6 +103,32 @@ pub enum NativeTimelineDirection {
 pub struct NativeTimelineViewPaginationRequest {
     pub stream_id: String,
     pub direction: NativeTimelineDirection,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum NativeTimelineReadAction {
+    MarkRead,
+    MarkUnread,
+}
+
+/// A read-state transition always targets one opened native timeline view.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NativeTimelineReadStateRequest {
+    pub stream_id: String,
+    pub action: NativeTimelineReadAction,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NativeTimelineReadStateReadback {
+    pub action: NativeTimelineReadAction,
+    /// `None` for an account-data unread-flag change; otherwise whether the
+    /// SDK actually sent a private read receipt.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub receipt_sent: Option<bool>,
+    pub snapshot: TimelineViewSnapshot,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -437,27 +466,131 @@ impl NativeTimelineRegistry {
     pub async fn paginate(
         &mut self,
         client: &Client,
-    request: NativeTimelineViewPaginationRequest,
-    ) -> Result<TimelineViewSnapshot,
-    &'static str> {         let (room_id,
-    timeline,
-    position,
-    pagination) = {             let stream = self                 .view_streams                 .get_mut(&request.stream_id)                 .ok_or("v-timeline-view-not-open")?;             let reached_end = match request.direction {                 NativeTimelineDirection::Backwards => stream                     .timeline                     .paginate_backwards(PAGINATION_BATCH_SIZE)                     .await                     .map_err(|_| "v-timeline-view-paginate-backwards-failed")?,
-    NativeTimelineDirection::Forwards => stream                     .timeline                     .paginate_forwards(PAGINATION_BATCH_SIZE)                     .await                     .map_err(|_| "v-timeline-view-paginate-forwards-failed")?,
-    };             if request.direction == NativeTimelineDirection::Backwards {                 stream.hit_start = reached_end;             }             (                 stream.room_id.clone(),
-    stream.timeline.clone(),
-    stream.position.clone(),
-    TimelinePaginationState {                     backward: if stream.hit_start {                         TimelinePageState::Exhausted                     } else {                         TimelinePageState::Available                     },
-    forward: TimelinePageState::Available,
-    },
-    )         };         let revision = self             .view_revisions             .get(&request.stream_id)             .ok_or("v-timeline-view-revision-missing")?             .load(Ordering::Acquire);         Ok(view_snapshot_from_timeline(             self.session_generation,
-    room_id,
-    pagination,
-    &timeline,
-    client.user_id().map(ToOwned::to_owned),
-    revision,
-    )         .await)     }      pub async fn paginate_legacy(         &mut self,
-        room_id: &str,
+        request: NativeTimelineViewPaginationRequest,
+    ) -> Result<TimelineViewSnapshot, &'static str> {
+        let (room_id, timeline, position, pagination) = {
+            let stream = self
+                .view_streams
+                .get_mut(&request.stream_id)
+                .ok_or("v-timeline-view-not-open")?;
+            let reached_end = match request.direction {
+                NativeTimelineDirection::Backwards => stream
+                    .timeline
+                    .paginate_backwards(PAGINATION_BATCH_SIZE)
+                    .await
+                    .map_err(|_| "v-timeline-view-paginate-backwards-failed")?,
+                NativeTimelineDirection::Forwards => stream
+                    .timeline
+                    .paginate_forwards(PAGINATION_BATCH_SIZE)
+                    .await
+                    .map_err(|_| "v-timeline-view-paginate-forwards-failed")?,
+            };
+            if request.direction == NativeTimelineDirection::Backwards {
+                stream.hit_start = reached_end;
+            }
+            (
+                stream.room_id.clone(),
+                stream.timeline.clone(),
+                stream.position.clone(),
+                TimelinePaginationState {
+                    backward: if stream.hit_start {
+                        TimelinePageState::Exhausted
+                    } else {
+                        TimelinePageState::Available
+                    },
+                    forward: TimelinePageState::Available,
+                },
+            )
+        };
+        let revision = self
+            .view_revisions
+            .get(&request.stream_id)
+            .ok_or("v-timeline-view-revision-missing")?
+            .load(Ordering::Acquire);
+        Ok(view_snapshot_from_timeline(
+            self.session_generation,
+            room_id,
+            position,
+            pagination,
+            &timeline,
+            client.user_id().map(ToOwned::to_owned),
+            revision,
+        )
+        .await)
+    }
+
+    pub async fn set_read_state(
+        &mut self,
+        client: &Client,
+        request: NativeTimelineReadStateRequest,
+    ) -> Result<NativeTimelineReadStateReadback, &'static str> {
+        let timeline = self
+            .view_streams
+            .get(&request.stream_id)
+            .ok_or("v-timeline-view-not-open")?
+            .timeline
+            .clone();
+        let receipt_sent = match request.action {
+            NativeTimelineReadAction::MarkRead => Some(
+                timeline
+                    .mark_as_read(ReceiptType::ReadPrivate)
+                    .await
+                    .map_err(|_| "v-timeline-view-mark-read-failed")?,
+            ),
+            NativeTimelineReadAction::MarkUnread => {
+                timeline
+                    .room()
+                    .set_unread_flag(true)
+                    .await
+                    .map_err(|_| "v-timeline-view-mark-unread-failed")?;
+                None
+            }
+        };
+        let snapshot = self
+            .view_snapshot_for_stream(client, &request.stream_id)
+            .await?;
+        Ok(NativeTimelineReadStateReadback {
+            action: request.action,
+            receipt_sent,
+            snapshot,
+        })
+    }
+
+    async fn view_snapshot_for_stream(
+        &self,
+        client: &Client,
+        stream_id: &str,
+    ) -> Result<TimelineViewSnapshot, &'static str> {
+        let stream = self
+            .view_streams
+            .get(stream_id)
+            .ok_or("v-timeline-view-not-open")?;
+        let revision = self
+            .view_revisions
+            .get(stream_id)
+            .ok_or("v-timeline-view-revision-missing")?
+            .load(Ordering::Acquire);
+        Ok(view_snapshot_from_timeline(
+            self.session_generation,
+            stream.room_id.clone(),
+            stream.position.clone(),
+            TimelinePaginationState {
+                backward: if stream.hit_start {
+                    TimelinePageState::Exhausted
+                } else {
+                    TimelinePageState::Available
+                },
+                forward: TimelinePageState::Available,
+            },
+            &stream.timeline,
+            client.user_id().map(ToOwned::to_owned),
+            revision,
+        )
+        .await)
+    }
+
+    pub async fn paginate_legacy(
+        &mut self,        room_id: &str,
         direction: NativeTimelineDirection,
     ) -> Result<NativeTimelineSnapshot, &'static str> {
         let room_id = parse_room_id(room_id)?.to_string();
@@ -940,8 +1073,34 @@ impl NativeTimelineRegistry {
     timeline: &Timeline,
     own_user_id: Option<OwnedUserId>,
     rows: Vec<super::TimelineViewRow>,
-    ) -> TimelineViewSnapshot {     let own_read_event_id = match own_user_id.as_ref() {         Some(user_id) => timeline             .latest_user_read_receipt_timeline_event_id(&user_id)             .await             .map(|event_id| event_id.to_string()),
-}
+) -> TimelineViewSnapshot {
+    let own_read_event_id = match own_user_id.as_ref() {
+        Some(user_id) => timeline
+            .latest_user_read_receipt_timeline_event_id(&user_id)
+            .await
+            .map(|event_id| event_id.to_string()),
+        None => None,
+    };
+    TimelineViewSnapshot {
+        schema_version: TIMELINE_VIEW_SCHEMA_VERSION,
+        session_generation,
+        room_id,
+        revision,
+        position,
+        pagination,
+        read_state: TimelineReadState {
+            own_read_event_id,
+            unread_anchor_event_id: None,
+            is_marked_unread: timeline.room().is_marked_unread(),
+        },
+        rows,
+        capabilities: TimelineViewCapabilities {
+            mark_read: true,
+            mark_unread: true,
+            paginate_backward: true,
+            paginate_forward: true,
+        },
+    }}
 
 fn parse_room_id(room_id: &str) -> Result<OwnedRoomId, &'static str> {
     OwnedRoomId::try_from(room_id.trim()).map_err(|_| "d0.3-timeline-invalid-room-id")
@@ -1260,6 +1419,7 @@ mod tests {
                 read_state: TimelineReadState {
                     own_read_event_id: None,
                     unread_anchor_event_id: None,
+                    is_marked_unread: false,
                 },
                 rows: Vec::new(),
                 capabilities: TimelineViewCapabilities {
@@ -1276,6 +1436,7 @@ mod tests {
         assert_eq!(snapshot["roomId"], "!room:example.org");
         assert!(snapshot.get("isEncrypted").is_none());
         assert!(snapshot.get("items").is_none());
+        assert_eq!(snapshot["readState"]["isMarkedUnread"], false);
     }
 
     #[test]
@@ -1308,6 +1469,17 @@ mod tests {
             "focused:!room:example.org:$one:example.org"
         );
         assert_eq!(request.direction, NativeTimelineDirection::Backwards);
+    }
+
+    #[test]
+    fn read_state_request_targets_the_opened_stream_and_action() {
+        let request: NativeTimelineReadStateRequest = serde_json::from_value(serde_json::json!({
+            "streamId": "live:!room:example.org",
+            "action": "mark_unread"
+        }))
+        .unwrap();
+        assert_eq!(request.stream_id, "live:!room:example.org");
+        assert_eq!(request.action, NativeTimelineReadAction::MarkUnread);
     }
 
     #[test]

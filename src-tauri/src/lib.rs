@@ -326,6 +326,7 @@ pub fn run() {
             matrix::auth::product::matrix_timeline_open,
             matrix::auth::product::matrix_timeline_snapshot,
             matrix::auth::product::matrix_timeline_paginate,
+            matrix::auth::product::matrix_timeline_set_read_state,
             matrix::auth::product::matrix_timeline_event_readback,
             matrix::auth::product::matrix_timeline_reaction_toggle,
             matrix::auth::product::matrix_reaction_ensure,
