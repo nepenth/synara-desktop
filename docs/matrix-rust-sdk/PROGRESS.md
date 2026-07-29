@@ -9,20 +9,20 @@
 >
 > [docs/matrix-rust-sdk/PROGRESS.md](https://github.com/nepenth/synara-desktop/blob/feature/matrix-rust-sdk-full-replacement/docs/matrix-rust-sdk/PROGRESS.md)
 
-| Field              | Value                                                                                                                                                                  |
-| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Last updated (UTC) | **2026-07-29 ~12:16**                                                                                                                                                  |
-| Integration tip    | `0ba87f3` — V-CRYPTO.2 cross-signing ownership and physical deletion merged (#231)                                                                                     |
-| Active work        | **Paused between slices; no active implementation PR.** Next queued slice: V-CRYPTO.3-D backup deletion.                                                               |
-| Product runtime    | Native owns core D0 path and wired crypto surfaces; superseded JS implementations/imports remain deletion residuals                                                    |
-| Execution model    | Primary Codex + same-model sub-agents: `gpt-5.6-sol`, medium; MiniMax-M3 optional                                                                                      |
-| Import accounting  | V-CRYPTO.2 deletion moves production importers 212→211 and the component bucket 41→40. Direct desktop-runtime inventory is **222 files / 279 lines** (from 232 / 292). |
-| Dual backend       | **`false`** (forbidden forever)                                                                                                                                        |
-| Operating model    | [cutover-operating-model.md](cutover-operating-model.md)                                                                                                               |
-| Machine ledger     | [program-status.md](program-status.md) (generated; do not hand-edit)                                                                                                   |
-| Short continuation | [CONTINUATION.md](CONTINUATION.md)                                                                                                                                     |
-| Full handoff       | [implementation-handoff.md](implementation-handoff.md)                                                                                                                 |
-| Umbrella → main    | [PR #39](https://github.com/nepenth/synara-desktop/pull/39) — **do not merge without explicit user approval**                                                          |
+| Field              | Value                                                                                                                                                            |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Last updated (UTC) | **2026-07-29 ~12:26**                                                                                                                                            |
+| Integration tip    | `a5a76b1` — bounded operating-path contract merged (#232)                                                                                                        |
+| Active work        | **Paused between slices; no active implementation PR.** Next queued slice: V-CRYPTO.4-D secret-storage deletion.                                                 |
+| Product runtime    | Native owns core D0 path and wired crypto surfaces; superseded JS implementations/imports remain deletion residuals                                              |
+| Execution model    | Primary Codex + same-model sub-agents: `gpt-5.6-sol`, medium; MiniMax-M3 optional                                                                                |
+| Import accounting  | V-CRYPTO.3 deletion moves production importers 211→208; component 40→39, hook 54→53, state 14→13. Direct desktop-runtime inventory is **219 files / 276 lines**. |
+| Dual backend       | **`false`** (forbidden forever)                                                                                                                                  |
+| Operating model    | [cutover-operating-model.md](cutover-operating-model.md)                                                                                                         |
+| Machine ledger     | [program-status.md](program-status.md) (generated; do not hand-edit)                                                                                             |
+| Short continuation | [CONTINUATION.md](CONTINUATION.md)                                                                                                                               |
+| Full handoff       | [implementation-handoff.md](implementation-handoff.md)                                                                                                           |
+| Umbrella → main    | [PR #39](https://github.com/nepenth/synara-desktop/pull/39) — **do not merge without explicit user approval**                                                    |
 
 ---
 
@@ -30,7 +30,7 @@
 
 |               |                                                                                                                                                           |
 | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Now**       | **Paused between slices.** V-CRYPTO.1, V-CRYPTO.2, and V-CRYPTO.5 are done; resume with V-CRYPTO.3-D, then drain .4-D before V-CRYPTO.6. **#221 HOLD**.   |
+| **Now**       | **Paused between slices.** V-CRYPTO.1–.3 and V-CRYPTO.5 are done; resume with V-CRYPTO.4-D before V-CRYPTO.6. **#221 HOLD**.                              |
 | **Policy**    | [full-vertical-policy.md](full-vertical-policy.md)                                                                                                        |
 | **Tip**       | V-CRYPTO.2 merged — native cross-signing is the sole retained product owner.                                                                              |
 | **Active PR** | None; orchestration is intentionally paused at a clean slice boundary.                                                                                    |
@@ -63,6 +63,7 @@ Update rules:
 
 | When (UTC) | Item                         | Result                                                                | Notes                                                                                                                                         |
 | ---------- | ---------------------------- | --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| current    | **V-CRYPTO.3 key backup**    | **Done in deletion candidate**                                        | Legacy UI/listeners/progress/auto-restore deleted; native owner retained; direct imports 222/279 → 219/276.                                   |
 | ~12:16     | **V-CRYPTO.2 cross-signing** | **Merged** [#231](https://github.com/nepenth/synara-desktop/pull/231) | Tip `0ba87f3`; legacy setup/status/reset owner and fallback deleted; native owner retained; direct imports 223/280 → 222/279.                 |
 | earlier    | **V-CRYPTO.1 verification**  | **Merged** [#230](https://github.com/nepenth/synara-desktop/pull/230) | Tip `5c68b19`; legacy owner/inbox/hooks/helpers and JS-only test deleted; native owner retained; direct imports 232/292 → 223/280.            |
 | ~02:03     | **V-CRYPTO.5 closure**       | **Merged** [#227](https://github.com/nepenth/synara-desktop/pull/227) | Tip `146952a`; Rust owns room-key export/import, legacy owner/helper deleted, exact-head gates green.                                         |

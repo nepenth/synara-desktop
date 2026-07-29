@@ -2,7 +2,7 @@
 
 | Field                 | Value                                                                                 |
 | --------------------- | ------------------------------------------------------------------------------------- |
-| Status                | **Product wiring merged #225; physical deletion open (V-CRYPTO.3-D)**                 |
+| Status                | **DONE — native product owner; V-CRYPTO.3-D legacy deletion complete**                |
 | Scope                 | Server-side key-backup status, setup, restore, repair, and restore after verification |
 | Product path          | UI → Tauri IPC → managed `matrix_sdk::Client`                                         |
 | Follow-up crypto rows | V-CRYPTO.4–V-CRYPTO.7 remain open                                                     |
@@ -30,18 +30,15 @@ matrix-sdk determines that is necessary.
 
 Native clients use `BackupDownloadStrategy::OneShot`. Successful recovery and
 backup material received from a verified device therefore download backed-up
-room keys directly into the native crypto store. The
-`useRestoreBackupOnVerification` native path does not attach matrix-js-sdk
-crypto listeners or invoke `restoreKeyBackup`; matrix-sdk owns that transition.
+room keys directly into the native crypto store. Matrix-sdk owns recovery after
+verification through the same one-shot policy; the WebView does not attach a
+crypto listener or issue a duplicate restore action.
 
-For native sessions, `BackupRestore`, `useKeyBackup`, `backupRestore.ts`, and
-`LocalBackup` do not call matrix-js-sdk `CryptoApi` or initialize JS crypto.
-`LocalBackup` fails closed on the native path because encrypted room-key file
-import/export is the separately named retained room-key transfer surface in
-**V-CRYPTO.5**. It points users to the fully native server backup path rather
-than silently starting JS crypto. Legacy web/non-native sessions retain their
-existing components. Under the clarified full-vertical policy, that retained
-legacy implementation is a blocking deletion residual.
+`BackupRestore` and `useNativeKeyBackup` call only the native IPC owner and do
+not import matrix-js-sdk `CryptoApi` or initialize JS crypto.
+`LocalBackup` remains the separate native encrypted room-key file import/export
+surface completed in **V-CRYPTO.5**. This slice does not change that retained
+path or silently start JS crypto.
 
 ## Rust host and IPC
 
@@ -82,12 +79,15 @@ command errors use fixed product copy and stable diagnostic identifiers.
   scoped tests.
 - Rust formatting/tests/check and touched TypeScript formatting/typecheck pass.
 
-## Blocking deletion residual — V-CRYPTO.3-D
+## V-CRYPTO.3-D deletion complete
 
-Delete the matrix-js-sdk backup status/setup/restore/repair owner, crypto
-listeners, `CryptoApi`/backup type imports, and native-vs-legacy branches.
-Migrate useful UI/tests to the native projection. Record the deleted-file/import
-delta before marking V-CRYPTO.3 done.
+The matrix-js-sdk backup status/restore owner, crypto listeners, progress atom,
+automatic restore listener, `CryptoApi`/backup types, and native-vs-legacy UI
+branch are deleted. The retained settings tile owns setup, restore, repair, and
+status only through native DTOs and `matrix_backup_*` IPC. Direct desktop-runtime
+inventory moved from **222 files / 279 import declarations** to **219 / 276**;
+production importers moved **211 → 208**, with component **40 → 39**, hook
+**54 → 53**, and state **14 → 13**.
 
 ## Remaining named crypto residuals
 
