@@ -35,8 +35,10 @@ export function OtherDevices({ devices, refreshDeviceList, showVerification }: O
   const [working, setWorking] = useState(false);
   const [deleteFailed, setDeleteFailed] = useState(false);
   const [ssoWindow, setSsoWindow] = useState<Window>();
-  const pendingOperationIdRef = useRef<number | undefined>(undefined);
-  const authentication = challenge?.authentication[0];
+  const pendingOperationRef = useRef<
+    { operationId: number; sessionGeneration: number } | undefined
+  >(undefined);
+  const authentication = challenge?.authentication;
 
   const handleDashboardOIDC = useCallback(() => {
     const authUrl = authMetadata?.account_management_uri ?? authMetadata?.issuer;
@@ -72,12 +74,15 @@ export function OtherDevices({ devices, refreshDeviceList, showVerification }: O
   const applyDeleteResult = useCallback(
     async (result: NativeDeviceDeleteResult) => {
       if (result.outcome === 'authentication_required') {
-        pendingOperationIdRef.current = result.challenge.operationId;
+        pendingOperationRef.current = {
+          operationId: result.challenge.operationId,
+          sessionGeneration: result.challenge.sessionGeneration,
+        };
         setChallenge(result.challenge);
         setDeleteFailed(false);
         return;
       }
-      pendingOperationIdRef.current = undefined;
+      pendingOperationRef.current = undefined;
       setChallenge(undefined);
       setDeleted(new Set());
       setDeleteFailed(false);
@@ -110,7 +115,11 @@ export function OtherDevices({ devices, refreshDeviceList, showVerification }: O
     setDeleteFailed(false);
     try {
       await applyDeleteResult(
-        await authenticateNativeDeviceDeletePassword(challenge.operationId, password)
+        await authenticateNativeDeviceDeletePassword(
+          challenge.operationId,
+          challenge.sessionGeneration,
+          password
+        )
       );
     } catch {
       setDeleteFailed(true);
@@ -125,7 +134,9 @@ export function OtherDevices({ devices, refreshDeviceList, showVerification }: O
     setWorking(true);
     setDeleteFailed(false);
     try {
-      await applyDeleteResult(await acknowledgeNativeDeviceDeleteSso(challenge.operationId));
+      await applyDeleteResult(
+        await acknowledgeNativeDeviceDeleteSso(challenge.operationId, challenge.sessionGeneration)
+      );
     } catch {
       setDeleteFailed(true);
     } finally {
@@ -134,15 +145,23 @@ export function OtherDevices({ devices, refreshDeviceList, showVerification }: O
   }, [applyDeleteResult, challenge, working]);
 
   const cancelDelete = useCallback(async () => {
-    const operationId = challenge?.operationId;
-    pendingOperationIdRef.current = undefined;
+    const pendingOperation = challenge
+      ? {
+          operationId: challenge.operationId,
+          sessionGeneration: challenge.sessionGeneration,
+        }
+      : undefined;
+    pendingOperationRef.current = undefined;
     setChallenge(undefined);
     setDeleted(new Set());
     setDeleteFailed(false);
     ssoWindow?.close();
     setSsoWindow(undefined);
-    if (operationId !== undefined) {
-      await cancelNativeDeviceDelete(operationId).catch(() => undefined);
+    if (pendingOperation) {
+      await cancelNativeDeviceDelete(
+        pendingOperation.operationId,
+        pendingOperation.sessionGeneration
+      ).catch(() => undefined);
     }
   }, [challenge, ssoWindow]);
 
@@ -179,10 +198,13 @@ export function OtherDevices({ devices, refreshDeviceList, showVerification }: O
 
   useEffect(
     () => () => {
-      const operationId = pendingOperationIdRef.current;
-      pendingOperationIdRef.current = undefined;
-      if (operationId !== undefined) {
-        void cancelNativeDeviceDelete(operationId).catch(() => undefined);
+      const pendingOperation = pendingOperationRef.current;
+      pendingOperationRef.current = undefined;
+      if (pendingOperation) {
+        void cancelNativeDeviceDelete(
+          pendingOperation.operationId,
+          pendingOperation.sessionGeneration
+        ).catch(() => undefined);
       }
     },
     []

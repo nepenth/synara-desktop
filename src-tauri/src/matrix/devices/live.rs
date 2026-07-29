@@ -66,7 +66,7 @@ pub enum NativeDeviceDeleteAuthentication {
 pub struct NativeDeviceDeleteChallenge {
     pub operation_id: u64,
     pub session_generation: u64,
-    pub authentication: Vec<NativeDeviceDeleteAuthentication>,
+    pub authentication: NativeDeviceDeleteAuthentication,
     pub sso_fallback_url: Option<String>,
     pub authentication_failed: bool,
 }
@@ -253,8 +253,8 @@ mod tests {
     use matrix_sdk::ruma::api::client::uiaa::{AuthFlow, AuthType, UiaaInfo};
 
     use super::{
-        supported_delete_authentication, NativeDeviceDeleteAuthentication, NativeDeviceSnapshot,
-        NativeDeviceSummary, NativeDeviceTrust,
+        supported_delete_authentication, NativeDeviceDeleteAuthentication,
+        NativeDeviceDeleteChallenge, NativeDeviceSnapshot, NativeDeviceSummary, NativeDeviceTrust,
     };
 
     #[test]
@@ -314,5 +314,16 @@ mod tests {
         ] {
             assert!(!json.contains(forbidden));
         }
+
+        let challenge = NativeDeviceDeleteChallenge {
+            operation_id: 3,
+            session_generation: 7,
+            authentication: NativeDeviceDeleteAuthentication::Password,
+            sso_fallback_url: None,
+            authentication_failed: false,
+        };
+        let challenge_json = serde_json::to_string(&challenge).unwrap();
+        assert!(challenge_json.contains(r#""authentication":"password""#));
+        assert!(!challenge_json.contains(r#""authentication":["#));
     }
 }
