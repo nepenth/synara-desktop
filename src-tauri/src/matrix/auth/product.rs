@@ -1274,6 +1274,7 @@ pub async fn matrix_invites_block_sender(
 
 #[tauri::command]
 pub async fn matrix_timeline_open(
+    app: AppHandle,
     state: State<'_, MatrixAuthState>,
     request: NativeTimelineOpenRequest,
 ) -> Result<NativeTimelineOpenReadback, MatrixAuthCommandError> {
@@ -1281,7 +1282,7 @@ pub async fn matrix_timeline_open(
     let active = require_session_mut(session.as_mut())?;
     active
         .timelines
-        .open_at(&active.client, request)
+        .open_at(app, &active.client, request)
         .await
         .map_err(map_timeline_error)
 }

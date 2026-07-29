@@ -6,6 +6,9 @@
 //! subscription are deliberately separate follow-up work; this module fixes
 //! the stable shape that those owners must produce.
 
+use std::sync::Arc;
+
+use eyeball_im::VectorDiff;
 use matrix_sdk::ruma::UserId as RumaUserId;
 use matrix_sdk_ui::timeline::{
     EventTimelineItem, MsgLikeKind, TimelineDetails, TimelineItem as SdkTimelineItem,
@@ -16,6 +19,7 @@ use serde::{Deserialize, Serialize};
 use crate::matrix::dto::{EventId, RoomId, TimelineItemId, UserId};
 
 pub const TIMELINE_VIEW_SCHEMA_VERSION: u32 = 1;
+pub const NATIVE_TIMELINE_VIEW_UPDATED_EVENT: &str = "matrix-timeline-view-updated";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
@@ -452,4 +456,80 @@ pub struct TimelineViewSnapshot {
     pub read_state: TimelineReadState,
     pub rows: Vec<TimelineViewRow>,
     pub capabilities: TimelineViewCapabilities,
+}
+
+/// One ordered native update to a `TimelineViewSnapshot` row list. This mirrors
+/// every SDK `VectorDiff` variant so the presenter never has to infer or poll
+/// a missing mutation.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "op", rename_all = "snake_case")]
+pub enum TimelineViewDeltaOp {
+    Append { rows: Vec<TimelineViewRow> },
+    Clear,
+    PushFront { row: TimelineViewRow },
+    PushBack { row: TimelineViewRow },
+    PopFront,
+    PopBack,
+    Insert { index: usize, row: TimelineViewRow },
+    Set { index: usize, row: TimelineViewRow },
+    Remove { index: usize },
+    Truncate { len: usize },
+    Reset { rows: Vec<TimelineViewRow> },
+}
+
+/// A native timeline update emitted only from the managed SDK subscription.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TimelineViewDeltaBatch {
+    pub schema_version: u32,
+    pub session_generation: u64,
+    /// Matches `NativeTimelineOpenReadback.stream_id`; required to keep a
+    /// room's live and focused views from consuming one another's updates.
+    pub stream_id: String,
+    pub room_id: RoomId,
+    pub revision: u64,
+    pub ops: Vec<TimelineViewDeltaOp>,
+}
+
+/// Project one SDK delta batch while keeping SDK items and diffs in Rust.
+pub fn project_timeline_diffs(
+    diffs: &[VectorDiff<Arc<SdkTimelineItem>>],
+    own_user_id: Option<&RumaUserId>,
+) -> Vec<TimelineViewDeltaOp> {
+    diffs
+        .iter()
+        .map(|diff| match diff {
+            VectorDiff::Append { values } => TimelineViewDeltaOp::Append {
+                rows: values
+                    .iter()
+                    .map(|item| project_timeline_item(item, own_user_id))
+                    .collect(),
+            },
+            VectorDiff::Clear => TimelineViewDeltaOp::Clear,
+            VectorDiff::PushFront { value } => TimelineViewDeltaOp::PushFront {
+                row: project_timeline_item(value, own_user_id),
+            },
+            VectorDiff::PushBack { value } => TimelineViewDeltaOp::PushBack {
+                row: project_timeline_item(value, own_user_id),
+            },
+            VectorDiff::PopFront => TimelineViewDeltaOp::PopFront,
+            VectorDiff::PopBack => TimelineViewDeltaOp::PopBack,
+            VectorDiff::Insert { index, value } => TimelineViewDeltaOp::Insert {
+                index: *index,
+                row: project_timeline_item(value, own_user_id),
+            },
+            VectorDiff::Set { index, value } => TimelineViewDeltaOp::Set {
+                index: *index,
+                row: project_timeline_item(value, own_user_id),
+            },
+            VectorDiff::Remove { index } => TimelineViewDeltaOp::Remove { index: *index },
+            VectorDiff::Truncate { length } => TimelineViewDeltaOp::Truncate { len: *length },
+            VectorDiff::Reset { values } => TimelineViewDeltaOp::Reset {
+                rows: values
+                    .iter()
+                    .map(|item| project_timeline_item(item, own_user_id))
+                    .collect(),
+            },
+        })
+        .collect()
 }
