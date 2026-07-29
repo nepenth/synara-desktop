@@ -103,10 +103,11 @@
       "V-CRYPTO.1",
       "V-CRYPTO.2",
       "V-CRYPTO.3",
+      "V-CRYPTO.4",
       "V-CRYPTO.5"
     ],
-    "wired_deletion_open": ["V-CRYPTO.4"],
-    "next_slices": ["V-CRYPTO.4-D", "V-CRYPTO.6", "V-CRYPTO.7"],
+    "wired_deletion_open": [],
+    "next_slices": ["V-CRYPTO.6", "V-CRYPTO.7"],
     "held_prs": [221],
     "completion_evidence": {
       "capability_owner_delta": "negative",
@@ -118,8 +119,8 @@
         "import_lines": 292
       },
       "current": {
-        "files": 219,
-        "import_lines": 276
+        "files": 218,
+        "import_lines": 275
       }
     }
   },

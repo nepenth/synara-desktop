@@ -14,10 +14,10 @@ Totals below count **import files** (static, `require()`, or dynamic `import()`)
 
 | Role       | Import files | Networking files | Networking findings |
 | ---------- | -----------: | ---------------: | ------------------: |
-| production |          208 |                2 |                   3 |
+| production |          207 |                2 |                   3 |
 | test       |           11 |                8 |                  30 |
 | tooling    |            3 |                2 |                   5 |
-| **total**  |      **222** |                  |                     |
+| **total**  |      **221** |                  |                     |
 
 ### Role definitions
 
@@ -31,15 +31,15 @@ This section is the plan §4 baseline: production and test import files under `s
 
 | Metric                  | Count |
 | ----------------------- | ----: |
-| Production import files |   208 |
+| Production import files |   207 |
 | Test import files       |    11 |
-| Total import files      |   219 |
+| Total import files      |   218 |
 
 ### Plan comparison
 
 Expected **220** production and **12** test import files.
 
-- Production match: **no** (found 208)
+- Production match: **no** (found 207)
 - Test match: **no** (found 11)
 
 ### Production files by bucket (desktop runtime only)
@@ -47,7 +47,7 @@ Expected **220** production and **12** test import files.
 | Bucket           | Files |
 | ---------------- | ----: |
 | client-lifecycle |     2 |
-| component        |    39 |
+| component        |    38 |
 | feature          |    58 |
 | hook             |    53 |
 | media-boundary   |     1 |
@@ -59,7 +59,7 @@ Expected **220** production and **12** test import files.
 
 ## Aggregates: production
 
-Scope: **production only**. Import files: 208. Files with any finding: 210.
+Scope: **production only**. Import files: 207. Files with any finding: 209.
 
 ### Imported modules
 
@@ -70,8 +70,8 @@ Scope: **production only**. Import files: 208. Files with any finding: 210.
 | `matrix-js-sdk/lib/@types/spaces`                     |            6 |     6 |
 | `matrix-js-sdk/lib/models/event`                      |            6 |     6 |
 | `matrix-js-sdk/lib/@types/event`                      |            5 |     5 |
-| `matrix-js-sdk/lib/crypto-api`                        |            5 |     5 |
 | `matrix-js-sdk/lib/client`                            |            4 |     4 |
+| `matrix-js-sdk/lib/crypto-api`                        |            4 |     4 |
 | `matrix-js-sdk/lib/matrixrtc/CallMembership`          |            4 |     4 |
 | `matrix-js-sdk/lib/models/relations`                  |            4 |     4 |
 | `matrix-js-sdk/lib/models/room`                       |            4 |     4 |
@@ -155,7 +155,7 @@ Scope: **production only**. Import files: 208. Files with any finding: 210.
 | `room_methods`                 |    92 |                 0 |                   0 |                      0 |          0 |
 | `event_emitters_listeners`     |    30 |                 0 |                 148 |                      0 |          0 |
 | `sync_lifecycle`               |    16 |                12 |                   6 |                      0 |          0 |
-| `crypto_verification_recovery` |     9 |                 6 |                   4 |                      0 |          0 |
+| `crypto_verification_recovery` |     8 |                 6 |                   4 |                      0 |          0 |
 | `indexeddb_matrix_stores`      |     1 |                 0 |                   0 |                      2 |          0 |
 | `authenticated_media`          |     7 |                 9 |                   0 |                      0 |          0 |
 | `matrixrtc_calls`              |     5 |                 0 |                   8 |                      0 |          0 |
@@ -417,7 +417,6 @@ Scope: **tooling only**. Import files: 3. Files with any finding: 5.
 | `synara/src/app/components/JoinRulesSwitcher.tsx`                                                                             | production | yes     | component        | static       | `matrix-js-sdk`                                                                                                                                                           |
 | `synara/src/app/components/RenderMessageContent.tsx`                                                                          | production | yes     | component        | static       | `matrix-js-sdk`                                                                                                                                                           |
 | `synara/src/app/components/RoomSummaryLoader.tsx`                                                                             | production | yes     | component        | static       | `matrix-js-sdk`, `matrix-js-sdk/lib/@types/spaces`                                                                                                                        |
-| `synara/src/app/components/SecretStorage.tsx`                                                                                 | production | yes     | component        | static       | `matrix-js-sdk/lib/crypto-api`                                                                                                                                            |
 | `synara/src/app/components/ServerConfigsLoader.tsx`                                                                           | production | yes     | component        | static       | `matrix-js-sdk`                                                                                                                                                           |
 | `synara/src/app/components/SupportedUIAFlowsLoader.tsx`                                                                       | production | yes     | component        | static       | `matrix-js-sdk`                                                                                                                                                           |
 | `synara/src/app/components/create-room/CreateRoomAliasInput.tsx`                                                              | production | yes     | component        | static       | `matrix-js-sdk`                                                                                                                                                           |

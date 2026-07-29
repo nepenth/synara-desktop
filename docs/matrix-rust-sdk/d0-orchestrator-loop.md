@@ -42,22 +42,22 @@ authority even when implementation is delegated.
 1. **Do not merge** PRs that only plateau residual / dogfood-shell without full vertical acceptance
 2. Merge green **residual-completion / full vertical** product PR if Quality + Desktop package gates success
 3. Merge green **policy/docs** that enforce full-vertical + residual ledger
-4. If no merge: advance the next item from [d0-residual-completion.md](d0-residual-completion.md) — V-CRYPTO.4-D, then V-CRYPTO.6
+4. If no merge: advance the next item from [d0-residual-completion.md](d0-residual-completion.md) — V-CRYPTO.6
 5. Tip-merge **only** the active residual PR if BEHIND/CONFLICTING
 6. Update PROGRESS after residual lands
 7. Report short status; stop if disk &lt; 5 Gi free
 
 ## Current slice pointer
 
-| Slice         | Status                                        | Branch / PR                                                                  |
-| ------------- | --------------------------------------------- | ---------------------------------------------------------------------------- |
-| D0.1–D0.4     | Merged (partial debt → residual doc)          | tip history                                                                  |
-| V-CRYPTO.1–.3 | **DONE**                                      | Native owners; legacy verification, cross-signing, and backup owners deleted |
-| V-CRYPTO.4    | Product wiring merged #226; **deletion open** | debt = **V-CRYPTO.4-D**                                                      |
-| V-CRYPTO.5    | **DONE #227**                                 | Rust-only owner; legacy owner/helper deleted; gates green                    |
-| V-CRYPTO.6–.7 | Queued                                        | UTD recovery, then device/trust; wire + delete in each slice                 |
-| D0.6 plateau  | **#221 HOLD — do not merge as complete**      | rework → V-BURN later                                                        |
-| **Next**      | **V-CRYPTO.4-D** after the goal resumes       | final wired deletion residual; no active implementation PR                   |
+| Slice         | Status                                   | Branch / PR                                                                  |
+| ------------- | ---------------------------------------- | ---------------------------------------------------------------------------- |
+| D0.1–D0.4     | Merged (partial debt → residual doc)     | tip history                                                                  |
+| V-CRYPTO.1–.3 | **DONE**                                 | Native owners; legacy verification, cross-signing, and backup owners deleted |
+| V-CRYPTO.4    | **DONE in V-CRYPTO.4-D candidate**       | Native owner retained; legacy secret-storage owner deleted                   |
+| V-CRYPTO.5    | **DONE #227**                            | Rust-only owner; legacy owner/helper deleted; gates green                    |
+| V-CRYPTO.6–.7 | Queued                                   | UTD recovery, then device/trust; wire + delete in each slice                 |
+| D0.6 plateau  | **#221 HOLD — do not merge as complete** | rework → V-BURN later                                                        |
+| **Next**      | **V-CRYPTO.6**                           | UTD/history recovery; no active implementation PR                            |
 
 _Orchestrator must rewrite this table when a residual slice merges._
 
@@ -75,10 +75,9 @@ codex exec -m gpt-5.6-sol -c model_reasoning_effort="medium" --ephemeral -
 
 Use [d0-residual-completion.md](d0-residual-completion.md) + [full-vertical-policy.md](full-vertical-policy.md) + [operating-path-contract.md](operating-path-contract.md).
 
-**Full product rewire plus physical deletion** for the ID. For already-wired
-V-CRYPTO.4, use the named `-D` residual. One capability-bounded branch/PR;
-record deleted paths/import delta; close the row only when both ownership and
-deletion gates pass.
+**Full product rewire plus physical deletion** for the ID. One
+capability-bounded branch/PR; record deleted paths/import delta; close the row
+only when both ownership and deletion gates pass.
 
 ### C) Review
 
@@ -90,7 +89,7 @@ or a retained `Legacy*` / native-vs-JS branch for the claimed capability.
 - Merge #221 plateau as D0.6 complete
 - Open new media/widgets/registry verticals before residual queue allows
 - Open new notify/call L1 polish PRs
-- Start V-CRYPTO.6 while V-CRYPTO.4-D remains open
+- Start V-CRYPTO.7 while V-CRYPTO.6 remains open
 - Merge umbrella #39 or `main`
 - Claim phase-gate acceptance for crypto until V-CRYPTO complete
 
