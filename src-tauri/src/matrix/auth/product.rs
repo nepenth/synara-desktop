@@ -59,7 +59,8 @@ use crate::matrix::sync::{
     SyncServiceOwner,
 };
 use crate::matrix::timeline::{
-    NativeTimelineDirection, NativeTimelineRegistry, NativeTimelineSnapshot,
+    NativeTimelineDirection, NativeTimelineEventReadback, NativeTimelineRegistry,
+    NativeTimelineSnapshot,
 };
 use crate::matrix::verification::live::{
     NativeDeviceVerificationStatus, NativeVerificationInbox, NativeVerificationOwner,
@@ -947,11 +948,26 @@ pub async fn matrix_timeline_snapshot(
     state: State<'_, MatrixAuthState>,
     room_id: String,
 ) -> Result<NativeTimelineSnapshot, MatrixAuthCommandError> {
-    let session = state.session.lock().await;
-    let active = require_session(session.as_ref())?;
+    let mut session = state.session.lock().await;
+    let active = require_session_mut(session.as_mut())?;
     active
         .timelines
         .snapshot(&room_id)
+        .await
+        .map_err(map_timeline_error)
+}
+
+#[tauri::command]
+pub async fn matrix_timeline_event_readback(
+    state: State<'_, MatrixAuthState>,
+    room_id: String,
+    event_id: String,
+) -> Result<NativeTimelineEventReadback, MatrixAuthCommandError> {
+    let mut session = state.session.lock().await;
+    let active = require_session_mut(session.as_mut())?;
+    active
+        .timelines
+        .event_readback(&active.client, &room_id, &event_id)
         .await
         .map_err(map_timeline_error)
 }

@@ -32,13 +32,13 @@ the operating model, or the canonical status ledger.
 
 | Field                        | Current value                                                                                                                                                   |
 | ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Integration branch / tip** | `feature/matrix-rust-sdk-full-replacement` @ `38f0994` (V-CRYPTO.3 deletion [#233](https://github.com/nepenth/synara-desktop/pull/233)); re-fetch before acting |
+| **Integration branch / tip** | V-CRYPTO.6 candidate base `c2a002df90a3b9de1553bdc5843f7045949b427f`; re-fetch integration before review/merge                                      |
 | **Policy**                   | [Full vertical replacement](full-vertical-policy.md): no minima/plateau; **physical deletion per vertical**                                                     |
-| **Active product work**      | V-CRYPTO.4-D deletion candidate complete locally; no active PR                                                                                                  |
+| **Active product work**      | V-CRYPTO.6 automatic UTD/history-recovery candidate complete locally; no PR yet; live/UI proof not confirmed                                                    |
 | **Completed verticals**      | D0 core #214/#216/#218/#219/#220; V-CRYPTO.1–.5 have native owners and per-vertical legacy deletion complete                                                    |
-| **Deletion residuals**       | None for V-CRYPTO.1–.5; V-CRYPTO.4-D secret-storage deletion is complete                                                                                        |
-| **Next product work**        | V-CRYPTO.6 UTD recovery → V-CRYPTO.7 devices/trust                                                                                                              |
-| **Import baseline**          | 232 files / 292 direct import lines → 218 / 275 after V-CRYPTO.4-D; record a non-increasing global delta plus a negative capability-owner/file deletion delta   |
+| **Deletion residuals**       | V-CRYPTO.6 JS retry, per-event decrypt, pagination call, and Decrypted-listener ownership are deleted in the candidate                                           |
+| **Next product work**        | Review V-CRYPTO.6 automatic UTD recovery candidate → V-CRYPTO.7 devices/trust                                                                                   |
+| **Import baseline**          | 232 files / 292 direct import lines → 218 / 273 in the V-CRYPTO.6 candidate; generated production importer files remain 207                                     |
 | **Held**                     | #221 plateau; L1-only notify/call/media/helper PRs unless they block the active vertical                                                                        |
 | **Runtime truth**            | Native product cutover is underway capability-by-capability; relevant JS owners remain until deletion residuals close; **dual_backend false**                   |
 | **Strict gates**             | Original-plan inventory ~74/112; 0/15 strict phase gates closed. Inventory is not product completion.                                                           |
@@ -46,10 +46,10 @@ the operating model, or the canonical status ledger.
 
 ### Current next-owner procedure
 
-1. Re-fetch and verify integration remains at or after `38f0994`; confirm there is no active implementation PR.
-2. Resume with the bounded V-CRYPTO.6 UTD/history-recovery packet on Codex `gpt-5.6-sol` medium.
+1. Open the V-CRYPTO.6 PR from the candidate, then update `program-status.json`/`.md` with the real positive PR number before reviewed-SHA validation.
+2. Review the bounded V-CRYPTO.6 UTD/history-recovery candidate; runtime proof remains unconfirmed.
 3. Require each vertical/deletion residual to report deleted paths and importer/file count delta.
-4. Implement V-CRYPTO.6 and .7 as wire-plus-delete slices.
+4. After V-CRYPTO.6 lands, implement V-CRYPTO.7 as the next wire-plus-delete slice.
 5. Update [PROGRESS.md](PROGRESS.md), [d0-residual-completion.md](d0-residual-completion.md), and the short [CONTINUATION.md](CONTINUATION.md) in the same PR whenever the active pointer or residual status changes.
 
 Everything below this live snapshot is dated audit/history. It remains useful
@@ -550,10 +550,13 @@ Accepted notification findings that must be preserved:
 - FR-7.9-007: status `implemented` (retained UI). Settings Devices LocalBackup
   exportRoomKeysAsJson + encryptMegolmKeyFile → synara-keys.txt; import decrypt
   - importRoomKeysAsJson. Not server key backup (006). SC-061 compile-only ≠ pass.
-- FR-7.9-008: status `implemented`. Automatic UTD retry via
-  decryptAllTimelineEvent → attemptDecryption({isRetry:true}) on encrypted
-  pagination; EncryptedContent MatrixEventEvent.Decrypted re-render; permanent
-  UTD fallbacks. No dedicated Retry button.
+- FR-7.9-008: status `implemented candidate`. Automatic UTD readback is owned by
+  the managed Rust timeline: SDK event-cache insertion and its room-key
+  redecryptor cover encrypted pagination; P5.10/P8.7 project privacy-safe
+  pending/unavailable/recovered state; SDK key arrival replaces plaintext on the existing snapshot
+  loop. Existing Devices secret-storage/backup recovery is the guided action.
+  There is no dedicated Retry button. JS `decryptAllTimelineEvent`, per-event
+  `attemptDecryption`, and `EncryptedContent` listener ownership are deleted.
 - FR-7.9-009: status `implemented`. Key-backup state listeners in
   `useKeyBackup.ts` (KeyBackupStatus / SessionsRemaining / Failed /
   DecryptionKeyCached) drive BackupRestore Connected/Disconnected/Syncing/

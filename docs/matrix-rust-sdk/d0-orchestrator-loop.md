@@ -42,7 +42,7 @@ authority even when implementation is delegated.
 1. **Do not merge** PRs that only plateau residual / dogfood-shell without full vertical acceptance
 2. Merge green **residual-completion / full vertical** product PR if Quality + Desktop package gates success
 3. Merge green **policy/docs** that enforce full-vertical + residual ledger
-4. If no merge: advance the next item from [d0-residual-completion.md](d0-residual-completion.md) — V-CRYPTO.6
+4. If no merge: review V-CRYPTO.6; after it lands, advance V-CRYPTO.7 from [d0-residual-completion.md](d0-residual-completion.md)
 5. Tip-merge **only** the active residual PR if BEHIND/CONFLICTING
 6. Update PROGRESS after residual lands
 7. Report short status; stop if disk &lt; 5 Gi free
@@ -55,9 +55,10 @@ authority even when implementation is delegated.
 | V-CRYPTO.1–.3 | **DONE**                                 | Native owners; legacy verification, cross-signing, and backup owners deleted |
 | V-CRYPTO.4    | **DONE in V-CRYPTO.4-D candidate**       | Native owner retained; legacy secret-storage owner deleted                   |
 | V-CRYPTO.5    | **DONE #227**                            | Rust-only owner; legacy owner/helper deleted; gates green                    |
-| V-CRYPTO.6–.7 | Queued                                   | UTD recovery, then device/trust; wire + delete in each slice                 |
+| V-CRYPTO.6    | **DONE candidate**                       | Automatic native UTD/history recovery; legacy retry/listener owners deleted |
+| V-CRYPTO.7    | Queued                                   | Device/trust; wire + delete                                                   |
 | D0.6 plateau  | **#221 HOLD — do not merge as complete** | rework → V-BURN later                                                        |
-| **Next**      | **V-CRYPTO.6**                           | UTD/history recovery; no active implementation PR                            |
+| **Next**      | **Review V-CRYPTO.6, then V-CRYPTO.7**   | Device list/trust follows the UTD recovery candidate                         |
 
 _Orchestrator must rewrite this table when a residual slice merges._
 

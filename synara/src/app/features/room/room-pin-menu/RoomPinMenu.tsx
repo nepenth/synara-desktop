@@ -64,7 +64,7 @@ import { RenderMessageContent } from '../../../components/RenderMessageContent';
 import { useSetting } from '../../../state/hooks/settings';
 import { settingsAtom } from '../../../state/settings';
 import * as customHtmlCss from '../../../styles/CustomHtml.css';
-import { EncryptedContent } from '../message';
+import { NativeEventContent } from '../message';
 import { Image } from '../../../components/media';
 import { ImageViewer } from '../../../components/image-viewer';
 import { useRoomNavigate } from '../../../hooks/useRoomNavigate';
@@ -360,13 +360,13 @@ export const RoomPinMenu = forwardRef<HTMLDivElement, RoomPinMenuProps>(
           }
 
           return (
-            <EncryptedContent mEvent={mEvent}>
-              {() => {
-                if (mEvent.isRedacted()) return <RedactedContent />;
-                if (mEvent.getType() === MessageEvent.Sticker)
+            <NativeEventContent roomId={room.roomId} mEvent={mEvent}>
+              {(resolvedEvent) => {
+                if (resolvedEvent.isRedacted()) return <RedactedContent />;
+                if (resolvedEvent.getType() === MessageEvent.Sticker)
                   return (
                     <MSticker
-                      content={mEvent.getContent()}
+                      content={resolvedEvent.getContent()}
                       renderImageContent={(props) => (
                         <ImageContent
                           {...props}
@@ -377,18 +377,22 @@ export const RoomPinMenu = forwardRef<HTMLDivElement, RoomPinMenuProps>(
                       )}
                     />
                   );
-                if (mEvent.getType() === MessageEvent.RoomMessage) {
-                  const editedEvent = getEditedEvent(eventId, mEvent, evtTimeline.getTimelineSet());
+                if (resolvedEvent.getType() === MessageEvent.RoomMessage) {
+                  const editedEvent = getEditedEvent(
+                    eventId,
+                    resolvedEvent,
+                    evtTimeline.getTimelineSet()
+                  );
                   const getContent = (() =>
                     editedEvent?.getContent()['m.new_content'] ??
-                    mEvent.getContent()) as GetContentCallback;
+                    resolvedEvent.getContent()) as GetContentCallback;
 
                   return (
                     <RenderMessageContent
                       displayName={displayName}
-                      msgType={mEvent.getContent().msgtype ?? ''}
-                      ts={mEvent.getTs()}
-                      edited={!!editedEvent || !!mEvent.replacingEvent()}
+                      msgType={resolvedEvent.getContent().msgtype ?? ''}
+                      ts={resolvedEvent.getTs()}
+                      edited={!!editedEvent || !!resolvedEvent.replacingEvent()}
                       getContent={getContent}
                       mediaAutoLoad={mediaAutoLoad}
                       htmlReactParserOptions={htmlReactParserOptions}
@@ -401,7 +405,7 @@ export const RoomPinMenu = forwardRef<HTMLDivElement, RoomPinMenuProps>(
                     />
                   );
                 }
-                if (mEvent.getType() === MessageEvent.RoomMessageEncrypted)
+                if (resolvedEvent.getType() === MessageEvent.RoomMessageEncrypted)
                   return (
                     <Text>
                       <MessageNotDecryptedContent />
@@ -413,7 +417,7 @@ export const RoomPinMenu = forwardRef<HTMLDivElement, RoomPinMenuProps>(
                   </Text>
                 );
               }}
-            </EncryptedContent>
+            </NativeEventContent>
           );
         },
         [MessageEvent.Sticker]: (event, displayName, getContent) => {
