@@ -24,7 +24,7 @@ pub struct SyncServiceConfig {
 impl Default for SyncServiceConfig {
     fn default() -> Self {
         Self {
-            // Dogfood path prefers automatic recovery from transient outages.
+            // The partial path prefers automatic recovery from transient outages.
             offline_mode: true,
         }
     }

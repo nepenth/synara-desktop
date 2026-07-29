@@ -60,9 +60,9 @@ Required check name remains **Desktop package gate** (must always report).
 | `workflow_dispatch` | **Always run** full smoke (“when ready”) |
 | Push `release/**` | Run (workflow path filters) |
 
-Rationale: during dogfood rewire, packaging every `src-tauri` PR was ~15–20m of
+Rationale: during partial-path rewire, packaging every `src-tauri` PR was ~15–20m of
 wall clock with little signal. Validate + Quality gate remain the merge bar for
-integration. Run a full package smoke manually before dogfood builds / main.
+integration. Run a full package smoke manually before release-candidate builds / main.
 
 ## Residual cost
 

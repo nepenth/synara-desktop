@@ -137,12 +137,12 @@ test("tracks full-vertical execution and requires per-vertical deletion policy",
   assert.match(rendered, /negative capability-owner\/file deletion delta/);
   assert.match(
     rendered,
-    /Integration product state: `capability-cutover-in-progress`/
+    /Integration product state: `between-slices-paused`/
   );
-  assert.match(rendered, /Active slice: \*\*V-CRYPTO\.7\*\* \(PR #236\)/);
+  assert.match(rendered, /Active slice: \*\*None\*\*/);
   assert.match(
     rendered,
-    /Completed under full policy: `V-CRYPTO\.1`, `V-CRYPTO\.2`, `V-CRYPTO\.3`, `V-CRYPTO\.4`, `V-CRYPTO\.5`, `V-CRYPTO\.6`/
+    /Completed under full policy: `V-CRYPTO\.1`, `V-CRYPTO\.2`, `V-CRYPTO\.3`, `V-CRYPTO\.4`, `V-CRYPTO\.5`, `V-CRYPTO\.6`, `V-CRYPTO\.7`/
   );
 
   const wrongPolicy = clone(status);
@@ -177,14 +177,16 @@ test("tracks full-vertical execution and requires per-vertical deletion policy",
   );
 
   const pausedWithActiveWork = clone(status);
-  pausedWithActiveWork.vertical_execution.integration_product_state =
-    "between-slices-paused";
+  pausedWithActiveWork.vertical_execution.active_slice = "V-AUTH.1";
+  pausedWithActiveWork.vertical_execution.active_pr = 237;
   assert.throws(
     () => validateProgramStatus(pausedWithActiveWork, plan),
     /between-slices-paused requires null active_slice and active_pr/
   );
 
   const resumedWithoutActiveWork = clone(status);
+  resumedWithoutActiveWork.vertical_execution.integration_product_state =
+    "capability-cutover-in-progress";
   resumedWithoutActiveWork.vertical_execution.active_slice = null;
   resumedWithoutActiveWork.vertical_execution.active_pr = null;
   assert.throws(
