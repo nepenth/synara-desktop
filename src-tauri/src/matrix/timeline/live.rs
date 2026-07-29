@@ -20,7 +20,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::matrix::{
     dto::TimelineEncryptedUnavailableItem,
-    utd_recovery::{UtdRecoveryCoordinator, UtdRecoveryKind, UtdRecoveryPhase},
+    utd_recovery::{UtdRecoveryCoordinator, UtdRecoveryKind},
 };
 
 use super::{UtdIndex, UtdPhase, UtdReasonCode};
@@ -346,11 +346,17 @@ impl NativeTimelineRegistry {
             .iter()
             .filter(|item| item.decryption_state == Some(NativeDecryptionState::Unavailable))
             .count() as u32;
-        if pending_count > 0 && self.utd_recovery.get(&room_id).is_none() {
+        let utd_count = pending_count.saturating_add(unavailable_count);
+        let needs_recovery_session = self
+            .utd_recovery
+            .get(&room_id)
+            .map(|session| !session.phase.is_active())
+            .unwrap_or(true);
+        if utd_count > 0 && needs_recovery_session {
             let pending_ids = snapshot
                 .items
                 .iter()
-                .filter(|item| item.decryption_state == Some(NativeDecryptionState::Pending))
+                .filter(|item| item.decryption_state.is_some())
                 .take(crate::matrix::utd_recovery::MAX_EVENT_IDS_PER_BATCH)
                 .map(|item| item.event_id.clone())
                 .collect();
@@ -365,18 +371,13 @@ impl NativeTimelineRegistry {
         if let Some(session) = self.utd_recovery.get(&room_id).cloned() {
             if session.phase.is_active() {
                 let recovered = session.recovered_count.saturating_add(newly_recovered);
-                if pending_count == 0 {
+                if utd_count == 0 {
                     self.utd_recovery
-                        .succeed(&room_id, session.op_id, recovered, unavailable_count)
+                        .succeed(&room_id, session.op_id, recovered, 0)
                         .map_err(|_| "v-crypto.6-recovery-state-failed")?;
                 } else {
                     self.utd_recovery
-                        .report_progress(
-                            &room_id,
-                            session.op_id,
-                            newly_recovered,
-                            pending_count.saturating_add(unavailable_count),
-                        )
+                        .report_progress(&room_id, session.op_id, newly_recovered, utd_count)
                         .map_err(|_| "v-crypto.6-recovery-state-failed")?;
                 }
             }
@@ -637,6 +638,50 @@ mod tests {
         assert_eq!(decrypted.utd.pending_count, 0);
         assert_eq!(decrypted.utd.recovered_count, 1);
         assert_eq!(decrypted.items[0].body, "clear text");
+
+        let first_op_id = registry
+            .utd_recovery
+            .get("!room:example.org")
+            .unwrap()
+            .op_id;
+        let mut later_pending = NativeTimelineSnapshot {
+            items: vec![NativeTimelineItem {
+                item_id: "item-2".into(),
+                event_id: "$event-2".into(),
+                body: UTD_PLACEHOLDER.into(),
+                event_type: "m.room.encrypted".into(),
+                decryption_state: Some(NativeDecryptionState::Pending),
+                ..decrypted.items[0].clone()
+            }],
+            ..decrypted
+        };
+        registry
+            .reconcile_utd(&mut later_pending, UtdRecoveryKind::RetryDecrypt)
+            .unwrap();
+        let second_session = registry.utd_recovery.get("!room:example.org").unwrap();
+        assert!(second_session.op_id > first_op_id);
+        assert!(second_session.phase.is_active());
+
+        later_pending.items[0].decryption_state = Some(NativeDecryptionState::Unavailable);
+        registry
+            .reconcile_utd(&mut later_pending, UtdRecoveryKind::RetryDecrypt)
+            .unwrap();
+        assert_eq!(later_pending.utd.phase, NativeUtdPhase::Unavailable);
+
+        let mut later_decrypted = NativeTimelineSnapshot {
+            items: vec![NativeTimelineItem {
+                body: "later clear text".into(),
+                event_type: "m.room.message".into(),
+                decryption_state: None,
+                ..later_pending.items[0].clone()
+            }],
+            ..later_pending
+        };
+        registry
+            .reconcile_utd(&mut later_decrypted, UtdRecoveryKind::RetryDecrypt)
+            .unwrap();
+        assert_eq!(later_decrypted.utd.phase, NativeUtdPhase::Idle);
+        assert_eq!(later_decrypted.utd.recovered_count, 1);
     }
 
     #[test]
