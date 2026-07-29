@@ -1,6 +1,6 @@
 # V-CRYPTO.6 — automatic UTD/history recovery
 
-Status: **implemented candidate** on `matrix-rust/v-crypto-6-utd-recovery`.
+Status: **implemented candidate** in [#235](https://github.com/nepenth/synara-desktop/pull/235) on `matrix-rust/v-crypto-6-utd-recovery`.
 
 ## Retained operating path
 

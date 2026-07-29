@@ -53,10 +53,10 @@ authority even when implementation is delegated.
 | ------------- | ---------------------------------------- | ---------------------------------------------------------------------------- |
 | D0.1–D0.4     | Merged (partial debt → residual doc)     | tip history                                                                  |
 | V-CRYPTO.1–.3 | **DONE**                                 | Native owners; legacy verification, cross-signing, and backup owners deleted |
-| V-CRYPTO.4    | **DONE in V-CRYPTO.4-D candidate**       | Native owner retained; legacy secret-storage owner deleted                   |
+| V-CRYPTO.4    | **DONE #234**                            | Native owner retained; legacy secret-storage owner deleted                   |
 | V-CRYPTO.5    | **DONE #227**                            | Rust-only owner; legacy owner/helper deleted; gates green                    |
-| V-CRYPTO.6    | **DONE candidate**                       | Automatic native UTD/history recovery; legacy retry/listener owners deleted |
-| V-CRYPTO.7    | Queued                                   | Device/trust; wire + delete                                                   |
+| V-CRYPTO.6    | **ACTIVE #235 candidate**                | Automatic native UTD/history recovery; legacy retry/listener owners deleted  |
+| V-CRYPTO.7    | Queued                                   | Device/trust; wire + delete                                                  |
 | D0.6 plateau  | **#221 HOLD — do not merge as complete** | rework → V-BURN later                                                        |
 | **Next**      | **Review V-CRYPTO.6, then V-CRYPTO.7**   | Device list/trust follows the UTD recovery candidate                         |
 
