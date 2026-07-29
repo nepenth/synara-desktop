@@ -1,11 +1,11 @@
 # V-CRYPTO.4 — native secret-storage bootstrap and unlock
 
-| Field | Value |
-| --- | --- |
-| Status | **Done on `matrix-rust/v-crypto-4-secret-storage`** |
-| Scope | Secret-storage readiness, bootstrap, unlock/import, and recovery-key rotation |
-| Product path | UI → Tauri IPC → managed `matrix_sdk::Client` |
-| Follow-up crypto rows | V-CRYPTO.5–V-CRYPTO.7 remain open |
+| Field                 | Value                                                                         |
+| --------------------- | ----------------------------------------------------------------------------- |
+| Status                | **Product wiring merged #226; physical deletion open (V-CRYPTO.4-D)**         |
+| Scope                 | Secret-storage readiness, bootstrap, unlock/import, and recovery-key rotation |
+| Product path          | UI → Tauri IPC → managed `matrix_sdk::Client`                                 |
+| Follow-up crypto rows | V-CRYPTO.5–V-CRYPTO.7 remain open                                             |
 
 ## Product ownership
 
@@ -38,7 +38,8 @@ can proceed.
 For native sessions, `SecretStorage.tsx`, `useSecretStorage.ts`, and the Devices
 and Verification gates use this native path. The legacy account-data hooks and
 `matrix-js-sdk` secret-storage key checking/derivation remain available only to
-web and other non-native sessions. A missing desktop command or unavailable
+web and other non-native sessions. Under the clarified full-vertical policy,
+that retained implementation is a blocking deletion residual. A missing desktop command or unavailable
 SDK status fails closed with fixed recovery guidance; it never starts JS
 crypto.
 
@@ -70,7 +71,7 @@ Raw encrypted account-data bodies are inspected only inside Rust to project
 presence. Key IDs, key descriptions, encrypted secret bodies, private identity
 material, and raw SDK errors never cross IPC.
 
-## V-CRYPTO.4 done criteria
+## V-CRYPTO.4 product-wiring criteria met
 
 - Native-session readiness comes from the live managed Rust client.
 - Native bootstrap creates secret storage and exports the complete local
@@ -88,9 +89,16 @@ material, and raw SDK errors never cross IPC.
   cover the boundary.
 - Rust formatting/tests/check and touched TypeScript formatting/typecheck pass.
 
+## Blocking deletion residual — V-CRYPTO.4-D
+
+Delete the WebView secret-storage key derivation/checking owner, JS account-data
+recovery path, `matrix-js-sdk` crypto imports, and native-vs-legacy branches.
+Keep recovery material host-side and record the deleted-file/import delta before
+marking V-CRYPTO.4 done.
+
 ## Remaining named crypto residuals
 
-Closing this row does **not** close the V-CRYPTO vertical:
+Closing the deletion residual for this row does **not** close the V-CRYPTO vertical:
 
 - **V-CRYPTO.5** — interactive key sharing and retained advanced room-key
   import/export flows.

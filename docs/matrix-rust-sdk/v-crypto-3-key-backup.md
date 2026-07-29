@@ -1,11 +1,11 @@
 # V-CRYPTO.3 — native key-backup restore, setup, and repair
 
-| Field | Value |
-| --- | --- |
-| Status | **Done on `matrix-rust/v-crypto-3-key-backup`** |
-| Scope | Server-side key-backup status, setup, restore, repair, and restore after verification |
-| Product path | UI → Tauri IPC → managed `matrix_sdk::Client` |
-| Follow-up crypto rows | V-CRYPTO.4–V-CRYPTO.7 remain open |
+| Field                 | Value                                                                                 |
+| --------------------- | ------------------------------------------------------------------------------------- |
+| Status                | **Product wiring merged #225; physical deletion open (V-CRYPTO.3-D)**                 |
+| Scope                 | Server-side key-backup status, setup, restore, repair, and restore after verification |
+| Product path          | UI → Tauri IPC → managed `matrix_sdk::Client`                                         |
+| Follow-up crypto rows | V-CRYPTO.4–V-CRYPTO.7 remain open                                                     |
 
 ## Product ownership
 
@@ -40,7 +40,8 @@ For native sessions, `BackupRestore`, `useKeyBackup`, `backupRestore.ts`, and
 import/export is the separately named retained room-key transfer surface in
 **V-CRYPTO.5**. It points users to the fully native server backup path rather
 than silently starting JS crypto. Legacy web/non-native sessions retain their
-existing components.
+existing components. Under the clarified full-vertical policy, that retained
+legacy implementation is a blocking deletion residual.
 
 ## Rust host and IPC
 
@@ -64,7 +65,7 @@ recovery key is retained by matrix-sdk as required for the local crypto store
 and is zeroized in the command implementation without crossing IPC. All
 command errors use fixed product copy and stable diagnostic identifiers.
 
-## V-CRYPTO.3 done criteria
+## V-CRYPTO.3 product-wiring criteria met
 
 - Native-session status, setup, restore, and repair operate on the live managed
   Rust client.
@@ -81,9 +82,16 @@ command errors use fixed product copy and stable diagnostic identifiers.
   scoped tests.
 - Rust formatting/tests/check and touched TypeScript formatting/typecheck pass.
 
+## Blocking deletion residual — V-CRYPTO.3-D
+
+Delete the matrix-js-sdk backup status/setup/restore/repair owner, crypto
+listeners, `CryptoApi`/backup type imports, and native-vs-legacy branches.
+Migrate useful UI/tests to the native projection. Record the deleted-file/import
+delta before marking V-CRYPTO.3 done.
+
 ## Remaining named crypto residuals
 
-Closing this row does **not** close the V-CRYPTO vertical:
+Closing the deletion residual for this row does **not** close the V-CRYPTO vertical:
 
 - **V-CRYPTO.4** — full secret-storage bootstrap/unlock and identity-recovery
   UX beyond the SDK calls required by backup setup/restore/repair here.

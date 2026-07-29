@@ -1,18 +1,20 @@
 # Matrix Rust SDK Replacement — Execution Handoff
 
-Last updated: 2026-07-27
+Last updated: 2026-07-28
 
 Authoritative program plan: [`../matrix-rust-sdk-full-replacement-plan.md`](../matrix-rust-sdk-full-replacement-plan.md)
 
 **Canonical execution model:** [`cutover-operating-model.md`](cutover-operating-model.md)
-— capability vertical slices on the integration branch → atomic sole-owner
-cutover (Rust only) → burn down `matrix-js-sdk` → merge to `main` with approval.
-No runtime SDK selector; no dual live Matrix clients; clean-break re-login OK.
+— full capability verticals on the integration branch, including physical
+deletion of the superseded JS owner in each slice → final repository convergence
+and dependency removal → merge to `main` with approval. No runtime SDK selector;
+no dual live Matrix clients; clean-break re-login OK.
 
 **Live progress log (remote monitor):** [`PROGRESS.md`](PROGRESS.md) —
 https://github.com/nepenth/synara-desktop/blob/feature/matrix-rust-sdk-full-replacement/docs/matrix-rust-sdk/PROGRESS.md
 
 <!-- matrix-rust-program-status-link -->
+
 Current delivery and strict-acceptance state:
 [`program-status.md`](program-status.md) (generated from
 [`program-status.json`](program-status.json)).
@@ -22,41 +24,46 @@ Traceability artifacts:
 - [`feature-parity-traceability.json`](feature-parity-traceability.json)
 - [`feature-parity-traceability.md`](feature-parity-traceability.md)
 
-## Live continuation snapshot (2026-07-27)
+## Live continuation snapshot (2026-07-28)
 
 This section is the current handoff. The dated audit and former implementation
 ledger below remain historical evidence and must not override this snapshot,
 the operating model, or the canonical status ledger.
 
-| Field | Current value |
-|---|---|
-| **Integration branch / tip** | `feature/matrix-rust-sdk-full-replacement` @ `69f1087` (PR [#112](https://github.com/nepenth/synara-desktop/pull/112) P3.6; [#110](https://github.com/nepenth/synara-desktop/pull/110) P3.5). Re-fetch to confirm. |
-| **Operating model** | Capability-first vertical slices; atomic sole-owner cutover; js-sdk burn-down; **no** dual-backend/selector ([`cutover-operating-model.md`](cutover-operating-model.md)) |
-| **Strategy** | Prefer **product progress** (auth → session → sync …) over residual R0 formal thrash; clean-break re-login approved; no false phase-gate closes |
-| **R0.5 / REV-001** | **Merged and accepted** via PR [#86](https://github.com/nepenth/synara-desktop/pull/86) |
-| **R0.4 / REV-002/006/007** | **Merged and accepted** via PR [#87](https://github.com/nepenth/synara-desktop/pull/87) (path confinement) + PR [#94](https://github.com/nepenth/synara-desktop/pull/94) (native keyring vault + encrypted reopen evidence) |
-| **R0.6 / REV-003** | **Merged and accepted** via PR [#89](https://github.com/nepenth/synara-desktop/pull/89) — privacy-safe plan/layout/wipe/SDK errors; adversarial redaction fixtures |
-| **R0.3 / REV-004/005** | **Merged and accepted** via PR [#91](https://github.com/nepenth/synara-desktop/pull/91) (wire counters + stream-id authority) + PR [#92](https://github.com/nepenth/synara-desktop/pull/92) (topic→DTO bodies + secret/media reject) |
-| **R0.7 live adapters** | **Slices 1–4 merged** via PR [#96](https://github.com/nepenth/synara-desktop/pull/96)–[#102](https://github.com/nepenth/synara-desktop/pull/102). Strict acceptance **open**. Login under `matrix/auth/`; restore under `matrix/lifecycle/` |
-| **R0.8 formal reports** | **Slice 1 merged** via PR [#104](https://github.com/nepenth/synara-desktop/pull/104); strict acceptance **open**; **0** phase gates closed |
-| **P3.2 password/token login** | **Merged** via PR [#107](https://github.com/nepenth/synara-desktop/pull/107). Strict acceptance **open** |
-| **P3.5 session secret persist** | **Merged** via PR [#110](https://github.com/nepenth/synara-desktop/pull/110) — sealed vault + post-login persist + rotation. Strict acceptance **open** |
-| **P3.6 session restore** | **Merged** via PR [#112](https://github.com/nepenth/synara-desktop/pull/112) — vault→`Client::restore_session` + identity-scoped switch probe. Strict acceptance **open** |
-| **Active product work** | Merge P4.1 [#114](https://github.com/nepenth/synara-desktop/pull/114) + P4.2 [#115](https://github.com/nepenth/synara-desktop/pull/115); CI path filters [#113](https://github.com/nepenth/synara-desktop/pull/113) |
-| **Parked** | R0.2-E2 thrash; elaborate P3.7 dual-state; residual R0.8 churn unless real safety. #109 MiniMax helper non-priority |
-| **Next product slice** | Land P4.1 sync readiness → P4.2 room list → timeline toward dogfood sole-owner flip |
-| **Product runtime** | `matrix-js-sdk` only until atomic cutover; Rust = future sole owner foundation; **dual_backend false** |
-| **Progress** | See [`PROGRESS.md`](PROGRESS.md) + program-status ledger; 0/15 strict phase gates closed |
-| **Main PR** | [#39](https://github.com/nepenth/synara-desktop/pull/39) — do not merge without explicit user approval |
+| Field                        | Current value                                                                                                                                                 |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Integration branch / tip** | `feature/matrix-rust-sdk-full-replacement` @ `4b4d921` (V-CRYPTO.4 [#226](https://github.com/nepenth/synara-desktop/pull/226)); re-fetch before acting        |
+| **Policy**                   | [Full vertical replacement](full-vertical-policy.md): no minima/plateau; **physical deletion per vertical**                                                   |
+| **Active product work**      | V-CRYPTO.5 [#227](https://github.com/nepenth/synara-desktop/pull/227), draft/mergeable and CI-green; amend to delete its legacy room-key owner before closure |
+| **Already wired**            | D0 core #214/#216/#218/#219/#220; V-CRYPTO.1–.4 #223–#226                                                                                                     |
+| **Deletion residuals**       | V-CRYPTO.1-D verification → .2-D cross-signing → .3-D backup → .4-D secret storage; drain before V-CRYPTO.6                                                   |
+| **Next product work**        | Amend #227 → drain V-CRYPTO.1-D→.4-D → V-CRYPTO.6 UTD recovery → V-CRYPTO.7 devices/trust                                                                     |
+| **Import baseline**          | 232 files / 292 direct import lines; record a non-increasing global delta plus a negative capability-owner/file deletion delta for each completed vertical   |
+| **Held**                     | #221 plateau; L1-only notify/call/media/helper PRs unless they block the active vertical                                                                      |
+| **Runtime truth**            | Native product cutover is underway capability-by-capability; relevant JS owners remain until deletion residuals close; **dual_backend false**                 |
+| **Strict gates**             | Original-plan inventory ~74/112; 0/15 strict phase gates closed. Inventory is not product completion.                                                         |
+| **Main PR**                  | [#39](https://github.com/nepenth/synara-desktop/pull/39) — do not merge without explicit user approval                                                        |
+
+### Current next-owner procedure
+
+1. Re-fetch and verify the integration tip and [#227](https://github.com/nepenth/synara-desktop/pull/227) state.
+2. Do not accept #227 as V-CRYPTO.5 complete while `LegacyLocalBackup`, WebView keyfile crypto/FileSaver, or its native-vs-legacy branch remains.
+3. Require each vertical/deletion residual to report deleted paths and importer/file count delta.
+4. After #227 is corrected, drain V-CRYPTO.1-D→.4-D serially; then implement V-CRYPTO.6 and .7 as wire-plus-delete slices.
+5. Update [PROGRESS.md](PROGRESS.md), [d0-residual-completion.md](d0-residual-completion.md), and the short [CONTINUATION.md](CONTINUATION.md) in the same PR whenever the active pointer or residual status changes.
+
+Everything below this live snapshot is dated audit/history. It remains useful
+evidence, but old “next P3.2/P4.1,” `matrix-js-sdk-only`, or dogfood-minimum
+statements must not override the files linked above.
 
 ### R0.2 work landed before E1
 
-| Delivery | Evidence | State |
-|---|---|---|
-| Security threat model and owned risk register | PR #79, integration commit `239c04b` | Merged; R0.2 remains open |
+| Delivery                                                     | Evidence                             | State                     |
+| ------------------------------------------------------------ | ------------------------------------ | ------------------------- |
+| Security threat model and owned risk register                | PR #79, integration commit `239c04b` | Merged; R0.2 remains open |
 | Native-agent task/review governance contracts and validators | PR #80, integration commit `4ec78c7` | Merged; R0.2 remains open |
-| Phase 0 test/Synapse topology and evidence manifest | PR #81, integration commit `c358502` | Merged; R0.2 remains open |
-| CI full-history prerequisite for traceability validation | PR #83, integration commit `7ffd588` | Merged; prerequisite only |
+| Phase 0 test/Synapse topology and evidence manifest          | PR #81, integration commit `c358502` | Merged; R0.2 remains open |
+| CI full-history prerequisite for traceability validation     | PR #83, integration commit `7ffd588` | Merged; prerequisite only |
 
 R0.1 was accepted before this sequence. The entries above are corrective
 deliveries within R0.2, not additional original-plan features and not authority
@@ -83,17 +90,17 @@ accepted content byte-for-byte.
 
 Local acceptance evidence for that exact content:
 
-| Validation | Result |
-|---|---|
-| Independent frozen-tree review | **ACCEPT**, no remaining blocking correctness, lifecycle-integrity, schema/runtime, CLI-safety, security, or scope finding |
-| `npm run test:matrix-rust-traceability-tooling` | **86/86 PASS** |
-| `node --test scripts/__tests__/*.test.mjs` | **284/284 PASS** |
-| `npm run check:matrix-rust-guardrails` | **PASS**, 1,588 files checked |
-| `npm run check:matrix-rust-governance` | **PASS** |
-| `npm run check:quality-gates` | **PASS** |
-| Prettier 2.8.1 across the exact 11 paths | **PASS** |
-| `node --check` across all six production E1 scripts | **PASS** |
-| `git diff --check` and exact changed-path audit | **PASS** |
+| Validation                                          | Result                                                                                                                     |
+| --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| Independent frozen-tree review                      | **ACCEPT**, no remaining blocking correctness, lifecycle-integrity, schema/runtime, CLI-safety, security, or scope finding |
+| `npm run test:matrix-rust-traceability-tooling`     | **86/86 PASS**                                                                                                             |
+| `node --test scripts/__tests__/*.test.mjs`          | **284/284 PASS**                                                                                                           |
+| `npm run check:matrix-rust-guardrails`              | **PASS**, 1,588 files checked                                                                                              |
+| `npm run check:matrix-rust-governance`              | **PASS**                                                                                                                   |
+| `npm run check:quality-gates`                       | **PASS**                                                                                                                   |
+| Prettier 2.8.1 across the exact 11 paths            | **PASS**                                                                                                                   |
+| `node --check` across all six production E1 scripts | **PASS**                                                                                                                   |
+| `git diff --check` and exact changed-path audit     | **PASS**                                                                                                                   |
 
 CI provided two useful environment checks. The first E1 run failed because CI
 used a shallow checkout while the validator correctly requires pinned historical
@@ -141,16 +148,16 @@ Start with [`review-2026-07-25.md`](review-2026-07-25.md). It contains the
 reviewed commit range, finding-level evidence, validation results, R0.1–R0.8
 remediation tasks, and the corrected continuation sequence.
 
-| Field | Audited value |
-|---|---|
-| **Current status and next task** | See [`program-status.md`](program-status.md) |
-| **Integration branch** | `feature/matrix-rust-sdk-full-replacement` |
-| **Audited integration tip** | `edfefee499064b736985b6528896b693e5120f22` (always re-fetch and verify) |
-| **Open PRs → integration at audit start** | None |
-| **Open PR → `main`** | [#39](https://github.com/nepenth/synara-desktop/pull/39) — do not merge without explicit user approval |
-| **Product Matrix runtime** | `matrix-js-sdk` only; no Rust production login/sync, dual backend, or cutover |
-| **Landed inventory** | P0.1–P0.7, P1.1–P1.6, P2.1–P2.6, and P3.1 foundation (20/112 original task artifacts) |
-| **Strict acceptance** | Phase 0 open; Phase 1 open; Phase 2 open; P3.1 open; 0/15 phase gates closed |
+| Field                                     | Audited value                                                                                          |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| **Current status and next task**          | See [`program-status.md`](program-status.md)                                                           |
+| **Integration branch**                    | `feature/matrix-rust-sdk-full-replacement`                                                             |
+| **Audited integration tip**               | `edfefee499064b736985b6528896b693e5120f22` (always re-fetch and verify)                                |
+| **Open PRs → integration at audit start** | None                                                                                                   |
+| **Open PR → `main`**                      | [#39](https://github.com/nepenth/synara-desktop/pull/39) — do not merge without explicit user approval |
+| **Product Matrix runtime**                | `matrix-js-sdk` only; no Rust production login/sync, dual backend, or cutover                          |
+| **Landed inventory**                      | P0.1–P0.7, P1.1–P1.6, P2.1–P2.6, and P3.1 foundation (20/112 original task artifacts)                  |
+| **Strict acceptance**                     | Phase 0 open; Phase 1 open; Phase 2 open; P3.1 open; 0/15 phase gates closed                           |
 
 The former handoff's clean-worktree and no-cutover claims were accurate. Its
 “Phases 0–2 complete,” “P3.1 complete,” and “next P3.2” claims are superseded.
@@ -170,36 +177,36 @@ it is not current acceptance or continuation guidance.
 Do not use this section to resume work. It is preserved only as a dated record
 of the prior agent's claims.
 
-| Field | Value |
-|-------|--------|
-| **Status** | **Paused for human handoff** — no automatic 4-minute progress loop is running |
-| **Integration branch** | `feature/matrix-rust-sdk-full-replacement` |
-| **Integration tip** | `3bea95a915c6b4368e81ed1aced88c86cb1fc602` (verify with `git rev-parse origin/feature/matrix-rust-sdk-full-replacement`) |
-| **Tip messages** | `docs(matrix): continuation handoff snapshot…` on top of P3.1 merge/handoff (`#72` / `#73`) |
-| **Open PRs → integration** | **None** after this handoff lands (all work through P3.1 + this snapshot merged) |
-| **Open PR → `main`** | [#39](https://github.com/nepenth/synara-desktop/pull/39) umbrella “Plan complete Matrix Rust SDK replacement” — **do not merge without explicit user approval** |
-| **Product Matrix runtime** | Still **`matrix-js-sdk` only** (no dual-backend; no frontend cutover) |
-| **Next task** | **P3.2 — Password/token login and device naming** (harness only) |
-| **Local validation (2026-07-26)** | `cargo test --locked matrix::` → **189 PASS**; `npm run check:matrix-rust-guardrails` → **PASS** |
-| **Progress (plan line items)** | **~20 / ~112 tasks (~18%)**; Phases **0–2 complete**; Phase **3** at **P3.1/8** |
-| **Working tree** | Integration tip is the source of truth; no uncommitted handoff work should remain after this snapshot lands |
+| Field                             | Value                                                                                                                                                           |
+| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Status**                        | **Paused for human handoff** — no automatic 4-minute progress loop is running                                                                                   |
+| **Integration branch**            | `feature/matrix-rust-sdk-full-replacement`                                                                                                                      |
+| **Integration tip**               | `3bea95a915c6b4368e81ed1aced88c86cb1fc602` (verify with `git rev-parse origin/feature/matrix-rust-sdk-full-replacement`)                                        |
+| **Tip messages**                  | `docs(matrix): continuation handoff snapshot…` on top of P3.1 merge/handoff (`#72` / `#73`)                                                                     |
+| **Open PRs → integration**        | **None** after this handoff lands (all work through P3.1 + this snapshot merged)                                                                                |
+| **Open PR → `main`**              | [#39](https://github.com/nepenth/synara-desktop/pull/39) umbrella “Plan complete Matrix Rust SDK replacement” — **do not merge without explicit user approval** |
+| **Product Matrix runtime**        | Still **`matrix-js-sdk` only** (no dual-backend; no frontend cutover)                                                                                           |
+| **Next task**                     | **P3.2 — Password/token login and device naming** (harness only)                                                                                                |
+| **Local validation (2026-07-26)** | `cargo test --locked matrix::` → **189 PASS**; `npm run check:matrix-rust-guardrails` → **PASS**                                                                |
+| **Progress (plan line items)**    | **~20 / ~112 tasks (~18%)**; Phases **0–2 complete**; Phase **3** at **P3.1/8**                                                                                 |
+| **Working tree**                  | Integration tip is the source of truth; no uncommitted handoff work should remain after this snapshot lands                                                     |
 
 ### What exists on integration (Rust)
 
 Under `src-tauri/src/matrix/`:
 
-| Module | Plan tasks | Notes |
-|--------|------------|--------|
-| `ipc/` | P1.3, P1.5 | Versioned envelope, fixtures, contract tests |
-| `dto/` | P1.4 | 15 domain DTO families |
-| `supervisor/` | P2.1 | Lifecycle actor + generation isolation |
-| `store/` | P2.2 | Per-account paths + store-key vault |
-| `client_builder/` | P2.3 | Sole allowed `Client::builder` site; unauthenticated open |
-| `tasks/` | P2.4 | Generation-stamped task supervision |
-| `diagnostics/` | P2.5 | Privacy-filtered metrics + redaction |
-| `lifecycle/` | P2.6 | Logout ≠ wipe; exact-target wipe; no auto-delete on store failure |
-| `auth/` | P3.1 | Discovery + login-flow **list** only (no login execution) |
-| (+ `matrix_sdk_link_smoke` in crate root) | P1.2 | Compile-only SDK type-path smoke |
+| Module                                    | Plan tasks | Notes                                                             |
+| ----------------------------------------- | ---------- | ----------------------------------------------------------------- |
+| `ipc/`                                    | P1.3, P1.5 | Versioned envelope, fixtures, contract tests                      |
+| `dto/`                                    | P1.4       | 15 domain DTO families                                            |
+| `supervisor/`                             | P2.1       | Lifecycle actor + generation isolation                            |
+| `store/`                                  | P2.2       | Per-account paths + store-key vault                               |
+| `client_builder/`                         | P2.3       | Sole allowed `Client::builder` site; unauthenticated open         |
+| `tasks/`                                  | P2.4       | Generation-stamped task supervision                               |
+| `diagnostics/`                            | P2.5       | Privacy-filtered metrics + redaction                              |
+| `lifecycle/`                              | P2.6       | Logout ≠ wipe; exact-target wipe; no auto-delete on store failure |
+| `auth/`                                   | P3.1       | Discovery + login-flow **list** only (no login execution)         |
+| (+ `matrix_sdk_link_smoke` in crate root) | P1.2       | Compile-only SDK type-path smoke                                  |
 
 Frontend mirrors: `synara/src/app/features/matrix-ipc/`, `matrix-dto/` (not wired as product runtime).
 
@@ -348,7 +355,7 @@ without explicit user approval.
 - **P1.6:** **MERGED** into integration (PR #56). Architectural CI guardrails:
   `matrix-rust-p1.6-guardrails.mjs` (JS SDK import allowlist freeze, wire-module
   SDK bans, raw HTTP, versioned IPC) + `check-matrix-rust-sdk-guardrails.mjs`
-  (dual-backend ban, no production Client under matrix/, no matrix_* Tauri
+  (dual-backend ban, no production Client under matrix/, no matrix\_\* Tauri
   commands); allowlist `p1.6-js-sdk-import-allowlist.json`; prohibited fixtures;
   wired into `check:matrix-boundaries` + CI. Independent review: unit tests 26
   ok; live guardrails PASS. **No** production login/sync; **no** dual-backend.
@@ -409,8 +416,8 @@ Phase 1 progress:
 
 - P1.1 permanent Rust 1.93 toolchain pin — **merged** (PR #48)
 - P1.2 exact Matrix Rust SDK deps (`matrix-sdk` / `matrix-sdk-ui` `=0.18.0`)
-  + feature rationale / license review — **merged** (PR #49); no production
-  login/sync
+  - feature rationale / license review — **merged** (PR #49); no production
+    login/sync
 - P1.3 versioned Matrix IPC schemas — **merged** (PR #50); contracts only;
   no production login/sync; no SDK wire types
 - P1.4 Synara domain DTOs (15 families) — **merged** (PR #52); contracts
@@ -425,7 +432,7 @@ Phase 2 progress:
 - P2.1 Matrix supervisor actor — **merged** (PR #59); pure state machine +
   generation isolation; Client handle deferred to P2.3
 - P2.2 Store paths and encryption keys — **merged** (PR #61); per-account paths
-  + key vault foundation; live keyring Entry deferred
+  - key vault foundation; live keyring Entry deferred
 - P2.3 SDK client builder — **merged** (PR #63); unauthenticated open only;
   sole `Client::builder` site under `matrix/client_builder/`
 - P2.4 Task supervision and cancellation — **merged** (PR #65);
@@ -542,7 +549,7 @@ Accepted notification findings that must be preserved:
   import/export is FR-7.9-007. SC-065/066 compile-only ≠ product pass.
 - FR-7.9-007: status `implemented` (retained UI). Settings Devices LocalBackup
   exportRoomKeysAsJson + encryptMegolmKeyFile → synara-keys.txt; import decrypt
-  + importRoomKeysAsJson. Not server key backup (006). SC-061 compile-only ≠ pass.
+  - importRoomKeysAsJson. Not server key backup (006). SC-061 compile-only ≠ pass.
 - FR-7.9-008: status `implemented`. Automatic UTD retry via
   decryptAllTimelineEvent → attemptDecryption({isRetry:true}) on encrypted
   pagination; EncryptedContent MatrixEventEvent.Decrypted re-render; permanent
@@ -610,48 +617,39 @@ Accepted notification findings that must be preserved:
   Live UIs. rust_target gap presence boolean-only (not SC-082 primary).
   Cutover residual GATE-7.11-001-FULL-MEMBERSHIP-LIST-PROJECTION.
 
-
 - FR-7.11-002: status `implemented`. Element Call embed: createCallEmbed /
   CallEmbed.getWidget → `/public/element-call/index.html` + iframe +
   ClientWidgetApi postMessage + CallWidgetDriver capabilities. SC-082
   experimental-widgets (not membership display 001). Widget plumbing ≠ call parity.
-
 
 - FR-7.11-003: status **`partial`** under
   `GATE-7.11-003-NATIVE-OR-PRODUCT-MEMBERSHIP-WRITE`. Join via useCallStart/
   JoinCall; leave via hangup; decline capability-only (no product Decline UI);
   member status after actions (display ownership 001). Widget-mediated write.
 
-
 - FR-7.11-004: status **`partial`** under
   `GATE-7.11-004-NATIVE-MATRIXRTC-KEY-SESSION`. Widget-mediated to-device
   encrypt/queue + feedToDevice + encryption_keys capabilities; no product-
   owned native MatrixRTC key-session API.
 
-
 - FR-7.11-005: status **`partial`** under
   `GATE-7.11-005-LOGOUT-WINDOW-CLOSE-HANGUP-CLEANUP`. Hangup/dispose pipeline
   present; room nav retains session; logout/window-close lack explicit hangup.
-
 
 - FR-7.11-006: status **`partial`** under
   `GATE-7.11-006-CSP-ORIGIN-HARDENING`. Tauri CSP + iframe sandbox + same-origin
   EC + parentUrl; residual: no HTML CSP meta, scripts+same-origin sandbox,
   broad connect-src, no strictOriginCheck.
 
-
 - FR-7.11-007: status **`partial`** under
   `GATE-7.11-007-EXPERIMENTAL-WIDGETS-RISK-ACCEPTANCE`. Plan/dossier risk language
   present (SC-082 blocked, P10.1, RISK-CALLS); no formal product acceptance artifact
   for pin 0.18.0 yet.
 
-
 - FR-7.11-008: status **`not-currently-exposed`** under
   `GATE-7.11-008-DOCUMENTED-CONTINGENCY-ARTIFACT`. Plan §7.11 + P10.7 contingency
   language present; formal contingency decision artifact not delivered. Must not
   reintroduce permanent dual-backend without new user decision.
-
-
 
 ## Branch and PR contract
 

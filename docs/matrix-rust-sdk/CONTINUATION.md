@@ -1,123 +1,93 @@
-# Continuation — D0 dogfood pivot
+# Continuation — full-vertical Matrix Rust replacement
 
-> **Do this next.** Full history remains in PROGRESS / program-status.
-
-## Active mode
-
-**D0** — break integration branch product; Rust owns Matrix vertically.  
-Canonical: [d0-dogfood-epic.md](d0-dogfood-epic.md)
-
-## Next task
-
-**D0.1 — Login/session sole owner** (password path first): Tauri commands + product login no longer uses js `createClient`/`loginRequest` for happy path.
-
-Then: D0.2 sync+rooms → D0.3 timeline → D0.4 send.
-
-## Parked
-
-L1-only open PRs (notify/call/media polish, MiniMax helper) unless they block D0.
-
-## Metrics
-
-- `program-status` inventory (L1 honesty)
-- `rg matrix-js-sdk synara/src` count ↓
-- Dogfood: login works on Rust
-
-## Never
-
-- dual_backend
-- merge umbrella #39 / main without approval
-
-
----
-
-# Matrix Rust SDK program — continuation card
-
-**Date:** 2026-07-27
-
-**Audience:** Current or next orchestrator of the full-replacement program.
-
-For full history, rules, and FR notes use
-[`implementation-handoff.md`](implementation-handoff.md).
-
-**Canonical how-we-execute model:**
-[`cutover-operating-model.md`](cutover-operating-model.md)
-(capability vertical slices → atomic sole-owner cutover → burn down js-sdk →
-merge to main with approval). Supersedes any older text that implies a runtime
-SDK selector, dual production backends, or hard-blocking product slices on residual
-R0 formal thrash.
-
-**Live human progress log (refresh on GitHub while away):**
-[`PROGRESS.md`](PROGRESS.md) —
-https://github.com/nepenth/synara-desktop/blob/feature/matrix-rust-sdk-full-replacement/docs/matrix-rust-sdk/PROGRESS.md  
-Orchestrators must update `PROGRESS.md` when PRs merge or priorities change.
+> **Current continuation card.** Full history remains in
+> [PROGRESS.md](PROGRESS.md); original plan inventory and strict gates remain in
+> [program-status.md](program-status.md).
 
 <!-- matrix-rust-program-status-link -->
-Current machine-readable and generated status:
-[`program-status.json`](program-status.json) and
-[`program-status.md`](program-status.md). The status ledger, not dated task
-evidence, is authoritative for current delivery and acceptance state.
 
-## Repo truth
+| Field                    | Current value                                                                                                      |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------ |
+| Date                     | 2026-07-28 (America/New_York)                                                                                      |
+| Integration branch       | `feature/matrix-rust-sdk-full-replacement`                                                                         |
+| Execution model          | Primary Codex + Codex sub-agents, all `gpt-5.6-sol` medium; MiniMax-M3 optional                                    |
+| Verified integration tip | `4b4d921` — V-CRYPTO.4 merged (#226)                                                                               |
+| Active PR                | [#227](https://github.com/nepenth/synara-desktop/pull/227) — V-CRYPTO.5 room-key export/import, draft and CI-green |
+| Policy                   | [full-vertical-policy.md](full-vertical-policy.md)                                                                 |
+| Binding queue            | [d0-residual-completion.md](d0-residual-completion.md)                                                             |
+| Main merge               | PR #39 — explicit user approval required                                                                           |
 
-| Item | Value |
-|---|---|
-| Integration branch | `feature/matrix-rust-sdk-full-replacement` |
-| Live integration tip | Re-fetch; expected at/after `8b7d39e` (#110 P3.5). Verify with `git rev-parse origin/feature/matrix-rust-sdk-full-replacement` |
-| Progress log | [`PROGRESS.md`](PROGRESS.md) — remote human monitor |
-| Open PRs | [#112](https://github.com/nepenth/synara-desktop/pull/112) **P3.6** (product); [#111](https://github.com/nepenth/synara-desktop/pull/111) PROGRESS; [#109](https://github.com/nepenth/synara-desktop/pull/109) MiniMax |
-| Open PR to `main` | [#39](https://github.com/nepenth/synara-desktop/pull/39) — **do not merge without user approval** |
-| Product runtime | Still **`matrix-js-sdk` only** until atomic cutover; Rust = harness foundation / future sole owner |
-| Dual backend | **`false` forever** — no selector |
-| Execution model | Capability slices on branch → dogfood sole-owner cutover → delete js-sdk → main when approved |
+## Active direction
 
-Always re-fetch and verify branch tips and PR state.
+Complete the desktop replacement as serial, product-visible verticals:
+
+```text
+React UI → versioned Tauri IPC + Synara DTOs → live Rust matrix-sdk
+```
+
+No dogfood minima, no accepted residual plateau, no backend selector, and no
+concurrent JS/Rust clients for one session.
+
+**Physical deletion happens per vertical.** A native path beside retained JS
+ownership is “wired,” not “done.” Each capability slice must delete its
+superseded `matrix-js-sdk` implementation, imports, compatibility branches, and
+obsolete tests/types before closure.
 
 ## Exact continuation point
 
-### Priority (user-approved 2026-07-27)
+1. Amend active V-CRYPTO.5 [#227](https://github.com/nepenth/synara-desktop/pull/227): remove `LegacyLocalBackup`, WebView room-key file crypto/FileSaver behavior, and its old JS owner before calling the row done.
+2. Drain the already-wired crypto deletion queue serially:
+   - V-CRYPTO.1-D — verification;
+   - V-CRYPTO.2-D — cross-signing;
+   - V-CRYPTO.3-D — backup/recovery;
+   - V-CRYPTO.4-D — secret storage.
+3. Implement V-CRYPTO.6 UTD/history recovery as a complete wire-plus-delete vertical.
+4. Implement V-CRYPTO.7 device list/trust/actions as a complete wire-plus-delete vertical.
+5. Continue V-AUTH → V-ROOMS → V-TIMELINE → V-SEND, deleting the superseded JS owner inside each capability slice.
+6. Run V-BURN only as the final convergence audit and npm dependency/bootstrap/store cleanup.
+7. Resume new media/widgets/notifications/calls verticals only after the residual queue allows.
 
-1. **Update [`PROGRESS.md`](PROGRESS.md)** on every merge / priority change.
-2. **P3.2 + P3.5 landed.** **P3.6 session restore** open [#112](https://github.com/nepenth/synara-desktop/pull/112) (merge when CI green; rustfmt fix `78c61ea`).
-3. Then sync + room list (P4.1 SyncService readiness → P4.2 room list) toward dogfood sole-owner flip.
-4. **Clean-break:** re-login / wipe local Matrix dirs OK; no elaborate JS→Rust token/device migration.
-5. **Do not** build dual-backend, runtime flags, or dual live clients.
-6. Residual R0 formal work is secondary; fix real safety only.
-7. Merge to `main` / #39 only with explicit user approval.
+## Current accounting
 
-### Next owner procedure
+- D0.1–D0.5 established native login/session, sync/room list, basic timeline,
+  plain-text send, and encrypted-room machine paths.
+- V-CRYPTO.1–.4 product wiring merged in #223–#226.
+- Those four rows are reopened as **wired / deletion open** because relevant JS
+  crypto imports and conditional legacy implementations remain.
+- V-CRYPTO.5 is still draft and can be corrected before merge.
+- Repository baseline remains **232 files / 292 direct import lines** referencing
+  `matrix-js-sdk`. Each completed vertical must record a negative
+  capability-owner/file deletion delta and an honest, non-increasing global
+  import delta; the latter may be zero for indirect ownership.
+- #221 remains held: zero deleted importers is not completion.
+- L1 foundation inventory is about 74/112, but that number is not product
+  replacement completion and 0/15 strict phase gates remain closed.
 
-```bash
-git fetch origin
-git checkout feature/matrix-rust-sdk-full-replacement
-git pull --ff-only
-npm run check:matrix-rust-guardrails
-(cd src-tauri && cargo test --locked matrix::)
-# Next: merge #112 when green; then P4.1 sync readiness. Keep PROGRESS.md current.
-```
+## Required evidence for every vertical
 
-## Program accounting
+1. Native product ownership through the managed Rust client.
+2. Retained behavior parity or explicit product-approved removal.
+3. No tokens, keys, passphrases, recovery material, ciphertext, raw paths, or
+   raw SDK errors in IPC/logs.
+4. Physical deletion of the replaced JS implementation/imports.
+5. Capability-owner/file deletion and repository-wide direct-import counts
+   before and after the slice.
+6. Scoped Rust tests, product/helper tests, TypeScript typecheck, formatting,
+   guardrails, and required CI on the reviewed SHA.
+7. Residual ledger and [PROGRESS.md](PROGRESS.md) updated in the same PR.
 
-- Original-plan artifact inventory: see [`program-status.md`](program-status.md) (sync after P3.5; human view in [`PROGRESS.md`](PROGRESS.md)).
-- **0 of 15** strict phase gates closed (honest).
-- Shipping runtime: `matrix-js-sdk` only until cutover.
-- Rust: harness foundation growing toward sole owner (login + session persist landed).
+## Parked
 
-## Authoritative docs
+- #221 D0.6 plateau.
+- L1-only notification, call-state, media-boundary/policy, and helper PRs unless
+  they directly block the active full vertical.
+- Umbrella/main PR #39 until explicit approval and final gates.
 
-- **Progress log (remote):** [`PROGRESS.md`](PROGRESS.md)
-- Operating model: [`cutover-operating-model.md`](cutover-operating-model.md)
-- Plan: [`../matrix-rust-sdk-full-replacement-plan.md`](../matrix-rust-sdk-full-replacement-plan.md)
-- Full handoff: [`implementation-handoff.md`](implementation-handoff.md)
-- Migration UX (reauth / new device / no token continuity): [`migration-ux-decision.md`](migration-ux-decision.md)
-- Independent review (historical baseline): [`review-2026-07-25.md`](review-2026-07-25.md)
-- Machine status: [`program-status.md`](program-status.md)
+## Never
 
-## Non-negotiables
-
-- No dual-backend / selector.
-- No concurrent JS + Rust Matrix clients for one session.
-- No merge to `main` without explicit user approval.
-- No secrets in diagnostics/IPC.
-- Guardrails stay green.
-- Capability-first slices; atomic cutover; then js-sdk burn-down.
+- dual backend or runtime selector;
+- fallback to a live JS Matrix client after native ownership is selected;
+- raw `/_matrix/` product HTTP outside documented SDK-gap approval;
+- secrets in WebView state, IPC returns, diagnostics, logs, or generated docs;
+- “wired” relabeled as “done” while the legacy implementation remains;
+- final bulk burn-down used to defer deletion owned by an earlier vertical.

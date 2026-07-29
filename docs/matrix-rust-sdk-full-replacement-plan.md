@@ -10,6 +10,7 @@ Integration branch: `feature/matrix-rust-sdk-full-replacement`
 Current execution record: [`docs/matrix-rust-sdk/implementation-handoff.md`](matrix-rust-sdk/implementation-handoff.md)
 
 <!-- matrix-rust-program-status-link -->
+
 Canonical current status: [`docs/matrix-rust-sdk/program-status.md`](matrix-rust-sdk/program-status.md)
 (generated from [`program-status.json`](matrix-rust-sdk/program-status.json)).
 Task evidence remains historical; only this ledger records current delivery and
@@ -31,13 +32,13 @@ This table is the immutable audit baseline, not a live PR ledger. For progress
 after `edfefee`, use the canonical status ledger and the current live snapshot in
 [`implementation-handoff.md`](matrix-rust-sdk/implementation-handoff.md).
 
-| Band | Artifact inventory | Acceptance state |
-|---|---|---|
-| Phase 0 | P0.1–P0.7 landed | **Gate open** — cross-platform/live evidence, full traceability, and mandatory planning artifacts remain incomplete |
-| Phase 1 | P1.1–P1.6 landed | **Gate open** — fmt/lint/clippy/CI fail and IPC correctness issues are unresolved |
-| Phase 2 | P2.1–P2.6 harness landed | **Gate open** — native keyring/live lifecycle evidence is absent; critical/high lifecycle, path, and privacy findings are unresolved |
-| Phase 3 | P3.1 domain/mock foundation landed | **P3.1 acceptance open** — live SDK adapter and disposable-homeserver proof remain |
-| Phases 4–14 | No named tasks landed | **Not started** |
+| Band        | Artifact inventory                 | Acceptance state                                                                                                                     |
+| ----------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| Phase 0     | P0.1–P0.7 landed                   | **Gate open** — cross-platform/live evidence, full traceability, and mandatory planning artifacts remain incomplete                  |
+| Phase 1     | P1.1–P1.6 landed                   | **Gate open** — fmt/lint/clippy/CI fail and IPC correctness issues are unresolved                                                    |
+| Phase 2     | P2.1–P2.6 harness landed           | **Gate open** — native keyring/live lifecycle evidence is absent; critical/high lifecycle, path, and privacy findings are unresolved |
+| Phase 3     | P3.1 domain/mock foundation landed | **P3.1 acceptance open** — live SDK adapter and disposable-homeserver proof remain                                                   |
+| Phases 4–14 | No named tasks landed              | **Not started**                                                                                                                      |
 
 “N/112” is only an inventory of named task artifacts, not validated completion.
 Zero of 15 strict phase gates are closed. Remediation tasks R0.1–R0.8 from the
@@ -82,6 +83,14 @@ re-login / wipe of local Matrix state is acceptable; elaborate JS→Rust
 session/token migration is out of scope. Full write-up:
 [`docs/matrix-rust-sdk/cutover-operating-model.md`](matrix-rust-sdk/cutover-operating-model.md).
 
+**Full-vertical deletion clarification (2026-07-28):** physical deletion now
+happens in the owning capability vertical. Native wiring beside a retained JS
+implementation is “wired,” not “done.” Each completed slice deletes the
+superseded JS implementation/imports and records its count delta. Phase 11 is
+therefore the final repository-wide convergence, cross-cutting cleanup, and
+dependency-removal gate—not the primary backlog for capability deletion. See
+[`full-vertical-policy.md`](matrix-rust-sdk/full-vertical-policy.md).
+
 ## 2. Outcomes
 
 The completed system will have:
@@ -124,9 +133,10 @@ The completed system will have:
   js-sdk importers and dependencies only decrease (burn-down), never grow.
 - **Execution order:** capability vertical slices (auth → session → sync →
   timeline → crypto → …) with host ownership + IPC contracts first; UI rewires
-  consume Synara DTOs only. The ~220 baseline production `matrix-js-sdk` import
-  sites are a burn-down checklist after cutover, not a file-by-file dual-SDK
-  rewrite order. See
+  consume Synara DTOs only and delete their superseded JS owner in the same
+  vertical. The ~220 baseline production `matrix-js-sdk` import sites are a
+  capability-owned convergence checklist, not a random file-by-file rewrite
+  order or a deferred bulk-deletion excuse. See
   [`cutover-operating-model.md`](matrix-rust-sdk/cutover-operating-model.md).
 
 ### 3.2 No compatibility clone of `matrix-js-sdk`
@@ -613,6 +623,12 @@ The program now runs in one agent harness. The primary agent is the orchestrator
 and independent reviewer. It may delegate bounded implementation units to native
 sub-agents when the task can be isolated safely. External CLI model sessions are
 not part of the required workflow.
+
+The active execution model is Codex `gpt-5.6-sol` with medium reasoning for the
+primary orchestrator and delegated implementation/review agents. MiniMax-M3 may
+assist with non-authoritative text or research work, but acceptance, Git/PR
+state, and merges remain owned by the primary Codex orchestrator. Grok is not in
+the active execution path while its usage allocation is unavailable.
 
 ### 10.1 Orchestrator responsibilities
 
@@ -1229,10 +1245,11 @@ Validation:
 If this phase fails, the migration remains blocked on the feature branch. Do not
 cut over with a permanent JavaScript SDK exception.
 
-### Phase 11 — React conversion and atomic desktop cutover
+### Phase 11 — Final React convergence and atomic dependency removal
 
-Goal: change the actual desktop product to the Rust-owned Matrix client exactly
-once, without maintaining selectable backends.
+Goal: verify the serial full verticals have changed the actual desktop product
+to the Rust-owned Matrix client, remove cross-cutting leftovers and the npm
+dependency exactly once, and never maintain selectable backends.
 
 Tasks:
 
@@ -1249,12 +1266,14 @@ Tasks:
 
 Execution rule:
 
-- Individual UI mechanical tasks may land on the integration branch while
-  preserving buildability, but the integration branch is not releasable during
-  conversion.
-- There is no runtime toggle. The cutover commit stops JS client startup and
-  enables Rust startup; the immediately associated deletion commits remove the
-  old implementation before the phase is accepted.
+- Owning verticals must already have deleted their superseded JS implementations
+  and imports; Phase 11 must not become a bulk capability rewrite.
+- Individual cross-cutting cleanup tasks may land on the integration branch
+  while preserving buildability, but the branch is not releasable during final
+  convergence.
+- There is no runtime toggle. The final convergence commit proves JS client
+  startup is impossible and removes the dependency, stores, assets, and
+  remaining scaffolding before the phase is accepted.
 
 Acceptance criteria:
 
@@ -1526,27 +1545,27 @@ The program is complete only when all of the following are true:
 
 ## 16. Initial risk register
 
-| Risk                                                      | Severity                 | Required mitigation/gate                                              |
-| --------------------------------------------------------- | ------------------------ | --------------------------------------------------------------------- |
-| Rust 0.18.0 requires Rust 1.93 versus current 1.77.2      | High                     | Phase 0/1 cross-platform build and release-toolchain proof            |
-| `matrix-sdk-ui` APIs and widget feature stability         | High                     | Exact pin, compile probes, call gate, no upgrade drift                |
-| Element Call/MatrixRTC parity                             | Critical to cutover      | Phase 10 must pass before JS SDK removal                              |
-| JS IndexedDB crypto store cannot be reused safely         | Critical data/identity   | New-device/recovery transition; no store/token guessing               |
-| 220 production files import JS SDK models                 | High schedule/complexity | AST inventory, task-size limits, zero-usage burn-down                 |
-| IPC ordering/backpressure can recreate timeline defects   | High                     | Versioned snapshot/delta protocol, property/fault tests               |
-| Two client owners can corrupt semantics or duplicate work | Critical                 | Single supervisor; no production dual backend/selector                |
-| Custom agent events lose raw content                      | High                     | Exact raw-content probe and shared golden fixtures                    |
-| UIA/registration API gaps                                 | High                     | Phase 0 capability proof; upstream change if required                 |
-| Search behavior differs                                   | Medium                   | Explicit server/local-search decision and parity tests                |
-| Media byte transport harms memory/security                | High                     | Native cache/local protocol; no JSON byte payloads                    |
-| Store-key or diagnostics leak                             | Critical                 | Keyring, redaction, secret scanning, security review                  |
-| Long-lived feature branch diverges from main              | High                     | Controlled periodic reconciliation and phase retest                   |
-| Implementation agent strays or masks failures            | High                     | Bounded task packets, independent review, correction loop, rejection rules |
-| CI cancellation permits unvalidated merges               | High                     | Green non-cancelled run on reviewed SHA before every merge             |
-| Store deletion races live client/tasks                    | Critical data loss       | R0.5 close barrier, injected-failure tests, lifecycle acceptance report |
-| Store paths escape through symlinks                       | High security            | R0.4 canonical confinement and adversarial filesystem tests            |
-| IPC integer/stream ambiguity corrupts state               | High correctness         | R0.3 frozen cross-language wire contract and boundary/property tests    |
-| Migration scaffolding becomes permanent                   | High                     | Definition-of-done zero gates and Phase 14 deletion review            |
+| Risk                                                      | Severity                 | Required mitigation/gate                                                   |
+| --------------------------------------------------------- | ------------------------ | -------------------------------------------------------------------------- |
+| Rust 0.18.0 requires Rust 1.93 versus current 1.77.2      | High                     | Phase 0/1 cross-platform build and release-toolchain proof                 |
+| `matrix-sdk-ui` APIs and widget feature stability         | High                     | Exact pin, compile probes, call gate, no upgrade drift                     |
+| Element Call/MatrixRTC parity                             | Critical to cutover      | Phase 10 must pass before JS SDK removal                                   |
+| JS IndexedDB crypto store cannot be reused safely         | Critical data/identity   | New-device/recovery transition; no store/token guessing                    |
+| 220 production files import JS SDK models                 | High schedule/complexity | AST inventory, task-size limits, zero-usage burn-down                      |
+| IPC ordering/backpressure can recreate timeline defects   | High                     | Versioned snapshot/delta protocol, property/fault tests                    |
+| Two client owners can corrupt semantics or duplicate work | Critical                 | Single supervisor; no production dual backend/selector                     |
+| Custom agent events lose raw content                      | High                     | Exact raw-content probe and shared golden fixtures                         |
+| UIA/registration API gaps                                 | High                     | Phase 0 capability proof; upstream change if required                      |
+| Search behavior differs                                   | Medium                   | Explicit server/local-search decision and parity tests                     |
+| Media byte transport harms memory/security                | High                     | Native cache/local protocol; no JSON byte payloads                         |
+| Store-key or diagnostics leak                             | Critical                 | Keyring, redaction, secret scanning, security review                       |
+| Long-lived feature branch diverges from main              | High                     | Controlled periodic reconciliation and phase retest                        |
+| Implementation agent strays or masks failures             | High                     | Bounded task packets, independent review, correction loop, rejection rules |
+| CI cancellation permits unvalidated merges                | High                     | Green non-cancelled run on reviewed SHA before every merge                 |
+| Store deletion races live client/tasks                    | Critical data loss       | R0.5 close barrier, injected-failure tests, lifecycle acceptance report    |
+| Store paths escape through symlinks                       | High security            | R0.4 canonical confinement and adversarial filesystem tests                |
+| IPC integer/stream ambiguity corrupts state               | High correctness         | R0.3 frozen cross-language wire contract and boundary/property tests       |
+| Migration scaffolding becomes permanent                   | High                     | Definition-of-done zero gates and Phase 14 deletion review                 |
 
 ## 17. Required planning artifacts before code execution
 
