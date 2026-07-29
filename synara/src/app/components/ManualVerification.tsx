@@ -138,7 +138,6 @@ export function ManualVerificationTile({
 
       storePrivateKey(secretStorageKeyId, recoveryKey);
 
-      await crypto.bootstrapCrossSigning({});
       await crypto.bootstrapSecretStorage({});
 
       await crypto.loadSessionBackupPrivateKeyFromSecretStorage();
