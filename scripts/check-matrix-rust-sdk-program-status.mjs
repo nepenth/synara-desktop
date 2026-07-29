@@ -457,17 +457,26 @@ export function validateProgramStatus(status, planText) {
     "vertical_execution.policy must require per-vertical deletion"
   );
   assert(
-    vertical.integration_product_state === "capability-cutover-in-progress",
+    ["capability-cutover-in-progress", "between-slices-paused"].includes(
+      vertical.integration_product_state
+    ),
     "invalid integration_product_state"
   );
-  assert(
-    /^V-[A-Z]+\.\d+(?:-D)?$/.test(vertical.active_slice),
-    "vertical_execution.active_slice must be a vertical ID"
-  );
-  assert(
-    Number.isInteger(vertical.active_pr) && vertical.active_pr > 0,
-    "vertical_execution.active_pr must be a positive PR number"
-  );
+  if (vertical.integration_product_state === "capability-cutover-in-progress") {
+    assert(
+      /^V-[A-Z]+\.\d+(?:-D)?$/.test(vertical.active_slice),
+      "vertical_execution.active_slice must be a vertical ID while cutover is in progress"
+    );
+    assert(
+      Number.isInteger(vertical.active_pr) && vertical.active_pr > 0,
+      "vertical_execution.active_pr must be a positive PR number while cutover is in progress"
+    );
+  } else {
+    assert(
+      vertical.active_slice === null && vertical.active_pr === null,
+      "between-slices-paused requires null active_slice and active_pr"
+    );
+  }
   assertUnique(
     vertical.wired_deletion_open,
     "vertical_execution.wired_deletion_open"
@@ -568,7 +577,11 @@ export function renderProgramStatus(status) {
     "",
     `- Policy: \`${status.vertical_execution.policy}\``,
     `- Integration product state: \`${status.vertical_execution.integration_product_state}\``,
-    `- Active slice: **${status.vertical_execution.active_slice}** (PR #${status.vertical_execution.active_pr})`,
+    `- Active slice: **${status.vertical_execution.active_slice ?? "None"}**${
+      status.vertical_execution.active_pr === null
+        ? ""
+        : ` (PR #${status.vertical_execution.active_pr})`
+    }`,
     `- Wired / deletion open: ${status.vertical_execution.wired_deletion_open
       .map((id) => `\`${id}\``)
       .join(", ")}`,

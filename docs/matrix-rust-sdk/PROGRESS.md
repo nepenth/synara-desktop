@@ -11,9 +11,9 @@
 
 | Field              | Value                                                                                                                                                                                                                                     |
 | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Last updated (UTC) | **2026-07-29 ~01:39**                                                                                                                                                                                                                     |
-| Integration tip    | `fd7c934` — full-vertical policy alignment merged (#228)                                                                                                                                                                                  |
-| Active work        | [#227](https://github.com/nepenth/synara-desktop/pull/227) V-CRYPTO.5 draft; closure implementation under reviewed-SHA validation                                                                                                         |
+| Last updated (UTC) | **2026-07-29 ~02:03**                                                                                                                                                                                                                     |
+| Integration tip    | `146952a` — V-CRYPTO.5 room-key ownership and physical deletion merged (#227)                                                                                                                                                             |
+| Active work        | **Paused between slices; no active implementation PR.** Next queued slice: V-CRYPTO.1-D verification deletion.                                                                                                                            |
 | Product runtime    | Native owns core D0 path and wired crypto surfaces; superseded JS implementations/imports remain deletion residuals                                                                                                                       |
 | Execution model    | Primary Codex + same-model sub-agents: `gpt-5.6-terra`, high; MiniMax-M3 optional                                                                                                                                                         |
 | Import accounting  | V-CRYPTO.5 capability deltas: legacy owner 1→0; helper files 1→0; `useMatrixClient` 2→0; `getCrypto` 2→0; JS room-key API calls 2→0. Global direct inventory remains **232 files / 292 lines** (0 delta; deleted ownership was indirect). |
@@ -28,13 +28,13 @@
 
 ## Snapshot (read this first)
 
-|               |                                                                                                                                                                                                             |
-| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Now**       | **Full-vertical + physical deletion per vertical.** Validate and land V-CRYPTO.5 [#227](https://github.com/nepenth/synara-desktop/pull/227), then drain V-CRYPTO.1-D→.4-D before V-CRYPTO.6. **#221 HOLD**. |
-| **Policy**    | [full-vertical-policy.md](full-vertical-policy.md)                                                                                                                                                          |
-| **Tip**       | `fd7c934` — full-vertical policy, physical-deletion metrics, and Codex orchestration aligned.                                                                                                               |
-| **Active PR** | V-CRYPTO.5 [#227](https://github.com/nepenth/synara-desktop/pull/227), draft; single Rust owner, legacy deletion, and retry correction implemented, pending reviewed-SHA gates.                             |
-| **Blocked**   | Merging plateau D0.6 (#221); declaring wired crypto rows done before JS deletion; starting V-CRYPTO.6 or new media/widgets/etc before the deletion queue.                                                   |
+|               |                                                                                                                                                                                              |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Now**       | **Paused between slices.** V-CRYPTO.5 [#227](https://github.com/nepenth/synara-desktop/pull/227) is landed; resume with V-CRYPTO.1-D, then drain .2-D→.4-D before V-CRYPTO.6. **#221 HOLD**. |
+| **Policy**    | [full-vertical-policy.md](full-vertical-policy.md)                                                                                                                                           |
+| **Tip**       | `146952a` — V-CRYPTO.5 landed after exact-head review and CI.                                                                                                                                |
+| **Active PR** | None; orchestration is intentionally paused at a clean slice boundary.                                                                                                                       |
+| **Blocked**   | Merging plateau D0.6 (#221); declaring wired crypto rows done before JS deletion; starting V-CRYPTO.6 or new media/widgets/etc before the deletion queue.                                    |
 
 ---
 
@@ -61,14 +61,16 @@ Update rules:
 
 ### 2026-07-29 (UTC) — plan alignment
 
-| When (UTC) | Item                         | Result        | Notes                                                                                                                                         |
-| ---------- | ---------------------------- | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| ~01:39     | **Execution model**          | **Changed**   | Resume orchestration and coding with Codex `gpt-5.6-terra` high; MiniMax-M3 remains optional.                                                 |
-| ~01:25     | **V-CRYPTO.5 closure**       | **This PR**   | Single Rust IPC owner; legacy WebView/keyfile crypto deleted; retry and incomplete-export cleanup made race-safe; reviewed-SHA gates pending. |
-| ~01:01     | **Plan alignment #228**      | **Merged**    | Tip `fd7c934`; per-vertical deletion metrics and Codex orchestration made binding.                                                            |
-| ~00:10     | **Execution model**          | **Clarified** | Codex `gpt-5.6-sol` medium orchestrates and delegates; Grok is temporarily unavailable; MiniMax-M3 remains optional.                          |
-| ~00:10     | **Physical deletion policy** | **Clarified** | Superseded JS implementation/imports are deleted in each owning vertical. V-BURN becomes final convergence/dependency removal.                |
-| ~00:10     | **V-CRYPTO status audit**    | **Corrected** | #223–#226 are product-wired but deletion-open; #227 must remove its legacy path before closure.                                               |
+| When (UTC) | Item                         | Result                                                                | Notes                                                                                                                                         |
+| ---------- | ---------------------------- | --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| ~02:03     | **V-CRYPTO.5 closure**       | **Merged** [#227](https://github.com/nepenth/synara-desktop/pull/227) | Tip `146952a`; Rust owns room-key export/import, legacy owner/helper deleted, exact-head gates green.                                         |
+| ~02:03     | **Execution pause**          | **Paused**                                                            | Clean between-slices handoff; no active implementation PR; V-CRYPTO.1-D is next.                                                              |
+| ~01:39     | **Execution model**          | **Changed**                                                           | Resume orchestration and coding with Codex `gpt-5.6-terra` high; MiniMax-M3 remains optional.                                                 |
+| ~01:25     | **V-CRYPTO.5 closure**       | **This PR**                                                           | Single Rust IPC owner; legacy WebView/keyfile crypto deleted; retry and incomplete-export cleanup made race-safe; reviewed-SHA gates pending. |
+| ~01:01     | **Plan alignment #228**      | **Merged**                                                            | Tip `fd7c934`; per-vertical deletion metrics and Codex orchestration made binding.                                                            |
+| ~00:10     | **Execution model**          | **Clarified**                                                         | Codex `gpt-5.6-sol` medium orchestrates and delegates; Grok is temporarily unavailable; MiniMax-M3 remains optional.                          |
+| ~00:10     | **Physical deletion policy** | **Clarified**                                                         | Superseded JS implementation/imports are deleted in each owning vertical. V-BURN becomes final convergence/dependency removal.                |
+| ~00:10     | **V-CRYPTO status audit**    | **Corrected**                                                         | #223–#226 are product-wired but deletion-open; #227 must remove its legacy path before closure.                                               |
 
 ### 2026-07-28 (V-CRYPTO product wiring)
 

@@ -2,7 +2,7 @@
 
 | Field              | Value                                                                         |
 | ------------------ | ----------------------------------------------------------------------------- |
-| Active             | **Yes** (2026-07-28), as a persistent Codex goal                              |
+| Active             | **Paused between slices** (2026-07-29); resume as a persistent Codex goal     |
 | Interval           | Goal continuation; optional scheduler fires every **4 minutes**               |
 | Integration        | `feature/matrix-rust-sdk-full-replacement` only                               |
 | Orchestrator       | **Codex `gpt-5.6-terra`, high reasoning**                                     |
@@ -40,7 +40,7 @@ authority even when implementation is delegated.
 1. **Do not merge** PRs that only plateau residual / dogfood-shell without full vertical acceptance
 2. Merge green **residual-completion / full vertical** product PR if Quality + Desktop package gates success
 3. Merge green **policy/docs** that enforce full-vertical + residual ledger
-4. If no merge: advance the next item from [d0-residual-completion.md](d0-residual-completion.md) — active [#227](https://github.com/nepenth/synara-desktop/pull/227), then V-CRYPTO.1-D→.4-D, then V-CRYPTO.6
+4. If no merge: advance the next item from [d0-residual-completion.md](d0-residual-completion.md) — V-CRYPTO.1-D→.4-D, then V-CRYPTO.6
 5. Tip-merge **only** the active residual PR if BEHIND/CONFLICTING
 6. Update PROGRESS after residual lands
 7. Report short status; stop if disk &lt; 5 Gi free
@@ -51,10 +51,10 @@ authority even when implementation is delegated.
 | ------------- | -------------------------------------------------- | ------------------------------------------------------------ |
 | D0.1–D0.4     | Merged (partial debt → residual doc)               | tip history                                                  |
 | V-CRYPTO.1–.4 | Product wiring merged #223–#226; **deletion open** | debt = **V-CRYPTO.1-D→.4-D**                                 |
-| V-CRYPTO.5    | **Active draft #227**; closure implementation      | validate deletion, retry safety, privacy, and reviewed SHA   |
+| V-CRYPTO.5    | **DONE #227**                                      | Rust-only owner; legacy owner/helper deleted; gates green    |
 | V-CRYPTO.6–.7 | Queued                                             | UTD recovery, then device/trust; wire + delete in each slice |
 | D0.6 plateau  | **#221 HOLD — do not merge as complete**           | rework → V-BURN later                                        |
-| **Next**      | Validate/land **#227**, then **V-CRYPTO.1-D**      | serial residual drain                                        |
+| **Next**      | **V-CRYPTO.1-D** after the goal resumes            | serial residual drain; no active implementation PR           |
 
 _Orchestrator must rewrite this table when a residual slice merges._
 

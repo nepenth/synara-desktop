@@ -3,7 +3,7 @@
 > Generated from `program-status.json` by `scripts/check-matrix-rust-sdk-program-status.mjs`.
 > Do not hand-edit. Dated task evidence and the independent review remain historical records.
 
-As of: 2026-07-28
+As of: 2026-07-29
 
 Integration branch: `feature/matrix-rust-sdk-full-replacement`
 
@@ -28,10 +28,10 @@ These release/main fields do not describe partial product wiring on the integrat
 ## Current full-vertical product execution
 
 - Policy: `full-vertical-delete-per-vertical`
-- Integration product state: `capability-cutover-in-progress`
-- Active slice: **V-CRYPTO.5** (PR #227)
+- Integration product state: `between-slices-paused`
+- Active slice: **None**
 - Wired / deletion open: `V-CRYPTO.1`, `V-CRYPTO.2`, `V-CRYPTO.3`, `V-CRYPTO.4`
-- Completed under full policy: None
+- Completed under full policy: `V-CRYPTO.5`
 - Next slices: `V-CRYPTO.1-D` → `V-CRYPTO.2-D` → `V-CRYPTO.3-D` → `V-CRYPTO.4-D` → `V-CRYPTO.6` → `V-CRYPTO.7`
 - Held PRs: #221
 - Completion evidence: negative capability-owner/file deletion delta; global direct-import delta recorded and non-increasing
