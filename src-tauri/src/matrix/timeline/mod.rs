@@ -51,6 +51,7 @@ pub use live::{
     NativeTimelineOpenPosition,
     NativeTimelineOpenReadback,
     NativeTimelineOpenRequest,
+    NativeTimelineViewPaginationRequest,
     NATIVE_TIMELINE_OPEN_SCHEMA_VERSION,
 };
 pub use pagination::{
