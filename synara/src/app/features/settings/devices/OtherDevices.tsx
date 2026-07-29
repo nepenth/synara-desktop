@@ -11,7 +11,6 @@ import { SettingTile } from '../../../components/setting-tile';
 import { openExternalUrl } from '../../../utils/appLinks';
 import { PasswordInput } from '../../../components/password-input';
 import {
-  acknowledgeNativeDeviceDeleteSso,
   authenticateNativeDeviceDeletePassword,
   cancelNativeDeviceDelete,
   NativeDevice,
@@ -34,7 +33,6 @@ export function OtherDevices({ devices, refreshDeviceList, showVerification }: O
   const [challenge, setChallenge] = useState<NativeDeviceDeleteChallenge>();
   const [working, setWorking] = useState(false);
   const [deleteFailed, setDeleteFailed] = useState(false);
-  const [ssoWindow, setSsoWindow] = useState<Window>();
   const pendingOperationRef = useRef<
     { operationId: number; sessionGeneration: number } | undefined
   >(undefined);
@@ -129,21 +127,6 @@ export function OtherDevices({ devices, refreshDeviceList, showVerification }: O
     }
   };
 
-  const acknowledgeSso = useCallback(async () => {
-    if (!challenge || working) return;
-    setWorking(true);
-    setDeleteFailed(false);
-    try {
-      await applyDeleteResult(
-        await acknowledgeNativeDeviceDeleteSso(challenge.operationId, challenge.sessionGeneration)
-      );
-    } catch {
-      setDeleteFailed(true);
-    } finally {
-      setWorking(false);
-    }
-  }, [applyDeleteResult, challenge, working]);
-
   const cancelDelete = useCallback(async () => {
     const pendingOperation = challenge
       ? {
@@ -155,46 +138,13 @@ export function OtherDevices({ devices, refreshDeviceList, showVerification }: O
     setChallenge(undefined);
     setDeleted(new Set());
     setDeleteFailed(false);
-    ssoWindow?.close();
-    setSsoWindow(undefined);
     if (pendingOperation) {
       await cancelNativeDeviceDelete(
         pendingOperation.operationId,
         pendingOperation.sessionGeneration
       ).catch(() => undefined);
     }
-  }, [challenge, ssoWindow]);
-
-  const openSso = useCallback(() => {
-    if (challenge?.ssoFallbackUrl) {
-      setSsoWindow(window.open(challenge.ssoFallbackUrl, '_blank') ?? undefined);
-    }
   }, [challenge]);
-
-  useEffect(() => {
-    if (!challenge?.ssoFallbackUrl || !ssoWindow) return undefined;
-    const fallbackOrigin = new URL(challenge.ssoFallbackUrl).origin;
-    const handleMessage = (event: MessageEvent) => {
-      if (
-        event.origin === fallbackOrigin &&
-        event.source === ssoWindow &&
-        event.data === 'authDone'
-      ) {
-        ssoWindow.close();
-        setSsoWindow(undefined);
-        void acknowledgeSso();
-      }
-    };
-    window.addEventListener('message', handleMessage);
-    return () => window.removeEventListener('message', handleMessage);
-  }, [acknowledgeSso, challenge, ssoWindow]);
-
-  useEffect(
-    () => () => {
-      ssoWindow?.close();
-    },
-    [ssoWindow]
-  );
 
   useEffect(
     () => () => {
@@ -301,7 +251,7 @@ export function OtherDevices({ devices, refreshDeviceList, showVerification }: O
               {deleteFailed && <Text size="T200">Failed to logout devices. Please try again.</Text>}
               {challenge?.authenticationFailed && (
                 <Text size="T200">
-                  Authentication was not completed. Check your password or finish SSO and try again.
+                  Authentication was not completed. Check your password and try again.
                 </Text>
               )}
               {authentication === 'password' && (
@@ -327,32 +277,6 @@ export function OtherDevices({ devices, refreshDeviceList, showVerification }: O
               >
                 <Text size="B300">Cancel</Text>
               </Button>
-              {authentication === 'sso_fallback' && (
-                <>
-                  {ssoWindow ? (
-                    <Button
-                      type="button"
-                      size="300"
-                      variant="Critical"
-                      radii="300"
-                      onClick={() => void acknowledgeSso()}
-                      disabled={working}
-                    >
-                      <Text size="B300">Continue</Text>
-                    </Button>
-                  ) : (
-                    <Button
-                      type="button"
-                      size="300"
-                      radii="300"
-                      onClick={openSso}
-                      disabled={working}
-                    >
-                      <Text size="B300">Open SSO</Text>
-                    </Button>
-                  )}
-                </>
-              )}
               {authentication === 'password' ? (
                 <Button
                   type="submit"

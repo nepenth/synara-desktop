@@ -229,17 +229,15 @@ fn login_flow_list_mapping() {
     let mapped = map_matrix_login_types(&[
         "m.login.password",
         "m.login.token",
-        "m.login.sso",
         "m.login.application_service",
         "m.login.custom.widget",
     ]);
-    assert_eq!(mapped.len(), 5);
+    assert_eq!(mapped.len(), 4);
     assert_eq!(mapped[0].kind, LoginFlowKind::Password);
     assert_eq!(mapped[1].kind, LoginFlowKind::Token);
-    assert_eq!(mapped[2].kind, LoginFlowKind::Sso);
-    assert_eq!(mapped[3].kind, LoginFlowKind::ApplicationService);
-    assert_eq!(mapped[4].kind, LoginFlowKind::Unknown);
-    assert_eq!(mapped[4].matrix_type, "m.login.custom.widget");
+    assert_eq!(mapped[2].kind, LoginFlowKind::ApplicationService);
+    assert_eq!(mapped[3].kind, LoginFlowKind::Unknown);
+    assert_eq!(mapped[3].matrix_type, "m.login.custom.widget");
 }
 
 #[test]
@@ -248,18 +246,7 @@ fn login_flow_discovery_mock_success() {
         .enable_all()
         .build()
         .unwrap();
-    let flows = vec![
-        LoginFlow::password(),
-        LoginFlow::sso(
-            vec![SsoIdentityProvider {
-                id: "oidc".into(),
-                name: "OIDC".into(),
-                brand: Some("oidc".into()),
-            }],
-            false,
-        ),
-        LoginFlow::token(true),
-    ];
+    let flows = vec![LoginFlow::password(), LoginFlow::token(true)];
     let transport =
         MockLoginFlowTransport::new().with_response("https://hs.example.org", flows.clone());
     let result = rt
@@ -267,11 +254,9 @@ fn login_flow_discovery_mock_success() {
         .expect("flows");
     assert_eq!(result.homeserver_base_url, "https://hs.example.org");
     assert!(result.password_available());
-    assert!(result.sso_available());
     assert!(result.supports(LoginFlowKind::Token));
-    assert_eq!(result.flows.len(), 3);
-    assert_eq!(result.flows[1].identity_providers[0].id, "oidc");
-    assert_eq!(result.flows[2].get_login_token, Some(true));
+    assert_eq!(result.flows.len(), 2);
+    assert_eq!(result.flows[1].get_login_token, Some(true));
 }
 
 #[test]
@@ -302,7 +287,7 @@ fn end_to_end_discovery_then_login_flows_with_mocks() {
     let disc = MockDiscoveryTransport::new().with_response("example.org", wk);
     let flows_transport = MockLoginFlowTransport::new().with_response(
         "https://matrix.example.org",
-        vec![LoginFlow::password(), LoginFlow::sso(vec![], false)],
+        vec![LoginFlow::password(), LoginFlow::token(false)],
     );
 
     let (discovered, flows) = rt
@@ -314,7 +299,7 @@ fn end_to_end_discovery_then_login_flows_with_mocks() {
         .unwrap();
     assert_eq!(discovered.homeserver_base_url, "https://matrix.example.org");
     assert!(flows.password_available());
-    assert!(flows.sso_available());
+    assert!(flows.supports(LoginFlowKind::Token));
 }
 
 #[test]
@@ -424,85 +409,6 @@ fn login_flow_kind_matrix_type_roundtrip() {
         assert_eq!(LoginFlowKind::from_matrix_type(mt), *kind);
         assert!(!kind.as_str().is_empty());
     }
-}
-
-// --- P3.3 SSO callback lifecycle ---
-
-#[test]
-fn sso_happy_path() {
-    let mut flow = SsoCallbackFlow::new(2);
-    let op = flow
-        .begin(
-            "state-abc",
-            "synara-desktop://sso-callback",
-            Some("github".into()),
-            Some("https://matrix.example.org".into()),
-        )
-        .unwrap();
-    assert_eq!(flow.phase(), SsoCallbackPhase::AwaitingBrowser);
-    assert!(flow.is_active());
-    flow.on_callback("state-abc", op).unwrap();
-    assert_eq!(flow.phase(), SsoCallbackPhase::CallbackReceived);
-    flow.begin_exchange(op).unwrap();
-    let out = flow.complete_success(op).unwrap();
-    assert_eq!(out.session_generation, 2);
-    assert_eq!(out.idp_id.as_deref(), Some("github"));
-    assert_eq!(flow.phase(), SsoCallbackPhase::Succeeded);
-    assert!(flow.never_stores_tokens());
-    assert!(flow.state_id().is_none());
-}
-
-#[test]
-fn sso_state_mismatch_fails() {
-    let mut flow = SsoCallbackFlow::new(1);
-    let op = flow
-        .begin("good", "https://app.example.org/cb", None, None)
-        .unwrap();
-    let err = flow.on_callback("bad", op).unwrap_err();
-    assert_eq!(err.diagnostic_id(), "p3.3-state-mismatch");
-    assert_eq!(flow.phase(), SsoCallbackPhase::Failed);
-}
-
-#[test]
-fn sso_forbids_secret_redirect_and_http() {
-    let mut flow = SsoCallbackFlow::new(1);
-    let err = flow
-        .begin("s", "http://insecure.example/cb", None, None)
-        .unwrap_err();
-    assert_eq!(err.diagnostic_id(), "p3.3-forbidden-redirect-scheme");
-    let err = flow
-        .begin(
-            "s",
-            "https://app.example.org/cb?access_token=leak",
-            None,
-            None,
-        )
-        .unwrap_err();
-    assert_eq!(err.diagnostic_id(), "p3.3-redirect-forbids-secrets");
-}
-
-#[test]
-fn sso_cancel_and_stale_op() {
-    let mut flow = SsoCallbackFlow::new(1);
-    let op = flow.begin("s", "synara://sso", None, None).unwrap();
-    flow.cancel(op).unwrap();
-    assert_eq!(flow.phase(), SsoCallbackPhase::Cancelled);
-    let err = flow.begin_exchange(op).unwrap_err();
-    assert_eq!(err.diagnostic_id(), "p3.3-exchange-wrong-phase");
-    flow.reset();
-    let op2 = flow.begin("s2", "synara://sso", None, None).unwrap();
-    let err = flow.on_callback("s2", op2 + 99).unwrap_err();
-    assert_eq!(err.diagnostic_id(), "p3.3-stale-sso-op");
-}
-
-#[test]
-fn sso_retire_generation_wipes() {
-    let mut flow = SsoCallbackFlow::new(1);
-    flow.begin("s", "synara://sso", None, None).unwrap();
-    flow.retire_generation(5);
-    assert_eq!(flow.session_generation(), 5);
-    assert!(!flow.is_active());
-    assert_eq!(flow.phase(), SsoCallbackPhase::Idle);
 }
 
 // --- P3.4 UIA session ---

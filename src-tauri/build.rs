@@ -52,7 +52,6 @@ const DESKTOP_COMMANDS: &[&str] = &[
     "matrix_device_rename",
     "matrix_device_delete_start",
     "matrix_device_delete_password",
-    "matrix_device_delete_sso_acknowledge",
     "matrix_device_delete_cancel",
 ];
 

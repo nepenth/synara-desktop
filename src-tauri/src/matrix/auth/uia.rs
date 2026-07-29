@@ -47,7 +47,6 @@ pub enum UiaStageKind {
     Terms,
     Dummy,
     RegistrationToken,
-    Sso,
     /// Unrecognized `m.login.*` stage.
     Unknown,
 }
@@ -62,7 +61,6 @@ impl UiaStageKind {
             Self::Terms => "terms",
             Self::Dummy => "dummy",
             Self::RegistrationToken => "registration_token",
-            Self::Sso => "sso",
             Self::Unknown => "unknown",
         }
     }
@@ -76,7 +74,6 @@ impl UiaStageKind {
             "m.login.terms" => Self::Terms,
             "m.login.dummy" => Self::Dummy,
             "m.login.registration_token" => Self::RegistrationToken,
-            "m.login.sso" => Self::Sso,
             _ => Self::Unknown,
         }
     }
