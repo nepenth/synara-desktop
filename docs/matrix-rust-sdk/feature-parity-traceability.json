@@ -71052,7 +71052,7 @@
             "task_id": "P8.7",
             "phase": "Phase 8 — E2EE, devices, verification, backup, and recovery",
             "level": "integration-e2e",
-            "scenario": "Existing disposable-Synapse scenario: receiver shows pending UTD, keys arrive through native recovery, plaintext replaces without restart or Retry click, paginated insertion follows the SDK event-cache/redecryptor path, and currently unavailable UTD remains honest and live for later keys.",
+        "scenario": "Existing disposable-Synapse native receiver scenario: pending UTD, later keys, automatic plaintext replacement, SDK event-cache pagination insertion/redecryptor route, and honest currently-unavailable state that remains live for later keys.",
             "test_target": "Managed NativeTimelineRegistry plus NativeRoomTimeline",
             "preconditions": [
               "Disposable Synapse and two E2EE-capable sessions"
@@ -71074,8 +71074,8 @@
             "does_not_currently_exist": true,
             "clause_breakdown": [
               "pending state",
-              "automatic retry/readback",
-              "currently unavailable state",
+          "automatic SDK late-key readback",
+          "currently unavailable state remains observable",
               "privacy"
             ]
           }
@@ -107322,6 +107322,7 @@
           "privacy"
         ]
       },
+      {
         "id": "AT-FR-7.9-009-001",
         "requirement_id": "FR-7.9-009",
         "kind": "planned-required",
@@ -111161,6 +111162,7 @@
         "P5.10/P8.7 managed timeline ownership"
       ]
     },
+    {
       "id": "MA-FR-7.9-009",
       "requirement_id": "FR-7.9-009",
       "platforms": [
