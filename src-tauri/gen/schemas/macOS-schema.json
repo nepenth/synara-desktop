@@ -615,6 +615,36 @@
           "markdownDescription": "Enables the matrix_device_snapshot command without any pre-configured scope."
         },
         {
+          "description": "Enables the matrix_invites_accept command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-invites-accept",
+          "markdownDescription": "Enables the matrix_invites_accept command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_invites_block_sender command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-invites-block-sender",
+          "markdownDescription": "Enables the matrix_invites_block_sender command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_invites_decline command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-invites-decline",
+          "markdownDescription": "Enables the matrix_invites_decline command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_invites_report_spam command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-invites-report-spam",
+          "markdownDescription": "Enables the matrix_invites_report_spam command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_invites_snapshot command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-invites-snapshot",
+          "markdownDescription": "Enables the matrix_invites_snapshot command without any pre-configured scope."
+        },
+        {
           "description": "Enables the matrix_login_password command without any pre-configured scope.",
           "type": "string",
           "const": "allow-matrix-login-password",
@@ -1039,6 +1069,36 @@
           "type": "string",
           "const": "deny-matrix-device-snapshot",
           "markdownDescription": "Denies the matrix_device_snapshot command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_invites_accept command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-invites-accept",
+          "markdownDescription": "Denies the matrix_invites_accept command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_invites_block_sender command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-invites-block-sender",
+          "markdownDescription": "Denies the matrix_invites_block_sender command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_invites_decline command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-invites-decline",
+          "markdownDescription": "Denies the matrix_invites_decline command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_invites_report_spam command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-invites-report-spam",
+          "markdownDescription": "Denies the matrix_invites_report_spam command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_invites_snapshot command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-invites-snapshot",
+          "markdownDescription": "Denies the matrix_invites_snapshot command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_login_password command without any pre-configured scope.",
