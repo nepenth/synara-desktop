@@ -11,7 +11,7 @@
 
 | Field              | Value                                                                                                                                                                                                                                     |
 | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Last updated (UTC) | **2026-07-29 ~00:10**                                                                                                                                                                                                                     |
+| Last updated (UTC) | **2026-07-29 ~01:25**                                                                                                                                                                                                                     |
 | Integration tip    | `fd7c934` — full-vertical policy alignment merged (#228)                                                                                                                                                                                  |
 | Active work        | [#227](https://github.com/nepenth/synara-desktop/pull/227) V-CRYPTO.5 draft; closure implementation under reviewed-SHA validation                                                                                                         |
 | Product runtime    | Native owns core D0 path and wired crypto surfaces; superseded JS implementations/imports remain deletion residuals                                                                                                                       |
@@ -61,13 +61,13 @@ Update rules:
 
 ### 2026-07-29 (UTC) — plan alignment
 
-| When (UTC) | Item                         | Result        | Notes                                                                                                                               |
-| ---------- | ---------------------------- | ------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| ~01:05     | **V-CRYPTO.5 closure**       | **This PR**   | Single Rust IPC owner; legacy WebView/keyfile crypto deleted; failed-import retry made generation-safe; reviewed-SHA gates pending. |
-| ~01:01     | **Plan alignment #228**      | **Merged**    | Tip `fd7c934`; per-vertical deletion metrics and Codex orchestration made binding.                                                  |
-| ~00:10     | **Execution model**          | **Clarified** | Codex `gpt-5.6-sol` medium orchestrates and delegates; Grok is temporarily unavailable; MiniMax-M3 remains optional.                |
-| ~00:10     | **Physical deletion policy** | **Clarified** | Superseded JS implementation/imports are deleted in each owning vertical. V-BURN becomes final convergence/dependency removal.      |
-| ~00:10     | **V-CRYPTO status audit**    | **Corrected** | #223–#226 are product-wired but deletion-open; #227 must remove its legacy path before closure.                                     |
+| When (UTC) | Item                         | Result        | Notes                                                                                                                                         |
+| ---------- | ---------------------------- | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| ~01:25     | **V-CRYPTO.5 closure**       | **This PR**   | Single Rust IPC owner; legacy WebView/keyfile crypto deleted; retry and incomplete-export cleanup made race-safe; reviewed-SHA gates pending. |
+| ~01:01     | **Plan alignment #228**      | **Merged**    | Tip `fd7c934`; per-vertical deletion metrics and Codex orchestration made binding.                                                            |
+| ~00:10     | **Execution model**          | **Clarified** | Codex `gpt-5.6-sol` medium orchestrates and delegates; Grok is temporarily unavailable; MiniMax-M3 remains optional.                          |
+| ~00:10     | **Physical deletion policy** | **Clarified** | Superseded JS implementation/imports are deleted in each owning vertical. V-BURN becomes final convergence/dependency removal.                |
+| ~00:10     | **V-CRYPTO status audit**    | **Corrected** | #223–#226 are product-wired but deletion-open; #227 must remove its legacy path before closure.                                               |
 
 ### 2026-07-28 (V-CRYPTO product wiring)
 
