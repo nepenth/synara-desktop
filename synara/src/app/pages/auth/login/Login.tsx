@@ -5,7 +5,7 @@ import { useAuthFlows } from '../../../hooks/useAuthFlows';
 import { useAuthServer } from '../../../hooks/useAuthServer';
 import { useParsedLoginFlows } from '../../../hooks/useParsedLoginFlows';
 import { PasswordLoginForm } from './PasswordLoginForm';
-import { getLoginPath, getRegisterPath } from '../../pathUtils';
+import { getRegisterPath } from '../../pathUtils';
 import { LoginPathSearchParams } from '../../paths';
 
 const useLoginSearchParams = (searchParams: URLSearchParams): LoginPathSearchParams =>

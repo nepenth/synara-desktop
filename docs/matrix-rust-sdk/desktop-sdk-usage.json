@@ -11,9 +11,9 @@
         },
         "authenticated_media": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 7,
+          "fileCount": 6,
           "listenerCandidateOccurrences": 0,
-          "methodCandidateOccurrences": 9,
+          "methodCandidateOccurrences": 7,
           "networkingOccurrences": 0
         },
         "client_events": {
@@ -25,7 +25,7 @@
         },
         "client_methods": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 121,
+          "fileCount": 120,
           "listenerCandidateOccurrences": 0,
           "methodCandidateOccurrences": 0,
           "networkingOccurrences": 0
@@ -102,9 +102,9 @@
         },
         "searches": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 4,
+          "fileCount": 3,
           "listenerCandidateOccurrences": 0,
-          "methodCandidateOccurrences": 4,
+          "methodCandidateOccurrences": 3,
           "networkingOccurrences": 0
         },
         "spaces": {
@@ -150,8 +150,8 @@
           "networkingOccurrences": 0
         }
       },
-      "fileCount": 203,
-      "importFileCount": 201,
+      "fileCount": 199,
+      "importFileCount": 197,
       "methodCandidateFrequencies": [
         {
           "count": 78,
@@ -219,10 +219,6 @@
         },
         {
           "count": 5,
-          "name": "mxcUrlToHttp"
-        },
-        {
-          "count": 5,
           "name": "redactEvent"
         },
         {
@@ -251,7 +247,7 @@
         },
         {
           "count": 3,
-          "name": "search"
+          "name": "mxcUrlToHttp"
         },
         {
           "count": 3,
@@ -292,6 +288,10 @@
         {
           "count": 2,
           "name": "retryImmediately"
+        },
+        {
+          "count": 2,
+          "name": "search"
         },
         {
           "count": 1,
@@ -396,8 +396,8 @@
           "importOccurrences": 60
         },
         "MatrixError": {
-          "fileCount": 41,
-          "importOccurrences": 41
+          "fileCount": 40,
+          "importOccurrences": 40
         },
         "MatrixEvent": {
           "fileCount": 35,
@@ -424,14 +424,14 @@
           "importOccurrences": 0
         },
         "createClient": {
-          "fileCount": 6,
-          "importOccurrences": 6
+          "fileCount": 5,
+          "importOccurrences": 5
         }
       },
       "modules": [
         {
-          "fileCount": 192,
-          "importCount": 192,
+          "fileCount": 188,
+          "importCount": 188,
           "path": "matrix-js-sdk"
         },
         {
@@ -555,11 +555,11 @@
           "valueImports": 54
         },
         {
-          "fileCount": 41,
-          "importCount": 41,
+          "fileCount": 40,
+          "importCount": 40,
           "name": "MatrixError",
           "typeImports": 0,
-          "valueImports": 41
+          "valueImports": 40
         },
         {
           "fileCount": 35,
@@ -674,13 +674,6 @@
           "valueImports": 5
         },
         {
-          "fileCount": 6,
-          "importCount": 6,
-          "name": "createClient",
-          "typeImports": 0,
-          "valueImports": 6
-        },
-        {
           "fileCount": 5,
           "importCount": 5,
           "name": "EventTimeline",
@@ -698,6 +691,13 @@
           "fileCount": 5,
           "importCount": 5,
           "name": "RelationType",
+          "typeImports": 0,
+          "valueImports": 5
+        },
+        {
+          "fileCount": 5,
+          "importCount": 5,
+          "name": "createClient",
           "typeImports": 0,
           "valueImports": 5
         },
@@ -803,13 +803,6 @@
           "fileCount": 3,
           "importCount": 3,
           "name": "RuleId",
-          "typeImports": 0,
-          "valueImports": 3
-        },
-        {
-          "fileCount": 3,
-          "importCount": 3,
-          "name": "SSOAction",
           "typeImports": 0,
           "valueImports": 3
         },
@@ -1040,20 +1033,6 @@
         {
           "fileCount": 1,
           "importCount": 1,
-          "name": "IIdentityProvider",
-          "typeImports": 0,
-          "valueImports": 1
-        },
-        {
-          "fileCount": 1,
-          "importCount": 1,
-          "name": "ILoginFlow",
-          "typeImports": 0,
-          "valueImports": 1
-        },
-        {
-          "fileCount": 1,
-          "importCount": 1,
           "name": "ILoginFlowsResponse",
           "typeImports": 0,
           "valueImports": 1
@@ -1125,13 +1104,6 @@
           "fileCount": 1,
           "importCount": 1,
           "name": "IRoomTimelineData",
-          "typeImports": 0,
-          "valueImports": 1
-        },
-        {
-          "fileCount": 1,
-          "importCount": 1,
-          "name": "ISSOFlow",
           "typeImports": 0,
           "valueImports": 1
         },
@@ -8705,17 +8677,7 @@
             {
               "alias": null,
               "isTypeOnly": false,
-              "name": "ILoginFlow"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
               "name": "IPasswordFlow"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "ISSOFlow"
             },
             {
               "alias": null,
@@ -10556,97 +10518,6 @@
     },
     {
       "bucket": "page",
-      "categories": ["client_methods", "authenticated_media"],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 2,
-          "module": "matrix-js-sdk",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "IIdentityProvider"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "SSOAction"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "createClient"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [],
-      "methodCandidates": [
-        {
-          "category": "authenticated_media",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_call_candidate",
-          "line": 22,
-          "name": "mxcUrlToHttp"
-        },
-        {
-          "category": "authenticated_media",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_call_candidate",
-          "line": 33,
-          "name": "mxcUrlToHttp"
-        }
-      ],
-      "modelCoupling": ["createClient"],
-      "networking": [],
-      "path": "synara/src/app/pages/auth/SSOLogin.tsx",
-      "role": "production"
-    },
-    {
-      "bucket": "page",
-      "categories": ["searches"],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 4,
-          "module": "matrix-js-sdk",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "SSOAction"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [],
-      "methodCandidates": [
-        {
-          "category": "searches",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_reference_candidate",
-          "line": 22,
-          "name": "search"
-        }
-      ],
-      "modelCoupling": [],
-      "networking": [],
-      "path": "synara/src/app/pages/auth/login/Login.tsx",
-      "role": "production"
-    },
-    {
-      "bucket": "page",
       "categories": [],
       "constructorCandidates": [],
       "desktopRuntime": true,
@@ -10672,35 +10543,6 @@
       "modelCoupling": ["MatrixError"],
       "networking": [],
       "path": "synara/src/app/pages/auth/login/PasswordLoginForm.tsx",
-      "role": "production"
-    },
-    {
-      "bucket": "page",
-      "categories": [],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 14,
-          "module": "matrix-js-sdk",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "MatrixError"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [],
-      "methodCandidates": [],
-      "modelCoupling": ["MatrixError"],
-      "networking": [],
-      "path": "synara/src/app/pages/auth/login/TokenLogin.tsx",
       "role": "production"
     },
     {
@@ -10804,35 +10646,6 @@
       "modelCoupling": ["MatrixError", "createClient"],
       "networking": [],
       "path": "synara/src/app/pages/auth/register/PasswordRegisterForm.tsx",
-      "role": "production"
-    },
-    {
-      "bucket": "page",
-      "categories": [],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 4,
-          "module": "matrix-js-sdk",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "SSOAction"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [],
-      "methodCandidates": [],
-      "modelCoupling": [],
-      "networking": [],
-      "path": "synara/src/app/pages/auth/register/Register.tsx",
       "role": "production"
     },
     {
@@ -15657,7 +15470,7 @@
         "feature": 56,
         "hook": 51,
         "media-boundary": 1,
-        "page": 19,
+        "page": 15,
         "plugin": 8,
         "shared-type": 1,
         "state": 13,
@@ -15669,13 +15482,13 @@
         "matchesProduction": false,
         "matchesTest": false
       },
-      "productionImportFiles": 201,
+      "productionImportFiles": 197,
       "sourcePrefix": "synara/src/",
       "testImportFiles": 11,
-      "totalImportFiles": 212
+      "totalImportFiles": 208
     },
     "repositoryWide": {
-      "productionImportFiles": 201,
+      "productionImportFiles": 197,
       "productionNetworkingFiles": 2,
       "productionNetworkingFindings": 3,
       "testImportFiles": 11,
@@ -15684,7 +15497,7 @@
       "toolingImportFiles": 3,
       "toolingNetworkingFiles": 2,
       "toolingNetworkingFindings": 5,
-      "totalImportFiles": 215
+      "totalImportFiles": 211
     }
   }
 }
