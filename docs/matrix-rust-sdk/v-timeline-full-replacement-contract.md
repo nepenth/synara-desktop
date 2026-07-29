@@ -75,14 +75,17 @@ SDK/Ruma types.
 
 The version-one Rust `TimelineViewSnapshot`/`TimelineViewRow` contract now
 exists in `src-tauri/src/matrix/timeline/view.rs`, including opaque media
-handles and explicit capability gates. Its pure SDK projection now covers SDK
-virtual date/read/start rows plus safe message/relation, poll, membership,
-profile/state, call, redaction, and UTD row shapes. It deliberately does not
-claim projection completion: stickers require the native media resolver,
-reaction ownership requires the native active-user context, and native unread,
-pagination, read-frontier, viewport, delta, and presenter ownership still
-remain. The existing flat `NativeTimelineSnapshot` remains the old foundation
-until those owners replace it.
+handles and explicit capability gates. `matrix_timeline_open` now returns this
+versioned boundary from the managed SDK timeline, without activating a React
+consumer. Its projection covers SDK virtual date/read/start rows plus safe
+message/relation, poll, membership, profile/state, call, redaction, and UTD
+row shapes. Reaction ownership is calculated from the active native user; its
+action capability remains closed until V-SEND.2 is integrated. It deliberately
+does not claim projection completion: stickers require the native media
+resolver, and native unread, pagination, read-frontier, viewport, delta, and
+presenter ownership still remain. The flat
+`NativeTimelineSnapshot` remains only for the explicitly temporary V-CRYPTO.6
+bridge until those owners replace it.
 
 ## Actions and sequencing
 
