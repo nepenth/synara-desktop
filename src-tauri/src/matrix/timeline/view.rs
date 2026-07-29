@@ -53,6 +53,7 @@ pub struct TimelineReadState {
     pub own_read_event_id: Option<EventId>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub unread_anchor_event_id: Option<EventId>,
+    pub is_marked_unread: bool,
 }
 
 /// Opaque reference resolved only by a bounded native media protocol.

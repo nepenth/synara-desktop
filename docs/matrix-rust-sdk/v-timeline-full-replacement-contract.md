@@ -126,7 +126,7 @@ legacy composer or a rich reply/edit flow.
 | Plain-text reply | Native send plus native reply draft/composer state | Transport input exists; UI owner pending |
 | Rich send, edit, forward | Typed send/edit/forward DTO commands | Pending |
 | Redact, report, pin | Typed room-event action commands | Pending |
-| Mark read/unread, receipts | Native receipt/read-frontier command and readback | Pending |
+| Mark read/unread, receipts | Native receipt/read-frontier command and readback | Stream-addressed private `m.read` / unread-flag command and snapshot readback exist; unread positioning/frontier signals still pending |
 | Save/later/notes/reminders | Typed account-data commands and snapshot | Pending |
 | Media/sticker image display | Bounded native media-handle resolver | Pending; invite-avatar handling is not general timeline media |
 | Poll vote and call controls | Typed poll/call commands with capability readback | Pending |
