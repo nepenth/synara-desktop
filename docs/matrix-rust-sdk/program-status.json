@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "as_of_date": "2026-07-28",
-  "source_of_truth": "Current delivery and strict-acceptance state only; dated evidence and audit artifacts remain historical sources.",
+  "source_of_truth": "Original-plan inventory, strict gates, release runtime, and current full-vertical product execution. Dated evidence and audit artifacts remain historical sources.",
   "integration_branch": "feature/matrix-rust-sdk-full-replacement",
   "audited_snapshot": {
     "sha": "edfefee499064b736985b6528896b693e5120f22",
@@ -94,9 +94,45 @@
     "dual_backend": false,
     "cutover_state": "not_started"
   },
+  "vertical_execution": {
+    "policy": "full-vertical-delete-per-vertical",
+    "integration_product_state": "capability-cutover-in-progress",
+    "active_slice": "V-CRYPTO.5",
+    "active_pr": 227,
+    "completed_slices": [],
+    "wired_deletion_open": [
+      "V-CRYPTO.1",
+      "V-CRYPTO.2",
+      "V-CRYPTO.3",
+      "V-CRYPTO.4"
+    ],
+    "next_slices": [
+      "V-CRYPTO.1-D",
+      "V-CRYPTO.2-D",
+      "V-CRYPTO.3-D",
+      "V-CRYPTO.4-D",
+      "V-CRYPTO.6",
+      "V-CRYPTO.7"
+    ],
+    "held_prs": [221],
+    "completion_evidence": {
+      "capability_owner_delta": "negative",
+      "global_direct_import_delta": "recorded-non-increasing"
+    },
+    "matrix_js_sdk_import_inventory": {
+      "baseline": {
+        "files": 232,
+        "import_lines": 292
+      },
+      "current": {
+        "files": 232,
+        "import_lines": 292
+      }
+    }
+  },
   "current_execution": {
     "active_task": null,
-    "next_task": "P7.4",
+    "next_task": null,
     "blocked_tasks": []
   },
   "phase_gates": [
@@ -111,48 +147,21 @@
         "P0.6",
         "P0.7"
       ],
-      "blocked_by": [
-        "R0.2",
-        "R0.8"
-      ],
+      "blocked_by": ["R0.2", "R0.8"],
       "strict_acceptance_state": "open",
       "phase_gate_state": "open"
     },
     {
       "phase": 1,
-      "planned_task_ids": [
-        "P1.1",
-        "P1.2",
-        "P1.3",
-        "P1.4",
-        "P1.5",
-        "P1.6"
-      ],
-      "blocked_by": [
-        "R0.1",
-        "R0.3",
-        "R0.8"
-      ],
+      "planned_task_ids": ["P1.1", "P1.2", "P1.3", "P1.4", "P1.5", "P1.6"],
+      "blocked_by": ["R0.1", "R0.3", "R0.8"],
       "strict_acceptance_state": "open",
       "phase_gate_state": "open"
     },
     {
       "phase": 2,
-      "planned_task_ids": [
-        "P2.1",
-        "P2.2",
-        "P2.3",
-        "P2.4",
-        "P2.5",
-        "P2.6"
-      ],
-      "blocked_by": [
-        "R0.4",
-        "R0.5",
-        "R0.6",
-        "R0.7",
-        "R0.8"
-      ],
+      "planned_task_ids": ["P2.1", "P2.2", "P2.3", "P2.4", "P2.5", "P2.6"],
+      "blocked_by": ["R0.4", "R0.5", "R0.6", "R0.7", "R0.8"],
       "strict_acceptance_state": "open",
       "phase_gate_state": "open"
     },
@@ -168,10 +177,7 @@
         "P3.7",
         "P3.8"
       ],
-      "blocked_by": [
-        "R0.7",
-        "R0.8"
-      ],
+      "blocked_by": ["R0.7", "R0.8"],
       "strict_acceptance_state": "open",
       "phase_gate_state": "open"
     },
@@ -258,14 +264,7 @@
     },
     {
       "phase": 9,
-      "planned_task_ids": [
-        "P9.1",
-        "P9.2",
-        "P9.3",
-        "P9.4",
-        "P9.5",
-        "P9.6"
-      ],
+      "planned_task_ids": ["P9.1", "P9.2", "P9.3", "P9.4", "P9.5", "P9.6"],
       "blocked_by": [],
       "strict_acceptance_state": "not_reviewed",
       "phase_gate_state": "open"
@@ -745,14 +744,14 @@
     {
       "id": "P7.4",
       "artifact_state": "landed",
-      "integration_state": "pr_open",
+      "integration_state": "merged",
       "strict_acceptance_state": "open",
       "phase_gate_state": "open"
     },
     {
       "id": "P7.5",
       "artifact_state": "landed",
-      "integration_state": "pr_open",
+      "integration_state": "merged",
       "strict_acceptance_state": "open",
       "phase_gate_state": "open"
     },
