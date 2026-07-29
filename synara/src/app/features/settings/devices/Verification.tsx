@@ -17,7 +17,7 @@ import {
   IconButton,
 } from 'folds';
 import FocusTrap from 'focus-trap-react';
-import { VerificationStatus } from '../../../hooks/useDeviceVerificationStatus';
+import { VerificationStatus } from './nativeDevices';
 import { InfoCard } from '../../../components/info-card';
 import { NativeStartVerification } from '../../verification/NativeDeviceVerification';
 import {
@@ -36,13 +36,10 @@ export function VerificationStatusBadge({
   verificationStatus,
   otherUnverifiedCount,
 }: VerificationStatusBadgeProps) {
-  if (
-    verificationStatus === VerificationStatus.Unknown ||
-    typeof otherUnverifiedCount !== 'number'
-  ) {
+  if (verificationStatus === 'unknown' || typeof otherUnverifiedCount !== 'number') {
     return <Spinner size="400" variant="Secondary" />;
   }
-  if (verificationStatus === VerificationStatus.Unverified) {
+  if (verificationStatus === 'unverified') {
     return (
       <Badge variant="Critical" fill="Solid" size="500">
         <Text size="L400">Unverified</Text>

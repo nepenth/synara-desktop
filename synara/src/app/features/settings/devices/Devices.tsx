@@ -4,21 +4,15 @@ import { Page, PageContent, PageHeader } from '../../../components/page';
 import { SequenceCard } from '../../../components/sequence-card';
 import { SequenceCardStyle } from '../styles.css';
 import { SettingTile } from '../../../components/setting-tile';
-import { useDeviceIds, useDeviceList, useSplitCurrentDevice } from '../../../hooks/useDeviceList';
-import { useMatrixClient } from '../../../hooks/useMatrixClient';
+import { useDeviceList, useSplitCurrentDevice } from '../../../hooks/useDeviceList';
 import { LocalBackup } from './LocalBackup';
-import { DeviceLogoutBtn, DeviceKeyDetails, DeviceTile, DeviceTilePlaceholder } from './DeviceTile';
+import { DeviceLogoutBtn, DeviceTile, DeviceTilePlaceholder } from './DeviceTile';
 import { OtherDevices } from './OtherDevices';
 import {
   EnableVerification,
   VerificationStatusBadge,
   VerifyCurrentDeviceTile,
 } from './Verification';
-import {
-  useDeviceVerificationStatus,
-  useUnverifiedDeviceCount,
-  VerificationStatus,
-} from '../../../hooks/useDeviceVerificationStatus';
 import { useCrossSigning } from '../../../hooks/useCrossSigning';
 import { BackupRestoreTile } from '../../../components/BackupRestore';
 import { isNativeMatrixSession } from '../../verification/nativeVerification';
@@ -37,18 +31,16 @@ type DevicesProps = {
   requestClose: () => void;
 };
 export function Devices({ requestClose }: DevicesProps) {
-  const mx = useMatrixClient();
   const nativeSession = isNativeMatrixSession();
-  const crypto = nativeSession ? undefined : mx.getCrypto();
   const crossSigning = useCrossSigning();
   const crossSigningActive = crossSigning.active;
   const [devices, refreshDeviceList] = useDeviceList();
 
   const [currentDevice, otherDevices] = useSplitCurrentDevice(devices);
-  const verificationStatus = useDeviceVerificationStatus(currentDevice?.device_id);
-
-  const otherDevicesId = useDeviceIds(otherDevices);
-  const unverifiedDeviceCount = useUnverifiedDeviceCount(otherDevicesId);
+  const verificationStatus = currentDevice?.trust ?? 'unknown';
+  const unverifiedDeviceCount = otherDevices?.filter(
+    (device) => device.trust === 'unverified'
+  ).length;
 
   return (
     <Page>
@@ -126,10 +118,8 @@ export function Devices({ requestClose }: DevicesProps) {
                       device={currentDevice}
                       refreshDeviceList={refreshDeviceList}
                       options={<DeviceLogoutBtn />}
-                    >
-                      {crypto && <DeviceKeyDetails crypto={crypto} />}
-                    </DeviceTile>
-                    {crossSigningActive && verificationStatus === VerificationStatus.Unverified && (
+                    ></DeviceTile>
+                    {crossSigningActive && verificationStatus === 'unverified' && (
                       <VerifyCurrentDeviceTile />
                     )}
                   </SequenceCard>
@@ -142,9 +132,7 @@ export function Devices({ requestClose }: DevicesProps) {
                 <OtherDevices
                   devices={otherDevices}
                   refreshDeviceList={refreshDeviceList}
-                  showVerification={
-                    crossSigningActive && verificationStatus === VerificationStatus.Verified
-                  }
+                  showVerification={crossSigningActive && verificationStatus === 'verified'}
                 />
               )}
               <LocalBackup />

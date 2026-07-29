@@ -1,7 +1,6 @@
 export * from './agentActions';
 export * from './badge';
 export * from './capabilities';
-export * from './device';
 export * from './diagnostics';
 export * from './files';
 export * from './links';

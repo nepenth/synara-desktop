@@ -1,79 +1,72 @@
-import { useEffect, useCallback, useMemo } from 'react';
-import { IMyDevice } from 'matrix-js-sdk';
-import { useQuery } from '@tanstack/react-query';
-import { CryptoEvent, CryptoEventHandlerMap } from 'matrix-js-sdk/lib/crypto-api';
-import { useMatrixClient } from './useMatrixClient';
+import { useCallback, useEffect, useMemo } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  getNativeDeviceSnapshot,
+  NativeDevice,
+  NativeDeviceSnapshot,
+} from '../features/settings/devices/nativeDevices';
 
-export const useDeviceListChange = (
-  onChange: CryptoEventHandlerMap[CryptoEvent.DevicesUpdated],
-  enabled = true
-) => {
-  const mx = useMatrixClient();
-  useEffect(() => {
-    if (!enabled) return undefined;
-    mx.on(CryptoEvent.DevicesUpdated, onChange);
-    return () => {
-      mx.removeListener(CryptoEvent.DevicesUpdated, onChange);
-    };
-  }, [enabled, mx, onChange]);
-};
+const DEVICES_QUERY_KEY = ['native-devices'];
+const DEVICE_LIST_UPDATED_EVENT = 'matrix-device-list-updated';
 
-const DEVICES_QUERY_KEY = ['devices'];
+export type RefreshDeviceList = (snapshot?: NativeDeviceSnapshot) => Promise<void>;
 
-export function useDeviceList(): [undefined | IMyDevice[], () => Promise<void>] {
-  const mx = useMatrixClient();
-
-  const fetchDevices = useCallback(async () => {
-    const data = await mx.getDevices();
-    return data.devices ?? [];
-  }, [mx]);
-
-  const { data: deviceList, refetch } = useQuery({
+export function useDeviceList(): [undefined | NativeDevice[], RefreshDeviceList] {
+  const queryClient = useQueryClient();
+  const { data: snapshot, refetch } = useQuery({
     queryKey: DEVICES_QUERY_KEY,
-    queryFn: fetchDevices,
+    queryFn: getNativeDeviceSnapshot,
     staleTime: 0,
     gcTime: Infinity,
     refetchOnMount: 'always',
+    refetchOnWindowFocus: 'always',
   });
 
-  const refreshDeviceList = useCallback(async () => {
-    await refetch();
-  }, [refetch]);
-
-  useDeviceListChange(
-    useCallback(
-      (users) => {
-        const userId = mx.getUserId();
-        if (userId && users.includes(userId)) {
-          refreshDeviceList();
-        }
-      },
-      [mx, refreshDeviceList]
-    )
+  const refreshDeviceList = useCallback(
+    async (authoritativeSnapshot?: NativeDeviceSnapshot) => {
+      if (authoritativeSnapshot) {
+        queryClient.setQueryData(DEVICES_QUERY_KEY, authoritativeSnapshot);
+        return;
+      }
+      await refetch();
+    },
+    [queryClient, refetch]
   );
 
-  return [deviceList ?? undefined, refreshDeviceList];
+  useEffect(() => {
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
+    void import('@tauri-apps/api/event')
+      .then(({ listen }) =>
+        listen<{ sessionGeneration: number }>(DEVICE_LIST_UPDATED_EVENT, (event) => {
+          if (
+            snapshot === undefined ||
+            event.payload.sessionGeneration === snapshot.sessionGeneration
+          ) {
+            void refreshDeviceList();
+          }
+        })
+      )
+      .then((cleanup) => {
+        if (disposed) cleanup();
+        else unlisten = cleanup;
+      })
+      .catch(() => undefined);
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, [refreshDeviceList, snapshot]);
+
+  return [snapshot?.devices, refreshDeviceList];
 }
 
-export const useDeviceIds = (devices: IMyDevice[] | undefined): string[] => {
-  const devicesId = useMemo(() => devices?.map((device) => device.device_id) ?? [], [devices]);
-
-  return devicesId;
-};
-
 export const useSplitCurrentDevice = (
-  devices: IMyDevice[] | undefined
-): [IMyDevice | undefined, IMyDevice[] | undefined] => {
-  const mx = useMatrixClient();
-  const currentDeviceId = mx.getDeviceId();
-  const currentDevice = useMemo(
-    () => devices?.find((d) => d.device_id === currentDeviceId),
-    [devices, currentDeviceId]
-  );
-  const otherDevices = useMemo(
-    () => devices?.filter((device) => device.device_id !== currentDeviceId),
-    [devices, currentDeviceId]
-  );
-
+  devices: NativeDevice[] | undefined
+): [NativeDevice | undefined, NativeDevice[] | undefined] => {
+  const currentDevice = useMemo(() => devices?.find((device) => device.isCurrent), [devices]);
+  const otherDevices = useMemo(() => devices?.filter((device) => !device.isCurrent), [devices]);
   return [currentDevice, otherDevices];
 };
+
+export type { NativeDevice, NativeDeviceSnapshot };
