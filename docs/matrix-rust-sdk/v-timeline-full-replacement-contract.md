@@ -70,6 +70,12 @@ rows; it also includes presentation rows for dates, unread marker, read marker,
 intro, and pagination. It never includes a `MatrixClient`, `Room`, `MatrixEvent`,
 raw event graph/content, ciphertext, media bytes, tokens, or SDK/Ruma types.
 
+The version-one Rust `TimelineViewSnapshot`/`TimelineViewRow` contract now
+exists in `src-tauri/src/matrix/timeline/view.rs`, including opaque media
+handles and explicit capability gates. It is a defined boundary, not a
+projection-complete claim: the existing flat `NativeTimelineSnapshot` remains
+the old foundation until projection and native delta ownership replace it.
+
 ## Actions and sequencing
 
 The presenter invokes narrow native commands rather than a generic event API.
