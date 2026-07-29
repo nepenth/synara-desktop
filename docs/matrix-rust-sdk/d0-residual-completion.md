@@ -83,6 +83,12 @@ Migration decision already decided: **`D-KEY-RECOVERY`** in [migration-ux-decisi
 | **V-TIMELINE.4** | Rich/media/state event render            | Native opaque media route and image/file/audio/video/sticker projection exist in draft `5e0c2a5`; remaining rich/state parity is open                                                                                                                                                                                                                                                            | Parity renderers on native DTOs                                                                 |
 | **V-TIMELINE.5** | Focused-event open / jump / pins / notes | Native focused and normal-open placement exist; active jump/pins/notes remain residual                                                                                                                                                                                                                                                                                                           | Native ownership                                                                                |
 
+The listed slices are delivery dependencies, not permission to delete the
+single JS `RoomTimeline` owner piecemeal. See
+[the full-replacement contract](v-timeline-full-replacement-contract.md): a
+native timeline shell or flat snapshot is not a completed V-TIMELINE.1 if it
+silently drops any retained timeline operating path.
+
 ### V-SEND — full send vertical (D0.4 gaps)
 
 | ID           | Capability                              | Residual today                                                                                                                                                                                                                                                                         | Done when                                               |
