@@ -7,7 +7,6 @@ import {
   SidebarItemTooltip,
 } from '../../../components/sidebar';
 import { useDeviceIds, useDeviceList, useSplitCurrentDevice } from '../../../hooks/useDeviceList';
-import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import * as css from './UnverifiedTab.css';
 import {
   useDeviceVerificationStatus,
@@ -17,29 +16,17 @@ import {
 import { useCrossSigningActive } from '../../../hooks/useCrossSigning';
 import { Modal500 } from '../../../components/Modal500';
 import { Settings, SettingsPages } from '../../../features/settings';
-import { isNativeMatrixSession } from '../../../features/verification/nativeVerification';
 
 function UnverifiedIndicator() {
-  const mx = useMatrixClient();
-
-  const crypto = isNativeMatrixSession() ? undefined : mx.getCrypto();
   const [devices] = useDeviceList();
 
   const [currentDevice, otherDevices] = useSplitCurrentDevice(devices);
 
-  const verificationStatus = useDeviceVerificationStatus(
-    crypto,
-    mx.getSafeUserId(),
-    currentDevice?.device_id
-  );
+  const verificationStatus = useDeviceVerificationStatus(currentDevice?.device_id);
   const unverified = verificationStatus === VerificationStatus.Unverified;
 
   const otherDevicesId = useDeviceIds(otherDevices);
-  const unverifiedDeviceCount = useUnverifiedDeviceCount(
-    crypto,
-    mx.getSafeUserId(),
-    otherDevicesId
-  );
+  const unverifiedDeviceCount = useUnverifiedDeviceCount(otherDevicesId);
 
   const [settings, setSettings] = useState(false);
   const closeSettings = () => setSettings(false);

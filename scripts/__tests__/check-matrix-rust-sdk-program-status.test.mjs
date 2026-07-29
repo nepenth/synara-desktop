@@ -133,11 +133,14 @@ test("tracks full-vertical execution and requires per-vertical deletion policy",
   assert.match(rendered, /Current full-vertical product execution/);
   assert.match(rendered, /full-vertical-delete-per-vertical/);
   assert.match(rendered, /Wired \/ deletion open/);
-  assert.match(rendered, /232 files \/ 292 import lines current/);
+  assert.match(rendered, /223 files \/ 280 import lines current/);
   assert.match(rendered, /negative capability-owner\/file deletion delta/);
   assert.match(rendered, /Integration product state: `between-slices-paused`/);
   assert.match(rendered, /Active slice: \*\*None\*\*/);
-  assert.match(rendered, /Completed under full policy: `V-CRYPTO\.5`/);
+  assert.match(
+    rendered,
+    /Completed under full policy: `V-CRYPTO\.1`, `V-CRYPTO\.5`/
+  );
 
   const wrongPolicy = clone(status);
   wrongPolicy.vertical_execution.policy = "bulk-delete-at-end";
@@ -155,21 +158,23 @@ test("tracks full-vertical execution and requires per-vertical deletion policy",
   );
 
   const duplicateResidual = clone(status);
-  duplicateResidual.vertical_execution.next_slices.push("V-CRYPTO.1-D");
+  duplicateResidual.vertical_execution.next_slices.push("V-CRYPTO.2-D");
   assert.throws(
     () => validateProgramStatus(duplicateResidual, plan),
     /duplicate IDs/
   );
 
   const importerRegression = clone(status);
-  importerRegression.vertical_execution.matrix_js_sdk_import_inventory.current.files += 1;
+  importerRegression.vertical_execution.matrix_js_sdk_import_inventory.current.files =
+    importerRegression.vertical_execution.matrix_js_sdk_import_inventory
+      .baseline.files + 1;
   assert.throws(
     () => validateProgramStatus(importerRegression, plan),
     /cannot exceed the full-vertical baseline/
   );
 
   const pausedWithActiveWork = clone(status);
-  pausedWithActiveWork.vertical_execution.active_slice = "V-CRYPTO.1-D";
+  pausedWithActiveWork.vertical_execution.active_slice = "V-CRYPTO.2-D";
   pausedWithActiveWork.vertical_execution.active_pr = 229;
   assert.throws(
     () => validateProgramStatus(pausedWithActiveWork, plan),

@@ -3,7 +3,6 @@ import {
   Badge,
   Box,
   Button,
-  Chip,
   color,
   config,
   Dialog,
@@ -22,14 +21,8 @@ import {
   MenuItem,
 } from 'folds';
 import FocusTrap from 'focus-trap-react';
-import { CryptoApi, VerificationRequest } from 'matrix-js-sdk/lib/crypto-api';
 import { VerificationStatus } from '../../../hooks/useDeviceVerificationStatus';
 import { InfoCard } from '../../../components/info-card';
-import { ManualVerificationTile } from '../../../components/ManualVerification';
-import { SecretStorageKeyContent } from '../../../../types/matrix/accountData';
-import { AsyncState, AsyncStatus, useAsync } from '../../../hooks/useAsyncCallback';
-import { useMatrixClient } from '../../../hooks/useMatrixClient';
-import { DeviceVerification } from '../../../components/DeviceVerification';
 import {
   DeviceVerificationReset,
   DeviceVerificationSetup,
@@ -86,265 +79,25 @@ export function VerificationStatusBadge({
   );
 }
 
-function LearnStartVerificationFromOtherDevice({
-  manualVerificationAvailable,
-}: {
-  manualVerificationAvailable: boolean;
-}) {
+export function VerifyCurrentDeviceTile() {
   return (
-    <Box direction="Column">
-      <Text size="T200">Steps to verify from another device.</Text>
-      <Text as="div" size="T200">
-        <ul style={{ margin: `${config.space.S100} 0` }}>
-          <li>Press Verify from Another Device.</li>
-          <li>Open your other verified device.</li>
-          <li>Accept the verification request.</li>
-          <li>Compare the emoji shown on both devices.</li>
-        </ul>
-      </Text>
-      {manualVerificationAvailable && (
-        <Text size="T200">
-          If you do not have any verified device press the <i>&quot;Verify Manually&quot;</i>{' '}
-          button.
-        </Text>
-      )}
-    </Box>
-  );
-}
-
-type VerifyCurrentDeviceTileProps = {
-  crypto?: CryptoApi;
-  secretStorageKeyId?: string;
-  secretStorageKeyContent?: SecretStorageKeyContent;
-};
-export function VerifyCurrentDeviceTile({
-  crypto,
-  secretStorageKeyId,
-  secretStorageKeyContent,
-}: VerifyCurrentDeviceTileProps) {
-  if (isNativeMatrixSession()) {
-    return (
-      <InfoCard
-        variant="Critical"
-        title="Unverified"
-        description="Use another verified device to compare emoji or decimal security codes."
-        after={<NativeStartVerification onExit={() => undefined} />}
-      />
-    );
-  }
-  if (!crypto) {
-    return (
-      <InfoCard
-        variant="Critical"
-        title="Verification unavailable"
-        description="Device verification is unavailable for this session."
-      />
-    );
-  }
-  return (
-    <LegacyVerifyCurrentDeviceTile
-      crypto={crypto}
-      secretStorageKeyId={secretStorageKeyId}
-      secretStorageKeyContent={secretStorageKeyContent}
+    <InfoCard
+      variant="Critical"
+      title="Unverified"
+      description="Use another verified device to compare emoji or decimal security codes."
+      after={<NativeStartVerification onExit={() => undefined} />}
     />
   );
 }
 
-function LegacyVerifyCurrentDeviceTile({
-  crypto,
-  secretStorageKeyId,
-  secretStorageKeyContent,
-}: {
-  crypto: CryptoApi;
-  secretStorageKeyId?: string;
-  secretStorageKeyContent?: SecretStorageKeyContent;
-}) {
-  const [learnMore, setLearnMore] = useState(false);
-
-  const [manualVerification, setManualVerification] = useState(false);
-  const handleCancelVerification = () => setManualVerification(false);
-  const manualVerificationAvailable = Boolean(secretStorageKeyId && secretStorageKeyContent);
-
-  const [requestState, setRequestState] = useState<AsyncState<VerificationRequest, Error>>({
-    status: AsyncStatus.Idle,
-  });
-
-  const requestVerification = useAsync<VerificationRequest, Error, []>(
-    useCallback(() => crypto.requestOwnUserVerification(), [crypto]),
-    setRequestState
-  );
-
-  const handleExit = useCallback(() => {
-    setRequestState({
-      status: AsyncStatus.Idle,
-    });
-  }, []);
-
-  const requesting = requestState.status === AsyncStatus.Loading;
-  const verificationOpen = requestState.status === AsyncStatus.Success;
-
-  return (
-    <>
-      <InfoCard
-        variant="Critical"
-        title="Unverified"
-        description={
-          <>
-            Use another verified device to compare emoji
-            {manualVerificationAvailable ? ' or verify manually with your recovery key' : ''}.{' '}
-            <Text as="a" size="T200" onClick={() => setLearnMore(!learnMore)}>
-              <b>{learnMore ? 'View Less' : 'Learn More'}</b>
-            </Text>
-          </>
-        }
-        after={
-          !manualVerification &&
-          !verificationOpen && (
-            <Box gap="200" wrap="Wrap" justifyContent="End">
-              <Button
-                size="300"
-                variant="Critical"
-                radii="300"
-                onClick={requestVerification}
-                before={requesting && <Spinner size="100" variant="Critical" fill="Solid" />}
-                disabled={requesting}
-              >
-                <Text as="span" size="B300">
-                  Verify from Another Device
-                </Text>
-              </Button>
-              {manualVerificationAvailable && (
-                <Button
-                  size="300"
-                  variant="Critical"
-                  fill="Soft"
-                  radii="300"
-                  outlined
-                  onClick={() => setManualVerification(true)}
-                >
-                  <Text as="span" size="B300">
-                    Verify Manually
-                  </Text>
-                </Button>
-              )}
-            </Box>
-          )
-        }
-      >
-        {learnMore && (
-          <LearnStartVerificationFromOtherDevice
-            manualVerificationAvailable={manualVerificationAvailable}
-          />
-        )}
-        {requestState.status === AsyncStatus.Error && (
-          <Text size="T200">{requestState.error.message}</Text>
-        )}
-        {requestState.status === AsyncStatus.Success && (
-          <DeviceVerification request={requestState.data} onExit={handleExit} />
-        )}
-      </InfoCard>
-      {manualVerification && secretStorageKeyId && secretStorageKeyContent && (
-        <ManualVerificationTile
-          secretStorageKeyId={secretStorageKeyId}
-          secretStorageKeyContent={secretStorageKeyContent}
-          options={
-            <Chip
-              type="button"
-              variant="Secondary"
-              fill="Soft"
-              radii="Pill"
-              onClick={handleCancelVerification}
-            >
-              <Icon size="100" src={Icons.Cross} />
-            </Chip>
-          }
-        />
-      )}
-    </>
-  );
-}
-
-type VerifyOtherDeviceTileProps = {
-  crypto?: CryptoApi;
-  deviceId: string;
-};
-export function VerifyOtherDeviceTile({ crypto, deviceId }: VerifyOtherDeviceTileProps) {
-  if (isNativeMatrixSession()) {
-    return (
-      <InfoCard
-        variant="Warning"
-        title="Unverified"
-        description="Verify device identity and grant access to encrypted messages."
-        after={<NativeStartVerification deviceId={deviceId} onExit={() => undefined} />}
-      />
-    );
-  }
-  if (!crypto) {
-    return (
-      <InfoCard
-        variant="Warning"
-        title="Verification unavailable"
-        description="Device verification is unavailable for this session."
-      />
-    );
-  }
-  return <LegacyVerifyOtherDeviceTile crypto={crypto} deviceId={deviceId} />;
-}
-
-function LegacyVerifyOtherDeviceTile({
-  crypto,
-  deviceId,
-}: {
-  crypto: CryptoApi;
-  deviceId: string;
-}) {
-  const mx = useMatrixClient();
-  const [requestState, setRequestState] = useState<AsyncState<VerificationRequest, Error>>({
-    status: AsyncStatus.Idle,
-  });
-
-  const requestVerification = useAsync<VerificationRequest, Error, []>(
-    useCallback(() => {
-      const requestPromise = crypto.requestDeviceVerification(mx.getSafeUserId(), deviceId);
-      return requestPromise;
-    }, [mx, crypto, deviceId]),
-    setRequestState
-  );
-
-  const handleExit = useCallback(() => {
-    setRequestState({
-      status: AsyncStatus.Idle,
-    });
-  }, []);
-
-  const requesting = requestState.status === AsyncStatus.Loading;
+export function VerifyOtherDeviceTile({ deviceId }: { deviceId: string }) {
   return (
     <InfoCard
       variant="Warning"
       title="Unverified"
       description="Verify device identity and grant access to encrypted messages."
-      after={
-        <Button
-          size="300"
-          variant="Warning"
-          radii="300"
-          onClick={requestVerification}
-          before={requesting && <Spinner size="100" variant="Warning" fill="Solid" />}
-          disabled={requesting}
-        >
-          <Text as="span" size="B300">
-            Verify
-          </Text>
-        </Button>
-      }
-    >
-      {requestState.status === AsyncStatus.Error && (
-        <Text size="T200">{requestState.error.message}</Text>
-      )}
-      {requestState.status === AsyncStatus.Success && (
-        <DeviceVerification request={requestState.data} onExit={handleExit} />
-      )}
-    </InfoCard>
+      after={<NativeStartVerification deviceId={deviceId} onExit={() => undefined} />}
+    />
   );
 }
 

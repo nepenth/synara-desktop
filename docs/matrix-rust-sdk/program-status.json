@@ -99,15 +99,9 @@
     "integration_product_state": "between-slices-paused",
     "active_slice": null,
     "active_pr": null,
-    "completed_slices": ["V-CRYPTO.5"],
-    "wired_deletion_open": [
-      "V-CRYPTO.1",
-      "V-CRYPTO.2",
-      "V-CRYPTO.3",
-      "V-CRYPTO.4"
-    ],
+    "completed_slices": ["V-CRYPTO.1", "V-CRYPTO.5"],
+    "wired_deletion_open": ["V-CRYPTO.2", "V-CRYPTO.3", "V-CRYPTO.4"],
     "next_slices": [
-      "V-CRYPTO.1-D",
       "V-CRYPTO.2-D",
       "V-CRYPTO.3-D",
       "V-CRYPTO.4-D",
@@ -125,8 +119,8 @@
         "import_lines": 292
       },
       "current": {
-        "files": 232,
-        "import_lines": 292
+        "files": 223,
+        "import_lines": 280
       }
     }
   },
