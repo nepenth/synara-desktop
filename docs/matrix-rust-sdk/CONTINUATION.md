@@ -11,7 +11,7 @@
 | Date                     | 2026-07-29 (America/New_York)                                                   |
 | Integration branch       | `feature/matrix-rust-sdk-full-replacement`                                      |
 | Execution model          | Primary Codex + Codex sub-agents, all `gpt-5.6-sol` medium; MiniMax-M3 optional |
-| Verified integration tip | `a5a76b1` — bounded operating-path contract merged (#232)                       |
+| Verified integration tip | `38f0994` — V-CRYPTO.3 deletion merged (#233)                                   |
 | Active PR                | None — intentionally paused between slices                                      |
 | Policy                   | [full-vertical-policy.md](full-vertical-policy.md)                              |
 | Operating path           | [operating-path-contract.md](operating-path-contract.md)                        |
@@ -36,14 +36,11 @@ obsolete tests/types before closure.
 
 ## Exact continuation point
 
-1. Resume the goal with V-CRYPTO.4-D. Keep orchestration and coding on Codex `gpt-5.6-sol` medium; there is no active implementation PR to recover.
-2. Drain the already-wired crypto deletion queue serially:
-   - V-CRYPTO.4-D — secret storage.
-3. Implement V-CRYPTO.6 UTD/history recovery as a complete wire-plus-delete vertical.
-4. Implement V-CRYPTO.7 device list/trust/actions as a complete wire-plus-delete vertical.
-5. Continue V-AUTH → V-ROOMS → V-TIMELINE → V-SEND, deleting the superseded JS owner inside each capability slice.
-6. Run V-BURN only as the final convergence audit and npm dependency/bootstrap/store cleanup.
-7. Resume new media/widgets/notifications/calls verticals only after the residual queue allows.
+1. Resume the goal with V-CRYPTO.6 UTD/history recovery as a complete wire-plus-delete vertical. Keep orchestration and coding on Codex `gpt-5.6-sol` medium; there is no active implementation PR to recover.
+2. Implement V-CRYPTO.7 device list/trust/actions as a complete wire-plus-delete vertical.
+3. Continue V-AUTH → V-ROOMS → V-TIMELINE → V-SEND, deleting the superseded JS owner inside each capability slice.
+4. Run V-BURN only as the final convergence audit and npm dependency/bootstrap/store cleanup.
+5. Resume new media/widgets/notifications/calls verticals only after the residual queue allows.
 
 ## Current accounting
 
@@ -57,8 +54,10 @@ obsolete tests/types before closure.
 - V-CRYPTO.3 native backup is complete: its legacy status/restore UI, listeners,
   progress state, and automatic restore listener are deleted, with direct
   desktop-runtime imports 222/279 → 219/276.
-- V-CRYPTO.4 remains **wired / deletion open** because relevant JS crypto
-  imports and conditional legacy implementations remain.
+- V-CRYPTO.4 native secret storage is complete: browser recovery derivation and
+  checking, the account-data compatibility path, dead manual-verification UI,
+  JS key cache, and JS-only test are deleted, with direct desktop-runtime imports
+  219/276 → 218/275.
 - V-CRYPTO.5 merged in #227 and is complete under the per-vertical deletion policy: the retained product path has one Rust IPC owner, and the legacy WebView owner/browser crypto helper are deleted.
 - Repository baseline remains **232 files / 292 direct import lines** referencing
   `matrix-js-sdk`. Each completed vertical must record a negative
@@ -96,6 +95,9 @@ obsolete tests/types before closure.
 - dual backend or runtime selector;
 - fallback to a live JS Matrix client after native ownership is selected;
 - raw `/_matrix/` product HTTP outside documented SDK-gap approval;
-- secrets in WebView state, IPC returns, diagnostics, logs, or generated docs;
+- persistence or retention of secrets in WebView state; secrets in IPC
+  responses, events, diagnostics, logs, or generated docs. Transient
+  user-entered recovery material may exist only while the user supplies a
+  one-way native command input;
 - “wired” relabeled as “done” while the legacy implementation remains;
 - final bulk burn-down used to defer deletion owned by an earlier vertical.

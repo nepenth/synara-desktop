@@ -5,7 +5,7 @@
 | Status                    | **Paused between slices — blocking forward work remains** (2026-07-29) |
 | Policy                    | [full-vertical-policy.md](full-vertical-policy.md)                     |
 | Integration tip at policy | `0400306` (D0.1–D0.5 merged; D0.5 was **crypto minimum**)              |
-| Current integration tip   | `0ba87f3` (V-CRYPTO.2 cross-signing ownership/deletion #231 merged)    |
+| Current integration tip   | `38f0994` (V-CRYPTO.3 backup ownership/deletion #233 merged)           |
 | Active PR                 | None — intentionally paused between slices                             |
 
 ## Policy trigger
@@ -37,31 +37,19 @@ Status language in this ledger is strict:
 
 **Done when:** native session owns the product crypto surfaces that Synara already ships (or SDK-supported equivalents), without matrix-js-sdk crypto client.
 
-| ID             | Status                        | Capability                                   | Current evidence                                                     | Closure requirement                                                                                                                                                    |
-| -------------- | ----------------------------- | -------------------------------------------- | -------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **V-CRYPTO.1** | **DONE**                      | Device verification UX                       | Live `matrix/verification/live.rs`, IPC, native verification UI      | Native owner plus legacy verification deletion; 232/292 → 223/280 direct desktop-runtime imports; see [v-crypto-1-verification.md](v-crypto-1-verification.md)         |
-| **V-CRYPTO.2** | **DONE**                      | Cross-signing readiness/setup                | Live `matrix/cross_signing/live.rs`, setup/auth UI                   | Native owner plus legacy setup/status/reset deletion; 223/280 → 222/279 direct desktop-runtime imports; see [v-crypto-2-cross-signing.md](v-crypto-2-cross-signing.md) |
-| **V-CRYPTO.3** | **DONE**                      | Key backup restore/recovery                  | Live `matrix/backup/live.rs`, native backup UI/hooks                 | Native owner plus legacy UI/listener/progress deletion; 222/279 → 219/276 direct desktop-runtime imports; see [v-crypto-3-key-backup.md](v-crypto-3-key-backup.md)     |
-| **V-CRYPTO.4** | **WIRED #226; deletion open** | SSSS bootstrap/unlock                        | Live `matrix/secret_storage/live.rs`, native secret-storage UI/hooks | Delete JS recovery-key derivation/storage path and imports; keep secrets host-side; see [v-crypto-4-secret-storage.md](v-crypto-4-secret-storage.md)                   |
-| **V-CRYPTO.5** | **DONE #227**                 | Room-key export/import retained product path | Single Rust IPC owner; legacy WebView owner/helper deleted           | Reviewed-SHA validation proved parity, retry safety, privacy, deletion, and ledger evidence                                                                            |
-| **V-CRYPTO.6** | **QUEUED**                    | UTD recovery UX                              | `matrix/utd_recovery/*`, timeline UTD foundations                    | User-visible recovery/retry controls plus deletion of superseded JS retry/decryption-listener ownership                                                                |
-| **V-CRYPTO.7** | **QUEUED**                    | Device list/trust presentation               | `matrix/devices/*` foundations                                       | Device list/trust/actions from Rust projections and deletion of JS `CryptoApi`/device model ownership                                                                  |
+| ID             | Status        | Capability                                   | Current evidence                                                     | Closure requirement                                                                                                                                                                                                                            |
+| -------------- | ------------- | -------------------------------------------- | -------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **V-CRYPTO.1** | **DONE**      | Device verification UX                       | Live `matrix/verification/live.rs`, IPC, native verification UI      | Native owner plus legacy verification deletion; 232/292 → 223/280 direct desktop-runtime imports; see [v-crypto-1-verification.md](v-crypto-1-verification.md)                                                                                 |
+| **V-CRYPTO.2** | **DONE**      | Cross-signing readiness/setup                | Live `matrix/cross_signing/live.rs`, setup/auth UI                   | Native owner plus legacy setup/status/reset deletion; 223/280 → 222/279 direct desktop-runtime imports; see [v-crypto-2-cross-signing.md](v-crypto-2-cross-signing.md)                                                                         |
+| **V-CRYPTO.3** | **DONE**      | Key backup restore/recovery                  | Live `matrix/backup/live.rs`, native backup UI/hooks                 | Native owner plus legacy UI/listener/progress deletion; 222/279 → 219/276 direct desktop-runtime imports; see [v-crypto-3-key-backup.md](v-crypto-3-key-backup.md)                                                                             |
+| **V-CRYPTO.4** | **DONE**      | SSSS bootstrap/unlock                        | Live `matrix/secret_storage/live.rs`, native secret-storage UI/hooks | Native owner plus legacy recovery derivation/checking, account-data path, JS key-cache, dead UI, and JS-only test deletion; 219/276 → 218/275 direct desktop-runtime imports; see [v-crypto-4-secret-storage.md](v-crypto-4-secret-storage.md) |
+| **V-CRYPTO.5** | **DONE #227** | Room-key export/import retained product path | Single Rust IPC owner; legacy WebView owner/helper deleted           | Reviewed-SHA validation proved parity, retry safety, privacy, deletion, and ledger evidence                                                                                                                                                    |
+| **V-CRYPTO.6** | **QUEUED**    | UTD recovery UX                              | `matrix/utd_recovery/*`, timeline UTD foundations                    | User-visible recovery/retry controls plus deletion of superseded JS retry/decryption-listener ownership                                                                                                                                        |
+| **V-CRYPTO.7** | **QUEUED**    | Device list/trust presentation               | `matrix/devices/*` foundations                                       | Device list/trust/actions from Rust projections and deletion of JS `CryptoApi`/device model ownership                                                                                                                                          |
 
 **Also required for V-CRYPTO complete:** encrypted timeline decrypt + encrypted send remain (already on tip from D0.5 machine path); extend with recovery so history is restorable when keys exist server-side.
 
 Migration decision already decided: **`D-KEY-RECOVERY`** in [migration-ux-decision.md](migration-ux-decision.md).
-
-### Immediate crypto deletion queue
-
-Because V-CRYPTO.4 merged before the physical-deletion clarification, close its
-deletion residual before starting V-CRYPTO.6. Keep the cleanup serial and
-capability-bounded; do not create a generic formatting or type-rewrite sweep.
-
-1. **V-CRYPTO.4-D** — WebView secret-storage/recovery-key implementation and imports.
-
-Each deletion slice must preserve current product behavior through native IPC,
-delete tests that only validate the removed JS owner, migrate reusable UI tests
-to SDK-neutral/native fixtures, and record importer/file count deltas.
 
 ### V-AUTH — complete auth vertical (D0.1 gaps)
 
@@ -117,12 +105,11 @@ have already deleted their implementations.
 
 ## Execution order (binding)
 
-1. **Close V-CRYPTO.4-D** (physical deletion for the already-wired crypto capability; V-CRYPTO.1–.3 and V-CRYPTO.5 are done)
-2. **V-CRYPTO.6 → .7** as full wire-plus-delete verticals (closes D0.5 dogfood debt)
-3. **V-AUTH** remaining desktop auth surfaces, deleting each superseded JS owner in its slice
-4. **V-ROOMS** / **V-TIMELINE** / **V-SEND** gaps, with physical deletion per completed capability
-5. **V-BURN** final convergence audit + npm dependency removal
-6. **Only then** new verticals: media display polish beyond send, widgets, registry, calls, etc. — each as full verticals under [full-vertical-policy.md](full-vertical-policy.md)
+1. **V-CRYPTO.6 → .7** as full wire-plus-delete verticals (closes D0.5 dogfood debt)
+2. **V-AUTH** remaining desktop auth surfaces, deleting each superseded JS owner in its slice
+3. **V-ROOMS** / **V-TIMELINE** / **V-SEND** gaps, with physical deletion per completed capability
+4. **V-BURN** final convergence audit + npm dependency removal
+5. **Only then** new verticals: media display polish beyond send, widgets, registry, calls, etc. — each as full verticals under [full-vertical-policy.md](full-vertical-policy.md)
 
 L1 modules under `src-tauri/src/matrix/{verification,backup,cross_signing,devices,room_keys,utd_recovery}/` are **inputs**, not done.
 
@@ -142,8 +129,8 @@ L1 modules under `src-tauri/src/matrix/{verification,backup,cross_signing,device
 Loop must:
 
 1. **Not** merge #221 as D0.6 complete.
-2. Treat V-CRYPTO.4 as **wired / deletion open**; V-CRYPTO.1–.3 and V-CRYPTO.5 are done.
+2. Treat V-CRYPTO.1–.5 as done.
 3. Preserve V-CRYPTO.5 [#227](https://github.com/nepenth/synara-desktop/pull/227) as done; its legacy deletion, retry safety, privacy, and reviewed-SHA evidence passed.
-4. On resume, close V-CRYPTO.4-D, then advance to V-CRYPTO.6.
+4. On resume, advance to V-CRYPTO.6.
 5. Update [PROGRESS.md](PROGRESS.md) with product wiring, deletion deltas, and residual closure.
 6. Refuse new L1-only or new non-residual verticals until this queue is cleared or user reorders explicitly.
