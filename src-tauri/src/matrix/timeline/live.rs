@@ -5,8 +5,11 @@
 //! event types, timestamps, and safe display text.
 
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
+use eyeball_im::VectorDiff;
+use futures_util::StreamExt;
 use matrix_sdk::{
     ruma::{
         events::{reaction::ReactionEventContent, relation::Annotation},
@@ -21,6 +24,8 @@ use matrix_sdk_ui::timeline::{
     TimelineItemContent as SdkTimelineItemContent,
 };
 use serde::{Deserialize, Serialize};
+use tauri::{AppHandle, Emitter};
+use tokio::task::JoinHandle;
 
 use crate::matrix::{
     dto::TimelineEncryptedUnavailableItem,
@@ -28,9 +33,10 @@ use crate::matrix::{
 };
 
 use super::{
-    project_timeline_item, TimelinePageState, TimelinePaginationState, TimelineReadState,
-    TimelineViewCapabilities, TimelineViewPosition, TimelineViewSnapshot, UtdIndex, UtdPhase,
-    UtdReasonCode, TIMELINE_VIEW_SCHEMA_VERSION,
+    project_timeline_diffs, project_timeline_item, TimelinePageState, TimelinePaginationState,
+    TimelineReadState, TimelineViewCapabilities, TimelineViewDeltaBatch, TimelineViewPosition,
+    TimelineViewSnapshot, UtdIndex, UtdPhase, UtdReasonCode, NATIVE_TIMELINE_VIEW_UPDATED_EVENT,
+    TIMELINE_VIEW_SCHEMA_VERSION,
 };
 
 const PAGINATION_BATCH_SIZE: u16 = 30;
@@ -74,6 +80,8 @@ pub struct NativeTimelineOpenRequest {
 #[serde(rename_all = "camelCase")]
 pub struct NativeTimelineOpenReadback {
     pub schema_version: u32,
+    /// Opaque identifier carried by every delta from this exact opened view.
+    pub stream_id: String,
     pub position: NativeTimelineOpenPosition,
     pub snapshot: TimelineViewSnapshot,
 }
@@ -198,6 +206,8 @@ pub struct NativeTimelineRegistry {
     session_generation: u64,
     entries: HashMap<String, LiveTimelineEntry>,
     focused_entries: HashMap<(String, String), Arc<Timeline>>,
+    view_update_tasks: HashMap<String, JoinHandle<()>>,
+    view_revisions: HashMap<String, Arc<AtomicU64>>,
     utd_index: UtdIndex,
     utd_recovery: UtdRecoveryCoordinator,
 }
@@ -208,6 +218,8 @@ impl NativeTimelineRegistry {
             session_generation,
             entries: HashMap::new(),
             focused_entries: HashMap::new(),
+            view_update_tasks: HashMap::new(),
+            view_revisions: HashMap::new(),
             utd_index: UtdIndex::new(session_generation),
             utd_recovery: UtdRecoveryCoordinator::new(session_generation),
         }
@@ -249,6 +261,7 @@ impl NativeTimelineRegistry {
     /// collapsing an event-link focus into the live-bottom route.
     pub async fn open_at(
         &mut self,
+        app: AppHandle,
         client: &Client,
         request: NativeTimelineOpenRequest,
     ) -> Result<NativeTimelineOpenReadback, &'static str> {
@@ -317,17 +330,59 @@ impl NativeTimelineRegistry {
                 )
             }
         };
-        let snapshot = view_snapshot_from_timeline(
-            self.session_generation,
-            room_id_string,
-            view_position,
-            pagination,
-            &timeline,
-            client.user_id().map(ToOwned::to_owned),
-        )
-        .await;
+        let own_user_id = client.user_id().map(ToOwned::to_owned);
+        let subscription_key = view_subscription_key(&room_id_string, &position);
+        let revision = self
+            .view_revisions
+            .entry(subscription_key.clone())
+            .or_insert_with(|| Arc::new(AtomicU64::new(0)))
+            .clone();
+        let snapshot = if self.view_update_tasks.contains_key(&subscription_key) {
+            view_snapshot_from_timeline(
+                self.session_generation,
+                room_id_string.clone(),
+                view_position,
+                pagination,
+                &timeline,
+                own_user_id,
+                revision.load(Ordering::Acquire),
+            )
+            .await
+        } else {
+            // Subscribe before materializing the initial rows so no SDK update
+            // can fall into a snapshot-to-stream gap.
+            let (items, updates) = timeline.subscribe().await;
+            let snapshot = view_snapshot_from_items(
+                self.session_generation,
+                room_id_string.clone(),
+                view_position,
+                pagination,
+                &timeline,
+                own_user_id.clone(),
+                revision.load(Ordering::Acquire),
+                items
+                    .iter()
+                    .map(|item| project_timeline_item(item, own_user_id.as_deref()))
+                    .collect(),
+            )
+            .await;
+            self.view_update_tasks.insert(
+                subscription_key.clone(),
+                spawn_view_update_owner(
+                    app,
+                    self.session_generation,
+                    subscription_key.clone(),
+                    room_id_string.clone(),
+                    own_user_id,
+                    revision,
+                    updates,
+                ),
+            );
+            snapshot
+        };
         Ok(NativeTimelineOpenReadback {
             schema_version: NATIVE_TIMELINE_OPEN_SCHEMA_VERSION,
+            stream_id: subscription_key,
             position,
             snapshot,
         })
@@ -780,6 +835,28 @@ impl NativeTimelineRegistry {
     ) -> bool {     reaction         .senders         .iter()         .any(|sender| sender.reaction_event_id.as_deref() == Some(reaction_event_id.as_str())),
     /// Build the currently available native view snapshot from the SDK owner. /// /// `revision` is zero until the native delta subscriber owns monotonically /// advancing revisions. Treating repeated snapshot reads as deltas would hide /// the missing owner boundary,
     so this contract makes that absence explicit. async fn view_snapshot_from_timeline(     session_generation: u64,
+    impl Drop for NativeTimelineRegistry {     fn drop(&mut self) {         for (_,
+    task) in self.view_update_tasks.drain() {             task.abort();         }     } }  fn view_subscription_key(room_id: &str,
+    position: &NativeTimelineOpenPosition) -> String {     match position {         NativeTimelineOpenPosition::LiveBottom => format!("live:{room_id}"),
+    NativeTimelineOpenPosition::Focused { event_id } => format!("focused:{room_id}:{event_id}"),
+    } }  fn spawn_view_update_owner(     app: AppHandle,
+    session_generation: u64,
+    stream_id: String,
+    room_id: String,
+    own_user_id: Option<OwnedUserId>,
+    revision: Arc<AtomicU64>,
+    updates: impl futures_util::Stream<Item = Vec<VectorDiff<Arc<SdkTimelineItem>>>> + Send + 'static,
+    ) -> JoinHandle<()> {     tokio::spawn(async move {         futures_util::pin_mut!(updates);         while let Some(diffs) = updates.next().await {             let ops = project_timeline_diffs(&diffs,
+    own_user_id.as_deref());             if ops.is_empty() {                 continue;             }             let next_revision = revision.fetch_add(1,
+    Ordering::AcqRel).saturating_add(1);             let _ = app.emit(                 NATIVE_TIMELINE_VIEW_UPDATED_EVENT,
+    TimelineViewDeltaBatch {                     schema_version: TIMELINE_VIEW_SCHEMA_VERSION,
+    session_generation,
+    stream_id: stream_id.clone(),
+    room_id: room_id.clone(),
+    revision: next_revision,
+    ops,
+    },
+    );         }     }) }  /// Build the currently available native view snapshot from the SDK owner. /// /// `revision` is zero until the native delta subscriber owns monotonically /// advancing revisions. Treating repeated snapshot reads as deltas would hide /// the missing owner boundary,
     room_id: String,
     position: TimelineViewPosition,
     pagination: TimelinePaginationState,
@@ -803,6 +880,21 @@ impl NativeTimelineRegistry {
     mark_unread: false,
     paginate_backward: true,
     paginate_forward: true,
+    revision: u64,
+    _updates) = timeline.subscribe().await;     let rows = items         .iter()         .map(|item| project_timeline_item(item,
+    own_user_id.as_deref()))         .collect();     view_snapshot_from_items(         session_generation,
+    timeline,
+    own_user_id,
+    revision,
+    rows,
+    )     .await }  async fn view_snapshot_from_items(     session_generation: u64,
+    room_id: String,
+    position: TimelineViewPosition,
+    pagination: TimelinePaginationState,
+    timeline: &Timeline,
+    own_user_id: Option<OwnedUserId>,
+    rows: Vec<super::TimelineViewRow>,
+    ) -> TimelineViewSnapshot {     let own_read_event_id = match own_user_id.as_ref() {         Some(user_id) => timeline             .latest_user_read_receipt_timeline_event_id(&user_id)             .await             .map(|event_id| event_id.to_string()),
 }
 
 fn parse_room_id(room_id: &str) -> Result<OwnedRoomId, &'static str> {
@@ -1107,6 +1199,7 @@ mod tests {
     fn typed_open_readback_uses_the_versioned_view_boundary() {
         let readback = NativeTimelineOpenReadback {
             schema_version: NATIVE_TIMELINE_OPEN_SCHEMA_VERSION,
+            stream_id: "live:!room:example.org".into(),
             position: NativeTimelineOpenPosition::LiveBottom,
             snapshot: TimelineViewSnapshot {
                 schema_version: TIMELINE_VIEW_SCHEMA_VERSION,
@@ -1137,6 +1230,23 @@ mod tests {
         assert_eq!(snapshot["roomId"], "!room:example.org");
         assert!(snapshot.get("isEncrypted").is_none());
         assert!(snapshot.get("items").is_none());
+    }
+
+    #[test]
+    fn view_subscription_keys_keep_focuses_isolated_from_live_timeline() {
+        assert_eq!(
+            view_subscription_key("!room:example.org", &NativeTimelineOpenPosition::LiveBottom),
+            "live:!room:example.org"
+        );
+        assert_eq!(
+            view_subscription_key(
+                "!room:example.org",
+                &NativeTimelineOpenPosition::Focused {
+                    event_id: "$one:example.org".into()
+                }
+            ),
+            "focused:!room:example.org:$one:example.org"
+        );
     }
 
     #[test]

@@ -82,10 +82,19 @@ message/relation, poll, membership, profile/state, call, redaction, and UTD
 row shapes. Reaction ownership is calculated from the active native user; its
 action capability remains closed until V-SEND.2 is integrated. It deliberately
 does not claim projection completion: stickers require the native media
-resolver, and native unread, pagination, read-frontier, viewport, delta, and
-presenter ownership still remain. The flat
+resolver, and native unread, pagination/read-frontier, viewport, and presenter
+ownership still remain. The flat
 `NativeTimelineSnapshot` remains only for the explicitly temporary V-CRYPTO.6
 bridge until those owners replace it.
+
+The managed SDK timeline now also owns an ordered subscription from the same
+pre-snapshot boundary and emits `matrix-timeline-view-updated` batches. Each
+batch contains only the versioned product row operations and a monotonic native
+revision plus the exact opaque stream ID returned by the open readback; it is
+aborted with the session timeline registry. No React listener exists yet, so
+this establishes the live-update owner without activating a partial presenter.
+Native unread/read-frontier, pagination-state changes, and viewport restoration
+still need their corresponding owner signals before final cutover.
 
 ## Actions and sequencing
 
