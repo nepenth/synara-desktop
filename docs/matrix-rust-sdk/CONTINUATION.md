@@ -12,7 +12,7 @@
 | Integration branch       | `feature/matrix-rust-sdk-full-replacement`                                      |
 | Execution model          | Primary Codex + Codex sub-agents, all `gpt-5.6-sol` medium; MiniMax-M3 optional |
 | Verified integration tip | `05e3f64` — V-CRYPTO.6 merged (#235)                                            |
-| Active PR                | None — V-CRYPTO.7 local candidate                                               |
+| Active PR                | [#236](https://github.com/nepenth/synara-desktop/pull/236) — V-CRYPTO.7; reviewed code head `7df8abe` |
 | Policy                   | [full-vertical-policy.md](full-vertical-policy.md)                              |
 | Operating path           | [operating-path-contract.md](operating-path-contract.md)                        |
 | Binding queue            | [d0-residual-completion.md](d0-residual-completion.md)                          |
@@ -36,8 +36,8 @@ obsolete tests/types before closure.
 
 ## Exact continuation point
 
-1. Review the V-CRYPTO.7 device list/trust/actions local candidate; live multi-session/UI proof is not yet claimed.
-2. Land V-CRYPTO.7 only after focused checks and review; its native route and physical JS-owner deletion are documented in [v-crypto-7-device-list-trust.md](v-crypto-7-device-list-trust.md).
+1. Monitor V-CRYPTO.7 [#236](https://github.com/nepenth/synara-desktop/pull/236) at reviewed code head `7df8abe`; live multi-session/UI proof is not yet claimed.
+2. Land V-CRYPTO.7 only after required PR checks remain green; its native route and physical JS-owner deletion are documented in [v-crypto-7-device-list-trust.md](v-crypto-7-device-list-trust.md).
 3. Continue with V-AUTH.1 → remaining V-AUTH → V-ROOMS → V-TIMELINE → V-SEND, deleting the superseded JS owner inside each capability slice.
 4. Run V-BURN only as the final convergence audit and npm dependency/bootstrap/store cleanup.
 5. Resume new media/widgets/notifications/calls verticals only after the residual queue allows.
@@ -63,7 +63,7 @@ obsolete tests/types before closure.
   relies on SDK-owned pagination insertion/late-key redecryption and adds safe late-decrypt readback, reuses native
   recovery settings, and deletes the JS retry/per-event/listener owners. See
   [v-crypto-6-utd-recovery.md](v-crypto-6-utd-recovery.md).
-- V-CRYPTO.7 is a local candidate: native device list/trust, rename, and
+- V-CRYPTO.7 is active in [#236](https://github.com/nepenth/synara-desktop/pull/236) at reviewed code head `7df8abe`: native device list/trust, rename, and
   purpose-specific other-device deletion/UIAA replace the device page's JS SDK
   owners. Direct inventory is **212 files / 265 import lines**, production
   importers **201**, and repository-wide importers **215**.

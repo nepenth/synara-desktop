@@ -32,12 +32,12 @@ the operating model, or the canonical status ledger.
 
 | Field                        | Current value                                                                                                                                 |
 | ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Integration branch / tip** | `feature/matrix-rust-sdk-full-replacement` @ `05e3f64dc9b6e1b38dcc181abe2090370e85a5e3`; V-CRYPTO.7 local candidate, no PR                    |
+| **Integration branch / tip** | `feature/matrix-rust-sdk-full-replacement` @ `05e3f64dc9b6e1b38dcc181abe2090370e85a5e3`; V-CRYPTO.7 active in [#236](https://github.com/nepenth/synara-desktop/pull/236), reviewed code head `7df8abe` |
 | **Policy**                   | [Full vertical replacement](full-vertical-policy.md): no minima/plateau; **physical deletion per vertical**                                   |
 | **Active product work**      | V-CRYPTO.7 native device list/trust/rename/delete and purpose-specific Password/SSO UIAA candidate; live multi-session/UI proof not claimed   |
 | **Completed verticals**      | D0 core #214/#216/#218/#219/#220; V-CRYPTO.1–.6 have native owners and per-vertical legacy deletion complete                                  |
 | **Deletion residuals**       | V-CRYPTO.7 JS `CryptoApi`, device model/listener/polling, trust hooks, platform repair helper, and dead delete-UIA owners are deleted         |
-| **Next product work**        | Review/land V-CRYPTO.7 → V-AUTH.1 desktop SSO login                                                                                           |
+| **Next product work**        | Monitor/land V-CRYPTO.7 #236 → V-AUTH.1 desktop SSO login                                                                                     |
 | **Import baseline**          | 232 files / 292 direct import lines → 212 / 265 in V-CRYPTO.7; production importer files 207→201 and repository-wide 221→215                  |
 | **Held**                     | #221 plateau; L1-only notify/call/media/helper PRs unless they block the active vertical                                                      |
 | **Runtime truth**            | Native product cutover is underway capability-by-capability; relevant JS owners remain until deletion residuals close; **dual_backend false** |
@@ -46,8 +46,8 @@ the operating model, or the canonical status ledger.
 
 ### Current next-owner procedure
 
-1. Review the local V-CRYPTO.7 candidate against [v-crypto-7-device-list-trust.md](v-crypto-7-device-list-trust.md); live multi-session/UI proof remains unconfirmed.
-2. Open/merge only after required exact-head checks and independent review pass.
+1. Monitor V-CRYPTO.7 [#236](https://github.com/nepenth/synara-desktop/pull/236), whose reviewed code head is `7df8abe`, against [v-crypto-7-device-list-trust.md](v-crypto-7-device-list-trust.md); live multi-session/UI proof remains unconfirmed.
+2. Merge only after required PR checks remain green; this documentation-only ledger follow-up does not claim additional product proof.
 3. Require each vertical/deletion residual to report deleted paths and importer/file count delta.
 4. After V-CRYPTO.7 lands, implement V-AUTH.1 as the next wire-plus-delete slice.
 5. Update [PROGRESS.md](PROGRESS.md), [d0-residual-completion.md](d0-residual-completion.md), and the short [CONTINUATION.md](CONTINUATION.md) in the same PR whenever the active pointer or residual status changes.

@@ -13,7 +13,7 @@
 | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Last updated (UTC) | **2026-07-29**                                                                                                                                              |
 | Integration tip    | `05e3f64dc9b6e1b38dcc181abe2090370e85a5e3` — V-CRYPTO.6 merged in [#235](https://github.com/nepenth/synara-desktop/pull/235)                                |
-| Active work        | **V-CRYPTO.7 native device list/trust/actions local candidate.** Focused local checks pass; independent review/live proof remain; V-AUTH.1 follows landing. |
+| Active work        | **V-CRYPTO.7 native device list/trust/actions in [#236](https://github.com/nepenth/synara-desktop/pull/236).** Reviewed code head `7df8abe`; live proof remains unclaimed; V-AUTH.1 follows landing. |
 | Product runtime    | Native owns core D0 path and wired crypto surfaces; superseded JS implementations/imports remain deletion residuals                                         |
 | Execution model    | Primary Codex + same-model sub-agents: `gpt-5.6-sol`, medium; MiniMax-M3 optional                                                                           |
 | Import accounting  | V-CRYPTO.7 removes six importers and eight declarations: desktop **218/273→212/265**, production **207→201**, repository-wide **221→215**.                  |
@@ -30,10 +30,10 @@
 
 |               |                                                                                                                                                                        |
 | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Now**       | **V-CRYPTO.7 is the local native device-list/trust/actions candidate.** Focused local checks pass; independent review/live proof remain; then V-AUTH.1. **#221 HOLD**. |
+| **Now**       | **V-CRYPTO.7 is active in [#236](https://github.com/nepenth/synara-desktop/pull/236).** Reviewed code head `7df8abe`; live multi-session/UI proof remains unclaimed; then V-AUTH.1. **#221 HOLD**. |
 | **Policy**    | [full-vertical-policy.md](full-vertical-policy.md)                                                                                                                     |
-| **Tip**       | Candidate is based on merged integration tip `05e3f64dc9b6e1b38dcc181abe2090370e85a5e3`; this does not claim a V-CRYPTO.7 PR or merge.                                 |
-| **Active PR** | None — local V-CRYPTO.7 candidate.                                                                                                                                     |
+| **Tip**       | PR #236 is based on merged integration tip `05e3f64dc9b6e1b38dcc181abe2090370e85a5e3`; reviewed product-code head `7df8abe`; no V-CRYPTO.7 merge is claimed.            |
+| **Active PR** | [#236](https://github.com/nepenth/synara-desktop/pull/236) — V-CRYPTO.7.                                                                                              |
 | **Blocked**   | Merging plateau D0.6 (#221); declaring later wired crypto rows done before JS deletion; starting new media/widgets/etc before the residual queue.                      |
 
 ---
@@ -63,7 +63,7 @@ Update rules:
 
 | When (UTC) | Item                          | Result                                                                | Notes                                                                                                                                           |
 | ---------- | ----------------------------- | --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| current    | **V-CRYPTO.7 devices/trust**  | **Local candidate; no PR yet**                                        | Native list/trust/rename/delete/UIAA owns the device page; JS owners deleted; inventory 218/273→212/265; live multi-session/UI proof unclaimed. |
+| current    | **V-CRYPTO.7 devices/trust**  | **Active** [#236](https://github.com/nepenth/synara-desktop/pull/236)  | Reviewed code head `7df8abe`; native list/trust/rename/delete/UIAA owns the device page; JS owners deleted; inventory 218/273→212/265; live proof unclaimed. |
 | earlier    | **V-CRYPTO.6 UTD recovery**   | **Merged** [#235](https://github.com/nepenth/synara-desktop/pull/235) | Integration tip `05e3f64`; native late-key readback and JS retry/listener deletion landed.                                                      |
 | ~14:20     | **V-CRYPTO.4 secret storage** | **Merged** [#234](https://github.com/nepenth/synara-desktop/pull/234) | Tip `c2a002d`; legacy secret-storage owner deleted; direct imports 219/276 → 218/275.                                                           |
 | ~13:13     | **V-CRYPTO.3 key backup**     | **Merged** [#233](https://github.com/nepenth/synara-desktop/pull/233) | Tip `38f0994`; legacy UI/listeners/progress/auto-restore deleted; native owner retained; direct imports 222/279 → 219/276.                      |
