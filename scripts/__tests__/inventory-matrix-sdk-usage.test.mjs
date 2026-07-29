@@ -472,29 +472,29 @@ test("check mode detects stale artifacts and does not mutate them", () => {
   }
 });
 
-test("repository inventory includes tooling dynamic import and matches plan baseline", () => {
+test("repository inventory includes tooling dynamic import and records the current deletion delta", () => {
   const inventory = buildInventory({ root: REPO_ROOT });
   const baseline = inventory.summary.desktopRuntimeBaseline;
   const rw = inventory.summary.repositoryWide;
 
   assert.equal(
     baseline.productionImportFiles,
-    220,
-    `expected 220 desktop runtime production import files, found ${baseline.productionImportFiles}`
+    212,
+    `expected 212 desktop runtime production import files, found ${baseline.productionImportFiles}`
   );
   assert.equal(
     baseline.testImportFiles,
-    12,
-    `expected 12 desktop runtime test import files, found ${baseline.testImportFiles}`
+    11,
+    `expected 11 desktop runtime test import files, found ${baseline.testImportFiles}`
   );
-  assert.equal(baseline.buckets.feature, 59);
-  assert.equal(baseline.buckets.hook, 56);
-  assert.equal(baseline.buckets.component, 43);
+  assert.equal(baseline.buckets.feature, 58);
+  assert.equal(baseline.buckets.hook, 54);
+  assert.equal(baseline.buckets.component, 41);
   assert.equal(baseline.buckets.page, 19);
-  assert.equal(baseline.buckets.utility, 16);
+  assert.equal(baseline.buckets.utility, 14);
   assert.equal(baseline.buckets.state, 14);
   assert.equal(baseline.buckets.plugin, 8);
-  assert.equal(baseline.buckets["client-lifecycle"], 3);
+  assert.equal(baseline.buckets["client-lifecycle"], 2);
   assert.equal(baseline.buckets["media-boundary"], 1);
   assert.equal(baseline.buckets["shared-type"], 1);
 

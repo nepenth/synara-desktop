@@ -36,7 +36,6 @@ import {
 import { platformSessionStore } from '../app/platform';
 import { clearNotificationCaches } from '../app/notifications/notificationCaches';
 import { assertCryptoStoreContinuity, CryptoStoreContinuityError } from './cryptoStoreContinuity';
-import { ensureVerificationRequestInbox } from './verificationRequestInbox';
 import { recordClientDiagnostic } from '../app/utils/clientDiagnostics';
 import { getSessionBootstrapResult } from '../app/state/sessionBootstrap';
 import { isSynaraDesktop } from '../app/utils/desktop';
@@ -267,8 +266,6 @@ const startMatrixClient = async (
       } else {
         pendingFreshLoginContinuity.set(mx, session);
       }
-      initializationPhase = 'verification-inbox';
-      ensureVerificationRequestInbox(mx);
     }
     recordClientDiagnostic('session', 'matrix-client.initialization-completed', {
       outcome: 'ready-to-start',

@@ -35,9 +35,8 @@ obsolete tests/types before closure.
 
 ## Exact continuation point
 
-1. Resume the goal with V-CRYPTO.1-D. Keep orchestration and coding on Codex `gpt-5.6-terra` high; there is no active implementation PR to recover.
+1. Resume the goal with V-CRYPTO.2-D. Keep orchestration and coding on Codex `gpt-5.6-terra` high; there is no active implementation PR to recover.
 2. Drain the already-wired crypto deletion queue serially:
-   - V-CRYPTO.1-D — verification;
    - V-CRYPTO.2-D — cross-signing;
    - V-CRYPTO.3-D — backup/recovery;
    - V-CRYPTO.4-D — secret storage.
@@ -51,9 +50,10 @@ obsolete tests/types before closure.
 
 - D0.1–D0.5 established native login/session, sync/room list, basic timeline,
   plain-text send, and encrypted-room machine paths.
-- V-CRYPTO.1–.4 product wiring merged in #223–#226.
-- Those four rows are reopened as **wired / deletion open** because relevant JS
-  crypto imports and conditional legacy implementations remain.
+- V-CRYPTO.1 native verification is complete: its legacy owner/inbox/hooks/helpers
+  and JS-only test are deleted, with direct desktop-runtime imports 232/292 → 223/280.
+- V-CRYPTO.2–.4 remain **wired / deletion open** because relevant JS crypto
+  imports and conditional legacy implementations remain.
 - V-CRYPTO.5 merged in #227 and is complete under the per-vertical deletion policy: the retained product path has one Rust IPC owner, and the legacy WebView owner/browser crypto helper are deleted.
 - Repository baseline remains **232 files / 292 direct import lines** referencing
   `matrix-js-sdk`. Each completed vertical must record a negative
