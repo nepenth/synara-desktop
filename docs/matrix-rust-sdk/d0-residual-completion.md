@@ -44,7 +44,7 @@ Status language in this ledger is strict:
 | **V-CRYPTO.3** | **DONE**      | Key backup restore/recovery                  | Live `matrix/backup/live.rs`, native backup UI/hooks                 | Native owner plus legacy UI/listener/progress deletion; 222/279 → 219/276 direct desktop-runtime imports; see [v-crypto-3-key-backup.md](v-crypto-3-key-backup.md)                                                                             |
 | **V-CRYPTO.4** | **DONE**      | SSSS bootstrap/unlock                        | Live `matrix/secret_storage/live.rs`, native secret-storage UI/hooks | Native owner plus legacy recovery derivation/checking, account-data path, JS key-cache, dead UI, and JS-only test deletion; 219/276 → 218/275 direct desktop-runtime imports; see [v-crypto-4-secret-storage.md](v-crypto-4-secret-storage.md) |
 | **V-CRYPTO.5** | **DONE #227** | Room-key export/import retained product path | Single Rust IPC owner; legacy WebView owner/helper deleted           | Reviewed-SHA validation proved parity, retry safety, privacy, deletion, and ledger evidence                                                                                                                                                    |
-| **V-CRYPTO.6** | **QUEUED**    | UTD recovery UX                              | `matrix/utd_recovery/*`, timeline UTD foundations                    | User-visible recovery/retry controls plus deletion of superseded JS retry/decryption-listener ownership                                                                                                                                        |
+| **V-CRYPTO.6** | **DONE candidate** | Automatic UTD/history recovery           | Live managed timeline + P5.10/P8.7 state; safe event readback         | Automatic SDK retry/readback, guided native recovery settings, and JS retry/decryption-listener deletion; see [v-crypto-6-utd-recovery.md](v-crypto-6-utd-recovery.md)                                                                          |
 | **V-CRYPTO.7** | **QUEUED**    | Device list/trust presentation               | `matrix/devices/*` foundations                                       | Device list/trust/actions from Rust projections and deletion of JS `CryptoApi`/device model ownership                                                                                                                                          |
 
 **Also required for V-CRYPTO complete:** encrypted timeline decrypt + encrypted send remain (already on tip from D0.5 machine path); extend with recovery so history is restorable when keys exist server-side.
@@ -105,7 +105,7 @@ have already deleted their implementations.
 
 ## Execution order (binding)
 
-1. **V-CRYPTO.6 → .7** as full wire-plus-delete verticals (closes D0.5 dogfood debt)
+1. Review/merge **V-CRYPTO.6**, then implement **V-CRYPTO.7** as a full wire-plus-delete vertical.
 2. **V-AUTH** remaining desktop auth surfaces, deleting each superseded JS owner in its slice
 3. **V-ROOMS** / **V-TIMELINE** / **V-SEND** gaps, with physical deletion per completed capability
 4. **V-BURN** final convergence audit + npm dependency removal
@@ -131,6 +131,6 @@ Loop must:
 1. **Not** merge #221 as D0.6 complete.
 2. Treat V-CRYPTO.1–.5 as done.
 3. Preserve V-CRYPTO.5 [#227](https://github.com/nepenth/synara-desktop/pull/227) as done; its legacy deletion, retry safety, privacy, and reviewed-SHA evidence passed.
-4. On resume, advance to V-CRYPTO.6.
+4. On resume after V-CRYPTO.6 review, advance to V-CRYPTO.7.
 5. Update [PROGRESS.md](PROGRESS.md) with product wiring, deletion deltas, and residual closure.
 6. Refuse new L1-only or new non-residual verticals until this queue is cleared or user reorders explicitly.

@@ -17,7 +17,6 @@ import {
   Room,
   RoomMember,
 } from 'matrix-js-sdk';
-import { CryptoBackend } from 'matrix-js-sdk/lib/common-crypto/CryptoBackend';
 import { AccountDataEvent, MarkedUnreadContent } from '../../types/matrix/accountData';
 import {
   IRoomCreateContent,
@@ -397,17 +396,6 @@ export const getMemberAvatarMxc = (room: Room, userId: string): string | undefin
 export const isMembershipChanged = (mEvent: MatrixEvent): boolean =>
   mEvent.getContent().membership !== mEvent.getPrevContent().membership ||
   mEvent.getContent().reason !== mEvent.getPrevContent().reason;
-
-export const decryptAllTimelineEvent = async (mx: MatrixClient, timeline: EventTimeline) => {
-  const crypto = mx.getCrypto();
-  if (!crypto) return;
-  const decryptionPromises = timeline
-    .getEvents()
-    .filter((event) => event.isEncrypted())
-    .reverse()
-    .map((event) => event.attemptDecryption(crypto as CryptoBackend, { isRetry: true }));
-  await Promise.allSettled(decryptionPromises);
-};
 
 export const getReactionContent = (eventId: string, key: string, shortcode?: string) => ({
   'm.relates_to': {

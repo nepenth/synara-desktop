@@ -11,12 +11,12 @@
 
 | Field              | Value                                                                                                                                                                                 |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Last updated (UTC) | **2026-07-29 ~13:20**                                                                                                                                                                 |
-| Integration tip    | `38f0994` — V-CRYPTO.3 deletion merged (#233)                                                                                                                                         |
-| Active work        | **V-CRYPTO.4-D deletion candidate complete locally.** Next queued slice: V-CRYPTO.6 UTD/history recovery.                                                                             |
+| Last updated (UTC) | **2026-07-29**                                                                                                                                                                        |
+| Integration tip    | Candidate base `c2a002df90a3b9de1553bdc5843f7045949b427f`; re-fetch before merge                                                                                                    |
+| Active work        | **V-CRYPTO.6 automatic UTD/history-recovery candidate complete locally.** PR review and live/UI proof remain open; V-CRYPTO.7 is next after merge.                                    |
 | Product runtime    | Native owns core D0 path and wired crypto surfaces; superseded JS implementations/imports remain deletion residuals                                                                   |
 | Execution model    | Primary Codex + same-model sub-agents: `gpt-5.6-sol`, medium; MiniMax-M3 optional                                                                                                     |
-| Import accounting  | V-CRYPTO.4-D moves production importers 208→207, component 39→38, allowlist 208→207, and repository importers 222→221. Direct desktop-runtime inventory is **218 files / 275 lines**. |
+| Import accounting  | V-CRYPTO.6 keeps direct desktop-runtime inventory at **218 files** and removes two direct import lines (**275→273**); generated production import files remain **207**.              |
 | Dual backend       | **`false`** (forbidden forever)                                                                                                                                                       |
 | Operating model    | [cutover-operating-model.md](cutover-operating-model.md)                                                                                                                              |
 | Machine ledger     | [program-status.md](program-status.md) (generated; do not hand-edit)                                                                                                                  |
@@ -30,10 +30,10 @@
 
 |               |                                                                                                                                                   |
 | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Now**       | **V-CRYPTO.4-D is complete in the local deletion candidate.** V-CRYPTO.1–.5 are done; resume with V-CRYPTO.6. **#221 HOLD**.                      |
+| **Now**       | **V-CRYPTO.6 is complete in the local candidate.** Review/merge and live/UI proof remain; then resume with V-CRYPTO.7. **#221 HOLD**.              |
 | **Policy**    | [full-vertical-policy.md](full-vertical-policy.md)                                                                                                |
-| **Tip**       | V-CRYPTO.3 merged — native backup is the sole retained product owner.                                                                             |
-| **Active PR** | None; orchestration is intentionally paused at a clean slice boundary.                                                                            |
+| **Tip**       | Candidate is based on `c2a002df90a3b9de1553bdc5843f7045949b427f`; this does not claim merge.                                                     |
+| **Active PR** | None yet; program-status PR-number fields must be updated after the PR is opened.                                                                   |
 | **Blocked**   | Merging plateau D0.6 (#221); declaring later wired crypto rows done before JS deletion; starting new media/widgets/etc before the residual queue. |
 
 ---
@@ -63,7 +63,7 @@ Update rules:
 
 | When (UTC) | Item                            | Result                                                                | Notes                                                                                                                                         |
 | ---------- | ------------------------------- | --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| current    | **V-CRYPTO.4-D secret storage** | **Done in deletion candidate**                                        | Legacy recovery derivation/checking, account-data path, dead manual UI, JS key cache/test deleted; direct imports 219/276 → 218/275.          |
+| current    | **V-CRYPTO.6 UTD recovery**     | **Done in local candidate; runtime proof not confirmed**               | Native automatic retry/readback plus guided recovery; legacy retry/per-event/listener owners deleted; direct imports 275→273.                 |
 | ~13:13     | **V-CRYPTO.3 key backup**       | **Merged** [#233](https://github.com/nepenth/synara-desktop/pull/233) | Tip `38f0994`; legacy UI/listeners/progress/auto-restore deleted; native owner retained; direct imports 222/279 → 219/276.                    |
 | ~12:16     | **V-CRYPTO.2 cross-signing**    | **Merged** [#231](https://github.com/nepenth/synara-desktop/pull/231) | Tip `0ba87f3`; legacy setup/status/reset owner and fallback deleted; native owner retained; direct imports 223/280 → 222/279.                 |
 | earlier    | **V-CRYPTO.1 verification**     | **Merged** [#230](https://github.com/nepenth/synara-desktop/pull/230) | Tip `5c68b19`; legacy owner/inbox/hooks/helpers and JS-only test deleted; native owner retained; direct imports 232/292 → 223/280.            |
