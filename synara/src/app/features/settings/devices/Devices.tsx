@@ -132,11 +132,6 @@ export function Devices({ requestClose }: DevicesProps) {
                     {crossSigningActive && verificationStatus === VerificationStatus.Unverified && (
                       <VerifyCurrentDeviceTile />
                     )}
-                    {!nativeSession &&
-                      crypto &&
-                      verificationStatus === VerificationStatus.Verified && (
-                        <BackupRestoreTile crypto={crypto} />
-                      )}
                   </SequenceCard>
                 ) : (
                   <DeviceTilePlaceholder />
