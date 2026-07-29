@@ -7,8 +7,8 @@
 //! the stable shape that those owners must produce.
 
 use matrix_sdk_ui::timeline::{
-    EventTimelineItem, MsgLikeKind, TimelineItem as SdkTimelineItem, TimelineItemContent,
-    VirtualTimelineItem,
+    EventTimelineItem, MsgLikeKind, TimelineDetails, TimelineItem as SdkTimelineItem,
+    TimelineItemContent, VirtualTimelineItem,
 };
 use serde::{Deserialize, Serialize};
 
@@ -70,7 +70,10 @@ pub struct TimelineMediaHandle {
 pub struct TimelineReaction {
     pub key: String,
     pub count: u32,
-    pub own: bool,
+    /// `None` until the native snapshot owns the active-user context. A
+    /// presenter must not represent unknown ownership as an unreacted state.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub own: Option<bool>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -161,11 +164,19 @@ pub fn project_event_row(item_id: &str, event: &EventTimelineItem) -> TimelineVi
                 formatted_body: None,
                 message_type: None,
                 edited: message.is_edited(),
-                reply: None,
-                thread: None,
-                reactions: Vec::new(),
+                reply: project_reply(content),
+                thread: project_thread_summary(content, event),
+                reactions: project_reactions(content),
                 media: None,
             }),
+            MsgLikeKind::Poll(poll) => {
+                let results = poll.results();
+                TimelineViewRow::Poll(TimelinePollRow {
+                    event: base,
+                    question: results.question,
+                    closed: results.end_time.is_some(),
+                })
+            }
             MsgLikeKind::Redacted => match base.event_id.clone() {
                 Some(event_id) => TimelineViewRow::Redacted(TimelineRedactedRow {
                     item_id: base.item_id,
@@ -184,10 +195,81 @@ pub fn project_event_row(item_id: &str, event: &EventTimelineItem) -> TimelineVi
                 }
                 None => other_row(item_id, None, "Encrypted local event"),
             },
+            MsgLikeKind::Sticker(_) => other_row(item_id, base.event_id, "Sticker unavailable"),
             _ => other_row(item_id, base.event_id, "Unsupported timeline event"),
         },
-        _ => other_row(item_id, base.event_id, "Unsupported timeline event"),
+        TimelineItemContent::MembershipChange(change) => {
+            TimelineViewRow::Membership(TimelineMembershipRow {
+                event: base,
+                target_user_id: change.user_id().to_string(),
+                summary: "Membership changed".to_owned(),
+            })
+        }
+        TimelineItemContent::ProfileChange(change) => TimelineViewRow::State(TimelineStateRow {
+            event: base,
+            state_type: "m.room.member".to_owned(),
+            summary: format!("Profile updated for {}", change.user_id()),
+        }),
+        TimelineItemContent::OtherState(change) => TimelineViewRow::State(TimelineStateRow {
+            event: base,
+            state_type: change.content().event_type().to_string(),
+            summary: "Room state updated".to_owned(),
+        }),
+        TimelineItemContent::CallInvite => TimelineViewRow::Call(TimelineCallRow {
+            event: base,
+            call_kind: "invite".to_owned(),
+        }),
+        TimelineItemContent::RtcNotification { .. } => TimelineViewRow::Call(TimelineCallRow {
+            event: base,
+            call_kind: "notification".to_owned(),
+        }),
+        TimelineItemContent::FailedToParseMessageLike { .. }
+        | TimelineItemContent::FailedToParseState { .. } => {
+            other_row(item_id, base.event_id, "Unsupported timeline event")
+        }
     }
+}
+
+fn project_reactions(content: &matrix_sdk_ui::timeline::MsgLikeContent) -> Vec<TimelineReaction> {
+    content
+        .reactions
+        .iter()
+        .map(|(key, reactions)| TimelineReaction {
+            key: key.clone(),
+            count: reactions.len().try_into().unwrap_or(u32::MAX),
+            own: None,
+        })
+        .collect()
+}
+
+fn project_reply(
+    content: &matrix_sdk_ui::timeline::MsgLikeContent,
+) -> Option<TimelineReplyPreview> {
+    let details = content.in_reply_to.as_ref()?;
+    let TimelineDetails::Ready(event) = &details.event else {
+        return None;
+    };
+    let body = event.content.as_message()?.body().to_owned();
+    Some(TimelineReplyPreview {
+        event_id: details.event_id.to_string(),
+        sender_name: event.sender.to_string(),
+        body,
+    })
+}
+
+fn project_thread_summary(
+    content: &matrix_sdk_ui::timeline::MsgLikeContent,
+    event: &EventTimelineItem,
+) -> Option<TimelineThreadSummary> {
+    let summary = content.thread_summary.as_ref()?;
+    let root_event_id = event.event_id()?.to_string();
+    Some(TimelineThreadSummary {
+        root_event_id,
+        reply_count: summary.num_replies,
+        // The latest embedded event may still be pending. It becomes a
+        // readback only after the native detail owner can provide it safely.
+        latest_event_id: None,
+    })
 }
 
 /// Project one SDK item without allowing the SDK object graph to cross the
