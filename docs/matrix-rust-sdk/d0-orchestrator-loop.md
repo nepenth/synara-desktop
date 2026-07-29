@@ -12,11 +12,11 @@
 
 ## Roles
 
-| Agent                                      | Role                                                                                                              |
-| ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
+| Agent                                      | Role                                                                                                             |
+| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
 | **Codex** `gpt-5.6-sol` **medium**         | Primary orchestrator: fire this loop, own Git/PR state, review and merge green full-vertical PRs, never main/#39 |
-| **Codex sub-agents**, same model/reasoning | Implement bounded task packets or independent review in parallel when scopes do not conflict                    |
-| **MiniMax-M3**                             | Optional text/research assistance during waits; never sole implementer, reviewer, or acceptance authority       |
+| **Codex sub-agents**, same model/reasoning | Implement bounded task packets or independent review in parallel when scopes do not conflict                     |
+| **MiniMax-M3**                             | Optional text/research assistance during waits; never sole implementer, reviewer, or acceptance authority        |
 
 Grok is not part of the active execution path while its usage allocation is
 unavailable. The primary Codex orchestrator retains acceptance and merge
@@ -51,10 +51,10 @@ authority even when implementation is delegated.
 | ------------- | -------------------------------------------------- | ------------------------------------------------------------ |
 | D0.1–D0.4     | Merged (partial debt → residual doc)               | tip history                                                  |
 | V-CRYPTO.1–.4 | Product wiring merged #223–#226; **deletion open** | debt = **V-CRYPTO.1-D→.4-D**                                 |
-| V-CRYPTO.5    | **Active draft #227**; CI green                    | amend to delete legacy room-key path before closure          |
+| V-CRYPTO.5    | **Active draft #227**; closure implementation      | validate deletion, retry safety, privacy, and reviewed SHA   |
 | V-CRYPTO.6–.7 | Queued                                             | UTD recovery, then device/trust; wire + delete in each slice |
 | D0.6 plateau  | **#221 HOLD — do not merge as complete**           | rework → V-BURN later                                        |
-| **Next**      | Amend **#227**, then **V-CRYPTO.1-D**              | serial residual drain                                        |
+| **Next**      | Validate/land **#227**, then **V-CRYPTO.1-D**      | serial residual drain                                        |
 
 _Orchestrator must rewrite this table when a residual slice merges._
 

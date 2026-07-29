@@ -43,7 +43,7 @@ Status language in this ledger is strict:
 | **V-CRYPTO.2** | **WIRED #224; deletion open** | Cross-signing readiness/setup                | Live `matrix/cross_signing/live.rs`, setup/auth UI                   | Delete superseded JS cross-signing setup/status implementation/imports; SDK-neutral shared UI only; see [v-crypto-2-cross-signing.md](v-crypto-2-cross-signing.md) |
 | **V-CRYPTO.3** | **WIRED #225; deletion open** | Key backup restore/recovery                  | Live `matrix/backup/live.rs`, native backup UI/hooks                 | Delete superseded JS backup restore/setup/repair implementation/imports; see [v-crypto-3-key-backup.md](v-crypto-3-key-backup.md)                                  |
 | **V-CRYPTO.4** | **WIRED #226; deletion open** | SSSS bootstrap/unlock                        | Live `matrix/secret_storage/live.rs`, native secret-storage UI/hooks | Delete JS recovery-key derivation/storage path and imports; keep secrets host-side; see [v-crypto-4-secret-storage.md](v-crypto-4-secret-storage.md)               |
-| **V-CRYPTO.5** | **ACTIVE draft #227**         | Room-key export/import retained product path | Single Rust IPC owner and legacy deletion implemented on PR         | Merge only after reviewed-SHA validation proves parity, retry safety, privacy, deletion, and ledger evidence                                                      |
+| **V-CRYPTO.5** | **ACTIVE draft #227**         | Room-key export/import retained product path | Single Rust IPC owner and legacy deletion implemented on PR          | Merge only after reviewed-SHA validation proves parity, retry safety, privacy, deletion, and ledger evidence                                                       |
 | **V-CRYPTO.6** | **QUEUED**                    | UTD recovery UX                              | `matrix/utd_recovery/*`, timeline UTD foundations                    | User-visible recovery/retry controls plus deletion of superseded JS retry/decryption-listener ownership                                                            |
 | **V-CRYPTO.7** | **QUEUED**                    | Device list/trust presentation               | `matrix/devices/*` foundations                                       | Device list/trust/actions from Rust projections and deletion of JS `CryptoApi`/device model ownership                                                              |
 
@@ -132,14 +132,14 @@ L1 modules under `src-tauri/src/matrix/{verification,backup,cross_signing,device
 
 ## Scoreboard (replace dogfood metrics)
 
-| Metric                                                         | Target                                                          |
-| -------------------------------------------------------------- | --------------------------------------------------------------- |
-| Open rows in this residual table                               | **0** for claimed-complete verticals                            |
-| js importers for a claimed-complete capability                 | **0** production files                                          |
-| Capability-owner/file deletion delta per completed vertical    | **Negative and recorded**; zero-deletion completion is rejected |
+| Metric                                                         | Target                                                                               |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| Open rows in this residual table                               | **0** for claimed-complete verticals                                                 |
+| js importers for a claimed-complete capability                 | **0** production files                                                               |
+| Capability-owner/file deletion delta per completed vertical    | **Negative and recorded**; zero-deletion completion is rejected                      |
 | Repository-wide direct `matrix-js-sdk` import delta            | Recorded and non-increasing; zero is allowed only for an indirectly owned capability |
-| New PRs with “minimum / dogfood / plateau residual” acceptance | **0**                                                           |
-| Phase-gate crypto / cutover claims                             | Only after V-CRYPTO + owning verticals complete                 |
+| New PRs with “minimum / dogfood / plateau residual” acceptance | **0**                                                                                |
+| Phase-gate crypto / cutover claims                             | Only after V-CRYPTO + owning verticals complete                                      |
 
 ## Orchestrator
 
@@ -147,7 +147,7 @@ Loop must:
 
 1. **Not** merge #221 as D0.6 complete.
 2. Treat V-CRYPTO.1–.4 as **wired / deletion open**, not done.
-3. Amend active [#227](https://github.com/nepenth/synara-desktop/pull/227) to delete its legacy room-key path before closure.
+3. Validate and land active [#227](https://github.com/nepenth/synara-desktop/pull/227) only after its legacy deletion, retry safety, privacy, and ledger evidence pass on the reviewed SHA.
 4. Drain V-CRYPTO.1-D → .4-D, then advance to V-CRYPTO.6.
 5. Update [PROGRESS.md](PROGRESS.md) with product wiring, deletion deltas, and residual closure.
 6. Refuse new L1-only or new non-residual verticals until this queue is cleared or user reorders explicitly.
