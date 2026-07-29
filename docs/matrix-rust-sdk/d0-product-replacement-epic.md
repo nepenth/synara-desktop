@@ -58,8 +58,8 @@ L1-only open PRs (notify polish, call-state, extra media orthogonal, MiniMax hel
 
 | Role                                    | Owner                                                                               |
 | --------------------------------------- | ----------------------------------------------------------------------------------- |
-| Orchestrate, dispatch, and merge        | **Codex** `gpt-5.6-terra` high — **refuse incomplete vertical acceptance**          |
-| Implement full vertical residual slices | Same-model/high-reasoning Codex sub-agents with bounded task packets                |
+| Orchestrate, dispatch, and merge        | **Codex** `gpt-5.6-sol` medium — **refuse incomplete vertical acceptance**         |
+| Implement full vertical residual slices | Same-model/medium-reasoning Codex sub-agents with bounded task packets              |
 | Review + tip-merge + focused tests      | Primary Codex orchestrator; independent same-model review may assist                |
 
 ## Orchestration
