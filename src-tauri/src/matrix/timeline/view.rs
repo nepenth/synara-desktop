@@ -6,7 +6,7 @@
 //! subscription are deliberately separate follow-up work; this module fixes
 //! the stable shape that those owners must produce.
 
-use matrix_sdk_ui::timeline::EventTimelineItem;
+use matrix_sdk_ui::timeline::{EventTimelineItem, MsgLikeKind, TimelineItemContent};
 use serde::{Deserialize, Serialize};
 
 use crate::matrix::dto::{EventId, RoomId, TimelineItemId, UserId};
@@ -146,6 +146,54 @@ pub fn project_event_row_base(item_id: &str, event: &EventTimelineItem) -> Timel
             forward: false,
         },
     }
+}
+
+pub fn project_event_row(item_id: &str, event: &EventTimelineItem) -> TimelineViewRow {
+    let base = project_event_row_base(item_id, event);
+    match event.content() {
+        TimelineItemContent::MsgLike(content) => match &content.kind {
+            MsgLikeKind::Message(message) => TimelineViewRow::Message(TimelineMessageRow {
+                event: base,
+                body: message.body().to_owned(),
+                formatted_body: None,
+                message_type: None,
+                edited: message.is_edited(),
+                reply: None,
+                thread: None,
+                reactions: Vec::new(),
+                media: None,
+            }),
+            MsgLikeKind::Redacted => match base.event_id.clone() {
+                Some(event_id) => TimelineViewRow::Redacted(TimelineRedactedRow {
+                    item_id: base.item_id,
+                    event_id,
+                    summary: "Message removed".to_owned(),
+                }),
+                None => other_row(item_id, None, "Redacted local event"),
+            },
+            MsgLikeKind::UnableToDecrypt(_) => match base.event_id.clone() {
+                Some(event_id) => {
+                    TimelineViewRow::EncryptedUnavailable(TimelineEncryptedUnavailableRow {
+                        item_id: base.item_id,
+                        event_id,
+                        reason_code: "unable_to_decrypt".to_owned(),
+                    })
+                }
+                None => other_row(item_id, None, "Encrypted local event"),
+            },
+            _ => other_row(item_id, base.event_id, "Unsupported timeline event"),
+        },
+        _ => other_row(item_id, base.event_id, "Unsupported timeline event"),
+    }
+}
+
+fn other_row(item_id: &str, event_id: Option<EventId>, summary: &str) -> TimelineViewRow {
+    TimelineViewRow::Other(TimelineOtherRow {
+        item_id: item_id.to_owned(),
+        event_id,
+        event_type: None,
+        summary: summary.to_owned(),
+    })
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

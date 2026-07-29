@@ -61,12 +61,12 @@ pub use projection::{reconstruct, TimelineProjection};
 pub use registry::{TimelineEntry, TimelineKey, TimelineLifecycle, TimelineRegistry};
 pub use utd::{UtdEntry, UtdIndex, UtdPhase, UtdReasonCode, UtdUpdate, MAX_UTD_ENTRIES};
 pub use view::{
-    project_event_row_base, TimelineCallRow, TimelineEncryptedUnavailableRow, TimelineEventRowBase,
-    TimelineMediaHandle, TimelineMembershipRow, TimelineMessageRow, TimelineOtherRow,
-    TimelinePageState, TimelinePaginationState, TimelinePollRow, TimelineReaction,
-    TimelineReadState, TimelineRedactedRow, TimelineReplyPreview, TimelineRowCapabilities,
-    TimelineStateRow, TimelineThreadSummary, TimelineViewCapabilities, TimelineViewPosition,
-    TimelineViewRow, TimelineViewSnapshot, TIMELINE_VIEW_SCHEMA_VERSION,
+    project_event_row, project_event_row_base, TimelineCallRow, TimelineEncryptedUnavailableRow,
+    TimelineEventRowBase, TimelineMediaHandle, TimelineMembershipRow, TimelineMessageRow,
+    TimelineOtherRow, TimelinePageState, TimelinePaginationState, TimelinePollRow,
+    TimelineReaction, TimelineReadState, TimelineRedactedRow, TimelineReplyPreview,
+    TimelineRowCapabilities, TimelineStateRow, TimelineThreadSummary, TimelineViewCapabilities,
+    TimelineViewPosition, TimelineViewRow, TimelineViewSnapshot, TIMELINE_VIEW_SCHEMA_VERSION,
 };
 
 /// Static marker for link / schema smoke.
