@@ -79,7 +79,7 @@ import { markAsRead, markAsReadInBackground } from '../../../utils/notifications
 import { ContainerColor } from '../../../styles/ContainerColor.css';
 import { VirtualTile } from '../../../components/virtualizer';
 import { UserAvatar } from '../../../components/user-avatar';
-import { EncryptedContent } from '../../../features/room/message';
+import { NativeEventContent } from '../../../features/room/message';
 import { useMentionClickHandler } from '../../../hooks/useMentionClickHandler';
 import { useSpoilerClickHandler } from '../../../hooks/useSpoilerClickHandler';
 import { ScreenSize, useScreenSizeContext } from '../../../hooks/useScreenSize';
@@ -310,13 +310,13 @@ function RoomNotificationsGroupComp({
         }
 
         return (
-          <EncryptedContent mEvent={mEvent}>
-            {() => {
-              if (mEvent.isRedacted()) return <RedactedContent />;
-              if (mEvent.getType() === MessageEvent.Sticker)
+          <NativeEventContent roomId={room.roomId} mEvent={mEvent}>
+            {(resolvedEvent) => {
+              if (resolvedEvent.isRedacted()) return <RedactedContent />;
+              if (resolvedEvent.getType() === MessageEvent.Sticker)
                 return (
                   <MSticker
-                    content={mEvent.getContent()}
+                    content={resolvedEvent.getContent()}
                     renderImageContent={(props) => (
                       <ImageContent
                         {...props}
@@ -327,21 +327,21 @@ function RoomNotificationsGroupComp({
                     )}
                   />
                 );
-              if (mEvent.getType() === MessageEvent.RoomMessage) {
+              if (resolvedEvent.getType() === MessageEvent.RoomMessage) {
                 const editedEvent = getEditedEvent(
                   evt.event_id,
-                  mEvent,
+                  resolvedEvent,
                   evtTimeline.getTimelineSet()
                 );
                 const getContent = (() =>
                   editedEvent?.getContent()['m.new_content'] ??
-                  mEvent.getContent()) as GetContentCallback;
+                  resolvedEvent.getContent()) as GetContentCallback;
 
                 return (
                   <RenderMessageContent
                     displayName={displayName}
-                    msgType={mEvent.getContent().msgtype ?? ''}
-                    ts={mEvent.getTs()}
+                    msgType={resolvedEvent.getContent().msgtype ?? ''}
+                    ts={resolvedEvent.getTs()}
                     edited={!!editedEvent}
                     getContent={getContent}
                     mediaAutoLoad={mediaAutoLoad}
@@ -354,7 +354,7 @@ function RoomNotificationsGroupComp({
                   />
                 );
               }
-              if (mEvent.getType() === MessageEvent.RoomMessageEncrypted)
+              if (resolvedEvent.getType() === MessageEvent.RoomMessageEncrypted)
                 return (
                   <Text>
                     <MessageNotDecryptedContent />
@@ -366,7 +366,7 @@ function RoomNotificationsGroupComp({
                 </Text>
               );
             }}
-          </EncryptedContent>
+          </NativeEventContent>
         );
       },
       [MessageEvent.Sticker]: (event, displayName, getContent) => {

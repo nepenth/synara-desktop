@@ -6130,69 +6130,22 @@ Limited rejected-review correction (`p0.2-correct-54-fr-7.11-008-widget-continge
 - **Text**: undecryptable-event retry;
 - **Lines**: 432–432
 - **Status**: `implemented`
-- **Behavior**: Product implements automatic undecryptable-event retry (no dedicated Retry button): encrypted-room pagination runs `decryptAllTimelineEvent` → `attemptDecryption(..., { isRetry: true })`; `EncryptedContent` re-renders on `MatrixEventEvent.Decrypted`; `useRoomEvent` attempts decrypt on `fetchRoomEvent`; UI shows `MessageNotDecryptedContent` while pending and `MessageBadEncryptedContent`/`MBadEncrypted` for `m.bad.encrypted`. status=implemented.
-- **Notes**: Evidence (conservative): (1) RETRY BULK `room.ts` `decryptAllTimelineEvent` L401–410: `getCrypto` L402; filter `isEncrypted` L406; `attemptDecryption(crypto, { isRetry: true })` L408. (2) RETRY TRIGGER `RoomTimeline` pagination L524–530: after `paginateEventTimeline`, if `room.hasEncryptionStateEvent()` then `decryptAllTimelineEvent` L529. (3) UI LIFECYCLE `EncryptedContent` L10–24: `mEvent.on(MatrixEventEvent.Decrypted)` L18; still encrypted → `MessageNotDecryptedContent` L3029. (4) PER-EVENT `useRoomEvent` L21–22 `attemptDecryption`. (5) PERMANENT UTD `MessageBadEncryptedContent` L34–38; `MBadEncrypted` L33–38; `RenderMessageContent` L272–273. (6) NON-EVIDENCE: `matrix-crypto.ts` is `verifiedDevice` only (FR-7.9-002/004); `useRoomEventReaders` receipts (FR-7.3-005); LocalBackup FR-7.9-007; server backup FR-7.9-006; presentation taxonomy alone FR-7.3-009; no product Retry/Request-keys button. (7) Cutover P8.7+P5.10 via Rust crypto+timeline + product UX + IPC; SC-061 alone / compile-only / raw HTTP / dual-backend / room-key-file-only / server-backup-only / presentation-only FAIL.
-- **Limits**: Product retry is automatic — no manual retry control. SC-061 is Encryption type probe only; no separate SC for `attemptDecryption`/timeline UTD re-emit. SC-061 compile-shape-only blocked (E3–E5 missing).
-- **UI**: `synara/src/app/features/room/RoomTimeline.tsx`, `synara/src/app/features/room/message/EncryptedContent.tsx`, `synara/src/app/components/message/content/FallbackContent.tsx`, `synara/src/app/components/RenderMessageContent.tsx`
-- **UI rationale**: RoomTimeline mounts EncryptedContent for `m.room.encrypted` and shows MessageNotDecryptedContent while still encrypted; after Decrypted or successful attemptDecryption, plaintext or permanent UTD. No dedicated Retry button. Presentation taxonomy alone is FR-7.3-009.
-- **Owners**: `synara/src/app/utils/room.ts`, `synara/src/app/features/room/message/EncryptedContent.tsx`, `synara/src/app/hooks/useRoomEvent.ts`
-- **Files**:
-  - `synara/src/app/utils/room.ts` symbols=['decryptAllTimelineEvent','getCrypto','attemptDecryption','isEncrypted'] retained_m=2 retained_l=0
-    - method `getCrypto`:L402 — Bulk decrypt retry crypto gate
-    - method `attemptDecryption`:L408 — Primary UTD retry with `{ isRetry: true }`
-  - `synara/src/app/features/room/RoomTimeline.tsx` symbols=['decryptAllTimelineEvent','EncryptedContent','MessageNotDecryptedContent'] retained_m=2 retained_l=0
-    - method `hasEncryptionStateEvent`:L528 — Encrypted-room gate
-    - method `decryptAllTimelineEvent`:L529 — Pagination bulk retry trigger
-  - `synara/src/app/features/room/message/EncryptedContent.tsx` symbols=['EncryptedContent','MatrixEventEvent.Decrypted'] retained_m=0 retained_l=2
-    - listener `on:MatrixEventEvent.Decrypted`:L18 — Re-render after decrypt/retry success
-    - listener `removeListener:MatrixEventEvent.Decrypted`:L20 — Cleanup
-  - `synara/src/app/hooks/useRoomEvent.ts` symbols=['getCrypto','attemptDecryption','isEncrypted'] retained_m=2 retained_l=0
-    - method `getCrypto`:L21 — Per-event fetch crypto gate
-    - method `attemptDecryption`:L22 — Per-event decrypt on fetchRoomEvent
-  - `synara/src/app/components/message/content/FallbackContent.tsx` symbols=['MessageBadEncryptedContent','MessageNotDecryptedContent'] retained_m=0 retained_l=0
-  - `synara/src/app/components/message/MsgTypeRenderers.tsx` symbols=['MBadEncrypted'] retained_m=0 retained_l=0
-  - `synara/src/app/components/RenderMessageContent.tsx` symbols=['MBadEncrypted','m.bad.encrypted'] retained_m=0 retained_l=0
-- **Behavior-relevant methods (top-level)**:
-  - `getCrypto` `synara/src/app/utils/room.ts`:L402 — Bulk decrypt retry crypto gate
-  - `attemptDecryption` `synara/src/app/utils/room.ts`:L408 — Primary UTD retry `{ isRetry: true }`
-  - `hasEncryptionStateEvent` `synara/src/app/features/room/RoomTimeline.tsx`:L528 — Encrypted-room gate
-  - `decryptAllTimelineEvent` `synara/src/app/features/room/RoomTimeline.tsx`:L529 — Pagination bulk retry
-  - `getCrypto` `synara/src/app/hooks/useRoomEvent.ts`:L21 — Per-event fetch crypto gate
-  - `attemptDecryption` `synara/src/app/hooks/useRoomEvent.ts`:L22 — Per-event decrypt attempt
-- **Behavior-relevant listeners (top-level)**:
-  - `on:MatrixEventEvent.Decrypted` `synara/src/app/features/room/message/EncryptedContent.tsx`:L18 — Re-render on decrypt
-  - `removeListener:MatrixEventEvent.Decrypted` `synara/src/app/features/room/message/EncryptedContent.tsx`:L20 — Cleanup
-- **Unfiltered linked candidates**: methods=4 listeners=10 (original P0.1 subset; primary retry surfaces source-inspected)
-- **Rust**: `utd-retry-compile-shape-only-blocked-for-product` caps=['SC-061'] gaps=[]
-  - `SC-061` `blocked` `matrix_sdk::encryption::Encryption` https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/encryption/mod.rs#L892
-  - Honest: SC-061 Encryption compile-shape only. Product UTD retry maps to timeline/crypto re-decrypt + IPC DTO updates (P5.10+P8.7). Do **not** map to SC-066/GAP-RECOVERY-BACKUP (FR-7.9-006) or export/import_room_keys (FR-7.9-007). SC-061 alone / compile-only / presentation-only FAIL.
+- **Behavior**: The managed Rust timeline owns automatic UTD recovery. SDK event-cache insertion and its room-key redecryptor cover encrypted pagination; SDK key arrival is observed by the existing snapshot/readback loop and replaces pending rows with plaintext without restart or user retry.
+- **Notes**: P5.10 `UtdIndex` and P8.7 `UtdRecoveryCoordinator` are embedded in `NativeTimelineRegistry`. The UI reports privacy-safe pending/unavailable/recovered state and opens existing Devices secret-storage/backup recovery. `NativeEventContent` preserves late-decrypt display for pin/inbox rows through a safe focused timeline projection.
+- **Limits**: No dedicated Retry button. No key, session ID, sender key, device ID, ciphertext, or raw SDK error crosses IPC. Focused Rust/compile/typecheck evidence passes; live two-client Synapse and UI acceptance are not confirmed.
+- **UI**: `synara/src/app/features/room/NativeRoomTimeline.tsx`, `synara/src/app/features/room/message/NativeEventContent.tsx`
+- **UI rationale**: NativeRoomTimeline presents honest state and guided recovery; NativeEventContent is a bounded readback adapter, not a Matrix JS crypto owner.
+- **Owners**: `src-tauri/src/matrix/timeline/live.rs`
+- **Deleted ownership**: `room.ts decryptAllTimelineEvent`; RoomTimeline pagination decrypt call; `useRoomEvent attemptDecryption` / `CryptoBackend`; `EncryptedContent` Decrypted listener and wrappers.
+- **Behavior-relevant JS crypto methods/listeners**: none.
+- **Excluded retained listeners**: room activity and `CallEmbed` Decrypted listeners.
+- **Rust**: `product-wired-runtime-proof-pending` caps=['SC-061'] gaps=[]
 - **Tasks**: `P8.7`, `P5.10`
 - **Existing tests**:
-  - _(none)_
+  - `matrix::timeline::live::tests` — six focused tests cover pending→plaintext reconciliation, current-availability mapping, placeholder safety, and readback IPC privacy.
 - **Planned** `AT-FR-7.9-008-001` task `P8.7` level `integration-e2e`
-  - Scenario: Integration-e2e against disposable Synapse with an E2EE room: (A) PENDING UTD — create/fixture messages that remain encrypted on receiver (missing megolm keys); assert timeline shows MessageNotDecryptedContent ('This message is not decrypted yet') or product-equivalent pending state via EncryptedContent. (B) RETRY SUCCESS — after room keys become available (key forward, backup restore FR-7.9-006 path as fixture only, or second-device history), assert decrypt path runs (pagination decryptAllTimelineEvent/attemptDecryption isRetry and/or SDK decrypt + Decrypted) and UI re-renders plaintext body without process restart. (C) PERMANENT UTD — for events that remain undecryptable, assert MessageBadEncryptedContent / MBadEncrypted ('Unable to decrypt message') via m.bad.encrypted. (D) PAGINATION RETRY — paginate encrypted history and assert RoomTimeline invokes decryptAllTimelineEvent for hasEncryptionStateEvent rooms. After cutover P8.7+P5.10 same observables via Rust crypto+timeline ownership + product UX + IPC DTO; SC-061 alone, compile-only blocked, raw /\_matrix HTTP, dual-backend, room-key-file-only (FR-7.9-007), server-backup-restore-only (FR-7.9-006), presentation-only (FR-7.3-009), or helper/fixture-only FAIL.
-  - Test target: decryptAllTimelineEvent (room.ts); RoomTimeline pagination encrypted decrypt; EncryptedContent Decrypted listener; useRoomEvent attemptDecryption; MessageNotDecryptedContent / MessageBadEncryptedContent / MBadEncrypted; post-cutover P8.7+P5.10 Rust timeline UTD→decrypted DTO
-  - Preconditions:
-    - Disposable Synapse; two E2EE-capable sessions (or controlled missing-key fixture) in an encrypted room.
-    - Named product surfaces present: room.ts decryptAllTimelineEvent, RoomTimeline EncryptedContent+MessageNotDecryptedContent, useRoomEvent attemptDecryption, FallbackContent/MsgTypeRenderers/RenderMessageContent UTD strings.
-    - Harness can observe pending not-decrypted UI, post-key plaintext re-render, permanent unable-to-decrypt, and encrypted-room pagination decrypt trigger; does not bypass product path with dual-backend/raw HTTP/helper-only pass criteria.
-    - Do not accept LocalBackup room-key file alone (FR-7.9-007), BackupRestore server restore alone (FR-7.9-006), SAS alone (FR-7.9-005), or encrypted/UTD presentation taxonomy alone (FR-7.3-009) as sole pass for this FR.
-  - Actions:
-    1. Boot integration harness against disposable Synapse. Do not use fixture-only mocks that skip product EncryptedContent/RoomTimeline decrypt paths, dual-backend selectors, raw HTTP, or helper-only pass criteria.
-    2. PENDING: Arrange encrypted events without room keys on the under-test session; open room timeline; assert MessageNotDecryptedContent (or product-equivalent pending UTD) is visible for those events.
-    3. RETRY SUCCESS: Make room keys available to the session (key share / restore fixture). Trigger history load or pagination if needed. Assert EncryptedContent re-renders plaintext (Decrypted path) without requiring a dedicated Retry button click.
-    4. PAGINATION: On encrypted room with hasEncryptionStateEvent, paginate timeline; assert decryptAllTimelineEvent / attemptDecryption isRetry path is exercised for encrypted events (or product-equivalent bulk re-decrypt after cutover).
-    5. PERMANENT UTD: For events that remain undecryptable, assert MessageBadEncryptedContent / MBadEncrypted presentation.
-    6. After cutover P8.7+P5.10, repeat pending → decrypted and permanent UTD observables via Rust crypto+timeline ownership + IPC DTO. Citing SC-061 alone, compile-only, raw /\_matrix HTTP, dual-backend/SDK selector, room-key-file-only, server-backup-only, presentation-only, or helper/fixture-only is a FAIL.
-  - Assertions:
-    - PENDING: encrypted events without keys show not-yet-decrypted UI (MessageNotDecryptedContent or equivalent) via EncryptedContent.
-    - RETRY: when keys become available, events re-decrypt and UI updates to plaintext without a dedicated product Retry button (automatic path).
-    - PAGINATION: encrypted-room pagination triggers bulk re-decrypt (decryptAllTimelineEvent / isRetry) or Rust/IPC successor.
-    - PERMANENT UTD: m.bad.encrypted / MessageBadEncryptedContent remains for permanently undecryptable events.
-    - COORDINATION: retry remains through room.ts decryptAllTimelineEvent + EncryptedContent Decrypted + useRoomEvent attemptDecryption (or Rust/IPC successors), not ad-hoc dual writers.
-    - CUTOVER: P8.7+P5.10 preserve pending/retry-success/permanent-UTD observables via Rust ownership + IPC DTO; SC-061 compile-only never product pass; no SC-066/GAP-RECOVERY-BACKUP as sole mapping; no raw /\_matrix runtime HTTP; no dual-backend/SDK selector.
-    - No new production matrix-js-sdk usage and no raw /\_matrix runtime HTTP unless the dossier marks that exact behavior typed-sdk-request-required.
-    - Room-key file import alone (FR-7.9-007), server backup restore alone (FR-7.9-006), SAS alone (FR-7.9-005), and presentation-only (FR-7.3-009) are not accepted as sole pass criteria for this FR.
+  - Scenario: Existing disposable-Synapse native receiver scenario; do not create a second harness.
+  - Assertions: pending UTD visible; keys cause automatic plaintext replacement; pagination follows the SDK event-cache/redecryptor route; unavailable UTD stays honest and live for later keys; no Retry button or secret IPC.
   - does_not_currently_exist: `True`
 - **Manual**: `MA-FR-7.9-008`
 
@@ -9382,24 +9335,19 @@ Limited rejected-review correction (`p0.2-correct-54-fr-7.11-008-widget-continge
 
 - Platforms: macOS, Linux
 - Preconditions:
-  - Desktop app against disposable Synapse; two E2EE sessions (or missing-key fixture) in an encrypted room.
-  - Product surfaces available: room.ts decryptAllTimelineEvent, RoomTimeline EncryptedContent + MessageNotDecryptedContent, useRoomEvent attemptDecryption, FallbackContent/MBadEncrypted UTD strings.
-  - UI/lifecycle: encrypted room timeline with pending/permanent UTD presentation; no dedicated Retry button expected.
-  - Current status baseline: implemented (automatic retry)
+  - Desktop app against disposable Synapse; two E2EE sessions in an encrypted room.
+  - Managed native timeline and existing Devices recovery settings are available.
+  - No dedicated Retry button is expected.
 - Actions:
-  1. Launch Synara desktop on the target platform against disposable Synapse with an E2EE profile in an encrypted room.
-  2. PENDING: Withhold room keys for some encrypted messages on the under-test session; open the room; confirm MessageNotDecryptedContent ('This message is not decrypted yet') or product-equivalent pending UI via EncryptedContent.
-  3. RETRY SUCCESS: Supply room keys (key share or restore fixture). Paginate or wait for decrypt; confirm plaintext body replaces pending UTD without clicking a Retry button.
-  4. PAGINATION: Scroll/load older encrypted history; confirm bulk re-decrypt path for encrypted rooms (decryptAllTimelineEvent / isRetry or post-cutover equivalent).
-  5. PERMANENT UTD: Confirm events that remain undecryptable show MessageBadEncryptedContent / MBadEncrypted ('Unable to decrypt message').
-  6. Confirm LocalBackup file import alone (FR-7.9-007), server BackupRestore alone (FR-7.9-006), and presentation taxonomy alone (FR-7.3-009) are not used as sole pass for this FR.
+  1. Withhold room keys and confirm pending native UTD state.
+  2. Supply keys through the retained native recovery path and confirm automatic plaintext replacement without restart.
+  3. Load older encrypted history and confirm the SDK event-cache/redecryptor route remains live.
+  4. Confirm currently unavailable state is honest and continues observing later keys.
 - Expected:
-  - Pending encrypted events show not-yet-decrypted UI; successful key availability updates to plaintext automatically.
-  - Encrypted-room pagination exercises bulk re-decrypt (decryptAllTimelineEvent attemptDecryption isRetry or Rust/IPC successor under P8.7+P5.10).
-  - Permanent UTD presents Unable to decrypt message for m.bad.encrypted.
-  - No unexpected raw /\_matrix traffic from the app renderer for this flow on the post-cutover build.
-  - Room-key file import alone (FR-7.9-007), server backup restore alone (FR-7.9-006), SAS alone (FR-7.9-005), and presentation-only (FR-7.3-009) do not close this FR.
-  - Clauses pending UTD, automatic retry, permanent UTD, and cutover observables satisfied on macOS and Linux via room.ts + EncryptedContent + RoomTimeline (or Rust/IPC successors under P8.7+P5.10).
+  - Pending content becomes safe plaintext automatically when keys arrive.
+  - Unavailable content uses m.bad.encrypted presentation without becoming terminal.
+  - No key, session ID, ciphertext, media URL, or raw error crosses IPC.
+  - No raw Matrix HTTP or dual backend is introduced.
 
 ### `MA-FR-7.9-009` (FR-7.9-009)
 
@@ -11685,24 +11633,18 @@ Limited rejected-review correction (`p0.2-correct-54-fr-7.11-008-widget-continge
 
 ### `AT-FR-7.9-008-001`
 
-- Integration-e2e against disposable Synapse with an E2EE room: (A) PENDING UTD — create/fixture messages that remain encrypted on receiver (missing megolm keys); assert timeline shows MessageNotDecryptedContent ('This message is not decrypted yet') or product-equivalent pending state via EncryptedContent. (B) RETRY SUCCESS — after room keys become available (key forward, backup restore FR-7.9-006 path as fixture only, or second-device history), assert decrypt path runs (pagination decryptAllTimelineEvent/attemptDecryption isRetry and/or SDK decrypt + Decrypted) and UI re-renders plaintext body without process restart. (C) PERMANENT UTD — for events that remain undecryptable, assert MessageBadEncryptedContent / MBadEncrypted ('Unable to decrypt message') via m.bad.encrypted. (D) PAGINATION RETRY — paginate encrypted history and assert RoomTimeline invokes decryptAllTimelineEvent for hasEncryptionStateEvent rooms. After cutover P8.7+P5.10 same observables via Rust crypto+timeline ownership + product UX + IPC DTO; SC-061 alone, compile-only blocked, raw /\_matrix HTTP, dual-backend, room-key-file-only (FR-7.9-007), server-backup-restore-only (FR-7.9-006), presentation-only (FR-7.3-009), or helper/fixture-only FAIL.
-- target: decryptAllTimelineEvent (room.ts); RoomTimeline pagination encrypted decrypt; EncryptedContent Decrypted listener; useRoomEvent attemptDecryption; MessageNotDecryptedContent / MessageBadEncryptedContent / MBadEncrypted; post-cutover P8.7+P5.10 Rust timeline UTD→decrypted DTO
+- Existing integration-e2e scenario against disposable Synapse with two E2EE-capable sessions.
+- target: managed `NativeTimelineRegistry` plus `NativeRoomTimeline`
 - actions:
-  1. Boot integration harness against disposable Synapse. Do not use fixture-only mocks that skip product EncryptedContent/RoomTimeline decrypt paths, dual-backend selectors, raw HTTP, or helper-only pass criteria.
-  2. PENDING: Arrange encrypted events without room keys on the under-test session; open room timeline; assert MessageNotDecryptedContent (or product-equivalent pending UTD) is visible for those events.
-  3. RETRY SUCCESS: Make room keys available to the session (key share / restore fixture). Trigger history load or pagination if needed. Assert EncryptedContent re-renders plaintext (Decrypted path) without requiring a dedicated Retry button click.
-  4. PAGINATION: On encrypted room with hasEncryptionStateEvent, paginate timeline; assert decryptAllTimelineEvent / attemptDecryption isRetry path is exercised for encrypted events (or product-equivalent bulk re-decrypt after cutover).
-  5. PERMANENT UTD: For events that remain undecryptable, assert MessageBadEncryptedContent / MBadEncrypted presentation.
-  6. After cutover P8.7+P5.10, repeat pending → decrypted and permanent UTD observables via Rust crypto+timeline ownership + IPC DTO. Citing SC-061 alone, compile-only, raw /\_matrix HTTP, dual-backend/SDK selector, room-key-file-only, server-backup-only, presentation-only, or helper/fixture-only is a FAIL.
+  1. Create a receiver UTD by withholding room keys and confirm native pending state.
+  2. Make keys available through the retained native recovery path; confirm plaintext replaces the row automatically without restart or a Retry click.
+  3. Paginate encrypted history and confirm the SDK event-cache/redecryptor route remains live.
+  4. Confirm currently unavailable UTD remains honest while continuing to observe later keys.
 - assertions:
-  - PENDING: encrypted events without keys show not-yet-decrypted UI (MessageNotDecryptedContent or equivalent) via EncryptedContent.
-  - RETRY: when keys become available, events re-decrypt and UI updates to plaintext without a dedicated product Retry button (automatic path).
-  - PAGINATION: encrypted-room pagination triggers bulk re-decrypt (decryptAllTimelineEvent / isRetry) or Rust/IPC successor.
-  - PERMANENT UTD: m.bad.encrypted / MessageBadEncryptedContent remains for permanently undecryptable events.
-  - COORDINATION: retry remains through room.ts decryptAllTimelineEvent + EncryptedContent Decrypted + useRoomEvent attemptDecryption (or Rust/IPC successors), not ad-hoc dual writers.
-  - CUTOVER: P8.7+P5.10 preserve pending/retry-success/permanent-UTD observables via Rust ownership + IPC DTO; SC-061 compile-only never product pass; no SC-066/GAP-RECOVERY-BACKUP as sole mapping; no raw /\_matrix runtime HTTP; no dual-backend/SDK selector.
-  - No new production matrix-js-sdk usage and no raw /\_matrix runtime HTTP unless the dossier marks that exact behavior typed-sdk-request-required.
-  - Room-key file import alone (FR-7.9-007), server backup restore alone (FR-7.9-006), SAS alone (FR-7.9-005), and presentation-only (FR-7.3-009) are not accepted as sole pass criteria for this FR.
+  - No dedicated Retry button.
+  - P5.10/P8.7 state and plaintext replacement come from the managed native timeline owner.
+  - No key, session ID, sender key, device ID, ciphertext, or raw error crosses IPC.
+  - Backup/secret-storage alone, compile-only evidence, raw Matrix HTTP, and presentation-only evidence do not pass the scenario.
 
 ### `AT-FR-7.9-009-001`
 

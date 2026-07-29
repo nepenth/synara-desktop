@@ -36,8 +36,8 @@ obsolete tests/types before closure.
 
 ## Exact continuation point
 
-1. Resume the goal with V-CRYPTO.6 UTD/history recovery as a complete wire-plus-delete vertical. Keep orchestration and coding on Codex `gpt-5.6-sol` medium; there is no active implementation PR to recover.
-2. Implement V-CRYPTO.7 device list/trust/actions as a complete wire-plus-delete vertical.
+1. Review and merge V-CRYPTO.6 [#235](https://github.com/nepenth/synara-desktop/pull/235); live two-client recovery proof remains unconfirmed until the existing harness is run.
+2. Implement V-CRYPTO.7 device list/trust/actions as the next complete wire-plus-delete vertical.
 3. Continue V-AUTH → V-ROOMS → V-TIMELINE → V-SEND, deleting the superseded JS owner inside each capability slice.
 4. Run V-BURN only as the final convergence audit and npm dependency/bootstrap/store cleanup.
 5. Resume new media/widgets/notifications/calls verticals only after the residual queue allows.
@@ -59,6 +59,10 @@ obsolete tests/types before closure.
   JS key cache, and JS-only test are deleted, with direct desktop-runtime imports
   219/276 → 218/275.
 - V-CRYPTO.5 merged in #227 and is complete under the per-vertical deletion policy: the retained product path has one Rust IPC owner, and the legacy WebView owner/browser crypto helper are deleted.
+- V-CRYPTO.6 [#235](https://github.com/nepenth/synara-desktop/pull/235) integrates P5.10/P8.7 into the managed native timeline,
+  relies on SDK-owned pagination insertion/late-key redecryption and adds safe late-decrypt readback, reuses native
+  recovery settings, and deletes the JS retry/per-event/listener owners. See
+  [v-crypto-6-utd-recovery.md](v-crypto-6-utd-recovery.md).
 - Repository baseline remains **232 files / 292 direct import lines** referencing
   `matrix-js-sdk`. Each completed vertical must record a negative
   capability-owner/file deletion delta and an honest, non-increasing global

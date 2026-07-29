@@ -1,5 +1,12 @@
 import React, { ReactNode, useCallback, useEffect, useState } from 'react';
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
+import { Modal500 } from '../../components/Modal500';
+import { Settings, SettingsPages } from '../settings/Settings';
+import { getNativeBackupStatus, NATIVE_BACKUP_CHANGED } from '../backup/nativeBackup';
+import {
+  getNativeSecretStorageStatus,
+  NATIVE_SECRET_STORAGE_CHANGED,
+} from '../secret-storage/nativeSecretStorage';
 
 type NativeSessionSnapshot = {
   status: 'logged_out' | 'logged_in';
@@ -12,6 +19,14 @@ type NativeTimelineItem = {
   type: string;
   body: string;
   originServerTs: number;
+  decryptionState?: 'pending' | 'unavailable';
+};
+
+type NativeUtdStatus = {
+  phase: 'idle' | 'recovering' | 'partial' | 'unavailable';
+  pendingCount: number;
+  unavailableCount: number;
+  recoveredCount: number;
 };
 
 type NativeTimelineSnapshot = {
@@ -20,6 +35,7 @@ type NativeTimelineSnapshot = {
   isEncrypted: boolean;
   items: NativeTimelineItem[];
   hitStart: boolean;
+  utd: NativeUtdStatus;
 };
 
 type NativeCryptoStatus = {
@@ -69,6 +85,12 @@ function NativeRoomTimeline({ roomId }: { roomId: string }) {
   const [cryptoStatusUnavailable, setCryptoStatusUnavailable] = useState(false);
   const [error, setError] = useState(false);
   const [paginating, setPaginating] = useState(false);
+  const [recoverySettingsOpen, setRecoverySettingsOpen] = useState(false);
+  const [recoveryGuidance, setRecoveryGuidance] = useState<
+    'checking' | 'ready' | 'action_required' | 'unavailable'
+  >('checking');
+  const pendingUtdCount = snapshot?.utd.pendingCount ?? 0;
+  const unavailableUtdCount = snapshot?.utd.unavailableCount ?? 0;
 
   const loadSnapshot = useCallback(
     async (command: string) => {
@@ -122,6 +144,33 @@ function NativeRoomTimeline({ roomId }: { roomId: string }) {
       if (pollId !== undefined) window.clearInterval(pollId);
     };
   }, [loadSnapshot, roomId]);
+
+  useEffect(() => {
+    if (pendingUtdCount + unavailableUtdCount === 0) return;
+    let disposed = false;
+    const refreshRecoveryGuidance = async () => {
+      const [secretStorage, backup] = await Promise.all([
+        getNativeSecretStorageStatus().catch(() => undefined),
+        getNativeBackupStatus().catch(() => undefined),
+      ]);
+      if (disposed) return;
+      if (!secretStorage || !backup) {
+        setRecoveryGuidance('unavailable');
+      } else if (secretStorage.action !== 'none' || backup.action !== 'none') {
+        setRecoveryGuidance('action_required');
+      } else {
+        setRecoveryGuidance('ready');
+      }
+    };
+    void refreshRecoveryGuidance();
+    window.addEventListener(NATIVE_SECRET_STORAGE_CHANGED, refreshRecoveryGuidance);
+    window.addEventListener(NATIVE_BACKUP_CHANGED, refreshRecoveryGuidance);
+    return () => {
+      disposed = true;
+      window.removeEventListener(NATIVE_SECRET_STORAGE_CHANGED, refreshRecoveryGuidance);
+      window.removeEventListener(NATIVE_BACKUP_CHANGED, refreshRecoveryGuidance);
+    };
+  }, [pendingUtdCount, unavailableUtdCount]);
 
   const paginateBackwards = async () => {
     if (paginating) return;
@@ -183,6 +232,48 @@ function NativeRoomTimeline({ roomId }: { roomId: string }) {
             : 'Confirming native encryption readiness…'}
         </p>
       )}
+      {snapshot.utd.phase !== 'idle' && (
+        <div
+          role="status"
+          data-native-utd-phase={snapshot.utd.phase}
+          style={{
+            margin: '0 0 12px',
+            padding: '10px 12px',
+            borderRadius: 6,
+            background: 'rgba(127, 127, 127, 0.12)',
+            fontSize: 13,
+          }}
+        >
+          {snapshot.utd.pendingCount > 0 && (
+            <p style={{ margin: 0 }}>
+              {snapshot.utd.pendingCount} encrypted message
+              {snapshot.utd.pendingCount === 1 ? ' is' : 's are'} waiting for keys. Synara retries
+              automatically when recovery data arrives.
+            </p>
+          )}
+          {snapshot.utd.unavailableCount > 0 && (
+            <p style={{ margin: snapshot.utd.pendingCount > 0 ? '6px 0 0' : 0 }}>
+              {snapshot.utd.unavailableCount} message
+              {snapshot.utd.unavailableCount === 1 ? ' is' : 's are'} currently unavailable on this
+              device. Synara will keep checking for keys.
+            </p>
+          )}
+          {snapshot.utd.recoveredCount > 0 && (
+            <p style={{ margin: '6px 0 0' }}>
+              {snapshot.utd.recoveredCount} message
+              {snapshot.utd.recoveredCount === 1 ? ' has' : 's have'} been recovered.
+            </p>
+          )}
+          <button
+            type="button"
+            data-native-recovery-guidance={recoveryGuidance}
+            onClick={() => setRecoverySettingsOpen(true)}
+            style={{ marginTop: 8 }}
+          >
+            Review encryption recovery
+          </button>
+        </div>
+      )}
       {!snapshot.hitStart && (
         <div style={{ display: 'flex', justifyContent: 'center', paddingBottom: 12 }}>
           <button type="button" disabled={paginating} onClick={() => void paginateBackwards()}>
@@ -216,6 +307,14 @@ function NativeRoomTimeline({ roomId }: { roomId: string }) {
           <p style={{ margin: '4px 0 0', whiteSpace: 'pre-wrap' }}>{item.body}</p>
         </article>
       ))}
+      {recoverySettingsOpen && (
+        <Modal500 requestClose={() => setRecoverySettingsOpen(false)}>
+          <Settings
+            initialPage={SettingsPages.DevicesPage}
+            requestClose={() => setRecoverySettingsOpen(false)}
+          />
+        </Modal500>
+      )}
     </div>
   );
 }

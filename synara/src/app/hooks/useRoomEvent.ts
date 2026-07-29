@@ -1,7 +1,5 @@
 import { IEvent, MatrixEvent, Room } from 'matrix-js-sdk';
 import { useCallback, useMemo } from 'react';
-import to from 'await-to-js';
-import { CryptoBackend } from 'matrix-js-sdk/lib/common-crypto/CryptoBackend';
 import { useQuery } from '@tanstack/react-query';
 import { useMatrixClient } from './useMatrixClient';
 
@@ -16,10 +14,6 @@ const useFetchEvent = (room: Room, eventId: string) => {
       const replaceEvt = evt.unsigned?.['m.relations']['m.replace'] as IEvent;
       const replaceEvent = new MatrixEvent(replaceEvt);
       mEvent.makeReplaced(replaceEvent);
-    }
-
-    if (mEvent.isEncrypted() && mx.getCrypto()) {
-      await to(mEvent.attemptDecryption(mx.getCrypto() as CryptoBackend));
     }
 
     return mEvent;

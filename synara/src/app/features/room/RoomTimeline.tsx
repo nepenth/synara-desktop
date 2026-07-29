@@ -79,7 +79,6 @@ import {
 } from '../../plugins/react-custom-html-parser';
 import {
   canEditEvent,
-  decryptAllTimelineEvent,
   getEditedEvent,
   getEventReactions,
   getLatestEditableEvt,
@@ -92,7 +91,7 @@ import {
 import { useSetting } from '../../state/hooks/settings';
 import { MessageLayout, settingsAtom } from '../../state/settings';
 import { useMatrixEventRenderer } from '../../hooks/useMatrixEventRenderer';
-import { Reactions, Message, Event, EncryptedContent, MessageForwardItem } from './message';
+import { Reactions, Message, Event, NativeEventContent, MessageForwardItem } from './message';
 import { useMemberEventParser } from '../../hooks/useMemberEventParser';
 import * as customHtmlCss from '../../styles/CustomHtml.css';
 import { RoomIntro } from '../../components/room-intro';
@@ -517,17 +516,6 @@ const useTimelinePagination = (
         return;
       }
       onPaginationError(backwards ? 'backward' : 'forward', null);
-      const fetchedTimeline =
-        timelineToPaginate.getNeighbouringTimeline(
-          backwards ? Direction.Backward : Direction.Forward
-        ) ?? timelineToPaginate;
-      // Decrypt all event ahead of render cycle
-      const roomId = fetchedTimeline.getRoomId();
-      const room = roomId ? mx.getRoom(roomId) : null;
-
-      if (room?.hasEncryptionStateEvent()) {
-        await to(decryptAllTimelineEvent(mx, fetchedTimeline));
-      }
       if (alive()) {
         recalibratePagination(lTimelines, timelinesEventsCount, backwards);
       }
@@ -2978,13 +2966,13 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
             hour24Clock={hour24Clock}
             dateFormatString={dateFormatString}
           >
-            <EncryptedContent mEvent={mEvent}>
-              {() => {
-                if (mEvent.isRedacted()) return <RedactedContent />;
-                if (mEvent.getType() === MessageEvent.Sticker)
+            <NativeEventContent roomId={room.roomId} mEvent={mEvent}>
+              {(resolvedEvent) => {
+                if (resolvedEvent.isRedacted()) return <RedactedContent />;
+                if (resolvedEvent.getType() === MessageEvent.Sticker)
                   return (
                     <MSticker
-                      content={mEvent.getContent()}
+                      content={resolvedEvent.getContent()}
                       renderImageContent={(props) => (
                         <ImageContent
                           {...props}
@@ -2995,20 +2983,20 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
                       )}
                     />
                   );
-                if (mEvent.getType() === MessageEvent.RoomMessage) {
-                  const editedEvent = getEditedEvent(mEventId, mEvent, timelineSet);
+                if (resolvedEvent.getType() === MessageEvent.RoomMessage) {
+                  const editedEvent = getEditedEvent(mEventId, resolvedEvent, timelineSet);
                   const getContent = (() =>
                     editedEvent?.getContent()['m.new_content'] ??
-                    mEvent.getContent()) as GetContentCallback;
+                    resolvedEvent.getContent()) as GetContentCallback;
 
-                  const senderId = mEvent.getSender() ?? '';
+                  const senderId = resolvedEvent.getSender() ?? '';
                   const senderDisplayName =
                     getMemberDisplayName(room, senderId) ?? getMxIdLocalPart(senderId) ?? senderId;
                   return (
                     <RenderMessageContent
                       displayName={senderDisplayName}
-                      msgType={mEvent.getContent().msgtype ?? ''}
-                      ts={mEvent.getTs()}
+                      msgType={resolvedEvent.getContent().msgtype ?? ''}
+                      ts={resolvedEvent.getTs()}
                       edited={!!editedEvent}
                       getContent={getContent}
                       mediaAutoLoad={mediaAutoLoad}
@@ -3023,7 +3011,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
                     />
                   );
                 }
-                if (mEvent.getType() === MessageEvent.RoomMessageEncrypted)
+                if (resolvedEvent.getType() === MessageEvent.RoomMessageEncrypted)
                   return (
                     <Text>
                       <MessageNotDecryptedContent />
@@ -3035,7 +3023,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
                   </Text>
                 );
               }}
-            </EncryptedContent>
+            </NativeEventContent>
           </Message>
         );
       },
