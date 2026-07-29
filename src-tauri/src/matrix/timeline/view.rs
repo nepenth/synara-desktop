@@ -6,6 +6,7 @@
 //! subscription are deliberately separate follow-up work; this module fixes
 //! the stable shape that those owners must produce.
 
+use matrix_sdk_ui::timeline::EventTimelineItem;
 use serde::{Deserialize, Serialize};
 
 use crate::matrix::dto::{EventId, RoomId, TimelineItemId, UserId};
@@ -120,6 +121,31 @@ pub struct TimelineEventRowBase {
     pub sender_name: String,
     pub origin_server_ts: u64,
     pub capabilities: TimelineRowCapabilities,
+}
+
+/// Project the SDK-owned metadata common to every event row.
+///
+/// The sender ID is the safe fallback display label until the native profile
+/// projection supplies a resolved display name. Every action remains disabled
+/// until its specific typed native command and readback exist.
+pub fn project_event_row_base(item_id: &str, event: &EventTimelineItem) -> TimelineEventRowBase {
+    let sender_id = event.sender().to_string();
+    TimelineEventRowBase {
+        item_id: item_id.to_owned(),
+        event_id: event.event_id().map(ToString::to_string),
+        sender_name: sender_id.clone(),
+        sender_id,
+        origin_server_ts: event.timestamp().get().into(),
+        capabilities: TimelineRowCapabilities {
+            react: false,
+            reply: false,
+            edit: false,
+            redact: false,
+            report: false,
+            pin: false,
+            forward: false,
+        },
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
