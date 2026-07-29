@@ -624,7 +624,7 @@ and independent reviewer. It may delegate bounded implementation units to native
 sub-agents when the task can be isolated safely. External CLI model sessions are
 not part of the required workflow.
 
-The active execution model is Codex `gpt-5.6-terra` with high reasoning for the
+The active execution model is Codex `gpt-5.6-sol` with medium reasoning for the
 primary orchestrator and delegated implementation/review agents. MiniMax-M3 may
 assist with non-authoritative text or research work, but acceptance, Git/PR
 state, and merges remain owned by the primary Codex orchestrator. Grok is not in

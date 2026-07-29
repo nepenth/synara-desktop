@@ -30,12 +30,12 @@ These release/main fields do not describe partial product wiring on the integrat
 - Policy: `full-vertical-delete-per-vertical`
 - Integration product state: `between-slices-paused`
 - Active slice: **None**
-- Wired / deletion open: `V-CRYPTO.2`, `V-CRYPTO.3`, `V-CRYPTO.4`
-- Completed under full policy: `V-CRYPTO.1`, `V-CRYPTO.5`
-- Next slices: `V-CRYPTO.2-D` → `V-CRYPTO.3-D` → `V-CRYPTO.4-D` → `V-CRYPTO.6` → `V-CRYPTO.7`
+- Wired / deletion open: `V-CRYPTO.3`, `V-CRYPTO.4`
+- Completed under full policy: `V-CRYPTO.1`, `V-CRYPTO.2`, `V-CRYPTO.5`
+- Next slices: `V-CRYPTO.3-D` → `V-CRYPTO.4-D` → `V-CRYPTO.6` → `V-CRYPTO.7`
 - Held PRs: #221
 - Completion evidence: negative capability-owner/file deletion delta; global direct-import delta recorded and non-increasing
-- matrix-js-sdk inventory: **223 files / 280 import lines current**; baseline **232 / 292**
+- matrix-js-sdk inventory: **222 files / 275 import lines current**; baseline **232 / 292**
 
 ## Phase gates
 

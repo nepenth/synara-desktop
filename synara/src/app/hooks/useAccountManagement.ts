@@ -8,7 +8,6 @@ export const useAccountManagementActions = () => {
       sessionView: 'org.matrix.session_view',
       sessionEnd: 'org.matrix.session_end',
       accountDeactivate: 'org.matrix.account_deactivate',
-      crossSigningReset: 'org.matrix.cross_signing_reset',
     }),
     []
   );

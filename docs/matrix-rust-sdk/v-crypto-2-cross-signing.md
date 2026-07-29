@@ -2,7 +2,7 @@
 
 | Field                 | Value                                                                                 |
 | --------------------- | ------------------------------------------------------------------------------------- |
-| Status                | **Product wiring merged #224; physical deletion open (V-CRYPTO.2-D)**                 |
+| Status                | **DONE — native product owner; V-CRYPTO.2-D legacy deletion complete**                |
 | Scope                 | Cross-signing publication, local readiness, own-identity status, and first-time setup |
 | Product path          | UI → Tauri IPC → managed `matrix_sdk::Client`                                         |
 | Follow-up crypto rows | V-CRYPTO.3–V-CRYPTO.7 remain open                                                     |
@@ -77,12 +77,14 @@ the OS credential store through the existing native client/store foundation.
 - Rust formatting, tests/check, and touched TypeScript formatting/typecheck
   pass.
 
-## Blocking deletion residual — V-CRYPTO.2-D
+## V-CRYPTO.2-D deletion complete
 
-Delete the superseded matrix-js-sdk cross-signing status/setup implementation,
-`CryptoApi` ownership, and native-vs-legacy branches. Keep shared setup UI only
-after it consumes native DTOs/actions. Record the deleted-file/import delta
-before marking V-CRYPTO.2 done.
+The superseded matrix-js-sdk cross-signing setup/status/reset owner,
+account-data status fallback, account-management reset action, and compatibility
+types are deleted. Native setup UI and DTO actions remain the sole cross-signing
+product path. Direct desktop-runtime inventory moved from **223 files / 280
+import lines** to **222 / 275**; production importers moved **212 → 211** and the
+component bucket moved **41 → 40**.
 
 ## Remaining named crypto residuals
 

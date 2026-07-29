@@ -10,8 +10,8 @@
 | ------------------------ | ------------------------------------------------------------------------------- |
 | Date                     | 2026-07-29 (America/New_York)                                                   |
 | Integration branch       | `feature/matrix-rust-sdk-full-replacement`                                      |
-| Execution model          | Primary Codex + Codex sub-agents, all `gpt-5.6-terra` high; MiniMax-M3 optional |
-| Verified integration tip | `146952a` — V-CRYPTO.5 room-key ownership and deletion merged (#227)            |
+| Execution model          | Primary Codex + Codex sub-agents, all `gpt-5.6-sol` medium; MiniMax-M3 optional |
+| Verified integration tip | `5c68b19` — V-CRYPTO.1 verification ownership and deletion merged (#230)        |
 | Active PR                | None — intentionally paused between slices                                      |
 | Policy                   | [full-vertical-policy.md](full-vertical-policy.md)                              |
 | Binding queue            | [d0-residual-completion.md](d0-residual-completion.md)                          |
@@ -35,9 +35,8 @@ obsolete tests/types before closure.
 
 ## Exact continuation point
 
-1. Resume the goal with V-CRYPTO.2-D. Keep orchestration and coding on Codex `gpt-5.6-terra` high; there is no active implementation PR to recover.
+1. Resume the goal with V-CRYPTO.3-D. Keep orchestration and coding on Codex `gpt-5.6-sol` medium; there is no active implementation PR to recover.
 2. Drain the already-wired crypto deletion queue serially:
-   - V-CRYPTO.2-D — cross-signing;
    - V-CRYPTO.3-D — backup/recovery;
    - V-CRYPTO.4-D — secret storage.
 3. Implement V-CRYPTO.6 UTD/history recovery as a complete wire-plus-delete vertical.
@@ -52,7 +51,10 @@ obsolete tests/types before closure.
   plain-text send, and encrypted-room machine paths.
 - V-CRYPTO.1 native verification is complete: its legacy owner/inbox/hooks/helpers
   and JS-only test are deleted, with direct desktop-runtime imports 232/292 → 223/280.
-- V-CRYPTO.2–.4 remain **wired / deletion open** because relevant JS crypto
+- V-CRYPTO.2 native cross-signing is complete: its legacy setup/status/reset owner,
+  account-data fallback, and compatibility types are deleted, with direct
+  desktop-runtime imports 223/280 → 222/275.
+- V-CRYPTO.3–.4 remain **wired / deletion open** because relevant JS crypto
   imports and conditional legacy implementations remain.
 - V-CRYPTO.5 merged in #227 and is complete under the per-vertical deletion policy: the retained product path has one Rust IPC owner, and the legacy WebView owner/browser crypto helper are deleted.
 - Repository baseline remains **232 files / 292 direct import lines** referencing

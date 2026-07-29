@@ -1,4 +1,4 @@
-import React, { FormEventHandler, MouseEventHandler, useCallback, useState } from 'react';
+import React, { FormEventHandler, useState } from 'react';
 import {
   Badge,
   Box,
@@ -15,25 +15,11 @@ import {
   OverlayBackdrop,
   OverlayCenter,
   IconButton,
-  RectCords,
-  PopOut,
-  Menu,
-  MenuItem,
 } from 'folds';
 import FocusTrap from 'focus-trap-react';
 import { VerificationStatus } from '../../../hooks/useDeviceVerificationStatus';
 import { InfoCard } from '../../../components/info-card';
-import {
-  DeviceVerificationReset,
-  DeviceVerificationSetup,
-} from '../../../components/DeviceVerificationSetup';
-import { stopPropagation } from '../../../utils/keyboard';
-import { useAuthMetadata } from '../../../hooks/useAuthMetadata';
-import { withSearchParam } from '../../../pages/pathUtils';
-import { useAccountManagementActions } from '../../../hooks/useAccountManagement';
-import { openExternalUrl } from '../../../utils/appLinks';
 import { NativeStartVerification } from '../../verification/NativeDeviceVerification';
-import { isNativeMatrixSession } from '../../verification/nativeVerification';
 import {
   authenticateNativeCrossSigningSetup,
   NativeCrossSigningStatus,
@@ -113,17 +99,14 @@ export function EnableVerification({
   loading,
   error,
 }: EnableVerificationProps) {
-  if (isNativeMatrixSession()) {
-    return (
-      <NativeEnableVerification
-        visible={visible}
-        status={nativeStatus}
-        loading={loading}
-        error={error}
-      />
-    );
-  }
-  return <LegacyEnableVerification visible={visible} />;
+  return (
+    <NativeEnableVerification
+      visible={visible}
+      status={nativeStatus}
+      loading={loading}
+      error={error}
+    />
+  );
 }
 
 function NativeEnableVerification({
@@ -286,135 +269,5 @@ function NativeCrossSigningSetup({ onCancel }: { onCancel: () => void }) {
         )}
       </Box>
     </Dialog>
-  );
-}
-
-function LegacyEnableVerification({ visible }: EnableVerificationProps) {
-  const [open, setOpen] = useState(false);
-
-  const handleCancel = useCallback(() => setOpen(false), []);
-
-  return (
-    <>
-      {visible && (
-        <Button size="300" radii="300" onClick={() => setOpen(true)}>
-          <Text as="span" size="B300">
-            Enable
-          </Text>
-        </Button>
-      )}
-      {open && (
-        <Overlay open backdrop={<OverlayBackdrop />}>
-          <OverlayCenter>
-            <FocusTrap
-              focusTrapOptions={{
-                initialFocus: false,
-                clickOutsideDeactivates: false,
-                escapeDeactivates: false,
-              }}
-            >
-              <DeviceVerificationSetup onCancel={handleCancel} />
-            </FocusTrap>
-          </OverlayCenter>
-        </Overlay>
-      )}
-    </>
-  );
-}
-
-export function DeviceVerificationOptions() {
-  const [menuCords, setMenuCords] = useState<RectCords>();
-  const authMetadata = useAuthMetadata();
-  const accountManagementActions = useAccountManagementActions();
-
-  const [reset, setReset] = useState(false);
-
-  const handleCancelReset = useCallback(() => {
-    setReset(false);
-  }, []);
-
-  const handleMenu: MouseEventHandler<HTMLButtonElement> = (event) => {
-    setMenuCords(event.currentTarget.getBoundingClientRect());
-  };
-
-  const handleReset = () => {
-    setMenuCords(undefined);
-
-    if (authMetadata) {
-      const authUrl = authMetadata.account_management_uri ?? authMetadata.issuer;
-      void openExternalUrl(
-        withSearchParam(authUrl, {
-          action: accountManagementActions.crossSigningReset,
-        })
-      );
-      return;
-    }
-
-    setReset(true);
-  };
-
-  return (
-    <>
-      <IconButton
-        aria-pressed={!!menuCords}
-        variant="SurfaceVariant"
-        size="300"
-        radii="300"
-        onClick={handleMenu}
-      >
-        <Icon size="100" src={Icons.VerticalDots} />
-      </IconButton>
-      <PopOut
-        anchor={menuCords}
-        offset={5}
-        position="Bottom"
-        align="Center"
-        content={
-          <FocusTrap
-            focusTrapOptions={{
-              initialFocus: false,
-              onDeactivate: () => setMenuCords(undefined),
-              clickOutsideDeactivates: true,
-              isKeyForward: (evt: KeyboardEvent) =>
-                evt.key === 'ArrowDown' || evt.key === 'ArrowRight',
-              isKeyBackward: (evt: KeyboardEvent) =>
-                evt.key === 'ArrowUp' || evt.key === 'ArrowLeft',
-              escapeDeactivates: stopPropagation,
-            }}
-          >
-            <Menu>
-              <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
-                <MenuItem
-                  variant="Critical"
-                  onClick={handleReset}
-                  size="300"
-                  radii="300"
-                  fill="None"
-                >
-                  <Text as="span" size="T300" truncate>
-                    Reset
-                  </Text>
-                </MenuItem>
-              </Box>
-            </Menu>
-          </FocusTrap>
-        }
-      />
-      {reset && (
-        <Overlay open backdrop={<OverlayBackdrop />}>
-          <OverlayCenter>
-            <FocusTrap
-              focusTrapOptions={{
-                initialFocus: false,
-                clickOutsideDeactivates: false,
-                escapeDeactivates: false,
-              }}
-            >
-              <DeviceVerificationReset onCancel={handleCancelReset} />
-            </FocusTrap>
-          </OverlayCenter>
-        </Overlay>
-      )}
-    </>
   );
 }
