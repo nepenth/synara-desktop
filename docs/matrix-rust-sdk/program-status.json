@@ -96,9 +96,9 @@
   },
   "vertical_execution": {
     "policy": "full-vertical-delete-per-vertical",
-    "integration_product_state": "between-slices-paused",
-    "active_slice": null,
-    "active_pr": null,
+    "integration_product_state": "capability-cutover-in-progress",
+    "active_slice": "V-AUTH.1",
+    "active_pr": 238,
     "completed_slices": [
       "V-CRYPTO.1",
       "V-CRYPTO.2",
@@ -109,7 +109,7 @@
       "V-CRYPTO.7"
     ],
     "wired_deletion_open": [],
-    "next_slices": ["V-AUTH.1"],
+    "next_slices": ["V-AUTH.2", "V-AUTH.3", "V-AUTH.4", "V-ROOMS.1", "V-TIMELINE.1", "V-SEND.1"],
     "held_prs": [221],
     "completion_evidence": {
       "capability_owner_delta": "negative",
@@ -121,8 +121,8 @@
         "import_lines": 292
       },
       "current": {
-        "files": 212,
-        "import_lines": 265
+        "files": 208,
+        "import_lines": 261
       }
     }
   },

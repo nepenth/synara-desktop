@@ -2,11 +2,11 @@
 
 | Field                     | Value                                                                  |
 | ------------------------- | ---------------------------------------------------------------------- |
-| Status                    | **Between slices — V-AUTH.1 complete SSO removal queued** (2026-07-29) |
+| Status                    | **Active — V-AUTH.1 complete SSO removal** in draft [#238](https://github.com/nepenth/synara-desktop/pull/238) (2026-07-29) |
 | Policy                    | [full-vertical-policy.md](full-vertical-policy.md)                     |
 | Integration tip at policy | `0400306` (D0.1–D0.5 merged; D0.5 was **crypto minimum**)              |
-| Current integration tip   | `528a510` (V-CRYPTO.7 #236 merged)                                     |
-| Active PR                 | None — V-CRYPTO.7 reviewed, green product/test head `192be46` merged   |
+| Current integration tip   | `ff050159` (documentation alignment #237 merged after V-CRYPTO.7)       |
+| Active PR                 | Draft [#238](https://github.com/nepenth/synara-desktop/pull/238) — V-AUTH.1 removal candidate; required CI pending |
 
 ## Policy trigger
 
@@ -45,7 +45,7 @@ Status language in this ledger is strict:
 | **V-CRYPTO.4** | **DONE**                   | SSSS bootstrap/unlock                        | Live `matrix/secret_storage/live.rs`, native secret-storage UI/hooks | Native owner plus legacy recovery derivation/checking, account-data path, JS key-cache, dead UI, and JS-only test deletion; 219/276 → 218/275 direct desktop-runtime imports; see [v-crypto-4-secret-storage.md](v-crypto-4-secret-storage.md) |
 | **V-CRYPTO.5** | **DONE #227**              | Room-key export/import retained product path | Single Rust IPC owner; legacy WebView owner/helper deleted           | Reviewed-SHA validation proved parity, retry safety, privacy, deletion, and ledger evidence                                                                                                                                                    |
 | **V-CRYPTO.6** | **DONE #235**              | Automatic UTD/history recovery               | Live managed timeline + P5.10/P8.7 state; safe event readback        | SDK-owned late-key readback, guided native recovery settings, and JS retry/decryption-listener deletion; see [v-crypto-6-utd-recovery.md](v-crypto-6-utd-recovery.md)                                                                          |
-| **V-CRYPTO.7** | **DONE #236**             | Device list/trust presentation and actions   | Live `matrix/devices/live.rs`, SDK-neutral UI, native rename/delete  | Merged at `528a510`; reviewed, green product/test head `192be46`; Rust-owned snapshots/trust/readback and bounded Password/SSO delete UIAA; JS `CryptoApi`, device model/listener/polling and dead UIA owners deleted; 218/273 → 212/265; live proof unclaimed; see [v-crypto-7-device-list-trust.md](v-crypto-7-device-list-trust.md) |
+| **V-CRYPTO.7** | **DONE #236**             | Device list/trust presentation and actions   | Live `matrix/devices/live.rs`, SDK-neutral UI, native rename/delete  | Merged at `528a510`; reviewed, green product/test head `192be46`; Rust-owned snapshots/trust/readback and device-delete UIAA at delivery; V-AUTH.1 #238 removes its SSO continuation. JS `CryptoApi`, device model/listener/polling and dead UIA owners deleted; 218/273 → 212/265; live proof unclaimed; see [v-crypto-7-device-list-trust.md](v-crypto-7-device-list-trust.md) |
 
 **Also required for V-CRYPTO complete:** encrypted timeline decrypt + encrypted send remain (already on tip from D0.5 machine path); extend with recovery so history is restorable when keys exist server-side.
 
@@ -55,7 +55,7 @@ Migration decision already decided: **`D-KEY-RECOVERY`** in [migration-ux-decisi
 
 | ID           | Capability                     | Residual today    | Done when                                                                    |
 | ------------ | ------------------------------ | ----------------- | ---------------------------------------------------------------------------- |
-| **V-AUTH.1** | Complete desktop SSO removal    | JS login/callback owner and native UIAA SSO continuation | Delete every desktop SSO entry point, browser/callback/token-completion route, JS SSO owner/import, and native device-delete SSO UIAA continuation. Keep no Rust replacement, Matrix-ID prompt, inferred identity, pending-store/adoption route, or fallback. Password-only UIAA remains where server-supported; SSO-only authentication is explicitly unsupported on desktop. |
+| **V-AUTH.1** | Complete desktop SSO removal    | Draft [#238](https://github.com/nepenth/synara-desktop/pull/238) removes JS login/callback owner and native UIAA SSO continuation | Candidate deletes every desktop SSO entry point, browser/callback/token-completion route, JS SSO owner/import, and native device-delete SSO UIAA continuation. No Rust replacement, Matrix-ID prompt, inferred identity, pending-store/adoption route, or fallback. Password-only UIAA remains where server-supported; SSO-only authentication is explicitly unsupported on desktop. Exact AST inventory is 212/265 → 208/261 desktop files/import lines, production importers 201→197, repository-wide 215→211; closure awaits required CI. |
 | **V-AUTH.2** | Token login                    | Out of D0.1       | Native token login if product retains it                                     |
 | **V-AUTH.3** | UIA flows used by product auth | Largely js        | UIA stages for retained flows native or product-owned without live js client |
 | **V-AUTH.4** | Register / reset-password      | js                | Re-home if product keeps them on desktop                                     |
