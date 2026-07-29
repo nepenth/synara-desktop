@@ -5736,141 +5736,37 @@ Limited rejected-review correction (`p0.2-correct-54-fr-7.11-008-widget-continge
 - **Text**: own-device and other-device lists;
 - **Lines**: 427–427
 - **Status**: `implemented`
-- **Behavior**: Current desktop implements own-device and other-device lists as own-account session listing: `useDeviceList` fetches `mx.getDevices()` `IMyDevice[]`; `useSplitCurrentDevice` splits by `mx.getDeviceId()` into Current (this session) vs Others (remaining sessions). Settings → Devices renders both surfaces; UnverifiedTab reuses the same list split. status=implemented.
-- **Notes**: Evidence (conservative): (1) List fetch `useDeviceList.ts` L24–27 `mx.getDevices()` → `data.devices ?? []`; react-query key `['devices']` L19/L29–35 with `staleTime` 0, `refetchOnMount` always; returns `[deviceList, refreshDeviceList]` L37–53. (2) Refresh: L41–50 `useDeviceListChange` on `CryptoEvent.DevicesUpdated` (L12 on / L14 removeListener) refreshes only when `users.includes(mx.getUserId())` L44; manual `refreshDeviceList` after rename/delete success. (3) Identity/split L62–76 `useSplitCurrentDevice`: `currentDeviceId=mx.getDeviceId()`; current find / other filter — product «own-device» = Current this-session; «other-device lists» = other own-account sessions (not third-party users). `useDeviceIds` L56–59. (4) Primary UI `Devices.tsx` L46–48 load+split; L116–147 Current + `DeviceTile(currentDevice)` + `DeviceKeyDetails`; L148 loading placeholder; L149–157 `OtherDevices(otherDevices)`. (5) `OtherDevices.tsx` L106 “Others”; L132–181 sort `last_seen_ts` desc + `DeviceTile` map. (6) `DeviceTile` identity: `display_name??device_id`, `last_seen_ts`, expandable `device_id`/`last_seen_ip`; current `getOwnDeviceKeys` ed25519 L87. (7) `UnverifiedTab.tsx` L25–40 list consumer. (8) Non-evidence: no `getUserDeviceInfo`; `getCrypto`/verify tiles FR-7.9-004/005; `deleteMultipleDevices` FR-7.9-010; cross-signing FR-7.9-002. (9) Cutover P8.2 must preserve Current/Others, identity fields, DevicesUpdated refresh via Rust ownership+IPC; SC-067/SC-063 alone / compile-only / raw HTTP / helper-only FAIL.
-- **UI**: `synara/src/app/features/settings/devices/Devices.tsx`, `synara/src/app/features/settings/devices/OtherDevices.tsx`, `synara/src/app/pages/client/sidebar/UnverifiedTab.tsx`
-- **UI rationale**: Devices is Settings → Devices composition (Current + Others). OtherDevices is the other-session list renderer. UnverifiedTab reuses the same list split. Product does not expose third-party-user device lists.
-- **Owners**: `synara/src/app/hooks/useDeviceList.ts`
+- **V-CRYPTO.7 candidate**: The managed Rust session owns the authoritative list through `Client::devices`. `matrix/devices/live.rs` projects a bounded `NativeDeviceSnapshot`; `nativeDevices.ts` and `useDeviceList.ts` provide the SDK-neutral product boundary. Current sorts first and Others sort by `lastSeenTs` descending with a device-ID tiebreaker.
+- **Refresh semantics**: reads are demand-driven on mount/refocus. The native query cache is keyed by the existing bootstrap session generation, so stale old-session results cannot install as the next account's visible list. Supported `Encryption::devices_stream` new/changed entries for the current user emit only a generation-scoped refresh trigger; the stream is not list authority and undocumented empty/deletion signals are ignored. Rename/delete results install their authoritative readback directly.
+- **Privacy/limits**: DTO retains device ID, display name, `lastSeenIp`, `lastSeenTs`, trust, and `isCurrent`; it contains no keys, tokens, recovery material, raw SDK errors, or raw UIAA. Ed25519 display was deliberately removed. Live multi-session/UI acceptance remains open.
+- **UI**: `Devices.tsx`, `OtherDevices.tsx`, `UnverifiedTab.tsx`
+- **Owners**: `src-tauri/src/matrix/devices/live.rs`; `synara/src/app/hooks/useDeviceList.ts` owns only the native query cache/view split.
 - **Files**:
-  - `synara/src/app/hooks/useDeviceList.ts` symbols=['getDevices', 'getDeviceId', 'getUserId', 'useDeviceList', 'useSplitCurrentDevice'] retained_m=3 retained_l=2
-    - method `getDevices`:L25 — own-account session list fetch
-    - method `getDeviceId`:L66 — current-session identity for split
-    - method `getUserId`:L44 — DevicesUpdated own-user filter
-    - listener `on:CryptoEvent.DevicesUpdated`:L12 — reactive list refresh
-    - listener `removeListener:CryptoEvent.DevicesUpdated`:L14 — cleanup
-  - `synara/src/app/features/settings/devices/Devices.tsx` symbols=['useDeviceList', 'useSplitCurrentDevice', 'OtherDevices'] retained_m=0 retained_l=0
-    - note: L46–48 load+split; L116–147 Current; L149–157 OtherDevices; no direct matrix-js-sdk import
-  - `synara/src/app/features/settings/devices/OtherDevices.tsx` symbols=['OtherDevices', 'DeviceTile'] retained_m=0 retained_l=0
-    - note: L106 Others heading; L132–181 sort+map; getCrypto/delete excluded (FR-7.9-004/005/010)
-  - `synara/src/app/features/settings/devices/DeviceTile.tsx` symbols=['DeviceTile', 'DeviceDetails', 'getOwnDeviceKeys'] retained_m=1 retained_l=0
-    - method `getOwnDeviceKeys`:L87 — current-device ed25519 identity
-  - `synara/src/app/pages/client/sidebar/UnverifiedTab.tsx` symbols=['useDeviceList', 'useSplitCurrentDevice'] retained_m=0 retained_l=0
-    - note: L25–40 list consumer for badge inputs
-- **Behavior-relevant methods (top-level)**:
-  - `getDevices` `synara/src/app/hooks/useDeviceList.ts`:L25 — own-account session list
-  - `getDeviceId` `synara/src/app/hooks/useDeviceList.ts`:L66 — Current vs Others split
-  - `getUserId` `synara/src/app/hooks/useDeviceList.ts`:L44 — DevicesUpdated own-user filter
-  - `getOwnDeviceKeys` `synara/src/app/features/settings/devices/DeviceTile.tsx`:L87 — current-device ed25519
-- **Behavior-relevant listeners (top-level)**:
-  - `on:CryptoEvent.DevicesUpdated` `synara/src/app/hooks/useDeviceList.ts`:L12 — list refresh
-  - `removeListener:CryptoEvent.DevicesUpdated` `synara/src/app/hooks/useDeviceList.ts`:L14 — cleanup
-- **Unfiltered linked candidates**: methods=6 listeners=2
-- **Rust**: `compile-shape-only-blocked-for-product` caps=['SC-067', 'SC-063'] gaps=[]
-  - `SC-067` `blocked` `matrix_sdk::Client::devices` https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/client/mod.rs#L2640
-  - `SC-063` `blocked` `matrix_sdk::encryption::Encryption::get_user_devices` https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/encryption/mod.rs#L1156
-  - Honest: SC-067 is primary analogue for `getDevices` own session list. SC-063 is crypto-side per-user device enum not used by Settings list UI today (no `getUserDeviceInfo`). Both compile-only blocked. Cutover P8.2 via Rust ownership+IPC; SC IDs alone / raw HTTP / helper-only FAIL.
-- **Tasks**: `P8.2`
-- **Existing tests**:
-  - _(none)_
-- **Planned** `AT-FR-7.9-003-001` task `P8.2` level `integration-e2e`
-  - Scenario: Integration-e2e against disposable Synapse: multi-session account shows Settings → Devices Current tile for this session (device_id === client getDeviceId, display_name/last_seen identity) and Others list for remaining own-account sessions (sorted by last_seen_ts). useDeviceList loads via getDevices; DevicesUpdated for own userId refreshes the list without process restart. UnverifiedTab may consume the same split. After cutover P8.2 same observables via Rust Client::devices (SC-067) and list projection + IPC; SC-067/SC-063 alone, compile-only blocked states, raw /\_matrix HTTP, dual-backend, or helper/fixture-only FAIL.
-  - Test target: useDeviceList (getDevices + DevicesUpdated refresh) + useSplitCurrentDevice (getDeviceId Current vs Others) + Devices.tsx Current/OtherDevices surfaces + DeviceTile identity fields; post-cutover SC-067 Client::devices (+ optional SC-063 crypto device enum) under P8.2
-  - Preconditions:
-    - Disposable Synapse; desktop app with E2EE-capable session fixtures: (A) single-session account (Current only, empty Others); (B) multi-session account with at least one other own-account device_id present in getDevices.
-    - Named product surfaces present: useDeviceList.ts, Devices.tsx Settings Devices page, OtherDevices.tsx, DeviceTile.tsx.
-    - Harness can observe UI (Current tile device_id/display_name; Others rows) and list refresh after DevicesUpdated / refreshDeviceList without bypassing product useDeviceList.
-    - Optional second client/session for multi-device fixture; recovery/verification fixtures not required for list-only path.
-  - Actions:
-    1. Boot integration harness against disposable Synapse. Do not use fixture-only mocks that skip product useDeviceList/getDevices, dual-backend selectors, raw HTTP, or helper-only pass criteria.
-    2. OWN/CURRENT: open Settings → Devices with multi-session fixture. Assert Current section shows a DeviceTile for the session whose device_id matches client getDeviceId; identity fields include display_name or device_id and may show last activity / expandable device_id + last_seen_ip; current device may show DeviceKeyDetails ed25519 when expanded.
-    3. OTHER: assert Others section lists remaining own-account devices (not current device_id), sorted with more recent last_seen_ts first when timestamps present; empty Others when only one session.
-    4. REFRESH: trigger a DevicesUpdated for own userId (or call product refresh path after a list-mutating action such as rename if available) and assert the list re-renders without requiring process restart. Confirm loading placeholder path when devices is still undefined on first paint.
-    5. CONSUMER (optional): with cross-signing active, UnverifiedTab uses the same list split for other-device ids — assert it does not invent a separate list source.
-    6. PROCESS RESTART: relaunch multi-session session; re-assert Current/Others from restored client + getDevices without dual writers.
-    7. After cutover P8.2, repeat Current/Others/refresh/restart observables via Rust Client::devices (SC-067) list projection under product lifecycle actor/IPC. Citing SC-067 or SC-063 alone, compile-only blocked states, raw /\_matrix HTTP, dual-backend/SDK selector, or helper/fixture-only is a FAIL.
-  - Assertions:
-    - OWN/CURRENT: Settings Devices Current shows this-session device matching getDeviceId with product identity fields (display_name/device_id, optional last_seen).
-    - OTHER: Others lists only other own-account sessions (not current device_id); no third-party user device list required for this FR.
-    - FETCH: list data originates from getDevices (or Rust SC-067 successor), coordinated through useDeviceList (or IPC successor), not ad-hoc dual writers.
-    - REFRESH: DevicesUpdated for own userId (or explicit refreshDeviceList) updates the UI without process restart.
-    - SPLIT: useSplitCurrentDevice semantics preserved post-cutover (current vs other own sessions).
-    - CUTOVER: P8.2 preserves Current/Others list observables via Rust ownership + IPC; SC-067/SC-063 compile-only never passes product acceptance; no raw /\_matrix runtime HTTP; no dual-backend/SDK selector.
-    - No new production matrix-js-sdk usage and no raw /\_matrix runtime HTTP unless the dossier marks that exact behavior typed-sdk-request-required.
-    - Device list identity fields (device_id, last_seen_ip) not leaked to unintended rooms/logs beyond product UI surfaces.
-  - does_not_currently_exist: `True`
-- **Manual**: `MA-FR-7.9-003`
+  - `src-tauri/src/matrix/devices/live.rs` — `snapshot`, `NativeDeviceOwner`
+  - `src-tauri/src/matrix/auth/product.rs` — `matrix_device_snapshot`
+  - `synara/src/app/features/settings/devices/nativeDevices.ts` — bounded DTO/invoke boundary
+  - `synara/src/app/hooks/useDeviceList.ts` — demand-driven query and generation-scoped trigger consumer
+- **Superseded JS owner**: deleted `getDevices`/`getDeviceId`, `CryptoEvent.DevicesUpdated`, device-model, listener, and polling ownership.
+- **Rust mapping**: `Client::devices` plus `Encryption::get_user_devices` under P8.2/V-CRYPTO.7; no raw `/_matrix` HTTP and no dual backend.
+- **Planned** `AT-FR-7.9-003-001` / **Manual** `MA-FR-7.9-003`: on a disposable multi-session Synapse, prove Current/Others identity fields and ordering, mount/refocus refresh, documented new/changed-trigger refresh, generation isolation, and no refresh storm/process restart. Live proof remains unclaimed by this candidate.
 
 ### `FR-7.9-004` — ### 7.9 Devices, E2EE, verification, and recovery
 
 - **Text**: device trust and verification state;
 - **Lines**: 428–428
 - **Status**: `implemented`
-- **Behavior**: Current desktop implements device trust and verification state as `getDeviceVerificationStatus.crossSigningVerified` projected through `verifiedDevice` → `VerificationStatus` (Unknown/Unverified/Verified/Unsupported) and `useUnverifiedDeviceCount` for other own devices. Settings Devices badge, OtherDevices per-device status, UnverifiedTab, and LogoutDialog display and gate on that status; refresh is `DevicesUpdated` via `useDeviceListChange`. status=implemented.
-- **Notes**: Evidence (conservative): (1) Trust source `matrix-crypto.ts` `verifiedDevice` L3–13: `getDeviceVerificationStatus` → `crossSigningVerified` only. (2) `VerificationStatus` L9–14; `useDeviceVerificationDetect` L16–51 maps null/true/false → Unsupported/Verified/Unverified; refresh via `useDeviceListChange` L41–50; `useUnverifiedDeviceCount` L65–106. (3) `DeviceVerificationStatus.ts` L15–24 render-prop. (4) `VerificationStatusBadge` L44–75 Spinner/Unverified/N Unverified/Verified. (5) `Devices.tsx` L49–60 status+count; L103 badge; L131 Unverified tile gate; L153 showVerification when current Verified. (6) `OtherDevices` L168–178 per-device status. (7) `UnverifiedTab` L29–93 banner. (8) `LogoutDialog` L21–58 Unverified warning. (9) Wired refresh = `CryptoEvent.DevicesUpdated` (`useDeviceList.ts` L12/L14), not `UserTrustStatusChanged`. (10) `useUserTrustStatusChange` unused (zero call sites). (11) Non-evidence: SAS ceremony (FR-7.9-005), bootstrapCrossSigning (FR-7.9-002), getDevices list (FR-7.9-003). (12) Cutover P8.2/P8.4 via Rust trust projection + IPC; SC-063/SC-064 alone / compile-only / raw HTTP / SAS-only / helper-only FAIL.
-- **UI**: `synara/src/app/features/settings/devices/Devices.tsx`, `synara/src/app/features/settings/devices/Verification.tsx`, `synara/src/app/features/settings/devices/OtherDevices.tsx`, `synara/src/app/pages/client/sidebar/UnverifiedTab.tsx`, `synara/src/app/components/LogoutDialog.tsx`
-- **UI rationale**: Devices is primary Settings trust surface (badge + status-gated tiles). VerificationStatusBadge is the status display. OtherDevices shows per-device status. UnverifiedTab/LogoutDialog consume the same projection. SAS ceremony UI is FR-7.9-005.
-- **Owners**: `synara/src/app/hooks/useDeviceVerificationStatus.ts`, `synara/src/app/utils/matrix-crypto.ts`
+- **V-CRYPTO.7 candidate**: `matrix/devices/live.rs` joins `Encryption::get_user_devices` by device ID and maps `is_verified_with_cross_signing` to verified/unverified; an authoritative server row without a crypto row maps to unsupported. The bounded DTO drives Settings badge/count, other-device verification affordances, `UnverifiedTab`, and `LogoutDialog`.
+- **Refresh semantics**: trust refresh shares the generation-scoped native device snapshot route; SAS ceremony remains the separate existing native verification owner.
+- **Privacy/limits**: no device keys or raw crypto objects cross IPC. Live multi-session/UI acceptance remains open.
+- **UI**: `Devices.tsx`, `Verification.tsx`, `OtherDevices.tsx`, `UnverifiedTab.tsx`, `LogoutDialog.tsx`
+- **Owner**: `src-tauri/src/matrix/devices/live.rs`
 - **Files**:
-  - `synara/src/app/utils/matrix-crypto.ts` symbols=['getDeviceVerificationStatus', 'verifiedDevice'] retained_m=1 retained_l=0
-    - method `getDeviceVerificationStatus`:L8 — trust bit via crossSigningVerified
-  - `synara/src/app/hooks/useDeviceVerificationStatus.ts` symbols=['VerificationStatus', 'useDeviceVerificationStatus', 'useUnverifiedDeviceCount'] retained_m=0 retained_l=0
-    - note: L9–14 enum; L16–63 status detect+state; L65–106 other-unverified count; DevicesUpdated refresh
-  - `synara/src/app/components/DeviceVerificationStatus.ts` symbols=['DeviceVerificationStatus'] retained_m=0 retained_l=0
-    - note: L15–24 render-prop for OtherDevices per-device status
-  - `synara/src/app/features/settings/devices/Verification.tsx` symbols=['VerificationStatusBadge'] retained_m=0 retained_l=0
-    - note: L44–75 badge; requestOwnUserVerification/requestDeviceVerification excluded (FR-7.9-005)
-  - `synara/src/app/features/settings/devices/Devices.tsx` symbols=['useDeviceVerificationStatus', 'VerificationStatusBadge'] retained_m=0 retained_l=0
-    - note: L49–60 status+count; L103 badge; L131 Unverified gate; no direct matrix-js-sdk import
-  - `synara/src/app/features/settings/devices/OtherDevices.tsx` symbols=['DeviceVerificationStatus'] retained_m=0 retained_l=0
-    - note: L168–178 per-device status when showVerification
-  - `synara/src/app/pages/client/sidebar/UnverifiedTab.tsx` symbols=['useDeviceVerificationStatus', 'UnverifiedTab'] retained_m=0 retained_l=0
-    - note: L29–93 Critical/Warning trust banner
-  - `synara/src/app/components/LogoutDialog.tsx` symbols=['useDeviceVerificationStatus'] retained_m=0 retained_l=0
-    - note: L21–58 Unverified Device logout warning
-  - `synara/src/app/hooks/useDeviceList.ts` symbols=['useDeviceListChange'] retained_m=0 retained_l=2
-    - listener `on:CryptoEvent.DevicesUpdated`:L12 — status refresh path
-    - listener `removeListener:CryptoEvent.DevicesUpdated`:L14 — cleanup
-  - `synara/src/app/hooks/useUserTrustStatusChange.ts` symbols=[] retained_m=0 retained_l=0
-    - note: UNUSED — UserTrustStatusChanged defined but zero product call sites; not behavior_relevant
-- **Behavior-relevant methods (top-level)**:
-  - `getDeviceVerificationStatus` `synara/src/app/utils/matrix-crypto.ts`:L8 — crossSigningVerified trust bit
-- **Behavior-relevant listeners (top-level)**:
-  - `on:CryptoEvent.DevicesUpdated` `synara/src/app/hooks/useDeviceList.ts`:L12 — status re-query refresh
-  - `removeListener:CryptoEvent.DevicesUpdated` `synara/src/app/hooks/useDeviceList.ts`:L14 — cleanup
-- **Unfiltered linked candidates**: methods=6 listeners=4
-- **Rust**: `compile-shape-only-blocked-for-product` caps=['SC-063', 'SC-064'] gaps=[]
-  - `SC-063` `blocked` `matrix_sdk::encryption::Encryption::get_user_devices` https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/encryption/mod.rs#L1156
-  - `SC-064` `blocked` `matrix_sdk::encryption::Encryption::cross_signing_status` https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/encryption/mod.rs#L976
-  - Honest: SC-063 is crypto-side device trust enum analogue for per-device verification metadata. SC-064 is related cross-signing/identity precondition (also FR-7.9-002), not per-device Verified display. Both compile-only blocked. Cutover P8.2/P8.4 via Rust ownership+IPC DTO; SC IDs alone / raw HTTP / SAS-only / helper-only FAIL.
-- **Tasks**: `P8.2`, `P8.4`
-- **Existing tests**:
-  - _(none)_
-- **Planned** `AT-FR-7.9-004-001` task `P8.2` level `integration-e2e`
-  - Scenario: Integration-e2e against disposable Synapse with cross-signing active: Settings → Devices VerificationStatusBadge and DeviceVerificationStatus tiles show Verified vs Unverified (and Unsupported when status is null) for current device and other own-account devices from getDeviceVerificationStatus.crossSigningVerified via verifiedDevice/useDeviceVerificationStatus. UnverifiedTab and LogoutDialog consume the same status projection. After trust/verification state changes (post-ceremony outcome or DevicesUpdated), badge/banner/count refresh without process restart. After cutover P8.2/P8.4 same observables via Rust device trust projection (SC-063 get_user_devices; SC-064 cross_signing_status as related identity precondition) + IPC DTO; SC-063/SC-064 alone, compile-only blocked states, raw /\_matrix HTTP, dual-backend, SAS-ceremony-only, or helper/fixture-only FAIL.
-  - Test target: matrix-crypto verifiedDevice (getDeviceVerificationStatus.crossSigningVerified) + useDeviceVerificationStatus/useUnverifiedDeviceCount + VerificationStatusBadge + Devices/OtherDevices/UnverifiedTab/LogoutDialog status surfaces; refresh via CryptoEvent.DevicesUpdated (useDeviceListChange); post-cutover SC-063/SC-064 trust projection under P8.2/P8.4
-  - Preconditions:
-    - Disposable Synapse; desktop app with E2EE-capable session and cross-signing active so status surfaces are shown (not Enable path).
-    - Fixtures: (A) current Unverified; (B) current Verified; (C) multi-session other Unverified; (D) optional Unsupported when status null.
-    - Named product surfaces: matrix-crypto.ts, useDeviceVerificationStatus.ts, DeviceVerificationStatus.ts, VerificationStatusBadge, Devices.tsx, OtherDevices.tsx, UnverifiedTab.tsx, LogoutDialog.tsx.
-    - Harness observes badge/banner/tile labels and DevicesUpdated refresh without bypassing product verifiedDevice.
-  - Actions:
-    1. Boot integration harness against disposable Synapse. No fixture-only mocks, dual-backend, raw HTTP, or helper-only pass.
-    2. CURRENT UNVERIFIED: open Settings → Devices; assert Critical «Unverified» badge and VerifyCurrentDeviceTile; other verify tiles gated off.
-    3. CURRENT VERIFIED: assert Success «Verified» or Warning «N Unverified» with OtherDevices Unverified tiles when applicable.
-    4. UNSUPPORTED/UNKNOWN: null status → Unsupported; missing crypto/deviceId → Unknown spinner path.
-    5. SIDEBAR/LOGOUT: UnverifiedTab Critical vs Warning+count; LogoutDialog Unverified Device warning with encrypted rooms.
-    6. REFRESH: after trust change / DevicesUpdated, UI updates without process restart; do not treat unused UserTrustStatusChanged as wired path.
-    7. PROCESS RESTART: relaunch; re-assert Verified/Unverified from restored trust state.
-    8. After cutover P8.2/P8.4, repeat via Rust trust projection + IPC. SC-063/SC-064 alone, compile-only, raw HTTP, dual-backend, SAS-only, or helper-only is a FAIL.
-  - Assertions:
-    - CURRENT/OTHER: Verified/Unverified/Unsupported/Unknown display for current and other own devices.
-    - DISPLAY SURFACES: badge, UnverifiedTab, LogoutDialog, status-gated tiles share the same projection.
-    - REFRESH: DevicesUpdated re-queries status; UserTrustStatusChanged unused.
-    - FETCH: status from getDeviceVerificationStatus → crossSigningVerified (or SC-063 successor) via verifiedDevice/useDeviceVerificationStatus.
-    - CUTOVER: P8.2/P8.4 preserves display+refresh via Rust+IPC; SC compile-only never product pass; no raw /\_matrix; no dual-backend.
-    - SAS ceremony, bootstrapCrossSigning alone, and getDevices list alone are not sole pass criteria.
-  - does_not_currently_exist: `True`
-- **Manual**: `MA-FR-7.9-004`
+  - `src-tauri/src/matrix/devices/live.rs` — `NativeDeviceTrust`, `snapshot`
+  - `synara/src/app/features/settings/devices/nativeDevices.ts` — SDK-neutral trust DTO
+  - listed UI consumers render only the native projection
+- **Superseded JS owner**: deleted CryptoApi trust helpers, `DeviceVerificationStatus`, `useDeviceVerificationStatus`, device-list refresh coupling, and the unused `useUserTrustStatusChange` listener.
+- **Rust mapping**: `Encryption::get_user_devices` / `is_verified_with_cross_signing` under P8.2/P8.4/V-CRYPTO.7; cross-signing status or SAS alone does not satisfy this row.
+- **Planned** `AT-FR-7.9-004-001` / **Manual** `MA-FR-7.9-004`: with cross-signing and two sessions, prove verified/unverified/unsupported projection, badge/count/banner/logout-warning consumers, and refresh after a trust change without restart. Live proof remains unclaimed by this candidate.
 
 ### `FR-7.9-005` — ### 7.9 Devices, E2EE, verification, and recovery
 
@@ -6230,63 +6126,19 @@ Limited rejected-review correction (`p0.2-correct-54-fr-7.11-008-widget-continge
 - **Text**: device deletion and UIA;
 - **Lines**: 434–434
 - **Status**: `implemented`
-- **Behavior**: Product implements other-device deletion with interactive auth: Settings → Devices → Others multi-select (DeviceDeleteBtn) then bulk `mx.deleteMultipleDevices`; 401 UIA via `useUIAMatrixError` + `ActionUIA` (Password/SSO). Current this-session device is not multi-deleteable (`DeviceLogoutBtn`). OIDC sessions use external account-management `sessionEnd`. status=implemented.
-- **Notes**: Evidence (conservative): (1) SCOPE `Devices.tsx` L149–157 mounts `OtherDevices` only with `otherDevices` from `useSplitCurrentDevice` — current this-session is Current tile with `DeviceLogoutBtn` L127 (`LogoutDialog`), never `DeviceDeleteBtn` / `deleted` Set. Only other own-account sessions are deletable via this FR. (2) MULTI-SELECT `OtherDevices` L31 `deleted` Set; L59–68 `handleToggleDelete`; L141 Critical card when selected; L158–163 `DeviceDeleteBtn` Delete/Undo when `!authMetadata`; L183–250 sticky Critical menu when `deleted.size>0` with count, Cancel (clear Set), Logout → `deleteDevices()`. (3) DELETE API L75–91 `useAsync` `deleteDevices(authDict?)`: `mx.deleteMultipleDevices(Array.from(deleted), authDict)` L78 — primary JS method (source-inspected; not in original P0.1 AST sample). (4) SUCCESS L84–87 clear `deleted` Set + `refreshDeviceList()` so Others re-renders without process restart. (5) UIA L93–96 `useUIAMatrixError`: `httpStatus===401` → `authData` (`IAuthData`), else `deleteError`. L96 `deleting` = Loading || authData. L207–224 when authData: `ActionUIAFlowsLoader` filters `SUPPORTED_IN_APP_UIA_STAGES=[Password,Sso]` (`ActionUIA.tsx` L9); unsupported → message; `ActionUIA` runs `PasswordStage` (`getUserId` L39 + password AuthDict) or `SSOStage` (`getFallbackAuthUrl` L47) and re-calls `deleteDevices(authDict)`. `handleCancelAuth` L99–101 resets deleteState Idle. (6) FAILURE non-401: L198–201 “Failed to logout devices! … {deleteError.message}”. (7) OIDC BRANCH L107–130 Device Dashboard; L44–57 `handleDeleteOIDC` opens `account_management_uri`/`issuer` with `action=sessionEnd` + `device_id` — external, not `deleteMultipleDevices`/UIA. L151–156 `DeviceDeleteBtn` uses `handleDeleteOIDC` when `authMetadata` present. (8) NON-EVIDENCE / OUT OF SCOPE: `getDevices`/`getDeviceId`/`DevicesUpdated` list fetch+split = FR-7.9-003; `getCrypto`/`getSafeUserId`/`VerifyOtherDeviceTile`/`DeviceVerificationStatus` = FR-7.9-004/005; `setDeviceDetails` rename = naming adjacent not this FR text; `DeviceLogoutBtn` current logout ≠ other-device delete; `DeviceVerificationSetup` ActionUIA for signing keys = FR-7.9-006; registration/password-reset UIA = FR-7.1-006 / auth. (9) Cutover P8.2 (delete) + P3.4 (UIA stage completion): preserve multi-select other-device delete, Password/SSO UIA, success list refresh, failure text, OIDC external path policy via Rust `Client::delete_devices` (GAP-DEVICE-NAMING-DELETE) + UIA AuthData (GAP-UIA) + product UX + IPC — not SC-067 devices list alone, not compile-only blocked, not raw `/_matrix` HTTP, not dual-backend, not list-only, not trust/verification-only, not helper-only.
-- **Limits**: P0.1 method/listener candidates are AST name hits, not type-checked receiver proofs. `deleteMultipleDevices` and `getFallbackAuthUrl` are source-inspected beyond original P0.1 AST samples for linked files. `Devices.tsx` has no direct matrix-js-sdk import (product surface not in 220 P0.1 import ledger). No product single-device `mx.deleteDevice` call site — only `deleteMultipleDevices`. Rust: no separate SC ID for `delete_devices`; primary mapping is GAP-DEVICE-NAMING-DELETE (`Client::delete_devices`) + GAP-UIA; SC-067 `Client::devices` is list (FR-7.9-003) and may support post-delete refresh only — SC-067 alone never closes this FR. Gaps remain compile-shape-only blocked (E3–E5 missing).
-- **UI**: `synara/src/app/features/settings/devices/OtherDevices.tsx`, `synara/src/app/features/settings/devices/Devices.tsx`
-- **UI rationale**: Settings → Devices mounts Current with `DeviceLogoutBtn` (this-session logout) and `OtherDevices(otherDevices, refreshDeviceList)` for other own-account sessions only. `OtherDevices` is the sole multi-select delete + UIA surface; current device is never in the `deleted` Set.
-- **Owners**: `synara/src/app/features/settings/devices/OtherDevices.tsx`, `synara/src/app/components/ActionUIA.tsx`, `synara/src/app/hooks/useDeviceList.ts` (refresh only)
+- **V-CRYPTO.7 candidate**: `matrix/auth/product.rs` owns non-current multi-select `Client::delete_devices`, mandatory operation ID/session-generation validation, purpose-specific Password/SSO UIAA, cancel/unmount cleanup, and authoritative absence readback. Each continuation and cancellation carries the challenge generation; Rust compares it with both the active session and pending operation before acting on an operation ID. The current device keeps its separate native logout route; OIDC sessions keep external account-management `sessionEnd`.
+- **UIAA semantics**: only flows whose remaining stages are entirely Password/SSO are viable. Password is preferred across alternative flows; authoritative `completed` stages advance a multi-stage flow without falsely reporting the accepted stage as failed. Exactly one method is presented as a scalar challenge field. Password crosses IPC once and is immediately zeroized. The Ruma-generated fallback URL, returned only when SSO is selected, is the sole bounded field containing the opaque UIAA session. `authDone` requires the exact fallback origin and exact popup source; manual Continue uses the same native acknowledgement.
+- **Completion/failure**: operation mismatch rejects late responses after cancel/replacement. UIAA authentication failure is distinct from terminal delete failure. Success is returned only after server success and `Client::devices` readback proves all selected IDs absent.
+- **UI**: `OtherDevices.tsx`, `DeviceTile.tsx`
+- **Owner**: `src-tauri/src/matrix/auth/product.rs`
 - **Files**:
-  - `synara/src/app/features/settings/devices/OtherDevices.tsx` symbols=['deleteMultipleDevices','deleted','ActionUIA'] retained_m=1 retained_l=0
-    - method `deleteMultipleDevices`:L78 — bulk delete selected other-device ids with optional AuthDict
-  - `synara/src/app/components/ActionUIA.tsx` symbols=['ActionUIA','ActionUIAFlowsLoader','getUserId','getFallbackAuthUrl'] retained_m=2 retained_l=0
-    - method `getUserId`:L39 — PasswordStage user identifier
-    - method `getFallbackAuthUrl`:L47 — SSOStage fallback auth URL
-  - `synara/src/app/features/settings/devices/DeviceTile.tsx` symbols=['DeviceDeleteBtn'] retained_m=0 retained_l=0
-    - UI DeviceDeleteBtn L233 Delete/Undo chip (OtherDevices options only)
-  - `synara/src/app/hooks/useDeviceList.ts` symbols=['refreshDeviceList'] retained_m=0 retained_l=0
-    - refresh after delete Success (list fetch/split/DevicesUpdated = FR-7.9-003)
-- **Behavior-relevant methods (top-level)**:
-  - `deleteMultipleDevices` `synara/src/app/features/settings/devices/OtherDevices.tsx`:L78 — primary delete API
-  - `getUserId` `synara/src/app/components/ActionUIA.tsx`:L39 — Password UIA userId
-  - `getFallbackAuthUrl` `synara/src/app/components/ActionUIA.tsx`:L47 — SSO UIA URL
-- **Behavior-relevant listeners (top-level)**:
-  - — (delete is request/response; `DevicesUpdated` is FR-7.9-003 list refresh)
-- **Unfiltered linked candidates**: methods=6 listeners=2 (original P0.1; `deleteMultipleDevices`/`getFallbackAuthUrl` source-inspected beyond sample)
-- **Rust**: `device-deletion-uia-compile-shape-only-blocked-for-product` caps=['SC-067'] gaps=['GAP-DEVICE-NAMING-DELETE', 'GAP-UIA']
-  - `SC-067` `blocked` `matrix_sdk::Client::devices` https://github.com/matrix-org/matrix-rust-sdk/blob/1c44fb66214667c6d00acaf72ab592493653708b/crates/matrix-sdk/src/client/mod.rs#L2640 — list only; not delete
-  - Honest: primary delete+UIA is GAP-DEVICE-NAMING-DELETE `Client::delete_devices` + GAP-UIA AuthData. SC-067 is post-delete list refresh analogue only. Do **not** map sole pass to SC-067 alone, list-only (FR-7.9-003), trust-only (FR-7.9-004), or SAS-only (FR-7.9-005).
-- **Tasks**: `P8.2`, `P3.4`
-- **Existing tests**:
-  - _(none)_
-- **Planned** `AT-FR-7.9-010-001` task `P8.2` level `integration-e2e`
-  - Scenario: Integration-e2e against disposable Synapse with multi-session account (non-OIDC password session preferred for in-app UIA): (A) SCOPE — Settings → Devices shows Current without multi-delete; Others lists other own-account sessions. (B) MULTI-SELECT — select ≥1 other device via DeviceDeleteBtn; sticky Logout menu shows count; Cancel clears selection. (C) DELETE+UIA — Logout triggers `mx.deleteMultipleDevices`; when server returns 401 with UIA flows, ActionUIA presents Password (and/or SSO) stage; completing password AuthDict retries delete and succeeds. (D) REFRESH — on success, deleted devices leave Others list via `refreshDeviceList` without process restart. (E) FAILURE — non-401 error shows Failed to logout devices text; selection retained for retry. (F) OIDC (if fixture) — with `account_management_uri`, delete control opens external sessionEnd URL rather than in-app UIA. After cutover P8.2+P3.4 same observables via Rust `Client::delete_devices` (GAP-DEVICE-NAMING-DELETE) + UIA AuthData (GAP-UIA) + product UX + IPC; SC-067 alone, compile-only blocked, raw `/_matrix` HTTP, dual-backend, list-only (FR-7.9-003), trust-only (FR-7.9-004), SAS-only (FR-7.9-005), or helper/fixture-only FAIL.
-  - Test target: OtherDevices multi-select + deleteMultipleDevices + useUIAMatrixError + ActionUIA Password/SSO; DeviceDeleteBtn; refreshDeviceList success path; Devices.tsx OtherDevices mount (not Current); post-cutover P8.2+P3.4 GAP-DEVICE-NAMING-DELETE + GAP-UIA + IPC
-  - Preconditions:
-    - Disposable Synapse; multi-session account with ≥1 other own-account device_id in getDevices; password-capable session for in-app UIA (or controlled 401 UIA fixture).
-    - Named product surfaces present: OtherDevices.tsx, ActionUIA.tsx, DeviceTile DeviceDeleteBtn, Devices.tsx OtherDevices mount, useDeviceList refreshDeviceList.
-    - Harness can multi-select other devices, submit Logout, complete Password UIA (or inject 401 authData), observe list refresh and failure text; does not bypass product OtherDevices with dual-backend/raw HTTP/helper-only pass criteria.
-    - Do not accept device list load alone (FR-7.9-003), trust/verification alone (FR-7.9-004), SAS alone (FR-7.9-005), recovery signing-key UIA alone (FR-7.9-006), or current-session DeviceLogoutBtn alone as sole pass for this FR.
-  - Actions:
-    1. Boot integration harness against disposable Synapse. Do not use fixture-only mocks that skip product OtherDevices deleteMultipleDevices + ActionUIA, dual-backend selectors, raw HTTP, or helper-only pass criteria.
-    2. SCOPE: Open Settings → Devices. Assert Current has Logout (this session) not multi-delete select; Others lists other sessions.
-    3. MULTI-SELECT: Toggle ≥1 other device Delete; assert Critical selection + sticky menu count; Cancel clears selection.
-    4. DELETE+UIA: Select other device(s); Logout. If 401 UIA, complete Password (or SSO) stage via ActionUIA; assert delete completes.
-    5. REFRESH: Assert removed device_id(s) no longer appear in Others after success without process restart.
-    6. FAILURE: Induce non-401 delete error; assert Failed to logout devices message and ability to retry.
-    7. After cutover P8.2+P3.4, repeat multi-select delete + UIA + refresh via Rust delete_devices + UIA + product UX + IPC. Citing SC-067 alone, compile-only, raw `/_matrix` HTTP, dual-backend/SDK selector, list-only, trust/SAS-only, or helper/fixture-only is a FAIL.
-  - Assertions:
-    - SCOPE: only other own-account devices are multi-selectable for delete; current this-session uses DeviceLogoutBtn, not deleted Set.
-    - DELETE: product calls deleteMultipleDevices (or Rust Client::delete_devices successor) with selected device ids.
-    - UIA: 401 with flows surfaces ActionUIA Password and/or SSO; completed AuthDict retries delete successfully.
-    - REFRESH: success clears selection and removes deleted devices from Others via refreshDeviceList (or Rust/IPC list successor) without process restart.
-    - FAILURE: non-401 shows Failed to logout devices (or product-equivalent) with error detail.
-    - COORDINATION: delete state remains through OtherDevices + ActionUIA (or Rust/IPC successors), not ad-hoc dual writers; list ownership remains FR-7.9-003.
-    - CUTOVER: P8.2+P3.4 preserves delete+UIA+refresh observables via GAP-DEVICE-NAMING-DELETE + GAP-UIA + product UX + IPC; SC-067 alone / compile-only never product pass; no raw `/_matrix` runtime HTTP; no dual-backend/SDK selector.
-    - No new production matrix-js-sdk usage and no raw `/_matrix` runtime HTTP unless the dossier marks that exact behavior typed-sdk-request-required.
-    - Device list alone (FR-7.9-003), trust alone (FR-7.9-004), SAS alone (FR-7.9-005), recovery UIA alone (FR-7.9-006), and helper unit tests alone are not accepted as sole pass criteria for this FR.
-  - does_not_currently_exist: `True`
-- **Manual**: `MA-FR-7.9-010`
+  - `src-tauri/src/matrix/auth/product.rs` — delete start/password/SSO/cancel commands and pending-operation state
+  - `src-tauri/src/matrix/devices/live.rs` — bounded challenge selection and Ruma fallback URL
+  - `synara/src/app/features/settings/devices/nativeDevices.ts` — SDK-neutral commands/DTOs
+  - `synara/src/app/features/settings/devices/OtherDevices.tsx` — multi-select and one-method UI
+- **Superseded JS owner**: deleted `deleteMultipleDevices`, raw Matrix UIAA state, `ActionUIA`, and its device-delete Password/SSO stages. Generic registration/reset UIA remains outside this row.
+- **Rust mapping**: `Client::delete_devices` plus typed Ruma `AuthData`; no raw Matrix HTTP and no dual backend.
+- **Planned** `AT-FR-7.9-010-001` / **Manual** `MA-FR-7.9-010`: on a disposable multi-session Synapse, prove non-current selection/cancel, password and SSO continuation (including supported multi-stage progression), exact-origin/source popup completion, terminal-vs-auth failure copy, authoritative disappearance without restart, unmount cancellation, and retained OIDC external policy. Live proof remains unclaimed by this candidate.
 
 ### `FR-7.9-011` — ### 7.9 Devices, E2EE, verification, and recovery
 

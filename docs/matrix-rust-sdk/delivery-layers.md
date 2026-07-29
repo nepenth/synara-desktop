@@ -16,10 +16,10 @@
 
 **Today:** L1 is large (**~74/112** plan tasks with foundations). L2 is broad
 enough to support the D0 native core and V-CRYPTO wiring. L3 is **in progress**:
-D0 core paths and V-CRYPTO.1–.5 are complete, including physical deletion of
-their superseded JS owners. V-CRYPTO.6 is a local automatic-recovery candidate
-with its superseded owners deleted; live/UI proof and PR review remain open.
-V-CRYPTO.7 is queued. L4 has not started.
+D0 core paths and V-CRYPTO.1–.6 are complete, including physical deletion of
+their superseded JS owners. V-CRYPTO.7 is a local device-list/trust/actions
+candidate with its superseded owners deleted; live multi-session/UI proof and
+PR review remain open. V-AUTH.1 follows. L4 has not started.
 
 Strict phase-gate **acceptance** is a fourth axis: landed ≠ accepted (still **0/15** gates closed).
 

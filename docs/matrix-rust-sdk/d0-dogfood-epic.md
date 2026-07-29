@@ -37,7 +37,7 @@ Earlier D0 wording allowed “crypto **minimum** / usable enough for dogfood” 
 
 ## Current priority (binding)
 
-1. **Close residual queue** in [d0-residual-completion.md](d0-residual-completion.md) — V-CRYPTO.1–.5 are done; resume with V-CRYPTO.6.
+1. **Close residual queue** in [d0-residual-completion.md](d0-residual-completion.md) — V-CRYPTO.1–.6 are done; monitor and land V-CRYPTO.7 [#236](https://github.com/nepenth/synara-desktop/pull/236), then continue with V-AUTH.1.
 2. Do **not** merge plateau / dogfood PRs as complete.
 3. Only after native wiring **and superseded JS deletion** are both landed may a vertical be marked done.
 4. New verticals (media, widgets, registry, …) only after residual completion order allows.
