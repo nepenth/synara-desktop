@@ -133,16 +133,16 @@ test("tracks full-vertical execution and requires per-vertical deletion policy",
   assert.match(rendered, /Current full-vertical product execution/);
   assert.match(rendered, /full-vertical-delete-per-vertical/);
   assert.match(rendered, /Wired \/ deletion open/);
-  assert.match(rendered, /218 files \/ 273 import lines current/);
+  assert.match(rendered, /212 files \/ 265 import lines current/);
   assert.match(rendered, /negative capability-owner\/file deletion delta/);
   assert.match(
     rendered,
     /Integration product state: `capability-cutover-in-progress`/
   );
-  assert.match(rendered, /Active slice: \*\*V-CRYPTO\.6\*\* \(PR #235\)/);
+  assert.match(rendered, /Active slice: \*\*V-CRYPTO\.7\*\* \(PR #236\)/);
   assert.match(
     rendered,
-    /Completed under full policy: `V-CRYPTO\.1`, `V-CRYPTO\.2`, `V-CRYPTO\.3`, `V-CRYPTO\.4`, `V-CRYPTO\.5`/
+    /Completed under full policy: `V-CRYPTO\.1`, `V-CRYPTO\.2`, `V-CRYPTO\.3`, `V-CRYPTO\.4`, `V-CRYPTO\.5`, `V-CRYPTO\.6`/
   );
 
   const wrongPolicy = clone(status);
@@ -161,7 +161,7 @@ test("tracks full-vertical execution and requires per-vertical deletion policy",
   );
 
   const duplicateResidual = clone(status);
-  duplicateResidual.vertical_execution.next_slices.push("V-CRYPTO.7");
+  duplicateResidual.vertical_execution.next_slices.push("V-AUTH.1");
   assert.throws(
     () => validateProgramStatus(duplicateResidual, plan),
     /duplicate IDs/
