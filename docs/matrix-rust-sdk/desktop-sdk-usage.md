@@ -14,10 +14,10 @@ Totals below count **import files** (static, `require()`, or dynamic `import()`)
 
 | Role       | Import files | Networking files | Networking findings |
 | ---------- | -----------: | ---------------: | ------------------: |
-| production |          211 |                2 |                   3 |
+| production |          208 |                2 |                   3 |
 | test       |           11 |                8 |                  30 |
 | tooling    |            3 |                2 |                   5 |
-| **total**  |      **225** |                  |                     |
+| **total**  |      **222** |                  |                     |
 
 ### Role definitions
 
@@ -31,15 +31,15 @@ This section is the plan §4 baseline: production and test import files under `s
 
 | Metric                  | Count |
 | ----------------------- | ----: |
-| Production import files |   211 |
+| Production import files |   208 |
 | Test import files       |    11 |
-| Total import files      |   222 |
+| Total import files      |   219 |
 
 ### Plan comparison
 
 Expected **220** production and **12** test import files.
 
-- Production match: **no** (found 211)
+- Production match: **no** (found 208)
 - Test match: **no** (found 11)
 
 ### Production files by bucket (desktop runtime only)
@@ -47,19 +47,19 @@ Expected **220** production and **12** test import files.
 | Bucket           | Files |
 | ---------------- | ----: |
 | client-lifecycle |     2 |
-| component        |    40 |
+| component        |    39 |
 | feature          |    58 |
-| hook             |    54 |
+| hook             |    53 |
 | media-boundary   |     1 |
 | page             |    19 |
 | plugin           |     8 |
 | shared-type      |     1 |
-| state            |    14 |
+| state            |    13 |
 | utility          |    14 |
 
 ## Aggregates: production
 
-Scope: **production only**. Import files: 211. Files with any finding: 213.
+Scope: **production only**. Import files: 208. Files with any finding: 210.
 
 ### Imported modules
 
@@ -67,10 +67,10 @@ Scope: **production only**. Import files: 211. Files with any finding: 213.
 | ----------------------------------------------------- | -----------: | ----: |
 | `matrix-js-sdk`                                       |          197 |   197 |
 | `matrix-js-sdk/lib/types`                             |           14 |    14 |
-| `matrix-js-sdk/lib/crypto-api`                        |            8 |     8 |
 | `matrix-js-sdk/lib/@types/spaces`                     |            6 |     6 |
 | `matrix-js-sdk/lib/models/event`                      |            6 |     6 |
 | `matrix-js-sdk/lib/@types/event`                      |            5 |     5 |
+| `matrix-js-sdk/lib/crypto-api`                        |            5 |     5 |
 | `matrix-js-sdk/lib/client`                            |            4 |     4 |
 | `matrix-js-sdk/lib/matrixrtc/CallMembership`          |            4 |     4 |
 | `matrix-js-sdk/lib/models/relations`                  |            4 |     4 |
@@ -86,55 +86,55 @@ Scope: **production only**. Import files: 211. Files with any finding: 213.
 
 ### Top imported symbols
 
-| Symbol                      | Imports | Value | Type-only | Files |
-| --------------------------- | ------: | ----: | --------: | ----: |
-| `Room`                      |      89 |    84 |         5 |    89 |
-| `MatrixClient`              |      60 |    54 |         6 |    60 |
-| `MatrixError`               |      44 |    44 |         0 |    44 |
-| `MatrixEvent`               |      35 |    28 |         7 |    35 |
-| `JoinRule`                  |      17 |    17 |         0 |    17 |
-| `RoomEvent`                 |      12 |    12 |         0 |    12 |
-| `RoomMember`                |      12 |    12 |         0 |    12 |
-| `AuthType`                  |      11 |    11 |         0 |    11 |
-| `ClientEvent`               |      11 |    11 |         0 |    11 |
-| `EventType`                 |       8 |     8 |         0 |     8 |
-| `RoomEventHandlerMap`       |       8 |     8 |         0 |     8 |
-| `Direction`                 |       7 |     7 |         0 |     7 |
-| `IAuthData`                 |       7 |     7 |         0 |     7 |
-| `IContent`                  |       7 |     5 |         2 |     7 |
-| `AuthDict`                  |       6 |     6 |         0 |     6 |
-| `IHierarchyRoom`            |       6 |     6 |         0 |     6 |
-| `IPushRules`                |       6 |     6 |         0 |     6 |
-| `MsgType`                   |       6 |     6 |         0 |     6 |
-| `RoomJoinRulesEventContent` |       6 |     6 |         0 |     6 |
-| `SyncState`                 |       6 |     5 |         1 |     6 |
-| `createClient`              |       6 |     6 |         0 |     6 |
-| `EventTimeline`             |       5 |     3 |         2 |     5 |
-| `PushRuleKind`              |       5 |     5 |         0 |     5 |
-| `RelationType`              |       5 |     5 |         0 |     5 |
-| `UIAFlow`                   |       5 |     5 |         0 |     5 |
-| `CallMembership`            |       4 |     4 |         0 |     4 |
-| `IPushRule`                 |       4 |     4 |         0 |     4 |
-| `Method`                    |       4 |     4 |         0 |     4 |
-| `Relations`                 |       4 |     2 |         2 |     4 |
-| `RoomStateEvent`            |       4 |     4 |         0 |     4 |
-| `Capabilities`              |       3 |     3 |         0 |     3 |
-| `ConditionKind`             |       3 |     3 |         0 |     3 |
-| `CryptoApi`                 |       3 |     3 |         0 |     3 |
-| `CryptoEvent`               |       3 |     3 |         0 |     3 |
-| `CryptoEventHandlerMap`     |       3 |     3 |         0 |     3 |
-| `EventTimelineSet`          |       3 |     3 |         0 |     3 |
-| `IMyDevice`                 |       3 |     3 |         0 |     3 |
-| `MatrixEventEvent`          |       3 |     3 |         0 |     3 |
-| `ReceiptType`               |       3 |     3 |         0 |     3 |
-| `RestrictedAllowType`       |       3 |     3 |         0 |     3 |
+| Symbol                         | Imports | Value | Type-only | Files |
+| ------------------------------ | ------: | ----: | --------: | ----: |
+| `Room`                         |      89 |    84 |         5 |    89 |
+| `MatrixClient`                 |      60 |    54 |         6 |    60 |
+| `MatrixError`                  |      44 |    44 |         0 |    44 |
+| `MatrixEvent`                  |      35 |    28 |         7 |    35 |
+| `JoinRule`                     |      17 |    17 |         0 |    17 |
+| `RoomEvent`                    |      12 |    12 |         0 |    12 |
+| `RoomMember`                   |      12 |    12 |         0 |    12 |
+| `AuthType`                     |      11 |    11 |         0 |    11 |
+| `ClientEvent`                  |      11 |    11 |         0 |    11 |
+| `EventType`                    |       8 |     8 |         0 |     8 |
+| `RoomEventHandlerMap`          |       8 |     8 |         0 |     8 |
+| `Direction`                    |       7 |     7 |         0 |     7 |
+| `IAuthData`                    |       7 |     7 |         0 |     7 |
+| `IContent`                     |       7 |     5 |         2 |     7 |
+| `AuthDict`                     |       6 |     6 |         0 |     6 |
+| `IHierarchyRoom`               |       6 |     6 |         0 |     6 |
+| `IPushRules`                   |       6 |     6 |         0 |     6 |
+| `MsgType`                      |       6 |     6 |         0 |     6 |
+| `RoomJoinRulesEventContent`    |       6 |     6 |         0 |     6 |
+| `SyncState`                    |       6 |     5 |         1 |     6 |
+| `createClient`                 |       6 |     6 |         0 |     6 |
+| `EventTimeline`                |       5 |     3 |         2 |     5 |
+| `PushRuleKind`                 |       5 |     5 |         0 |     5 |
+| `RelationType`                 |       5 |     5 |         0 |     5 |
+| `UIAFlow`                      |       5 |     5 |         0 |     5 |
+| `CallMembership`               |       4 |     4 |         0 |     4 |
+| `IPushRule`                    |       4 |     4 |         0 |     4 |
+| `Method`                       |       4 |     4 |         0 |     4 |
+| `Relations`                    |       4 |     2 |         2 |     4 |
+| `RoomStateEvent`               |       4 |     4 |         0 |     4 |
+| `Capabilities`                 |       3 |     3 |         0 |     3 |
+| `ConditionKind`                |       3 |     3 |         0 |     3 |
+| `EventTimelineSet`             |       3 |     3 |         0 |     3 |
+| `IMyDevice`                    |       3 |     3 |         0 |     3 |
+| `MatrixEventEvent`             |       3 |     3 |         0 |     3 |
+| `ReceiptType`                  |       3 |     3 |         0 |     3 |
+| `RestrictedAllowType`          |       3 |     3 |         0 |     3 |
+| `RoomMemberEvent`              |       3 |     3 |         0 |     3 |
+| `RoomPinnedEventsEventContent` |       3 |     3 |         0 |     3 |
+| `RuleId`                       |       3 |     3 |         0 |     3 |
 
 ### SDK model import coupling
 
 | Model / symbol         | Files | Import occurrences |
 | ---------------------- | ----: | -----------------: |
 | `CallMembership`       |     4 |                  4 |
-| `CryptoApi`            |     3 |                  3 |
+| `CryptoApi`            |     1 |                  1 |
 | `EventTimeline`        |     5 |                  5 |
 | `IndexedDBCryptoStore` |     1 |                  1 |
 | `IndexedDBStore`       |     1 |                  1 |
@@ -151,11 +151,11 @@ Scope: **production only**. Import files: 211. Files with any finding: 213.
 
 | Category                       | Files | Method candidates | Listener candidates | Constructor candidates | Networking |
 | ------------------------------ | ----: | ----------------: | ------------------: | ---------------------: | ---------: |
-| `client_methods`               |   125 |                 0 |                   0 |                      0 |          0 |
+| `client_methods`               |   124 |                 0 |                   0 |                      0 |          0 |
 | `room_methods`                 |    92 |                 0 |                   0 |                      0 |          0 |
-| `event_emitters_listeners`     |    31 |                 0 |                 156 |                      0 |          0 |
+| `event_emitters_listeners`     |    30 |                 0 |                 148 |                      0 |          0 |
 | `sync_lifecycle`               |    16 |                12 |                   6 |                      0 |          0 |
-| `crypto_verification_recovery` |    12 |                 8 |                  12 |                      0 |          0 |
+| `crypto_verification_recovery` |     9 |                 6 |                   4 |                      0 |          0 |
 | `indexeddb_matrix_stores`      |     1 |                 0 |                   0 |                      2 |          0 |
 | `authenticated_media`          |     7 |                 9 |                   0 |                      0 |          0 |
 | `matrixrtc_calls`              |     5 |                 0 |                   8 |                      0 |          0 |
@@ -175,48 +175,48 @@ Scope: **production only**. Import files: 211. Files with any finding: 213.
 
 ### Top method-name candidates (not type-proven)
 
-| Method name                     | Candidate occurrences |
-| ------------------------------- | --------------------: |
-| `getRoom`                       |                    79 |
-| `getSafeUserId`                 |                    57 |
-| `getUserId`                     |                    53 |
-| `isSpaceRoom`                   |                    30 |
-| `sendStateEvent`                |                    26 |
-| `findEventById`                 |                    13 |
-| `getAccountData`                |                    11 |
-| `getRooms`                      |                    10 |
-| `setAccountData`                |                    10 |
-| `getUnfilteredTimelineSet`      |                     8 |
-| `sendEvent`                     |                     8 |
-| `getLiveTimeline`               |                     7 |
-| `joinRoom`                      |                     7 |
-| `leave`                         |                     7 |
-| `refreshToken`                  |                     7 |
-| `getCrypto`                     |                     5 |
-| `getSyncState`                  |                     5 |
-| `mxcUrlToHttp`                  |                     5 |
-| `redactEvent`                   |                     5 |
-| `sendMessage`                   |                     5 |
-| `getDeviceId`                   |                     4 |
-| `stopClient`                    |                     4 |
-| `uploadContent`                 |                     4 |
-| `addPushRule`                   |                     3 |
-| `createRoom`                    |                     3 |
-| `deletePushRule`                |                     3 |
-| `search`                        |                     3 |
-| `sendTyping`                    |                     3 |
-| `setPushRuleActions`            |                     3 |
-| `getCapabilities`               |                     2 |
-| `getLatestTimeline`             |                     2 |
-| `getRoomHierarchy`              |                     2 |
-| `invite`                        |                     2 |
-| `registerRequest`               |                     2 |
-| `retryImmediately`              |                     2 |
-| `getActiveSessionBackupVersion` |                     1 |
-| `getDevices`                    |                     1 |
-| `getEventReadUpTo`              |                     1 |
-| `getEventTimeline`              |                     1 |
-| `getLocalAliases`               |                     1 |
+| Method name                | Candidate occurrences |
+| -------------------------- | --------------------: |
+| `getRoom`                  |                    79 |
+| `getSafeUserId`            |                    57 |
+| `getUserId`                |                    53 |
+| `isSpaceRoom`              |                    30 |
+| `sendStateEvent`           |                    26 |
+| `findEventById`            |                    13 |
+| `getAccountData`           |                    11 |
+| `getRooms`                 |                    10 |
+| `setAccountData`           |                    10 |
+| `getUnfilteredTimelineSet` |                     8 |
+| `sendEvent`                |                     8 |
+| `getLiveTimeline`          |                     7 |
+| `joinRoom`                 |                     7 |
+| `leave`                    |                     7 |
+| `refreshToken`             |                     7 |
+| `getCrypto`                |                     5 |
+| `getSyncState`             |                     5 |
+| `mxcUrlToHttp`             |                     5 |
+| `redactEvent`              |                     5 |
+| `sendMessage`              |                     5 |
+| `getDeviceId`              |                     4 |
+| `stopClient`               |                     4 |
+| `uploadContent`            |                     4 |
+| `addPushRule`              |                     3 |
+| `createRoom`               |                     3 |
+| `deletePushRule`           |                     3 |
+| `search`                   |                     3 |
+| `sendTyping`               |                     3 |
+| `setPushRuleActions`       |                     3 |
+| `getCapabilities`          |                     2 |
+| `getLatestTimeline`        |                     2 |
+| `getRoomHierarchy`         |                     2 |
+| `invite`                   |                     2 |
+| `registerRequest`          |                     2 |
+| `retryImmediately`         |                     2 |
+| `getDevices`               |                     1 |
+| `getEventReadUpTo`         |                     1 |
+| `getEventTimeline`         |                     1 |
+| `getLocalAliases`          |                     1 |
+| `getRoomIdForAlias`        |                     1 |
 
 ### Direct Matrix networking findings
 
@@ -413,7 +413,6 @@ Scope: **tooling only**. Import files: 3. Files with any finding: 5.
 | `synara/src/app/components/AccountDataEditor.tsx`                                                                             | production | yes     | component        | static       | `matrix-js-sdk`                                                                                                                                                           |
 | `synara/src/app/components/ActionUIA.tsx`                                                                                     | production | yes     | component        | static       | `matrix-js-sdk`                                                                                                                                                           |
 | `synara/src/app/components/AuthFlowsLoader.tsx`                                                                               | production | yes     | component        | static       | `matrix-js-sdk`                                                                                                                                                           |
-| `synara/src/app/components/BackupRestore.tsx`                                                                                 | production | yes     | component        | static       | `matrix-js-sdk/lib/crypto-api`                                                                                                                                            |
 | `synara/src/app/components/CapabilitiesLoader.tsx`                                                                            | production | yes     | component        | static       | `matrix-js-sdk`                                                                                                                                                           |
 | `synara/src/app/components/JoinRulesSwitcher.tsx`                                                                             | production | yes     | component        | static       | `matrix-js-sdk`                                                                                                                                                           |
 | `synara/src/app/components/RenderMessageContent.tsx`                                                                          | production | yes     | component        | static       | `matrix-js-sdk`                                                                                                                                                           |
@@ -521,7 +520,6 @@ Scope: **tooling only**. Import files: 3. Files with any finding: 5.
 | `synara/src/app/hooks/useGetRoom.ts`                                                                                          | production | yes     | hook             | static       | `matrix-js-sdk`                                                                                                                                                           |
 | `synara/src/app/hooks/useImagePackRooms.ts`                                                                                   | production | yes     | hook             | static       | `matrix-js-sdk`                                                                                                                                                           |
 | `synara/src/app/hooks/useImagePacks.ts`                                                                                       | production | yes     | hook             | static       | `matrix-js-sdk`                                                                                                                                                           |
-| `synara/src/app/hooks/useKeyBackup.ts`                                                                                        | production | yes     | hook             | static       | `matrix-js-sdk/lib/crypto-api`                                                                                                                                            |
 | `synara/src/app/hooks/useLocalRoomSummary.ts`                                                                                 | production | yes     | hook             | static       | `matrix-js-sdk`                                                                                                                                                           |
 | `synara/src/app/hooks/useMatrixClient.ts`                                                                                     | production | yes     | hook             | static       | `matrix-js-sdk/lib/client`                                                                                                                                                |
 | `synara/src/app/hooks/useMemberEventParser.tsx`                                                                               | production | yes     | hook             | static       | `matrix-js-sdk`                                                                                                                                                           |
@@ -596,7 +594,6 @@ Scope: **tooling only**. Import files: 3. Files with any finding: 5.
 | `synara/src/app/state/__tests__/initMatrix.test.ts`                                                                           | test       | yes     | state            | static       | `matrix-js-sdk`                                                                                                                                                           |
 | `synara/src/app/state/__tests__/performLogout.test.ts`                                                                        | test       | yes     | state            | static       | `matrix-js-sdk`                                                                                                                                                           |
 | `synara/src/app/state/__tests__/tokenRefresh.test.ts`                                                                         | test       | yes     | state            | static       | `matrix-js-sdk`                                                                                                                                                           |
-| `synara/src/app/state/backupRestore.ts`                                                                                       | production | yes     | state            | static       | `matrix-js-sdk/lib/crypto-api`                                                                                                                                            |
 | `synara/src/app/state/hooks/inviteList.ts`                                                                                    | production | yes     | state            | static       | `matrix-js-sdk`                                                                                                                                                           |
 | `synara/src/app/state/hooks/roomList.ts`                                                                                      | production | yes     | state            | static       | `matrix-js-sdk`                                                                                                                                                           |
 | `synara/src/app/state/hooks/useBindAtoms.ts`                                                                                  | production | yes     | state            | static       | `matrix-js-sdk`                                                                                                                                                           |

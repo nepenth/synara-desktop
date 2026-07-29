@@ -25,16 +25,16 @@
         },
         "client_methods": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 125,
+          "fileCount": 124,
           "listenerCandidateOccurrences": 0,
           "methodCandidateOccurrences": 0,
           "networkingOccurrences": 0
         },
         "crypto_verification_recovery": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 12,
-          "listenerCandidateOccurrences": 12,
-          "methodCandidateOccurrences": 8,
+          "fileCount": 9,
+          "listenerCandidateOccurrences": 4,
+          "methodCandidateOccurrences": 6,
           "networkingOccurrences": 0
         },
         "custom_raw_event_sends": {
@@ -53,8 +53,8 @@
         },
         "event_emitters_listeners": {
           "constructorCandidateOccurrences": 0,
-          "fileCount": 31,
-          "listenerCandidateOccurrences": 156,
+          "fileCount": 30,
+          "listenerCandidateOccurrences": 148,
           "methodCandidateOccurrences": 0,
           "networkingOccurrences": 0
         },
@@ -150,8 +150,8 @@
           "networkingOccurrences": 0
         }
       },
-      "fileCount": 213,
-      "importFileCount": 211,
+      "fileCount": 210,
+      "importFileCount": 208,
       "methodCandidateFrequencies": [
         {
           "count": 79,
@@ -295,10 +295,6 @@
         },
         {
           "count": 1,
-          "name": "getActiveSessionBackupVersion"
-        },
-        {
-          "count": 1,
           "name": "getDevices"
         },
         {
@@ -336,10 +332,6 @@
         {
           "count": 1,
           "name": "initRustCrypto"
-        },
-        {
-          "count": 1,
-          "name": "isKeyBackupTrusted"
         },
         {
           "count": 1,
@@ -388,8 +380,8 @@
           "importOccurrences": 4
         },
         "CryptoApi": {
-          "fileCount": 3,
-          "importOccurrences": 3
+          "fileCount": 1,
+          "importOccurrences": 1
         },
         "EventTimeline": {
           "fileCount": 5,
@@ -452,11 +444,6 @@
           "path": "matrix-js-sdk/lib/types"
         },
         {
-          "fileCount": 8,
-          "importCount": 8,
-          "path": "matrix-js-sdk/lib/crypto-api"
-        },
-        {
           "fileCount": 6,
           "importCount": 6,
           "path": "matrix-js-sdk/lib/@types/spaces"
@@ -470,6 +457,11 @@
           "fileCount": 5,
           "importCount": 5,
           "path": "matrix-js-sdk/lib/@types/event"
+        },
+        {
+          "fileCount": 5,
+          "importCount": 5,
+          "path": "matrix-js-sdk/lib/crypto-api"
         },
         {
           "fileCount": 4,
@@ -784,27 +776,6 @@
         {
           "fileCount": 3,
           "importCount": 3,
-          "name": "CryptoApi",
-          "typeImports": 0,
-          "valueImports": 3
-        },
-        {
-          "fileCount": 3,
-          "importCount": 3,
-          "name": "CryptoEvent",
-          "typeImports": 0,
-          "valueImports": 3
-        },
-        {
-          "fileCount": 3,
-          "importCount": 3,
-          "name": "CryptoEventHandlerMap",
-          "typeImports": 0,
-          "valueImports": 3
-        },
-        {
-          "fileCount": 3,
-          "importCount": 3,
           "name": "EventTimelineSet",
           "typeImports": 0,
           "valueImports": 3
@@ -896,6 +867,20 @@
         {
           "fileCount": 2,
           "importCount": 2,
+          "name": "CryptoEvent",
+          "typeImports": 0,
+          "valueImports": 2
+        },
+        {
+          "fileCount": 2,
+          "importCount": 2,
+          "name": "CryptoEventHandlerMap",
+          "typeImports": 0,
+          "valueImports": 2
+        },
+        {
+          "fileCount": 2,
+          "importCount": 2,
           "name": "HistoryVisibility",
           "typeImports": 0,
           "valueImports": 2
@@ -918,13 +903,6 @@
           "fileCount": 2,
           "importCount": 2,
           "name": "IMentions",
-          "typeImports": 0,
-          "valueImports": 2
-        },
-        {
-          "fileCount": 2,
-          "importCount": 2,
-          "name": "KeyBackupInfo",
           "typeImports": 0,
           "valueImports": 2
         },
@@ -1029,7 +1007,7 @@
         {
           "fileCount": 1,
           "importCount": 1,
-          "name": "BackupTrustInfo",
+          "name": "CryptoApi",
           "typeImports": 0,
           "valueImports": 1
         },
@@ -1219,20 +1197,6 @@
           "fileCount": 1,
           "importCount": 1,
           "name": "ISearchResult",
-          "typeImports": 0,
-          "valueImports": 1
-        },
-        {
-          "fileCount": 1,
-          "importCount": 1,
-          "name": "ImportRoomKeyProgressData",
-          "typeImports": 0,
-          "valueImports": 1
-        },
-        {
-          "fileCount": 1,
-          "importCount": 1,
-          "name": "ImportRoomKeyStage",
           "typeImports": 0,
           "valueImports": 1
         },
@@ -2988,40 +2952,6 @@
       "modelCoupling": ["MatrixError", "createClient"],
       "networking": [],
       "path": "synara/src/app/components/AuthFlowsLoader.tsx",
-      "role": "production"
-    },
-    {
-      "bucket": "component",
-      "categories": ["crypto_verification_recovery"],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 3,
-          "module": "matrix-js-sdk/lib/crypto-api",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "CryptoApi"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "KeyBackupInfo"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [],
-      "methodCandidates": [],
-      "modelCoupling": ["CryptoApi"],
-      "networking": [],
-      "path": "synara/src/app/components/BackupRestore.tsx",
       "role": "production"
     },
     {
@@ -8856,131 +8786,6 @@
     },
     {
       "bucket": "hook",
-      "categories": [
-        "client_methods",
-        "event_emitters_listeners",
-        "crypto_verification_recovery"
-      ],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 1,
-          "module": "matrix-js-sdk/lib/crypto-api",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "BackupTrustInfo"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "CryptoApi"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "CryptoEvent"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "CryptoEventHandlerMap"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "KeyBackupInfo"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [
-        {
-          "category": "crypto_verification_recovery",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "event": "CryptoEvent.KeyBackupStatus",
-          "line": 26,
-          "method": "on"
-        },
-        {
-          "category": "crypto_verification_recovery",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "event": "CryptoEvent.KeyBackupStatus",
-          "line": 28,
-          "method": "removeListener"
-        },
-        {
-          "category": "crypto_verification_recovery",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "event": "CryptoEvent.KeyBackupSessionsRemaining",
-          "line": 61,
-          "method": "on"
-        },
-        {
-          "category": "crypto_verification_recovery",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "event": "CryptoEvent.KeyBackupSessionsRemaining",
-          "line": 63,
-          "method": "removeListener"
-        },
-        {
-          "category": "crypto_verification_recovery",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "event": "CryptoEvent.KeyBackupFailed",
-          "line": 76,
-          "method": "on"
-        },
-        {
-          "category": "crypto_verification_recovery",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "event": "CryptoEvent.KeyBackupFailed",
-          "line": 78,
-          "method": "removeListener"
-        },
-        {
-          "category": "crypto_verification_recovery",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "event": "CryptoEvent.KeyBackupDecryptionKeyCached",
-          "line": 91,
-          "method": "on"
-        },
-        {
-          "category": "crypto_verification_recovery",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "event": "CryptoEvent.KeyBackupDecryptionKeyCached",
-          "line": 93,
-          "method": "removeListener"
-        }
-      ],
-      "methodCandidates": [
-        {
-          "category": "crypto_verification_recovery",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_call_candidate",
-          "line": 40,
-          "name": "getActiveSessionBackupVersion"
-        },
-        {
-          "category": "crypto_verification_recovery",
-          "confidence": "AST property-name candidate in a file that imports matrix-js-sdk; receiver is not type-proven to be an SDK client/room/model.",
-          "kind": "property_call_candidate",
-          "line": 165,
-          "name": "isKeyBackupTrusted"
-        }
-      ],
-      "modelCoupling": ["CryptoApi"],
-      "networking": [],
-      "path": "synara/src/app/hooks/useKeyBackup.ts",
-      "role": "production"
-    },
-    {
-      "bucket": "hook",
       "categories": ["room_methods"],
       "constructorCandidates": [],
       "desktopRuntime": true,
@@ -13219,40 +13024,6 @@
     },
     {
       "bucket": "state",
-      "categories": ["crypto_verification_recovery"],
-      "constructorCandidates": [],
-      "desktopRuntime": true,
-      "imports": [
-        {
-          "defaultImport": null,
-          "form": "static",
-          "isTypeOnly": false,
-          "line": 2,
-          "module": "matrix-js-sdk/lib/crypto-api",
-          "namedImports": [
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "ImportRoomKeyProgressData"
-            },
-            {
-              "alias": null,
-              "isTypeOnly": false,
-              "name": "ImportRoomKeyStage"
-            }
-          ],
-          "namespaceImport": null
-        }
-      ],
-      "listenerCandidates": [],
-      "methodCandidates": [],
-      "modelCoupling": [],
-      "networking": [],
-      "path": "synara/src/app/state/backupRestore.ts",
-      "role": "production"
-    },
-    {
-      "bucket": "state",
       "categories": ["client_methods", "room_lists", "uia_auth"],
       "constructorCandidates": [],
       "desktopRuntime": true,
@@ -16390,14 +16161,14 @@
     "desktopRuntimeBaseline": {
       "buckets": {
         "client-lifecycle": 2,
-        "component": 40,
+        "component": 39,
         "feature": 58,
-        "hook": 54,
+        "hook": 53,
         "media-boundary": 1,
         "page": 19,
         "plugin": 8,
         "shared-type": 1,
-        "state": 14,
+        "state": 13,
         "utility": 14
       },
       "planComparison": {
@@ -16406,13 +16177,13 @@
         "matchesProduction": false,
         "matchesTest": false
       },
-      "productionImportFiles": 211,
+      "productionImportFiles": 208,
       "sourcePrefix": "synara/src/",
       "testImportFiles": 11,
-      "totalImportFiles": 222
+      "totalImportFiles": 219
     },
     "repositoryWide": {
-      "productionImportFiles": 211,
+      "productionImportFiles": 208,
       "productionNetworkingFiles": 2,
       "productionNetworkingFindings": 3,
       "testImportFiles": 11,
@@ -16421,7 +16192,7 @@
       "toolingImportFiles": 3,
       "toolingNetworkingFiles": 2,
       "toolingNetworkingFindings": 5,
-      "totalImportFiles": 225
+      "totalImportFiles": 222
     }
   }
 }
