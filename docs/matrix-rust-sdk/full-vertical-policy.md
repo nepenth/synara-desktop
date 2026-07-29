@@ -4,17 +4,17 @@
 | --------------- | ---------------------------------------------------------------------------------------------- |
 | Status          | **Active** (user directive 2026-07-28)                                                         |
 | Branch          | `feature/matrix-rust-sdk-full-replacement` only                                                |
-| Supersedes      | “Dogfood minimum / usable enough / approved residual plateau” acceptance for product verticals |
+| Supersedes      | “Incomplete minimum / usable enough / approved residual plateau” acceptance for product verticals |
 | Deletion policy | **Physical deletion happens inside each vertical** (clarified 2026-07-28)                      |
 
 ## Directive
 
-**No dogfood cuts.** Each product vertical must be **fully implemented / re-implemented** under the native Matrix Rust SDK path (UI → Tauri IPC → live `matrix-sdk`), for capabilities that:
+**Complete replacement only.** Each product vertical must be **fully implemented / re-implemented** under the native Matrix Rust SDK path (UI → Tauri IPC → live `matrix-sdk`), for capabilities that:
 
 1. Exist in the current Synara client (matrix-js-sdk product surface), **and/or**
 2. Are supported by matrix-rust-sdk and are part of product parity for that vertical.
 
-Do **not** ship “minimum”, “usable enough for dogfood”, “approved non-zero residual plateau”, or stub shells as acceptance for a vertical. Temporary brokenness _between_ sequential full verticals is OK; **declaring a vertical done while product still owns the capability on js-sdk is not**.
+Do **not** ship “minimum”, “usable enough”, “approved non-zero residual plateau”, or stub shells as acceptance for a vertical. Temporary brokenness _between_ sequential full verticals is OK; **declaring a vertical done while product still owns the capability on js-sdk is not**.
 
 ## Physical deletion is part of the vertical
 
@@ -56,14 +56,14 @@ A slice is **done only when** all of the following hold for its capability set:
 
 1. **Finish incomplete prior verticals first** — see [d0-residual-completion.md](d0-residual-completion.md).
 2. Only then open new verticals (media, widgets, registry, …) with the same full bar.
-3. Do **not** merge PRs that document “approved residual plateau” or “dogfood minimum” as the done state for D0 / crypto / burn-down.
+3. Do **not** merge PRs that document “approved residual plateau” or an incomplete minimum as the done state for D0 / crypto / burn-down.
 4. L1 harness PRs remain parked unless they block a full product vertical.
 5. Capability-owner/file deletion must be negative and recorded for each completed vertical. Record the repository-wide direct `matrix-js-sdk` import delta too; it must not increase, but it may be zero when the deleted owner reached the SDK indirectly through a shared hook. Do not mix unrelated cleanup into a slice merely to force the global counter down. The final burn-down is a verification and dependency-removal gate, not a warehouse for deferred capability deletion.
 
 ## Orchestrator / Codex rules
 
 - Prefer one full vertical in flight (serial product merges).
-- Reject prompts that say “minimum”, “dogfood enough”, “plateau residual OK”, “0 imports removed is fine”.
+- Reject prompts that say “minimum”, “partial is enough”, “plateau residual OK”, “0 imports removed is fine”.
 - If a PR only documents residual debt without product rewire, treat as **docs debt PR**, not vertical complete.
 - If a PR adds a native branch but retains the replaced JS branch, mark it **wired / deletion open**, not done.
 - High effort sparingly for crypto/session edges; still full product wire, not stubs.
@@ -75,7 +75,7 @@ A slice is **done only when** all of the following hold for its capability set:
 ## Related
 
 - Residual inventory: [d0-residual-completion.md](d0-residual-completion.md)
-- Epic (reoriented): [d0-dogfood-epic.md](d0-dogfood-epic.md)
+- Epic (reoriented): [d0-product-replacement-epic.md](d0-product-replacement-epic.md)
 - Loop: [d0-orchestrator-loop.md](d0-orchestrator-loop.md)
 - Operating path and evidence budget: [operating-path-contract.md](operating-path-contract.md)
 - Migration crypto decisions: [migration-ux-decision.md](migration-ux-decision.md) (`D-KEY-RECOVERY`, etc.)

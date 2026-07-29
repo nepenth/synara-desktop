@@ -1,7 +1,7 @@
 //! Helpers to build privacy-safe [`RoomSummary`] rows for harness tests.
 //!
 //! Live mapping from SDK `Room` / `RoomListItem` is intentionally deferred until
-//! a sliding-sync dogfood harness lands; this module only constructs DTOs from
+//! a sliding-sync partial-path harness lands; this module only constructs DTOs from
 //! pure product fields (no matrix-sdk types).
 
 use crate::matrix::dto::{Membership, RoomId, RoomSummary};

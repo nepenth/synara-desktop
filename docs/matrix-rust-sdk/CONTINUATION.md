@@ -10,9 +10,9 @@
 | ------------------------ | ------------------------------------------------------------------------------- |
 | Date                     | 2026-07-29 (America/New_York)                                                   |
 | Integration branch       | `feature/matrix-rust-sdk-full-replacement`                                      |
-| Execution model          | Primary Codex + Codex sub-agents, all `gpt-5.6-sol` medium; MiniMax-M3 optional |
-| Verified integration tip | `05e3f64` — V-CRYPTO.6 merged (#235)                                            |
-| Active PR                | [#236](https://github.com/nepenth/synara-desktop/pull/236) — V-CRYPTO.7; reviewed code head `7df8abe` |
+| Execution model          | Primary Codex and every implementation/review sub-agent: `gpt-5.6-terra`, high reasoning |
+| Verified integration tip | `528a510` — V-CRYPTO.7 merged (#236)                                            |
+| Active PR                | None — V-AUTH.1 product decision is next                                         |
 | Policy                   | [full-vertical-policy.md](full-vertical-policy.md)                              |
 | Operating path           | [operating-path-contract.md](operating-path-contract.md)                        |
 | Binding queue            | [d0-residual-completion.md](d0-residual-completion.md)                          |
@@ -26,8 +26,8 @@ Complete the desktop replacement as serial, product-visible verticals:
 React UI → versioned Tauri IPC + Synara DTOs → live Rust matrix-sdk
 ```
 
-No dogfood minima, no accepted residual plateau, no backend selector, and no
-concurrent JS/Rust clients for one session.
+No incomplete/minimum/plateau acceptance, no backend selector, and no concurrent
+JS/Rust clients for one session.
 
 **Physical deletion happens per vertical.** A native path beside retained JS
 ownership is “wired,” not “done.” Each capability slice must delete its
@@ -36,9 +36,9 @@ obsolete tests/types before closure.
 
 ## Exact continuation point
 
-1. Monitor V-CRYPTO.7 [#236](https://github.com/nepenth/synara-desktop/pull/236) at reviewed code head `7df8abe`; live multi-session/UI proof is not yet claimed.
-2. Land V-CRYPTO.7 only after required PR checks remain green; its native route and physical JS-owner deletion are documented in [v-crypto-7-device-list-trust.md](v-crypto-7-device-list-trust.md).
-3. Continue with V-AUTH.1 → remaining V-AUTH → V-ROOMS → V-TIMELINE → V-SEND, deleting the superseded JS owner inside each capability slice.
+1. V-CRYPTO.7 [#236](https://github.com/nepenth/synara-desktop/pull/236) is merged at integration `528a510`; its reviewed, green product/test head was `192be46`. Live multi-session/UI proof remains unclaimed.
+2. Resolve the V-AUTH.1 product contract before implementation: require a full Matrix-ID hint for native SSO, or explicitly authorize the materially larger pending-store/adoption architecture. Do not silently infer an identity from an email, IdP, or domain.
+3. Continue with the selected V-AUTH.1 contract → remaining V-AUTH → V-ROOMS → V-TIMELINE → V-SEND, deleting the superseded JS owner inside each capability slice.
 4. Run V-BURN only as the final convergence audit and npm dependency/bootstrap/store cleanup.
 5. Resume new media/widgets/notifications/calls verticals only after the residual queue allows.
 
@@ -63,7 +63,7 @@ obsolete tests/types before closure.
   relies on SDK-owned pagination insertion/late-key redecryption and adds safe late-decrypt readback, reuses native
   recovery settings, and deletes the JS retry/per-event/listener owners. See
   [v-crypto-6-utd-recovery.md](v-crypto-6-utd-recovery.md).
-- V-CRYPTO.7 is active in [#236](https://github.com/nepenth/synara-desktop/pull/236) at reviewed code head `7df8abe`: native device list/trust, rename, and
+- V-CRYPTO.7 merged in [#236](https://github.com/nepenth/synara-desktop/pull/236) at integration `528a510` (reviewed, green product/test head `192be46`): native device list/trust, rename, and
   purpose-specific other-device deletion/UIAA replace the device page's JS SDK
   owners. Direct inventory is **212 files / 265 import lines**, production
   importers **201**, and repository-wide importers **215**.
