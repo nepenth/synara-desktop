@@ -37,6 +37,7 @@ const toSafeMatrixEvent = (
     sender: item.sender,
     origin_server_ts: item.originServerTs,
     type: MessageEvent.RoomMessage,
+    unsigned: {},
     content: {
       msgtype: unavailable ? 'm.bad.encrypted' : 'm.text',
       body: unavailable ? 'Unable to decrypt message' : item.body,
