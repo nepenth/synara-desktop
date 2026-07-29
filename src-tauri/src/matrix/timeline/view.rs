@@ -6,6 +6,7 @@
 //! subscription are deliberately separate follow-up work; this module fixes
 //! the stable shape that those owners must produce.
 
+use matrix_sdk::ruma::UserId as RumaUserId;
 use matrix_sdk_ui::timeline::{
     EventTimelineItem, MsgLikeKind, TimelineDetails, TimelineItem as SdkTimelineItem,
     TimelineItemContent, VirtualTimelineItem,
@@ -155,6 +156,14 @@ pub fn project_event_row_base(item_id: &str, event: &EventTimelineItem) -> Timel
 }
 
 pub fn project_event_row(item_id: &str, event: &EventTimelineItem) -> TimelineViewRow {
+    project_event_row_for_user(item_id, event, None)
+}
+
+fn project_event_row_for_user(
+    item_id: &str,
+    event: &EventTimelineItem,
+    own_user_id: Option<&RumaUserId>,
+) -> TimelineViewRow {
     let base = project_event_row_base(item_id, event);
     match event.content() {
         TimelineItemContent::MsgLike(content) => match &content.kind {
@@ -166,7 +175,7 @@ pub fn project_event_row(item_id: &str, event: &EventTimelineItem) -> TimelineVi
                 edited: message.is_edited(),
                 reply: project_reply(content),
                 thread: project_thread_summary(content, event),
-                reactions: project_reactions(content),
+                reactions: project_reactions(content, own_user_id),
                 media: None,
             }),
             MsgLikeKind::Poll(poll) => {
@@ -230,14 +239,17 @@ pub fn project_event_row(item_id: &str, event: &EventTimelineItem) -> TimelineVi
     }
 }
 
-fn project_reactions(content: &matrix_sdk_ui::timeline::MsgLikeContent) -> Vec<TimelineReaction> {
+fn project_reactions(
+    content: &matrix_sdk_ui::timeline::MsgLikeContent,
+    own_user_id: Option<&RumaUserId>,
+) -> Vec<TimelineReaction> {
     content
         .reactions
         .iter()
         .map(|(key, reactions)| TimelineReaction {
             key: key.clone(),
             count: reactions.len().try_into().unwrap_or(u32::MAX),
-            own: None,
+            own: own_user_id.map(|user_id| reactions.contains_key(user_id)),
         })
         .collect()
 }
@@ -276,10 +288,13 @@ fn project_thread_summary(
 /// presenter boundary. The SDK supplies only three virtual item kinds; native
 /// unread and pagination rows are synthesized later by their respective
 /// read-frontier and pagination owners.
-pub fn project_timeline_item(item: &SdkTimelineItem) -> TimelineViewRow {
+pub fn project_timeline_item(
+    item: &SdkTimelineItem,
+    own_user_id: Option<&RumaUserId>,
+) -> TimelineViewRow {
     let item_id = item.unique_id().0.clone();
     if let Some(event) = item.as_event() {
-        return project_event_row(&item_id, event);
+        return project_event_row_for_user(&item_id, event, own_user_id);
     }
 
     match item.as_virtual() {

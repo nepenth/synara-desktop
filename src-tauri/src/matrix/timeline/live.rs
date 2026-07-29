@@ -10,7 +10,7 @@ use std::sync::Arc;
 use matrix_sdk::{
     ruma::{
         events::{reaction::ReactionEventContent, relation::Annotation},
-        OwnedEventId, OwnedRoomId,
+        OwnedEventId, OwnedRoomId, OwnedUserId,
     },
     Client,
 };
@@ -27,7 +27,11 @@ use crate::matrix::{
     utd_recovery::{UtdRecoveryCoordinator, UtdRecoveryKind},
 };
 
-use super::{UtdIndex, UtdPhase, UtdReasonCode};
+use super::{
+    project_timeline_item, TimelinePageState, TimelinePaginationState, TimelineReadState,
+    TimelineViewCapabilities, TimelineViewPosition, TimelineViewSnapshot, UtdIndex, UtdPhase,
+    UtdReasonCode, TIMELINE_VIEW_SCHEMA_VERSION,
+};
 
 const PAGINATION_BATCH_SIZE: u16 = 30;
 const REDACTED_PLACEHOLDER: &str = "Message removed";
@@ -64,14 +68,14 @@ pub struct NativeTimelineOpenRequest {
 }
 
 /// Bounded authoritative result of opening the requested native timeline
-/// position. The `snapshot` remains the pre-cutover projection; a future
-/// `TimelineViewSnapshot` replaces it with the complete typed row union.
+/// position. This is the versioned, SDK-neutral view boundary; it has no
+/// active React consumer until the complete presenter cutover is ready.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeTimelineOpenReadback {
     pub schema_version: u32,
     pub position: NativeTimelineOpenPosition,
-    pub snapshot: NativeTimelineSnapshot,
+    pub snapshot: TimelineViewSnapshot,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
@@ -251,19 +255,32 @@ impl NativeTimelineRegistry {
         let room_id = parse_room_id(&request.room_id)?;
         let room_id_string = room_id.to_string();
         let position = request.position;
-        let snapshot = match &position {
-            NativeTimelineOpenPosition::LiveBottom => self.open(client, &room_id_string).await?,
+        let (timeline, view_position, pagination) = match &position {
+            NativeTimelineOpenPosition::LiveBottom => {
+                self.open(client, &room_id_string).await?;
+                let entry = self
+                    .entries
+                    .get(&room_id_string)
+                    .expect("live timeline inserted by open");
+                (
+                    entry.timeline.clone(),
+                    TimelineViewPosition::LiveBottom,
+                    TimelinePaginationState {
+                        backward: if entry.hit_start {
+                            TimelinePageState::Exhausted
+                        } else {
+                            TimelinePageState::Available
+                        },
+                        forward: TimelinePageState::Available,
+                    },
+                )
+            }
             NativeTimelineOpenPosition::Focused { event_id } => {
                 let event_id = parse_event_id(event_id)?;
                 let key = (room_id_string.clone(), event_id.to_string());
                 let room = client
                     .get_room(&room_id)
                     .ok_or("v-timeline-focused-room-not-found")?;
-                let is_encrypted = room
-                    .latest_encryption_state()
-                    .await
-                    .map_err(|_| "d0.5-timeline-encryption-state-unavailable")?
-                    .is_encrypted();
                 if !self.focused_entries.contains_key(&key) {
                     if self.focused_entries.len() >= MAX_FOCUSED_EVENT_READBACKS {
                         if let Some(oldest_key) = self.focused_entries.keys().next().cloned() {
@@ -283,25 +300,32 @@ impl NativeTimelineRegistry {
                         .map_err(|_| "v-timeline-focused-open-failed")?;
                     self.focused_entries.insert(key.clone(), Arc::new(timeline));
                 }
-                // The room remains encrypted even when its focused window
-                // currently contains no encrypted item. Carry that fact in the
-                // returned snapshot rather than inferring it in React.
                 let timeline = self
                     .focused_entries
                     .get(&key)
-                    .expect("focused timeline present");
-                let mut snapshot = snapshot_from_timeline(
-                    self.session_generation,
-                    room_id_string.clone(),
+                    .expect("focused timeline present")
+                    .clone();
+                (
                     timeline,
-                    is_encrypted,
-                    false,
+                    TimelineViewPosition::Focused {
+                        target_event_id: event_id.to_string(),
+                    },
+                    TimelinePaginationState {
+                        backward: TimelinePageState::Available,
+                        forward: TimelinePageState::Available,
+                    },
                 )
-                .await?;
-                self.reconcile_utd(&mut snapshot, UtdRecoveryKind::RetryDecrypt)?;
-                snapshot
             }
         };
+        let snapshot = view_snapshot_from_timeline(
+            self.session_generation,
+            room_id_string,
+            view_position,
+            pagination,
+            &timeline,
+            client.user_id().map(ToOwned::to_owned),
+        )
+        .await;
         Ok(NativeTimelineOpenReadback {
             schema_version: NATIVE_TIMELINE_OPEN_SCHEMA_VERSION,
             position,
@@ -751,14 +775,34 @@ impl NativeTimelineRegistry {
     }
 }
 
-fn reaction_contains_event_id(
-    reaction: &NativeTimelineReaction,
+    fn reaction_contains_event_id(     reaction: &NativeTimelineReaction,
     reaction_event_id: &OwnedEventId,
-) -> bool {
-    reaction
-        .senders
-        .iter()
-        .any(|sender| sender.reaction_event_id.as_deref() == Some(reaction_event_id.as_str()))
+    ) -> bool {     reaction         .senders         .iter()         .any(|sender| sender.reaction_event_id.as_deref() == Some(reaction_event_id.as_str())),
+    /// Build the currently available native view snapshot from the SDK owner. /// /// `revision` is zero until the native delta subscriber owns monotonically /// advancing revisions. Treating repeated snapshot reads as deltas would hide /// the missing owner boundary,
+    so this contract makes that absence explicit. async fn view_snapshot_from_timeline(     session_generation: u64,
+    room_id: String,
+    position: TimelineViewPosition,
+    pagination: TimelinePaginationState,
+    timeline: &Timeline,
+    own_user_id: Option<OwnedUserId>,
+    ) -> TimelineViewSnapshot {     let (items,
+    _updates) = timeline.subscribe().await;     let own_read_event_id = match own_user_id.as_ref() {         Some(user_id) => timeline             .latest_user_read_receipt_timeline_event_id(&user_id)             .await             .map(|event_id| event_id.to_string()),
+    None => None,
+    };     TimelineViewSnapshot {         schema_version: TIMELINE_VIEW_SCHEMA_VERSION,
+    session_generation,
+    room_id,
+    revision: 0,
+    position,
+    pagination,
+    read_state: TimelineReadState {             own_read_event_id,
+    unread_anchor_event_id: None,
+    },
+    rows: items             .iter()             .map(|item| project_timeline_item(item,
+    own_user_id.as_deref()))             .collect(),
+    capabilities: TimelineViewCapabilities {             mark_read: false,
+    mark_unread: false,
+    paginate_backward: true,
+    paginate_forward: true,
 }
 
 fn parse_room_id(room_id: &str) -> Result<OwnedRoomId, &'static str> {
@@ -1059,6 +1103,42 @@ mod tests {
             }
         );
     }
+    #[test]
+    fn typed_open_readback_uses_the_versioned_view_boundary() {
+        let readback = NativeTimelineOpenReadback {
+            schema_version: NATIVE_TIMELINE_OPEN_SCHEMA_VERSION,
+            position: NativeTimelineOpenPosition::LiveBottom,
+            snapshot: TimelineViewSnapshot {
+                schema_version: TIMELINE_VIEW_SCHEMA_VERSION,
+                session_generation: 7,
+                room_id: "!room:example.org".into(),
+                revision: 0,
+                position: TimelineViewPosition::LiveBottom,
+                pagination: TimelinePaginationState {
+                    backward: TimelinePageState::Available,
+                    forward: TimelinePageState::Available,
+                },
+                read_state: TimelineReadState {
+                    own_read_event_id: None,
+                    unread_anchor_event_id: None,
+                },
+                rows: Vec::new(),
+                capabilities: TimelineViewCapabilities {
+                    mark_read: false,
+                    mark_unread: false,
+                    paginate_backward: true,
+                    paginate_forward: true,
+                },
+            },
+        };
+        let json = serde_json::to_value(readback).unwrap();
+        let snapshot = &json["snapshot"];
+        assert_eq!(snapshot["schemaVersion"], TIMELINE_VIEW_SCHEMA_VERSION);
+        assert_eq!(snapshot["roomId"], "!room:example.org");
+        assert!(snapshot.get("isEncrypted").is_none());
+        assert!(snapshot.get("items").is_none());
+    }
+
     #[test]
     fn safe_body_projection_never_exposes_unavailable_event_content() {
         assert_eq!(
