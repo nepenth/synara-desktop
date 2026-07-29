@@ -679,28 +679,14 @@ async fn matrix_room_key_import_inner(
     selection_id: u64,
     passphrase: &str,
 ) -> Result<NativeRoomKeyTransferResult, MatrixAuthCommandError> {
-    live_room_keys::require_passphrase(passphrase)?;
     let (client, generation, flow, selected) = {
         let mut session = state.session.lock().await;
         let active = require_room_key_session_mut(session.as_mut())?;
-        if active
-            .selected_room_key_import
-            .as_ref()
-            .is_none_or(|selected| selected.selection_id != selection_id)
-        {
-            return Err(MatrixAuthCommandError::new(
-                "InvalidRequest",
-                "Choose an encrypted room-key file before importing.",
-                "v-crypto.5-import-selection-invalid",
-            ));
-        }
-        let selected = active.selected_room_key_import.take().ok_or_else(|| {
-            MatrixAuthCommandError::new(
-                "InvalidRequest",
-                "Choose an encrypted room-key file before importing.",
-                "v-crypto.5-import-selection-invalid",
-            )
-        })?;
+        let selected = reserve_room_key_import_selection(
+            &mut active.selected_room_key_import,
+            selection_id,
+            passphrase,
+        )?;
         (
             active.client.clone(),
             active.sync.session_generation(),
@@ -708,9 +694,71 @@ async fn matrix_room_key_import_inner(
             selected,
         )
     };
-    let result = live_room_keys::import(&client, generation, &flow, selected, passphrase).await?;
+    let result = live_room_keys::import(&client, generation, &flow, &selected, passphrase).await;
+    let result = match result {
+        Ok(result) => result,
+        Err(error) => {
+            restore_room_key_import_selection(state, generation, selected).await;
+            return Err(error);
+        }
+    };
     require_current_room_key_generation(state, generation).await?;
     Ok(result)
+}
+
+fn reserve_room_key_import_selection(
+    slot: &mut Option<SelectedRoomKeyImport>,
+    selection_id: u64,
+    passphrase: &str,
+) -> Result<SelectedRoomKeyImport, MatrixAuthCommandError> {
+    live_room_keys::require_passphrase(passphrase)?;
+    if slot
+        .as_ref()
+        .is_none_or(|selected| selected.selection_id != selection_id)
+    {
+        return Err(MatrixAuthCommandError::new(
+            "InvalidRequest",
+            "Choose an encrypted room-key file before importing.",
+            "v-crypto.5-import-selection-invalid",
+        ));
+    }
+    slot.take().ok_or_else(|| {
+        MatrixAuthCommandError::new(
+            "InvalidRequest",
+            "Choose an encrypted room-key file before importing.",
+            "v-crypto.5-import-selection-invalid",
+        )
+    })
+}
+
+async fn restore_room_key_import_selection(
+    state: &State<'_, MatrixAuthState>,
+    generation: u64,
+    selected: SelectedRoomKeyImport,
+) {
+    let mut session = state.session.lock().await;
+    let Some(active) = session.as_mut() else {
+        return;
+    };
+    restore_reserved_room_key_import(
+        generation,
+        Some(active.sync.session_generation()),
+        &mut active.selected_room_key_import,
+        selected,
+    );
+}
+
+fn restore_reserved_room_key_import(
+    expected_generation: u64,
+    current_generation: Option<u64>,
+    slot: &mut Option<SelectedRoomKeyImport>,
+    selected: SelectedRoomKeyImport,
+) -> bool {
+    if current_generation != Some(expected_generation) || slot.is_some() {
+        return false;
+    }
+    *slot = Some(selected);
+    true
 }
 
 async fn matrix_secret_storage_reset_inner(
@@ -1534,6 +1582,81 @@ fn map_auth_error(error: AuthError) -> MatrixAuthCommandError {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn room_key_selection(selection_id: u64, label: &str) -> SelectedRoomKeyImport {
+        SelectedRoomKeyImport {
+            selection_id,
+            path: PathBuf::from(format!("/opaque/{label}")),
+            file_label: label.to_owned(),
+        }
+    }
+
+    #[test]
+    fn room_key_import_reservation_is_consumed_on_success_path() {
+        let mut slot = Some(room_key_selection(4, "backup.keys"));
+        let reserved = reserve_room_key_import_selection(&mut slot, 4, "passphrase").unwrap();
+        assert_eq!(reserved.selection_id, 4);
+        assert!(slot.is_none());
+    }
+
+    #[test]
+    fn failed_room_key_import_restores_same_generation_empty_slot() {
+        let mut slot = None;
+        let restored = restore_reserved_room_key_import(
+            7,
+            Some(7),
+            &mut slot,
+            room_key_selection(4, "backup.keys"),
+        );
+        assert!(restored);
+        assert_eq!(slot.as_ref().unwrap().selection_id, 4);
+    }
+
+    #[test]
+    fn failed_room_key_import_never_overwrites_newer_selection() {
+        let mut slot = Some(room_key_selection(5, "newer.keys"));
+        let restored = restore_reserved_room_key_import(
+            7,
+            Some(7),
+            &mut slot,
+            room_key_selection(4, "older.keys"),
+        );
+        assert!(!restored);
+        assert_eq!(slot.as_ref().unwrap().selection_id, 5);
+    }
+
+    #[test]
+    fn failed_room_key_import_is_discarded_after_generation_change_or_logout() {
+        let mut replacement_generation_slot = None;
+        assert!(!restore_reserved_room_key_import(
+            7,
+            Some(8),
+            &mut replacement_generation_slot,
+            room_key_selection(4, "old.keys"),
+        ));
+        assert!(replacement_generation_slot.is_none());
+
+        let mut logged_out_slot = None;
+        assert!(!restore_reserved_room_key_import(
+            7,
+            None,
+            &mut logged_out_slot,
+            room_key_selection(4, "logged-out.keys"),
+        ));
+        assert!(logged_out_slot.is_none());
+    }
+
+    #[test]
+    fn empty_passphrase_and_invalid_room_key_selection_leave_slot_untouched() {
+        let mut slot = Some(room_key_selection(4, "backup.keys"));
+        let empty = reserve_room_key_import_selection(&mut slot, 4, "").unwrap_err();
+        assert_eq!(empty.diagnostic_id, "v-crypto.5-passphrase-empty");
+        assert_eq!(slot.as_ref().unwrap().selection_id, 4);
+
+        let invalid = reserve_room_key_import_selection(&mut slot, 99, "passphrase").unwrap_err();
+        assert_eq!(invalid.diagnostic_id, "v-crypto.5-import-selection-invalid");
+        assert_eq!(slot.as_ref().unwrap().selection_id, 4);
+    }
 
     #[test]
     fn login_identity_and_snapshot_serialization_never_have_token_fields() {

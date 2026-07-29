@@ -195,16 +195,22 @@ pub async fn import(
     client: &Client,
     session_generation: u64,
     flow: &Arc<Mutex<RoomKeyTransferFlow>>,
-    selected: SelectedRoomKeyImport,
+    selected: &SelectedRoomKeyImport,
     passphrase: &str,
 ) -> Result<NativeRoomKeyTransferResult, MatrixAuthCommandError> {
-    let SelectedRoomKeyImport {
-        path, file_label, ..
-    } = selected;
-    let op_id = begin_transfer(flow, RoomKeyTransferKind::Import, file_label.clone()).await?;
+    let op_id = begin_transfer(
+        flow,
+        RoomKeyTransferKind::Import,
+        selected.file_label.clone(),
+    )
+    .await?;
     mark_in_flight(flow, op_id).await?;
 
-    match client.encryption().import_room_keys(path, passphrase).await {
+    match client
+        .encryption()
+        .import_room_keys(selected.path.clone(), passphrase)
+        .await
+    {
         Ok(imported) => {
             let keys_processed = u32::try_from(imported.imported_count).unwrap_or(u32::MAX);
             let total_keys_found = u32::try_from(imported.total_count).unwrap_or(u32::MAX);
@@ -221,7 +227,7 @@ pub async fn import(
             .await?;
             Ok(NativeRoomKeyTransferResult {
                 outcome: "complete",
-                file_label,
+                file_label: selected.file_label.clone(),
                 keys_processed,
                 rooms_touched: 0,
                 total_keys_found: Some(total_keys_found),
@@ -324,6 +330,25 @@ fn room_key_error(message: &'static str, diagnostic_id: &'static str) -> MatrixA
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn failed_import_flow_can_retry_through_in_flight() {
+        let flow = Arc::new(Mutex::new(RoomKeyTransferFlow::new(7)));
+        let first = begin_transfer(&flow, RoomKeyTransferKind::Import, "backup.keys".to_owned())
+            .await
+            .unwrap();
+        mark_in_flight(&flow, first).await.unwrap();
+        assert_eq!(flow.lock().await.phase(), RoomKeyTransferPhase::InFlight);
+        fail_transfer(&flow, first, "v-crypto.5-import-sdk-failed").await;
+        assert_eq!(flow.lock().await.phase(), RoomKeyTransferPhase::Failed);
+
+        let retry = begin_transfer(&flow, RoomKeyTransferKind::Import, "backup.keys".to_owned())
+            .await
+            .unwrap();
+        mark_in_flight(&flow, retry).await.unwrap();
+        assert_ne!(retry, first);
+        assert_eq!(flow.lock().await.phase(), RoomKeyTransferPhase::InFlight);
+    }
 
     #[test]
     fn status_and_results_are_privacy_safe() {

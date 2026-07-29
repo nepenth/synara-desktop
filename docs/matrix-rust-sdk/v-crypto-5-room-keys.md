@@ -20,15 +20,19 @@ The webview receives only operation phase, progress percentage, imported or
 exported counts, room count where the SDK can project it, and a display
 basename. The native file chooser returns an opaque selection number and the
 basename; the full import path remains in the managed Rust session. A new
-selection replaces the prior one and a selection is consumed by its import
-attempt.
+selection replaces the prior one. Import exclusively reserves the selection
+while it is in flight. Success consumes it; failure restores it for retry only
+when the same managed-session generation is still active and no newer
+selection occupies the slot. Logout or generation replacement discards the
+reservation.
 
-For native sessions, `LocalBackup.tsx` renders the native export/import UI and
+`LocalBackup.tsx` renders the native export/import UI and
 calls only the room-key IPC adapter. It does not call matrix-js-sdk
 `exportRoomKeysAsJson` / `importRoomKeysAsJson`, the browser megolm keyfile
-helpers, browser file reads, Blob export, or FileSaver. Those legacy paths
-remain for web and other non-native sessions only. Missing IPC and SDK/file
-failures fail closed with fixed privacy-safe product errors.
+helpers, browser file reads, Blob export, or FileSaver. The superseded WebView
+owner and browser megolm keyfile helper are physically deleted; there is no
+native/legacy runtime branch. Missing IPC and SDK/file failures fail closed
+with fixed privacy-safe product errors.
 
 Synara has no retained inbound room-key-request approval prompt or accept/deny
 surface. V-CRYPTO.5 therefore does not invent one. Matrix device verification,
@@ -72,6 +76,8 @@ cleanly when the next operation starts; concurrent transfers fail closed.
   appears in IPC responses or logs.
 - Export uses a private host-created Downloads file; import uses a host picker
   and opaque session-local selection ID.
+- Import success consumes its selection. Import failure retains it for retry
+  only in the same session generation and never overwrites a newer selection.
 - Status and outcomes expose only privacy-safe phases, counts, labels, and
   diagnostic identifiers.
 - Commands, invoke registration, permissions, and generated schemas agree.
