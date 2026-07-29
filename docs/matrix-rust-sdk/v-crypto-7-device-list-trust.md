@@ -7,7 +7,21 @@
 | Delivery   | PR [#236](https://github.com/nepenth/synara-desktop/pull/236) merged at integration `528a510c2034e438136a04f22362c3a9180d77a9`; reviewed, green product/test head `192be46` |
 | Next slice | V-AUTH.1 complete desktop SSO removal                                             |
 
-## Retained operating path
+## V-AUTH.1 current compatibility boundary
+
+V-AUTH.1 has superseded the desktop SSO behavior described in the historical
+V-CRYPTO.7 delivery record below. The desktop now has **no SSO UI, callback, or
+SSO UIAA support**. Other-device deletion supports password UIAA only when the
+homeserver provides a password-only viable flow; an SSO-only response (or a
+flow that still requires SSO) is unsupported. The OIDC account-management
+dashboard and its session-management actions remain unchanged as external
+account-management routes, not as desktop authentication.
+
+The generic token foundation remains in the auth core without a desktop route.
+Whether it becomes a product capability is reserved for an explicit V-AUTH.2
+decision.
+
+## Historical V-CRYPTO.7 retained operating path
 
 The settings UI now has one owner for this capability:
 
@@ -34,7 +48,7 @@ does not poll, inspect raw sync, reach into `OlmMachine`, or treat undocumented
 empty/deletion wakeups as authoritative. Rename and delete return an
 authoritative server readback, which the UI installs directly.
 
-## Rename and other-device deletion
+## Historical V-CRYPTO.7 rename and other-device deletion
 
 Rename accepts the device ID selected from the authoritative rendered snapshot,
 lets the SDK/server validate it, and returns a fresh authoritative snapshot
@@ -73,7 +87,7 @@ generation. A request that resolves after a native session transition therefore
 can update only its old generation's cache entry and cannot become the next
 account's visible device list.
 
-## Superseded owners deleted
+## Historical V-CRYPTO.7 superseded owners deleted
 
 - `ActionUIA.tsx`, its device-delete-only Password and SSO stages, and the dead
   device-delete `useUIAMatrixError` path. Registration/reset UIA remains.
@@ -100,6 +114,6 @@ account's visible device list.
 This merged vertical closes the V-CRYPTO device-list/trust/action owner. It does not
 claim a global crypto phase gate or replace generic registration/reset UIA.
 
-> **Subsequent product decision:** V-AUTH.1 owns removal of the native SSO
-> continuation documented above. The retained desktop product must not offer SSO
-> authentication after that vertical lands.
+> **Superseded by V-AUTH.1:** the native SSO continuation documented in this
+> historical V-CRYPTO.7 record has been removed. The retained desktop product
+> does not offer SSO authentication or SSO UIAA.

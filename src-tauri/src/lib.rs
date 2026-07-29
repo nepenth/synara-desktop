@@ -190,7 +190,6 @@ pub fn run() {
             matrix::auth::product::matrix_device_rename,
             matrix::auth::product::matrix_device_delete_start,
             matrix::auth::product::matrix_device_delete_password,
-            matrix::auth::product::matrix_device_delete_sso_acknowledge,
             matrix::auth::product::matrix_device_delete_cancel,
             matrix::auth::product::matrix_room_list_snapshot,
             matrix::auth::product::matrix_timeline_open,

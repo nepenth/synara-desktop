@@ -27,7 +27,7 @@ pub const SESSION_MATERIAL_SERVICE: &str = "com.whylandcreative.synara.desktop.m
 /// Wire format version for the sealed session envelope JSON.
 pub const SESSION_ENVELOPE_VERSION: u8 = 1;
 
-/// Kind marker for native Matrix auth sessions (password/token/SSO matrix API).
+/// Kind marker for native Matrix auth sessions (password/token matrix API).
 pub const SESSION_KIND_MATRIX: &str = "matrix";
 
 /// Non-secret keyring account id for session material for one account.

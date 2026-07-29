@@ -3,7 +3,7 @@
 //! Given a resolved homeserver base URL, list available login mechanisms as
 //! stable Synara domain types. Network I/O is behind [`LoginFlowTransport`].
 //!
-//! **No** password/token/SSO login execution (P3.2 / P3.3).
+//! **No** password/token login execution (P3.2).
 
 use super::error::AuthError;
 use super::input::normalize_homeserver_url;
@@ -19,8 +19,6 @@ pub enum LoginFlowKind {
     Password,
     /// `m.login.token`
     Token,
-    /// `m.login.sso`
-    Sso,
     /// `m.login.application_service`
     ApplicationService,
     /// Unrecognized homeserver login type (type string preserved on [`LoginFlow`]).
@@ -28,18 +26,13 @@ pub enum LoginFlowKind {
 }
 
 impl LoginFlowKind {
-    pub const ALL_KNOWN: &'static [LoginFlowKind] = &[
-        Self::Password,
-        Self::Token,
-        Self::Sso,
-        Self::ApplicationService,
-    ];
+    pub const ALL_KNOWN: &'static [LoginFlowKind] =
+        &[Self::Password, Self::Token, Self::ApplicationService];
 
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Password => "password",
             Self::Token => "token",
-            Self::Sso => "sso",
             Self::ApplicationService => "application_service",
             Self::Unknown => "unknown",
         }
@@ -50,7 +43,6 @@ impl LoginFlowKind {
         match self {
             Self::Password => Some("m.login.password"),
             Self::Token => Some("m.login.token"),
-            Self::Sso => Some("m.login.sso"),
             Self::ApplicationService => Some("m.login.application_service"),
             Self::Unknown => None,
         }
@@ -61,20 +53,10 @@ impl LoginFlowKind {
         match matrix_type {
             "m.login.password" => Self::Password,
             "m.login.token" => Self::Token,
-            "m.login.sso" => Self::Sso,
             "m.login.application_service" => Self::ApplicationService,
             _ => Self::Unknown,
         }
     }
-}
-
-/// One SSO identity provider advertised by `m.login.sso`.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SsoIdentityProvider {
-    pub id: String,
-    pub name: String,
-    /// Optional brand identifier (e.g. `github`, `google`) when provided.
-    pub brand: Option<String>,
 }
 
 /// One homeserver login flow as a Synara domain value.
@@ -83,12 +65,8 @@ pub struct LoginFlow {
     pub kind: LoginFlowKind,
     /// Original Matrix type string (`m.login.password`, custom types, …).
     pub matrix_type: String,
-    /// SSO IdPs when `kind == Sso`.
-    pub identity_providers: Vec<SsoIdentityProvider>,
     /// Token flow: homeserver supports `get_login_token` (when known).
     pub get_login_token: Option<bool>,
-    /// SSO flow preferred for OAuth-aware clients (when known).
-    pub oauth_aware_preferred: Option<bool>,
 }
 
 impl LoginFlow {
@@ -96,9 +74,7 @@ impl LoginFlow {
         Self {
             kind: LoginFlowKind::Password,
             matrix_type: "m.login.password".to_owned(),
-            identity_providers: Vec::new(),
             get_login_token: None,
-            oauth_aware_preferred: None,
         }
     }
 
@@ -106,19 +82,7 @@ impl LoginFlow {
         Self {
             kind: LoginFlowKind::Token,
             matrix_type: "m.login.token".to_owned(),
-            identity_providers: Vec::new(),
             get_login_token: Some(get_login_token),
-            oauth_aware_preferred: None,
-        }
-    }
-
-    pub fn sso(identity_providers: Vec<SsoIdentityProvider>, oauth_aware_preferred: bool) -> Self {
-        Self {
-            kind: LoginFlowKind::Sso,
-            matrix_type: "m.login.sso".to_owned(),
-            identity_providers,
-            get_login_token: None,
-            oauth_aware_preferred: Some(oauth_aware_preferred),
         }
     }
 
@@ -126,26 +90,17 @@ impl LoginFlow {
         Self {
             kind: LoginFlowKind::ApplicationService,
             matrix_type: "m.login.application_service".to_owned(),
-            identity_providers: Vec::new(),
             get_login_token: None,
-            oauth_aware_preferred: None,
         }
     }
 
-    /// Map a raw Matrix type (+ optional SSO metadata) into a domain flow.
-    pub fn from_matrix_parts(
-        matrix_type: &str,
-        identity_providers: Vec<SsoIdentityProvider>,
-        get_login_token: Option<bool>,
-        oauth_aware_preferred: Option<bool>,
-    ) -> Self {
+    /// Map a raw Matrix type (+ optional token capability) into a domain flow.
+    pub fn from_matrix_parts(matrix_type: &str, get_login_token: Option<bool>) -> Self {
         let kind = LoginFlowKind::from_matrix_type(matrix_type);
         Self {
             kind,
             matrix_type: matrix_type.to_owned(),
-            identity_providers,
             get_login_token,
-            oauth_aware_preferred,
         }
     }
 }
@@ -164,10 +119,6 @@ impl LoginFlowDiscoveryResult {
 
     pub fn password_available(&self) -> bool {
         self.supports(LoginFlowKind::Password)
-    }
-
-    pub fn sso_available(&self) -> bool {
-        self.supports(LoginFlowKind::Sso)
     }
 }
 
@@ -254,11 +205,11 @@ pub async fn discover_login_flows<T: LoginFlowTransport>(
 
 /// Map fixture-style flow descriptors (tests / harness JSON) into domain flows.
 ///
-/// Accepted matrix types: `m.login.password`, `m.login.token`, `m.login.sso`,
+/// Accepted matrix types: `m.login.password`, `m.login.token`,
 /// `m.login.application_service`, or any custom string → [`LoginFlowKind::Unknown`].
 pub fn map_matrix_login_types(types: &[&str]) -> Vec<LoginFlow> {
     types
         .iter()
-        .map(|t| LoginFlow::from_matrix_parts(t, Vec::new(), None, None))
+        .map(|t| LoginFlow::from_matrix_parts(t, None))
         .collect()
 }
