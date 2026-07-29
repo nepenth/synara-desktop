@@ -7,17 +7,29 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use matrix_sdk::{ruma::OwnedRoomId, Client};
+use matrix_sdk::{
+    ruma::{OwnedEventId, OwnedRoomId},
+    Client,
+};
+use matrix_sdk_crypto::types::events::UtdCause;
 use matrix_sdk_ui::timeline::{
-    Timeline, TimelineBuilder, TimelineItem as SdkTimelineItem,
-    TimelineItemContent as SdkTimelineItemContent,
+    EncryptedMessage, Timeline, TimelineBuilder, TimelineEventFocusThreadMode, TimelineFocus,
+    TimelineItem as SdkTimelineItem, TimelineItemContent as SdkTimelineItemContent,
 };
 use serde::{Deserialize, Serialize};
+
+use crate::matrix::{
+    dto::TimelineEncryptedUnavailableItem,
+    utd_recovery::{UtdRecoveryCoordinator, UtdRecoveryKind},
+};
+
+use super::{UtdIndex, UtdPhase, UtdReasonCode};
 
 const PAGINATION_BATCH_SIZE: u16 = 30;
 const REDACTED_PLACEHOLDER: &str = "Message removed";
 const UTD_PLACEHOLDER: &str = "Unable to decrypt this message";
 const UNSUPPORTED_PLACEHOLDER: &str = "Unsupported event";
+const MAX_FOCUSED_EVENT_READBACKS: usize = 256;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -36,6 +48,33 @@ pub struct NativeTimelineItem {
     pub event_type: String,
     pub body: String,
     pub origin_server_ts: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub decryption_state: Option<NativeDecryptionState>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum NativeDecryptionState {
+    Pending,
+    Unavailable,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum NativeUtdPhase {
+    Idle,
+    Recovering,
+    Partial,
+    Unavailable,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NativeUtdStatus {
+    pub phase: NativeUtdPhase,
+    pub pending_count: u32,
+    pub unavailable_count: u32,
+    pub recovered_count: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -46,6 +85,16 @@ pub struct NativeTimelineSnapshot {
     pub is_encrypted: bool,
     pub items: Vec<NativeTimelineItem>,
     pub hit_start: bool,
+    pub utd: NativeUtdStatus,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NativeTimelineEventReadback {
+    pub session_generation: u64,
+    pub room_id: String,
+    pub event_id: String,
+    pub item: NativeTimelineItem,
 }
 
 struct LiveTimelineEntry {
@@ -57,6 +106,9 @@ struct LiveTimelineEntry {
 pub struct NativeTimelineRegistry {
     session_generation: u64,
     entries: HashMap<String, LiveTimelineEntry>,
+    focused_entries: HashMap<(String, String), Arc<Timeline>>,
+    utd_index: UtdIndex,
+    utd_recovery: UtdRecoveryCoordinator,
 }
 
 impl NativeTimelineRegistry {
@@ -64,6 +116,9 @@ impl NativeTimelineRegistry {
         Self {
             session_generation,
             entries: HashMap::new(),
+            focused_entries: HashMap::new(),
+            utd_index: UtdIndex::new(session_generation),
+            utd_recovery: UtdRecoveryCoordinator::new(session_generation),
         }
     }
 
@@ -99,17 +154,22 @@ impl NativeTimelineRegistry {
         self.snapshot(&room_id_string).await
     }
 
-    pub async fn snapshot(&self, room_id: &str) -> Result<NativeTimelineSnapshot, &'static str> {
+    pub async fn snapshot(
+        &mut self,
+        room_id: &str,
+    ) -> Result<NativeTimelineSnapshot, &'static str> {
         let room_id = parse_room_id(room_id)?.to_string();
         let entry = self.entries.get(&room_id).ok_or("d0.3-timeline-not-open")?;
-        snapshot_from_timeline(
+        let mut snapshot = snapshot_from_timeline(
             self.session_generation,
-            room_id,
+            room_id.clone(),
             &entry.timeline,
             entry.is_encrypted,
             entry.hit_start,
         )
-        .await
+        .await?;
+        self.reconcile_utd(&mut snapshot, UtdRecoveryKind::RetryDecrypt)?;
+        Ok(snapshot)
     }
 
     pub async fn paginate(
@@ -137,19 +197,217 @@ impl NativeTimelineRegistry {
         if direction == NativeTimelineDirection::Backwards {
             entry.hit_start = reached_end;
         }
-        snapshot_from_timeline(
+        let mut snapshot = snapshot_from_timeline(
             self.session_generation,
-            room_id,
+            room_id.clone(),
             &entry.timeline,
             entry.is_encrypted,
             entry.hit_start,
         )
-        .await
+        .await?;
+        self.reconcile_utd(&mut snapshot, UtdRecoveryKind::EncryptedHistoryRecovery)?;
+        Ok(snapshot)
+    }
+
+    pub async fn event_readback(
+        &mut self,
+        client: &Client,
+        room_id: &str,
+        event_id: &str,
+    ) -> Result<NativeTimelineEventReadback, &'static str> {
+        let room_id = parse_room_id(room_id)?.to_string();
+        let event_id = parse_event_id(event_id)?;
+        let key = (room_id.clone(), event_id.to_string());
+        if !self.focused_entries.contains_key(&key) {
+            if self.focused_entries.len() >= MAX_FOCUSED_EVENT_READBACKS {
+                if let Some(oldest_key) = self.focused_entries.keys().next().cloned() {
+                    self.focused_entries.remove(&oldest_key);
+                }
+            }
+            let room = client
+                .get_room(parse_room_id(&room_id)?.as_ref())
+                .ok_or("v-crypto.6-event-room-not-found")?;
+            let timeline = TimelineBuilder::new(&room)
+                .with_focus(TimelineFocus::Event {
+                    target: event_id.clone(),
+                    num_context_events: 0,
+                    thread_mode: TimelineEventFocusThreadMode::Automatic {
+                        hide_threaded_events: false,
+                    },
+                })
+                .build()
+                .await
+                .map_err(|_| "v-crypto.6-event-open-failed")?;
+            self.focused_entries.insert(key.clone(), Arc::new(timeline));
+        }
+        let timeline = self
+            .focused_entries
+            .get(&key)
+            .expect("focused timeline inserted");
+        let (items, _updates) = timeline.subscribe().await;
+        let item = items
+            .iter()
+            .filter_map(|item| project_item(item))
+            .find(|item| item.event_id == event_id.as_str())
+            .ok_or("v-crypto.6-event-not-found")?;
+        Ok(NativeTimelineEventReadback {
+            session_generation: self.session_generation,
+            room_id,
+            event_id: event_id.to_string(),
+            item,
+        })
+    }
+
+    fn reconcile_utd(
+        &mut self,
+        snapshot: &mut NativeTimelineSnapshot,
+        kind: UtdRecoveryKind,
+    ) -> Result<(), &'static str> {
+        let room_id = snapshot.room_id.clone();
+        let previous_active: Vec<String> = self
+            .utd_index
+            .list_active_for_room(&room_id)
+            .iter()
+            .map(|entry| entry.event_id.clone())
+            .collect();
+
+        for item in snapshot
+            .items
+            .iter()
+            .filter(|item| item.decryption_state.is_some())
+        {
+            let reason = match item.decryption_state {
+                Some(NativeDecryptionState::Unavailable) => UtdReasonCode::Other,
+                _ => UtdReasonCode::MissingKeys,
+            };
+            if self
+                .utd_index
+                .get(&room_id, &item.event_id)
+                .map(|entry| entry.reason)
+                != Some(reason)
+            {
+                self.utd_index
+                    .mark_unavailable(
+                        TimelineEncryptedUnavailableItem {
+                            item_id: item.item_id.clone(),
+                            event_id: item.event_id.clone(),
+                            room_id: room_id.clone(),
+                            reason: Some(reason.as_str().to_owned()),
+                        },
+                        reason,
+                    )
+                    .map_err(|_| "v-crypto.6-utd-index-failed")?;
+            }
+            match item.decryption_state {
+                Some(NativeDecryptionState::Unavailable) => {}
+                Some(NativeDecryptionState::Pending) => {
+                    if self
+                        .utd_index
+                        .get(&room_id, &item.event_id)
+                        .map(|e| e.phase)
+                        == Some(UtdPhase::UnableToDecrypt)
+                    {
+                        self.utd_index
+                            .begin_retry(&room_id, &item.event_id)
+                            .map_err(|_| "v-crypto.6-utd-index-failed")?;
+                    }
+                }
+                None => {}
+            }
+        }
+
+        let current_event_ids: std::collections::HashSet<&str> = snapshot
+            .items
+            .iter()
+            .filter(|item| item.decryption_state.is_some())
+            .map(|item| item.event_id.as_str())
+            .collect();
+        let newly_recovered = previous_active
+            .iter()
+            .filter(|event_id| !current_event_ids.contains(event_id.as_str()))
+            .count() as u32;
+        for event_id in previous_active
+            .iter()
+            .filter(|event_id| !current_event_ids.contains(event_id.as_str()))
+        {
+            self.utd_index
+                .mark_decrypted(&room_id, event_id)
+                .map_err(|_| "v-crypto.6-utd-index-failed")?;
+        }
+        self.utd_index.gc_decrypted();
+
+        let pending_count = snapshot
+            .items
+            .iter()
+            .filter(|item| item.decryption_state == Some(NativeDecryptionState::Pending))
+            .count() as u32;
+        let unavailable_count = snapshot
+            .items
+            .iter()
+            .filter(|item| item.decryption_state == Some(NativeDecryptionState::Unavailable))
+            .count() as u32;
+        let utd_count = pending_count.saturating_add(unavailable_count);
+        let needs_recovery_session = self
+            .utd_recovery
+            .get(&room_id)
+            .map(|session| !session.phase.is_active())
+            .unwrap_or(true);
+        if utd_count > 0 && needs_recovery_session {
+            let pending_ids = snapshot
+                .items
+                .iter()
+                .filter(|item| item.decryption_state.is_some())
+                .take(crate::matrix::utd_recovery::MAX_EVENT_IDS_PER_BATCH)
+                .map(|item| item.event_id.clone())
+                .collect();
+            let op_id = self
+                .utd_recovery
+                .begin(room_id.clone(), kind, pending_ids)
+                .map_err(|_| "v-crypto.6-recovery-state-failed")?;
+            self.utd_recovery
+                .mark_in_flight(&room_id, op_id)
+                .map_err(|_| "v-crypto.6-recovery-state-failed")?;
+        }
+        if let Some(session) = self.utd_recovery.get(&room_id).cloned() {
+            if session.phase.is_active() {
+                let recovered = session.recovered_count.saturating_add(newly_recovered);
+                if utd_count == 0 {
+                    self.utd_recovery
+                        .succeed(&room_id, session.op_id, recovered, 0)
+                        .map_err(|_| "v-crypto.6-recovery-state-failed")?;
+                } else {
+                    self.utd_recovery
+                        .report_progress(&room_id, session.op_id, newly_recovered, utd_count)
+                        .map_err(|_| "v-crypto.6-recovery-state-failed")?;
+                }
+            }
+        }
+        let recovery = self.utd_recovery.get(&room_id);
+        snapshot.utd = NativeUtdStatus {
+            phase: if pending_count > 0 {
+                NativeUtdPhase::Recovering
+            } else if unavailable_count > 0 && recovery.map(|s| s.recovered_count).unwrap_or(0) > 0
+            {
+                NativeUtdPhase::Partial
+            } else if unavailable_count > 0 {
+                NativeUtdPhase::Unavailable
+            } else {
+                NativeUtdPhase::Idle
+            },
+            pending_count,
+            unavailable_count,
+            recovered_count: recovery.map(|s| s.recovered_count).unwrap_or(0),
+        };
+        Ok(())
     }
 }
 
 fn parse_room_id(room_id: &str) -> Result<OwnedRoomId, &'static str> {
     OwnedRoomId::try_from(room_id.trim()).map_err(|_| "d0.3-timeline-invalid-room-id")
+}
+
+fn parse_event_id(event_id: &str) -> Result<OwnedEventId, &'static str> {
+    OwnedEventId::try_from(event_id.trim()).map_err(|_| "v-crypto.6-invalid-event-id")
 }
 
 async fn snapshot_from_timeline(
@@ -167,6 +425,12 @@ async fn snapshot_from_timeline(
         is_encrypted,
         items,
         hit_start,
+        utd: NativeUtdStatus {
+            phase: NativeUtdPhase::Idle,
+            pending_count: 0,
+            unavailable_count: 0,
+            recovered_count: 0,
+        },
     })
 }
 
@@ -181,7 +445,30 @@ fn project_item(item: &SdkTimelineItem) -> Option<NativeTimelineItem> {
         event_type: safe_event_type(content),
         body: safe_body(content),
         origin_server_ts: event.timestamp().get().into(),
+        decryption_state: decryption_state(content),
     })
+}
+
+fn decryption_state(content: &SdkTimelineItemContent) -> Option<NativeDecryptionState> {
+    let encrypted = content.as_unable_to_decrypt()?;
+    let unavailable = match encrypted {
+        EncryptedMessage::MegolmV1AesSha2 { cause, .. } => is_currently_unavailable(*cause),
+        EncryptedMessage::OlmV1Curve25519AesSha2 { .. } | EncryptedMessage::Unknown => true,
+    };
+    Some(if unavailable {
+        NativeDecryptionState::Unavailable
+    } else {
+        NativeDecryptionState::Pending
+    })
+}
+
+fn is_currently_unavailable(cause: UtdCause) -> bool {
+    matches!(
+        cause,
+        UtdCause::SentBeforeWeJoined
+            | UtdCause::HistoricalMessageAndBackupIsDisabled
+            | UtdCause::WithheldBySender
+    )
 }
 
 fn safe_event_type(content: &SdkTimelineItemContent) -> String {
@@ -230,8 +517,15 @@ mod tests {
                 event_type: "m.room.message".into(),
                 body: "hello".into(),
                 origin_server_ts: 42,
+                decryption_state: None,
             }],
             hit_start: false,
+            utd: NativeUtdStatus {
+                phase: NativeUtdPhase::Idle,
+                pending_count: 0,
+                unavailable_count: 0,
+                recovered_count: 0,
+            },
         };
         let json = serde_json::to_string(&snapshot).unwrap();
         for forbidden in [
@@ -275,5 +569,147 @@ mod tests {
             safe_body_from_parts(false, false, Some("clear text")),
             "clear text"
         );
+    }
+
+    #[test]
+    fn sdk_utd_causes_map_to_honest_pending_and_unavailable_states() {
+        for cause in [
+            UtdCause::SentBeforeWeJoined,
+            UtdCause::HistoricalMessageAndBackupIsDisabled,
+            UtdCause::WithheldBySender,
+        ] {
+            assert!(is_currently_unavailable(cause));
+        }
+        for cause in [
+            UtdCause::Unknown,
+            UtdCause::VerificationViolation,
+            UtdCause::UnsignedDevice,
+            UtdCause::UnknownDevice,
+            UtdCause::WithheldForUnverifiedOrInsecureDevice,
+            UtdCause::HistoricalMessageAndDeviceIsUnverified,
+        ] {
+            assert!(!is_currently_unavailable(cause));
+        }
+    }
+
+    #[test]
+    fn live_registry_reconciles_pending_to_automatic_decrypted_readback() {
+        let mut registry = NativeTimelineRegistry::new(11);
+        let mut pending = NativeTimelineSnapshot {
+            session_generation: 11,
+            room_id: "!room:example.org".into(),
+            is_encrypted: true,
+            items: vec![NativeTimelineItem {
+                item_id: "item-1".into(),
+                event_id: "$event".into(),
+                sender: "@alice:example.org".into(),
+                event_type: "m.room.encrypted".into(),
+                body: UTD_PLACEHOLDER.into(),
+                origin_server_ts: 42,
+                decryption_state: Some(NativeDecryptionState::Pending),
+            }],
+            hit_start: false,
+            utd: NativeUtdStatus {
+                phase: NativeUtdPhase::Idle,
+                pending_count: 0,
+                unavailable_count: 0,
+                recovered_count: 0,
+            },
+        };
+        registry
+            .reconcile_utd(&mut pending, UtdRecoveryKind::RetryDecrypt)
+            .unwrap();
+        assert_eq!(pending.utd.phase, NativeUtdPhase::Recovering);
+        assert_eq!(pending.utd.pending_count, 1);
+
+        let mut decrypted = NativeTimelineSnapshot {
+            items: vec![NativeTimelineItem {
+                body: "clear text".into(),
+                event_type: "m.room.message".into(),
+                decryption_state: None,
+                ..pending.items[0].clone()
+            }],
+            ..pending
+        };
+        registry
+            .reconcile_utd(&mut decrypted, UtdRecoveryKind::RetryDecrypt)
+            .unwrap();
+        assert_eq!(decrypted.utd.phase, NativeUtdPhase::Idle);
+        assert_eq!(decrypted.utd.pending_count, 0);
+        assert_eq!(decrypted.utd.recovered_count, 1);
+        assert_eq!(decrypted.items[0].body, "clear text");
+
+        let first_op_id = registry
+            .utd_recovery
+            .get("!room:example.org")
+            .unwrap()
+            .op_id;
+        let mut later_pending = NativeTimelineSnapshot {
+            items: vec![NativeTimelineItem {
+                item_id: "item-2".into(),
+                event_id: "$event-2".into(),
+                body: UTD_PLACEHOLDER.into(),
+                event_type: "m.room.encrypted".into(),
+                decryption_state: Some(NativeDecryptionState::Pending),
+                ..decrypted.items[0].clone()
+            }],
+            ..decrypted
+        };
+        registry
+            .reconcile_utd(&mut later_pending, UtdRecoveryKind::RetryDecrypt)
+            .unwrap();
+        let second_session = registry.utd_recovery.get("!room:example.org").unwrap();
+        assert!(second_session.op_id > first_op_id);
+        assert!(second_session.phase.is_active());
+
+        later_pending.items[0].decryption_state = Some(NativeDecryptionState::Unavailable);
+        registry
+            .reconcile_utd(&mut later_pending, UtdRecoveryKind::RetryDecrypt)
+            .unwrap();
+        assert_eq!(later_pending.utd.phase, NativeUtdPhase::Unavailable);
+
+        let mut later_decrypted = NativeTimelineSnapshot {
+            items: vec![NativeTimelineItem {
+                body: "later clear text".into(),
+                event_type: "m.room.message".into(),
+                decryption_state: None,
+                ..later_pending.items[0].clone()
+            }],
+            ..later_pending
+        };
+        registry
+            .reconcile_utd(&mut later_decrypted, UtdRecoveryKind::RetryDecrypt)
+            .unwrap();
+        assert_eq!(later_decrypted.utd.phase, NativeUtdPhase::Idle);
+        assert_eq!(later_decrypted.utd.recovered_count, 1);
+    }
+
+    #[test]
+    fn focused_event_readback_schema_excludes_crypto_material() {
+        let readback = NativeTimelineEventReadback {
+            session_generation: 3,
+            room_id: "!room:example.org".into(),
+            event_id: "$event".into(),
+            item: NativeTimelineItem {
+                item_id: "item".into(),
+                event_id: "$event".into(),
+                sender: "@alice:example.org".into(),
+                event_type: "m.room.message".into(),
+                body: "safe body".into(),
+                origin_server_ts: 42,
+                decryption_state: None,
+            },
+        };
+        let json = serde_json::to_string(&readback).unwrap();
+        for forbidden in [
+            "sessionId",
+            "sessionKey",
+            "senderKey",
+            "deviceId",
+            "ciphertext",
+        ] {
+            assert!(!json.contains(forbidden));
+        }
+        assert!(json.contains("safe body"));
     }
 }

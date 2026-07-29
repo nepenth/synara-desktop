@@ -84,7 +84,7 @@
     "synara/src/app/features/room/RoomViewHeader.tsx",
     "synara/src/app/features/room/RoomViewTyping.tsx",
     "synara/src/app/features/room/jump-to-time/JumpToTime.tsx",
-    "synara/src/app/features/room/message/EncryptedContent.tsx",
+    "synara/src/app/features/room/message/NativeEventContent.tsx",
     "synara/src/app/features/room/message/Message.tsx",
     "synara/src/app/features/room/message/MessageEditor.tsx",
     "synara/src/app/features/room/message/Reactions.tsx",
